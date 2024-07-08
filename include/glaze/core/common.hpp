@@ -592,8 +592,7 @@ namespace glz
 
    constexpr auto flags(auto&&... args) noexcept
    {
-      using Tuple = std::decay_t<decltype(glz::tuplet::tuple{conv_sv(args)...})>;
-      return glz::detail::Flags{group_builder<Tuple>::op(glz::tuplet::tuple{conv_sv(args)...})};
+      return detail::Flags{tuplet::tuple{args...}};
    }
 }
 

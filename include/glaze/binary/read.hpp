@@ -159,9 +159,7 @@ namespace glz
             it += Length;
 
             for_each<N>([&](auto I) {
-               static constexpr auto item = glz::get<I>(meta_v<T>);
-
-               get_member(value, glz::get<1>(item)) = data[I / 8] & (uint8_t{1} << (7 - (I % 8)));
+               get_member(value, get<I>(refl<T>.values)) = data[I / 8] & (uint8_t{1} << (7 - (I % 8)));
             });
          }
       };
@@ -1088,11 +1086,7 @@ namespace glz
                }
 
                for_each<N>([&](auto I) {
-                  static constexpr auto item = get<I>(meta_v<V>);
-                  using T0 = std::decay_t<decltype(get<0>(item))>;
-                  constexpr bool use_reflection = std::is_member_pointer_v<T0>;
-                  constexpr auto member_index = use_reflection ? 0 : 1;
-                  read<binary>::op<Opts>(get_member(value, get<member_index>(item)), ctx, it, end);
+                  read<binary>::op<Opts>(get_member(value, get<I>(refl<V>.values)), ctx, it, end);
                });
             }
          }

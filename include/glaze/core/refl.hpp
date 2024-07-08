@@ -116,7 +116,7 @@ namespace glz
    struct refl_info;
    
    template <class T>
-      requires detail::glaze_object_t<T>
+      requires (detail::glaze_object_t<T> || detail::glaze_flags_t<T>)
    struct refl_info<T>
    {
       using V = std::remove_cvref_t<T>;
@@ -403,13 +403,7 @@ namespace glz::detail
    {
       return refl<T>.keys[I];
    }
-
-   template <class T, size_t I>
-   constexpr auto get_enum_value() noexcept
-   {
-      return get<I>(refl<T>.values);
-   }
-
+   
    template <class T, size_t I>
    struct meta_sv
    {
@@ -485,7 +479,7 @@ namespace glz::detail
    {
       constexpr auto N = refl<T>.N;
       return [&]<size_t... I>(std::index_sequence<I...>) {
-         return normal_map<sv, size_t, refl<T>.N>(pair<sv, size_t>{get_enum_key<T, I>(), I}...);
+         return normal_map<sv, size_t, refl<T>.N>(pair<sv, size_t>{refl<T>.keys[I], I}...);
       }(std::make_index_sequence<N>{});
    }
 }
@@ -500,7 +494,7 @@ namespace glz
       
       if constexpr (detail::glaze_t<T>) {
          using U = std::underlying_type_t<T>;
-         return detail::get_enum_key<T, static_cast<U>(Enum)>();
+         return refl<T>.keys[static_cast<U>(Enum)];
       }
       else {
          static_assert(false_v<decltype(Enum)>, "Enum requires glaze metadata for name");
@@ -517,7 +511,7 @@ namespace glz::detail
       return [&]<size_t... I>(std::index_sequence<I...>) {
          using key_t = std::underlying_type_t<T>;
          return normal_map<key_t, sv, N>(std::array<pair<key_t, sv>, N>{
-            pair<key_t, sv>{static_cast<key_t>(get_enum_value<T, I>()), get_enum_key<T, I>()}...});
+            pair<key_t, sv>{static_cast<key_t>(get<I>(refl<T>.values)), refl<T>.keys[I]}...});
       }(std::make_index_sequence<N>{});
    }
 
@@ -526,7 +520,7 @@ namespace glz::detail
    constexpr auto make_enum_to_string_array() noexcept
    {
       return []<size_t... I>(std::index_sequence<I...>) {
-         return std::array<sv, sizeof...(I)>{get_enum_key<T, I>()...};
+         return std::array<sv, sizeof...(I)>{refl<T>.keys[I]...};
       }(std::make_index_sequence<refl<T>.N>{});
    }
 
@@ -536,7 +530,7 @@ namespace glz::detail
       constexpr auto N = refl<T>.N;
       return [&]<size_t... I>(std::index_sequence<I...>) {
          return normal_map<sv, T, N>(
-            std::array<pair<sv, T>, N>{pair<sv, T>{get_enum_key<T, I>(), T(get_enum_value<T, I>())}...});
+            std::array<pair<sv, T>, N>{pair<sv, T>{refl<T>.keys[I], T(get<I>(refl<T>.values))}...});
       }(std::make_index_sequence<N>{});
    }
 
@@ -568,7 +562,6 @@ namespace glz::detail
 #include <initializer_list>
 
 #include "glaze/core/common.hpp"
-#include "glaze/core/refl.hpp"
 #include "glaze/reflection/get_name.hpp"
 #include "glaze/reflection/to_tuple.hpp"
 

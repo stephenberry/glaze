@@ -175,9 +175,7 @@ namespace glz
             std::array<uint8_t, byte_length<T>()> data{};
 
             for_each<N>([&](auto I) {
-               static constexpr auto item = glz::get<I>(meta_v<T>);
-
-               data[I / 8] |= static_cast<uint8_t>(get_member(value, glz::get<1>(item))) << (7 - (I % 8));
+               data[I / 8] |= static_cast<uint8_t>(get_member(value, get<I>(refl<T>.values))) << (7 - (I % 8));
             });
 
             dump(data, b, ix);

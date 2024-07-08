@@ -337,10 +337,10 @@ namespace glz
                auto& enumeration = (*s.oneOf)[I];
                // Do not override if already set
                if (!enumeration.attributes.constant.has_value()) {
-                  enumeration.attributes.constant = get_enum_key<V, I>();
+                  enumeration.attributes.constant = refl<V>.keys[I];
                }
                if (!enumeration.attributes.title.has_value()) {
-                  enumeration.attributes.title = get_enum_key<V, I>();
+                  enumeration.attributes.title = refl<V>.keys[I];
                }
             });
          }
