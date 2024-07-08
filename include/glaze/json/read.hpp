@@ -1600,29 +1600,31 @@ namespace glz
          if (bool(ctx.error)) [[unlikely]]
             return {};
 
-         constexpr auto N = refl<T>.N;
-
          if constexpr (keys_may_contain_escape<T>()) {
             std::string& static_key = string_buffer();
             read<json>::op<opening_handled<Opts>()>(static_key, ctx, it, end);
             --it; // reveal the quote
             return static_key;
          }
-         else if constexpr (N > 0) {
-            static constexpr auto stats = key_stats<T, tag>();
-            if constexpr (stats.length_range < 24) {
-               if ((it + stats.max_length) < end) [[likely]] {
-                  return parse_key_cx<Opts, stats>(it);
-               }
-            }
-            auto start = it;
-            skip_till_quote(ctx, it, end);
-            return {start, size_t(it - start)};
-         }
          else {
-            auto start = it;
-            skip_till_quote(ctx, it, end);
-            return {start, size_t(it - start)};
+            constexpr auto N = refl<T>.N;
+            
+            if constexpr (N > 0) {
+               static constexpr auto stats = key_stats<T, tag>();
+               if constexpr (stats.length_range < 24) {
+                  if ((it + stats.max_length) < end) [[likely]] {
+                     return parse_key_cx<Opts, stats>(it);
+                  }
+               }
+               auto start = it;
+               skip_till_quote(ctx, it, end);
+               return {start, size_t(it - start)};
+            }
+            else {
+               auto start = it;
+               skip_till_quote(ctx, it, end);
+               return {start, size_t(it - start)};
+            }
          }
       }
 
