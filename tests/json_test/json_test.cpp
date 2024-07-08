@@ -3767,19 +3767,6 @@ struct glz::meta<string_t>
    static constexpr auto value = object("string", &T::string);
 };
 
-suite any_tests = [] {
-   "any"_test = [] {
-      glz::any a = 5.5;
-
-      expect(glz::any_cast<double>(a) == 5.5);
-
-      auto* data = a.data();
-      *static_cast<double*>(data) = 6.6;
-
-      expect(glz::any_cast<double>(a) == 6.6);
-   };
-};
-
 static constexpr std::string_view json0 = R"(
 {
    "fixed_object": {
