@@ -784,7 +784,7 @@ namespace glz::repe
          }
 
          for_each<N>([&](auto I) {
-            decltype(auto) func = []<size_t I>() -> decltype(auto) {
+            decltype(auto) func = [&]<size_t I>() -> decltype(auto) {
                if constexpr (reflectable<T>) {
                   return std::get<I>(t);
                }
@@ -792,15 +792,17 @@ namespace glz::repe
                   return get_member(value, get<I>(refl<T>.values));
                }
             }.template operator()<I>();
+            
+            static constexpr auto key = refl<T>.keys[I];
 
-            static constexpr std::string_view full_key = []<size_t I>() {
+            static constexpr std::string_view full_key = [&] {
                if constexpr (parent == detail::empty_path) {
-                  return join_v<chars<"/">, refl<T>.keys[I]>;
+                  return join_v<chars<"/">, key>;
                }
                else {
-                  return join_v<parent, chars<"/">, refl<T>.keys[I]>;
+                  return join_v<parent, chars<"/">, key>;
                }
-            }.template operator()<I>();
+            }();
 
             using E = refl_t<T, I>;
 
