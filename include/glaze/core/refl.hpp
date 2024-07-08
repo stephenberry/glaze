@@ -699,25 +699,9 @@ namespace glz::detail
       size_t index = 0;
       for_each<N>([&](auto I) {
          using V = std::decay_t<std::variant_alternative_t<I, T>>;
-         if constexpr (reflectable<V>) {
-            for_each<glz::tuple_size_v<decltype(member_names<V>)>>(
-               [&](auto J) { (*data_ptr)[index++] = glz::get<J>(member_names<V>); });
-         }
-         else {
-            for_each<refl<V>.N>([&](auto J) {
-               constexpr auto item = get<J>(meta_v<V>);
-               using T0 = std::decay_t<decltype(get<0>(item))>;
-               auto key_getter = [&] {
-                  if constexpr (std::is_member_pointer_v<T0>) {
-                     return get_name<get<0>(get<J>(meta_v<V>))>();
-                  }
-                  else {
-                     return get<0>(get<J>(meta_v<V>));
-                  }
-               };
-               (*data_ptr)[index++] = key_getter();
-            });
-         }
+         for_each<refl<V>.N>([&](auto J) {
+            (*data_ptr)[index++] = refl<V>.keys[J];
+         });
       });
 
       std::sort(keys.begin(), keys.end());
@@ -746,15 +730,9 @@ namespace glz::detail
       constexpr auto N = std::variant_size_v<T>;
       for_each<N>([&](auto I) {
          using V = decay_keep_volatile_t<std::variant_alternative_t<I, T>>;
-         if constexpr (reflectable<V>) {
-            for_each<glz::tuple_size_v<decltype(member_names<V>)>>(
-               [&](auto J) { deduction_map.find(get<J>(member_names<V>))->second[I] = true; });
-         }
-         else {
-            for_each<refl<V>.N>([&](auto J) {
-               deduction_map.find(refl<V>.keys[J])->second[I] = true;
-            });
-         }
+         for_each<refl<V>.N>([&](auto J) {
+            deduction_map.find(refl<V>.keys[J])->second[I] = true;
+         });
       });
 
       return deduction_map;
