@@ -142,7 +142,7 @@ namespace glz
                   else if constexpr (glaze_object_t<E> || reflectable<E>) {
                      std::atomic<bool> menu_boolean = true;
                      if constexpr (reflectable<T>) {
-                        run_cli_menu<Opts>(std::get<I>(t), menu_boolean);
+                        run_cli_menu<Opts>(get<I>(t), menu_boolean);
                      }
                      else {
                         decltype(auto) v = get_member(value, get<I>(refl<T>.values));
