@@ -148,6 +148,25 @@ namespace glz
    };
    
    template <class T>
+      requires (detail::glaze_array_t<T>)
+   struct refl_info<T>
+   {
+      using V = std::remove_cvref_t<T>;
+      
+      static constexpr auto values = meta_v<V>;
+      
+      using tuple = decltype(values);
+      
+      static constexpr auto N = tuple_size_v<decltype(values)>;
+      
+      template <size_t I>
+      using elem = decltype(get<I>(values));
+      
+      template <size_t I>
+      using type = detail::member_t<V, decltype(get<I>(values))>;
+   };
+   
+   template <class T>
       requires detail::reflectable<T>
    struct refl_info<T>
    {
