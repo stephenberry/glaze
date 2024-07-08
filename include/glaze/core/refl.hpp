@@ -236,9 +236,7 @@ namespace glz
    template <auto Opts, class T>
    struct object_info
    {
-      using V = std::remove_cvref_t<T>;
-      static constexpr auto info = refl_info<T>{};
-      static constexpr auto N = info.N;
+      static constexpr auto N = refl<T>.N;
       
       // Allows us to remove a branch if the first item will always be written
       static constexpr bool first_will_be_written = [] {
