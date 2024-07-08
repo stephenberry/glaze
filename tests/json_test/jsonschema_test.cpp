@@ -209,9 +209,9 @@ template <>
 struct glz::meta<color>
 {
    using enum color;
-   static constexpr auto value = enumerate("red", red, "red description", //
-                                           "green", green, "green description", //
-                                           "blue", blue, schema{.description = "blue description"} //
+   static constexpr auto value = enumerate("red", red, //
+                                           "green", green, //
+                                           "blue", blue //
    );
 };
 
@@ -363,9 +363,6 @@ suite schema_tests = [] {
       auto err = read_json_ignore_unknown(obj, schema_str);
       expect(!err) << format_error(err, schema_str);
       expect[(obj.oneOf.has_value())];
-      for (const auto& oneOf : obj.oneOf.value()) {
-         expect[(oneOf.attributes.description.has_value())];
-      }
    };
 
    "fixed array has fixed size"_test = [] {
