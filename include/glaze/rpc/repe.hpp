@@ -786,7 +786,7 @@ namespace glz::repe
          for_each<N>([&](auto I) {
             decltype(auto) func = [&]<size_t I>() -> decltype(auto) {
                if constexpr (reflectable<T>) {
-                  return std::get<I>(t);
+                  return get<I>(t);
                }
                else {
                   return get_member(value, get<I>(refl<T>.values));

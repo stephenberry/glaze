@@ -686,7 +686,7 @@ namespace glz
                else {
                   decltype(auto) member = [&]() -> decltype(auto) {
                      if constexpr (reflectable<T>) {
-                        return std::get<I>(t);
+                        return get<I>(t);
                      }
                      else {
                         return get<I>(refl<T>.values);
