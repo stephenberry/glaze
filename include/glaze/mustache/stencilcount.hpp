@@ -94,7 +94,7 @@ namespace glz
 
                   sv key{s, size_t(it - s)};
 
-                  static constexpr auto num_members = refl<T>.N<T>;
+                  static constexpr auto num_members = refl<T>.N;
 
                   decltype(auto) frozen_map = [&]() -> decltype(auto) {
                      using V = decay_keep_volatile_t<decltype(value)>;
