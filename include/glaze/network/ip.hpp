@@ -89,7 +89,7 @@ namespace glz {
          int family = (ip_part.find(':') != std::string_view::npos) ? AF_INET6 : AF_INET;
          unsigned char buf[sizeof(struct in6_addr)];
          if (inet_pton(family, std::string(ip_part).c_str(), buf) == 1) {
-            if (inet_ntop(family, buf, output.data(), output.size())) {
+            if (inet_ntop(family, buf, output.data(), net::asize_t(output.size()))) {
                output.resize(std::strlen(output.c_str()));
                return output;
             }
@@ -109,7 +109,7 @@ namespace glz {
          return std::nullopt; // Invalid input size for binary IP
       }
 
-      if (inet_ntop(family, addr_ptr, output.data(), output.size())) {
+      if (inet_ntop(family, addr_ptr, output.data(), net::asize_t(output.size()))) {
          output.resize(std::strlen(output.c_str()));
          return output;
       } else {

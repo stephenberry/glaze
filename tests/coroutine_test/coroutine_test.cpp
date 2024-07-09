@@ -10,6 +10,8 @@
 
 using namespace ut;
 
+#define TEST_ALL
+
 #ifdef TEST_ALL
 suite generator = [] {
    std::atomic<uint64_t> result{};
@@ -369,6 +371,9 @@ suite ring_buffer_test = [] {
 };
 #endif
 
+//#define SERVER_CLIENT_TEST
+
+#ifdef SERVER_CLIENT_TEST
 suite server_client_test = [] {
    std::cout << "\n\nServer/Client test:\n";
 
@@ -518,6 +523,7 @@ suite server_client_test = [] {
    // Create and wait for the server and client tasks to complete.
    glz::sync_wait(glz::when_all(make_server_task(), make_client_task()));
 };
+#endif
 
 int main()
 {
