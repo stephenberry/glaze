@@ -201,8 +201,21 @@ namespace glz
    template <class T, size_t I>
    using refl_t = refl_info<T>::template type<I>;
    
-   template <auto Opts, class T>
-   struct object_info
+   // MSVC requires this specialization, otherwise it will try to instatiate dead `if constexpr` branches for N == 0
+   template <opts Opts, class T>
+   struct object_info;
+   
+   template <opts Opts, class T>
+      requires (refl<T>.N == 0)
+   struct object_info<Opts, T>
+   {
+      static constexpr bool first_will_be_written = false;
+      static constexpr bool maybe_skipped = false;
+   };
+   
+   template <opts Opts, class T>
+      requires (refl<T>.N > 0)
+   struct object_info<Opts, T>
    {
       static constexpr auto N = refl<T>.N;
       
