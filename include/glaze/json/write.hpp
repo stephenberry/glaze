@@ -9,11 +9,11 @@
 #include <variant>
 
 #include "glaze/core/opts.hpp"
+#include "glaze/core/refl.hpp"
 #include "glaze/core/reflection_tuple.hpp"
 #include "glaze/core/write.hpp"
 #include "glaze/core/write_chars.hpp"
 #include "glaze/json/ptr.hpp"
-#include "glaze/reflection/reflect.hpp"
 #include "glaze/util/dump.hpp"
 #include "glaze/util/for_each.hpp"
 #include "glaze/util/itoa.hpp"
@@ -73,16 +73,14 @@ namespace glz
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&&, auto&& b, auto&& ix) noexcept
          {
-            static constexpr auto N = glz::tuple_size_v<meta_t<T>>;
+            static constexpr auto N = refl<T>.N;
 
             dump<'['>(b, ix);
 
             for_each<N>([&](auto I) {
-               static constexpr auto item = glz::get<I>(meta_v<T>);
-
-               if (get_member(value, glz::get<1>(item))) {
+               if (get_member(value, get<I>(refl<T>.values))) {
                   dump<'"'>(b, ix);
-                  dump_maybe_empty(glz::get<0>(item), b, ix);
+                  dump_maybe_empty(refl<T>.keys[I], b, ix);
                   dump<"\",">(b, ix);
                }
             });
@@ -428,30 +426,27 @@ namespace glz
       };
 
       template <class T>
-         requires(glaze_enum_t<T> && !custom_write<T>)
+         requires(glaze_enum_t<T> && not custom_write<T>)
       struct to_json<T>
       {
          template <auto Opts, class... Args>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
-            using key_t = std::underlying_type_t<T>;
-            static constexpr auto frozen_map = detail::make_enum_to_string_map<T>();
-            const auto& member_it = frozen_map.find(static_cast<key_t>(value));
-            if (member_it != frozen_map.end()) {
-               const sv str = {member_it->second.data(), member_it->second.size()};
-               // TODO: Assumes people dont use strings with chars that need to be escaped for their enum names
-               // TODO: Could create a pre quoted map for better performance
-               if constexpr (not Opts.raw) {
-                  dump<'"'>(args...);
-               }
-               dump_maybe_empty(str, args...);
-               if constexpr (not Opts.raw) {
-                  dump<'"'>(args...);
-               }
+            // TODO: Assumes people dont use strings with chars that need to be escaped for their enum names
+            // TODO: Could create a pre quoted map for better performance
+
+            const auto index = static_cast<std::underlying_type_t<T>>(value);
+            if (size_t(index) >= refl<T>.keys.size()) {
+               ctx.error = error_code::array_element_not_found;
+               return;
             }
-            else [[unlikely]] {
-               // What do we want to happen if the value doesnt have a mapped string
-               write<json>::op<Opts>(static_cast<std::underlying_type_t<T>>(value), ctx, std::forward<Args>(args)...);
+
+            if constexpr (not Opts.raw) {
+               dump<'"'>(args...);
+            }
+            dump_maybe_empty(refl<T>.keys[index], args...);
+            if constexpr (not Opts.raw) {
+               dump<'"'>(args...);
             }
          }
       };
@@ -827,7 +822,7 @@ namespace glz
                   using V = std::decay_t<decltype(val)>;
 
                   if constexpr (Opts.write_type_info && !tag_v<T>.empty() && glaze_object_t<V>) {
-                     constexpr auto num_members = glz::tuple_size_v<meta_t<V>>;
+                     constexpr auto num_members = refl<V>.N;
 
                      // must first write out type
                      if constexpr (Opts.prettify) {
@@ -1164,33 +1159,29 @@ namespace glz
                }
             }
 
-            using Info = object_type_info<Options, T>;
-
-            static constexpr auto N = Info::N;
+            static constexpr auto N = refl<T>.N;
 
             [[maybe_unused]] decltype(auto) t = reflection_tuple<T>(value);
             [[maybe_unused]] bool first = true;
-            static constexpr auto first_is_written = Info::first_will_be_written;
-            static constexpr auto maybe_skipped = Info::maybe_skipped;
+            static constexpr auto first_is_written = object_info<Options, T>::first_will_be_written;
+            static constexpr auto maybe_skipped = object_info<Options, T>::maybe_skipped;
             for_each<N>([&](auto I) {
                constexpr auto Opts = opening_and_closing_handled_off<ws_handled_off<Options>()>();
 
-               using Element = glaze_tuple_element<I, N, T>;
-               static constexpr size_t member_index = Element::member_index;
-               static constexpr bool use_reflection = Element::use_reflection;
-               using val_t = std::remove_cvref_t<typename Element::type>;
+               using val_t = std::remove_cvref_t<refl_t<T, I>>;
 
                decltype(auto) member = [&]() -> decltype(auto) {
                   if constexpr (reflectable<T>) {
-                     return std::get<I>(t);
+                     return get<I>(t);
                   }
                   else {
-                     return get<member_index>(get<I>(meta_v<std::decay_t<T>>));
+                     return get<I>(refl<T>.values);
                   }
                }();
 
                auto write_key = [&] {
-                  static constexpr sv key = key_name<I, T, use_reflection>;
+                  // MSVC requires get<I> rather than keys[I]
+                  static constexpr sv key = get<I>(refl<T>.keys);
                   if constexpr (needs_escaping(key)) {
                      // TODO: do compile time escaping
                      write<json>::op<Opts>(key, ctx, b, ix);
@@ -1259,27 +1250,6 @@ namespace glz
                      else {
                         write<json>::op<Opts>(get_member(value, member), ctx, b, ix);
                      }
-
-                     if constexpr (glaze_object_t<T>) {
-                        // Writing comments only applies to glaze object types
-                        // MSVC ICE bugs cause this code to be duplicated
-                        static constexpr size_t comment_index = member_index + 1;
-                        static constexpr auto S = glz::tuple_size_v<typename Element::Item>;
-                        if constexpr (Opts.comments && S > comment_index) {
-                           static constexpr auto i = glz::get<I>(meta_v<std::decay_t<T>>);
-                           if constexpr (std::is_convertible_v<decltype(get<comment_index>(i)), sv>) {
-                              static constexpr sv comment = get<comment_index>(i);
-                              if constexpr (comment.size() > 0) {
-                                 if constexpr (Opts.prettify) {
-                                    dump<' '>(b, ix);
-                                 }
-                                 dump<"/*">(b, ix);
-                                 dump_not_empty(comment, b, ix);
-                                 dump<"*/">(b, ix);
-                              }
-                           }
-                        }
-                     }
                   }
                }
                else {
@@ -1294,27 +1264,6 @@ namespace glz
                   }
                   else {
                      write<json>::op<Opts>(get_member(value, member), ctx, b, ix);
-                  }
-
-                  if constexpr (glaze_object_t<T>) {
-                     // Writing comments only applies to glaze object types
-                     // MSVC ICE bugs cause this code to be duplicated
-                     static constexpr size_t comment_index = member_index + 1;
-                     static constexpr auto S = glz::tuple_size_v<typename Element::Item>;
-                     if constexpr (Opts.comments && S > comment_index) {
-                        static constexpr auto i = glz::get<I>(meta_v<std::decay_t<T>>);
-                        if constexpr (std::is_convertible_v<decltype(get<comment_index>(i)), sv>) {
-                           static constexpr sv comment = get<comment_index>(i);
-                           if constexpr (comment.size() > 0) {
-                              if constexpr (Opts.prettify) {
-                                 dump<' '>(b, ix);
-                              }
-                              dump<"/*">(b, ix);
-                              dump_not_empty(comment, b, ix);
-                              dump<"*/">(b, ix);
-                           }
-                        }
-                     }
                   }
                }
             });
@@ -1387,7 +1336,7 @@ namespace glz
             static constexpr auto groups = glz::group_json_ptrs<sorted>();
             static constexpr auto N = glz::tuple_size_v<std::decay_t<decltype(groups)>>;
 
-            static constexpr auto num_members = reflection_count<T>;
+            static constexpr auto num_members = refl<T>.N;
 
             if constexpr ((num_members > 0) && (glaze_object_t<T> || reflectable<T>)) {
                if constexpr (glaze_object_t<T>) {

@@ -1432,17 +1432,23 @@ namespace variants
    struct A
    {
       uint8_t a{};
+
+      auto operator<=>(const A&) const = default;
    };
 
    struct A1
    {
       std::map<uint8_t, uint64_t> a{};
+
+      auto operator<=>(const A1&) const = default;
    };
 
    struct B
    {
       uint8_t b{};
       A1 a{};
+
+      auto operator<=>(const B&) const = default;
    };
 
    struct C

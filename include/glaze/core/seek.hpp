@@ -4,8 +4,8 @@
 #pragma once
 
 #include "glaze/core/read.hpp"
+#include "glaze/core/refl.hpp"
 #include "glaze/core/write.hpp"
-#include "glaze/reflection/reflect.hpp"
 
 // Use JSON Pointer syntax to seek to a specific element
 // https://github.com/stephenberry/JSON-Pointer
@@ -113,9 +113,7 @@ namespace glz::detail
          const auto& member_it = frozen_map.find(key);
          if (member_it != frozen_map.end()) [[likely]] {
             return std::visit(
-               [&](auto&& member_ptr) {
-                  return seek_impl(std::forward<F>(func), get_member(value, member_ptr), json_ptr);
-               },
+               [&](auto&& element) { return seek_impl(std::forward<F>(func), get_member(value, element), json_ptr); },
                member_it->second);
          }
          else [[unlikely]] {
@@ -146,9 +144,7 @@ namespace glz::detail
          static constexpr auto member_array = glz::detail::make_array<decay_keep_volatile_t<T>>();
          if (index >= member_array.size()) return false;
          return std::visit(
-            [&](auto&& member_ptr) {
-               return seek_impl(std::forward<F>(func), get_member(value, member_ptr), json_ptr);
-            },
+            [&](auto&& element) { return seek_impl(std::forward<F>(func), get_member(value, element), json_ptr); },
             member_array[index]);
       }
       else if constexpr (tuple_t<std::decay_t<T>> || is_std_tuple<std::decay_t<T>>) {

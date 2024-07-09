@@ -7,8 +7,8 @@
 
 #include "glaze/core/opts.hpp"
 #include "glaze/core/read.hpp"
+#include "glaze/core/refl.hpp"
 #include "glaze/file/file_ops.hpp"
-#include "glaze/reflection/reflect.hpp"
 #include "glaze/util/parse.hpp"
 #include "glaze/util/strod.hpp"
 
@@ -411,7 +411,7 @@ namespace glz
          template <auto Opts, class It>
          static void op(auto&& value, is_context auto&& ctx, It&& it, auto&& end)
          {
-            static constexpr auto num_members = reflection_count<T>;
+            static constexpr auto num_members = refl<T>.N;
 
             decltype(auto) frozen_map = [&]() -> decltype(auto) {
                if constexpr (reflectable<T> && num_members > 0) {

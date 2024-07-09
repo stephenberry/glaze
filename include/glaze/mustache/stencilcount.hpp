@@ -4,9 +4,9 @@
 #pragma once
 
 #include "glaze/core/read.hpp"
+#include "glaze/core/refl.hpp"
 #include "glaze/core/write.hpp"
 #include "glaze/format/format_to.hpp"
-#include "glaze/reflection/reflect.hpp"
 
 namespace glz
 {
@@ -94,7 +94,7 @@ namespace glz
 
                   sv key{s, size_t(it - s)};
 
-                  static constexpr auto num_members = reflection_count<T>;
+                  static constexpr auto num_members = refl<T>.N;
 
                   decltype(auto) frozen_map = [&]() -> decltype(auto) {
                      using V = decay_keep_volatile_t<decltype(value)>;

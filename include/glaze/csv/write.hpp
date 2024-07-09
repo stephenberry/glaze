@@ -176,9 +176,7 @@ namespace glz
          template <auto Opts, class B>
          static void op(auto&& value, is_context auto&& ctx, B&& b, auto&& ix) noexcept
          {
-            using V = std::decay_t<T>;
-
-            static constexpr auto N = reflection_count<T>;
+            static constexpr auto N = refl<T>.N;
 
             [[maybe_unused]] decltype(auto) t = [&] {
                if constexpr (reflectable<T>) {
@@ -191,20 +189,16 @@ namespace glz
 
             if constexpr (Opts.layout == rowwise) {
                for_each<N>([&](auto I) {
-                  using Element = glaze_tuple_element<I, N, T>;
-                  static constexpr size_t member_index = Element::member_index;
+                  using value_type = typename std::decay_t<refl_t<T, I>>::value_type;
 
-                  using item_type = typename std::decay<typename Element::type>::type;
-                  using value_type = typename item_type::value_type;
-
-                  static constexpr sv key = key_name<I, T, Element::use_reflection>;
+                  static constexpr sv key = refl<T>.keys[I];
 
                   decltype(auto) mem = [&]() -> decltype(auto) {
                      if constexpr (reflectable<T>) {
-                        return std::get<I>(t);
+                        return get<I>(t);
                      }
                      else {
-                        return get<member_index>(get<I>(meta_v<V>));
+                        return get<I>(refl<T>.values);
                      }
                   }();
 
@@ -242,18 +236,16 @@ namespace glz
             else {
                // write titles
                for_each<N>([&](auto I) {
-                  using Element = glaze_tuple_element<I, N, T>;
-                  static constexpr size_t member_index = Element::member_index;
-                  using X = std::decay_t<typename Element::type>;
+                  using X = refl_t<T, I>;
 
-                  static constexpr sv key = key_name<I, T, Element::use_reflection>;
+                  static constexpr sv key = refl<T>.keys[I];
 
                   decltype(auto) member = [&]() -> decltype(auto) {
                      if constexpr (reflectable<T>) {
-                        return std::get<I>(t);
+                        return get<I>(t);
                      }
                      else {
-                        return get<member_index>(get<I>(meta_v<V>));
+                        return get<I>(refl<T>.values);
                      }
                   }();
 
@@ -285,16 +277,14 @@ namespace glz
 
                while (true) {
                   for_each<N>([&](auto I) {
-                     using Element = glaze_tuple_element<I, N, T>;
-                     static constexpr size_t member_index = Element::member_index;
-                     using X = std::decay_t<typename Element::type>;
+                     using X = std::decay_t<refl_t<T, I>>;
 
                      decltype(auto) mem = [&]() -> decltype(auto) {
                         if constexpr (reflectable<T>) {
-                           return std::get<I>(t);
+                           return get<I>(t);
                         }
                         else {
-                           return get<member_index>(get<I>(meta_v<V>));
+                           return get<I>(refl<T>.values);
                         }
                      }();
 
