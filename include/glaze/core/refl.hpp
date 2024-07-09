@@ -114,6 +114,18 @@ namespace glz
    
    template <class T>
    struct refl_info;
+
+   // MSVC requires this template specialization for when the tuple size if zero,
+   // otherwise MSVC tries to instantiate calls of get<0> in invalid branches
+   template <class T>
+      requires((detail::glaze_object_t<T> || detail::glaze_flags_t<T> || detail::glaze_enum_t<T>) &&
+               (tuple_size_v<meta_t<T>> == 0))
+      struct refl_info<T>
+   {
+      static constexpr auto N = 0;
+      static constexpr auto values = tuplet::tuple{};
+      static constexpr std::array<sv, 0> keys{};
+   };
    
    template <class T>
       requires (detail::glaze_object_t<T> || detail::glaze_flags_t<T> || detail::glaze_enum_t<T>)
