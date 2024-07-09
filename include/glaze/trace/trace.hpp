@@ -34,7 +34,7 @@ namespace glz
    {
       static constexpr sv name = "glz::display_time_unit";
       using enum display_time_unit;
-      static constexpr auto value = enumerate_no_reflect("s", s, //
+      static constexpr auto value = enumerate("s", s, //
                                                          "ms", ms, //
                                                          "us", us, //
                                                          "ns", ns);

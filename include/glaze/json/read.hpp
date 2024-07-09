@@ -17,7 +17,7 @@
 #include "glaze/file/file_ops.hpp"
 #include "glaze/json/json_t.hpp"
 #include "glaze/json/skip.hpp"
-#include "glaze/reflection/reflect.hpp"
+#include "glaze/core/refl.hpp"
 #include "glaze/util/for_each.hpp"
 #include "glaze/util/strod.hpp"
 #include "glaze/util/type_traits.hpp"
@@ -1335,7 +1335,7 @@ namespace glz
          {
             static constexpr auto N = []() constexpr {
                if constexpr (glaze_array_t<T>) {
-                  return glz::tuple_size_v<meta_t<T>>;
+                  return refl<T>.N;
                }
                else {
                   return glz::tuple_size_v<T>;
@@ -1475,25 +1475,13 @@ namespace glz
          auto is_unicode = [](const auto c) { return (static_cast<uint8_t>(c) >> 7) > 0; };
 
          bool may_escape = false;
-         constexpr auto N = glz::tuple_size_v<meta_t<T>>;
+         constexpr auto N = refl<T>.N;
          for_each<N>([&](auto I) {
-            constexpr auto first = get<0>(get<I>(meta_v<T>));
-            using T0 = std::decay_t<decltype(first)>;
-            if constexpr (std::is_member_pointer_v<T0>) {
-               constexpr auto s = get_name<first>();
-               for (auto& c : s) {
-                  if (c == '\\' || c == '"' || is_unicode(c)) {
-                     may_escape = true;
-                     return;
-                  }
-               }
-            }
-            else {
-               for (auto& c : first) {
-                  if (c == '\\' || c == '"' || is_unicode(c)) {
-                     may_escape = true;
-                     return;
-                  }
+            constexpr auto key = refl<T>.keys[I];
+            for (auto& c : key) {
+               if (c == '\\' || c == '"' || is_unicode(c)) {
+                  may_escape = true;
+                  return;
                }
             }
          });
@@ -1537,11 +1525,10 @@ namespace glz
             stats.min_length = tag_size;
          }
 
-         constexpr auto N = reflection_count<T>;
+         constexpr auto N = refl<T>.N;
 
          for_each<N>([&](auto I) {
-            using Element = glaze_tuple_element<I, N, T>;
-            constexpr sv key = key_name<I, T, Element::use_reflection>;
+            constexpr sv key = refl<T>.keys[I];
 
             const auto n = key.size();
             if (n < stats.min_length) {
@@ -1613,29 +1600,38 @@ namespace glz
          if (bool(ctx.error)) [[unlikely]]
             return {};
 
-         constexpr auto N = reflection_count<T>;
-
          if constexpr (keys_may_contain_escape<T>()) {
             std::string& static_key = string_buffer();
             read<json>::op<opening_handled<Opts>()>(static_key, ctx, it, end);
             --it; // reveal the quote
             return static_key;
          }
-         else if constexpr (N > 0) {
-            static constexpr auto stats = key_stats<T, tag>();
-            if constexpr (stats.length_range < 24) {
-               if ((it + stats.max_length) < end) [[likely]] {
-                  return parse_key_cx<Opts, stats>(it);
-               }
-            }
-            auto start = it;
-            skip_till_quote(ctx, it, end);
-            return {start, size_t(it - start)};
-         }
          else {
-            auto start = it;
-            skip_till_quote(ctx, it, end);
-            return {start, size_t(it - start)};
+            constexpr auto N = []{
+               if constexpr (is_variant<T>) {
+                  return std::variant_size_v<T>;
+               }
+               else {
+                  return refl<T>.N;
+               }
+            }();
+            
+            if constexpr (N > 0) {
+               static constexpr auto stats = key_stats<T, tag>();
+               if constexpr (stats.length_range < 24) {
+                  if ((it + stats.max_length) < end) [[likely]] {
+                     return parse_key_cx<Opts, stats>(it);
+                  }
+               }
+               auto start = it;
+               skip_till_quote(ctx, it, end);
+               return {start, size_t(it - start)};
+            }
+            else {
+               auto start = it;
+               skip_till_quote(ctx, it, end);
+               return {start, size_t(it - start)};
+            }
          }
       }
 
@@ -1713,7 +1709,7 @@ namespace glz
          template <auto Options, string_literal tag = "">
          static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
-            static constexpr auto num_members = reflection_count<T>;
+            static constexpr auto num_members = refl<T>.N;
             if constexpr (num_members == 0 && is_partial_read<T>) {
                static_assert(false_v<T>, "No members to read for partial read");
             }

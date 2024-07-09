@@ -8,7 +8,7 @@
 #include "glaze/core/opts.hpp"
 #include "glaze/core/read.hpp"
 #include "glaze/file/file_ops.hpp"
-#include "glaze/reflection/reflect.hpp"
+#include "glaze/core/refl.hpp"
 #include "glaze/util/dump.hpp"
 
 namespace glz
@@ -150,7 +150,7 @@ namespace glz
          template <auto Opts, is_context Ctx, class It0, class It1>
          GLZ_ALWAYS_INLINE static void op(auto&& value, Ctx&&, It0&& it, It1&&)
          {
-            constexpr auto N = glz::tuple_size_v<meta_t<T>>;
+            constexpr auto N = refl<T>.N;
 
             constexpr auto Length = byte_length<T>();
             uint8_t data[Length];
@@ -159,9 +159,7 @@ namespace glz
             it += Length;
 
             for_each<N>([&](auto I) {
-               static constexpr auto item = glz::get<I>(meta_v<T>);
-
-               get_member(value, glz::get<1>(item)) = data[I / 8] & (uint8_t{1} << (7 - (I % 8)));
+               get_member(value, get<I>(refl<T>.values)) = data[I / 8] & (uint8_t{1} << (7 - (I % 8)));
             });
          }
       };
@@ -1081,18 +1079,14 @@ namespace glz
                ++it;
 
                using V = std::decay_t<T>;
-               constexpr auto N = glz::tuple_size_v<meta_t<V>>;
+               constexpr auto N = refl<V>.N;
                if (int_from_compressed(ctx, it, end) != N) {
                   ctx.error = error_code::syntax_error;
                   return;
                }
 
                for_each<N>([&](auto I) {
-                  static constexpr auto item = get<I>(meta_v<V>);
-                  using T0 = std::decay_t<decltype(get<0>(item))>;
-                  constexpr bool use_reflection = std::is_member_pointer_v<T0>;
-                  constexpr auto member_index = use_reflection ? 0 : 1;
-                  read<binary>::op<Opts>(get_member(value, get<member_index>(item)), ctx, it, end);
+                  read<binary>::op<Opts>(get_member(value, get<I>(refl<V>.values)), ctx, it, end);
                });
             }
          }
@@ -1112,7 +1106,7 @@ namespace glz
 
             ++it;
 
-            static constexpr auto N = reflection_count<T>;
+            static constexpr auto N = refl<T>.N;
 
             static constexpr bit_array<N> all_fields = [] {
                bit_array<N> arr{};
@@ -1177,7 +1171,7 @@ namespace glz
                      }
 
                      std::visit(
-                        [&](auto&& member_ptr) { read<binary>::op<Opts>(get_member(value, member_ptr), ctx, it, end); },
+                        [&](auto&& element) { read<binary>::op<Opts>(get_member(value, element), ctx, it, end); },
                         p->second);
 
                      if (bool(ctx.error)) [[unlikely]] {
@@ -1223,15 +1217,14 @@ namespace glz
             }
             ++it;
 
-            using V = std::decay_t<T>;
-            constexpr auto N = glz::tuple_size_v<meta_t<V>>;
+            constexpr auto N = refl<T>.N;
             if (int_from_compressed(ctx, it, end) != N) {
                ctx.error = error_code::syntax_error;
                return;
             }
 
             for_each<N>(
-               [&](auto I) { read<binary>::op<Opts>(get_member(value, glz::get<I>(meta_v<V>)), ctx, it, end); });
+               [&](auto I) { read<binary>::op<Opts>(get_member(value, get<I>(refl<T>.values)), ctx, it, end); });
          }
       };
 

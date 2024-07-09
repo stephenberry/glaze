@@ -1,14 +1,14 @@
 # Glaze
 One of the fastest JSON libraries in the world. Glaze reads and writes from object memory, simplifying interfaces and offering incredible performance.
 
-> [!IMPORTANT]
->
-> Version 2.8.0 adds write error handling which matches the read API. [See v2.8.0 Release notes](https://github.com/stephenberry/glaze/releases/tag/v2.8.0)
-
 Glaze also supports:
 
 - [BEVE](https://github.com/beve-org/beve) (binary efficient versatile encoding)
 - [CSV](./docs/csv.md) (comma separated value)
+
+> [!IMPORTANT]
+>
+> This `main` branch is moving towards version 3.0.0, which will remove comment and `glz::schema` support from `glz::object` within `glz::meta`.
 
 ## With compile time reflection for MSVC, Clang, and GCC!
 
@@ -527,35 +527,6 @@ Comments are supported with the specification defined here: [JSONC](https://gith
 
 Read support for comments is provided with `glz::read_jsonc` or `glz::read<glz::opts{.comments = true}>(...)`.
 
-Comments may be included in the `glz::meta` description for your types. These comments can be written out to provide a description of your JSON interface. Calling `write_jsonc` as opposed to `write_json` will write out any comments included in the `meta` description.
-
-```c++
-struct thing {
-  double x{5.0};
-  int y{7};
-};
-
-template <>
-struct glz::meta<thing> {
-   using T = thing;
-   static constexpr auto value = object(
-      &T::x, "x is a double"_c,
-      &T::y, "y is an int"_c
-   );
-};
-```
-
-Prettified output:
-
-```json
-{
-  "x": 5 /*x is a double*/,
-  "y": 7 /*y is an int*/
-}
-```
-
-> The `_c` is necessary if member object pointer names are reflected. You can also write `comment("x is a double")`
-
 # Prettify JSON
 
 Formatted JSON can be written out directly via a compile time option:
@@ -709,7 +680,7 @@ The struct below shows the available options and the default behavior.
 ```c++
 struct opts {
   uint32_t format = json;
-  bool comments = false; // Write out or support reading in JSONC style comments
+  bool comments = false; // Support reading in JSONC style comments
   bool error_on_unknown_keys = true; // Error when an unknown key is encountered
   bool skip_null_members = true; // Skip writing out params in an object if the value is null
   bool use_hash_comparison = true; // Will replace some string equality checks with hash checks

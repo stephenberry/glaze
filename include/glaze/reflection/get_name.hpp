@@ -109,7 +109,12 @@ namespace glz
    template <class T, size_t... I>
    [[nodiscard]] constexpr auto member_names_impl(std::index_sequence<I...>)
    {
-      return std::array{member_nameof<I, T>...};
+      if constexpr (sizeof...(I) == 0) {
+         return std::array<sv, 0>{};
+      }
+      else {
+         return std::array{member_nameof<I, T>...};
+      }
    }
 
    template <class T>
