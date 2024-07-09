@@ -6,6 +6,10 @@ Glaze also supports:
 - [BEVE](https://github.com/beve-org/beve) (binary efficient versatile encoding)
 - [CSV](./docs/csv.md) (comma separated value)
 
+> [!IMPORTANT]
+>
+> This `main` branch is moving towards version 3.0.0, which will remove comment and `glz::schema` support from `glz::object` within `glz::meta`.
+
 ## With compile time reflection for MSVC, Clang, and GCC!
 
 - Read/write aggregate initializable structs without writing any metadata or macros!
