@@ -125,6 +125,9 @@ namespace glz
       static constexpr auto N = 0;
       static constexpr auto values = tuplet::tuple{};
       static constexpr std::array<sv, 0> keys{};
+      
+      template <size_t I>
+      using type = std::nullptr_t;
    };
    
    template <class T>
