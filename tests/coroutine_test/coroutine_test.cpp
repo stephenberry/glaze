@@ -8,6 +8,9 @@
 #include "glaze/network.hpp"
 #include "ut/ut.hpp"
 
+#include "stdexec/execution.hpp"
+#include "exec/task.hpp"
+
 using namespace ut;
 
 #define TEST_ALL
@@ -524,6 +527,34 @@ suite server_client_test = [] {
    glz::sync_wait(glz::when_all(make_server_task(), make_client_task()));
 };
 #endif
+
+template <stdexec::sender S1, stdexec::sender S2>
+exec::task<int> async_answer(S1 s1, S2 s2) {
+  // Senders are implicitly awaitable (in this coroutine type):
+  co_await static_cast<S2&&>(s2);
+  co_return co_await static_cast<S1&&>(s1);
+}
+
+template <stdexec::sender S1, stdexec::sender S2>
+exec::task<std::optional<int>> async_answer2(S1 s1, S2 s2) {
+  co_return co_await stdexec::stopped_as_optional(async_answer(s1, s2));
+}
+
+// tasks have an associated stop token
+exec::task<std::optional<stdexec::inplace_stop_token>> async_stop_token() {
+  co_return co_await stdexec::stopped_as_optional(stdexec::get_stop_token());
+}
+
+suite stdexec_coroutine_test = []
+{
+   try {
+     // Awaitables are implicitly senders:
+     auto [i] = stdexec::sync_wait(async_answer2(stdexec::just(42), stdexec::just())).value();
+     std::cout << "The answer is " << i.value() << '\n';
+   } catch (std::exception& e) {
+     std::cout << e.what() << '\n';
+   }
+};
 
 int main()
 {

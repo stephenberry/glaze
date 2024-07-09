@@ -4,7 +4,7 @@ add_compile_definitions(CURRENT_DIRECTORY="${CMAKE_CURRENT_SOURCE_DIR}")
 
 add_executable(${PROJECT_NAME} ${PROJECT_NAME}.cpp)
 
-target_link_libraries(${PROJECT_NAME} PRIVATE glz_test_common)
+target_link_libraries(${PROJECT_NAME} PRIVATE glz_test_exceptions)
 
 add_test(NAME ${PROJECT_NAME} COMMAND ${PROJECT_NAME})
 
