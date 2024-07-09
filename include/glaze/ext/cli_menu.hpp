@@ -81,11 +81,9 @@ namespace glz
             for_each_short_circuit<N>([&](auto I) {
                if (I == item_number - 1) {
                   using E = refl_t<T, I>;
-                  
+
                   // MSVC bug requires Index alias here
-                  decltype(auto) func = [&](auto Index) -> decltype(auto) {
-                     return get<Index>(refl<T>.values);
-                  }(I);
+                  decltype(auto) func = [&](auto Index) -> decltype(auto) { return get<Index>(refl<T>.values); }(I);
 
                   using Func = decltype(func);
                   if constexpr (std::is_invocable_v<Func>) {

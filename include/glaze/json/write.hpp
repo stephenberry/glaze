@@ -9,12 +9,11 @@
 #include <variant>
 
 #include "glaze/core/opts.hpp"
-#include "glaze/core/reflection_tuple.hpp"
 #include "glaze/core/refl.hpp"
+#include "glaze/core/reflection_tuple.hpp"
 #include "glaze/core/write.hpp"
 #include "glaze/core/write_chars.hpp"
 #include "glaze/json/ptr.hpp"
-#include "glaze/core/refl.hpp"
 #include "glaze/util/dump.hpp"
 #include "glaze/util/for_each.hpp"
 #include "glaze/util/itoa.hpp"
@@ -435,13 +434,13 @@ namespace glz
          {
             // TODO: Assumes people dont use strings with chars that need to be escaped for their enum names
             // TODO: Could create a pre quoted map for better performance
-            
+
             const auto index = static_cast<std::underlying_type_t<T>>(value);
             if (size_t(index) >= refl<T>.keys.size()) {
                ctx.error = error_code::array_element_not_found;
                return;
             }
-            
+
             if constexpr (not Opts.raw) {
                dump<'"'>(args...);
             }

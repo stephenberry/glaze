@@ -14,10 +14,10 @@
 #include "glaze/core/common.hpp"
 #include "glaze/core/opts.hpp"
 #include "glaze/core/read.hpp"
+#include "glaze/core/refl.hpp"
 #include "glaze/file/file_ops.hpp"
 #include "glaze/json/json_t.hpp"
 #include "glaze/json/skip.hpp"
-#include "glaze/core/refl.hpp"
 #include "glaze/util/for_each.hpp"
 #include "glaze/util/strod.hpp"
 #include "glaze/util/type_traits.hpp"
@@ -1607,7 +1607,7 @@ namespace glz
             return static_key;
          }
          else {
-            constexpr auto N = []{
+            constexpr auto N = [] {
                if constexpr (is_variant<T>) {
                   return std::variant_size_v<T>;
                }
@@ -1615,7 +1615,7 @@ namespace glz
                   return refl<T>.N;
                }
             }();
-            
+
             if constexpr (N > 0) {
                static constexpr auto stats = key_stats<T, tag>();
                if constexpr (stats.length_range < 24) {

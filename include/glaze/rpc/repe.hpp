@@ -792,7 +792,7 @@ namespace glz::repe
                   return get_member(value, get<I>(refl<T>.values));
                }
             }.template operator()<I>();
-            
+
             static constexpr auto key = refl<T>.keys[I];
 
             static constexpr std::string_view full_key = [&] {

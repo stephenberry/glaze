@@ -99,9 +99,8 @@ template <>
 struct glz::meta<sub_thing>
 {
    static constexpr std::string_view name = "sub_thing";
-   static constexpr auto value = object(
-      "a", &sub_thing::a, //
-      "b", [](auto&& v) -> auto& { return v.b; } //
+   static constexpr auto value = object("a", &sub_thing::a, //
+                                        "b", [](auto&& v) -> auto& { return v.b; } //
    );
 };
 

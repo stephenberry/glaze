@@ -25,17 +25,16 @@ static constexpr auto& info = glz::refl<my_struct>;
 
 #include <iostream>
 
-int main() {
+int main()
+{
    std::cout << "Field types:\n";
    glz::for_each<info.N>([](auto I) {
-      //std::cout << glz::name_v<decltype(glz::get<I>(info.values))> << '\n';
+      // std::cout << glz::name_v<decltype(glz::get<I>(info.values))> << '\n';
    });
-   
+
    std::cout << "Field keys:\n";
-   glz::for_each<info.N>([](auto I) {
-      std::cout << info.keys[I] << '\n';
-   });
-   
+   glz::for_each<info.N>([](auto I) { std::cout << info.keys[I] << '\n'; });
+
    my_struct obj{};
    std::cout << '\n' << glz::write_json(obj).value() << '\n';
    std::ignore = glz::read_json(obj, R"({"i":287,"d":3.14,"hello":"Hello World","arr":[1,2,3]})");

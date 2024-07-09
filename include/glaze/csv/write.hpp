@@ -189,7 +189,6 @@ namespace glz
 
             if constexpr (Opts.layout == rowwise) {
                for_each<N>([&](auto I) {
-
                   using value_type = typename std::decay_t<refl_t<T, I>>::value_type;
 
                   static constexpr sv key = refl<T>.keys[I];

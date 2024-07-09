@@ -470,9 +470,7 @@ namespace glz
       inline constexpr auto glaze_names = []() {
          constexpr auto N = refl<T>.N;
          std::array<sv, N> names{};
-         for_each<N>([&](auto I) {
-            names[I] = refl<T>.keys[I];
-         });
+         for_each<N>([&](auto I) { names[I] = refl<T>.keys[I]; });
          return names;
       }();
 
@@ -565,7 +563,7 @@ namespace glz
                   validate_ref<name_v<val_t>>();
                   ref_val.ref = join_v<chars<"#/$defs/">, name_v<val_t>>;
                }
-               
+
                if (!def.type) {
                   to_json_schema<val_t>::template op<Opts>(def, defs);
                }

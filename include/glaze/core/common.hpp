@@ -427,7 +427,7 @@ namespace glz
             return element;
          }
       }
-      
+
       template <class T, class mptr_t>
       using member_t = decltype(get_member(std::declval<T>(), std::declval<std::decay_t<mptr_t>&>()));
 
@@ -480,15 +480,9 @@ namespace glz
       return detail::Object{tuplet::tuple{std::forward<Args>(args)...}};
    }
 
-   constexpr auto enumerate(auto&&... args) noexcept
-   {
-      return detail::Enum{tuplet::tuple{args...}};
-   }
+   constexpr auto enumerate(auto&&... args) noexcept { return detail::Enum{tuplet::tuple{args...}}; }
 
-   constexpr auto flags(auto&&... args) noexcept
-   {
-      return detail::Flags{tuplet::tuple{args...}};
-   }
+   constexpr auto flags(auto&&... args) noexcept { return detail::Flags{tuplet::tuple{args...}}; }
 }
 
 template <>

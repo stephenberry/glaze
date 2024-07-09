@@ -7,8 +7,8 @@
 
 #include "glaze/core/opts.hpp"
 #include "glaze/core/read.hpp"
-#include "glaze/file/file_ops.hpp"
 #include "glaze/core/refl.hpp"
+#include "glaze/file/file_ops.hpp"
 #include "glaze/util/parse.hpp"
 #include "glaze/util/strod.hpp"
 

@@ -7,8 +7,8 @@
 #include "glaze/binary/skip.hpp"
 #include "glaze/core/opts.hpp"
 #include "glaze/core/read.hpp"
-#include "glaze/file/file_ops.hpp"
 #include "glaze/core/refl.hpp"
+#include "glaze/file/file_ops.hpp"
 #include "glaze/util/dump.hpp"
 
 namespace glz
@@ -1085,9 +1085,8 @@ namespace glz
                   return;
                }
 
-               for_each<N>([&](auto I) {
-                  read<binary>::op<Opts>(get_member(value, get<I>(refl<V>.values)), ctx, it, end);
-               });
+               for_each<N>(
+                  [&](auto I) { read<binary>::op<Opts>(get_member(value, get<I>(refl<V>.values)), ctx, it, end); });
             }
          }
 
