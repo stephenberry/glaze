@@ -126,12 +126,12 @@ suite when_all = [] {
    expect(second == 20);
 };
 
-/*suite event = [] {
+suite event = [] {
    std::cout << "\nEvent test:\n";
    glz::event e;
 
    // These tasks will wait until the given event has been set before advancing.
-   auto make_wait_task = [](const glz::event& e, uint64_t i) -> glz::task<void> {
+   auto make_wait_task = [](const glz::event& e, uint64_t i) -> exec::task<void> {
       std::cout << "task " << i << " is waiting on the event...\n";
       co_await e;
       std::cout << "task " << i << " event triggered, now resuming.\n";
@@ -139,7 +139,7 @@ suite when_all = [] {
    };
 
    // This task will trigger the event allowing all waiting tasks to proceed.
-   auto make_set_task = [](glz::event& e) -> glz::task<void> {
+   auto make_set_task = [](glz::event& e) -> exec::task<void> {
       std::cout << "set task is triggering the event\n";
       e.set();
       co_return;
@@ -147,10 +147,10 @@ suite when_all = [] {
 
    // Given more than a single task to synchronously wait on, use when_all() to execute all the
    // tasks concurrently on this thread and then sync_wait() for them all to complete.
-   glz::sync_wait(glz::when_all(make_wait_task(e, 1), make_wait_task(e, 2), make_wait_task(e, 3), make_set_task(e)));
+   stdexec::sync_wait(stdexec::when_all(make_wait_task(e, 1), make_wait_task(e, 2), make_wait_task(e, 3), make_set_task(e)));
 };
 
-suite latch = [] {
+/*suite latch = [] {
    std::cout << "\nLatch test:\n";
    // Complete worker tasks faster on a thread pool, using the scheduler version so the worker
    // tasks can yield for a specific amount of time to mimic difficult work.  The pool is only
