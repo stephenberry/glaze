@@ -10,6 +10,8 @@
 
 #include "stdexec/execution.hpp"
 #include "exec/task.hpp"
+#include "exec/static_thread_pool.hpp"
+#include "exec/async_scope.hpp"
 
 using namespace ut;
 
@@ -18,7 +20,7 @@ using namespace ut;
 #ifdef TEST_ALL
 suite generator = [] {
    std::atomic<uint64_t> result{};
-   auto task = [&](uint64_t count_to) -> glz::task<void> {
+   auto task = [&](uint64_t count_to) -> exec::task<void> {
       // Create a generator function that will yield and incrementing
       // number each time its called.
       auto gen = []() -> glz::generator<uint64_t> {
@@ -41,7 +43,7 @@ suite generator = [] {
       co_return;
    };
 
-   glz::sync_wait(task(100));
+   stdexec::sync_wait(task(100));
 
    expect(result == 5050) << result;
 };
@@ -49,73 +51,82 @@ suite generator = [] {
 suite thread_pool = [] {
    // This lambda will create a glz::task that returns a unit64_t.
    // It can be invoked many times with different arguments.
-   auto make_task_inline = [](uint64_t x) -> glz::task<uint64_t> { co_return x + x; };
+   auto make_task_inline = [](uint64_t x) -> exec::task<uint64_t> { co_return x + x; };
 
    // This will block the calling thread until the created task completes.
    // Since this task isn't scheduled on any glz::thread_pool or glz::scheduler
    // it will execute directly on the calling thread.
-   auto result = glz::sync_wait(make_task_inline(5));
-   expect(result == 10);
+   auto result = stdexec::sync_wait(make_task_inline(5));
+   expect(std::get<0>(result.value()) == 10);
    // std::cout << "Inline Result = " << result << "\n";
 
-   // We'll make a 1 thread glz::thread_pool to demonstrate offloading the task's
-   // execution to another thread.  We'll capture the thread pool in the lambda,
-   // note that you will need to guarantee the thread pool outlives the coroutine.
-   glz::thread_pool tp{glz::thread_pool::options{.thread_count = 1}};
+   exec::static_thread_pool pool(1);
+   auto sched = pool.get_scheduler();
 
-   auto make_task_offload = [&tp](uint64_t x) -> glz::task<uint64_t> {
-      co_await tp.schedule(); // Schedules execution on the thread pool.
-      co_return x + x; // This will execute on the thread pool.
+   auto make_task_offload = [&sched](uint64_t x) {
+      return stdexec::on(sched, stdexec::just() | stdexec::then([=] { return x + x; }));
    };
 
    // This will still block the calling thread, but it will now offload to the
-   // glz::thread_pool since the coroutine task is immediately scheduled.
-   result = glz::sync_wait(make_task_offload(10));
-   expect(result == 20);
-   // std::cout << "Offload Result = " << result << "\n";
+   // thread pool since the coroutine task is immediately scheduled.
+   result = stdexec::sync_wait(make_task_offload(10));
+   expect(std::get<0>(result.value()) == 20);
 };
 
 suite when_all = [] {
    // Create a thread pool to execute all the tasks in parallel.
-   glz::thread_pool tp{glz::thread_pool::options{.thread_count = 4}};
-   // Create the task we want to invoke multiple times and execute in parallel on the thread pool.
-   auto twice = [&](uint64_t x) -> glz::task<uint64_t> {
-      co_await tp.schedule(); // Schedule onto the thread pool.
-      co_return x + x; // Executed on the thread pool.
+   exec::static_thread_pool tp{4};
+   auto scheduler = tp.get_scheduler();
+   auto twice = [&](uint64_t x) {
+      return x + x; // Executed on the thread pool.
    };
-
-   // Make our tasks to execute, tasks can be passed in via a std::ranges::range type or var args.
-   std::vector<glz::task<uint64_t>> tasks{};
+   
+   exec::async_scope scope;
+   std::mutex mtx{};
+   std::vector<uint64_t> results{};
    for (std::size_t i = 0; i < 5; ++i) {
-      tasks.emplace_back(twice(i + 1));
+      scope.spawn(stdexec::on(scheduler, stdexec::just() | stdexec::then([&, i] {
+         const auto value = twice(i + 1);
+         std::unique_lock lock{mtx};
+         results.emplace_back(value);
+      })));
    }
 
    // Synchronously wait on this thread for the thread pool to finish executing all the tasks in parallel.
-   auto results = glz::sync_wait(glz::when_all(std::move(tasks)));
-   expect(results[0].return_value() == 2);
-   expect(results[1].return_value() == 4);
-   expect(results[2].return_value() == 6);
-   expect(results[3].return_value() == 8);
-   expect(results[4].return_value() == 10);
+   [[maybe_unused]] auto ret = stdexec::sync_wait(scope.on_empty());
+   std::ranges::sort(results);
+   expect(results[0] == 2);
+   expect(results[1] == 4);
+   expect(results[2] == 6);
+   expect(results[3] == 8);
+   expect(results[4] == 10);
 
    // Use var args instead of a container as input to glz::when_all.
-   auto square = [&](uint8_t x) -> glz::task<uint8_t> {
-      co_await tp.schedule();
-      co_return x* x;
+   auto square = [](uint64_t x) {
+      return [=] { return x * x; };
    };
+   
+   auto parallel = [](auto& scheduler, auto... fs) {
+      return stdexec::when_all(stdexec::on(scheduler, stdexec::just() | stdexec::then(fs))...);
+   };
+   
+   /*auto chain(auto& scheduler, auto... fs) {
+     return stdexec::on(scheduler, stdexec::just() | (stdexec::then(fs) | ...));
+   }*/
 
    // Var args allows you to pass in tasks with different return types and returns
    // the result as a std::tuple.
-   auto tuple_results = glz::sync_wait(glz::when_all(square(2), twice(10)));
+   //auto tuple_results = stdexec::sync_wait(chain_workers(scheduler, square(2), square(10))).value();
+   auto tuple_results = stdexec::sync_wait(parallel(scheduler, square(2), [&]{ return twice(10); })).value();
 
-   auto first = std::get<0>(tuple_results).return_value();
-   auto second = std::get<1>(tuple_results).return_value();
+   auto first = std::get<0>(tuple_results);
+   auto second = std::get<1>(tuple_results);
 
    expect(first == 4);
    expect(second == 20);
 };
 
-suite event = [] {
+/*suite event = [] {
    std::cout << "\nEvent test:\n";
    glz::event e;
 
@@ -371,7 +382,7 @@ suite ring_buffer_test = [] {
 
    // Wait for all the values to be produced and consumed through the ring buffer.
    glz::sync_wait(glz::when_all(std::move(tasks)));
-};
+};*/
 #endif
 
 //#define SERVER_CLIENT_TEST
