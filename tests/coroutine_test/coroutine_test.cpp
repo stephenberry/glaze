@@ -63,8 +63,13 @@ suite thread_pool = [] {
    exec::static_thread_pool pool(1);
    auto sched = pool.get_scheduler();
 
-   auto make_task_offload = [&sched](uint64_t x) {
+   /*auto make_task_offload = [&sched](uint64_t x) {
       return stdexec::on(sched, stdexec::just() | stdexec::then([=] { return x + x; }));
+   };*/
+   
+   auto make_task_offload = [&sched](uint64_t x) -> exec::task<uint64_t> {
+      co_await sched.schedule();
+      co_return x + x;
    };
 
    // This will still block the calling thread, but it will now offload to the
@@ -150,15 +155,70 @@ suite event = [] {
    stdexec::sync_wait(stdexec::when_all(make_wait_task(e, 1), make_wait_task(e, 2), make_wait_task(e, 3), make_set_task(e)));
 };
 
-/*suite latch = [] {
+using namespace std::chrono_literals;
+
+struct Timer {
+    struct promise_type {
+        auto get_return_object() {
+            return Timer{ std::coroutine_handle<promise_type>::from_promise(*this) };
+        }
+        auto initial_suspend() noexcept {
+            return std::suspend_always{};
+        }
+        auto final_suspend() noexcept {
+            return std::suspend_always{};
+        }
+        void return_void() {}
+        void unhandled_exception() {
+            std::terminate();
+        }
+        std::chrono::milliseconds duration;
+    };
+
+    std::coroutine_handle<promise_type> handle;
+
+    Timer(std::coroutine_handle<promise_type> h) : handle(h) {}
+    ~Timer() {
+        if (handle) handle.destroy();
+    }
+
+    bool await_ready() const noexcept {
+        return handle.done();
+    }
+    void await_suspend(std::coroutine_handle<> awaiting) noexcept {
+        std::thread([=] {
+            std::this_thread::sleep_for(handle.promise().duration);
+            awaiting.resume();
+        }).detach();
+    }
+    void await_resume() noexcept {}
+};
+
+inline Timer sleep_for(std::chrono::milliseconds duration) {
+    struct awaiter {
+        std::chrono::milliseconds duration;
+        bool await_ready() const noexcept { return false; }
+        void await_suspend(std::coroutine_handle<> h) const {
+            std::thread([=] {
+                std::this_thread::sleep_for(duration);
+                h.resume();
+            }).detach();
+        }
+        void await_resume() const noexcept {}
+    };
+    co_await awaiter{ duration };
+}
+
+suite latch = [] {
    std::cout << "\nLatch test:\n";
    // Complete worker tasks faster on a thread pool, using the scheduler version so the worker
    // tasks can yield for a specific amount of time to mimic difficult work.  The pool is only
    // setup with a single thread to showcase yield_for().
-   glz::scheduler tp{glz::scheduler::options{.pool = glz::thread_pool::options{.thread_count = 1}}};
+   exec::static_thread_pool tp{1};
+   auto scheduler = tp.get_scheduler();
 
    // This task will wait until the given latch setters have completed.
-   auto make_latch_task = [](glz::latch& l) -> glz::task<void> {
+   auto make_latch_task = [](glz::latch& l) -> exec::task<void> {
       // It seems like the dependent worker tasks could be created here, but in that case it would
       // be superior to simply do: `co_await coro::when_all(tasks);`
       // It is also important to note that the last dependent task will resume the waiting latch
@@ -174,14 +234,14 @@ suite event = [] {
 
    // This task does 'work' and counts down on the latch when completed.  The final child task to
    // complete will end up resuming the latch task when the latch's count reaches zero.
-   auto make_worker_task = [](glz::scheduler& tp, glz::latch& l, int64_t i) -> glz::task<void> {
+   auto make_worker_task = [](auto& sched, glz::latch& l, int64_t i) -> exec::task<void> {
       // Schedule the worker task onto the thread pool.
-      co_await tp.schedule();
+      co_await sched.schedule();
       std::cout << "worker task " << i << " is working...\n";
       // Do some expensive calculations, yield to mimic work...!  Its also important to never use
       // std::this_thread::sleep_for() within the context of coroutines, it will block the thread
       // and other tasks that are ready to execute will be blocked.
-      co_await tp.yield_for(std::chrono::milliseconds{i * 20});
+      co_await sleep_for(std::chrono::milliseconds{i * 20});
       std::cout << "worker task " << i << " is done, counting down on the latch\n";
       l.count_down();
       co_return;
@@ -189,19 +249,21 @@ suite event = [] {
 
    const int64_t num_tasks{5};
    glz::latch l{num_tasks};
-   std::vector<glz::task<void>> tasks{};
 
    // Make the latch task first so it correctly waits for all worker tasks to count down.
-   tasks.emplace_back(make_latch_task(l));
-   for (int64_t i = 1; i <= num_tasks; ++i) {
-      tasks.emplace_back(make_worker_task(tp, l, i));
-   }
+   auto work = [&](auto) -> exec::task<void> {
+      co_await make_latch_task(l);
+      for (int64_t i = 1; i <= num_tasks; ++i) {
+         co_await make_worker_task(scheduler, l, i);
+      }
+      co_return;
+   };
 
    // Wait for all tasks to complete.
-   glz::sync_wait(glz::when_all(std::move(tasks)));
+   //stdexec::sync_wait(work(5));
 };
 
-suite mutex_test = [] {
+/*suite mutex_test = [] {
    std::cout << "\nMutex test:\n";
 
    glz::thread_pool tp{glz::thread_pool::options{.thread_count = 4}};
