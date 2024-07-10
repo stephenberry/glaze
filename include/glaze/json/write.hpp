@@ -1186,7 +1186,7 @@ namespace glz
                         else {
                            auto is_null = [&]() {
                               if constexpr (nullable_wrapper<val_t>) {
-                                 return !bool(member(value).val);
+                                 return !bool(mem(value).val);
                               }
                               else {
                                  return !bool(get_member(value, mem));
