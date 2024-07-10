@@ -37,3 +37,6 @@ jobs:
 
     - name: Build
       run: cmake --build build -j $(nproc)
+
+    - name: Test
+      run: ctest --output-on-failure --test-dir ${{github.workspace}}/build
