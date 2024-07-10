@@ -8,7 +8,7 @@ endif()
 set_property(GLOBAL PROPERTY USE_FOLDERS YES)
 
 include(CTest)
-if(BUILD_TESTING OR glaze_DEVELOPER_MODE)
+if(BUILD_TESTING)
   add_subdirectory(tests)
 endif()
 
