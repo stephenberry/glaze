@@ -10,6 +10,7 @@
 #include <string_view>
 
 #include "glaze/concepts/container_concepts.hpp"
+#include "glaze/core/opts.hpp"
 
 namespace glz::detail
 {
@@ -77,10 +78,10 @@ namespace glz::detail
       }
    }
 
-   template <class B>
+   template <bool Checked = true, class B>
    GLZ_ALWAYS_INLINE void dump(const byte_sized auto c, B& b, auto& ix) noexcept
    {
-      if constexpr (vector_like<B>) {
+      if constexpr (Checked && vector_like<B>) {
          if (ix == b.size()) [[unlikely]] {
             b.resize(b.size() == 0 ? 128 : b.size() * 2);
          }
@@ -89,10 +90,10 @@ namespace glz::detail
       ++ix;
    }
 
-   template <auto c, class B>
+   template <auto c, bool Checked = true, class B>
    GLZ_ALWAYS_INLINE void dump(B& b, auto& ix) noexcept
    {
-      if constexpr (vector_like<B>) {
+      if constexpr (Checked && vector_like<B>) {
          if (ix == b.size()) [[unlikely]] {
             b.resize(b.size() == 0 ? 128 : b.size() * 2);
          }
@@ -101,15 +102,17 @@ namespace glz::detail
       ++ix;
    }
 
-   template <string_literal str, class B>
+   template <string_literal str, bool Checked = true, class B>
    GLZ_ALWAYS_INLINE void dump(B& b, auto& ix) noexcept
    {
       static constexpr auto s = str.sv();
       static constexpr auto n = s.size();
 
       if constexpr (vector_like<B>) {
-         if (ix + n > b.size()) [[unlikely]] {
-            b.resize((std::max)(b.size() * 2, ix + n));
+         if constexpr (Checked) {
+            if (ix + n > b.size()) [[unlikely]] {
+               b.resize((std::max)(b.size() * 2, ix + n));
+            }
          }
          std::memcpy(b.data() + ix, s.data(), n);
       }
@@ -119,43 +122,20 @@ namespace glz::detail
       ix += n;
    }
 
-   template <auto c>
-   GLZ_ALWAYS_INLINE void dump_unchecked(auto& b, auto& ix) noexcept
-   {
-      assign_maybe_cast<c>(b, ix);
-      ++ix;
-   }
-
-   GLZ_ALWAYS_INLINE void dump_unchecked(const byte_sized auto c, auto& b, auto& ix) noexcept
-   {
-      assign_maybe_cast(c, b, ix);
-      ++ix;
-   }
-
-   template <class B>
-   GLZ_ALWAYS_INLINE void dump_unchecked(const sv str, B& b, auto& ix) noexcept
+   template <bool Checked = true, class B>
+   GLZ_ALWAYS_INLINE void dump(const sv str, B& b, auto& ix) noexcept
    {
       const auto n = str.size();
       if constexpr (vector_like<B>) {
+         if constexpr (Checked) {
+            if (ix + n > b.size()) [[unlikely]] {
+               b.resize((std::max)(b.size() * 2, ix + n));
+            }
+         }
          std::memcpy(b.data() + ix, str.data(), n);
       }
       else {
          std::memcpy(b + ix, str.data(), n);
-      }
-      ix += n;
-   }
-
-   template <string_literal str, class B>
-   GLZ_ALWAYS_INLINE void dump_unchecked(B& b, auto& ix) noexcept
-   {
-      static constexpr auto s = str.sv();
-      static constexpr auto n = s.size();
-
-      if constexpr (vector_like<B>) {
-         std::memcpy(b.data() + ix, s.data(), n);
-      }
-      else {
-         std::memcpy(b + ix, s.data(), n);
       }
       ix += n;
    }
@@ -207,31 +187,18 @@ namespace glz::detail
       ix += n;
    }
 
-   template <const sv& str, class B>
+   template <const sv& str, bool Checked = true, class B>
    GLZ_ALWAYS_INLINE void dump(B& b, auto& ix) noexcept
    {
       static constexpr auto s = str;
       static constexpr auto n = s.size();
 
       if constexpr (vector_like<B>) {
-         if (ix + n > b.size()) [[unlikely]] {
-            b.resize((std::max)(b.size() * 2, ix + n));
+         if constexpr (Checked) {
+            if (ix + n > b.size()) [[unlikely]] {
+               b.resize((std::max)(b.size() * 2, ix + n));
+            }
          }
-         std::memcpy(b.data() + ix, s.data(), n);
-      }
-      else {
-         std::memcpy(b + ix, s.data(), n);
-      }
-      ix += n;
-   }
-
-   template <const sv& str, class B>
-   GLZ_ALWAYS_INLINE void dump_unchecked(B& b, auto& ix) noexcept
-   {
-      static constexpr auto s = str;
-      static constexpr auto n = s.size();
-
-      if constexpr (vector_like<B>) {
          std::memcpy(b.data() + ix, s.data(), n);
       }
       else {

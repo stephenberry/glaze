@@ -83,7 +83,14 @@ namespace glz
                   using E = refl_t<T, I>;
 
                   // MSVC bug requires Index alias here
-                  decltype(auto) func = [&](auto Index) -> decltype(auto) { return get<Index>(refl<T>.values); }(I);
+                  decltype(auto) func = [&]<size_t I>() -> decltype(auto) {
+                     if constexpr (reflectable<T>) {
+                        return get_member(value, get<I>(t));
+                     }
+                     else {
+                        return get_member(value, get<I>(refl<T>.values));
+                     }
+                  }.template operator()<I>();
 
                   using Func = decltype(func);
                   if constexpr (std::is_invocable_v<Func>) {

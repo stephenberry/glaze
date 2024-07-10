@@ -32,11 +32,11 @@ jobs:
     - uses: actions/checkout@v4
 
     - name: Configure CMake
-      run: cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{matrix.build_type}} -DCMAKE_CXX_STANDARD=${{matrix.std}}
+      run: |
+        CXXFLAGS="-g3" cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{matrix.build_type}} -DCMAKE_CXX_STANDARD=${{matrix.std}}
 
     - name: Build
       run: cmake --build build -j $(nproc)
 
     - name: Test
-      working-directory: build
-      run: ctest -j $(nproc) --output-on-failure
+      run: ctest --output-on-failure --test-dir ${{github.workspace}}/build

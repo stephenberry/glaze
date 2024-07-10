@@ -739,7 +739,7 @@ namespace glz::repe
          using namespace glz::detail;
          static constexpr auto N = refl<T>.N;
 
-         [[maybe_unused]] decltype(auto) t = [&] {
+         [[maybe_unused]] decltype(auto) t = [&]() -> decltype(auto) {
             if constexpr (reflectable<T> && requires { to_tuple(value); }) {
                return to_tuple(value);
             }
@@ -786,7 +786,7 @@ namespace glz::repe
          for_each<N>([&](auto I) {
             decltype(auto) func = [&]<size_t I>() -> decltype(auto) {
                if constexpr (reflectable<T>) {
-                  return get<I>(t);
+                  return get_member(value, get<I>(t));
                }
                else {
                   return get_member(value, get<I>(refl<T>.values));
@@ -804,7 +804,8 @@ namespace glz::repe
                }
             }();
 
-            using E = refl_t<T, I>;
+            // static_assert(std::same_as<decltype(func), refl_t<T, I>>);
+            using E = std::remove_cvref_t<decltype(func)>;
 
             // This logic chain should match glz::cli_menu
             using Func = decltype(func);
@@ -877,7 +878,7 @@ namespace glz::repe
                };
             }
             else if constexpr (glaze_object_t<E> || reflectable<E>) {
-               on<root, std::decay_t<E>, full_key>(get_member(value, func));
+               on<root, E, full_key>(func);
 
                // build read/write calls to the object as a variable
                methods[full_key] = [&func, chain = get_chain(full_key)](repe::state&& state) mutable {

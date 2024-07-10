@@ -268,8 +268,9 @@ namespace glz
                                     !resizable<std::decay_t<decltype(std::declval<T>()[0])>>;
 
       template <class T>
-      concept boolean_like = std::same_as<T, bool> || std::same_as<T, std::vector<bool>::reference> ||
-                             std::same_as<T, std::vector<bool>::const_reference>;
+      concept boolean_like =
+         std::same_as<std::remove_cvref_t<T>, bool> || std::same_as<T, std::vector<bool>::reference> ||
+         std::same_as<T, std::vector<bool>::const_reference>;
 
       template <class T>
       concept is_no_reflect = requires(T t) { requires T::glaze_reflect == false; };
@@ -403,7 +404,7 @@ namespace glz
       }
 
       template <class Value, class Element>
-      inline decltype(auto) get_member(Value&& value, Element&& element)
+      inline decltype(auto) get_member(Value&& value, Element&& element) noexcept
       {
          using V = std::decay_t<decltype(element)>;
          if constexpr (std::is_member_object_pointer_v<V>) {
@@ -428,8 +429,8 @@ namespace glz
          }
       }
 
-      template <class T, class mptr_t>
-      using member_t = decltype(get_member(std::declval<T>(), std::declval<std::decay_t<mptr_t>&>()));
+      template <class T, class Element>
+      using member_t = decltype(get_member(std::declval<T>(), std::declval<Element>()));
 
       // member_ptr and lambda wrapper helper
       template <template <class> class Wrapper, class Wrapped>
