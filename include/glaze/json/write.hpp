@@ -10,7 +10,6 @@
 
 #include "glaze/core/opts.hpp"
 #include "glaze/core/refl.hpp"
-#include "glaze/core/reflection_tuple.hpp"
 #include "glaze/core/write.hpp"
 #include "glaze/core/write_chars.hpp"
 #include "glaze/json/ptr.hpp"
@@ -1070,6 +1069,7 @@ namespace glz
       struct to_json<T>
       {
          template <auto Options, class V>
+            requires (not std::is_pointer_v<std::remove_cvref_t<V>>)
          static void op(V&& value, is_context auto&& ctx, auto&& b, auto&& ix) noexcept
          {
             using ValueType = std::decay_t<V>;
@@ -1118,7 +1118,15 @@ namespace glz
 
             static constexpr auto N = refl<T>.N;
 
-            [[maybe_unused]] decltype(auto) t = reflection_tuple<T>(value);
+            [[maybe_unused]] decltype(auto) t = [&]() -> decltype(auto) {
+               if constexpr (reflectable<T>) {
+                  return to_tuple(value);
+               }
+               else {
+                  return nullptr;
+               }
+            }();
+            
             [[maybe_unused]] bool first = true;
             static constexpr auto first_is_written = object_info<Options, T>::first_will_be_written;
             static constexpr auto maybe_skipped = object_info<Options, T>::maybe_skipped;
@@ -1210,7 +1218,7 @@ namespace glz
                   }
                }
                else {
-                  // in this case we don't have values that maybe skipped
+                  // in this case we don't have values that are maybe skipped
                   if constexpr (I > 0) {
                      write_entry_separator<Opts>(ctx, b, ix);
                   }

@@ -403,7 +403,7 @@ namespace glz
       }
 
       template <class Value, class Element>
-      inline decltype(auto) get_member(Value&& value, Element&& element)
+      inline decltype(auto) get_member(Value&& value, Element&& element) noexcept
       {
          using V = std::decay_t<decltype(element)>;
          if constexpr (std::is_member_object_pointer_v<V>) {

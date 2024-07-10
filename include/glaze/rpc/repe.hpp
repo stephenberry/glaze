@@ -805,7 +805,6 @@ namespace glz::repe
             }();
 
             //static_assert(std::same_as<decltype(func), refl_t<T, I>>);
-            //using E = std::remove_pointer_t<std::remove_cvref_t<refl_t<T, I>>>;
             using E = std::remove_cvref_t<decltype(func)>;
 
             // This logic chain should match glz::cli_menu
