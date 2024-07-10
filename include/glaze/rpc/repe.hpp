@@ -739,7 +739,7 @@ namespace glz::repe
          using namespace glz::detail;
          static constexpr auto N = refl<T>.N;
 
-         [[maybe_unused]] decltype(auto) t = [&] {
+         [[maybe_unused]] decltype(auto) t = [&]() -> decltype(auto) {
             if constexpr (reflectable<T> && requires { to_tuple(value); }) {
                return to_tuple(value);
             }
