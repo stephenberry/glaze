@@ -240,33 +240,28 @@ suite latch = [] {
    stdexec::sync_wait(stdexec::when_all(make_latch_task(l), work()));
 };
 
-/*suite mutex_test = [] {
+suite mutex_test = [] {
    std::cout << "\nMutex test:\n";
 
-   glz::thread_pool tp{glz::thread_pool::options{.thread_count = 4}};
+   exec::static_thread_pool tp{4};
+   auto scheduler = tp.get_scheduler();
    std::vector<uint64_t> output{};
-   glz::mutex mutex;
+   std::mutex mtx{};
 
-   auto make_critical_section_task = [&](uint64_t i) -> glz::task<void> {
-      co_await tp.schedule();
-      // To acquire a mutex lock co_await its lock() function.  Upon acquiring the lock the
-      // lock() function returns a coro::scoped_lock that holds the mutex and automatically
-      // unlocks the mutex upon destruction.  This behaves just like std::scoped_lock.
-      {
-         auto scoped_lock = co_await mutex.lock();
-         output.emplace_back(i);
-      } // <-- scoped lock unlocks the mutex here.
-      co_return;
+   auto make_critical_section_task = [&](uint64_t i) {
+      std::unique_lock lock{mtx};
+      output.emplace_back(i);
    };
 
    const size_t num_tasks{100};
-   std::vector<glz::task<void>> tasks{};
-   tasks.reserve(num_tasks);
-   for (size_t i = 1; i <= num_tasks; ++i) {
-      tasks.emplace_back(make_critical_section_task(i));
+   exec::async_scope scope;
+   for (std::size_t i = 1; i < num_tasks; ++i) {
+      scope.spawn(stdexec::on(scheduler, stdexec::just() | stdexec::then([&, i]() {
+         make_critical_section_task(i);
+      })));
    }
 
-   glz::sync_wait(glz::when_all(std::move(tasks)));
+   stdexec::sync_wait(scope.on_empty());
 
    // The output will be variable per run depending on how the tasks are picked up on the
    // thread pool workers.
@@ -275,7 +270,7 @@ suite latch = [] {
    }
 };
 
-suite shared_mutex_test = [] {
+/*suite shared_mutex_test = [] {
    std::cout << "\nShared Mutex test:\n";
    // Shared mutexes require an excutor type to be able to wake up multiple shared waiters when
    // there is an exclusive lock holder releasing the lock.  This example uses a single thread
