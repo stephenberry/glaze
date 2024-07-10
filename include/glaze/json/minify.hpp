@@ -45,68 +45,68 @@ namespace glz
             switch (json_types[size_t(*it)]) {
             case String: {
                const auto value = read_json_string<Opts>(it, end);
-               dump_unchecked(value, b, ix); // we couldn't have gotten here without a quote
+               dump<false>(value, b, ix); // we couldn't have gotten here without a quote
                skip_whitespace();
                break;
             }
             case Comma: {
-               dump<',', true>(b, ix);
+               dump<',', false>(b, ix);
                ++it;
                skip_expected_whitespace();
                break;
             }
             case Number: {
                const auto value = read_json_number(it);
-               dump_unchecked(value, b, ix); // we couldn't have gotten here without one valid character
+               dump<false>(value, b, ix); // we couldn't have gotten here without one valid character
                skip_whitespace();
                break;
             }
             case Colon: {
-               dump<':', true>(b, ix);
+               dump<':', false>(b, ix);
                ++it;
                skip_whitespace();
                break;
             }
             case Array_Start: {
-               dump<'[', true>(b, ix);
+               dump<'[', false>(b, ix);
                ++it;
                skip_expected_whitespace();
                break;
             }
             case Array_End: {
-               dump<']', true>(b, ix);
+               dump<']', false>(b, ix);
                ++it;
                skip_whitespace();
                break;
             }
             case Null: {
-               dump_unchecked<"null">(b, ix);
+               dump<"null", false>(b, ix);
                it += 4;
                skip_whitespace();
                break;
             }
             case Bool: {
                if (*it == 't') {
-                  dump_unchecked<"true">(b, ix);
+                  dump<"true", false>(b, ix);
                   it += 4;
                   skip_whitespace();
                   break;
                }
                else {
-                  dump_unchecked<"false">(b, ix);
+                  dump<"false", false>(b, ix);
                   it += 5;
                   skip_whitespace();
                   break;
                }
             }
             case Object_Start: {
-               dump<'{', true>(b, ix);
+               dump<'{', false>(b, ix);
                ++it;
                skip_expected_whitespace();
                break;
             }
             case Object_End: {
-               dump<'}', true>(b, ix);
+               dump<'}', false>(b, ix);
                ++it;
                skip_whitespace();
                break;
@@ -115,7 +115,7 @@ namespace glz
                if constexpr (Opts.comments) {
                   const auto value = read_jsonc_comment(it, end);
                   if (value.size()) [[likely]] {
-                     dump_unchecked(value, b, ix);
+                     dump<false>(value, b, ix);
                   }
                   skip_whitespace();
                   break;

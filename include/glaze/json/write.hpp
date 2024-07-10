@@ -162,40 +162,21 @@ namespace glz
          template <auto Opts, class... Args>
          GLZ_ALWAYS_INLINE static void op(const bool value, is_context auto&&, Args&&... args) noexcept
          {
+            static constexpr auto checked = not has_write_unchecked(Opts);
             if constexpr (Opts.bools_as_numbers) {
-               if constexpr (has_write_unchecked(Opts)) {
-                  if (value) {
-                     dump_unchecked<"1">(std::forward<Args>(args)...);
-                  }
-                  else {
-                     dump_unchecked<"0">(std::forward<Args>(args)...);
-                  }
+               if (value) {
+                  dump<"1", checked>(std::forward<Args>(args)...);
                }
                else {
-                  if (value) {
-                     dump<"1">(std::forward<Args>(args)...);
-                  }
-                  else {
-                     dump<"0">(std::forward<Args>(args)...);
-                  }
+                  dump<"0", checked>(std::forward<Args>(args)...);
                }
             }
             else {
-               if constexpr (has_write_unchecked(Opts)) {
-                  if (value) {
-                     dump_unchecked<"true">(std::forward<Args>(args)...);
-                  }
-                  else {
-                     dump_unchecked<"false">(std::forward<Args>(args)...);
-                  }
+               if (value) {
+                  dump<"true", checked>(std::forward<Args>(args)...);
                }
                else {
-                  if (value) {
-                     dump<"true">(std::forward<Args>(args)...);
-                  }
-                  else {
-                     dump<"false">(std::forward<Args>(args)...);
-                  }
+                  dump<"false", checked>(std::forward<Args>(args)...);
                }
             }
          }
@@ -264,7 +245,7 @@ namespace glz
                      }
                   }
 
-                  dump<'"', true>(b, ix);
+                  dump<'"', false>(b, ix);
                   if (const auto escaped = char_escape_table[uint8_t(value)]; escaped) {
                      std::memcpy(data_ptr(b) + ix, &escaped, 2);
                      ix += 2;
@@ -273,9 +254,9 @@ namespace glz
                      // null character treated as empty string
                   }
                   else {
-                     dump_unchecked(value, b, ix);
+                     dump<false>(value, b, ix);
                   }
-                  dump<'"', true>(b, ix);
+                  dump<'"', false>(b, ix);
                }
             }
             else {
@@ -299,11 +280,11 @@ namespace glz
                   }
                   // now we don't have to check writing
 
-                  dump<'"', true>(b, ix);
+                  dump<'"', false>(b, ix);
                   if (str.size()) [[likely]] {
-                     dump_unchecked(str, b, ix);
+                     dump<false>(str, b, ix);
                   }
-                  dump<'"', true>(b, ix);
+                  dump<'"', false>(b, ix);
                }
                else {
                   const sv str = [&]() -> const sv {
@@ -330,11 +311,11 @@ namespace glz
 
                   if constexpr (Opts.raw) {
                      if (str.size()) [[likely]] {
-                        dump_unchecked(str, b, ix);
+                        dump<false>(str, b, ix);
                      }
                   }
                   else {
-                     dump<'"', true>(b, ix);
+                     dump<'"', false>(b, ix);
 
                      const auto* c = str.data();
                      const auto* const e = c + n;
@@ -408,7 +389,7 @@ namespace glz
 
                      ix += size_t(data - start);
 
-                     dump<'"', true>(b, ix);
+                     dump<'"', false>(b, ix);
                   }
                }
             }
@@ -510,7 +491,7 @@ namespace glz
                   b.resize((std::max)(b.size() * 2, k));
                }
             }
-            dump_unchecked<",\n">(b, ix);
+            dump<",\n", false>(b, ix);
             dumpn_unchecked<Opts.indentation_char>(ctx.indentation_level, b, ix);
          }
          else {
@@ -607,7 +588,7 @@ namespace glz
                      b.resize((std::max)(b.size() * 2, k));
                   }
                }
-               dump_unchecked<"{\n">(b, ix);
+               dump<"{\n", false>(b, ix);
                dumpn_unchecked<Opts.indentation_char>(ctx.indentation_level, b, ix);
             }
             else {
@@ -619,7 +600,7 @@ namespace glz
             if constexpr (Opts.prettify) {
                ctx.indentation_level -= Opts.indentation_width;
                dump_newline_indent<Opts.indentation_char>(ctx.indentation_level, b, ix);
-               dump<'}', true>(b, ix);
+               dump<'}', false>(b, ix);
             }
             else {
                dump<'}'>(b, ix);
@@ -786,12 +767,7 @@ namespace glz
                }
             }
             else {
-               if constexpr (has_write_unchecked(Opts)) {
-                  dump_unchecked<"null">(std::forward<Args>(args)...);
-               }
-               else {
-                  dump<"null">(std::forward<Args>(args)...);
-               }
+               dump<"null", not has_write_unchecked(Opts)>(std::forward<Args>(args)...);
             }
          }
       };
@@ -802,12 +778,7 @@ namespace glz
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&&, auto&&... args) noexcept
          {
-            if constexpr (has_write_unchecked(Opts)) {
-               dump_unchecked<"null">(args...);
-            }
-            else {
-               dump<"null">(args...);
-            }
+            dump<"null", not has_write_unchecked(Opts)>(args...);
          }
       };
 
@@ -1151,7 +1122,7 @@ namespace glz
                         b.resize((std::max)(b.size() * 2, k));
                      }
                   }
-                  dump_unchecked<"{\n">(b, ix);
+                  dump<"{\n", false>(b, ix);
                   dumpn_unchecked<Options.indentation_char>(ctx.indentation_level, b, ix);
                }
                else {
@@ -1187,10 +1158,10 @@ namespace glz
                      write<json>::op<Opts>(key, ctx, b, ix);
                      maybe_pad<write_padding_bytes>(b, ix);
                      if constexpr (Opts.prettify) {
-                        dump_unchecked<": ">(b, ix);
+                        dump<": ", false>(b, ix);
                      }
                      else {
-                        dump<':', true>(b, ix);
+                        dump<':', false>(b, ix);
                      }
                   }
                   else {
@@ -1275,9 +1246,9 @@ namespace glz
                         b.resize((std::max)(b.size() * 2, k));
                      }
                   }
-                  dump<'\n', true>(b, ix);
+                  dump<'\n', false>(b, ix);
                   dumpn_unchecked<Options.indentation_char>(ctx.indentation_level, b, ix);
-                  dump<'}', true>(b, ix);
+                  dump<'}', false>(b, ix);
                }
                else {
                   dump<'}'>(b, ix);
