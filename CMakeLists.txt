@@ -36,54 +36,25 @@ endif()
 
 set_property(TARGET glaze_glaze PROPERTY EXPORT_NAME glaze)
 
-#include(FetchContent)
-#
-#FetchContent_Declare(
-#  stdexec
-#  GIT_REPOSITORY https://github.com/NVIDIA/stdexec.git
-#  GIT_TAG main
-#  GIT_SHALLOW TRUE
-#)
-#FetchContent_MakeAvailable(stdexec)
+include(FetchContent)
 
-#include(cmake/CPM.cmake)
-#
-#CPMAddPackage(
-#  NAME stdexec
-#  GITHUB_REPOSITORY NVIDIA/stdexec
-#  GIT_TAG main
-#)
+FetchContent_Declare(
+  stdexec
+  GIT_REPOSITORY https://github.com/NVIDIA/stdexec.git
+  GIT_TAG main
+  GIT_SHALLOW TRUE
+)
 
-#if (EXISTS ${stdexec_SOURCE_DIR}/include)
-#message("stdexec headers available")
-#endif()
+set(STDEXEC_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 
-#find_package(Git REQUIRED)
-#execute_process(
-#    COMMAND ${GIT_EXECUTABLE} clone --depth 1 --branch "main" --recursive "https://github.com/NVIDIA/stdexec.git" "stdexec-src"
-#    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/_deps
-#)
-#
-#set(STDEXEC_INCLUDE_DIR ${CMAKE_BINARY_DIR}/_deps/stdexec-src/include)
-#
-#target_compile_features(glaze_glaze INTERFACE cxx_std_20)
-#target_include_directories(
-#    glaze_glaze ${warning_guard}
-#    INTERFACE 
-#        "$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>"
-#        "$<BUILD_INTERFACE:${STDEXEC_INCLUDE_DIR}>"
-#)
+FetchContent_MakeAvailable(stdexec)
 
 target_compile_features(glaze_glaze INTERFACE cxx_std_20)
 target_include_directories(
     glaze_glaze ${warning_guard}
     INTERFACE "$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>"
-    "$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/../stdexec/include>"
+    "$<BUILD_INTERFACE:${stdexec_SOURCE_DIR}/include>"
 )
-#if (TARGET stdexec::stdexec)
-#message("stdexec::stdexec found")
-#endif()
-#target_link_libraries(${PROJECT_NAME} INTERFACE STDEXEC::stdexec)
 
 if(NOT CMAKE_SKIP_INSTALL_RULES)
   include(cmake/install-rules.cmake)
