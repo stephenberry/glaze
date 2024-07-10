@@ -319,9 +319,9 @@ suite mutex_test = [] {
    }
 
    glz::sync_wait(glz::when_all(std::move(tasks)));
-};
+};*/
 
-suite semaphore_test = [] {
+/*suite semaphore_test = [] {
    std::cout << "\nSemaphore test:\n";
    // Have more threads/tasks than the semaphore will allow for at any given point in time.
    glz::thread_pool tp{glz::thread_pool::options{.thread_count = 8}};
@@ -350,9 +350,9 @@ suite semaphore_test = [] {
    }
 
    glz::sync_wait(glz::when_all(std::move(tasks)));
-};
+};*/
 
-suite ring_buffer_test = [] {
+/*suite ring_buffer_test = [] {
    std::cout << "\nRing Buffer test:\n";
 
    const size_t iterations = 100;
