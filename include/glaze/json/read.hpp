@@ -1695,7 +1695,21 @@ namespace glz
          constexpr auto variant_size = std::variant_size_v<std::decay_t<decltype(variant)>>;
          for_each_short_circuit<variant_size>([&](auto I) {
             if (I == variant.index()) {
-               read<json>::op<ws_handled<Opts>()>(get_member(value, std::get<I>(variant)), ctx, it, end);
+               using V = decltype(get_member(value, std::get<I>(variant)));
+               
+               if constexpr (std::is_const_v<std::remove_reference_t<V>>) {
+                  if constexpr (Opts.error_on_const_read) {
+                     ctx.error = error_code::attempt_const_read;
+                  }
+                  else {
+                     // do not read anything into the const value
+                     skip_value<Opts>(ctx, it, end);
+                  }
+               }
+               else {
+                  from_json<std::remove_cvref_t<V>>::template op<ws_handled<Opts>()>(get_member(value, std::get<I>(variant)), ctx, it, end);
+               }
+               
                return true;
             }
             return false;
