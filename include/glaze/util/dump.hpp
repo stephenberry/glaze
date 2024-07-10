@@ -187,31 +187,18 @@ namespace glz::detail
       ix += n;
    }
 
-   template <const sv& str, class B>
+   template <const sv& str, bool Checked = true, class B>
    GLZ_ALWAYS_INLINE void dump(B& b, auto& ix) noexcept
    {
       static constexpr auto s = str;
       static constexpr auto n = s.size();
 
       if constexpr (vector_like<B>) {
-         if (ix + n > b.size()) [[unlikely]] {
-            b.resize((std::max)(b.size() * 2, ix + n));
+         if constexpr (Checked) {
+            if (ix + n > b.size()) [[unlikely]] {
+               b.resize((std::max)(b.size() * 2, ix + n));
+            }
          }
-         std::memcpy(b.data() + ix, s.data(), n);
-      }
-      else {
-         std::memcpy(b + ix, s.data(), n);
-      }
-      ix += n;
-   }
-
-   template <const sv& str, class B>
-   GLZ_ALWAYS_INLINE void dump_unchecked(B& b, auto& ix) noexcept
-   {
-      static constexpr auto s = str;
-      static constexpr auto n = s.size();
-
-      if constexpr (vector_like<B>) {
          std::memcpy(b.data() + ix, s.data(), n);
       }
       else {

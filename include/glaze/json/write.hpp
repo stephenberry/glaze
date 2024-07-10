@@ -139,20 +139,12 @@ namespace glz
          template <auto Opts, class B>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, B&& b, auto&& ix) noexcept
          {
-            if constexpr (has_write_unchecked(Opts) && (sizeof(typename T::value_type) <= 8)) {
-               dump_unchecked<'['>(b, ix);
-               write<json>::op<Opts>(value.real(), ctx, b, ix);
-               dump_unchecked<','>(b, ix);
-               write<json>::op<Opts>(value.imag(), ctx, b, ix);
-               dump_unchecked<']'>(b, ix);
-            }
-            else {
-               dump<'['>(b, ix);
-               write<json>::op<Opts>(value.real(), ctx, b, ix);
-               dump<','>(b, ix);
-               write<json>::op<Opts>(value.imag(), ctx, b, ix);
-               dump<']'>(b, ix);
-            }
+            constexpr auto unchecked = has_write_unchecked(Opts) && (sizeof(typename T::value_type) <= 8);
+            dump<'[', not unchecked>(b, ix);
+            write<json>::op<Opts>(value.real(), ctx, b, ix);
+            dump<',', not unchecked>(b, ix);
+            write<json>::op<Opts>(value.imag(), ctx, b, ix);
+            dump<']', not unchecked>(b, ix);
          }
       };
 
@@ -162,7 +154,7 @@ namespace glz
          template <auto Opts, class... Args>
          GLZ_ALWAYS_INLINE static void op(const bool value, is_context auto&&, Args&&... args) noexcept
          {
-            static constexpr auto checked = not has_write_unchecked(Opts);
+            constexpr auto checked = not has_write_unchecked(Opts);
             if constexpr (Opts.bools_as_numbers) {
                if (value) {
                   dump<"1", checked>(std::forward<Args>(args)...);
@@ -188,23 +180,13 @@ namespace glz
          template <auto Opts, class B>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, B&& b, auto&& ix) noexcept
          {
-            if constexpr (has_write_unchecked(Opts)) {
-               if constexpr (Opts.quoted_num) {
-                  dump_unchecked<'"'>(b, ix);
-               }
-               write_chars::op<Opts>(value, ctx, b, ix);
-               if constexpr (Opts.quoted_num) {
-                  dump_unchecked<'"'>(b, ix);
-               }
+            constexpr auto checked = not has_write_unchecked(Opts);
+            if constexpr (Opts.quoted_num) {
+               dump<'"', checked>(b, ix);
             }
-            else {
-               if constexpr (Opts.quoted_num) {
-                  dump<'"'>(b, ix);
-               }
-               write_chars::op<Opts>(value, ctx, b, ix);
-               if constexpr (Opts.quoted_num) {
-                  dump<'"'>(b, ix);
-               }
+            write_chars::op<Opts>(value, ctx, b, ix);
+            if constexpr (Opts.quoted_num) {
+               dump<'"', checked>(b, ix);
             }
          }
       };
@@ -1176,7 +1158,7 @@ namespace glz
                      else {
                         maybe_pad<quoted_key.size() + write_padding_bytes>(b);
                      }
-                     dump_unchecked<quoted_key>(b, ix);
+                     dump<quoted_key, false>(b, ix);
                   }
                };
 
