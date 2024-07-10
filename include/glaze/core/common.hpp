@@ -428,8 +428,8 @@ namespace glz
          }
       }
 
-      template <class T, class mptr_t>
-      using member_t = decltype(get_member(std::declval<T>(), std::declval<std::decay_t<mptr_t>&>()));
+      template <class T, class Element>
+      using member_t = decltype(get_member(std::declval<T>(), std::declval<Element>()));
 
       // member_ptr and lambda wrapper helper
       template <template <class> class Wrapper, class Wrapped>

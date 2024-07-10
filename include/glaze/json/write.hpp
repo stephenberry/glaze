@@ -141,9 +141,9 @@ namespace glz
          {
             constexpr auto unchecked = has_write_unchecked(Opts) && (sizeof(typename T::value_type) <= 8);
             dump<'[', not unchecked>(b, ix);
-            to_json<decltype(value.real())>::template op<Opts>(value.real(), ctx, b, ix);
+            write<json>::op<Opts>(value.real(), ctx, b, ix);
             dump<',', not unchecked>(b, ix);
-            to_json<decltype(value.imag())>::template op<Opts>(value.imag(), ctx, b, ix);
+            write<json>::op<Opts>(value.imag(), ctx, b, ix);
             dump<']', not unchecked>(b, ix);
          }
       };
@@ -742,15 +742,14 @@ namespace glz
          template <auto Opts, class... Args>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
-            using val_t = std::remove_cvref_t<decltype(*value)>;
             if (value) {
                if constexpr (
                   requires { requires supports_unchecked_write<typename T::value_type>; } ||
                   requires { requires supports_unchecked_write<typename T::element_type>; }) {
-                  to_json<val_t>::template op<Opts>(*value, ctx, std::forward<Args>(args)...);
+                  write<json>::op<Opts>(*value, ctx, std::forward<Args>(args)...);
                }
                else {
-                  to_json<val_t>::template op<write_unchecked_off<Opts>()>(*value, ctx, std::forward<Args>(args)...);
+                  write<json>::op<write_unchecked_off<Opts>()>(*value, ctx, std::forward<Args>(args)...);
                }
             }
             else {
@@ -1081,12 +1080,12 @@ namespace glz
                if constexpr (std::is_member_object_pointer_v<WriterType>) {
                   // TODO: This intermediate is added to get GCC 14 to build
                   decltype(auto) merged = glz::merge{value, value.*writer};
-                  to_json<decltype(merged)>::template op<disable_write_unknown_on<Options>()>(std::move(merged), ctx, b, ix);
+                  write<json>::op<disable_write_unknown_on<Options>()>(std::move(merged), ctx, b, ix);
                }
                else if constexpr (std::is_member_function_pointer_v<WriterType>) {
                   // TODO: This intermediate is added to get GCC 14 to build
                   decltype(auto) merged = glz::merge{value, (value.*writer)()};
-                  to_json<decltype(merged)>::template op<disable_write_unknown_on<Options>()>(std::move(merged), ctx, b, ix);
+                  write<json>::op<disable_write_unknown_on<Options>()>(std::move(merged), ctx, b, ix);
                }
                else {
                   static_assert(false_v<T>, "unknown_write type not handled");
@@ -1142,7 +1141,7 @@ namespace glz
                   static constexpr sv key = get<I>(refl<T>.keys);
                   if constexpr (needs_escaping(key)) {
                      // TODO: do compile time escaping
-                     to_json<decltype(key)>::template op<Opts>(key, ctx, b, ix);
+                     write<json>::op<Opts>(key, ctx, b, ix);
                      maybe_pad<write_padding_bytes>(b, ix);
                      if constexpr (Opts.prettify) {
                         dump<": ", false>(b, ix);
