@@ -1129,20 +1129,19 @@ namespace glz
 
             [[maybe_unused]] bool first = true;
             static constexpr auto first_is_written = object_info<Options, T>::first_will_be_written;
-            static constexpr auto maybe_skipped = object_info<Options, T>::maybe_skipped;
             for_each<N>([&](auto I) {
                constexpr auto Opts = opening_and_closing_handled_off<ws_handled_off<Options>()>();
 
                using val_t = std::remove_cvref_t<refl_t<T, I>>;
 
-               decltype(auto) member = [&]() -> decltype(auto) {
+               decltype(auto) element = [&]() -> decltype(auto) {
                   if constexpr (reflectable<T>) {
                      return get<I>(t);
                   }
                   else {
                      return get<I>(refl<T>.values);
                   }
-               }();
+               };
 
                auto write_key = [&] {
                   // MSVC requires get<I> rather than keys[I]
@@ -1174,27 +1173,29 @@ namespace glz
                   }
                };
 
-               if constexpr (maybe_skipped) {
-                  if constexpr (null_t<val_t>) {
-                     if constexpr (always_null_t<T>)
-                        return;
-                     else {
-                        auto is_null = [&]() {
-                           if constexpr (nullable_wrapper<val_t>) {
-                              return !bool(member(value).val);
-                           }
-                           else {
-                              return !bool(get_member(value, member));
-                           }
-                        }();
-                        if (is_null) return;
-                     }
-                  }
-
+               if constexpr (object_info<Options, T>::maybe_skipped) {
                   if constexpr (is_includer<val_t> || std::same_as<val_t, hidden> || std::same_as<val_t, skip>) {
                      return;
                   }
                   else {
+                     decltype(auto) mem = element();
+                     
+                     if constexpr (null_t<val_t>) {
+                        if constexpr (always_null_t<T>)
+                           return;
+                        else {
+                           auto is_null = [&]() {
+                              if constexpr (nullable_wrapper<val_t>) {
+                                 return !bool(member(value).val);
+                              }
+                              else {
+                                 return !bool(get_member(value, mem));
+                              }
+                           }();
+                           if (is_null) return;
+                        }
+                     }
+                     
                      if constexpr (first_is_written && I > 0) {
                         write_entry_separator<Opts>(ctx, b, ix);
                      }
@@ -1210,10 +1211,10 @@ namespace glz
 
                      write_key();
                      if constexpr (supports_unchecked_write<val_t>) {
-                        to_json<val_t>::template op<write_unchecked_on<Opts>()>(get_member(value, member), ctx, b, ix);
+                        to_json<val_t>::template op<write_unchecked_on<Opts>()>(get_member(value, mem), ctx, b, ix);
                      }
                      else {
-                        to_json<val_t>::template op<Opts>(get_member(value, member), ctx, b, ix);
+                        to_json<val_t>::template op<Opts>(get_member(value, mem), ctx, b, ix);
                      }
                   }
                }
@@ -1225,10 +1226,10 @@ namespace glz
 
                   write_key();
                   if constexpr (supports_unchecked_write<val_t>) {
-                     to_json<val_t>::template op<write_unchecked_on<Opts>()>(get_member(value, member), ctx, b, ix);
+                     to_json<val_t>::template op<write_unchecked_on<Opts>()>(get_member(value, element()), ctx, b, ix);
                   }
                   else {
-                     to_json<val_t>::template op<Opts>(get_member(value, member), ctx, b, ix);
+                     to_json<val_t>::template op<Opts>(get_member(value, element()), ctx, b, ix);
                   }
                }
             });
