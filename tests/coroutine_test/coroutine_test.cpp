@@ -13,6 +13,9 @@
 #include "exec/task.hpp"
 #include "exec/static_thread_pool.hpp"
 #include "exec/async_scope.hpp"
+#include "exec/finally.hpp"
+#include "exec/timed_thread_scheduler.hpp"
+#include "exec/when_any.hpp"
 
 using namespace ut;
 
@@ -158,57 +161,28 @@ suite event = [] {
 
 using namespace std::chrono_literals;
 
-struct Timer {
-    struct promise_type {
-        auto get_return_object() {
-            return Timer{ std::coroutine_handle<promise_type>::from_promise(*this) };
-        }
-        auto initial_suspend() noexcept {
-            return std::suspend_always{};
-        }
-        auto final_suspend() noexcept {
-            return std::suspend_always{};
-        }
-        void return_void() {}
-        void unhandled_exception() {
-            std::terminate();
-        }
-        std::chrono::milliseconds duration;
-    };
+/*struct timer {
+   std::chrono::milliseconds duration_;
+   
+    auto operator co_await() const noexcept {
+        struct awaiter {
+            std::chrono::milliseconds duration;
 
-    std::coroutine_handle<promise_type> handle;
+            bool await_ready() const noexcept { return false; }
 
-    Timer(std::coroutine_handle<promise_type> h) : handle(h) {}
-    ~Timer() {
-        if (handle) handle.destroy();
+            void await_suspend(std::coroutine_handle<> h) const {
+                std::thread([h, this]() {
+                    std::this_thread::sleep_for(duration);
+                    h.resume();
+                }).detach();
+            }
+
+            void await_resume() const noexcept {}
+        };
+
+        return awaiter{duration_};
     }
-
-    bool await_ready() const noexcept {
-        return handle.done();
-    }
-    void await_suspend(std::coroutine_handle<> awaiting) noexcept {
-        std::thread([=] {
-            std::this_thread::sleep_for(handle.promise().duration);
-            awaiting.resume();
-        }).detach();
-    }
-    void await_resume() noexcept {}
-};
-
-inline Timer sleep_for(std::chrono::milliseconds duration) {
-    struct awaiter {
-        std::chrono::milliseconds duration;
-        bool await_ready() const noexcept { return false; }
-        void await_suspend(std::coroutine_handle<> h) const {
-            std::thread([=] {
-                std::this_thread::sleep_for(duration);
-                h.resume();
-            }).detach();
-        }
-        void await_resume() const noexcept {}
-    };
-    co_await awaiter{ duration };
-}
+};*/
 
 suite latch = [] {
    std::cout << "\nLatch test:\n";
@@ -242,7 +216,10 @@ suite latch = [] {
       // Do some expensive calculations, yield to mimic work...!  Its also important to never use
       // std::this_thread::sleep_for() within the context of coroutines, it will block the thread
       // and other tasks that are ready to execute will be blocked.
-      co_await sleep_for(std::chrono::milliseconds{i * 20});
+      //co_await timer{std::chrono::milliseconds{i * 20}}(sched);
+      co_await [&]() -> exec::task<void> {
+         co_return std::thread([i]{ std::this_thread::sleep_for(std::chrono::milliseconds(i * 20)); }).detach();
+      }();
       std::cout << "worker task " << i << " is done, counting down on the latch\n";
       l.count_down();
       co_return;
@@ -252,8 +229,7 @@ suite latch = [] {
    glz::latch l{num_tasks};
 
    // Make the latch task first so it correctly waits for all worker tasks to count down.
-   auto work = [&](auto) -> exec::task<void> {
-      co_await make_latch_task(l);
+   auto work = [&]() -> exec::task<void> {
       for (int64_t i = 1; i <= num_tasks; ++i) {
          co_await make_worker_task(scheduler, l, i);
       }
@@ -261,7 +237,7 @@ suite latch = [] {
    };
 
    // Wait for all tasks to complete.
-   //stdexec::sync_wait(work(5));
+   stdexec::sync_wait(stdexec::when_all(make_latch_task(l), work()));
 };
 
 /*suite mutex_test = [] {
