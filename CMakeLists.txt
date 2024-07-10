@@ -19,7 +19,7 @@ if (MSVC)
   string(REGEX MATCH "\/cl(.exe)?$" matched_cl ${CMAKE_CXX_COMPILER})
   if (matched_cl)
     # for a C++ standards compliant preprocessor, not needed for clang-cl
-    target_compile_options(glaze_glaze INTERFACE "/Zc:preprocessor" /permissive- /Zc:lambda)
+    target_compile_options(glaze_glaze INTERFACE "/Zc:preprocessor" /permissive- /Zc:lambda /Zc:__cplusplus)
     
     if(PROJECT_IS_TOP_LEVEL)
       target_compile_options(glaze_glaze INTERFACE 

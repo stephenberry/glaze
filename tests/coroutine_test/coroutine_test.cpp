@@ -5,7 +5,8 @@
 
 #include "glaze/coroutine.hpp"
 
-#include "glaze/network.hpp"
+// #include "glaze/network.hpp"
+
 #include "ut/ut.hpp"
 
 #include "stdexec/execution.hpp"

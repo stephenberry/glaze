@@ -5,7 +5,6 @@
 
 #include "glaze/coroutine/awaitable.hpp"
 #include "glaze/coroutine/generator.hpp"
-#include "glaze/coroutine/scheduler.hpp"
 #include "glaze/coroutine/latch.hpp"
 #include "glaze/coroutine/mutex.hpp"
 #include "glaze/coroutine/ring_buffer.hpp"
