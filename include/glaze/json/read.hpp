@@ -351,6 +351,8 @@ namespace glz
 
             using V = std::decay_t<decltype(value)>;
             if constexpr (int_t<V>) {
+               static_assert(sizeof(*it) == sizeof(char));
+               
                static constexpr auto maximum = uint64_t((std::numeric_limits<V>::max)());
                if constexpr (std::is_unsigned_v<V>) {
                   if constexpr (std::same_as<V, uint64_t>) {
@@ -358,8 +360,7 @@ namespace glz
                         ctx.error = error_code::parse_number_failure;
                         return;
                      }
-
-                     static_assert(sizeof(*it) == sizeof(char));
+                     
                      const char* cur = reinterpret_cast<const char*>(it);
                      const char* beg = cur;
                      if constexpr (std::is_volatile_v<std::remove_reference_t<decltype(value)>>) {
@@ -390,7 +391,6 @@ namespace glz
                         return;
                      }
 
-                     static_assert(sizeof(*it) == sizeof(char));
                      const char* cur = reinterpret_cast<const char*>(it);
                      const char* beg = cur;
                      auto s = parse_int<std::decay_t<decltype(i)>, Opts.force_conformance>(i, cur);
@@ -415,7 +415,6 @@ namespace glz
                      ++it;
                   }
 
-                  static_assert(sizeof(*it) == sizeof(char));
                   const char* cur = reinterpret_cast<const char*>(it);
                   const char* beg = cur;
                   auto s = parse_int<decay_keep_volatile_t<decltype(i)>, Opts.force_conformance>(i, cur);
@@ -1695,7 +1694,21 @@ namespace glz
          constexpr auto variant_size = std::variant_size_v<std::decay_t<decltype(variant)>>;
          for_each_short_circuit<variant_size>([&](auto I) {
             if (I == variant.index()) {
-               read<json>::op<ws_handled<Opts>()>(get_member(value, std::get<I>(variant)), ctx, it, end);
+               using V = decltype(get_member(value, std::get<I>(variant)));
+               
+               if constexpr (std::is_const_v<std::remove_reference_t<V>>) {
+                  if constexpr (Opts.error_on_const_read) {
+                     ctx.error = error_code::attempt_const_read;
+                  }
+                  else {
+                     // do not read anything into the const value
+                     skip_value<Opts>(ctx, it, end);
+                  }
+               }
+               else {
+                  from_json<std::remove_cvref_t<V>>::template op<ws_handled<Opts>()>(get_member(value, std::get<I>(variant)), ctx, it, end);
+               }
+               
                return true;
             }
             return false;

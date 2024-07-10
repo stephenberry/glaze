@@ -253,7 +253,7 @@ namespace glz
       }();
 
       static constexpr bool maybe_skipped = [] {
-         if constexpr (N > 0) {
+         if constexpr (N > 0 && Opts.skip_null_members) {
             bool found_maybe_skipped{};
             for_each_short_circuit<N>([&](auto I) {
                using V = std::remove_cvref_t<refl_t<T, I>>;
