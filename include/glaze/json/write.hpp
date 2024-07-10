@@ -811,10 +811,10 @@ namespace glz
                            dump<R"(",)">(args...);
                         }
                      }
-                     write<json>::op<opening_handled<Opts>()>(val, ctx, args...);
+                     to_json<V>::template op<opening_handled<Opts>()>(val, ctx, args...);
                   }
                   else {
-                     write<json>::op<Opts>(val, ctx, args...);
+                     to_json<V>::template op<Opts>(val, ctx, args...);
                   }
                },
                value);
@@ -1004,7 +1004,7 @@ namespace glz
 
                   if constexpr (str_t<Key> || char_t<Key>) {
                      const sv key = glz::get<2 * I>(value.value);
-                     write<json>::op<Opts>(key, ctx, b, ix);
+                     to_json<decltype(key)>::template op<Opts>(key, ctx, b, ix);
                      dump<':'>(b, ix);
                      if constexpr (Opts.prettify) {
                         dump<' '>(b, ix);
@@ -1012,11 +1012,11 @@ namespace glz
                   }
                   else {
                      dump<'"'>(b, ix);
-                     write<json>::op<Opts>(item, ctx, b, ix);
+                     to_json<val_t>::template op<Opts>(item, ctx, b, ix);
                      dump_not_empty(Opts.prettify ? "\": " : "\":", b, ix);
                   }
 
-                  write<json>::op<Opts>(item, ctx, b, ix);
+                  to_json<val_t>::template op<Opts>(item, ctx, b, ix);
                }
             });
 
