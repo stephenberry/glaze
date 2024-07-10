@@ -484,28 +484,32 @@ namespace glz
       template <opts Opts>
       GLZ_ALWAYS_INLINE void write_array_to_json(auto&& value, is_context auto&& ctx, auto&&... args)
       {
-         dump<'['>(args...);
+         if (empty_range(value)) {
+            dump<"[]">(args...);
+         }
+         else {
+            dump<'['>(args...);
 
-         if (!empty_range(value)) {
             if constexpr (Opts.prettify) {
                ctx.indentation_level += Opts.indentation_width;
                dump_newline_indent<Opts.indentation_char>(ctx.indentation_level, args...);
             }
 
             auto it = std::begin(value);
-            write<json>::op<Opts>(*it, ctx, args...);
+            using val_t = std::remove_cvref_t<decltype(*it)>;
+            to_json<val_t>::template op<Opts>(*it, ctx, args...);
             ++it;
             for (const auto fin = std::end(value); it != fin; ++it) {
                write_entry_separator<Opts>(ctx, args...);
-               write<json>::op<Opts>(*it, ctx, args...);
+               to_json<val_t>::template op<Opts>(*it, ctx, args...);
             }
             if constexpr (Opts.prettify) {
                ctx.indentation_level -= Opts.indentation_width;
                dump_newline_indent<Opts.indentation_char>(ctx.indentation_level, args...);
             }
-         }
 
-         dump<']'>(args...);
+            dump<']'>(args...);
+         }
       }
 
       template <writable_array_t T>
