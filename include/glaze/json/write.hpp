@@ -264,7 +264,7 @@ namespace glz
                      }
                   }
 
-                  dump_unchecked<'"'>(b, ix);
+                  dump<'"', true>(b, ix);
                   if (const auto escaped = char_escape_table[uint8_t(value)]; escaped) {
                      std::memcpy(data_ptr(b) + ix, &escaped, 2);
                      ix += 2;
@@ -275,7 +275,7 @@ namespace glz
                   else {
                      dump_unchecked(value, b, ix);
                   }
-                  dump_unchecked<'"'>(b, ix);
+                  dump<'"', true>(b, ix);
                }
             }
             else {
@@ -299,11 +299,11 @@ namespace glz
                   }
                   // now we don't have to check writing
 
-                  dump_unchecked<'"'>(b, ix);
+                  dump<'"', true>(b, ix);
                   if (str.size()) [[likely]] {
                      dump_unchecked(str, b, ix);
                   }
-                  dump_unchecked<'"'>(b, ix);
+                  dump<'"', true>(b, ix);
                }
                else {
                   const sv str = [&]() -> const sv {
@@ -334,7 +334,7 @@ namespace glz
                      }
                   }
                   else {
-                     dump_unchecked<'"'>(b, ix);
+                     dump<'"', true>(b, ix);
 
                      const auto* c = str.data();
                      const auto* const e = c + n;
@@ -408,7 +408,7 @@ namespace glz
 
                      ix += size_t(data - start);
 
-                     dump_unchecked<'"'>(b, ix);
+                     dump<'"', true>(b, ix);
                   }
                }
             }
@@ -619,7 +619,7 @@ namespace glz
             if constexpr (Opts.prettify) {
                ctx.indentation_level -= Opts.indentation_width;
                dump_newline_indent<Opts.indentation_char>(ctx.indentation_level, b, ix);
-               dump_unchecked<'}'>(b, ix);
+               dump<'}', true>(b, ix);
             }
             else {
                dump<'}'>(b, ix);
@@ -1190,7 +1190,7 @@ namespace glz
                         dump_unchecked<": ">(b, ix);
                      }
                      else {
-                        dump_unchecked<':'>(b, ix);
+                        dump<':', true>(b, ix);
                      }
                   }
                   else {
@@ -1275,9 +1275,9 @@ namespace glz
                         b.resize((std::max)(b.size() * 2, k));
                      }
                   }
-                  dump_unchecked<'\n'>(b, ix);
+                  dump<'\n', true>(b, ix);
                   dumpn_unchecked<Options.indentation_char>(ctx.indentation_level, b, ix);
-                  dump_unchecked<'}'>(b, ix);
+                  dump<'}', true>(b, ix);
                }
                else {
                   dump<'}'>(b, ix);

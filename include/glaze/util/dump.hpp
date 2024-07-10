@@ -10,6 +10,7 @@
 #include <string_view>
 
 #include "glaze/concepts/container_concepts.hpp"
+#include "glaze/core/opts.hpp"
 
 namespace glz::detail
 {
@@ -89,10 +90,10 @@ namespace glz::detail
       ++ix;
    }
 
-   template <auto c, class B>
+   template <auto c, bool Unchecked = false, class B>
    GLZ_ALWAYS_INLINE void dump(B& b, auto& ix) noexcept
    {
-      if constexpr (vector_like<B>) {
+      if constexpr (Unchecked && vector_like<B>) {
          if (ix == b.size()) [[unlikely]] {
             b.resize(b.size() == 0 ? 128 : b.size() * 2);
          }
@@ -106,7 +107,7 @@ namespace glz::detail
    {
       static constexpr auto s = str.sv();
       static constexpr auto n = s.size();
-
+      
       if constexpr (vector_like<B>) {
          if (ix + n > b.size()) [[unlikely]] {
             b.resize((std::max)(b.size() * 2, ix + n));
@@ -117,13 +118,6 @@ namespace glz::detail
          std::memcpy(b + ix, s.data(), n);
       }
       ix += n;
-   }
-
-   template <auto c>
-   GLZ_ALWAYS_INLINE void dump_unchecked(auto& b, auto& ix) noexcept
-   {
-      assign_maybe_cast<c>(b, ix);
-      ++ix;
    }
 
    GLZ_ALWAYS_INLINE void dump_unchecked(const byte_sized auto c, auto& b, auto& ix) noexcept
