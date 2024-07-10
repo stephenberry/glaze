@@ -351,6 +351,8 @@ namespace glz
 
             using V = std::decay_t<decltype(value)>;
             if constexpr (int_t<V>) {
+               static_assert(sizeof(*it) == sizeof(char));
+               
                static constexpr auto maximum = uint64_t((std::numeric_limits<V>::max)());
                if constexpr (std::is_unsigned_v<V>) {
                   if constexpr (std::same_as<V, uint64_t>) {
@@ -358,8 +360,7 @@ namespace glz
                         ctx.error = error_code::parse_number_failure;
                         return;
                      }
-
-                     static_assert(sizeof(*it) == sizeof(char));
+                     
                      const char* cur = reinterpret_cast<const char*>(it);
                      const char* beg = cur;
                      if constexpr (std::is_volatile_v<std::remove_reference_t<decltype(value)>>) {
@@ -390,7 +391,6 @@ namespace glz
                         return;
                      }
 
-                     static_assert(sizeof(*it) == sizeof(char));
                      const char* cur = reinterpret_cast<const char*>(it);
                      const char* beg = cur;
                      auto s = parse_int<std::decay_t<decltype(i)>, Opts.force_conformance>(i, cur);
@@ -415,7 +415,6 @@ namespace glz
                      ++it;
                   }
 
-                  static_assert(sizeof(*it) == sizeof(char));
                   const char* cur = reinterpret_cast<const char*>(it);
                   const char* beg = cur;
                   auto s = parse_int<decay_keep_volatile_t<decltype(i)>, Opts.force_conformance>(i, cur);
