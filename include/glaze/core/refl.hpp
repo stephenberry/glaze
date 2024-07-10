@@ -14,7 +14,7 @@ namespace glz::detail
    template <class... Ts>
    struct tuple_ptr<tuplet::tuple<Ts...>>
    {
-      using type = tuplet::tuple<std::add_pointer_t<Ts>...>;
+      using type = tuplet::tuple<std::add_pointer_t<std::remove_reference_t<Ts>>...>;
    };
 
    template <class Tuple>
@@ -144,8 +144,6 @@ namespace glz
          }(std::make_index_sequence<value_indices.size()>{}); //
       }();
 
-      using tuple = decltype(values);
-
       static constexpr auto N = tuple_size_v<decltype(values)>;
 
       static constexpr auto keys = [] {
@@ -170,8 +168,6 @@ namespace glz
       using V = std::remove_cvref_t<T>;
 
       static constexpr auto values = meta_v<V>;
-
-      using tuple = decltype(values);
 
       static constexpr auto N = tuple_size_v<decltype(values)>;
 
