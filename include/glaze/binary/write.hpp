@@ -8,7 +8,6 @@
 #include "glaze/binary/header.hpp"
 #include "glaze/core/opts.hpp"
 #include "glaze/core/refl.hpp"
-#include "glaze/core/reflection_tuple.hpp"
 #include "glaze/core/seek.hpp"
 #include "glaze/core/write.hpp"
 #include "glaze/util/dump.hpp"
@@ -675,7 +674,16 @@ namespace glz
          {
             dump<tag::generic_array>(args...);
             dump_compressed_int<count_to_write>(args...);
-            decltype(auto) t = reflection_tuple<T>(value);
+            
+            [[maybe_unused]] decltype(auto) t = [&]() -> decltype(auto) {
+                           if constexpr (reflectable<T>) {
+                              return to_tuple(value);
+                           }
+                           else {
+                              return nullptr;
+                           }
+                        }();
+            
             for_each<N>([&](auto I) {
                using val_t = std::remove_cvref_t<refl_t<T, I>>;
 
@@ -705,7 +713,15 @@ namespace glz
             }
             constexpr auto Opts = opening_handled_off<Options>();
 
-            decltype(auto) t = reflection_tuple<T>(value);
+            [[maybe_unused]] decltype(auto) t = [&]() -> decltype(auto) {
+                           if constexpr (reflectable<T>) {
+                              return to_tuple(value);
+                           }
+                           else {
+                              return nullptr;
+                           }
+                        }();
+            
             for_each<N>([&](auto I) {
                using val_t = std::remove_cvref_t<refl_t<T, I>>;
 

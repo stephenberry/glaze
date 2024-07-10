@@ -14,7 +14,7 @@ namespace glz::detail
    template <class... Ts>
    struct tuple_ptr<tuplet::tuple<Ts...>>
    {
-      using type = tuplet::tuple<std::add_pointer_t<Ts>...>;
+      using type = tuplet::tuple<std::add_pointer_t<std::remove_reference_t<Ts>>...>;
    };
 
    template <class Tuple>
@@ -144,8 +144,6 @@ namespace glz
          }(std::make_index_sequence<value_indices.size()>{}); //
       }();
 
-      using tuple = decltype(values);
-
       static constexpr auto N = tuple_size_v<decltype(values)>;
 
       static constexpr auto keys = [] {
@@ -171,8 +169,6 @@ namespace glz
 
       static constexpr auto values = meta_v<V>;
 
-      using tuple = decltype(values);
-
       static constexpr auto N = tuple_size_v<decltype(values)>;
 
       template <size_t I>
@@ -189,16 +185,16 @@ namespace glz
       using V = std::remove_cvref_t<T>;
       using tuple = decay_keep_volatile_t<decltype(detail::to_tuple(std::declval<T>()))>;
 
-      static constexpr auto values = typename detail::tuple_ptr<tuple>::type{};
+      //static constexpr auto values = typename detail::tuple_ptr<tuple>::type{};
 
       static constexpr auto keys = member_names<V>;
       static constexpr auto N = keys.size();
 
       template <size_t I>
-      using elem = tuple_element_t<I, tuple>;
+      using elem = decltype(get<I>(std::declval<tuple>()));
 
       template <size_t I>
-      using type = detail::member_t<V, tuple_element_t<I, tuple>>;
+      using type = detail::member_t<V, decltype(get<I>(std::declval<tuple>()))>;
    };
 
    template <class T>

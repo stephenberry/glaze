@@ -43,7 +43,8 @@ namespace glz
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept
          {
-            write<json>::op<opt_true<Opts, &opts::raw_string>>(value.val, ctx, args...);
+            using val_t = std::remove_cvref_t<decltype(value.val)>;
+            to_json<val_t>::template op<opt_true<Opts, &opts::raw_string>>(value.val, ctx, args...);
          }
       };
 
@@ -63,7 +64,8 @@ namespace glz
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept
          {
-            write<json>::op<opt_false<Opts, &opts::raw_string>>(value.val, ctx, args...);
+            using val_t = std::remove_cvref_t<decltype(value.val)>;
+            to_json<val_t>::template op<opt_false<Opts, &opts::raw_string>>(value.val, ctx, args...);
          }
       };
 
