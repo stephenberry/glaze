@@ -85,9 +85,9 @@ suite default_numerics = [] {
 #else
       constexpr size_t n = 100000;
 #endif
-      
+
       integers ints_obj{};
-      
+
       std::string buffer;
       auto t0 = std::chrono::steady_clock::now();
       for (size_t i = 0; i < n; ++i) {
@@ -96,7 +96,7 @@ suite default_numerics = [] {
       auto t1 = std::chrono::steady_clock::now();
       auto duration = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-6;
       std::cout << "write integer: " << duration << '\n';
-      
+
       t0 = std::chrono::steady_clock::now();
       glz::error_ctx e;
       for (size_t i = 0; i < n; ++i) {

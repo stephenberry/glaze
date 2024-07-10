@@ -1179,7 +1179,7 @@ namespace glz
                   }
                   else {
                      decltype(auto) mem = element();
-                     
+
                      if constexpr (null_t<val_t>) {
                         if constexpr (always_null_t<T>)
                            return;
@@ -1195,7 +1195,7 @@ namespace glz
                            if (is_null) return;
                         }
                      }
-                     
+
                      if constexpr (first_is_written && I > 0) {
                         write_entry_separator<Opts>(ctx, b, ix);
                      }
