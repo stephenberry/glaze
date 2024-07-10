@@ -1069,7 +1069,7 @@ namespace glz
       struct to_json<T>
       {
          template <auto Options, class V>
-            requires (not std::is_pointer_v<std::remove_cvref_t<V>>)
+            requires(not std::is_pointer_v<std::remove_cvref_t<V>>)
          static void op(V&& value, is_context auto&& ctx, auto&& b, auto&& ix) noexcept
          {
             using ValueType = std::decay_t<V>;
@@ -1126,7 +1126,7 @@ namespace glz
                   return nullptr;
                }
             }();
-            
+
             [[maybe_unused]] bool first = true;
             static constexpr auto first_is_written = object_info<Options, T>::first_will_be_written;
             static constexpr auto maybe_skipped = object_info<Options, T>::maybe_skipped;

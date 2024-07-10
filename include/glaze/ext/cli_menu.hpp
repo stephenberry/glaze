@@ -82,7 +82,7 @@ namespace glz
                if (I == item_number - 1) {
                   using E = refl_t<T, I>;
 
-                  // MSVC bug requires Index alias here                  
+                  // MSVC bug requires Index alias here
                   decltype(auto) func = [&]<size_t I>() -> decltype(auto) {
                      if constexpr (reflectable<T>) {
                         return get_member(value, get<I>(t));

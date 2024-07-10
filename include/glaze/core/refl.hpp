@@ -185,7 +185,7 @@ namespace glz
       using V = std::remove_cvref_t<T>;
       using tuple = decay_keep_volatile_t<decltype(detail::to_tuple(std::declval<T>()))>;
 
-      //static constexpr auto values = typename detail::tuple_ptr<tuple>::type{};
+      // static constexpr auto values = typename detail::tuple_ptr<tuple>::type{};
 
       static constexpr auto keys = member_names<V>;
       static constexpr auto N = keys.size();

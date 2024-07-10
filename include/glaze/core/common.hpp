@@ -268,8 +268,9 @@ namespace glz
                                     !resizable<std::decay_t<decltype(std::declval<T>()[0])>>;
 
       template <class T>
-      concept boolean_like = std::same_as<std::remove_cvref_t<T>, bool> || std::same_as<T, std::vector<bool>::reference> ||
-                             std::same_as<T, std::vector<bool>::const_reference>;
+      concept boolean_like =
+         std::same_as<std::remove_cvref_t<T>, bool> || std::same_as<T, std::vector<bool>::reference> ||
+         std::same_as<T, std::vector<bool>::const_reference>;
 
       template <class T>
       concept is_no_reflect = requires(T t) { requires T::glaze_reflect == false; };

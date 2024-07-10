@@ -107,7 +107,7 @@ namespace glz::detail
    {
       static constexpr auto s = str.sv();
       static constexpr auto n = s.size();
-      
+
       if constexpr (vector_like<B>) {
          if constexpr (Checked) {
             if (ix + n > b.size()) [[unlikely]] {

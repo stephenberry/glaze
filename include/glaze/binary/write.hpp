@@ -674,16 +674,16 @@ namespace glz
          {
             dump<tag::generic_array>(args...);
             dump_compressed_int<count_to_write>(args...);
-            
+
             [[maybe_unused]] decltype(auto) t = [&]() -> decltype(auto) {
-                           if constexpr (reflectable<T>) {
-                              return to_tuple(value);
-                           }
-                           else {
-                              return nullptr;
-                           }
-                        }();
-            
+               if constexpr (reflectable<T>) {
+                  return to_tuple(value);
+               }
+               else {
+                  return nullptr;
+               }
+            }();
+
             for_each<N>([&](auto I) {
                using val_t = std::remove_cvref_t<refl_t<T, I>>;
 
@@ -714,14 +714,14 @@ namespace glz
             constexpr auto Opts = opening_handled_off<Options>();
 
             [[maybe_unused]] decltype(auto) t = [&]() -> decltype(auto) {
-                           if constexpr (reflectable<T>) {
-                              return to_tuple(value);
-                           }
-                           else {
-                              return nullptr;
-                           }
-                        }();
-            
+               if constexpr (reflectable<T>) {
+                  return to_tuple(value);
+               }
+               else {
+                  return nullptr;
+               }
+            }();
+
             for_each<N>([&](auto I) {
                using val_t = std::remove_cvref_t<refl_t<T, I>>;
 
