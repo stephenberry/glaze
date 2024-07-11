@@ -904,7 +904,8 @@ namespace glz::detail
    enum struct hash_type
    {
       invalid,
-      first_char
+      first_char,
+      front_16
    };
    
    struct keys_info_t
@@ -947,25 +948,27 @@ namespace glz::detail
          }
       }
       
+      if (info.min_length > 0)
       {
+         bool valid = true;
+         
          std::array<uint8_t, N> first_char;
-         bool first_char_valid = true;
          for (size_t i = 0; i < N; ++i) {
             if (keys[i].size() == 0) {
-               first_char_valid = false;
+               valid = false;
                break;
             }
             first_char[i] = uint8_t(keys[i][0]);
          }
 
-         if (first_char_valid)
+         if (valid)
          {
             std::sort(first_char.begin(), first_char.end());
 
             for (size_t i = 0; i < N - 1; ++i) {
                const auto diff = uint8_t(first_char[i + 1] - first_char[i]);
                if (diff == 0) {
-                  first_char_valid = false;
+                  valid = false;
                   break;
                }
                if (diff < info.min_diff) {
@@ -973,7 +976,7 @@ namespace glz::detail
                }
             }
             
-            if (first_char_valid) {
+            if (valid) {
                info.type = hash_type::first_char;
                return info;
             }
