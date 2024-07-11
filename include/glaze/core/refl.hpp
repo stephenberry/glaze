@@ -932,25 +932,6 @@ namespace glz::detail
       uint64_t seed{};
    };
    
-   template <hash_type Type>
-   struct hasher;
-   
-   template <>
-   struct hasher<hash_type::first_char> final
-   {
-      /*template <keys_info Info>
-      static constexpr uint64_t hash(uint64_t seed, const sv key) noexcept
-      {
-         return bitmix(uint64_t(key.front()), seed);
-      }
-      
-      template <keys_info Info>
-      static constexpr uint64_t hash(uint64_t seed, is_context auto&& ctx, auto&& it, auto&& end) noexcept
-      {
-         return bitmix(uint64_t(*it), seed);
-      }*/
-   };
-   
    template <size_t N>
    consteval auto make_keys_info(const std::array<sv, N>& keys)
    {
