@@ -37,5 +37,9 @@ int main()
 
    my_struct obj{};
    std::cout << '\n' << glz::write_json(obj).value() << '\n';
-   std::ignore = glz::read_json(obj, R"({"i":287,"d":3.14,"hello":"Hello World","arr":[1,2,3]})");
+   constexpr std::string_view input = R"({"i":287,"d":3.14,"hello":"Hello World","arr":[1,2,3]})";
+   auto ec = glz::read_json(obj, input);
+   if (ec) {
+      std::cout << "error: " << glz::format_error(ec, input);
+   }
 }

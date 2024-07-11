@@ -124,11 +124,11 @@ namespace glz
             constexpr auto Opts = opening_handled_off<ws_handled_off<Options>()>();
 
             if constexpr (!has_opening_handled(Options)) {
-               GLZ_SKIP_WS;
+               GLZ_SKIP_WS();
                GLZ_MATCH_OPEN_BRACE;
             }
 
-            GLZ_SKIP_WS;
+            GLZ_SKIP_WS();
 
             // we read into available containers, we do not intialize here
             const size_t n = value.data.size();
@@ -138,7 +138,7 @@ namespace glz
                }
 
                // find the string, escape characters are not supported for recorders
-               GLZ_SKIP_WS;
+               GLZ_SKIP_WS();
                const auto name = parse_key(ctx, it, end);
 
                auto& [str, v] = value.data[i];
@@ -147,20 +147,20 @@ namespace glz
                   return;
                }
 
-               GLZ_SKIP_WS;
-               GLZ_MATCH_COLON;
-               GLZ_SKIP_WS;
+               GLZ_SKIP_WS();
+               GLZ_MATCH_COLON();
+               GLZ_SKIP_WS();
 
                std::visit([&](auto&& deq) { read<json>::op<Opts>(deq, ctx, it, end); }, v.first);
 
                if (i < n - 1) {
-                  GLZ_SKIP_WS;
+                  GLZ_SKIP_WS();
                   GLZ_MATCH_COMMA;
-                  GLZ_SKIP_WS;
+                  GLZ_SKIP_WS();
                }
             }
 
-            GLZ_SKIP_WS;
+            GLZ_SKIP_WS();
             match<'}'>(ctx, it);
          }
       };

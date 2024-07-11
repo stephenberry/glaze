@@ -737,3 +737,345 @@ namespace glz::detail
       return deduction_map;
    }
 }
+
+namespace glz::detail
+{
+   // Array of random 64bit primes to avoid needing a generator
+   // If you have a 10% chance of success, 128 tries has 1 : 719'380 odds of failure
+   // formula: 1 / (1 - .10)^128
+   // If you have a 15% chance of success, 128 tries has 1 : 1'082'374'392 odds of failure
+   constexpr std::array<uint64_t, 128> primes_64 = {
+      12835920395396008793ull,
+      15149911783463666029ull,
+      15211026597907833541ull,
+      14523965596842631817ull,
+      16449355892475772073ull,
+      15002762636229733759ull,
+      12275448295353509891ull,
+      16826285440568349437ull,
+      17433093378066653197ull,
+      10902769355249605843ull,
+      // 10
+      13434269760430048511ull,
+      11322871945166463571ull,
+      9764742595129026499ull,
+      13799666429485716229ull,
+      14861204462552525359ull,
+      17599486090324515493ull,
+      10266842847898195667ull,
+      13468209895759219897ull,
+      16289274021814922521ull,
+      17204791465022878523ull,
+      // 20
+      17650915497556268801ull,
+      9455725851336774341ull,
+      9961868820920778071ull,
+      18289017266131008167ull,
+      16309921878298474091ull,
+      11652007405601517343ull,
+      17496906368504743207ull,
+      13339901080756288547ull,
+      10018112158103183191ull,
+      14981853847663275059ull,
+      // 30
+      15024425770511821387ull,
+      10063189458099824779ull,
+      11839419318547724641ull,
+      12830508825440804579ull,
+      18433073685722024387ull,
+      17299753196133391897ull,
+      15396274865347173053ull,
+      13749499465490568733ull,
+      13860497513065316459ull,
+      11692484392508072123ull,
+      // 40
+      9438685344574842347ull,
+      14400973074801304571ull,
+      15991854874494707081ull,
+      12114831452910579989ull,
+      13998562683662696077ull,
+      10851982863396796529ull,
+      10344539733475859441ull,
+      10045431121852560691ull,
+      12186301656248163491ull,
+      10339340957932801343ull,
+      // 50
+      12602808298244447957ull,
+      9729322814141112953ull,
+      16362682788060189359ull,
+      14286005063617200559ull,
+      10711312188467965759ull,
+      17189878401094383577ull,
+      14020292519311722517ull,
+      14345076507873302501ull,
+      12604083410008146689ull,
+      13199781912416808047ull,
+      // 60
+      12315285542260457987ull,
+      9594690105092455043ull,
+      18319948908022195243ull,
+      16595976138570481823ull,
+      12195274638706298323ull,
+      17646127793987855047ull,
+      16841966643138849923ull,
+      13507873747212661603ull,
+      13643501673321416333ull,
+      12363547163076811279ull,
+      // 70
+      14884690672546139069ull,
+      16390599211964954609ull,
+      13389084014248465909ull,
+      9833412254409620477ull,
+      13398707790907619797ull,
+      18368581595698861159ull,
+      10384836406878147059ull,
+      9453231669972318281ull,
+      16669513057697818169ull,
+      14697852657232879237ull,
+      // 80
+      15363091209268144241ull,
+      15275124567630446861ull,
+      17481357028816037011ull,
+      12534821792295694231ull,
+      11054303650520058359ull,
+      12403322865831490261ull,
+      16889743306920098983ull,
+      16047403249754946029ull,
+      16775982981238529423ull,
+      12421181800577384167ull,
+      // 90
+      9280311361047996317ull,
+      12160582891762080001ull,
+      17367939315478490407ull,
+      9267482598791369377ull,
+      17806662591996060709ull,
+      11533875385674872861ull,
+      16816712667689633689ull,
+      16223588510861656927ull,
+      13482535659370429831ull,
+      11801382448764686461ull,
+      // 100
+      18177646705946605939ull,
+      12608957628213527767ull,
+      17302819561726521227ull,
+      10609776890453861677ull,
+      16615779974080376533ull,
+      14779379909309032351ull,
+      14673741062489338759ull,
+      11634351264868983527ull,
+      13874971253878591537ull,
+      17332275173558136899ull,
+      // 110
+      11257300840627829851ull,
+      13341443249676872783ull,
+      11607230252125083613ull,
+      12141161410409106457ull,
+      13282325402819801929ull,
+      17990774082148480601ull,
+      15496227723025164119ull,
+      15956314649183876369ull,
+      9834926670622290883ull,
+      16435035491439552943ull,
+      // 120
+      14806063675962222449ull,
+      18113370406266068597ull,
+      9968958022058734229ull,
+      14864844583184822773ull,
+      11170341707334307859ull,
+      10502344452987841991ull,
+      16247553219265957739ull,
+      14933089789266129581ull
+   };
+   
+   constexpr uint64_t bitmix(uint64_t h, const uint64_t seed) noexcept
+   {
+      h *= seed;
+      return h ^ std::rotr(h, 49);
+   };
+   
+   template <size_t N>
+   using bucket_value_t = std::conditional_t<N < 256, uint8_t, uint16_t>;
+   
+   // The larger the underlying bucket the more we avoid collisions with invalid keys.
+   // This improves performance of rejecting invalid keys because we don't have to do
+   // string comparisons in these cases.
+   // However, there are obvious memory costs with increasing the bucket size.
+   
+   enum struct hash_type
+   {
+      invalid,
+      first_char
+   };
+   
+   struct keys_info_t
+   {
+      size_t N{};
+      hash_type type{};
+      size_t min_length = (std::numeric_limits<size_t>::max)();
+      size_t max_length{};
+      uint8_t min_diff = (std::numeric_limits<uint8_t>::max)();
+   };
+   
+   // For hash algorithm a value of the seed indicates an invalid hash
+   
+   // A value of N in the bucket indicates an invalid hash
+   template <class T, size_t Slots>
+   struct hash_info_t
+   {
+      hash_type type{};
+      
+      static constexpr auto N = refl<T>.N;
+      using V = bucket_value_t<N>;
+      static constexpr auto invalid = static_cast<V>(N);
+      
+      std::array<V, Slots> table{invalid}; // hashes to switch-case indices
+      uint64_t seed{};
+   };
+   
+   template <hash_type Type>
+   struct hasher;
+   
+   template <>
+   struct hasher<hash_type::first_char> final
+   {
+      /*template <keys_info Info>
+      static constexpr uint64_t hash(uint64_t seed, const sv key) noexcept
+      {
+         return bitmix(uint64_t(key.front()), seed);
+      }
+      
+      template <keys_info Info>
+      static constexpr uint64_t hash(uint64_t seed, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+      {
+         return bitmix(uint64_t(*it), seed);
+      }*/
+   };
+   
+   template <size_t N>
+   consteval auto make_keys_info(const std::array<sv, N>& keys)
+   {
+      keys_info_t info{N};
+      
+      for (size_t i = 0; i < N; ++i) {
+         const auto n = keys[i].size();
+         if (n < info.min_length) {
+            info.min_length = n;
+         }
+         if (n > info.max_length) {
+            info.max_length = n;
+         }
+      }
+      
+      {
+         std::array<uint8_t, N> first_char;
+         bool first_char_valid = true;
+         for (size_t i = 0; i < N; ++i) {
+            if (keys[i].size() == 0) {
+               first_char_valid = false;
+               break;
+            }
+            first_char[i] = uint8_t(keys[i][0]);
+         }
+
+         if (first_char_valid)
+         {
+            std::sort(first_char.begin(), first_char.end());
+
+            for (size_t i = 0; i < N - 1; ++i) {
+               const auto diff = uint8_t(first_char[i + 1] - first_char[i]);
+               if (diff == 0) {
+                  first_char_valid = false;
+                  break;
+               }
+               if (diff < info.min_diff) {
+                  info.min_diff = diff;
+               }
+            }
+            
+            if (first_char_valid) {
+               info.type = hash_type::first_char;
+               return info;
+            }
+         }
+      }
+      
+      return info;
+   }
+   
+   template <class T>
+   constexpr auto keys_info = make_keys_info(refl<T>.keys);
+   
+   template <class T>
+   consteval auto make_hash_info()
+   {
+      constexpr auto& k_info = keys_info<T>;
+      constexpr auto type = k_info.type;
+      constexpr auto N = refl<T>.N;
+      constexpr auto& keys = refl<T>.keys;
+      
+      if constexpr (type == hash_type::first_char) {
+         hash_info_t<T, 255> info{hash_type::first_char};
+         
+         for (uint8_t i = 0; i < N; ++i) {
+            const auto h = uint8_t(keys[i][0]);
+            info.table[h] = i;
+         }
+
+         return info;
+      }
+      else {
+         // invalid
+         return hash_info_t<T, 0>{};
+      }
+   }
+   
+   template <opts Opts, class T, auto HashInfo, class Func>
+   constexpr void parse_and_invoke(Func&& func, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+   {
+      constexpr auto type = HashInfo.type;
+      constexpr auto N = refl<T>.N;
+      
+      if constexpr (type == hash_type::first_char) {
+         const auto index = HashInfo.table[uint8_t(*it)];
+         if (index == N) [[unlikely]] {
+            ctx.error = error_code::unknown_key;
+            return;
+         }
+         
+         for_each_short_circuit<N>([&](auto I){
+            if (I == index) {
+               constexpr auto TargetKey = get<I>(refl<T>.keys);
+               if ((it + TargetKey.size()) >= end) [[unlikely]] {
+                  ctx.error = error_code::unknown_key;
+                  return true;
+               }
+               
+               const sv key{ it, TargetKey.size() };
+               //if (cx_string_cmp<TargetKey>(key)) [[likely]] {
+               if (TargetKey == key) [[likely]] {
+                  it += TargetKey.size();
+                  if (*it != '"') [[unlikely]] {
+                     ctx.error = error_code::unknown_key;
+                     return true;
+                  }
+                  ++it;
+                  
+                  GLZ_SKIP_WS(true);
+                  GLZ_MATCH_COLON(true);
+                  GLZ_SKIP_WS(true);
+                  
+                  func(get<I>(refl<T>.values)); // invoke on the value
+               }
+               else [[unlikely]] {
+                  ctx.error = error_code::unknown_key;
+               }
+               return true;
+            }
+            return false;
+         });
+      }
+      else {
+         static_assert(false_v<T>, "invalid hash algorithm");
+      }
+   }
+}
