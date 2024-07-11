@@ -1008,7 +1008,7 @@ namespace glz::detail
    template <class T>
    constexpr auto hash_info = []
    {
-      if constexpr (glaze_object_t<T>)
+      if constexpr (glaze_object_t<T> || reflectable<T>)
       {
          constexpr auto& k_info = keys_info<T>;
          constexpr auto type = k_info.type;
@@ -1035,9 +1035,13 @@ namespace glz::detail
       }
    }();
    
-   template <opts Opts, class T, auto HashInfo, class Func>
-   constexpr void parse_and_invoke(Func&& func, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+   template <opts Opts, class T, auto HashInfo, class Func, class Tuple>
+   constexpr void parse_and_invoke(Func&& func, Tuple&& tuple, is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
+      if constexpr (glaze_object_t<T>) {
+         (void)tuple;
+      }
+      
       constexpr auto type = HashInfo.type;
       constexpr auto N = refl<T>.N;
       
@@ -1070,7 +1074,13 @@ namespace glz::detail
                   GLZ_MATCH_COLON(true);
                   GLZ_SKIP_WS(true);
                   
-                  func(get<I>(refl<T>.values), I); // invoke on the value
+                  // invoke on the value
+                  if constexpr (glaze_object_t<T>) {
+                     std::forward<Func>(func)(get<I>(refl<T>.values), I);
+                  }
+                  else {
+                     std::forward<Func>(func)(get<I>(std::forward<Tuple>(tuple)), I);
+                  }
                }
                else [[unlikely]] {
                   ctx.error = error_code::unknown_key;

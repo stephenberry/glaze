@@ -1859,7 +1859,7 @@ namespace glz
                      if (bool(ctx.error)) [[unlikely]]
                         return;
                   }
-                  else if constexpr (glaze_object_t<T> //
+                  else if constexpr ((glaze_object_t<T> || reflectable<T>) //
                                      && Opts.error_on_unknown_keys // TODO: handle not erroring option
                                      && (not keys_may_contain_escape<T>()) // TODO: handle escaped keys
                                      && (tag.sv() == "") // TODO: handle tag_v with variants
@@ -1870,12 +1870,18 @@ namespace glz
                      }
                      ++it;
                      
-                     parse_and_invoke<Opts, T, hash_info<T>>([&](auto&& element, size_t index){
+                     decltype(auto) t = [&]() -> decltype(auto) {
+                        if constexpr (reflectable<T>) {
+                           return to_tuple(value);
+                        }
+                        else {
+                           return nullptr;
+                        }
+                     }();
+                     
+                     parse_and_invoke<Opts, T, hash_info<T>>([&](auto&& element, const size_t index){
                         
                         if constexpr (Opts.error_on_missing_keys || is_partial_read<T> || Opts.partial_read) {
-                           // TODO: Kludge/hack. Should work but could easily cause memory issues with small changes.
-                           // At the very least if we are going to do this add a get_index method to the maps and
-                           // call that
                            fields[index] = true;
                         }
                         else {
@@ -1897,7 +1903,7 @@ namespace glz
                            from_json<std::remove_cvref_t<V>>::template op<ws_handled<Opts>()>(
                               get_member(value, element), ctx, it, end);
                         }
-                     }, ctx, it, end);
+                     }, t, ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
                   }
