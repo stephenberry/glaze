@@ -1006,7 +1006,7 @@ namespace glz::detail
       
       constexpr uint64_t invalid_seed = 0;
       
-      if (info.min_length > 1)
+      if (info.min_length > 1 && N <= 32)
       {
          // check for uniqueness
          std::array<uint16_t, N> k;
