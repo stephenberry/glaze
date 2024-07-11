@@ -1154,16 +1154,17 @@ namespace glz::detail
          
          for_each_short_circuit<N>([&](auto I){
             if (I == index) {
-               constexpr auto TargetKey = get<I>(refl<T>.keys);
-               if ((it + TargetKey.size()) >= end) [[unlikely]] {
+               static constexpr auto TargetKey = get<I>(refl<T>.keys);
+               static constexpr auto Length = TargetKey.size();
+               if ((it + Length) >= end) [[unlikely]] {
                   ctx.error = error_code::unknown_key;
                   return true;
                }
                
-               const sv key{ it, TargetKey.size() };
-               //if (cx_string_cmp<TargetKey>(key)) [[likely]] {
-               if (TargetKey == key) [[likely]] {
-                  it += TargetKey.size();
+               const sv key{ it, Length };
+               if (cx_string_cmp<TargetKey>(key)) [[likely]] {
+               //if (TargetKey == key) [[likely]] {
+                  it += Length;
                   if (*it != '"') [[unlikely]] {
                      ctx.error = error_code::unknown_key;
                      return true;
@@ -1185,6 +1186,7 @@ namespace glz::detail
                else [[unlikely]] {
                   ctx.error = error_code::unknown_key;
                }
+               
                return true;
             }
             return false;
