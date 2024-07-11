@@ -1006,28 +1006,34 @@ namespace glz::detail
    constexpr auto keys_info = make_keys_info(refl<T>.keys);
    
    template <class T>
-   consteval auto make_hash_info()
+   constexpr auto hash_info = []
    {
-      constexpr auto& k_info = keys_info<T>;
-      constexpr auto type = k_info.type;
-      constexpr auto N = refl<T>.N;
-      constexpr auto& keys = refl<T>.keys;
-      
-      if constexpr (type == hash_type::first_char) {
-         hash_info_t<T, 255> info{hash_type::first_char};
+      if constexpr (glaze_object_t<T>)
+      {
+         constexpr auto& k_info = keys_info<T>;
+         constexpr auto type = k_info.type;
+         constexpr auto N = refl<T>.N;
+         constexpr auto& keys = refl<T>.keys;
          
-         for (uint8_t i = 0; i < N; ++i) {
-            const auto h = uint8_t(keys[i][0]);
-            info.table[h] = i;
-         }
+         if constexpr (type == hash_type::first_char) {
+            hash_info_t<T, 255> info{hash_type::first_char};
+            
+            for (uint8_t i = 0; i < N; ++i) {
+               const auto h = uint8_t(keys[i][0]);
+               info.table[h] = i;
+            }
 
-         return info;
+            return info;
+         }
+         else {
+            // invalid
+            return hash_info_t<T, 0>{};
+         }
       }
       else {
-         // invalid
          return hash_info_t<T, 0>{};
       }
-   }
+   }();
    
    template <opts Opts, class T, auto HashInfo, class Func>
    constexpr void parse_and_invoke(Func&& func, is_context auto&& ctx, auto&& it, auto&& end) noexcept
@@ -1064,7 +1070,7 @@ namespace glz::detail
                   GLZ_MATCH_COLON(true);
                   GLZ_SKIP_WS(true);
                   
-                  func(get<I>(refl<T>.values)); // invoke on the value
+                  func(get<I>(refl<T>.values), I); // invoke on the value
                }
                else [[unlikely]] {
                   ctx.error = error_code::unknown_key;

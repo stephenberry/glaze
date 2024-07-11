@@ -1466,10 +1466,16 @@ namespace glz
             ctx.current_file = current_file;
          }
       };
+      
+      template <class T>
+      consteval bool keys_may_contain_escape()
+      {
+         return true;
+      }
 
       // TODO: count the maximum number of escapes that can be seen if error_on_unknown_keys is true
       template <glaze_object_t T>
-      constexpr bool keys_may_contain_escape()
+      consteval bool keys_may_contain_escape()
       {
          auto is_unicode = [](const auto c) { return (static_cast<uint8_t>(c) >> 7) > 0; };
 
@@ -1489,13 +1495,13 @@ namespace glz
       }
 
       template <reflectable T>
-      constexpr bool keys_may_contain_escape()
+      consteval bool keys_may_contain_escape()
       {
          return false; // escapes are not valid in C++ names
       }
 
       template <is_variant T>
-      constexpr bool keys_may_contain_escape()
+      consteval bool keys_may_contain_escape()
       {
          bool may_escape = false;
          constexpr auto N = std::variant_size_v<T>;
@@ -1590,11 +1596,7 @@ namespace glz
       GLZ_ALWAYS_INLINE std::string_view parse_object_key(is_context auto&& ctx, auto&& it, auto&& end)
       {
          // skip white space and escape characters and find the string
-         if constexpr (!has_ws_handled(Opts)) {
-            skip_ws<Opts>(ctx, it, end);
-            if (bool(ctx.error)) [[unlikely]]
-               return {};
-         }
+         GLZ_SKIP_WS({});
          match<'"'>(ctx, it);
          if (bool(ctx.error)) [[unlikely]]
             return {};
@@ -1789,8 +1791,6 @@ namespace glz
                   }
                }();
                
-               static constexpr auto hash_info = make_hash_info<T>();
-
                bool first = true;
                while (true) {
                   if constexpr ((glaze_object_t<T> || reflectable<T>)&&(is_partial_read<T> || Opts.partial_read)) {
@@ -1859,14 +1859,29 @@ namespace glz
                      if (bool(ctx.error)) [[unlikely]]
                         return;
                   }
-                  else if constexpr (glaze_object_t<T> && bool(hash_info.type)) {
+                  else if constexpr (glaze_object_t<T> //
+                                     && Opts.error_on_unknown_keys // TODO: handle not erroring option
+                                     && (not keys_may_contain_escape<T>()) // TODO: handle escaped keys
+                                     && (tag.sv() == "") // TODO: handle tag_v with variants
+                                     && bool(hash_info<T>.type)) {
                      if (*it != '"') [[unlikely]] {
                         ctx.error = error_code::unknown_key;
                         return;
                      }
                      ++it;
                      
-                     parse_and_invoke<Opts, T, hash_info>([&](auto&& element){
+                     parse_and_invoke<Opts, T, hash_info<T>>([&](auto&& element, size_t index){
+                        
+                        if constexpr (Opts.error_on_missing_keys || is_partial_read<T> || Opts.partial_read) {
+                           // TODO: Kludge/hack. Should work but could easily cause memory issues with small changes.
+                           // At the very least if we are going to do this add a get_index method to the maps and
+                           // call that
+                           fields[index] = true;
+                        }
+                        else {
+                           (void)index;
+                        }
+                        
                         using V = decltype(get_member(value, element));
 
                         if constexpr (std::is_const_v<std::remove_reference_t<V>>) {
@@ -2244,7 +2259,7 @@ namespace glz
          {
             constexpr auto Opts = ws_handled_off<Options>();
             if constexpr (variant_is_auto_deducible<T>()) {
-               if constexpr (!has_ws_handled(Options)) {
+               if constexpr (not has_ws_handled(Options)) {
                   GLZ_SKIP_WS();
                }
 
@@ -2287,8 +2302,8 @@ namespace glz
                                  parse_object_entry_sep<Opts>(ctx, it, end);
                                  if (bool(ctx.error)) [[unlikely]]
                                     return;
-                                 std::string_view type_id{};
-                                 read<json>::op<ws_handled<Opts>()>(type_id, ctx, it, end);
+                                 sv type_id{};
+                                 from_json<sv>::template op<ws_handled<Opts>()>(type_id, ctx, it, end);
                                  if (bool(ctx.error)) [[unlikely]]
                                     return;
                                  GLZ_SKIP_WS();

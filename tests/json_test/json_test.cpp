@@ -4929,7 +4929,8 @@ suite lamda_wrapper = [] {
       expect(buffer == R"({"x":"3.14","y":["1","2","3"],"z":[["1","2","3"]]})");
 
       buffer = R"({"x":"999.2","y":["4","5","6"],"z":[["4","5"]]})";
-      expect(glz::read<glz::opts{.error_on_missing_keys = true}>(a, buffer) == glz::error_code::none);
+      auto ec = glz::read<glz::opts{.error_on_missing_keys = true}>(a, buffer);
+      expect(ec == glz::error_code::none) << glz::format_error(ec, buffer);
       expect(a.x == 999.2);
       expect(a.y == std::vector<uint32_t>{4, 5, 6});
       expect(a.z == std::vector<std::vector<uint32_t>>{{4, 5}});
