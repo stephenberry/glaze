@@ -956,6 +956,7 @@ namespace glz::detail
    
    template <size_t N>
    consteval auto make_keys_info(const std::array<sv, N>& keys)
+   //constexpr auto make_keys_info(const std::array<sv, N>& keys)
    {
       keys_info_t info{N};
       
@@ -1007,43 +1008,65 @@ namespace glz::detail
       
       if (info.min_length > 1)
       {
-         auto& seed = info.seed;
+         // check for uniqueness
+         std::array<uint16_t, N> k;
+         for (size_t i = 0; i < N; ++i) {
+            k[i] = uint16_t(keys[i][0]) | (uint16_t(keys[i][1]) << 8);
+         }
+
+         std::sort(k.begin(), k.end());
          
-         auto front_16_hash = [&] {
-            std::array<size_t, N> bucket_index{};
-            
-            for (size_t i = 0; i < primes_64.size(); ++i) {
-               seed = primes_64[i];
-               size_t index = 0;
-               for (const auto& key : keys) {
-                  const auto hash = bitmix(uint64_t(uint16_t(key[0]) | (uint16_t(key[1]) << 8)), seed);
-                  if (hash == seed) {
-                     break;
-                  }
-                  const auto bucket = hash % bucket_size(front_16, N);
-                  if (contains(std::span{bucket_index.data(), index}, bucket)) {
-                     break;
-                  }
-                  bucket_index[index] = bucket;
-                  ++index;
-               }
-
-               if (index == N) {
-                  // make sure the seed does not collide with any hashes
-                  const auto bucket = seed % bucket_size(front_16, N);
-                  if (not contains(std::span{bucket_index.data(), N}, bucket)) {
-                     return; // found working seed
-                  }
-               }
+         bool valid = true;
+         
+         for (size_t i = 0; i < N - 1; ++i) {
+            const auto diff = k[i + 1] - k[i];
+            if (diff == 0) {
+               valid = false;
+               break;
             }
+         }
+         
+         if (valid)
+         {
+            auto& seed = info.seed;
+            
+            auto front_16_hash = [&] {
+               std::array<size_t, N> bucket_index{};
+               constexpr auto bsize = bucket_size(front_16, N);
+               
+               for (size_t i = 0; i < primes_64.size(); ++i) {
+                  seed = primes_64[i];
+                  size_t index = 0;
+                  for (const auto& key : keys) {
+                     const auto hash = bitmix(uint16_t(key[0]) | (uint16_t(key[1]) << 8), seed);
+                     if (hash == seed) {
+                        break;
+                     }
+                     const auto bucket = hash % bsize;
+                     if (contains(std::span{bucket_index.data(), index}, bucket)) {
+                        break;
+                     }
+                     bucket_index[index] = bucket;
+                     ++index;
+                  }
 
-            seed = invalid_seed;
-         };
+                  if (index == N) {
+                     // make sure the seed does not collide with any hashes
+                     const auto bucket = seed % bsize;
+                     if (not contains(std::span{bucket_index.data(), N}, bucket)) {
+                        return; // found working seed
+                     }
+                  }
+               }
 
-         front_16_hash();
-         if (seed != invalid_seed) {
-            info.type = front_16;
-            return info;
+               seed = invalid_seed;
+            };
+
+            front_16_hash();
+            if (seed != invalid_seed) {
+               info.type = front_16;
+               return info;
+            }
          }
       }
       
@@ -1076,10 +1099,10 @@ namespace glz::detail
          }
          else if constexpr (type == front_16) {
             constexpr auto bsize = bucket_size(front_16, N);
-            hash_info_t<T, bsize> info{front_16};
+            hash_info_t<T, bsize> info{.type = front_16, .seed = k_info.seed};
             
             for (uint8_t i = 0; i < N; ++i) {
-               const auto h = bitmix(uint64_t(uint16_t(keys[i][0]) | (uint16_t(keys[i][1]) << 8)), k_info.seed) % bsize;
+               const auto h = bitmix(uint16_t(keys[i][0]) | (uint16_t(keys[i][1]) << 8), k_info.seed) % bsize;
                info.table[h] = i;
             }
 
@@ -1096,6 +1119,7 @@ namespace glz::detail
    }();
    
    template <opts Opts, class T, auto HashInfo, class Func, class Tuple>
+      requires (glaze_object_t<T> || reflectable<T>)
    constexpr void parse_and_invoke(Func&& func, Tuple&& tuple, is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       if constexpr (glaze_object_t<T>) {
@@ -1114,9 +1138,9 @@ namespace glz::detail
             else if constexpr (type == front_16) {
                constexpr auto bsize = bucket_size(front_16, N);
                // we don't need to check for second character because we are null terminated
-               uint64_t h;
+               uint16_t h;
                std::memcpy(&h, it, 2);
-               return bitmix(h, HashInfo.seed) % bsize;
+               return HashInfo.table[bitmix(h, HashInfo.seed) % bsize];
             }
             else {
                static_assert(false_v<T>, "invalid hash algorithm");
