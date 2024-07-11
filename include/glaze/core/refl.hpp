@@ -908,6 +908,26 @@ namespace glz::detail
       front_16
    };
    
+   consteval size_t bucket_size(hash_type type, size_t N)
+   {
+      using enum hash_type;
+      switch (type)
+      {
+         case invalid: {
+            return 0;
+         }
+         case first_char: {
+            return 255;
+         }
+         case front_16: {
+            return (N == 1) ? 1 : std::bit_ceil(N * N) / 2;
+         }
+         default: {
+            return 0;
+         }
+      }
+   }
+   
    struct keys_info_t
    {
       size_t N{};
@@ -915,6 +935,7 @@ namespace glz::detail
       size_t min_length = (std::numeric_limits<size_t>::max)();
       size_t max_length{};
       uint8_t min_diff = (std::numeric_limits<uint8_t>::max)();
+      uint64_t seed{};
    };
    
    // For hash algorithm a value of the seed indicates an invalid hash
@@ -938,6 +959,10 @@ namespace glz::detail
    {
       keys_info_t info{N};
       
+      if (N == 0) {
+         return info;
+      }
+      
       for (size_t i = 0; i < N; ++i) {
          const auto n = keys[i].size();
          if (n < info.min_length) {
@@ -948,38 +973,77 @@ namespace glz::detail
          }
       }
       
+      using enum hash_type;
+      
       if (info.min_length > 0)
       {
          bool valid = true;
          
-         std::array<uint8_t, N> first_char;
+         std::array<uint8_t, N> hashes;
          for (size_t i = 0; i < N; ++i) {
-            if (keys[i].size() == 0) {
+            hashes[i] = uint8_t(keys[i][0]);
+         }
+
+         std::sort(hashes.begin(), hashes.end());
+
+         for (size_t i = 0; i < N - 1; ++i) {
+            const auto diff = uint8_t(hashes[i + 1] - hashes[i]);
+            if (diff == 0) {
                valid = false;
                break;
             }
-            first_char[i] = uint8_t(keys[i][0]);
+            if (diff < info.min_diff) {
+               info.min_diff = diff;
+            }
          }
-
-         if (valid)
-         {
-            std::sort(first_char.begin(), first_char.end());
-
-            for (size_t i = 0; i < N - 1; ++i) {
-               const auto diff = uint8_t(first_char[i + 1] - first_char[i]);
-               if (diff == 0) {
-                  valid = false;
-                  break;
-               }
-               if (diff < info.min_diff) {
-                  info.min_diff = diff;
-               }
-            }
+         
+         if (valid) {
+            info.type = first_char;
+            return info;
+         }
+      }
+      
+      constexpr uint64_t invalid_seed = 0;
+      
+      if (info.min_length > 1)
+      {
+         auto& seed = info.seed;
+         
+         auto front_16_hash = [&] {
+            std::array<size_t, N> bucket_index{};
             
-            if (valid) {
-               info.type = hash_type::first_char;
-               return info;
+            for (size_t i = 0; i < primes_64.size(); ++i) {
+               seed = primes_64[i];
+               size_t index = 0;
+               for (const auto& key : keys) {
+                  const auto hash = bitmix(uint64_t(uint16_t(key[0]) | (uint16_t(key[1]) << 8)), seed);
+                  if (hash == seed) {
+                     break;
+                  }
+                  const auto bucket = hash % bucket_size(front_16, N);
+                  if (contains(std::span{bucket_index.data(), index}, bucket)) {
+                     break;
+                  }
+                  bucket_index[index] = bucket;
+                  ++index;
+               }
+
+               if (index == N) {
+                  // make sure the seed does not collide with any hashes
+                  const auto bucket = seed % bucket_size(front_16, N);
+                  if (not contains(std::span{bucket_index.data(), N}, bucket)) {
+                     return; // found working seed
+                  }
+               }
             }
+
+            seed = invalid_seed;
+         };
+
+         front_16_hash();
+         if (seed != invalid_seed) {
+            info.type = front_16;
+            return info;
          }
       }
       
@@ -999,11 +1063,23 @@ namespace glz::detail
          constexpr auto N = refl<T>.N;
          constexpr auto& keys = refl<T>.keys;
          
-         if constexpr (type == hash_type::first_char) {
-            hash_info_t<T, 255> info{hash_type::first_char};
+         using enum hash_type;
+         if constexpr (type == first_char) {
+            hash_info_t<T, bucket_size(first_char, N)> info{first_char};
             
             for (uint8_t i = 0; i < N; ++i) {
                const auto h = uint8_t(keys[i][0]);
+               info.table[h] = i;
+            }
+
+            return info;
+         }
+         else if constexpr (type == front_16) {
+            constexpr auto bsize = bucket_size(front_16, N);
+            hash_info_t<T, bsize> info{front_16};
+            
+            for (uint8_t i = 0; i < N; ++i) {
+               const auto h = bitmix(uint64_t(uint16_t(keys[i][0]) | (uint16_t(keys[i][1]) << 8)), k_info.seed) % bsize;
                info.table[h] = i;
             }
 
@@ -1031,8 +1107,19 @@ namespace glz::detail
       
       if constexpr (bool(type)) {
          const auto index = [&] {
-            if constexpr (type == hash_type::first_char) {
+            using enum hash_type;
+            if constexpr (type == first_char) {
                return HashInfo.table[uint8_t(*it)];
+            }
+            else if constexpr (type == front_16) {
+               constexpr auto bsize = bucket_size(front_16, N);
+               // we don't need to check for second character because we are null terminated
+               uint64_t h;
+               std::memcpy(&h, it, 2);
+               return bitmix(h, HashInfo.seed) % bsize;
+            }
+            else {
+               static_assert(false_v<T>, "invalid hash algorithm");
             }
          }();
          
