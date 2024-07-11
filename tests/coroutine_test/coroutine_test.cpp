@@ -7,15 +7,16 @@
 
 // #include "glaze/network.hpp"
 
-#include "ut/ut.hpp"
+#include <latch>
 
-#include "stdexec/execution.hpp"
-#include "exec/task.hpp"
-#include "exec/static_thread_pool.hpp"
 #include "exec/async_scope.hpp"
 #include "exec/finally.hpp"
+#include "exec/static_thread_pool.hpp"
+#include "exec/task.hpp"
 #include "exec/timed_thread_scheduler.hpp"
 #include "exec/when_any.hpp"
+#include "stdexec/execution.hpp"
+#include "ut/ut.hpp"
 
 using namespace ut;
 
@@ -67,17 +68,10 @@ suite thread_pool = [] {
    exec::static_thread_pool pool(1);
    auto sched = pool.get_scheduler();
 
-   /*auto make_task_offload = [&sched](uint64_t x) {
+   auto make_task_offload = [&sched](uint64_t x) {
       return stdexec::on(sched, stdexec::just() | stdexec::then([=] { return x + x; }));
-   };*/
-   
-   auto make_task_offload = [&sched](uint64_t x) -> exec::task<uint64_t> {
-      co_await sched.schedule();
-      co_return x + x;
    };
 
-   // This will still block the calling thread, but it will now offload to the
-   // thread pool since the coroutine task is immediately scheduled.
    result = stdexec::sync_wait(make_task_offload(10));
    expect(std::get<0>(result.value()) == 20);
 };
@@ -89,16 +83,16 @@ suite when_all = [] {
    auto twice = [&](uint64_t x) {
       return x + x; // Executed on the thread pool.
    };
-   
+
    exec::async_scope scope;
    std::mutex mtx{};
    std::vector<uint64_t> results{};
    for (std::size_t i = 0; i < 5; ++i) {
       scope.spawn(stdexec::on(scheduler, stdexec::just() | stdexec::then([&, i] {
-         const auto value = twice(i + 1);
-         std::unique_lock lock{mtx};
-         results.emplace_back(value);
-      })));
+                                            const auto value = twice(i + 1);
+                                            std::unique_lock lock{mtx};
+                                            results.emplace_back(value);
+                                         })));
    }
 
    // Synchronously wait on this thread for the thread pool to finish executing all the tasks in parallel.
@@ -111,22 +105,20 @@ suite when_all = [] {
    expect(results[4] == 10);
 
    // Use var args instead of a container as input to glz::when_all.
-   auto square = [](uint64_t x) {
-      return [=] { return x * x; };
-   };
-   
+   auto square = [](uint64_t x) { return [=] { return x * x; }; };
+
    auto parallel = [](auto& scheduler, auto... fs) {
       return stdexec::when_all(stdexec::on(scheduler, stdexec::just() | stdexec::then(fs))...);
    };
-   
+
    /*auto chain(auto& scheduler, auto... fs) {
      return stdexec::on(scheduler, stdexec::just() | (stdexec::then(fs) | ...));
    }*/
 
    // Var args allows you to pass in tasks with different return types and returns
    // the result as a std::tuple.
-   //auto tuple_results = stdexec::sync_wait(chain_workers(scheduler, square(2), square(10))).value();
-   auto tuple_results = stdexec::sync_wait(parallel(scheduler, square(2), [&]{ return twice(10); })).value();
+   // auto tuple_results = stdexec::sync_wait(chain_workers(scheduler, square(2), square(10))).value();
+   auto tuple_results = stdexec::sync_wait(parallel(scheduler, square(2), [&] { return twice(10); })).value();
 
    auto first = std::get<0>(tuple_results);
    auto second = std::get<1>(tuple_results);
@@ -156,14 +148,15 @@ suite event = [] {
 
    // Given more than a single task to synchronously wait on, use when_all() to execute all the
    // tasks concurrently on this thread and then sync_wait() for them all to complete.
-   stdexec::sync_wait(stdexec::when_all(make_wait_task(e, 1), make_wait_task(e, 2), make_wait_task(e, 3), make_set_task(e)));
+   stdexec::sync_wait(
+      stdexec::when_all(make_wait_task(e, 1), make_wait_task(e, 2), make_wait_task(e, 3), make_set_task(e)));
 };
 
 using namespace std::chrono_literals;
 
 /*struct timer {
    std::chrono::milliseconds duration_;
-   
+
     auto operator co_await() const noexcept {
         struct awaiter {
             std::chrono::milliseconds duration;
@@ -184,6 +177,7 @@ using namespace std::chrono_literals;
     }
 };*/
 
+/*
 suite latch = [] {
    std::cout << "\nLatch test:\n";
    // Complete worker tasks faster on a thread pool, using the scheduler version so the worker
@@ -239,6 +233,50 @@ suite latch = [] {
    // Wait for all tasks to complete.
    stdexec::sync_wait(stdexec::when_all(make_latch_task(l), work()));
 };
+*/
+
+suite latch = [] {
+   namespace ex = stdexec;
+
+   std::cout << "\nLatch test:\n";
+
+   // Create a thread pool with a single thread
+   exec::static_thread_pool tp{1};
+   auto scheduler = tp.get_scheduler();
+
+   // Create a latch with count 3 (for 3 worker tasks)
+   std::latch l(3);
+
+   // Define the latch task
+   auto latch_task = ex::let_value(ex::schedule(scheduler), [&]() {
+      return ex::just() | ex::then([&]() {
+                std::cout << "latch task is now waiting on all children tasks...\n";
+                l.wait();
+                std::cout << "latch task dependency tasks completed, resuming.\n";
+             });
+   });
+
+   // Define the worker task
+   auto make_worker_task = [&](int64_t i) {
+      return ex::let_value(ex::schedule(scheduler), [i, &l]() {
+         return ex::just() | ex::then([i]() {
+                   std::cout << "worker task " << i << " is working...\n";
+                   std::this_thread::sleep_for(std::chrono::milliseconds(i * 20));
+                   std::cout << "worker task " << i << " is done, counting down on the latch\n";
+                }) |
+                ex::then([&l]() { l.count_down(); });
+      });
+   };
+
+   // Create and schedule tasks
+   auto scheduled_latch_task = latch_task;
+   auto scheduled_worker_tasks = ex::when_all(make_worker_task(1), make_worker_task(2), make_worker_task(3));
+
+   // Run all tasks
+   ex::sync_wait(ex::when_all(scheduled_latch_task, scheduled_worker_tasks));
+
+   return 0;
+};
 
 suite mutex_test = [] {
    std::cout << "\nMutex test:\n";
@@ -256,9 +294,7 @@ suite mutex_test = [] {
    const size_t num_tasks{100};
    exec::async_scope scope;
    for (std::size_t i = 1; i < num_tasks; ++i) {
-      scope.spawn(stdexec::on(scheduler, stdexec::just() | stdexec::then([&, i]() {
-         make_critical_section_task(i);
-      })));
+      scope.spawn(stdexec::on(scheduler, stdexec::just() | stdexec::then([&, i]() { make_critical_section_task(i); })));
    }
 
    stdexec::sync_wait(scope.on_empty());
@@ -419,7 +455,7 @@ suite mutex_test = [] {
 };*/
 #endif
 
-//#define SERVER_CLIENT_TEST
+// #define SERVER_CLIENT_TEST
 
 #ifdef SERVER_CLIENT_TEST
 suite server_client_test = [] {
@@ -461,7 +497,8 @@ suite server_client_test = [] {
       // Wait for an incoming connection and accept it.
       auto poll_status = co_await server.poll();
       if (poll_status != glz::poll_status::event) {
-         std::cerr << "Incoming client connection failed!\n" << "Poll Status Detail: " << glz::nameof(poll_status) << '\n';
+         std::cerr << "Incoming client connection failed!\n"
+                   << "Poll Status Detail: " << glz::nameof(poll_status) << '\n';
          co_return; // Handle error, see poll_status for detailed error states.
       }
 
@@ -477,10 +514,12 @@ suite server_client_test = [] {
       poll_status = co_await client.poll(glz::poll_op::read);
       if (poll_status != glz::poll_status::event) {
          if (glz::poll_status::closed == glz::poll_status::event) {
-            std::cerr << "Error on: co_await client.poll(glz::poll_op::read): client Id, " << client.socket->socket_fd << ", the socket is closed.\n";
+            std::cerr << "Error on: co_await client.poll(glz::poll_op::read): client Id, " << client.socket->socket_fd
+                      << ", the socket is closed.\n";
          }
          else {
-              std::cerr << "Error on: co_await client.poll(glz::poll_op::read): client Id, " << client.socket->socket_fd << ".\nDetails: " << glz::nameof(poll_status) << '\n';
+            std::cerr << "Error on: co_await client.poll(glz::poll_op::read): client Id, " << client.socket->socket_fd
+                      << ".\nDetails: " << glz::nameof(poll_status) << '\n';
          }
          co_return; // Handle error.
       }
@@ -491,7 +530,8 @@ suite server_client_test = [] {
       std::string request(256, '\0');
       auto [ip_status, recv_bytes] = client.recv(request);
       if (ip_status != glz::ip_status::ok) {
-         std::cerr << "client::recv error:\n" << "Details: " << glz::nameof(poll_status) << '\n';
+         std::cerr << "client::recv error:\n"
+                   << "Details: " << glz::nameof(poll_status) << '\n';
          co_return; // Handle error, see net::ip_status for detailed error states.
       }
 
@@ -501,7 +541,8 @@ suite server_client_test = [] {
       // Make sure the client socket can be written to.
       poll_status = co_await client.poll(glz::poll_op::write);
       if (poll_status != glz::poll_status::event) {
-           std::cerr << "Error on: co_await client.poll(glz::poll_op::write): client Id" << client.socket->socket_fd << ".\nDetails: " << glz::nameof(poll_status) << '\n';
+         std::cerr << "Error on: co_await client.poll(glz::poll_op::write): client Id" << client.socket->socket_fd
+                   << ".\nDetails: " << glz::nameof(poll_status) << '\n';
          co_return; // Handle error.
       }
 
@@ -574,30 +615,33 @@ suite server_client_test = [] {
 #endif
 
 template <stdexec::sender S1, stdexec::sender S2>
-exec::task<int> async_answer(S1 s1, S2 s2) {
-  // Senders are implicitly awaitable (in this coroutine type):
-  co_await static_cast<S2&&>(s2);
-  co_return co_await static_cast<S1&&>(s1);
+exec::task<int> async_answer(S1 s1, S2 s2)
+{
+   // Senders are implicitly awaitable (in this coroutine type):
+   co_await static_cast<S2&&>(s2);
+   co_return co_await static_cast<S1&&>(s1);
 }
 
 template <stdexec::sender S1, stdexec::sender S2>
-exec::task<std::optional<int>> async_answer2(S1 s1, S2 s2) {
-  co_return co_await stdexec::stopped_as_optional(async_answer(s1, s2));
+exec::task<std::optional<int>> async_answer2(S1 s1, S2 s2)
+{
+   co_return co_await stdexec::stopped_as_optional(async_answer(s1, s2));
 }
 
 // tasks have an associated stop token
-exec::task<std::optional<stdexec::inplace_stop_token>> async_stop_token() {
-  co_return co_await stdexec::stopped_as_optional(stdexec::get_stop_token());
+exec::task<std::optional<stdexec::inplace_stop_token>> async_stop_token()
+{
+   co_return co_await stdexec::stopped_as_optional(stdexec::get_stop_token());
 }
 
-suite stdexec_coroutine_test = []
-{
+suite stdexec_coroutine_test = [] {
    try {
-     // Awaitables are implicitly senders:
-     auto [i] = stdexec::sync_wait(async_answer2(stdexec::just(42), stdexec::just())).value();
-     std::cout << "The answer is " << i.value() << '\n';
-   } catch (std::exception& e) {
-     std::cout << e.what() << '\n';
+      // Awaitables are implicitly senders:
+      auto [i] = stdexec::sync_wait(async_answer2(stdexec::just(42), stdexec::just())).value();
+      std::cout << "The answer is " << i.value() << '\n';
+   }
+   catch (std::exception& e) {
+      std::cout << e.what() << '\n';
    }
 };
 
