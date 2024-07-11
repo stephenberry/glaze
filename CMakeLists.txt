@@ -10,6 +10,9 @@ project(
 
 include(cmake/project-is-top-level.cmake)
 include(cmake/variables.cmake)
+include(cmake/stdexec.cmake)
+
+fetch_stdexec()
 
 add_library(glaze_glaze INTERFACE)
 add_library(glaze::glaze ALIAS glaze_glaze)
@@ -36,24 +39,11 @@ endif()
 
 set_property(TARGET glaze_glaze PROPERTY EXPORT_NAME glaze)
 
-include(FetchContent)
-
-FetchContent_Declare(
-  stdexec
-  GIT_REPOSITORY https://github.com/NVIDIA/stdexec.git
-  GIT_TAG main
-  GIT_SHALLOW TRUE
-)
-
-set(STDEXEC_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
-
-FetchContent_MakeAvailable(stdexec)
-
 target_compile_features(glaze_glaze INTERFACE cxx_std_20)
 target_include_directories(
     glaze_glaze ${warning_guard}
     INTERFACE "$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>"
-    "$<BUILD_INTERFACE:${stdexec_SOURCE_DIR}/include>"
+    "$<BUILD_INTERFACE:${stdexec_INCLUDE_DIR}>"
 )
 
 if(NOT CMAKE_SKIP_INSTALL_RULES)
