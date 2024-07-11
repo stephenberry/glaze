@@ -1045,8 +1045,13 @@ namespace glz::detail
       constexpr auto type = HashInfo.type;
       constexpr auto N = refl<T>.N;
       
-      if constexpr (type == hash_type::first_char) {
-         const auto index = HashInfo.table[uint8_t(*it)];
+      if constexpr (bool(type)) {
+         const auto index = [&] {
+            if constexpr (type == hash_type::first_char) {
+               return HashInfo.table[uint8_t(*it)];
+            }
+         }();
+         
          if (index == N) [[unlikely]] {
             ctx.error = error_code::unknown_key;
             return;
