@@ -270,10 +270,22 @@ suite latch = [] {
 
    // Create and schedule tasks
    auto scheduled_latch_task = latch_task;
+
+   /* TODO:
+    std::vector<decltype(make_worker_task(0))> worker_tasks;
+    for (int i = 1; i <= 3; ++i) {
+        worker_tasks.push_back(make_worker_task(i));
+    }
+    */
+
    auto scheduled_worker_tasks = ex::when_all(make_worker_task(1), make_worker_task(2), make_worker_task(3));
 
-   // Run all tasks
+   auto start = std::chrono::high_resolution_clock::now();
    ex::sync_wait(ex::when_all(scheduled_latch_task, scheduled_worker_tasks));
+   auto end = std::chrono::high_resolution_clock::now();
+
+   std::chrono::duration<double> diff = end - start;
+   std::cout << "Total execution time: " << diff.count() << " seconds\n";
 
    return 0;
 };
