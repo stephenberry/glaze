@@ -955,7 +955,7 @@ namespace glz::detail
       using V = bucket_value_t<N>;
       static constexpr auto invalid = static_cast<V>(N);
       
-      std::array<V, Slots> table{invalid}; // hashes to switch-case indices
+      std::array<V, Slots> table{}; // hashes to switch-case indices
       uint64_t seed{};
       size_t unique_index = (std::numeric_limits<size_t>::max)();
    };
@@ -1136,6 +1136,7 @@ namespace glz::detail
          using enum hash_type;
          if constexpr (type == first_char && N < 256) {
             hash_info_t<T, bucket_size(first_char, N)> info{first_char};
+            info.table.fill(N);
             for (uint8_t i = 0; i < N; ++i) {
                const auto h = uint8_t(keys[i][0]);
                info.table[h] = i;
@@ -1144,6 +1145,7 @@ namespace glz::detail
          }
          else if constexpr (type == unique_index && N < 256) {
             hash_info_t<T, bucket_size(unique_index, N)> info{unique_index};
+            info.table.fill(N);
             info.unique_index = k_info.unique_index;
             for (uint8_t i = 0; i < N; ++i) {
                const auto h = uint8_t(keys[i][k_info.unique_index]);
@@ -1154,6 +1156,7 @@ namespace glz::detail
          else if constexpr (type == front_16) {
             constexpr auto bsize = bucket_size(front_16, N);
             hash_info_t<T, bsize> info{.type = front_16, .seed = k_info.seed};
+            info.table.fill(N);
             
             for (uint8_t i = 0; i < N; ++i) {
                const auto h = bitmix(uint16_t(keys[i][0]) | (uint16_t(keys[i][1]) << 8), k_info.seed) % bsize;
