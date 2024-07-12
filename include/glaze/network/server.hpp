@@ -3,7 +3,20 @@
 
 #pragma once
 
+#include <algorithm>
+#include <atomic>
+#include <chrono>
+#include <future>
+#include <vector>
+
+#include <exec/any_sender_of.hpp>
+#include <exec/async_scope.hpp>
+#include <exec/static_thread_pool.hpp>
+#include <exec/task.hpp>
+#include <stdexec/execution.hpp>
+
 #include "glaze/network/socket.hpp"
+
 
 #ifdef _WIN32
 #define GLZ_CLOSE_SOCKET closesocket
@@ -69,6 +82,10 @@ namespace glz
       int port{};
       std::atomic<bool> active = true;
       std::shared_future<std::error_code> async_accept_thread{};
+
+      exec::static_thread_pool thread_pool{std::thread::hardware_concurrency() / 2};
+      exec::async_scope scope{};
+
       std::vector<std::future<void>> threads{};
 
       ~server() { active = false; }
