@@ -1,13 +1,9 @@
-// Glaze Library
-// For the license information refer to glaze.hpp
-
-#define UT_RUN_TIME_ONLY
+#include <iostream>
+#include <latch>
+#include <optional>
+#include <tuple>
 
 #include "glaze/coroutine.hpp"
-
-// #include "glaze/network.hpp"
-
-#include <latch>
 
 #include "exec/async_scope.hpp"
 #include "exec/finally.hpp"
@@ -626,6 +622,7 @@ suite server_client_test = [] {
 };
 #endif
 
+/*Old with co-routines
 template <stdexec::sender S1, stdexec::sender S2>
 exec::task<int> async_answer(S1 s1, S2 s2)
 {
@@ -654,6 +651,52 @@ suite stdexec_coroutine_test = [] {
    }
    catch (std::exception& e) {
       std::cout << e.what() << '\n';
+   }
+};
+*/
+
+template <stdexec::sender S1, stdexec::sender S2>
+auto async_answer(S1&& s1, S2&& s2)
+{
+   return stdexec::let_value(std::forward<S2>(s2), [s1 = std::forward<S1>(s1)]() mutable { return std::move(s1); });
+}
+
+template <stdexec::sender S1, stdexec::sender S2>
+auto async_answer2(S1&& s1, S2&& s2)
+{
+   return stdexec::stopped_as_optional(async_answer(std::forward<S1>(s1), std::forward<S2>(s2)));
+}
+
+inline auto async_stop_token(exec::async_scope& scope) { return stdexec::just(scope.get_stop_token()); }
+
+suite stdexec_sender_composition_test  = [] {
+   exec::static_thread_pool pool(4);
+   auto scheduler = pool.get_scheduler();
+
+   auto s1 = stdexec::just(42);
+   auto s2 = stdexec::just();
+
+   auto result = stdexec::sync_wait(stdexec::on(scheduler, async_answer2(std::move(s1), std::move(s2))));
+
+   if (result) {
+      if (auto& value_opt = std::get<0>(*result)) {
+         std::cout << "Result: " << *value_opt << std::endl;
+      }
+      else {
+         std::cout << "Operation was stopped" << std::endl;
+      }
+   }
+   else {
+      std::cout << "Operation failed" << std::endl;
+   }
+
+   exec::async_scope scope;
+   auto stop_token_result = stdexec::sync_wait(stdexec::on(scheduler, async_stop_token(scope)));
+   if (stop_token_result) {
+      std::cout << "Stop token obtained" << std::endl;
+   }
+   else {
+      std::cout << "Stop token operation failed" << std::endl;
    }
 };
 
