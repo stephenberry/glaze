@@ -1,9 +1,9 @@
+#include "glaze/coroutine.hpp"
+
 #include <iostream>
 #include <latch>
 #include <optional>
 #include <tuple>
-
-#include "glaze/coroutine.hpp"
 
 #include "exec/async_scope.hpp"
 #include "exec/finally.hpp"
@@ -243,10 +243,13 @@ suite latch = [] {
    // Create a latch with count 3 (for 3 worker tasks)
    std::latch l(3);
 
+   std::atomic<bool> wait_start{false};
+
    // Define the latch task
    auto latch_task = ex::let_value(ex::schedule(scheduler), [&]() {
       return ex::just() | ex::then([&]() {
                 std::cout << "latch task is now waiting on all children tasks...\n";
+                wait_start = true;
                 l.wait();
                 std::cout << "latch task dependency tasks completed, resuming.\n";
              });
@@ -254,6 +257,7 @@ suite latch = [] {
 
    // Define the worker task
    auto make_worker_task = [&](int64_t i) {
+      while (wait_start) std::this_thread::sleep_for(std::chrono::milliseconds(10));
       return ex::let_value(ex::schedule(scheduler), [i, &l]() {
          return ex::just() | ex::then([i]() {
                    std::cout << "worker task " << i << " is working...\n";
@@ -669,7 +673,7 @@ auto async_answer2(S1&& s1, S2&& s2)
 
 inline auto async_stop_token(exec::async_scope& scope) { return stdexec::just(scope.get_stop_token()); }
 
-suite stdexec_sender_composition_test  = [] {
+suite stdexec_sender_composition_test = [] {
    exec::static_thread_pool pool(4);
    auto scheduler = pool.get_scheduler();
 
