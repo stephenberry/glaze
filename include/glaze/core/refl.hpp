@@ -1079,7 +1079,7 @@ namespace glz::detail
    template <class T>
    constexpr auto hash_info = []
    {
-      if constexpr (glaze_object_t<T> || reflectable<T>)
+      if constexpr ((glaze_object_t<T> || reflectable<T>) && (refl<T>.N > 0))
       {
          constexpr auto& k_info = keys_info<T>;
          constexpr auto type = k_info.type;

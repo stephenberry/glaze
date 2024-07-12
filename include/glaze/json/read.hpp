@@ -1769,10 +1769,16 @@ namespace glz
                }();
 
                size_t read_count{}; // for partial_read and dynamic objects
+               
+               static constexpr bool direct_maps = (glaze_object_t<T> || reflectable<T>) //
+               && Opts.error_on_unknown_keys // TODO: handle not erroring option
+               && (not keys_may_contain_escape<T>()) // TODO: handle escaped keys
+               && (tag.sv() == "") // TODO: handle tag_v with variants
+               && bool(hash_info<T>.type);
 
                decltype(auto) frozen_map = [&]() -> decltype(auto) {
                   using V = decay_keep_volatile_t<decltype(value)>;
-                  if constexpr (reflectable<T> && num_members > 0) {
+                  if constexpr (!direct_maps && reflectable<T> && num_members > 0) {
 #if ((defined _MSC_VER) && (!defined __clang__))
                      static thread_local auto cmap = make_map<V, Opts.use_hash_comparison>();
 #else
@@ -1782,7 +1788,7 @@ namespace glz
                      populate_map(value, cmap); // Function required for MSVC to build
                      return cmap;
                   }
-                  else if constexpr (glaze_object_t<T> && num_members > 0) {
+                  else if constexpr (!direct_maps && glaze_object_t<T> && num_members > 0) {
                      static constexpr auto cmap = make_map<T, Opts.use_hash_comparison>();
                      return cmap;
                   }
@@ -1859,11 +1865,7 @@ namespace glz
                      if (bool(ctx.error)) [[unlikely]]
                         return;
                   }
-                  else if constexpr ((glaze_object_t<T> || reflectable<T>) //
-                                     && Opts.error_on_unknown_keys // TODO: handle not erroring option
-                                     && (not keys_may_contain_escape<T>()) // TODO: handle escaped keys
-                                     && (tag.sv() == "") // TODO: handle tag_v with variants
-                                     && bool(hash_info<T>.type)) {
+                  else if constexpr (direct_maps) {
                      if (*it != '"') [[unlikely]] {
                         ctx.error = error_code::unknown_key;
                         return;
