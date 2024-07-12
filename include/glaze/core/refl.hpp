@@ -970,13 +970,9 @@ namespace glz::detail
          return {};
       }
       
-      size_t max_length{};
       size_t min_length = (std::numeric_limits<size_t>::max)();
       for (auto& s : strings) {
          const auto n = s.size();
-         if (n > max_length) {
-            max_length = n;
-         }
          if (n < min_length) {
             min_length = n;
          }
@@ -986,13 +982,12 @@ namespace glz::detail
          return {};
       }
       
-      std::vector<std::vector<uint8_t>> cols(max_length);
+      std::vector<std::vector<uint8_t>> cols(min_length);
       
       for (size_t i = 0; i < N; ++i) {
          const auto& s = strings[i];
-         const auto n = s.size();
          // for each character in the string
-         for (size_t c = 0; c < n; ++c) {
+         for (size_t c = 0; c < min_length; ++c) {
             cols[c].emplace_back(s[c]);
          }
       }
@@ -1001,15 +996,14 @@ namespace glz::detail
       // if the colum has unique characters
       size_t best_index{};
       size_t best_count{};
-      for (size_t i = 0; i < max_length; ++i) {
+      for (size_t i = 0; i < min_length; ++i) {
          auto& col = cols[i];
          ranges::sort(col);
          if (auto it = ranges::adjacent_find(col); it == col.end()) {
             // no duplicates found
-            if (col.size() > best_count) {
-               best_count = col.size();
-               best_index = i;
-            }
+            best_count = col.size();
+            best_index = i;
+            break;
          }
       }
       
@@ -1017,12 +1011,7 @@ namespace glz::detail
          return {};
       }
       
-      if (cols[best_index].size() == N) {
-         // we have a candidate that applies to all strings
-         return best_index;
-      }
-      
-      return {};
+      return best_index;
    }
    
    template <size_t N>
