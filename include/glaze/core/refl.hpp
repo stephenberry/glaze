@@ -918,10 +918,10 @@ namespace glz::detail
             return 0;
          }
          case first_char: {
-            return 255;
+            return 256;
          }
          case unique_index: {
-            return 255;
+            return 256;
          }
          case front_16: {
             return (N == 1) ? 1 : std::bit_ceil(N * N) / 2;
