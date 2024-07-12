@@ -1028,6 +1028,8 @@ namespace glz::detail
    template <size_t N>
    constexpr auto make_keys_info(const std::array<sv, N>& keys)
    {
+      namespace ranges = std::ranges;
+      
       keys_info_t info{N};
       
       if (N == 0) {
@@ -1071,10 +1073,9 @@ namespace glz::detail
             k[i] = uint16_t(keys[i][0]) | (uint16_t(keys[i][1]) << 8);
          }
 
-         std::sort(k.begin(), k.end());
+         ranges::sort(k);
          
          bool valid = true;
-         
          for (size_t i = 0; i < N - 1; ++i) {
             const auto diff = k[i + 1] - k[i];
             if (diff == 0) {
@@ -1219,7 +1220,7 @@ namespace glz::detail
             }
          }();
          
-         if (index == N) [[unlikely]] {
+         if (index >= N) [[unlikely]] {
             ctx.error = error_code::unknown_key;
             return;
          }
