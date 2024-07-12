@@ -88,7 +88,13 @@ namespace glz
 
       std::vector<std::future<void>> threads{};
 
-      ~server() { active = false; }
+       ~server()
+      {
+         active.store(false);
+         scope.request_stop();
+         thread_pool.request_stop();
+         stdexec::sync_wait(scope.on_empty());
+      }
 
       template <class AcceptCallback>
       std::shared_future<std::error_code> async_accept(AcceptCallback&& callback)
@@ -97,6 +103,18 @@ namespace glz
             std::async([this, callback = std::forward<AcceptCallback>(callback)] { return accept(callback); })};
          return async_accept_thread;
       }
+
+      /*
+
+      template <class AcceptCallback>
+      exec::task<std::error_code> async_accept(AcceptCallback&& callback)
+      {
+         return exec::task<std::error_code>([this, callback = std::forward<AcceptCallback>(callback)]() mutable {
+            return accept(std::move(callback));
+         });
+      }
+
+      */
 
       template <class AcceptCallback>
       [[nodiscard]] std::error_code accept(AcceptCallback&& callback)
