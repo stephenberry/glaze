@@ -300,8 +300,8 @@ struct glz::meta<Escaped>
 {
    static constexpr std::string_view name = "Escaped";
    using T = Escaped;
-   static constexpr auto value = object(R"(escaped"key)", &T::escaped_key, //
-                                        R"(escaped""key2)", &T::escaped_key2, R"(escape_chars)", &T::escape_chars);
+   static constexpr auto value = object(R"(escaped\"key)", &T::escaped_key, //
+                                        R"(escaped\"\"key2)", &T::escaped_key2, R"(escape_chars)", &T::escape_chars);
 };
 
 suite escaping_tests = [] {
@@ -4034,7 +4034,7 @@ suite unicode_tests = [] {
    };
 
    "unicode_escaped"_test = [] {
-      std::string str = R"({"\u11FF":"\u11FF"})";
+      std::string str = R"({"ᇿ":"\u11FF"})";
       question_t obj{};
       expect(glz::read_json(obj, str) == glz::error_code::none);
 

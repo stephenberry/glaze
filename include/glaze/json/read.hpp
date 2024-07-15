@@ -183,7 +183,7 @@ namespace glz
                            return N; // error
                         }
                      }
-                     return HashInfo.table[it[uindex]];
+                     return HashInfo.table[uint8_t(it[uindex])];
                   }
                }
                else if constexpr (type == front_16) {
@@ -1650,57 +1650,6 @@ namespace glz
          }
       };
 
-      template <class T>
-      consteval bool keys_may_contain_escape()
-      {
-         return true;
-      }
-
-      // TODO: count the maximum number of escapes that can be seen if error_on_unknown_keys is true
-      template <glaze_object_t T>
-      consteval bool keys_may_contain_escape()
-      {
-         auto is_unicode = [](const auto c) { return (static_cast<uint8_t>(c) >> 7) > 0; };
-
-         bool may_escape = false;
-         constexpr auto N = refl<T>.N;
-         for_each<N>([&](auto I) {
-            constexpr auto key = refl<T>.keys[I];
-            for (auto& c : key) {
-               if (c == '\\' || c == '"' || is_unicode(c)) {
-                  may_escape = true;
-                  return;
-               }
-            }
-         });
-
-         return may_escape;
-      }
-
-      template <reflectable T>
-      consteval bool keys_may_contain_escape()
-      {
-         return false; // escapes are not valid in C++ names
-      }
-
-      template <is_variant T>
-      consteval bool keys_may_contain_escape()
-      {
-         bool may_escape = false;
-         constexpr auto N = std::variant_size_v<T>;
-         for_each<N>([&](auto I) {
-            using V = std::decay_t<std::variant_alternative_t<I, T>>;
-            constexpr bool is_object = glaze_object_t<V>;
-            if constexpr (is_object) {
-               if constexpr (keys_may_contain_escape<V>()) {
-                  may_escape = true;
-                  return;
-               }
-            }
-         });
-         return may_escape;
-      }
-
       // only use this if the keys cannot contain escape characters
       template <class T, string_literal tag = "">
          requires(glaze_object_t<T> || reflectable<T>)
@@ -1776,38 +1725,30 @@ namespace glz
          if (bool(ctx.error)) [[unlikely]]
             return {};
 
-         if constexpr (keys_may_contain_escape<T>()) {
-            std::string& static_key = string_buffer();
-            read<json>::op<opening_handled<Opts>()>(static_key, ctx, it, end);
-            --it; // reveal the quote
-            return static_key;
-         }
-         else {
-            constexpr auto N = [] {
-               if constexpr (is_variant<T>) {
-                  return std::variant_size_v<T>;
-               }
-               else {
-                  return refl<T>.N;
-               }
-            }();
-
-            if constexpr (N > 0) {
-               static constexpr auto stats = key_stats<T, tag>();
-               if constexpr (stats.length_range < 24) {
-                  if ((it + stats.max_length) < end) [[likely]] {
-                     return parse_key_cx<Opts, stats>(it);
-                  }
-               }
-               auto start = it;
-               skip_till_quote(ctx, it, end);
-               return {start, size_t(it - start)};
+         constexpr auto N = [] {
+            if constexpr (is_variant<T>) {
+               return std::variant_size_v<T>;
             }
             else {
-               auto start = it;
-               skip_till_quote(ctx, it, end);
-               return {start, size_t(it - start)};
+               return refl<T>.N;
             }
+         }();
+
+         if constexpr (N > 0) {
+            static constexpr auto stats = key_stats<T, tag>();
+            if constexpr (stats.length_range < 24) {
+               if ((it + stats.max_length) < end) [[likely]] {
+                  return parse_key_cx<Opts, stats>(it);
+               }
+            }
+            auto start = it;
+            skip_till_quote(ctx, it, end);
+            return {start, size_t(it - start)};
+         }
+         else {
+            auto start = it;
+            skip_till_quote(ctx, it, end);
+            return {start, size_t(it - start)};
          }
       }
 
@@ -1946,7 +1887,6 @@ namespace glz
                size_t read_count{}; // for partial_read and dynamic objects
 
                static constexpr bool direct_maps = (glaze_object_t<T> || reflectable<T>) //
-                                                   &&(not keys_may_contain_escape<T>()) // TODO: handle escaped keys
                                                    && (tag.sv() == "") // TODO: handle tag_v with variants
                                                    && bool(hash_info<T>.type);
 
