@@ -21,8 +21,7 @@ namespace glz
 
       std::string message(int ec) const override
       {
-         static constexpr auto arr = detail::make_enum_to_string_array<error_code>();
-         return std::string{arr[ec]};
+         return std::string{nameof(error_code(ec))};
       }
    };
 }
