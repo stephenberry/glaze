@@ -8542,6 +8542,48 @@ suite custom_error = [] {
    };
 };
 
+struct var_a {
+  int m1;
+
+  struct glaze {
+    static constexpr auto value = glz::object("a", &var_a::m1);
+  };
+};
+
+struct var_b {
+  std::vector<var_a> m1;
+  bool m2;
+
+  struct glaze {
+    static constexpr auto value = glz::object("b", &var_b::m1, "c", &var_b::m2);
+  };
+};
+
+struct var_c {
+  std::vector<var_a> m1;
+  struct glaze {
+    static constexpr auto value = &var_c::m1;
+  };
+};
+
+struct var_abc_t {
+  std::variant<var_a, var_b, var_c> m1;
+  struct glaze {
+    static constexpr auto value = &var_abc_t::m1;
+  };
+};
+
+suite nested_variants = [] {
+   "nested_variants"_test = [] {
+      var_abc_t v{};
+      
+      auto ec = glz::read_json(v, std::string{R"({"a":5})"});
+      
+      expect(not ec) << glz::format_error(ec);
+      expect(std::get<var_a>(v.m1).m1 == 5);
+   };
+};
+
 int main()
 {
    trace.end("json_test");
