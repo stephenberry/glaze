@@ -26,7 +26,6 @@ namespace glz
             unexpected_end, //
             expected_end_comment, //
             syntax_error, //
-            key_not_found, //
             unexpected_enum, //
             attempt_const_read, //
             attempt_member_func_read, //
@@ -38,14 +37,13 @@ namespace glz
             no_matching_variant_type, //
             expected_true_or_false, //
             // Key errors
+            key_not_found, //
             unknown_key, //
             missing_key, //
             // Other errors
             invalid_flag_input, //
             invalid_escape, //
             u_requires_hex_digits, //
-            could_not_determine_extension, //
-            seek_failure, //
             unicode_escape_conversion_failure, //
             dump_int_error, //
             // File errors
@@ -53,9 +51,11 @@ namespace glz
             file_close_failure, //
             file_include_error, //
             file_extension_not_supported, //
+            could_not_determine_extension, //
             // JSON pointer access errors
             get_nonexistent_json_ptr, //
             get_wrong_type, //
+            seek_failure, //
             // Other errors
             cannot_be_referenced, //
             invalid_get, //
@@ -74,7 +74,7 @@ namespace glz
    struct error_ctx final
    {
       error_code ec{};
-      std::string_view custom_error_message{}; // for custom error messages
+      std::string_view custom_error_message{};
       // INTERNAL USE:
       size_t location{};
       std::string_view includer_error{}; // error from a nested file includer
@@ -89,7 +89,7 @@ namespace glz
    struct context final
    {
       error_code error{};
-      std::string_view custom_error_message{}; // for custom error messages
+      std::string_view custom_error_message{};
       // INTERNAL USE:
       uint32_t indentation_level{};
       std::string current_file; // top level file path
