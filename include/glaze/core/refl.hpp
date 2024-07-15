@@ -1068,6 +1068,7 @@ namespace glz::detail
       return best_index;
    }
    
+   // TODO: Add N == 1 optimization
    template <size_t N>
    constexpr auto make_keys_info(const std::array<sv, N>& keys)
    {
