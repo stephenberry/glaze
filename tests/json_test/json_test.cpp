@@ -8482,7 +8482,7 @@ static_assert(bool(glz::detail::hash_info<front_16_t>.type));
 suite front_16_test = [] {
    "front_16"_test = [] {
       front_16_t obj{};
-      
+
       std::string buffer = R"({"aa":1,"ab":2,"acc":3,"cb":4})";
       auto ec = glz::read_json(obj, buffer);
       expect(not ec) << glz::format_error(ec, buffer);

@@ -135,7 +135,7 @@ namespace glz
                                             std::forward<Ctx>(ctx), std::forward<It0>(it), std::forward<It1>(end));
          }
       };
-      
+
       template <glz::opts Opts>
       GLZ_ALWAYS_INLINE void parse_object_entry_sep(is_context auto& ctx, auto& it, const auto end)
       {
@@ -143,22 +143,23 @@ namespace glz
          GLZ_MATCH_COLON();
          GLZ_SKIP_WS();
       }
-      
+
       template <opts Opts, class T, auto HashInfo, class Func, class Tuple, class Value>
-         requires (glaze_object_t<T> || reflectable<T>)
-      constexpr void parse_and_invoke(Func&& func, Tuple&& tuple, Value&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+         requires(glaze_object_t<T> || reflectable<T>)
+      constexpr void parse_and_invoke(Func&& func, Tuple&& tuple, Value&& value, is_context auto&& ctx, auto&& it,
+                                      auto&& end) noexcept
       {
          if constexpr (glaze_object_t<T>) {
             (void)tuple;
          }
-         
+
          if constexpr (Opts.error_on_unknown_keys) {
             (void)value;
          }
-         
+
          constexpr auto type = HashInfo.type;
          constexpr auto N = refl<T>.N;
-         
+
          if constexpr (bool(type)) {
             const auto index = [&]() -> size_t {
                using enum hash_type;
@@ -170,7 +171,7 @@ namespace glz
                         if (n == 0 || n > HashInfo.max_length) {
                            return N; // error
                         }
-                        
+
                         const auto h = bitmix(uint16_t(it[HashInfo.unique_index]) | (uint16_t(n) << 8), HashInfo.seed);
                         static constexpr auto bsize = bucket_size(unique_index, N);
                         return HashInfo.table[h % bsize];
@@ -200,7 +201,7 @@ namespace glz
                   static_assert(false_v<T>, "invalid hash algorithm");
                }
             }();
-            
+
             if (index >= N) [[unlikely]] {
                if constexpr (Opts.error_on_unknown_keys) {
                   ctx.error = error_code::unknown_key;
@@ -223,8 +224,8 @@ namespace glz
                   return;
                }
             }
-            
-            for_each_short_circuit<N>([&](auto I){
+
+            for_each_short_circuit<N>([&](auto I) {
                if (I == index) {
                   static constexpr auto TargetKey = get<I>(refl<T>.keys);
                   static constexpr auto Length = TargetKey.size();
@@ -249,8 +250,8 @@ namespace glz
                         return true;
                      }
                   }
-                  
-                  const sv key{ it, Length };
+
+                  const sv key{it, Length};
                   if (cx_string_cmp<TargetKey>(key)) [[likely]] {
                      it += Length;
                      if (*it != '"') [[unlikely]] {
@@ -279,11 +280,11 @@ namespace glz
                         }
                      }
                      ++it;
-                     
+
                      GLZ_SKIP_WS(true);
                      GLZ_MATCH_COLON(true);
                      GLZ_SKIP_WS(true);
-                     
+
                      // invoke on the value
                      if constexpr (glaze_object_t<T>) {
                         std::forward<Func>(func)(get<I>(refl<T>.values), I);
@@ -311,7 +312,7 @@ namespace glz
                         read<json>::handle_unknown<Opts>(key, value, ctx, it, end);
                      }
                   }
-                  
+
                   return true;
                }
                return false;
@@ -1652,7 +1653,7 @@ namespace glz
             ctx.current_file = current_file;
          }
       };
-      
+
       template <class T>
       consteval bool keys_may_contain_escape()
       {
@@ -1947,11 +1948,11 @@ namespace glz
                }();
 
                size_t read_count{}; // for partial_read and dynamic objects
-               
+
                static constexpr bool direct_maps = (glaze_object_t<T> || reflectable<T>) //
-               && (not keys_may_contain_escape<T>()) // TODO: handle escaped keys
-               && (tag.sv() == "") // TODO: handle tag_v with variants
-               && bool(hash_info<T>.type);
+                                                   &&(not keys_may_contain_escape<T>()) // TODO: handle escaped keys
+                                                   && (tag.sv() == "") // TODO: handle tag_v with variants
+                                                   && bool(hash_info<T>.type);
 
                decltype(auto) frozen_map = [&]() -> decltype(auto) {
                   using V = decay_keep_volatile_t<decltype(value)>;
@@ -1973,7 +1974,7 @@ namespace glz
                      return nullptr;
                   }
                }();
-               
+
                bool first = true;
                while (true) {
                   if constexpr ((glaze_object_t<T> || reflectable<T>)&&(is_partial_read<T> || Opts.partial_read)) {
@@ -2048,7 +2049,7 @@ namespace glz
                         return;
                      }
                      ++it;
-                     
+
                      decltype(auto) t = [&]() -> decltype(auto) {
                         if constexpr (reflectable<T>) {
                            return to_tuple(value);
@@ -2057,32 +2058,33 @@ namespace glz
                            return nullptr;
                         }
                      }();
-                     
-                     parse_and_invoke<Opts, T, hash_info<T>>([&](auto&& element, const size_t index){
-                        
-                        if constexpr (Opts.error_on_missing_keys || is_partial_read<T> || Opts.partial_read) {
-                           fields[index] = true;
-                        }
-                        else {
-                           (void)index;
-                        }
-                        
-                        using V = decltype(get_member(value, element));
 
-                        if constexpr (std::is_const_v<std::remove_reference_t<V>>) {
-                           if constexpr (Opts.error_on_const_read) {
-                              ctx.error = error_code::attempt_const_read;
+                     parse_and_invoke<Opts, T, hash_info<T>>(
+                        [&](auto&& element, const size_t index) {
+                           if constexpr (Opts.error_on_missing_keys || is_partial_read<T> || Opts.partial_read) {
+                              fields[index] = true;
                            }
                            else {
-                              // do not read anything into the const value
-                              skip_value<Opts>(ctx, it, end);
+                              (void)index;
                            }
-                        }
-                        else {
-                           from_json<std::remove_cvref_t<V>>::template op<ws_handled<Opts>()>(
-                              get_member(value, element), ctx, it, end);
-                        }
-                     }, t, value, ctx, it, end);
+
+                           using V = decltype(get_member(value, element));
+
+                           if constexpr (std::is_const_v<std::remove_reference_t<V>>) {
+                              if constexpr (Opts.error_on_const_read) {
+                                 ctx.error = error_code::attempt_const_read;
+                              }
+                              else {
+                                 // do not read anything into the const value
+                                 skip_value<Opts>(ctx, it, end);
+                              }
+                           }
+                           else {
+                              from_json<std::remove_cvref_t<V>>::template op<ws_handled<Opts>()>(
+                                 get_member(value, element), ctx, it, end);
+                           }
+                        },
+                        t, value, ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
                   }
