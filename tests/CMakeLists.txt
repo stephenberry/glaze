@@ -22,7 +22,7 @@ include(../cmake/code-coverage.cmake)
 add_code_coverage_all_targets()
 
 add_library(glz_test_common INTERFACE)
-target_compile_features(glz_test_common INTERFACE cxx_std_20)
+target_compile_features(glz_test_common INTERFACE cxx_std_23)
 target_link_libraries(glz_test_common INTERFACE ut::ut glaze::glaze)
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     target_compile_options(glz_test_common INTERFACE -fno-exceptions -fno-rtti)
@@ -42,7 +42,7 @@ elseif(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
 endif()
 
 add_library(glz_test_exceptions INTERFACE)
-target_compile_features(glz_test_exceptions INTERFACE cxx_std_20)
+target_compile_features(glz_test_exceptions INTERFACE cxx_std_23)
 target_link_libraries(glz_test_exceptions INTERFACE ut::ut glaze::glaze)
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     target_compile_options(glz_test_exceptions INTERFACE)
@@ -71,7 +71,8 @@ add_subdirectory(reflection_test)
 add_subdirectory(repe_test)
 
 # We don't run find_package_test or glaze-install_test with MSVC/Windows, because the Github action runner often chokes
-if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+# Don't run find_package on Clang, because Linux runs with Clang try to use GCC standard library and have errors before Clang 18
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
     add_test(
     NAME glaze-install_test
     COMMAND
