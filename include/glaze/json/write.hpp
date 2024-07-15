@@ -1132,14 +1132,14 @@ namespace glz
                      return get<I>(refl<T>.values);
                   }
                };
+               
+               static constexpr sv key = get<I>(refl<T>.keys);
+               // MSVC requires get<I> rather than keys[I]
+               static constexpr auto quoted_key = join_v < chars<"\"">, key,
+                                     Opts.prettify ? chars<"\": "> : chars < "\":" >>
+                  ;
 
                auto write_key = [&] {
-                  // MSVC requires get<I> rather than keys[I]
-                  static constexpr sv k = get<I>(refl<T>.keys);
-                  static constexpr sv key = join_v<k>; // Intermediate added for GCC 14
-                  static constexpr auto quoted_key = join_v < chars<"\"">, key,
-                                        Opts.prettify ? chars<"\": "> : chars < "\":" >>
-                     ;
                   if constexpr (quoted_key.size() < 128) {
                      // Using the same padding constant alows the compiler
                      // to not need to load different lengths into the register
