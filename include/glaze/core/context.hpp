@@ -37,20 +37,26 @@ namespace glz
             invalid_variant_string, //
             no_matching_variant_type, //
             expected_true_or_false, //
+            // Key errors
             unknown_key, //
+            missing_key, //
+            // Other errors
             invalid_flag_input, //
             invalid_escape, //
             u_requires_hex_digits, //
-            file_extension_not_supported, //
             could_not_determine_extension, //
             seek_failure, //
             unicode_escape_conversion_failure, //
+            dump_int_error, //
+            // File errors
             file_open_failure, //
             file_close_failure, //
             file_include_error, //
-            dump_int_error, //
+            file_extension_not_supported, //
+            // JSON pointer access errors
             get_nonexistent_json_ptr, //
             get_wrong_type, //
+            // Other errors
             cannot_be_referenced, //
             invalid_get, //
             invalid_get_fn, //
@@ -61,7 +67,6 @@ namespace glz
             elements_not_convertible_to_design, //
             unknown_distribution, //
             invalid_distribution_elements, //
-            missing_key, //
             hostname_failure, //
             includer_error //
    );
@@ -69,6 +74,8 @@ namespace glz
    struct error_ctx final
    {
       error_code ec{};
+      std::string_view custom_error_message{}; // for custom error messages
+      // INTERNAL USE:
       size_t location{};
       std::string_view includer_error{}; // error from a nested file includer
 
@@ -81,11 +88,12 @@ namespace glz
    // We do not template the context on iterators so that it can be easily shared across buffer implementations
    struct context final
    {
-      // INTERNAL USE
+      error_code error{};
+      std::string_view custom_error_message{}; // for custom error messages
+      // INTERNAL USE:
       uint32_t indentation_level{};
       std::string current_file; // top level file path
       std::string_view includer_error{}; // error from a nested file includer
-      error_code error{};
    };
 
    template <class T>

@@ -57,7 +57,7 @@ namespace glz
 
       if (buffer.empty()) [[unlikely]] {
          ctx.error = error_code::no_read_input;
-         return {ctx.error, 0, ctx.includer_error};
+         return {ctx.error, ctx.custom_error_message, 0, ctx.includer_error};
       }
 
       constexpr bool use_padded = resizable<Buffer> && non_const_buffer<Buffer> && !has_disable_padding(Opts);
@@ -103,7 +103,7 @@ namespace glz
          buffer.resize(buffer.size() - padding_bytes);
       }
 
-      return {ctx.error, size_t(it - start), ctx.includer_error};
+      return {ctx.error, ctx.custom_error_message, size_t(it - start), ctx.includer_error};
    }
 
    template <opts Opts, class T>
@@ -124,7 +124,7 @@ namespace glz
    {
       const auto str = std::string_view{std::forward<Buffer>(buffer)};
       if (str.empty()) {
-         return {error_code::no_read_input, 0};
+         return {error_code::no_read_input};
       }
       return read<Opts>(value, str, ctx);
    }
