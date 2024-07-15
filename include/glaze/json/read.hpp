@@ -135,6 +135,192 @@ namespace glz
                                             std::forward<Ctx>(ctx), std::forward<It0>(it), std::forward<It1>(end));
          }
       };
+      
+      template <glz::opts Opts>
+      GLZ_ALWAYS_INLINE void parse_object_entry_sep(is_context auto& ctx, auto& it, const auto end)
+      {
+         GLZ_SKIP_WS();
+         GLZ_MATCH_COLON();
+         GLZ_SKIP_WS();
+      }
+      
+      template <opts Opts, class T, auto HashInfo, class Func, class Tuple, class Value>
+         requires (glaze_object_t<T> || reflectable<T>)
+      constexpr void parse_and_invoke(Func&& func, Tuple&& tuple, Value&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+      {
+         if constexpr (glaze_object_t<T>) {
+            (void)tuple;
+         }
+         
+         if constexpr (Opts.error_on_unknown_keys) {
+            (void)value;
+         }
+         
+         constexpr auto type = HashInfo.type;
+         constexpr auto N = refl<T>.N;
+         
+         if constexpr (bool(type)) {
+            const auto index = [&]() -> size_t {
+               using enum hash_type;
+               if constexpr (type == unique_index) {
+                  if constexpr (HashInfo.sized_hash) {
+                     const auto* c = std::memchr(it, '"', size_t(end - it));
+                     if (c) [[likely]] {
+                        const auto n = size_t(static_cast<std::decay_t<decltype(it)>>(c) - it);
+                        if (n == 0 || n > HashInfo.max_length) {
+                           return N; // error
+                        }
+                        
+                        const auto h = bitmix(uint16_t(it[HashInfo.unique_index]) | (uint16_t(n) << 8), HashInfo.seed);
+                        static constexpr auto bsize = bucket_size(unique_index, N);
+                        return HashInfo.table[h % bsize];
+                     }
+                     else [[unlikely]] {
+                        return N;
+                     }
+                  }
+                  else {
+                     static constexpr auto uindex = HashInfo.unique_index;
+                     if constexpr (uindex > 0) {
+                        if ((it + uindex) >= end) [[unlikely]] {
+                           return N; // error
+                        }
+                     }
+                     return HashInfo.table[it[uindex]];
+                  }
+               }
+               else if constexpr (type == front_16) {
+                  static constexpr auto bsize = bucket_size(front_16, N);
+                  // we don't need to check for second character because we are null terminated
+                  uint16_t h;
+                  std::memcpy(&h, it, 2);
+                  return HashInfo.table[bitmix(h, HashInfo.seed) % bsize];
+               }
+               else {
+                  static_assert(false_v<T>, "invalid hash algorithm");
+               }
+            }();
+            
+            if (index >= N) [[unlikely]] {
+               if constexpr (Opts.error_on_unknown_keys) {
+                  ctx.error = error_code::unknown_key;
+                  return;
+               }
+               else {
+                  // we need to search until we find the ending quote of the key
+                  auto start = it;
+                  skip_string_view<Opts>(ctx, it, end);
+                  if (bool(ctx.error)) [[unlikely]]
+                     return;
+                  const sv key = {start, size_t(it - start)};
+                  ++it; // skip the quote
+
+                  parse_object_entry_sep<Opts>(ctx, it, end);
+                  if (bool(ctx.error)) [[unlikely]]
+                     return;
+
+                  read<json>::handle_unknown<Opts>(key, value, ctx, it, end);
+                  return;
+               }
+            }
+            
+            for_each_short_circuit<N>([&](auto I){
+               if (I == index) {
+                  static constexpr auto TargetKey = get<I>(refl<T>.keys);
+                  static constexpr auto Length = TargetKey.size();
+                  if ((it + Length) >= end) [[unlikely]] {
+                     if constexpr (Opts.error_on_unknown_keys) {
+                        ctx.error = error_code::unknown_key;
+                        return true;
+                     }
+                     else {
+                        auto start = it;
+                        skip_string_view<Opts>(ctx, it, end);
+                        if (bool(ctx.error)) [[unlikely]]
+                           return true;
+                        const sv key = {start, size_t(it - start)};
+                        ++it; // skip the quote
+
+                        parse_object_entry_sep<Opts>(ctx, it, end);
+                        if (bool(ctx.error)) [[unlikely]]
+                           return true;
+
+                        read<json>::handle_unknown<Opts>(key, value, ctx, it, end);
+                        return true;
+                     }
+                  }
+                  
+                  const sv key{ it, Length };
+                  if (cx_string_cmp<TargetKey>(key)) [[likely]] {
+                     it += Length;
+                     if (*it != '"') [[unlikely]] {
+                        if constexpr (Opts.error_on_unknown_keys) {
+                           ctx.error = error_code::unknown_key;
+                           return true;
+                        }
+                        else {
+                           // This code should not error on valid unknown keys
+                           // We arrived here because the key was perhaps found, but if the quote does not exist
+                           // then this does not necessarily mean we have a syntax error.
+                           // We may have just found the prefix of a longer, unknown key.
+                           auto* start = it - Length;
+                           skip_string_view<Opts>(ctx, it, end);
+                           if (bool(ctx.error)) [[unlikely]]
+                              return true;
+                           const sv key = {start, size_t(it - start)};
+                           ++it;
+
+                           parse_object_entry_sep<Opts>(ctx, it, end);
+                           if (bool(ctx.error)) [[unlikely]]
+                              return true;
+
+                           read<json>::handle_unknown<Opts>(key, value, ctx, it, end);
+                           return true;
+                        }
+                     }
+                     ++it;
+                     
+                     GLZ_SKIP_WS(true);
+                     GLZ_MATCH_COLON(true);
+                     GLZ_SKIP_WS(true);
+                     
+                     // invoke on the value
+                     if constexpr (glaze_object_t<T>) {
+                        std::forward<Func>(func)(get<I>(refl<T>.values), I);
+                     }
+                     else {
+                        std::forward<Func>(func)(get<I>(std::forward<Tuple>(tuple)), I);
+                     }
+                  }
+                  else [[unlikely]] {
+                     if constexpr (Opts.error_on_unknown_keys) {
+                        ctx.error = error_code::unknown_key;
+                     }
+                     else {
+                        auto* start = it - Length;
+                        skip_string_view<Opts>(ctx, it, end);
+                        if (bool(ctx.error)) [[unlikely]]
+                           return true;
+                        const sv key = {start, size_t(it - start)};
+                        ++it;
+
+                        parse_object_entry_sep<Opts>(ctx, it, end);
+                        if (bool(ctx.error)) [[unlikely]]
+                           return true;
+
+                        read<json>::handle_unknown<Opts>(key, value, ctx, it, end);
+                     }
+                  }
+                  
+                  return true;
+               }
+               return false;
+            });
+         }
+         else {
+            static_assert(false_v<T>, "invalid hash algorithm");
+         }
+      }
 
       template <is_member_function_pointer T>
       struct from_json<T>
@@ -1581,14 +1767,6 @@ namespace glz
          return stats;
       }
 
-      template <glz::opts Opts>
-      GLZ_ALWAYS_INLINE void parse_object_entry_sep(is_context auto& ctx, auto& it, const auto end)
-      {
-         GLZ_SKIP_WS();
-         GLZ_MATCH_COLON();
-         GLZ_SKIP_WS();
-      }
-
       // Key parsing for meta objects or variants of meta objects.
       // We do not check for an ending quote, we simply parse up to the quote
       // TODO: We could expand this to compiletime known strings in general like enums
@@ -1771,7 +1949,6 @@ namespace glz
                size_t read_count{}; // for partial_read and dynamic objects
                
                static constexpr bool direct_maps = (glaze_object_t<T> || reflectable<T>) //
-               && Opts.error_on_unknown_keys // TODO: handle not erroring option
                && (not keys_may_contain_escape<T>()) // TODO: handle escaped keys
                && (tag.sv() == "") // TODO: handle tag_v with variants
                && bool(hash_info<T>.type);
@@ -1905,7 +2082,7 @@ namespace glz
                            from_json<std::remove_cvref_t<V>>::template op<ws_handled<Opts>()>(
                               get_member(value, element), ctx, it, end);
                         }
-                     }, t, ctx, it, end);
+                     }, t, value, ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
                   }
