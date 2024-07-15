@@ -240,7 +240,8 @@ namespace glz
 
    struct ip_error_category : public std::error_category
    {
-      static const ip_error_category& instance() {
+      static const ip_error_category& instance()
+      {
          static ip_error_category instance{};
          return instance;
       }
@@ -360,7 +361,7 @@ namespace glz
 
          return {};
       }
-
+      
       template <ip_header Header>
       [[nodiscard]] std::error_code receive(Header& header, std::string& buffer)
       {
@@ -434,10 +435,71 @@ namespace glz
                   return {ip_error::send_failed, ip_error_category::instance()};
                }
             }
-
+            
             total_bytes += bytes;
          }
          return {};
+      }
+
+      enum class io_result { completed, would_block, error };
+
+      io_result send(const std::string_view& buffer, size_t& bytes_sent)
+      {
+         auto remaining = buffer.size() - bytes_sent;
+         auto result = ::send(socket_fd, buffer.data() + bytes_sent, remaining, 0);
+         if (result > 0) {
+            bytes_sent += result;
+            return bytes_sent == buffer.size() ? io_result::completed : io_result::would_block;
+         }
+         else if (result == 0 ||
+                  (result == -1 && GLZ_SOCKET_ERROR_CODE != GLZ_EWOULDBLOCK && GLZ_SOCKET_ERROR_CODE != EAGAIN)) {
+            return io_result::error;
+         }
+         return io_result::would_block;
+      }
+
+      template <ip_header Header>
+      io_result receive(Header& header, std::string& buffer, size_t& bytes_received)
+      {
+         if (bytes_received < sizeof(Header)) {
+            auto result =
+               ::recv(socket_fd, reinterpret_cast<char*>(&header) + bytes_received, sizeof(Header) - bytes_received, 0);
+            if (result > 0) {
+               bytes_received += result;
+               if (bytes_received < sizeof(Header)) {
+                  return io_result::would_block;
+               }
+            }
+            else if (result == 0 ||
+                     (result == -1 && GLZ_SOCKET_ERROR_CODE != GLZ_EWOULDBLOCK && GLZ_SOCKET_ERROR_CODE != EAGAIN)) {
+               return io_result::error;
+            }
+            else {
+               return io_result::would_block;
+            }
+         }
+         
+         size_t size{};
+         if constexpr (std::same_as<Header, uint64_t>) {
+            size = header;
+         }
+         else {
+            size = size_t(header.body_size);
+         }
+         
+         buffer.resize(size);
+
+         auto result = ::recv(socket_fd, buffer.data() + (bytes_received - sizeof(Header)),
+                              buffer.size() - (bytes_received - sizeof(Header)), 0);
+         if (result > 0) {
+            bytes_received += result;
+            return bytes_received == (sizeof(Header) + buffer.size()) ? io_result::completed : io_result::would_block;
+         }
+         else if (result == 0 ||
+                  (result == -1 && GLZ_SOCKET_ERROR_CODE != GLZ_EWOULDBLOCK && GLZ_SOCKET_ERROR_CODE != EAGAIN)) {
+            return io_result::error;
+         }
+         return io_result::would_block;
       }
    };
 }

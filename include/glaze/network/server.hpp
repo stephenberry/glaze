@@ -6,7 +6,6 @@
 #include <algorithm>
 #include <atomic>
 #include <chrono>
-#include <future>
 #include <vector>
 
 #include <exec/any_sender_of.hpp>
@@ -16,7 +15,6 @@
 #include <stdexec/execution.hpp>
 
 #include "glaze/network/socket.hpp"
-
 
 #ifdef _WIN32
 #define GLZ_CLOSE_SOCKET closesocket
@@ -61,34 +59,14 @@
 
 namespace glz
 {
-   namespace detail
-   {
-      inline void server_thread_cleanup(auto& threads)
-      {
-         threads.erase(std::partition(threads.begin(), threads.end(),
-                                      [](auto& future) {
-                                         if (auto status = future.wait_for(std::chrono::milliseconds(0));
-                                             status == std::future_status::ready) {
-                                            return false;
-                                         }
-                                         return true;
-                                      }),
-                       threads.end());
-      }
-   }
-
    struct server final
    {
       int port{};
       std::atomic<bool> active = true;
-      std::shared_future<std::error_code> async_accept_thread{};
-
       exec::static_thread_pool thread_pool{std::thread::hardware_concurrency() / 2};
       exec::async_scope scope{};
 
-      std::vector<std::future<void>> threads{};
-
-       ~server()
+      ~server()
       {
          active.store(false);
          scope.request_stop();
@@ -97,27 +75,16 @@ namespace glz
       }
 
       template <class AcceptCallback>
-      std::shared_future<std::error_code> async_accept(AcceptCallback&& callback)
+      auto async_accept(AcceptCallback&& callback)
       {
-         async_accept_thread = {
-            std::async([this, callback = std::forward<AcceptCallback>(callback)] { return accept(callback); })};
-         return async_accept_thread;
+         return stdexec::schedule(thread_pool.get_scheduler()) |
+                stdexec::then([this, callback = std::forward<AcceptCallback>(callback)]() mutable {
+                   return accept(std::move(callback));
+                });
       }
 
-      /*
-
       template <class AcceptCallback>
-      exec::task<std::error_code> async_accept(AcceptCallback&& callback)
-      {
-         return exec::task<std::error_code>([this, callback = std::forward<AcceptCallback>(callback)]() mutable {
-            return accept(std::move(callback));
-         });
-      }
-
-      */
-
-      template <class AcceptCallback>
-      [[nodiscard]] std::error_code accept(AcceptCallback&& callback)
+      std::error_code accept(AcceptCallback&& callback)
       {
          glz::socket accept_socket{};
 
@@ -193,8 +160,14 @@ namespace glz
                socklen_t client_len = sizeof(client_addr);
                auto client_fd = ::accept(accept_socket.socket_fd, (sockaddr*)&client_addr, &client_len);
                if (client_fd != GLZ_INVALID_SOCKET) {
-                  threads.emplace_back(
-                     std::async([this, callback, client_fd] { callback(socket{client_fd}, active); }));
+                  scope.spawn(
+                     stdexec::on(thread_pool.get_scheduler(),
+                                 stdexec::just() |
+                                 stdexec::then([callback, client_fd, this] {
+                                    callback(thread_pool.get_scheduler(), socket{client_fd}, active);
+                                 })
+                     )
+                  );
                }
             };
 
@@ -222,8 +195,6 @@ namespace glz
                }
             }
 #endif
-
-            detail::server_thread_cleanup(threads);
          }
 
          GLZ_EVENT_CLOSE(event_fd);
