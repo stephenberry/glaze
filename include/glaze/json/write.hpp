@@ -1135,7 +1135,8 @@ namespace glz
 
                auto write_key = [&] {
                   // MSVC requires get<I> rather than keys[I]
-                  static constexpr sv key = get<I>(refl_info<T>::keys);
+                  static constexpr sv k = get<I>(refl<T>.keys);
+                  static constexpr sv key = join_v<k>; // Intermediate added for GCC 14
                   static constexpr auto quoted_key = join_v < chars<"\"">, key,
                                         Opts.prettify ? chars<"\": "> : chars < "\":" >>
                      ;
