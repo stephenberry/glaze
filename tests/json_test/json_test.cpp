@@ -4929,7 +4929,8 @@ suite lamda_wrapper = [] {
       expect(buffer == R"({"x":"3.14","y":["1","2","3"],"z":[["1","2","3"]]})");
 
       buffer = R"({"x":"999.2","y":["4","5","6"],"z":[["4","5"]]})";
-      expect(glz::read<glz::opts{.error_on_missing_keys = true}>(a, buffer) == glz::error_code::none);
+      auto ec = glz::read<glz::opts{.error_on_missing_keys = true}>(a, buffer);
+      expect(ec == glz::error_code::none) << glz::format_error(ec, buffer);
       expect(a.x == 999.2);
       expect(a.y == std::vector<uint32_t>{4, 5, 6});
       expect(a.z == std::vector<std::vector<uint32_t>>{{4, 5}});
@@ -8466,6 +8467,30 @@ suite msvc_ice_tests = [] {
 suite error_codes_test = [] {
    expect(glz::format_error(glz::error_ctx{glz::error_code::none}) == "none");
    expect(glz::format_error(glz::error_ctx{glz::error_code::expected_brace}) == "expected_brace");
+};
+
+struct front_16_t
+{
+   int aa{0};
+   int ab{0};
+   int acc{0};
+   int cb{0};
+};
+
+static_assert(bool(glz::detail::hash_info<front_16_t>.type));
+
+suite front_16_test = [] {
+   "front_16"_test = [] {
+      front_16_t obj{};
+      
+      std::string buffer = R"({"aa":1,"ab":2,"acc":3,"cb":4})";
+      auto ec = glz::read_json(obj, buffer);
+      expect(not ec) << glz::format_error(ec, buffer);
+      expect(obj.aa = 1);
+      expect(obj.ab = 2);
+      expect(obj.acc = 3);
+      expect(obj.cb = 4);
+   };
 };
 
 int main()

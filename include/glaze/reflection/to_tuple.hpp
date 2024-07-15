@@ -10,6 +10,7 @@
 #include <utility>
 
 #include "glaze/tuplet/tuple.hpp"
+#include "glaze/util/inline.hpp"
 #include "glaze/util/type_traits.hpp"
 
 namespace glz
@@ -55,7 +56,7 @@ namespace glz
 
       template <class T, size_t N = count_members<T>>
          requires(N <= 128)
-      constexpr decltype(auto) to_tuple(T&& t)
+      GLZ_ALWAYS_INLINE constexpr decltype(auto) to_tuple(T&& t)
       {
          if constexpr (N == 0) {
             return tuplet::tuple{};

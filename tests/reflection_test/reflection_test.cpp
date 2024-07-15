@@ -733,4 +733,25 @@ struct S1
 };
 static_assert(glz::detail::count_members<S1> == 3);
 
+struct unique_index_t
+{
+   int apple{};
+   int archer{};
+   int arm{};
+   int amiable{};
+};
+
+suite unique_index_test = [] {
+   "unique_index"_test = [] {
+      unique_index_t obj{};
+      std::string buffer = R"({"apple":1,"archer":2,"arm":3,"amiable":4})";
+      auto ec = glz::read_json(obj, buffer);
+      expect(not ec) << glz::format_error(ec, buffer);
+      expect(obj.apple == 1);
+      expect(obj.archer == 2);
+      expect(obj.arm == 3);
+      expect(obj.amiable == 4);
+   };
+};
+
 int main() { return 0; }

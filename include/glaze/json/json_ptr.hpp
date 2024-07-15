@@ -65,15 +65,15 @@ namespace glz
                case '{': {
                   ++it;
                   while (true) {
-                     GLZ_SKIP_WS;
+                     GLZ_SKIP_WS();
                      const auto k = parse_key(ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]] {
                         return;
                      }
                      if (cx_string_cmp<key>(k)) {
-                        GLZ_SKIP_WS;
-                        GLZ_MATCH_COLON;
-                        GLZ_SKIP_WS;
+                        GLZ_SKIP_WS();
+                        GLZ_MATCH_COLON();
+                        GLZ_SKIP_WS();
 
                         if constexpr (I == (N - 1)) {
                            ret = parse_value<Opts>(ctx, it, end);
@@ -110,7 +110,7 @@ namespace glz
                         ++it;
                      });
 
-                     GLZ_SKIP_WS;
+                     GLZ_SKIP_WS();
 
                      if constexpr (I == (N - 1)) {
                         ret = parse_value<Opts>(ctx, it, end);
@@ -128,16 +128,16 @@ namespace glz
                GLZ_MATCH_OPEN_BRACE;
 
                while (it < end) {
-                  GLZ_SKIP_WS;
+                  GLZ_SKIP_WS();
                   const auto k = parse_key(ctx, it, end);
                   if (bool(ctx.error)) [[unlikely]] {
                      return;
                   }
 
                   if (cx_string_cmp<key>(k)) {
-                     GLZ_SKIP_WS;
-                     GLZ_MATCH_COLON;
-                     GLZ_SKIP_WS;
+                     GLZ_SKIP_WS();
+                     GLZ_MATCH_COLON();
+                     GLZ_SKIP_WS();
 
                      if constexpr (I == (N - 1)) {
                         ret = parse_value<Opts>(ctx, it, end);
