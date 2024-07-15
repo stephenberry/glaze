@@ -932,6 +932,10 @@ namespace glz::detail
 
       size_t min_length = (std::numeric_limits<size_t>::max)();
       for (auto& s : strings) {
+         if (s.contains('"')) {
+            return {}; // Sized hashing requires looking for terminating quote
+         }
+         
          const auto n = s.size();
          if (n < min_length) {
             min_length = n;
