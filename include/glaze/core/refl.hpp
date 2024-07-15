@@ -1089,9 +1089,7 @@ namespace glz::detail
       
       using enum hash_type;
       
-      const auto uindex = find_unique_index(keys);
-      
-      if (uindex) {
+      if (const auto uindex = find_unique_index(keys)) {
          info.type = unique_index;
          info.unique_index = uindex.value();
          return info;
