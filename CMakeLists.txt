@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.21)
+cmake_minimum_required(VERSION 3.25)
 
 include(cmake/prelude.cmake)
 
@@ -36,7 +36,7 @@ endif()
 
 set_property(TARGET glaze_glaze PROPERTY EXPORT_NAME glaze)
 
-target_compile_features(glaze_glaze INTERFACE cxx_std_20)
+target_compile_features(glaze_glaze INTERFACE cxx_std_23)
 target_include_directories(
     glaze_glaze ${warning_guard}
     INTERFACE "$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>"

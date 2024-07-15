@@ -22,7 +22,7 @@ jobs:
       matrix:
         clang: [16, 17, 18]
         build_type: [Debug]
-        std: [20, 23]
+        std: [23]
 
     env:
       CC: clang-${{matrix.clang}}

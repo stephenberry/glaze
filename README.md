@@ -9,6 +9,8 @@ Glaze also supports:
 > [!IMPORTANT]
 >
 > This `main` branch is moving towards version 3.0.0, which will remove comment and `glz::schema` support from `glz::object` within `glz::meta`.
+>
+> Glaze version 3.0.0 will also require C++23, which is already supported on all compilers that build Glaze.
 
 ## With compile time reflection for MSVC, Clang, and GCC!
 
@@ -168,7 +170,7 @@ auto ec = glz::write_file_json(obj, "./obj.json", std::string{});
 
 ## Compiler/System Support
 
-- Requires C++20
+- Requires C++23
 - Only tested on 64bit systems, but should run on 32bit systems
 - Only supports little-endian systems
 
