@@ -937,6 +937,7 @@ namespace glz::detail
       //uint8_t min_diff = (std::numeric_limits<uint8_t>::max)();
       uint64_t seed{};
       size_t unique_index = (std::numeric_limits<size_t>::max)();
+      bool sized_hash = false;
    };
    
    // For hash algorithm a value of the seed indicates an invalid hash
@@ -952,6 +953,7 @@ namespace glz::detail
       static constexpr auto invalid = static_cast<V>(N);
       
       std::array<V, Slots> table{}; // hashes to switch-case indices
+      size_t max_length{};
       uint64_t seed{};
       size_t unique_index = (std::numeric_limits<size_t>::max)();
       bool sized_hash = false;
@@ -1095,7 +1097,51 @@ namespace glz::detail
          return info;
       }
       
+      auto& seed = info.seed;
       constexpr uint64_t invalid_seed = 0;
+      
+      if (const auto uindex = find_unique_sized_index(keys)) {
+         info.type = unique_index;
+         info.unique_index = uindex.value();
+         info.sized_hash = true;
+         
+         auto sized_unique_hash = [&] {
+            std::array<size_t, N> bucket_index{};
+            constexpr auto bsize = bucket_size(unique_index, N);
+            
+            for (size_t i = 0; i < primes_64.size(); ++i) {
+               seed = primes_64[i];
+               size_t index = 0;
+               for (const auto& key : keys) {
+                  const auto hash = bitmix(uint16_t(key[info.unique_index]) | (uint16_t(key.size()) << 8), seed);
+                  if (hash == seed) {
+                     break;
+                  }
+                  const auto bucket = hash % bsize;
+                  if (contains(std::span{bucket_index.data(), index}, bucket)) {
+                     break;
+                  }
+                  bucket_index[index] = bucket;
+                  ++index;
+               }
+
+               if (index == N) {
+                  // make sure the seed does not collide with any hashes
+                  const auto bucket = seed % bsize;
+                  if (not contains(std::span{bucket_index.data(), N}, bucket)) {
+                     return; // found working seed
+                  }
+               }
+            }
+
+            seed = invalid_seed;
+         };
+
+         sized_unique_hash();
+         if (seed != invalid_seed) {
+            return info;
+         }
+      }
       
       if (info.min_length > 1 && N <= 32)
       {
@@ -1118,8 +1164,6 @@ namespace glz::detail
          
          if (valid)
          {
-            auto& seed = info.seed;
-            
             auto front_16_hash = [&] {
                std::array<size_t, N> bucket_index{};
                constexpr auto bsize = bucket_size(front_16, N);
@@ -1178,22 +1222,36 @@ namespace glz::detail
          
          using enum hash_type;
          if constexpr (type == unique_index && N < 256) {
-            hash_info_t<T, bucket_size(unique_index, N)> info{unique_index};
+            hash_info_t<T, bucket_size(unique_index, N)> info{unique_index, .seed = k_info.seed};
+            info.max_length = k_info.max_length;
             info.table.fill(N);
             info.unique_index = k_info.unique_index;
-            for (uint8_t i = 0; i < N; ++i) {
-               const auto h = uint8_t(keys[i][k_info.unique_index]);
-               info.table[h] = i;
+            
+            if constexpr (k_info.sized_hash) {
+               info.sized_hash = true;
+               constexpr auto bsize = bucket_size(unique_index, N);
+               for (uint8_t i = 0; i < N; ++i) {
+                  const auto x = uint16_t(keys[i][k_info.unique_index]) | (uint16_t(keys[i].size()) << 8);
+                  const auto h = bitmix(x, info.seed) % bsize;
+                  info.table[h] = i;
+               }
+            }
+            else {
+               for (uint8_t i = 0; i < N; ++i) {
+                  const auto h = uint8_t(keys[i][k_info.unique_index]);
+                  info.table[h] = i;
+               }
             }
             return info;
          }
          else if constexpr (type == front_16) {
             constexpr auto bsize = bucket_size(front_16, N);
             hash_info_t<T, bsize> info{.type = front_16, .seed = k_info.seed};
+            info.max_length = k_info.max_length;
             info.table.fill(N);
             
             for (uint8_t i = 0; i < N; ++i) {
-               const auto h = bitmix(uint16_t(keys[i][0]) | (uint16_t(keys[i][1]) << 8), k_info.seed) % bsize;
+               const auto h = bitmix(uint16_t(keys[i][0]) | (uint16_t(keys[i][1]) << 8), info.seed) % bsize;
                info.table[h] = i;
             }
 
@@ -1224,14 +1282,31 @@ namespace glz::detail
          const auto index = [&]() -> size_t {
             using enum hash_type;
             if constexpr (type == unique_index) {
-               static constexpr auto uindex = HashInfo.unique_index;
-               if constexpr (uindex > 0) {
-                  if ((it + uindex) >= end) [[unlikely]] {
-                     ctx.error = error_code::unknown_key;
-                     return true;
+               if constexpr (HashInfo.sized_hash) {
+                  const auto* c = std::memchr(it, '"', size_t(end - it));
+                  if (c) [[likely]] {
+                     const auto n = size_t(static_cast<std::decay_t<decltype(it)>>(c) - it);
+                     if (n == 0 || n > HashInfo.max_length) {
+                        return N; // error
+                     }
+                     
+                     const auto h = bitmix(uint16_t(it[HashInfo.unique_index]) | (uint16_t(n) << 8), HashInfo.seed);
+                     static constexpr auto bsize = bucket_size(unique_index, N);
+                     return HashInfo.table[h % bsize];
+                  }
+                  else [[unlikely]] {
+                     return N;
                   }
                }
-               return HashInfo.table[it[uindex]];
+               else {
+                  static constexpr auto uindex = HashInfo.unique_index;
+                  if constexpr (uindex > 0) {
+                     if ((it + uindex) >= end) [[unlikely]] {
+                        return N; // error
+                     }
+                  }
+                  return HashInfo.table[it[uindex]];
+               }
             }
             else if constexpr (type == front_16) {
                static constexpr auto bsize = bucket_size(front_16, N);
