@@ -8493,6 +8493,55 @@ suite front_16_test = [] {
    };
 };
 
+struct custom_errors_t
+{
+   uint32_t a{};
+   uint32_t alpha{};
+};
+
+template <>
+struct glz::meta<custom_errors_t>
+{
+   using T = custom_errors_t;
+   static constexpr auto value = object(&T::a, &T::alpha);
+};
+
+namespace glz::detail
+{
+   template <>
+   struct from_json<custom_errors_t>
+   {
+      template <auto Opts>
+      static void op(auto&, is_context auto& ctx, auto&&...)
+      {
+         ctx.custom_error_message = "custom_errors_t read error";
+      }
+   };
+
+   template <>
+   struct to_json<custom_errors_t>
+   {
+      template <auto Opts>
+      static void op(auto&, is_context auto& ctx, auto&&...) noexcept
+      {
+         ctx.custom_error_message = "custom_errors_t write error";
+      }
+   };
+}
+
+suite custom_error = [] {
+   "custom_errors_t"_test = [] {
+      custom_errors_t obj{};
+      
+      std::string buffer{};
+      auto ec = glz::write_json(obj, buffer);
+      expect(ec.custom_error_message == "custom_errors_t write error");
+      
+      ec = glz::read_json(obj, "{}");
+      expect(ec.custom_error_message == "custom_errors_t read error");
+   };
+};
+
 int main()
 {
    trace.end("json_test");

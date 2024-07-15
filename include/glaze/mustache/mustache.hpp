@@ -18,7 +18,7 @@ namespace glz
 
       if (tmp.empty()) [[unlikely]] {
          ctx.error = error_code::no_read_input;
-         return unexpected(error_ctx{ctx.error, 0, ctx.includer_error});
+         return unexpected(error_ctx{ctx.error, ctx.custom_error_message, 0, ctx.includer_error});
       }
 
       auto [it, end] = read_iterators<Opts, false>(ctx, tmp);
@@ -78,11 +78,11 @@ namespace glz
                         },
                         member_it->second);
                      if (bool(ctx.error)) [[unlikely]]
-                        return unexpected(error_ctx{ctx.error, size_t(it - start), ctx.includer_error});
+                        return unexpected(error_ctx{ctx.error, ctx.custom_error_message, size_t(it - start), ctx.includer_error});
                   }
                   else {
                      ctx.error = error_code::unknown_key;
-                     return unexpected(error_ctx{ctx.error, size_t(it - start), ctx.includer_error});
+                     return unexpected(error_ctx{ctx.error, ctx.custom_error_message, size_t(it - start), ctx.includer_error});
                   }
 
                   skip_whitespace();
@@ -114,7 +114,7 @@ namespace glz
       }
 
       if (bool(ctx.error)) [[unlikely]] {
-         return unexpected(error_ctx{ctx.error, size_t(it - start), ctx.includer_error});
+         return unexpected(error_ctx{ctx.error, ctx.custom_error_message, size_t(it - start), ctx.includer_error});
       }
 
       return {result};

@@ -162,7 +162,7 @@ namespace glz::repe
       glz::detail::read<Opts.format>::template op<Opts>(std::forward<Value>(value), ctx, b, e);
 
       if (bool(ctx.error)) {
-         error_ctx ec{ctx.error, size_t(b - start), ctx.includer_error};
+         error_ctx ec{ctx.error, ctx.custom_error_message, size_t(b - start), ctx.includer_error};
          std::ignore =
             write<Opts>(std::forward_as_tuple(header{.error = true},
                                               error_t{error_e::parse_error, format_error(ec, state.message)}),
@@ -220,7 +220,7 @@ namespace glz::repe
 
       auto handle_error = [&](auto& it) {
          ctx.error = error_code::syntax_error;
-         error_ctx pe{ctx.error, size_t(it - start), ctx.includer_error};
+         error_ctx pe{ctx.error, ctx.custom_error_message, size_t(it - start), ctx.includer_error};
          return error_t{error_e::parse_error, format_error(pe, buffer)};
       };
 
@@ -234,7 +234,7 @@ namespace glz::repe
       glz::detail::read<Opts.format>::template op<Opts>(h, ctx, b, e);
 
       if (bool(ctx.error)) {
-         error_ctx pe{ctx.error, size_t(b - start), ctx.includer_error};
+         error_ctx pe{ctx.error, ctx.custom_error_message, size_t(b - start), ctx.includer_error};
          return {error_e::parse_error, format_error(pe, buffer)};
       }
 
@@ -255,7 +255,7 @@ namespace glz::repe
          glz::detail::read<Opts.format>::template op<Opts>(result, ctx, b, e);
 
          if (bool(ctx.error)) {
-            error_ctx pe{ctx.error, size_t(b - start), ctx.includer_error};
+            error_ctx pe{ctx.error, ctx.custom_error_message, size_t(b - start), ctx.includer_error};
             return {error_e::parse_error, format_error(pe, buffer)};
          }
       }
@@ -1124,7 +1124,7 @@ namespace glz::repe
 
          auto handle_error = [&](auto& it) {
             ctx.error = error_code::syntax_error;
-            error_ctx pe{ctx.error, size_t(it - start), ctx.includer_error};
+            error_ctx pe{ctx.error, ctx.custom_error_message, size_t(it - start), ctx.includer_error};
             std::ignore = write<Opts>(
                std::forward_as_tuple(header{.error = true}, error_t{error_e::parse_error, format_error(pe, msg)}),
                response);
@@ -1173,7 +1173,7 @@ namespace glz::repe
          glz::detail::read<Opts.format>::template op<Opts>(h, ctx, b, e);
 
          if (bool(ctx.error)) [[unlikely]] {
-            error_ctx pe{ctx.error, size_t(b - start), ctx.includer_error};
+            error_ctx pe{ctx.error, ctx.custom_error_message, size_t(b - start), ctx.includer_error};
             response = format_error(pe, msg);
             return finish();
          }

@@ -41,7 +41,7 @@ namespace glz
       auto start = it;
 
       if (bool(ctx.error)) [[unlikely]] {
-         return result_t{unexpected(error_ctx{ctx.error, 0})};
+         return result_t{unexpected(error_ctx{ctx.error})};
       }
 
       if constexpr (N == 0) {
@@ -160,7 +160,7 @@ namespace glz
          });
 
          if (bool(ctx.error)) [[unlikely]] {
-            return result_t{unexpected(error_ctx{ctx.error, size_t(it - start)})};
+            return result_t{unexpected(error_ctx{ctx.error, "", size_t(it - start)})};
          }
 
          return ret;

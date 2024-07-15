@@ -153,10 +153,6 @@ namespace glz
             (void)tuple;
          }
 
-         if constexpr (Opts.error_on_unknown_keys) {
-            (void)value;
-         }
-
          constexpr auto type = HashInfo.type;
          constexpr auto N = refl<T>.N;
 
