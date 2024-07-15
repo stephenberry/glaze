@@ -49,7 +49,7 @@ namespace glz
 }
 
 #ifdef __has_include
-#if __has_include(<expected>)
+#if __has_include(<expected>) && __cpp_lib_expected >= 202202L
 #include <expected>
 #elif __has_include(<experimental/expected>)
 #include <experimental/expected>

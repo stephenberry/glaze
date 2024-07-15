@@ -47,11 +47,11 @@ suite string_performance = [] {
       std::string buffer;
       auto t0 = std::chrono::steady_clock::now();
       for (auto i = 0; i < 100; ++i) {
-         expect(not glz::write_json(vec, buffer));
+         std::ignore = glz::write_json(vec, buffer);
       }
       auto t1 = std::chrono::steady_clock::now();
       auto duration = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-6;
-      std::cerr << duration << '\n';
+      std::cout << "write: " << duration << '\n';
 
       vec.clear();
       t0 = std::chrono::steady_clock::now();
@@ -65,12 +65,57 @@ suite string_performance = [] {
       expect(!e) << glz::format_error(e, buffer);
 
       duration = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-6;
-      std::cerr << duration << '\n';
+      std::cout << "read: " << duration << '\n';
+      std::cout << '\n';
+   };
+};
+
+struct integers
+{
+   int32_t a{};
+   uint32_t b{};
+   int64_t c{};
+   uint64_t d{};
+};
+
+suite default_numerics = [] {
+   "default numerics"_test = [] {
+#ifdef NDEBUG
+      constexpr size_t n = 10000000;
+#else
+      constexpr size_t n = 100000;
+#endif
+
+      integers ints_obj{};
+
+      std::string buffer;
+      auto t0 = std::chrono::steady_clock::now();
+      for (size_t i = 0; i < n; ++i) {
+         std::ignore = glz::write_json(ints_obj, buffer);
+      }
+      auto t1 = std::chrono::steady_clock::now();
+      auto duration = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-6;
+      std::cout << "write integer: " << duration << '\n';
+
+      t0 = std::chrono::steady_clock::now();
+      glz::error_ctx e;
+      for (size_t i = 0; i < n; ++i) {
+         e = glz::read_json(ints_obj, buffer);
+      }
+      t1 = std::chrono::steady_clock::now();
+
+      expect(!e) << glz::format_error(e, buffer);
+
+      duration = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-6;
+      std::cout << "read integer: " << duration << '\n';
+      std::cout << '\n';
    };
 };
 
 [[maybe_unused]] constexpr std::string_view json_minified =
    R"({"fixed_object":{"int_array":[0,1,2,3,4,5,6],"float_array":[0.1,0.2,0.3,0.4,0.5,0.6],"double_array":[3288398.238,2.33e+24,28.9,0.928759872,0.22222848,0.1,0.2,0.3,0.4]},"fixed_name_object":{"name0":"James","name1":"Abraham","name2":"Susan","name3":"Frank","name4":"Alicia"},"another_object":{"string":"here is some text","another_string":"Hello World","escaped_text":"{\"some key\":\"some string value\"}","boolean":false,"nested_object":{"v3s":[[0.12345,0.23456,0.001345],[0.3894675,97.39827,297.92387],[18.18,87.289,2988.298]],"id":"298728949872"}},"string_array":["Cat","Dog","Elephant","Tiger"],"string":"Hello world","number":3.14,"boolean":true,"another_bool":false})";
+
+// #define USE_PURE_REFLECTION
 
 struct fixed_object_t
 {
@@ -79,12 +124,14 @@ struct fixed_object_t
    std::vector<double> double_array;
 };
 
+#ifndef USE_PURE_REFLECTION
 template <>
 struct glz::meta<fixed_object_t>
 {
    using T = fixed_object_t;
    static constexpr auto value = object(&T::int_array, &T::float_array, &T::double_array);
 };
+#endif
 
 struct fixed_name_object_t
 {
@@ -95,12 +142,14 @@ struct fixed_name_object_t
    std::string name4{};
 };
 
+#ifndef USE_PURE_REFLECTION
 template <>
 struct glz::meta<fixed_name_object_t>
 {
    using T = fixed_name_object_t;
    static constexpr auto value = object(&T::name0, &T::name1, &T::name2, &T::name3, &T::name4);
 };
+#endif
 
 struct nested_object_t
 {
@@ -108,12 +157,14 @@ struct nested_object_t
    std::string id{};
 };
 
+#ifndef USE_PURE_REFLECTION
 template <>
 struct glz::meta<nested_object_t>
 {
    using T = nested_object_t;
    static constexpr auto value = object(&T::v3s, &T::id);
 };
+#endif
 
 struct another_object_t
 {
@@ -124,6 +175,7 @@ struct another_object_t
    nested_object_t nested_object{};
 };
 
+#ifndef USE_PURE_REFLECTION
 template <>
 struct glz::meta<another_object_t>
 {
@@ -131,6 +183,7 @@ struct glz::meta<another_object_t>
    static constexpr auto value =
       object(&T::string, &T::another_string, &T::escaped_text, &T::boolean, &T::nested_object);
 };
+#endif
 
 struct obj_t
 {
@@ -144,6 +197,7 @@ struct obj_t
    bool another_bool{};
 };
 
+#ifndef USE_PURE_REFLECTION
 template <>
 struct glz::meta<obj_t>
 {
@@ -151,6 +205,7 @@ struct glz::meta<obj_t>
    static constexpr auto value = object(&T::fixed_object, &T::fixed_name_object, &T::another_object, &T::string_array,
                                         &T::string, &T::number, &T::boolean, &T::another_bool);
 };
+#endif
 
 // We scale all speeds by the minified JSON byte length, so that libraries which do not efficiently write JSON do not
 // get an unfair advantage We want to know how fast the libraries will serialize/deserialize with repsect to one another

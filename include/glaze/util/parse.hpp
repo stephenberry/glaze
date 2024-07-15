@@ -365,10 +365,10 @@ namespace glz::detail
       ++it;                                   \
    }
 
-#define GLZ_MATCH_COLON                       \
+#define GLZ_MATCH_COLON(RETURN)               \
    if (*it != ':') [[unlikely]] {             \
       ctx.error = error_code::expected_colon; \
-      return;                                 \
+      return RETURN;                          \
    }                                          \
    else [[likely]] {                          \
       ++it;                                   \
@@ -521,14 +521,14 @@ namespace glz::detail
       return (chunk & repeat_byte8(0b11110000u));
    }
 
-#define GLZ_SKIP_WS                                \
+#define GLZ_SKIP_WS(RETURN)                        \
    if constexpr (!Opts.minified) {                 \
       if constexpr (Opts.comments) {               \
          while (whitespace_comment_table[*it]) {   \
             if (*it == '/') [[unlikely]] {         \
                skip_comment(ctx, it, end);         \
                if (bool(ctx.error)) [[unlikely]] { \
-                  return;                          \
+                  return RETURN;                   \
                }                                   \
             }                                      \
             else [[likely]] {                      \

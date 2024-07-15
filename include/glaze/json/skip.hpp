@@ -16,7 +16,7 @@ namespace glz::detail
       }
       else {
          ++it;
-         GLZ_SKIP_WS;
+         GLZ_SKIP_WS();
          if (*it == '}') {
             ++it;
             return;
@@ -29,16 +29,16 @@ namespace glz::detail
             skip_string<Opts>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
                return;
-            GLZ_SKIP_WS;
-            GLZ_MATCH_COLON;
-            GLZ_SKIP_WS;
+            GLZ_SKIP_WS();
+            GLZ_MATCH_COLON();
+            GLZ_SKIP_WS();
             skip_value<Opts>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
                return;
-            GLZ_SKIP_WS;
+            GLZ_SKIP_WS();
             if (*it != ',') break;
             ++it;
-            GLZ_SKIP_WS;
+            GLZ_SKIP_WS();
          }
          match<'}'>(ctx, it);
       }
@@ -53,7 +53,7 @@ namespace glz::detail
       }
       else {
          ++it;
-         GLZ_SKIP_WS;
+         GLZ_SKIP_WS();
          if (*it == ']') {
             ++it;
             return;
@@ -62,10 +62,10 @@ namespace glz::detail
             skip_value<Opts>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
                return;
-            GLZ_SKIP_WS;
+            GLZ_SKIP_WS();
             if (*it != ',') break;
             ++it;
-            GLZ_SKIP_WS;
+            GLZ_SKIP_WS();
          }
          match<']'>(ctx, it);
       }
@@ -76,7 +76,7 @@ namespace glz::detail
    {
       if constexpr (!Opts.force_conformance) {
          if constexpr (!has_ws_handled(Opts)) {
-            GLZ_SKIP_WS;
+            GLZ_SKIP_WS();
          }
          while (true) {
             switch (*it) {
@@ -120,7 +120,7 @@ namespace glz::detail
       }
       else {
          if constexpr (!has_ws_handled(Opts)) {
-            GLZ_SKIP_WS;
+            GLZ_SKIP_WS();
          }
          switch (*it) {
          case '{': {

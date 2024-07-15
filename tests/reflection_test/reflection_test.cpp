@@ -455,6 +455,10 @@ suite json_schema = [] {
 struct empty_t
 {};
 
+static_assert(glz::refl<empty_t>.N == 0);
+static_assert(not glz::object_info<glz::opts{}, empty_t>::first_will_be_written);
+static_assert(not glz::object_info<glz::opts{}, empty_t>::maybe_skipped);
+
 suite empty_test = [] {
    "empty_t"_test = [] {
       empty_t obj;
@@ -728,5 +732,26 @@ struct S1
    std::filesystem::path fn{};
 };
 static_assert(glz::detail::count_members<S1> == 3);
+
+struct unique_index_t
+{
+   int apple{};
+   int archer{};
+   int arm{};
+   int amiable{};
+};
+
+suite unique_index_test = [] {
+   "unique_index"_test = [] {
+      unique_index_t obj{};
+      std::string buffer = R"({"apple":1,"archer":2,"arm":3,"amiable":4})";
+      auto ec = glz::read_json(obj, buffer);
+      expect(not ec) << glz::format_error(ec, buffer);
+      expect(obj.apple == 1);
+      expect(obj.archer == 2);
+      expect(obj.arm == 3);
+      expect(obj.amiable == 4);
+   };
+};
 
 int main() { return 0; }

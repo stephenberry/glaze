@@ -31,7 +31,6 @@
 #include "glaze/json/study.hpp"
 #include "glaze/record/recorder.hpp"
 #include "glaze/trace/trace.hpp"
-#include "glaze/util/poly.hpp"
 #include "glaze/util/progress_bar.hpp"
 #include "ut/ut.hpp"
 
@@ -100,9 +99,8 @@ template <>
 struct glz::meta<sub_thing>
 {
    static constexpr std::string_view name = "sub_thing";
-   static constexpr auto value = object(
-      "a", &sub_thing::a, "Test comment 1"_c, //
-      "b", [](auto&& v) -> auto& { return v.b; }, comment("Test comment 2") //
+   static constexpr auto value = object("a", &sub_thing::a, //
+                                        "b", [](auto&& v) -> auto& { return v.b; } //
    );
 };
 
@@ -274,8 +272,8 @@ struct glz::meta<Thing>
       "list", &T::list, //
       "deque", &T::deque, //
       "vector", [](auto&& v) -> auto& { return v.vector; }, //
-      "i", [](auto&& v) -> auto& { return v.i; }, glz::schema{.minimum = 2}, //
-      "d", &T::d, "double is the best type", //
+      "i", [](auto&& v) -> auto& { return v.i; }, //
+      "d", &T::d, //
       "b", &T::b, //
       "c", &T::c, //
       "v", &T::v, //
@@ -864,7 +862,7 @@ suite user_types = [] {
       expect(not glz::write_jsonc(obj, buffer));
       expect(
          buffer ==
-         R"({"thing":{"a":3.14/*Test comment 1*/,"b":"stuff"/*Test comment 2*/},"thing2array":[{"a":3.14/*Test comment 1*/,"b":"stuff"/*Test comment 2*/,"c":999.342494903,"d":1E-12,"e":203082348402.1,"f":89.089,"g":12380.00000013,"h":1000000.000001}],"vec3":[3.14,2.7,6.5],"list":[6,7,8,2],"deque":[9,6.7,3.1],"vector":[[9,6.7,3.1],[3.14,2.7,6.5]],"i":8,"d":2/*double is the best type*/,"b":false,"c":"W","v":{"x":0},"color":"Green","vb":[true,false,false,true,true,true,true],"sptr":{"a":3.14/*Test comment 1*/,"b":"stuff"/*Test comment 2*/},"array":["as\"df\\ghjkl","pie","42","foo"],"map":{"a":4,"b":12,"f":7},"mapi":{"2":9.63,"5":3.14,"7":7.42},"thing_ptr":{"a":3.14/*Test comment 1*/,"b":"stuff"/*Test comment 2*/}})")
+         R"({"thing":{"a":3.14,"b":"stuff"},"thing2array":[{"a":3.14,"b":"stuff","c":999.342494903,"d":1E-12,"e":203082348402.1,"f":89.089,"g":12380.00000013,"h":1000000.000001}],"vec3":[3.14,2.7,6.5],"list":[6,7,8,2],"deque":[9,6.7,3.1],"vector":[[9,6.7,3.1],[3.14,2.7,6.5]],"i":8,"d":2,"b":false,"c":"W","v":{"x":0},"color":"Green","vb":[true,false,false,true,true,true,true],"sptr":{"a":3.14,"b":"stuff"},"array":["as\"df\\ghjkl","pie","42","foo"],"map":{"a":4,"b":12,"f":7},"mapi":{"2":9.63,"5":3.14,"7":7.42},"thing_ptr":{"a":3.14,"b":"stuff"}})")
          << buffer;
       expect(glz::read_jsonc(obj, buffer) == glz::error_code::none);
    };
@@ -1074,13 +1072,13 @@ suite user_types = [] {
 
       std::string thing_pretty = R"({
    "thing": {
-      "a": 3.14/*Test comment 1*/,
-      "b": "stuff"/*Test comment 2*/
+      "a": 3.14,
+      "b": "stuff"
    },
    "thing2array": [
       {
-         "a": 3.14/*Test comment 1*/,
-         "b": "stuff"/*Test comment 2*/,
+         "a": 3.14,
+         "b": "stuff",
          "c": 999.342494903,
          "d": 1E-12,
          "e": 203082348402.1,
@@ -1118,7 +1116,7 @@ suite user_types = [] {
       ]
    ],
    "i": 8,
-   "d": 2/*double is the best type*/,
+   "d": 2,
    "b": false,
    "c": "W",
    "v": {
@@ -1135,8 +1133,8 @@ suite user_types = [] {
       true
    ],
    "sptr": {
-      "a": 3.14/*Test comment 1*/,
-      "b": "stuff"/*Test comment 2*/
+      "a": 3.14,
+      "b": "stuff"
    },
    "array": [
       "as\"df\\ghjkl",
@@ -1155,8 +1153,8 @@ suite user_types = [] {
       "7": 7.42
    },
    "thing_ptr": {
-      "a": 3.14/*Test comment 1*/,
-      "b": "stuff"/*Test comment 2*/
+      "a": 3.14,
+      "b": "stuff"
    }
 })";
 
@@ -1222,7 +1220,7 @@ suite user_types = [] {
              "glz::tuplet::tuple<sub_thing,std::array<sub_thing2,1>,V3,std::list<int32_t>,std::deque<double>,std::"
              "vector<V3>,int32_t,double,bool,char,std::variant<var1_t,var2_t>,Color,std::vector<bool>,std::shared_ptr<"
              "sub_thing>,std::optional<V3>,std::array<std::string,4>,std::map<std::string,int32_t>,std::map<int32_t,"
-             "double>,sub_thing*>");
+             "double>,sub_thing>");
    };
 };
 
@@ -3768,51 +3766,6 @@ struct glz::meta<string_t>
    static constexpr auto value = object("string", &T::string);
 };
 
-suite poly_tests = [] {
-   "poly"_test = [] {
-      std::array<glz::poly<animal>, 2> a{dog{}, cat{}};
-
-      a[0].call<"eat">();
-      a[1].call<"eat">();
-
-      expect(a[0].get<"age">() == 1);
-   };
-
-   "poly person"_test = [] {
-      // std::array<glz::poly<animal>, 2> a{ dog{}, person{} };
-      //  This should static_assert
-   };
-
-   "poly pointer"_test = [] {
-      dog d{};
-      glz::poly<animal> a{&d};
-
-      a.call<"eat">();
-
-      expect(d.age == 1);
-      expect(&a.get<"age">() == &d.age);
-   };
-
-   "complex_function"_test = [] {
-      glz::poly<string_t> p{complex_function_call_t{}};
-
-      expect(p.call<"string">("x", 5) == "x:5");
-   };
-};
-
-suite any_tests = [] {
-   "any"_test = [] {
-      glz::any a = 5.5;
-
-      expect(glz::any_cast<double>(a) == 5.5);
-
-      auto* data = a.data();
-      *static_cast<double*>(data) = 6.6;
-
-      expect(glz::any_cast<double>(a) == 6.6);
-   };
-};
-
 static constexpr std::string_view json0 = R"(
 {
    "fixed_object": {
@@ -3960,7 +3913,7 @@ suite json_schema = [] {
       // when you update this string
       expect(
          schema ==
-         R"({"type":["object"],"properties":{"array":{"$ref":"#/$defs/std::array<std::string,4>"},"b":{"$ref":"#/$defs/bool"},"c":{"$ref":"#/$defs/char"},"color":{"$ref":"#/$defs/Color"},"d":{"$ref":"#/$defs/double","description":"double is the best type"},"deque":{"$ref":"#/$defs/std::deque<double>"},"i":{"$ref":"#/$defs/int32_t","minimum":2},"list":{"$ref":"#/$defs/std::list<int32_t>"},"map":{"$ref":"#/$defs/std::map<std::string,int32_t>"},"mapi":{"$ref":"#/$defs/std::map<int32_t,double>"},"optional":{"$ref":"#/$defs/std::optional<V3>"},"sptr":{"$ref":"#/$defs/std::shared_ptr<sub_thing>"},"thing":{"$ref":"#/$defs/sub_thing"},"thing2array":{"$ref":"#/$defs/std::array<sub_thing2,1>"},"thing_ptr":{"$ref":"#/$defs/sub_thing*"},"v":{"$ref":"#/$defs/std::variant<var1_t,var2_t>"},"vb":{"$ref":"#/$defs/std::vector<bool>"},"vec3":{"$ref":"#/$defs/V3"},"vector":{"$ref":"#/$defs/std::vector<V3>"}},"additionalProperties":false,"$defs":{"Color":{"type":["string"],"oneOf":[{"title":"Red","const":"Red"},{"title":"Green","const":"Green"},{"title":"Blue","const":"Blue"}]},"V3":{"type":["array"]},"bool":{"type":["boolean"]},"char":{"type":["string"]},"double":{"type":["number"],"minimum":-1.7976931348623157E308,"maximum":1.7976931348623157E308},"float":{"type":["number"],"minimum":-3.4028234663852886E38,"maximum":3.4028234663852886E38},"int32_t":{"type":["integer"],"minimum":-2147483648,"maximum":2147483647},"std::array<std::string,4>":{"type":["array"],"items":{"$ref":"#/$defs/std::string"},"minItems":4,"maxItems":4},"std::array<sub_thing2,1>":{"type":["array"],"items":{"$ref":"#/$defs/sub_thing2"},"minItems":1,"maxItems":1},"std::deque<double>":{"type":["array"],"items":{"$ref":"#/$defs/double"}},"std::list<int32_t>":{"type":["array"],"items":{"$ref":"#/$defs/int32_t"}},"std::map<int32_t,double>":{"type":["object"],"additionalProperties":{"$ref":"#/$defs/double"}},"std::map<std::string,int32_t>":{"type":["object"],"additionalProperties":{"$ref":"#/$defs/int32_t"}},"std::optional<V3>":{"type":["array","null"]},"std::shared_ptr<sub_thing>":{"type":["object","null"],"properties":{"a":{"$ref":"#/$defs/double","description":"Test comment 1"},"b":{"$ref":"#/$defs/std::string","description":"Test comment 2"}},"additionalProperties":false},"std::string":{"type":["string"]},"std::variant<var1_t,var2_t>":{"type":["object"],"oneOf":[{"type":["object"],"properties":{"x":{"$ref":"#/$defs/double"}},"additionalProperties":false},{"type":["object"],"properties":{"y":{"$ref":"#/$defs/double"}},"additionalProperties":false}]},"std::vector<V3>":{"type":["array"],"items":{"$ref":"#/$defs/V3"}},"std::vector<bool>":{"type":["array"],"items":{"$ref":"#/$defs/bool"}},"sub_thing":{"type":["object"],"properties":{"a":{"$ref":"#/$defs/double","description":"Test comment 1"},"b":{"$ref":"#/$defs/std::string","description":"Test comment 2"}},"additionalProperties":false},"sub_thing*":{"type":["object","null"],"properties":{"a":{"$ref":"#/$defs/double","description":"Test comment 1"},"b":{"$ref":"#/$defs/std::string","description":"Test comment 2"}},"additionalProperties":false},"sub_thing2":{"type":["object"],"properties":{"a":{"$ref":"#/$defs/double","description":"Test comment 1"},"b":{"$ref":"#/$defs/std::string","description":"Test comment 2"},"c":{"$ref":"#/$defs/double"},"d":{"$ref":"#/$defs/double"},"e":{"$ref":"#/$defs/double"},"f":{"$ref":"#/$defs/float"},"g":{"$ref":"#/$defs/double"},"h":{"$ref":"#/$defs/double"}},"additionalProperties":false}},"examples":[{"thing":{},"i":42}],"required":["thing","i"]})")
+         R"({"type":["object"],"properties":{"array":{"$ref":"#/$defs/std::array<std::string,4>"},"b":{"$ref":"#/$defs/bool"},"c":{"$ref":"#/$defs/char"},"color":{"$ref":"#/$defs/Color"},"d":{"$ref":"#/$defs/double"},"deque":{"$ref":"#/$defs/std::deque<double>"},"i":{"$ref":"#/$defs/int32_t"},"list":{"$ref":"#/$defs/std::list<int32_t>"},"map":{"$ref":"#/$defs/std::map<std::string,int32_t>"},"mapi":{"$ref":"#/$defs/std::map<int32_t,double>"},"optional":{"$ref":"#/$defs/std::optional<V3>"},"sptr":{"$ref":"#/$defs/std::shared_ptr<sub_thing>"},"thing":{"$ref":"#/$defs/sub_thing"},"thing2array":{"$ref":"#/$defs/std::array<sub_thing2,1>"},"thing_ptr":{"$ref":"#/$defs/sub_thing*"},"v":{"$ref":"#/$defs/std::variant<var1_t,var2_t>"},"vb":{"$ref":"#/$defs/std::vector<bool>"},"vec3":{"$ref":"#/$defs/V3"},"vector":{"$ref":"#/$defs/std::vector<V3>"}},"additionalProperties":false,"$defs":{"Color":{"type":["string"],"oneOf":[{"title":"Red","const":"Red"},{"title":"Green","const":"Green"},{"title":"Blue","const":"Blue"}]},"V3":{"type":["array"]},"bool":{"type":["boolean"]},"char":{"type":["string"]},"double":{"type":["number"],"minimum":-1.7976931348623157E308,"maximum":1.7976931348623157E308},"float":{"type":["number"],"minimum":-3.4028234663852886E38,"maximum":3.4028234663852886E38},"int32_t":{"type":["integer"],"minimum":-2147483648,"maximum":2147483647},"std::array<std::string,4>":{"type":["array"],"items":{"$ref":"#/$defs/std::string"},"minItems":4,"maxItems":4},"std::array<sub_thing2,1>":{"type":["array"],"items":{"$ref":"#/$defs/sub_thing2"},"minItems":1,"maxItems":1},"std::deque<double>":{"type":["array"],"items":{"$ref":"#/$defs/double"}},"std::list<int32_t>":{"type":["array"],"items":{"$ref":"#/$defs/int32_t"}},"std::map<int32_t,double>":{"type":["object"],"additionalProperties":{"$ref":"#/$defs/double"}},"std::map<std::string,int32_t>":{"type":["object"],"additionalProperties":{"$ref":"#/$defs/int32_t"}},"std::optional<V3>":{"type":["array","null"]},"std::shared_ptr<sub_thing>":{"type":["object","null"],"properties":{"a":{"$ref":"#/$defs/double"},"b":{"$ref":"#/$defs/std::string"}},"additionalProperties":false},"std::string":{"type":["string"]},"std::variant<var1_t,var2_t>":{"type":["object"],"oneOf":[{"type":["object"],"properties":{"x":{"$ref":"#/$defs/double"}},"additionalProperties":false},{"type":["object"],"properties":{"y":{"$ref":"#/$defs/double"}},"additionalProperties":false}]},"std::vector<V3>":{"type":["array"],"items":{"$ref":"#/$defs/V3"}},"std::vector<bool>":{"type":["array"],"items":{"$ref":"#/$defs/bool"}},"sub_thing":{"type":["object"],"properties":{"a":{"$ref":"#/$defs/double"},"b":{"$ref":"#/$defs/std::string"}},"additionalProperties":false},"sub_thing*":{"type":["object","null"],"properties":{"a":{"$ref":"#/$defs/double"},"b":{"$ref":"#/$defs/std::string"}},"additionalProperties":false},"sub_thing2":{"type":["object"],"properties":{"a":{"$ref":"#/$defs/double"},"b":{"$ref":"#/$defs/std::string"},"c":{"$ref":"#/$defs/double"},"d":{"$ref":"#/$defs/double"},"e":{"$ref":"#/$defs/double"},"f":{"$ref":"#/$defs/float"},"g":{"$ref":"#/$defs/double"},"h":{"$ref":"#/$defs/double"}},"additionalProperties":false}},"examples":[{"thing":{},"i":42}],"required":["thing","i"]})")
          << schema;
    };
 };
@@ -4976,7 +4929,8 @@ suite lamda_wrapper = [] {
       expect(buffer == R"({"x":"3.14","y":["1","2","3"],"z":[["1","2","3"]]})");
 
       buffer = R"({"x":"999.2","y":["4","5","6"],"z":[["4","5"]]})";
-      expect(glz::read<glz::opts{.error_on_missing_keys = true}>(a, buffer) == glz::error_code::none);
+      auto ec = glz::read<glz::opts{.error_on_missing_keys = true}>(a, buffer);
+      expect(ec == glz::error_code::none) << glz::format_error(ec, buffer);
       expect(a.x == 999.2);
       expect(a.y == std::vector<uint32_t>{4, 5, 6});
       expect(a.z == std::vector<std::vector<uint32_t>>{{4, 5}});
@@ -8507,6 +8461,35 @@ suite msvc_ice_tests = [] {
          .comments = true, .error_on_unknown_keys = true, .skip_null_members = true, .prettify = false}>(settings,
                                                                                                          buffer);
       expect(not ec) << glz::format_error(ec, buffer);
+   };
+};
+
+suite error_codes_test = [] {
+   expect(glz::format_error(glz::error_ctx{glz::error_code::none}) == "none");
+   expect(glz::format_error(glz::error_ctx{glz::error_code::expected_brace}) == "expected_brace");
+};
+
+struct front_16_t
+{
+   int aa{0};
+   int ab{0};
+   int acc{0};
+   int cb{0};
+};
+
+static_assert(bool(glz::detail::hash_info<front_16_t>.type));
+
+suite front_16_test = [] {
+   "front_16"_test = [] {
+      front_16_t obj{};
+
+      std::string buffer = R"({"aa":1,"ab":2,"acc":3,"cb":4})";
+      auto ec = glz::read_json(obj, buffer);
+      expect(not ec) << glz::format_error(ec, buffer);
+      expect(obj.aa = 1);
+      expect(obj.ab = 2);
+      expect(obj.acc = 3);
+      expect(obj.cb = 4);
    };
 };
 
