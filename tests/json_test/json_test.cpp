@@ -8532,11 +8532,11 @@ namespace glz::detail
 suite custom_error = [] {
    "custom_errors_t"_test = [] {
       custom_errors_t obj{};
-      
+
       std::string buffer{};
       auto ec = glz::write_json(obj, buffer);
       expect(ec.custom_error_message == "custom_errors_t write error");
-      
+
       ec = glz::read_json(obj, "{}");
       expect(ec.custom_error_message == "custom_errors_t read error");
    };

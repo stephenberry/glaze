@@ -78,11 +78,13 @@ namespace glz
                         },
                         member_it->second);
                      if (bool(ctx.error)) [[unlikely]]
-                        return unexpected(error_ctx{ctx.error, ctx.custom_error_message, size_t(it - start), ctx.includer_error});
+                        return unexpected(
+                           error_ctx{ctx.error, ctx.custom_error_message, size_t(it - start), ctx.includer_error});
                   }
                   else {
                      ctx.error = error_code::unknown_key;
-                     return unexpected(error_ctx{ctx.error, ctx.custom_error_message, size_t(it - start), ctx.includer_error});
+                     return unexpected(
+                        error_ctx{ctx.error, ctx.custom_error_message, size_t(it - start), ctx.includer_error});
                   }
 
                   skip_whitespace();
