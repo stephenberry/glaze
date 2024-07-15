@@ -945,16 +945,6 @@ namespace glz
          return arr;
       }
 
-      GLZ_ALWAYS_INLINE constexpr bool needs_escaping(const auto& S) noexcept
-      {
-         for (const auto& c : S) {
-            if (c == '"') {
-               return true;
-            }
-         }
-         return false;
-      }
-
       template <class T>
          requires is_specialization_v<T, glz::obj> || is_specialization_v<T, glz::obj_copy>
       struct to_json<T>
@@ -1146,31 +1136,18 @@ namespace glz
                auto write_key = [&] {
                   // MSVC requires get<I> rather than keys[I]
                   static constexpr sv key = get<I>(refl<T>.keys);
-                  if constexpr (needs_escaping(key)) {
-                     // TODO: do compile time escaping
-                     write<json>::op<Opts>(key, ctx, b, ix);
+                  static constexpr auto quoted_key = join_v < chars<"\"">, key,
+                                        Opts.prettify ? chars<"\": "> : chars < "\":" >>
+                     ;
+                  if constexpr (quoted_key.size() < 128) {
+                     // Using the same padding constant alows the compiler
+                     // to not need to load different lengths into the register
                      maybe_pad<write_padding_bytes>(b, ix);
-                     if constexpr (Opts.prettify) {
-                        dump<": ", false>(b, ix);
-                     }
-                     else {
-                        dump<':', false>(b, ix);
-                     }
                   }
                   else {
-                     static constexpr auto quoted_key = join_v < chars<"\"">, key,
-                                           Opts.prettify ? chars<"\": "> : chars < "\":" >>
-                        ;
-                     if constexpr (quoted_key.size() < 128) {
-                        // Using the same padding constant alows the compiler
-                        // to not need to load different lengths into the register
-                        maybe_pad<write_padding_bytes>(b, ix);
-                     }
-                     else {
-                        maybe_pad<quoted_key.size() + write_padding_bytes>(b);
-                     }
-                     dump<quoted_key, false>(b, ix);
+                     maybe_pad<quoted_key.size() + write_padding_bytes>(b);
                   }
+                  dump<quoted_key, false>(b, ix);
                };
 
                if constexpr (object_info<Options, T>::maybe_skipped) {
