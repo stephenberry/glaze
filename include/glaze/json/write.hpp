@@ -1134,7 +1134,8 @@ namespace glz
                };
                
                // MSVC requires get<I> rather than keys[I]
-               static constexpr auto key = get<I>(refl<T>.keys);
+               // GCC 14 requires this to exist outside the write_key lambda
+               static constexpr auto key = get<I>(refl<T>.keys); // GCC 14 requires auto here
                static constexpr auto quoted_key = join_v < chars<"\"">, key,
                                      Opts.prettify ? chars<"\": "> : chars < "\":" >>
                   ;
