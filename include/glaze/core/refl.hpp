@@ -1223,7 +1223,7 @@ namespace glz::detail
          
          using enum hash_type;
          if constexpr (type == unique_index && N < 256) {
-            hash_info_t<T, bucket_size(unique_index, N)> info{unique_index, .seed = k_info.seed};
+            hash_info_t<T, bucket_size(unique_index, N)> info{.type = unique_index, .seed = k_info.seed};
             info.max_length = k_info.max_length;
             info.table.fill(N);
             info.unique_index = k_info.unique_index;
