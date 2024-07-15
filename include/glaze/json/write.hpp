@@ -1132,7 +1132,7 @@ namespace glz
                      return get<I>(refl<T>.values);
                   }
                };
-               
+
                // MSVC requires get<I> rather than keys[I]
                // GCC 14 requires this to exist outside the write_key lambda
                static constexpr auto key = get<I>(refl<T>.keys); // GCC 14 requires auto here

@@ -1887,7 +1887,7 @@ namespace glz
                size_t read_count{}; // for partial_read and dynamic objects
 
                static constexpr bool direct_maps = (glaze_object_t<T> || reflectable<T>) //
-                                                   && (tag.sv() == "") // TODO: handle tag_v with variants
+                                                   &&(tag.sv() == "") // TODO: handle tag_v with variants
                                                    && bool(hash_info<T>.type);
 
                decltype(auto) frozen_map = [&]() -> decltype(auto) {

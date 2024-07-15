@@ -935,7 +935,7 @@ namespace glz::detail
          if (s.contains('"')) {
             return {}; // Sized hashing requires looking for terminating quote
          }
-         
+
          const auto n = s.size();
          if (n < min_length) {
             min_length = n;
