@@ -904,7 +904,6 @@ namespace glz::detail
    enum struct hash_type
    {
       invalid,
-      first_char,
       unique_index,
       front_16,
    };
@@ -916,9 +915,6 @@ namespace glz::detail
       {
          case invalid: {
             return 0;
-         }
-         case first_char: {
-            return 256;
          }
          case unique_index: {
             return 256;
@@ -958,6 +954,7 @@ namespace glz::detail
       std::array<V, Slots> table{}; // hashes to switch-case indices
       uint64_t seed{};
       size_t unique_index = (std::numeric_limits<size_t>::max)();
+      bool sized_hash = false;
    };
    
    constexpr std::optional<size_t> find_unique_index(const auto& strings)
@@ -992,8 +989,63 @@ namespace glz::detail
          }
       }
       
-      // sort all colums so that we can determine
-      // if the colum has unique characters
+      // sort colums so that we can determine
+      // if the column is unique
+      size_t best_index{};
+      size_t best_count{};
+      for (size_t i = 0; i < min_length; ++i) {
+         auto& col = cols[i];
+         ranges::sort(col);
+         if (auto it = ranges::adjacent_find(col); it == col.end()) {
+            // no duplicates found
+            best_count = col.size();
+            best_index = i;
+            break;
+         }
+      }
+      
+      if (best_count == 0) {
+         return {};
+      }
+      
+      return best_index;
+   }
+   
+   constexpr std::optional<size_t> find_unique_sized_index(const auto& strings)
+   {
+      namespace ranges = std::ranges;
+      
+      const auto N = strings.size();
+      
+      if (N == 0) {
+         return {};
+      }
+      
+      size_t min_length = (std::numeric_limits<size_t>::max)();
+      for (auto& s : strings) {
+         const auto n = s.size();
+         if (n < min_length) {
+            min_length = n;
+         }
+      }
+      
+      if (min_length == 0) {
+         return {};
+      }
+      
+      std::vector<std::vector<uint16_t>> cols(min_length);
+      
+      for (size_t i = 0; i < N; ++i) {
+         const auto& s = strings[i];
+         // for each character in the string
+         for (size_t c = 0; c < min_length; ++c) {
+            const auto k = uint16_t(s[c]) | (uint16_t(s.size()) << 8);
+            cols[c].emplace_back(k);
+         }
+      }
+      
+      // sort colums so that we can determine
+      // if the column is unique
       size_t best_index{};
       size_t best_count{};
       for (size_t i = 0; i < min_length; ++i) {
@@ -1040,16 +1092,9 @@ namespace glz::detail
       const auto uindex = find_unique_index(keys);
       
       if (uindex) {
-         if (uindex.value() == 0)
-         {
-            info.type = first_char;
-            return info;
-         }
-         else {
-            info.type = unique_index;
-            info.unique_index = uindex.value();
-            return info;
-         }
+         info.type = unique_index;
+         info.unique_index = uindex.value();
+         return info;
       }
       
       constexpr uint64_t invalid_seed = 0;
@@ -1134,16 +1179,7 @@ namespace glz::detail
          constexpr auto& keys = refl<T>.keys;
          
          using enum hash_type;
-         if constexpr (type == first_char && N < 256) {
-            hash_info_t<T, bucket_size(first_char, N)> info{first_char};
-            info.table.fill(N);
-            for (uint8_t i = 0; i < N; ++i) {
-               const auto h = uint8_t(keys[i][0]);
-               info.table[h] = i;
-            }
-            return info;
-         }
-         else if constexpr (type == unique_index && N < 256) {
+         if constexpr (type == unique_index && N < 256) {
             hash_info_t<T, bucket_size(unique_index, N)> info{unique_index};
             info.table.fill(N);
             info.unique_index = k_info.unique_index;
@@ -1189,19 +1225,18 @@ namespace glz::detail
       if constexpr (bool(type)) {
          const auto index = [&]() -> size_t {
             using enum hash_type;
-            if constexpr (type == first_char) {
-               return HashInfo.table[uint8_t(*it)];
-            }
-            else if constexpr (type == unique_index) {
+            if constexpr (type == unique_index) {
                static constexpr auto uindex = HashInfo.unique_index;
-               if ((it + uindex) >= end) [[unlikely]] {
-                  ctx.error = error_code::unknown_key;
-                  return true;
+               if constexpr (uindex > 0) {
+                  if ((it + uindex) >= end) [[unlikely]] {
+                     ctx.error = error_code::unknown_key;
+                     return true;
+                  }
                }
                return HashInfo.table[it[uindex]];
             }
             else if constexpr (type == front_16) {
-               constexpr auto bsize = bucket_size(front_16, N);
+               static constexpr auto bsize = bucket_size(front_16, N);
                // we don't need to check for second character because we are null terminated
                uint16_t h;
                std::memcpy(&h, it, 2);
