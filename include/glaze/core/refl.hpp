@@ -692,7 +692,7 @@ namespace glz::detail
    {
       constexpr auto N = std::variant_size_v<T>;
 
-      std::array<std::string_view, get_max_keys<T, N>> keys{};
+      std::array<sv, get_max_keys<T, N>> keys{};
       // This intermediate pointer is necessary for GCC 13 (otherwise segfaults with reflection logic)
       auto* data_ptr = &keys;
       size_t index = 0;
@@ -707,7 +707,7 @@ namespace glz::detail
       const auto end = std::unique(keys.begin(), keys.end());
       const auto size = std::distance(keys.begin(), end);
 
-      return std::pair{keys, size};
+      return pair{keys, size};
    }
 
    template <class T, size_t... I>
