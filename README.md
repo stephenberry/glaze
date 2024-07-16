@@ -507,10 +507,7 @@ enum class Color { Red, Green, Blue };
 template <>
 struct glz::meta<Color> {
    using enum Color;
-   static constexpr auto value = enumerate(Red,
-                                           Green,
-                                           Blue
-   );
+   static constexpr auto value = enumerate(Red, Green, Blue);
 };
 ```
 

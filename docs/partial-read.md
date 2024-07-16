@@ -6,6 +6,10 @@ At times it is not necessary to read the entire JSON document, but rather just a
 -  `partial_read` in `glz::meta`
 - Partial reading via [JSON Pointer syntax](./json-pointer-syntax.md)
 
+> [!NOTE]
+>
+> If you wish partial reading to work on nested objects, you must also turn on `.partial_read_nested = true` in `glz::opts`.
+
 # Partial reading with glz::opts
 
 `partial_read` is a compile time flag in `glz::opts` that indicates only existing array and object elements should be read into, and once the memory has been read, parsing returns without iterating through the rest of the document.
