@@ -92,8 +92,9 @@ namespace glz
 
    template <class T>
    using not_object_key_type = std::bool_constant<not is_object_key_type<T>>;
-   
-   namespace detail {
+
+   namespace detail
+   {
       // The purpose of this is to allocate a new string_view to only the portion of memory
       // that we are concerned with. This lets the compiler reduce the binary on
       // reflected names;
@@ -115,7 +116,7 @@ namespace glz
          }
          else {
             return detail::get_name_alloc<0, V>::value;
-            //return get_name<get<0>(meta_v<V>)>();
+            // return get_name<get<0>(meta_v<V>)>();
          }
       }
       else if constexpr (is_object_key_type<decltype(get<I - 1>(meta_v<V>))>) {
@@ -123,7 +124,7 @@ namespace glz
       }
       else {
          return detail::get_name_alloc<I, V>::value;
-         //return get_name<get<I>(meta_v<V>)>();
+         // return get_name<get<I>(meta_v<V>)>();
       }
    };
 
