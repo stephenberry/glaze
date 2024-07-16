@@ -3,23 +3,24 @@
 
 #include <iostream>
 
-#include "glaze/ext/glaze_asio.hpp"
-#include "glaze/glaze.hpp"
-#include "glaze/rpc/repe.hpp"
+#include "glaze/network/repe_client.hpp"
 
 void asio_client_test()
 {
    try {
       constexpr auto N = 100;
-      std::vector<glz::asio_client<>> clients;
+      std::vector<glz::repe_client<>> clients;
       clients.reserve(N);
 
       std::vector<std::future<void>> threads;
       threads.reserve(N);
 
       for (size_t i = 0; i < N; ++i) {
-         clients.emplace_back(glz::asio_client<>{"localhost", "8080"});
+         clients.emplace_back(glz::repe_client<>{"127.0.0.1", 8080});
       }
+      
+      std::mutex mtx{};
+      std::vector<int> results{};
 
       for (size_t i = 0; i < N; ++i) {
          threads.emplace_back(std::async([&, i] {
@@ -38,17 +39,25 @@ void asio_client_test()
             }
 
             int sum{};
-            if (auto e_call = client.call({"/sum"}, data, sum); e_call) {
+            if (auto e_call = client.call({"/sum"}, data, sum)) {
                std::cerr << glz::write_json(e_call).value_or("error") << '\n';
             }
             else {
+               std::unique_lock lock{mtx};
                std::cout << "i: " << i << ", " << sum << '\n';
+               results.emplace_back(sum);
             }
          }));
       }
 
       for (auto& t : threads) {
          t.get();
+      }
+      
+      for (auto v : results) {
+         if (v != 4950) {
+            std::abort();
+         }
       }
    }
    catch (const std::exception& e) {

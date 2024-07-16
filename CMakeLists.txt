@@ -4,12 +4,15 @@ include(cmake/prelude.cmake)
 
 project(
     glaze
-    VERSION 2.9.5
+    VERSION 2.9.4
     LANGUAGES CXX
 )
 
 include(cmake/project-is-top-level.cmake)
 include(cmake/variables.cmake)
+include(cmake/stdexec.cmake)
+
+fetch_stdexec()
 
 add_library(glaze_glaze INTERFACE)
 add_library(glaze::glaze ALIAS glaze_glaze)
@@ -19,7 +22,7 @@ if (MSVC)
   string(REGEX MATCH "\/cl(.exe)?$" matched_cl ${CMAKE_CXX_COMPILER})
   if (matched_cl)
     # for a C++ standards compliant preprocessor, not needed for clang-cl
-    target_compile_options(glaze_glaze INTERFACE "/Zc:preprocessor" /permissive- /Zc:lambda)
+    target_compile_options(glaze_glaze INTERFACE "/Zc:preprocessor" /permissive- /Zc:lambda /Zc:__cplusplus)
     
     if(PROJECT_IS_TOP_LEVEL)
       target_compile_options(glaze_glaze INTERFACE 
@@ -40,6 +43,7 @@ target_compile_features(glaze_glaze INTERFACE cxx_std_23)
 target_include_directories(
     glaze_glaze ${warning_guard}
     INTERFACE "$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>"
+    "$<BUILD_INTERFACE:${stdexec_INCLUDE_DIR}>"
 )
 
 if(NOT CMAKE_SKIP_INSTALL_RULES)
