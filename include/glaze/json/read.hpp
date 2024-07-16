@@ -1712,56 +1712,56 @@ namespace glz
 
          return stats;
       }
-      
+
       template <class T>
-            consteval bool keys_may_contain_escape()
-            {
-               return true;
+      consteval bool keys_may_contain_escape()
+      {
+         return true;
+      }
+
+      template <glaze_object_t T>
+      consteval bool keys_may_contain_escape()
+      {
+         auto is_unicode = [](const auto c) { return (uint8_t(c) >> 7) > 0; };
+
+         bool may_escape = false;
+         constexpr auto N = refl<T>.N;
+         for_each<N>([&](auto I) {
+            constexpr auto key = refl<T>.keys[I];
+            for (auto& c : key) {
+               if (c == '\\' || c == '"' || is_unicode(c)) {
+                  may_escape = true;
+                  return;
+               }
             }
+         });
 
-            template <glaze_object_t T>
-            consteval bool keys_may_contain_escape()
-            {
-               auto is_unicode = [](const auto c) { return (uint8_t(c) >> 7) > 0; };
+         return may_escape;
+      }
 
-               bool may_escape = false;
-               constexpr auto N = refl<T>.N;
-               for_each<N>([&](auto I) {
-                  constexpr auto key = refl<T>.keys[I];
-                  for (auto& c : key) {
-                     if (c == '\\' || c == '"' || is_unicode(c)) {
-                        may_escape = true;
-                        return;
-                     }
-                  }
-               });
+      template <reflectable T>
+      consteval bool keys_may_contain_escape()
+      {
+         return false; // escapes are not valid in C++ names
+      }
 
-               return may_escape;
+      template <is_variant T>
+      consteval bool keys_may_contain_escape()
+      {
+         bool may_escape = false;
+         constexpr auto N = std::variant_size_v<T>;
+         for_each<N>([&](auto I) {
+            using V = std::decay_t<std::variant_alternative_t<I, T>>;
+            constexpr bool is_object = glaze_object_t<V>;
+            if constexpr (is_object) {
+               if constexpr (keys_may_contain_escape<V>()) {
+                  may_escape = true;
+                  return;
+               }
             }
-
-            template <reflectable T>
-            consteval bool keys_may_contain_escape()
-            {
-               return false; // escapes are not valid in C++ names
-            }
-
-            template <is_variant T>
-            consteval bool keys_may_contain_escape()
-            {
-               bool may_escape = false;
-               constexpr auto N = std::variant_size_v<T>;
-               for_each<N>([&](auto I) {
-                  using V = std::decay_t<std::variant_alternative_t<I, T>>;
-                  constexpr bool is_object = glaze_object_t<V>;
-                  if constexpr (is_object) {
-                     if constexpr (keys_may_contain_escape<V>()) {
-                        may_escape = true;
-                        return;
-                     }
-                  }
-               });
-               return may_escape;
-            }
+         });
+         return may_escape;
+      }
 
       // Key parsing for meta objects or variants of meta objects.
       // We do not check for an ending quote, we simply parse up to the quote
@@ -1783,13 +1783,13 @@ namespace glz
                return refl<T>.N;
             }
          }();
-         
+
          if constexpr (Opts.escaped_unicode_key_conversion && keys_may_contain_escape<T>()) {
-                     std::string& static_key = string_buffer();
-                     read<json>::op<opening_handled<Opts>()>(static_key, ctx, it, end);
-                     --it; // reveal the quote
-                     return static_key;
-                  }
+            std::string& static_key = string_buffer();
+            read<json>::op<opening_handled<Opts>()>(static_key, ctx, it, end);
+            --it; // reveal the quote
+            return static_key;
+         }
          else {
             if constexpr (N > 0) {
                static constexpr auto stats = key_stats<T, tag>();
@@ -1943,12 +1943,13 @@ namespace glz
                }();
 
                size_t read_count{}; // for partial_read and dynamic objects
-               
-               static constexpr bool key_conversion = Opts.escaped_unicode_key_conversion && keys_may_contain_escape<T>();
+
+               static constexpr bool key_conversion =
+                  Opts.escaped_unicode_key_conversion && keys_may_contain_escape<T>();
 
                static constexpr bool direct_maps = (glaze_object_t<T> || reflectable<T>) //
                                                    &&(not key_conversion) //
-                                                   &&(tag.sv() == "") // TODO: handle tag_v with variants
+                                                   && (tag.sv() == "") // TODO: handle tag_v with variants
                                                    && bool(hash_info<T>.type);
 
                decltype(auto) frozen_map = [&]() -> decltype(auto) {

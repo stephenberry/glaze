@@ -27,7 +27,7 @@ namespace glz
 
    // Write padding bytes simplifies our dump calculations by making sure we have significant excess
    constexpr uint32_t write_padding_bytes = 256;
-   
+
    // We use a alias to a uint8_t for booleans so that compiler errors will print "0" or "1" rather than "true" or
    // "false" This shortens compiler error printouts significantly.
    // We use a macro rather than an alias because some compilers print out alias definitions, extending length.
@@ -60,9 +60,11 @@ namespace glz
       float_precision float_max_write_precision{};
 
       bool_t bools_as_numbers = false; // Read and write booleans with 1's and 0's
-      
-      bool_t escaped_unicode_key_conversion = false; // JSON does not require escaped unicode keys to match with unescaped UTF-8
-      // This enables automatic escaped unicode unescaping and matching for keys in glz::object, but it comes at a performance cost.
+
+      bool_t escaped_unicode_key_conversion =
+         false; // JSON does not require escaped unicode keys to match with unescaped UTF-8
+      // This enables automatic escaped unicode unescaping and matching for keys in glz::object, but it comes at a
+      // performance cost.
 
       bool_t quoted_num = false; // treat numbers as quoted or array-like types as having quoted numbers
       bool_t number = false; // read numbers as strings and write these string as numbers
@@ -102,7 +104,7 @@ namespace glz
 
       [[nodiscard]] constexpr bool operator==(const opts&) const noexcept = default;
    };
-   
+
 #undef bool_t
 
    consteval bool has_opening_handled(opts o) { return o.internal & uint32_t(opts::internal::opening_handled); }
