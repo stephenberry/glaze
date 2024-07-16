@@ -1968,6 +1968,18 @@ suite read_tests = [] {
          expect(glz::read_json(d, res) != glz::error_code::none);
       }
    };
+   
+   "random doubles"_test = [] {
+      std::mt19937_64 g{std::random_device{}()};
+      std::uniform_real_distribution<double> dist{};
+      
+      std::string buffer{};
+      for (size_t i = 0; i < 1000; ++i) {
+         double x = dist(g);
+         expect(not glz::write_json(x, buffer));
+         expect(not glz::read_json(x, buffer));
+      }
+   };
 
    "Read string"_test = [] {
       std::string in_nothrow = R"("asljl{}121231212441[]123::,,;,;,,::,Q~123\\a13dqwdwqwq")";
