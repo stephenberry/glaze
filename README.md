@@ -10,7 +10,7 @@ Glaze also supports:
 >
 > Since v3.0.0, Glaze requires C++23.
 >
-> See additional breaking changes for v3.0.0 in the [Version 3.0.0 Release Notes]()
+> See additional breaking changes for v3.0.0 in the [Version 3.0.0 Release Notes](https://github.com/stephenberry/glaze/releases/tag/v3.0.0)
 
 ## With compile time reflection for MSVC, Clang, and GCC!
 
