@@ -1937,7 +1937,7 @@ suite read_tests = [] {
          std::string res = R"(1.a)";
          double d;
 
-         expect(glz::read_json(d, res) == glz::error_code::none);
+         expect(glz::read_json(d, res) != glz::error_code::none);
       }
       {
          std::string res = R"()";
@@ -1953,19 +1953,19 @@ suite read_tests = [] {
          std::string res = R"(1.)";
          double d;
 
-         expect(glz::read_json(d, res) == glz::error_code::none);
+         expect(glz::read_json(d, res) != glz::error_code::none);
       }
       {
          std::string res = R"(1.0e)";
          double d;
 
-         expect(glz::read_json(d, res) == glz::error_code::none);
+         expect(glz::read_json(d, res) != glz::error_code::none);
       }
       {
          std::string res = R"(1.0e-)";
          double d;
 
-         expect(glz::read_json(d, res) == glz::error_code::none);
+         expect(glz::read_json(d, res) != glz::error_code::none);
       }
    };
 
