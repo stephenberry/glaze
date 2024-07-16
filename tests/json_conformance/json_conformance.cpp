@@ -110,31 +110,30 @@ inline void should_fail()
       }
    };
 
-   if constexpr (Opts.force_conformance) {
-      // TODO: Add force_conformance testing after parse
-      /*skip / "comma after close"_test = [] {
+   if constexpr (Opts.validate_trailing_whitespace) {
+      "comma after close"_test = [] {
          constexpr sv s = R"(["Comma after the close"],)";
          {
             std::vector<std::string> v;
-            expect(glz::read_json(v, s));
+            expect(glz::read<Opts>(v, s));
          }
       };
 
-      skip / "extra close"_test = [] {
+      "extra close"_test = [] {
          constexpr sv s = R"(["Extra close"]])";
          {
             std::vector<std::string> v;
-            expect(glz::read_json(v, s));
+            expect(glz::read<Opts>(v, s));
          }
       };
 
-      skip / "extra value after close"_test = [] {
+      "extra value after close"_test = [] {
          constexpr sv s = R"({"b": true} "misplaced quoted value")";
          {
             bool_object obj{};
-            expect(glz::read_json(obj, s));
+            expect(glz::read<Opts>(obj, s));
          }
-      };*/
+      };
    }
 
    "illegal expression"_test = [] {
@@ -358,6 +357,11 @@ suite json_conformance = [] {
    "force_conformance = true"_test = [] {
       should_fail<glz::opts{.force_conformance = true}>();
       should_pass<glz::opts{.force_conformance = true}>();
+   };
+   
+   "validate_trailing_whitespace = true"_test = [] {
+      should_fail<glz::opts{.validate_trailing_whitespace = true}>();
+      should_pass<glz::opts{.validate_trailing_whitespace = true}>();
    };
 };
 
