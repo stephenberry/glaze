@@ -53,6 +53,7 @@ namespace glz
                                             // skip_null_members = false to require nullable members
       bool_t error_on_const_read =
          false; // Error if attempt is made to read into a const value, by default the value is skipped without error
+      bool_t validate_trailing_whitespace = false; // If, after parsing a value, we want to validate the trailing whitespace
 
       uint8_t layout = rowwise; // CSV row wise output/input
 

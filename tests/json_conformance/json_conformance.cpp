@@ -161,8 +161,7 @@ inline void should_fail()
       }
    };
 
-   // TODO: Support this error in all cases
-   /*skip / "numbers cannot have leading zeroes"_test = [] {
+   "numbers cannot have leading zeroes"_test = [] {
       constexpr sv s = R"({"i": 013})";
       {
          int_object obj{};
@@ -172,7 +171,7 @@ inline void should_fail()
          glz::json_t obj{};
          expect(glz::read_json(obj, s));
       }
-   };*/
+   };
 
    "numbers cannot be hex"_test = [] {
       constexpr sv s = R"({"i": 0x14})";
@@ -290,8 +289,7 @@ inline void should_fail()
       }
    };
 
-   // TODO: This should be an error
-   /*skip / "0e"_test = [] {
+   "0e"_test = [] {
       constexpr sv s = R"(0e)";
       {
          double v{};
@@ -305,9 +303,9 @@ inline void should_fail()
          int v{};
          expect(glz::read_json(v, s));
       }
-   };*/
+   };
 
-   /*skip / "0e+"_test = [] {
+   "0e+"_test = [] {
       constexpr sv s = R"(0e+)";
       {
          double v{};
@@ -321,7 +319,7 @@ inline void should_fail()
          int v{};
          expect(glz::read_json(v, s));
       }
-   };*/
+   };
 }
 
 template <glz::opts Opts>
