@@ -8,9 +8,9 @@ Glaze also supports:
 
 > [!IMPORTANT]
 >
-> This `main` branch is moving towards version 3.0.0, which will remove comment and `glz::schema` support from `glz::object` within `glz::meta`.
+> Since v3.0.0, Glaze requires C++23.
 >
-> Glaze version 3.0.0 will also require C++23, which is already supported on all compilers that build Glaze.
+> See additional breaking changes for v3.0.0 in the [Version 3.0.0 Release Notes]()
 
 ## With compile time reflection for MSVC, Clang, and GCC!
 
@@ -507,7 +507,10 @@ enum class Color { Red, Green, Blue };
 template <>
 struct glz::meta<Color> {
    using enum Color;
-   static constexpr auto value = enumerate(Red, Green, Blue);
+   static constexpr auto value = enumerate(Red,
+                                           Green,
+                                           Blue
+   );
 };
 ```
 
