@@ -146,7 +146,7 @@ namespace glz::detail
       return false;
    }
 
-   template <class T, bool force_conformance, class CharType>
+   template <class T, bool json_conformance = true, class CharType>
       requires(std::is_unsigned_v<T>)
    inline bool parse_int(auto& val, const CharType*& cur) noexcept
    {
@@ -173,14 +173,14 @@ namespace glz::detail
    if ((num_tmp = cur[i] - zero) <= 9) [[likely]] \
       sig = num_tmp + sig * 10;                   \
    else {                                         \
-      if constexpr (force_conformance && i > 1) { \
+      if constexpr (json_conformance && i > 1) { \
          if (*cur == zero) return false;          \
       }                                           \
       goto digi_sepr_##i;                         \
    }
       repeat_in_1_18(expr_intg);
 #undef expr_intg
-      if constexpr (force_conformance) {
+      if constexpr (json_conformance) {
          if (*cur == zero) return false;
       }
       cur += 19; /* skip continuous 19 digits */
@@ -283,7 +283,7 @@ namespace glz::detail
    digi_frac_end:
       sig_end = cur;
       exp_sig = -int32_t((cur - dot_pos) - 1);
-      if constexpr (force_conformance) {
+      if constexpr (json_conformance) {
          if (exp_sig == 0) [[unlikely]]
             return false;
       }
@@ -303,7 +303,7 @@ namespace glz::detail
       exp_sign = (*++cur == '-');
       cur += (*cur == '+' || *cur == '-');
       if (uint8_t(*cur - zero) > 9) {
-         if constexpr (force_conformance) {
+         if constexpr (json_conformance) {
             return false;
          }
          else {

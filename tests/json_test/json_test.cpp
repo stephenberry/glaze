@@ -1937,7 +1937,7 @@ suite read_tests = [] {
          std::string res = R"(1.a)";
          double d;
 
-         expect(glz::read_json(d, res) == glz::error_code::none);
+         expect(glz::read_json(d, res) != glz::error_code::none);
       }
       {
          std::string res = R"()";
@@ -1953,19 +1953,31 @@ suite read_tests = [] {
          std::string res = R"(1.)";
          double d;
 
-         expect(glz::read_json(d, res) == glz::error_code::none);
+         expect(glz::read_json(d, res) != glz::error_code::none);
       }
       {
          std::string res = R"(1.0e)";
          double d;
 
-         expect(glz::read_json(d, res) == glz::error_code::none);
+         expect(glz::read_json(d, res) != glz::error_code::none);
       }
       {
          std::string res = R"(1.0e-)";
          double d;
 
-         expect(glz::read_json(d, res) == glz::error_code::none);
+         expect(glz::read_json(d, res) != glz::error_code::none);
+      }
+   };
+   
+   "random doubles"_test = [] {
+      std::mt19937_64 g{std::random_device{}()};
+      std::uniform_real_distribution<double> dist{};
+      
+      std::string buffer{};
+      for (size_t i = 0; i < 1000; ++i) {
+         double x = dist(g);
+         expect(not glz::write_json(x, buffer));
+         expect(not glz::read_json(x, buffer));
       }
    };
 
