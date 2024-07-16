@@ -2842,7 +2842,7 @@ namespace glz
    {
       context ctx{};
       glz::skip skip_value{};
-      return read<opts{.force_conformance = true}>(skip_value, std::forward<Buffer>(buffer), ctx);
+      return read<opts{.force_conformance = true, .validate_trailing_whitespace = true}>(skip_value, std::forward<Buffer>(buffer), ctx);
    }
 
    template <class Buffer>
@@ -2850,7 +2850,7 @@ namespace glz
    {
       context ctx{};
       glz::skip skip_value{};
-      return read<opts{}>(skip_value, std::forward<Buffer>(buffer), ctx);
+      return read<opts{.validate_trailing_whitespace = true}>(skip_value, std::forward<Buffer>(buffer), ctx);
    }
 
    template <read_json_supported T, class Buffer>
