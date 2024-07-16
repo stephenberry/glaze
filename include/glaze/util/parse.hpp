@@ -897,7 +897,7 @@ namespace glz::detail
          ++it;
       }
 
-      if constexpr (Opts.force_conformance) {
+      if constexpr (Opts.validate_skipped) {
          while (true) {
             if ((*it & 0b11100000) == 0) [[unlikely]] {
                ctx.error = error_code::syntax_error;
@@ -1148,7 +1148,7 @@ namespace glz::detail
    template <opts Opts>
    GLZ_ALWAYS_INLINE void skip_number(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
-      if constexpr (!Opts.force_conformance) {
+      if constexpr (!Opts.validate_skipped) {
          while (numeric_table[*it]) {
             ++it;
          }
