@@ -173,7 +173,7 @@ namespace glz::detail
    if ((num_tmp = cur[i] - zero) <= 9) [[likely]] \
       sig = num_tmp + sig * 10;                   \
    else {                                         \
-      if constexpr (json_conformance && i > 1) { \
+      if constexpr (json_conformance && i > 1) {  \
          if (*cur == zero) return false;          \
       }                                           \
       goto digi_sepr_##i;                         \

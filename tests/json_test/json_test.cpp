@@ -1968,11 +1968,11 @@ suite read_tests = [] {
          expect(glz::read_json(d, res) != glz::error_code::none);
       }
    };
-   
+
    "random doubles"_test = [] {
       std::mt19937_64 g{std::random_device{}()};
       std::uniform_real_distribution<double> dist{};
-      
+
       std::string buffer{};
       for (size_t i = 0; i < 1000; ++i) {
          double x = dist(g);
