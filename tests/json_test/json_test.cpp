@@ -7363,6 +7363,63 @@ suite nested_partial_read_tests = [] {
    };
 };
 
+struct AccountUpdateInner {
+    char a[16];
+    double wb;
+};
+
+template <>
+struct glz::meta<AccountUpdateInner> {
+   using T = AccountUpdateInner;
+    static constexpr auto partial_read = true;
+    static constexpr auto value = object("a", &T::a,
+                                         "wb", glz::quoted_num<&T::wb>);
+};
+
+struct AccountUpdateData {
+    std::vector<AccountUpdateInner> B;
+};
+
+struct AccountUpdate {
+    static void fromJson(AccountUpdate& accountUpdate, const std::string& jSon);
+    AccountUpdateData a;
+};
+
+inline void AccountUpdate::fromJson(AccountUpdate &accountUpdate, const std::string &jSon) {
+    auto ec = glz::read<glz::opts{.error_on_unknown_keys=false, .raw_string=true, .partial_read_nested = true}>(accountUpdate, jSon);
+   expect(not ec) << glz::format_error(ec, jSon);
+}
+
+suite account_update_partial_read_tests = [] {
+   "AccountUpdate partial read"_test = [] {
+      const std::string json = R"({
+  "e": "ACCOUNT_UPDATE",
+  "E": 1564745798939,
+  "T": 1564745798938,
+  "a": {
+    "m": "ORDER",
+    "B": [
+      {
+        "a": "USDT",
+        "wb": "122624.12345678",
+        "cw": "100.12345678",
+        "bc": "50.12345678"
+      },
+      {
+        "a": "BUSD",
+        "wb": "1.00000000",
+        "cw": "0.00000000",
+        "bc": "-49.12345678"
+      }
+    ]
+  }
+})";
+      
+      AccountUpdate obj{};
+      AccountUpdate::fromJson(obj, json);
+   };
+};
+
 struct meta_schema_t
 {
    int x{};
