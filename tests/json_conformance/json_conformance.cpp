@@ -358,7 +358,7 @@ suite json_conformance = [] {
       should_fail<glz::opts{.force_conformance = true}>();
       should_pass<glz::opts{.force_conformance = true}>();
    };
-   
+
    "validate_trailing_whitespace = true"_test = [] {
       should_fail<glz::opts{.validate_trailing_whitespace = true}>();
       should_pass<glz::opts{.validate_trailing_whitespace = true}>();
