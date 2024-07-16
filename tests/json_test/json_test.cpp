@@ -7363,30 +7363,35 @@ suite nested_partial_read_tests = [] {
    };
 };
 
-struct AccountUpdateInner {
-    char a[16];
-    double wb;
+struct AccountUpdateInner
+{
+   char a[16];
+   double wb;
 };
 
 template <>
-struct glz::meta<AccountUpdateInner> {
+struct glz::meta<AccountUpdateInner>
+{
    using T = AccountUpdateInner;
-    static constexpr auto partial_read = true;
-    static constexpr auto value = object("a", &T::a,
-                                         "wb", glz::quoted_num<&T::wb>);
+   static constexpr auto partial_read = true;
+   static constexpr auto value = object("a", &T::a, "wb", glz::quoted_num<&T::wb>);
 };
 
-struct AccountUpdateData {
-    std::vector<AccountUpdateInner> B;
+struct AccountUpdateData
+{
+   std::vector<AccountUpdateInner> B;
 };
 
-struct AccountUpdate {
-    static void fromJson(AccountUpdate& accountUpdate, const std::string& jSon);
-    AccountUpdateData a;
+struct AccountUpdate
+{
+   static void fromJson(AccountUpdate& accountUpdate, const std::string& jSon);
+   AccountUpdateData a;
 };
 
-inline void AccountUpdate::fromJson(AccountUpdate &accountUpdate, const std::string &jSon) {
-    auto ec = glz::read<glz::opts{.error_on_unknown_keys=false, .raw_string=true, .partial_read_nested = true}>(accountUpdate, jSon);
+inline void AccountUpdate::fromJson(AccountUpdate& accountUpdate, const std::string& jSon)
+{
+   auto ec = glz::read<glz::opts{.error_on_unknown_keys = false, .raw_string = true, .partial_read_nested = true}>(
+      accountUpdate, jSon);
    expect(not ec) << glz::format_error(ec, jSon);
 }
 
@@ -7414,7 +7419,7 @@ suite account_update_partial_read_tests = [] {
     ]
   }
 })";
-      
+
       AccountUpdate obj{};
       AccountUpdate::fromJson(obj, json);
    };
