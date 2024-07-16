@@ -92,9 +92,6 @@ namespace glz
    {
       using T::operator()...;
    };
-   // explicit deduction guide (not needed as of C++20)
-   template <class... T>
-   overload(T...) -> overload<T...>;
 
    struct hidden
    {};
