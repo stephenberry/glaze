@@ -550,7 +550,7 @@ namespace glz
                         // Hardware may interact with value changes, so we parse into a temporary and assign in one
                         // place
                         uint64_t i{};
-                        auto s = parse_int<uint64_t, Opts.force_conformance>(i, cur);
+                        auto s = parse_int<uint64_t>(i, cur);
                         if (!s) [[unlikely]] {
                            ctx.error = error_code::parse_number_failure;
                            return;
@@ -558,7 +558,7 @@ namespace glz
                         value = i;
                      }
                      else {
-                        auto s = parse_int<decay_keep_volatile_t<decltype(value)>, Opts.force_conformance>(value, cur);
+                        auto s = parse_int<decay_keep_volatile_t<decltype(value)>>(value, cur);
                         if (!s) [[unlikely]] {
                            ctx.error = error_code::parse_number_failure;
                            return;
@@ -576,7 +576,7 @@ namespace glz
 
                      const char* cur = reinterpret_cast<const char*>(it);
                      const char* beg = cur;
-                     auto s = parse_int<std::decay_t<decltype(i)>, Opts.force_conformance>(i, cur);
+                     auto s = parse_int<std::decay_t<decltype(i)>>(i, cur);
                      if (!s) [[unlikely]] {
                         ctx.error = error_code::parse_number_failure;
                         return;
@@ -600,7 +600,7 @@ namespace glz
 
                   const char* cur = reinterpret_cast<const char*>(it);
                   const char* beg = cur;
-                  auto s = parse_int<decay_keep_volatile_t<decltype(i)>, Opts.force_conformance>(i, cur);
+                  auto s = parse_int<decay_keep_volatile_t<decltype(i)>>(i, cur);
                   if (!s) [[unlikely]] {
                      ctx.error = error_code::parse_number_failure;
                      return;
