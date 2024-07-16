@@ -110,31 +110,30 @@ inline void should_fail()
       }
    };
 
-   if constexpr (Opts.force_conformance) {
-      // TODO: Add force_conformance testing after parse
-      /*skip / "comma after close"_test = [] {
+   if constexpr (Opts.validate_trailing_whitespace) {
+      "comma after close"_test = [] {
          constexpr sv s = R"(["Comma after the close"],)";
          {
             std::vector<std::string> v;
-            expect(glz::read_json(v, s));
+            expect(glz::read<Opts>(v, s));
          }
       };
 
-      skip / "extra close"_test = [] {
+      "extra close"_test = [] {
          constexpr sv s = R"(["Extra close"]])";
          {
             std::vector<std::string> v;
-            expect(glz::read_json(v, s));
+            expect(glz::read<Opts>(v, s));
          }
       };
 
-      skip / "extra value after close"_test = [] {
+      "extra value after close"_test = [] {
          constexpr sv s = R"({"b": true} "misplaced quoted value")";
          {
             bool_object obj{};
-            expect(glz::read_json(obj, s));
+            expect(glz::read<Opts>(obj, s));
          }
-      };*/
+      };
    }
 
    "illegal expression"_test = [] {
@@ -161,8 +160,7 @@ inline void should_fail()
       }
    };
 
-   // TODO: Support this error in all cases
-   /*skip / "numbers cannot have leading zeroes"_test = [] {
+   "numbers cannot have leading zeroes"_test = [] {
       constexpr sv s = R"({"i": 013})";
       {
          int_object obj{};
@@ -172,7 +170,7 @@ inline void should_fail()
          glz::json_t obj{};
          expect(glz::read_json(obj, s));
       }
-   };*/
+   };
 
    "numbers cannot be hex"_test = [] {
       constexpr sv s = R"({"i": 0x14})";
@@ -290,8 +288,7 @@ inline void should_fail()
       }
    };
 
-   // TODO: This should be an error
-   /*skip / "0e"_test = [] {
+   "0e"_test = [] {
       constexpr sv s = R"(0e)";
       {
          double v{};
@@ -305,9 +302,9 @@ inline void should_fail()
          int v{};
          expect(glz::read_json(v, s));
       }
-   };*/
+   };
 
-   /*skip / "0e+"_test = [] {
+   "0e+"_test = [] {
       constexpr sv s = R"(0e+)";
       {
          double v{};
@@ -321,7 +318,7 @@ inline void should_fail()
          int v{};
          expect(glz::read_json(v, s));
       }
-   };*/
+   };
 }
 
 template <glz::opts Opts>
@@ -360,6 +357,11 @@ suite json_conformance = [] {
    "force_conformance = true"_test = [] {
       should_fail<glz::opts{.force_conformance = true}>();
       should_pass<glz::opts{.force_conformance = true}>();
+   };
+   
+   "validate_trailing_whitespace = true"_test = [] {
+      should_fail<glz::opts{.validate_trailing_whitespace = true}>();
+      should_pass<glz::opts{.validate_trailing_whitespace = true}>();
    };
 };
 
