@@ -4034,9 +4034,9 @@ suite unicode_tests = [] {
    };
 
    "unicode_escaped"_test = [] {
-      std::string str = R"({"ᇿ":"\u11FF"})";
+      std::string str = R"({"\u11FF":"\u11FF"})";
       question_t obj{};
-      expect(glz::read_json(obj, str) == glz::error_code::none);
+      expect(glz::read<glz::opts{.escaped_unicode_key_conversion = true}>(obj, str) == glz::error_code::none);
 
       expect(obj.text == "ᇿ");
    };

@@ -50,7 +50,6 @@ namespace glz
       bool_t force_conformance = false; // Do not allow invalid json normally accepted such as nan, inf.
       bool_t error_on_missing_keys = false; // Require all non nullable keys to be present in the object. Use
                                             // skip_null_members = false to require nullable members
-
       bool_t error_on_const_read =
          false; // Error if attempt is made to read into a const value, by default the value is skipped without error
 
@@ -60,6 +59,9 @@ namespace glz
       float_precision float_max_write_precision{};
 
       bool_t bools_as_numbers = false; // Read and write booleans with 1's and 0's
+      
+      bool_t escaped_unicode_key_conversion = false; // JSON does not require escaped unicode keys to match with unescaped UTF-8
+      // This enables automatic escaped unicode unescaping and matching for keys in glz::object, but it comes at a performance cost.
 
       bool_t quoted_num = false; // treat numbers as quoted or array-like types as having quoted numbers
       bool_t number = false; // read numbers as strings and write these string as numbers
