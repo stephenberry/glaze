@@ -109,7 +109,7 @@ namespace glz
                }
             }
             else {
-               auto s = parse_float<V, Opts.force_conformance>(value, it);
+               auto s = parse_float<V>(value, it);
                if (!s) [[unlikely]] {
                   ctx.error = error_code::parse_number_failure;
                   return;

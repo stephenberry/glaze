@@ -402,7 +402,8 @@ namespace glz::detail
       }
    };
 
-   template <std::floating_point T, bool force_conformance = false>
+   // json_conformance doesn't allow multiple leading zeros
+   template <std::floating_point T, bool json_conformance = true>
       requires(sizeof(T) <= 8)
    inline bool parse_float(auto& val, const uint8_t*& cur) noexcept
    {
@@ -411,7 +412,6 @@ namespace glz::detail
       [[maybe_unused]] const uint8_t* sig_end = nullptr; /* significant part ending position */
       const uint8_t* dot_pos = nullptr; /* decimal point position */
       uint32_t frac_zeros = 0;
-      uint64_t sig = 0; /* significant part of the number */
       int32_t exp = 0; /* exponent part of the number */
       bool exp_sign; /* temporary exponent sign from literal part */
       int32_t exp_sig = 0; /* temporary exponent number from significant part */
@@ -423,7 +423,7 @@ namespace glz::detail
       cur += sign;
       auto apply_sign = [&](auto&& val) -> T { return sign ? -static_cast<T>(val) : static_cast<T>(val); };
       /* begin with non-zero digit */
-      sig = uint64_t(*cur - '0');
+      uint64_t sig = uint64_t(*cur - '0'); /* significant part of the number */
       if (sig > 9) {
          if constexpr (std::integral<T>) {
             return false;
@@ -447,7 +447,7 @@ namespace glz::detail
    if ((num_tmp = cur[i] - zero) <= 9) [[likely]] \
       sig = num_tmp + sig * 10;                   \
    else {                                         \
-      if constexpr (force_conformance && i > 1) { \
+      if constexpr (json_conformance && i > 1) {  \
          if (*cur == zero) return false;          \
       }                                           \
       goto digi_sepr_##i;                         \
@@ -575,7 +575,7 @@ namespace glz::detail
    digi_frac_end:
       sig_end = cur;
       exp_sig = -int32_t((cur - dot_pos) - 1);
-      if constexpr (force_conformance) {
+      if constexpr (json_conformance) {
          if (exp_sig == 0) return false;
       }
       if ((e_bit | *cur) != 'e') [[likely]] {
@@ -594,7 +594,7 @@ namespace glz::detail
       exp_sign = (*++cur == '-');
       cur += (*cur == '+' || *cur == '-');
       if (uint8_t(*cur - zero) > 9) [[unlikely]] {
-         if constexpr (force_conformance) {
+         if constexpr (json_conformance) {
             return false;
          }
          else {
@@ -782,13 +782,13 @@ namespace glz::detail
       return true;
    }
 
-   template <std::floating_point T, bool force_conformance = false>
+   template <std::floating_point T, bool json_conformance = true>
       requires(sizeof(T) <= 8)
    inline bool parse_float(auto& val, auto& itr) noexcept
    {
       const uint8_t* cur = reinterpret_cast<const uint8_t*>(itr);
       const uint8_t* beg = cur;
-      if (parse_float<T, force_conformance>(val, cur)) {
+      if (parse_float<T, json_conformance>(val, cur)) {
          itr += (cur - beg);
          return true;
       }
