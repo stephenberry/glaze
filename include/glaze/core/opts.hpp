@@ -27,13 +27,14 @@ namespace glz
 
    // Write padding bytes simplifies our dump calculations by making sure we have significant excess
    constexpr uint32_t write_padding_bytes = 256;
+   
+   // We use a alias to a uint8_t for booleans so that compiler errors will print "0" or "1" rather than "true" or
+   // "false" This shortens compiler error printouts significantly.
+   // We use a macro rather than an alias because some compilers print out alias definitions, extending length.
+#define bool_t uint8_t
 
    struct opts
    {
-      // We use a alias to a uint8_t for booleans so that compiler errors will print "0" or "1" rather than "true" or
-      // "false" This shortens compiler error printouts significantly
-      using bool_t = uint8_t;
-
       // USER CONFIGURABLE
       uint32_t format = json;
       bool_t comments = false; // Support reading in JSONC style comments
@@ -101,6 +102,8 @@ namespace glz
 
       [[nodiscard]] constexpr bool operator==(const opts&) const noexcept = default;
    };
+   
+#undef bool_t
 
    consteval bool has_opening_handled(opts o) { return o.internal & uint32_t(opts::internal::opening_handled); }
 
