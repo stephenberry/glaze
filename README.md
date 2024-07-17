@@ -693,25 +693,34 @@ struct opts {
   bool new_lines_in_arrays = true; // Whether prettified arrays should have new lines for each element
   bool shrink_to_fit = false; // Shrinks dynamic containers to new size to save memory
   bool write_type_info = true; // Write type info for meta objects in variants
-  bool force_conformance = false; // Do not allow invalid json normally accepted such as nan, inf.
   bool error_on_missing_keys = false; // Require all non nullable keys to be present in the object. Use
-                                      // skip_null_members = false to require nullable members
-
+                                        // skip_null_members = false to require nullable members
   bool error_on_const_read =
      false; // Error if attempt is made to read into a const value, by default the value is skipped without error
+  bool validate_skipped = false; // If full validation should be performed on skipped values
+  bool validate_trailing_whitespace =
+     false; // If, after parsing a value, we want to validate the trailing whitespace
 
-  uint32_t layout = rowwise; // CSV row wise output/input
+  uint8_t layout = rowwise; // CSV row wise output/input
 
   // The maximum precision type used for writing floats, higher precision floats will be cast down to this precision
   float_precision float_max_write_precision{};
 
   bool bools_as_numbers = false; // Read and write booleans with 1's and 0's
 
+  bool escaped_unicode_key_conversion =
+     false; // JSON does not require escaped unicode keys to match with unescaped UTF-8
+  // This enables automatic escaped unicode unescaping and matching for keys in glz::object, but it comes at a
+  // performance cost.
+
   bool quoted_num = false; // treat numbers as quoted or array-like types as having quoted numbers
   bool number = false; // read numbers as strings and write these string as numbers
   bool raw = false; // write out string like values without quotes
-  bool raw_string = false; // do not decode/encode escaped characters for strings (improves read/write performance)
-  bool structs_as_arrays = false; // Handle structs (reading/writing) without keys, which applies to reflectable and
+  bool raw_string =
+     false; // do not decode/encode escaped characters for strings (improves read/write performance)
+  bool structs_as_arrays = false; // Handle structs (reading/writing) without keys, which applies
+  bool allow_conversions = true; // Whether conversions between convertible types are
+  // allowed in binary, e.g. double -> float
 
   bool partial_read =
      false; // Reads into only existing fields and elements and then exits without parsing the rest of the input
@@ -726,6 +735,15 @@ struct opts {
 ```
 
 > Many of these compile time options have wrappers to apply the option to only a single field. See [Wrappers](./docs/wrappers.md) for more details.
+
+## JSON Conformance
+
+By default Glaze is strictly conformant with the latest JSON standard except in two cases with associated options:
+
+- `validate_skipped`
+  This option does full JSON validation for skipped values when parsing. This is not set by default because values are typically skipped when the user is unconcerned with them, and Glaze still validates for major issues. But, this makes skipping faster by not caring if the skipped values are exactly JSON conformant. For example, by default Glaze will ensure skipped numbers have all valid numerical characters, but it will not validate for issues like leading zeros in skipped numbers unless `validate_skipped` is on. Wherever Glaze parses a value to be used it is fully validated.
+- `validate_trailing_whitespace`
+  This option validates the trailing whitespace in a parsed document. Because Glaze parses C++ structs, there is typically no need to continue parsing after the object of interest has been read. Turn on this option if you want to ensure that the rest of the document has valid whitespace, otherwise Glaze will just ignore the content after the content of interest has been parsed.
 
 ## Skip
 
