@@ -18,7 +18,7 @@ namespace glz
          (f(std::integral_constant<std::size_t, I>{}), ...);
       }(std::make_index_sequence<N>{});
    }
-   
+
    template <std::size_t N, class Func>
    GLZ_FLATTEN constexpr void for_each_flatten(Func&& f)
    {
@@ -35,7 +35,7 @@ namespace glz
          (f(std::integral_constant<std::size_t, I>{}) || ...);
       }(std::make_index_sequence<N>{});
    }
-   
+
    template <std::size_t N, class Func>
    GLZ_FLATTEN constexpr void for_each_short_circuit_flatten(Func&& f)
    {

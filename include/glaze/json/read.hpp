@@ -685,7 +685,7 @@ namespace glz
 
                if constexpr (not Opts.raw_string) {
                   value.clear();
-                  
+
                   auto& temp = string_decode_buffer();
                   auto* p = temp.data();
                   auto* p_end = p + temp.size() - padding_bytes;
@@ -801,7 +801,7 @@ namespace glz
 
                if constexpr (not Opts.raw_string) {
                   value.clear();
-                  
+
                   auto& temp = string_decode_buffer();
                   auto* p = temp.data();
 
