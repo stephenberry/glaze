@@ -180,6 +180,10 @@ auto ec = glz::write_file_json(obj, "./obj.json", std::string{});
 
 > Glaze seeks to maintain compatibility with the latest three versions of GCC and Clang, as well as the latest version of MSVC and Apple Clang.
 
+### MSVC Compiler Flags
+
+Glaze requires a C++ standard conformant pre-processor, which requires the `/Zc:preprocessor` flag when building with MSVC.
+
 ## How To Use Glaze
 
 ### [FetchContent](https://cmake.org/cmake/help/latest/module/FetchContent.html)
