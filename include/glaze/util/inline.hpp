@@ -24,7 +24,7 @@
 // It should only be applied in very specific circumstances.
 // It is best to more often rely on the compiler.
 
-#if defined(__clang__) && defined(NDEBUG)
+#if (defined(__clang__) || defined(__GNUC__)) && defined(NDEBUG)
 #ifndef GLZ_FLATTEN
 #define GLZ_FLATTEN inline __attribute__((flatten))
 #endif
@@ -40,4 +40,12 @@
 
 #ifndef GLZ_FLATTEN_NO_INLINE
 #define GLZ_FLATTEN_NO_INLINE
+#endif
+
+#ifndef GLZ_NO_INLINE
+#if defined(__clang__) || defined(__GNUC__)
+#define GLZ_NO_INLINE __attribute__((noinline))
+#elif defined(_MSC_VER)
+#define GLZ_NO_INLINE __declspec((noinline))
+#endif
 #endif

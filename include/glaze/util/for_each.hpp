@@ -5,6 +5,8 @@
 
 #include <utility>
 
+#include "glaze/util/inline.hpp"
+
 namespace glz
 {
    // Compile time iterate over I indices
@@ -16,10 +18,26 @@ namespace glz
          (f(std::integral_constant<std::size_t, I>{}), ...);
       }(std::make_index_sequence<N>{});
    }
+   
+   template <std::size_t N, class Func>
+   GLZ_FLATTEN constexpr void for_each_flatten(Func&& f)
+   {
+      [&]<std::size_t... I>(std::index_sequence<I...>) constexpr {
+         (f(std::integral_constant<std::size_t, I>{}), ...);
+      }(std::make_index_sequence<N>{});
+   }
 
    // Runtime short circuiting if function returns true, return false to continue evaluation
    template <std::size_t N, class Func>
    constexpr void for_each_short_circuit(Func&& f)
+   {
+      [&]<std::size_t... I>(std::index_sequence<I...>) constexpr {
+         (f(std::integral_constant<std::size_t, I>{}) || ...);
+      }(std::make_index_sequence<N>{});
+   }
+   
+   template <std::size_t N, class Func>
+   GLZ_FLATTEN constexpr void for_each_short_circuit_flatten(Func&& f)
    {
       [&]<std::size_t... I>(std::index_sequence<I...>) constexpr {
          (f(std::integral_constant<std::size_t, I>{}) || ...);
