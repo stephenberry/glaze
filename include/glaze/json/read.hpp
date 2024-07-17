@@ -2842,7 +2842,7 @@ namespace glz
    {
       context ctx{};
       glz::skip skip_value{};
-      return read<opts{.force_conformance = true, .validate_trailing_whitespace = true}>(
+      return read<opts{.validate_skipped = true, .validate_trailing_whitespace = true}>(
          skip_value, std::forward<Buffer>(buffer), ctx);
    }
 

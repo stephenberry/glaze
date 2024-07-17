@@ -48,11 +48,11 @@ namespace glz
       bool_t new_lines_in_arrays = true; // Whether prettified arrays should have new lines for each element
       bool_t shrink_to_fit = false; // Shrinks dynamic containers to new size to save memory
       bool_t write_type_info = true; // Write type info for meta objects in variants
-      bool_t force_conformance = false; // Do not allow invalid json normally accepted such as nan, inf.
       bool_t error_on_missing_keys = false; // Require all non nullable keys to be present in the object. Use
                                             // skip_null_members = false to require nullable members
       bool_t error_on_const_read =
          false; // Error if attempt is made to read into a const value, by default the value is skipped without error
+      bool_t validate_skipped = false; // If full validation should be performed on skipped values
       bool_t validate_trailing_whitespace =
          false; // If, after parsing a value, we want to validate the trailing whitespace
 

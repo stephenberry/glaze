@@ -10,7 +10,7 @@ namespace glz::detail
    template <opts Opts>
    void skip_object(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
-      if constexpr (!Opts.force_conformance) {
+      if constexpr (!Opts.validate_skipped) {
          ++it;
          skip_until_closed<Opts, '{', '}'>(ctx, it, end);
       }
@@ -47,7 +47,7 @@ namespace glz::detail
    template <opts Opts>
    void skip_array(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
-      if constexpr (!Opts.force_conformance) {
+      if constexpr (!Opts.validate_skipped) {
          ++it;
          skip_until_closed<Opts, '[', ']'>(ctx, it, end);
       }
@@ -74,7 +74,7 @@ namespace glz::detail
    template <opts Opts>
    void skip_value(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
-      if constexpr (!Opts.force_conformance) {
+      if constexpr (!Opts.validate_skipped) {
          if constexpr (!has_ws_handled(Opts)) {
             GLZ_SKIP_WS();
          }
