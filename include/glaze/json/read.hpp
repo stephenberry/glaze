@@ -40,8 +40,8 @@ namespace glz
          return buffer;
       }
 
-      // The string_buffer() often gets resized, but we want our decode buffer to
-      // only ever grow on resizing. So, we make it its own buffer.
+      // The string_decode_buffer() is statically sized to
+      // reduce memory usage.
       GLZ_ALWAYS_INLINE auto& string_decode_buffer() noexcept
       {
          static thread_local std::array<char, 512> buffer{};
