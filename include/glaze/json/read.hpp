@@ -247,8 +247,7 @@ namespace glz
                      }
                   }
 
-                  const sv key{it, Length};
-                  if (cx_string_cmp<TargetKey>(key)) [[likely]] {
+                  if (compare<Length>(TargetKey.data(), it)) [[likely]] {
                      it += Length;
                      if (*it != '"') [[unlikely]] {
                         if constexpr (Opts.error_on_unknown_keys) {
@@ -2046,7 +2045,7 @@ namespace glz
                   }
                   else if constexpr (direct_maps) {
                      if (*it != '"') [[unlikely]] {
-                        ctx.error = error_code::unknown_key;
+                        ctx.error = error_code::expected_quote;
                         return;
                      }
                      ++it;
