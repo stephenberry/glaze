@@ -208,7 +208,7 @@ namespace glz::detail
    }
 
    template <class Char>
-   [[nodiscard]] GLZ_ALWAYS_INLINE bool handle_unicode_code_point(const Char*& it, Char*& dst)
+   [[nodiscard]] GLZ_ALWAYS_INLINE bool handle_unicode_code_point(const Char*& it, Char*& dst) noexcept
    {
       using namespace unicode;
 
@@ -234,7 +234,7 @@ namespace glz::detail
          }
          it += 4;
 
-         if ((low & surrogate_mask) != low_surrogate_value) {
+         if ((low & surrogate_mask) != low_surrogate_value) [[unlikely]] {
             return false;
          }
 
@@ -251,7 +251,7 @@ namespace glz::detail
    }
 
    template <class Char>
-   [[nodiscard]] GLZ_ALWAYS_INLINE bool handle_unicode_code_point(const Char*& it, Char*& dst, const Char* end)
+   [[nodiscard]] GLZ_ALWAYS_INLINE bool handle_unicode_code_point(const Char*& it, Char*& dst, const Char* end) noexcept
    {
       using namespace unicode;
 
@@ -283,7 +283,7 @@ namespace glz::detail
          }
          it += 4;
 
-         if ((low & surrogate_mask) != low_surrogate_value) {
+         if ((low & surrogate_mask) != low_surrogate_value) [[unlikely]] {
             return false;
          }
 
@@ -300,7 +300,7 @@ namespace glz::detail
    }
 
    template <class Char>
-   [[nodiscard]] GLZ_ALWAYS_INLINE bool skip_unicode_code_point(const Char*& it, const Char* end)
+   [[nodiscard]] GLZ_ALWAYS_INLINE bool skip_unicode_code_point(const Char*& it, const Char* end) noexcept
    {
       using namespace unicode;
       if (it + 4 >= end) [[unlikely]] {
@@ -317,7 +317,7 @@ namespace glz::detail
 
       if ((high & generic_surrogate_mask) == generic_surrogate_value) {
          // surrogate pair code points
-         if ((high & surrogate_mask) != high_surrogate_value) {
+         if ((high & surrogate_mask) != high_surrogate_value) [[unlikely]] {
             return false;
          }
 
@@ -332,7 +332,7 @@ namespace glz::detail
          }
          it += 4;
 
-         if ((low & surrogate_mask) != low_surrogate_value) {
+         if ((low & surrogate_mask) != low_surrogate_value) [[unlikely]] {
             return false;
          }
 
