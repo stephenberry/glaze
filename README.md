@@ -46,14 +46,14 @@ See [DOCS](https://github.com/stephenberry/glaze/tree/main/docs) for more docume
 
 | Library                                                      | Roundtrip Time (s) | Write (MB/s) | Read (MB/s) |
 | ------------------------------------------------------------ | ------------------ | ------------ | ----------- |
-| [**Glaze**](https://github.com/stephenberry/glaze)           | **1.20**           | **1064**     | **1175**    |
-| [**simdjson (on demand)**](https://github.com/simdjson/simdjson) | **N/A**            | **N/A**      | **1201**    |
-| [**yyjson**](https://github.com/ibireme/yyjson)              | **1.23**           | **996**      | **1108**    |
-| [**daw_json_link**](https://github.com/beached/daw_json_link) | **2.90**           | **370**      | **554**     |
-| [**RapidJSON**](https://github.com/Tencent/rapidjson)        | **3.63**           | **295**      | **447**     |
-| [**Boost.JSON (direct)**](https://boost.org/libs/json)       | **4.66**           | **203**      | **437**     |
-| [**json_struct**](https://github.com/jorgen/json_struct)     | **5.47**           | **184**      | **331**     |
-| [**nlohmann**](https://github.com/nlohmann/json)             | **15.00**          | **86**       | **82**      |
+| [**Glaze**](https://github.com/stephenberry/glaze)           | **1.18**           | **1066**     | **1173**    |
+| [**simdjson (on demand)**](https://github.com/simdjson/simdjson) | **N/A**            | **N/A**      | **1194**    |
+| [**yyjson**](https://github.com/ibireme/yyjson)              | **1.24**           | **1007**     | **1099**    |
+| [**daw_json_link**](https://github.com/beached/daw_json_link) | **2.92**           | **365**      | **547**     |
+| [**RapidJSON**](https://github.com/Tencent/rapidjson)        | **3.67**           | **291**      | **449**     |
+| [**Boost.JSON (direct)**](https://boost.org/libs/json)       | **4.83**           | **197**      | **436**     |
+| [**json_struct**](https://github.com/jorgen/json_struct)     | **5.51**           | **182**      | **329**     |
+| [**nlohmann**](https://github.com/nlohmann/json)             | **15.31**          | **86**       | **82**      |
 
 [Performance test code available here](https://github.com/stephenberry/json_performance)
 
@@ -65,8 +65,8 @@ See [DOCS](https://github.com/stephenberry/glaze/tree/main/docs) for more docume
 
 | Library                                                      | Read (MB/s) |
 | ------------------------------------------------------------ | ----------- |
-| [**Glaze**](https://github.com/stephenberry/glaze)           | **1426**    |
-| [**simdjson (on demand)**](https://github.com/simdjson/simdjson) | **108**     |
+| [**Glaze**](https://github.com/stephenberry/glaze)           | **670**     |
+| [**simdjson (on demand)**](https://github.com/simdjson/simdjson) | **92**      |
 
 ## Binary Performance
 
