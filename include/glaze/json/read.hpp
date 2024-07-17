@@ -42,9 +42,9 @@ namespace glz
 
       // The string_buffer() often gets resized, but we want our decode buffer to
       // only ever grow on resizing. So, we make it its own buffer.
-      GLZ_ALWAYS_INLINE std::string& string_decode_buffer() noexcept
+      GLZ_ALWAYS_INLINE auto& string_decode_buffer() noexcept
       {
-         static thread_local std::string buffer(512, '\0');
+         static thread_local std::array<char, 512> buffer{};
          return buffer;
       }
 
@@ -685,17 +685,18 @@ namespace glz
                }
 
                if constexpr (not Opts.raw_string) {
+                  value.clear();
+                  
                   auto& temp = string_decode_buffer();
                   auto* p = temp.data();
                   auto* p_end = p + temp.size() - padding_bytes;
 
                   while (true) {
                      if (p >= p_end) [[unlikely]] {
-                        // the rare case of running out of temp buffer
-                        const auto distance = size_t(p - temp.data());
-                        temp.resize(temp.size() * 2);
-                        p = temp.data() + distance; // reset p from new memory
-                        p_end = temp.data() + temp.size() - padding_bytes;
+                        const auto n = temp.size();
+                        value.append(temp.data(), size_t(p - temp.data()));
+                        p = temp.data();
+                        p_end = p + n - padding_bytes;
                      }
                      std::memcpy(p, it, 8);
                      uint64_t swar;
@@ -731,7 +732,7 @@ namespace glz
                         next = countr_zero(next) >> 3;
                         it += next;
                         if (*it == '"') {
-                           value.assign(temp.data(), size_t((p + next) - temp.data()));
+                           value.append(temp.data(), size_t((p + next) - temp.data()));
                            ++it;
                            return;
                         }
@@ -800,6 +801,8 @@ namespace glz
                }
 
                if constexpr (not Opts.raw_string) {
+                  value.clear();
+                  
                   auto& temp = string_decode_buffer();
                   auto* p = temp.data();
 
@@ -812,10 +815,10 @@ namespace glz
                      while (true) {
                         if (p >= p_end) [[unlikely]] {
                            // the rare case of running out of temp buffer
-                           const auto distance = size_t(p - temp.data());
-                           temp.resize(temp.size() * 2);
-                           p = temp.data() + distance; // reset p from new memory
-                           p_end = temp.data() + temp.size() - padding_bytes;
+                           const auto n = temp.size();
+                           value.append(temp.data(), size_t(p - temp.data()));
+                           p = temp.data();
+                           p_end = p + n - padding_bytes;
                         }
                         if (it > end12) {
                            break;
@@ -854,7 +857,7 @@ namespace glz
                            next = countr_zero(next) >> 3;
                            it += next;
                            if (*it == '"') {
-                              value.assign(temp.data(), size_t((p + next) - temp.data()));
+                              value.append(temp.data(), size_t((p + next) - temp.data()));
                               ++it;
                               return;
                            }
@@ -900,7 +903,7 @@ namespace glz
                   while (it < end) [[likely]] {
                      *p = *it;
                      if (*it == '"') {
-                        value.assign(temp.data(), size_t(p - temp.data()));
+                        value.append(temp.data(), size_t(p - temp.data()));
                         ++it;
                         return;
                      }

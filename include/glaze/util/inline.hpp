@@ -41,3 +41,11 @@
 #ifndef GLZ_FLATTEN_NO_INLINE
 #define GLZ_FLATTEN_NO_INLINE
 #endif
+
+#ifndef GLZ_NO_INLINE
+#if defined(__clang__) || defined(__GNUC__)
+#define GLZ_NO_INLINE __attribute__((noinline))
+#elif defined(_MSC_VER)
+#define GLZ_NO_INLINE __declspec((noinline))
+#endif
+#endif
