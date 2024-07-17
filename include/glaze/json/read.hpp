@@ -221,7 +221,7 @@ namespace glz
                }
             }
 
-            for_each_short_circuit<N>([&](auto I) {
+            for_each_short_circuit_flatten<N>([&](auto I) {
                if (I == index) {
                   static constexpr auto TargetKey = get<I>(refl<T>.keys);
                   static constexpr auto Length = TargetKey.size();
@@ -1533,7 +1533,7 @@ namespace glz
             GLZ_MATCH_OPEN_BRACKET;
             GLZ_SKIP_WS();
 
-            for_each<N>([&](auto I) {
+            for_each_flatten<N>([&](auto I) {
                if (*it == ']') {
                   return;
                }
@@ -1870,7 +1870,7 @@ namespace glz
       GLZ_ALWAYS_INLINE void read_json_visitor(auto&& value, auto&& variant, auto&& ctx, auto&& it, auto&& end) noexcept
       {
          constexpr auto variant_size = std::variant_size_v<std::decay_t<decltype(variant)>>;
-         for_each_short_circuit<variant_size>([&](auto I) {
+         for_each_short_circuit_flatten<variant_size>([&](auto I) {
             if (I == variant.index()) {
                using V = decltype(get_member(value, std::get<I>(variant)));
 

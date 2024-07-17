@@ -172,7 +172,7 @@ namespace glz
 
             std::array<uint8_t, byte_length<T>()> data{};
 
-            for_each<N>([&](auto I) {
+            for_each_flatten<N>([&](auto I) {
                data[I / 8] |= static_cast<uint8_t>(get_member(value, get<I>(refl<T>.values))) << (7 - (I % 8));
             });
 
@@ -600,7 +600,7 @@ namespace glz
                dump_compressed_int<N>(args...);
             }
 
-            for_each<N>([&](auto I) {
+            for_each_flatten<N>([&](auto I) {
                constexpr auto Opts = opening_handled_off<Options>();
                write<binary>::no_header<Opts>(get<2 * I>(value.value), ctx, args...);
                write<binary>::op<Opts>(get<2 * I + 1>(value.value), ctx, args...);
@@ -654,7 +654,7 @@ namespace glz
          static constexpr auto N = refl<T>.N;
          static constexpr size_t count_to_write = [] {
             size_t count{};
-            for_each<N>([&](auto I) {
+            for_each_flatten<N>([&](auto I) {
                using V = std::remove_cvref_t<refl_t<T, I>>;
 
                if constexpr (std::same_as<V, hidden> || std::same_as<V, skip>) {
@@ -684,7 +684,7 @@ namespace glz
                }
             }();
 
-            for_each<N>([&](auto I) {
+            for_each_flatten<N>([&](auto I) {
                using val_t = std::remove_cvref_t<refl_t<T, I>>;
 
                if constexpr (std::same_as<val_t, hidden> || std::same_as<val_t, skip>) {
@@ -722,7 +722,7 @@ namespace glz
                }
             }();
 
-            for_each<N>([&](auto I) {
+            for_each_flatten<N>([&](auto I) {
                using val_t = std::remove_cvref_t<refl_t<T, I>>;
 
                if constexpr (std::same_as<val_t, hidden> || std::same_as<val_t, skip>) {
@@ -759,7 +759,7 @@ namespace glz
             static constexpr auto N = refl<T>.N;
             dump_compressed_int<N>(args...);
 
-            for_each<refl<T>.N>(
+            for_each_flatten<refl<T>.N>(
                [&](auto I) { write<binary>::op<Opts>(get_member(value, get<I>(refl<T>.values)), ctx, args...); });
          }
       };

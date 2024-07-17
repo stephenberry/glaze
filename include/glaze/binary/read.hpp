@@ -158,7 +158,7 @@ namespace glz
             std::memcpy(data, it, Length);
             it += Length;
 
-            for_each<N>([&](auto I) {
+            for_each_flatten<N>([&](auto I) {
                get_member(value, get<I>(refl<T>.values)) = data[I / 8] & (uint8_t{1} << (7 - (I % 8)));
             });
          }
@@ -1085,7 +1085,7 @@ namespace glz
                   return;
                }
 
-               for_each<N>(
+               for_each_flatten<N>(
                   [&](auto I) { read<binary>::op<Opts>(get_member(value, get<I>(refl<V>.values)), ctx, it, end); });
             }
          }
@@ -1222,7 +1222,7 @@ namespace glz
                return;
             }
 
-            for_each<N>(
+            for_each_flatten<N>(
                [&](auto I) { read<binary>::op<Opts>(get_member(value, get<I>(refl<T>.values)), ctx, it, end); });
          }
       };
@@ -1247,7 +1247,7 @@ namespace glz
                const auto n = int_from_compressed(ctx, it, end);
 
                if constexpr (is_std_tuple<T>) {
-                  for_each_short_circuit<N>([&](auto I) {
+                  for_each_short_circuit_flatten<N>([&](auto I) {
                      if (I < n) {
                         read<binary>::op<Opts>(std::get<I>(value), ctx, it, end);
                         return false; // continue
@@ -1256,7 +1256,7 @@ namespace glz
                   });
                }
                else {
-                  for_each_short_circuit<N>([&](auto I) {
+                  for_each_short_circuit_flatten<N>([&](auto I) {
                      if (I < n) {
                         read<binary>::op<Opts>(glz::get<I>(value), ctx, it, end);
                         return false; // continue
@@ -1272,10 +1272,10 @@ namespace glz
                }
 
                if constexpr (is_std_tuple<T>) {
-                  for_each<N>([&](auto I) { read<binary>::op<Opts>(std::get<I>(value), ctx, it, end); });
+                  for_each_flatten<N>([&](auto I) { read<binary>::op<Opts>(std::get<I>(value), ctx, it, end); });
                }
                else {
-                  for_each<N>([&](auto I) { read<binary>::op<Opts>(glz::get<I>(value), ctx, it, end); });
+                  for_each_flatten<N>([&](auto I) { read<binary>::op<Opts>(glz::get<I>(value), ctx, it, end); });
                }
             }
          }

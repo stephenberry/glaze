@@ -76,7 +76,7 @@ namespace glz
 
             dump<'['>(b, ix);
 
-            for_each<N>([&](auto I) {
+            for_each_flatten<N>([&](auto I) {
                if (get_member(value, get<I>(refl<T>.values))) {
                   dump<'"'>(b, ix);
                   dump_maybe_empty(refl<T>.keys[I], b, ix);
@@ -861,7 +861,7 @@ namespace glz
                ctx.indentation_level += Opts.indentation_width;
                dump_newline_indent<Opts.indentation_char>(ctx.indentation_level, args...);
             }
-            for_each<N>([&](auto I) {
+            for_each_flatten<N>([&](auto I) {
                if constexpr (glaze_array_t<V>) {
                   write<json>::op<Opts>(get_member(value.value, glz::get<I>(meta_v<T>)), ctx, args...);
                }
@@ -903,7 +903,7 @@ namespace glz
                dump_newline_indent<Opts.indentation_char>(ctx.indentation_level, args...);
             }
             using V = std::decay_t<T>;
-            for_each<N>([&](auto I) {
+            for_each_flatten<N>([&](auto I) {
                if constexpr (glaze_array_t<V>) {
                   write<json>::op<Opts>(get_member(value, glz::get<I>(meta_v<T>)), ctx, args...);
                }
@@ -965,7 +965,7 @@ namespace glz
             static constexpr auto N = glz::tuple_size_v<V> / 2;
 
             bool first = true;
-            for_each<N>([&](auto I) {
+            for_each_flatten<N>([&](auto I) {
                constexpr auto Opts = opening_and_closing_handled_off<ws_handled_off<Options>()>();
                decltype(auto) item = glz::get<2 * I + 1>(value.value);
                using val_t = std::decay_t<decltype(item)>;
@@ -1038,7 +1038,7 @@ namespace glz
             using V = std::decay_t<decltype(value.value)>;
             static constexpr auto N = glz::tuple_size_v<V>;
 
-            for_each<N>([&](auto I) {
+            for_each_flatten<N>([&](auto I) {
                write<json>::op<opening_and_closing_handled<Options>()>(glz::get<I>(value.value), ctx, b, ix);
                if constexpr (I < N - 1) {
                   dump<','>(b, ix);
@@ -1119,7 +1119,7 @@ namespace glz
 
             [[maybe_unused]] bool first = true;
             static constexpr auto first_is_written = object_info<Options, T>::first_will_be_written;
-            for_each<N>([&](auto I) {
+            for_each_flatten<N>([&](auto I) {
                constexpr auto Opts = opening_and_closing_handled_off<ws_handled_off<Options>()>();
 
                using val_t = std::remove_cvref_t<refl_t<T, I>>;
@@ -1285,7 +1285,7 @@ namespace glz
 
             if constexpr ((num_members > 0) && (glaze_object_t<T> || reflectable<T>)) {
                if constexpr (glaze_object_t<T>) {
-                  for_each<N>([&](auto I) {
+                  for_each_flatten<N>([&](auto I) {
                      if (bool(ctx.error)) [[unlikely]] {
                         return;
                      }
@@ -1321,7 +1321,7 @@ namespace glz
 
                   static constexpr auto members = member_names<T>;
 
-                  for_each<N>([&](auto I) {
+                  for_each_flatten<N>([&](auto I) {
                      if (bool(ctx.error)) [[unlikely]] {
                         return;
                      }
@@ -1363,7 +1363,7 @@ namespace glz
                }
             }
             else if constexpr (writable_map_t<T>) {
-               for_each<N>([&](auto I) {
+               for_each_flatten<N>([&](auto I) {
                   if (bool(ctx.error)) [[unlikely]] {
                      return;
                   }
