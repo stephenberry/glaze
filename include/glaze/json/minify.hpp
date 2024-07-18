@@ -42,7 +42,7 @@ namespace glz
          skip_whitespace();
 
          while (true) {
-            switch (json_types[size_t(*it)]) {
+            switch (json_types[uint8_t(*it)]) {
             case String: {
                const auto value = read_json_string<Opts>(it, end);
                dump<false>(value, b, ix); // we couldn't have gotten here without a quote
