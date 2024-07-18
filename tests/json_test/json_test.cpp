@@ -7192,7 +7192,7 @@ suite address_sanitizer_test = [] {
       my_struct obj{};
       expect(glz::read_json(obj, buffer));
    };
-   
+
    "invalid json_t read"_test = [] {
       glz::json_t json{};
       auto blah = std::vector<char>{0x22, 0x5c, char(0xff), 0x22, 0x00};
