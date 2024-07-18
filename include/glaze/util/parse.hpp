@@ -524,7 +524,7 @@ namespace glz::detail
 #define GLZ_SKIP_WS(RETURN)                        \
    if constexpr (!Opts.minified) {                 \
       if constexpr (Opts.comments) {               \
-         while (whitespace_comment_table[*it]) {   \
+         while (whitespace_comment_table[uint8_t(*it)]) {   \
             if (*it == '/') [[unlikely]] {         \
                skip_comment(ctx, it, end);         \
                if (bool(ctx.error)) [[unlikely]] { \
@@ -537,7 +537,7 @@ namespace glz::detail
          }                                         \
       }                                            \
       else {                                       \
-         while (whitespace_table[*it]) {           \
+         while (whitespace_table[uint8_t(*it)]) {           \
             ++it;                                  \
          }                                         \
       }                                            \
@@ -549,7 +549,7 @@ namespace glz::detail
    {
       if constexpr (!Opts.minified) {
          if constexpr (Opts.comments) {
-            while (whitespace_comment_table[*it]) {
+            while (whitespace_comment_table[uint8_t(*it)]) {
                if (*it == '/') [[unlikely]] {
                   skip_comment(ctx, it, end);
                   if (bool(ctx.error)) [[unlikely]] {
@@ -562,7 +562,7 @@ namespace glz::detail
             }
          }
          else {
-            while (whitespace_table[*it]) {
+            while (whitespace_table[uint8_t(*it)]) {
                ++it;
             }
          }
@@ -911,7 +911,7 @@ namespace glz::detail
             }
             case '\\': {
                ++it;
-               if (char_unescape_table[*it]) {
+               if (char_unescape_table[uint8_t(*it)]) {
                   ++it;
                   continue;
                }
@@ -1149,7 +1149,7 @@ namespace glz::detail
    GLZ_ALWAYS_INLINE void skip_number(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       if constexpr (!Opts.validate_skipped) {
-         while (numeric_table[*it]) {
+         while (numeric_table[uint8_t(*it)]) {
             ++it;
          }
       }

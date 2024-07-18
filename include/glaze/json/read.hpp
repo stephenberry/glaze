@@ -952,7 +952,7 @@ namespace glz
                                  }
                               }
                               else {
-                                 *p = char_unescape_table[*it];
+                                 *p = char_unescape_table[uint8_t(*it)];
                                  if (*p == 0) [[unlikely]] {
                                     ctx.error = error_code::invalid_escape;
                                     return;
@@ -994,7 +994,7 @@ namespace glz
                               }
                            }
                            else {
-                              *p = char_unescape_table[*it];
+                              *p = char_unescape_table[uint8_t(*it)];
                               if (*p == 0) [[unlikely]] {
                                  ctx.error = error_code::invalid_escape;
                                  return;

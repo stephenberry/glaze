@@ -26,7 +26,7 @@ namespace glz
                skip_matching_ws(ws_start, it, ws_size);
             }
 
-            while (whitespace_table[*it]) {
+            while (whitespace_table[uint8_t(*it)]) {
                ++it;
             }
             ws_start = new_ws_start;
@@ -34,7 +34,7 @@ namespace glz
          };
 
          auto skip_whitespace = [&] {
-            while (whitespace_table[*it]) {
+            while (whitespace_table[uint8_t(*it)]) {
                ++it;
             }
          };
