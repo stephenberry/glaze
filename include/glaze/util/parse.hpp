@@ -208,7 +208,7 @@ namespace glz::detail
    }
 
    template <class Char>
-   [[nodiscard]] GLZ_ALWAYS_INLINE bool handle_unicode_code_point(const Char*& it, Char*& dst) noexcept
+   [[nodiscard]] GLZ_ALWAYS_INLINE uint32_t handle_unicode_code_point(const Char*& it, Char*& dst) noexcept
    {
       using namespace unicode;
 
@@ -247,11 +247,11 @@ namespace glz::detail
       }
       const uint32_t offset = code_point_to_utf8(code_point, dst);
       dst += offset;
-      return offset > 0;
+      return offset;
    }
 
    template <class Char>
-   [[nodiscard]] GLZ_ALWAYS_INLINE bool handle_unicode_code_point(const Char*& it, Char*& dst, const Char* end) noexcept
+   [[nodiscard]] GLZ_ALWAYS_INLINE uint32_t handle_unicode_code_point(const Char*& it, Char*& dst, const Char* end) noexcept
    {
       using namespace unicode;
 
@@ -296,7 +296,7 @@ namespace glz::detail
       }
       const uint32_t offset = code_point_to_utf8(code_point, dst);
       dst += offset;
-      return offset > 0;
+      return offset;
    }
 
    template <class Char>
