@@ -410,57 +410,61 @@ auto glaze_test()
 
 suite object_performance = [] { "object_performance"_test = [] { glaze_test<glz::opts{}>(); }; };
 
-inline std::string emoji_unicode(auto& generator) {
-    // Define Unicode ranges for emojis
-    static const std::vector<std::pair<char32_t, char32_t>> emoji_ranges = {
-        {0x1F600, 0x1F64F}, // Emoticons
-        {0x1F300, 0x1F5FF}, // Misc Symbols and Pictographs
-        {0x1F680, 0x1F6FF}, // Transport and Map Symbols
-        {0x2600, 0x26FF},   // Misc symbols
-        {0x2700, 0x27BF},   // Dingbats
-        {0x1F900, 0x1F9FF}, // Supplemental Symbols and Pictographs
-        {0x1FA70, 0x1FAFF}  // Symbols and Pictographs Extended-A
-    };
+inline std::string emoji_unicode(auto& generator)
+{
+   // Define Unicode ranges for emojis
+   static const std::vector<std::pair<char32_t, char32_t>> emoji_ranges = {
+      {0x1F600, 0x1F64F}, // Emoticons
+      {0x1F300, 0x1F5FF}, // Misc Symbols and Pictographs
+      {0x1F680, 0x1F6FF}, // Transport and Map Symbols
+      {0x2600, 0x26FF}, // Misc symbols
+      {0x2700, 0x27BF}, // Dingbats
+      {0x1F900, 0x1F9FF}, // Supplemental Symbols and Pictographs
+      {0x1FA70, 0x1FAFF} // Symbols and Pictographs Extended-A
+   };
 
-    // Calculate total number of emojis
-    size_t total_emojis = 0;
-    for (const auto& range : emoji_ranges) {
-        total_emojis += range.second - range.first + 1;
-    }
+   // Calculate total number of emojis
+   size_t total_emojis = 0;
+   for (const auto& range : emoji_ranges) {
+      total_emojis += range.second - range.first + 1;
+   }
 
-    // Generate a random emoji code point
-    std::uniform_int_distribution<size_t> dis(0, total_emojis - 1);
-    size_t random_index = dis(generator);
+   // Generate a random emoji code point
+   std::uniform_int_distribution<size_t> dis(0, total_emojis - 1);
+   size_t random_index = dis(generator);
 
-    char32_t cpoint = 0;
-    for (const auto& range : emoji_ranges) {
-        size_t range_size = range.second - range.first + 1;
-        if (random_index < range_size) {
-            cpoint = char32_t(range.first + random_index);
-            break;
-        }
-        random_index -= range_size;
-    }
+   char32_t cpoint = 0;
+   for (const auto& range : emoji_ranges) {
+      size_t range_size = range.second - range.first + 1;
+      if (random_index < range_size) {
+         cpoint = char32_t(range.first + random_index);
+         break;
+      }
+      random_index -= range_size;
+   }
 
-    // Convert the code point to UTF-8
-    std::string result;
-    if (cpoint <= 0x7F) {
-        result.push_back(static_cast<char>(cpoint));
-    } else if (cpoint <= 0x7FF) {
-        result.push_back(static_cast<char>(0xC0 | ((cpoint >> 6) & 0x1F)));
-        result.push_back(static_cast<char>(0x80 | (cpoint & 0x3F)));
-    } else if (cpoint <= 0xFFFF) {
-        result.push_back(static_cast<char>(0xE0 | ((cpoint >> 12) & 0x0F)));
-        result.push_back(static_cast<char>(0x80 | ((cpoint >> 6) & 0x3F)));
-        result.push_back(static_cast<char>(0x80 | (cpoint & 0x3F)));
-    } else {
-        result.push_back(static_cast<char>(0xF0 | ((cpoint >> 18) & 0x07)));
-        result.push_back(static_cast<char>(0x80 | ((cpoint >> 12) & 0x3F)));
-        result.push_back(static_cast<char>(0x80 | ((cpoint >> 6) & 0x3F)));
-        result.push_back(static_cast<char>(0x80 | (cpoint & 0x3F)));
-    }
+   // Convert the code point to UTF-8
+   std::string result;
+   if (cpoint <= 0x7F) {
+      result.push_back(static_cast<char>(cpoint));
+   }
+   else if (cpoint <= 0x7FF) {
+      result.push_back(static_cast<char>(0xC0 | ((cpoint >> 6) & 0x1F)));
+      result.push_back(static_cast<char>(0x80 | (cpoint & 0x3F)));
+   }
+   else if (cpoint <= 0xFFFF) {
+      result.push_back(static_cast<char>(0xE0 | ((cpoint >> 12) & 0x0F)));
+      result.push_back(static_cast<char>(0x80 | ((cpoint >> 6) & 0x3F)));
+      result.push_back(static_cast<char>(0x80 | (cpoint & 0x3F)));
+   }
+   else {
+      result.push_back(static_cast<char>(0xF0 | ((cpoint >> 18) & 0x07)));
+      result.push_back(static_cast<char>(0x80 | ((cpoint >> 12) & 0x3F)));
+      result.push_back(static_cast<char>(0x80 | ((cpoint >> 6) & 0x3F)));
+      result.push_back(static_cast<char>(0x80 | (cpoint & 0x3F)));
+   }
 
-    return result;
+   return result;
 }
 
 template <class T>
@@ -491,10 +495,7 @@ struct test_generator
       return static_cast<V>(dis(gen));
    }
 
-   void insertUnicodeInJSON(std::string& jsonString)
-   {
-       jsonString += emoji_unicode(gen);
-   }
+   void insertUnicodeInJSON(std::string& jsonString) { jsonString += emoji_unicode(gen); }
 
    std::string generateString()
    {
@@ -644,7 +645,7 @@ auto benchmark_tester()
 #else
    constexpr size_t N = 30;
 #endif
-   
+
    expect(!glz::write_file_json(obj, "benchmark_minified.json", std::string{}));
 
    if (glz::write_json(obj, buffer)) {
