@@ -181,7 +181,7 @@ namespace glz::detail
    inline sv read_json_number(auto&& it) noexcept
    {
       auto start = it;
-      while (numeric_table[*it]) {
+      while (numeric_table[uint8_t(*it)]) {
          ++it;
       }
       return {start, size_t(it - start)};

@@ -7177,6 +7177,7 @@ struct glz::meta<string_tester>
    static constexpr auto value = object("val1", &T::val1);
 };
 
+// Former address santizer issues
 suite address_sanitizer_test = [] {
    "address_sanitizer"_test = [] {
       string_tester obj{};
@@ -7184,6 +7185,12 @@ suite address_sanitizer_test = [] {
       auto res = glz::read_json<string_tester>(buffer);
       expect(bool(res));
       [[maybe_unused]] auto parsed = glz::write_json(res.value());
+   };
+   
+   "address_santizer string read"_test = [] {
+      std::string buffer = "\x9e";
+      my_struct obj{};
+      expect(glz::read_json(obj, buffer));
    };
 };
 

@@ -25,7 +25,7 @@ namespace glz
       auto start = it;
       if (not bool(ctx.error)) [[likely]] {
          auto skip_whitespace = [&] {
-            while (detail::whitespace_table[*it]) {
+            while (detail::whitespace_table[uint8_t(*it)]) {
                ++it;
             }
          };

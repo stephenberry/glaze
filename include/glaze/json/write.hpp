@@ -314,45 +314,27 @@ namespace glz
                            uint64_t swar;
                            std::memcpy(&swar, c, 8);
 
-                           constexpr uint64_t high_mask = repeat_byte8(0b10000000);
                            constexpr uint64_t lo7_mask = repeat_byte8(0b01111111);
-                           const uint64_t hi = swar & high_mask;
-                           uint64_t next;
-                           if (hi == high_mask) {
-                              // unescaped unicode has all high bits set
+                           const uint64_t lo7 = swar & lo7_mask;
+                           const uint64_t quote = (lo7 ^ repeat_byte8('"')) + lo7_mask;
+                           const uint64_t backslash = (lo7 ^ repeat_byte8('\\')) + lo7_mask;
+                           const uint64_t less_32 = (swar & repeat_byte8(0b01100000)) + lo7_mask;
+                           uint64_t next = ~((quote & backslash & less_32) | swar);
+
+                           next &= repeat_byte8(0b10000000);
+                           if (next == 0) {
                               data += 8;
                               c += 8;
                               continue;
                            }
-                           else if (hi == 0) {
-                              // we have only ascii
-                              const uint64_t quote = (swar ^ repeat_byte8('"')) + lo7_mask;
-                              const uint64_t backslash = (swar ^ repeat_byte8('\\')) + lo7_mask;
-                              const uint64_t less_32 = (swar & repeat_byte8(0b01100000)) + lo7_mask;
-                              next = ~(quote & backslash & less_32);
-                           }
-                           else {
-                              const uint64_t lo7 = swar & lo7_mask;
-                              const uint64_t quote = (lo7 ^ repeat_byte8('"')) + lo7_mask;
-                              const uint64_t backslash = (lo7 ^ repeat_byte8('\\')) + lo7_mask;
-                              const uint64_t less_32 = (swar & repeat_byte8(0b01100000)) + lo7_mask;
-                              next = ~((quote & backslash & less_32) | swar);
-                           }
+                           
+                           const auto length = (countr_zero(next) >> 3);
+                           c += length;
+                           data += length;
 
-                           next &= repeat_byte8(0b10000000);
-                           if (next) {
-                              const auto length = (countr_zero(next) >> 3);
-                              c += length;
-                              data += length;
-
-                              std::memcpy(data, &char_escape_table[uint8_t(*c)], 2);
-                              data += 2;
-                              ++c;
-                           }
-                           else {
-                              data += 8;
-                              c += 8;
-                           }
+                           std::memcpy(data, &char_escape_table[uint8_t(*c)], 2);
+                           data += 2;
+                           ++c;
                         }
                      }
 
