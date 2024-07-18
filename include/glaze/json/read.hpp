@@ -684,7 +684,7 @@ namespace glz
                         ctx.error = error_code::unexpected_end;
                         return;
                      }
-                     
+
                      uint64_t chunk;
                      std::memcpy(&chunk, it, 8);
                      const uint64_t test_chars = has_quote(chunk);
@@ -707,14 +707,14 @@ namespace glz
 
                   auto n = size_t(it - start);
                   value.resize(n + string_padding_bytes);
-                  
+
                   auto* p = value.data();
 
                   while (true) {
                      if (start >= it) {
                         break;
                      }
-                     
+
                      std::memcpy(p, start, 8);
                      uint64_t swar;
                      std::memcpy(&swar, p, 8);
@@ -737,7 +737,7 @@ namespace glz
                      if (start >= it) {
                         break;
                      }
-                     
+
                      if ((*start & 0b11100000) == 0) [[unlikely]] {
                         ctx.error = error_code::syntax_error;
                         return;
@@ -768,7 +768,7 @@ namespace glz
                         --n;
                      }
                   }
-                  
+
                   value.resize(n);
                   ++it;
                }
@@ -808,7 +808,7 @@ namespace glz
 
                if constexpr (not Opts.raw_string) {
                   static constexpr auto string_padding_bytes = 8;
-                  
+
                   if (size_t(end - it) >= 8) {
                      auto start = it;
                      const auto end8 = end - 8;
@@ -816,7 +816,7 @@ namespace glz
                         if (it >= end8) [[unlikely]] {
                            break;
                         }
-                        
+
                         uint64_t chunk;
                         std::memcpy(&chunk, it, 8);
                         const uint64_t test_chars = has_quote(chunk);
@@ -836,13 +836,13 @@ namespace glz
                            it += 8;
                         }
                      }
-                     
+
                      while (it[-1] == '\\') [[unlikely]] {
                         // if we ended on an escape character then we need to rewind
                         // because we lost our context
                         --it;
                      }
-                     
+
                      for (; it < end; ++it) {
                         if (*it == '"') {
                            auto* prev = it - 1;
@@ -854,24 +854,24 @@ namespace glz
                            }
                         }
                      }
-                     
+
                      ctx.error = error_code::unexpected_end;
                      return;
-                     
-                     continue_decode:
-                     
+
+                  continue_decode:
+
                      const auto available_padding = size_t(end - it);
                      auto n = size_t(it - start);
                      if (available_padding >= 8) [[likely]] {
                         value.resize(n + string_padding_bytes);
-                        
+
                         auto* p = value.data();
 
                         while (true) {
                            if (start >= it) {
                               break;
                            }
-                           
+
                            std::memcpy(p, start, 8);
                            uint64_t swar;
                            std::memcpy(&swar, p, 8);
@@ -894,7 +894,7 @@ namespace glz
                            if (start >= it) {
                               break;
                            }
-                           
+
                            if ((*start & 0b11100000) == 0) [[unlikely]] {
                               ctx.error = error_code::syntax_error;
                               return;
@@ -925,7 +925,7 @@ namespace glz
                               --n;
                            }
                         }
-                        
+
                         value.resize(n);
                         ++it;
                      }
@@ -933,7 +933,7 @@ namespace glz
                         // For large inputs this case of running out of buffer is very rare
                         value.resize(n);
                         auto* p = value.data();
-                        
+
                         it = start;
                         while (it < end) [[likely]] {
                            *p = *it;
@@ -966,17 +966,17 @@ namespace glz
                               ++p;
                            }
                         }
-                        
+
                         ctx.error = error_code::unexpected_end;
                      }
                   }
                   else {
                      // For short strings
-                     
+
                      std::array<char, 8> buffer{};
-                     
+
                      auto* p = buffer.data();
-                     
+
                      while (it < end) [[likely]] {
                         *p = *it;
                         if (*it == '"') {
@@ -1008,7 +1008,7 @@ namespace glz
                            ++p;
                         }
                      }
-                     
+
                      ctx.error = error_code::unexpected_end;
                   }
                }

@@ -7186,7 +7186,7 @@ suite address_sanitizer_test = [] {
       expect(bool(res));
       [[maybe_unused]] auto parsed = glz::write_json(res.value());
    };
-   
+
    "address_santizer string read"_test = [] {
       std::string buffer = "\x9e";
       my_struct obj{};

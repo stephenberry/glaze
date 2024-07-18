@@ -251,7 +251,8 @@ namespace glz::detail
    }
 
    template <class Char>
-   [[nodiscard]] GLZ_ALWAYS_INLINE uint32_t handle_unicode_code_point(const Char*& it, Char*& dst, const Char* end) noexcept
+   [[nodiscard]] GLZ_ALWAYS_INLINE uint32_t handle_unicode_code_point(const Char*& it, Char*& dst,
+                                                                      const Char* end) noexcept
    {
       using namespace unicode;
 
@@ -521,26 +522,26 @@ namespace glz::detail
       return (chunk & repeat_byte8(0b11110000u));
    }
 
-#define GLZ_SKIP_WS(RETURN)                        \
-   if constexpr (!Opts.minified) {                 \
-      if constexpr (Opts.comments) {               \
-         while (whitespace_comment_table[uint8_t(*it)]) {   \
-            if (*it == '/') [[unlikely]] {         \
-               skip_comment(ctx, it, end);         \
-               if (bool(ctx.error)) [[unlikely]] { \
-                  return RETURN;                   \
-               }                                   \
-            }                                      \
-            else [[likely]] {                      \
-               ++it;                               \
-            }                                      \
-         }                                         \
-      }                                            \
-      else {                                       \
-         while (whitespace_table[uint8_t(*it)]) {           \
-            ++it;                                  \
-         }                                         \
-      }                                            \
+#define GLZ_SKIP_WS(RETURN)                               \
+   if constexpr (!Opts.minified) {                        \
+      if constexpr (Opts.comments) {                      \
+         while (whitespace_comment_table[uint8_t(*it)]) { \
+            if (*it == '/') [[unlikely]] {                \
+               skip_comment(ctx, it, end);                \
+               if (bool(ctx.error)) [[unlikely]] {        \
+                  return RETURN;                          \
+               }                                          \
+            }                                             \
+            else [[likely]] {                             \
+               ++it;                                      \
+            }                                             \
+         }                                                \
+      }                                                   \
+      else {                                              \
+         while (whitespace_table[uint8_t(*it)]) {         \
+            ++it;                                         \
+         }                                                \
+      }                                                   \
    }
 
    // skip whitespace

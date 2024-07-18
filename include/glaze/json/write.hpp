@@ -327,7 +327,7 @@ namespace glz
                               c += 8;
                               continue;
                            }
-                           
+
                            const auto length = (countr_zero(next) >> 3);
                            c += length;
                            data += length;
