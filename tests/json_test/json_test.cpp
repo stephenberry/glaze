@@ -8677,13 +8677,17 @@ suite minify_prettify_safety = [] {
    "invalid minify"_test = [] {
       std::string buffer("f");
       auto minified = glz::minify_json(buffer);
-      expect(minified == "false") << minified;
+      expect(minified == "false");
+      
+      buffer = "\"";
+      minified = glz::minify_json(buffer);
+      expect(minified == "");
    };
 
    "invalid prettify"_test = [] {
       std::string_view buffer = "\"";
       auto prettified = glz::prettify_json(buffer);
-      expect(prettified == "") << prettified;
+      expect(prettified == "");
    };
 };
 

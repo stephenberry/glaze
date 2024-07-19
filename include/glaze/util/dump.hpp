@@ -207,13 +207,15 @@ namespace glz::detail
       ix += n;
    }
 
-   template <class B>
+   template <bool Checked = true, class B>
    GLZ_ALWAYS_INLINE void dump_not_empty(const sv str, B& b, auto& ix) noexcept
    {
       const auto n = str.size();
       if constexpr (vector_like<B>) {
-         if (ix + n > b.size()) [[unlikely]] {
-            b.resize((std::max)(b.size() * 2, ix + n));
+         if constexpr (Checked) {
+            if (ix + n > b.size()) [[unlikely]] {
+               b.resize((std::max)(b.size() * 2, ix + n));
+            }
          }
          std::memcpy(b.data() + ix, str.data(), n);
       }
@@ -223,14 +225,16 @@ namespace glz::detail
       ix += n;
    }
 
-   template <class B>
+   template <bool Checked = true, class B>
    GLZ_ALWAYS_INLINE void dump_maybe_empty(const sv str, B& b, auto& ix) noexcept
    {
       const auto n = str.size();
       if (n) {
          if constexpr (vector_like<B>) {
-            if (ix + n > b.size()) [[unlikely]] {
-               b.resize((std::max)(b.size() * 2, ix + n));
+            if constexpr (Checked) {
+               if (ix + n > b.size()) [[unlikely]] {
+                  b.resize((std::max)(b.size() * 2, ix + n));
+               }
             }
             std::memcpy(b.data() + ix, str.data(), n);
          }
