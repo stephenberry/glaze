@@ -45,7 +45,7 @@ namespace glz
             switch (json_types[uint8_t(*it)]) {
             case String: {
                const auto value = read_json_string<Opts>(it, end);
-               dump<false>(value, b, ix); // we couldn't have gotten here without a quote
+               dump_maybe_empty<false>(value, b, ix);
                skip_whitespace();
                break;
             }
