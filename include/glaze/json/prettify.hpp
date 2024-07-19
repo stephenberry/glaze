@@ -26,7 +26,7 @@ namespace glz
             switch (json_types[uint8_t(*it)]) {
             case String: {
                const auto value = read_json_string<Opts>(it, end);
-               dump_not_empty(value, b, ix);
+               dump_maybe_empty(value, b, ix);
                break;
             }
             case Comma: {

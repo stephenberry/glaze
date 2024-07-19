@@ -8145,7 +8145,7 @@ struct ticker_t
 };
 
 suite ticker_tests = [] {
-   std::string_view json = R"({
+   std::string json = R"({
   "time": 1686621452000000000,
   "exchange": "SHFE",
   "symbol": "rb2310",
@@ -8670,6 +8670,20 @@ suite nested_variants = [] {
 
       expect(not ec) << glz::format_error(ec);
       expect(std::get<var_a>(v.m1).m1 == 5);
+   };
+};
+
+suite minify_prettify_safety = [] {
+   "invalid minify"_test = [] {
+      std::string buffer("f");
+      auto minified = glz::minify_json(buffer);
+      expect(minified == "false") << minified;
+   };
+   
+   "invalid prettify"_test = [] {
+      std::string_view buffer = "\"";
+      auto prettified = glz::prettify_json(buffer);
+      expect(prettified == "") << prettified;
    };
 };
 

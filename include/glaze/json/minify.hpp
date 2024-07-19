@@ -133,12 +133,14 @@ namespace glz
          }
       }
 
-      template <opts Opts, contiguous In, output_buffer Out>
+      template <opts Opts, class In, output_buffer Out>
+         requires (contiguous<In> && resizable<In>)
       inline void minify_json(is_context auto&& ctx, In&& in, Out&& out) noexcept
       {
          if (in.empty()) {
             return;
          }
+         in.resize(in.size() + padding_bytes);
 
          if constexpr (resizable<Out>) {
             out.resize(in.size() + padding_bytes);
@@ -152,6 +154,7 @@ namespace glz
          if constexpr (resizable<Out>) {
             out.resize(ix);
          }
+         in.resize(in.size() - padding_bytes);
       }
    }
 
@@ -160,14 +163,14 @@ namespace glz
    // The detail version can be used if error context is needed
 
    template <opts Opts = opts{}>
-   inline void minify_json(const auto& in, auto& out) noexcept
+   inline void minify_json(resizable auto& in, auto& out) noexcept
    {
       context ctx{};
       detail::minify_json<Opts>(ctx, in, out);
    }
 
    template <opts Opts = opts{}>
-   inline std::string minify_json(const auto& in) noexcept
+   inline std::string minify_json(resizable auto& in) noexcept
    {
       context ctx{};
       std::string out{};
@@ -183,7 +186,7 @@ namespace glz
    }
 
    template <opts Opts = opts{}>
-   inline std::string minify_jsonc(const auto& in) noexcept
+   inline std::string minify_jsonc(resizable auto& in) noexcept
    {
       context ctx{};
       std::string out{};
