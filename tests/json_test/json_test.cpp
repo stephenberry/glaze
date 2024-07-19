@@ -418,12 +418,11 @@ suite basic_types = [] {
       expect(num == -0);
    };
    
-   // TODO: Should this be improved? Current output is: 
-   /*"float write"_test = [] {
+   "float write"_test = [] {
        std::string buffer{};
        expect(not glz::write_json(-8536070.f, buffer));
        expect(buffer == "-8536070") << buffer;
-    };*/
+    };
 
    "int write"_test = [] {
       std::string buffer{};
