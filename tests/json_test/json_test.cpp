@@ -8684,13 +8684,28 @@ suite minify_prettify_safety = [] {
    "invalid minify"_test = [] {
       std::string buffer("f");
       auto minified = glz::minify_json(buffer);
-      expect(minified == "false") << minified;
+      expect(minified == "false");
+
+      buffer = "\"";
+      minified = glz::minify_json(buffer);
+      expect(minified == "");
+
+      buffer = "\" ";
+      minified = glz::minify_json(buffer);
+      expect(minified == "");
    };
 
    "invalid prettify"_test = [] {
       std::string_view buffer = "\"";
       auto prettified = glz::prettify_json(buffer);
-      expect(prettified == "") << prettified;
+      expect(prettified == "");
+   };
+
+   "prettify"_test = [] {
+      const char* d = "{{{{{{{{{{{[{{{[{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{";
+      std::vector<char> buf{d, d + std::strlen(d)};
+      buf.push_back('\0');
+      auto beautiful = glz::prettify_json(buf);
    };
 };
 

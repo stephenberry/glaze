@@ -69,10 +69,10 @@ namespace glz
                dump<'['>(b, ix);
                ++it;
                ++indent;
-               state[indent] = Array_Start;
                if (size_t(indent) >= state.size()) [[unlikely]] {
                   state.resize(state.size() * 2);
                }
+               state[indent] = Array_Start;
                if constexpr (Opts.new_lines_in_arrays) {
                   if (*it != ']') {
                      append_new_line<use_tabs, indent_width>(b, ix, indent);
@@ -116,10 +116,10 @@ namespace glz
                dump<'{'>(b, ix);
                ++it;
                ++indent;
-               state[indent] = Object_Start;
                if (size_t(indent) >= state.size()) [[unlikely]] {
                   state.resize(state.size() * 2);
                }
+               state[indent] = Object_Start;
                if (*it != '}') {
                   append_new_line<use_tabs, indent_width>(b, ix, indent);
                }
