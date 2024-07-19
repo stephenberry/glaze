@@ -8678,7 +8678,7 @@ suite minify_prettify_safety = [] {
       std::string buffer("f");
       auto minified = glz::minify_json(buffer);
       expect(minified == "false");
-      
+
       buffer = "\"";
       minified = glz::minify_json(buffer);
       expect(minified == "");
