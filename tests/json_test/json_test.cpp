@@ -404,7 +404,28 @@ suite basic_types = [] {
       buffer.clear();
       expect(not glz::write_json(-0.0, buffer));
       expect(buffer == "-0") << buffer;
+      buffer.clear();
+      expect(not glz::write_json(-8536070, buffer));
+      expect(buffer == "-8536070") << buffer;
    };
+   
+   "float write"_test = [] {
+      std::string buffer{};
+      expect(not glz::write_json(3.14f, buffer));
+      expect(buffer == "3.14") << buffer;
+      buffer.clear();
+      expect(not glz::write_json(9.81f, buffer));
+      expect(buffer == "9.81") << buffer;
+      buffer.clear();
+      expect(not glz::write_json(0.0f, buffer));
+      expect(buffer == "0") << buffer;
+      buffer.clear();
+      expect(not glz::write_json(-0.0f, buffer));
+      expect(buffer == "-0") << buffer;
+      buffer.clear();
+      expect(not glz::write_json(-8536070.f, buffer));
+      expect(buffer == "-8536070") << buffer;
+    };
 
    "double read valid"_test = [] {
       double num{};
@@ -417,12 +438,6 @@ suite basic_types = [] {
       expect(glz::read_json(num, "-0") == glz::error_code::none);
       expect(num == -0);
    };
-   
-   "float write"_test = [] {
-       std::string buffer{};
-       expect(not glz::write_json(-8536070.f, buffer));
-       expect(buffer == "-8536070") << buffer;
-    };
 
    "int write"_test = [] {
       std::string buffer{};
