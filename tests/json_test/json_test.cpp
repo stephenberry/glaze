@@ -8679,7 +8679,7 @@ suite minify_prettify_safety = [] {
       auto minified = glz::minify_json(buffer);
       expect(minified == "false") << minified;
    };
-   
+
    "invalid prettify"_test = [] {
       std::string_view buffer = "\"";
       auto prettified = glz::prettify_json(buffer);

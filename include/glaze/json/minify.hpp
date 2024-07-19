@@ -134,7 +134,7 @@ namespace glz
       }
 
       template <opts Opts, class In, output_buffer Out>
-         requires (contiguous<In> && resizable<In>)
+         requires(contiguous<In> && resizable<In>)
       inline void minify_json(is_context auto&& ctx, In&& in, Out&& out) noexcept
       {
          if (in.empty()) {
