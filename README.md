@@ -749,6 +749,10 @@ By default Glaze is strictly conformant with the latest JSON standard except in 
 - `validate_trailing_whitespace`
   This option validates the trailing whitespace in a parsed document. Because Glaze parses C++ structs, there is typically no need to continue parsing after the object of interest has been read. Turn on this option if you want to ensure that the rest of the document has valid whitespace, otherwise Glaze will just ignore the content after the content of interest has been parsed.
 
+> [!NOTE]
+>
+> Glaze does not automatically unicode escape control characters (e.g. `"\x1f"` to `"\u001f"`), as this poses a risk of embedding null characters and other invisible characters in strings. A compile time option will be added to enable these conversions (open issue: [unicode escaped write](https://github.com/stephenberry/glaze/issues/812)), but it will not be the default behavior.
+
 ## Skip
 
 It can be useful to acknowledge a keys existence in an object to prevent errors, and yet the value may not be needed or exist in C++. These cases are handled by registering a `glz::skip` type with the meta data.
