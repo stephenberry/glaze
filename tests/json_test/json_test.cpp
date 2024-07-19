@@ -8682,6 +8682,10 @@ suite minify_prettify_safety = [] {
       buffer = "\"";
       minified = glz::minify_json(buffer);
       expect(minified == "");
+      
+      buffer = "\" ";
+      minified = glz::minify_json(buffer);
+      expect(minified == "");
    };
 
    "invalid prettify"_test = [] {
