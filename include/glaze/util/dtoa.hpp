@@ -1049,9 +1049,7 @@ namespace glz
             else {
                /* dot after first digit */
                /* such as 1.234, 1234.0, 123400000000000000000.0 */
-               std::memset(buffer, '0', 8);
-               std::memset(buffer + 8, '0', 8);
-               std::memset(buffer + 16, '0', 8);
+               std::memset(buffer, '0', 24);
                auto num_hdr = buffer + 1;
                auto num_end = write_u64_len_15_to_17_trim(num_hdr, sig_dec);
                std::memmove(buffer, buffer + 1, dot_pos); // shift characters to the left
