@@ -8689,13 +8689,13 @@ suite minify_prettify_safety = [] {
       auto prettified = glz::prettify_json(buffer);
       expect(prettified == "");
    };
-   
-   "prettify"_test=[]{
-          const char* d="{{{{{{{{{{{[{{{[{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{";
-          std::vector<char> buf{d,d+std::strlen(d)};
-          buf.push_back('\0');
-          auto beautiful = glz::prettify_json(buf);
-      };
+
+   "prettify"_test = [] {
+      const char* d = "{{{{{{{{{{{[{{{[{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{";
+      std::vector<char> buf{d, d + std::strlen(d)};
+      buf.push_back('\0');
+      auto beautiful = glz::prettify_json(buf);
+   };
 };
 
 int main()
