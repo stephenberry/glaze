@@ -13,6 +13,11 @@
 
 namespace glz
 {
+   using u64 = uint64_t;
+   using i32 = int32_t;
+   using u32 = uint32_t;
+   using u8 = uint8_t;
+
    // Source: https://github.com/ibireme/yyjson/blob/master/src/yyjson.c
 
    /** Multiplies two 64-bit unsigned integers (a * b),
@@ -874,6 +879,128 @@ namespace glz
       *exp_dec = k;
    }
 
+   alignas(2) constexpr char digit_table[200] = {
+      '0', '0', '0', '1', '0', '2', '0', '3', '0', '4', '0', '5', '0', '6', '0', '7', '0', '8', '0', '9', '1', '0', '1',
+      '1', '1', '2', '1', '3', '1', '4', '1', '5', '1', '6', '1', '7', '1', '8', '1', '9', '2', '0', '2', '1', '2', '2',
+      '2', '3', '2', '4', '2', '5', '2', '6', '2', '7', '2', '8', '2', '9', '3', '0', '3', '1', '3', '2', '3', '3', '3',
+      '4', '3', '5', '3', '6', '3', '7', '3', '8', '3', '9', '4', '0', '4', '1', '4', '2', '4', '3', '4', '4', '4', '5',
+      '4', '6', '4', '7', '4', '8', '4', '9', '5', '0', '5', '1', '5', '2', '5', '3', '5', '4', '5', '5', '5', '6', '5',
+      '7', '5', '8', '5', '9', '6', '0', '6', '1', '6', '2', '6', '3', '6', '4', '6', '5', '6', '6', '6', '7', '6', '8',
+      '6', '9', '7', '0', '7', '1', '7', '2', '7', '3', '7', '4', '7', '5', '7', '6', '7', '7', '7', '8', '7', '9', '8',
+      '0', '8', '1', '8', '2', '8', '3', '8', '4', '8', '5', '8', '6', '8', '7', '8', '8', '8', '9', '9', '0', '9', '1',
+      '9', '2', '9', '3', '9', '4', '9', '5', '9', '6', '9', '7', '9', '8', '9', '9'};
+
+   inline u8* write_u32_len_8(u32 val, u8* buf) noexcept
+   {
+      u32 aa, bb, cc, dd, aabb, ccdd; /* 8 digits: aabbccdd */
+      aabb = (u32)(((u64)val * 109951163) >> 40); /* (val / 10000) */
+      ccdd = val - aabb * 10000; /* (val % 10000) */
+      aa = (aabb * 5243) >> 19; /* (aabb / 100) */
+      cc = (ccdd * 5243) >> 19; /* (ccdd / 100) */
+      bb = aabb - aa * 100; /* (aabb % 100) */
+      dd = ccdd - cc * 100; /* (ccdd % 100) */
+      std::memcpy(buf + 0, digit_table + aa * 2, 2);
+      std::memcpy(buf + 2, digit_table + bb * 2, 2);
+      std::memcpy(buf + 4, digit_table + cc * 2, 2);
+      std::memcpy(buf + 6, digit_table + dd * 2, 2);
+      return buf + 8;
+   }
+
+   inline u8* write_u32_len_1_8(u32 val, u8* buf) noexcept
+   {
+      u32 aa, bb, cc, dd, aabb, bbcc, ccdd, lz;
+
+      if (val < 100) { /* 1-2 digits: aa */
+         lz = val < 10; /* leading zero: 0 or 1 */
+         std::memcpy(buf + 0, digit_table + val * 2 + lz, 2);
+         buf -= lz;
+         return buf + 2;
+      }
+      else if (val < 10000) { /* 3-4 digits: aabb */
+         aa = (val * 5243) >> 19; /* (val / 100) */
+         bb = val - aa * 100; /* (val % 100) */
+         lz = aa < 10; /* leading zero: 0 or 1 */
+         std::memcpy(buf + 0, digit_table + aa * 2 + lz, 2);
+         buf -= lz;
+         std::memcpy(buf + 2, digit_table + bb * 2, 2);
+         return buf + 4;
+      }
+      else if (val < 1000000) { /* 5-6 digits: aabbcc */
+         aa = (u32)(((u64)val * 429497) >> 32); /* (val / 10000) */
+         bbcc = val - aa * 10000; /* (val % 10000) */
+         bb = (bbcc * 5243) >> 19; /* (bbcc / 100) */
+         cc = bbcc - bb * 100; /* (bbcc % 100) */
+         lz = aa < 10; /* leading zero: 0 or 1 */
+         std::memcpy(buf + 0, digit_table + aa * 2 + lz, 2);
+         buf -= lz;
+         std::memcpy(buf + 2, digit_table + bb * 2, 2);
+         std::memcpy(buf + 4, digit_table + cc * 2, 2);
+         return buf + 6;
+      }
+      else { /* 7-8 digits: aabbccdd */
+         aabb = (u32)(((u64)val * 109951163) >> 40); /* (val / 10000) */
+         ccdd = val - aabb * 10000; /* (val % 10000) */
+         aa = (aabb * 5243) >> 19; /* (aabb / 100) */
+         cc = (ccdd * 5243) >> 19; /* (ccdd / 100) */
+         bb = aabb - aa * 100; /* (aabb % 100) */
+         dd = ccdd - cc * 100; /* (ccdd % 100) */
+         lz = aa < 10; /* leading zero: 0 or 1 */
+         std::memcpy(buf + 0, digit_table + aa * 2 + lz, 2);
+         buf -= lz;
+         std::memcpy(buf + 2, digit_table + bb * 2, 2);
+         std::memcpy(buf + 4, digit_table + cc * 2, 2);
+         std::memcpy(buf + 6, digit_table + dd * 2, 2);
+         return buf + 8;
+      }
+   }
+
+   /** Write an unsigned integer with a length of 1 to 16. */
+   inline u8* write_u64_len_1_to_16(u64 val, u8* buf) noexcept
+   {
+      u64 hgh;
+      u32 low;
+      if (val < 100000000) { /* 1-8 digits */
+         buf = write_u32_len_1_8((u32)val, buf);
+         return buf;
+      }
+      else { /* 9-16 digits */
+         hgh = val / 100000000; /* (val / 100000000) */
+         low = (u32)(val - hgh * 100000000); /* (val % 100000000) */
+         buf = write_u32_len_1_8((u32)hgh, buf);
+         buf = write_u32_len_8(low, buf);
+         return buf;
+      }
+   }
+
+   /** Write an unsigned integer with a length of 1 to 17. */
+   constexpr u8* write_u64_len_1_to_17(u64 val, u8* buf) noexcept
+   {
+      u64 hgh;
+      u32 mid, low, one;
+      if (val >= (u64)100000000 * 10000000) { /* len: 16 to 17 */
+         hgh = val / 100000000; /* (val / 100000000) */
+         low = (u32)(val - hgh * 100000000); /* (val % 100000000) */
+         one = (u32)(hgh / 100000000); /* (hgh / 100000000) */
+         mid = (u32)(hgh - (u64)one * 100000000); /* (hgh % 100000000) */
+         *buf = (u8)((u8)one + (u8)'0');
+         buf += one > 0;
+         buf = write_u32_len_8(mid, buf);
+         buf = write_u32_len_8(low, buf);
+         return buf;
+      }
+      else if (val >= (u64)100000000) { /* len: 9 to 15 */
+         hgh = val / 100000000; /* (val / 100000000) */
+         low = (u32)(val - hgh * 100000000); /* (val % 100000000) */
+         buf = write_u32_len_1_8((u32)hgh, buf);
+         buf = write_u32_len_8(low, buf);
+         return buf;
+      }
+      else { /* len: 1 to 8 */
+         buf = write_u32_len_1_8((u32)val, buf);
+         return buf;
+      }
+   }
+
    /** Trailing zero count table for number 0 to 99.
     (generate with misc/make_tables.c) */
    inline constexpr uint8_t dec_trailing_zero_table[] = {
@@ -967,88 +1094,130 @@ namespace glz
       }
    }
 
+   /** Write a signed integer in the range -324 to 308. */
+   inline u8* write_f64_exp(i32 exp, u8* buf) noexcept
+   {
+      buf[0] = '-';
+      buf += exp < 0;
+      exp = exp < 0 ? -exp : exp;
+      if (exp < 100) {
+         u32 lz = exp < 10;
+         std::memcpy(buf + 0, digit_table + (u32)exp * 2 + lz, 2);
+         return buf + 2 - lz;
+      }
+      else {
+         u32 hi = ((u32)exp * 656) >> 16; /* exp / 100 */
+         u32 lo = (u32)exp - hi * 100; /* exp % 100 */
+         buf[0] = (u8)((u8)hi + (u8)'0');
+         std::memcpy(buf + 1, digit_table + lo * 2, 2);
+         return buf + 3;
+      }
+   }
+
    consteval uint32_t numbits(uint32_t x) noexcept { return x < 2 ? x : 1 + numbits(x >> 1); }
 
-   template <std::floating_point T>
-   inline auto* to_chars(auto* buffer, T val) noexcept
+   /* double number bits */
+   constexpr auto F64_BITS = 64;
+
+   /* double number exponent part bits */
+   constexpr auto F64_EXP_BITS = 11;
+
+   /* double number significand part bits */
+   constexpr auto F64_SIG_BITS = 52;
+
+   /* double number significand part bits (with 1 hidden bit) */
+   constexpr auto F64_SIG_FULL_BITS = 53;
+
+   /* double number significand bit mask */
+   constexpr auto F64_SIG_MASK = (uint64_t(0x000FFFFFul) << 32u) + 0xFFFFFFFFul;
+
+   /* double number exponent bit mask */
+   constexpr auto F64_EXP_MASK = (uint64_t(0x7FF00000ul) << 32u) + 0x00000000ul;
+
+   constexpr auto F64_EXP_BIAS = 1023;
+
+   inline uint8_t* to_chars(uint8_t* buf, double val) noexcept
    {
-      static_assert(std::numeric_limits<T>::is_iec559);
-      static_assert(std::numeric_limits<T>::radix == 2);
-      static_assert(std::is_same_v<float, T> || std::is_same_v<double, T>);
+      static_assert(std::numeric_limits<double>::is_iec559);
+      static_assert(std::numeric_limits<double>::radix == 2);
       static_assert(sizeof(float) == 4 && sizeof(double) == 8);
-      using Raw = std::conditional_t<std::is_same_v<float, T>, uint32_t, uint64_t>;
 
-      Raw raw;
-      std::memcpy(&raw, &val, sizeof(T));
+      uint64_t raw;
+      std::memcpy(&raw, &val, sizeof(double));
 
-      /* decode from raw bytes from IEEE-754 double format. */
-      constexpr uint32_t exponent_bits =
-         numbits(std::numeric_limits<T>::max_exponent - std::numeric_limits<T>::min_exponent + 1);
-      constexpr Raw sig_mask = Raw(-1) >> (exponent_bits + 1);
-      bool sign = (raw >> (sizeof(T) * 8 - 1));
-      uint64_t sig_raw = raw & sig_mask;
-      int32_t exp_raw = raw << 1 >> (sizeof(Raw) * 8 - exponent_bits);
+      u64 sig_bin, sig_dec, sig_raw;
+      i32 exp_bin, exp_dec, sig_len, dot_pos, i, max;
+      u32 exp_raw, hi, lo;
+      u8 *hdr, *num_hdr, *num_end, *dot_end;
+      bool sign;
 
-      if (exp_raw == (uint32_t(1) << exponent_bits) - 1) [[unlikely]] {
+      /* decode raw bytes from IEEE-754 double format. */
+      sign = (bool)(raw >> (F64_BITS - 1));
+      sig_raw = raw & F64_SIG_MASK;
+      exp_raw = (u32)((raw & F64_EXP_MASK) >> F64_SIG_BITS);
+
+      /* return inf and nan */
+      if (exp_raw == ((u32)1 << F64_EXP_BITS) - 1) [[unlikely]] {
          // NaN or Infinity
-         std::memcpy(buffer, "null", 4);
-         return buffer + 4;
+         std::memcpy(buf, "null", 4);
+         return buf + 4;
       }
-      if (sign) {
-         *buffer = '-';
-         ++buffer;
-      }
-      if ((raw << 1) != 0) [[likely]] {
-         uint64_t sig_bin;
-         int32_t exp_bin;
-         if (exp_raw == 0) [[unlikely]] {
-            // subnormal
-            sig_bin = sig_raw;
-            exp_bin = 1 - (std::numeric_limits<T>::max_exponent - 1) - (std::numeric_limits<T>::digits - 1);
-         }
-         else {
-            sig_bin = sig_raw | uint64_t(1ull << (std::numeric_limits<T>::digits - 1));
-            exp_bin =
-               int32_t(exp_raw) - (std::numeric_limits<T>::max_exponent - 1) - (std::numeric_limits<T>::digits - 1);
-         }
 
-         // if constexpr (std::same_as<T, float>) {
-         //    constexpr auto shift = std::numeric_limits<double>::digits - std::numeric_limits<float>::digits;
-         //    sig_bin <<= shift;
-         //    exp_bin -= shift;
-         // }
+      /* add sign for all finite double value, including 0.0 and inf */
+      buf[0] = '-';
+      buf += sign;
+      hdr = buf;
+
+      /* return zero */
+      if ((raw << 1) == 0) {
+         *buf = '0';
+         return buf + 1;
+      }
+
+      if (exp_raw != 0) [[likely]] {
+         /* normal number */
+         sig_bin = sig_raw | ((u64)1 << F64_SIG_BITS);
+         exp_bin = (i32)exp_raw - F64_EXP_BIAS - F64_SIG_BITS;
+
+         /* fast path for small integer number without fraction */
+         if (-F64_SIG_BITS <= exp_bin && exp_bin <= 0) {
+            if (u32(std::countr_zero(sig_bin)) >= (u32)-exp_bin) {
+               /* number is integer in range 1 to 0x1FFFFFFFFFFFFF */
+               sig_dec = sig_bin >> -exp_bin;
+               buf = write_u64_len_1_to_16(sig_dec, buf);
+               return buf;
+            }
+         }
 
          /* binary to decimal */
-         uint64_t sig_dec;
-         int32_t exp_dec;
          f64_bin_to_dec(sig_raw, exp_raw, sig_bin, exp_bin, &sig_dec, &exp_dec);
-         if constexpr (std::same_as<T, float>) {
-            sig_dec *= 100000000;
-            exp_dec -= 8;
-         }
 
-         int32_t sig_len = 17;
-         sig_len -= (sig_dec < 100000000ull * 100000000ull);
-         sig_len -= (sig_dec < 100000000ull * 10000000ull);
+         /* the sig length is 15 to 17 */
+         sig_len = 17;
+         sig_len -= (sig_dec < (u64)100000000 * 100000000);
+         sig_len -= (sig_dec < (u64)100000000 * 10000000);
 
          /* the decimal point position relative to the first digit */
-         int32_t dot_pos = sig_len + exp_dec;
+         dot_pos = sig_len + exp_dec;
 
          if (-6 < dot_pos && dot_pos <= 21) {
             /* no need to write exponent part */
             if (dot_pos <= 0) {
-               auto num_hdr = buffer + (2 - dot_pos);
-               auto num_end = write_u64_len_15_to_17_trim(num_hdr, sig_dec);
-               buffer[0] = '0';
-               buffer[1] = '.';
-               buffer += 2;
-               // we don't have to increment the buffer because we are returning
-               std::memset(buffer, '0', num_hdr - buffer);
+               /* dot before first digit */
+               /* such as 0.1234, 0.000001234 */
+               num_hdr = hdr + (2 - dot_pos);
+               num_end = write_u64_len_15_to_17_trim(num_hdr, sig_dec);
+               hdr[0] = '0';
+               hdr[1] = '.';
+               hdr += 2;
+               max = -dot_pos;
+               for (i = 0; i < max; i++) hdr[i] = '0';
                return num_end;
             }
             else {
                /* dot after first digit */
                /* such as 1.234, 1234.0, 123400000000000000000.0 */
+<<<<<<< Updated upstream
                std::memset(buffer, '0', 8);
                std::memset(buffer + 8, '0', 8);
                std::memset(buffer + 16, '0', 8);
@@ -1057,40 +1226,63 @@ namespace glz
                std::memmove(buffer, buffer + 1, dot_pos); // shift characters to the left
                buffer[dot_pos] = '.';
                return ((num_end - num_hdr) <= dot_pos) ? buffer + dot_pos : num_end;
+=======
+               std::memset(hdr + 0, '0', 8);
+               std::memset(hdr + 8, '0', 8);
+               std::memset(hdr + 16, '0', 8);
+               num_hdr = hdr + 1;
+               num_end = write_u64_len_15_to_17_trim(num_hdr, sig_dec);
+               for (i = 0; i < dot_pos; i++) hdr[i] = hdr[i + 1];
+               hdr[dot_pos] = '.';
+               dot_end = hdr + dot_pos + 2;
+               return dot_end < num_end ? num_end : dot_end;
+>>>>>>> Stashed changes
             }
          }
          else {
             /* write with scientific notation */
             /* such as 1.234e56 */
-            auto end = write_u64_len_15_to_17_trim(buffer + 1, sig_dec);
-            end -= (end == buffer + 2); /* remove '.0', e.g. 2.0e34 -> 2e34 */
+            u8* end = write_u64_len_15_to_17_trim(buf + 1, sig_dec);
+            end -= (end == buf + 2); /* remove '.0', e.g. 2.0e34 -> 2e34 */
             exp_dec += sig_len - 1;
-            buffer[0] = buffer[1];
-            buffer[1] = '.';
-            end[0] = 'E';
-            buffer = end + 1;
-            buffer[0] = '-';
-            buffer += exp_dec < 0;
-            exp_dec = std::abs(exp_dec);
-            if (exp_dec < 100) {
-               uint32_t lz = exp_dec < 10;
-               //*(uint16_t *)buffer = *(const uint16_t *)(char_table + (exp_dec * 2 + lz));
-               std::memcpy(buffer, char_table + (exp_dec * 2 + lz), 2);
-               return buffer + 2 - lz;
-            }
-            else {
-               const uint32_t hi = (uint32_t(exp_dec) * 656) >> 16; /* exp / 100 */
-               const uint32_t lo = uint32_t(exp_dec) - hi * 100; /* exp % 100 */
-               buffer[0] = uint8_t(hi) + '0';
-               std::memcpy(&buffer[1], char_table + (lo * 2), 2);
-               return buffer + 3;
-            }
+            hdr[0] = hdr[1];
+            hdr[1] = '.';
+            end[0] = 'e';
+            buf = write_f64_exp(exp_dec, end + 1);
+            return buf;
          }
       }
-      else [[unlikely]] {
-         *buffer = '0';
-         return buffer + 1;
+      else {
+         /* subnormal number */
+         sig_bin = sig_raw;
+         exp_bin = 1 - F64_EXP_BIAS - F64_SIG_BITS;
+
+         /* binary to decimal */
+         f64_bin_to_dec(sig_raw, exp_raw, sig_bin, exp_bin, &sig_dec, &exp_dec);
+
+         /* write significand part */
+         buf = write_u64_len_1_to_17(sig_dec, buf + 1);
+         hdr[0] = hdr[1];
+         hdr[1] = '.';
+         do {
+            buf--;
+            exp_dec++;
+         } while (*buf == '0');
+         exp_dec += (i32)(buf - hdr - 2);
+         buf += (*buf != '.');
+         buf[0] = 'e';
+         buf++;
+
+         /* write exponent part */
+         buf[0] = '-';
+         buf++;
+         exp_dec = -exp_dec;
+         hi = ((u32)exp_dec * 656) >> 16; /* exp / 100 */
+         lo = (u32)exp_dec - hi * 100; /* exp % 100 */
+         buf[0] = (u8)((u8)hi + (u8)'0');
+         std::memcpy(buf + 1, digit_table + lo * 2, 2);
+         buf += 3;
+         return buf;
       }
    }
-
 }

@@ -76,7 +76,7 @@ namespace glz::detail
                else if constexpr (uint8_t(Opts.float_max_write_precision) == 4) {
                   const auto reduced = static_cast<float>(value);
                   const auto start = data_ptr(b) + ix;
-                  const auto end = glz::to_chars(start, reduced);
+                  const auto end = (std::decay_t<decltype(start)>)glz::to_chars((uint8_t*)start, reduced);
                   ix += size_t(end - start);
                }
                else {
@@ -85,8 +85,14 @@ namespace glz::detail
             }
             else if constexpr (is_any_of<V, float, double>) {
                const auto start = data_ptr(b) + ix;
-               const auto end = glz::to_chars(start, value);
-               ix += size_t(end - start);
+               if constexpr (std::same_as<V, double>) {
+                  const auto end = (std::decay_t<decltype(start)>)glz::to_chars((uint8_t*)start, value);
+                  ix += size_t(end - start);
+               }
+               else {
+                  const auto end = (std::decay_t<decltype(start)>)glz::to_chars((uint8_t*)start, double(value));
+                  ix += size_t(end - start);
+               }
             }
             else if constexpr (is_float128<V>) {
                const auto start = data_ptr(b) + ix;
