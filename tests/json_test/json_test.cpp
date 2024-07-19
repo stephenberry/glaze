@@ -597,6 +597,15 @@ suite container_types = [] {
       expect(glz::read_json(vec2, buffer) == glz::error_code::none);
       expect(vec == vec2);
    };
+   "vector float roundtrip"_test = [] {
+      std::vector<float> vec(100);
+      for (auto& item : vec) item = rand() / (1.0 + rand());
+      std::string buffer{};
+      std::vector<float> vec2{};
+      expect(not glz::write_json(vec, buffer));
+      expect(glz::read_json(vec2, buffer) == glz::error_code::none);
+      expect(vec == vec2);
+   };
    "vector bool roundtrip"_test = [] {
       std::vector<bool> vec(100);
       for (auto&& item : vec) item = rand() / (1.0 + rand());
@@ -1992,11 +2001,23 @@ suite read_tests = [] {
 
    "random doubles"_test = [] {
       std::mt19937_64 g{std::random_device{}()};
-      std::uniform_real_distribution<double> dist{};
+      std::uniform_real_distribution<double> dist{(std::numeric_limits<double>::min)(), (std::numeric_limits<double>::max)()};
 
       std::string buffer{};
       for (size_t i = 0; i < 1000; ++i) {
          double x = dist(g);
+         expect(not glz::write_json(x, buffer));
+         expect(not glz::read_json(x, buffer));
+      }
+   };
+   
+   "random floats"_test = [] {
+      std::mt19937_64 g{std::random_device{}()};
+      std::uniform_real_distribution<float> dist{(std::numeric_limits<float>::min)(), (std::numeric_limits<float>::max)()};
+
+      std::string buffer{};
+      for (size_t i = 0; i < 1000; ++i) {
+         float x = dist(g);
          expect(not glz::write_json(x, buffer));
          expect(not glz::read_json(x, buffer));
       }
