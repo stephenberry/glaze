@@ -962,7 +962,7 @@ namespace glz
    consteval uint32_t numbits(uint32_t x) noexcept { return x < 2 ? x : 1 + numbits(x >> 1); }
 
    template <std::floating_point T>
-   inline auto* to_chars(auto* buffer, T val) noexcept
+   inline auto* to_chars(auto* buf, T val) noexcept
    {
       static_assert(std::numeric_limits<T>::is_iec559);
       static_assert(std::numeric_limits<T>::radix == 2);
@@ -983,105 +983,103 @@ namespace glz
 
       if (exp_raw == (uint32_t(1) << exponent_bits) - 1) [[unlikely]] {
          // NaN or Infinity
-         std::memcpy(buffer, "null", 4);
-         return buffer + 4;
+         std::memcpy(buf, "null", 4);
+         return buf + 4;
       }
       
-      *buffer = '-';
-      buffer += sign;
+      *buf = '-';
+      buf += sign;
       
-      if ((raw << 1) != 0) [[likely]] {
-         uint64_t sig_bin;
-         int32_t exp_bin;
-         if (exp_raw == 0) [[unlikely]] {
-            // subnormal
-            sig_bin = sig_raw;
-            exp_bin = 1 - (std::numeric_limits<T>::max_exponent - 1) - (std::numeric_limits<T>::digits - 1);
+      if ((raw << 1) == 0) [[unlikely]] {
+         *buf = '0';
+         return buf + 1;
+      }
+      
+      uint64_t sig_bin;
+      int32_t exp_bin;
+      if (exp_raw == 0) [[unlikely]] {
+         // subnormal
+         sig_bin = sig_raw;
+         exp_bin = 1 - (std::numeric_limits<T>::max_exponent - 1) - (std::numeric_limits<T>::digits - 1);
+      }
+      else {
+         sig_bin = sig_raw | uint64_t(1ull << (std::numeric_limits<T>::digits - 1));
+         exp_bin =
+            int32_t(exp_raw) - (std::numeric_limits<T>::max_exponent - 1) - (std::numeric_limits<T>::digits - 1);
+      }
+
+      // if constexpr (std::same_as<T, float>) {
+      //    constexpr auto shift = std::numeric_limits<double>::digits - std::numeric_limits<float>::digits;
+      //    sig_bin <<= shift;
+      //    exp_bin -= shift;
+      // }
+
+      /* binary to decimal */
+      uint64_t sig_dec;
+      int32_t exp_dec;
+      f64_bin_to_dec(sig_raw, exp_raw, sig_bin, exp_bin, &sig_dec, &exp_dec);
+      if constexpr (std::same_as<T, float>) {
+         sig_dec *= 100000000;
+         exp_dec -= 8;
+      }
+
+      int32_t sig_len = 17;
+      sig_len -= (sig_dec < 100000000ull * 100000000ull);
+      sig_len -= (sig_dec < 100000000ull * 10000000ull);
+
+      /* the decimal point position relative to the first digit */
+      int32_t dot_pos = sig_len + exp_dec;
+
+      if (-6 < dot_pos && dot_pos <= 21) {
+         /* no need to write exponent part */
+         if (dot_pos <= 0) {
+            auto num_hdr = buf + (2 - dot_pos);
+            auto num_end = write_u64_len_15_to_17_trim(num_hdr, sig_dec);
+            buf[0] = '0';
+            buf[1] = '.';
+            buf += 2;
+            // we don't have to increment the buffer because we are returning
+            std::memset(buf, '0', num_hdr - buf);
+            return num_end;
          }
          else {
-            sig_bin = sig_raw | uint64_t(1ull << (std::numeric_limits<T>::digits - 1));
-            exp_bin =
-               int32_t(exp_raw) - (std::numeric_limits<T>::max_exponent - 1) - (std::numeric_limits<T>::digits - 1);
-         }
-
-         // if constexpr (std::same_as<T, float>) {
-         //    constexpr auto shift = std::numeric_limits<double>::digits - std::numeric_limits<float>::digits;
-         //    sig_bin <<= shift;
-         //    exp_bin -= shift;
-         // }
-
-         /* binary to decimal */
-         uint64_t sig_dec;
-         int32_t exp_dec;
-         f64_bin_to_dec(sig_raw, exp_raw, sig_bin, exp_bin, &sig_dec, &exp_dec);
-         if constexpr (std::same_as<T, float>) {
-            sig_dec *= 100000000;
-            exp_dec -= 8;
-         }
-
-         int32_t sig_len = 17;
-         sig_len -= (sig_dec < 100000000ull * 100000000ull);
-         sig_len -= (sig_dec < 100000000ull * 10000000ull);
-
-         /* the decimal point position relative to the first digit */
-         int32_t dot_pos = sig_len + exp_dec;
-
-         if (-6 < dot_pos && dot_pos <= 21) {
-            /* no need to write exponent part */
-            if (dot_pos <= 0) {
-               auto num_hdr = buffer + (2 - dot_pos);
-               auto num_end = write_u64_len_15_to_17_trim(num_hdr, sig_dec);
-               buffer[0] = '0';
-               buffer[1] = '.';
-               buffer += 2;
-               // we don't have to increment the buffer because we are returning
-               std::memset(buffer, '0', num_hdr - buffer);
-               return num_end;
-            }
-            else {
-               /* dot after first digit */
-               /* such as 1.234, 1234.0, 123400000000000000000.0 */
-               std::memset(buffer, '0', 8);
-               std::memset(buffer + 8, '0', 8);
-               std::memset(buffer + 16, '0', 8);
-               auto num_hdr = buffer + 1;
-               auto num_end = write_u64_len_15_to_17_trim(num_hdr, sig_dec);
-               std::memmove(buffer, buffer + 1, dot_pos); // shift characters to the left
-               buffer[dot_pos] = '.';
-               return ((num_end - num_hdr) <= dot_pos) ? buffer + dot_pos : num_end;
-            }
-         }
-         else {
-            /* write with scientific notation */
-            /* such as 1.234e56 */
-            auto end = write_u64_len_15_to_17_trim(buffer + 1, sig_dec);
-            end -= (end == buffer + 2); /* remove '.0', e.g. 2.0e34 -> 2e34 */
-            exp_dec += sig_len - 1;
-            buffer[0] = buffer[1];
-            buffer[1] = '.';
-            end[0] = 'E';
-            buffer = end + 1;
-            buffer[0] = '-';
-            buffer += exp_dec < 0;
-            exp_dec = std::abs(exp_dec);
-            if (exp_dec < 100) {
-               uint32_t lz = exp_dec < 10;
-               //*(uint16_t *)buffer = *(const uint16_t *)(char_table + (exp_dec * 2 + lz));
-               std::memcpy(buffer, char_table + (exp_dec * 2 + lz), 2);
-               return buffer + 2 - lz;
-            }
-            else {
-               const uint32_t hi = (uint32_t(exp_dec) * 656) >> 16; /* exp / 100 */
-               const uint32_t lo = uint32_t(exp_dec) - hi * 100; /* exp % 100 */
-               buffer[0] = uint8_t(hi) + '0';
-               std::memcpy(&buffer[1], char_table + (lo * 2), 2);
-               return buffer + 3;
-            }
+            /* dot after first digit */
+            /* such as 1.234, 1234.0, 123400000000000000000.0 */
+            std::memset(buf, '0', 8);
+            std::memset(buf + 8, '0', 8);
+            std::memset(buf + 16, '0', 8);
+            auto num_hdr = buf + 1;
+            auto num_end = write_u64_len_15_to_17_trim(num_hdr, sig_dec);
+            std::memmove(buf, buf + 1, dot_pos); // shift characters to the left
+            buf[dot_pos] = '.';
+            return ((num_end - num_hdr) <= dot_pos) ? buf + dot_pos : num_end;
          }
       }
-      else [[unlikely]] {
-         *buffer = '0';
-         return buffer + 1;
+      else {
+         /* write with scientific notation */
+         /* such as 1.234e56 */
+         auto end = write_u64_len_15_to_17_trim(buf + 1, sig_dec);
+         end -= (end == buf + 2); /* remove '.0', e.g. 2.0e34 -> 2e34 */
+         exp_dec += sig_len - 1;
+         buf[0] = buf[1];
+         buf[1] = '.';
+         end[0] = 'E';
+         buf = end + 1;
+         buf[0] = '-';
+         buf += exp_dec < 0;
+         exp_dec = std::abs(exp_dec);
+         if (exp_dec < 100) {
+            uint32_t lz = exp_dec < 10;
+            std::memcpy(buf, char_table + (exp_dec * 2 + lz), 2);
+            return buf + 2 - lz;
+         }
+         else {
+            const uint32_t hi = (uint32_t(exp_dec) * 656) >> 16; /* exp / 100 */
+            const uint32_t lo = uint32_t(exp_dec) - hi * 100; /* exp % 100 */
+            buf[0] = uint8_t(hi) + '0';
+            std::memcpy(&buf[1], char_table + (lo * 2), 2);
+            return buf + 3;
+         }
       }
    }
 
