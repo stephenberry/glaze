@@ -914,20 +914,14 @@ namespace glz
          uint32_t hhii = ffgghhii - ffgg * 10000; /* (val % 10000) */
          uint32_t ff = (ffgg * 5243) >> 19; /* (aabb / 100) */
          uint32_t gg = ffgg - ff * 100; /* (aabb % 100) */
-         //((uint16_t *)buf)[2] = ((const uint16_t *)char_table)[dd];
          std::memcpy(buf + 4, char_table + 2 * dd, 2);
-         //((uint16_t *)buf)[3] = ((const uint16_t *)char_table)[ee];
          std::memcpy(buf + 6, char_table + 2 * ee, 2);
-         //((uint16_t *)buf)[4] = ((const uint16_t *)char_table)[ff];
          std::memcpy(buf + 8, char_table + 2 * ff, 2);
-         //((uint16_t *)buf)[5] = ((const uint16_t *)char_table)[gg];
          std::memcpy(buf + 10, char_table + 2 * gg, 2);
          if (hhii) {
             uint32_t hh = (hhii * 5243) >> 19; /* (ccdd / 100) */
             uint32_t ii = hhii - hh * 100; /* (ccdd % 100) */
-            //((uint16_t *)buf)[6] = ((const uint16_t *)char_table)[hh];
             std::memcpy(buf + 12, char_table + 2 * hh, 2);
-            //((uint16_t *)buf)[7] = ((const uint16_t *)char_table)[ii];
             std::memcpy(buf + 14, char_table + 2 * ii, 2);
             tz1 = dec_trailing_zero_table[hh];
             tz2 = dec_trailing_zero_table[ii];
@@ -947,9 +941,7 @@ namespace glz
          if (ddee) {
             uint32_t dd = (ddee * 5243) >> 19; /* (ddee / 100) */
             uint32_t ee = ddee - dd * 100; /* (ddee % 100) */
-            //((uint16_t *)buf)[2] = ((const uint16_t *)char_table)[dd];
             std::memcpy(buf + 4, char_table + 2 * dd, 2);
-            //((uint16_t *)buf)[3] = ((const uint16_t *)char_table)[ee];
             std::memcpy(buf + 6, char_table + 2 * ee, 2);
             tz1 = dec_trailing_zero_table[dd];
             tz2 = dec_trailing_zero_table[ee];
@@ -994,10 +986,10 @@ namespace glz
          std::memcpy(buffer, "null", 4);
          return buffer + 4;
       }
-      if (sign) {
-         *buffer = '-';
-         ++buffer;
-      }
+      
+      *buffer = '-';
+      buffer += sign;
+      
       if ((raw << 1) != 0) [[likely]] {
          uint64_t sig_bin;
          int32_t exp_bin;

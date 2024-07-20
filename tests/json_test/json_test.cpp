@@ -404,7 +404,54 @@ suite basic_types = [] {
       buffer.clear();
       expect(not glz::write_json(-0.0, buffer));
       expect(buffer == "-0") << buffer;
+      buffer.clear();
+      expect(not glz::write_json(-8536070.0, buffer));
+      expect(buffer == "-8536070") << buffer;
+      buffer.clear();
+      expect(not glz::write_json(8536070.0, buffer));
+      expect(buffer == "8536070") << buffer;
+      buffer.clear();
+      expect(not glz::write_json(1.0 / 0.0, buffer));
+      expect(buffer == "null") << buffer;
    };
+   
+   /*"double roundtrip"_test = [] {
+          for (const double expected:{
+               -0x1.e42427b42cb42p+949,
+              -0x1.3ffff0d0ddb37p+725,
+              0x1.73d40c08b20ffp-395
+      }) {
+              double d{expected};
+              auto str = glz::write_json(d).value();
+              auto restored = glz::read_json<double>(str);
+              expect(restored.has_value());
+              expect(restored.value() == d);
+          }
+      };*/
+   
+   "float write"_test = [] {
+      std::string buffer{};
+      expect(not glz::write_json(3.14f, buffer));
+      expect(buffer == "3.14") << buffer;
+      buffer.clear();
+      expect(not glz::write_json(9.81f, buffer));
+      expect(buffer == "9.81") << buffer;
+      buffer.clear();
+      expect(not glz::write_json(0.0f, buffer));
+      expect(buffer == "0") << buffer;
+      buffer.clear();
+      expect(not glz::write_json(-0.0f, buffer));
+      expect(buffer == "-0") << buffer;
+      buffer.clear();
+      expect(not glz::write_json(-8536070.f, buffer));
+      expect(buffer == "-8536070") << buffer;
+      buffer.clear();
+      expect(not glz::write_json(8536070.f, buffer));
+      expect(buffer == "8536070") << buffer;
+      buffer.clear();
+      expect(not glz::write_json(1.0f / 0.0f, buffer));
+      expect(buffer == "null") << buffer;
+    };
 
    "double read valid"_test = [] {
       double num{};
