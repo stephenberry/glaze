@@ -289,20 +289,29 @@ namespace glz
             }
             else {
                /* dot after first digit */
-               auto num_hdr = buf;
+               /* such as 1.234, 1234.0, 123400000000000000000.0 */
+               std::memset(buf, '0', 24);
+               auto num_hdr = buf + 1;
                auto num_end = write_u64_len_15_to_17_trim(num_hdr, sig_dec);
-               if (dot_pos < (num_end - num_hdr)) {
-                  std::memmove(num_hdr + dot_pos + 1, num_hdr + dot_pos, (num_end - num_hdr) - dot_pos);
-                  num_hdr[dot_pos] = '.';
-                  return num_end + 1;
-               }
-               else if (dot_pos > (num_end - num_hdr)) {
-                  std::memset(num_end, '0', dot_pos - (num_end - num_hdr));
-                  return num_hdr + dot_pos;
-               }
-               else {
-                  return num_end; // Whole number, no decimal point needed
-               }
+               std::memmove(buf, buf + 1, dot_pos); // shift characters to the left
+               buf[dot_pos] = '.';
+               return ((num_end - num_hdr) <= dot_pos) ? buf + dot_pos : num_end;
+               
+               ///* dot after first digit */
+               //auto num_hdr = buf;
+               //auto num_end = write_u64_len_15_to_17_trim(num_hdr, sig_dec);
+               //if (dot_pos < (num_end - num_hdr)) {
+               //   std::memmove(num_hdr + dot_pos + 1, num_hdr + dot_pos, (num_end - num_hdr) - dot_pos);
+               //   num_hdr[dot_pos] = '.';
+               //   return num_end + 1;
+               //}
+               //else if (dot_pos > (num_end - num_hdr)) {
+               //   std::memset(num_end, '0', dot_pos - (num_end - num_hdr));
+               //   return num_hdr + dot_pos;
+               //}
+               //else {
+               //   return num_end; // Whole number, no decimal point needed
+               //}
             }
          }
          else {
