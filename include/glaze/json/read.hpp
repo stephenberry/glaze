@@ -618,7 +618,7 @@ namespace glz
             else {
                if constexpr (is_float128<V>) {
                   auto [ptr, ec] = std::from_chars(it, end, value);
-                  if (ec != std::errc()) {
+                  if (ec != std::errc()) [[unlikely]] {
                      ctx.error = error_code::parse_number_failure;
                      return;
                   }

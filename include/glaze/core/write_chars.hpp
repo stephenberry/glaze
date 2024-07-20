@@ -8,7 +8,6 @@
 
 #include "glaze/concepts/container_concepts.hpp"
 #include "glaze/core/opts.hpp"
-#include "glaze/util/dtoa.hpp"
 #include "glaze/util/dump.hpp"
 #include "glaze/util/itoa.hpp"
 
@@ -64,48 +63,66 @@ namespace glz::detail
          using V = std::decay_t<decltype(value)>;
 
          if constexpr (std::floating_point<V>) {
+            
+            auto serialize_float = [&](auto&& value) {
+               auto start = reinterpret_cast<char*>(data_ptr(b) + ix);
+               const auto [ptr, ec] = std::to_chars(start, start + 64, value);
+               if (ec != std::errc()) [[unlikely]] {
+                  ctx.error = error_code::write_number_error;
+               }
+               else [[likely]] {
+                  switch (*start) {
+                        [[unlikely]] case 'n':  {
+                           [[fallthrough]];
+                     }
+                        [[unlikely]] case 'i':  {
+                        dump<"null", false>(b, ix);
+                        break;
+                     }
+                        [[likely]] default:  {
+                        ix += size_t(ptr - start);
+                     }
+                  }
+               }
+            };
+            
             if constexpr (uint8_t(Opts.float_max_write_precision) > 0 &&
                           uint8_t(Opts.float_max_write_precision) < sizeof(V)) {
                // we cast to a lower precision floating point value before writing out
                if constexpr (uint8_t(Opts.float_max_write_precision) == 8) {
-                  const auto reduced = static_cast<double>(value);
-                  const auto start = data_ptr(b) + ix;
-                  const auto end = glz::to_chars(start, reduced);
-                  ix += size_t(end - start);
+                  serialize_float(static_cast<double>(value));
                }
                else if constexpr (uint8_t(Opts.float_max_write_precision) == 4) {
-                  const auto reduced = static_cast<float>(value);
-                  const auto start = data_ptr(b) + ix;
-                  const auto end = glz::to_chars(start, reduced);
-                  ix += size_t(end - start);
+                  serialize_float(static_cast<float>(value));
                }
                else {
                   static_assert(false_v<V>, "invalid float_max_write_precision");
                }
             }
             else if constexpr (is_any_of<V, float, double>) {
-               auto start = reinterpret_cast<char*>(data_ptr(b) + ix);
-               const auto [ptr, ec] = std::to_chars(start, start + 64, value);
-               if (ec != std::errc()) {
-                  ctx.error = error_code::write_number_error;
-               }
-               else {
-                  if (*start == 'n') [[unlikely]] // NAN
-                  {
-                     dump<"null", false>(b, ix);
-                  }
-                  else [[likely]] {
-                     ix += size_t(ptr - start);
-                  }
-               }
+               serialize_float(value);
             }
             else if constexpr (is_float128<V>) {
                auto start = reinterpret_cast<char*>(data_ptr(b) + ix);
                const auto [ptr, ec] = std::to_chars(start, start + 64, value, std::chars_format::general);
-               if (ec != std::errc()) {
+               if (ec != std::errc()) [[unlikely]] {
                   ctx.error = error_code::write_number_error;
+                  return;
                }
-               ix += size_t(ptr - start);
+               else [[likely]] {
+                  switch (*start) {
+                        [[unlikely]] case 'n':  {
+                           [[fallthrough]];
+                     }
+                        [[unlikely]] case 'i':  {
+                        dump<"null", false>(b, ix);
+                        break;
+                     }
+                        [[likely]] default:  {
+                        ix += size_t(ptr - start);
+                     }
+                  }
+               }
             }
             else {
                static_assert(false_v<V>, "type is not supported");
