@@ -70,13 +70,13 @@ namespace glz::detail
                if constexpr (uint8_t(Opts.float_max_write_precision) == 8) {
                   const auto reduced = static_cast<double>(value);
                   const auto start = data_ptr(b) + ix;
-                  const auto end = jkj::dragonbox::to_chars(reduced, start);
+                  const auto end = glz::to_chars(start, reduced);
                   ix += size_t(end - start);
                }
                else if constexpr (uint8_t(Opts.float_max_write_precision) == 4) {
                   const auto reduced = static_cast<float>(value);
                   const auto start = data_ptr(b) + ix;
-                  const auto end = jkj::dragonbox::to_chars(reduced, start);
+                  const auto end = glz::to_chars(start, reduced);
                   ix += size_t(end - start);
                }
                else {
@@ -85,7 +85,7 @@ namespace glz::detail
             }
             else if constexpr (is_any_of<V, float, double>) {
                const auto start = reinterpret_cast<char*>(data_ptr(b) + ix);
-               const auto end = jkj::dragonbox::to_chars(value, start);
+               const auto end = glz::to_chars(start, value);
                ix += size_t(end - start);
             }
             else if constexpr (is_float128<V>) {
