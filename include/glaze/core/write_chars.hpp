@@ -46,7 +46,7 @@ namespace glz::detail
    struct write_chars
    {
       template <auto Opts, class B>
-      inline static void op(num_t auto&& value, is_context auto&&, B&& b, auto&& ix) noexcept
+      inline static void op(num_t auto&& value, is_context auto&& ctx, B&& b, auto&& ix) noexcept
       {
          /*if constexpr (std::same_as<std::decay_t<B>, std::string>) {
             // more efficient strings in C++23:
@@ -84,15 +84,26 @@ namespace glz::detail
                }
             }
             else if constexpr (is_any_of<V, float, double>) {
-               const auto start = data_ptr(b) + ix;
-               const auto end = glz::to_chars(start, value);
-               ix += size_t(end - start);
+               auto start = reinterpret_cast<char*>(data_ptr(b) + ix);
+               const auto [ptr, ec] = std::to_chars(start, start + 64, value);
+               if (ec != std::errc()) {
+                  ctx.error = error_code::write_number_error;
+               }
+               else {
+                  if (*start == 'n') [[unlikely]] // NAN
+                  {
+                     dump<"null", false>(b, ix);
+                  }
+                  else [[likely]] {
+                     ix += size_t(ptr - start);
+                  }
+               }
             }
             else if constexpr (is_float128<V>) {
-               const auto start = data_ptr(b) + ix;
-               const auto [ptr, ec] = std::to_chars(start, data_ptr(b) + b.size(), value, std::chars_format::general);
+               auto start = reinterpret_cast<char*>(data_ptr(b) + ix);
+               const auto [ptr, ec] = std::to_chars(start, start + 64, value, std::chars_format::general);
                if (ec != std::errc()) {
-                  // TODO: Do we need to handle this error state?
+                  ctx.error = error_code::write_number_error;
                }
                ix += size_t(ptr - start);
             }

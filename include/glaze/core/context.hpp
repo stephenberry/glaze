@@ -46,6 +46,7 @@ namespace glz
             u_requires_hex_digits, //
             unicode_escape_conversion_failure, //
             dump_int_error, //
+            write_number_error, //
             // File errors
             file_open_failure, //
             file_close_failure, //
