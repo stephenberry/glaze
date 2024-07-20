@@ -14,10 +14,10 @@ namespace glz
       auto ix = buffer.size();
       buffer.resize((std::max)(buffer.size() * 2, ix + 64));
 
-      auto start = reinterpret_cast<char*>(data_ptr(b) + ix);
+      auto start = detail::data_ptr(buffer) + ix;
       const auto [ptr, ec] = std::to_chars(start, start + 64, std::forward<T>(value));
       if (ec != std::errc()) [[unlikely]] {
-         dump<"null", false>(b, ix);
+         detail::dump<"null", false>(buffer, ix);
       }
       else [[likely]] {
          if constexpr (std::floating_point<T>) {
@@ -26,7 +26,7 @@ namespace glz
                      [[fallthrough]];
                }
                   [[unlikely]] case 'i':  {
-                  dump<"null", false>(b, ix);
+                  detail::dump<"null", false>(buffer, ix);
                   break;
                }
                   [[likely]] default:  {
