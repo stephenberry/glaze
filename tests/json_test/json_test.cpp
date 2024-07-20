@@ -395,24 +395,24 @@ suite basic_types = [] {
       std::string buffer{};
       expect(not glz::write_json(3.14, buffer));
       expect(buffer == "3.14") << buffer;
-      buffer.clear();
       expect(not glz::write_json(9.81, buffer));
       expect(buffer == "9.81") << buffer;
-      buffer.clear();
       expect(not glz::write_json(0.0, buffer));
       expect(buffer == "0") << buffer;
-      buffer.clear();
       expect(not glz::write_json(-0.0, buffer));
       expect(buffer == "-0") << buffer;
-      buffer.clear();
       expect(not glz::write_json(-8536070.0, buffer));
       expect(buffer == "-8536070") << buffer;
-      buffer.clear();
       expect(not glz::write_json(8536070.0, buffer));
       expect(buffer == "8536070") << buffer;
-      buffer.clear();
       expect(not glz::write_json(1.0 / 0.0, buffer));
       expect(buffer == "null") << buffer;
+      expect(not glz::write_json(1.0, buffer));
+      expect(buffer == "1") << buffer;
+      expect(not glz::write_json(10.0, buffer));
+      expect(buffer == "10") << buffer;
+      expect(not glz::write_json(100.0, buffer));
+      expect(buffer == "100") << buffer;
    };
    
    /*"double roundtrip"_test = [] {
@@ -433,24 +433,24 @@ suite basic_types = [] {
       std::string buffer{};
       expect(not glz::write_json(3.14f, buffer));
       expect(buffer == "3.14") << buffer;
-      buffer.clear();
       expect(not glz::write_json(9.81f, buffer));
       expect(buffer == "9.81") << buffer;
-      buffer.clear();
       expect(not glz::write_json(0.0f, buffer));
       expect(buffer == "0") << buffer;
-      buffer.clear();
       expect(not glz::write_json(-0.0f, buffer));
       expect(buffer == "-0") << buffer;
-      buffer.clear();
       expect(not glz::write_json(-8536070.f, buffer));
       expect(buffer == "-8536070") << buffer;
-      buffer.clear();
       expect(not glz::write_json(8536070.f, buffer));
       expect(buffer == "8536070") << buffer;
-      buffer.clear();
       expect(not glz::write_json(1.0f / 0.0f, buffer));
       expect(buffer == "null") << buffer;
+      expect(not glz::write_json(1.0f, buffer));
+      expect(buffer == "1") << buffer;
+      expect(not glz::write_json(10.0f, buffer));
+      expect(buffer == "10") << buffer;
+      expect(not glz::write_json(100.0f, buffer));
+      expect(buffer == "100") << buffer;
     };
 
    "double read valid"_test = [] {
