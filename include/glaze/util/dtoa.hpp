@@ -25,23 +25,18 @@ namespace glz
 #endif
 #endif
    }
-   
+
    constexpr int int_log2(uint32_t x) noexcept { return 31 - glz::countl_zero(x | 1); }
-   
+
    constexpr uint64_t digit_count_table[] = {
-      4294967296,  8589934582,  8589934582,  8589934582,  12884901788,
-      12884901788, 12884901788, 17179868184, 17179868184, 17179868184,
-      21474826480, 21474826480, 21474826480, 21474826480, 25769703776,
-      25769703776, 25769703776, 30063771072, 30063771072, 30063771072,
-      34349738368, 34349738368, 34349738368, 34349738368, 38554705664,
-      38554705664, 38554705664, 41949672960, 41949672960, 41949672960,
-      42949672960, 42949672960};
-   
+      4294967296,  8589934582,  8589934582,  8589934582,  12884901788, 12884901788, 12884901788, 17179868184,
+      17179868184, 17179868184, 21474826480, 21474826480, 21474826480, 21474826480, 25769703776, 25769703776,
+      25769703776, 30063771072, 30063771072, 30063771072, 34349738368, 34349738368, 34349738368, 34349738368,
+      38554705664, 38554705664, 38554705664, 41949672960, 41949672960, 41949672960, 42949672960, 42949672960};
+
    // https://lemire.me/blog/2021/06/03/computing-the-number-of-digits-of-an-integer-even-faster/
-   constexpr int fast_digit_count(const uint32_t x) noexcept {
-     return (x + digit_count_table[int_log2(x)]) >> 32;
-   }
-   
+   constexpr int fast_digit_count(const uint32_t x) noexcept { return (x + digit_count_table[int_log2(x)]) >> 32; }
+
    /** Trailing zero count table for number 0 to 99.
     (generate with misc/make_tables.c) */
    inline constexpr uint8_t dec_trailing_zero_table[] = {
@@ -299,22 +294,22 @@ namespace glz
                std::memmove(buf, buf + 1, dot_pos); // shift characters to the left
                buf[dot_pos] = '.';
                return ((num_end - num_hdr) <= dot_pos) ? buf + dot_pos : num_end;
-               
+
                ///* dot after first digit */
-               //auto num_hdr = buf;
-               //auto num_end = write_u64_len_15_to_17_trim(num_hdr, sig_dec);
-               //if (dot_pos < (num_end - num_hdr)) {
-               //   std::memmove(num_hdr + dot_pos + 1, num_hdr + dot_pos, (num_end - num_hdr) - dot_pos);
-               //   num_hdr[dot_pos] = '.';
-               //   return num_end + 1;
-               //}
-               //else if (dot_pos > (num_end - num_hdr)) {
-               //   std::memset(num_end, '0', dot_pos - (num_end - num_hdr));
-               //   return num_hdr + dot_pos;
-               //}
-               //else {
-               //   return num_end; // Whole number, no decimal point needed
-               //}
+               // auto num_hdr = buf;
+               // auto num_end = write_u64_len_15_to_17_trim(num_hdr, sig_dec);
+               // if (dot_pos < (num_end - num_hdr)) {
+               //    std::memmove(num_hdr + dot_pos + 1, num_hdr + dot_pos, (num_end - num_hdr) - dot_pos);
+               //    num_hdr[dot_pos] = '.';
+               //    return num_end + 1;
+               // }
+               // else if (dot_pos > (num_end - num_hdr)) {
+               //    std::memset(num_end, '0', dot_pos - (num_end - num_hdr));
+               //    return num_hdr + dot_pos;
+               // }
+               // else {
+               //    return num_end; // Whole number, no decimal point needed
+               // }
             }
          }
          else {

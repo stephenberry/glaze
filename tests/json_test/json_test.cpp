@@ -420,7 +420,7 @@ suite basic_types = [] {
       expect(not glz::write_json(0.001, buffer));
       expect(buffer == "0.001") << buffer;
    };
-   
+
    /*"double roundtrip"_test = [] {
           for (const double expected:{
                -0x1.e42427b42cb42p+949,
@@ -434,7 +434,7 @@ suite basic_types = [] {
               expect(restored.value() == d);
           }
       };*/
-   
+
    "float write"_test = [] {
       std::string buffer{};
       expect(not glz::write_json(3.14f, buffer));
@@ -463,7 +463,7 @@ suite basic_types = [] {
       expect(buffer == "0.01") << buffer;
       expect(not glz::write_json(0.001f, buffer));
       expect(buffer == "0.001") << buffer;
-    };
+   };
 
    "double read valid"_test = [] {
       double num{};
