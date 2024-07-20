@@ -6,10 +6,26 @@
 #include <cstring>
 
 #include "glaze/util/dragonbox.hpp"
+#include "glaze/util/inline.hpp"
 #include "glaze/util/itoa.hpp"
 
 namespace glz
 {
+   // std::countl_zero uses another branch check whether the input is zero,
+   // we use this function when we know that x > 0
+   GLZ_ALWAYS_INLINE constexpr auto countl_zero(const uint32_t x) noexcept
+   {
+#ifdef _MSC_VER
+      return std::countl_zero(x);
+#else
+#if __has_builtin(__builtin_ctzll)
+      return __builtin_clz(x);
+#else
+      return std::countl_zero(x);
+#endif
+#endif
+   }
+   
    /** Trailing zero count table for number 0 to 99.
     (generate with misc/make_tables.c) */
    inline constexpr uint8_t dec_trailing_zero_table[] = {
@@ -157,6 +173,21 @@ namespace glz
    }
 
    consteval uint32_t numbits(uint32_t x) noexcept { return x < 2 ? x : 1 + numbits(x >> 1); }
+      
+   constexpr int int_log2(uint32_t x) noexcept { return 31 - glz::countl_zero(x | 1); }
+   
+   constexpr uint64_t digit_count_table[] = {
+      4294967296,  8589934582,  8589934582,  8589934582,  12884901788,
+      12884901788, 12884901788, 17179868184, 17179868184, 17179868184,
+      21474826480, 21474826480, 21474826480, 21474826480, 25769703776,
+      25769703776, 25769703776, 30063771072, 30063771072, 30063771072,
+      34349738368, 34349738368, 34349738368, 34349738368, 38554705664,
+      38554705664, 38554705664, 41949672960, 41949672960, 41949672960,
+      42949672960, 42949672960};
+   
+   constexpr int fast_digit_count(const uint32_t x) noexcept {
+     return (x + digit_count_table[int_log2(x)]) >> 32;
+   }
 
    template <std::floating_point T>
    inline auto* to_chars(auto* buf, T val) noexcept
@@ -199,10 +230,7 @@ namespace glz
          int32_t exp_dec = v.exponent;
 
          /* Calculate number of digits */
-         int32_t num_digits = 1;
-         for (uint32_t temp = sig_dec; temp >= 10; temp /= 10) {
-            ++num_digits;
-         }
+         const int32_t num_digits = fast_digit_count(sig_dec);
 
          /* the decimal point position relative to the first digit */
          int32_t dot_pos = num_digits + exp_dec;
@@ -214,7 +242,7 @@ namespace glz
                *buf++ = '.';
                while (dot_pos < 0) {
                   *buf++ = '0';
-                  dot_pos++;
+                  ++dot_pos;
                }
                return write_u32_len_1_to_9_trim(buf, sig_dec);
             }
