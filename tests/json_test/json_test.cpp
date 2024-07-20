@@ -413,6 +413,12 @@ suite basic_types = [] {
       expect(buffer == "10") << buffer;
       expect(not glz::write_json(100.0, buffer));
       expect(buffer == "100") << buffer;
+      expect(not glz::write_json(0.1, buffer));
+      expect(buffer == "0.1") << buffer;
+      expect(not glz::write_json(0.01, buffer));
+      expect(buffer == "0.01") << buffer;
+      expect(not glz::write_json(0.001, buffer));
+      expect(buffer == "0.001") << buffer;
    };
    
    /*"double roundtrip"_test = [] {
@@ -451,6 +457,12 @@ suite basic_types = [] {
       expect(buffer == "10") << buffer;
       expect(not glz::write_json(100.0f, buffer));
       expect(buffer == "100") << buffer;
+      expect(not glz::write_json(0.1f, buffer));
+      expect(buffer == "0.1") << buffer;
+      expect(not glz::write_json(0.01f, buffer));
+      expect(buffer == "0.01") << buffer;
+      expect(not glz::write_json(0.001f, buffer));
+      expect(buffer == "0.001") << buffer;
     };
 
    "double read valid"_test = [] {
