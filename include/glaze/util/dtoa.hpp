@@ -185,6 +185,7 @@ namespace glz
       38554705664, 38554705664, 41949672960, 41949672960, 41949672960,
       42949672960, 42949672960};
    
+   // https://lemire.me/blog/2021/06/03/computing-the-number-of-digits-of-an-integer-even-faster/
    constexpr int fast_digit_count(const uint32_t x) noexcept {
      return (x + digit_count_table[int_log2(x)]) >> 32;
    }
