@@ -26,6 +26,22 @@ namespace glz
 #endif
    }
    
+   constexpr int int_log2(uint32_t x) noexcept { return 31 - glz::countl_zero(x | 1); }
+   
+   constexpr uint64_t digit_count_table[] = {
+      4294967296,  8589934582,  8589934582,  8589934582,  12884901788,
+      12884901788, 12884901788, 17179868184, 17179868184, 17179868184,
+      21474826480, 21474826480, 21474826480, 21474826480, 25769703776,
+      25769703776, 25769703776, 30063771072, 30063771072, 30063771072,
+      34349738368, 34349738368, 34349738368, 34349738368, 38554705664,
+      38554705664, 38554705664, 41949672960, 41949672960, 41949672960,
+      42949672960, 42949672960};
+   
+   // https://lemire.me/blog/2021/06/03/computing-the-number-of-digits-of-an-integer-even-faster/
+   constexpr int fast_digit_count(const uint32_t x) noexcept {
+     return (x + digit_count_table[int_log2(x)]) >> 32;
+   }
+   
    /** Trailing zero count table for number 0 to 99.
     (generate with misc/make_tables.c) */
    inline constexpr uint8_t dec_trailing_zero_table[] = {
@@ -123,33 +139,7 @@ namespace glz
          return buf + 2;
       }
 
-      // Binary search to determine the number of digits
-      uint32_t digits;
-      if (val < 1000000) {
-         if (val < 10000) {
-            if (val < 1000)
-               digits = 3;
-            else
-               digits = 4;
-         }
-         else {
-            if (val < 100000)
-               digits = 5;
-            else
-               digits = 6;
-         }
-      }
-      else {
-         if (val < 100000000) {
-            if (val < 10000000)
-               digits = 7;
-            else
-               digits = 8;
-         }
-         else {
-            digits = 9;
-         }
-      }
+      const uint32_t digits = fast_digit_count(val);
 
       // Write digits in reverse order
       auto* end = buf + digits;
@@ -173,22 +163,6 @@ namespace glz
    }
 
    consteval uint32_t numbits(uint32_t x) noexcept { return x < 2 ? x : 1 + numbits(x >> 1); }
-      
-   constexpr int int_log2(uint32_t x) noexcept { return 31 - glz::countl_zero(x | 1); }
-   
-   constexpr uint64_t digit_count_table[] = {
-      4294967296,  8589934582,  8589934582,  8589934582,  12884901788,
-      12884901788, 12884901788, 17179868184, 17179868184, 17179868184,
-      21474826480, 21474826480, 21474826480, 21474826480, 25769703776,
-      25769703776, 25769703776, 30063771072, 30063771072, 30063771072,
-      34349738368, 34349738368, 34349738368, 34349738368, 38554705664,
-      38554705664, 38554705664, 41949672960, 41949672960, 41949672960,
-      42949672960, 42949672960};
-   
-   // https://lemire.me/blog/2021/06/03/computing-the-number-of-digits-of-an-integer-even-faster/
-   constexpr int fast_digit_count(const uint32_t x) noexcept {
-     return (x + digit_count_table[int_log2(x)]) >> 32;
-   }
 
    template <std::floating_point T>
    inline auto* to_chars(auto* buf, T val) noexcept
