@@ -405,7 +405,7 @@ suite basic_types = [] {
       expect(buffer == "-8536070") << buffer;
       expect(not glz::write_json(8536070.0, buffer));
       expect(buffer == "8536070") << buffer;
-      expect(not glz::write_json(1.0 / 0.0, buffer));
+      expect(not glz::write_json(std::numeric_limits<double>::infinity(), buffer));
       expect(buffer == "null") << buffer;
       expect(not glz::write_json(1.0, buffer));
       expect(buffer == "1") << buffer;
@@ -449,7 +449,7 @@ suite basic_types = [] {
       expect(buffer == "-8536070") << buffer;
       expect(not glz::write_json(8536070.f, buffer));
       expect(buffer == "8536070") << buffer;
-      expect(not glz::write_json(1.0f / 0.0f, buffer));
+      expect(not glz::write_json(std::numeric_limits<float>::infinity(), buffer));
       expect(buffer == "null") << buffer;
       expect(not glz::write_json(1.0f, buffer));
       expect(buffer == "1") << buffer;
