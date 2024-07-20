@@ -84,7 +84,7 @@ namespace glz::detail
                }
             }
             else if constexpr (is_any_of<V, float, double>) {
-               const auto start = data_ptr(b) + ix;
+               const auto start = reinterpret_cast<char*>(data_ptr(b) + ix);
                const auto end = glz::to_chars(start, value);
                ix += size_t(end - start);
             }
