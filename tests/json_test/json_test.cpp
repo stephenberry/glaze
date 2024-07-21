@@ -478,19 +478,15 @@ suite basic_types = [] {
       expect(buffer == "0.001") << buffer;
    };
 
-   /*"double roundtrip"_test = [] {
-          for (const double expected:{
-               -0x1.e42427b42cb42p+949,
-              -0x1.3ffff0d0ddb37p+725,
-              0x1.73d40c08b20ffp-395
-      }) {
-              double d{expected};
-              auto str = glz::write_json(d).value();
-              auto restored = glz::read_json<double>(str);
-              expect(restored.has_value());
-              expect(restored.value() == d);
-          }
-      };*/
+   "double roundtrip"_test = [] {
+      for (const double expected : {-0x1.e42427b42cb42p+949, -0x1.3ffff0d0ddb37p+725, 0x1.73d40c08b20ffp-395}) {
+         double d{expected};
+         auto str = glz::write_json(d).value();
+         auto restored = glz::read_json<double>(str);
+         expect(restored.has_value());
+         expect(restored.value() == d);
+      }
+   };
 
    "float write"_test = [] {
       std::string buffer{};
