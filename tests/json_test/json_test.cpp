@@ -423,7 +423,7 @@ bool equal_within_ulps(T x, T y, size_t n)
     // If `x` and `y` have different gap sizes (which means they have
     // different exponents), we take the smaller one. Taking the bigger
     // one is also reasonable, I guess.
-    const T m = std::min(std::fabs(x), std::fabs(y));
+    const T m = std::min(std::abs(x), std::abs(y));
  
     // Subnormal numbers have fixed exponent, which is `min_exponent - 1`.
     const int exp = m < (std::numeric_limits<T>::min)()
