@@ -251,18 +251,9 @@ namespace glz
                exp_dec = -exp_dec;
             }
             exp_dec = std::abs(exp_dec);
-            if (exp_dec < 100) {
-               uint32_t lz = exp_dec < 10;
-               std::memcpy(buf, char_table + (exp_dec * 2 + lz), 2);
-               return buf + 2 - lz;
-            }
-            else {
-               const uint32_t hi = (uint32_t(exp_dec) * 656) >> 16; /* exp / 100 */
-               const uint32_t lo = uint32_t(exp_dec) - hi * 100; /* exp % 100 */
-               buf[0] = uint8_t(hi) + '0';
-               std::memcpy(&buf[1], char_table + (lo * 2), 2);
-               return buf + 3;
-            }
+            uint32_t lz = exp_dec < 10;
+            std::memcpy(buf, char_table + (exp_dec * 2 + lz), 2);
+            return buf + 2 - lz;
          }
       }
       else {
