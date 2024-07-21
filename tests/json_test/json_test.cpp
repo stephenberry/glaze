@@ -3390,6 +3390,11 @@ suite generic_json_tests = [] {
       expect(json.empty());
       expect(json.size() == 0);
    };
+
+   "json_t garbage input"_test = [] {
+      glz::json_t json{};
+      expect(glz::read_json(json, "\x22\x5c\x75\xff\x22"));
+   };
 };
 
 struct holder0_t
