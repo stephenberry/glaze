@@ -13,6 +13,7 @@
 
 #include "glaze/concepts/container_concepts.hpp"
 #include "glaze/core/context.hpp"
+#include "glaze/core/feature_test.hpp"
 #include "glaze/core/meta.hpp"
 #include "glaze/util/bit_array.hpp"
 #include "glaze/util/expected.hpp"
