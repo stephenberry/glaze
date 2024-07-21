@@ -388,6 +388,63 @@ suite escaping_tests = [] {
    };
 };
 
+template <std::floating_point T>
+T generate_uniform() {
+   static std::mt19937 gen(std::random_device{}());
+    static std::uniform_real_distribution<double> dis(0, 1);
+    
+    int sign = (dis(gen) < 0.5) ? -1 : 1;
+    
+    int min_exp = std::numeric_limits<T>::min_exponent;
+    int max_exp = std::numeric_limits<T>::max_exponent;
+    std::uniform_int_distribution<> exp_dis(min_exp, max_exp);
+    int exp = exp_dis(gen);
+    
+    // Generate random significand
+    T sig = static_cast<T>(dis(gen));
+    
+    // Combine to create the random float
+    return sign * std::ldexp(sig, exp);
+}
+
+template <std::floating_point T>
+bool equal_within_ulps(T x, T y, size_t n)
+{
+   if (std::abs(x) < (std::numeric_limits<T>::min)()) {
+      // a denormalized value - check that it is close enough to zero.
+      return std::abs(y) < (std::numeric_limits<T>::min)();
+   }
+   
+    // Since `epsilon()` is the gap size (ULP, unit in the last place)
+    // of floating-point numbers in interval [1, 2), we can scale it to
+    // the gap size in interval [2^e, 2^{e+1}), where `e` is the exponent
+    // of `x` and `y`.
+ 
+    // If `x` and `y` have different gap sizes (which means they have
+    // different exponents), we take the smaller one. Taking the bigger
+    // one is also reasonable, I guess.
+    const T m = (std::min)(std::abs(x), std::abs(y));
+ 
+    // Subnormal numbers have fixed exponent, which is `min_exponent - 1`.
+    const int exp = m < (std::numeric_limits<T>::min)()
+                  ? std::numeric_limits<T>::min_exponent - 1
+                  : std::ilogb(m);
+ 
+    // We consider `x` and `y` equal if the difference between them is
+    // within `n` ULPs.
+    return std::abs(x - y) <= n * std::ldexp(std::numeric_limits<T>::epsilon(), exp);
+}
+
+template <std::floating_point T>
+bool equal(T x, T y) {
+   if (std::abs(x) < (std::numeric_limits<T>::min)()) {
+      // a denormalized value - check that it is close enough to zero.
+      return std::abs(y) < (std::numeric_limits<T>::min)();
+   }
+   
+   return x == y;
+}
+
 suite basic_types = [] {
    using namespace ut;
 
@@ -475,6 +532,42 @@ suite basic_types = [] {
       expect(num == 0);
       expect(glz::read_json(num, "-0") == glz::error_code::none);
       expect(num == -0);
+   };
+   
+   "double write/read"_test = [] {
+      double x{};
+      auto buffer = glz::write_json(-1.40129846e-45).value();
+      auto ec = glz::read_json(x, buffer);
+      expect(not ec) << glz::format_error(ec, buffer);
+   };
+   
+   "random double"_test = [] {
+      for (size_t i = 0; i < 10000; ++i) {
+         double x = generate_uniform<double>();
+         auto buffer = glz::write_json(x).value();
+         double y{};
+         auto ec = glz::read_json(y, buffer);
+         expect(not ec) << glz::format_error(ec, buffer);
+         expect(equal(x, y)) << x << ", " << y;
+      }
+   };
+   
+   "float write/read"_test = [] {
+      float x{};
+      auto buffer = glz::write_json(-1.40129846e-45f).value();
+      auto ec = glz::read_json(x, buffer);
+      expect(not ec) << glz::format_error(ec, buffer);
+   };
+   
+   "random float"_test = [] {
+      for (size_t i = 0; i < 10000; ++i) {
+         float x = generate_uniform<float>();
+         auto buffer = glz::write_json(x).value();
+         float y{};
+         auto ec = glz::read_json(y, buffer);
+         expect(not ec) << glz::format_error(ec, buffer);
+         expect(equal(x, y)) << x << ", " << y;
+      }
    };
 
    "int write"_test = [] {
@@ -633,6 +726,15 @@ suite container_types = [] {
       std::vector<double> vec2{};
       expect(not glz::write_json(vec, buffer));
       expect(glz::read_json(vec2, buffer) == glz::error_code::none);
+      expect(vec == vec2);
+   };
+   "vector float roundtrip"_test = [] {
+      std::vector<float> vec(100);
+      for (auto& item : vec) item = rand() / (1.0 + rand());
+      std::string buffer{};
+      std::vector<float> vec2{};
+      expect(not glz::write_json(vec, buffer));
+      expect(not glz::read_json(vec2, buffer));
       expect(vec == vec2);
    };
    "vector bool roundtrip"_test = [] {

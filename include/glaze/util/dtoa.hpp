@@ -122,7 +122,7 @@ namespace glz
       }
    }
 
-   inline auto* write_u32_len_1_to_9_trim(auto* buf, uint32_t val) noexcept
+   inline auto* write_u32_len_1_to_9(auto* buf, uint32_t val) noexcept
    {
       if (val < 10) {
          *buf = uint8_t(val + '0');
@@ -214,10 +214,10 @@ namespace glz
                   *buf++ = '0';
                   ++dot_pos;
                }
-               return write_u32_len_1_to_9_trim(buf, sig_dec);
+               return write_u32_len_1_to_9(buf, sig_dec);
             }
             else {
-               auto num_end = write_u32_len_1_to_9_trim(buf, sig_dec);
+               auto num_end = write_u32_len_1_to_9(buf, sig_dec);
                int32_t digits_written = int32_t(num_end - buf);
                if (dot_pos < digits_written) {
                   std::memmove(buf + dot_pos + 1, buf + dot_pos, digits_written - dot_pos);
@@ -235,27 +235,25 @@ namespace glz
          }
          else {
             /* write with scientific notation */
-            auto end = write_u32_len_1_to_9_trim(buf + 1, sig_dec);
-            exp_dec += num_digits - 1;
-            buf[0] = buf[1];
-            buf[1] = '.';
-            end[0] = 'E';
+            auto end = write_u32_len_1_to_9(buf + 1, sig_dec);
+            exp_dec += int32_t(end - (buf + 1)) - 1; // Adjust exponent based on actual digits written
+            buf[0] = buf[1]; // First digit
+            buf[1] = '.'; // Decimal point
+            if (end == buf + 2) { // Only one digit was written
+               buf[2] = '0'; // Add trailing zero
+               ++end;
+            }
+            *end = 'E';
             buf = end + 1;
-            buf[0] = '-';
-            buf += exp_dec < 0;
+            if (exp_dec < 0) {
+               *buf = '-';
+               ++buf;
+               exp_dec = -exp_dec;
+            }
             exp_dec = std::abs(exp_dec);
-            if (exp_dec < 100) {
-               uint32_t lz = exp_dec < 10;
-               std::memcpy(buf, char_table + (exp_dec * 2 + lz), 2);
-               return buf + 2 - lz;
-            }
-            else {
-               const uint32_t hi = (uint32_t(exp_dec) * 656) >> 16; /* exp / 100 */
-               const uint32_t lo = uint32_t(exp_dec) - hi * 100; /* exp % 100 */
-               buf[0] = uint8_t(hi) + '0';
-               std::memcpy(&buf[1], char_table + (lo * 2), 2);
-               return buf + 3;
-            }
+            uint32_t lz = exp_dec < 10;
+            std::memcpy(buf, char_table + (exp_dec * 2 + lz), 2);
+            return buf + 2 - lz;
          }
       }
       else {
