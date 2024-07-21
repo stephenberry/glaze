@@ -122,7 +122,7 @@ namespace glz
       }
    }
 
-   inline auto* write_u32_len_1_to_9_trim(auto* buf, uint32_t val) noexcept
+   inline auto* write_u32_len_1_to_9(auto* buf, uint32_t val) noexcept
    {
       if (val < 10) {
          *buf = uint8_t(val + '0');
@@ -214,10 +214,10 @@ namespace glz
                   *buf++ = '0';
                   ++dot_pos;
                }
-               return write_u32_len_1_to_9_trim(buf, sig_dec);
+               return write_u32_len_1_to_9(buf, sig_dec);
             }
             else {
-               auto num_end = write_u32_len_1_to_9_trim(buf, sig_dec);
+               auto num_end = write_u32_len_1_to_9(buf, sig_dec);
                int32_t digits_written = int32_t(num_end - buf);
                if (dot_pos < digits_written) {
                   std::memmove(buf + dot_pos + 1, buf + dot_pos, digits_written - dot_pos);
@@ -235,7 +235,7 @@ namespace glz
          }
          else {
             /* write with scientific notation */
-            auto end = write_u32_len_1_to_9_trim(buf + 1, sig_dec);
+            auto end = write_u32_len_1_to_9(buf + 1, sig_dec);
             exp_dec += int32_t(end - (buf + 1)) - 1; // Adjust exponent based on actual digits written
             buf[0] = buf[1]; // First digit
             buf[1] = '.'; // Decimal point
