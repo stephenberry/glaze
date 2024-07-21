@@ -62,3 +62,4 @@ macro(create_exhaustive_test testname)
 endmacro()
 
 create_exhaustive_test(json_exhaustive_roundtrip_int)
+create_exhaustive_test(json_exhaustive_roundtrip_float)
