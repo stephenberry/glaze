@@ -241,7 +241,7 @@ namespace glz
             buf[1] = '.'; // Decimal point
             if (end == buf + 2) { // Only one digit was written
                buf[2] = '0'; // Add trailing zero
-               end++;
+               ++end;
             }
             *end = 'E';
             buf = end + 1;

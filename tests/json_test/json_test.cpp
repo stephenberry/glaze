@@ -649,6 +649,15 @@ suite container_types = [] {
       expect(glz::read_json(vec2, buffer) == glz::error_code::none);
       expect(vec == vec2);
    };
+   "vector float roundtrip"_test = [] {
+      std::vector<float> vec(100);
+      for (auto& item : vec) item = rand() / (1.0 + rand());
+      std::string buffer{};
+      std::vector<float> vec2{};
+      expect(not glz::write_json(vec, buffer));
+      expect(not glz::read_json(vec2, buffer));
+      expect(vec == vec2);
+   };
    "vector bool roundtrip"_test = [] {
       std::vector<bool> vec(100);
       for (auto&& item : vec) item = rand() / (1.0 + rand());
