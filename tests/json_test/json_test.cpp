@@ -476,6 +476,20 @@ suite basic_types = [] {
       expect(glz::read_json(num, "-0") == glz::error_code::none);
       expect(num == -0);
    };
+   
+   "double write/read valid"_test = [] {
+      double x{};
+      auto buffer = glz::write_json(-1.40129846e-45).value();
+      auto ec = glz::read_json(x, buffer);
+      expect(not ec) << glz::format_error(ec, buffer);
+   };
+   
+   "float write/read valid"_test = [] {
+      float x{};
+      auto buffer = glz::write_json(-1.40129846e-45f).value();
+      auto ec = glz::read_json(x, buffer);
+      expect(not ec) << glz::format_error(ec, buffer);
+   };
 
    "int write"_test = [] {
       std::string buffer{};

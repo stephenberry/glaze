@@ -236,13 +236,20 @@ namespace glz
          else {
             /* write with scientific notation */
             auto end = write_u32_len_1_to_9_trim(buf + 1, sig_dec);
-            exp_dec += num_digits - 1;
-            buf[0] = buf[1];
-            buf[1] = '.';
-            end[0] = 'E';
+            exp_dec += int32_t(end - (buf + 1)) - 1; // Adjust exponent based on actual digits written
+            buf[0] = buf[1]; // First digit
+            buf[1] = '.'; // Decimal point
+            if (end == buf + 2) { // Only one digit was written
+               buf[2] = '0'; // Add trailing zero
+               end++;
+            }
+            *end = 'E';
             buf = end + 1;
-            buf[0] = '-';
-            buf += exp_dec < 0;
+            if (exp_dec < 0) {
+               *buf = '-';
+               ++buf;
+               exp_dec = -exp_dec;
+            }
             exp_dec = std::abs(exp_dec);
             if (exp_dec < 100) {
                uint32_t lz = exp_dec < 10;
