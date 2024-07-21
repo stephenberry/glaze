@@ -628,7 +628,7 @@ namespace glz
                   if constexpr (std::is_volatile_v<std::remove_reference_t<decltype(value)>>) {
                      // Hardware may interact with value changes, so we parse into a temporary and assign in one place
                      V temp;
-                     static constexpr fast_float::parse_options options{ fast_float::chars_format::json };
+                     static constexpr fast_float::parse_options options{fast_float::chars_format::json};
                      auto [ptr, ec] = fast_float::from_chars_advanced(it, end, temp, options);
                      if (ec != std::errc()) [[unlikely]] {
                         ctx.error = error_code::parse_number_failure;
@@ -638,7 +638,7 @@ namespace glz
                      it = ptr;
                   }
                   else {
-                     static constexpr fast_float::parse_options options{ fast_float::chars_format::json };
+                     static constexpr fast_float::parse_options options{fast_float::chars_format::json};
                      auto [ptr, ec] = fast_float::from_chars_advanced(it, end, value, options);
                      if (ec != std::errc()) [[unlikely]] {
                         ctx.error = error_code::parse_number_failure;
