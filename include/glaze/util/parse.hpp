@@ -256,11 +256,11 @@ namespace glz::detail
    {
       using namespace unicode;
 
-      const uint32_t high = hex_to_u32(it);
-      if (high == 0xFFFFFFFFu) [[unlikely]] {
+      if (it + 4 >= end) [[unlikely]] {
          return false;
       }
-      if (it + 4 >= end) [[unlikely]] {
+      const uint32_t high = hex_to_u32(it);
+      if (high == 0xFFFFFFFFu) [[unlikely]] {
          return false;
       }
       it += 4; // skip the code point characters
