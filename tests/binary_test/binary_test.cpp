@@ -4,6 +4,7 @@
 #define UT_RUN_TIME_ONLY
 
 #include <bit>
+#include <bitset>
 #include <chrono>
 #include <complex>
 #include <deque>
