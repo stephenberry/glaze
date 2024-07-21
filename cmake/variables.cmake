@@ -11,6 +11,10 @@ if(PROJECT_IS_TOP_LEVEL)
     glaze_DEVELOPER_MODE "Enable developer mode" ON
     "PROJECT_IS_TOP_LEVEL" OFF
   )
+  cmake_dependent_option(
+    glaze_ENABLE_FUZZING "Enable building fuzzers" ON
+    "PROJECT_IS_TOP_LEVEL" OFF
+  )
 endif()
 
 # ---- Warning guard ----
