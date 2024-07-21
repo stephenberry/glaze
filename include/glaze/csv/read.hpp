@@ -9,8 +9,8 @@
 #include "glaze/core/read.hpp"
 #include "glaze/core/refl.hpp"
 #include "glaze/file/file_ops.hpp"
+#include "glaze/util/fast_float.hpp"
 #include "glaze/util/parse.hpp"
-#include "glaze/util/strod.hpp"
 
 namespace glz
 {
@@ -62,7 +62,7 @@ namespace glz
       struct from_csv<T>
       {
          template <auto Opts, class It>
-         static void op(auto&& value, is_context auto&& ctx, It&& it, auto&&) noexcept
+         static void op(auto&& value, is_context auto&& ctx, It&& it, auto&& end) noexcept
          {
             if (bool(ctx.error)) [[unlikely]] {
                return;
@@ -109,11 +109,13 @@ namespace glz
                }
             }
             else {
-               auto s = parse_float<V>(value, it);
-               if (!s) [[unlikely]] {
+               static constexpr fast_float::parse_options options{ fast_float::chars_format::json };
+               auto [ptr, ec] = fast_float::from_chars_advanced(it, end, value, options);
+               if (ec != std::errc()) [[unlikely]] {
                   ctx.error = error_code::parse_number_failure;
                   return;
                }
+               it = ptr;
             }
          }
       };

@@ -6,10 +6,117 @@
 #include <iterator>
 
 #include "glaze/util/inline.hpp"
-#include "glaze/util/strod.hpp"
 
 namespace glz::detail
 {
+   constexpr std::array<uint64_t, 20> powers_of_ten_int{1ull,
+                                                        10ull,
+                                                        100ull,
+                                                        1000ull,
+                                                        10000ull,
+                                                        100000ull,
+                                                        1000000ull,
+                                                        10000000ull,
+                                                        100000000ull,
+                                                        1000000000ull,
+                                                        10000000000ull,
+                                                        100000000000ull,
+                                                        1000000000000ull,
+                                                        10000000000000ull,
+                                                        100000000000000ull,
+                                                        1000000000000000ull,
+                                                        10000000000000000ull,
+                                                        100000000000000000ull,
+                                                        1000000000000000000ull,
+                                                        10000000000000000000ull};
+
+   /*==============================================================================
+    * Digit Character Matcher
+    *============================================================================*/
+   // Digit type
+   using digi_type = uint8_t;
+   // Digit: '0'.
+   constexpr digi_type DIGI_TYPE_ZERO = 1 << 0;
+   // Digit: [1-9].
+   constexpr digi_type DIGI_TYPE_NONZERO = 1 << 1;
+   // Plus sign (positive): '+'.
+   constexpr digi_type DIGI_TYPE_POS = 1 << 2;
+   // Minus sign (negative): '-'.
+   constexpr digi_type DIGI_TYPE_NEG = 1 << 3;
+   // Decimal point: '.'
+   constexpr digi_type DIGI_TYPE_DOT = 1 << 4;
+   // Exponent sign: 'e, 'E'.
+   constexpr digi_type DIGI_TYPE_EXP = 1 << 5;
+   // Digit type table
+   constexpr std::array<digi_type, 256> digi_table = {
+      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+      0x00, 0x00, 0x00, 0x00, 0x00, 0x04, 0x00, 0x08, 0x10, 0x00, 0x01, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02,
+      0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x20, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x20, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+   /** Match a character with specified type. */
+   inline bool digi_is_type(uint8_t d, digi_type type) noexcept { return (digi_table[d] & type) != 0; }
+   /** Match a floating point indicator: '.', 'e', 'E'. */
+   inline bool digi_is_fp(uint8_t d) noexcept { return digi_is_type(d, digi_type(DIGI_TYPE_DOT | DIGI_TYPE_EXP)); }
+   /** Match a digit or floating point indicator: [0-9], '.', 'e', 'E'. */
+   inline bool digi_is_digit_or_fp(uint8_t d) noexcept
+   {
+      return digi_is_type(d, digi_type(DIGI_TYPE_ZERO | DIGI_TYPE_NONZERO | DIGI_TYPE_DOT | DIGI_TYPE_EXP));
+   }
+/* Macros used for loop unrolling and other purpose. */
+#define repeat2(x) \
+   {               \
+      x x          \
+   }
+#define repeat3(x) \
+   {               \
+      x x x        \
+   }
+#define repeat4(x) \
+   {               \
+      x x x x      \
+   }
+#define repeat8(x)    \
+   {                  \
+      x x x x x x x x \
+   }
+#define repeat16(x)                   \
+   {                                  \
+      x x x x x x x x x x x x x x x x \
+   }
+#define repeat2_incr(x) \
+   {                    \
+      x(0) x(1)         \
+   }
+#define repeat4_incr(x)   \
+   {                      \
+      x(0) x(1) x(2) x(3) \
+   }
+#define repeat8_incr(x)                       \
+   {                                          \
+      x(0) x(1) x(2) x(3) x(4) x(5) x(6) x(7) \
+   }
+#define repeat16_incr(x)                                                                    \
+   {                                                                                        \
+      x(0) x(1) x(2) x(3) x(4) x(5) x(6) x(7) x(8) x(9) x(10) x(11) x(12) x(13) x(14) x(15) \
+   }
+#define repeat_in_1_18(x)                                                                                \
+   {                                                                                                     \
+      x(1) x(2) x(3) x(4) x(5) x(6) x(7) x(8) x(9) x(10) x(11) x(12) x(13) x(14) x(15) x(16) x(17) x(18) \
+   }
+   constexpr auto e_bit = static_cast<uint8_t>('E' ^ 'e');
+   /*==============================================================================
+    * IEEE-754 Double Number Constants
+    *============================================================================*/
+   // maximum decimal power of double number (1.7976931348623157e308)
+   constexpr auto F64_MAX_DEC_EXP = 308;
+   // minimum decimal power of double number (4.9406564584124654e-324)
+   constexpr auto F64_MIN_DEC_EXP = (-324);
+
+   consteval uint32_t ceillog2(uint32_t x) { return x < 2 ? x : 1 + ceillog2(x >> 1); }
+
    GLZ_ALWAYS_INLINE constexpr bool is_digit(const char c) noexcept { return c >= '0' && c <= '9'; }
 
    GLZ_ALWAYS_INLINE constexpr bool is_safe_addition(uint64_t a, uint64_t b) noexcept

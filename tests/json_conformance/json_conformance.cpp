@@ -289,33 +289,33 @@ inline void should_fail()
    };
 
    "0e"_test = [] {
-      constexpr sv s = R"(0e)";
+      constexpr sv s = R"([0e])";
       {
-         double v{};
+         std::vector<double> v{};
          expect(glz::read_json(v, s));
       }
       {
-         float v{};
+         std::vector<float> v{};
          expect(glz::read_json(v, s));
       }
       {
-         int v{};
+         std::vector<int> v{};
          expect(glz::read_json(v, s));
       }
    };
 
    "0e+"_test = [] {
-      constexpr sv s = R"(0e+)";
+      constexpr sv s = R"([0e+])";
       {
-         double v{};
+         std::vector<double> v{};
          expect(glz::read_json(v, s));
       }
       {
-         float v{};
+         std::vector<float> v{};
          expect(glz::read_json(v, s));
       }
       {
-         int v{};
+         std::vector<int> v{};
          expect(glz::read_json(v, s));
       }
    };

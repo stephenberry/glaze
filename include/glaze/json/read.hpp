@@ -18,8 +18,8 @@
 #include "glaze/file/file_ops.hpp"
 #include "glaze/json/json_t.hpp"
 #include "glaze/json/skip.hpp"
+#include "glaze/util/fast_float.hpp"
 #include "glaze/util/for_each.hpp"
-#include "glaze/util/strod.hpp"
 #include "glaze/util/type_traits.hpp"
 #include "glaze/util/variant.hpp"
 
@@ -628,19 +628,23 @@ namespace glz
                   if constexpr (std::is_volatile_v<std::remove_reference_t<decltype(value)>>) {
                      // Hardware may interact with value changes, so we parse into a temporary and assign in one place
                      V temp;
-                     auto s = parse_float<V>(temp, it);
-                     if (!s) [[unlikely]] {
+                     static constexpr fast_float::parse_options options{ fast_float::chars_format::json };
+                     auto [ptr, ec] = fast_float::from_chars_advanced(it, end, temp, options);
+                     if (ec != std::errc()) [[unlikely]] {
                         ctx.error = error_code::parse_number_failure;
                         return;
                      }
                      value = temp;
+                     it = ptr;
                   }
                   else {
-                     auto s = parse_float<V>(value, it);
-                     if (!s) [[unlikely]] {
+                     static constexpr fast_float::parse_options options{ fast_float::chars_format::json };
+                     auto [ptr, ec] = fast_float::from_chars_advanced(it, end, value, options);
+                     if (ec != std::errc()) [[unlikely]] {
                         ctx.error = error_code::parse_number_failure;
                         return;
                      }
+                     it = ptr;
                   }
                }
             }
