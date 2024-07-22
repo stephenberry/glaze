@@ -8853,6 +8853,25 @@ suite minify_prettify_safety = [] {
    };
 };
 
+struct TestSettingsData {
+   std::string VERSION = "0.0.2";
+
+   std::map<std::string, float> video = {{"scale", 0.5F}, {"monitor", 2.F}};
+   std::map<std::string, std::string> controls = {{"jump", "A"}, {"crouch", "L_CNTRL"}};
+
+   std::string username = "MISSING";
+};
+
+suite TestSettingsData_test = [] {
+   "TestSettingsData"_test = [] {
+      TestSettingsData obj{};
+      std::string buffer{};
+      expect(not glz::write_json(obj, buffer));
+      auto ec = glz::read_json(obj, buffer);
+      expect(not ec) << glz::format_error(ec, buffer);
+   };
+};
+
 int main()
 {
    trace.end("json_test");
