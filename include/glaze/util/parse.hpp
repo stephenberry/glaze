@@ -564,6 +564,12 @@ namespace glz::detail
             }                                                            \
          }                                                               \
       }                                                                  \
+      if constexpr (not Opts.is_null_terminated) {                       \
+         if (it == end) [[unlikely]] {                                   \
+            ctx.error = error_code::unexpected_end;                      \
+            return RETURN;                                               \
+         }                                                               \
+      }                                                                  \
    }
 
    // skip whitespace
@@ -609,6 +615,13 @@ namespace glz::detail
                while (it < end && whitespace_table[uint8_t(*it)]) {
                   ++it;
                }
+            }
+         }
+
+         if constexpr (not Opts.is_null_terminated) {
+            if (it == end) [[unlikely]] {
+               ctx.error = error_code::unexpected_end;
+               return;
             }
          }
       }

@@ -78,7 +78,17 @@ namespace glz::detail
          if constexpr (!has_ws_handled(Opts)) {
             GLZ_SKIP_WS();
          }
-         while (true) {
+         
+         auto valid = [&]() constexpr {
+            if constexpr (Opts.is_null_terminated) {
+               return true;
+            }
+            else {
+               return it < end;
+            }
+         };
+         
+         while (valid()) {
             switch (*it) {
             case '{':
                ++it;
@@ -122,6 +132,14 @@ namespace glz::detail
          if constexpr (!has_ws_handled(Opts)) {
             GLZ_SKIP_WS();
          }
+         
+         if constexpr (not Opts.is_null_terminated) {
+            if (it == end) [[unlikely]] {
+               ctx.error = error_code::unexpected_end;
+               return;
+            }
+         }
+         
          switch (*it) {
          case '{': {
             skip_object<Opts>(ctx, it, end);
