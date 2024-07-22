@@ -7349,6 +7349,12 @@ suite address_sanitizer_test = [] {
       auto blah = std::vector<char>{0x22, 0x5c, char(0xff), 0x22, 0x00};
       expect(glz::read_json(json, blah));
    };
+   
+   "invalid json_t read"_test = [] {
+      std::string buffer = R"({\"      \\\\\\\\\\\\[\\\\\\\\\\uuu\365uuu     \\\\\\\\\\\\[\\\\\\\\\\uuuuuuuuuuuuuuuuPuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuu\\\\\\\"  @\000\000\\\\\"\"    $\000)";
+      glz::json_t json{};
+      expect(glz::read_json(json, buffer));
+   };
 };
 
 struct Sinks
