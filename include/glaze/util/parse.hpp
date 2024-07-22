@@ -132,7 +132,7 @@ namespace glz::detail
    [[nodiscard]] GLZ_ALWAYS_INLINE uint32_t hex_to_u32(const char* c) noexcept
    {
       const auto& t = digit_hex_table;
-      const uint8_t arr[4]{t[c[3]], t[c[2]], t[c[1]], t[c[0]]};
+      const uint8_t arr[4]{t[uint8_t(c[3])], t[uint8_t(c[2])], t[uint8_t(c[1])], t[uint8_t(c[0])]};
       uint32_t chunk;
       std::memcpy(&chunk, arr, 4);
       // check that all hex characters are valid
