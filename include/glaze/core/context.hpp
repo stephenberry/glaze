@@ -13,7 +13,7 @@
 namespace glz
 {
    constexpr size_t max_recursive_depth_limit = 256;
-   
+
    GLZ_ENUM(error_code,
             none, //
             no_read_input, //

@@ -2538,12 +2538,12 @@ namespace glz
                   ctx.error = error_code::unexpected_end;
                   return;
                case '{':
-                     if (ctx.indentation_level >= max_recursive_depth_limit) {
-                        ctx.error = error_code::exceeded_max_recursive_depth;
-                        return;
-                     }
-                     ++ctx.indentation_level;
-                     
+                  if (ctx.indentation_level >= max_recursive_depth_limit) {
+                     ctx.error = error_code::exceeded_max_recursive_depth;
+                     return;
+                  }
+                  ++ctx.indentation_level;
+
                   ++it;
                   using object_types = typename variant_types<T>::object_types;
                   if constexpr (glz::tuple_size_v<object_types> < 1) {
@@ -2604,7 +2604,7 @@ namespace glz
                                           }
                                        },
                                        value);
-                                    
+
                                     --ctx.indentation_level;
                                     return; // we've decoded our target type
                                  }
@@ -2679,7 +2679,7 @@ namespace glz
                                  }
                               },
                               value);
-                           
+
                            --ctx.indentation_level;
                            return; // we've decoded our target type
                         }
@@ -2697,7 +2697,7 @@ namespace glz
                   break;
                case '[':
                   using array_types = typename variant_types<T>::array_types;
-                     
+
                   if (ctx.indentation_level >= max_recursive_depth_limit) {
                      ctx.error = error_code::exceeded_max_recursive_depth;
                      return;

@@ -8905,7 +8905,7 @@ suite depth_limits_test = [] {
       auto ec = glz::read_json(json, buffer);
       expect(ec);
    };
-   
+
    "massive { depth"_test = [] {
       std::string buffer{};
       buffer.insert(0, 4096, '{');
