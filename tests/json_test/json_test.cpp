@@ -8853,7 +8853,8 @@ suite minify_prettify_safety = [] {
    };
 };
 
-struct TestSettingsData {
+struct TestSettingsData
+{
    std::string VERSION = "0.0.2";
 
    std::map<std::string, float> video = {{"scale", 0.5F}, {"monitor", 2.F}};
@@ -8870,10 +8871,14 @@ suite TestSettingsData_test = [] {
       auto ec = glz::read_json(obj, buffer);
       expect(not ec) << glz::format_error(ec, buffer);
    };
-   
+
    static constexpr glz::opts write_options{.comments = 1U, .prettify = 1U, .allow_conversions = 1U};
-   static constexpr glz::opts read_options{.comments = 1U, .error_on_unknown_keys = 0U, .skip_null_members = 1U, .error_on_missing_keys = 0U, .allow_conversions = 1U};
-   
+   static constexpr glz::opts read_options{.comments = 1U,
+                                           .error_on_unknown_keys = 0U,
+                                           .skip_null_members = 1U,
+                                           .error_on_missing_keys = 0U,
+                                           .allow_conversions = 1U};
+
    "TestSettingsData options"_test = [] {
       TestSettingsData obj{};
       std::string buffer{};
@@ -8881,7 +8886,7 @@ suite TestSettingsData_test = [] {
       auto ec = glz::read<read_options>(obj, buffer);
       expect(not ec) << glz::format_error(ec, buffer);
    };
-   
+
    "TestSettingsData options file"_test = [] {
       TestSettingsData obj{};
       std::string buffer{};
