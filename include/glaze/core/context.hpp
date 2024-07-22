@@ -12,6 +12,8 @@
 
 namespace glz
 {
+   constexpr size_t max_recursive_depth_limit = 256;
+   
    GLZ_ENUM(error_code,
             none, //
             no_read_input, //
@@ -23,6 +25,7 @@ namespace glz
             expected_comma, //
             expected_colon, //
             exceeded_static_array_size, //
+            exceeded_max_recursive_depth, //
             unexpected_end, //
             expected_end_comment, //
             syntax_error, //
@@ -91,7 +94,9 @@ namespace glz
       error_code error{};
       std::string_view custom_error_message{};
       // INTERNAL USE:
-      uint32_t indentation_level{};
+      uint32_t indentation_level{}; // When writing this is the number of indent character to serialize
+      // When reading indentation_level is used to track the depth of structures to prevent stack overflows
+      // From massive depths due to untrusted inputs or attacks
       std::string current_file; // top level file path
       std::string_view includer_error{}; // error from a nested file includer
    };
