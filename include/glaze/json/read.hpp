@@ -2538,6 +2538,12 @@ namespace glz
                   ctx.error = error_code::unexpected_end;
                   return;
                case '{':
+                  if (ctx.indentation_level >= max_recursive_depth_limit) {
+                     ctx.error = error_code::exceeded_max_recursive_depth;
+                     return;
+                  }
+                  ++ctx.indentation_level;
+
                   ++it;
                   using object_types = typename variant_types<T>::object_types;
                   if constexpr (glz::tuple_size_v<object_types> < 1) {
@@ -2598,6 +2604,8 @@ namespace glz
                                           }
                                        },
                                        value);
+
+                                    --ctx.indentation_level;
                                     return; // we've decoded our target type
                                  }
                                  else {
@@ -2671,7 +2679,9 @@ namespace glz
                                  }
                               },
                               value);
-                           return;
+
+                           --ctx.indentation_level;
+                           return; // we've decoded our target type
                         }
                         parse_object_entry_sep<Opts>(ctx, it, end);
                         if (bool(ctx.error)) [[unlikely]]
@@ -2687,7 +2697,14 @@ namespace glz
                   break;
                case '[':
                   using array_types = typename variant_types<T>::array_types;
+
+                  if (ctx.indentation_level >= max_recursive_depth_limit) {
+                     ctx.error = error_code::exceeded_max_recursive_depth;
+                     return;
+                  }
+                  ++ctx.indentation_level;
                   process_arithmetic_boolean_string_or_array<array_types>::template op<Opts>(value, ctx, it, end);
+                  --ctx.indentation_level;
                   break;
                case '"': {
                   using string_types = typename variant_types<T>::string_types;
