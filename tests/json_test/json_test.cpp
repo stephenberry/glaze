@@ -8896,6 +8896,25 @@ suite TestSettingsData_test = [] {
    };
 };
 
+suite depth_limits_test = [] {
+   // test to check for guard against stack overflow
+   "massive [ depth"_test = [] {
+      std::string buffer{};
+      buffer.insert(0, 4096, '[');
+      glz::json_t json{};
+      auto ec = glz::read_json(json, buffer);
+      expect(ec);
+   };
+   
+   "massive { depth"_test = [] {
+      std::string buffer{};
+      buffer.insert(0, 4096, '{');
+      glz::json_t json{};
+      auto ec = glz::read_json(json, buffer);
+      expect(ec);
+   };
+};
+
 int main()
 {
    trace.end("json_test");
