@@ -8921,6 +8921,19 @@ suite depth_limits_test = [] {
    };
 };
 
+suite non_null_terminated_buffer = [] {
+   static constexpr glz::opts options{.is_null_terminated = false};
+   
+   "!null-termination string"_test = [] {
+      std::string_view str = R"("Hello World")";
+      std::vector<char> buffer{str.begin(), str.end()};
+      
+      std::string v{};
+      expect(not glz::read<options>(v, buffer));
+      expect(v == "Hello World");
+   };
+};
+
 int main()
 {
    trace.end("json_test");

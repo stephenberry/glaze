@@ -522,26 +522,48 @@ namespace glz::detail
       return (chunk & repeat_byte8(0b11110000u));
    }
 
-#define GLZ_SKIP_WS(RETURN)                               \
-   if constexpr (!Opts.minified) {                        \
-      if constexpr (Opts.comments) {                      \
-         while (whitespace_comment_table[uint8_t(*it)]) { \
-            if (*it == '/') [[unlikely]] {                \
-               skip_comment(ctx, it, end);                \
-               if (bool(ctx.error)) [[unlikely]] {        \
-                  return RETURN;                          \
-               }                                          \
-            }                                             \
-            else [[likely]] {                             \
-               ++it;                                      \
-            }                                             \
-         }                                                \
-      }                                                   \
-      else {                                              \
-         while (whitespace_table[uint8_t(*it)]) {         \
-            ++it;                                         \
-         }                                                \
-      }                                                   \
+#define GLZ_SKIP_WS(RETURN)                                              \
+   if constexpr (!Opts.minified) {                                       \
+      if constexpr (Opts.comments) {                                     \
+         if constexpr (Opts.is_null_terminated) {                        \
+            while (whitespace_comment_table[uint8_t(*it)]) {             \
+               if (*it == '/') [[unlikely]] {                            \
+                  skip_comment(ctx, it, end);                            \
+                  if (bool(ctx.error)) [[unlikely]] {                    \
+                     return RETURN;                                      \
+                  }                                                      \
+               }                                                         \
+               else [[likely]] {                                         \
+                  ++it;                                                  \
+               }                                                         \
+            }                                                            \
+         }                                                               \
+         else {                                                          \
+            while (it < end && whitespace_comment_table[uint8_t(*it)]) { \
+               if (*it == '/') [[unlikely]] {                            \
+                  skip_comment(ctx, it, end);                            \
+                  if (bool(ctx.error)) [[unlikely]] {                    \
+                     return RETURN;                                      \
+                  }                                                      \
+               }                                                         \
+               else [[likely]] {                                         \
+                  ++it;                                                  \
+               }                                                         \
+            }                                                            \
+         }                                                               \
+      }                                                                  \
+      else {                                                             \
+         if constexpr (Opts.is_null_terminated) {                        \
+            while (whitespace_table[uint8_t(*it)]) {                     \
+               ++it;                                                     \
+            }                                                            \
+         }                                                               \
+         else {                                                          \
+            while (it < end && whitespace_table[uint8_t(*it)]) {         \
+               ++it;                                                     \
+            }                                                            \
+         }                                                               \
+      }                                                                  \
    }
 
    // skip whitespace
@@ -550,21 +572,43 @@ namespace glz::detail
    {
       if constexpr (!Opts.minified) {
          if constexpr (Opts.comments) {
-            while (whitespace_comment_table[uint8_t(*it)]) {
-               if (*it == '/') [[unlikely]] {
-                  skip_comment(ctx, it, end);
-                  if (bool(ctx.error)) [[unlikely]] {
-                     return;
+            if constexpr (Opts.is_null_terminated) {
+               while (whitespace_comment_table[uint8_t(*it)]) {
+                  if (*it == '/') [[unlikely]] {
+                     skip_comment(ctx, it, end);
+                     if (bool(ctx.error)) [[unlikely]] {
+                        return;
+                     }
+                  }
+                  else [[likely]] {
+                     ++it;
                   }
                }
-               else [[likely]] {
-                  ++it;
+            }
+            else {
+               while (it < end && whitespace_comment_table[uint8_t(*it)]) {
+                  if (*it == '/') [[unlikely]] {
+                     skip_comment(ctx, it, end);
+                     if (bool(ctx.error)) [[unlikely]] {
+                        return;
+                     }
+                  }
+                  else [[likely]] {
+                     ++it;
+                  }
                }
             }
          }
          else {
-            while (whitespace_table[uint8_t(*it)]) {
-               ++it;
+            if constexpr (Opts.is_null_terminated) {
+               while (whitespace_table[uint8_t(*it)]) {
+                  ++it;
+               }
+            }
+            else {
+               while (it < end && whitespace_table[uint8_t(*it)]) {
+                  ++it;
+               }
             }
          }
       }
