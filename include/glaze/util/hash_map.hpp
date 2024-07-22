@@ -516,67 +516,68 @@ namespace glz::detail
          if constexpr (N == 0) {
             return;
          }
+         else {
+            std::array<std::array<storage_type, max_bucket_size>, N> full_buckets{};
+            std::array<size_t, N> bucket_sizes{};
+            detail::naive_prng gen{};
 
-         std::array<std::array<storage_type, max_bucket_size>, N> full_buckets{};
-         std::array<size_t, N> bucket_sizes{};
-         detail::naive_prng gen{};
-
-         bool failed;
-         do {
-            failed = false;
-            seed = gen() + 1;
-            for (storage_type i{}; i < N; ++i) {
-               const auto hash = hash_alg{}(items[i].first, seed);
-               if (hash == seed) {
-                  failed = true;
-                  break;
-               }
-               hashes[i] = hash;
-               const auto bucket = hash % N;
-               const auto bucket_size = bucket_sizes[bucket]++;
-               if (bucket_size == max_bucket_size) {
-                  failed = true;
-                  bucket_sizes = {};
-                  break;
-               }
-               else {
-                  full_buckets[bucket][bucket_size] = i;
-               }
-            }
-         } while (failed);
-
-         std::array<size_t, N> buckets_index{};
-         std::iota(buckets_index.begin(), buckets_index.end(), 0);
-         std::sort(buckets_index.begin(), buckets_index.end(),
-                   [&bucket_sizes](size_t i1, size_t i2) { return bucket_sizes[i1] > bucket_sizes[i2]; });
-
-         constexpr auto unknown_key_indice = N;
-         std::fill(table.begin(), table.end(), storage_type(unknown_key_indice));
-         for (auto bucket_index : buckets_index) {
-            const auto bucket_size = bucket_sizes[bucket_index];
-            if (bucket_size < 1) break;
-            if (bucket_size == 1) {
-               buckets[bucket_index] = -int64_t(full_buckets[bucket_index][0]);
-               continue;
-            }
-            const auto table_old = table;
+            bool failed;
             do {
                failed = false;
-               // We need to reserve top bit for bucket_size == 1
-               const auto secondary_seed = gen() >> 1;
-               for (size_t i = 0; i < bucket_size; ++i) {
-                  const auto index = full_buckets[bucket_index][i];
-                  const auto hash = hashes[index];
-                  const auto slot = combine(hash, secondary_seed) % storage_size;
-                  if (table[slot] != unknown_key_indice) {
+               seed = gen() + 1;
+               for (storage_type i{}; i < N; ++i) {
+                  const auto hash = hash_alg{}(items[i].first, seed);
+                  if (hash == seed) {
                      failed = true;
-                     table = table_old;
                      break;
                   }
-                  table[slot] = index;
+                  hashes[i] = hash;
+                  const auto bucket = hash % N;
+                  const auto bucket_size = bucket_sizes[bucket]++;
+                  if (bucket_size == max_bucket_size) {
+                     failed = true;
+                     bucket_sizes = {};
+                     break;
+                  }
+                  else {
+                     full_buckets[bucket][bucket_size] = i;
+                  }
                }
-               buckets[bucket_index] = secondary_seed;
             } while (failed);
+
+            std::array<size_t, N> buckets_index{};
+            std::iota(buckets_index.begin(), buckets_index.end(), 0);
+            std::sort(buckets_index.begin(), buckets_index.end(),
+                      [&bucket_sizes](size_t i1, size_t i2) { return bucket_sizes[i1] > bucket_sizes[i2]; });
+
+            constexpr auto unknown_key_indice = N;
+            std::fill(table.begin(), table.end(), storage_type(unknown_key_indice));
+            for (auto bucket_index : buckets_index) {
+               const auto bucket_size = bucket_sizes[bucket_index];
+               if (bucket_size < 1) break;
+               if (bucket_size == 1) {
+                  buckets[bucket_index] = -int64_t(full_buckets[bucket_index][0]);
+                  continue;
+               }
+               const auto table_old = table;
+               do {
+                  failed = false;
+                  // We need to reserve top bit for bucket_size == 1
+                  const auto secondary_seed = gen() >> 1;
+                  for (size_t i = 0; i < bucket_size; ++i) {
+                     const auto index = full_buckets[bucket_index][i];
+                     const auto hash = hashes[index];
+                     const auto slot = combine(hash, secondary_seed) % storage_size;
+                     if (table[slot] != unknown_key_indice) {
+                        failed = true;
+                        table = table_old;
+                        break;
+                     }
+                     table[slot] = index;
+                  }
+                  buckets[bucket_index] = secondary_seed;
+               } while (failed);
+            }
          }
       }
    };
