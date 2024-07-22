@@ -8870,6 +8870,25 @@ suite TestSettingsData_test = [] {
       auto ec = glz::read_json(obj, buffer);
       expect(not ec) << glz::format_error(ec, buffer);
    };
+   
+   static constexpr glz::opts write_options{.comments = 1U, .prettify = 1U, .allow_conversions = 1U};
+   static constexpr glz::opts read_options{.comments = 1U, .error_on_unknown_keys = 0U, .skip_null_members = 1U, .error_on_missing_keys = 0U, .allow_conversions = 1U};
+   
+   "TestSettingsData options"_test = [] {
+      TestSettingsData obj{};
+      std::string buffer{};
+      expect(not glz::write<write_options>(obj, buffer));
+      auto ec = glz::read<read_options>(obj, buffer);
+      expect(not ec) << glz::format_error(ec, buffer);
+   };
+   
+   "TestSettingsData options file"_test = [] {
+      TestSettingsData obj{};
+      std::string buffer{};
+      expect(not glz::write_file_json<write_options>(obj, "test_settings.json", buffer));
+      auto ec = glz::read_file_json<read_options>(obj, "test_settings.json", buffer);
+      expect(not ec) << glz::format_error(ec, buffer);
+   };
 };
 
 int main()
