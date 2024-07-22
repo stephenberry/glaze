@@ -77,10 +77,6 @@ namespace glz
          static constexpr type value{};
          static constexpr const std::string_view get() { return {value.data, num_digits(x)}; }
       };
-
-      /* instantiate numeric_string::value as needed for different numbers */
-      template <uint64_t x>
-      constexpr typename numeric_string<x>::type numeric_string<x>::value;
    }
 
    template <class T, T Value>
