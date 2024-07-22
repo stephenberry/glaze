@@ -1560,7 +1560,6 @@ suite early_end = [] {
       while (buffer.size() > 0) {
          buffer_data.pop_back();
          buffer = std::vector<char>{buffer_data.begin(), buffer_data.end()};
-         buffer.emplace_back(' '); // add one character of buffer
          // This is mainly to check if all our end checks are in place.
          const auto const_buffer = buffer; // const buffer to avoid padding
          auto ec = glz::read<options>(obj, const_buffer);
