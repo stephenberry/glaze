@@ -1,4 +1,4 @@
-name: exhaustive json tests
+name: exhaustive float json tests
 
 on:
   push:
@@ -47,13 +47,6 @@ jobs:
       working-directory: build
       run: |
         set -e
-        fuzzing/json_exhaustive_roundtrip_int
+        fuzzing/json_exhaustive_roundtrip_float
 
         echo all is OK!
-
-    - uses: actions/upload-artifact@v4
-      if: ${{ failure() }}
-      with:
-        name: fuzzing-artifacts
-        path: build/artifacts/
-

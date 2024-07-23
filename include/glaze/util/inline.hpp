@@ -19,7 +19,7 @@
 #define GLZ_ALWAYS_INLINE inline
 #endif
 
-// IMPORTNAT: GLZ_FLATTEN should only be used with extreme care
+// IMPORTANT: GLZ_FLATTEN should only be used with extreme care
 // It often adds to the binary size and greatly increases compilation times.
 // It should only be applied in very specific circumstances.
 // It is best to more often rely on the compiler.
