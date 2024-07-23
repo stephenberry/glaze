@@ -2245,9 +2245,6 @@ namespace fast_float
       };
    };
 
-   template <class unused>
-   constexpr uint64_t powers_template<unused>::power_of_five_128[number_of_entries];
-
    using powers = powers_template<>;
 
 } // namespace fast_float
