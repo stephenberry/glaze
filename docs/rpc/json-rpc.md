@@ -6,7 +6,7 @@ Compile time specification of JSON-RPC methods making it unnecessary to convert 
 
 ### Example
 
-full wrodking example can be seen in source code [examples/json-rpc.cc](examples/json-rpc.cc)
+full working example can be seen in source code [examples/json-rpc.cc](examples/json-rpc.cc)
 
 ```C++
 struct foo_params
