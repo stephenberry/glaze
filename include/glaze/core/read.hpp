@@ -35,13 +35,9 @@ namespace glz
          }
       }
       else {
-         // if not a std::string, std::string_view, or span, check that the last character is a null character
          end += buffer.size() - 1;
          if constexpr (Padded) {
             end -= padding_bytes;
-         }
-         if (*end != '\0') {
-            ctx.error = error_code::data_must_be_null_terminated;
          }
       }
 
