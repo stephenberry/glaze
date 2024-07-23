@@ -751,7 +751,7 @@ namespace glz
                         ++start;
                         p += next;
                         const auto mark = start;
-                        const auto offset = handle_unicode_code_point(start, p);
+                        const auto offset = handle_unicode_code_point(start, p, end);
                         if (offset == 0) [[unlikely]] {
                            ctx.error = error_code::unicode_escape_conversion_failure;
                            return;
@@ -908,7 +908,7 @@ namespace glz
                               ++start;
                               p += next;
                               const auto mark = start;
-                              const auto offset = handle_unicode_code_point(start, p);
+                              const auto offset = handle_unicode_code_point(start, p, end);
                               if (offset == 0) [[unlikely]] {
                                  ctx.error = error_code::unicode_escape_conversion_failure;
                                  return;
