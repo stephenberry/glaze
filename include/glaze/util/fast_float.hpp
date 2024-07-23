@@ -575,12 +575,6 @@ namespace fast_float
    };
 
    template <typename U>
-   constexpr double binary_format_lookup_tables<double, U>::powers_of_ten[];
-
-   template <typename U>
-   constexpr uint64_t binary_format_lookup_tables<double, U>::max_mantissa[];
-
-   template <typename U>
    struct binary_format_lookup_tables<float, U>
    {
       static constexpr float powers_of_ten[] = {1e0f, 1e1f, 1e2f, 1e3f, 1e4f, 1e5f, 1e6f, 1e7f, 1e8f, 1e9f, 1e10f};
@@ -600,12 +594,6 @@ namespace fast_float
                                                   0x1000000 / (constant_55555 * constant_55555),
                                                   0x1000000 / (constant_55555 * constant_55555 * 5)};
    };
-
-   template <typename U>
-   constexpr float binary_format_lookup_tables<float, U>::powers_of_ten[];
-
-   template <typename U>
-   constexpr uint64_t binary_format_lookup_tables<float, U>::max_mantissa[];
 
    template <>
    inline constexpr int binary_format<double>::min_exponent_fast_path()
@@ -944,15 +932,6 @@ namespace fast_float
          15943230000000000000ull, 787662783788549761,      1152921504606846976,    1667889514952984961,
          2386420683693101056,     3379220508056640625,     4738381338321616896};
    };
-
-   template <typename T>
-   constexpr uint8_t int_luts<T>::chdigit[];
-
-   template <typename T>
-   constexpr size_t int_luts<T>::maxdigits_u64[];
-
-   template <typename T>
-   constexpr uint64_t int_luts<T>::min_safe_u64[];
 
    template <typename UC>
    fastfloat_really_inline constexpr uint8_t ch_to_digit(UC c)
@@ -2893,15 +2872,6 @@ namespace fast_float
                                                   1057042919U, 1071430142U, 2440757623U, 381945767U,  46164893U};
 #endif
    };
-
-   template <typename T>
-   constexpr uint32_t pow5_tables<T>::large_step;
-
-   template <typename T>
-   constexpr uint64_t pow5_tables<T>::small_power_of_5[];
-
-   template <typename T>
-   constexpr limb pow5_tables<T>::large_power_of_5[];
 
    // big integer type. implements a small subset of big integer
    // arithmetic, using simple algorithms since asymptotically
