@@ -7355,7 +7355,7 @@ suite address_sanitizer_test = [] {
       auto blah = std::vector<char>{0x22, 0x5c, 0x75, char(0xff), 0x22, 0x00};
       expect(glz::read_json(json, blah));
    };
-   
+
    "invalid json_t 3"_test = [] {
       glz::json_t json{};
 

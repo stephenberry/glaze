@@ -129,7 +129,7 @@ namespace glz::detail
       if (chunk & repeat_byte4(0b11110000u)) [[unlikely]] {
          return 0xFFFFFFFFu;
       }
-      
+
       // TODO: can you use std::bit_cast here?
       // now pack into first four bytes of uint32_t
       uint32_t packed{};
