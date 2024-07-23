@@ -7370,6 +7370,13 @@ suite address_sanitizer_test = [] {
       auto r = glz::read_json(json, data);
       expect(r);
    };
+   
+   "invalid json_t 4"_test = []() {
+         glz::json_t json{};
+         std::string data = "\"\\uDBDD\" DDDD";
+         auto r = glz::read_json(json, data);
+         expect(r);
+      };
 };
 
 struct Sinks
