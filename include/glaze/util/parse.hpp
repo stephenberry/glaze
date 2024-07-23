@@ -113,17 +113,7 @@ namespace glz::detail
       return t;
    }();
 
-   consteval uint32_t repeat_byte4(const auto repeat) { return 0x01010101u * uint8_t(repeat); }
-
-   GLZ_ALWAYS_INLINE constexpr uint32_t has_zero_u32(const uint32_t chunk) noexcept
-   {
-      return (((chunk - 0x01010101u) & ~chunk) & 0x80808080u);
-   }
-
-   GLZ_ALWAYS_INLINE constexpr uint32_t is_less_16_u32(const uint32_t chunk) noexcept
-   {
-      return has_zero_u32(chunk & repeat_byte4(0b11110000u));
-   }
+   consteval uint32_t repeat_byte4(const auto repeat) { return uint32_t(0x01010101u) * uint8_t(repeat); }
 
    consteval uint64_t repeat_byte8(const uint8_t repeat) { return 0x0101010101010101ull * repeat; }
 
@@ -131,21 +121,23 @@ namespace glz::detail
 
    [[nodiscard]] GLZ_ALWAYS_INLINE uint32_t hex_to_u32(const char* c) noexcept
    {
-      const auto& t = digit_hex_table;
+      constexpr auto& t = digit_hex_table;
       const uint8_t arr[4]{t[uint8_t(c[3])], t[uint8_t(c[2])], t[uint8_t(c[1])], t[uint8_t(c[0])]};
       uint32_t chunk;
       std::memcpy(&chunk, arr, 4);
       // check that all hex characters are valid
-      if (is_less_16_u32(chunk)) [[likely]] {
-         // now pack into first four bytes of uint32_t
-         uint32_t packed{};
-         packed |= (chunk & 0x0000000F);
-         packed |= (chunk & 0x00000F00) >> 4;
-         packed |= (chunk & 0x000F0000) >> 8;
-         packed |= (chunk & 0x0F000000) >> 12;
-         return packed;
+      if (chunk & repeat_byte4(0b11110000u)) [[unlikely]] {
+         return 0xFFFFFFFFu;
       }
-      return 0xFFFFFFFFu;
+      
+      // TODO: can you use std::bit_cast here?
+      // now pack into first four bytes of uint32_t
+      uint32_t packed{};
+      packed |= (chunk & 0x0000000F);
+      packed |= (chunk & 0x00000F00) >> 4;
+      packed |= (chunk & 0x000F0000) >> 8;
+      packed |= (chunk & 0x0F000000) >> 12;
+      return packed;
    }
 
    template <class Char>
