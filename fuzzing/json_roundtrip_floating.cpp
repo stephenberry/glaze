@@ -29,14 +29,7 @@ void test(const uint8_t* Data, size_t Size)
       auto str = glz::write_json(s).value_or(std::string{});
       auto restored = glz::read_json<S>(str);
       assert(restored);
-
-      if (std::abs(s.value) < std::numeric_limits<T>::min()) {
-         // a denormalized value - check that it is close enough to zero.
-         assert(std::abs(restored.value().value) < std::numeric_limits<T>::min());
-      }
-      else {
-         assert(restored.value().value == s.value);
-      }
+      assert(restored.value().value == s.value);
    }
 }
 
