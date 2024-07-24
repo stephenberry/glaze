@@ -7411,7 +7411,7 @@ suite address_sanitizer_test = [] {
       auto r = glz::read_json(json, data);
       expect(r);
    };
-   
+
    "json_t 5"_test = []() {
       glz::json_t json{};
       auto data = make_vector("\"\\udb0f \"df33 ");
