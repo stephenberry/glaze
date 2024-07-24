@@ -102,7 +102,7 @@ namespace glz
       static constexpr opts options = make_read_options<T, Buffer>(Opts);
       detail::read<Opts.format>::template op<options>(value, ctx, it, end);
       
-      if constexpr (not options.null_terminated) {
+      if constexpr (not options.null_terminated && detail::glaze_object_t<T>) {
          if (ctx.indentation_level != 0) [[unlikely]] {
             ctx.error = error_code::unexpected_end;
          }
@@ -135,7 +135,7 @@ namespace glz
                ++it;
             }
          }
-         else {
+         else if (ctx.error == error_code::none) {
             ctx.error = error_code::syntax_error;
          }
       }

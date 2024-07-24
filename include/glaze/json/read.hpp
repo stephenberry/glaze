@@ -2114,6 +2114,7 @@ namespace glz
                         if constexpr (not Opts.null_terminated) {
                            if (it == end) [[unlikely]] {
                               ctx.error = error_code::brace_sentinel;
+                              return;
                            }
                         }
                         
