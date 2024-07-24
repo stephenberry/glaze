@@ -71,7 +71,10 @@ namespace glz
             unknown_distribution, //
             invalid_distribution_elements, //
             hostname_failure, //
-            includer_error //
+            includer_error, //
+            // Contextual Sentinel
+            brace_sentinel, //
+            bracket_sentinel //
    );
 
    struct error_ctx final

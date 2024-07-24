@@ -47,6 +47,16 @@ namespace glz
 
       return std::pair{it, end};
    }
+   
+   template <class T, class Buffer>
+   consteval opts make_read_options(const opts& in) {
+      opts out = in;
+      const bool use_padded = resizable<Buffer> && non_const_buffer<Buffer> && !has_disable_padding(in);
+      if (use_padded) {
+         out.internal |= uint32_t(opts::internal::is_padded);
+      }
+      return out;
+   }
 
    template <opts Opts, class T>
       requires read_supported<Opts.format, T>
@@ -72,13 +82,15 @@ namespace glz
       if (bool(ctx.error)) [[unlikely]] {
          goto finish;
       }
-
-      if constexpr (use_padded) {
-         detail::read<Opts.format>::template op<is_padded_on<Opts>()>(value, ctx, it, end);
-      }
-      else {
-         detail::read<Opts.format>::template op<is_padded_off<Opts>()>(value, ctx, it, end);
-      }
+      
+      // TODO: Add is_null_terminated option for std::string
+      //using Buffer = std::remove_cvref_t<decltype(buffer)>;
+      //if constexpr (is_specialization_v<Buffer, std::basic_string>) {
+      //
+      //}
+      
+      static constexpr opts options = make_read_options<T, Buffer>(Opts);
+      detail::read<Opts.format>::template op<options>(value, ctx, it, end);
 
       if (bool(ctx.error)) [[unlikely]] {
          goto finish;
