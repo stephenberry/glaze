@@ -1834,7 +1834,7 @@ suite read_tests = [] {
    };
 
    "Read array type"_test = [] {
-      std::string in = "    [ 3.25 , 1.125 , 3.0625 ]   ";
+      std::string in = "    [ 3.25 , 1.125 , 3.0625 ]";
       v3 v{};
       expect(glz::read_json(v, in) == glz::error_code::none);
 
@@ -1846,7 +1846,7 @@ suite read_tests = [] {
    "Read partial array type"_test = [] {
       // partial reading of fixed sized arrays
       {
-         std::string in = "    [ 3.25 , 3.125 ]   ";
+         std::string in = "    [ 3.25 , 3.125 ]";
          [[maybe_unused]] v3 v{};
          expect(glz::read_json(v, in) == glz::error_code::none);
 
@@ -1857,7 +1857,7 @@ suite read_tests = [] {
    };
 
    "Read object type"_test = [] {
-      std::string in = R"(    { "v" :  [ 3.25 , 1.125 , 3.0625 ]   , "n" : 5 } )";
+      std::string in = R"(    { "v" :  [ 3.25 , 1.125 , 3.0625 ]   , "n" : 5 })";
       oob oob{};
       expect(glz::read_json(oob, in) == glz::error_code::none);
 
@@ -1868,14 +1868,14 @@ suite read_tests = [] {
    };
 
    "Read partial object type"_test = [] {
-      std::string in = R"(    { "v" :  [ 3.25 , null , 3.0625 ]   , "n" : null } )";
+      std::string in = R"(    { "v" :  [ 3.25 , null , 3.0625 ]   , "n" : null })";
       oob oob{};
 
       expect(glz::read_json(oob, in) != glz::error_code::none);
    };
 
    "Reversed object"_test = [] {
-      std::string in = R"(    {  "n" : 5   ,  "v" :  [ 3.25 , 1.125 , 3.0625 ] } )";
+      std::string in = R"(    {  "n" : 5   ,  "v" :  [ 3.25 , 1.125 , 3.0625 ] })";
       oob oob{};
       expect(glz::read_json(oob, in) == glz::error_code::none);
 
@@ -1928,11 +1928,11 @@ suite read_tests = [] {
 
    "Read array"_test = [] {
       {
-         std::string in = R"(    [1, 5, 232, 75, 123, 54, 89] )";
+         std::string in = R"(    [1, 5, 232, 75, 123, 54, 89])";
          std::array<int, 7> v1{}, v2{99}, v3{99, 99, 99, 99, 99}, vr{1, 5, 232, 75, 123, 54, 89};
-         expect(glz::read_json(v1, in) == glz::error_code::none);
-         expect(glz::read_json(v2, in) == glz::error_code::none);
-         expect(glz::read_json(v3, in) == glz::error_code::none);
+         expect(not glz::read_json(v1, in));
+         expect(not glz::read_json(v2, in));
+         expect(not glz::read_json(v3, in));
          expect(v1 == vr);
          expect(v2 == vr);
          expect(v3 == vr);
@@ -1943,28 +1943,28 @@ suite read_tests = [] {
       {
          std::string in = R"(    [1, 5, 232, 75, 123, 54, 89])";
          std::vector<int> v, vr{1, 5, 232, 75, 123, 54, 89};
-         expect(glz::read_json(v, in) == glz::error_code::none);
+         expect(not glz::read_json(v, in));
 
          expect(v == vr);
       }
       {
          std::string in = R"([true, false, true, false])";
          std::vector<bool> v, vr{true, false, true, false};
-         expect(glz::read_json(v, in) == glz::error_code::none);
+         expect(not glz::read_json(v, in));
 
          expect(v == vr);
       }
       {
          std::string in = R"(    [1, 5, 232, 75, 123, 54, 89])";
          std::vector<int> v{1, 2, 3, 4}, vr{1, 5, 232, 75, 123, 54, 89};
-         expect(glz::read_json(v, in) == glz::error_code::none);
+         expect(not glz::read_json(v, in));
 
          expect(v == vr);
       }
       {
          std::string in = R"(    [1, 5, 232, 75, 123, 54, 89])";
          std::vector<int> v{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, vr{1, 5, 232, 75, 123, 54, 89};
-         expect(glz::read_json(v, in) == glz::error_code::none);
+         expect(not glz::read_json(v, in));
 
          expect(v == vr);
       }
@@ -2429,7 +2429,7 @@ suite write_tests = [] {
    "Read empty array structure"_test = [] {
       EmptyArray e;
       expect(glz::read_json(e, "[]") == glz::error_code::none);
-      expect(glz::read_json(e, " [   ] ") == glz::error_code::none);
+      expect(glz::read_json(e, " [   ]") == glz::error_code::none);
       expect(glz::read_json(e, "[1,2,3]") == glz::error_code::syntax_error);
    };
 
@@ -2444,10 +2444,10 @@ suite write_tests = [] {
    "Read empty object structure"_test = [] {
       EmptyObject e;
       static_assert(glz::detail::glaze_object_t<EmptyObject>);
-      expect(glz::read_json(e, "{}") == glz::error_code::none);
-      expect(glz::read_json(e, " {    } ") == glz::error_code::none);
+      expect(not glz::read_json(e, "{}"));
+      expect(not glz::read_json(e, " {    }"));
       expect(glz::read_json(e, "{ \"reject\": 44 }") == glz::error_code::unknown_key);
-      expect(glz::read<glz::opts{.error_on_unknown_keys = false}>(e, "{ \"skipped\": 44 }") == glz::error_code::none);
+      expect(not glz::read<glz::opts{.error_on_unknown_keys = false}>(e, "{ \"skipped\": 44 }"));
    };
 
    "Write c-string"_test = [] {
