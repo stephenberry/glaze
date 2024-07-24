@@ -50,7 +50,7 @@ namespace glz
 
                      // Notify that work is finished
                      --working;
-                     done_cv.notify_all();
+                     done_cv.notify_one();
                   }
                }
             });
@@ -172,7 +172,7 @@ namespace glz
       {
          // Close the queue and finish all the remaining work
          {
-            std::unique_lock lock(mtx);
+            std::lock_guard lock(mtx);
             closed = true;
             work_cv.notify_all();
          }
