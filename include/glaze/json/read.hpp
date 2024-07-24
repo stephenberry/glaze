@@ -1342,8 +1342,6 @@ namespace glz
                   GLZ_SKIP_WS();
                }
                else if (*it == ']') {
-                  GLZ_SUB_LEVEL_BRACKET;
-                  ++it;
                   if constexpr (erasable<T>) {
                      value.erase(value_it,
                                  value.end()); // use erase rather than resize for non-default constructible elements
@@ -1352,6 +1350,8 @@ namespace glz
                         value.shrink_to_fit();
                      }
                   }
+                  GLZ_SUB_LEVEL_BRACKET;
+                  ++it;
                   return;
                }
                else [[unlikely]] {
