@@ -117,6 +117,22 @@ namespace glz
    ++ctx.indentation_level; \
 }
 
-#define GLZ_SUB_LEVEL if constexpr (not Opts.null_terminated) { \
+#define GLZ_SUB_LEVEL_BRACE if constexpr (not Opts.null_terminated) { \
    --ctx.indentation_level; \
+} \
+if constexpr (not Opts.null_terminated) { \
+   if (it == end) { \
+      ctx.error = error_code::brace_sentinel; \
+      return; \
+   } \
+}
+
+#define GLZ_SUB_LEVEL_BRACKET if constexpr (not Opts.null_terminated) { \
+   --ctx.indentation_level; \
+} \
+if constexpr (not Opts.null_terminated) { \
+   if (it == end) { \
+      ctx.error = error_code::bracket_sentinel; \
+      return; \
+   } \
 }

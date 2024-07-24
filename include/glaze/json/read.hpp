@@ -430,7 +430,7 @@ namespace glz
 
             GLZ_SKIP_WS();
             GLZ_MATCH_CLOSE_BRACKET;
-            GLZ_SUB_LEVEL;
+            GLZ_SUB_LEVEL_BRACKET;
          }
       };
 
@@ -1264,7 +1264,7 @@ namespace glz
 
             value.clear();
             if (*it == ']') [[unlikely]] {
-               GLZ_SUB_LEVEL;
+               GLZ_SUB_LEVEL_BRACKET;
                ++it;
                return;
             }
@@ -1278,7 +1278,7 @@ namespace glz
                value.emplace(std::move(v));
                GLZ_SKIP_WS();
                if (*it == ']') {
-                  GLZ_SUB_LEVEL;
+                  GLZ_SUB_LEVEL_BRACKET;
                   ++it;
                   return;
                }
@@ -1307,7 +1307,7 @@ namespace glz
             GLZ_SKIP_WS();
 
             if (*it == ']') {
-               GLZ_SUB_LEVEL;
+               GLZ_SUB_LEVEL_BRACKET;
                ++it;
                if constexpr (resizable<T>) {
                   value.clear();
@@ -1342,7 +1342,7 @@ namespace glz
                   GLZ_SKIP_WS();
                }
                else if (*it == ']') {
-                  GLZ_SUB_LEVEL;
+                  GLZ_SUB_LEVEL_BRACKET;
                   ++it;
                   if constexpr (erasable<T>) {
                      value.erase(value_it,
@@ -1396,7 +1396,7 @@ namespace glz
                            GLZ_SKIP_WS();
                         }
                         else if (*it == ']') {
-                           GLZ_SUB_LEVEL;
+                           GLZ_SUB_LEVEL_BRACKET;
                            ++it;
                            return;
                         }
@@ -1436,7 +1436,7 @@ namespace glz
                            GLZ_SKIP_WS();
                         }
                         else if (*it == ']') {
-                           GLZ_SUB_LEVEL;
+                           GLZ_SUB_LEVEL_BRACKET;
                            ++it;
                            break;
                         }
@@ -1491,7 +1491,7 @@ namespace glz
                            GLZ_SKIP_WS();
                         }
                         else if (*it == ']') {
-                           GLZ_SUB_LEVEL;
+                           GLZ_SUB_LEVEL_BRACKET;
                            ++it;
                            return;
                         }
@@ -1603,7 +1603,7 @@ namespace glz
                ++i;
             }
             GLZ_MATCH_CLOSE_BRACKET;
-            GLZ_SUB_LEVEL;
+            GLZ_SUB_LEVEL_BRACKET;
          }
       };
 
@@ -1633,7 +1633,7 @@ namespace glz
 
             for_each_flatten<N>([&](auto I) {
                if (*it == ']') {
-                  GLZ_SUB_LEVEL;
+                  GLZ_SUB_LEVEL_BRACKET;
                   return;
                }
                if constexpr (I != 0) {
@@ -1663,7 +1663,7 @@ namespace glz
             }
             else {
                GLZ_MATCH_CLOSE_BRACKET;
-               GLZ_SUB_LEVEL;
+               GLZ_SUB_LEVEL_BRACKET;
             }
          }
       };
@@ -1701,7 +1701,7 @@ namespace glz
 
                GLZ_SKIP_WS();
                if (*it == ']') {
-                  GLZ_SUB_LEVEL;
+                  GLZ_SUB_LEVEL_BRACKET;
                   ++it;
                   return;
                }
@@ -1934,7 +1934,7 @@ namespace glz
             [[maybe_unused]] bit_array<1> fields{};
 
             if (*it == '}') {
-               GLZ_SUB_LEVEL;
+               GLZ_SUB_LEVEL_BRACE;
                
                if constexpr (Opts.error_on_missing_keys) {
                   ctx.error = error_code::missing_key;
@@ -1968,7 +1968,7 @@ namespace glz
             GLZ_SKIP_WS();
 
             GLZ_MATCH_CLOSE_BRACE;
-            GLZ_SUB_LEVEL;
+            GLZ_SUB_LEVEL_BRACE;
          }
       };
 
@@ -2026,15 +2026,7 @@ namespace glz
 
             if constexpr ((glaze_object_t<T> || reflectable<T>)&&num_members == 0 && Opts.error_on_unknown_keys) {
                if (*it == '}') [[likely]] {
-                  GLZ_SUB_LEVEL;
-                  
-                  if constexpr (not Opts.null_terminated) {
-                     if (it == end) {
-                        ctx.error = error_code::brace_sentinel;
-                        return;
-                     }
-                  }
-                  
+                  GLZ_SUB_LEVEL_BRACE;
                   ++it;
                   return;
                }
@@ -2103,21 +2095,13 @@ namespace glz
                   }
 
                   if (*it == '}') {
-                     GLZ_SUB_LEVEL;
-                     
                      if constexpr ((glaze_object_t<T> || reflectable<T>)&&((is_partial_read<T> || Opts.partial_read) &&
                                                                            Opts.error_on_missing_keys)) {
                         ctx.error = error_code::missing_key;
                         return;
                      }
                      else {
-                        if constexpr (not Opts.null_terminated) {
-                           if (it == end) [[unlikely]] {
-                              ctx.error = error_code::brace_sentinel;
-                              return;
-                           }
-                        }
-                        
+                        GLZ_SUB_LEVEL_BRACE;
                         ++it;
                         if constexpr ((glaze_object_t<T> || reflectable<T>)&&Opts.error_on_missing_keys) {
                            constexpr auto req_fields = required_fields<T, Opts>();
@@ -2125,9 +2109,8 @@ namespace glz
                               ctx.error = error_code::missing_key;
                            }
                         }
+                        return;
                      }
-                     
-                     return;
                   }
                   else if (first) {
                      first = false;
@@ -2846,7 +2829,7 @@ namespace glz
 
             GLZ_SKIP_WS();
             GLZ_MATCH_CLOSE_BRACKET;
-            GLZ_SUB_LEVEL;
+            GLZ_SUB_LEVEL_BRACKET;
          }
       };
 
@@ -2866,7 +2849,7 @@ namespace glz
                ++it;
                GLZ_SKIP_WS();
                if (*it == '}') {
-                  GLZ_SUB_LEVEL;
+                  GLZ_SUB_LEVEL_BRACE;
                   it = start;
                   // empty object
                   if (value) {
@@ -2903,7 +2886,7 @@ namespace glz
                      }
                      GLZ_SKIP_WS();
                      GLZ_MATCH_CLOSE_BRACE;
-                     GLZ_SUB_LEVEL;
+                     GLZ_SUB_LEVEL_BRACE;
                   }
                   else {
                      it = start;

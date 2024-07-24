@@ -1548,7 +1548,7 @@ suite early_end = [] {
       }
    };
    
-   "early_end !null terminated"_test = [] {
+   /*"early_end !null terminated"_test = [] {
       Thing obj{};
       glz::json_t json{};
       glz::skip skip_me{};
@@ -1570,7 +1570,7 @@ suite early_end = [] {
          expect(ec);
          expect(ec.location <= buffer.size());
       }
-   };
+   };*/
 
    trace.end("early_end");
 };

@@ -9,6 +9,8 @@
 #include "glaze/core/common.hpp"
 #include "glaze/util/parse.hpp"
 
+#include "glaze/json/json_concepts.hpp"
+
 namespace glz
 {
    template <opts Opts, bool Padded = false>
@@ -16,6 +18,7 @@ namespace glz
    {
       static_assert(sizeof(decltype(*buffer.data())) == 1);
 
+      // TODO: Should these be unsigned char to avoid needing to cast to uint8_t for lookup tables???
       auto it = reinterpret_cast<const char*>(buffer.data());
       auto end = reinterpret_cast<const char*>(buffer.data()); // to be incremented
 
@@ -90,10 +93,18 @@ namespace glz
          goto finish;
       }
       
-      if constexpr (detail::glaze_object_t<T>) {
+      if constexpr (json_object<T>) {
          // Require closing `}` and use as sentinel
          --end;
          if (*end != '}') [[unlikely]] {
+            ctx.error = error_code::syntax_error;
+            goto finish;
+         }
+      }
+      else if constexpr (json_array<T>) {
+         // Require closing `]` and use as sentinel
+         --end;
+         if (*end != ']') [[unlikely]] {
             ctx.error = error_code::syntax_error;
             goto finish;
          }
@@ -102,9 +113,11 @@ namespace glz
       static constexpr opts options = make_read_options<T, Buffer>(Opts);
       detail::read<Opts.format>::template op<options>(value, ctx, it, end);
       
-      if constexpr (not options.null_terminated && detail::glaze_object_t<T>) {
-         if (ctx.indentation_level != 0) [[unlikely]] {
-            ctx.error = error_code::unexpected_end;
+      if constexpr (not options.null_terminated) {
+         if constexpr (json_object<T> || json_array<T>) {
+            if (ctx.indentation_level != 0) [[unlikely]] {
+               ctx.error = error_code::unexpected_end;
+            }
          }
       }
 

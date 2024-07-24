@@ -12,7 +12,7 @@ namespace glz
       detail::glaze_object_t<T> || detail::reflectable<T> || detail::writable_map_t<T> || detail::readable_map_t<T>;
 
    template <class T>
-   concept json_array = detail::array_t<T>;
+   concept json_array = detail::array_t<T> || detail::readable_array_t<T> || detail::writable_array_t<T>;
 
    template <class T>
    concept json_string = detail::str_t<T>;
