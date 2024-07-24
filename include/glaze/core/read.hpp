@@ -128,10 +128,15 @@ namespace glz
       }
 
    finish:
-      if (it == end) {
-         if (ctx.error == error_code::brace_sentinel) {
-            ctx.error = error_code::none;
-            ++it;
+      if constexpr (not Opts.null_terminated) {
+         if (it == end) [[likely]] {
+            if (ctx.error == error_code::brace_sentinel) {
+               ctx.error = error_code::none;
+               ++it;
+            }
+         }
+         else {
+            ctx.error = error_code::syntax_error;
          }
       }
       

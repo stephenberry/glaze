@@ -2028,9 +2028,11 @@ namespace glz
                if (*it == '}') [[likely]] {
                   GLZ_SUB_LEVEL;
                   
-                  if (it == end) {
-                     ctx.error = error_code::brace_sentinel;
-                     return;
+                  if constexpr (not Opts.null_terminated) {
+                     if (it == end) {
+                        ctx.error = error_code::brace_sentinel;
+                        return;
+                     }
                   }
                   
                   ++it;
@@ -2109,18 +2111,19 @@ namespace glz
                         return;
                      }
                      else {
+                        if constexpr (not Opts.null_terminated) {
+                           if (it == end) [[unlikely]] {
+                              ctx.error = error_code::brace_sentinel;
+                           }
+                        }
+                        
                         ++it;
                         if constexpr ((glaze_object_t<T> || reflectable<T>)&&Opts.error_on_missing_keys) {
                            constexpr auto req_fields = required_fields<T, Opts>();
                            if ((req_fields & fields) != req_fields) {
                               ctx.error = error_code::missing_key;
-                              return;
                            }
                         }
-                     }
-                     
-                     if (it == end) [[unlikely]] {
-                        ctx.error = error_code::brace_sentinel;
                      }
                      
                      return;
