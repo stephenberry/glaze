@@ -93,7 +93,7 @@ namespace glz
          goto finish;
       }
       
-      if constexpr (json_object<T>) {
+      if constexpr (json_read_object<T>) {
          // Require closing `}` and use as sentinel
          --end;
          if (*end != '}') [[unlikely]] {
@@ -101,7 +101,7 @@ namespace glz
             goto finish;
          }
       }
-      else if constexpr (json_array<T>) {
+      else if constexpr (json_read_array<T>) {
          // Require closing `]` and use as sentinel
          --end;
          if (*end != ']') [[unlikely]] {
@@ -114,7 +114,7 @@ namespace glz
       detail::read<Opts.format>::template op<options>(value, ctx, it, end);
       
       if constexpr (not options.null_terminated) {
-         if constexpr (json_object<T> || json_array<T>) {
+         if constexpr (json_read_object<T> || json_read_array<T>) {
             if (ctx.indentation_level != 0) [[unlikely]] {
                ctx.error = error_code::unexpected_end;
             }
@@ -143,7 +143,7 @@ namespace glz
    finish:
       if constexpr (not Opts.null_terminated) {
          if (it == end) [[likely]] {
-            if constexpr (json_object<T>) {
+            if constexpr (json_read_object<T>) {
                if (ctx.error == error_code::brace_sentinel) [[likely]] {
                   ctx.error = error_code::none;
                   ++it;
@@ -152,7 +152,7 @@ namespace glz
                   ctx.error = error_code::expected_brace;
                }
             }
-            else if constexpr (json_array<T>) {
+            else if constexpr (json_read_array<T>) {
                if (ctx.error == error_code::bracket_sentinel) [[likely]] {
                   ctx.error = error_code::none;
                   ++it;

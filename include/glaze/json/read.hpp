@@ -429,8 +429,8 @@ namespace glz
                return;
 
             GLZ_SKIP_WS();
-            GLZ_MATCH_CLOSE_BRACKET;
             GLZ_SUB_LEVEL_BRACKET;
+            GLZ_MATCH_CLOSE_BRACKET;
          }
       };
 
@@ -1602,8 +1602,8 @@ namespace glz
                }
                ++i;
             }
-            GLZ_MATCH_CLOSE_BRACKET;
             GLZ_SUB_LEVEL_BRACKET;
+            GLZ_MATCH_CLOSE_BRACKET;
          }
       };
 
@@ -1662,8 +1662,8 @@ namespace glz
                return;
             }
             else {
-               GLZ_MATCH_CLOSE_BRACKET;
                GLZ_SUB_LEVEL_BRACKET;
+               GLZ_MATCH_CLOSE_BRACKET;
             }
          }
       };
@@ -1967,8 +1967,8 @@ namespace glz
 
             GLZ_SKIP_WS();
 
-            GLZ_MATCH_CLOSE_BRACE;
             GLZ_SUB_LEVEL_BRACE;
+            GLZ_MATCH_CLOSE_BRACE;
          }
       };
 
@@ -2828,8 +2828,8 @@ namespace glz
             }
 
             GLZ_SKIP_WS();
-            GLZ_MATCH_CLOSE_BRACKET;
             GLZ_SUB_LEVEL_BRACKET;
+            GLZ_MATCH_CLOSE_BRACKET;
          }
       };
 
@@ -2885,8 +2885,8 @@ namespace glz
                         value = glz::unexpected(error);
                      }
                      GLZ_SKIP_WS();
-                     GLZ_MATCH_CLOSE_BRACE;
                      GLZ_SUB_LEVEL_BRACE;
+                     GLZ_MATCH_CLOSE_BRACE;
                   }
                   else {
                      it = start;
