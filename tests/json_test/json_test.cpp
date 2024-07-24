@@ -1316,7 +1316,8 @@ suite user_types = [] {
 })";
 
       expect(thing_pretty == buffer);
-      expect(!glz::read_jsonc(obj, buffer));
+      auto ec = glz::read_jsonc(obj, buffer);
+      expect(!ec) << glz::format_error(ec, buffer);
       const auto minified = glz::minify_jsonc(thing_pretty);
       expect(json == minified);
       expect(!glz::read_jsonc(obj, minified));
@@ -1546,7 +1547,7 @@ suite early_end = [] {
       }
    };
    
-   /*"early_end !null terminated"_test = [] {
+   "early_end !null terminated"_test = [] {
       Thing obj{};
       glz::json_t json{};
       glz::skip skip_me{};
@@ -1568,7 +1569,7 @@ suite early_end = [] {
          expect(ec);
          expect(ec.location <= buffer.size());
       }
-   };*/
+   };
 
    trace.end("early_end");
 };

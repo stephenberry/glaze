@@ -97,6 +97,9 @@ namespace glz
       error_code error{};
       std::string_view custom_error_message{};
       // INTERNAL USE:
+      // TODO: Rename to indent_level
+      // We use an unsigned integer because if we hit negative numbers when reading we wrap around
+      // And we are always checking if this value is zero or less than some small number
       uint32_t indentation_level{}; // When writing this is the number of indent character to serialize
       // When reading indentation_level is used to track the depth of structures to prevent stack overflows
       // From massive depths due to untrusted inputs or attacks
@@ -106,4 +109,14 @@ namespace glz
 
    template <class T>
    concept is_context = std::same_as<std::decay_t<T>, context>;
+}
+
+// We use macros to make it easier to edit the if constexpr logic in the future
+// And, it reduces lines of code
+#define GLZ_ADD_LEVEL if constexpr (not Opts.null_terminated) { \
+   ++ctx.indentation_level; \
+}
+
+#define GLZ_SUB_LEVEL if constexpr (not Opts.null_terminated) { \
+   --ctx.indentation_level; \
 }

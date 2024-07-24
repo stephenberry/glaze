@@ -55,6 +55,13 @@ namespace glz
       if (use_padded) {
          out.internal |= uint32_t(opts::internal::is_padded);
       }
+      
+      // TODO: Add is_null_terminated option for std::string
+      //using Buffer = std::remove_cvref_t<decltype(buffer)>;
+      //if constexpr (is_specialization_v<Buffer, std::basic_string>) {
+      //
+      //}
+      
       return out;
    }
 
@@ -83,14 +90,23 @@ namespace glz
          goto finish;
       }
       
-      // TODO: Add is_null_terminated option for std::string
-      //using Buffer = std::remove_cvref_t<decltype(buffer)>;
-      //if constexpr (is_specialization_v<Buffer, std::basic_string>) {
-      //
-      //}
+      if constexpr (detail::glaze_object_t<T>) {
+         // Require closing `}` and use as sentinel
+         --end;
+         if (*end != '}') [[unlikely]] {
+            ctx.error = error_code::syntax_error;
+            goto finish;
+         }
+      }
       
       static constexpr opts options = make_read_options<T, Buffer>(Opts);
       detail::read<Opts.format>::template op<options>(value, ctx, it, end);
+      
+      if constexpr (not options.null_terminated) {
+         if (ctx.indentation_level != 0) [[unlikely]] {
+            ctx.error = error_code::unexpected_end;
+         }
+      }
 
       if (bool(ctx.error)) [[unlikely]] {
          goto finish;
@@ -112,6 +128,13 @@ namespace glz
       }
 
    finish:
+      if (it == end) {
+         if (ctx.error == error_code::brace_sentinel) {
+            ctx.error = error_code::none;
+            ++it;
+         }
+      }
+      
       if constexpr (use_padded) {
          // Restore the original buffer state
          buffer.resize(buffer.size() - padding_bytes);
