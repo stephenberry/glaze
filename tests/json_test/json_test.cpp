@@ -2428,9 +2428,9 @@ suite write_tests = [] {
 
    "Read empty array structure"_test = [] {
       EmptyArray e;
-      expect(glz::read_json(e, "[]") == glz::error_code::none);
-      expect(glz::read_json(e, " [   ]") == glz::error_code::none);
-      expect(glz::read_json(e, "[1,2,3]") == glz::error_code::syntax_error);
+      expect(not glz::read_json(e, "[]"));
+      expect(not glz::read_json(e, " [   ]"));
+      expect(glz::read_json(e, "[1,2,3]"));
    };
 
    //* Empty object not allowed
