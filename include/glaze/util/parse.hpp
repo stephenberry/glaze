@@ -241,6 +241,10 @@ namespace glz::detail
       dst += offset;
       return offset;
    }
+   
+   consteval uint16_t to_uint16_t(const char chars[2]) {
+      return uint16_t(chars[0]) | (uint16_t(chars[1]) << 8);
+   }
 
    template <class Char>
    [[nodiscard]] GLZ_ALWAYS_INLINE uint32_t handle_unicode_code_point(const Char*& it, Char*& dst,
@@ -266,6 +270,12 @@ namespace glz::detail
          }
 
          if (it + 6 >= end) [[unlikely]] {
+            return false;
+         }
+         // The next two characters must be `\u`
+         uint16_t u;
+         std::memcpy(&u, it, 2);
+         if (u != to_uint16_t(R"(\u)")) [[unlikely]] {
             return false;
          }
          it += 2;
