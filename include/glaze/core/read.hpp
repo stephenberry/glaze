@@ -143,9 +143,23 @@ namespace glz
    finish:
       if constexpr (not Opts.null_terminated) {
          if (it == end) [[likely]] {
-            if (ctx.error == error_code::brace_sentinel) {
-               ctx.error = error_code::none;
-               ++it;
+            if constexpr (json_object<T>) {
+               if (ctx.error == error_code::brace_sentinel) [[likely]] {
+                  ctx.error = error_code::none;
+                  ++it;
+               }
+               else [[unlikely]] {
+                  ctx.error = error_code::expected_brace;
+               }
+            }
+            else if constexpr (json_array<T>) {
+               if (ctx.error == error_code::bracket_sentinel) [[likely]] {
+                  ctx.error = error_code::none;
+                  ++it;
+               }
+               else [[unlikely]] {
+                  ctx.error = error_code::expected_bracket;
+               }
             }
          }
          else if (ctx.error == error_code::none) {
