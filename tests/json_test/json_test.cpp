@@ -7381,6 +7381,13 @@ struct glz::meta<string_tester>
    static constexpr auto value = object("val1", &T::val1);
 };
 
+template <size_t N>
+std::vector<char> make_vector(const char (&literal)[N])
+{
+   // include the null
+   return {literal, literal + N};
+};
+
 // Former address santizer issues
 suite address_sanitizer_test = [] {
    "address_sanitizer"_test = [] {
@@ -7424,9 +7431,16 @@ suite address_sanitizer_test = [] {
       expect(r);
    };
 
-   "invalid json_t 4"_test = []() {
+   "json_t 4"_test = []() {
       glz::json_t json{};
       std::string data = "\"\\uDBDD\" DDDD";
+      auto r = glz::read_json(json, data);
+      expect(r);
+   };
+
+   "json_t 5"_test = []() {
+      glz::json_t json{};
+      auto data = make_vector("\"\\udb0f \"df33 ");
       auto r = glz::read_json(json, data);
       expect(r);
    };
