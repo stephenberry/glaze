@@ -142,7 +142,7 @@ namespace glz
       }
 
    finish:
-      if constexpr (not Opts.null_terminated && json_read_object<T> || json_read_array<T>) {
+      if constexpr (not Opts.null_terminated && (json_read_object<T> || json_read_array<T>)) {
          if (it == end) [[likely]] {
             if constexpr (json_read_object<T>) {
                if (ctx.error == error_code::brace_sentinel) [[likely]] {
