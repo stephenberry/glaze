@@ -1307,8 +1307,6 @@ namespace glz
             GLZ_SKIP_WS();
 
             if (*it == ']') {
-               GLZ_SUB_LEVEL_BRACKET;
-               ++it;
                if constexpr (resizable<T>) {
                   value.clear();
 
@@ -1316,6 +1314,8 @@ namespace glz
                      value.shrink_to_fit();
                   }
                }
+               GLZ_SUB_LEVEL_BRACKET;
+               ++it;
                return;
             }
 
