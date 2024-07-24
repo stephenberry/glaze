@@ -2800,6 +2800,7 @@ namespace glz
             }
 
             GLZ_MATCH_OPEN_BRACKET;
+            GLZ_ADD_LEVEL;
             GLZ_SKIP_WS();
 
             // TODO Use key parsing for compiletime known keys

@@ -1941,7 +1941,7 @@ suite read_tests = [] {
 
    "Read vector"_test = [] {
       {
-         std::string in = R"(    [1, 5, 232, 75, 123, 54, 89] )";
+         std::string in = R"(    [1, 5, 232, 75, 123, 54, 89])";
          std::vector<int> v, vr{1, 5, 232, 75, 123, 54, 89};
          expect(glz::read_json(v, in) == glz::error_code::none);
 
@@ -1955,14 +1955,14 @@ suite read_tests = [] {
          expect(v == vr);
       }
       {
-         std::string in = R"(    [1, 5, 232, 75, 123, 54, 89] )";
+         std::string in = R"(    [1, 5, 232, 75, 123, 54, 89])";
          std::vector<int> v{1, 2, 3, 4}, vr{1, 5, 232, 75, 123, 54, 89};
          expect(glz::read_json(v, in) == glz::error_code::none);
 
          expect(v == vr);
       }
       {
-         std::string in = R"(    [1, 5, 232, 75, 123, 54, 89] )";
+         std::string in = R"(    [1, 5, 232, 75, 123, 54, 89])";
          std::vector<int> v{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, vr{1, 5, 232, 75, 123, 54, 89};
          expect(glz::read_json(v, in) == glz::error_code::none);
 
@@ -1971,7 +1971,7 @@ suite read_tests = [] {
    };
 
    "Read partial vector"_test = [] {
-      std::string in = R"(    [1, 5, 232, 75, null, 54, 89] )";
+      std::string in = R"(    [1, 5, 232, 75, null, 54, 89])";
       std::vector<int> v, vr{1, 5, 232, 75, 0, 54, 89};
 
       expect(glz::read_json(v, in) != glz::error_code::none);
@@ -1997,7 +1997,7 @@ suite read_tests = [] {
    };
 
    "Read map"_test = [] {
-      constexpr std::string_view in = R"(   { "as" : 1, "so" : 2, "make" : 3 } )";
+      constexpr std::string_view in = R"(   { "as" : 1, "so" : 2, "make" : 3 })";
       {
          std::map<std::string, int> v, vr{{"as", 1}, {"so", 2}, {"make", 3}};
          expect(glz::read_json(v, in) == glz::error_code::none);
@@ -2033,7 +2033,7 @@ suite read_tests = [] {
    };
 
    "Read partial map"_test = [] {
-      std::string in = R"(   { "as" : 1, "so" : null, "make" : 3 } )";
+      std::string in = R"(   { "as" : 1, "so" : null, "make" : 3 })";
       std::map<std::string, int> v, vr{{"as", 1}, {"so", 0}, {"make", 3}};
 
       expect(glz::read_json(v, in) != glz::error_code::none);
