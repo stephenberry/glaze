@@ -115,7 +115,8 @@ namespace glz
       
       if constexpr (not options.null_terminated) {
          if constexpr (json_read_object<T> || json_read_array<T>) {
-            if (ctx.indentation_level != 0) [[unlikely]] {
+            static constexpr uint32_t end_of_sentinels = 2;
+            if (uint32_t(ctx.error) > end_of_sentinels && ctx.indentation_level != 0) [[unlikely]] {
                ctx.error = error_code::unexpected_end;
             }
          }

@@ -16,6 +16,10 @@ namespace glz
 
    GLZ_ENUM(error_code,
             none, //
+            // Contextual Sentinels
+            brace_sentinel, //
+            bracket_sentinel, //
+            // Normal Errors
             no_read_input, //
             data_must_be_null_terminated, //
             parse_number_failure, //
@@ -71,10 +75,7 @@ namespace glz
             unknown_distribution, //
             invalid_distribution_elements, //
             hostname_failure, //
-            includer_error, //
-            // Contextual Sentinel
-            brace_sentinel, //
-            bracket_sentinel //
+            includer_error //
    );
 
    struct error_ctx final
