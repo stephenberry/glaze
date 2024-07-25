@@ -2750,7 +2750,7 @@ struct glz::meta<study_obj>
 };
 
 // TODO: Figure out why the thread pool can randomly hang, especially on Windows GitHub actions
-/*suite study_tests = [] {
+suite study_tests = [] {
    "study"_test = [] {
       glz::study::design design;
       design.params = {{.ptr = "/x", .distribution = "linspace", .range = {"0", "1", "10"}}};
@@ -2850,7 +2850,7 @@ suite thread_pool = [] {
 
       expect(numbers.size() == 1000);
    };
-};*/
+};
 
 suite progress_bar_tests = [] {
    "progress bar 30%"_test = [] {
