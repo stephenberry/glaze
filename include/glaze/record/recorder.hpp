@@ -155,7 +155,7 @@ namespace glz
 
                if (i < n - 1) {
                   GLZ_SKIP_WS();
-                  GLZ_MATCH_COMMA;
+                  GLZ_MATCH_COMMA();
                   GLZ_SKIP_WS();
                }
             }

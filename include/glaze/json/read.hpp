@@ -422,7 +422,7 @@ namespace glz
 
             GLZ_SKIP_WS();
 
-            GLZ_MATCH_COMMA;
+            GLZ_MATCH_COMMA();
 
             read<json>::op<Opts>(ptr[1], ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
@@ -1282,7 +1282,7 @@ namespace glz
                   ++it;
                   return;
                }
-               GLZ_MATCH_COMMA;
+               GLZ_MATCH_COMMA();
             }
          }
       };
@@ -1598,7 +1598,7 @@ namespace glz
 
                GLZ_SKIP_WS();
                if (i < n - 1) {
-                  GLZ_MATCH_COMMA;
+                  GLZ_MATCH_COMMA();
                }
                ++i;
             }
@@ -1631,31 +1631,31 @@ namespace glz
             GLZ_ADD_LEVEL;
             GLZ_SKIP_WS();
 
-            for_each_flatten<N>([&](auto I) {
+            for_each_short_circuit_flatten<N>([&](auto I) -> bool {
                if (*it == ']') {
-                  GLZ_SUB_LEVEL_BRACKET;
-                  return;
+                  return true;
                }
                if constexpr (I != 0) {
-                  GLZ_MATCH_COMMA;
-                  GLZ_SKIP_WS();
+                  GLZ_MATCH_COMMA(true);
+                  GLZ_SKIP_WS(true);
                }
                if constexpr (is_std_tuple<T>) {
                   read<json>::op<ws_handled<Opts>()>(std::get<I>(value), ctx, it, end);
                   if (bool(ctx.error)) [[unlikely]]
-                     return;
+                     return true;
                }
                else if constexpr (glaze_array_t<T>) {
                   read<json>::op<ws_handled<Opts>()>(get_member(value, glz::get<I>(meta_v<T>)), ctx, it, end);
                   if (bool(ctx.error)) [[unlikely]]
-                     return;
+                     return true;
                }
                else {
                   read<json>::op<ws_handled<Opts>()>(glz::get<I>(value), ctx, it, end);
                   if (bool(ctx.error)) [[unlikely]]
-                     return;
+                     return true;
                }
-               GLZ_SKIP_WS();
+               GLZ_SKIP_WS(true);
+               return false;
             });
 
             if constexpr (Opts.partial_read) {
@@ -1705,7 +1705,7 @@ namespace glz
                   ++it;
                   return;
                }
-               GLZ_MATCH_COMMA;
+               GLZ_MATCH_COMMA();
             }
          }
       };
@@ -2119,7 +2119,7 @@ namespace glz
                      first = false;
                   }
                   else {
-                     GLZ_MATCH_COMMA;
+                     GLZ_MATCH_COMMA();
 
                      if constexpr ((not Opts.minified) && (num_members > 1 || !Opts.error_on_unknown_keys)) {
                         if (ws_size && ws_size < size_t(end - it)) {
@@ -2598,7 +2598,7 @@ namespace glz
                      auto start = it;
                      while (*it != '}') {
                         if (it != start) {
-                           GLZ_MATCH_COMMA;
+                           GLZ_MATCH_COMMA();
                         }
                         const sv key = parse_object_key<T, Opts, tag_literal>(ctx, it, end);
                         if (bool(ctx.error)) [[unlikely]]
@@ -2819,7 +2819,7 @@ namespace glz
             auto id_it = id_map.find(type_id);
             if (id_it != id_map.end()) [[likely]] {
                GLZ_SKIP_WS();
-               GLZ_MATCH_COMMA;
+               GLZ_MATCH_COMMA();
                const auto type_index = id_it->second;
                if (value.index() != type_index) value = runtime_variant_map<T>()[type_index];
                std::visit([&](auto&& v) { read<json>::op<Opts>(v, ctx, it, end); }, value);

@@ -357,10 +357,10 @@ namespace glz::detail
       ++it;                                   \
    }
 
-#define GLZ_MATCH_COMMA                       \
+#define GLZ_MATCH_COMMA(RETURN)               \
    if (*it != ',') [[unlikely]] {             \
       ctx.error = error_code::expected_comma; \
-      return;                                 \
+      return RETURN;                          \
    }                                          \
    else [[likely]] {                          \
       ++it;                                   \
