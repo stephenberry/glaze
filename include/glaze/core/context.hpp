@@ -23,6 +23,7 @@ namespace glz
             no_read_input, //
             data_must_be_null_terminated, //
             parse_number_failure, //
+            expected_sentinel, // Expects a `]` or `}`
             expected_brace, //
             expected_bracket, //
             expected_quote, //

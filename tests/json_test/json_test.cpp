@@ -4187,7 +4187,8 @@ suite date_test = [] {
       expect(s == R"("55")");
 
       d.data = 0;
-      expect(glz::read_json(d, s) == glz::error_code::none);
+      auto ec = glz::read<glz::opts{.null_terminated = true}>(d, s);
+      expect(not ec) << glz::format_error(ec, s);
       expect(d.data == 55);
    };
 };
@@ -4904,7 +4905,7 @@ break"])";
 1e00,2e+00,2e-00
 ,"rosebud"])";
       auto ec_pass1 = glz::read_json(json, pass1);
-      expect(ec_pass1 == glz::error_code::none) << glz::format_error(ec_pass1, pass1);
+      expect(not ec_pass1) << glz::format_error(ec_pass1, pass1);
       expect(!glz::validate_json(pass1));
 
       std::string pass2 = R"([[[[[[[[[[[[[[[[[[["Not too deep"]]]]]]]]]]]]]]]]]]])";

@@ -86,6 +86,8 @@ namespace glz
          // Pad the buffer for SWAR
          buffer.resize(buffer.size() + padding_bytes);
       }
+      
+      char opening{};
 
       auto [it, end] = read_iterators<Opts, use_padded>(ctx, buffer);
       auto start = it;
@@ -93,24 +95,32 @@ namespace glz
          goto finish;
       }
       
-      if constexpr (Opts.format == json && json_read_object<T>) {
-         // Require closing `}` and use as sentinel
+      // glz::skip needs to handle either terminating `]` or `}`
+      // Rather than matching exactly an object or array, either of these types will consider
+      // the opening character and match to the opening.
+      // This allows dynamic types that support both arrays or objects.
+      if constexpr (not Opts.null_terminated && Opts.format == json && (json_read_object<T> || json_read_array<T>)) {
          --end; // We move back to the last allocated character that must exist
-         if (*end != '}') [[unlikely]] {
-            it = end;
-            ctx.error = error_code::expected_brace;
+         if (detail::whitespace_table[uint8_t(*end)]) [[unlikely]] {
+            ctx.error = error_code::expected_sentinel;
+            goto finish;
+         }
+         detail::skip_ws<Opts>(ctx, it, end);
+         if (bool(ctx.error)) [[unlikely]] {
+            goto finish;
+         }
+         if (it == end) [[unlikely]] {
+            ctx.error = error_code::unexpected_end;
+            goto finish;
+         }
+         
+         if (*it != '{' && *it != '[') [[unlikely]] {
+            ctx.error = error_code::syntax_error;
             goto finish;
          }
       }
-      else if constexpr (Opts.format == json && json_read_array<T>) {
-         // Require closing `]` and use as sentinel
-         --end; // We move back to the last allocated character that must exist
-         if (*end != ']') [[unlikely]] {
-            it = end;
-            ctx.error = error_code::expected_bracket;
-            goto finish;
-         }
-      }
+      
+      opening = *it;
       
       static constexpr opts options = make_read_options<T, Buffer>(Opts);
       detail::read<Opts.format>::template op<options>(value, ctx, it, end);
@@ -146,23 +156,27 @@ namespace glz
    finish:
       if constexpr (Opts.format == json && not Opts.null_terminated && (json_read_object<T> || json_read_array<T>)) {
          if (it == end) [[likely]] {
-            if constexpr (json_read_object<T>) {
-               if (ctx.error == error_code::brace_sentinel) [[likely]] {
-                  ctx.error = error_code::none;
-                  ++it;
+            bool success{};
+            switch (opening) {
+               case '[': {
+                  success = *it == ']';
+                  break;
                }
-               else [[unlikely]] {
-                  ctx.error = error_code::expected_brace;
+               case '{': {
+                  success = *it == '}';
+                  break;
+               }
+               default: {
+                  break;
                }
             }
-            else if constexpr (json_read_array<T>) {
-               if (ctx.error == error_code::bracket_sentinel) [[likely]] {
-                  ctx.error = error_code::none;
-                  ++it;
-               }
-               else [[unlikely]] {
-                  ctx.error = error_code::expected_bracket;
-               }
+            
+            if (success) [[likely]] {
+               ctx.error = error_code::none;
+               ++it;
+            }
+            else [[unlikely]] {
+               ctx.error = error_code::expected_sentinel;
             }
          }
          else if (ctx.error == error_code::none) {
