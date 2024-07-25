@@ -1934,11 +1934,12 @@ namespace glz
             [[maybe_unused]] bit_array<1> fields{};
 
             if (*it == '}') {
-               GLZ_SUB_LEVEL_BRACE;
-               
                if constexpr (Opts.error_on_missing_keys) {
                   ctx.error = error_code::missing_key;
+                  return;
                }
+               
+               GLZ_SUB_LEVEL_BRACE;
                return;
             }
 
@@ -2101,14 +2102,16 @@ namespace glz
                         return;
                      }
                      else {
-                        GLZ_SUB_LEVEL_BRACE;
-                        ++it;
                         if constexpr ((glaze_object_t<T> || reflectable<T>)&&Opts.error_on_missing_keys) {
                            constexpr auto req_fields = required_fields<T, Opts>();
                            if ((req_fields & fields) != req_fields) {
                               ctx.error = error_code::missing_key;
+                              return;
                            }
                         }
+                        
+                        GLZ_SUB_LEVEL_BRACE;
+                        ++it;
                         return;
                      }
                   }
