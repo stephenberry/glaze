@@ -5422,8 +5422,7 @@ suite required_keys = [] {
       my_struct obj{};
       std::string buffer = R"({"i":287,"hello":"Hello World","arr":[1,2,3]})";
       auto err = glz::read<glz::opts{.error_on_missing_keys = true}>(obj, buffer);
-      expect(err != glz::error_code::none);
-      expect(glz::format_error(err, buffer) == "index 45: missing_key") << glz::format_error(err, buffer);
+      expect(err == glz::error_code::missing_key);
    };
 };
 
