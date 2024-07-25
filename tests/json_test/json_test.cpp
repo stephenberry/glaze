@@ -8983,7 +8983,7 @@ suite depth_limits_test = [] {
       auto ec = glz::read_json(json, buffer);
       expect(ec);
    };
-   
+
    "depth should be valid: 1"_test = [] {
       std::string buffer = R"({"keys":[)";
       for (size_t i = 0; i < 512; ++i) {
@@ -8995,7 +8995,7 @@ suite depth_limits_test = [] {
       auto ec = glz::read_json(json, buffer);
       expect(not ec) << glz::format_error(ec, buffer);
    };
-   
+
    "depth should be valid: 2"_test = [] {
       std::string buffer = R"({"arrays":[)";
       for (size_t i = 0; i < 512; ++i) {
@@ -9007,7 +9007,7 @@ suite depth_limits_test = [] {
       auto ec = glz::read_json(json, buffer);
       expect(not ec) << glz::format_error(ec, buffer);
    };
-   
+
    "depth should be valid: mixed"_test = [] {
       std::string buffer = R"({"values":[)";
       for (size_t i = 0; i < 512; ++i) {
