@@ -95,7 +95,7 @@ namespace glz
       
       if constexpr (json_read_object<T>) {
          // Require closing `}` and use as sentinel
-         --end;
+         --end; // We move back to the last allocated character that must exist
          if (*end != '}') [[unlikely]] {
             ctx.error = error_code::syntax_error;
             goto finish;
@@ -103,7 +103,7 @@ namespace glz
       }
       else if constexpr (json_read_array<T>) {
          // Require closing `]` and use as sentinel
-         --end;
+         --end; // We move back to the last allocated character that must exist
          if (*end != ']') [[unlikely]] {
             ctx.error = error_code::syntax_error;
             goto finish;
