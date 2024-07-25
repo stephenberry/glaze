@@ -114,6 +114,8 @@ namespace glz
 
             const auto current_file = ctx.current_file;
             ctx.current_file = string_file_path;
+            const auto current_depth = ctx.indentation_level;
+            ctx.indentation_level = 0;
 
             const auto ecode = glz::read<Opts>(value.value, buffer, ctx);
             if (bool(ctx.error)) [[unlikely]] {
@@ -121,10 +123,12 @@ namespace glz
                auto& error_msg = error_buffer();
                error_msg = glz::format_error(ecode, buffer);
                ctx.includer_error = error_msg;
+               ctx.indentation_level = current_depth;
                return;
             }
 
             ctx.current_file = current_file;
+            ctx.indentation_level = current_depth;
          }
       };
 

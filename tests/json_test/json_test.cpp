@@ -5399,8 +5399,7 @@ suite required_keys = [] {
          "instType":"SPOT","lever":"10","listTime":"1548133413000","lotSz":"0.00000001","maxIcebergSz":"9999999999",
          "maxLmtSz":"9999999999","maxMktSz":"1000000","maxStopSz":"1000000","maxTriggerSz":"9999999999","maxTwapSz":"9999999999",
          "minSz":"0.00001","optType":"","quoteCcy":"USDT","settleCcy":"","state":"live","stk":"","tickSz":"0.1","uly":""}],
-         "msg":""}
-      )";
+         "msg":""})";
 
       OKX_OrderBook order_book{};
       auto ec = glz::read<glz::opts{.error_on_unknown_keys = false, .error_on_missing_keys = true}>(order_book,
@@ -5413,8 +5412,7 @@ suite required_keys = [] {
          "instType":"SPOT","lever":"10","listTime":"1548133413000","lotSz":"0.00000001","maxIcebergSz":"9999999999",
          "maxLmtSz":"9999999999","maxMktSz":"1000000","maxStopSz":"1000000","maxTriggerSz":"9999999999","maxTwapSz":"9999999999",
          "minSz":"0.00001","optType":"","quoteCcy":"USDT","settleCcy":"","state":"live","stk":"","tickSz":"0.1","uly":""}],
-         "msg":""}
-      )";
+         "msg":""})";
       ec = glz::read<glz::opts{.error_on_unknown_keys = false, .error_on_missing_keys = true}>(order_book,
                                                                                                order_book_str_missing);
       expect(ec == glz::error_code::missing_key);
@@ -6037,7 +6035,7 @@ suite whitespace_testing = [] {
       std::string_view buffer{"{\"0\"/\n/"};
       my_struct value{};
       glz::context ctx{};
-      expect(glz::read_json(value, buffer) == glz::error_code::unknown_key);
+      expect(glz::read<glz::opts{.null_terminated = true}>(value, buffer) == glz::error_code::unknown_key);
    };
 };
 
@@ -8621,8 +8619,7 @@ suite error_on_missing_keys_symbols_tests = [] {
                           "maxPosition": 1000000
                       }
                   ]
-              }
-          )";
+              })";
 
       single_symbol_info_js result;
       auto ec = glz::read<glz::opts{
