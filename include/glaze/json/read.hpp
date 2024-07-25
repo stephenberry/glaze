@@ -2554,6 +2554,7 @@ namespace glz
                      using V = glz::tuple_element_t<0, object_types>;
                      if (!std::holds_alternative<V>(value)) value = V{};
                      read<json>::op<opening_handled<Opts>()>(std::get<V>(value), ctx, it, end);
+                     --ctx.indentation_level;
                      return;
                   }
                   else {
