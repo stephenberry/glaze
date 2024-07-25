@@ -8574,8 +8574,7 @@ suite raw_char_buffer_tests = [] {
             {
                 "T": 123456788,
                 "s": "ETHBTC"
-            }
-        )";
+            })";
       auto result = glz::read_json<Trade>(payload);
       expect(result.has_value()) << glz::format_error(result, payload);
    };
