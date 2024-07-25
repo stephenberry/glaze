@@ -50,7 +50,10 @@ namespace glz
 
                      // Notify that work is finished
                      --working;
-                     done_cv.notify_one();
+                     lock.lock();
+                     if (queue.empty() && (working == 0)) {
+                        done_cv.notify_one();
+                     }
                   }
                }
             });
@@ -152,7 +155,7 @@ namespace glz
       {
          std::unique_lock lock(mtx);
          if (queue.empty() && (working == 0)) return;
-         done_cv.wait(lock, [&] { return queue.empty() && (working == 0); });
+         done_cv.wait(lock);
       }
 
       size_t size() const { return threads.size(); }
