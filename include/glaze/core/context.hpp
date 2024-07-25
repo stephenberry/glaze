@@ -124,6 +124,7 @@ namespace glz
 } \
 if constexpr (not Opts.null_terminated) { \
    if (it == end) { \
+      ++it; \
       ctx.error = error_code::brace_sentinel; \
       return; \
    } \
@@ -134,6 +135,7 @@ if constexpr (not Opts.null_terminated) { \
 } \
 if constexpr (not Opts.null_terminated) { \
    if (it == end) { \
+      ++it; \
       ctx.error = error_code::bracket_sentinel; \
       return; \
    } \

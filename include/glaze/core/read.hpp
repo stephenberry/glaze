@@ -99,11 +99,21 @@ namespace glz
          goto finish;
       }
       
+      // Whether to use contextual sentinels for non-null terminated inputs
+      static constexpr bool use_json_sentinels = (Opts.format == json) && not (Opts.null_terminated) && (json_read_object<T> || json_read_array<T>);
+      
+      // Custom decoding and types like glz::skip consume the entire thing they are decoding
+      // Indeed, most all parse implementation should be expected to consume the terminating characters
+      // This does pose an issue when dealing with non-null terminated buffers because
+      // if we progress beyond the length of the buffer we must not de-reference.
+      // By setting using error context we block de-referencing, so we can progress the iterator
+      // when using contextual sentinels.
+      
       // glz::skip needs to handle either terminating `]` or `}`
       // Rather than matching exactly an object or array, either of these types will consider
       // the opening character and match to the opening.
       // This allows dynamic types that support both arrays or objects.
-      if constexpr (not Opts.null_terminated && Opts.format == json && (json_read_object<T> || json_read_array<T>)) {
+      if constexpr (use_json_sentinels) {
          --end; // We move back to the last allocated character that must exist
          if (*end != ']' && *end != '}') [[unlikely]] {
             ctx.error = error_code::expected_sentinel;
@@ -129,17 +139,24 @@ namespace glz
       static constexpr opts options = make_read_options<T, Buffer>(Opts);
       detail::read<Opts.format>::template op<options>(value, ctx, it, end);
       
+      if constexpr (use_json_sentinels) {
+         ++end; // reset the end iterator so that we can know if we have decoded the entire buffer
+      }
+      
       static constexpr uint32_t normal_errors = 3;
-      if constexpr (Opts.format == json && not options.null_terminated) {
-         if constexpr (json_read_object<T> || json_read_array<T>) {
-            if (uint32_t(ctx.error) < normal_errors && ctx.indentation_level != 0) [[unlikely]] {
-               ctx.error = error_code::unexpected_end;
-            }
+      if constexpr (use_json_sentinels) {
+         if (uint32_t(ctx.error) < normal_errors && ctx.indentation_level != 0) [[unlikely]] {
+            ctx.error = error_code::unexpected_end;
+         }
+         
+         if (bool(ctx.error) >= normal_errors) [[unlikely]] {
+            goto finish;
          }
       }
-
-      if (bool(ctx.error)) [[unlikely]] {
-         goto finish;
+      else {
+         if (bool(ctx.error)) [[unlikely]] {
+            goto finish;
+         }
       }
 
       // The JSON RFC 8259 defines: JSON-text = ws value ws
@@ -177,11 +194,11 @@ namespace glz
                bool success{};
                switch (opening) {
                   case '[': {
-                     success = *it == ']';
+                     success = it[-1] == ']';
                      break;
                   }
                   case '{': {
-                     success = *it == '}';
+                     success = it[-1] == '}';
                      break;
                   }
                   default: {
@@ -191,7 +208,6 @@ namespace glz
                
                if (success) [[likely]] {
                   ctx.error = error_code::none;
-                  ++it;
                }
                else [[unlikely]] {
                   ctx.error = error_code::expected_sentinel;
