@@ -101,7 +101,7 @@ namespace glz
       // This allows dynamic types that support both arrays or objects.
       if constexpr (not Opts.null_terminated && Opts.format == json && (json_read_object<T> || json_read_array<T>)) {
          --end; // We move back to the last allocated character that must exist
-         if (*end != '}' && *end != '}') [[unlikely]] {
+         if (*end != ']' && *end != '}') [[unlikely]] {
             ctx.error = error_code::expected_sentinel;
             goto finish;
          }
