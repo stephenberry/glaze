@@ -1738,6 +1738,8 @@ namespace glz
 
             const auto current_file = ctx.current_file;
             ctx.current_file = string_file_path;
+            const auto current_depth = ctx.indentation_level;
+            ctx.indentation_level = 0;
 
             // We need to allocate a new buffer here because we could call another includer that uses buffer
             std::string nested_buffer = buffer;
@@ -1747,10 +1749,12 @@ namespace glz
                auto& error_msg = error_buffer();
                error_msg = glz::format_error(ecode, nested_buffer);
                ctx.includer_error = error_msg;
+               ctx.indentation_level = current_depth;
                return;
             }
 
             ctx.current_file = current_file;
+            ctx.indentation_level = current_depth;
          }
       };
 
