@@ -75,10 +75,13 @@ namespace glz
          {
             using ValueType = std::decay_t<decltype(value)>;
             if constexpr (detail::has_unknown_reader<ValueType>) {
+               
                constexpr auto& reader = meta_unknown_read_v<ValueType>;
                using ReaderType = meta_unknown_read_t<ValueType>;
+               
                if constexpr (std::is_member_object_pointer_v<ReaderType>) {
                   using MemberType = typename member_value<ReaderType>::type;
+                  
                   if constexpr (detail::map_subscriptable<MemberType>) {
                      read<json>::op<Opts>((value.*reader)[key], ctx, it, end);
                   }
@@ -88,8 +91,10 @@ namespace glz
                }
                else if constexpr (std::is_member_function_pointer_v<ReaderType>) {
                   using ReturnType = typename return_type<ReaderType>::type;
+                  
                   if constexpr (std::is_void_v<ReturnType>) {
                      using TupleType = typename inputs_as_tuple<ReaderType>::type;
+                     
                      if constexpr (glz::tuple_size_v<TupleType> == 2) {
                         std::decay_t<glz::tuple_element_t<1, TupleType>> input{};
                         read<json>::op<Opts>(input, ctx, it, end);
