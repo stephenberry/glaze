@@ -125,9 +125,9 @@ namespace glz
       static constexpr opts options = make_read_options<T, Buffer>(Opts);
       detail::read<Opts.format>::template op<options>(value, ctx, it, end);
       
+      static constexpr uint32_t normal_errors = 3;
       if constexpr (Opts.format == json && not options.null_terminated) {
          if constexpr (json_read_object<T> || json_read_array<T>) {
-            static constexpr uint32_t normal_errors = 3;
             if (uint32_t(ctx.error) < normal_errors && ctx.indentation_level != 0) [[unlikely]] {
                ctx.error = error_code::unexpected_end;
             }
@@ -155,32 +155,34 @@ namespace glz
 
    finish:
       if constexpr (Opts.format == json && not Opts.null_terminated && (json_read_object<T> || json_read_array<T>)) {
-         if (it == end) [[likely]] {
-            bool success{};
-            switch (opening) {
-               case '[': {
-                  success = *it == ']';
-                  break;
+         if (uint32_t(ctx.error) < normal_errors) [[likely]] {
+            if (it == end) [[likely]] {
+               bool success{};
+               switch (opening) {
+                  case '[': {
+                     success = *it == ']';
+                     break;
+                  }
+                  case '{': {
+                     success = *it == '}';
+                     break;
+                  }
+                  default: {
+                     break;
+                  }
                }
-               case '{': {
-                  success = *it == '}';
-                  break;
+               
+               if (success) [[likely]] {
+                  ctx.error = error_code::none;
+                  ++it;
                }
-               default: {
-                  break;
+               else [[unlikely]] {
+                  ctx.error = error_code::expected_sentinel;
                }
             }
-            
-            if (success) [[likely]] {
-               ctx.error = error_code::none;
-               ++it;
+            else if (ctx.error == error_code::none) [[unlikely]] {
+               ctx.error = error_code::syntax_error;
             }
-            else [[unlikely]] {
-               ctx.error = error_code::expected_sentinel;
-            }
-         }
-         else if (ctx.error == error_code::none) {
-            ctx.error = error_code::syntax_error;
          }
       }
       
