@@ -97,7 +97,8 @@ namespace glz
          // Require closing `}` and use as sentinel
          --end; // We move back to the last allocated character that must exist
          if (*end != '}') [[unlikely]] {
-            ctx.error = error_code::syntax_error;
+            it = end;
+            ctx.error = error_code::expected_brace;
             goto finish;
          }
       }
@@ -105,7 +106,8 @@ namespace glz
          // Require closing `]` and use as sentinel
          --end; // We move back to the last allocated character that must exist
          if (*end != ']') [[unlikely]] {
-            ctx.error = error_code::syntax_error;
+            it = end;
+            ctx.error = error_code::expected_bracket;
             goto finish;
          }
       }

@@ -4015,8 +4015,7 @@ static constexpr std::string_view json0 = R"(
    "number": 3.14,
    "boolean": true,
    "another_bool": false
-}
-)";
+})";
 
 struct fixed_object_t
 {
@@ -4112,7 +4111,8 @@ suite json_performance = [] {
 
       obj_t obj{};
 
-      expect(glz::read_json(obj, buffer) == glz::error_code::none);
+      auto ec = glz::read_json(obj, buffer);
+      expect(not ec) << glz::format_error(ec, buffer);
       buffer.clear();
 
       expect(not glz::write_json(obj, buffer));
