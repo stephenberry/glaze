@@ -714,8 +714,7 @@ suite custom_chrono_tests = [] {
          {
             "message": "Hello",
             "seconds_duration": 5458
-         }
-      )";
+         })";
 
       chrono_data obj{};
       expect(not glz::read_json(obj, json));
