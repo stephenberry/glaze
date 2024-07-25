@@ -3550,7 +3550,8 @@ suite file_include_test = [] {
       obj.str = "";
 
       std::string s = R"({"include": "../alabastar.json", "i": 100})";
-      expect(glz::read_json(obj, s) == glz::error_code::none);
+      auto ec = glz::read_json(obj, s);
+      expect(not ec) << glz::format_error(ec, s);
 
       expect(obj.str == "Hello") << obj.str;
       expect(obj.i == 100) << obj.i;
