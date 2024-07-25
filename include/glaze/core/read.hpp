@@ -114,7 +114,7 @@ namespace glz
             goto finish;
          }
          
-         if (*it != '{' && *it != '[') [[unlikely]] {
+         if (*it != '[' && *it != '{') [[unlikely]] {
             ctx.error = error_code::syntax_error;
             goto finish;
          }
