@@ -89,7 +89,11 @@ namespace glz
       
       char opening{};
 
-      auto [it, end] = read_iterators<Opts, use_padded>(ctx, buffer);
+      auto p = read_iterators<Opts, use_padded>(ctx, buffer);
+      // explicitly get [it, end] because the clang debugger keeps jumping back to structured bindings
+      // someday you can write: auto [it, end] = ... and the debugger won't be a pain
+      auto it = p.first;
+      auto end = p.second;
       auto start = it;
       if (bool(ctx.error)) [[unlikely]] {
          goto finish;
@@ -142,13 +146,26 @@ namespace glz
       // So, trailing whitespace is permitted and sometimes we want to
       // validate this, even though this memory will not affect Glaze.
       if constexpr (Opts.validate_trailing_whitespace) {
-         if (it < end) {
-            detail::skip_ws<Opts>(ctx, it, end);
-            if (bool(ctx.error)) [[unlikely]] {
-               goto finish;
+         if constexpr (Opts.null_terminated) {
+            if (it < end) {
+               detail::skip_ws<Opts>(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]] {
+                  goto finish;
+               }
+               if (it != end) [[unlikely]] {
+                  ctx.error = error_code::syntax_error;
+               }
             }
-            if (it != end) [[unlikely]] {
-               ctx.error = error_code::syntax_error;
+         }
+         else {
+            if (it < end) {
+               detail::skip_ws_end_checks<Opts>(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]] {
+                  goto finish;
+               }
+               if (it != end) [[unlikely]] {
+                  ctx.error = error_code::syntax_error;
+               }
             }
          }
       }

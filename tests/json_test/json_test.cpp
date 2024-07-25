@@ -4692,159 +4692,159 @@ suite validation_tests = [] {
       std::string fail10 = R"({"Extra value after close": true} "misplaced quoted value")";
       auto ec_fail10 = glz::read<glz::opts{.validate_trailing_whitespace = true}>(json, fail10);
       expect(ec_fail10 != glz::error_code::none);
-      expect(glz::validate_json(fail10) != glz::error_code::none);
+      expect(glz::validate_json(fail10));
 
       std::string fail11 = R"({"Illegal expression": 1 + 2})";
       auto ec_fail11 = glz::read_json(json, fail11);
       expect(ec_fail11 != glz::error_code::none);
-      expect(glz::validate_json(fail11) != glz::error_code::none);
+      expect(glz::validate_json(fail11));
 
       std::string fail12 = R"({"Illegal invocation": alert()})";
       auto ec_fail12 = glz::read_json(json, fail12);
       expect(ec_fail12 != glz::error_code::none);
-      expect(glz::validate_json(fail12) != glz::error_code::none);
+      expect(glz::validate_json(fail12));
 
       std::string fail13 = R"({"Numbers cannot have leading zeroes": 013})";
       auto ec_fail13 = glz::read_json(json, fail13);
       expect(ec_fail13 != glz::error_code::none);
-      expect(glz::validate_json(fail13) != glz::error_code::none);
+      expect(glz::validate_json(fail13));
 
       std::string fail14 = R"({"Numbers cannot be hex": 0x14})";
       auto ec_fail14 = glz::read_json(json, fail14);
       expect(ec_fail14 != glz::error_code::none);
-      expect(glz::validate_json(fail14) != glz::error_code::none);
+      expect(glz::validate_json(fail14));
 
       std::string fail15 = R"(["Illegal backslash escape: \x15"])";
       auto ec_fail15 = glz::read_json(json, fail15);
       expect(ec_fail15 != glz::error_code::none);
-      expect(glz::validate_json(fail15) != glz::error_code::none);
+      expect(glz::validate_json(fail15));
 
       std::string fail16 = R"([\naked])";
       auto ec_fail16 = glz::read_json(json, fail16);
       expect(ec_fail16 != glz::error_code::none);
-      expect(glz::validate_json(fail16) != glz::error_code::none);
+      expect(glz::validate_json(fail16));
 
       std::string fail17 = R"(["Illegal backslash escape: \017"])";
       auto ec_fail17 = glz::read_json(json, fail17);
       expect(ec_fail17 != glz::error_code::none);
-      expect(glz::validate_json(fail17) != glz::error_code::none);
+      expect(glz::validate_json(fail17));
 
       std::string fail19 = R"({"Missing colon" null})";
       auto ec_fail19 = glz::read_json(json, fail19);
       expect(ec_fail19 != glz::error_code::none);
-      expect(glz::validate_json(fail19) != glz::error_code::none);
+      expect(glz::validate_json(fail19));
 
       std::string fail2 = R"(["Unclosed array")";
       auto ec_fail2 = glz::read_json(json, fail2);
       expect(ec_fail2 != glz::error_code::none);
-      expect(glz::validate_json(fail2) != glz::error_code::none);
+      expect(glz::validate_json(fail2));
 
       std::string fail20 = R"({"Double colon":: null})";
       auto ec_fail20 = glz::read_json(json, fail20);
       expect(ec_fail20 != glz::error_code::none);
-      expect(glz::validate_json(fail20) != glz::error_code::none);
+      expect(glz::validate_json(fail20));
 
       std::string fail21 = R"({"Comma instead of colon", null})";
       auto ec_fail21 = glz::read_json(json, fail21);
       expect(ec_fail21 != glz::error_code::none);
-      expect(glz::validate_json(fail21) != glz::error_code::none);
+      expect(glz::validate_json(fail21));
 
       std::string fail22 = R"(["Colon instead of comma": false])";
       auto ec_fail22 = glz::read_json(json, fail22);
       expect(ec_fail22 != glz::error_code::none);
-      expect(glz::validate_json(fail22) != glz::error_code::none);
+      expect(glz::validate_json(fail22));
 
       std::string fail23 = R"(["Bad value", truth])";
       auto ec_fail23 = glz::read_json(json, fail23);
       expect(ec_fail23 != glz::error_code::none);
-      expect(glz::validate_json(fail23) != glz::error_code::none);
+      expect(glz::validate_json(fail23));
 
       std::string fail24 = R"(['single quote'])";
       auto ec_fail24 = glz::read_json(json, fail24);
       expect(ec_fail24 != glz::error_code::none);
-      expect(glz::validate_json(fail24) != glz::error_code::none);
+      expect(glz::validate_json(fail24));
 
       std::string fail25 = R"(["	tab	character	in	string	"])";
       auto ec_fail25 = glz::read_json(json, fail25);
       expect(ec_fail25 != glz::error_code::none);
-      expect(glz::validate_json(fail25) != glz::error_code::none);
+      expect(glz::validate_json(fail25));
 
       std::string fail26 = R"(["tab\   character\   in\  string\  "])";
       auto ec_fail26 = glz::read_json(json, fail26);
       expect(ec_fail26 != glz::error_code::none);
-      expect(glz::validate_json(fail26) != glz::error_code::none);
+      expect(glz::validate_json(fail26));
 
       std::string fail27 = R"(["line
 break"])";
       auto ec_fail27 = glz::read_json(json, fail27);
       expect(ec_fail27 != glz::error_code::none);
-      expect(glz::validate_json(fail27) != glz::error_code::none);
+      expect(glz::validate_json(fail27));
 
       std::string fail28 = R"(["line\
 break"])";
       auto ec_fail28 = glz::read_json(json, fail28);
       expect(ec_fail28 != glz::error_code::none);
-      expect(glz::validate_json(fail28) != glz::error_code::none);
+      expect(glz::validate_json(fail28));
 
       std::string fail29 = R"([0e])";
       auto ec_fail29 = glz::read_json(json, fail29);
       expect(ec_fail29 != glz::error_code::none);
-      expect(glz::validate_json(fail29) != glz::error_code::none);
+      expect(glz::validate_json(fail29));
 
       std::string fail3 = R"({unquoted_key: "keys must be quoted"})";
       auto ec_fail3 = glz::read_json(json, fail3);
       expect(ec_fail3 != glz::error_code::none);
-      expect(glz::validate_json(fail3) != glz::error_code::none);
+      expect(glz::validate_json(fail3));
 
       std::string fail30 = R"([0e+])";
       auto ec_fail30 = glz::read_json(json, fail30);
       expect(ec_fail30 != glz::error_code::none);
-      expect(glz::validate_json(fail30) != glz::error_code::none);
+      expect(glz::validate_json(fail30));
 
       std::string fail31 = R"([0e+-1])";
       auto ec_fail31 = glz::read_json(json, fail31);
       expect(ec_fail31 != glz::error_code::none);
-      expect(glz::validate_json(fail31) != glz::error_code::none);
+      expect(glz::validate_json(fail31));
 
       std::string fail32 = R"({"Comma instead if closing brace": true,)";
       auto ec_fail32 = glz::read_json(json, fail32);
       expect(ec_fail32 != glz::error_code::none);
-      expect(glz::validate_json(fail32) != glz::error_code::none);
+      expect(glz::validate_json(fail32));
 
       std::string fail33 = R"(["mismatch"})";
       auto ec_fail33 = glz::read_json(json, fail33);
       expect(ec_fail33 != glz::error_code::none);
-      expect(glz::validate_json(fail33) != glz::error_code::none);
+      expect(glz::validate_json(fail33));
 
       std::string fail4 = R"(["extra comma",])";
       auto ec_fail4 = glz::read_json(json, fail4);
       expect(ec_fail4 != glz::error_code::none);
-      expect(glz::validate_json(fail4) != glz::error_code::none);
+      expect(glz::validate_json(fail4));
 
       std::string fail5 = R"(["double extra comma",,])";
       auto ec_fail5 = glz::read_json(json, fail5);
       expect(ec_fail5 != glz::error_code::none);
-      expect(glz::validate_json(fail5) != glz::error_code::none);
+      expect(glz::validate_json(fail5));
 
       std::string fail6 = R"([   , "<-- missing value"])";
       auto ec_fail6 = glz::read_json(json, fail6);
       expect(ec_fail6 != glz::error_code::none);
-      expect(glz::validate_json(fail6) != glz::error_code::none);
+      expect(glz::validate_json(fail6));
 
       std::string fail7 = R"(["Comma after the close"],)";
       auto ec_fail7 = glz::read<glz::opts{.validate_trailing_whitespace = true}>(json, fail7);
       expect(ec_fail7 != glz::error_code::none);
-      expect(glz::validate_json(fail7) != glz::error_code::none);
+      expect(glz::validate_json(fail7));
 
       std::string fail8 = R"(["Extra close"]])";
       auto ec_fail8 = glz::read<glz::opts{.validate_trailing_whitespace = true}>(json, fail8);
       expect(ec_fail8 != glz::error_code::none);
-      expect(glz::validate_json(fail8) != glz::error_code::none);
+      expect(glz::validate_json(fail8));
 
       std::string fail9 = R"({"Extra comma": true,})";
       auto ec_fail9 = glz::read_json(json, fail9);
       expect(ec_fail9 != glz::error_code::none);
-      expect(glz::validate_json(fail9) != glz::error_code::none);
+      expect(glz::validate_json(fail9));
 
       std::string pass1 = R"([
     "JSON Test Pattern pass1",

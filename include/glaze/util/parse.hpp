@@ -569,6 +569,21 @@ namespace glz::detail
          }
       }
    }
+   
+   template <opts Opts>
+   GLZ_ALWAYS_INLINE void skip_ws_end_checks(is_context auto&& ctx, auto&& it, auto&& end) noexcept
+   {
+      if constexpr (!Opts.minified) {
+         if constexpr (Opts.comments) {
+            static_assert(false_v<decltype(ctx)>, "Skipping non-null terminated buffers does not support comments");
+         }
+         else {
+            while (it < end && whitespace_table[uint8_t(*it)]) {
+               ++it;
+            }
+         }
+      }
+   }
 
    GLZ_ALWAYS_INLINE void skip_matching_ws(const auto* ws, auto&& it, uint64_t length) noexcept
    {
