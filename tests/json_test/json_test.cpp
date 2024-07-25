@@ -3805,7 +3805,8 @@ suite ndjson_test = [] {
 {"a":3.14,"b":"stuff"})";
 
       std::vector<glz::json_t> x{};
-      expect(not glz::read_ndjson(x, buffer));
+      auto ec = glz::read_ndjson(x, buffer);
+      expect(not ec) << glz::format_error(ec, buffer);
 
       auto out = glz::write_ndjson(x).value_or("error");
       expect(out == buffer) << out;
