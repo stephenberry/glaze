@@ -2572,11 +2572,9 @@ namespace glz
                      ctx.error = error_code::exceeded_max_recursive_depth;
                      return;
                   }
-                     if constexpr (Opts.null_terminated) {
-                        // In the null terminated case this guards for stack overflow
-                        // Depth counting is done at the object level when not null terminated
-                        ++ctx.indentation_level;
-                     }
+                  // In the null terminated case this guards for stack overflow
+                  // For depth counting with contextual sentinels this handles the opening
+                  ++ctx.indentation_level;
 
                   ++it;
                   using object_types = typename variant_types<T>::object_types;
