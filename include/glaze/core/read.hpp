@@ -116,6 +116,7 @@ namespace glz
       if constexpr (use_json_sentinels) {
          --end; // We move back to the last allocated character that must exist
          if (*end != ']' && *end != '}') [[unlikely]] {
+            it = end;
             ctx.error = error_code::expected_sentinel;
             goto finish;
          }

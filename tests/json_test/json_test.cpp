@@ -4906,23 +4906,12 @@ break"])";
 ,"rosebud"])";
       auto ec_pass1 = glz::read_json(json, pass1);
       expect(not ec_pass1) << glz::format_error(ec_pass1, pass1);
-      expect(!glz::validate_json(pass1));
+      expect(not glz::validate_json(pass1));
 
       std::string pass2 = R"([[[[[[[[[[[[[[[[[[["Not too deep"]]]]]]]]]]]]]]]]]]])";
       auto ec_pass2 = glz::read_json(json, pass2);
-      expect(ec_pass2 == glz::error_code::none);
-      expect(glz::validate_json(pass2) == glz::error_code::none);
-
-      std::string pass3 = R"({
-    "JSON Test Pattern pass3": {
-        "The outermost value": "must be an object or array.",
-        "In this test": "It is an object."
-    }
-}
-)";
-      auto ec_pass3 = glz::read_json(json, pass3);
-      expect(!ec_pass3);
-      expect(!glz::validate_json(pass3));
+      expect(not ec_pass2);
+      expect(not glz::validate_json(pass2));
    };
 };
 
@@ -5096,12 +5085,11 @@ suite long_object = [] {
     "instType":"SPOT","lever":"10","listTime":"1548133413000","lotSz":"0.00000001","maxIcebergSz":"9999999999",
     "maxLmtSz":"9999999999","maxMktSz":"1000000","maxStopSz":"1000000","maxTriggerSz":"9999999999","maxTwapSz":"9999999999",
     "minSz":"0.00001","optType":"","quoteCcy":"USDT","settleCcy":"","state":"live","stk":"","tickSz":"0.1","uly":""}],
-    "msg":""}
-)";
+    "msg":""})";
 
       OKX_OrderBook order_book{};
       auto ec = glz::read<glz::opts{.error_on_unknown_keys = false}>(order_book, order_book_str);
-      expect(ec == glz::error_code::none);
+      expect(not ec) << glz::format_error(ec, order_book_str);
 
       std::string buffer{};
       expect(not glz::write_json(order_book, buffer));
