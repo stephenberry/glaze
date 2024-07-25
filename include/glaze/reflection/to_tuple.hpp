@@ -12,6 +12,7 @@
 #include "glaze/tuplet/tuple.hpp"
 #include "glaze/util/inline.hpp"
 #include "glaze/util/type_traits.hpp"
+#include "glaze/util/hash_map.hpp"
 
 namespace glz
 {
@@ -55,7 +56,7 @@ namespace glz
       }();
 
       template <class T, size_t N = count_members<T>>
-         requires(N <= 128)
+         requires(N <= naive_map_max_size)
       GLZ_ALWAYS_INLINE constexpr decltype(auto) to_tuple(T&& t)
       {
          if constexpr (N == 0) {
