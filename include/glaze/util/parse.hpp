@@ -389,16 +389,16 @@ namespace glz::detail
    if (it == end) { \
       ++it; \
       if (*it != ']') [[unlikely]] { \
-         ctx.error = error_code::expected_brace; \
+         ctx.error = error_code::expected_bracket; \
          return;                                 \
       }                                          \
       ++it; \
-      ctx.error = error_code::brace_sentinel; \
+      ctx.error = error_code::bracket_sentinel; \
       return; \
    } \
    else { \
       if (*it != ']') [[unlikely]] {             \
-         ctx.error = error_code::expected_brace; \
+         ctx.error = error_code::expected_bracket; \
          return;                                 \
       }                                          \
       else [[likely]] {                          \
@@ -408,7 +408,7 @@ namespace glz::detail
 } \
    else { \
       if (*it != ']') [[unlikely]] {             \
-         ctx.error = error_code::expected_brace; \
+         ctx.error = error_code::expected_bracket; \
          return;                                 \
       }                                          \
       else [[likely]] {                          \
