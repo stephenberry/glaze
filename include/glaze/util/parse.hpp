@@ -384,36 +384,19 @@ namespace glz::detail
       ++it;                                     \
    }
    
-#define GLZ_MATCH_CLOSE_BRACKET if constexpr (not Opts.null_terminated) { \
-   --ctx.indentation_level; \
-   if (it == end) { \
-      if (*it != ']') [[unlikely]] { \
-         ctx.error = error_code::expected_bracket; \
-         return;                                 \
-      }                                          \
-      ++it; \
-      ctx.error = error_code::bracket_sentinel; \
+#define GLZ_MATCH_CLOSE_BRACKET if (*it != ']') [[unlikely]] { \
+      ctx.error = error_code::expected_bracket; \
       return; \
    } \
-   else { \
-      if (*it != ']') [[unlikely]] {             \
-         ctx.error = error_code::expected_bracket; \
-         return;                                 \
-      }                                          \
-      else [[likely]] {                          \
-         ++it;                                   \
+   if constexpr (not Opts.null_terminated) { \
+      --ctx.indentation_level; \
+      if (it == end) { \
+         ++it; \
+         ctx.error = error_code::bracket_sentinel; \
+         return; \
       } \
    } \
-} \
-   else { \
-      if (*it != ']') [[unlikely]] {             \
-         ctx.error = error_code::expected_bracket; \
-         return;                                 \
-      }                                          \
-      else [[likely]] {                          \
-         ++it;                                   \
-      } \
-   }
+   ++it;
 
 #define GLZ_MATCH_OPEN_BRACE                  \
    if (*it != '{') [[unlikely]] {             \
@@ -424,36 +407,19 @@ namespace glz::detail
       ++it;                                   \
    }
    
-#define GLZ_MATCH_CLOSE_BRACE if constexpr (not Opts.null_terminated) { \
-   --ctx.indentation_level; \
-   if (it == end) { \
-      if (*it != '}') [[unlikely]] { \
-         ctx.error = error_code::expected_brace; \
-         return;                                 \
-      }                                          \
-      ++it; \
-      ctx.error = error_code::brace_sentinel; \
+#define GLZ_MATCH_CLOSE_BRACE if (*it != '}') [[unlikely]] { \
+      ctx.error = error_code::expected_brace; \
       return; \
    } \
-   else { \
-      if (*it != '}') [[unlikely]] {             \
-         ctx.error = error_code::expected_brace; \
-         return;                                 \
-      }                                          \
-      else [[likely]] {                          \
-         ++it;                                   \
+   if constexpr (not Opts.null_terminated) { \
+      --ctx.indentation_level; \
+      if (it == end) { \
+         ++it; \
+         ctx.error = error_code::brace_sentinel; \
+         return; \
       } \
    } \
-} \
-   else { \
-      if (*it != '}') [[unlikely]] {             \
-         ctx.error = error_code::expected_brace; \
-         return;                                 \
-      }                                          \
-      else [[likely]] {                          \
-         ++it;                                   \
-      } \
-   }
+   ++it;
 
    template <char c>
    GLZ_ALWAYS_INLINE void match(is_context auto&& ctx, auto&& it) noexcept
