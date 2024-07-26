@@ -66,11 +66,11 @@ namespace glz
          out.internal |= uint32_t(opts::internal::is_padded);
       }
       
-      // TODO: Add is_null_terminated option for std::string
-      //using Buffer = std::remove_cvref_t<decltype(buffer)>;
-      //if constexpr (is_specialization_v<Buffer, std::basic_string>) {
-      //
-      //}
+      // std::string is null terminated
+      using B = std::remove_cvref_t<Buffer>;
+      if constexpr (is_specialization_v<B, std::basic_string>) {
+         out.null_terminated = true;
+      }
       
       return out;
    }
@@ -104,8 +104,10 @@ namespace glz
          goto finish;
       }
       
+      static constexpr opts options = make_read_options<T, Buffer>(Opts);
+      
       // Whether to use contextual sentinels for non-null terminated inputs
-      static constexpr bool use_json_sentinels = (Opts.format == json) && not (Opts.null_terminated) && (json_read_object<T> || json_read_array<T>);
+      static constexpr bool use_json_sentinels = (Opts.format == json) && not (options.null_terminated) && (json_read_object<T> || json_read_array<T>);
       
       // Custom decoding and types like glz::skip consume the entire thing they are decoding
       // Indeed, most all parse implementation should be expected to consume the terminating characters
@@ -128,7 +130,6 @@ namespace glz
          }
       }
       
-      static constexpr opts options = make_read_options<T, Buffer>(Opts);
       detail::read<Opts.format>::template op<options>(value, ctx, it, end);
       
       if constexpr (use_json_sentinels) {
@@ -156,8 +157,8 @@ namespace glz
       // The JSON RFC 8259 defines: JSON-text = ws value ws
       // So, trailing whitespace is permitted and sometimes we want to
       // validate this, even though this memory will not affect Glaze.
-      if constexpr (Opts.validate_trailing_whitespace) {
-         if constexpr (Opts.null_terminated) {
+      if constexpr (options.validate_trailing_whitespace) {
+         if constexpr (options.null_terminated) {
             if (it < end) {
                detail::skip_ws<Opts>(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]] {
@@ -182,7 +183,7 @@ namespace glz
       }
 
    finish:
-      if constexpr (Opts.format == json && not Opts.null_terminated && (json_read_object<T> || json_read_array<T>)) {
+      if constexpr (Opts.format == json && not options.null_terminated && (json_read_object<T> || json_read_array<T>)) {
          if (bool(ctx.error) && uint32_t(ctx.error) < normal_errors) [[likely]] {
             // If we hit a sentinel then we clear the error
             // We could have only hit a sentinel if we reached the end of the buffer
