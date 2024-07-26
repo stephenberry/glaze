@@ -86,8 +86,6 @@ namespace glz
          // Pad the buffer for SWAR
          buffer.resize(buffer.size() + padding_bytes);
       }
-      
-      char opening{};
 
       auto p = read_iterators<Opts, use_padded>(ctx, buffer);
       // explicitly get [it, end] because the clang debugger keeps jumping back to structured bindings
@@ -120,22 +118,7 @@ namespace glz
             ctx.error = error_code::expected_sentinel;
             goto finish;
          }
-         detail::skip_ws<Opts>(ctx, it, end);
-         if (bool(ctx.error)) [[unlikely]] {
-            goto finish;
-         }
-         if (it == end) [[unlikely]] {
-            ctx.error = error_code::unexpected_end;
-            goto finish;
-         }
-         
-         if (*it != '[' && *it != '{') [[unlikely]] {
-            ctx.error = error_code::syntax_error;
-            goto finish;
-         }
       }
-      
-      opening = *it;
       
       static constexpr opts options = make_read_options<T, Buffer>(Opts);
       detail::read<Opts.format>::template op<options>(value, ctx, it, end);
@@ -191,31 +174,15 @@ namespace glz
    finish:
       if constexpr (Opts.format == json && not Opts.null_terminated && (json_read_object<T> || json_read_array<T>)) {
          if (uint32_t(ctx.error) < normal_errors) [[likely]] {
+            // If we reached our end we should have hit a sentinel
+            // otherwise we have partial reading, which we do not treat as an error
             if (it == end) [[likely]] {
-               bool success{};
-               switch (opening) {
-                  case '[': {
-                     success = it[-1] == ']';
-                     break;
-                  }
-                  case '{': {
-                     success = it[-1] == '}';
-                     break;
-                  }
-                  default: {
-                     break;
-                  }
-               }
-               
-               if (success) [[likely]] {
-                  ctx.error = error_code::none;
-               }
-               else [[unlikely]] {
+               if (ctx.error == error_code::none) [[unlikely]] {
                   ctx.error = error_code::expected_sentinel;
                }
-            }
-            else if (ctx.error == error_code::none) [[unlikely]] {
-               ctx.error = error_code::syntax_error;
+               else {
+                  ctx.error = error_code::none;
+               }
             }
          }
       }
