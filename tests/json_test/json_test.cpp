@@ -7501,7 +7501,7 @@ suite partial_read_tests = [] {
       // closing brace is intentionally missing
       std::string buf = R"({"id":"51e2affb","type":"message_type","unknown key":"value")";
 
-      expect(!glz::read_json(h, buf));
+      expect(!glz::read<glz::opts{.null_terminated = true}>(h, buf));
       expect(h.id == "51e2affb");
       expect(h.type == "message_type");
    };

@@ -127,9 +127,11 @@ namespace glz
          ++end; // reset the end iterator so that we can know if we have decoded the entire buffer
       }
       
-      static constexpr uint32_t normal_errors = 3;
+      static constexpr uint32_t normal_errors = uint32_t(error_code::no_read_input);
       if constexpr (use_json_sentinels) {
-         if (uint32_t(ctx.error) < normal_errors && ctx.indentation_level != 0) [[unlikely]] {
+         if ((uint32_t(ctx.error) < normal_errors) //
+             && (ctx.indentation_level != 0) //
+             && (not ctx.partial)) [[unlikely]] {
             ctx.error = error_code::unexpected_end;
          }
          

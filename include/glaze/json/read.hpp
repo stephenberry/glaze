@@ -1365,6 +1365,7 @@ namespace glz
             }
 
             if constexpr (Opts.partial_read) {
+               ctx.partial = true;
                return;
             }
             else {
@@ -1662,6 +1663,7 @@ namespace glz
             });
 
             if constexpr (Opts.partial_read) {
+               ctx.partial = true;
                return;
             }
             else {
@@ -2096,6 +2098,7 @@ namespace glz
                         if constexpr (Opts.partial_read_nested) {
                            skip_until_closed<Opts, '{', '}'>(ctx, it, end);
                         }
+                        ctx.partial = true;
                         return;
                      }
                   }
@@ -2347,6 +2350,7 @@ namespace glz
                               skip_value<Opts>(ctx, it, end);
                            }
                            if (read_count == value.size()) {
+                              ctx.partial = true;
                               return;
                            }
                         }
@@ -2375,6 +2379,7 @@ namespace glz
                               skip_value<Opts>(ctx, it, end);
                            }
                            if (read_count == value.size()) {
+                              ctx.partial = true;
                               return;
                            }
                         }
@@ -2412,6 +2417,7 @@ namespace glz
                               skip_value<Opts>(ctx, it, end);
                            }
                            if (read_count == value.size()) {
+                              ctx.partial = true;
                               return;
                            }
                         }

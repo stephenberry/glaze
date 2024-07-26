@@ -106,8 +106,9 @@ namespace glz
       uint32_t indentation_level{}; // When writing this is the number of indent character to serialize
       // When reading indentation_level is used to track the depth of structures to prevent stack overflows
       // From massive depths due to untrusted inputs or attacks
-      std::string current_file; // top level file path
+      std::string current_file; // Top level file path
       std::string_view includer_error; // error from a nested file includer
+      bool partial = false; // Whether this parsing/serialization context should be partial
    };
 
    template <class T>
