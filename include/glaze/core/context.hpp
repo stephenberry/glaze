@@ -121,8 +121,6 @@ namespace glz
 
 #define GLZ_SUB_LEVEL_BRACE if constexpr (not Opts.null_terminated) { \
    --ctx.indentation_level; \
-} \
-if constexpr (not Opts.null_terminated) { \
    if (it == end) { \
       ++it; \
       ctx.error = error_code::brace_sentinel; \
@@ -132,8 +130,6 @@ if constexpr (not Opts.null_terminated) { \
 
 #define GLZ_SUB_LEVEL_BRACKET if constexpr (not Opts.null_terminated) { \
    --ctx.indentation_level; \
-} \
-if constexpr (not Opts.null_terminated) { \
    if (it == end) { \
       ++it; \
       ctx.error = error_code::bracket_sentinel; \

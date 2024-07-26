@@ -383,14 +383,28 @@ namespace glz::detail
    else [[likely]] {                            \
       ++it;                                     \
    }
-
-#define GLZ_MATCH_CLOSE_BRACKET                 \
-   if (*it != ']') [[unlikely]] {               \
-      ctx.error = error_code::expected_bracket; \
-      return;                                   \
-   }                                            \
-   else [[likely]] {                            \
-      ++it;                                     \
+   
+#define GLZ_MATCH_CLOSE_BRACKET if constexpr (not Opts.null_terminated) { \
+   --ctx.indentation_level; \
+   if (it == end) { \
+      ++it; \
+      if (*it != ']') [[unlikely]] { \
+         ctx.error = error_code::expected_brace; \
+         return;                                 \
+      }                                          \
+      ++it; \
+      ctx.error = error_code::brace_sentinel; \
+      return; \
+   } \
+} \
+   else { \
+      if (*it != ']') [[unlikely]] {             \
+         ctx.error = error_code::expected_brace; \
+         return;                                 \
+      }                                          \
+      else [[likely]] {                          \
+         ++it;                                   \
+      } \
    }
 
 #define GLZ_MATCH_OPEN_BRACE                  \
@@ -401,14 +415,28 @@ namespace glz::detail
    else [[likely]] {                          \
       ++it;                                   \
    }
-
-#define GLZ_MATCH_CLOSE_BRACE                 \
-   if (*it != '}') [[unlikely]] {             \
-      ctx.error = error_code::expected_brace; \
-      return;                                 \
-   }                                          \
-   else [[likely]] {                          \
-      ++it;                                   \
+   
+#define GLZ_MATCH_CLOSE_BRACE if constexpr (not Opts.null_terminated) { \
+   --ctx.indentation_level; \
+   if (it == end) { \
+      ++it; \
+      if (*it != '}') [[unlikely]] { \
+         ctx.error = error_code::expected_brace; \
+         return;                                 \
+      }                                          \
+      ++it; \
+      ctx.error = error_code::brace_sentinel; \
+      return; \
+   } \
+} \
+   else { \
+      if (*it != '}') [[unlikely]] {             \
+         ctx.error = error_code::expected_brace; \
+         return;                                 \
+      }                                          \
+      else [[likely]] {                          \
+         ++it;                                   \
+      } \
    }
 
    template <char c>
