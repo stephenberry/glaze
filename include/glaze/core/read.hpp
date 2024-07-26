@@ -106,6 +106,7 @@ namespace glz
       // if we progress beyond the length of the buffer we must not de-reference.
       // By setting using error context we block de-referencing, so we can progress the iterator
       // when using contextual sentinels.
+      // In short, we don't assume compile time knowledge of the sentinel character at this level.
       
       // glz::skip needs to handle either terminating `]` or `}`
       // Rather than matching exactly an object or array, either of these types will consider

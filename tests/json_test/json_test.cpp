@@ -7961,7 +7961,7 @@ suite custom_struct_tests = [] {
       expect(not glz::write_json(obj, s));
       expect(s == R"("write")");
 
-      expect(!glz::read_json(obj, s));
+      expect(!glz::read<glz::opts{.null_terminated = true}>(obj, s));
       expect(obj.str == R"(writeread)") << obj.str;
    };
 };
