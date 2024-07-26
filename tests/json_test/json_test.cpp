@@ -7498,7 +7498,7 @@ suite partial_read_tests = [] {
 
    "partial read 2"_test = [] {
       Header h{};
-      // closing curly bracket is missing
+      // closing brace is intentionally missing
       std::string buf = R"({"id":"51e2affb","type":"message_type","unknown key":"value")";
 
       expect(!glz::read_json(h, buf));
