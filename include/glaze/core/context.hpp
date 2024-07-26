@@ -97,7 +97,7 @@ namespace glz
    struct context final
    {
       error_code error{};
-      std::string_view custom_error_message{};
+      std::string_view custom_error_message;
       // INTERNAL USE:
       // TODO: Rename to indent_level
       // We use an unsigned integer because if we hit negative numbers when reading we wrap around
@@ -106,7 +106,7 @@ namespace glz
       // When reading indentation_level is used to track the depth of structures to prevent stack overflows
       // From massive depths due to untrusted inputs or attacks
       std::string current_file; // top level file path
-      std::string_view includer_error{}; // error from a nested file includer
+      std::string_view includer_error; // error from a nested file includer
    };
 
    template <class T>
