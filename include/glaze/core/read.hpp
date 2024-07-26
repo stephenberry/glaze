@@ -51,6 +51,13 @@ namespace glz
       return std::pair{it, end};
    }
    
+   constexpr std::array<bool, 256> sentinel_table = [] {
+      std::array<bool, 256> t{};
+      t[']'] = true;
+      t['}'] = true;
+      return t;
+   }();
+   
    template <class T, class Buffer>
    consteval opts make_read_options(const opts& in) {
       opts out = in;
@@ -114,7 +121,7 @@ namespace glz
       // This allows dynamic types that support both arrays or objects.
       if constexpr (use_json_sentinels) {
          --end; // We move back to the last allocated character that must exist
-         if (*end != ']' && *end != '}') [[unlikely]] {
+         if (not sentinel_table[uint8_t(*end)]) [[unlikely]] {
             it = end;
             ctx.error = error_code::expected_sentinel;
             goto finish;

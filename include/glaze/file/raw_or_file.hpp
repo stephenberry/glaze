@@ -25,7 +25,7 @@ namespace glz
          template <auto Options>
          static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
-            constexpr auto Opts = ws_handled_off<Options>();
+            constexpr auto Opts = opt_true<ws_handled_off<Options>(), &opts::null_terminated>;
             auto& v = value;
             // check if we are decoding a string, which could be a file path
             if (*it == '"') {
@@ -48,7 +48,11 @@ namespace glz
                      return;
                   }
 
-                  const auto ecode = validate_jsonc(v.str);
+                  //const auto ecode = validate_jsonc(v.str);
+                  // A custom validate_jsonc that sets null_terminated = true
+                  context new_ctx{};
+                  glz::skip skip_value{};
+                  const auto ecode = glz::read<opts{.null_terminated = true, .comments = true, .validate_skipped = true, .validate_trailing_whitespace = true}>(skip_value, v.str, new_ctx);
                   if (ecode) [[unlikely]] {
                      ctx.error = error_code::includer_error;
                      auto& error_msg = error_buffer();
