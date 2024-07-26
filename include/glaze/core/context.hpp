@@ -97,6 +97,7 @@ namespace glz
    struct context final
    {
       error_code error{};
+      // We don't use the unnecessary {} for std::string_view to keep debuggers from jumping here
       std::string_view custom_error_message;
       // INTERNAL USE:
       // TODO: Rename to indent_level
