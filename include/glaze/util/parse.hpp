@@ -396,6 +396,15 @@ namespace glz::detail
       ctx.error = error_code::brace_sentinel; \
       return; \
    } \
+   else { \
+      if (*it != ']') [[unlikely]] {             \
+         ctx.error = error_code::expected_brace; \
+         return;                                 \
+      }                                          \
+      else [[likely]] {                          \
+         ++it;                                   \
+      } \
+   } \
 } \
    else { \
       if (*it != ']') [[unlikely]] {             \
@@ -427,6 +436,15 @@ namespace glz::detail
       ++it; \
       ctx.error = error_code::brace_sentinel; \
       return; \
+   } \
+   else { \
+      if (*it != '}') [[unlikely]] {             \
+         ctx.error = error_code::expected_brace; \
+         return;                                 \
+      }                                          \
+      else [[likely]] {                          \
+         ++it;                                   \
+      } \
    } \
 } \
    else { \
