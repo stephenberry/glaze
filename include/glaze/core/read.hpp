@@ -173,17 +173,11 @@ namespace glz
 
    finish:
       if constexpr (Opts.format == json && not Opts.null_terminated && (json_read_object<T> || json_read_array<T>)) {
-         if (uint32_t(ctx.error) < normal_errors) [[likely]] {
-            // If we reached our end we should have hit a sentinel
-            // otherwise we have partial reading, which we do not treat as an error
-            if (it == end) [[likely]] {
-               if (ctx.error == error_code::none) [[unlikely]] {
-                  ctx.error = error_code::expected_sentinel;
-               }
-               else {
-                  ctx.error = error_code::none;
-               }
-            }
+         if (bool(ctx.error) && uint32_t(ctx.error) < normal_errors) [[likely]] {
+            // If we hit a sentinel then we clear the error
+            // We could have only hit a sentinel if we reached the end of the buffer
+            // If we didn't hit a sentinel then we assume we have partial reading
+            ctx.error = error_code::none;
          }
       }
       
