@@ -387,7 +387,6 @@ namespace glz::detail
 #define GLZ_MATCH_CLOSE_BRACKET if constexpr (not Opts.null_terminated) { \
    --ctx.indentation_level; \
    if (it == end) { \
-      ++it; \
       if (*it != ']') [[unlikely]] { \
          ctx.error = error_code::expected_bracket; \
          return;                                 \
@@ -428,7 +427,6 @@ namespace glz::detail
 #define GLZ_MATCH_CLOSE_BRACE if constexpr (not Opts.null_terminated) { \
    --ctx.indentation_level; \
    if (it == end) { \
-      ++it; \
       if (*it != '}') [[unlikely]] { \
          ctx.error = error_code::expected_brace; \
          return;                                 \
