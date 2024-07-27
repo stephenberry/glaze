@@ -90,7 +90,7 @@ namespace glz
    };
 
    template <auto N, class T>
-   constexpr auto member_nameof = []() constexpr { return member_nameof_impl<N, T>::stripped_literal; }();
+   inline constexpr auto member_nameof = []() constexpr { return member_nameof_impl<N, T>::stripped_literal; }();
 
    template <class T>
    constexpr auto type_name = [] {
