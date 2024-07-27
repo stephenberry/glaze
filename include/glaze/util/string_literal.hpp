@@ -46,10 +46,10 @@ namespace glz
    }
 
    template <string_literal Str>
-   constexpr std::string_view chars = Str.sv();
+   inline constexpr std::string_view chars = Str.sv();
 
    template <string_literal Str>
-   constexpr std::string_view root = Str.sv();
+   inline constexpr std::string_view root = Str.sv();
 
    namespace detail
    {
@@ -79,5 +79,5 @@ namespace glz
 
    // Helper to get the value out
    template <const std::string_view&... Strs>
-   constexpr auto join_v = detail::join<Strs...>();
+   inline constexpr auto join_v = detail::join<Strs...>();
 }

@@ -70,8 +70,7 @@ int main()
    auto timeout = [uuid, &client]() {
       decltype(auto) map = client.get_request_map<"foo">();
       if (map.contains(uuid))
-         ;
-      map.erase(uuid);
+         map.erase(uuid);
    };
 #if 0
    // caling timeout would cause to not process response
