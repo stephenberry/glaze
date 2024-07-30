@@ -54,6 +54,7 @@ endif()
 
 add_subdirectory(asio_repe)
 add_subdirectory(api_test)
+add_subdirectory(binary_rpc)
 add_subdirectory(binary_test)
 add_subdirectory(cli_menu_test)
 add_subdirectory(compare_test)
