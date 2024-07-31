@@ -54,8 +54,10 @@ namespace glz
          }
       }();
 
+      constexpr size_t max_pure_reflection_count = 128;
+
       template <class T, size_t N = count_members<T>>
-         requires(N <= 128)
+         requires(N <= max_pure_reflection_count)
       GLZ_ALWAYS_INLINE constexpr decltype(auto) to_tuple(T&& t)
       {
          if constexpr (N == 0) {
