@@ -51,6 +51,7 @@ if (glaze_DEVELOPER_MODE)
 endif()
 
 option(BUILD_EXAMPLES "Build examples" OFF)
+set_property(CACHE BUILD_EXAMPLES PROPERTY CATEGORY "GLAZE")
 
 if(BUILD_EXAMPLES)
   add_subdirectory(examples)
