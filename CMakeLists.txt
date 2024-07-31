@@ -50,9 +50,8 @@ if (glaze_DEVELOPER_MODE)
   include(cmake/dev-mode.cmake)
 endif()
 
-option(BUILD_EXAMPLES "Build examples" OFF)
-set_property(CACHE BUILD_EXAMPLES PROPERTY CATEGORY "GLAZE")
+option(GLAZE_BUILD_EXAMPLES "Build GLAZE examples" OFF)
 
-if(BUILD_EXAMPLES)
+if(GLAZE_BUILD_EXAMPLES)
   add_subdirectory(examples)
 endif()
