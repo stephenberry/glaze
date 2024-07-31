@@ -12,7 +12,6 @@
 #include "glaze/tuplet/tuple.hpp"
 #include "glaze/util/inline.hpp"
 #include "glaze/util/type_traits.hpp"
-#include "glaze/util/hash_map.hpp"
 
 namespace glz
 {
