@@ -49,4 +49,9 @@ endif()
 if (glaze_DEVELOPER_MODE)
   include(cmake/dev-mode.cmake)
 endif()
-add_subdirectory(examples)
+
+option(BUILD_EXAMPLES "Build examples" OFF)
+
+if(BUILD_EXAMPLES)
+  add_subdirectory(examples)
+endif()
