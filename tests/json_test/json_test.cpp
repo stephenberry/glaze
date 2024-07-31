@@ -9023,6 +9023,52 @@ suite depth_limits_test = [] {
    };
 };
 
+struct hammerhead_t
+{
+   double length{};
+};
+
+struct mako_t
+{
+   double length{};
+};
+
+using shark_t = std::variant<hammerhead_t, mako_t>;
+
+template <>
+struct glz::meta<shark_t>
+{
+   static constexpr std::string_view tag = "name";
+   static constexpr auto ids = std::array{"hammerhead", "mako"};
+};
+
+using shark_ptr_t = std::variant<std::shared_ptr<hammerhead_t>, std::shared_ptr<mako_t>>;
+
+template <>
+struct glz::meta<shark_ptr_t>
+{
+   static constexpr std::string_view tag = "name";
+   static constexpr auto ids = std::array{"hammerhead", "mako"};
+};
+
+suite shark_variant = [] {
+   "shark_variant"_test = [] {
+      shark_t shark{};
+      auto ec = glz::read_json(shark, R"({"name":"mako","length":44.0})");
+      expect(!ec);
+      expect(std::holds_alternative<mako_t>(shark));
+      expect(std::get<mako_t>(shark).length == 44.0);
+   };
+   
+   "shark_ptr_variant"_test = [] {
+      shark_ptr_t shark{};
+      auto ec = glz::read_json(shark, R"({"name":"mako","length":44.0})");
+      expect(!ec);
+      expect(std::holds_alternative<std::shared_ptr<mako_t>>(shark));
+      expect(std::get<std::shared_ptr<mako_t>>(shark)->length == 44.0);
+   };
+};
+
 int main()
 {
    trace.end("json_test");
