@@ -32,6 +32,8 @@
 #ifndef GLZ_FLATTEN_NO_INLINE
 #define GLZ_FLATTEN_NO_INLINE __attribute__((noinline)) __attribute__((flatten))
 #endif
+#elif defined(_MSC_VER) && defined(NDEBUG)
+#define GLZ_FLATTEN [[msvc::flatten]] inline
 #endif
 
 #ifndef GLZ_FLATTEN
