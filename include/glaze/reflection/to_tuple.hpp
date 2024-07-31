@@ -53,7 +53,7 @@ namespace glz
             return sizeof...(Args);
          }
       }();
-      
+
       constexpr size_t max_pure_reflection_count = 128;
 
       template <class T, size_t N = count_members<T>>
