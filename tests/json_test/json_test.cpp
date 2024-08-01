@@ -9051,6 +9051,21 @@ struct glz::meta<shark_ptr_t>
    static constexpr auto ids = std::array{"hammerhead", "mako"};
 };
 
+struct chair_t
+{
+   float height{};
+   uint8_t number_of_legs{};
+   bool has_back{};
+};
+
+struct bed_t
+{
+   float height{};
+   bool has_headboard{};
+};
+
+using furniture_ptr_t = std::variant<std::shared_ptr<chair_t>, std::shared_ptr<bed_t>>;
+
 suite shark_variant = [] {
    "shark_variant"_test = [] {
       shark_t shark{};
@@ -9060,12 +9075,21 @@ suite shark_variant = [] {
       expect(std::get<mako_t>(shark).length == 44.0);
    };
    
-   "shark_ptr_variant"_test = [] {
+   "shark_ptr variant"_test = [] {
       shark_ptr_t shark{};
       auto ec = glz::read_json(shark, R"({"name":"mako","length":44.0})");
       expect(!ec);
       expect(std::holds_alternative<std::shared_ptr<mako_t>>(shark));
       expect(std::get<std::shared_ptr<mako_t>>(shark)->length == 44.0);
+   };
+   
+   "furniture_ptr variant auto-deduction "_test = [] {
+      furniture_ptr_t furniture{};
+      auto ec = glz::read_json(furniture, R"({"height":44.0,"has_headboard":true})");
+      expect(!ec);
+      expect(std::holds_alternative<std::shared_ptr<bed_t>>(furniture));
+      expect(std::get<std::shared_ptr<bed_t>>(furniture)->height == 44.0f);
+      expect(std::get<std::shared_ptr<bed_t>>(furniture)->has_headboard);
    };
 };
 

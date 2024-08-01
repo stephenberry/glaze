@@ -762,6 +762,10 @@ namespace glz::detail
          if constexpr (glaze_object_t<V> || reflectable<V>) {
             for_each<refl<V>.N>([&](auto J) { deduction_map.find(refl<V>.keys[J])->second[I] = true; });
          }
+         else if constexpr (is_memory_object<V>) {
+            using X = memory_type<V>;
+            for_each<refl<X>.N>([&](auto J) { deduction_map.find(refl<X>.keys[J])->second[I] = true; });
+         }
       });
 
       return deduction_map;
