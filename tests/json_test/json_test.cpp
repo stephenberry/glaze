@@ -9074,7 +9074,7 @@ suite shark_variant = [] {
       expect(std::holds_alternative<mako_t>(shark));
       expect(std::get<mako_t>(shark).length == 44.0);
    };
-   
+
    "shark_ptr variant"_test = [] {
       shark_ptr_t shark{};
       auto ec = glz::read_json(shark, R"({"name":"mako","length":44.0})");
@@ -9082,7 +9082,7 @@ suite shark_variant = [] {
       expect(std::holds_alternative<std::shared_ptr<mako_t>>(shark));
       expect(std::get<std::shared_ptr<mako_t>>(shark)->length == 44.0);
    };
-   
+
    "furniture_ptr variant auto-deduction "_test = [] {
       furniture_ptr_t furniture{};
       auto ec = glz::read_json(furniture, R"({"height":44.0,"has_headboard":true})");

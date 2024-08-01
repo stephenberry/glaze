@@ -1768,10 +1768,11 @@ namespace glz
 
          return stats;
       }
-      
+
       template <class T, string_literal tag = "">
          requires(is_memory_object<T>)
-      constexpr auto key_stats() {
+      constexpr auto key_stats()
+      {
          return key_stats<memory_type<T>>();
       }
 
@@ -2442,14 +2443,15 @@ namespace glz
             std::conditional_t < str_t<remove_meta_wrapper_t<Ts>> || glaze_enum_t<remove_meta_wrapper_t<Ts>> ||
                glaze_enum_t<Ts>,
             tuplet::tuple<Ts>, tuplet::tuple < >> {}...));
-         using object_types = decltype(tuplet::tuple_cat(
-            std::conditional_t<json_object<Ts>, tuplet::tuple<Ts>, tuplet::tuple<>>{}...));
+         using object_types =
+            decltype(tuplet::tuple_cat(std::conditional_t<json_object<Ts>, tuplet::tuple<Ts>, tuplet::tuple<>>{}...));
          using array_types =
             decltype(tuplet::tuple_cat(std::conditional_t < array_t<remove_meta_wrapper_t<Ts>> || glaze_array_t<Ts>,
                                        tuplet::tuple<Ts>, tuplet::tuple < >> {}...));
          using nullable_types =
             decltype(tuplet::tuple_cat(std::conditional_t<null_t<Ts>, tuplet::tuple<Ts>, tuplet::tuple<>>{}...));
-         using nullable_objects = decltype(tuplet::tuple_cat(std::conditional_t<is_memory_object<Ts>, tuplet::tuple<Ts>, tuplet::tuple<>>{}...));
+         using nullable_objects = decltype(tuplet::tuple_cat(
+            std::conditional_t<is_memory_object<Ts>, tuplet::tuple<Ts>, tuplet::tuple<>>{}...));
       };
 
       // post process output of variant_types
@@ -2633,11 +2635,12 @@ namespace glz
                                                 else {
                                                    ctx.error = error_code::invalid_nullable_read;
                                                    return;
-                                                   // Cannot read into unset nullable that is not std::optional, std::unique_ptr, or std::shared_ptr
+                                                   // Cannot read into unset nullable that is not std::optional,
+                                                   // std::unique_ptr, or std::shared_ptr
                                                 }
                                              }
-                                             from_json<memory_type<V>>::template op<opening_handled<Opts>(), tag_literal>(*v, ctx, it,
-                                                                                                             end);
+                                             from_json<memory_type<V>>::template op<opening_handled<Opts>(),
+                                                                                    tag_literal>(*v, ctx, it, end);
                                           }
                                        },
                                        value);
@@ -2734,11 +2737,12 @@ namespace glz
                                        else {
                                           ctx.error = error_code::invalid_nullable_read;
                                           return;
-                                          // Cannot read into unset nullable that is not std::optional, std::unique_ptr, or std::shared_ptr
+                                          // Cannot read into unset nullable that is not std::optional, std::unique_ptr,
+                                          // or std::shared_ptr
                                        }
                                     }
-                                    from_json<memory_type<V>>::template op<opening_handled<Opts>(), tag_literal>(*v, ctx, it,
-                                                                                                    end);
+                                    from_json<memory_type<V>>::template op<opening_handled<Opts>(), tag_literal>(
+                                       *v, ctx, it, end);
                                  }
                               },
                               value);

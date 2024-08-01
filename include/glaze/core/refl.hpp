@@ -175,10 +175,11 @@ namespace glz
       template <size_t I>
       using type = detail::member_t<V, decltype(get<I>(values))>;
    };
-   
+
    template <class T>
       requires(detail::is_memory_object<T>)
-   struct refl_info<T> : refl_info<memory_type<T>> {};
+   struct refl_info<T> : refl_info<memory_type<T>>
+   {};
 
    template <class T>
       requires(detail::glaze_array_t<T>)

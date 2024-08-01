@@ -231,25 +231,27 @@ namespace glz
 
    template <class T>
    using decay_keep_volatile_t = std::remove_const_t<std::remove_reference_t<T>>;
-   
+
    template <class T>
    concept is_memory_type = requires(T t) {
-       typename T::element_type;
-       *t;
-       bool(t);
-       t.reset();
+      typename T::element_type;
+      *t;
+      bool(t);
+      t.reset();
    };
-   
+
    namespace detail
    {
       template <class T>
-      struct memory_type_impl {
-          using type = T;
+      struct memory_type_impl
+      {
+         using type = T;
       };
 
       template <is_memory_type T>
-      struct memory_type_impl<T> {
-          using type = typename T::element_type;
+      struct memory_type_impl<T>
+      {
+         using type = typename T::element_type;
       };
    }
 
