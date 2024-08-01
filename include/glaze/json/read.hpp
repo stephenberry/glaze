@@ -16,6 +16,7 @@
 #include "glaze/core/read.hpp"
 #include "glaze/core/refl.hpp"
 #include "glaze/file/file_ops.hpp"
+#include "glaze/json/json_concepts.hpp"
 #include "glaze/json/json_t.hpp"
 #include "glaze/json/skip.hpp"
 #include "glaze/util/fast_float.hpp"
@@ -2436,8 +2437,7 @@ namespace glz
                glaze_enum_t<Ts>,
             tuplet::tuple<Ts>, tuplet::tuple < >> {}...));
          using object_types = decltype(tuplet::tuple_cat(
-            std::conditional_t < reflectable<Ts> || readable_map_t<Ts> || writable_map_t<Ts> || glaze_object_t<Ts>,
-            tuplet::tuple<Ts>, tuplet::tuple < >> {}...));
+            std::conditional_t<json_object<Ts>, tuplet::tuple<Ts>, tuplet::tuple<>>{}...));
          using array_types =
             decltype(tuplet::tuple_cat(std::conditional_t < array_t<remove_meta_wrapper_t<Ts>> || glaze_array_t<Ts>,
                                        tuplet::tuple<Ts>, tuplet::tuple < >> {}...));
@@ -2574,7 +2574,7 @@ namespace glz
 
                         if constexpr (deduction_map.size()) {
                            // We first check if a tag is defined and see if the key matches the tag
-                           if constexpr (!tag_v<T>.empty()) {
+                           if constexpr (not tag_v<T>.empty()) {
                               if (key == tag_v<T>) {
                                  parse_object_entry_sep<Opts>(ctx, it, end);
                                  if (bool(ctx.error)) [[unlikely]]
@@ -2625,7 +2625,7 @@ namespace glz
                               return;
                            }
                         }
-                        else if constexpr (!tag_v<T>.empty()) {
+                        else if constexpr (not tag_v<T>.empty()) {
                            // empty object case for variant, if there are no normal elements
                            if (key == tag_v<T>) {
                               parse_object_entry_sep<Opts>(ctx, it, end);

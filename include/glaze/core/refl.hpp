@@ -714,7 +714,9 @@ namespace glz::detail
       for_each<N>([&](auto I) {
          using V = std::decay_t<std::variant_alternative_t<I, T>>;
          if constexpr (glaze_object_t<V> || reflectable<V>) {
-            for_each<refl<V>.N>([&](auto J) { (*data_ptr)[index++] = refl<V>.keys[J]; });
+            for (size_t i = 0; i < refl<V>.N; ++i) {
+               (*data_ptr)[index++] = refl<V>.keys[i];
+            }
          }
       });
 
