@@ -9060,13 +9060,13 @@ suite shark_variant = [] {
       expect(std::get<mako_t>(shark).length == 44.0);
    };
    
-   /*"shark_ptr_variant"_test = [] {
+   "shark_ptr_variant"_test = [] {
       shark_ptr_t shark{};
       auto ec = glz::read_json(shark, R"({"name":"mako","length":44.0})");
       expect(!ec);
       expect(std::holds_alternative<std::shared_ptr<mako_t>>(shark));
       expect(std::get<std::shared_ptr<mako_t>>(shark)->length == 44.0);
-   };*/
+   };
 };
 
 int main()

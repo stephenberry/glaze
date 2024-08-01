@@ -2410,9 +2410,9 @@ namespace glz
             strings += str_t<V>;
             strings += glaze_enum_t<V>;
             objects += pair_t<V>;
-            objects += (writable_map_t<V> || readable_map_t<V>);
+            objects += (writable_map_t<V> || readable_map_t<V> || is_memory_object<V>);
             objects += glaze_object_t<V>;
-            meta_objects += glaze_object_t<V> || reflectable<V>;
+            meta_objects += glaze_object_t<V> || reflectable<V> || is_memory_object<V>;
             arrays += glaze_array_t<V>;
             arrays += array_t<V>;
             // TODO null
@@ -2443,6 +2443,7 @@ namespace glz
                                        tuplet::tuple<Ts>, tuplet::tuple < >> {}...));
          using nullable_types =
             decltype(tuplet::tuple_cat(std::conditional_t<null_t<Ts>, tuplet::tuple<Ts>, tuplet::tuple<>>{}...));
+         using nullable_objects = decltype(tuplet::tuple_cat(std::conditional_t<is_memory_object<Ts>, tuplet::tuple<Ts>, tuplet::tuple<>>{}...));
       };
 
       // post process output of variant_types
@@ -2469,6 +2470,7 @@ namespace glz
          static constexpr auto n_number = glz::tuple_size_v<typename V::number_types>;
          static constexpr auto n_string = glz::tuple_size_v<typename V::string_types>;
          static constexpr auto n_object = glz::tuple_size_v<typename V::object_types>;
+         static constexpr auto n_nullable_object = glz::tuple_size_v<typename V::nullable_objects>;
          static constexpr auto n_array = glz::tuple_size_v<typename V::array_types>;
          static constexpr auto n_null = glz::tuple_size_v<typename V::nullable_types>;
       };
@@ -2545,12 +2547,14 @@ namespace glz
                   ++ctx.indentation_level;
 
                   ++it;
+                  using type_counts = variant_type_count<T>;
                   using object_types = typename variant_types<T>::object_types;
-                  if constexpr (glz::tuple_size_v<object_types> < 1) {
+                  if constexpr ((type_counts::n_object < 1) //
+                                && (type_counts::n_nullable_object < 1)) {
                      ctx.error = error_code::no_matching_variant_type;
                      return;
                   }
-                  else if constexpr (glz::tuple_size_v<object_types> == 1) {
+                  else if constexpr ((type_counts::n_object + type_counts::n_nullable_object) == 1) {
                      using V = glz::tuple_element_t<0, object_types>;
                      if (!std::holds_alternative<V>(value)) value = V{};
                      read<json>::op<opening_handled<Opts>()>(std::get<V>(value), ctx, it, end);
@@ -2601,6 +2605,32 @@ namespace glz
                                           constexpr bool is_object = glaze_object_t<V> || reflectable<V>;
                                           if constexpr (is_object) {
                                              from_json<V>::template op<opening_handled<Opts>(), tag_literal>(v, ctx, it,
+                                                                                                             end);
+                                          }
+                                          else if constexpr (is_memory_object<V>) {
+                                             if (!v) {
+                                                if constexpr (is_specialization_v<V, std::optional>) {
+                                                   if constexpr (requires { v.emplace(); }) {
+                                                      v.emplace();
+                                                   }
+                                                   else {
+                                                      v = typename V::value_type{};
+                                                   }
+                                                }
+                                                else if constexpr (is_specialization_v<V, std::unique_ptr>)
+                                                   v = std::make_unique<typename V::element_type>();
+                                                else if constexpr (is_specialization_v<V, std::shared_ptr>)
+                                                   v = std::make_shared<typename V::element_type>();
+                                                else if constexpr (constructible<V>) {
+                                                   v = meta_construct_v<V>();
+                                                }
+                                                else {
+                                                   ctx.error = error_code::invalid_nullable_read;
+                                                   return;
+                                                   // Cannot read into unset nullable that is not std::optional, std::unique_ptr, or std::shared_ptr
+                                                }
+                                             }
+                                             from_json<memory_type<V>>::template op<opening_handled<Opts>(), tag_literal>(*v, ctx, it,
                                                                                                              end);
                                           }
                                        },
