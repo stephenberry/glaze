@@ -175,6 +175,10 @@ namespace glz
       template <size_t I>
       using type = detail::member_t<V, decltype(get<I>(values))>;
    };
+   
+   template <class T>
+      requires(detail::is_memory_object<T>)
+   struct refl_info<T> : refl_info<memory_type<T>> {};
 
    template <class T>
       requires(detail::glaze_array_t<T>)
@@ -698,6 +702,9 @@ namespace glz::detail
          if constexpr (glaze_object_t<V> || reflectable<V>) {
             res += refl<V>.N;
          }
+         else if constexpr (is_memory_object<V>) {
+            res += refl<memory_type<V>>.N;
+         }
       });
       return res;
    }();
@@ -713,8 +720,11 @@ namespace glz::detail
       size_t index = 0;
       for_each<N>([&](auto I) {
          using V = std::decay_t<std::variant_alternative_t<I, T>>;
-         if constexpr (glaze_object_t<V> || reflectable<V>) {
-            for_each<refl<V>.N>([&](auto J) { (*data_ptr)[index++] = refl<V>.keys[J]; });
+         if constexpr (glaze_object_t<V> || reflectable<V> || is_memory_object<V>) {
+            using X = std::conditional_t<is_memory_object<V>, memory_type<V>, V>;
+            for (size_t i = 0; i < refl<X>.N; ++i) {
+               (*data_ptr)[index++] = refl<X>.keys[i];
+            }
          }
       });
 
@@ -744,8 +754,9 @@ namespace glz::detail
       constexpr auto N = std::variant_size_v<T>;
       for_each<N>([&](auto I) {
          using V = decay_keep_volatile_t<std::variant_alternative_t<I, T>>;
-         if constexpr (glaze_object_t<V> || reflectable<V>) {
-            for_each<refl<V>.N>([&](auto J) { deduction_map.find(refl<V>.keys[J])->second[I] = true; });
+         if constexpr (glaze_object_t<V> || reflectable<V> || is_memory_object<V>) {
+            using X = std::conditional_t<is_memory_object<V>, memory_type<V>, V>;
+            for_each<refl<X>.N>([&](auto J) { deduction_map.find(refl<X>.keys[J])->second[I] = true; });
          }
       });
 
