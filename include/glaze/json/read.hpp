@@ -2584,7 +2584,7 @@ namespace glz
                                  if (bool(ctx.error)) [[unlikely]]
                                     return;
                                  GLZ_SKIP_WS();
-                                 if (!(*it == ',' || *it == '}')) {
+                                 if (!(*it == ',' || *it == '}')) [[unlikely]] {
                                     ctx.error = error_code::syntax_error;
                                     return;
                                  }
@@ -2609,7 +2609,7 @@ namespace glz
                                     --ctx.indentation_level;
                                     return; // we've decoded our target type
                                  }
-                                 else {
+                                 else [[unlikely]] {
                                     ctx.error = error_code::no_matching_variant_type;
                                     return;
                                  }
