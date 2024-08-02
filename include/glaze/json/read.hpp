@@ -2017,14 +2017,6 @@ namespace glz
                return;
             }
             else {
-               static constexpr bit_array<num_members> all_fields = [] {
-                  bit_array<num_members> arr{};
-                  for (size_t i = 0; i < num_members; ++i) {
-                     arr[i] = true;
-                  }
-                  return arr;
-               }();
-
                decltype(auto) fields = [&]() -> decltype(auto) {
                   if constexpr ((glaze_object_t<T> || reflectable<T>)&&(Opts.error_on_missing_keys ||
                                                                         is_partial_read<T> || Opts.partial_read)) {
@@ -2069,6 +2061,14 @@ namespace glz
                bool first = true;
                while (true) {
                   if constexpr ((glaze_object_t<T> || reflectable<T>)&&(is_partial_read<T> || Opts.partial_read)) {
+                     static constexpr bit_array<num_members> all_fields = [] {
+                        bit_array<num_members> arr{};
+                        for (size_t i = 0; i < num_members; ++i) {
+                           arr[i] = true;
+                        }
+                        return arr;
+                     }();
+                     
                      if ((all_fields & fields) == all_fields) {
                         if constexpr (Opts.partial_read_nested) {
                            skip_until_closed<Opts, '{', '}'>(ctx, it, end);
