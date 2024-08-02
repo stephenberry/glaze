@@ -72,7 +72,7 @@ namespace glz
 
          // This unknown key handler should not be given unescaped keys, that is for the user to handle.
          template <auto Opts, class T, is_context Ctx, class It0, class It1>
-         GLZ_ALWAYS_INLINE static void handle_unknown(const sv& key, T&& value, Ctx&& ctx, It0&& it, It1&& end) noexcept
+         static void handle_unknown(const sv& key, T&& value, Ctx&& ctx, It0&& it, It1&& end) noexcept
          {
             using ValueType = std::decay_t<decltype(value)>;
             if constexpr (detail::has_unknown_reader<ValueType>) {
@@ -139,7 +139,7 @@ namespace glz
 
       template <opts Opts, class T, auto HashInfo, class Func, class Tuple, class Value>
          requires(glaze_object_t<T> || reflectable<T>)
-      constexpr void parse_and_invoke(Func&& func, Tuple&& tuple, Value&& value, is_context auto&& ctx, auto&& it,
+      GLZ_ALWAYS_INLINE constexpr void parse_and_invoke(Func&& func, Tuple&& tuple, Value&& value, is_context auto&& ctx, auto&& it,
                                       auto&& end) noexcept
       {
          if constexpr (glaze_object_t<T>) {
@@ -1989,7 +1989,7 @@ namespace glz
       struct from_json<T>
       {
          template <auto Options, string_literal tag = "">
-         GLZ_FLATTEN static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
+         static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
             static constexpr auto num_members = refl<T>.N;
             if constexpr (num_members == 0 && is_partial_read<T>) {
