@@ -141,7 +141,7 @@ namespace glz
       struct to_binary<T>
       {
          template <auto Opts, class... Args>
-         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&&, auto&&... args) noexcept
+         static void op(auto&& value, is_context auto&&, auto&&... args) noexcept
          {
             constexpr uint8_t type = uint8_t(3) << 3;
             constexpr uint8_t tag = tag::typed_array | type;
@@ -166,7 +166,7 @@ namespace glz
       struct to_binary<T>
       {
          template <auto Opts>
-         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&&, auto&& b, auto&& ix)
+         static void op(auto&& value, is_context auto&&, auto&& b, auto&& ix)
          {
             static constexpr auto N = refl<T>.N;
 
@@ -251,7 +251,7 @@ namespace glz
       struct to_binary<T> final
       {
          template <auto Opts, class... Args>
-         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
+         static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
             using Variant = std::decay_t<decltype(value)>;
 
@@ -388,7 +388,7 @@ namespace glz
       struct to_binary<T> final
       {
          template <auto Opts, class... Args>
-         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
+         static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
             using V = range_value_t<std::decay_t<T>>;
 
@@ -752,7 +752,7 @@ namespace glz
       struct to_binary<T> final
       {
          template <auto Opts, class... Args>
-         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
+         static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
             dump<tag::generic_array>(args...);
 
@@ -769,7 +769,7 @@ namespace glz
       struct to_binary<T> final
       {
          template <auto Opts, class... Args>
-         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
+         static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
             dump<tag::generic_array>(args...);
 

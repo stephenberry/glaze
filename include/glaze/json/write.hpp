@@ -56,7 +56,7 @@ namespace glz
       struct to_json<T>
       {
          template <auto Opts>
-         GLZ_ALWAYS_INLINE static void op(auto&& value, auto&&, auto&& b, auto&& ix) noexcept
+         static void op(auto&& value, auto&&, auto&& b, auto&& ix) noexcept
          {
             dump<'"'>(b, ix);
             for (size_t i = value.size(); i > 0; --i) {
@@ -70,7 +70,7 @@ namespace glz
       struct to_json<T>
       {
          template <auto Opts>
-         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&&, auto&& b, auto&& ix) noexcept
+         static void op(auto&& value, is_context auto&&, auto&& b, auto&& ix) noexcept
          {
             static constexpr auto N = refl<T>.N;
 
@@ -107,7 +107,7 @@ namespace glz
       struct to_json<skip>
       {
          template <auto Opts>
-         GLZ_ALWAYS_INLINE static void op(auto&& value, auto&&...) noexcept
+         static void op(auto&& value, auto&&...) noexcept
          {
             static_assert(false_v<decltype(value)>, "skip type should not be written");
          }
@@ -117,7 +117,7 @@ namespace glz
       struct to_json<T>
       {
          template <auto Opts>
-         GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&&, auto&&...) noexcept
+         static void op(auto&&, is_context auto&&, auto&&...) noexcept
          {}
       };
 
@@ -463,7 +463,7 @@ namespace glz
       }
 
       template <opts Opts>
-      GLZ_ALWAYS_INLINE void write_array_to_json(auto&& value, is_context auto&& ctx, auto&&... args)
+      void write_array_to_json(auto&& value, is_context auto&& ctx, auto&&... args)
       {
          if (empty_range(value)) {
             dump<"[]">(args...);

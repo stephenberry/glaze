@@ -32,7 +32,7 @@ namespace glz
       struct from_json<T>
       {
          template <auto Opts>
-         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+         static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
             using V = std::decay_t<decltype(value)>;
             using From = typename V::from_t;
@@ -77,7 +77,7 @@ namespace glz
       struct to_json<T>
       {
          template <auto Opts>
-         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept
+         static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept
          {
             using V = std::decay_t<decltype(value)>;
             using To = typename V::to_t;

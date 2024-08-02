@@ -200,7 +200,7 @@ namespace glz::detail
    }
 
    template <class Char>
-   [[nodiscard]] GLZ_ALWAYS_INLINE uint32_t handle_unicode_code_point(const Char*& it, Char*& dst) noexcept
+   [[nodiscard]] uint32_t handle_unicode_code_point(const Char*& it, Char*& dst) noexcept
    {
       using namespace unicode;
 
@@ -245,7 +245,7 @@ namespace glz::detail
    consteval uint16_t to_uint16_t(const char chars[2]) { return uint16_t(chars[0]) | (uint16_t(chars[1]) << 8); }
 
    template <class Char>
-   [[nodiscard]] GLZ_ALWAYS_INLINE uint32_t handle_unicode_code_point(const Char*& it, Char*& dst,
+   [[nodiscard]] uint32_t handle_unicode_code_point(const Char*& it, Char*& dst,
                                                                       const Char* end) noexcept
    {
       using namespace unicode;
