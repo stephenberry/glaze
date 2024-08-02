@@ -27,12 +27,12 @@ namespace glz
       struct from_json<quoted_t<T>>
       {
          template <auto Opts>
-         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept
+         static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept
          {
             static thread_local std::string s{};
             read<json>::op<Opts>(s, ctx, args...);
             auto pe = glz::read<Opts>(value.val, s);
-            if (pe) {
+            if (pe) [[unlikely]] {
                ctx.error = pe.ec;
             }
          }
@@ -42,7 +42,7 @@ namespace glz
       struct to_json<quoted_t<T>>
       {
          template <auto Opts>
-         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept
+         static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept
          {
             static thread_local std::string s(128, ' ');
             size_t ix = 0; // overwrite index

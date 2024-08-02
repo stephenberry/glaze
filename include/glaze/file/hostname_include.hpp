@@ -132,7 +132,7 @@ namespace glz
       struct to_json<hostname_includer<T>>
       {
          template <auto Opts>
-         GLZ_ALWAYS_INLINE static void op(auto&&...) noexcept
+         static void op(auto&&...) noexcept
          {}
       };
    }

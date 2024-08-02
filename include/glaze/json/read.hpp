@@ -35,14 +35,14 @@ namespace glz
    {
       // Unless we can mutate the input buffer we need somewhere to store escaped strings for key lookup, etc.
       // We don't put this in the context because we don't want to continually reallocate.
-      GLZ_ALWAYS_INLINE std::string& string_buffer() noexcept
+      inline std::string& string_buffer() noexcept
       {
          static thread_local std::string buffer(256, '\0');
          return buffer;
       }
 
       // We use an error buffer to avoid multiple allocations in the case that errors occur multiple times.
-      GLZ_ALWAYS_INLINE std::string& error_buffer() noexcept
+      inline std::string& error_buffer() noexcept
       {
          static thread_local std::string buffer(256, '\0');
          return buffer;
@@ -792,7 +792,7 @@ namespace glz
 
          template <auto Opts, class It, class End>
             requires(not has_is_padded(Opts))
-         GLZ_ALWAYS_INLINE static void op(auto& value, is_context auto&& ctx, It&& it, End&& end) noexcept
+         static void op(auto& value, is_context auto&& ctx, It&& it, End&& end) noexcept
          {
             if constexpr (Opts.number) {
                auto start = it;
@@ -1076,7 +1076,7 @@ namespace glz
       struct from_json<T>
       {
          template <auto Opts>
-         GLZ_ALWAYS_INLINE static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+         static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
             if constexpr (!has_opening_handled(Opts)) {
                if constexpr (!has_ws_handled(Opts)) {
@@ -1170,7 +1170,7 @@ namespace glz
       struct from_json<T>
       {
          template <auto Opts>
-         GLZ_ALWAYS_INLINE static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+         static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
             if constexpr (has_nameof<T>) {
                if constexpr (!has_ws_handled(Opts)) {
@@ -1504,7 +1504,7 @@ namespace glz
       // 'it' is copied so that it does not actually progress the iterator
       // expects the opening brace ([) to have already been consumed
       template <auto Opts>
-      [[nodiscard]] GLZ_ALWAYS_INLINE size_t number_of_array_elements(is_context auto&& ctx, auto it,
+      [[nodiscard]] size_t number_of_array_elements(is_context auto&& ctx, auto it,
                                                                       auto&& end) noexcept
       {
          skip_ws<Opts>(ctx, it, end);
@@ -2017,14 +2017,6 @@ namespace glz
                return;
             }
             else {
-               static constexpr bit_array<num_members> all_fields = [] {
-                  bit_array<num_members> arr{};
-                  for (size_t i = 0; i < num_members; ++i) {
-                     arr[i] = true;
-                  }
-                  return arr;
-               }();
-
                decltype(auto) fields = [&]() -> decltype(auto) {
                   if constexpr ((glaze_object_t<T> || reflectable<T>)&&(Opts.error_on_missing_keys ||
                                                                         is_partial_read<T> || Opts.partial_read)) {
@@ -2069,6 +2061,14 @@ namespace glz
                bool first = true;
                while (true) {
                   if constexpr ((glaze_object_t<T> || reflectable<T>)&&(is_partial_read<T> || Opts.partial_read)) {
+                     static constexpr bit_array<num_members> all_fields = [] {
+                        bit_array<num_members> arr{};
+                        for (size_t i = 0; i < num_members; ++i) {
+                           arr[i] = true;
+                        }
+                        return arr;
+                     }();
+                     
                      if ((all_fields & fields) == all_fields) {
                         if constexpr (Opts.partial_read_nested) {
                            skip_until_closed<Opts, '{', '}'>(ctx, it, end);
@@ -2995,7 +2995,7 @@ namespace glz
       struct from_json<T>
       {
          template <auto Opts>
-         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+         static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
             std::string& buffer = string_buffer();
             read<json>::op<Opts>(buffer, ctx, it, end);
