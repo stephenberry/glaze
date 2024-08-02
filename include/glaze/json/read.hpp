@@ -1504,8 +1504,7 @@ namespace glz
       // 'it' is copied so that it does not actually progress the iterator
       // expects the opening brace ([) to have already been consumed
       template <auto Opts>
-      [[nodiscard]] size_t number_of_array_elements(is_context auto&& ctx, auto it,
-                                                                      auto&& end) noexcept
+      [[nodiscard]] size_t number_of_array_elements(is_context auto&& ctx, auto it, auto&& end) noexcept
       {
          skip_ws<Opts>(ctx, it, end);
          if (bool(ctx.error)) [[unlikely]]
@@ -2068,7 +2067,7 @@ namespace glz
                         }
                         return arr;
                      }();
-                     
+
                      if ((all_fields & fields) == all_fields) {
                         if constexpr (Opts.partial_read_nested) {
                            skip_until_closed<Opts, '{', '}'>(ctx, it, end);
