@@ -142,6 +142,37 @@ namespace glz
          || f(std::integral_constant<std::size_t, 10>{}) //
          || f(std::integral_constant<std::size_t, 11>{});
       }
+      else if constexpr (N == 13) {
+         f(std::integral_constant<std::size_t, 0>{}) //
+         || f(std::integral_constant<std::size_t, 1>{}) //
+         || f(std::integral_constant<std::size_t, 2>{}) //
+         || f(std::integral_constant<std::size_t, 3>{}) //
+         || f(std::integral_constant<std::size_t, 4>{}) //
+         || f(std::integral_constant<std::size_t, 5>{}) //
+         || f(std::integral_constant<std::size_t, 6>{}) //
+         || f(std::integral_constant<std::size_t, 7>{}) //
+         || f(std::integral_constant<std::size_t, 8>{}) //
+         || f(std::integral_constant<std::size_t, 9>{}) //
+         || f(std::integral_constant<std::size_t, 10>{}) //
+         || f(std::integral_constant<std::size_t, 11>{}) //
+         || f(std::integral_constant<std::size_t, 12>{});
+      }
+      else if constexpr (N == 14) {
+         f(std::integral_constant<std::size_t, 0>{}) //
+         || f(std::integral_constant<std::size_t, 1>{}) //
+         || f(std::integral_constant<std::size_t, 2>{}) //
+         || f(std::integral_constant<std::size_t, 3>{}) //
+         || f(std::integral_constant<std::size_t, 4>{}) //
+         || f(std::integral_constant<std::size_t, 5>{}) //
+         || f(std::integral_constant<std::size_t, 6>{}) //
+         || f(std::integral_constant<std::size_t, 7>{}) //
+         || f(std::integral_constant<std::size_t, 8>{}) //
+         || f(std::integral_constant<std::size_t, 9>{}) //
+         || f(std::integral_constant<std::size_t, 10>{}) //
+         || f(std::integral_constant<std::size_t, 11>{}) //
+         || f(std::integral_constant<std::size_t, 12>{}) //
+         || f(std::integral_constant<std::size_t, 13>{});
+      }
       else if constexpr (N > 0) {
          [&]<std::size_t... I>(std::index_sequence<I...>) constexpr {
             (f(std::integral_constant<std::size_t, I>{}) || ...);
