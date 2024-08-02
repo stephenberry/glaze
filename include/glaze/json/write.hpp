@@ -463,7 +463,7 @@ namespace glz
       }
 
       template <opts Opts>
-      void write_array_to_json(auto&& value, is_context auto&& ctx, auto&&... args)
+      GLZ_ALWAYS_INLINE void write_array_to_json(auto&& value, is_context auto&& ctx, auto&&... args)
       {
          if (empty_range(value)) {
             dump<"[]">(args...);
