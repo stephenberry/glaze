@@ -14,9 +14,18 @@ namespace glz
    template <std::size_t N, class Func>
    constexpr void for_each(Func&& f)
    {
-      [&]<std::size_t... I>(std::index_sequence<I...>) constexpr {
-         (f(std::integral_constant<std::size_t, I>{}), ...);
-      }(std::make_index_sequence<N>{});
+      if constexpr (N == 1) {
+         f(std::integral_constant<std::size_t, 0>{});
+      }
+      else if constexpr (N == 2) {
+         f(std::integral_constant<std::size_t, 0>{});
+         f(std::integral_constant<std::size_t, 1>{});
+      }
+      else if constexpr (N > 0) {
+         [&]<std::size_t... I>(std::index_sequence<I...>) constexpr {
+            (f(std::integral_constant<std::size_t, I>{}), ...);
+         }(std::make_index_sequence<N>{});
+      }
    }
 
    template <std::size_t N, class Func>
@@ -31,9 +40,14 @@ namespace glz
    template <std::size_t N, class Func>
    constexpr void for_each_short_circuit(Func&& f)
    {
-      [&]<std::size_t... I>(std::index_sequence<I...>) constexpr {
-         (f(std::integral_constant<std::size_t, I>{}) || ...);
-      }(std::make_index_sequence<N>{});
+      if constexpr (N == 1) {
+         f(std::integral_constant<std::size_t, 0>{});
+      }
+      else if constexpr (N > 0) {
+         [&]<std::size_t... I>(std::index_sequence<I...>) constexpr {
+            (f(std::integral_constant<std::size_t, I>{}) || ...);
+         }(std::make_index_sequence<N>{});
+      }
    }
 
    template <std::size_t N, class Func>
@@ -48,8 +62,13 @@ namespace glz
    constexpr void for_each_apply(Func&& f, Tuple&& t)
    {
       constexpr size_t N = glz::tuple_size_v<std::decay_t<Tuple>>;
-      [&]<std::size_t... I>(std::index_sequence<I...>) constexpr {
-         (f(std::get<I>(t)), ...);
-      }(std::make_index_sequence<N>{});
+      if constexpr (N == 1) {
+         f(std::get<0>(t));
+      }
+      else if constexpr (N > 0) {
+         [&]<std::size_t... I>(std::index_sequence<I...>) constexpr {
+            (f(std::get<I>(t)), ...);
+         }(std::make_index_sequence<N>{});
+      }
    }
 }
