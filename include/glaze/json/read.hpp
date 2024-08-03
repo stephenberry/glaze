@@ -237,7 +237,7 @@ namespace glz
 
 #define GLZ1(I)                                            \
    case I: {                                                      \
-      decode_index<Opts, T, I>(func, tuple, value, ctx, it, end); \
+      decode_index<Opts, T, I>(f, t, v, ctx, it, end); \
       break;                                                      \
    }
       
@@ -251,12 +251,12 @@ namespace glz
    }
 
 template <opts Opts, class T, size_t N, class Func, class Tuple, class Value>
-GLZ_ALWAYS_INLINE constexpr void jump_table(size_t index, Func&& func, Tuple&& tuple, Value&& value,
+GLZ_ALWAYS_INLINE constexpr void jump_table(size_t index, Func&& f, Tuple&& t, Value&& v,
                                             is_context auto&& ctx, auto&& it, auto&& end) noexcept
 {
    // clang-format off
    if constexpr (N == 1) {
-      decode_index<Opts, T, 0>(func, tuple, value, ctx, it, end);
+      decode_index<Opts, T, 0>(f, t, v, ctx, it, end);
    }
    GLZ_SWITCH(2, 0, 1)
    GLZ_SWITCH(3, 0, 1, 2)
@@ -276,7 +276,7 @@ GLZ_ALWAYS_INLINE constexpr void jump_table(size_t index, Func&& func, Tuple&& t
    else {
       for_each_short_circuit<N>([&](auto I) {
          if (index == I) {
-            decode_index<Opts, T, I>(func, tuple, value, ctx, it, end);
+            decode_index<Opts, T, I>(f, t, v, ctx, it, end);
             return true;
          }
          return false;
