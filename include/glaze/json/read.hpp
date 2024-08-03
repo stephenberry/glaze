@@ -140,7 +140,7 @@ namespace glz
       template <opts Opts, class T, size_t I, class Func, class Tuple, class Value>
          requires(glaze_object_t<T> || reflectable<T>)
       void decode_index(Func&& func, Tuple&& tuple, Value&& value, is_context auto&& ctx, auto&& it,
-                                          auto&& end) noexcept
+                        auto&& end) noexcept
       {
          static constexpr auto TargetKey = get<I>(refl<T>.keys);
          static constexpr auto Length = TargetKey.size();
@@ -337,7 +337,7 @@ namespace glz
             });
          }
       }
-      
+
 #undef GLZ_10
 #undef GLZ_20
 #undef GLZ_30
