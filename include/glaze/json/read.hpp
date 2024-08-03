@@ -139,7 +139,7 @@ namespace glz
 
       template <opts Opts, class T, size_t I, class Func, class Tuple, class Value>
          requires(glaze_object_t<T> || reflectable<T>)
-      GLZ_ALWAYS_INLINE void decode_index(Func&& func, Tuple&& tuple, Value&& value, is_context auto&& ctx, auto&& it,
+      void decode_index(Func&& func, Tuple&& tuple, Value&& value, is_context auto&& ctx, auto&& it,
                                           auto&& end) noexcept
       {
          static constexpr auto TargetKey = get<I>(refl<T>.keys);
