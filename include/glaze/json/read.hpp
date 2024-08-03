@@ -137,6 +137,247 @@ namespace glz
          GLZ_SKIP_WS();
       }
 
+      template <opts Opts, class T, size_t I, class Func, class Tuple, class Value>
+         requires(glaze_object_t<T> || reflectable<T>)
+      GLZ_ALWAYS_INLINE void decode_index(Func&& func, Tuple&& tuple, Value&& value, is_context auto&& ctx, auto&& it,
+                                          auto&& end) noexcept
+      {
+         static constexpr auto TargetKey = get<I>(refl<T>.keys);
+         static constexpr auto Length = TargetKey.size();
+         if ((it + Length) >= end) [[unlikely]] {
+            if constexpr (Opts.error_on_unknown_keys) {
+               ctx.error = error_code::unknown_key;
+               return;
+            }
+            else {
+               auto start = it;
+               skip_string_view<Opts>(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
+               const sv key = {start, size_t(it - start)};
+               ++it; // skip the quote
+
+               parse_object_entry_sep<Opts>(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
+
+               read<json>::handle_unknown<Opts>(key, value, ctx, it, end);
+               return;
+            }
+         }
+
+         if (compare<Length>(TargetKey.data(), it)) [[likely]] {
+            it += Length;
+            if (*it != '"') [[unlikely]] {
+               if constexpr (Opts.error_on_unknown_keys) {
+                  ctx.error = error_code::unknown_key;
+                  return;
+               }
+               else {
+                  // This code should not error on valid unknown keys
+                  // We arrived here because the key was perhaps found, but if the quote does not exist
+                  // then this does not necessarily mean we have a syntax error.
+                  // We may have just found the prefix of a longer, unknown key.
+                  auto* start = it - Length;
+                  skip_string_view<Opts>(ctx, it, end);
+                  if (bool(ctx.error)) [[unlikely]]
+                     return;
+                  const sv key = {start, size_t(it - start)};
+                  ++it;
+
+                  parse_object_entry_sep<Opts>(ctx, it, end);
+                  if (bool(ctx.error)) [[unlikely]]
+                     return;
+
+                  read<json>::handle_unknown<Opts>(key, value, ctx, it, end);
+                  return;
+               }
+            }
+            ++it;
+
+            GLZ_SKIP_WS();
+            GLZ_MATCH_COLON();
+            GLZ_SKIP_WS();
+
+            // invoke on the value
+            if constexpr (glaze_object_t<T>) {
+               std::forward<Func>(func)(get<I>(refl<T>.values), I);
+            }
+            else {
+               std::forward<Func>(func)(get<I>(std::forward<Tuple>(tuple)), I);
+            }
+         }
+         else [[unlikely]] {
+            if constexpr (Opts.error_on_unknown_keys) {
+               ctx.error = error_code::unknown_key;
+            }
+            else {
+               auto* start = it - Length;
+               skip_string_view<Opts>(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
+               const sv key = {start, size_t(it - start)};
+               ++it;
+
+               parse_object_entry_sep<Opts>(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
+
+               read<json>::handle_unknown<Opts>(key, value, ctx, it, end);
+            }
+         }
+      }
+
+#define GLZ1(I)                                            \
+   case I: {                                                      \
+      decode_index<Opts, T, I>(func, tuple, value, ctx, it, end); \
+      break;                                                      \
+   }
+
+      // Runtime short circuiting if function returns true, return false to continue evaluation
+      template <opts Opts, class T, size_t N, class Func, class Tuple, class Value>
+      GLZ_ALWAYS_INLINE constexpr void jump_table(size_t index, Func&& func, Tuple&& tuple, Value&& value,
+                                                  is_context auto&& ctx, auto&& it, auto&& end) noexcept
+      {
+         // clang-format off
+         if constexpr (N == 1) {
+            decode_index<Opts, T, 0>(func, tuple, value, ctx, it, end);
+         }
+         else if constexpr (N == 2) {
+            switch (index) {
+               GLZ1(0); GLZ1(1);
+            default: {
+               unreachable();
+            }
+            }
+         }
+         else if constexpr (N == 3) {
+            switch (index) {
+               GLZ1(0); GLZ1(1); GLZ1(2);
+            default: {
+               unreachable();
+            }
+            }
+         }
+         else if constexpr (N == 4) {
+            switch (index) {
+               GLZ1(0); GLZ1(1); GLZ1(2); GLZ1(3);
+            default: {
+               unreachable();
+            }
+            }
+         }
+         else if constexpr (N == 5) {
+            switch (index) {
+               GLZ1(0); GLZ1(1); GLZ1(2); GLZ1(3);
+               GLZ1(4);
+            default: {
+               unreachable();
+            }
+            }
+         }
+         else if constexpr (N == 6) {
+            switch (index) {
+               GLZ1(0); GLZ1(1); GLZ1(2); GLZ1(3);
+               GLZ1(4); GLZ1(5);
+            default: {
+               unreachable();
+            }
+            }
+         }
+         else if constexpr (N == 7) {
+            switch (index) {
+               GLZ1(0); GLZ1(1); GLZ1(2); GLZ1(3);
+               GLZ1(4); GLZ1(5); GLZ1(6);
+            default: {
+               unreachable();
+            }
+            }
+         }
+         else if constexpr (N == 8) {
+            switch (index) {
+               GLZ1(0); GLZ1(1); GLZ1(2); GLZ1(3);
+               GLZ1(4); GLZ1(5); GLZ1(6); GLZ1(7);
+            default: {
+               unreachable();
+            }
+            }
+         }
+         else if constexpr (N == 9) {
+            switch (index) {
+               GLZ1(0); GLZ1(1); GLZ1(2); GLZ1(3);
+               GLZ1(4); GLZ1(5); GLZ1(6); GLZ1(7);
+               GLZ1(8);
+            default: {
+               unreachable();
+            }
+            }
+         }
+         else if constexpr (N == 10) {
+            switch (index) {
+               GLZ1(0); GLZ1(1); GLZ1(2); GLZ1(3);
+               GLZ1(4); GLZ1(5); GLZ1(6); GLZ1(7);
+               GLZ1(8); GLZ1(9);
+            default: {
+               unreachable();
+            }
+            }
+         }
+         else if constexpr (N == 11) {
+            switch (index) {
+               GLZ1(0); GLZ1(1); GLZ1(2); GLZ1(3);
+               GLZ1(4); GLZ1(5); GLZ1(6); GLZ1(7);
+               GLZ1(8); GLZ1(9); GLZ1(10);
+            default: {
+               unreachable();
+            }
+            }
+         }
+         else if constexpr (N == 12) {
+            switch (index) {
+               GLZ1(0); GLZ1(1); GLZ1(2); GLZ1(3);
+               GLZ1(4); GLZ1(5); GLZ1(6); GLZ1(7);
+               GLZ1(8); GLZ1(9); GLZ1(10); GLZ1(11);
+            default: {
+               unreachable();
+            }
+            }
+         }
+         else if constexpr (N == 13) {
+            switch (index) {
+               GLZ1(0); GLZ1(1); GLZ1(2); GLZ1(3);
+               GLZ1(4); GLZ1(5); GLZ1(6); GLZ1(7);
+               GLZ1(8); GLZ1(9); GLZ1(10); GLZ1(11);
+               GLZ1(12);
+            default: {
+               unreachable();
+            }
+            }
+         }
+         else if constexpr (N == 14) {
+            switch (index) {
+               GLZ1(0); GLZ1(1); GLZ1(2); GLZ1(3);
+               GLZ1(4); GLZ1(5); GLZ1(6); GLZ1(7);
+               GLZ1(8); GLZ1(9); GLZ1(10); GLZ1(11);
+               GLZ1(12); GLZ1(13);
+            default: {
+               unreachable();
+            }
+            }
+         }
+         else {
+            for_each_short_circuit<N>([&](auto I) {
+               if (index == I) {
+                  decode_index<Opts, T, I>(func, tuple, value, ctx, it, end);
+                  return true;
+               }
+               return false;
+            });
+         }
+         // clang-format on
+      }
+#undef GLZ1
+
       template <opts Opts, class T, auto HashInfo, class Func, class Tuple, class Value>
          requires(glaze_object_t<T> || reflectable<T>)
       GLZ_ALWAYS_INLINE constexpr void parse_and_invoke(Func&& func, Tuple&& tuple, Value&& value,
@@ -214,97 +455,7 @@ namespace glz
                }
             }
 
-            for_each_short_circuit_flatten<N>([&](auto I) {
-               if (I == index) {
-                  static constexpr auto TargetKey = get<I>(refl<T>.keys);
-                  static constexpr auto Length = TargetKey.size();
-                  if ((it + Length) >= end) [[unlikely]] {
-                     if constexpr (Opts.error_on_unknown_keys) {
-                        ctx.error = error_code::unknown_key;
-                        return true;
-                     }
-                     else {
-                        auto start = it;
-                        skip_string_view<Opts>(ctx, it, end);
-                        if (bool(ctx.error)) [[unlikely]]
-                           return true;
-                        const sv key = {start, size_t(it - start)};
-                        ++it; // skip the quote
-
-                        parse_object_entry_sep<Opts>(ctx, it, end);
-                        if (bool(ctx.error)) [[unlikely]]
-                           return true;
-
-                        read<json>::handle_unknown<Opts>(key, value, ctx, it, end);
-                        return true;
-                     }
-                  }
-
-                  if (compare<Length>(TargetKey.data(), it)) [[likely]] {
-                     it += Length;
-                     if (*it != '"') [[unlikely]] {
-                        if constexpr (Opts.error_on_unknown_keys) {
-                           ctx.error = error_code::unknown_key;
-                           return true;
-                        }
-                        else {
-                           // This code should not error on valid unknown keys
-                           // We arrived here because the key was perhaps found, but if the quote does not exist
-                           // then this does not necessarily mean we have a syntax error.
-                           // We may have just found the prefix of a longer, unknown key.
-                           auto* start = it - Length;
-                           skip_string_view<Opts>(ctx, it, end);
-                           if (bool(ctx.error)) [[unlikely]]
-                              return true;
-                           const sv key = {start, size_t(it - start)};
-                           ++it;
-
-                           parse_object_entry_sep<Opts>(ctx, it, end);
-                           if (bool(ctx.error)) [[unlikely]]
-                              return true;
-
-                           read<json>::handle_unknown<Opts>(key, value, ctx, it, end);
-                           return true;
-                        }
-                     }
-                     ++it;
-
-                     GLZ_SKIP_WS(true);
-                     GLZ_MATCH_COLON(true);
-                     GLZ_SKIP_WS(true);
-
-                     // invoke on the value
-                     if constexpr (glaze_object_t<T>) {
-                        std::forward<Func>(func)(get<I>(refl<T>.values), I);
-                     }
-                     else {
-                        std::forward<Func>(func)(get<I>(std::forward<Tuple>(tuple)), I);
-                     }
-                  }
-                  else [[unlikely]] {
-                     if constexpr (Opts.error_on_unknown_keys) {
-                        ctx.error = error_code::unknown_key;
-                     }
-                     else {
-                        auto* start = it - Length;
-                        skip_string_view<Opts>(ctx, it, end);
-                        if (bool(ctx.error)) [[unlikely]]
-                           return true;
-                        const sv key = {start, size_t(it - start)};
-                        ++it;
-
-                        parse_object_entry_sep<Opts>(ctx, it, end);
-                        if (bool(ctx.error)) [[unlikely]]
-                           return true;
-
-                        read<json>::handle_unknown<Opts>(key, value, ctx, it, end);
-                     }
-                  }
-
-                  return true;
-               }
-               return false;
-            });
+            jump_table<Opts, T, N>(index, func, tuple, value, ctx, it, end);
          }
          else {
             static_assert(false_v<T>, "invalid hash algorithm");
@@ -627,7 +778,8 @@ namespace glz
                }
                else {
                   if constexpr (std::is_volatile_v<std::remove_reference_t<decltype(value)>>) {
-                     // Hardware may interact with value changes, so we parse into a temporary and assign in one place
+                     // Hardware may interact with value changes, so we parse into a temporary and assign in one
+                     // place
                      V temp;
                      static constexpr fast_float::parse_options options{fast_float::chars_format::json};
                      auto [ptr, ec] = fast_float::from_chars_advanced(it, end, temp, options);
@@ -2201,9 +2353,9 @@ namespace glz
                               return;
 
                            if constexpr (Opts.error_on_missing_keys || is_partial_read<T> || Opts.partial_read) {
-                              // TODO: Kludge/hack. Should work but could easily cause memory issues with small changes.
-                              // At the very least if we are going to do this add a get_index method to the maps and
-                              // call that
+                              // TODO: Kludge/hack. Should work but could easily cause memory issues with small
+                              // changes. At the very least if we are going to do this add a get_index method to the
+                              // maps and call that
                               auto index = member_it - frozen_map.begin();
                               fields[index] = true;
                            }
@@ -2266,8 +2418,8 @@ namespace glz
 
                               if constexpr (Opts.error_on_missing_keys || is_partial_read<T> || Opts.partial_read) {
                                  // TODO: Kludge/hack. Should work but could easily cause memory issues with small
-                                 // changes. At the very least if we are going to do this add a get_index method to the
-                                 // maps and call that
+                                 // changes. At the very least if we are going to do this add a get_index method to
+                                 // the maps and call that
                                  auto index = member_it - frozen_map.begin();
                                  fields[index] = true;
                               }
@@ -2437,8 +2589,8 @@ namespace glz
             std::conditional_t<bool_t<remove_meta_wrapper_t<Ts>>, tuplet::tuple<Ts>, tuplet::tuple<>>{}...));
          using number_types = decltype(tuplet::tuple_cat(
             std::conditional_t<num_t<remove_meta_wrapper_t<Ts>>, tuplet::tuple<Ts>, tuplet::tuple<>>{}...));
-         using string_types = decltype(tuplet::tuple_cat( // glaze_enum_t remove_meta_wrapper_t supports constexpr types
-                                                          // while the other supports non const
+         using string_types = decltype(tuplet::tuple_cat( // glaze_enum_t remove_meta_wrapper_t supports constexpr
+                                                          // types while the other supports non const
             std::conditional_t < str_t<remove_meta_wrapper_t<Ts>> || glaze_enum_t<remove_meta_wrapper_t<Ts>> ||
                glaze_enum_t<Ts>,
             tuplet::tuple<Ts>, tuplet::tuple < >> {}...));
@@ -2736,8 +2888,8 @@ namespace glz
                                        else {
                                           ctx.error = error_code::invalid_nullable_read;
                                           return;
-                                          // Cannot read into unset nullable that is not std::optional, std::unique_ptr,
-                                          // or std::shared_ptr
+                                          // Cannot read into unset nullable that is not std::optional,
+                                          // std::unique_ptr, or std::shared_ptr
                                        }
                                     }
                                     from_json<memory_type<V>>::template op<opening_handled<Opts>(), tag_literal>(
@@ -2982,7 +3134,8 @@ namespace glz
                   else {
                      ctx.error = error_code::invalid_nullable_read;
                      return;
-                     // Cannot read into unset nullable that is not std::optional, std::unique_ptr, or std::shared_ptr
+                     // Cannot read into unset nullable that is not std::optional, std::unique_ptr, or
+                     // std::shared_ptr
                   }
                }
                read<json>::op<Opts>(*value, ctx, it, end);
