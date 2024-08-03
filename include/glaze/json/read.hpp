@@ -227,156 +227,69 @@ namespace glz
             }
          }
       }
+      
+#define GLZ_EVERY(macro, ...) \
+    __VA_OPT__(GLZ_EXPAND(GLZ_EVERY_HELPER(macro, __VA_ARGS__)))
+#define GLZ_EVERY_HELPER(macro, a, ...) \
+ macro(a) \
+ __VA_OPT__(GLZ_EVERY_AGAIN GLZ_PARENS (macro, __VA_ARGS__))
+#define GLZ_EVERY_AGAIN() GLZ_EVERY_HELPER
 
 #define GLZ1(I)                                            \
    case I: {                                                      \
       decode_index<Opts, T, I>(func, tuple, value, ctx, it, end); \
       break;                                                      \
    }
+      
+#define GLZ_SWITCH(X, ...) else if constexpr (N == X) { \
+      switch (index) { \
+         GLZ_EVERY(GLZ1, __VA_ARGS__); \
+         default: { \
+            unreachable(); \
+         } \
+      } \
+   }
 
-      // Runtime short circuiting if function returns true, return false to continue evaluation
-      template <opts Opts, class T, size_t N, class Func, class Tuple, class Value>
-      GLZ_ALWAYS_INLINE constexpr void jump_table(size_t index, Func&& func, Tuple&& tuple, Value&& value,
-                                                  is_context auto&& ctx, auto&& it, auto&& end) noexcept
-      {
-         // clang-format off
-         if constexpr (N == 1) {
-            decode_index<Opts, T, 0>(func, tuple, value, ctx, it, end);
+template <opts Opts, class T, size_t N, class Func, class Tuple, class Value>
+GLZ_ALWAYS_INLINE constexpr void jump_table(size_t index, Func&& func, Tuple&& tuple, Value&& value,
+                                            is_context auto&& ctx, auto&& it, auto&& end) noexcept
+{
+   // clang-format off
+   if constexpr (N == 1) {
+      decode_index<Opts, T, 0>(func, tuple, value, ctx, it, end);
+   }
+   GLZ_SWITCH(2, 0, 1)
+   GLZ_SWITCH(3, 0, 1, 2)
+   GLZ_SWITCH(4, 0, 1, 2, 3)
+   GLZ_SWITCH(5, 0, 1, 2, 3, 4)
+   GLZ_SWITCH(6, 0, 1, 2, 3, 4, 5)
+   GLZ_SWITCH(7, 0, 1, 2, 3, 4, 5, 6)
+   GLZ_SWITCH(8, 0, 1, 2, 3, 4, 5, 6, 7)
+   GLZ_SWITCH(9, 0, 1, 2, 3, 4, 5, 6, 7, 8)
+   GLZ_SWITCH(10, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
+   GLZ_SWITCH(11, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10)
+   GLZ_SWITCH(12, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11)
+   GLZ_SWITCH(13, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12)
+   GLZ_SWITCH(14, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13)
+   GLZ_SWITCH(15, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14)
+   GLZ_SWITCH(16, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15)
+   else {
+      for_each_short_circuit<N>([&](auto I) {
+         if (index == I) {
+            decode_index<Opts, T, I>(func, tuple, value, ctx, it, end);
+            return true;
          }
-         else if constexpr (N == 2) {
-            switch (index) {
-               GLZ1(0); GLZ1(1);
-            default: {
-               unreachable();
-            }
-            }
-         }
-         else if constexpr (N == 3) {
-            switch (index) {
-               GLZ1(0); GLZ1(1); GLZ1(2);
-            default: {
-               unreachable();
-            }
-            }
-         }
-         else if constexpr (N == 4) {
-            switch (index) {
-               GLZ1(0); GLZ1(1); GLZ1(2); GLZ1(3);
-            default: {
-               unreachable();
-            }
-            }
-         }
-         else if constexpr (N == 5) {
-            switch (index) {
-               GLZ1(0); GLZ1(1); GLZ1(2); GLZ1(3);
-               GLZ1(4);
-            default: {
-               unreachable();
-            }
-            }
-         }
-         else if constexpr (N == 6) {
-            switch (index) {
-               GLZ1(0); GLZ1(1); GLZ1(2); GLZ1(3);
-               GLZ1(4); GLZ1(5);
-            default: {
-               unreachable();
-            }
-            }
-         }
-         else if constexpr (N == 7) {
-            switch (index) {
-               GLZ1(0); GLZ1(1); GLZ1(2); GLZ1(3);
-               GLZ1(4); GLZ1(5); GLZ1(6);
-            default: {
-               unreachable();
-            }
-            }
-         }
-         else if constexpr (N == 8) {
-            switch (index) {
-               GLZ1(0); GLZ1(1); GLZ1(2); GLZ1(3);
-               GLZ1(4); GLZ1(5); GLZ1(6); GLZ1(7);
-            default: {
-               unreachable();
-            }
-            }
-         }
-         else if constexpr (N == 9) {
-            switch (index) {
-               GLZ1(0); GLZ1(1); GLZ1(2); GLZ1(3);
-               GLZ1(4); GLZ1(5); GLZ1(6); GLZ1(7);
-               GLZ1(8);
-            default: {
-               unreachable();
-            }
-            }
-         }
-         else if constexpr (N == 10) {
-            switch (index) {
-               GLZ1(0); GLZ1(1); GLZ1(2); GLZ1(3);
-               GLZ1(4); GLZ1(5); GLZ1(6); GLZ1(7);
-               GLZ1(8); GLZ1(9);
-            default: {
-               unreachable();
-            }
-            }
-         }
-         else if constexpr (N == 11) {
-            switch (index) {
-               GLZ1(0); GLZ1(1); GLZ1(2); GLZ1(3);
-               GLZ1(4); GLZ1(5); GLZ1(6); GLZ1(7);
-               GLZ1(8); GLZ1(9); GLZ1(10);
-            default: {
-               unreachable();
-            }
-            }
-         }
-         else if constexpr (N == 12) {
-            switch (index) {
-               GLZ1(0); GLZ1(1); GLZ1(2); GLZ1(3);
-               GLZ1(4); GLZ1(5); GLZ1(6); GLZ1(7);
-               GLZ1(8); GLZ1(9); GLZ1(10); GLZ1(11);
-            default: {
-               unreachable();
-            }
-            }
-         }
-         else if constexpr (N == 13) {
-            switch (index) {
-               GLZ1(0); GLZ1(1); GLZ1(2); GLZ1(3);
-               GLZ1(4); GLZ1(5); GLZ1(6); GLZ1(7);
-               GLZ1(8); GLZ1(9); GLZ1(10); GLZ1(11);
-               GLZ1(12);
-            default: {
-               unreachable();
-            }
-            }
-         }
-         else if constexpr (N == 14) {
-            switch (index) {
-               GLZ1(0); GLZ1(1); GLZ1(2); GLZ1(3);
-               GLZ1(4); GLZ1(5); GLZ1(6); GLZ1(7);
-               GLZ1(8); GLZ1(9); GLZ1(10); GLZ1(11);
-               GLZ1(12); GLZ1(13);
-            default: {
-               unreachable();
-            }
-            }
-         }
-         else {
-            for_each_short_circuit<N>([&](auto I) {
-               if (index == I) {
-                  decode_index<Opts, T, I>(func, tuple, value, ctx, it, end);
-                  return true;
-               }
-               return false;
-            });
-         }
-         // clang-format on
-      }
+         return false;
+      });
+   }
+   // clang-format on
+}
+
 #undef GLZ1
+#undef GLZ_SWITCH
+#undef GLZ_EVERY_AGAIN
+#undef GLZ_EVERY_HELPER
+#undef GLZ_EVERY
 
       template <opts Opts, class T, auto HashInfo, class Func, class Tuple, class Value>
          requires(glaze_object_t<T> || reflectable<T>)
