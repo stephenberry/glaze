@@ -337,6 +337,13 @@ namespace glz
             });
          }
       }
+      
+#undef GLZ_10
+#undef GLZ_20
+#undef GLZ_30
+#undef GLZ_40
+#undef GLZ_50
+#undef GLZ_60
 
 #undef GLZ1
 #undef GLZ_SWITCH
