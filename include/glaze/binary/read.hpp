@@ -1247,7 +1247,7 @@ namespace glz
                const auto n = int_from_compressed(ctx, it, end);
 
                if constexpr (is_std_tuple<T>) {
-                  for_each_short_circuit_flatten<N>([&](auto I) {
+                  for_each_short_circuit<N>([&](auto I) {
                      if (I < n) {
                         read<binary>::op<Opts>(std::get<I>(value), ctx, it, end);
                         return false; // continue
@@ -1256,7 +1256,7 @@ namespace glz
                   });
                }
                else {
-                  for_each_short_circuit_flatten<N>([&](auto I) {
+                  for_each_short_circuit<N>([&](auto I) {
                      if (I < n) {
                         read<binary>::op<Opts>(glz::get<I>(value), ctx, it, end);
                         return false; // continue
