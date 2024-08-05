@@ -59,7 +59,7 @@ namespace glz::detail
 #define GLZ_EVERY_HELPER(macro, a, ...) macro(a) __VA_OPT__(GLZ_EVERY_AGAIN GLZ_PARENS(macro, __VA_ARGS__))
 #define GLZ_EVERY_AGAIN() GLZ_EVERY_HELPER
 
-#define GLZ1(I)                                               \
+#define GLZ_CASE(I)                                               \
    case I: {                                                  \
       static_cast<Lambda&&>(lambda).template operator()<I>(); \
       break;                                                  \
@@ -69,7 +69,7 @@ namespace glz::detail
    else if constexpr (N == X)          \
    {                                   \
       switch (index) {                 \
-         GLZ_EVERY(GLZ1, __VA_ARGS__); \
+         GLZ_EVERY(GLZ_CASE, __VA_ARGS__); \
       default: {                       \
          unreachable();                \
       }                                \
@@ -256,9 +256,12 @@ namespace glz::detail
 #undef GLZ_50
 #undef GLZ_60
 
-#undef GLZ1
+#undef GLZ_CASE
 #undef GLZ_SWITCH
+   
 #undef GLZ_INVOKE
+#undef GLZ_INVOKE_ALL
+   
 #undef GLZ_EVERY_AGAIN
 #undef GLZ_EVERY_HELPER
 #undef GLZ_EVERY
