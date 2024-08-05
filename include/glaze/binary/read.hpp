@@ -158,7 +158,7 @@ namespace glz
             std::memcpy(data, it, Length);
             it += Length;
 
-            for_each_flatten<N>([&](auto I) {
+            invoke_table<N>([&]<size_t I>() {
                get_member(value, get<I>(refl<T>.values)) = data[I / 8] & (uint8_t{1} << (7 - (I % 8)));
             });
          }
@@ -1085,8 +1085,8 @@ namespace glz
                   return;
                }
 
-               for_each_flatten<N>(
-                  [&](auto I) { read<binary>::op<Opts>(get_member(value, get<I>(refl<V>.values)), ctx, it, end); });
+               invoke_table<N>(
+                  [&]<size_t I>() { read<binary>::op<Opts>(get_member(value, get<I>(refl<V>.values)), ctx, it, end); });
             }
          }
 
@@ -1222,8 +1222,8 @@ namespace glz
                return;
             }
 
-            for_each_flatten<N>(
-               [&](auto I) { read<binary>::op<Opts>(get_member(value, get<I>(refl<T>.values)), ctx, it, end); });
+            invoke_table<N>(
+               [&]<size_t I>() { read<binary>::op<Opts>(get_member(value, get<I>(refl<T>.values)), ctx, it, end); });
          }
       };
 
@@ -1272,10 +1272,10 @@ namespace glz
                }
 
                if constexpr (is_std_tuple<T>) {
-                  for_each_flatten<N>([&](auto I) { read<binary>::op<Opts>(std::get<I>(value), ctx, it, end); });
+                  invoke_table<N>([&]<size_t I>() { read<binary>::op<Opts>(std::get<I>(value), ctx, it, end); });
                }
                else {
-                  for_each_flatten<N>([&](auto I) { read<binary>::op<Opts>(glz::get<I>(value), ctx, it, end); });
+                  invoke_table<N>([&]<size_t I>() { read<binary>::op<Opts>(glz::get<I>(value), ctx, it, end); });
                }
             }
          }

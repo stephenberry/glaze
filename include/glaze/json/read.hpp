@@ -1620,7 +1620,7 @@ namespace glz
             GLZ_MATCH_OPEN_BRACKET;
             GLZ_SKIP_WS();
 
-            for_each_flatten<N>([&](auto I) {
+            invoke_table<N>([&]<size_t I>() {
                if (*it == ']') {
                   return;
                }
