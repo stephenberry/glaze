@@ -164,7 +164,7 @@ namespace glz::detail
       }
    }
 
-#define GLZ_INVOKE(I) static_cast<Lambda&&>(lambda).template operator()<I>();
+#define GLZ_INVOKE(I) lambda.template operator()<I>();
 
 #define GLZ_INVOKE_ALL(X, ...)            \
    else if constexpr (N == X)             \
