@@ -234,7 +234,7 @@ namespace glz
 
 #define GLZ1(I)                                        \
    case I: {                                           \
-      decode_index<Opts, T, I>(f, t, v, ctx, it, end); \
+      lambda.template operator()<I>();                 \
       break;                                           \
    }
 
@@ -256,12 +256,11 @@ namespace glz
 #define GLZ_50 GLZ_40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50
 #define GLZ_60 GLZ_50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60
 
-      template <opts Opts, class T, size_t N, class Func, class Tuple, class Value>
-      GLZ_ALWAYS_INLINE constexpr void jump_table(size_t index, Func&& f, Tuple&& t, Value&& v, is_context auto&& ctx,
-                                                  auto&& it, auto&& end) noexcept
+      template <opts Opts, class T, size_t N, class Lambda>
+      GLZ_ALWAYS_INLINE constexpr void jump_table(size_t index, Lambda&& lambda) noexcept
       {
          if constexpr (N == 1) {
-            decode_index<Opts, T, 0>(f, t, v, ctx, it, end);
+            lambda.template operator()<0>();
          }
          GLZ_SWITCH(2, 0, 1)
          GLZ_SWITCH(3, 0, 1, 2)
@@ -330,7 +329,7 @@ namespace glz
          {
             for_each_short_circuit<N>([&](auto I) {
                if (index == I) {
-                  decode_index<Opts, T, I>(f, t, v, ctx, it, end);
+                  lambda.template operator()<I>();
                   return true;
                }
                return false;
@@ -427,8 +426,12 @@ namespace glz
                   return;
                }
             }
+            
+            auto lambda = [&]<size_t I>() {
+                decode_index<Opts, T, I>(func, tuple, value, ctx, it, end);
+            };
 
-            jump_table<Opts, T, N>(index, func, tuple, value, ctx, it, end);
+            jump_table<Opts, T, N>(index, lambda);
          }
          else {
             static_assert(false_v<T>, "invalid hash algorithm");
