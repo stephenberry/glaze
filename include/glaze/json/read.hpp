@@ -228,129 +228,6 @@ namespace glz
          }
       }
 
-#define GLZ_EVERY(macro, ...) __VA_OPT__(GLZ_EXPAND(GLZ_EVERY_HELPER(macro, __VA_ARGS__)))
-#define GLZ_EVERY_HELPER(macro, a, ...) macro(a) __VA_OPT__(GLZ_EVERY_AGAIN GLZ_PARENS(macro, __VA_ARGS__))
-#define GLZ_EVERY_AGAIN() GLZ_EVERY_HELPER
-
-#define GLZ1(I)                                        \
-   case I: {                                           \
-      decode_index<Opts, T, I>(f, t, v, ctx, it, end); \
-      break;                                           \
-   }
-
-#define GLZ_SWITCH(X, ...)             \
-   else if constexpr (N == X)          \
-   {                                   \
-      switch (index) {                 \
-         GLZ_EVERY(GLZ1, __VA_ARGS__); \
-      default: {                       \
-         unreachable();                \
-      }                                \
-      }                                \
-   }
-
-#define GLZ_10 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10
-#define GLZ_20 GLZ_10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20
-#define GLZ_30 GLZ_20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30
-#define GLZ_40 GLZ_30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40
-#define GLZ_50 GLZ_40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50
-#define GLZ_60 GLZ_50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60
-
-      template <opts Opts, class T, size_t N, class Func, class Tuple, class Value>
-      GLZ_ALWAYS_INLINE constexpr void jump_table(size_t index, Func&& f, Tuple&& t, Value&& v, is_context auto&& ctx,
-                                                  auto&& it, auto&& end) noexcept
-      {
-         if constexpr (N == 1) {
-            decode_index<Opts, T, 0>(f, t, v, ctx, it, end);
-         }
-         GLZ_SWITCH(2, 0, 1)
-         GLZ_SWITCH(3, 0, 1, 2)
-         GLZ_SWITCH(4, 0, 1, 2, 3)
-         GLZ_SWITCH(5, 0, 1, 2, 3, 4)
-         GLZ_SWITCH(6, 0, 1, 2, 3, 4, 5)
-         GLZ_SWITCH(7, 0, 1, 2, 3, 4, 5, 6)
-         GLZ_SWITCH(8, 0, 1, 2, 3, 4, 5, 6, 7)
-         GLZ_SWITCH(9, 0, 1, 2, 3, 4, 5, 6, 7, 8)
-         GLZ_SWITCH(10, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
-         GLZ_SWITCH(11, GLZ_10)
-         GLZ_SWITCH(12, GLZ_10, 11)
-         GLZ_SWITCH(13, GLZ_10, 11, 12)
-         GLZ_SWITCH(14, GLZ_10, 11, 12, 13)
-         GLZ_SWITCH(15, GLZ_10, 11, 12, 13, 14)
-         GLZ_SWITCH(16, GLZ_10, 11, 12, 13, 14, 15)
-         GLZ_SWITCH(17, GLZ_10, 11, 12, 13, 14, 15, 16)
-         GLZ_SWITCH(18, GLZ_10, 11, 12, 13, 14, 15, 16, 17)
-         GLZ_SWITCH(19, GLZ_10, 11, 12, 13, 14, 15, 16, 17, 18)
-         GLZ_SWITCH(20, GLZ_10, 11, 12, 13, 14, 15, 16, 17, 18, 19)
-         GLZ_SWITCH(21, GLZ_20)
-         GLZ_SWITCH(22, GLZ_20, 21)
-         GLZ_SWITCH(23, GLZ_20, 21, 22)
-         GLZ_SWITCH(24, GLZ_20, 21, 22, 23)
-         GLZ_SWITCH(25, GLZ_20, 21, 22, 23, 24)
-         GLZ_SWITCH(26, GLZ_20, 21, 22, 23, 24, 25)
-         GLZ_SWITCH(27, GLZ_20, 21, 22, 23, 24, 25, 26)
-         GLZ_SWITCH(28, GLZ_20, 21, 22, 23, 24, 25, 26, 27)
-         GLZ_SWITCH(29, GLZ_20, 21, 22, 23, 24, 25, 26, 27, 28)
-         GLZ_SWITCH(30, GLZ_20, 21, 22, 23, 24, 25, 26, 27, 28, 29)
-         GLZ_SWITCH(31, GLZ_30)
-         GLZ_SWITCH(32, GLZ_30, 31)
-         GLZ_SWITCH(33, GLZ_30, 31, 32)
-         GLZ_SWITCH(34, GLZ_30, 31, 32, 33)
-         GLZ_SWITCH(35, GLZ_30, 31, 32, 33, 34)
-         GLZ_SWITCH(36, GLZ_30, 31, 32, 33, 34, 35)
-         GLZ_SWITCH(37, GLZ_30, 31, 32, 33, 34, 35, 36)
-         GLZ_SWITCH(38, GLZ_30, 31, 32, 33, 34, 35, 36, 37)
-         GLZ_SWITCH(39, GLZ_30, 31, 32, 33, 34, 35, 36, 37, 38)
-         GLZ_SWITCH(40, GLZ_30, 31, 32, 33, 34, 35, 36, 37, 38, 39)
-         GLZ_SWITCH(41, GLZ_40)
-         GLZ_SWITCH(42, GLZ_40, 41)
-         GLZ_SWITCH(43, GLZ_40, 41, 42)
-         GLZ_SWITCH(44, GLZ_40, 41, 42, 43)
-         GLZ_SWITCH(45, GLZ_40, 41, 42, 43, 44)
-         GLZ_SWITCH(46, GLZ_40, 41, 42, 43, 44, 45)
-         GLZ_SWITCH(47, GLZ_40, 41, 42, 43, 44, 45, 46)
-         GLZ_SWITCH(48, GLZ_40, 41, 42, 43, 44, 45, 46, 47)
-         GLZ_SWITCH(49, GLZ_40, 41, 42, 43, 44, 45, 46, 47, 48)
-         GLZ_SWITCH(50, GLZ_40, 41, 42, 43, 44, 45, 46, 47, 48, 49)
-         GLZ_SWITCH(51, GLZ_50)
-         GLZ_SWITCH(52, GLZ_50, 51)
-         GLZ_SWITCH(53, GLZ_50, 51, 52)
-         GLZ_SWITCH(54, GLZ_50, 51, 52, 53)
-         GLZ_SWITCH(55, GLZ_50, 51, 52, 53, 54)
-         GLZ_SWITCH(56, GLZ_50, 51, 52, 53, 54, 55)
-         GLZ_SWITCH(57, GLZ_50, 51, 52, 53, 54, 55, 56)
-         GLZ_SWITCH(58, GLZ_50, 51, 52, 53, 54, 55, 56, 57)
-         GLZ_SWITCH(59, GLZ_50, 51, 52, 53, 54, 55, 56, 57, 58)
-         GLZ_SWITCH(60, GLZ_50, 51, 52, 53, 54, 55, 56, 57, 58, 59)
-         GLZ_SWITCH(61, GLZ_60)
-         GLZ_SWITCH(62, GLZ_60, 61)
-         GLZ_SWITCH(63, GLZ_60, 61, 62)
-         GLZ_SWITCH(64, GLZ_60, 61, 62, 63)
-         else
-         {
-            for_each_short_circuit<N>([&](auto I) {
-               if (index == I) {
-                  decode_index<Opts, T, I>(f, t, v, ctx, it, end);
-                  return true;
-               }
-               return false;
-            });
-         }
-      }
-
-#undef GLZ_10
-#undef GLZ_20
-#undef GLZ_30
-#undef GLZ_40
-#undef GLZ_50
-#undef GLZ_60
-
-#undef GLZ1
-#undef GLZ_SWITCH
-#undef GLZ_EVERY_AGAIN
-#undef GLZ_EVERY_HELPER
-#undef GLZ_EVERY
-
       template <opts Opts, class T, auto HashInfo, class Func, class Tuple, class Value>
          requires(glaze_object_t<T> || reflectable<T>)
       GLZ_ALWAYS_INLINE constexpr void parse_and_invoke(Func&& func, Tuple&& tuple, Value&& value,
@@ -427,8 +304,10 @@ namespace glz
                   return;
                }
             }
-
-            jump_table<Opts, T, N>(index, func, tuple, value, ctx, it, end);
+            
+            jump_table<N>([&]<size_t I>() {
+               decode_index<Opts, T, I>(func, tuple, value, ctx, it, end);
+           }, index);
          }
          else {
             static_assert(false_v<T>, "invalid hash algorithm");
@@ -1741,7 +1620,7 @@ namespace glz
             GLZ_MATCH_OPEN_BRACKET;
             GLZ_SKIP_WS();
 
-            for_each_flatten<N>([&](auto I) {
+            invoke_table<N>([&]<size_t I>() {
                if (*it == ']') {
                   return;
                }
@@ -2085,28 +1964,23 @@ namespace glz
       GLZ_ALWAYS_INLINE void read_json_visitor(auto&& value, auto&& variant, auto&& ctx, auto&& it, auto&& end) noexcept
       {
          constexpr auto variant_size = std::variant_size_v<std::decay_t<decltype(variant)>>;
-         for_each_short_circuit_flatten<variant_size>([&](auto I) {
-            if (I == variant.index()) {
-               using V = decltype(get_member(value, std::get<I>(variant)));
+         jump_table<variant_size>([&]<size_t I>() {
+            using V = decltype(get_member(value, std::get<I>(variant)));
 
-               if constexpr (std::is_const_v<std::remove_reference_t<V>>) {
-                  if constexpr (Opts.error_on_const_read) {
-                     ctx.error = error_code::attempt_const_read;
-                  }
-                  else {
-                     // do not read anything into the const value
-                     skip_value<Opts>(ctx, it, end);
-                  }
+            if constexpr (std::is_const_v<std::remove_reference_t<V>>) {
+               if constexpr (Opts.error_on_const_read) {
+                  ctx.error = error_code::attempt_const_read;
                }
                else {
-                  from_json<std::remove_cvref_t<V>>::template op<ws_handled<Opts>()>(
-                     get_member(value, std::get<I>(variant)), ctx, it, end);
+                  // do not read anything into the const value
+                  skip_value<Opts>(ctx, it, end);
                }
-
-               return true;
             }
-            return false;
-         });
+            else {
+               from_json<std::remove_cvref_t<V>>::template op<ws_handled<Opts>()>(
+                  get_member(value, std::get<I>(variant)), ctx, it, end);
+            }
+         }, variant.index());
       }
 
       template <class T>
