@@ -55,6 +55,19 @@ namespace glz
    }
 }
 
+#define GLZ_PARENS ()
+
+#define GLZ_EXPAND(...) GLZ_EXPAND4(GLZ_EXPAND4(GLZ_EXPAND4(GLZ_EXPAND4(__VA_ARGS__))))
+#define GLZ_EXPAND4(...) GLZ_EXPAND3(GLZ_EXPAND3(GLZ_EXPAND3(GLZ_EXPAND3(__VA_ARGS__))))
+#define GLZ_EXPAND3(...) GLZ_EXPAND2(GLZ_EXPAND2(GLZ_EXPAND2(GLZ_EXPAND2(__VA_ARGS__))))
+#define GLZ_EXPAND2(...) GLZ_EXPAND1(GLZ_EXPAND1(GLZ_EXPAND1(GLZ_EXPAND1(__VA_ARGS__))))
+#define GLZ_EXPAND1(...) __VA_ARGS__
+
+#define GLZ_FOR_EACH(macro, ...) __VA_OPT__(GLZ_EXPAND(GLZ_FOR_EACH_HELPER(macro, __VA_ARGS__)))
+#define GLZ_FOR_EACH_HELPER(macro, a, ...) \
+   macro(a) __VA_OPT__(, ) __VA_OPT__(GLZ_FOR_EACH_AGAIN GLZ_PARENS(macro, __VA_ARGS__))
+#define GLZ_FOR_EACH_AGAIN() GLZ_FOR_EACH_HELPER
+
 namespace glz::detail
 {
 #define GLZ_EVERY(macro, ...) __VA_OPT__(GLZ_EXPAND(GLZ_EVERY_HELPER(macro, __VA_ARGS__)))
@@ -85,7 +98,7 @@ namespace glz::detail
 #define GLZ_50 GLZ_40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50
 #define GLZ_60 GLZ_50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60
 
-      template <opts Opts, class T, size_t N, class Lambda>
+      template <size_t N, class Lambda>
       GLZ_ALWAYS_INLINE constexpr void jump_table(Lambda&& lambda, size_t index) noexcept
       {
          if constexpr (N == 1) {
