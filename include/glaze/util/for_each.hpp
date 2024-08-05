@@ -59,10 +59,10 @@ namespace glz::detail
 #define GLZ_EVERY_HELPER(macro, a, ...) macro(a) __VA_OPT__(GLZ_EVERY_AGAIN GLZ_PARENS(macro, __VA_ARGS__))
 #define GLZ_EVERY_AGAIN() GLZ_EVERY_HELPER
 
-#define GLZ1(I)                                                \
-   case I: {                                                   \
-      static_cast<Lambda&&>(lambda).template operator()<I>();  \
-      break;                                                   \
+#define GLZ1(I)                                               \
+   case I: {                                                  \
+      static_cast<Lambda&&>(lambda).template operator()<I>(); \
+      break;                                                  \
    }
 
 #define GLZ_SWITCH(X, ...)             \
@@ -163,15 +163,15 @@ namespace glz::detail
          });
       }
    }
-   
+
 #define GLZ_INVOKE(I) static_cast<Lambda&&>(lambda).template operator()<I>();
-   
-#define GLZ_INVOKE_ALL(X, ...)             \
-   else if constexpr (N == X)          \
-   {                                   \
-      GLZ_EVERY(GLZ_INVOKE, __VA_ARGS__);    \
+
+#define GLZ_INVOKE_ALL(X, ...)            \
+   else if constexpr (N == X)             \
+   {                                      \
+      GLZ_EVERY(GLZ_INVOKE, __VA_ARGS__); \
    }
-   
+
    template <size_t N, class Lambda>
    GLZ_ALWAYS_INLINE constexpr void invoke_table(Lambda&& lambda) noexcept
    {

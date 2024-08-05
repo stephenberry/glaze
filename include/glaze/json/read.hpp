@@ -304,10 +304,8 @@ namespace glz
                   return;
                }
             }
-            
-            jump_table<N>([&]<size_t I>() {
-               decode_index<Opts, T, I>(func, tuple, value, ctx, it, end);
-           }, index);
+
+            jump_table<N>([&]<size_t I>() { decode_index<Opts, T, I>(func, tuple, value, ctx, it, end); }, index);
          }
          else {
             static_assert(false_v<T>, "invalid hash algorithm");
@@ -1964,23 +1962,25 @@ namespace glz
       GLZ_ALWAYS_INLINE void read_json_visitor(auto&& value, auto&& variant, auto&& ctx, auto&& it, auto&& end) noexcept
       {
          constexpr auto variant_size = std::variant_size_v<std::decay_t<decltype(variant)>>;
-         jump_table<variant_size>([&]<size_t I>() {
-            using V = decltype(get_member(value, std::get<I>(variant)));
+         jump_table<variant_size>(
+            [&]<size_t I>() {
+               using V = decltype(get_member(value, std::get<I>(variant)));
 
-            if constexpr (std::is_const_v<std::remove_reference_t<V>>) {
-               if constexpr (Opts.error_on_const_read) {
-                  ctx.error = error_code::attempt_const_read;
+               if constexpr (std::is_const_v<std::remove_reference_t<V>>) {
+                  if constexpr (Opts.error_on_const_read) {
+                     ctx.error = error_code::attempt_const_read;
+                  }
+                  else {
+                     // do not read anything into the const value
+                     skip_value<Opts>(ctx, it, end);
+                  }
                }
                else {
-                  // do not read anything into the const value
-                  skip_value<Opts>(ctx, it, end);
+                  from_json<std::remove_cvref_t<V>>::template op<ws_handled<Opts>()>(
+                     get_member(value, std::get<I>(variant)), ctx, it, end);
                }
-            }
-            else {
-               from_json<std::remove_cvref_t<V>>::template op<ws_handled<Opts>()>(
-                  get_member(value, std::get<I>(variant)), ctx, it, end);
-            }
-         }, variant.index());
+            },
+            variant.index());
       }
 
       template <class T>
