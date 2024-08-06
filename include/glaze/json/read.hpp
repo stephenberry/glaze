@@ -35,6 +35,7 @@ namespace glz
    {
       // Unless we can mutate the input buffer we need somewhere to store escaped strings for key lookup, etc.
       // We don't put this in the context because we don't want to continually reallocate.
+      // IMPORTANT: Do not call use this when nested calls may be made that need additional buffers on the same thread.
       inline std::string& string_buffer() noexcept
       {
          static thread_local std::string buffer(256, '\0');
@@ -1700,7 +1701,7 @@ namespace glz
          static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
             constexpr auto Opts = ws_handled_off<Options>();
-            std::string& buffer = string_buffer();
+            std::string buffer{};
             read<json>::op<Opts>(buffer, ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
                return;
