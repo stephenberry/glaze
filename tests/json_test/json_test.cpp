@@ -7219,6 +7219,43 @@ suite hostname_include_test = [] {
    };
 };
 
+struct core_struct
+{
+   glz::file_include include{};
+   float number{3.14f};
+};
+
+struct nested_include_struct
+{
+   glz::hostname_include hostname_include{};
+   std::string str = "Hello";
+   int integer = 55;
+   core_struct core{};
+};
+
+suite nested_include_tests = [] {
+   "nested_include"_test = [] {
+      expect(glz::error_code::none == glz::buffer_to_file(std::string_view{R"({"number":3.5})"}, "./core.jsonc"));
+      
+      glz::context ctx{};
+      const auto hostname = glz::detail::get_hostname(ctx);
+
+      std::string file_name = "./{}_include_test.jsonc";
+      glz::detail::replace_first_braces(file_name, hostname);
+      expect(glz::error_code::none == glz::buffer_to_file(std::string_view{R"({"core":{"include": "./core.jsonc"}})"}, file_name));
+
+      expect(glz::error_code::none == glz::buffer_to_file(std::string_view{R"({"str":"goodbye","integer":4,"hostname_include":"./{}_include_test.jsonc"})"}, "./start.jsonc"));
+      
+      nested_include_struct obj{};
+      std::string buffer{};
+      auto ec = glz::read_file_jsonc(obj, "./start.jsonc", buffer);
+      expect(not ec) << glz::format_error(ec, buffer);
+      expect(obj.str == "goodbye");
+      expect(obj.integer = 4);
+      expect(obj.core.number == 3.5f);
+   };
+};
+
 enum class some_enum {
    first,
    second,
