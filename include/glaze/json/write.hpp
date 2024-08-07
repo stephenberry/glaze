@@ -272,6 +272,9 @@ namespace glz
                      if constexpr (!char_array_t<T> && std::is_pointer_v<std::decay_t<T>>) {
                         return value ? value : "";
                      }
+                     else if constexpr (array_char_t<T>) {
+                        return *value.data() ? sv{value.data()} : "";
+                     }
                      else {
                         return value;
                      }
