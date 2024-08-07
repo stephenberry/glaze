@@ -1035,7 +1035,7 @@ namespace glz
       };
 
       template <class T>
-         requires(string_view_t<T> || char_array_t<T>)
+         requires(string_view_t<T> || char_array_t<T> || array_char_t<T>)
       struct from_json<T>
       {
          template <auto Opts, class It, class End>
@@ -1050,25 +1050,32 @@ namespace glz
             }
 
             auto start = it;
+            
+            skip_string_view<Opts>(ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]]
+               return;
 
             if constexpr (string_view_t<T>) {
-               skip_string_view<Opts>(ctx, it, end);
-               if (bool(ctx.error)) [[unlikely]]
-                  return;
                value = {start, size_t(it - start)};
                ++it; // skip closing quote
             }
             else if constexpr (char_array_t<T>) {
-               skip_string_view<Opts>(ctx, it, end);
-               if (bool(ctx.error)) [[unlikely]]
-                  return;
-
                const size_t n = it - start;
                if ((sizeof(value) - 1) < n) {
                   ctx.error = error_code::unexpected_end;
                   return;
                }
                std::memcpy(value, start, n);
+               value[n] = '\0';
+               ++it; // skip closing quote
+            }
+            else if constexpr (array_char_t<T>) {
+               const size_t n = it - start;
+               if ((value.size() - 1) < n) {
+                  ctx.error = error_code::unexpected_end;
+                  return;
+               }
+               std::memcpy(value.data(), start, n);
                value[n] = '\0';
                ++it; // skip closing quote
             }
