@@ -10,6 +10,7 @@ namespace glz::detail
    template <opts Opts>
    void skip_object(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
+      GLZ_ADD_LEVEL;
       if constexpr (!Opts.validate_skipped) {
          ++it;
          skip_until_closed<Opts, '{', '}'>(ctx, it, end);
@@ -42,11 +43,13 @@ namespace glz::detail
          }
          match<'}'>(ctx, it);
       }
+      GLZ_SUB_LEVEL;
    }
 
    template <opts Opts>
    void skip_array(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
+      GLZ_ADD_LEVEL;
       if constexpr (!Opts.validate_skipped) {
          ++it;
          skip_until_closed<Opts, '[', ']'>(ctx, it, end);
@@ -69,6 +72,7 @@ namespace glz::detail
          }
          match<']'>(ctx, it);
       }
+      GLZ_SUB_LEVEL;
    }
 
    template <opts Opts>

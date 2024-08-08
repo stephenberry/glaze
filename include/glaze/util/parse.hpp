@@ -592,7 +592,7 @@ namespace glz::detail
                   }
                }
                if (it == end) [[unlikely]] {
-                  ctx.error = error_code::unexpected_end;
+                  ctx.error = error_code::end_reached;
                   return;
                }
             }
@@ -601,7 +601,7 @@ namespace glz::detail
                   ++it;
                }
                if (it == end) [[unlikely]] {
-                  ctx.error = error_code::unexpected_end;
+                  ctx.error = error_code::end_reached;
                   return;
                }
             }
