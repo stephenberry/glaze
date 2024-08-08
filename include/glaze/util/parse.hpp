@@ -597,7 +597,7 @@ namespace glz::detail
                }
             }
             else {
-               while (whitespace_table[uint8_t(*it)]) {
+               while (it < end && whitespace_table[uint8_t(*it)]) {
                   ++it;
                }
                if (it == end) [[unlikely]] {

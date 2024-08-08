@@ -1495,10 +1495,11 @@ suite json_pointer = [] {
 
 suite early_end = [] {
    using namespace ut;
-   
+
    "should error"_test = [] {
-      std::string_view buffer = R"({"thing":{"a":3.14/*Test comment 1*/,"b":"stuff"/*Test comment 2*/},"thing2array":[{"a":3.14/*Test comment 1*/,"b":"stuff"/*Test comment 2*/,"c":999.342494903,"d":1e-12,"e":203082348402.1,"f":89.089,"g":12380.00000013,)";
-      
+      std::string_view buffer =
+         R"({"thing":{"a":3.14/*Test comment 1*/,"b":"stuff"/*Test comment 2*/},"thing2array":[{"a":3.14/*Test comment 1*/,"b":"stuff"/*Test comment 2*/,"c":999.342494903,"d":1e-12,"e":203082348402.1,"f":89.089,"g":12380.00000013,)";
+
       glz::json_t json{};
       static constexpr glz::opts options{.comments = true};
       expect(glz::read<options>(json, buffer));
@@ -1521,21 +1522,12 @@ suite early_end = [] {
          // This is mainly to check if all our end checks are in place.
          auto ec = glz::read<options>(obj, buffer);
          expect(ec);
-         if (not ec) {
-            std::cout << "Should error: " << buffer << '\n';
-         }
          expect(ec.location <= buffer.size());
          ec = glz::read<options>(json, buffer);
          expect(ec);
-         if (not ec) {
-            std::cout << "Should error: " << buffer << '\n';
-         }
          expect(ec.location <= buffer.size());
          ec = glz::read<options>(skip_me, buffer);
          expect(ec);
-         if (not ec) {
-            std::cout << "Should error: " << buffer << '\n';
-         }
          expect(ec.location <= buffer.size());
       }
    };
@@ -1550,6 +1542,30 @@ suite early_end = [] {
       while (buffer.size() > 0) {
          buffer_data.pop_back();
          buffer = buffer_data;
+         // This is mainly to check if all our end checks are in place.
+         auto ec = glz::read_json(obj, buffer);
+         expect(ec);
+         expect(ec.location <= buffer.size());
+         ec = glz::read_json(json, buffer);
+         expect(ec);
+         expect(ec.location <= buffer.size());
+         ec = glz::read_json(skip_me, buffer);
+         expect(ec);
+         expect(ec.location <= buffer.size());
+      }
+   };
+
+   "early_end !null terminated"_test = [] {
+      Thing obj{};
+      glz::json_t json{};
+      glz::skip skip_me{};
+      std::string_view buffer_data =
+         R"({"thing":{"a":3.14,"b":"stuff"},"thing2array":[{"a":3.14,"b":"stuff","c":999.342494903,"d":1e-12,"e":203082348402.1,"f":89.089,"g":12380.00000013,"h":1000000.000001}],"vec3":[3.14,2.7,6.5],"list":[6,7,8,2],"deque":[9,6.7,3.1],"vector":[[9,6.7,3.1],[3.14,2.7,6.5]],"i":8,"d":2,"b":false,"c":"W","vb":[true,false,false,true,true,true,true],"sptr":{"a":3.14,"b":"stuff"},"optional":null,"array":["as\"df\\ghjkl","pie","42","foo"],"map":{"a":4,"b":12,"f":7},"mapi":{"2":9.63,"5":3.14,"7":7.42},"thing_ptr":{"a":3.14,"b":"stuff"}})";
+      std::vector<char> temp{buffer_data.begin(), buffer_data.end()};
+      std::string_view buffer{temp.data(), temp.data() + temp.size()};
+      while (buffer.size() > 0) {
+         temp.pop_back();
+         buffer = {temp.data(), temp.data() + temp.size()};
          // This is mainly to check if all our end checks are in place.
          auto ec = glz::read_json(obj, buffer);
          expect(ec);
