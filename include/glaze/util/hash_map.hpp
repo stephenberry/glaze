@@ -69,7 +69,7 @@ namespace glz
 
 namespace glz::detail
 {
-   constexpr size_t naive_map_max_size = 32;
+   constexpr size_t naive_map_max_size = 128;
 
    struct naive_map_desc
    {

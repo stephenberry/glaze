@@ -69,9 +69,7 @@ int main()
    // you can assign timeout for the request in your event loop
    auto timeout = [uuid, &client]() {
       decltype(auto) map = client.get_request_map<"foo">();
-      if (map.contains(uuid))
-         ;
-      map.erase(uuid);
+      if (map.contains(uuid)) map.erase(uuid);
    };
 #if 0
    // caling timeout would cause to not process response

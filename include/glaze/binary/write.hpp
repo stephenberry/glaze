@@ -141,7 +141,7 @@ namespace glz
       struct to_binary<T>
       {
          template <auto Opts, class... Args>
-         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&&, auto&&... args) noexcept
+         static void op(auto&& value, is_context auto&&, auto&&... args) noexcept
          {
             constexpr uint8_t type = uint8_t(3) << 3;
             constexpr uint8_t tag = tag::typed_array | type;
@@ -166,13 +166,13 @@ namespace glz
       struct to_binary<T>
       {
          template <auto Opts>
-         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&&, auto&& b, auto&& ix)
+         static void op(auto&& value, is_context auto&&, auto&& b, auto&& ix)
          {
             static constexpr auto N = refl<T>.N;
 
             std::array<uint8_t, byte_length<T>()> data{};
 
-            for_each_flatten<N>([&](auto I) {
+            invoke_table<N>([&]<size_t I>() {
                data[I / 8] |= static_cast<uint8_t>(get_member(value, get<I>(refl<T>.values))) << (7 - (I % 8));
             });
 
@@ -251,7 +251,7 @@ namespace glz
       struct to_binary<T> final
       {
          template <auto Opts, class... Args>
-         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
+         static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
             using Variant = std::decay_t<decltype(value)>;
 
@@ -388,7 +388,7 @@ namespace glz
       struct to_binary<T> final
       {
          template <auto Opts, class... Args>
-         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
+         static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
             using V = range_value_t<std::decay_t<T>>;
 
@@ -600,7 +600,7 @@ namespace glz
                dump_compressed_int<N>(args...);
             }
 
-            for_each_flatten<N>([&](auto I) {
+            invoke_table<N>([&]<size_t I>() {
                constexpr auto Opts = opening_handled_off<Options>();
                write<binary>::no_header<Opts>(get<2 * I>(value.value), ctx, args...);
                write<binary>::op<Opts>(get<2 * I + 1>(value.value), ctx, args...);
@@ -654,7 +654,7 @@ namespace glz
          static constexpr auto N = refl<T>.N;
          static constexpr size_t count_to_write = [] {
             size_t count{};
-            for_each_flatten<N>([&](auto I) {
+            invoke_table<N>([&]<size_t I>() {
                using V = std::remove_cvref_t<refl_t<T, I>>;
 
                if constexpr (std::same_as<V, hidden> || std::same_as<V, skip>) {
@@ -684,7 +684,7 @@ namespace glz
                }
             }();
 
-            for_each_flatten<N>([&](auto I) {
+            invoke_table<N>([&]<size_t I>() {
                using val_t = std::remove_cvref_t<refl_t<T, I>>;
 
                if constexpr (std::same_as<val_t, hidden> || std::same_as<val_t, skip>) {
@@ -722,7 +722,7 @@ namespace glz
                }
             }();
 
-            for_each_flatten<N>([&](auto I) {
+            invoke_table<N>([&]<size_t I>() {
                using val_t = std::remove_cvref_t<refl_t<T, I>>;
 
                if constexpr (std::same_as<val_t, hidden> || std::same_as<val_t, skip>) {
@@ -752,15 +752,15 @@ namespace glz
       struct to_binary<T> final
       {
          template <auto Opts, class... Args>
-         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
+         static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
             dump<tag::generic_array>(args...);
 
             static constexpr auto N = refl<T>.N;
             dump_compressed_int<N>(args...);
 
-            for_each_flatten<refl<T>.N>(
-               [&](auto I) { write<binary>::op<Opts>(get_member(value, get<I>(refl<T>.values)), ctx, args...); });
+            invoke_table<refl<T>.N>(
+               [&]<size_t I>() { write<binary>::op<Opts>(get_member(value, get<I>(refl<T>.values)), ctx, args...); });
          }
       };
 
@@ -769,7 +769,7 @@ namespace glz
       struct to_binary<T> final
       {
          template <auto Opts, class... Args>
-         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
+         static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
             dump<tag::generic_array>(args...);
 

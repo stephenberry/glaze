@@ -374,6 +374,9 @@ namespace glz
                               glaze_flags_t<T> || range<T> || pair_t<T> || null_t<T>);
 
       template <class T>
+      concept is_memory_object = is_memory_type<T> && (glaze_object_t<memory_type<T>> || reflectable<memory_type<T>>);
+
+      template <class T>
       concept glaze_const_value_t = glaze_value_t<T> && std::is_pointer_v<glz::meta_wrapper_t<T>> &&
                                     std::is_const_v<std::remove_pointer_t<glz::meta_wrapper_t<T>>>;
 

@@ -16,6 +16,7 @@
 #include "glaze/core/read.hpp"
 #include "glaze/core/refl.hpp"
 #include "glaze/file/file_ops.hpp"
+#include "glaze/json/json_concepts.hpp"
 #include "glaze/json/json_t.hpp"
 #include "glaze/json/skip.hpp"
 #include "glaze/util/fast_float.hpp"
@@ -34,14 +35,15 @@ namespace glz
    {
       // Unless we can mutate the input buffer we need somewhere to store escaped strings for key lookup, etc.
       // We don't put this in the context because we don't want to continually reallocate.
-      GLZ_ALWAYS_INLINE std::string& string_buffer() noexcept
+      // IMPORTANT: Do not call use this when nested calls may be made that need additional buffers on the same thread.
+      inline std::string& string_buffer() noexcept
       {
          static thread_local std::string buffer(256, '\0');
          return buffer;
       }
 
       // We use an error buffer to avoid multiple allocations in the case that errors occur multiple times.
-      GLZ_ALWAYS_INLINE std::string& error_buffer() noexcept
+      inline std::string& error_buffer() noexcept
       {
          static thread_local std::string buffer(256, '\0');
          return buffer;
@@ -71,7 +73,7 @@ namespace glz
 
          // This unknown key handler should not be given unescaped keys, that is for the user to handle.
          template <auto Opts, class T, is_context Ctx, class It0, class It1>
-         GLZ_ALWAYS_INLINE static void handle_unknown(const sv& key, T&& value, Ctx&& ctx, It0&& it, It1&& end) noexcept
+         static void handle_unknown(const sv& key, T&& value, Ctx&& ctx, It0&& it, It1&& end) noexcept
          {
             using ValueType = std::decay_t<decltype(value)>;
             if constexpr (detail::has_unknown_reader<ValueType>) {
@@ -141,10 +143,101 @@ namespace glz
          GLZ_SKIP_WS();
       }
 
+      template <opts Opts, class T, size_t I, class Func, class Tuple, class Value>
+         requires(glaze_object_t<T> || reflectable<T>)
+      void decode_index(Func&& func, Tuple&& tuple, Value&& value, is_context auto&& ctx, auto&& it,
+                        auto&& end) noexcept
+      {
+         static constexpr auto TargetKey = get<I>(refl<T>.keys);
+         static constexpr auto Length = TargetKey.size();
+         if ((it + Length) >= end) [[unlikely]] {
+            if constexpr (Opts.error_on_unknown_keys) {
+               ctx.error = error_code::unknown_key;
+               return;
+            }
+            else {
+               auto start = it;
+               skip_string_view<Opts>(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
+               const sv key = {start, size_t(it - start)};
+               ++it; // skip the quote
+
+               parse_object_entry_sep<Opts>(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
+
+               read<json>::handle_unknown<Opts>(key, value, ctx, it, end);
+               return;
+            }
+         }
+
+         if (compare<Length>(TargetKey.data(), it)) [[likely]] {
+            it += Length;
+            if (*it != '"') [[unlikely]] {
+               if constexpr (Opts.error_on_unknown_keys) {
+                  ctx.error = error_code::unknown_key;
+                  return;
+               }
+               else {
+                  // This code should not error on valid unknown keys
+                  // We arrived here because the key was perhaps found, but if the quote does not exist
+                  // then this does not necessarily mean we have a syntax error.
+                  // We may have just found the prefix of a longer, unknown key.
+                  auto* start = it - Length;
+                  skip_string_view<Opts>(ctx, it, end);
+                  if (bool(ctx.error)) [[unlikely]]
+                     return;
+                  const sv key = {start, size_t(it - start)};
+                  ++it;
+
+                  parse_object_entry_sep<Opts>(ctx, it, end);
+                  if (bool(ctx.error)) [[unlikely]]
+                     return;
+
+                  read<json>::handle_unknown<Opts>(key, value, ctx, it, end);
+                  return;
+               }
+            }
+            ++it;
+
+            GLZ_SKIP_WS();
+            GLZ_MATCH_COLON();
+            GLZ_SKIP_WS();
+
+            // invoke on the value
+            if constexpr (glaze_object_t<T>) {
+               std::forward<Func>(func)(get<I>(refl<T>.values), I);
+            }
+            else {
+               std::forward<Func>(func)(get<I>(std::forward<Tuple>(tuple)), I);
+            }
+         }
+         else [[unlikely]] {
+            if constexpr (Opts.error_on_unknown_keys) {
+               ctx.error = error_code::unknown_key;
+            }
+            else {
+               auto* start = it - Length;
+               skip_string_view<Opts>(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
+               const sv key = {start, size_t(it - start)};
+               ++it;
+
+               parse_object_entry_sep<Opts>(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
+
+               read<json>::handle_unknown<Opts>(key, value, ctx, it, end);
+            }
+         }
+      }
+
       template <opts Opts, class T, auto HashInfo, class Func, class Tuple, class Value>
          requires(glaze_object_t<T> || reflectable<T>)
-      constexpr void parse_and_invoke(Func&& func, Tuple&& tuple, Value&& value, is_context auto&& ctx, auto&& it,
-                                      auto&& end) noexcept
+      GLZ_ALWAYS_INLINE constexpr void parse_and_invoke(Func&& func, Tuple&& tuple, Value&& value,
+                                                        is_context auto&& ctx, auto&& it, auto&& end) noexcept
       {
          if constexpr (glaze_object_t<T>) {
             (void)tuple;
@@ -218,97 +311,7 @@ namespace glz
                }
             }
 
-            for_each_short_circuit_flatten<N>([&](auto I) {
-               if (I == index) {
-                  static constexpr auto TargetKey = get<I>(refl<T>.keys);
-                  static constexpr auto Length = TargetKey.size();
-                  if ((it + Length) >= end) [[unlikely]] {
-                     if constexpr (Opts.error_on_unknown_keys) {
-                        ctx.error = error_code::unknown_key;
-                        return true;
-                     }
-                     else {
-                        auto start = it;
-                        skip_string_view<Opts>(ctx, it, end);
-                        if (bool(ctx.error)) [[unlikely]]
-                           return true;
-                        const sv key = {start, size_t(it - start)};
-                        ++it; // skip the quote
-
-                        parse_object_entry_sep<Opts>(ctx, it, end);
-                        if (bool(ctx.error)) [[unlikely]]
-                           return true;
-
-                        read<json>::handle_unknown<Opts>(key, value, ctx, it, end);
-                        return true;
-                     }
-                  }
-
-                  if (compare<Length>(TargetKey.data(), it)) [[likely]] {
-                     it += Length;
-                     if (*it != '"') [[unlikely]] {
-                        if constexpr (Opts.error_on_unknown_keys) {
-                           ctx.error = error_code::unknown_key;
-                           return true;
-                        }
-                        else {
-                           // This code should not error on valid unknown keys
-                           // We arrived here because the key was perhaps found, but if the quote does not exist
-                           // then this does not necessarily mean we have a syntax error.
-                           // We may have just found the prefix of a longer, unknown key.
-                           auto* start = it - Length;
-                           skip_string_view<Opts>(ctx, it, end);
-                           if (bool(ctx.error)) [[unlikely]]
-                              return true;
-                           const sv key = {start, size_t(it - start)};
-                           ++it;
-
-                           parse_object_entry_sep<Opts>(ctx, it, end);
-                           if (bool(ctx.error)) [[unlikely]]
-                              return true;
-
-                           read<json>::handle_unknown<Opts>(key, value, ctx, it, end);
-                           return true;
-                        }
-                     }
-                     ++it;
-
-                     GLZ_SKIP_WS(true);
-                     GLZ_MATCH_COLON(true);
-                     GLZ_SKIP_WS(true);
-
-                     // invoke on the value
-                     if constexpr (glaze_object_t<T>) {
-                        std::forward<Func>(func)(get<I>(refl<T>.values), I);
-                     }
-                     else {
-                        std::forward<Func>(func)(get<I>(std::forward<Tuple>(tuple)), I);
-                     }
-                  }
-                  else [[unlikely]] {
-                     if constexpr (Opts.error_on_unknown_keys) {
-                        ctx.error = error_code::unknown_key;
-                     }
-                     else {
-                        auto* start = it - Length;
-                        skip_string_view<Opts>(ctx, it, end);
-                        if (bool(ctx.error)) [[unlikely]]
-                           return true;
-                        const sv key = {start, size_t(it - start)};
-                        ++it;
-
-                        parse_object_entry_sep<Opts>(ctx, it, end);
-                        if (bool(ctx.error)) [[unlikely]]
-                           return true;
-
-                        read<json>::handle_unknown<Opts>(key, value, ctx, it, end);
-                     }
-                  }
-
-                  return true;
-               }
-               return false;
-            });
+            jump_table<N>([&]<size_t I>() { decode_index<Opts, T, I>(func, tuple, value, ctx, it, end); }, index);
          }
          else {
             static_assert(false_v<T>, "invalid hash algorithm");
@@ -632,7 +635,8 @@ namespace glz
                }
                else {
                   if constexpr (std::is_volatile_v<std::remove_reference_t<decltype(value)>>) {
-                     // Hardware may interact with value changes, so we parse into a temporary and assign in one place
+                     // Hardware may interact with value changes, so we parse into a temporary and assign in one
+                     // place
                      V temp;
                      static constexpr fast_float::parse_options options{fast_float::chars_format::json};
                      auto [ptr, ec] = fast_float::from_chars_advanced(it, end, temp, options);
@@ -797,7 +801,7 @@ namespace glz
 
          template <auto Opts, class It, class End>
             requires(not has_is_padded(Opts))
-         GLZ_ALWAYS_INLINE static void op(auto& value, is_context auto&& ctx, It&& it, End&& end) noexcept
+         static void op(auto& value, is_context auto&& ctx, It&& it, End&& end) noexcept
          {
             if constexpr (Opts.number) {
                auto start = it;
@@ -1081,7 +1085,7 @@ namespace glz
       struct from_json<T>
       {
          template <auto Opts>
-         GLZ_ALWAYS_INLINE static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+         static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
             if constexpr (!has_opening_handled(Opts)) {
                if constexpr (!has_ws_handled(Opts)) {
@@ -1175,7 +1179,7 @@ namespace glz
       struct from_json<T>
       {
          template <auto Opts>
-         GLZ_ALWAYS_INLINE static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+         static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
             if constexpr (has_nameof<T>) {
                if constexpr (!has_ws_handled(Opts)) {
@@ -1519,8 +1523,7 @@ namespace glz
       // 'it' is copied so that it does not actually progress the iterator
       // expects the opening brace ([) to have already been consumed
       template <auto Opts>
-      [[nodiscard]] GLZ_ALWAYS_INLINE size_t number_of_array_elements(is_context auto&& ctx, auto it,
-                                                                      auto&& end) noexcept
+      [[nodiscard]] size_t number_of_array_elements(is_context auto&& ctx, auto it, auto&& end) noexcept
       {
          skip_ws<Opts>(ctx, it, end);
          if (bool(ctx.error)) [[unlikely]]
@@ -1635,7 +1638,7 @@ namespace glz
             GLZ_ADD_LEVEL;
             GLZ_SKIP_WS();
 
-            for_each_short_circuit_flatten<N>([&](auto I) -> bool {
+            invoke_table<N>([&]<size_t I>() {
                if (*it == ']') {
                   return true;
                }
@@ -1721,7 +1724,7 @@ namespace glz
          static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
             constexpr auto Opts = ws_handled_off<Options>();
-            std::string& buffer = string_buffer();
+            std::string buffer{};
             read<json>::op<Opts>(buffer, ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
                return;
@@ -1795,6 +1798,13 @@ namespace glz
          return stats;
       }
 
+      template <class T, string_literal tag = "">
+         requires(is_memory_object<T>)
+      constexpr auto key_stats()
+      {
+         return key_stats<memory_type<T>>();
+      }
+
       template <is_variant T, string_literal tag = "">
       constexpr auto key_stats()
       {
@@ -1808,7 +1818,7 @@ namespace glz
          constexpr auto N = std::variant_size_v<T>;
          for_each<N>([&](auto I) {
             using V = std::decay_t<std::variant_alternative_t<I, T>>;
-            constexpr bool is_object = glaze_object_t<V>;
+            constexpr bool is_object = glaze_object_t<V> || reflectable<V> || is_memory_object<V>;
             if constexpr (is_object) {
                constexpr auto substats = key_stats<V>();
                if (substats.min_length < stats.min_length) {
@@ -1984,8 +1994,8 @@ namespace glz
       GLZ_ALWAYS_INLINE void read_json_visitor(auto&& value, auto&& variant, auto&& ctx, auto&& it, auto&& end) noexcept
       {
          constexpr auto variant_size = std::variant_size_v<std::decay_t<decltype(variant)>>;
-         for_each_short_circuit_flatten<variant_size>([&](auto I) {
-            if (I == variant.index()) {
+         jump_table<variant_size>(
+            [&]<size_t I>() {
                using V = decltype(get_member(value, std::get<I>(variant)));
 
                if constexpr (std::is_const_v<std::remove_reference_t<V>>) {
@@ -2001,11 +2011,8 @@ namespace glz
                   from_json<std::remove_cvref_t<V>>::template op<ws_handled<Opts>()>(
                      get_member(value, std::get<I>(variant)), ctx, it, end);
                }
-
-               return true;
-            }
-            return false;
-         });
+            },
+            variant.index());
       }
 
       template <class T>
@@ -2013,7 +2020,7 @@ namespace glz
       struct from_json<T>
       {
          template <auto Options, string_literal tag = "">
-         GLZ_FLATTEN static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
+         static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
             static constexpr auto num_members = refl<T>.N;
             if constexpr (num_members == 0 && is_partial_read<T>) {
@@ -2042,14 +2049,6 @@ namespace glz
                return;
             }
             else {
-               static constexpr bit_array<num_members> all_fields = [] {
-                  bit_array<num_members> arr{};
-                  for (size_t i = 0; i < num_members; ++i) {
-                     arr[i] = true;
-                  }
-                  return arr;
-               }();
-
                decltype(auto) fields = [&]() -> decltype(auto) {
                   if constexpr ((glaze_object_t<T> || reflectable<T>)&&(Opts.error_on_missing_keys ||
                                                                         is_partial_read<T> || Opts.partial_read)) {
@@ -2094,6 +2093,14 @@ namespace glz
                bool first = true;
                while (true) {
                   if constexpr ((glaze_object_t<T> || reflectable<T>)&&(is_partial_read<T> || Opts.partial_read)) {
+                     static constexpr bit_array<num_members> all_fields = [] {
+                        bit_array<num_members> arr{};
+                        for (size_t i = 0; i < num_members; ++i) {
+                           arr[i] = true;
+                        }
+                        return arr;
+                     }();
+
                      if ((all_fields & fields) == all_fields) {
                         if constexpr (Opts.partial_read_nested) {
                            skip_until_closed<Opts, '{', '}'>(ctx, it, end);
@@ -2232,9 +2239,9 @@ namespace glz
                               return;
 
                            if constexpr (Opts.error_on_missing_keys || is_partial_read<T> || Opts.partial_read) {
-                              // TODO: Kludge/hack. Should work but could easily cause memory issues with small changes.
-                              // At the very least if we are going to do this add a get_index method to the maps and
-                              // call that
+                              // TODO: Kludge/hack. Should work but could easily cause memory issues with small
+                              // changes. At the very least if we are going to do this add a get_index method to the
+                              // maps and call that
                               auto index = member_it - frozen_map.begin();
                               fields[index] = true;
                            }
@@ -2297,8 +2304,8 @@ namespace glz
 
                               if constexpr (Opts.error_on_missing_keys || is_partial_read<T> || Opts.partial_read) {
                                  // TODO: Kludge/hack. Should work but could easily cause memory issues with small
-                                 // changes. At the very least if we are going to do this add a get_index method to the
-                                 // maps and call that
+                                 // changes. At the very least if we are going to do this add a get_index method to
+                                 // the maps and call that
                                  auto index = member_it - frozen_map.begin();
                                  fields[index] = true;
                               }
@@ -2450,9 +2457,9 @@ namespace glz
             strings += str_t<V>;
             strings += glaze_enum_t<V>;
             objects += pair_t<V>;
-            objects += (writable_map_t<V> || readable_map_t<V>);
+            objects += (writable_map_t<V> || readable_map_t<V> || is_memory_object<V>);
             objects += glaze_object_t<V>;
-            meta_objects += glaze_object_t<V> || reflectable<V>;
+            meta_objects += glaze_object_t<V> || reflectable<V> || is_memory_object<V>;
             arrays += glaze_array_t<V>;
             arrays += array_t<V>;
             // TODO null
@@ -2471,19 +2478,20 @@ namespace glz
             std::conditional_t<bool_t<remove_meta_wrapper_t<Ts>>, tuplet::tuple<Ts>, tuplet::tuple<>>{}...));
          using number_types = decltype(tuplet::tuple_cat(
             std::conditional_t<num_t<remove_meta_wrapper_t<Ts>>, tuplet::tuple<Ts>, tuplet::tuple<>>{}...));
-         using string_types = decltype(tuplet::tuple_cat( // glaze_enum_t remove_meta_wrapper_t supports constexpr types
-                                                          // while the other supports non const
+         using string_types = decltype(tuplet::tuple_cat( // glaze_enum_t remove_meta_wrapper_t supports constexpr
+                                                          // types while the other supports non const
             std::conditional_t < str_t<remove_meta_wrapper_t<Ts>> || glaze_enum_t<remove_meta_wrapper_t<Ts>> ||
                glaze_enum_t<Ts>,
             tuplet::tuple<Ts>, tuplet::tuple < >> {}...));
-         using object_types = decltype(tuplet::tuple_cat(
-            std::conditional_t < reflectable<Ts> || readable_map_t<Ts> || writable_map_t<Ts> || glaze_object_t<Ts>,
-            tuplet::tuple<Ts>, tuplet::tuple < >> {}...));
+         using object_types =
+            decltype(tuplet::tuple_cat(std::conditional_t<json_object<Ts>, tuplet::tuple<Ts>, tuplet::tuple<>>{}...));
          using array_types =
             decltype(tuplet::tuple_cat(std::conditional_t < array_t<remove_meta_wrapper_t<Ts>> || glaze_array_t<Ts>,
                                        tuplet::tuple<Ts>, tuplet::tuple < >> {}...));
          using nullable_types =
             decltype(tuplet::tuple_cat(std::conditional_t<null_t<Ts>, tuplet::tuple<Ts>, tuplet::tuple<>>{}...));
+         using nullable_objects = decltype(tuplet::tuple_cat(
+            std::conditional_t<is_memory_object<Ts>, tuplet::tuple<Ts>, tuplet::tuple<>>{}...));
       };
 
       // post process output of variant_types
@@ -2509,7 +2517,8 @@ namespace glz
          static constexpr auto n_bool = glz::tuple_size_v<typename V::bool_types>;
          static constexpr auto n_number = glz::tuple_size_v<typename V::number_types>;
          static constexpr auto n_string = glz::tuple_size_v<typename V::string_types>;
-         static constexpr auto n_object = glz::tuple_size_v<typename V::object_types>;
+         static constexpr auto n_nullable_object = glz::tuple_size_v<typename V::nullable_objects>;
+         static constexpr auto n_object = glz::tuple_size_v<typename V::object_types> + n_nullable_object;
          static constexpr auto n_array = glz::tuple_size_v<typename V::array_types>;
          static constexpr auto n_null = glz::tuple_size_v<typename V::nullable_types>;
       };
@@ -2588,12 +2597,14 @@ namespace glz
                   ++ctx.indentation_level;
 
                   ++it;
+                  using type_counts = variant_type_count<T>;
                   using object_types = typename variant_types<T>::object_types;
-                  if constexpr (glz::tuple_size_v<object_types> < 1) {
+                  if constexpr ((type_counts::n_object < 1) //
+                                && (type_counts::n_nullable_object < 1)) {
                      ctx.error = error_code::no_matching_variant_type;
                      return;
                   }
-                  else if constexpr (glz::tuple_size_v<object_types> == 1) {
+                  else if constexpr ((type_counts::n_object + type_counts::n_nullable_object) == 1) {
                      using V = glz::tuple_element_t<0, object_types>;
                      if (!std::holds_alternative<V>(value)) value = V{};
                      read<json>::op<opening_handled<Opts>()>(std::get<V>(value), ctx, it, end);
@@ -2621,7 +2632,7 @@ namespace glz
 
                         if constexpr (deduction_map.size()) {
                            // We first check if a tag is defined and see if the key matches the tag
-                           if constexpr (!tag_v<T>.empty()) {
+                           if constexpr (not tag_v<T>.empty()) {
                               if (key == tag_v<T>) {
                                  parse_object_entry_sep<Opts>(ctx, it, end);
                                  if (bool(ctx.error)) [[unlikely]]
@@ -2631,7 +2642,7 @@ namespace glz
                                  if (bool(ctx.error)) [[unlikely]]
                                     return;
                                  GLZ_SKIP_WS();
-                                 if (!(*it == ',' || *it == '}')) {
+                                 if (!(*it == ',' || *it == '}')) [[unlikely]] {
                                     ctx.error = error_code::syntax_error;
                                     return;
                                  }
@@ -2650,6 +2661,33 @@ namespace glz
                                              from_json<V>::template op<opening_handled<Opts>(), tag_literal>(v, ctx, it,
                                                                                                              end);
                                           }
+                                          else if constexpr (is_memory_object<V>) {
+                                             if (!v) {
+                                                if constexpr (is_specialization_v<V, std::optional>) {
+                                                   if constexpr (requires { v.emplace(); }) {
+                                                      v.emplace();
+                                                   }
+                                                   else {
+                                                      v = typename V::value_type{};
+                                                   }
+                                                }
+                                                else if constexpr (is_specialization_v<V, std::unique_ptr>)
+                                                   v = std::make_unique<typename V::element_type>();
+                                                else if constexpr (is_specialization_v<V, std::shared_ptr>)
+                                                   v = std::make_shared<typename V::element_type>();
+                                                else if constexpr (constructible<V>) {
+                                                   v = meta_construct_v<V>();
+                                                }
+                                                else {
+                                                   ctx.error = error_code::invalid_nullable_read;
+                                                   return;
+                                                   // Cannot read into unset nullable that is not std::optional,
+                                                   // std::unique_ptr, or std::shared_ptr
+                                                }
+                                             }
+                                             from_json<memory_type<V>>::template op<opening_handled<Opts>(),
+                                                                                    tag_literal>(*v, ctx, it, end);
+                                          }
                                        },
                                        value);
 
@@ -2660,7 +2698,7 @@ namespace glz
                                     }
                                     return; // we've decoded our target type
                                  }
-                                 else {
+                                 else [[unlikely]] {
                                     ctx.error = error_code::no_matching_variant_type;
                                     return;
                                  }
@@ -2676,7 +2714,7 @@ namespace glz
                               return;
                            }
                         }
-                        else if constexpr (!tag_v<T>.empty()) {
+                        else if constexpr (not tag_v<T>.empty()) {
                            // empty object case for variant, if there are no normal elements
                            if (key == tag_v<T>) {
                               parse_object_entry_sep<Opts>(ctx, it, end);
@@ -2728,6 +2766,33 @@ namespace glz
                                  constexpr bool is_object = glaze_object_t<V> || reflectable<V>;
                                  if constexpr (is_object) {
                                     from_json<V>::template op<opening_handled<Opts>(), tag_literal>(v, ctx, it, end);
+                                 }
+                                 else if constexpr (is_memory_object<V>) {
+                                    if (!v) {
+                                       if constexpr (is_specialization_v<V, std::optional>) {
+                                          if constexpr (requires { v.emplace(); }) {
+                                             v.emplace();
+                                          }
+                                          else {
+                                             v = typename V::value_type{};
+                                          }
+                                       }
+                                       else if constexpr (is_specialization_v<V, std::unique_ptr>)
+                                          v = std::make_unique<typename V::element_type>();
+                                       else if constexpr (is_specialization_v<V, std::shared_ptr>)
+                                          v = std::make_shared<typename V::element_type>();
+                                       else if constexpr (constructible<V>) {
+                                          v = meta_construct_v<V>();
+                                       }
+                                       else {
+                                          ctx.error = error_code::invalid_nullable_read;
+                                          return;
+                                          // Cannot read into unset nullable that is not std::optional,
+                                          // std::unique_ptr, or std::shared_ptr
+                                       }
+                                    }
+                                    from_json<memory_type<V>>::template op<opening_handled<Opts>(), tag_literal>(
+                                       *v, ctx, it, end);
                                  }
                               },
                               value);
@@ -2981,7 +3046,8 @@ namespace glz
                   else {
                      ctx.error = error_code::invalid_nullable_read;
                      return;
-                     // Cannot read into unset nullable that is not std::optional, std::unique_ptr, or std::shared_ptr
+                     // Cannot read into unset nullable that is not std::optional, std::unique_ptr, or
+                     // std::shared_ptr
                   }
                }
                read<json>::op<Opts>(*value, ctx, it, end);
@@ -2993,7 +3059,7 @@ namespace glz
       struct from_json<T>
       {
          template <auto Opts>
-         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+         static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
             std::string& buffer = string_buffer();
             read<json>::op<Opts>(buffer, ctx, it, end);

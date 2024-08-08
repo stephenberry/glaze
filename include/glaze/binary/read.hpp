@@ -100,7 +100,7 @@ namespace glz
       struct from_binary<T>
       {
          template <auto Opts>
-         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+         static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
             const auto tag = uint8_t(*it);
 
@@ -148,7 +148,7 @@ namespace glz
       struct from_binary<T>
       {
          template <auto Opts, is_context Ctx, class It0, class It1>
-         GLZ_ALWAYS_INLINE static void op(auto&& value, Ctx&&, It0&& it, It1&&)
+         static void op(auto&& value, Ctx&&, It0&& it, It1&&)
          {
             constexpr auto N = refl<T>.N;
 
@@ -158,7 +158,7 @@ namespace glz
             std::memcpy(data, it, Length);
             it += Length;
 
-            for_each_flatten<N>([&](auto I) {
+            invoke_table<N>([&]<size_t I>() {
                get_member(value, get<I>(refl<T>.values)) = data[I / 8] & (uint8_t{1} << (7 - (I % 8)));
             });
          }
@@ -311,7 +311,7 @@ namespace glz
       struct from_binary<T>
       {
          template <auto Opts>
-         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&&) noexcept
+         static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&&) noexcept
          {
             if constexpr (has_no_header(Opts)) {
                using V = std::decay_t<T>;
@@ -483,7 +483,7 @@ namespace glz
       struct from_binary<T> final
       {
          template <auto Opts>
-         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+         static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
             using V = range_value_t<std::decay_t<T>>;
 
@@ -603,7 +603,7 @@ namespace glz
       struct from_binary<T> final
       {
          template <auto Opts>
-         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+         static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
             using V = range_value_t<std::decay_t<T>>;
 
@@ -904,7 +904,7 @@ namespace glz
       struct from_binary<T> final
       {
          template <auto Opts>
-         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+         static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
             using Key = typename T::key_type;
 
@@ -1085,8 +1085,8 @@ namespace glz
                   return;
                }
 
-               for_each_flatten<N>(
-                  [&](auto I) { read<binary>::op<Opts>(get_member(value, get<I>(refl<V>.values)), ctx, it, end); });
+               invoke_table<N>(
+                  [&]<size_t I>() { read<binary>::op<Opts>(get_member(value, get<I>(refl<V>.values)), ctx, it, end); });
             }
          }
 
@@ -1207,7 +1207,7 @@ namespace glz
       struct from_binary<T> final
       {
          template <auto Opts>
-         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+         static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
             const auto tag = uint8_t(*it);
             if (tag != tag::generic_array) [[unlikely]] {
@@ -1222,8 +1222,8 @@ namespace glz
                return;
             }
 
-            for_each_flatten<N>(
-               [&](auto I) { read<binary>::op<Opts>(get_member(value, get<I>(refl<T>.values)), ctx, it, end); });
+            invoke_table<N>(
+               [&]<size_t I>() { read<binary>::op<Opts>(get_member(value, get<I>(refl<T>.values)), ctx, it, end); });
          }
       };
 
@@ -1232,7 +1232,7 @@ namespace glz
       struct from_binary<T> final
       {
          template <auto Opts>
-         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+         static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
             const auto tag = uint8_t(*it);
             if (tag != tag::generic_array) [[unlikely]] {
@@ -1247,7 +1247,7 @@ namespace glz
                const auto n = int_from_compressed(ctx, it, end);
 
                if constexpr (is_std_tuple<T>) {
-                  for_each_short_circuit_flatten<N>([&](auto I) {
+                  for_each_short_circuit<N>([&](auto I) {
                      if (I < n) {
                         read<binary>::op<Opts>(std::get<I>(value), ctx, it, end);
                         return false; // continue
@@ -1256,7 +1256,7 @@ namespace glz
                   });
                }
                else {
-                  for_each_short_circuit_flatten<N>([&](auto I) {
+                  for_each_short_circuit<N>([&](auto I) {
                      if (I < n) {
                         read<binary>::op<Opts>(glz::get<I>(value), ctx, it, end);
                         return false; // continue
@@ -1272,10 +1272,10 @@ namespace glz
                }
 
                if constexpr (is_std_tuple<T>) {
-                  for_each_flatten<N>([&](auto I) { read<binary>::op<Opts>(std::get<I>(value), ctx, it, end); });
+                  invoke_table<N>([&]<size_t I>() { read<binary>::op<Opts>(std::get<I>(value), ctx, it, end); });
                }
                else {
-                  for_each_flatten<N>([&](auto I) { read<binary>::op<Opts>(glz::get<I>(value), ctx, it, end); });
+                  invoke_table<N>([&]<size_t I>() { read<binary>::op<Opts>(glz::get<I>(value), ctx, it, end); });
                }
             }
          }
@@ -1285,7 +1285,7 @@ namespace glz
       struct from_binary<T>
       {
          template <auto Opts>
-         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept
+         static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept
          {
             static thread_local std::string buffer{};
             read<binary>::op<Opts>(buffer, ctx, args...);

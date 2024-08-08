@@ -7233,6 +7233,47 @@ suite hostname_include_test = [] {
    };
 };
 
+struct core_struct
+{
+   glz::file_include include{};
+   float number{3.14f};
+};
+
+struct nested_include_struct
+{
+   glz::hostname_include hostname_include{};
+   std::string str = "Hello";
+   int integer = 55;
+   core_struct core{};
+};
+
+suite nested_include_tests = [] {
+   "nested_include"_test = [] {
+      expect(glz::error_code::none == glz::buffer_to_file(std::string_view{R"({"number":3.5})"}, "./core.jsonc"));
+
+      glz::context ctx{};
+      const auto hostname = glz::detail::get_hostname(ctx);
+
+      std::string file_name = "./{}_include_test.jsonc";
+      glz::detail::replace_first_braces(file_name, hostname);
+      expect(glz::error_code::none ==
+             glz::buffer_to_file(std::string_view{R"({"core":{"include": "./core.jsonc"}})"}, file_name));
+
+      expect(glz::error_code::none ==
+             glz::buffer_to_file(
+                std::string_view{R"({"str":"goodbye","integer":4,"hostname_include":"./{}_include_test.jsonc"})"},
+                "./start.jsonc"));
+
+      nested_include_struct obj{};
+      std::string buffer{};
+      auto ec = glz::read_file_jsonc(obj, "./start.jsonc", buffer);
+      expect(not ec) << glz::format_error(ec, buffer);
+      expect(obj.str == "goodbye");
+      expect(obj.integer = 4);
+      expect(obj.core.number == 3.5f);
+   };
+};
+
 enum class some_enum {
    first,
    second,
@@ -9032,6 +9073,76 @@ suite depth_limits_test = [] {
       glz::json_t json{};
       auto ec = glz::read_json(json, buffer);
       expect(not ec) << glz::format_error(ec, buffer);
+   };
+};
+
+struct hammerhead_t
+{
+   double length{};
+};
+
+struct mako_t
+{
+   double length{};
+};
+
+using shark_t = std::variant<hammerhead_t, mako_t>;
+
+template <>
+struct glz::meta<shark_t>
+{
+   static constexpr std::string_view tag = "name";
+   static constexpr auto ids = std::array{"hammerhead", "mako"};
+};
+
+using shark_ptr_t = std::variant<std::shared_ptr<hammerhead_t>, std::shared_ptr<mako_t>>;
+
+template <>
+struct glz::meta<shark_ptr_t>
+{
+   static constexpr std::string_view tag = "name";
+   static constexpr auto ids = std::array{"hammerhead", "mako"};
+};
+
+struct chair_t
+{
+   float height{};
+   uint8_t number_of_legs{};
+   bool has_back{};
+};
+
+struct bed_t
+{
+   float height{};
+   bool has_headboard{};
+};
+
+using furniture_ptr_t = std::variant<std::shared_ptr<chair_t>, std::shared_ptr<bed_t>>;
+
+suite shark_variant = [] {
+   "shark_variant"_test = [] {
+      shark_t shark{};
+      auto ec = glz::read_json(shark, R"({"name":"mako","length":44.0})");
+      expect(!ec);
+      expect(std::holds_alternative<mako_t>(shark));
+      expect(std::get<mako_t>(shark).length == 44.0);
+   };
+
+   "shark_ptr variant"_test = [] {
+      shark_ptr_t shark{};
+      auto ec = glz::read_json(shark, R"({"name":"mako","length":44.0})");
+      expect(!ec);
+      expect(std::holds_alternative<std::shared_ptr<mako_t>>(shark));
+      expect(std::get<std::shared_ptr<mako_t>>(shark)->length == 44.0);
+   };
+
+   "furniture_ptr variant auto-deduction "_test = [] {
+      furniture_ptr_t furniture{};
+      auto ec = glz::read_json(furniture, R"({"height":44.0,"has_headboard":true})");
+      expect(!ec);
+      expect(std::holds_alternative<std::shared_ptr<bed_t>>(furniture));
+      expect(std::get<std::shared_ptr<bed_t>>(furniture)->height == 44.0f);
+      expect(std::get<std::shared_ptr<bed_t>>(furniture)->has_headboard);
    };
 };
 

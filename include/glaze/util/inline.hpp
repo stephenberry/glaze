@@ -28,18 +28,10 @@
 #ifndef GLZ_FLATTEN
 #define GLZ_FLATTEN inline __attribute__((flatten))
 #endif
-
-#ifndef GLZ_FLATTEN_NO_INLINE
-#define GLZ_FLATTEN_NO_INLINE __attribute__((noinline)) __attribute__((flatten))
-#endif
 #endif
 
 #ifndef GLZ_FLATTEN
 #define GLZ_FLATTEN inline
-#endif
-
-#ifndef GLZ_FLATTEN_NO_INLINE
-#define GLZ_FLATTEN_NO_INLINE
 #endif
 
 #ifndef GLZ_NO_INLINE
