@@ -400,7 +400,7 @@ namespace glz::detail
 
 #define GLZ_VALID_END(RETURN)                 \
    if constexpr (not Opts.null_terminated) {  \
-      if (it >= end) {                        \
+      if (it == end) {                        \
          ctx.error = error_code::end_reached; \
          return RETURN;                       \
       }                                       \
@@ -408,7 +408,7 @@ namespace glz::detail
 
 #define GLZ_INVALID_END(RETURN)                  \
    if constexpr (not Opts.null_terminated) {     \
-      if (it >= end) [[unlikely]] {              \
+      if (it == end) [[unlikely]] {              \
          ctx.error = error_code::unexpected_end; \
          return RETURN;                          \
       }                                          \

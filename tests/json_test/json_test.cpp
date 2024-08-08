@@ -1556,6 +1556,8 @@ suite early_end = [] {
    };
 
    "early_end !null terminated"_test = [] {
+      static constexpr glz::opts options{.null_terminated = false};
+      
       Thing obj{};
       glz::json_t json{};
       glz::skip skip_me{};
@@ -1567,13 +1569,13 @@ suite early_end = [] {
          temp.pop_back();
          buffer = {temp.data(), temp.data() + temp.size()};
          // This is mainly to check if all our end checks are in place.
-         auto ec = glz::read_json(obj, buffer);
+         auto ec = glz::read<options>(obj, buffer);
          expect(ec);
          expect(ec.location <= buffer.size());
-         ec = glz::read_json(json, buffer);
+         ec = glz::read<options>(json, buffer);
          expect(ec);
          expect(ec.location <= buffer.size());
-         ec = glz::read_json(skip_me, buffer);
+         ec = glz::read<options>(skip_me, buffer);
          expect(ec);
          expect(ec.location <= buffer.size());
       }

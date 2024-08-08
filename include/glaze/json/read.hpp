@@ -726,10 +726,13 @@ namespace glz
                   }
                }
             }
-            GLZ_VALID_END();
 
             if constexpr (Opts.quoted_num) {
+               GLZ_INVALID_END();
                GLZ_MATCH_QUOTE;
+               GLZ_VALID_END();
+            }
+            else {
                GLZ_VALID_END();
             }
          }
@@ -1751,8 +1754,11 @@ namespace glz
                return;
             }
             else {
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
                match<']'>(ctx, it);
                GLZ_SUB_LEVEL;
+               GLZ_VALID_END();
             }
          }
       };
@@ -1792,6 +1798,7 @@ namespace glz
                if (*it == ']') {
                   GLZ_SUB_LEVEL;
                   ++it;
+                  GLZ_VALID_END();
                   return;
                }
                GLZ_MATCH_COMMA;
@@ -2064,6 +2071,7 @@ namespace glz
 
             match<'}'>(ctx, it);
             GLZ_SUB_LEVEL;
+            GLZ_VALID_END();
          }
       };
 
