@@ -42,8 +42,9 @@ namespace glz::detail
             GLZ_SKIP_WS();
          }
          match<'}'>(ctx, it);
+         GLZ_SUB_LEVEL;
+         GLZ_VALID_END();
       }
-      GLZ_SUB_LEVEL;
    }
 
    template <opts Opts>
@@ -58,7 +59,9 @@ namespace glz::detail
          ++it;
          GLZ_SKIP_WS();
          if (*it == ']') {
+            GLZ_SUB_LEVEL;
             ++it;
+            GLZ_VALID_END();
             return;
          }
          while (true) {
@@ -71,8 +74,9 @@ namespace glz::detail
             GLZ_SKIP_WS();
          }
          match<']'>(ctx, it);
+         GLZ_SUB_LEVEL;
+         GLZ_VALID_END();
       }
-      GLZ_SUB_LEVEL;
    }
 
    template <opts Opts>

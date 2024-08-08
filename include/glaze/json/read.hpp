@@ -157,6 +157,7 @@ namespace glz
                   return;
                const sv key = {start, size_t(it - start)};
                ++it; // skip the quote
+               GLZ_INVALID_END();
 
                parse_object_entry_sep<Opts>(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
@@ -185,6 +186,7 @@ namespace glz
                      return;
                   const sv key = {start, size_t(it - start)};
                   ++it;
+                  GLZ_INVALID_END();
 
                   parse_object_entry_sep<Opts>(ctx, it, end);
                   if (bool(ctx.error)) [[unlikely]]
@@ -195,6 +197,7 @@ namespace glz
                }
             }
             ++it;
+            GLZ_INVALID_END();
 
             GLZ_SKIP_WS();
             GLZ_MATCH_COLON();
@@ -219,6 +222,7 @@ namespace glz
                   return;
                const sv key = {start, size_t(it - start)};
                ++it;
+               GLZ_INVALID_END();
 
                parse_object_entry_sep<Opts>(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
@@ -296,6 +300,7 @@ namespace glz
                      return;
                   const sv key = {start, size_t(it - start)};
                   ++it; // skip the quote
+                  GLZ_INVALID_END();
 
                   parse_object_entry_sep<Opts>(ctx, it, end);
                   if (bool(ctx.error)) [[unlikely]]
@@ -472,10 +477,12 @@ namespace glz
                if (*it == '1') {
                   value = true;
                   ++it;
+                  GLZ_VALID_END();
                }
                else if (*it == '0') {
                   value = false;
                   ++it;
+                  GLZ_VALID_END();
                }
                else {
                   ctx.error = error_code::syntax_error;
@@ -597,6 +604,7 @@ namespace glz
                   if (*it == '-') {
                      sign = -1;
                      ++it;
+                     GLZ_VALID_END();
                   }
 
                   const char* cur = reinterpret_cast<const char*>(it);
@@ -1068,6 +1076,7 @@ namespace glz
                   return;
                value = {start, size_t(it - start)};
                ++it; // skip closing quote
+               GLZ_VALID_END();
             }
             else if constexpr (char_array_t<T>) {
                skip_string_view<Opts>(ctx, it, end);
@@ -1082,6 +1091,7 @@ namespace glz
                std::memcpy(value, start, n);
                value[n] = '\0';
                ++it; // skip closing quote
+               GLZ_VALID_END();
             }
          }
       };
@@ -1150,6 +1160,7 @@ namespace glz
                }
                value = *it++;
             }
+            GLZ_INVALID_END();
             GLZ_MATCH_QUOTE;
             GLZ_VALID_END();
          }
@@ -2036,6 +2047,7 @@ namespace glz
                   GLZ_SKIP_WS();
                }
                GLZ_MATCH_OPEN_BRACE;
+               GLZ_INVALID_END();
                GLZ_ADD_LEVEL;
             }
             const auto ws_start = it;
@@ -2046,6 +2058,7 @@ namespace glz
                if (*it == '}') [[likely]] {
                   GLZ_SUB_LEVEL;
                   ++it;
+                  GLZ_VALID_END();
                   return;
                }
                ctx.error = error_code::unknown_key;
@@ -2126,6 +2139,7 @@ namespace glz
                               ctx.error = error_code::missing_key;
                            }
                         }
+                        GLZ_VALID_END();
                      }
                      return;
                   }
@@ -2134,6 +2148,7 @@ namespace glz
                   }
                   else {
                      GLZ_MATCH_COMMA;
+                     GLZ_INVALID_END();
 
                      if constexpr ((not Opts.minified) && (num_members > 1 || !Opts.error_on_unknown_keys)) {
                         if (ws_size && ws_size < size_t(end - it)) {
@@ -2162,6 +2177,7 @@ namespace glz
                         return;
                      const sv key{start, size_t(it - start)};
                      ++it;
+                     GLZ_INVALID_END();
 
                      parse_object_entry_sep<Opts>(ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
@@ -2177,6 +2193,7 @@ namespace glz
                         return;
                      }
                      ++it;
+                     GLZ_INVALID_END();
 
                      decltype(auto) t = [&]() -> decltype(auto) {
                         if constexpr (reflectable<T>) {
@@ -2232,6 +2249,7 @@ namespace glz
                            return;
                         }
                         ++it;
+                        GLZ_INVALID_END();
 
                         if (const auto& member_it = frozen_map.find(key); member_it != frozen_map.end()) [[likely]] {
                            parse_object_entry_sep<Opts>(ctx, it, end);
@@ -2286,6 +2304,7 @@ namespace glz
                                  return;
                               key = {start, size_t(it - start)};
                               ++it;
+                              GLZ_INVALID_END();
 
                               parse_object_entry_sep<Opts>(ctx, it, end);
                               if (bool(ctx.error)) [[unlikely]]
@@ -2297,6 +2316,7 @@ namespace glz
                            }
                            else {
                               ++it; // skip the quote
+                              GLZ_INVALID_END();
 
                               parse_object_entry_sep<Opts>(ctx, it, end);
                               if (bool(ctx.error)) [[unlikely]]
@@ -2325,6 +2345,7 @@ namespace glz
                               key = {start, size_t(it - start)};
                            }
                            ++it; // skip the quote
+                           GLZ_INVALID_END();
 
                            parse_object_entry_sep<Opts>(ctx, it, end);
                            if (bool(ctx.error)) [[unlikely]]
@@ -2432,7 +2453,7 @@ namespace glz
                            return;
                      }
                   }
-                  skip_ws<Opts>(ctx, it, end);
+                  GLZ_SKIP_WS();
                }
             }
          }
@@ -2594,6 +2615,7 @@ namespace glz
                   ++ctx.indentation_level;
 
                   ++it;
+                  GLZ_INVALID_END();
                   using type_counts = variant_type_count<T>;
                   using object_types = typename variant_types<T>::object_types;
                   if constexpr ((type_counts::n_object < 1) //
@@ -2930,6 +2952,7 @@ namespace glz
                GLZ_ADD_LEVEL;
                auto start = it;
                ++it;
+               GLZ_INVALID_END();
                GLZ_SKIP_WS();
                if (*it == '}') {
                   it = start;
@@ -3020,6 +3043,7 @@ namespace glz
 
             if (*it == 'n') {
                ++it;
+               GLZ_INVALID_END();
                match<"ull", Opts>(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
                   return;
