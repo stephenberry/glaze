@@ -344,11 +344,13 @@ namespace glz
          static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
             GLZ_MATCH_QUOTE;
+            GLZ_INVALID_END();
 
             const auto n = value.size();
             for (size_t i = 1; it < end; ++i, ++it) {
                if (*it == '"') {
                   ++it;
+                  GLZ_VALID_END();
                   return;
                }
 
@@ -415,6 +417,7 @@ namespace glz
                GLZ_SKIP_WS();
             }
             GLZ_MATCH_OPEN_BRACKET;
+            GLZ_ADD_LEVEL;
 
             auto* ptr = reinterpret_cast<typename T::value_type*>(&v);
             static_assert(sizeof(T) == sizeof(typename T::value_type) * 2);
@@ -432,6 +435,7 @@ namespace glz
 
             GLZ_SKIP_WS();
             GLZ_MATCH_CLOSE_BRACKET;
+            GLZ_SUB_LEVEL;
          }
       };
 
@@ -457,6 +461,7 @@ namespace glz
             if constexpr (Opts.quoted_num) {
                GLZ_SKIP_WS();
                GLZ_MATCH_QUOTE;
+               GLZ_INVALID_END();
             }
 
             if constexpr (!has_ws_handled(Opts)) {
@@ -507,6 +512,7 @@ namespace glz
 
             if constexpr (Opts.quoted_num) {
                GLZ_MATCH_QUOTE;
+               GLZ_VALID_END();
             }
          }
       };
@@ -520,6 +526,7 @@ namespace glz
             if constexpr (Opts.quoted_num) {
                GLZ_SKIP_WS();
                GLZ_MATCH_QUOTE;
+               GLZ_INVALID_END();
             }
 
             if constexpr (!has_ws_handled(Opts)) {
@@ -655,6 +662,7 @@ namespace glz
 
             if constexpr (Opts.quoted_num) {
                GLZ_MATCH_QUOTE;
+               GLZ_VALID_END();
             }
          }
       };
@@ -681,6 +689,7 @@ namespace glz
                   }
 
                   GLZ_MATCH_QUOTE;
+                  GLZ_INVALID_END();
                }
 
                if constexpr (not Opts.raw_string) {
@@ -812,6 +821,7 @@ namespace glz
                   }
 
                   GLZ_MATCH_QUOTE;
+                  GLZ_INVALID_END();
                }
 
                if constexpr (not Opts.raw_string) {
@@ -1047,6 +1057,7 @@ namespace glz
                }
 
                GLZ_MATCH_QUOTE;
+               GLZ_INVALID_END();
             }
 
             auto start = it;
@@ -1087,6 +1098,7 @@ namespace glz
                }
 
                GLZ_MATCH_QUOTE;
+               GLZ_INVALID_END();
             }
 
             if (*it == '\\') [[unlikely]] {
@@ -1139,6 +1151,7 @@ namespace glz
                value = *it++;
             }
             GLZ_MATCH_QUOTE;
+            GLZ_VALID_END();
          }
       };
 
@@ -1215,10 +1228,12 @@ namespace glz
                GLZ_SKIP_WS();
             }
             GLZ_MATCH_QUOTE;
+            GLZ_INVALID_END();
             skip_string_view<Opts>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
                return;
             GLZ_MATCH_QUOTE;
+            GLZ_VALID_END();
          }
       };
 
@@ -1261,10 +1276,12 @@ namespace glz
             }
 
             GLZ_MATCH_OPEN_BRACKET;
+            GLZ_ADD_LEVEL;
             GLZ_SKIP_WS();
 
             value.clear();
             if (*it == ']') [[unlikely]] {
+               GLZ_SUB_LEVEL;
                ++it;
                return;
             }
@@ -1278,6 +1295,7 @@ namespace glz
                value.emplace(std::move(v));
                GLZ_SKIP_WS();
                if (*it == ']') {
+                  GLZ_SUB_LEVEL;
                   ++it;
                   return;
                }
@@ -1300,11 +1318,13 @@ namespace glz
             }
 
             GLZ_MATCH_OPEN_BRACKET;
+            GLZ_ADD_LEVEL;
 
             const auto ws_start = it;
             GLZ_SKIP_WS();
 
             if (*it == ']') {
+               GLZ_SUB_LEVEL;
                ++it;
                if constexpr (resizable<T>) {
                   value.clear();
@@ -1339,6 +1359,7 @@ namespace glz
                   GLZ_SKIP_WS();
                }
                else if (*it == ']') {
+                  GLZ_SUB_LEVEL;
                   ++it;
                   if constexpr (erasable<T>) {
                      value.erase(value_it,
@@ -1392,6 +1413,7 @@ namespace glz
                            GLZ_SKIP_WS();
                         }
                         else if (*it == ']') {
+                           GLZ_SUB_LEVEL;
                            ++it;
                            return;
                         }
@@ -1431,6 +1453,7 @@ namespace glz
                            GLZ_SKIP_WS();
                         }
                         else if (*it == ']') {
+                           GLZ_SUB_LEVEL;
                            ++it;
                            break;
                         }
@@ -1485,6 +1508,7 @@ namespace glz
                            GLZ_SKIP_WS();
                         }
                         else if (*it == ']') {
+                           GLZ_SUB_LEVEL;
                            ++it;
                            return;
                         }
@@ -1576,6 +1600,7 @@ namespace glz
             }
 
             GLZ_MATCH_OPEN_BRACKET;
+            GLZ_ADD_LEVEL;
             const auto n = number_of_array_elements<Opts>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
                return;
@@ -1593,6 +1618,7 @@ namespace glz
                ++i;
             }
             match<']'>(ctx, it);
+            GLZ_SUB_LEVEL;
          }
       };
 
@@ -1617,10 +1643,12 @@ namespace glz
             }
 
             GLZ_MATCH_OPEN_BRACKET;
+            GLZ_ADD_LEVEL;
             GLZ_SKIP_WS();
 
             invoke_table<N>([&]<size_t I>() {
                if (*it == ']') {
+                  GLZ_SUB_LEVEL;
                   return;
                }
                if constexpr (I != 0) {
@@ -1650,6 +1678,7 @@ namespace glz
             }
             else {
                match<']'>(ctx, it);
+               GLZ_SUB_LEVEL;
             }
          }
       };
@@ -1665,6 +1694,7 @@ namespace glz
             }
 
             GLZ_MATCH_OPEN_BRACKET;
+            GLZ_ADD_LEVEL;
 
             std::string& s = string_buffer();
 
@@ -1686,6 +1716,7 @@ namespace glz
 
                GLZ_SKIP_WS();
                if (*it == ']') {
+                  GLZ_SUB_LEVEL;
                   ++it;
                   return;
                }
@@ -1917,6 +1948,7 @@ namespace glz
                   GLZ_SKIP_WS();
                }
                GLZ_MATCH_OPEN_BRACE;
+               GLZ_ADD_LEVEL;
             }
             GLZ_SKIP_WS();
 
@@ -1924,6 +1956,7 @@ namespace glz
             [[maybe_unused]] bit_array<1> fields{};
 
             if (*it == '}') {
+               GLZ_SUB_LEVEL;
                if constexpr (Opts.error_on_missing_keys) {
                   ctx.error = error_code::missing_key;
                }
@@ -1956,6 +1989,7 @@ namespace glz
             GLZ_SKIP_WS();
 
             match<'}'>(ctx, it);
+            GLZ_SUB_LEVEL;
          }
       };
 
@@ -2002,6 +2036,7 @@ namespace glz
                   GLZ_SKIP_WS();
                }
                GLZ_MATCH_OPEN_BRACE;
+               GLZ_ADD_LEVEL;
             }
             const auto ws_start = it;
             GLZ_SKIP_WS();
@@ -2009,6 +2044,7 @@ namespace glz
 
             if constexpr ((glaze_object_t<T> || reflectable<T>)&&num_members == 0 && Opts.error_on_unknown_keys) {
                if (*it == '}') [[likely]] {
+                  GLZ_SUB_LEVEL;
                   ++it;
                   return;
                }
@@ -2077,6 +2113,7 @@ namespace glz
                   }
 
                   if (*it == '}') {
+                     GLZ_SUB_LEVEL;
                      if constexpr ((glaze_object_t<T> || reflectable<T>)&&((is_partial_read<T> || Opts.partial_read) &&
                                                                            Opts.error_on_missing_keys)) {
                         ctx.error = error_code::missing_key;
@@ -2112,6 +2149,7 @@ namespace glz
                   }
                   else if constexpr ((glaze_object_t<T> || reflectable<T>)&&num_members == 0) {
                      GLZ_MATCH_QUOTE;
+                     GLZ_INVALID_END();
 
                      // parsing to an empty object, but at this point the JSON presents keys
 
@@ -2582,6 +2620,7 @@ namespace glz
                         if (bool(ctx.error)) [[unlikely]]
                            return;
                         GLZ_MATCH_QUOTE;
+                        GLZ_INVALID_END();
 
                         if constexpr (deduction_map.size()) {
                            // We first check if a tag is defined and see if the key matches the tag
@@ -2821,16 +2860,19 @@ namespace glz
             }
 
             GLZ_MATCH_OPEN_BRACKET;
+            GLZ_ADD_LEVEL;
             GLZ_SKIP_WS();
 
             // TODO Use key parsing for compiletime known keys
             GLZ_MATCH_QUOTE;
+            GLZ_INVALID_END();
             auto start = it;
             skip_string_view<Opts>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
                return;
             sv type_id = {start, size_t(it - start)};
             GLZ_MATCH_QUOTE;
+            GLZ_VALID_END();
 
             static constexpr auto id_map = make_variant_id_map<T>();
             auto id_it = id_map.find(type_id);
@@ -2850,6 +2892,7 @@ namespace glz
 
             GLZ_SKIP_WS();
             match<']'>(ctx, it);
+            GLZ_SUB_LEVEL;
          }
       };
 
@@ -2864,6 +2907,7 @@ namespace glz
             }
 
             if (*it == '{') {
+               GLZ_ADD_LEVEL;
                auto start = it;
                ++it;
                GLZ_SKIP_WS();
@@ -2904,6 +2948,7 @@ namespace glz
                      }
                      GLZ_SKIP_WS();
                      GLZ_MATCH_CLOSE_BRACE;
+                     GLZ_SUB_LEVEL;
                   }
                   else {
                      it = start;

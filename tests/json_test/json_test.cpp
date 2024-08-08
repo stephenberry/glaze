@@ -1513,12 +1513,21 @@ suite early_end = [] {
          // This is mainly to check if all our end checks are in place.
          auto ec = glz::read<options>(obj, buffer);
          expect(ec);
+         if (not ec) {
+            std::cout << "Should error: " << buffer << '\n';
+         }
          expect(ec.location <= buffer.size());
          ec = glz::read<options>(json, buffer);
          expect(ec);
+         if (not ec) {
+            std::cout << "Should error: " << buffer << '\n';
+         }
          expect(ec.location <= buffer.size());
          ec = glz::read<options>(skip_me, buffer);
          expect(ec);
+         if (not ec) {
+            std::cout << "Should error: " << buffer << '\n';
+         }
          expect(ec.location <= buffer.size());
       }
    };

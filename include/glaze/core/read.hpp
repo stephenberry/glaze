@@ -100,6 +100,10 @@ namespace glz
       }
 
    finish:
+      if (ctx.error == error_code::end_reached && ctx.indentation_level == 0) {
+         ctx.error = error_code::none;
+      }
+      
       if constexpr (use_padded) {
          // Restore the original buffer state
          buffer.resize(buffer.size() - padding_bytes);
