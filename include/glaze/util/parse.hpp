@@ -320,31 +320,49 @@ namespace glz::detail
       ++it;                                   \
    }
 
-#define GLZ_MATCH_COMMA                       \
-   if (*it != ',') [[unlikely]] {             \
-      ctx.error = error_code::expected_comma; \
-      return;                                 \
-   }                                          \
-   else [[likely]] {                          \
-      ++it;                                   \
+#define GLZ_MATCH_COMMA                          \
+   if (*it != ',') [[unlikely]] {                \
+      ctx.error = error_code::expected_comma;    \
+      return;                                    \
+   }                                             \
+   else [[likely]] {                             \
+      ++it;                                      \
+   }                                             \
+   if constexpr (not Opts.null_terminated) {     \
+      if (it == end) [[unlikely]] {              \
+         ctx.error = error_code::unexpected_end; \
+         return;                                 \
+      }                                          \
    }
 
-#define GLZ_MATCH_COLON(RETURN)               \
-   if (*it != ':') [[unlikely]] {             \
-      ctx.error = error_code::expected_colon; \
-      return RETURN;                          \
-   }                                          \
-   else [[likely]] {                          \
-      ++it;                                   \
+#define GLZ_MATCH_COLON(RETURN)                  \
+   if (*it != ':') [[unlikely]] {                \
+      ctx.error = error_code::expected_colon;    \
+      return RETURN;                             \
+   }                                             \
+   else [[likely]] {                             \
+      ++it;                                      \
+   }                                             \
+   if constexpr (not Opts.null_terminated) {     \
+      if (it == end) [[unlikely]] {              \
+         ctx.error = error_code::unexpected_end; \
+         return RETURN;                          \
+      }                                          \
    }
 
-#define GLZ_MATCH_OPEN_BRACKET                  \
-   if (*it != '[') [[unlikely]] {               \
-      ctx.error = error_code::expected_bracket; \
-      return;                                   \
-   }                                            \
-   else [[likely]] {                            \
-      ++it;                                     \
+#define GLZ_MATCH_OPEN_BRACKET                   \
+   if (*it != '[') [[unlikely]] {                \
+      ctx.error = error_code::expected_bracket;  \
+      return;                                    \
+   }                                             \
+   else [[likely]] {                             \
+      ++it;                                      \
+   }                                             \
+   if constexpr (not Opts.null_terminated) {     \
+      if (it == end) [[unlikely]] {              \
+         ctx.error = error_code::unexpected_end; \
+         return;                                 \
+      }                                          \
    }
 
 #define GLZ_MATCH_CLOSE_BRACKET                 \
@@ -356,13 +374,19 @@ namespace glz::detail
       ++it;                                     \
    }
 
-#define GLZ_MATCH_OPEN_BRACE                  \
-   if (*it != '{') [[unlikely]] {             \
-      ctx.error = error_code::expected_brace; \
-      return;                                 \
-   }                                          \
-   else [[likely]] {                          \
-      ++it;                                   \
+#define GLZ_MATCH_OPEN_BRACE                     \
+   if (*it != '{') [[unlikely]] {                \
+      ctx.error = error_code::expected_brace;    \
+      return;                                    \
+   }                                             \
+   else [[likely]] {                             \
+      ++it;                                      \
+   }                                             \
+   if constexpr (not Opts.null_terminated) {     \
+      if (it == end) [[unlikely]] {              \
+         ctx.error = error_code::unexpected_end; \
+         return;                                 \
+      }                                          \
    }
 
 #define GLZ_MATCH_CLOSE_BRACE                 \

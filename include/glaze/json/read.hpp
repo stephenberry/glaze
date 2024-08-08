@@ -558,16 +558,14 @@ namespace glz
                         // Hardware may interact with value changes, so we parse into a temporary and assign in one
                         // place
                         uint64_t i{};
-                        auto s = parse_int<uint64_t>(i, cur);
-                        if (!s) [[unlikely]] {
+                        if (not parse_int<uint64_t>(i, cur)) [[unlikely]] {
                            ctx.error = error_code::parse_number_failure;
                            return;
                         }
                         value = i;
                      }
                      else {
-                        auto s = parse_int<decay_keep_volatile_t<decltype(value)>>(value, cur);
-                        if (!s) [[unlikely]] {
+                        if (not parse_int<decay_keep_volatile_t<decltype(value)>>(value, cur)) [[unlikely]] {
                            ctx.error = error_code::parse_number_failure;
                            return;
                         }
@@ -584,8 +582,7 @@ namespace glz
 
                      const char* cur = reinterpret_cast<const char*>(it);
                      const char* beg = cur;
-                     auto s = parse_int<std::decay_t<decltype(i)>>(i, cur);
-                     if (!s) [[unlikely]] {
+                     if (not parse_int<std::decay_t<decltype(i)>>(i, cur)) [[unlikely]] {
                         ctx.error = error_code::parse_number_failure;
                         return;
                      }
@@ -609,8 +606,7 @@ namespace glz
 
                   const char* cur = reinterpret_cast<const char*>(it);
                   const char* beg = cur;
-                  auto s = parse_int<decay_keep_volatile_t<decltype(i)>>(i, cur);
-                  if (!s) [[unlikely]] {
+                  if (not parse_int<decay_keep_volatile_t<decltype(i)>>(i, cur)) [[unlikely]] {
                      ctx.error = error_code::parse_number_failure;
                      return;
                   }
@@ -2368,6 +2364,8 @@ namespace glz
                            return;
 
                         parse_object_entry_sep<Opts>(ctx, it, end);
+                        if (bool(ctx.error)) [[unlikely]]
+                           return;
 
                         if constexpr (Opts.partial_read) {
                            if (auto element = value.find(key); element != value.end()) {
