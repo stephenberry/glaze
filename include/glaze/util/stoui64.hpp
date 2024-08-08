@@ -494,4 +494,30 @@ namespace glz::detail
       }
       return true;
    }
+   
+   // For non-null terminated buffers
+   template <class T, bool json_conformance = true, class CharType>
+      requires(std::is_unsigned_v<T>)
+   bool parse_int(auto& val, const CharType*& cur, const CharType* end) noexcept
+   {
+      // We copy the rest of the buffer or 64 bytes into a null terminated buffer
+      char data[65]{};
+      const auto n = size_t(end - cur);
+      if (n > 0) [[likely]] {
+         if (n < 64) {
+            std::memcpy(data, cur, n);
+         }
+         else {
+            std::memcpy(data, cur, 64);
+         }
+         
+         const char* it = data;
+         const auto valid = parse_int<T, json_conformance>(val, it);
+         cur += size_t(it - data);
+         return valid;
+      }
+      else [[unlikely]] {
+         return false;
+      }
+   }
 }

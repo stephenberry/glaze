@@ -477,12 +477,10 @@ namespace glz
                if (*it == '1') {
                   value = true;
                   ++it;
-                  GLZ_VALID_END();
                }
                else if (*it == '0') {
                   value = false;
                   ++it;
-                  GLZ_VALID_END();
                }
                else {
                   ctx.error = error_code::syntax_error;
@@ -498,27 +496,56 @@ namespace glz
                }
 
                uint64_t c{};
-               // Note that because our buffer must be null terminated, we can read one more index without checking:
-               std::memcpy(&c, it, 5);
                constexpr uint64_t u_true = 0b00000000'00000000'00000000'00000000'01100101'01110101'01110010'01110100;
                constexpr uint64_t u_false = 0b00000000'00000000'00000000'01100101'01110011'01101100'01100001'01100110;
-               // We have to wipe the 5th character for true testing
-               if ((c & 0xFF'FF'FF'00'FF'FF'FF'FF) == u_true) {
-                  value = true;
-                  it += 4;
+               if constexpr (Opts.null_terminated) {
+                  // Note that because our buffer must be null terminated, we can read one more index without checking:
+                  std::memcpy(&c, it, 5);
+                  // We have to wipe the 5th character for true testing
+                  if ((c & 0xFF'FF'FF'00'FF'FF'FF'FF) == u_true) {
+                     value = true;
+                     it += 4;
+                  }
+                  else {
+                     if (c != u_false) [[unlikely]] {
+                        ctx.error = error_code::expected_true_or_false;
+                        return;
+                     }
+                     value = false;
+                     it += 5;
+                  }
                }
                else {
-                  if (c != u_false) [[unlikely]] {
-                     ctx.error = error_code::expected_true_or_false;
+                  uint64_t c{};
+                  std::memcpy(&c, it, 4);
+                  if (c == u_true) {
+                     value = true;
+                     it += 4;
+                  }
+                  else if (size_t(end - it) < 5) [[unlikely]] {
+                     ctx.error = error_code::unexpected_end;
                      return;
                   }
-                  value = false;
-                  it += 5;
+                  else {
+                     std::memcpy(&c, it, 5);
+                     if (c == u_false) [[likely]] {
+                        value = false;
+                        it += 5;
+                     }
+                     else [[unlikely]] {
+                        ctx.error = error_code::expected_true_or_false;
+                        return;
+                     }
+                  }
                }
             }
 
             if constexpr (Opts.quoted_num) {
+               GLZ_INVALID_END();
                GLZ_MATCH_QUOTE;
+               GLZ_VALID_END();
+            }
+            else {
                GLZ_VALID_END();
             }
          }
@@ -558,17 +585,35 @@ namespace glz
                         // Hardware may interact with value changes, so we parse into a temporary and assign in one
                         // place
                         uint64_t i{};
-                        if (not parse_int<uint64_t>(i, cur)) [[unlikely]] {
-                           ctx.error = error_code::parse_number_failure;
-                           return;
+                        if constexpr (Opts.null_terminated) {
+                           if (not parse_int<uint64_t>(i, cur)) [[unlikely]] {
+                              ctx.error = error_code::parse_number_failure;
+                              return;
+                           }
                         }
+                        else {
+                           if (not parse_int<uint64_t>(i, cur, end)) [[unlikely]] {
+                              ctx.error = error_code::parse_number_failure;
+                              return;
+                           }
+                        }
+                        GLZ_VALID_END();
                         value = i;
                      }
                      else {
-                        if (not parse_int<decay_keep_volatile_t<decltype(value)>>(value, cur)) [[unlikely]] {
-                           ctx.error = error_code::parse_number_failure;
-                           return;
+                        if constexpr (Opts.null_terminated) {
+                           if (not parse_int<decay_keep_volatile_t<decltype(value)>>(value, cur)) [[unlikely]] {
+                              ctx.error = error_code::parse_number_failure;
+                              return;
+                           }
                         }
+                        else {
+                           if (not parse_int<decay_keep_volatile_t<decltype(value)>>(value, cur, end)) [[unlikely]] {
+                              ctx.error = error_code::parse_number_failure;
+                              return;
+                           }
+                        }
+                        GLZ_VALID_END();
                      }
 
                      it += (cur - beg);
@@ -582,10 +627,19 @@ namespace glz
 
                      const char* cur = reinterpret_cast<const char*>(it);
                      const char* beg = cur;
-                     if (not parse_int<std::decay_t<decltype(i)>>(i, cur)) [[unlikely]] {
-                        ctx.error = error_code::parse_number_failure;
-                        return;
+                     if constexpr (Opts.null_terminated) {
+                        if (not parse_int<std::decay_t<decltype(i)>>(i, cur)) [[unlikely]] {
+                           ctx.error = error_code::parse_number_failure;
+                           return;
+                        }
                      }
+                     else {
+                        if (not parse_int<std::decay_t<decltype(i)>>(i, cur, end)) [[unlikely]] {
+                           ctx.error = error_code::parse_number_failure;
+                           return;
+                        }
+                     }
+                     GLZ_VALID_END();
 
                      if (i > maximum) [[unlikely]] {
                         ctx.error = error_code::parse_number_failure;
@@ -606,10 +660,19 @@ namespace glz
 
                   const char* cur = reinterpret_cast<const char*>(it);
                   const char* beg = cur;
-                  if (not parse_int<decay_keep_volatile_t<decltype(i)>>(i, cur)) [[unlikely]] {
-                     ctx.error = error_code::parse_number_failure;
-                     return;
+                  if constexpr (Opts.null_terminated) {
+                     if (not parse_int<decay_keep_volatile_t<decltype(i)>>(i, cur)) [[unlikely]] {
+                        ctx.error = error_code::parse_number_failure;
+                        return;
+                     }
                   }
+                  else {
+                     if (not parse_int<decay_keep_volatile_t<decltype(i)>>(i, cur, end)) [[unlikely]] {
+                        ctx.error = error_code::parse_number_failure;
+                        return;
+                     }
+                  }
+                  GLZ_VALID_END();
 
                   if (sign == -1) {
                      static constexpr auto min_abs = uint64_t((std::numeric_limits<V>::max)()) + 1;
@@ -663,6 +726,7 @@ namespace glz
                   }
                }
             }
+            GLZ_VALID_END();
 
             if constexpr (Opts.quoted_num) {
                GLZ_MATCH_QUOTE;
@@ -1004,12 +1068,15 @@ namespace glz
                         if (*it == '"') {
                            value.assign(buffer.data(), size_t(p - buffer.data()));
                            ++it;
+                           GLZ_VALID_END();
                            return;
                         }
                         else if (*it == '\\') {
                            ++it; // skip the escape
+                           GLZ_INVALID_END();
                            if (*it == 'u') {
                               ++it;
+                              GLZ_INVALID_END();
                               if (!handle_unicode_code_point(it, p, end)) [[unlikely]] {
                                  ctx.error = error_code::unicode_escape_conversion_failure;
                                  return;
