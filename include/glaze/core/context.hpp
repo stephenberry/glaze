@@ -16,9 +16,14 @@ namespace glz
 
    GLZ_ENUM(error_code,
             none, //
+            // Contextual Sentinels
+            brace_sentinel, //
+            bracket_sentinel, //
+            // Normal Errors
             no_read_input, //
             data_must_be_null_terminated, //
             parse_number_failure, //
+            expected_sentinel, // Expects a `]` or `}`
             expected_brace, //
             expected_bracket, //
             expected_quote, //
@@ -92,15 +97,44 @@ namespace glz
    struct context final
    {
       error_code error{};
-      std::string_view custom_error_message{};
+      // We don't use the unnecessary {} for std::string_view to keep debuggers from jumping here
+      std::string_view custom_error_message;
       // INTERNAL USE:
+      // TODO: Rename to indent_level
+      // We use an unsigned integer because if we hit negative numbers when reading we wrap around
+      // And we are always checking if this value is zero or less than some small number
       uint32_t indentation_level{}; // When writing this is the number of indent character to serialize
       // When reading indentation_level is used to track the depth of structures to prevent stack overflows
       // From massive depths due to untrusted inputs or attacks
-      std::string current_file; // top level file path
-      std::string_view includer_error{}; // error from a nested file includer
+      std::string current_file; // Top level file path
+      std::string_view includer_error; // error from a nested file includer
+      bool partial = false; // Whether this parsing/serialization context should be partial
    };
 
    template <class T>
    concept is_context = std::same_as<std::decay_t<T>, context>;
+}
+
+// We use macros to make it easier to edit the if constexpr logic in the future
+// And, it reduces lines of code
+#define GLZ_ADD_LEVEL if constexpr (not Opts.null_terminated) { \
+   ++ctx.indentation_level; \
+}
+
+#define GLZ_SUB_LEVEL_BRACE if constexpr (not Opts.null_terminated) { \
+   --ctx.indentation_level; \
+   if (it == end) { \
+      ++it; \
+      ctx.error = error_code::brace_sentinel; \
+      return; \
+   } \
+}
+
+#define GLZ_SUB_LEVEL_BRACKET if constexpr (not Opts.null_terminated) { \
+   --ctx.indentation_level; \
+   if (it == end) { \
+      ++it; \
+      ctx.error = error_code::bracket_sentinel; \
+      return; \
+   } \
 }

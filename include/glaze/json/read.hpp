@@ -77,10 +77,13 @@ namespace glz
          {
             using ValueType = std::decay_t<decltype(value)>;
             if constexpr (detail::has_unknown_reader<ValueType>) {
+               
                constexpr auto& reader = meta_unknown_read_v<ValueType>;
                using ReaderType = meta_unknown_read_t<ValueType>;
+               
                if constexpr (std::is_member_object_pointer_v<ReaderType>) {
                   using MemberType = typename member_value<ReaderType>::type;
+                  
                   if constexpr (detail::map_subscriptable<MemberType>) {
                      read<json>::op<Opts>((value.*reader)[key], ctx, it, end);
                   }
@@ -90,8 +93,10 @@ namespace glz
                }
                else if constexpr (std::is_member_function_pointer_v<ReaderType>) {
                   using ReturnType = typename return_type<ReaderType>::type;
+                  
                   if constexpr (std::is_void_v<ReturnType>) {
                      using TupleType = typename inputs_as_tuple<ReaderType>::type;
+                     
                      if constexpr (glz::tuple_size_v<TupleType> == 2) {
                         std::decay_t<glz::tuple_element_t<1, TupleType>> input{};
                         read<json>::op<Opts>(input, ctx, it, end);
@@ -415,6 +420,7 @@ namespace glz
                GLZ_SKIP_WS();
             }
             GLZ_MATCH_OPEN_BRACKET;
+            GLZ_ADD_LEVEL;
 
             auto* ptr = reinterpret_cast<typename T::value_type*>(&v);
             static_assert(sizeof(T) == sizeof(typename T::value_type) * 2);
@@ -424,7 +430,7 @@ namespace glz
 
             GLZ_SKIP_WS();
 
-            GLZ_MATCH_COMMA;
+            GLZ_MATCH_COMMA();
 
             read<json>::op<Opts>(ptr[1], ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
@@ -1261,10 +1267,12 @@ namespace glz
             }
 
             GLZ_MATCH_OPEN_BRACKET;
+            GLZ_ADD_LEVEL;
             GLZ_SKIP_WS();
 
             value.clear();
             if (*it == ']') [[unlikely]] {
+               GLZ_SUB_LEVEL_BRACKET;
                ++it;
                return;
             }
@@ -1278,10 +1286,11 @@ namespace glz
                value.emplace(std::move(v));
                GLZ_SKIP_WS();
                if (*it == ']') {
+                  GLZ_SUB_LEVEL_BRACKET;
                   ++it;
                   return;
                }
-               GLZ_MATCH_COMMA;
+               GLZ_MATCH_COMMA();
             }
          }
       };
@@ -1300,12 +1309,12 @@ namespace glz
             }
 
             GLZ_MATCH_OPEN_BRACKET;
+            GLZ_ADD_LEVEL;
 
             const auto ws_start = it;
             GLZ_SKIP_WS();
 
             if (*it == ']') {
-               ++it;
                if constexpr (resizable<T>) {
                   value.clear();
 
@@ -1313,6 +1322,8 @@ namespace glz
                      value.shrink_to_fit();
                   }
                }
+               GLZ_SUB_LEVEL_BRACKET;
+               ++it;
                return;
             }
 
@@ -1339,7 +1350,6 @@ namespace glz
                   GLZ_SKIP_WS();
                }
                else if (*it == ']') {
-                  ++it;
                   if constexpr (erasable<T>) {
                      value.erase(value_it,
                                  value.end()); // use erase rather than resize for non-default constructible elements
@@ -1348,6 +1358,8 @@ namespace glz
                         value.shrink_to_fit();
                      }
                   }
+                  GLZ_SUB_LEVEL_BRACKET;
+                  ++it;
                   return;
                }
                else [[unlikely]] {
@@ -1357,6 +1369,7 @@ namespace glz
             }
 
             if constexpr (Opts.partial_read) {
+               ctx.partial = true;
                return;
             }
             else {
@@ -1392,6 +1405,7 @@ namespace glz
                            GLZ_SKIP_WS();
                         }
                         else if (*it == ']') {
+                           GLZ_SUB_LEVEL_BRACKET;
                            ++it;
                            return;
                         }
@@ -1431,6 +1445,7 @@ namespace glz
                            GLZ_SKIP_WS();
                         }
                         else if (*it == ']') {
+                           GLZ_SUB_LEVEL_BRACKET;
                            ++it;
                            break;
                         }
@@ -1485,6 +1500,7 @@ namespace glz
                            GLZ_SKIP_WS();
                         }
                         else if (*it == ']') {
+                           GLZ_SUB_LEVEL_BRACKET;
                            ++it;
                            return;
                         }
@@ -1576,6 +1592,8 @@ namespace glz
             }
 
             GLZ_MATCH_OPEN_BRACKET;
+            GLZ_ADD_LEVEL;
+            
             const auto n = number_of_array_elements<Opts>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
                return;
@@ -1588,11 +1606,11 @@ namespace glz
 
                GLZ_SKIP_WS();
                if (i < n - 1) {
-                  GLZ_MATCH_COMMA;
+                  GLZ_MATCH_COMMA();
                }
                ++i;
             }
-            match<']'>(ctx, it);
+            GLZ_MATCH_CLOSE_BRACKET;
          }
       };
 
@@ -1617,39 +1635,42 @@ namespace glz
             }
 
             GLZ_MATCH_OPEN_BRACKET;
+            GLZ_ADD_LEVEL;
             GLZ_SKIP_WS();
 
             invoke_table<N>([&]<size_t I>() {
                if (*it == ']') {
-                  return;
+                  return true;
                }
                if constexpr (I != 0) {
-                  GLZ_MATCH_COMMA;
-                  GLZ_SKIP_WS();
+                  GLZ_MATCH_COMMA(true);
+                  GLZ_SKIP_WS(true);
                }
                if constexpr (is_std_tuple<T>) {
                   read<json>::op<ws_handled<Opts>()>(std::get<I>(value), ctx, it, end);
                   if (bool(ctx.error)) [[unlikely]]
-                     return;
+                     return true;
                }
                else if constexpr (glaze_array_t<T>) {
                   read<json>::op<ws_handled<Opts>()>(get_member(value, glz::get<I>(meta_v<T>)), ctx, it, end);
                   if (bool(ctx.error)) [[unlikely]]
-                     return;
+                     return true;
                }
                else {
                   read<json>::op<ws_handled<Opts>()>(glz::get<I>(value), ctx, it, end);
                   if (bool(ctx.error)) [[unlikely]]
-                     return;
+                     return true;
                }
-               GLZ_SKIP_WS();
+               GLZ_SKIP_WS(true);
+               return false;
             });
 
             if constexpr (Opts.partial_read) {
+               ctx.partial = true;
                return;
             }
             else {
-               match<']'>(ctx, it);
+               GLZ_MATCH_CLOSE_BRACKET;
             }
          }
       };
@@ -1665,6 +1686,7 @@ namespace glz
             }
 
             GLZ_MATCH_OPEN_BRACKET;
+            GLZ_ADD_LEVEL;
 
             std::string& s = string_buffer();
 
@@ -1686,10 +1708,11 @@ namespace glz
 
                GLZ_SKIP_WS();
                if (*it == ']') {
+                  GLZ_SUB_LEVEL_BRACKET;
                   ++it;
                   return;
                }
-               GLZ_MATCH_COMMA;
+               GLZ_MATCH_COMMA();
             }
          }
       };
@@ -1722,6 +1745,8 @@ namespace glz
 
             const auto current_file = ctx.current_file;
             ctx.current_file = string_file_path;
+            const auto current_depth = ctx.indentation_level;
+            ctx.indentation_level = 0;
 
             // We need to allocate a new buffer here because we could call another includer that uses buffer
             std::string nested_buffer = buffer;
@@ -1731,10 +1756,12 @@ namespace glz
                auto& error_msg = error_buffer();
                error_msg = glz::format_error(ecode, nested_buffer);
                ctx.includer_error = error_msg;
+               ctx.indentation_level = current_depth;
                return;
             }
 
             ctx.current_file = current_file;
+            ctx.indentation_level = current_depth;
          }
       };
 
@@ -1917,6 +1944,7 @@ namespace glz
                   GLZ_SKIP_WS();
                }
                GLZ_MATCH_OPEN_BRACE;
+               GLZ_ADD_LEVEL;
             }
             GLZ_SKIP_WS();
 
@@ -1926,7 +1954,10 @@ namespace glz
             if (*it == '}') {
                if constexpr (Opts.error_on_missing_keys) {
                   ctx.error = error_code::missing_key;
+                  return;
                }
+               
+               GLZ_SUB_LEVEL_BRACE;
                return;
             }
 
@@ -1955,7 +1986,7 @@ namespace glz
 
             GLZ_SKIP_WS();
 
-            match<'}'>(ctx, it);
+            GLZ_MATCH_CLOSE_BRACE;
          }
       };
 
@@ -2002,6 +2033,7 @@ namespace glz
                   GLZ_SKIP_WS();
                }
                GLZ_MATCH_OPEN_BRACE;
+               GLZ_ADD_LEVEL;
             }
             const auto ws_start = it;
             GLZ_SKIP_WS();
@@ -2009,6 +2041,7 @@ namespace glz
 
             if constexpr ((glaze_object_t<T> || reflectable<T>)&&num_members == 0 && Opts.error_on_unknown_keys) {
                if (*it == '}') [[likely]] {
+                  GLZ_SUB_LEVEL_BRACE;
                   ++it;
                   return;
                }
@@ -2072,6 +2105,7 @@ namespace glz
                         if constexpr (Opts.partial_read_nested) {
                            skip_until_closed<Opts, '{', '}'>(ctx, it, end);
                         }
+                        ctx.partial = true;
                         return;
                      }
                   }
@@ -2080,23 +2114,27 @@ namespace glz
                      if constexpr ((glaze_object_t<T> || reflectable<T>)&&((is_partial_read<T> || Opts.partial_read) &&
                                                                            Opts.error_on_missing_keys)) {
                         ctx.error = error_code::missing_key;
+                        return;
                      }
                      else {
-                        ++it;
                         if constexpr ((glaze_object_t<T> || reflectable<T>)&&Opts.error_on_missing_keys) {
                            constexpr auto req_fields = required_fields<T, Opts>();
                            if ((req_fields & fields) != req_fields) {
                               ctx.error = error_code::missing_key;
+                              return;
                            }
                         }
+                        
+                        GLZ_SUB_LEVEL_BRACE;
+                        ++it;
+                        return;
                      }
-                     return;
                   }
                   else if (first) {
                      first = false;
                   }
                   else {
-                     GLZ_MATCH_COMMA;
+                     GLZ_MATCH_COMMA();
 
                      if constexpr ((not Opts.minified) && (num_members > 1 || !Opts.error_on_unknown_keys)) {
                         if (ws_size && ws_size < size_t(end - it)) {
@@ -2319,6 +2357,7 @@ namespace glz
                               skip_value<Opts>(ctx, it, end);
                            }
                            if (read_count == value.size()) {
+                              ctx.partial = true;
                               return;
                            }
                         }
@@ -2347,6 +2386,7 @@ namespace glz
                               skip_value<Opts>(ctx, it, end);
                            }
                            if (read_count == value.size()) {
+                              ctx.partial = true;
                               return;
                            }
                         }
@@ -2384,6 +2424,7 @@ namespace glz
                               skip_value<Opts>(ctx, it, end);
                            }
                            if (read_count == value.size()) {
+                              ctx.partial = true;
                               return;
                            }
                         }
@@ -2551,6 +2592,8 @@ namespace glz
                      ctx.error = error_code::exceeded_max_recursive_depth;
                      return;
                   }
+                  // In the null terminated case this guards for stack overflow
+                  // For depth counting with contextual sentinels this handles the opening
                   ++ctx.indentation_level;
 
                   ++it;
@@ -2565,7 +2608,11 @@ namespace glz
                      using V = glz::tuple_element_t<0, object_types>;
                      if (!std::holds_alternative<V>(value)) value = V{};
                      read<json>::op<opening_handled<Opts>()>(std::get<V>(value), ctx, it, end);
-                     --ctx.indentation_level;
+                     if constexpr (Opts.null_terminated) {
+                        // In the null terminated case this guards for stack overflow
+                        // Depth counting is done at the object level when not null terminated
+                        --ctx.indentation_level;
+                     }
                      return;
                   }
                   else {
@@ -2576,7 +2623,7 @@ namespace glz
                      auto start = it;
                      while (*it != '}') {
                         if (it != start) {
-                           GLZ_MATCH_COMMA;
+                           GLZ_MATCH_COMMA();
                         }
                         const sv key = parse_object_key<T, Opts, tag_literal>(ctx, it, end);
                         if (bool(ctx.error)) [[unlikely]]
@@ -2644,7 +2691,11 @@ namespace glz
                                        },
                                        value);
 
-                                    --ctx.indentation_level;
+                                    if constexpr (Opts.null_terminated) {
+                                       // In the null terminated case this guards for stack overflow
+                                       // Depth counting is done at the object level when not null terminated
+                                       --ctx.indentation_level;
+                                    }
                                     return; // we've decoded our target type
                                  }
                                  else [[unlikely]] {
@@ -2746,7 +2797,11 @@ namespace glz
                               },
                               value);
 
-                           --ctx.indentation_level;
+                           if constexpr (Opts.null_terminated) {
+                              // In the null terminated case this guards for stack overflow
+                              // Depth counting is done at the object level when not null terminated
+                              --ctx.indentation_level;
+                           }
                            return; // we've decoded our target type
                         }
                         parse_object_entry_sep<Opts>(ctx, it, end);
@@ -2768,9 +2823,15 @@ namespace glz
                      ctx.error = error_code::exceeded_max_recursive_depth;
                      return;
                   }
-                  ++ctx.indentation_level;
+                     if constexpr (Opts.null_terminated) {
+                        // In the null terminated case this guards for stack overflow
+                        // Depth counting is done at the object level when not null terminated
+                        ++ctx.indentation_level;
+                     }
                   process_arithmetic_boolean_string_or_array<array_types>::template op<Opts>(value, ctx, it, end);
-                  --ctx.indentation_level;
+                     if constexpr (Opts.null_terminated) {
+                        --ctx.indentation_level;
+                     }
                   break;
                case '"': {
                   using string_types = typename variant_types<T>::string_types;
@@ -2821,6 +2882,7 @@ namespace glz
             }
 
             GLZ_MATCH_OPEN_BRACKET;
+            GLZ_ADD_LEVEL;
             GLZ_SKIP_WS();
 
             // TODO Use key parsing for compiletime known keys
@@ -2836,7 +2898,7 @@ namespace glz
             auto id_it = id_map.find(type_id);
             if (id_it != id_map.end()) [[likely]] {
                GLZ_SKIP_WS();
-               GLZ_MATCH_COMMA;
+               GLZ_MATCH_COMMA();
                const auto type_index = id_it->second;
                if (value.index() != type_index) value = runtime_variant_map<T>()[type_index];
                std::visit([&](auto&& v) { read<json>::op<Opts>(v, ctx, it, end); }, value);
@@ -2849,7 +2911,7 @@ namespace glz
             }
 
             GLZ_SKIP_WS();
-            match<']'>(ctx, it);
+            GLZ_MATCH_CLOSE_BRACKET;
          }
       };
 
@@ -2864,10 +2926,12 @@ namespace glz
             }
 
             if (*it == '{') {
+               GLZ_ADD_LEVEL;
                auto start = it;
                ++it;
                GLZ_SKIP_WS();
                if (*it == '}') {
+                  GLZ_SUB_LEVEL_BRACE;
                   it = start;
                   // empty object
                   if (value) {
@@ -3020,7 +3084,7 @@ namespace glz
    {
       context ctx{};
       glz::skip skip_value{};
-      return read<opts{.validate_trailing_whitespace = true}>(skip_value, std::forward<Buffer>(buffer), ctx);
+      return read<opts{.comments = true, .validate_skipped = true, .validate_trailing_whitespace = true}>(skip_value, std::forward<Buffer>(buffer), ctx);
    }
 
    template <read_json_supported T, class Buffer>

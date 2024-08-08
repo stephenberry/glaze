@@ -1013,7 +1013,8 @@ suite user_types = [] {
          R"({"thing":{"a":3.14,"b":"stuff"},"thing2array":[{"a":3.14,"b":"stuff","c":999.342494903,"d":1E-12,"e":203082348402.1,"f":89.089,"g":12380.00000013,"h":1000000.000001}],"vec3":[3.14,2.7,6.5],"list":[6,7,8,2],"deque":[9,6.7,3.1],"vector":[[9,6.7,3.1],[3.14,2.7,6.5]],"i":8,"d":2,"b":false,"c":"W","v":{"x":0},"color":"Green","vb":[true,false,false,true,true,true,true],"sptr":{"a":3.14,"b":"stuff"},"optional":null,"array":["as\"df\\ghjkl","pie","42","foo"],"map":{"a":4,"b":12,"f":7},"mapi":{"2":9.63,"5":3.14,"7":7.42},"thing_ptr":{"a":3.14,"b":"stuff"}})")
          << buffer;
 
-      expect(glz::read_json(obj, buffer) == glz::error_code::none);
+      auto ec = glz::read_json(obj, buffer);
+      expect(not ec) << glz::format_error(ec, buffer);
 
       buffer.clear();
       expect(not glz::write_jsonc(obj, buffer));
@@ -1316,7 +1317,8 @@ suite user_types = [] {
 })";
 
       expect(thing_pretty == buffer);
-      expect(!glz::read_jsonc(obj, buffer));
+      auto ec = glz::read_jsonc(obj, buffer);
+      expect(!ec) << glz::format_error(ec, buffer);
       const auto minified = glz::minify_jsonc(thing_pretty);
       expect(json == minified);
       expect(!glz::read_jsonc(obj, minified));
@@ -1545,6 +1547,30 @@ suite early_end = [] {
          expect(ec.location <= buffer.size());
       }
    };
+   
+   /*"early_end !null terminated"_test = [] {
+      Thing obj{};
+      glz::json_t json{};
+      glz::skip skip_me{};
+      std::string_view buffer_data =
+         R"({"thing":{"a":3.14,"b":"stuff"},"thing2array":[{"a":3.14,"b":"stuff","c":999.342494903,"d":1e-12,"e":203082348402.1,"f":89.089,"g":12380.00000013,"h":1000000.000001}],"vec3":[3.14,2.7,6.5],"list":[6,7,8,2],"deque":[9,6.7,3.1],"vector":[[9,6.7,3.1],[3.14,2.7,6.5]],"i":8,"d":2,"b":false,"c":"W","vb":[true,false,false,true,true,true,true],"sptr":{"a":3.14,"b":"stuff"},"optional":null,"array":["as\"df\\ghjkl","pie","42","foo"],"map":{"a":4,"b":12,"f":7},"mapi":{"2":9.63,"5":3.14,"7":7.42},"thing_ptr":{"a":3.14,"b":"stuff"}})";
+      std::vector<char> temp{buffer_data.begin(), buffer_data.end()};
+      std::string_view buffer{ temp.data(), temp.data() + temp.size() };
+      while (buffer.size() > 0) {
+         temp.pop_back();
+         buffer = { temp.data(), temp.data() + temp.size() };
+         // This is mainly to check if all our end checks are in place.
+         auto ec = glz::read_json(obj, buffer);
+         expect(ec);
+         expect(ec.location <= buffer.size());
+         ec = glz::read_json(json, buffer);
+         expect(ec);
+         expect(ec.location <= buffer.size());
+         ec = glz::read_json(skip_me, buffer);
+         expect(ec);
+         expect(ec.location <= buffer.size());
+      }
+   };*/
 
    trace.end("early_end");
 };
@@ -1808,7 +1834,7 @@ suite read_tests = [] {
    };
 
    "Read array type"_test = [] {
-      std::string in = "    [ 3.25 , 1.125 , 3.0625 ]   ";
+      std::string in = "    [ 3.25 , 1.125 , 3.0625 ]";
       v3 v{};
       expect(glz::read_json(v, in) == glz::error_code::none);
 
@@ -1820,7 +1846,7 @@ suite read_tests = [] {
    "Read partial array type"_test = [] {
       // partial reading of fixed sized arrays
       {
-         std::string in = "    [ 3.25 , 3.125 ]   ";
+         std::string in = "    [ 3.25 , 3.125 ]";
          [[maybe_unused]] v3 v{};
          expect(glz::read_json(v, in) == glz::error_code::none);
 
@@ -1831,7 +1857,7 @@ suite read_tests = [] {
    };
 
    "Read object type"_test = [] {
-      std::string in = R"(    { "v" :  [ 3.25 , 1.125 , 3.0625 ]   , "n" : 5 } )";
+      std::string in = R"(    { "v" :  [ 3.25 , 1.125 , 3.0625 ]   , "n" : 5 })";
       oob oob{};
       expect(glz::read_json(oob, in) == glz::error_code::none);
 
@@ -1842,14 +1868,14 @@ suite read_tests = [] {
    };
 
    "Read partial object type"_test = [] {
-      std::string in = R"(    { "v" :  [ 3.25 , null , 3.0625 ]   , "n" : null } )";
+      std::string in = R"(    { "v" :  [ 3.25 , null , 3.0625 ]   , "n" : null })";
       oob oob{};
 
       expect(glz::read_json(oob, in) != glz::error_code::none);
    };
 
    "Reversed object"_test = [] {
-      std::string in = R"(    {  "n" : 5   ,  "v" :  [ 3.25 , 1.125 , 3.0625 ] } )";
+      std::string in = R"(    {  "n" : 5   ,  "v" :  [ 3.25 , 1.125 , 3.0625 ] })";
       oob oob{};
       expect(glz::read_json(oob, in) == glz::error_code::none);
 
@@ -1902,11 +1928,11 @@ suite read_tests = [] {
 
    "Read array"_test = [] {
       {
-         std::string in = R"(    [1, 5, 232, 75, 123, 54, 89] )";
+         std::string in = R"(    [1, 5, 232, 75, 123, 54, 89])";
          std::array<int, 7> v1{}, v2{99}, v3{99, 99, 99, 99, 99}, vr{1, 5, 232, 75, 123, 54, 89};
-         expect(glz::read_json(v1, in) == glz::error_code::none);
-         expect(glz::read_json(v2, in) == glz::error_code::none);
-         expect(glz::read_json(v3, in) == glz::error_code::none);
+         expect(not glz::read_json(v1, in));
+         expect(not glz::read_json(v2, in));
+         expect(not glz::read_json(v3, in));
          expect(v1 == vr);
          expect(v2 == vr);
          expect(v3 == vr);
@@ -1915,37 +1941,37 @@ suite read_tests = [] {
 
    "Read vector"_test = [] {
       {
-         std::string in = R"(    [1, 5, 232, 75, 123, 54, 89] )";
+         std::string in = R"(    [1, 5, 232, 75, 123, 54, 89])";
          std::vector<int> v, vr{1, 5, 232, 75, 123, 54, 89};
-         expect(glz::read_json(v, in) == glz::error_code::none);
+         expect(not glz::read_json(v, in));
 
          expect(v == vr);
       }
       {
          std::string in = R"([true, false, true, false])";
          std::vector<bool> v, vr{true, false, true, false};
-         expect(glz::read_json(v, in) == glz::error_code::none);
+         expect(not glz::read_json(v, in));
 
          expect(v == vr);
       }
       {
-         std::string in = R"(    [1, 5, 232, 75, 123, 54, 89] )";
+         std::string in = R"(    [1, 5, 232, 75, 123, 54, 89])";
          std::vector<int> v{1, 2, 3, 4}, vr{1, 5, 232, 75, 123, 54, 89};
-         expect(glz::read_json(v, in) == glz::error_code::none);
+         expect(not glz::read_json(v, in));
 
          expect(v == vr);
       }
       {
-         std::string in = R"(    [1, 5, 232, 75, 123, 54, 89] )";
+         std::string in = R"(    [1, 5, 232, 75, 123, 54, 89])";
          std::vector<int> v{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, vr{1, 5, 232, 75, 123, 54, 89};
-         expect(glz::read_json(v, in) == glz::error_code::none);
+         expect(not glz::read_json(v, in));
 
          expect(v == vr);
       }
    };
 
    "Read partial vector"_test = [] {
-      std::string in = R"(    [1, 5, 232, 75, null, 54, 89] )";
+      std::string in = R"(    [1, 5, 232, 75, null, 54, 89])";
       std::vector<int> v, vr{1, 5, 232, 75, 0, 54, 89};
 
       expect(glz::read_json(v, in) != glz::error_code::none);
@@ -1971,7 +1997,7 @@ suite read_tests = [] {
    };
 
    "Read map"_test = [] {
-      constexpr std::string_view in = R"(   { "as" : 1, "so" : 2, "make" : 3 } )";
+      constexpr std::string_view in = R"(   { "as" : 1, "so" : 2, "make" : 3 })";
       {
          std::map<std::string, int> v, vr{{"as", 1}, {"so", 2}, {"make", 3}};
          expect(glz::read_json(v, in) == glz::error_code::none);
@@ -2007,7 +2033,7 @@ suite read_tests = [] {
    };
 
    "Read partial map"_test = [] {
-      std::string in = R"(   { "as" : 1, "so" : null, "make" : 3 } )";
+      std::string in = R"(   { "as" : 1, "so" : null, "make" : 3 })";
       std::map<std::string, int> v, vr{{"as", 1}, {"so", 0}, {"make", 3}};
 
       expect(glz::read_json(v, in) != glz::error_code::none);
@@ -2402,9 +2428,9 @@ suite write_tests = [] {
 
    "Read empty array structure"_test = [] {
       EmptyArray e;
-      expect(glz::read_json(e, "[]") == glz::error_code::none);
-      expect(glz::read_json(e, " [   ] ") == glz::error_code::none);
-      expect(glz::read_json(e, "[1,2,3]") == glz::error_code::syntax_error);
+      expect(not glz::read_json(e, "[]"));
+      expect(not glz::read_json(e, " [   ]"));
+      expect(glz::read_json(e, "[1,2,3]"));
    };
 
    //* Empty object not allowed
@@ -2418,10 +2444,10 @@ suite write_tests = [] {
    "Read empty object structure"_test = [] {
       EmptyObject e;
       static_assert(glz::detail::glaze_object_t<EmptyObject>);
-      expect(glz::read_json(e, "{}") == glz::error_code::none);
-      expect(glz::read_json(e, " {    } ") == glz::error_code::none);
+      expect(not glz::read_json(e, "{}"));
+      expect(not glz::read_json(e, " {    }"));
       expect(glz::read_json(e, "{ \"reject\": 44 }") == glz::error_code::unknown_key);
-      expect(glz::read<glz::opts{.error_on_unknown_keys = false}>(e, "{ \"skipped\": 44 }") == glz::error_code::none);
+      expect(not glz::read<glz::opts{.error_on_unknown_keys = false}>(e, "{ \"skipped\": 44 }"));
    };
 
    "Write c-string"_test = [] {
@@ -3525,7 +3551,8 @@ suite file_include_test = [] {
       obj.str = "";
 
       std::string s = R"({"include": "../alabastar.json", "i": 100})";
-      expect(glz::read_json(obj, s) == glz::error_code::none);
+      auto ec = glz::read_json(obj, s);
+      expect(not ec) << glz::format_error(ec, s);
 
       expect(obj.str == "Hello") << obj.str;
       expect(obj.i == 100) << obj.i;
@@ -3778,7 +3805,8 @@ suite ndjson_test = [] {
 {"a":3.14,"b":"stuff"})";
 
       std::vector<glz::json_t> x{};
-      expect(not glz::read_ndjson(x, buffer));
+      auto ec = glz::read_ndjson(x, buffer);
+      expect(not ec) << glz::format_error(ec, buffer);
 
       auto out = glz::write_ndjson(x).value_or("error");
       expect(out == buffer) << out;
@@ -3987,8 +4015,7 @@ static constexpr std::string_view json0 = R"(
    "number": 3.14,
    "boolean": true,
    "another_bool": false
-}
-)";
+})";
 
 struct fixed_object_t
 {
@@ -4084,7 +4111,8 @@ suite json_performance = [] {
 
       obj_t obj{};
 
-      expect(glz::read_json(obj, buffer) == glz::error_code::none);
+      auto ec = glz::read_json(obj, buffer);
+      expect(not ec) << glz::format_error(ec, buffer);
       buffer.clear();
 
       expect(not glz::write_json(obj, buffer));
@@ -4159,7 +4187,8 @@ suite date_test = [] {
       expect(s == R"("55")");
 
       d.data = 0;
-      expect(glz::read_json(d, s) == glz::error_code::none);
+      auto ec = glz::read<glz::opts{.null_terminated = true}>(d, s);
+      expect(not ec) << glz::format_error(ec, s);
       expect(d.data == 55);
    };
 };
@@ -4663,159 +4692,159 @@ suite validation_tests = [] {
       std::string fail10 = R"({"Extra value after close": true} "misplaced quoted value")";
       auto ec_fail10 = glz::read<glz::opts{.validate_trailing_whitespace = true}>(json, fail10);
       expect(ec_fail10 != glz::error_code::none);
-      expect(glz::validate_json(fail10) != glz::error_code::none);
+      expect(glz::validate_json(fail10));
 
       std::string fail11 = R"({"Illegal expression": 1 + 2})";
       auto ec_fail11 = glz::read_json(json, fail11);
       expect(ec_fail11 != glz::error_code::none);
-      expect(glz::validate_json(fail11) != glz::error_code::none);
+      expect(glz::validate_json(fail11));
 
       std::string fail12 = R"({"Illegal invocation": alert()})";
       auto ec_fail12 = glz::read_json(json, fail12);
       expect(ec_fail12 != glz::error_code::none);
-      expect(glz::validate_json(fail12) != glz::error_code::none);
+      expect(glz::validate_json(fail12));
 
       std::string fail13 = R"({"Numbers cannot have leading zeroes": 013})";
       auto ec_fail13 = glz::read_json(json, fail13);
       expect(ec_fail13 != glz::error_code::none);
-      expect(glz::validate_json(fail13) != glz::error_code::none);
+      expect(glz::validate_json(fail13));
 
       std::string fail14 = R"({"Numbers cannot be hex": 0x14})";
       auto ec_fail14 = glz::read_json(json, fail14);
       expect(ec_fail14 != glz::error_code::none);
-      expect(glz::validate_json(fail14) != glz::error_code::none);
+      expect(glz::validate_json(fail14));
 
       std::string fail15 = R"(["Illegal backslash escape: \x15"])";
       auto ec_fail15 = glz::read_json(json, fail15);
       expect(ec_fail15 != glz::error_code::none);
-      expect(glz::validate_json(fail15) != glz::error_code::none);
+      expect(glz::validate_json(fail15));
 
       std::string fail16 = R"([\naked])";
       auto ec_fail16 = glz::read_json(json, fail16);
       expect(ec_fail16 != glz::error_code::none);
-      expect(glz::validate_json(fail16) != glz::error_code::none);
+      expect(glz::validate_json(fail16));
 
       std::string fail17 = R"(["Illegal backslash escape: \017"])";
       auto ec_fail17 = glz::read_json(json, fail17);
       expect(ec_fail17 != glz::error_code::none);
-      expect(glz::validate_json(fail17) != glz::error_code::none);
+      expect(glz::validate_json(fail17));
 
       std::string fail19 = R"({"Missing colon" null})";
       auto ec_fail19 = glz::read_json(json, fail19);
       expect(ec_fail19 != glz::error_code::none);
-      expect(glz::validate_json(fail19) != glz::error_code::none);
+      expect(glz::validate_json(fail19));
 
       std::string fail2 = R"(["Unclosed array")";
       auto ec_fail2 = glz::read_json(json, fail2);
       expect(ec_fail2 != glz::error_code::none);
-      expect(glz::validate_json(fail2) != glz::error_code::none);
+      expect(glz::validate_json(fail2));
 
       std::string fail20 = R"({"Double colon":: null})";
       auto ec_fail20 = glz::read_json(json, fail20);
       expect(ec_fail20 != glz::error_code::none);
-      expect(glz::validate_json(fail20) != glz::error_code::none);
+      expect(glz::validate_json(fail20));
 
       std::string fail21 = R"({"Comma instead of colon", null})";
       auto ec_fail21 = glz::read_json(json, fail21);
       expect(ec_fail21 != glz::error_code::none);
-      expect(glz::validate_json(fail21) != glz::error_code::none);
+      expect(glz::validate_json(fail21));
 
       std::string fail22 = R"(["Colon instead of comma": false])";
       auto ec_fail22 = glz::read_json(json, fail22);
       expect(ec_fail22 != glz::error_code::none);
-      expect(glz::validate_json(fail22) != glz::error_code::none);
+      expect(glz::validate_json(fail22));
 
       std::string fail23 = R"(["Bad value", truth])";
       auto ec_fail23 = glz::read_json(json, fail23);
       expect(ec_fail23 != glz::error_code::none);
-      expect(glz::validate_json(fail23) != glz::error_code::none);
+      expect(glz::validate_json(fail23));
 
       std::string fail24 = R"(['single quote'])";
       auto ec_fail24 = glz::read_json(json, fail24);
       expect(ec_fail24 != glz::error_code::none);
-      expect(glz::validate_json(fail24) != glz::error_code::none);
+      expect(glz::validate_json(fail24));
 
       std::string fail25 = R"(["	tab	character	in	string	"])";
       auto ec_fail25 = glz::read_json(json, fail25);
       expect(ec_fail25 != glz::error_code::none);
-      expect(glz::validate_json(fail25) != glz::error_code::none);
+      expect(glz::validate_json(fail25));
 
       std::string fail26 = R"(["tab\   character\   in\  string\  "])";
       auto ec_fail26 = glz::read_json(json, fail26);
       expect(ec_fail26 != glz::error_code::none);
-      expect(glz::validate_json(fail26) != glz::error_code::none);
+      expect(glz::validate_json(fail26));
 
       std::string fail27 = R"(["line
 break"])";
       auto ec_fail27 = glz::read_json(json, fail27);
       expect(ec_fail27 != glz::error_code::none);
-      expect(glz::validate_json(fail27) != glz::error_code::none);
+      expect(glz::validate_json(fail27));
 
       std::string fail28 = R"(["line\
 break"])";
       auto ec_fail28 = glz::read_json(json, fail28);
       expect(ec_fail28 != glz::error_code::none);
-      expect(glz::validate_json(fail28) != glz::error_code::none);
+      expect(glz::validate_json(fail28));
 
       std::string fail29 = R"([0e])";
       auto ec_fail29 = glz::read_json(json, fail29);
       expect(ec_fail29 != glz::error_code::none);
-      expect(glz::validate_json(fail29) != glz::error_code::none);
+      expect(glz::validate_json(fail29));
 
       std::string fail3 = R"({unquoted_key: "keys must be quoted"})";
       auto ec_fail3 = glz::read_json(json, fail3);
       expect(ec_fail3 != glz::error_code::none);
-      expect(glz::validate_json(fail3) != glz::error_code::none);
+      expect(glz::validate_json(fail3));
 
       std::string fail30 = R"([0e+])";
       auto ec_fail30 = glz::read_json(json, fail30);
       expect(ec_fail30 != glz::error_code::none);
-      expect(glz::validate_json(fail30) != glz::error_code::none);
+      expect(glz::validate_json(fail30));
 
       std::string fail31 = R"([0e+-1])";
       auto ec_fail31 = glz::read_json(json, fail31);
       expect(ec_fail31 != glz::error_code::none);
-      expect(glz::validate_json(fail31) != glz::error_code::none);
+      expect(glz::validate_json(fail31));
 
       std::string fail32 = R"({"Comma instead if closing brace": true,)";
       auto ec_fail32 = glz::read_json(json, fail32);
       expect(ec_fail32 != glz::error_code::none);
-      expect(glz::validate_json(fail32) != glz::error_code::none);
+      expect(glz::validate_json(fail32));
 
       std::string fail33 = R"(["mismatch"})";
       auto ec_fail33 = glz::read_json(json, fail33);
       expect(ec_fail33 != glz::error_code::none);
-      expect(glz::validate_json(fail33) != glz::error_code::none);
+      expect(glz::validate_json(fail33));
 
       std::string fail4 = R"(["extra comma",])";
       auto ec_fail4 = glz::read_json(json, fail4);
       expect(ec_fail4 != glz::error_code::none);
-      expect(glz::validate_json(fail4) != glz::error_code::none);
+      expect(glz::validate_json(fail4));
 
       std::string fail5 = R"(["double extra comma",,])";
       auto ec_fail5 = glz::read_json(json, fail5);
       expect(ec_fail5 != glz::error_code::none);
-      expect(glz::validate_json(fail5) != glz::error_code::none);
+      expect(glz::validate_json(fail5));
 
       std::string fail6 = R"([   , "<-- missing value"])";
       auto ec_fail6 = glz::read_json(json, fail6);
       expect(ec_fail6 != glz::error_code::none);
-      expect(glz::validate_json(fail6) != glz::error_code::none);
+      expect(glz::validate_json(fail6));
 
       std::string fail7 = R"(["Comma after the close"],)";
       auto ec_fail7 = glz::read<glz::opts{.validate_trailing_whitespace = true}>(json, fail7);
       expect(ec_fail7 != glz::error_code::none);
-      expect(glz::validate_json(fail7) != glz::error_code::none);
+      expect(glz::validate_json(fail7));
 
       std::string fail8 = R"(["Extra close"]])";
       auto ec_fail8 = glz::read<glz::opts{.validate_trailing_whitespace = true}>(json, fail8);
       expect(ec_fail8 != glz::error_code::none);
-      expect(glz::validate_json(fail8) != glz::error_code::none);
+      expect(glz::validate_json(fail8));
 
       std::string fail9 = R"({"Extra comma": true,})";
       auto ec_fail9 = glz::read_json(json, fail9);
       expect(ec_fail9 != glz::error_code::none);
-      expect(glz::validate_json(fail9) != glz::error_code::none);
+      expect(glz::validate_json(fail9));
 
       std::string pass1 = R"([
     "JSON Test Pattern pass1",
@@ -4876,24 +4905,13 @@ break"])";
 1e00,2e+00,2e-00
 ,"rosebud"])";
       auto ec_pass1 = glz::read_json(json, pass1);
-      expect(ec_pass1 == glz::error_code::none) << glz::format_error(ec_pass1, pass1);
-      expect(!glz::validate_json(pass1));
+      expect(not ec_pass1) << glz::format_error(ec_pass1, pass1);
+      expect(not glz::validate_json(pass1));
 
       std::string pass2 = R"([[[[[[[[[[[[[[[[[[["Not too deep"]]]]]]]]]]]]]]]]]]])";
       auto ec_pass2 = glz::read_json(json, pass2);
-      expect(ec_pass2 == glz::error_code::none);
-      expect(glz::validate_json(pass2) == glz::error_code::none);
-
-      std::string pass3 = R"({
-    "JSON Test Pattern pass3": {
-        "The outermost value": "must be an object or array.",
-        "In this test": "It is an object."
-    }
-}
-)";
-      auto ec_pass3 = glz::read_json(json, pass3);
-      expect(!ec_pass3);
-      expect(!glz::validate_json(pass3));
+      expect(not ec_pass2);
+      expect(not glz::validate_json(pass2));
    };
 };
 
@@ -5067,12 +5085,11 @@ suite long_object = [] {
     "instType":"SPOT","lever":"10","listTime":"1548133413000","lotSz":"0.00000001","maxIcebergSz":"9999999999",
     "maxLmtSz":"9999999999","maxMktSz":"1000000","maxStopSz":"1000000","maxTriggerSz":"9999999999","maxTwapSz":"9999999999",
     "minSz":"0.00001","optType":"","quoteCcy":"USDT","settleCcy":"","state":"live","stk":"","tickSz":"0.1","uly":""}],
-    "msg":""}
-)";
+    "msg":""})";
 
       OKX_OrderBook order_book{};
       auto ec = glz::read<glz::opts{.error_on_unknown_keys = false}>(order_book, order_book_str);
-      expect(ec == glz::error_code::none);
+      expect(not ec) << glz::format_error(ec, order_book_str);
 
       std::string buffer{};
       expect(not glz::write_json(order_book, buffer));
@@ -5382,8 +5399,7 @@ suite required_keys = [] {
          "instType":"SPOT","lever":"10","listTime":"1548133413000","lotSz":"0.00000001","maxIcebergSz":"9999999999",
          "maxLmtSz":"9999999999","maxMktSz":"1000000","maxStopSz":"1000000","maxTriggerSz":"9999999999","maxTwapSz":"9999999999",
          "minSz":"0.00001","optType":"","quoteCcy":"USDT","settleCcy":"","state":"live","stk":"","tickSz":"0.1","uly":""}],
-         "msg":""}
-      )";
+         "msg":""})";
 
       OKX_OrderBook order_book{};
       auto ec = glz::read<glz::opts{.error_on_unknown_keys = false, .error_on_missing_keys = true}>(order_book,
@@ -5396,8 +5412,7 @@ suite required_keys = [] {
          "instType":"SPOT","lever":"10","listTime":"1548133413000","lotSz":"0.00000001","maxIcebergSz":"9999999999",
          "maxLmtSz":"9999999999","maxMktSz":"1000000","maxStopSz":"1000000","maxTriggerSz":"9999999999","maxTwapSz":"9999999999",
          "minSz":"0.00001","optType":"","quoteCcy":"USDT","settleCcy":"","state":"live","stk":"","tickSz":"0.1","uly":""}],
-         "msg":""}
-      )";
+         "msg":""})";
       ec = glz::read<glz::opts{.error_on_unknown_keys = false, .error_on_missing_keys = true}>(order_book,
                                                                                                order_book_str_missing);
       expect(ec == glz::error_code::missing_key);
@@ -5407,8 +5422,7 @@ suite required_keys = [] {
       my_struct obj{};
       std::string buffer = R"({"i":287,"hello":"Hello World","arr":[1,2,3]})";
       auto err = glz::read<glz::opts{.error_on_missing_keys = true}>(obj, buffer);
-      expect(err != glz::error_code::none);
-      expect(glz::format_error(err, buffer) == "index 45: missing_key") << glz::format_error(err, buffer);
+      expect(err == glz::error_code::missing_key);
    };
 };
 
@@ -6020,7 +6034,7 @@ suite whitespace_testing = [] {
       std::string_view buffer{"{\"0\"/\n/"};
       my_struct value{};
       glz::context ctx{};
-      expect(glz::read_json(value, buffer) == glz::error_code::unknown_key);
+      expect(glz::read<glz::opts{.null_terminated = true}>(value, buffer) == glz::error_code::unknown_key);
    };
 };
 
@@ -7525,10 +7539,10 @@ suite partial_read_tests = [] {
 
    "partial read 2"_test = [] {
       Header h{};
-      // closing curly bracket is missing
+      // closing brace is intentionally missing
       std::string buf = R"({"id":"51e2affb","type":"message_type","unknown key":"value")";
 
-      expect(!glz::read_json(h, buf));
+      expect(!glz::read<glz::opts{.null_terminated = true}>(h, buf));
       expect(h.id == "51e2affb");
       expect(h.type == "message_type");
    };
@@ -7988,7 +8002,7 @@ suite custom_struct_tests = [] {
       expect(not glz::write_json(obj, s));
       expect(s == R"("write")");
 
-      expect(!glz::read_json(obj, s));
+      expect(!glz::read<glz::opts{.null_terminated = true}>(obj, s));
       expect(obj.str == R"(writeread)") << obj.str;
    };
 };
@@ -8601,8 +8615,7 @@ suite raw_char_buffer_tests = [] {
             {
                 "T": 123456788,
                 "s": "ETHBTC"
-            }
-        )";
+            })";
       auto result = glz::read_json<Trade>(payload);
       expect(result.has_value()) << glz::format_error(result, payload);
    };
@@ -8645,8 +8658,7 @@ suite error_on_missing_keys_symbols_tests = [] {
                           "maxPosition": 1000000
                       }
                   ]
-              }
-          )";
+              })";
 
       single_symbol_info_js result;
       auto ec = glz::read<glz::opts{

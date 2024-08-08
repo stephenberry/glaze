@@ -357,10 +357,10 @@ namespace glz::detail
       ++it;                                   \
    }
 
-#define GLZ_MATCH_COMMA                       \
+#define GLZ_MATCH_COMMA(RETURN)               \
    if (*it != ',') [[unlikely]] {             \
       ctx.error = error_code::expected_comma; \
-      return;                                 \
+      return RETURN;                          \
    }                                          \
    else [[likely]] {                          \
       ++it;                                   \
@@ -383,15 +383,20 @@ namespace glz::detail
    else [[likely]] {                            \
       ++it;                                     \
    }
-
-#define GLZ_MATCH_CLOSE_BRACKET                 \
-   if (*it != ']') [[unlikely]] {               \
+   
+#define GLZ_MATCH_CLOSE_BRACKET if (*it != ']') [[unlikely]] { \
       ctx.error = error_code::expected_bracket; \
-      return;                                   \
-   }                                            \
-   else [[likely]] {                            \
-      ++it;                                     \
-   }
+      return; \
+   } \
+   if constexpr (not Opts.null_terminated) { \
+      --ctx.indentation_level; \
+      if (it == end) { \
+         ++it; \
+         ctx.error = error_code::bracket_sentinel; \
+         return; \
+      } \
+   } \
+   ++it;
 
 #define GLZ_MATCH_OPEN_BRACE                  \
    if (*it != '{') [[unlikely]] {             \
@@ -401,15 +406,20 @@ namespace glz::detail
    else [[likely]] {                          \
       ++it;                                   \
    }
-
-#define GLZ_MATCH_CLOSE_BRACE                 \
-   if (*it != '}') [[unlikely]] {             \
+   
+#define GLZ_MATCH_CLOSE_BRACE if (*it != '}') [[unlikely]] { \
       ctx.error = error_code::expected_brace; \
-      return;                                 \
-   }                                          \
-   else [[likely]] {                          \
-      ++it;                                   \
-   }
+      return; \
+   } \
+   if constexpr (not Opts.null_terminated) { \
+      --ctx.indentation_level; \
+      if (it == end) { \
+         ++it; \
+         ctx.error = error_code::brace_sentinel; \
+         return; \
+      } \
+   } \
+   ++it;
 
    template <char c>
    GLZ_ALWAYS_INLINE void match(is_context auto&& ctx, auto&& it) noexcept
@@ -564,6 +574,21 @@ namespace glz::detail
          }
          else {
             while (whitespace_table[uint8_t(*it)]) {
+               ++it;
+            }
+         }
+      }
+   }
+   
+   template <opts Opts>
+   GLZ_ALWAYS_INLINE void skip_ws_end_checks(is_context auto&& ctx, auto&& it, auto&& end) noexcept
+   {
+      if constexpr (!Opts.minified) {
+         if constexpr (Opts.comments) {
+            static_assert(false_v<decltype(ctx)>, "Skipping non-null terminated buffers does not support comments");
+         }
+         else {
+            while (it < end && whitespace_table[uint8_t(*it)]) {
                ++it;
             }
          }

@@ -37,6 +37,7 @@ namespace glz
    {
       // USER CONFIGURABLE
       uint32_t format = json;
+      bool_t null_terminated = false; // Buffer is null terminated (improves performance)
       bool_t comments = false; // Support reading in JSONC style comments
       bool_t error_on_unknown_keys = true; // Error when an unknown key is encountered
       bool_t skip_null_members = true; // Skip writing out params in an object if the value is null

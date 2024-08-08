@@ -276,7 +276,7 @@ namespace glz
                      }
                   }
 
-                  GLZ_MATCH_COMMA;
+                  GLZ_MATCH_COMMA();
 
                   using key_type = typename std::decay_t<decltype(value)>::key_type;
                   auto& member = value[key_type(key)];
@@ -455,7 +455,7 @@ namespace glz
                      }
                   }
 
-                  GLZ_MATCH_COMMA;
+                  GLZ_MATCH_COMMA();
 
                   const auto& member_it = frozen_map.find(key);
 
