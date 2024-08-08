@@ -1724,6 +1724,9 @@ namespace glz
             GLZ_SKIP_WS();
 
             invoke_table<N>([&]<size_t I>() {
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
+               
                if (*it == ']') {
                   GLZ_SUB_LEVEL;
                   return;
@@ -2054,7 +2057,18 @@ namespace glz
                read<json>::op<Opts>(key, ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
                   return;
-               read<json>::op<Opts>(value.first, ctx, key.data(), key.data() + key.size());
+               if constexpr (Opts.null_terminated) {
+                  read<json>::op<Opts>(value.first, ctx, key.data(), key.data() + key.size());
+               }
+               else {
+                  if (size_t(end - it) == key.size()) [[unlikely]] {
+                     ctx.error = error_code::unexpected_end;
+                     return;
+                  }
+                  // For the non-null terminated case we just want one more character so that we don't parse
+                  // until the end of the buffer and create an end_reached code (unless there is an error).
+                  read<json>::op<Opts>(value.first, ctx, key.data(), key.data() + key.size() + 1);
+               }
                if (bool(ctx.error)) [[unlikely]]
                   return;
             }
