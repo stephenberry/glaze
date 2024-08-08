@@ -2589,6 +2589,8 @@ namespace glz
                      ctx.error = error_code::exceeded_max_recursive_depth;
                      return;
                   }
+                  // In the null terminated case this guards for stack overflow
+                  // Depth counting is done at the object level when not null terminated
                   ++ctx.indentation_level;
 
                   ++it;
@@ -2603,7 +2605,11 @@ namespace glz
                      using V = glz::tuple_element_t<0, object_types>;
                      if (!std::holds_alternative<V>(value)) value = V{};
                      read<json>::op<opening_handled<Opts>()>(std::get<V>(value), ctx, it, end);
-                     --ctx.indentation_level;
+                     if constexpr (Opts.null_terminated) {
+                        // In the null terminated case this guards for stack overflow
+                        // Depth counting is done at the object level when not null terminated
+                        --ctx.indentation_level;
+                     }
                      return;
                   }
                   else {
@@ -2683,7 +2689,11 @@ namespace glz
                                        },
                                        value);
 
-                                    --ctx.indentation_level;
+                                    if constexpr (Opts.null_terminated) {
+                                       // In the null terminated case this guards for stack overflow
+                                       // Depth counting is done at the object level when not null terminated
+                                       --ctx.indentation_level;
+                                    }
                                     return; // we've decoded our target type
                                  }
                                  else [[unlikely]] {
@@ -2785,7 +2795,11 @@ namespace glz
                               },
                               value);
 
-                           --ctx.indentation_level;
+                           if constexpr (Opts.null_terminated) {
+                              // In the null terminated case this guards for stack overflow
+                              // Depth counting is done at the object level when not null terminated
+                              --ctx.indentation_level;
+                           }
                            return; // we've decoded our target type
                         }
                         parse_object_entry_sep<Opts>(ctx, it, end);
@@ -2807,9 +2821,15 @@ namespace glz
                      ctx.error = error_code::exceeded_max_recursive_depth;
                      return;
                   }
-                  ++ctx.indentation_level;
+                  if constexpr (Opts.null_terminated) {
+                     // In the null terminated case this guards for stack overflow
+                     // Depth counting is done at the object level when not null terminated
+                     ++ctx.indentation_level;
+                  }
                   process_arithmetic_boolean_string_or_array<array_types>::template op<Opts>(value, ctx, it, end);
-                  --ctx.indentation_level;
+                  if constexpr (Opts.null_terminated) {
+                     --ctx.indentation_level;
+                  }
                   break;
                case '"': {
                   using string_types = typename variant_types<T>::string_types;

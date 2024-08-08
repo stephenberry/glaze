@@ -1495,6 +1495,14 @@ suite json_pointer = [] {
 
 suite early_end = [] {
    using namespace ut;
+   
+   "should error"_test = [] {
+      std::string_view buffer = R"({"thing":{"a":3.14/*Test comment 1*/,"b":"stuff"/*Test comment 2*/},"thing2array":[{"a":3.14/*Test comment 1*/,"b":"stuff"/*Test comment 2*/,"c":999.342494903,"d":1e-12,"e":203082348402.1,"f":89.089,"g":12380.00000013,)";
+      
+      glz::json_t json{};
+      static constexpr glz::opts options{.comments = true};
+      expect(glz::read<options>(json, buffer));
+   };
 
    "early_end comments"_test = [] {
       trace.begin("early_end");
