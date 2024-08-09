@@ -3160,6 +3160,14 @@ struct glz::meta<variant_obj>
    static constexpr auto value = object("v", &T::v);
 };
 
+struct var_a1{
+   int i{};
+};
+
+struct var_a2{
+   double i{};
+};
+
 suite variant_tests = [] {
    "variant_write_tests"_test = [] {
       std::variant<double, std::string> d = "not_a_fish";
@@ -3183,6 +3191,15 @@ suite variant_tests = [] {
       expect(glz::read_json(x, "33") == glz::error_code::none);
       expect(std::get<int32_t>(x) == 33);
    };
+   
+   // TODO: Make reading into the active element work here
+   /*"variant read active"_test = [] {
+      std::variant<var_a1, var_a2> v = var_a2{};
+      std::string json = R"({"i":6})";
+      expect(not glz::read_json(v, json));
+      expect(v.index() == 1);
+      expect(std::get<var_a2>(v).i == 6);
+   };*/
 
    "variant_read_auto"_test = [] {
       // Auto deduce variant with no conflicting basic types
