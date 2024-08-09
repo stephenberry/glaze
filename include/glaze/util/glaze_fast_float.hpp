@@ -26,7 +26,7 @@ namespace glz
       answer.negative = (*p == UC('-'));
       if (*p == UC('-')) { // C++17 20.19.3.(7.1) explicitly forbids '+' sign here
          ++p;
-         if (!is_integer(*p)) { // a sign must be followed by an integer
+         if (!is_integer(*p)) [[unlikely]] { // a sign must be followed by an integer
             return answer;
          }
       }
@@ -75,7 +75,7 @@ namespace glz
       int64_t exp_number = 0; // explicit exponential part
       if ((UC('e') == *p) || (UC('E') == *p)) {
          UC const* location_of_e = p;
-         if ((UC('e') == *p) || (UC('E') == *p) || (UC('d') == *p) || (UC('D') == *p)) {
+         if ((UC('e') == *p) || (UC('E') == *p)) {
             ++p;
          }
          bool neg_exp = false;
