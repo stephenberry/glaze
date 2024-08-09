@@ -93,13 +93,15 @@ namespace glz
    struct context final
    {
       error_code error{};
-      std::string_view custom_error_message{};
+      std::string_view custom_error_message;
       // INTERNAL USE:
       uint32_t indentation_level{}; // When writing this is the number of indent character to serialize
       // When reading indentation_level is used to track the depth of structures to prevent stack overflows
       // From massive depths due to untrusted inputs or attacks
       std::string current_file; // top level file path
-      std::string_view includer_error{}; // error from a nested file includer
+      std::string_view includer_error; // error from a nested file includer
+      // NOTE: The default constructor is valid for std::string_view, so we use this rather than {}
+      // because debuggers like jumping to std::string_view initialization calls
    };
 
    template <class T>
