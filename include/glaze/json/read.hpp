@@ -1177,11 +1177,11 @@ namespace glz
                if constexpr (!has_ws_handled(Opts)) {
                   GLZ_SKIP_WS();
                }
-               
-               GLZ_MATCH_QUOTE;
 
                constexpr auto& HashInfo = hash_info<T>;
                if constexpr (bool(HashInfo.type)) {
+                  GLZ_MATCH_QUOTE;
+                  
                   constexpr auto type = HashInfo.type;
                   constexpr auto N = HashInfo.N;
 
