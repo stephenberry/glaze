@@ -1178,21 +1178,91 @@ namespace glz
                   GLZ_SKIP_WS();
                }
 
-               const auto key = parse_key(ctx, it, end); // TODO: Use more optimal enum key parsing
-               if (bool(ctx.error)) [[unlikely]]
-                  return;
+               constexpr auto& HashInfo = hash_info<T>;
+               if constexpr (bool(HashInfo.type)) {
+                  GLZ_MATCH_QUOTE;
+                  
+                  constexpr auto type = HashInfo.type;
+                  constexpr auto N = HashInfo.N;
 
-               // TODO: use a compile time hash map
-               constexpr auto& names = enum_names(T{});
-               for (size_t i = 0; i < names.size(); ++i) {
-                  if (key == names[i]) {
-                     value = static_cast<std::decay_t<T>>(i);
+                  const auto index = [&]() -> size_t {
+                     using enum hash_type;
+                     if constexpr (type == unique_index) {
+                        if constexpr (HashInfo.sized_hash) {
+                           const auto* c = std::memchr(it, '"', size_t(end - it));
+                           if (c) [[likely]] {
+                              const auto n = size_t(static_cast<std::decay_t<decltype(it)>>(c) - it);
+                              if (n == 0 || n > HashInfo.max_length) {
+                                 return N; // error
+                              }
+
+                              const auto h = bitmix(uint16_t(it[HashInfo.unique_index]) | (uint16_t(n) << 8), HashInfo.seed);
+                              static constexpr auto bsize = bucket_size(unique_index, N);
+                              return HashInfo.table[h % bsize];
+                           }
+                           else [[unlikely]] {
+                              return N;
+                           }
+                        }
+                        else {
+                           static constexpr auto uindex = HashInfo.unique_index;
+                           if constexpr (uindex > 0) {
+                              if ((it + uindex) >= end) [[unlikely]] {
+                                 return N; // error
+                              }
+                           }
+                           return HashInfo.table[uint8_t(it[uindex])];
+                        }
+                     }
+                     else if constexpr (type == front_16) {
+                        static constexpr auto bsize = bucket_size(front_16, N);
+                        // we don't need to check for second character because we are null terminated
+                        uint16_t h;
+                        std::memcpy(&h, it, 2);
+                        return HashInfo.table[bitmix(h, HashInfo.seed) % bsize];
+                     }
+                     else {
+                        static_assert(false_v<T>, "invalid hash algorithm");
+                     }
+                  }();
+
+                  if (index >= N) [[unlikely]] {
+                     ctx.error = error_code::unexpected_enum;
                      return;
                   }
+                  
+                  jump_table<N>([&]<size_t I>() {
+                     static constexpr auto TargetKey = get<I>(refl<T>.keys);
+                     static constexpr auto Length = TargetKey.size();
+                     if ((it + Length) >= end) [[unlikely]] {
+                        ctx.error = error_code::unexpected_enum;
+                     }
+                     else [[likely]] {
+                        it += Length;
+                     }
+                  }, index);
+                  
+                  GLZ_MATCH_QUOTE;
+                  
+                  value = static_cast<std::decay_t<T>>(index);
+                  return;
                }
-
-               ctx.error = error_code::unexpected_enum;
-               return;
+               else {
+                  const auto key = parse_key(ctx, it, end); // TODO: Use more optimal enum key parsing
+                  if (bool(ctx.error)) [[unlikely]]
+                     return;
+                  
+                  // TODO: use a compile time hash map
+                  constexpr auto& names = enum_names(T{});
+                  for (size_t i = 0; i < names.size(); ++i) {
+                     if (key == names[i]) {
+                        value = static_cast<std::decay_t<T>>(i);
+                        return;
+                     }
+                  }
+                  ctx.error = error_code::unexpected_enum;
+                  return;
+               }
             }
             else {
                // TODO: use std::bit_cast???
