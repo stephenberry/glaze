@@ -9,7 +9,7 @@
 #include "glaze/core/read.hpp"
 #include "glaze/core/refl.hpp"
 #include "glaze/file/file_ops.hpp"
-#include "glaze/util/fast_float.hpp"
+#include "glaze/util/glaze_fast_float.hpp"
 #include "glaze/util/parse.hpp"
 
 namespace glz
@@ -109,8 +109,7 @@ namespace glz
                }
             }
             else {
-               static constexpr fast_float::parse_options options{fast_float::chars_format::json};
-               auto [ptr, ec] = fast_float::from_chars_advanced(it, end, value, options);
+               auto [ptr, ec] = glz::from_chars(it, end, value);
                if (ec != std::errc()) [[unlikely]] {
                   ctx.error = error_code::parse_number_failure;
                   return;
