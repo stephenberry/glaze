@@ -551,7 +551,7 @@ suite multi_threading_tests = [] {
 
       registry.on(obj);
 
-      constexpr size_t N = 10'000;
+      static constexpr size_t N = 10'000;
 
       auto read_str = repe::request_json({"/str"}).value();
 
