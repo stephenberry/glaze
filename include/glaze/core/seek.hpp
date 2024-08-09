@@ -6,7 +6,7 @@
 #include "glaze/core/read.hpp"
 #include "glaze/core/refl.hpp"
 #include "glaze/core/write.hpp"
-#include "glaze/util/fast_float.hpp"
+#include "glaze/util/glaze_fast_float.hpp"
 
 // Use JSON Pointer syntax to seek to a specific element
 // https://github.com/stephenberry/JSON-Pointer
@@ -85,7 +85,7 @@ namespace glz::detail
       else if constexpr (std::floating_point<Key>) {
          static constexpr fast_float::parse_options options{fast_float::chars_format::json};
          auto [ptr, ec] =
-            fast_float::from_chars_advanced(json_ptr.data(), json_ptr.data() + json_ptr.size(), key, options);
+            glz::from_chars_advanced(json_ptr.data(), json_ptr.data() + json_ptr.size(), key, options);
          if (ec != std::errc()) [[unlikely]] {
             return false;
          }

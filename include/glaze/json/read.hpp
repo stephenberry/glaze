@@ -19,7 +19,7 @@
 #include "glaze/json/json_concepts.hpp"
 #include "glaze/json/json_t.hpp"
 #include "glaze/json/skip.hpp"
-#include "glaze/util/fast_float.hpp"
+#include "glaze/util/glaze_fast_float.hpp"
 #include "glaze/util/for_each.hpp"
 #include "glaze/util/type_traits.hpp"
 #include "glaze/util/variant.hpp"
@@ -633,7 +633,7 @@ namespace glz
                      // place
                      V temp;
                      static constexpr fast_float::parse_options options{fast_float::chars_format::json};
-                     auto [ptr, ec] = fast_float::from_chars_advanced(it, end, temp, options);
+                     auto [ptr, ec] = glz::from_chars_advanced(it, end, temp, options);
                      if (ec != std::errc()) [[unlikely]] {
                         ctx.error = error_code::parse_number_failure;
                         return;
@@ -643,7 +643,7 @@ namespace glz
                   }
                   else {
                      static constexpr fast_float::parse_options options{fast_float::chars_format::json};
-                     auto [ptr, ec] = fast_float::from_chars_advanced(it, end, value, options);
+                     auto [ptr, ec] = glz::from_chars_advanced(it, end, value, options);
                      if (ec != std::errc()) [[unlikely]] {
                         ctx.error = error_code::parse_number_failure;
                         return;
