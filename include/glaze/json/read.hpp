@@ -1181,7 +1181,7 @@ namespace glz
                constexpr auto& HashInfo = hash_info<T>;
                if constexpr (bool(HashInfo.type)) {
                   GLZ_MATCH_QUOTE;
-                  
+
                   constexpr auto type = HashInfo.type;
                   constexpr auto N = HashInfo.N;
 
@@ -1196,7 +1196,8 @@ namespace glz
                                  return N; // error
                               }
 
-                              const auto h = bitmix(uint16_t(it[HashInfo.unique_index]) | (uint16_t(n) << 8), HashInfo.seed);
+                              const auto h =
+                                 bitmix(uint16_t(it[HashInfo.unique_index]) | (uint16_t(n) << 8), HashInfo.seed);
                               static constexpr auto bsize = bucket_size(unique_index, N);
                               return HashInfo.table[h % bsize];
                            }
@@ -1230,20 +1231,22 @@ namespace glz
                      ctx.error = error_code::unexpected_enum;
                      return;
                   }
-                  
-                  jump_table<N>([&]<size_t I>() {
-                     static constexpr auto TargetKey = get<I>(refl<T>.keys);
-                     static constexpr auto Length = TargetKey.size();
-                     if ((it + Length) >= end) [[unlikely]] {
-                        ctx.error = error_code::unexpected_enum;
-                     }
-                     else [[likely]] {
-                        it += Length;
-                     }
-                  }, index);
-                  
+
+                  jump_table<N>(
+                     [&]<size_t I>() {
+                        static constexpr auto TargetKey = get<I>(refl<T>.keys);
+                        static constexpr auto Length = TargetKey.size();
+                        if ((it + Length) >= end) [[unlikely]] {
+                           ctx.error = error_code::unexpected_enum;
+                        }
+                        else [[likely]] {
+                           it += Length;
+                        }
+                     },
+                     index);
+
                   GLZ_MATCH_QUOTE;
-                  
+
                   value = static_cast<std::decay_t<T>>(index);
                   return;
                }
@@ -1251,7 +1254,7 @@ namespace glz
                   const auto key = parse_key(ctx, it, end); // TODO: Use more optimal enum key parsing
                   if (bool(ctx.error)) [[unlikely]]
                      return;
-                  
+
                   // TODO: use a compile time hash map
                   constexpr auto& names = enum_names(T{});
                   for (size_t i = 0; i < names.size(); ++i) {

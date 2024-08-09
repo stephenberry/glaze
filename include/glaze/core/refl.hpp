@@ -197,7 +197,7 @@ namespace glz
       template <size_t I>
       using type = detail::member_t<V, decltype(get<I>(values))>;
    };
-   
+
    template <class T>
       requires(not detail::glaze_enum_t<T> && has_nameof<T> && std::is_enum_v<std::remove_cvref_t<T>>)
    struct refl_info<T>
@@ -207,7 +207,7 @@ namespace glz
       static constexpr auto keys = enum_names(V{});
 
       static constexpr auto N = keys.size();
-      
+
       template <size_t I>
       using elem = V;
 
@@ -1165,7 +1165,9 @@ namespace glz::detail
 
    template <class T>
    constexpr auto hash_info = [] {
-      if constexpr ((glaze_object_t<T> || reflectable<T> || (has_nameof<T> && std::is_enum_v<std::remove_cvref_t<T>>))&&(refl<T>.N > 0)) {
+      if constexpr ((glaze_object_t<T> || reflectable<T> ||
+                     (has_nameof<T> && std::is_enum_v<std::remove_cvref_t<T>>)) &&
+                    (refl<T>.N > 0)) {
          constexpr auto& k_info = keys_info<T>;
          constexpr auto& type = k_info.type;
          constexpr auto& N = refl<T>.N;
