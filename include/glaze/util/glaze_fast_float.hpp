@@ -58,7 +58,7 @@ namespace glz
          // for integers with many digits, digit parsing is the primary bottleneck.
          loop_parse_if_eight_digits(p, pend, i);
 
-         while ((p != pend) && is_integer(*p)) {
+         while (is_integer(*p)) {
             uint8_t digit = uint8_t(*p - UC('0'));
             ++p;
             i = i * 10 + digit; // in rare cases, this will overflow, but that's ok
@@ -79,14 +79,14 @@ namespace glz
             ++p;
          }
          bool neg_exp = false;
-         if ((p != pend) && (UC('-') == *p)) {
+         if (UC('-') == *p) {
             neg_exp = true;
             ++p;
          }
-         else if ((p != pend) && (UC('+') == *p)) { // '+' on exponent is allowed by C++17 20.19.3.(7.1)
+         else if (UC('+') == *p) { // '+' on exponent is allowed by C++17 20.19.3.(7.1)
             ++p;
          }
-         if ((p == pend) || !is_integer(*p)) {
+         if (!is_integer(*p)) {
             if (!(fmt & chars_format::fixed)) {
                // We are in error.
                return answer;
@@ -95,7 +95,7 @@ namespace glz
             p = location_of_e;
          }
          else {
-            while ((p != pend) && is_integer(*p)) {
+            while (is_integer(*p)) {
                uint8_t digit = uint8_t(*p - UC('0'));
                if (exp_number < 0x10000000) {
                   exp_number = 10 * exp_number + digit;
@@ -122,7 +122,7 @@ namespace glz
          // We need to be mindful of the case where we only have zeroes...
          // E.g., 0.000000000...000.
          UC const* start = start_digits;
-         while ((start != pend) && (*start == UC('0') || *start == decimal_point)) {
+         while ((*start == UC('0') || *start == decimal_point)) {
             if (*start == UC('0')) {
                digit_count--;
             }
