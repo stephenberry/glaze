@@ -917,8 +917,7 @@ namespace glz::detail
 
       std::vector<std::vector<uint8_t>> cols(min_length);
 
-      for (size_t i = 0; i < N; ++i) {
-         const auto& s = strings[i];
+      for (const auto& s : strings) {
          // for each character in the string
          for (size_t c = 0; c < min_length; ++c) {
             cols[c].emplace_back(s[c]);
@@ -1014,7 +1013,7 @@ namespace glz::detail
 
       keys_info_t info{N};
 
-      if (N == 0) {
+      if constexpr (N == 0) {
          return info;
       }
 
@@ -1151,8 +1150,8 @@ namespace glz::detail
    constexpr auto hash_info = [] {
       if constexpr ((glaze_object_t<T> || reflectable<T>)&&(refl<T>.N > 0)) {
          constexpr auto& k_info = keys_info<T>;
-         constexpr auto type = k_info.type;
-         constexpr auto N = refl<T>.N;
+         constexpr auto& type = k_info.type;
+         constexpr auto& N = refl<T>.N;
          constexpr auto& keys = refl<T>.keys;
 
          using enum hash_type;
