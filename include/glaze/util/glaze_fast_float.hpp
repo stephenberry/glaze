@@ -13,8 +13,8 @@ namespace glz
    // Assuming that you use no more than 19 digits, this will
    // parse an ASCII string.
    template <class UC>
-   GLZ_ALWAYS_INLINE constexpr fast_float::parsed_number_string_t<UC> parse_number_string(
-      UC const* p, UC const* pend) noexcept
+   GLZ_ALWAYS_INLINE constexpr fast_float::parsed_number_string_t<UC> parse_number_string(UC const* p,
+                                                                                          UC const* pend) noexcept
    {
       using namespace fast_float;
       static constexpr UC decimal_point = '.';
@@ -42,7 +42,7 @@ namespace glz
       UC const* const end_of_integer_part = p;
       int64_t digit_count = int64_t(end_of_integer_part - start_digits);
       answer.integer = fast_float::span<const UC>(start_digits, size_t(digit_count));
-      
+
       // at least 1 digit in integer part, without leading zeros
       if (digit_count == 0 || (start_digits[0] == UC('0') && digit_count > 1)) {
          return answer;
@@ -70,7 +70,7 @@ namespace glz
       if (has_decimal_point && exponent == 0) {
          return answer;
       }
-      
+
       int64_t exp_number = 0; // explicit exponential part
       if ((UC('e') == *p) || (UC('E') == *p)) {
          UC const* location_of_e = p;

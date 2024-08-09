@@ -19,8 +19,8 @@
 #include "glaze/json/json_concepts.hpp"
 #include "glaze/json/json_t.hpp"
 #include "glaze/json/skip.hpp"
-#include "glaze/util/glaze_fast_float.hpp"
 #include "glaze/util/for_each.hpp"
+#include "glaze/util/glaze_fast_float.hpp"
 #include "glaze/util/type_traits.hpp"
 #include "glaze/util/variant.hpp"
 
