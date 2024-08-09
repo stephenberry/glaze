@@ -123,8 +123,7 @@ namespace glz::detail
    {
       constexpr auto& t = digit_hex_table;
       const uint8_t arr[4]{t[uint8_t(c[3])], t[uint8_t(c[2])], t[uint8_t(c[1])], t[uint8_t(c[0])]};
-      uint32_t chunk;
-      std::memcpy(&chunk, arr, 4);
+      const auto chunk = std::bit_cast<uint32_t>(arr);
       // check that all hex characters are valid
       if (chunk & repeat_byte4(0b11110000u)) [[unlikely]] {
          return 0xFFFFFFFFu;

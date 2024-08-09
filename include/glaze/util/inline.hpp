@@ -3,7 +3,7 @@
 
 #pragma once
 
-#if defined(__clang__) || defined(__GNUC__)
+#if defined(__clang__) || defined(__GNUC__) || defined(_MSC_VER)
 #ifndef GLZ_USE_ALWAYS_INLINE
 #define GLZ_USE_ALWAYS_INLINE
 #endif
@@ -11,7 +11,11 @@
 
 #if defined(GLZ_USE_ALWAYS_INLINE) && defined(NDEBUG)
 #ifndef GLZ_ALWAYS_INLINE
+#if defined(_MSC_VER)
+#define GLZ_ALWAYS_INLINE [[msvc::forceinline]] inline
+#else
 #define GLZ_ALWAYS_INLINE inline __attribute__((always_inline))
+#endif
 #endif
 #endif
 

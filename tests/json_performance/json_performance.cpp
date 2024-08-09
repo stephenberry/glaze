@@ -485,13 +485,13 @@ struct test_generator
       if (theResult < 0) {
          theResult = -theResult;
       }
-      return theResult;
+      return static_cast<value_type_new>(theResult);
    }
 
    template <class V>
    V randomizeNumberUniform(V range)
    {
-      std::uniform_int_distribution<uint64_t> dis(0, range);
+      std::uniform_int_distribution<uint64_t> dis(0, uint64_t(range));
       return static_cast<V>(dis(gen));
    }
 
@@ -500,11 +500,11 @@ struct test_generator
    std::string generateString()
    {
       auto length{randomizeNumberNormal(64.0f, 16.0f)};
-      static constexpr uint32_t charsetSize = charset.size();
+      static constexpr auto charsetSize = charset.size();
       auto unicodeCount = randomizeNumberUniform(length / 8);
       std::string result{};
-      for (int32_t x = 0; x < length; ++x) {
-         if (x == static_cast<int32_t>(length / unicodeCount)) {
+      for (int32_t ix = 0; ix < length; ++ix) {
+         if (ix == static_cast<int32_t>(length / unicodeCount)) {
             insertUnicodeInJSON(result);
          }
          result += charset[randomizeNumberUniform(charsetSize - 1)];
