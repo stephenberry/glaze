@@ -109,8 +109,7 @@ namespace glz
                }
             }
             else {
-               static constexpr fast_float::parse_options options{fast_float::chars_format::json};
-               auto [ptr, ec] = glz::from_chars_advanced(it, end, value, options);
+               auto [ptr, ec] = glz::from_chars(it, end, value);
                if (ec != std::errc()) [[unlikely]] {
                   ctx.error = error_code::parse_number_failure;
                   return;

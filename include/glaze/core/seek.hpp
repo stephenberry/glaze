@@ -83,9 +83,8 @@ namespace glz::detail
          json_ptr = json_ptr.substr(i);
       }
       else if constexpr (std::floating_point<Key>) {
-         static constexpr fast_float::parse_options options{fast_float::chars_format::json};
          auto [ptr, ec] =
-            glz::from_chars_advanced(json_ptr.data(), json_ptr.data() + json_ptr.size(), key, options);
+            glz::from_chars(json_ptr.data(), json_ptr.data() + json_ptr.size(), key);
          if (ec != std::errc()) [[unlikely]] {
             return false;
          }

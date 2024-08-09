@@ -14,10 +14,9 @@ namespace glz
    // parse an ASCII string.
    template <class UC>
    GLZ_ALWAYS_INLINE constexpr fast_float::parsed_number_string_t<UC> parse_number_string(
-      UC const* p, UC const* pend, fast_float::parse_options_t<UC> options) noexcept
+      UC const* p, UC const* pend) noexcept
    {
       using namespace fast_float;
-      const chars_format fmt = options.format;
       static constexpr UC decimal_point = '.';
 
       parsed_number_string_t<UC> answer;
@@ -87,10 +86,6 @@ namespace glz
             ++p;
          }
          if (!is_integer(*p)) {
-            if (!(fmt & chars_format::fixed)) {
-               // We are in error.
-               return answer;
-            }
             // Otherwise, we will be ignoring the 'e'.
             p = location_of_e;
          }
@@ -124,9 +119,9 @@ namespace glz
          UC const* start = start_digits;
          while ((*start == UC('0') || *start == decimal_point)) {
             if (*start == UC('0')) {
-               digit_count--;
+               --digit_count;
             }
-            start++;
+            ++start;
          }
 
          if (digit_count > 19) {
@@ -163,14 +158,13 @@ namespace glz
    }
 
    template <class T, class UC>
-   constexpr fast_float::from_chars_result_t<UC> from_chars_advanced(UC const* first, UC const* last, T& value,
-                                                                     fast_float::parse_options_t<UC> options) noexcept
+   constexpr fast_float::from_chars_result_t<UC> from_chars(UC const* first, UC const* last, T& value) noexcept
    {
       using namespace fast_float;
       static_assert(is_supported_float_type<T>(), "only some floating-point types are supported");
       static_assert(is_supported_char_type<UC>(), "only char, wchar_t, char16_t and char32_t are supported");
 
-      parsed_number_string_t<UC> pns = glz::parse_number_string<UC>(first, last, options);
+      parsed_number_string_t<UC> pns = glz::parse_number_string<UC>(first, last);
       if (!pns.valid) [[unlikely]] {
          from_chars_result_t<UC> answer;
          answer.ec = std::errc::invalid_argument;

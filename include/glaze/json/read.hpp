@@ -632,8 +632,7 @@ namespace glz
                      // Hardware may interact with value changes, so we parse into a temporary and assign in one
                      // place
                      V temp;
-                     static constexpr fast_float::parse_options options{fast_float::chars_format::json};
-                     auto [ptr, ec] = glz::from_chars_advanced(it, end, temp, options);
+                     auto [ptr, ec] = glz::from_chars(it, end, temp);
                      if (ec != std::errc()) [[unlikely]] {
                         ctx.error = error_code::parse_number_failure;
                         return;
@@ -642,8 +641,7 @@ namespace glz
                      it = ptr;
                   }
                   else {
-                     static constexpr fast_float::parse_options options{fast_float::chars_format::json};
-                     auto [ptr, ec] = glz::from_chars_advanced(it, end, value, options);
+                     auto [ptr, ec] = glz::from_chars(it, end, value);
                      if (ec != std::errc()) [[unlikely]] {
                         ctx.error = error_code::parse_number_failure;
                         return;
