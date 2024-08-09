@@ -12,7 +12,7 @@ namespace glz
 {
    // Assuming that you use no more than 19 digits, this will
    // parse an ASCII string.
-   template <typename UC>
+   template <class UC>
    GLZ_ALWAYS_INLINE constexpr fast_float::parsed_number_string_t<UC> parse_number_string(
       UC const* p, UC const* pend, fast_float::parse_options_t<UC> options) noexcept
    {
@@ -73,9 +73,7 @@ namespace glz
       }
       
       int64_t exp_number = 0; // explicit exponential part
-      if (((fmt & chars_format::scientific) && (p != pend) && ((UC('e') == *p) || (UC('E') == *p))) ||
-          ((fmt & FASTFLOAT_FORTRANFMT) && (p != pend) &&
-           ((UC('+') == *p) || (UC('-') == *p) || (UC('d') == *p) || (UC('D') == *p)))) {
+      if ((UC('e') == *p) || (UC('E') == *p)) {
          UC const* location_of_e = p;
          if ((UC('e') == *p) || (UC('E') == *p) || (UC('d') == *p) || (UC('D') == *p)) {
             ++p;
@@ -108,12 +106,6 @@ namespace glz
                exp_number = -exp_number;
             }
             exponent += exp_number;
-         }
-      }
-      else {
-         // If it scientific and not fixed, we have to bail out.
-         if ((fmt & chars_format::scientific) && !(fmt & chars_format::fixed)) {
-            return answer;
          }
       }
       answer.lastmatch = p;
