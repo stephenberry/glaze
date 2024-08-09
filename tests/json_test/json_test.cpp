@@ -3160,11 +3160,13 @@ struct glz::meta<variant_obj>
    static constexpr auto value = object("v", &T::v);
 };
 
-struct var_a1{
+struct var_a1
+{
    int i{};
 };
 
-struct var_a2{
+struct var_a2
+{
    double i{};
 };
 
@@ -3191,7 +3193,7 @@ suite variant_tests = [] {
       expect(glz::read_json(x, "33") == glz::error_code::none);
       expect(std::get<int32_t>(x) == 33);
    };
-   
+
    // TODO: Make reading into the active element work here
    /*"variant read active"_test = [] {
       std::variant<var_a1, var_a2> v = var_a2{};
