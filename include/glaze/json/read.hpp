@@ -240,8 +240,15 @@ namespace glz
 
          constexpr auto type = HashInfo.type;
          constexpr auto N = refl<T>.N;
+         
+         if constexpr (not bool(type)) {
+            static_assert(false_v<T>, "invalid hash algorithm");
+         }
 
-         if constexpr (bool(type)) {
+         if constexpr (N == 1) {
+            decode_index<Opts, T, 0>(func, tuple, value, ctx, it, end);
+         }
+         else {
             const auto index = [&]() -> size_t {
                using enum hash_type;
                if constexpr (type == unique_index) {
@@ -307,9 +314,6 @@ namespace glz
             }
 
             jump_table<N>([&]<size_t I>() { decode_index<Opts, T, I>(func, tuple, value, ctx, it, end); }, index);
-         }
-         else {
-            static_assert(false_v<T>, "invalid hash algorithm");
          }
       }
 
@@ -1187,7 +1191,10 @@ namespace glz
 
                   const auto index = [&]() -> size_t {
                      using enum hash_type;
-                     if constexpr (type == unique_index) {
+                     if constexpr (type == single_element) {
+                        return 0;
+                     }
+                     else if constexpr (type == unique_index) {
                         if constexpr (HashInfo.sized_hash) {
                            const auto* c = std::memchr(it, '"', size_t(end - it));
                            if (c) [[likely]] {

@@ -858,6 +858,7 @@ namespace glz::detail
       invalid,
       unique_index,
       front_16,
+      single_element
    };
 
    consteval size_t bucket_size(hash_type type, size_t N)
@@ -872,6 +873,9 @@ namespace glz::detail
       }
       case front_16: {
          return (N == 1) ? 1 : std::bit_ceil(N * N) / 2;
+      }
+      case single_element: {
+         return 0;
       }
       default: {
          return 0;
@@ -1022,7 +1026,6 @@ namespace glz::detail
       return best_index;
    }
 
-   // TODO: Add N == 1 optimization
    template <size_t N>
    constexpr auto make_keys_info(const std::array<sv, N>& keys)
    {
@@ -1045,6 +1048,11 @@ namespace glz::detail
       }
 
       using enum hash_type;
+      
+      if constexpr (N == 1) {
+         info.type = single_element;
+         return info;
+      }
 
       if (const auto uindex = find_unique_index(keys)) {
          info.type = unique_index;
@@ -1174,7 +1182,11 @@ namespace glz::detail
          constexpr auto& keys = refl<T>.keys;
 
          using enum hash_type;
-         if constexpr (type == unique_index && N < 256) {
+         if constexpr (type == single_element) {
+            hash_info_t<T, bucket_size(single_element, N)> info{.type = single_element};
+            return info;
+         }
+         else if constexpr (type == unique_index && N < 256) {
             hash_info_t<T, bucket_size(unique_index, N)> info{.type = unique_index, .seed = k_info.seed};
             info.max_length = k_info.max_length;
             info.table.fill(N);
