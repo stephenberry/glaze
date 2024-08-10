@@ -854,11 +854,88 @@ namespace glz::detail
    // string comparisons in these cases.
    // However, there are obvious memory costs with increasing the bucket size.
 
-   enum struct hash_type {
-      invalid,
-      unique_index,
-      front_16,
+   enum struct hash_type { invalid, unique_index, front_16, single_element, unique_per_length };
+
+   struct unique_per_length_t
+   {
+      bool valid{};
+      std::array<uint8_t, 256> unique_index{};
    };
+
+   inline constexpr unique_per_length_t unique_per_length_info(const auto& input_strings) noexcept
+   {
+      // TODO: MSVC fixed the related compiler bug, but GitHub Actions has not caught up yet
+#if !defined(_MSC_VER)
+      const auto N = input_strings.size();
+      if (N == 0) {
+         return {};
+      }
+
+      std::vector<std::string_view> strings{};
+      for (size_t i = 0; i < N; ++i) {
+         strings.emplace_back(input_strings[i]);
+      }
+
+      std::ranges::sort(strings, [](const auto& a, const auto& b) {
+         return a.size() < b.size();
+      });
+
+      if (strings.front().empty() || strings.back().size() >= 255) {
+         return {};
+      }
+
+      unique_per_length_t info{.valid = true};
+      info.unique_index.fill(255);
+
+      // Process each unique length
+      for (size_t len = strings.front().size(); len <= strings.back().size(); ++len) {
+         auto range_begin = std::lower_bound(strings.begin(), strings.end(), len,
+                                             [](const auto& s, size_t l) { return s.length() < l; });
+
+         auto range_end =
+            std::upper_bound(range_begin, strings.end(), len, [](size_t l, const auto& s) { return l < s.length(); });
+
+         auto range = std::ranges::subrange(range_begin, range_end);
+
+         if (range.begin() == range.end()) continue;
+
+         // Find the first unique character for this length
+         bool found = false;
+         for (size_t pos = 0; pos < len; ++pos) {
+            std::array<int, 256> char_count = {};
+
+            // Count occurrences of each character at this position
+            for (auto it = range.begin(); it != range.end(); ++it) {
+               ++char_count[uint8_t((*it)[pos])];
+            }
+
+            bool collision = false;
+            for (const auto count : char_count) {
+               if (count > 1) {
+                  collision = true;
+                  break;
+               }
+            }
+            if (not collision) {
+               info.unique_index[len] = uint8_t(pos);
+               found = true;
+               break;
+            }
+         }
+         if (not found) {
+            info.valid = false;
+            return info;
+         }
+      }
+
+      return info;
+      #else
+      return {};
+      #endif
+   }
+
+   template <class T>
+   inline constexpr auto per_length_info = unique_per_length_info(refl<T>.keys);
 
    consteval size_t bucket_size(hash_type type, size_t N)
    {
@@ -871,6 +948,12 @@ namespace glz::detail
          return 256;
       }
       case front_16: {
+         return (N == 1) ? 1 : std::bit_ceil(N * N) / 2;
+      }
+      case single_element: {
+         return 0;
+      }
+      case unique_per_length: {
          return (N == 1) ? 1 : std::bit_ceil(N * N) / 2;
       }
       default: {
@@ -1022,7 +1105,6 @@ namespace glz::detail
       return best_index;
    }
 
-   // TODO: Add N == 1 optimization
    template <size_t N>
    constexpr auto make_keys_info(const std::array<sv, N>& keys)
    {
@@ -1046,6 +1128,11 @@ namespace glz::detail
 
       using enum hash_type;
 
+      if constexpr (N == 1) {
+         info.type = single_element;
+         return info;
+      }
+
       if (const auto uindex = find_unique_index(keys)) {
          info.type = unique_index;
          info.unique_index = uindex.value();
@@ -1054,49 +1141,6 @@ namespace glz::detail
 
       auto& seed = info.seed;
       constexpr uint64_t invalid_seed = 0;
-
-      if (const auto uindex = find_unique_sized_index(keys)) {
-         info.type = unique_index;
-         info.unique_index = uindex.value();
-         info.sized_hash = true;
-
-         auto sized_unique_hash = [&] {
-            std::array<size_t, N> bucket_index{};
-            constexpr auto bsize = bucket_size(unique_index, N);
-
-            for (size_t i = 0; i < primes_64.size(); ++i) {
-               seed = primes_64[i];
-               size_t index = 0;
-               for (const auto& key : keys) {
-                  const auto hash = bitmix(uint16_t(key[info.unique_index]) | (uint16_t(key.size()) << 8), seed);
-                  if (hash == seed) {
-                     break;
-                  }
-                  const auto bucket = hash % bsize;
-                  if (contains(std::span{bucket_index.data(), index}, bucket)) {
-                     break;
-                  }
-                  bucket_index[index] = bucket;
-                  ++index;
-               }
-
-               if (index == N) {
-                  // make sure the seed does not collide with any hashes
-                  const auto bucket = seed % bsize;
-                  if (not contains(std::span{bucket_index.data(), N}, bucket)) {
-                     return; // found working seed
-                  }
-               }
-            }
-
-            seed = invalid_seed;
-         };
-
-         sized_unique_hash();
-         if (seed != invalid_seed) {
-            return info;
-         }
-      }
 
       if (info.min_length > 1 && N <= 32) {
          // check for uniqueness
@@ -1157,6 +1201,95 @@ namespace glz::detail
          }
       }
 
+      if (const auto uindex = find_unique_sized_index(keys)) {
+         info.unique_index = uindex.value();
+         info.sized_hash = true;
+
+         auto sized_unique_hash = [&] {
+            std::array<size_t, N> bucket_index{};
+            constexpr auto bsize = bucket_size(unique_index, N);
+
+            for (size_t i = 0; i < primes_64.size(); ++i) {
+               seed = primes_64[i];
+               size_t index = 0;
+               for (const auto& key : keys) {
+                  const auto hash = bitmix(uint16_t(key[info.unique_index]) | (uint16_t(key.size()) << 8), seed);
+                  if (hash == seed) {
+                     break;
+                  }
+                  const auto bucket = hash % bsize;
+                  if (contains(std::span{bucket_index.data(), index}, bucket)) {
+                     break;
+                  }
+                  bucket_index[index] = bucket;
+                  ++index;
+               }
+
+               if (index == N) {
+                  // make sure the seed does not collide with any hashes
+                  const auto bucket = seed % bsize;
+                  if (not contains(std::span{bucket_index.data(), N}, bucket)) {
+                     return; // found working seed
+                  }
+               }
+            }
+
+            seed = invalid_seed;
+         };
+
+         sized_unique_hash();
+         if (seed != invalid_seed) {
+            info.type = unique_index;
+            return info;
+         }
+      }
+
+      // TODO: MSVC fixed the related compiler bug, but GitHub Actions has not caught up yet
+#if !defined(_MSC_VER)
+      // TODO: Use meta-programming to cache this value
+      const auto per_length_data = unique_per_length_info(keys);
+      if (per_length_data.valid) {
+         auto sized_unique_hash = [&] {
+            std::array<size_t, N> bucket_index{};
+            constexpr auto bsize = bucket_size(unique_per_length, N);
+
+            for (size_t i = 0; i < primes_64.size(); ++i) {
+               seed = primes_64[i];
+               size_t index = 0;
+               for (const auto& key : keys) {
+                  const auto n = uint8_t(key.size());
+                  const auto hash = bitmix(uint16_t(key[per_length_data.unique_index[n]]) | (uint16_t(n) << 8), seed);
+                  if (hash == seed) {
+                     break;
+                  }
+                  const auto bucket = hash % bsize;
+                  if (contains(std::span{bucket_index.data(), index}, bucket)) {
+                     break;
+                  }
+                  bucket_index[index] = bucket;
+                  ++index;
+               }
+
+               if (index == N) {
+                  // make sure the seed does not collide with any hashes
+                  const auto bucket = seed % bsize;
+                  if (not contains(std::span{bucket_index.data(), N}, bucket)) {
+                     return; // found working seed
+                  }
+               }
+            }
+
+            seed = invalid_seed;
+         };
+
+         sized_unique_hash();
+         if (seed != invalid_seed) {
+            info.type = unique_per_length;
+            return info;
+         }
+      }
+#endif
+
       return info;
    }
 
@@ -1174,7 +1307,24 @@ namespace glz::detail
          constexpr auto& keys = refl<T>.keys;
 
          using enum hash_type;
-         if constexpr (type == unique_index && N < 256) {
+         if constexpr (type == single_element) {
+            hash_info_t<T, bucket_size(single_element, N)> info{.type = single_element};
+            return info;
+         }
+         else if constexpr (type == front_16) {
+            constexpr auto bsize = bucket_size(front_16, N);
+            hash_info_t<T, bsize> info{.type = front_16, .seed = k_info.seed};
+            info.max_length = k_info.max_length;
+            info.table.fill(uint8_t(N));
+
+            for (uint8_t i = 0; i < N; ++i) {
+               const auto h = bitmix(uint16_t(keys[i][0]) | (uint16_t(keys[i][1]) << 8), info.seed) % bsize;
+               info.table[h] = i;
+            }
+
+            return info;
+         }
+         else if constexpr (type == unique_index && N < 256) {
             hash_info_t<T, bucket_size(unique_index, N)> info{.type = unique_index, .seed = k_info.seed};
             info.max_length = k_info.max_length;
             info.table.fill(N);
@@ -1197,19 +1347,24 @@ namespace glz::detail
             }
             return info;
          }
-         else if constexpr (type == front_16) {
-            constexpr auto bsize = bucket_size(front_16, N);
-            hash_info_t<T, bsize> info{.type = front_16, .seed = k_info.seed};
+         // TODO: MSVC fixed the related compiler bug, but GitHub Actions has not caught up yet
+#if !defined(_MSC_VER)
+         else if constexpr (type == unique_per_length) {
+            hash_info_t<T, bucket_size(unique_per_length, N)> info{.type = unique_per_length, .seed = k_info.seed};
             info.max_length = k_info.max_length;
-            info.table.fill(N);
-
+            info.table.fill(uint8_t(N));
+            info.sized_hash = true;
+            constexpr auto bsize = bucket_size(unique_per_length, N);
+            constexpr auto& data = per_length_info<T>;
             for (uint8_t i = 0; i < N; ++i) {
-               const auto h = bitmix(uint16_t(keys[i][0]) | (uint16_t(keys[i][1]) << 8), info.seed) % bsize;
+               const auto n = keys[i].size();
+               const auto x = uint16_t(keys[i][data.unique_index[n]]) | (uint16_t(n) << 8);
+               const auto h = bitmix(x, info.seed) % bsize;
                info.table[h] = i;
             }
-
             return info;
          }
+#endif
          else {
             // invalid
             return hash_info_t<T, 0>{};

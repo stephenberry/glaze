@@ -240,8 +240,15 @@ namespace glz
 
          constexpr auto type = HashInfo.type;
          constexpr auto N = refl<T>.N;
+         
+         if constexpr (not bool(type)) {
+            static_assert(false_v<T>, "invalid hash algorithm");
+         }
 
-         if constexpr (bool(type)) {
+         if constexpr (N == 1) {
+            decode_index<Opts, T, 0>(func, tuple, value, ctx, it, end);
+         }
+         else {
             const auto index = [&]() -> size_t {
                using enum hash_type;
                if constexpr (type == unique_index) {
@@ -278,6 +285,22 @@ namespace glz
                   std::memcpy(&h, it, 2);
                   return HashInfo.table[bitmix(h, HashInfo.seed) % bsize];
                }
+               else if constexpr (type == unique_per_length) {
+                  const auto* c = std::memchr(it, '"', size_t(end - it));
+                  if (c) [[likely]] {
+                     const auto n = uint8_t(static_cast<std::decay_t<decltype(it)>>(c) - it);
+                     const auto pos = per_length_info<T>.unique_index[n];
+                     if ((it + pos) >= end) [[unlikely]] {
+                        return N; // error
+                     }
+                     const auto h = bitmix(uint16_t(it[pos]) | (uint16_t(n) << 8), HashInfo.seed);
+                     static constexpr auto bsize = bucket_size(unique_per_length, N);
+                     return HashInfo.table[h % bsize];
+                  }
+                  else [[unlikely]] {
+                     return N;
+                  }
+               }
                else {
                   static_assert(false_v<T>, "invalid hash algorithm");
                }
@@ -307,9 +330,6 @@ namespace glz
             }
 
             jump_table<N>([&]<size_t I>() { decode_index<Opts, T, I>(func, tuple, value, ctx, it, end); }, index);
-         }
-         else {
-            static_assert(false_v<T>, "invalid hash algorithm");
          }
       }
 
@@ -1187,7 +1207,10 @@ namespace glz
 
                   const auto index = [&]() -> size_t {
                      using enum hash_type;
-                     if constexpr (type == unique_index) {
+                     if constexpr (type == single_element) {
+                        return 0;
+                     }
+                     else if constexpr (type == unique_index) {
                         if constexpr (HashInfo.sized_hash) {
                            const auto* c = std::memchr(it, '"', size_t(end - it));
                            if (c) [[likely]] {

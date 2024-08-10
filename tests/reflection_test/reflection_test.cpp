@@ -754,4 +754,19 @@ suite unique_index_test = [] {
    };
 };
 
+struct single_element_t
+{
+   int here_is_a_lonely_element{};
+};
+
+suite hash_tests = [] {
+   "single_element"_test = [] {
+      single_element_t obj{};
+      std::string_view buffer = R"({"here_is_a_lonely_element":42})";
+      auto ec = glz::read_json(obj, buffer);
+      expect(not ec) << glz::format_error(ec, buffer);
+      expect(obj.here_is_a_lonely_element == 42);
+   };
+};
+
 int main() { return 0; }
