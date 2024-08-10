@@ -864,8 +864,8 @@ namespace glz::detail
 
    inline constexpr unique_per_length_t unique_per_length_info(const auto& input_strings) noexcept
    {
-      // MSVC fixed a compiler bug, whenever we drop 1932 we can drop this
-#if (defined(__clang__) || defined(__GNUC__)) || ((_MSC_VER > 1932) || (_MSC_VER == 1932 && _MSC_FULL_VER >= 193231320))
+      // TODO: MSVC fixed the related compiler bug, but GitHub Actions has not caught up yet
+#if !defined(_MSC_VER)
       const auto N = input_strings.size();
       if (N == 0) {
          return {};
@@ -1244,8 +1244,8 @@ namespace glz::detail
          }
       }
 
-      // MSVC fixed a compiler bug, whenever we drop 1932 we can drop this
-#if (defined(__clang__) || defined(__GNUC__)) || ((_MSC_VER > 1932) || (_MSC_VER == 1932 && _MSC_FULL_VER >= 193231320))
+      // TODO: MSVC fixed the related compiler bug, but GitHub Actions has not caught up yet
+#if !defined(_MSC_VER)
       // TODO: Use meta-programming to cache this value
       const auto per_length_data = unique_per_length_info(keys);
       if (per_length_data.valid) {
@@ -1347,8 +1347,8 @@ namespace glz::detail
             }
             return info;
          }
-         // MSVC fixed a compiler bug, whenever we drop 1932 we can drop this
-   #if (defined(__clang__) || defined(__GNUC__)) || ((_MSC_VER > 1932) || (_MSC_VER == 1932 && _MSC_FULL_VER >= 193231320))
+         // TODO: MSVC fixed the related compiler bug, but GitHub Actions has not caught up yet
+#if !defined(_MSC_VER)
          else if constexpr (type == unique_per_length) {
             hash_info_t<T, bucket_size(unique_per_length, N)> info{.type = unique_per_length, .seed = k_info.seed};
             info.max_length = k_info.max_length;
