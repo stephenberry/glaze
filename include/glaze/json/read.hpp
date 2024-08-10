@@ -240,7 +240,7 @@ namespace glz
 
          constexpr auto type = HashInfo.type;
          constexpr auto N = refl<T>.N;
-         
+
          if constexpr (not bool(type)) {
             static_assert(false_v<T>, "invalid hash algorithm");
          }

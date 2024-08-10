@@ -876,9 +876,7 @@ namespace glz::detail
          strings.emplace_back(input_strings[i]);
       }
 
-      std::ranges::sort(strings, [](const auto& a, const auto& b) {
-         return a.size() < b.size();
-      });
+      std::ranges::sort(strings, [](const auto& a, const auto& b) { return a.size() < b.size(); });
 
       if (strings.front().empty() || strings.back().size() >= 255) {
          return {};
@@ -929,9 +927,9 @@ namespace glz::detail
       }
 
       return info;
-      #else
+#else
       return {};
-      #endif
+#endif
    }
 
    template <class T>
