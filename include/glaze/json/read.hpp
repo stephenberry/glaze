@@ -289,8 +289,7 @@ namespace glz
                   const auto* c = std::memchr(it, '"', size_t(end - it));
                   if (c) [[likely]] {
                      const auto n = uint8_t(static_cast<std::decay_t<decltype(it)>>(c) - it);
-                     static constexpr auto data = unique_per_length_info(refl<T>.keys);
-                     const auto pos = data.unique_index[n];
+                     const auto pos = per_length_info<T>.unique_index[n];
                      if ((it + pos) >= end) [[unlikely]] {
                         return N; // error
                      }
