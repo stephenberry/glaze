@@ -864,6 +864,8 @@ namespace glz::detail
 
    inline constexpr unique_per_length_t unique_per_length_info(const auto& input_strings) noexcept
    {
+      // MSVC fixed a compiler bug, whenever you drop 1932 you can drop this
+#if (_MSC_VER > 1932) || (_MSC_VER == 1932 && _MSC_FULL_VER >= 193231320)
       const auto N = input_strings.size();
       if (N == 0) {
          return {};
@@ -927,6 +929,9 @@ namespace glz::detail
       }
 
       return info;
+      #else
+      return {};
+      #endif
    }
 
    template <class T>
