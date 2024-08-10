@@ -929,9 +929,6 @@ namespace glz::detail
       return info;
    }
 
-   template <class T>
-   inline constexpr auto per_length_info = unique_per_length_info(refl<T>.keys);
-
    consteval size_t bucket_size(hash_type type, size_t N)
    {
       using enum hash_type;
@@ -1345,7 +1342,7 @@ namespace glz::detail
             info.table.fill(N);
             info.sized_hash = true;
             constexpr auto bsize = bucket_size(unique_per_length, N);
-            constexpr auto& data = per_length_info<T>;
+            constexpr auto data = unique_per_length_info(refl<T>.keys);
             for (uint8_t i = 0; i < N; ++i) {
                const auto n = keys[i].size();
                const auto x = uint16_t(keys[i][data.unique_index[n]]) | (uint16_t(n) << 8);
