@@ -1307,7 +1307,7 @@ namespace glz::detail
             constexpr auto bsize = bucket_size(front_16, N);
             hash_info_t<T, bsize> info{.type = front_16, .seed = k_info.seed};
             info.max_length = k_info.max_length;
-            info.table.fill(N);
+            info.table.fill(uint8_t(N));
 
             for (uint8_t i = 0; i < N; ++i) {
                const auto h = bitmix(uint16_t(keys[i][0]) | (uint16_t(keys[i][1]) << 8), info.seed) % bsize;
@@ -1342,7 +1342,7 @@ namespace glz::detail
          else if constexpr (type == unique_per_length) {
             hash_info_t<T, bucket_size(unique_per_length, N)> info{.type = unique_per_length, .seed = k_info.seed};
             info.max_length = k_info.max_length;
-            info.table.fill(N);
+            info.table.fill(uint8_t(N));
             info.sized_hash = true;
             constexpr auto bsize = bucket_size(unique_per_length, N);
             constexpr auto& data = per_length_info<T>;
