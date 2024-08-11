@@ -305,7 +305,8 @@ namespace glz
                   const auto* c = std::memchr(it, '"', size_t(end - it));
                   if (c) [[likely]] {
                      const auto n = uint8_t(static_cast<std::decay_t<decltype(it)>>(c) - it);
-                     return full_hash<HashInfo.min_length, HashInfo.max_length, HashInfo.seed>(it, n);
+                     static constexpr auto bsize = bucket_size(full_flat, N);
+                     return full_hash<HashInfo.min_length, HashInfo.max_length, HashInfo.seed>(it, n) % bsize;
                   }
                   else [[unlikely]] {
                      return N;

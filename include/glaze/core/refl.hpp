@@ -1094,19 +1094,19 @@ namespace glz::detail
    }
    
    // runtime full hash algorithm
-   template <size_t MinLength, size_t MaxLength, size_t Seed>
+   template <size_t min_length, size_t max_length, size_t seed>
    inline constexpr size_t full_hash(const auto* it, const size_t n) noexcept {
-      if constexpr (MaxLength < 8) {
+      if constexpr (max_length < 8) {
          if (n > 7) {
-            return Seed;
+            return seed;
          }
-         return bitmix(to_uint64_n_below_8(it, n), Seed);
+         return bitmix(to_uint64_n_below_8(it, n), seed);
       }
-      else if constexpr (MinLength > 7) {
+      else if constexpr (min_length > 7) {
          if (n < 8) {
-            return Seed;
+            return seed;
          }
-         uint64_t h = Seed;
+         uint64_t h = seed;
          const auto* end7 = it + n - 7;
          for (auto d0 = it; d0 < end7; d0 += 8) {
             h = bitmix(to_uint64(d0), h);
@@ -1116,10 +1116,10 @@ namespace glz::detail
       }
       else {
          if (n < 8) {
-            return bitmix(to_uint64_n_below_8(it, n), Seed);
+            return bitmix(to_uint64_n_below_8(it, n), seed);
          }
 
-         uint64_t h = Seed;
+         uint64_t h = seed;
          const auto* end7 = it + n - 7;
          for (auto d0 = it; d0 < end7; d0 += 8) {
             h = bitmix(to_uint64(d0), h);
