@@ -783,7 +783,7 @@ suite hash_tests = [] {
       auto ec = glz::read_json(obj, buffer);
       expect(not ec) << glz::format_error(ec, buffer);
       expect(obj.collide == 1);
-      expect(obj.collide2 == 1);
+      expect(obj.collide2 == 2);
    };
 };
 
