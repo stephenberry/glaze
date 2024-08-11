@@ -776,7 +776,7 @@ suite hash_tests = [] {
       expect(not ec) << glz::format_error(ec, buffer);
       expect(obj.here_is_a_lonely_element == 42);
    };
-   
+
    "full_hash"_test = [] {
       full_hash_t obj{};
       std::string_view buffer = R"({"collide":1,"collide2":2})";
