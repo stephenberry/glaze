@@ -301,6 +301,16 @@ namespace glz
                      return N;
                   }
                }
+               else if constexpr (type == full_flat) {
+                  const auto* c = std::memchr(it, '"', size_t(end - it));
+                  if (c) [[likely]] {
+                     const auto n = uint8_t(static_cast<std::decay_t<decltype(it)>>(c) - it);
+                     return full_hash<HashInfo.min_length, HashInfo.max_length, HashInfo.seed>(it, n);
+                  }
+                  else [[unlikely]] {
+                     return N;
+                  }
+               }
                else {
                   static_assert(false_v<T>, "invalid hash algorithm");
                }

@@ -759,6 +759,15 @@ struct single_element_t
    int here_is_a_lonely_element{};
 };
 
+struct full_hash_t
+{
+   int collide{};
+   int collide2{};
+   int colllide{};
+   int colilide{};
+   int coiilide{};
+};
+
 suite hash_tests = [] {
    "single_element"_test = [] {
       single_element_t obj{};
@@ -766,6 +775,15 @@ suite hash_tests = [] {
       auto ec = glz::read_json(obj, buffer);
       expect(not ec) << glz::format_error(ec, buffer);
       expect(obj.here_is_a_lonely_element == 42);
+   };
+   
+   "full_hash"_test = [] {
+      full_hash_t obj{};
+      std::string_view buffer = R"({"collide":1,"collide2":2})";
+      auto ec = glz::read_json(obj, buffer);
+      expect(not ec) << glz::format_error(ec, buffer);
+      expect(obj.collide == 1);
+      expect(obj.collide2 == 1);
    };
 };
 

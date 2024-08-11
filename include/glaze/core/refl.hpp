@@ -799,7 +799,14 @@ namespace glz::detail
    // string comparisons in these cases.
    // However, there are obvious memory costs with increasing the bucket size.
 
-   enum struct hash_type { invalid, unique_index, front_16, single_element, unique_per_length };
+   enum struct hash_type { //
+      invalid, // hashing failed
+      unique_index, // A unique character index is used
+      front_16, // Hash on the front 2 bytes of the key
+      single_element, // Map is a single element
+      unique_per_length, // Hash on a unique character index and the length of the key
+      full_flat // Full key hash with a single table
+   };
 
    struct unique_per_length_t
    {
@@ -899,6 +906,9 @@ namespace glz::detail
       case unique_per_length: {
          return (N == 1) ? 1 : std::bit_ceil(N * N) / 2;
       }
+      case full_flat: {
+         return (N == 1) ? 1 : std::bit_ceil(N * N) / 2;
+      }
       default: {
          return 0;
       }
@@ -930,6 +940,7 @@ namespace glz::detail
       static constexpr auto invalid = static_cast<V>(N);
 
       std::array<V, Slots> table{}; // hashes to switch-case indices
+      size_t min_length = (std::numeric_limits<size_t>::max)();
       size_t max_length{};
       uint64_t seed{};
       size_t unique_index = (std::numeric_limits<size_t>::max)();
@@ -1046,6 +1057,76 @@ namespace glz::detail
       }
 
       return best_index;
+   }
+   
+   // Do not call this at runtime, it is assumes the key lies within min_length and max_length
+   inline constexpr size_t full_hash_impl(const sv key, const uint64_t seed, const auto min_length, const auto max_length) noexcept {
+      if (max_length < 8) {
+         return bitmix(to_uint64_n_below_8(key.data(), key.size()), seed);
+      }
+      else if (min_length > 7) {
+         const auto n = key.size();
+         uint64_t h = seed;
+         const auto* data = key.data();
+         const auto* end7 = data + n - 7;
+         for (auto d0 = data; d0 < end7; d0 += 8) {
+            h = bitmix(to_uint64(d0), h);
+         }
+         // Handle potential tail. We know we have at least 8
+         return bitmix(to_uint64(data + n - 8), h);
+      }
+      else {
+         const auto n = key.size();
+         const auto* data = key.data();
+
+         if (n < 8) {
+            return bitmix(to_uint64_n_below_8(data, n), seed);
+         }
+
+         uint64_t h = seed;
+         const auto* end7 = data + n - 7;
+         for (auto d0 = data; d0 < end7; d0 += 8) {
+            h = bitmix(to_uint64(d0), h);
+         }
+         // Handle potential tail. We know we have at least 8
+         return bitmix(to_uint64(data + n - 8), h);
+      }
+   }
+   
+   // runtime full hash algorithm
+   template <size_t MinLength, size_t MaxLength, size_t Seed>
+   inline constexpr size_t full_hash(const auto* it, const size_t n) noexcept {
+      if constexpr (MaxLength < 8) {
+         if (n > 7) {
+            return Seed;
+         }
+         return bitmix(to_uint64_n_below_8(it, n), Seed);
+      }
+      else if constexpr (MinLength > 7) {
+         if (n < 8) {
+            return Seed;
+         }
+         uint64_t h = Seed;
+         const auto* end7 = it + n - 7;
+         for (auto d0 = it; d0 < end7; d0 += 8) {
+            h = bitmix(to_uint64(d0), h);
+         }
+         // Handle potential tail. We know we have at least 8
+         return bitmix(to_uint64(it + n - 8), h);
+      }
+      else {
+         if (n < 8) {
+            return bitmix(to_uint64_n_below_8(it, n), Seed);
+         }
+
+         uint64_t h = Seed;
+         const auto* end7 = it + n - 7;
+         for (auto d0 = it; d0 < end7; d0 += 8) {
+            h = bitmix(to_uint64(d0), h);
+         }
+         // Handle potential tail. We know we have at least 8
+         return bitmix(to_uint64(it + n - 8), h);
+      }
    }
 
    template <size_t N>
@@ -1232,6 +1313,47 @@ namespace glz::detail
          }
       }
 #endif
+      
+      // full_flat
+      {
+         auto full_flat_hash = [&] {
+            std::array<size_t, N> bucket_index{};
+            constexpr auto bsize = bucket_size(full_flat, N);
+
+            for (size_t i = 0; i < primes_64.size(); ++i) {
+               seed = primes_64[i];
+               size_t index = 0;
+               for (const auto& key : keys) {
+                  const auto hash = full_hash_impl(key, seed, info.min_length, info.max_length);
+                  if (hash == seed) {
+                     break;
+                  }
+                  const auto bucket = hash % bsize;
+                  if (contains(std::span{bucket_index.data(), index}, bucket)) {
+                     break;
+                  }
+                  bucket_index[index] = bucket;
+                  ++index;
+               }
+
+               if (index == N) {
+                  // make sure the seed does not collide with any hashes
+                  const auto bucket = seed % bsize;
+                  if (not contains(std::span{bucket_index.data(), N}, bucket)) {
+                     return; // found working seed
+                  }
+               }
+            }
+
+            seed = invalid_seed;
+         };
+
+         full_flat_hash();
+         if (seed != invalid_seed) {
+            info.type = full_flat;
+            return info;
+         }
+      }
 
       return info;
    }
@@ -1308,6 +1430,18 @@ namespace glz::detail
             return info;
          }
 #endif
+         else if constexpr (type == full_flat) {
+            hash_info_t<T, bucket_size(full_flat, N)> info{.type = full_flat, .seed = k_info.seed};
+            info.min_length = k_info.min_length;
+            info.max_length = k_info.max_length;
+            info.table.fill(uint8_t(N));
+            constexpr auto bsize = bucket_size(full_flat, N);
+            for (uint8_t i = 0; i < N; ++i) {
+               const auto h = full_hash_impl(keys[i], info.seed, info.min_length, info.max_length) % bsize;
+               info.table[h] = i;
+            }
+            return info;
+         }
          else {
             // invalid
             return hash_info_t<T, 0>{};
