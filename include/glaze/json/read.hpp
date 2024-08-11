@@ -1239,6 +1239,8 @@ namespace glz
                      }
                   },
                   index);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
 
                GLZ_MATCH_QUOTE;
 
