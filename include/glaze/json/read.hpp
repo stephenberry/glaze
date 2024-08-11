@@ -228,6 +228,80 @@ namespace glz
             }
          }
       }
+      
+      template <class T, auto HashInfo>
+      GLZ_ALWAYS_INLINE constexpr size_t decode_hash(auto&& it, auto&& end) noexcept
+      {
+         constexpr auto type = HashInfo.type;
+         constexpr auto N = refl<T>.N;
+         
+         using enum hash_type;
+         if constexpr (type == unique_index) {
+            if constexpr (HashInfo.sized_hash) {
+               const auto* c = std::memchr(it, '"', size_t(end - it));
+               if (c) [[likely]] {
+                  const auto n = size_t(static_cast<std::decay_t<decltype(it)>>(c) - it);
+                  if (n == 0 || n > HashInfo.max_length) {
+                     return N; // error
+                  }
+
+                  const auto h = bitmix(uint16_t(it[HashInfo.unique_index]) | (uint16_t(n) << 8), HashInfo.seed);
+                  static constexpr auto bsize = bucket_size(unique_index, N);
+                  return HashInfo.table[h % bsize];
+               }
+               else [[unlikely]] {
+                  return N;
+               }
+            }
+            else {
+               static constexpr auto uindex = HashInfo.unique_index;
+               if constexpr (uindex > 0) {
+                  if ((it + uindex) >= end) [[unlikely]] {
+                     return N; // error
+                  }
+               }
+               return HashInfo.table[uint8_t(it[uindex])];
+            }
+         }
+         else if constexpr (type == front_16) {
+            static constexpr auto bsize = bucket_size(front_16, N);
+            // we don't need to check for second character because we are null terminated
+            uint16_t h;
+            std::memcpy(&h, it, 2);
+            return HashInfo.table[bitmix(h, HashInfo.seed) % bsize];
+         }
+         else if constexpr (type == unique_per_length) {
+            const auto* c = std::memchr(it, '"', size_t(end - it));
+            if (c) [[likely]] {
+               const auto n = uint8_t(static_cast<std::decay_t<decltype(it)>>(c) - it);
+               const auto pos = per_length_info<T>.unique_index[n];
+               if ((it + pos) >= end) [[unlikely]] {
+                  return N; // error
+               }
+               const auto h = bitmix(uint16_t(it[pos]) | (uint16_t(n) << 8), HashInfo.seed);
+               static constexpr auto bsize = bucket_size(unique_per_length, N);
+               return HashInfo.table[h % bsize];
+            }
+            else [[unlikely]] {
+               return N;
+            }
+         }
+         else if constexpr (type == full_flat) {
+            const auto* c = std::memchr(it, '"', size_t(end - it));
+            if (c) [[likely]] {
+               const auto n = uint8_t(static_cast<std::decay_t<decltype(it)>>(c) - it);
+               static constexpr auto bsize = bucket_size(full_flat, N);
+               const auto h = full_hash<HashInfo.min_length, HashInfo.max_length, HashInfo.seed>(it, n);
+               return HashInfo.table[h % bsize];
+            }
+            else [[unlikely]] {
+               return N;
+            }
+         }
+         else {
+            static_assert(false_v<T>, "invalid hash algorithm");
+         }
+      }
 
       template <opts Opts, class T, auto HashInfo, class Func, class Tuple, class Value>
          requires(glaze_object_t<T> || reflectable<T>)
@@ -249,74 +323,7 @@ namespace glz
             decode_index<Opts, T, 0>(func, tuple, value, ctx, it, end);
          }
          else {
-            const auto index = [&]() -> size_t {
-               using enum hash_type;
-               if constexpr (type == unique_index) {
-                  if constexpr (HashInfo.sized_hash) {
-                     const auto* c = std::memchr(it, '"', size_t(end - it));
-                     if (c) [[likely]] {
-                        const auto n = size_t(static_cast<std::decay_t<decltype(it)>>(c) - it);
-                        if (n == 0 || n > HashInfo.max_length) {
-                           return N; // error
-                        }
-
-                        const auto h = bitmix(uint16_t(it[HashInfo.unique_index]) | (uint16_t(n) << 8), HashInfo.seed);
-                        static constexpr auto bsize = bucket_size(unique_index, N);
-                        return HashInfo.table[h % bsize];
-                     }
-                     else [[unlikely]] {
-                        return N;
-                     }
-                  }
-                  else {
-                     static constexpr auto uindex = HashInfo.unique_index;
-                     if constexpr (uindex > 0) {
-                        if ((it + uindex) >= end) [[unlikely]] {
-                           return N; // error
-                        }
-                     }
-                     return HashInfo.table[uint8_t(it[uindex])];
-                  }
-               }
-               else if constexpr (type == front_16) {
-                  static constexpr auto bsize = bucket_size(front_16, N);
-                  // we don't need to check for second character because we are null terminated
-                  uint16_t h;
-                  std::memcpy(&h, it, 2);
-                  return HashInfo.table[bitmix(h, HashInfo.seed) % bsize];
-               }
-               else if constexpr (type == unique_per_length) {
-                  const auto* c = std::memchr(it, '"', size_t(end - it));
-                  if (c) [[likely]] {
-                     const auto n = uint8_t(static_cast<std::decay_t<decltype(it)>>(c) - it);
-                     const auto pos = per_length_info<T>.unique_index[n];
-                     if ((it + pos) >= end) [[unlikely]] {
-                        return N; // error
-                     }
-                     const auto h = bitmix(uint16_t(it[pos]) | (uint16_t(n) << 8), HashInfo.seed);
-                     static constexpr auto bsize = bucket_size(unique_per_length, N);
-                     return HashInfo.table[h % bsize];
-                  }
-                  else [[unlikely]] {
-                     return N;
-                  }
-               }
-               else if constexpr (type == full_flat) {
-                  const auto* c = std::memchr(it, '"', size_t(end - it));
-                  if (c) [[likely]] {
-                     const auto n = uint8_t(static_cast<std::decay_t<decltype(it)>>(c) - it);
-                     static constexpr auto bsize = bucket_size(full_flat, N);
-                     const auto h = full_hash<HashInfo.min_length, HashInfo.max_length, HashInfo.seed>(it, n);
-                     return HashInfo.table[h % bsize];
-                  }
-                  else [[unlikely]] {
-                     return N;
-                  }
-               }
-               else {
-                  static_assert(false_v<T>, "invalid hash algorithm");
-               }
-            }();
+            const auto index = decode_hash<T, HashInfo>(it, end);
 
             if (index >= N) [[unlikely]] {
                if constexpr (Opts.error_on_unknown_keys) {
@@ -1209,126 +1216,34 @@ namespace glz
                if constexpr (!has_ws_handled(Opts)) {
                   GLZ_SKIP_WS();
                }
+               
+               GLZ_MATCH_QUOTE;
 
-               constexpr auto& HashInfo = hash_info<T>;
-               if constexpr (bool(HashInfo.type)) {
-                  GLZ_MATCH_QUOTE;
+               const auto index = decode_hash<T, hash_info<T>>(it, end);
+               constexpr auto N = refl<T>.N;
 
-                  constexpr auto type = HashInfo.type;
-                  constexpr auto N = HashInfo.N;
-
-                  const auto index = [&]() -> size_t {
-                     using enum hash_type;
-                     if constexpr (type == single_element) {
-                        return 0;
-                     }
-                     else if constexpr (type == unique_index) {
-                        if constexpr (HashInfo.sized_hash) {
-                           const auto* c = std::memchr(it, '"', size_t(end - it));
-                           if (c) [[likely]] {
-                              const auto n = size_t(static_cast<std::decay_t<decltype(it)>>(c) - it);
-                              if (n == 0 || n > HashInfo.max_length) {
-                                 return N; // error
-                              }
-
-                              const auto h =
-                                 bitmix(uint16_t(it[HashInfo.unique_index]) | (uint16_t(n) << 8), HashInfo.seed);
-                              static constexpr auto bsize = bucket_size(unique_index, N);
-                              return HashInfo.table[h % bsize];
-                           }
-                           else [[unlikely]] {
-                              return N;
-                           }
-                        }
-                        else {
-                           static constexpr auto uindex = HashInfo.unique_index;
-                           if constexpr (uindex > 0) {
-                              if ((it + uindex) >= end) [[unlikely]] {
-                                 return N; // error
-                              }
-                           }
-                           return HashInfo.table[uint8_t(it[uindex])];
-                        }
-                     }
-                     else if constexpr (type == front_16) {
-                        static constexpr auto bsize = bucket_size(front_16, N);
-                        // we don't need to check for second character because we are null terminated
-                        uint16_t h;
-                        std::memcpy(&h, it, 2);
-                        return HashInfo.table[bitmix(h, HashInfo.seed) % bsize];
-                     }
-                     else if constexpr (type == unique_per_length) {
-                        const auto* c = std::memchr(it, '"', size_t(end - it));
-                        if (c) [[likely]] {
-                           const auto n = uint8_t(static_cast<std::decay_t<decltype(it)>>(c) - it);
-                           const auto pos = per_length_info<T>.unique_index[n];
-                           if ((it + pos) >= end) [[unlikely]] {
-                              return N; // error
-                           }
-                           const auto h = bitmix(uint16_t(it[pos]) | (uint16_t(n) << 8), HashInfo.seed);
-                           static constexpr auto bsize = bucket_size(unique_per_length, N);
-                           return HashInfo.table[h % bsize];
-                        }
-                        else [[unlikely]] {
-                           return N;
-                        }
-                     }
-                     else if constexpr (type == full_flat) {
-                        const auto* c = std::memchr(it, '"', size_t(end - it));
-                        if (c) [[likely]] {
-                           const auto n = uint8_t(static_cast<std::decay_t<decltype(it)>>(c) - it);
-                           static constexpr auto bsize = bucket_size(full_flat, N);
-                           const auto h = full_hash<HashInfo.min_length, HashInfo.max_length, HashInfo.seed>(it, n);
-                           return HashInfo.table[h % bsize];
-                        }
-                        else [[unlikely]] {
-                           return N;
-                        }
-                     }
-                     else {
-                        static_assert(false_v<T>, "invalid hash algorithm");
-                     }
-                  }();
-
-                  if (index >= N) [[unlikely]] {
-                     ctx.error = error_code::unexpected_enum;
-                     return;
-                  }
-
-                  jump_table<N>(
-                     [&]<size_t I>() {
-                        static constexpr auto TargetKey = get<I>(refl<T>.keys);
-                        static constexpr auto Length = TargetKey.size();
-                        if ((it + Length) >= end) [[unlikely]] {
-                           ctx.error = error_code::unexpected_enum;
-                        }
-                        else [[likely]] {
-                           it += Length;
-                        }
-                     },
-                     index);
-
-                  GLZ_MATCH_QUOTE;
-
-                  value = static_cast<std::decay_t<T>>(index);
-                  return;
-               }
-               else {
-                  const auto key = parse_key(ctx, it, end); // TODO: Use more optimal enum key parsing
-                  if (bool(ctx.error)) [[unlikely]]
-                     return;
-
-                  // TODO: use a compile time hash map
-                  constexpr auto& names = enum_names(T{});
-                  for (size_t i = 0; i < names.size(); ++i) {
-                     if (key == names[i]) {
-                        value = static_cast<std::decay_t<T>>(i);
-                        return;
-                     }
-                  }
+               if (index >= N) [[unlikely]] {
                   ctx.error = error_code::unexpected_enum;
                   return;
                }
+
+               jump_table<N>(
+                  [&]<size_t I>() {
+                     static constexpr auto TargetKey = get<I>(refl<T>.keys);
+                     static constexpr auto Length = TargetKey.size();
+                     if ((it + Length) >= end) [[unlikely]] {
+                        ctx.error = error_code::unexpected_enum;
+                     }
+                     else [[likely]] {
+                        it += Length;
+                     }
+                  },
+                  index);
+
+               GLZ_MATCH_QUOTE;
+
+               value = static_cast<std::decay_t<T>>(index);
+               return;
             }
             else {
                // TODO: use std::bit_cast???
