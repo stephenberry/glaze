@@ -1257,6 +1257,34 @@ namespace glz
                         std::memcpy(&h, it, 2);
                         return HashInfo.table[bitmix(h, HashInfo.seed) % bsize];
                      }
+                     else if constexpr (type == unique_per_length) {
+                        const auto* c = std::memchr(it, '"', size_t(end - it));
+                        if (c) [[likely]] {
+                           const auto n = uint8_t(static_cast<std::decay_t<decltype(it)>>(c) - it);
+                           const auto pos = per_length_info<T>.unique_index[n];
+                           if ((it + pos) >= end) [[unlikely]] {
+                              return N; // error
+                           }
+                           const auto h = bitmix(uint16_t(it[pos]) | (uint16_t(n) << 8), HashInfo.seed);
+                           static constexpr auto bsize = bucket_size(unique_per_length, N);
+                           return HashInfo.table[h % bsize];
+                        }
+                        else [[unlikely]] {
+                           return N;
+                        }
+                     }
+                     else if constexpr (type == full_flat) {
+                        const auto* c = std::memchr(it, '"', size_t(end - it));
+                        if (c) [[likely]] {
+                           const auto n = uint8_t(static_cast<std::decay_t<decltype(it)>>(c) - it);
+                           static constexpr auto bsize = bucket_size(full_flat, N);
+                           const auto h = full_hash<HashInfo.min_length, HashInfo.max_length, HashInfo.seed>(it, n);
+                           return HashInfo.table[h % bsize];
+                        }
+                        else [[unlikely]] {
+                           return N;
+                        }
+                     }
                      else {
                         static_assert(false_v<T>, "invalid hash algorithm");
                      }
