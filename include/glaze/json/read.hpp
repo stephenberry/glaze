@@ -294,12 +294,33 @@ namespace glz
                }
             }
          }
-         else if constexpr (type == front_16) {
-            static constexpr auto bsize = bucket_size(front_16, N);
-            // we don't need to check for second character because we are null terminated
-            uint16_t h;
-            std::memcpy(&h, it, 2);
-            return HashInfo.table[bitmix(h, HashInfo.seed) % bsize];
+         else if constexpr (type == front_hash) {
+            static constexpr auto bsize = bucket_size(front_hash, N);
+            if constexpr (HashInfo.front_hash_bytes == 2) {
+               // we don't need to check for second character because we are null terminated
+               uint16_t h;
+               std::memcpy(&h, it, 2);
+               return HashInfo.table[bitmix(h, HashInfo.seed) % bsize];
+            }
+            else if constexpr (HashInfo.front_hash_bytes == 4) {
+               if ((it + 4) >= end) [[unlikely]] {
+                  return N;
+               }
+               uint32_t h;
+               std::memcpy(&h, it, 4);
+               return HashInfo.table[bitmix(h, HashInfo.seed) % bsize];
+            }
+            else if constexpr (HashInfo.front_hash_bytes == 8) {
+               if ((it + 8) >= end) [[unlikely]] {
+                  return N;
+               }
+               uint64_t h;
+               std::memcpy(&h, it, 8);
+               return HashInfo.table[rich_bitmix(h, HashInfo.seed) % bsize];
+            }
+            else {
+               static_assert(false_v<T>, "invalid hash algorithm");
+            }
          }
          else if constexpr (type == unique_per_length) {
             const auto* c = quote_memchr<HashInfo.min_length>(it, end);
