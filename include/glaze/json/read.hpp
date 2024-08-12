@@ -598,8 +598,8 @@ namespace glz
                }
 
                uint64_t c{};
-               constexpr uint64_t u_true = 0b00000000'00000000'00000000'00000000'01100101'01110101'01110010'01110100;
-               constexpr uint64_t u_false = 0b00000000'00000000'00000000'01100101'01110011'01101100'01100001'01100110;
+               static constexpr uint64_t u_true = 0b00000000'00000000'00000000'00000000'01100101'01110101'01110010'01110100;
+               static constexpr uint64_t u_false = 0b00000000'00000000'00000000'01100101'01110011'01101100'01100001'01100110;
                if constexpr (Opts.null_terminated) {
                   // Note that because our buffer must be null terminated, we can read one more index without checking:
                   std::memcpy(&c, it, 5);
@@ -618,7 +618,6 @@ namespace glz
                   }
                }
                else {
-                  uint64_t c{};
                   std::memcpy(&c, it, 4);
                   if (c == u_true) {
                      value = true;
@@ -3292,8 +3291,15 @@ namespace glz
          {
             std::string& buffer = string_buffer();
             read<json>::op<Opts>(buffer, ctx, it, end);
-            if (bool(ctx.error)) [[unlikely]]
-               return;
+            if constexpr (Opts.null_terminated) {
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
+            }
+            else {
+               if (size_t(ctx.error) > size_t(error_code::end_reached)) [[unlikely]] {
+                  return;
+               }
+            }
             value = buffer;
          }
       };

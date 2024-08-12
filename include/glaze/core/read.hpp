@@ -100,8 +100,17 @@ namespace glz
       }
 
    finish:
-      if (ctx.error == error_code::end_reached && ctx.indentation_level == 0) {
-         ctx.error = error_code::none;
+      if constexpr (Opts.partial_read_nested || Opts.partial_read) {
+         // We don't do depth validation for partial reading
+         // This end_reached condition is set for valid end points in parsing
+         if (ctx.error == error_code::end_reached) {
+            ctx.error = error_code::none;
+         }
+      }
+      else {
+         if (ctx.error == error_code::end_reached && ctx.indentation_level == 0) {
+            ctx.error = error_code::none;
+         }
       }
       
       if constexpr (use_padded) {

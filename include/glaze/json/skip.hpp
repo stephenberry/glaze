@@ -10,14 +10,15 @@ namespace glz::detail
    template <opts Opts>
    void skip_object(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
-      GLZ_ADD_LEVEL;
       if constexpr (!Opts.validate_skipped) {
          ++it;
          GLZ_INVALID_END();
          skip_until_closed<Opts, '{', '}'>(ctx, it, end);
       }
       else {
+         GLZ_ADD_LEVEL;
          ++it;
+         GLZ_INVALID_END();
          GLZ_SKIP_WS();
          if (*it == '}') {
             GLZ_SUB_LEVEL;
@@ -54,13 +55,15 @@ namespace glz::detail
    template <opts Opts>
    void skip_array(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
-      GLZ_ADD_LEVEL;
       if constexpr (!Opts.validate_skipped) {
          ++it;
+         GLZ_INVALID_END();
          skip_until_closed<Opts, '[', ']'>(ctx, it, end);
       }
       else {
+         GLZ_ADD_LEVEL;
          ++it;
+         GLZ_INVALID_END();
          GLZ_SKIP_WS();
          if (*it == ']') {
             GLZ_SUB_LEVEL;
