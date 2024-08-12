@@ -815,6 +815,7 @@ namespace glz::detail
       unique_index, // A unique character index is used
       front_hash, // Hash on the front bytes of the key
       single_element, // Map is a single element
+      three_element_unique_index,
       unique_per_length, // Hash on a unique character index and the length of the key
       full_flat // Full key hash with a single table
    };
@@ -912,6 +913,9 @@ namespace glz::detail
          return (N == 1) ? 1 : std::bit_ceil(N * N) / 2;
       }
       case single_element: {
+         return 0;
+      }
+      case three_element_unique_index: {
          return 0;
       }
       case unique_per_length: {
@@ -1256,6 +1260,7 @@ namespace glz::detail
       return false;
    }
 
+   // The sequence of hashing algorithms written here determines the selection preference
    template <size_t N>
    constexpr auto make_keys_info(const std::array<sv, N>& keys)
    {
@@ -1283,15 +1288,43 @@ namespace glz::detail
          info.type = single_element;
          return info;
       }
-
-      if (const auto uindex = find_unique_index(keys)) {
-         info.type = unique_index;
-         info.unique_index = uindex.value();
-         return info;
-      }
-
+      
+      // N == 2 is optimized within other hashing methods
+      
       auto& seed = info.seed;
       constexpr uint64_t invalid_seed = 0;
+
+      if (const auto uindex = find_unique_index(keys))
+      {
+         info.unique_index = uindex.value();
+         
+         if (N == 3) {
+            // An xor of the first unique character with itself will result in 0 (our desired index)
+            // We use a hash algorithm that will produce zero if zero is given, so we can avoid a branch
+            // We need a seed produces hashes of [1, 2] for the 2nd and 3rd keys
+            
+            const auto u = info.unique_index;
+            const auto first = uint8_t(keys[0][u]);
+            const auto mix1 = uint8_t(keys[1][u]) ^ first;
+            const auto mix2 = uint8_t(keys[2][u]) ^ first;
+            
+            for (size_t i = 0; i < primes_64.size(); ++i) {
+               seed = primes_64[i];
+               uint8_t h1 = (mix1 * seed) % 4;
+               uint8_t h2 = (mix2 * seed) % 4;
+               
+               if (h1 == 1 && h2 == 2) {
+                  info.type = three_element_unique_index;
+                  return info;
+               }
+            }
+            // Otherwise we failed to find a seed and we'll use another algorithm
+         }
+         else {
+            info.type = unique_index;
+            return info;
+         }
+      }
 
       if (front_bytes_hash_info<uint16_t>(keys, info)) {
          return info;
@@ -1454,6 +1487,14 @@ namespace glz::detail
             hash_info_t<T, bucket_size(single_element, N)> info{.type = single_element};
             info.min_length = k_info.min_length;
             info.max_length = k_info.max_length;
+            return info;
+         }
+         else if constexpr (type == three_element_unique_index) {
+            hash_info_t<T, bucket_size(three_element_unique_index, N)> info{.type = three_element_unique_index};
+            info.min_length = k_info.min_length;
+            info.max_length = k_info.max_length;
+            info.seed = k_info.seed;
+            info.unique_index = k_info.unique_index;
             return info;
          }
          else if constexpr (type == front_hash) {
