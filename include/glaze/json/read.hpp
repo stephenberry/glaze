@@ -228,7 +228,7 @@ namespace glz
             }
          }
       }
-      
+
       template <size_t min_length>
       GLZ_ALWAYS_INLINE constexpr const void* quote_memchr(auto&& it, auto&& end) noexcept
       {
@@ -246,13 +246,13 @@ namespace glz
             return std::memchr(it, '"', size_t(end - it));
          }
       }
-      
+
       template <class T, auto HashInfo>
       GLZ_ALWAYS_INLINE constexpr size_t decode_hash(auto&& it, auto&& end) noexcept
       {
          constexpr auto type = HashInfo.type;
          constexpr auto N = refl<T>.N;
-         
+
          using enum hash_type;
          if constexpr (type == unique_index) {
             if constexpr (HashInfo.sized_hash) {
@@ -1247,7 +1247,7 @@ namespace glz
                if constexpr (!has_ws_handled(Opts)) {
                   GLZ_SKIP_WS();
                }
-               
+
                GLZ_MATCH_QUOTE;
 
                const auto index = decode_hash<T, hash_info<T>>(it, end);
