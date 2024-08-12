@@ -74,9 +74,7 @@ namespace glz
       int64_t exp_number = 0; // explicit exponential part
       if ((UC('e') == *p) || (UC('E') == *p)) {
          UC const* location_of_e = p;
-         if ((UC('e') == *p) || (UC('E') == *p)) {
-            ++p;
-         }
+         ++p;
          bool neg_exp = false;
          if (UC('-') == *p) {
             neg_exp = true;
