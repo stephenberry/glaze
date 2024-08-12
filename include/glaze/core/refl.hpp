@@ -790,16 +790,16 @@ namespace glz::detail
       h *= seed;
       return h ^ std::rotr(h, 49);
    };
-   
+
    // Use when hashing large chunks of characters that are likely very similar
    GLZ_ALWAYS_INLINE constexpr uint64_t rich_bitmix(uint64_t h, const uint64_t seed) noexcept
    {
-       h ^= h >> 23;
-       h *= 0x2127599bf4325c37ULL;
-       h ^= seed;
-       h *= 0x880355f21e6d1965ULL;
-       h ^= h >> 47;
-       return h;
+      h ^= h >> 23;
+      h *= 0x2127599bf4325c37ULL;
+      h ^= seed;
+      h *= 0x880355f21e6d1965ULL;
+      h ^= h >> 47;
+      return h;
    }
 
    template <size_t N>
@@ -1144,14 +1144,14 @@ namespace glz::detail
          return bitmix(to_uint64(it + n - 8), h);
       }
    }
-   
+
    template <std::integral ChunkType, size_t N>
    constexpr bool front_bytes_hash_info(const std::array<sv, N>& keys, keys_info_t& info) noexcept
    {
       if (info.min_length < sizeof(ChunkType)) {
          return false;
       }
-      
+
       // check for uniqueness
       std::array<ChunkType, N> k;
       for (size_t i = 0; i < N; ++i) {
@@ -1160,19 +1160,19 @@ namespace glz::detail
          }
          else if constexpr (std::same_as<ChunkType, uint32_t>) {
             k[i] = uint32_t(keys[i][0]) //
-                 | (uint32_t(keys[i][1]) << 8) //
-                 | (uint32_t(keys[i][2]) << 16) //
-                 | (uint32_t(keys[i][3]) << 24);
+                   | (uint32_t(keys[i][1]) << 8) //
+                   | (uint32_t(keys[i][2]) << 16) //
+                   | (uint32_t(keys[i][3]) << 24);
          }
          else if constexpr (std::same_as<ChunkType, uint64_t>) {
             k[i] = uint64_t(keys[i][0]) //
-                 | (uint64_t(keys[i][1]) << 8) //
-                 | (uint64_t(keys[i][2]) << 16) //
-                 | (uint64_t(keys[i][3]) << 24) //
-                 | (uint64_t(keys[i][4]) << 32) //
-                 | (uint64_t(keys[i][5]) << 40) //
-                 | (uint64_t(keys[i][6]) << 48) //
-                 | (uint64_t(keys[i][7]) << 56);
+                   | (uint64_t(keys[i][1]) << 8) //
+                   | (uint64_t(keys[i][2]) << 16) //
+                   | (uint64_t(keys[i][3]) << 24) //
+                   | (uint64_t(keys[i][4]) << 32) //
+                   | (uint64_t(keys[i][5]) << 40) //
+                   | (uint64_t(keys[i][6]) << 48) //
+                   | (uint64_t(keys[i][7]) << 56);
          }
          else {
             static_assert(false_v<ChunkType>);
@@ -1205,19 +1205,21 @@ namespace glz::detail
                   }
                   else if constexpr (std::same_as<ChunkType, uint32_t>) {
                      return bitmix(uint32_t(key[0]) //
-                                   | (uint32_t(key[1]) << 8) //
-                                   | (uint32_t(key[2]) << 16) //
-                                   | (uint32_t(key[3]) << 24), seed);
+                                      | (uint32_t(key[1]) << 8) //
+                                      | (uint32_t(key[2]) << 16) //
+                                      | (uint32_t(key[3]) << 24),
+                                   seed);
                   }
                   else if constexpr (std::same_as<ChunkType, uint64_t>) {
                      return rich_bitmix(uint64_t(key[0]) //
-                                   | (uint64_t(key[1]) << 8) //
-                                   | (uint64_t(key[2]) << 16) //
-                                   | (uint64_t(key[3]) << 24) //
-                                   | (uint64_t(key[4]) << 32) //
-                                   | (uint64_t(key[5]) << 40) //
-                                   | (uint64_t(key[6]) << 48) //
-                                   | (uint64_t(key[7]) << 56), seed);
+                                           | (uint64_t(key[1]) << 8) //
+                                           | (uint64_t(key[2]) << 16) //
+                                           | (uint64_t(key[3]) << 24) //
+                                           | (uint64_t(key[4]) << 32) //
+                                           | (uint64_t(key[5]) << 40) //
+                                           | (uint64_t(key[6]) << 48) //
+                                           | (uint64_t(key[7]) << 56),
+                                        seed);
                   }
                   else {
                      static_assert(false_v<ChunkType>);
@@ -1252,7 +1254,7 @@ namespace glz::detail
          info.front_hash_bytes = sizeof(ChunkType);
          return true;
       }
-      
+
       return false;
    }
 
@@ -1472,19 +1474,23 @@ namespace glz::detail
                   }
                   else if (info.front_hash_bytes == sizeof(uint32_t)) {
                      return bitmix(uint32_t(key[0]) //
-                                   | (uint32_t(key[1]) << 8) //
-                                   | (uint32_t(key[2]) << 16) //
-                                   | (uint32_t(key[3]) << 24), info.seed) % bsize;
+                                      | (uint32_t(key[1]) << 8) //
+                                      | (uint32_t(key[2]) << 16) //
+                                      | (uint32_t(key[3]) << 24),
+                                   info.seed) %
+                            bsize;
                   }
                   else if (info.front_hash_bytes == sizeof(uint64_t)) {
                      return rich_bitmix(uint64_t(key[0]) //
-                                   | (uint64_t(key[1]) << 8) //
-                                   | (uint64_t(key[2]) << 16) //
-                                   | (uint64_t(key[3]) << 24) //
-                                   | (uint64_t(key[4]) << 32) //
-                                   | (uint64_t(key[5]) << 40) //
-                                   | (uint64_t(key[6]) << 48) //
-                                   | (uint64_t(key[7]) << 56), info.seed) % bsize;
+                                           | (uint64_t(key[1]) << 8) //
+                                           | (uint64_t(key[2]) << 16) //
+                                           | (uint64_t(key[3]) << 24) //
+                                           | (uint64_t(key[4]) << 32) //
+                                           | (uint64_t(key[5]) << 40) //
+                                           | (uint64_t(key[6]) << 48) //
+                                           | (uint64_t(key[7]) << 56),
+                                        info.seed) %
+                            bsize;
                   }
                   else {
                      return 0; // MSVC has a compiler bug that prevents us from returning N, but this is unreachable
