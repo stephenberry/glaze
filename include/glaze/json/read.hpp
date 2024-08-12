@@ -254,13 +254,26 @@ namespace glz
                }
             }
             else {
-               static constexpr auto uindex = HashInfo.unique_index;
-               if constexpr (uindex > 0) {
-                  if ((it + uindex) >= end) [[unlikely]] {
-                     return N; // error
+               if constexpr (N == 2) {
+                  static constexpr auto uindex = HashInfo.unique_index;
+                  if constexpr (uindex > 0) {
+                     if ((it + uindex) >= end) [[unlikely]] {
+                        return N; // error
+                     }
                   }
+                  // Avoids using a hash table
+                  static constexpr auto first_key_char = refl<T>.keys[0][uindex];
+                  return size_t(bool(it[uindex] ^ first_key_char));
                }
-               return HashInfo.table[uint8_t(it[uindex])];
+               else {
+                  static constexpr auto uindex = HashInfo.unique_index;
+                  if constexpr (uindex > 0) {
+                     if ((it + uindex) >= end) [[unlikely]] {
+                        return N; // error
+                     }
+                  }
+                  return HashInfo.table[uint8_t(it[uindex])];
+               }
             }
          }
          else if constexpr (type == front_16) {
