@@ -2,7 +2,6 @@
 // For the license information refer to glaze.hpp
 
 #define UT_RUN_TIME_ONLY
-#define GLZ_NULL_TERMINATED false
 
 #include <any>
 #include <bitset>
