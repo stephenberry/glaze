@@ -1377,11 +1377,14 @@ namespace glz::detail
          using enum hash_type;
          if constexpr (type == single_element) {
             hash_info_t<T, bucket_size(single_element, N)> info{.type = single_element};
+            info.min_length = k_info.min_length;
+            info.max_length = k_info.max_length;
             return info;
          }
          else if constexpr (type == front_16) {
             constexpr auto bsize = bucket_size(front_16, N);
             hash_info_t<T, bsize> info{.type = front_16, .seed = k_info.seed};
+            info.min_length = k_info.min_length;
             info.max_length = k_info.max_length;
             info.table.fill(uint8_t(N));
 
@@ -1394,6 +1397,7 @@ namespace glz::detail
          }
          else if constexpr (type == unique_index && N < 256) {
             hash_info_t<T, bucket_size(unique_index, N)> info{.type = unique_index, .seed = k_info.seed};
+            info.min_length = k_info.min_length;
             info.max_length = k_info.max_length;
             info.table.fill(N);
             info.unique_index = k_info.unique_index;
@@ -1419,6 +1423,7 @@ namespace glz::detail
 #if !defined(_MSC_VER)
          else if constexpr (type == unique_per_length) {
             hash_info_t<T, bucket_size(unique_per_length, N)> info{.type = unique_per_length, .seed = k_info.seed};
+            info.min_length = k_info.min_length;
             info.max_length = k_info.max_length;
             info.table.fill(uint8_t(N));
             info.sized_hash = true;

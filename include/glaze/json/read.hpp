@@ -229,6 +229,24 @@ namespace glz
          }
       }
       
+      template <size_t min_length>
+      GLZ_ALWAYS_INLINE constexpr const void* quote_memchr(auto&& it, auto&& end) noexcept
+      {
+         if constexpr (min_length >= 4) {
+            // Skipping makes the bifurcation worth it
+            const auto* start = it + min_length;
+            if (start >= end) [[unlikely]] {
+               return nullptr;
+            }
+            else [[likely]] {
+               return std::memchr(start, '"', size_t(end - start));
+            }
+         }
+         else {
+            return std::memchr(it, '"', size_t(end - it));
+         }
+      }
+      
       template <class T, auto HashInfo>
       GLZ_ALWAYS_INLINE constexpr size_t decode_hash(auto&& it, auto&& end) noexcept
       {
@@ -238,7 +256,7 @@ namespace glz
          using enum hash_type;
          if constexpr (type == unique_index) {
             if constexpr (HashInfo.sized_hash) {
-               const auto* c = std::memchr(it, '"', size_t(end - it));
+               const auto* c = quote_memchr<HashInfo.min_length>(it, end);
                if (c) [[likely]] {
                   const auto n = size_t(static_cast<std::decay_t<decltype(it)>>(c) - it);
                   if (n == 0 || n > HashInfo.max_length) {
@@ -284,7 +302,7 @@ namespace glz
             return HashInfo.table[bitmix(h, HashInfo.seed) % bsize];
          }
          else if constexpr (type == unique_per_length) {
-            const auto* c = std::memchr(it, '"', size_t(end - it));
+            const auto* c = quote_memchr<HashInfo.min_length>(it, end);
             if (c) [[likely]] {
                const auto n = uint8_t(static_cast<std::decay_t<decltype(it)>>(c) - it);
                const auto pos = per_length_info<T>.unique_index[n];
@@ -300,7 +318,7 @@ namespace glz
             }
          }
          else if constexpr (type == full_flat) {
-            const auto* c = std::memchr(it, '"', size_t(end - it));
+            const auto* c = quote_memchr<HashInfo.min_length>(it, end);
             if (c) [[likely]] {
                const auto n = uint8_t(static_cast<std::decay_t<decltype(it)>>(c) - it);
                static constexpr auto bsize = bucket_size(full_flat, N);
