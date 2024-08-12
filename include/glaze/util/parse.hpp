@@ -721,8 +721,6 @@ namespace glz::detail
       requires(has_is_padded(Opts))
    GLZ_ALWAYS_INLINE void skip_string_view(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
-      static_assert(std::contiguous_iterator<std::decay_t<decltype(it)>>);
-
       while (it < end) [[likely]] {
          uint64_t chunk;
          std::memcpy(&chunk, it, 8);
@@ -751,8 +749,6 @@ namespace glz::detail
       requires(!has_is_padded(Opts))
    GLZ_ALWAYS_INLINE void skip_string_view(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
-      static_assert(std::contiguous_iterator<std::decay_t<decltype(it)>>);
-
       for (const auto fin = end - 7; it < fin;) {
          uint64_t chunk;
          std::memcpy(&chunk, it, 8);

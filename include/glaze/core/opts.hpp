@@ -33,11 +33,17 @@ namespace glz
    // We use a macro rather than an alias because some compilers print out alias definitions, extending length.
 #define bool_t uint8_t
 
+   // This macro exists so that we can change the default behavior
+   // to easily run tests as if strings were not null terminated
+#ifndef GLZ_NULL_TERMINATED
+#define GLZ_NULL_TERMINATED true
+#endif
+
    struct opts
    {
       // USER CONFIGURABLE
       uint32_t format = json;
-      bool_t null_terminated = false; // Whether the input buffer is null terminated
+      bool_t null_terminated = GLZ_NULL_TERMINATED; // Whether the input buffer is null terminated
       bool_t comments = false; // Support reading in JSONC style comments
       bool_t error_on_unknown_keys = true; // Error when an unknown key is encountered
       bool_t skip_null_members = true; // Skip writing out params in an object if the value is null

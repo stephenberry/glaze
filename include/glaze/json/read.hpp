@@ -2756,7 +2756,7 @@ namespace glz
             else {
                using const_glaze_types = typename tuple_types<Tuple>::glaze_const_types;
                bool found_match{};
-               for_each<glz::tuple_size_v<const_glaze_types>>([&]([[maybe_unused]] auto I) mutable {
+               for_each<glz::tuple_size_v<const_glaze_types>>([&]([[maybe_unused]] auto I) {
                   if (found_match) {
                      return;
                   }
@@ -2768,9 +2768,17 @@ namespace glz
                   static constexpr auto const_value{*meta_wrapper_v<V>};
                   if (substitute == const_value) {
                      found_match = true;
-                     if (!std::holds_alternative<V>(value)) value = V{};
+                     if (!std::holds_alternative<V>(value)) {
+                        value = V{};
+                     }
                   }
                   else {
+                     if constexpr (not Options.null_terminated) {
+                        if (ctx.error == error_code::end_reached) {
+                           // reset the context for next attempt
+                           ctx.error = error_code::none;
+                        }
+                     }
                      it = copy_it;
                   }
                });

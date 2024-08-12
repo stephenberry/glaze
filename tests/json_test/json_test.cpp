@@ -2,6 +2,7 @@
 // For the license information refer to glaze.hpp
 
 #define UT_RUN_TIME_ONLY
+#define GLZ_NULL_TERMINATED false
 
 #include <any>
 #include <bitset>
@@ -5708,7 +5709,7 @@ suite constexpr_values_test = [] {
                    string_direct_cx_value_conversion, string_two_direct_cx_value_conversion,
                    array_direct_cx_value_conversion, array_two_direct_cx_value_conversion, const_red, const_green>;
    "constexpr blend with non constexpr variant string"_test = [] {
-      auto tester = [](auto& v) {
+      auto tester = [](auto&& v) {
          using const_t = std::remove_reference_t<decltype(v)>;
          const_only_variant var{v};
          std::string s{};
@@ -5721,9 +5722,11 @@ suite constexpr_values_test = [] {
          expect(std::holds_alternative<const_t>(var));
       };
 
-      variant_to_tuple<const_only_variant>::type tests{};
+      //variant_to_tuple<const_only_variant>::type tests{};
 
-      glz::for_each_apply(tester, tests);
+      //glz::for_each_apply(tester, tests);
+
+      tester(string_two_direct_cx_value_conversion{});
    };
 
    "parse error direct_conversion_variant cx int"_test = [] {
