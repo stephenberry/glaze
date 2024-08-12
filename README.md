@@ -20,6 +20,7 @@ Glaze also supports:
 ## Highlights
 
 - Pure, compile time reflection for structs
+- JSON [RFC 8259](https://datatracker.ietf.org/doc/html/rfc8259) compliance with UTF-8 validation
 - Standard C++ library support
 - Header only
 - Direct to memory serialization/deserialization
