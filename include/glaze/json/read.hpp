@@ -303,7 +303,7 @@ namespace glz
             }
             // Avoids using a hash table
             static constexpr auto first_key_char = refl<T>.keys[0][uindex];
-            return ((it[uindex] ^ first_key_char) * HashInfo.seed) % 4;
+            return (uint8_t(it[uindex] ^ first_key_char) * HashInfo.seed) % 4;
          }
          else if constexpr (type == front_hash) {
             static constexpr auto bsize = bucket_size(front_hash, N);
