@@ -109,7 +109,7 @@ namespace glz
                }
             }
             else {
-               auto [ptr, ec] = glz::from_chars(it, end, value);
+               auto [ptr, ec] = glz::from_chars<Opts.null_terminated>(it, end, value);
                if (ec != std::errc()) [[unlikely]] {
                   ctx.error = error_code::parse_number_failure;
                   return;

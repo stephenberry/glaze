@@ -808,7 +808,7 @@ namespace glz
                      // Hardware may interact with value changes, so we parse into a temporary and assign in one
                      // place
                      V temp;
-                     auto [ptr, ec] = glz::from_chars(it, end, temp);
+                     auto [ptr, ec] = glz::from_chars<Opts.null_terminated>(it, end, temp);
                      if (ec != std::errc()) [[unlikely]] {
                         ctx.error = error_code::parse_number_failure;
                         return;
@@ -817,7 +817,7 @@ namespace glz
                      it = ptr;
                   }
                   else {
-                     auto [ptr, ec] = glz::from_chars(it, end, value);
+                     auto [ptr, ec] = glz::from_chars<Opts.null_terminated>(it, end, value);
                      if (ec != std::errc()) [[unlikely]] {
                         ctx.error = error_code::parse_number_failure;
                         return;
@@ -1952,9 +1952,10 @@ namespace glz
             const auto current_file = ctx.current_file;
             ctx.current_file = string_file_path;
 
-            // We need to allocate a new buffer here because we could call another includer that uses buffer
+            // We need to allocate a new buffer here because we could call another includer that uses the buffer
             std::string nested_buffer = buffer;
-            const auto ecode = glz::read<disable_padding_on<Opts>()>(value.value, nested_buffer, ctx);
+            static constexpr auto NestedOpts = opt_true<disable_padding_on<Opts>(), &opts::null_terminated>;
+            const auto ecode = glz::read<NestedOpts>(value.value, nested_buffer, ctx);
             if (bool(ctx.error)) [[unlikely]] {
                ctx.error = error_code::includer_error;
                auto& error_msg = error_buffer();
