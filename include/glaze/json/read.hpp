@@ -312,7 +312,9 @@ namespace glz
          else if constexpr (type == front_hash) {
             static constexpr auto bsize = bucket_size(front_hash, N);
             if constexpr (HashInfo.front_hash_bytes == 2) {
-               // we don't need to check for second character because we are null terminated
+               if ((it + 2) >= end) [[unlikely]] {
+                  return N; // error
+               }
                uint16_t h;
                std::memcpy(&h, it, 2);
                return HashInfo.table[bitmix(h, HashInfo.seed) % bsize];
