@@ -2330,6 +2330,7 @@ namespace glz
                      if constexpr ((glaze_object_t<T> || reflectable<T>)&&((is_partial_read<T> || Opts.partial_read) &&
                                                                            Opts.error_on_missing_keys)) {
                         ctx.error = error_code::missing_key;
+                        return;
                      }
                      else {
                         ++it;
@@ -2337,6 +2338,7 @@ namespace glz
                            constexpr auto req_fields = required_fields<T, Opts>();
                            if ((req_fields & fields) != req_fields) {
                               ctx.error = error_code::missing_key;
+                              return;
                            }
                         }
                         GLZ_VALID_END();
