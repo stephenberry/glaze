@@ -294,6 +294,17 @@ namespace glz
                }
             }
          }
+         else if constexpr (type == three_element_unique_index) {
+            static constexpr auto uindex = HashInfo.unique_index;
+            if constexpr (uindex > 0) {
+               if ((it + uindex) >= end) [[unlikely]] {
+                  return N; // error
+               }
+            }
+            // Avoids using a hash table
+            static constexpr auto first_key_char = refl<T>.keys[0][uindex];
+            return (uint8_t(it[uindex] ^ first_key_char) * HashInfo.seed) % 4;
+         }
          else if constexpr (type == front_hash) {
             static constexpr auto bsize = bucket_size(front_hash, N);
             if constexpr (HashInfo.front_hash_bytes == 2) {
