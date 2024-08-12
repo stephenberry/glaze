@@ -4,6 +4,7 @@
 #pragma once
 
 #include "glaze/core/common.hpp"
+#include "glaze/util/primes_64.hpp"
 
 namespace glz::detail
 {
@@ -784,67 +785,22 @@ namespace glz::detail
 
 namespace glz::detail
 {
-   // Array of random 64bit primes to avoid needing a generator
-   // If you have a 10% chance of success, 128 tries has 1 : 719'380 odds of failure
-   // formula: 1 / (1 - .10)^128
-   // If you have a 15% chance of success, 128 tries has 1 : 1'082'374'392 odds of failure
-   constexpr std::array<uint64_t, 128> primes_64 = {
-      12835920395396008793ull, 15149911783463666029ull, 15211026597907833541ull, 14523965596842631817ull,
-      16449355892475772073ull, 15002762636229733759ull, 12275448295353509891ull, 16826285440568349437ull,
-      17433093378066653197ull, 10902769355249605843ull,
-      // 10
-      13434269760430048511ull, 11322871945166463571ull, 9764742595129026499ull, 13799666429485716229ull,
-      14861204462552525359ull, 17599486090324515493ull, 10266842847898195667ull, 13468209895759219897ull,
-      16289274021814922521ull, 17204791465022878523ull,
-      // 20
-      17650915497556268801ull, 9455725851336774341ull, 9961868820920778071ull, 18289017266131008167ull,
-      16309921878298474091ull, 11652007405601517343ull, 17496906368504743207ull, 13339901080756288547ull,
-      10018112158103183191ull, 14981853847663275059ull,
-      // 30
-      15024425770511821387ull, 10063189458099824779ull, 11839419318547724641ull, 12830508825440804579ull,
-      18433073685722024387ull, 17299753196133391897ull, 15396274865347173053ull, 13749499465490568733ull,
-      13860497513065316459ull, 11692484392508072123ull,
-      // 40
-      9438685344574842347ull, 14400973074801304571ull, 15991854874494707081ull, 12114831452910579989ull,
-      13998562683662696077ull, 10851982863396796529ull, 10344539733475859441ull, 10045431121852560691ull,
-      12186301656248163491ull, 10339340957932801343ull,
-      // 50
-      12602808298244447957ull, 9729322814141112953ull, 16362682788060189359ull, 14286005063617200559ull,
-      10711312188467965759ull, 17189878401094383577ull, 14020292519311722517ull, 14345076507873302501ull,
-      12604083410008146689ull, 13199781912416808047ull,
-      // 60
-      12315285542260457987ull, 9594690105092455043ull, 18319948908022195243ull, 16595976138570481823ull,
-      12195274638706298323ull, 17646127793987855047ull, 16841966643138849923ull, 13507873747212661603ull,
-      13643501673321416333ull, 12363547163076811279ull,
-      // 70
-      14884690672546139069ull, 16390599211964954609ull, 13389084014248465909ull, 9833412254409620477ull,
-      13398707790907619797ull, 18368581595698861159ull, 10384836406878147059ull, 9453231669972318281ull,
-      16669513057697818169ull, 14697852657232879237ull,
-      // 80
-      15363091209268144241ull, 15275124567630446861ull, 17481357028816037011ull, 12534821792295694231ull,
-      11054303650520058359ull, 12403322865831490261ull, 16889743306920098983ull, 16047403249754946029ull,
-      16775982981238529423ull, 12421181800577384167ull,
-      // 90
-      9280311361047996317ull, 12160582891762080001ull, 17367939315478490407ull, 9267482598791369377ull,
-      17806662591996060709ull, 11533875385674872861ull, 16816712667689633689ull, 16223588510861656927ull,
-      13482535659370429831ull, 11801382448764686461ull,
-      // 100
-      18177646705946605939ull, 12608957628213527767ull, 17302819561726521227ull, 10609776890453861677ull,
-      16615779974080376533ull, 14779379909309032351ull, 14673741062489338759ull, 11634351264868983527ull,
-      13874971253878591537ull, 17332275173558136899ull,
-      // 110
-      11257300840627829851ull, 13341443249676872783ull, 11607230252125083613ull, 12141161410409106457ull,
-      13282325402819801929ull, 17990774082148480601ull, 15496227723025164119ull, 15956314649183876369ull,
-      9834926670622290883ull, 16435035491439552943ull,
-      // 120
-      14806063675962222449ull, 18113370406266068597ull, 9968958022058734229ull, 14864844583184822773ull,
-      11170341707334307859ull, 10502344452987841991ull, 16247553219265957739ull, 14933089789266129581ull};
-
-   constexpr uint64_t bitmix(uint64_t h, const uint64_t seed) noexcept
+   GLZ_ALWAYS_INLINE constexpr uint64_t bitmix(uint64_t h, const uint64_t seed) noexcept
    {
       h *= seed;
       return h ^ std::rotr(h, 49);
    };
+
+   // Use when hashing large chunks of characters that are likely very similar
+   GLZ_ALWAYS_INLINE constexpr uint64_t rich_bitmix(uint64_t h, const uint64_t seed) noexcept
+   {
+      h ^= h >> 23;
+      h *= 0x2127599bf4325c37ULL;
+      h ^= seed;
+      h *= 0x880355f21e6d1965ULL;
+      h ^= h >> 47;
+      return h;
+   }
 
    template <size_t N>
    using bucket_value_t = std::conditional_t < N<256, uint8_t, uint16_t>;
@@ -854,11 +810,94 @@ namespace glz::detail
    // string comparisons in these cases.
    // However, there are obvious memory costs with increasing the bucket size.
 
-   enum struct hash_type {
-      invalid,
-      unique_index,
-      front_16,
+   enum struct hash_type { //
+      invalid, // hashing failed
+      unique_index, // A unique character index is used
+      front_hash, // Hash on the front bytes of the key
+      single_element, // Map is a single element
+      three_element_unique_index,
+      unique_per_length, // Hash on a unique character index and the length of the key
+      full_flat // Full key hash with a single table
    };
+
+   struct unique_per_length_t
+   {
+      bool valid{};
+      std::array<uint8_t, 256> unique_index{};
+   };
+
+   inline constexpr unique_per_length_t unique_per_length_info(const auto& input_strings) noexcept
+   {
+      // TODO: MSVC fixed the related compiler bug, but GitHub Actions has not caught up yet
+#if !defined(_MSC_VER)
+      const auto N = input_strings.size();
+      if (N == 0) {
+         return {};
+      }
+
+      std::vector<std::string_view> strings{};
+      for (size_t i = 0; i < N; ++i) {
+         strings.emplace_back(input_strings[i]);
+      }
+
+      std::ranges::sort(strings, [](const auto& a, const auto& b) { return a.size() < b.size(); });
+
+      if (strings.front().empty() || strings.back().size() >= 255) {
+         return {};
+      }
+
+      unique_per_length_t info{.valid = true};
+      info.unique_index.fill(255);
+
+      // Process each unique length
+      for (size_t len = strings.front().size(); len <= strings.back().size(); ++len) {
+         auto range_begin = std::lower_bound(strings.begin(), strings.end(), len,
+                                             [](const auto& s, size_t l) { return s.length() < l; });
+
+         auto range_end =
+            std::upper_bound(range_begin, strings.end(), len, [](size_t l, const auto& s) { return l < s.length(); });
+
+         auto range = std::ranges::subrange(range_begin, range_end);
+
+         if (range.begin() == range.end()) continue;
+
+         // Find the first unique character for this length
+         bool found = false;
+         for (size_t pos = 0; pos < len; ++pos) {
+            std::array<int, 256> char_count = {};
+
+            // Count occurrences of each character at this position
+            for (auto it = range.begin(); it != range.end(); ++it) {
+               ++char_count[uint8_t((*it)[pos])];
+            }
+
+            bool collision = false;
+            for (const auto count : char_count) {
+               if (count > 1) {
+                  collision = true;
+                  break;
+               }
+            }
+            if (not collision) {
+               info.unique_index[len] = uint8_t(pos);
+               found = true;
+               break;
+            }
+         }
+         if (not found) {
+            info.valid = false;
+            return info;
+         }
+      }
+
+      return info;
+#else
+      return {};
+#endif
+   }
+
+   template <class T>
+   inline constexpr auto per_length_info = unique_per_length_info(refl<T>.keys);
 
    consteval size_t bucket_size(hash_type type, size_t N)
    {
@@ -870,7 +909,19 @@ namespace glz::detail
       case unique_index: {
          return 256;
       }
-      case front_16: {
+      case front_hash: {
+         return (N == 1) ? 1 : std::bit_ceil(N * N) / 2;
+      }
+      case single_element: {
+         return 0;
+      }
+      case three_element_unique_index: {
+         return 0;
+      }
+      case unique_per_length: {
+         return (N == 1) ? 1 : std::bit_ceil(N * N) / 2;
+      }
+      case full_flat: {
          return (N == 1) ? 1 : std::bit_ceil(N * N) / 2;
       }
       default: {
@@ -889,6 +940,7 @@ namespace glz::detail
       uint64_t seed{};
       size_t unique_index = (std::numeric_limits<size_t>::max)();
       bool sized_hash = false;
+      size_t front_hash_bytes{};
    };
 
    // For hash algorithm a value of the seed indicates an invalid hash
@@ -904,10 +956,12 @@ namespace glz::detail
       static constexpr auto invalid = static_cast<V>(N);
 
       std::array<V, Slots> table{}; // hashes to switch-case indices
+      size_t min_length = (std::numeric_limits<size_t>::max)();
       size_t max_length{};
       uint64_t seed{};
       size_t unique_index = (std::numeric_limits<size_t>::max)();
       bool sized_hash = false;
+      size_t front_hash_bytes{};
    };
 
    constexpr std::optional<size_t> find_unique_index(const auto& strings)
@@ -1022,7 +1076,193 @@ namespace glz::detail
       return best_index;
    }
 
-   // TODO: Add N == 1 optimization
+   // Do not call this at runtime, it is assumes the key lies within min_length and max_length
+   inline constexpr size_t full_hash_impl(const sv key, const uint64_t seed, const auto min_length,
+                                          const auto max_length) noexcept
+   {
+      if (max_length < 8) {
+         return bitmix(to_uint64_n_below_8(key.data(), key.size()), seed);
+      }
+      else if (min_length > 7) {
+         const auto n = key.size();
+         uint64_t h = seed;
+         const auto* data = key.data();
+         const auto* end7 = data + n - 7;
+         for (auto d0 = data; d0 < end7; d0 += 8) {
+            h = bitmix(to_uint64(d0), h);
+         }
+         // Handle potential tail. We know we have at least 8
+         return bitmix(to_uint64(data + n - 8), h);
+      }
+      else {
+         const auto n = key.size();
+         const auto* data = key.data();
+
+         if (n < 8) {
+            return bitmix(to_uint64_n_below_8(data, n), seed);
+         }
+
+         uint64_t h = seed;
+         const auto* end7 = data + n - 7;
+         for (auto d0 = data; d0 < end7; d0 += 8) {
+            h = bitmix(to_uint64(d0), h);
+         }
+         // Handle potential tail. We know we have at least 8
+         return bitmix(to_uint64(data + n - 8), h);
+      }
+   }
+
+   // runtime full hash algorithm
+   template <size_t min_length, size_t max_length, size_t seed>
+   inline constexpr size_t full_hash(const auto* it, const size_t n) noexcept
+   {
+      if constexpr (max_length < 8) {
+         if (n > 7) {
+            return seed;
+         }
+         return bitmix(to_uint64_n_below_8(it, n), seed);
+      }
+      else if constexpr (min_length > 7) {
+         if (n < 8) {
+            return seed;
+         }
+         uint64_t h = seed;
+         const auto* end7 = it + n - 7;
+         for (auto d0 = it; d0 < end7; d0 += 8) {
+            h = bitmix(to_uint64(d0), h);
+         }
+         // Handle potential tail. We know we have at least 8
+         return bitmix(to_uint64(it + n - 8), h);
+      }
+      else {
+         if (n < 8) {
+            return bitmix(to_uint64_n_below_8(it, n), seed);
+         }
+
+         uint64_t h = seed;
+         const auto* end7 = it + n - 7;
+         for (auto d0 = it; d0 < end7; d0 += 8) {
+            h = bitmix(to_uint64(d0), h);
+         }
+         // Handle potential tail. We know we have at least 8
+         return bitmix(to_uint64(it + n - 8), h);
+      }
+   }
+
+   template <std::integral ChunkType, size_t N>
+   constexpr bool front_bytes_hash_info(const std::array<sv, N>& keys, keys_info_t& info) noexcept
+   {
+      if (info.min_length < sizeof(ChunkType)) {
+         return false;
+      }
+
+      // check for uniqueness
+      std::array<ChunkType, N> k;
+      for (size_t i = 0; i < N; ++i) {
+         if constexpr (std::same_as<ChunkType, uint16_t>) {
+            k[i] = uint16_t(keys[i][0]) | (uint16_t(keys[i][1]) << 8);
+         }
+         else if constexpr (std::same_as<ChunkType, uint32_t>) {
+            k[i] = uint32_t(keys[i][0]) //
+                   | (uint32_t(keys[i][1]) << 8) //
+                   | (uint32_t(keys[i][2]) << 16) //
+                   | (uint32_t(keys[i][3]) << 24);
+         }
+         else if constexpr (std::same_as<ChunkType, uint64_t>) {
+            k[i] = uint64_t(keys[i][0]) //
+                   | (uint64_t(keys[i][1]) << 8) //
+                   | (uint64_t(keys[i][2]) << 16) //
+                   | (uint64_t(keys[i][3]) << 24) //
+                   | (uint64_t(keys[i][4]) << 32) //
+                   | (uint64_t(keys[i][5]) << 40) //
+                   | (uint64_t(keys[i][6]) << 48) //
+                   | (uint64_t(keys[i][7]) << 56);
+         }
+         else {
+            static_assert(false_v<ChunkType>);
+         }
+      }
+
+      std::ranges::sort(k);
+
+      for (size_t i = 0; i < N - 1; ++i) {
+         const auto diff = k[i + 1] - k[i];
+         if (diff == 0) {
+            return false;
+         }
+      }
+
+      using enum hash_type;
+      constexpr uint64_t invalid_seed = 0;
+      auto& seed = info.seed;
+      auto hash_alg = [&] {
+         std::array<size_t, N> bucket_index{};
+         constexpr auto bsize = bucket_size(front_hash, N);
+
+         for (size_t i = 0; i < primes_64.size(); ++i) {
+            seed = primes_64[i];
+            size_t index = 0;
+            for (const auto& key : keys) {
+               const auto hash = [&]() -> size_t {
+                  if constexpr (std::same_as<ChunkType, uint16_t>) {
+                     return bitmix(uint16_t(key[0]) | (uint16_t(key[1]) << 8), seed);
+                  }
+                  else if constexpr (std::same_as<ChunkType, uint32_t>) {
+                     return bitmix(uint32_t(key[0]) //
+                                      | (uint32_t(key[1]) << 8) //
+                                      | (uint32_t(key[2]) << 16) //
+                                      | (uint32_t(key[3]) << 24),
+                                   seed);
+                  }
+                  else if constexpr (std::same_as<ChunkType, uint64_t>) {
+                     return rich_bitmix(uint64_t(key[0]) //
+                                           | (uint64_t(key[1]) << 8) //
+                                           | (uint64_t(key[2]) << 16) //
+                                           | (uint64_t(key[3]) << 24) //
+                                           | (uint64_t(key[4]) << 32) //
+                                           | (uint64_t(key[5]) << 40) //
+                                           | (uint64_t(key[6]) << 48) //
+                                           | (uint64_t(key[7]) << 56),
+                                        seed);
+                  }
+                  else {
+                     static_assert(false_v<ChunkType>);
+                  }
+               }();
+               if (hash == seed) {
+                  break;
+               }
+               const auto bucket = hash % bsize;
+               if (contains(std::span{bucket_index.data(), index}, bucket)) {
+                  break;
+               }
+               bucket_index[index] = bucket;
+               ++index;
+            }
+
+            if (index == N) {
+               // make sure the seed does not collide with any hashes
+               const auto bucket = seed % bsize;
+               if (not contains(std::span{bucket_index.data(), N}, bucket)) {
+                  return; // found working seed
+               }
+            }
+         }
+
+         seed = invalid_seed;
+      };
+
+      hash_alg();
+      if (seed != invalid_seed) {
+         info.type = front_hash;
+         info.front_hash_bytes = sizeof(ChunkType);
+         return true;
+      }
+
+      return false;
+   }
+
+   // The sequence of hashing algorithms written here determines the selection preference
    template <size_t N>
    constexpr auto make_keys_info(const std::array<sv, N>& keys)
    {
@@ -1046,17 +1286,58 @@ namespace glz::detail
 
       using enum hash_type;
 
-      if (const auto uindex = find_unique_index(keys)) {
-         info.type = unique_index;
-         info.unique_index = uindex.value();
+      if constexpr (N == 1) {
+         info.type = single_element;
          return info;
       }
+
+      // N == 2 is optimized within other hashing methods
 
       auto& seed = info.seed;
       constexpr uint64_t invalid_seed = 0;
 
+      if (const auto uindex = find_unique_index(keys)) {
+         info.unique_index = uindex.value();
+
+         if (N == 3) {
+            // An xor of the first unique character with itself will result in 0 (our desired index)
+            // We use a hash algorithm that will produce zero if zero is given, so we can avoid a branch
+            // We need a seed produces hashes of [1, 2] for the 2nd and 3rd keys
+
+            const auto u = info.unique_index;
+            const auto first = uint8_t(keys[0][u]);
+            const auto mix1 = uint8_t(keys[1][u]) ^ first;
+            const auto mix2 = uint8_t(keys[2][u]) ^ first;
+
+            for (size_t i = 0; i < primes_64.size(); ++i) {
+               seed = primes_64[i];
+               uint8_t h1 = (mix1 * seed) % 4;
+               uint8_t h2 = (mix2 * seed) % 4;
+
+               if (h1 == 1 && h2 == 2) {
+                  info.type = three_element_unique_index;
+                  return info;
+               }
+            }
+            // Otherwise we failed to find a seed and we'll use another algorithm
+         }
+         else {
+            info.type = unique_index;
+            return info;
+         }
+      }
+
+      if (front_bytes_hash_info<uint16_t>(keys, info)) {
+         return info;
+      }
+      else if (front_bytes_hash_info<uint32_t>(keys, info)) {
+         return info;
+      }
+      else if (front_bytes_hash_info<uint64_t>(keys, info)) {
+         return info;
+      }
+
       if (const auto uindex = find_unique_sized_index(keys)) {
-         info.type = unique_index;
          info.unique_index = uindex.value();
          info.sized_hash = true;
 
@@ -1094,66 +1375,95 @@ namespace glz::detail
 
          sized_unique_hash();
          if (seed != invalid_seed) {
+            info.type = unique_index;
             return info;
          }
       }
 
-      if (info.min_length > 1 && N <= 32) {
-         // check for uniqueness
-         std::array<uint16_t, N> k;
-         for (size_t i = 0; i < N; ++i) {
-            k[i] = uint16_t(keys[i][0]) | (uint16_t(keys[i][1]) << 8);
-         }
+      // TODO: MSVC fixed the related compiler bug, but GitHub Actions has not caught up yet
+#if !defined(_MSC_VER)
+      // TODO: Use meta-programming to cache this value
+      const auto per_length_data = unique_per_length_info(keys);
+      if (per_length_data.valid) {
+         auto sized_unique_hash = [&] {
+            std::array<size_t, N> bucket_index{};
+            constexpr auto bsize = bucket_size(unique_per_length, N);
 
-         ranges::sort(k);
-
-         bool valid = true;
-         for (size_t i = 0; i < N - 1; ++i) {
-            const auto diff = k[i + 1] - k[i];
-            if (diff == 0) {
-               valid = false;
-               break;
-            }
-         }
-
-         if (valid) {
-            auto front_16_hash = [&] {
-               std::array<size_t, N> bucket_index{};
-               constexpr auto bsize = bucket_size(front_16, N);
-
-               for (size_t i = 0; i < primes_64.size(); ++i) {
-                  seed = primes_64[i];
-                  size_t index = 0;
-                  for (const auto& key : keys) {
-                     const auto hash = bitmix(uint16_t(key[0]) | (uint16_t(key[1]) << 8), seed);
-                     if (hash == seed) {
-                        break;
-                     }
-                     const auto bucket = hash % bsize;
-                     if (contains(std::span{bucket_index.data(), index}, bucket)) {
-                        break;
-                     }
-                     bucket_index[index] = bucket;
-                     ++index;
+            for (size_t i = 0; i < primes_64.size(); ++i) {
+               seed = primes_64[i];
+               size_t index = 0;
+               for (const auto& key : keys) {
+                  const auto n = uint8_t(key.size());
+                  const auto hash = bitmix(uint16_t(key[per_length_data.unique_index[n]]) | (uint16_t(n) << 8), seed);
+                  if (hash == seed) {
+                     break;
                   }
-
-                  if (index == N) {
-                     // make sure the seed does not collide with any hashes
-                     const auto bucket = seed % bsize;
-                     if (not contains(std::span{bucket_index.data(), N}, bucket)) {
-                        return; // found working seed
-                     }
+                  const auto bucket = hash % bsize;
+                  if (contains(std::span{bucket_index.data(), index}, bucket)) {
+                     break;
                   }
+                  bucket_index[index] = bucket;
+                  ++index;
                }
 
-               seed = invalid_seed;
-            };
-
-            front_16_hash();
-            if (seed != invalid_seed) {
-               info.type = front_16;
-               return info;
+               if (index == N) {
+                  // make sure the seed does not collide with any hashes
+                  const auto bucket = seed % bsize;
+                  if (not contains(std::span{bucket_index.data(), N}, bucket)) {
+                     return; // found working seed
+                  }
+               }
             }
+
+            seed = invalid_seed;
+         };
+
+         sized_unique_hash();
+         if (seed != invalid_seed) {
+            info.type = unique_per_length;
+            return info;
+         }
+      }
+#endif
+
+      // full_flat
+      {
+         auto full_flat_hash = [&] {
+            std::array<size_t, N> bucket_index{};
+            constexpr auto bsize = bucket_size(full_flat, N);
+
+            for (size_t i = 0; i < primes_64.size(); ++i) {
+               seed = primes_64[i];
+               size_t index = 0;
+               for (const auto& key : keys) {
+                  const auto hash = full_hash_impl(key, seed, info.min_length, info.max_length);
+                  if (hash == seed) {
+                     break;
+                  }
+                  const auto bucket = hash % bsize;
+                  if (contains(std::span{bucket_index.data(), index}, bucket)) {
+                     break;
+                  }
+                  bucket_index[index] = bucket;
+                  ++index;
+               }
+
+               if (index == N) {
+                  // make sure the seed does not collide with any hashes
+                  const auto bucket = seed % bsize;
+                  if (not contains(std::span{bucket_index.data(), N}, bucket)) {
+                     return; // found working seed
+                  }
+               }
+            }
+
+            seed = invalid_seed;
+         };
+
+         full_flat_hash();
+         if (seed != invalid_seed) {
+            info.type = full_flat;
+            return info;
          }
       }
 
@@ -1174,8 +1484,66 @@ namespace glz::detail
          constexpr auto& keys = refl<T>.keys;
 
          using enum hash_type;
-         if constexpr (type == unique_index && N < 256) {
+         if constexpr (type == single_element) {
+            hash_info_t<T, bucket_size(single_element, N)> info{.type = single_element};
+            info.min_length = k_info.min_length;
+            info.max_length = k_info.max_length;
+            return info;
+         }
+         else if constexpr (type == three_element_unique_index) {
+            hash_info_t<T, bucket_size(three_element_unique_index, N)> info{.type = three_element_unique_index};
+            info.min_length = k_info.min_length;
+            info.max_length = k_info.max_length;
+            info.seed = k_info.seed;
+            info.unique_index = k_info.unique_index;
+            return info;
+         }
+         else if constexpr (type == front_hash) {
+            constexpr auto bsize = bucket_size(front_hash, N);
+            hash_info_t<T, bsize> info{.type = front_hash, .seed = k_info.seed};
+            info.min_length = k_info.min_length;
+            info.max_length = k_info.max_length;
+            info.front_hash_bytes = k_info.front_hash_bytes;
+            info.table.fill(uint8_t(N));
+
+            for (uint8_t i = 0; i < N; ++i) {
+               auto& key = keys[i];
+               const auto h = [&]() -> size_t {
+                  if (info.front_hash_bytes == sizeof(uint16_t)) {
+                     return bitmix(uint16_t(key[0]) | (uint16_t(key[1]) << 8), info.seed) % bsize;
+                  }
+                  else if (info.front_hash_bytes == sizeof(uint32_t)) {
+                     return bitmix(uint32_t(key[0]) //
+                                      | (uint32_t(key[1]) << 8) //
+                                      | (uint32_t(key[2]) << 16) //
+                                      | (uint32_t(key[3]) << 24),
+                                   info.seed) %
+                            bsize;
+                  }
+                  else if (info.front_hash_bytes == sizeof(uint64_t)) {
+                     return rich_bitmix(uint64_t(key[0]) //
+                                           | (uint64_t(key[1]) << 8) //
+                                           | (uint64_t(key[2]) << 16) //
+                                           | (uint64_t(key[3]) << 24) //
+                                           | (uint64_t(key[4]) << 32) //
+                                           | (uint64_t(key[5]) << 40) //
+                                           | (uint64_t(key[6]) << 48) //
+                                           | (uint64_t(key[7]) << 56),
+                                        info.seed) %
+                            bsize;
+                  }
+                  else {
+                     return 0; // MSVC has a compiler bug that prevents us from returning N, but this is unreachable
+                  }
+               }();
+               info.table[h] = i;
+            }
+
+            return info;
+         }
+         else if constexpr (type == unique_index && N < 256) {
             hash_info_t<T, bucket_size(unique_index, N)> info{.type = unique_index, .seed = k_info.seed};
+            info.min_length = k_info.min_length;
             info.max_length = k_info.max_length;
             info.table.fill(N);
             info.unique_index = k_info.unique_index;
@@ -1197,17 +1565,35 @@ namespace glz::detail
             }
             return info;
          }
-         else if constexpr (type == front_16) {
-            constexpr auto bsize = bucket_size(front_16, N);
-            hash_info_t<T, bsize> info{.type = front_16, .seed = k_info.seed};
+         // TODO: MSVC fixed the related compiler bug, but GitHub Actions has not caught up yet
+#if !defined(_MSC_VER)
+         else if constexpr (type == unique_per_length) {
+            hash_info_t<T, bucket_size(unique_per_length, N)> info{.type = unique_per_length, .seed = k_info.seed};
+            info.min_length = k_info.min_length;
             info.max_length = k_info.max_length;
-            info.table.fill(N);
-
+            info.table.fill(uint8_t(N));
+            info.sized_hash = true;
+            constexpr auto bsize = bucket_size(unique_per_length, N);
+            constexpr auto& data = per_length_info<T>;
             for (uint8_t i = 0; i < N; ++i) {
-               const auto h = bitmix(uint16_t(keys[i][0]) | (uint16_t(keys[i][1]) << 8), info.seed) % bsize;
+               const auto n = keys[i].size();
+               const auto x = uint16_t(keys[i][data.unique_index[n]]) | (uint16_t(n) << 8);
+               const auto h = bitmix(x, info.seed) % bsize;
                info.table[h] = i;
             }
-
+            return info;
+         }
+#endif
+         else if constexpr (type == full_flat) {
+            hash_info_t<T, bucket_size(full_flat, N)> info{.type = full_flat, .seed = k_info.seed};
+            info.min_length = k_info.min_length;
+            info.max_length = k_info.max_length;
+            info.table.fill(uint8_t(N));
+            constexpr auto bsize = bucket_size(full_flat, N);
+            for (uint8_t i = 0; i < N; ++i) {
+               const auto h = full_hash_impl(keys[i], info.seed, info.min_length, info.max_length) % bsize;
+               info.table[h] = i;
+            }
             return info;
          }
          else {

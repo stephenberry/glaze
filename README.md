@@ -15,7 +15,7 @@ Glaze also supports:
 ## With compile time reflection for MSVC, Clang, and GCC!
 
 - Read/write aggregate initializable structs without writing any metadata or macros!
-- See [example on Compiler Explorer](https://gcc.godbolt.org/z/85zKG3a4n)
+- See [example on Compiler Explorer](https://gcc.godbolt.org/z/T4To5fKfz)
 
 ## Highlights
 

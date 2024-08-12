@@ -4,7 +4,7 @@ include(cmake/prelude.cmake)
 
 project(
     glaze
-    VERSION 3.2.2
+    VERSION 3.2.4
     LANGUAGES CXX
 )
 
@@ -50,8 +50,8 @@ if (glaze_DEVELOPER_MODE)
   include(cmake/dev-mode.cmake)
 endif()
 
-option(GLAZE_BUILD_EXAMPLES "Build GLAZE examples" OFF)
+option(glaze_BUILD_EXAMPLES "Build GLAZE examples" OFF)
 
-if(GLAZE_BUILD_EXAMPLES)
+if(glaze_BUILD_EXAMPLES)
   add_subdirectory(examples)
 endif()
