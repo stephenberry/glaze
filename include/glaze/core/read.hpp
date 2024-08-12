@@ -24,25 +24,11 @@ namespace glz
          return std::pair{it, end};
       }
 
-      using Buffer = std::remove_cvref_t<decltype(buffer)>;
-      if constexpr (is_specialization_v<Buffer, std::basic_string> ||
-                    is_specialization_v<Buffer, std::basic_string_view> || span<Buffer>) {
-         if constexpr (Padded) {
-            end += buffer.size() - padding_bytes;
-         }
-         else {
-            end += buffer.size();
-         }
+      if constexpr (Padded) {
+         end += buffer.size() - padding_bytes;
       }
       else {
-         // if not a std::string, std::string_view, or span, check that the last character is a null character
-         end += buffer.size() - 1;
-         if constexpr (Padded) {
-            end -= padding_bytes;
-         }
-         if (*end != '\0') {
-            ctx.error = error_code::data_must_be_null_terminated;
-         }
+         end += buffer.size();
       }
 
       return std::pair{it, end};

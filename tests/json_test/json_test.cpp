@@ -3837,22 +3837,6 @@ suite ndjson_test = [] {
       auto out = glz::write_ndjson(x).value_or("error");
       expect(out == buffer) << out;
    };
-
-   "ndjson json_t"_test = [] {
-      std::string json = R"({"arr":[1,2,3],"d":3.14,"hello":"Hello World","i":287}
-{"a":3.14,"b":"stuff"})";
-      std::vector<std::byte> buffer(json.size());
-      std::memcpy(buffer.data(), json.data(), json.size());
-      buffer.emplace_back(std::byte('\0'));
-
-      std::vector<glz::json_t> x{};
-      expect(not glz::read_ndjson(x, buffer));
-
-      std::vector<std::byte> out{};
-      expect(not glz::write_ndjson(x, out));
-      out.emplace_back(std::byte('\0'));
-      expect(out == buffer);
-   };
 };
 
 suite std_function_handling = [] {
