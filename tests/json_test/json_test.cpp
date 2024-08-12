@@ -5820,7 +5820,8 @@ suite invoke_test = [] {
    "square":[5],
    "add_one":[]
 })";
-      expect(!glz::read_json(obj, s));
+      auto ec = glz::read_json(obj, s);
+      expect(!ec) << glz::format_error(ec, s);
       expect(obj.y == 26); // 5 * 5 + 1
    };
 };
