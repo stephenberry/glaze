@@ -130,6 +130,7 @@ namespace glz
          case tag::string: {
             ++it;
             const auto n = detail::int_from_compressed(ctx, it, end);
+            GLZ_N_CHECK();
             const sv value{reinterpret_cast<const char*>(it), n};
             to_json<sv>::template op<Opts>(value, ctx, out, ix);
             it += n;
@@ -150,9 +151,14 @@ namespace glz
             case 0: {
                // string key
                const auto n_fields = detail::int_from_compressed(ctx, it, end);
+               if (n_fields == std::numeric_limits<uint64_t>::max()) [[unlikely]] {
+                  ctx.error = error_code::unexpected_end;
+                  return;
+               }
                for (size_t i = 0; i < n_fields; ++i) {
                   // convert the key
                   const auto n = detail::int_from_compressed(ctx, it, end);
+                  GLZ_N_CHECK();
                   const sv key{reinterpret_cast<const char*>(it), n};
                   to_json<sv>::template op<Opts>(key, ctx, out, ix);
                   if constexpr (Opts.prettify) {
