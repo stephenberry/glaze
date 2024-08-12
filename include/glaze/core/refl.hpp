@@ -1487,7 +1487,7 @@ namespace glz::detail
                                    | (uint64_t(key[7]) << 56), info.seed) % bsize;
                   }
                   else {
-                     return N;
+                     return 0; // MSVC has a compiler bug that prevents us from returning N, but this is unreachable
                   }
                }();
                info.table[h] = i;
