@@ -1290,31 +1290,30 @@ namespace glz::detail
          info.type = single_element;
          return info;
       }
-      
+
       // N == 2 is optimized within other hashing methods
-      
+
       auto& seed = info.seed;
       constexpr uint64_t invalid_seed = 0;
 
-      if (const auto uindex = find_unique_index(keys))
-      {
+      if (const auto uindex = find_unique_index(keys)) {
          info.unique_index = uindex.value();
-         
+
          if (N == 3) {
             // An xor of the first unique character with itself will result in 0 (our desired index)
             // We use a hash algorithm that will produce zero if zero is given, so we can avoid a branch
             // We need a seed produces hashes of [1, 2] for the 2nd and 3rd keys
-            
+
             const auto u = info.unique_index;
             const auto first = uint8_t(keys[0][u]);
             const auto mix1 = uint8_t(keys[1][u]) ^ first;
             const auto mix2 = uint8_t(keys[2][u]) ^ first;
-            
+
             for (size_t i = 0; i < primes_64.size(); ++i) {
                seed = primes_64[i];
                uint8_t h1 = (mix1 * seed) % 4;
                uint8_t h2 = (mix2 * seed) % 4;
-               
+
                if (h1 == 1 && h2 == 2) {
                   info.type = three_element_unique_index;
                   return info;

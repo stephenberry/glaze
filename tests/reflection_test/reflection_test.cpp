@@ -834,7 +834,7 @@ suite hash_tests = [] {
       expect(obj.aaaaaaaz == 2);
       expect(obj.aaaaaaza == 3);
    };
-   
+
    "front_32"_test = [] {
       three_element_unique_t obj{};
       std::string_view buffer = R"({"aaaaaaaa":1,"aaaaaaab":2,"aaaaaabc":3})";
