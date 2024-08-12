@@ -790,6 +790,17 @@ namespace glz::detail
       h *= seed;
       return h ^ std::rotr(h, 49);
    };
+   
+   // Use when hashing large chunks of characters that are likely very similar
+   GLZ_ALWAYS_INLINE constexpr uint64_t rich_bitmix(uint64_t h, const uint64_t seed) noexcept
+   {
+       h ^= h >> 23;
+       h *= 0x2127599bf4325c37ULL;
+       h ^= seed;
+       h *= 0x880355f21e6d1965ULL;
+       h ^= h >> 47;
+       return h;
+   }
 
    template <size_t N>
    using bucket_value_t = std::conditional_t < N<256, uint8_t, uint16_t>;
@@ -802,7 +813,7 @@ namespace glz::detail
    enum struct hash_type { //
       invalid, // hashing failed
       unique_index, // A unique character index is used
-      front_16, // Hash on the front 2 bytes of the key
+      front_hash, // Hash on the front bytes of the key
       single_element, // Map is a single element
       unique_per_length, // Hash on a unique character index and the length of the key
       full_flat // Full key hash with a single table
@@ -897,7 +908,7 @@ namespace glz::detail
       case unique_index: {
          return 256;
       }
-      case front_16: {
+      case front_hash: {
          return (N == 1) ? 1 : std::bit_ceil(N * N) / 2;
       }
       case single_element: {
@@ -925,6 +936,7 @@ namespace glz::detail
       uint64_t seed{};
       size_t unique_index = (std::numeric_limits<size_t>::max)();
       bool sized_hash = false;
+      size_t front_hash_bytes{};
    };
 
    // For hash algorithm a value of the seed indicates an invalid hash
@@ -945,6 +957,7 @@ namespace glz::detail
       uint64_t seed{};
       size_t unique_index = (std::numeric_limits<size_t>::max)();
       bool sized_hash = false;
+      size_t front_hash_bytes{};
    };
 
    constexpr std::optional<size_t> find_unique_index(const auto& strings)
@@ -1131,6 +1144,117 @@ namespace glz::detail
          return bitmix(to_uint64(it + n - 8), h);
       }
    }
+   
+   template <std::integral ChunkType, size_t N>
+   constexpr bool front_bytes_hash_info(const std::array<sv, N>& keys, keys_info_t& info) noexcept
+   {
+      if (info.min_length < sizeof(ChunkType)) {
+         return false;
+      }
+      
+      // check for uniqueness
+      std::array<ChunkType, N> k;
+      for (size_t i = 0; i < N; ++i) {
+         if constexpr (std::same_as<ChunkType, uint16_t>) {
+            k[i] = uint16_t(keys[i][0]) | (uint16_t(keys[i][1]) << 8);
+         }
+         else if constexpr (std::same_as<ChunkType, uint32_t>) {
+            k[i] = uint32_t(keys[i][0]) //
+                 | (uint32_t(keys[i][1]) << 8) //
+                 | (uint32_t(keys[i][2]) << 16) //
+                 | (uint32_t(keys[i][3]) << 24);
+         }
+         else if constexpr (std::same_as<ChunkType, uint64_t>) {
+            k[i] = uint64_t(keys[i][0]) //
+                 | (uint64_t(keys[i][1]) << 8) //
+                 | (uint64_t(keys[i][2]) << 16) //
+                 | (uint64_t(keys[i][3]) << 24) //
+                 | (uint64_t(keys[i][4]) << 32) //
+                 | (uint64_t(keys[i][5]) << 40) //
+                 | (uint64_t(keys[i][6]) << 48) //
+                 | (uint64_t(keys[i][7]) << 56);
+         }
+         else {
+            static_assert(false_v<ChunkType>);
+         }
+      }
+
+      std::ranges::sort(k);
+
+      for (size_t i = 0; i < N - 1; ++i) {
+         const auto diff = k[i + 1] - k[i];
+         if (diff == 0) {
+            return false;
+         }
+      }
+
+      using enum hash_type;
+      constexpr uint64_t invalid_seed = 0;
+      auto& seed = info.seed;
+      auto hash_alg = [&] {
+         std::array<size_t, N> bucket_index{};
+         constexpr auto bsize = bucket_size(front_hash, N);
+
+         for (size_t i = 0; i < primes_64.size(); ++i) {
+            seed = primes_64[i];
+            size_t index = 0;
+            for (const auto& key : keys) {
+               const auto hash = [&]() -> size_t {
+                  if constexpr (std::same_as<ChunkType, uint16_t>) {
+                     return bitmix(uint16_t(key[0]) | (uint16_t(key[1]) << 8), seed);
+                  }
+                  else if constexpr (std::same_as<ChunkType, uint32_t>) {
+                     return bitmix(uint32_t(key[0]) //
+                                   | (uint32_t(key[1]) << 8) //
+                                   | (uint32_t(key[2]) << 16) //
+                                   | (uint32_t(key[3]) << 24), seed);
+                  }
+                  else if constexpr (std::same_as<ChunkType, uint64_t>) {
+                     return rich_bitmix(uint64_t(key[0]) //
+                                   | (uint64_t(key[1]) << 8) //
+                                   | (uint64_t(key[2]) << 16) //
+                                   | (uint64_t(key[3]) << 24) //
+                                   | (uint64_t(key[4]) << 32) //
+                                   | (uint64_t(key[5]) << 40) //
+                                   | (uint64_t(key[6]) << 48) //
+                                   | (uint64_t(key[7]) << 56), seed);
+                  }
+                  else {
+                     static_assert(false_v<ChunkType>);
+                  }
+               }();
+               if (hash == seed) {
+                  break;
+               }
+               const auto bucket = hash % bsize;
+               if (contains(std::span{bucket_index.data(), index}, bucket)) {
+                  break;
+               }
+               bucket_index[index] = bucket;
+               ++index;
+            }
+
+            if (index == N) {
+               // make sure the seed does not collide with any hashes
+               const auto bucket = seed % bsize;
+               if (not contains(std::span{bucket_index.data(), N}, bucket)) {
+                  return; // found working seed
+               }
+            }
+         }
+
+         seed = invalid_seed;
+      };
+
+      hash_alg();
+      if (seed != invalid_seed) {
+         info.type = front_hash;
+         info.front_hash_bytes = sizeof(ChunkType);
+         return true;
+      }
+      
+      return false;
+   }
 
    template <size_t N>
    constexpr auto make_keys_info(const std::array<sv, N>& keys)
@@ -1169,63 +1293,14 @@ namespace glz::detail
       auto& seed = info.seed;
       constexpr uint64_t invalid_seed = 0;
 
-      if (info.min_length > 1 && N <= 32) {
-         // check for uniqueness
-         std::array<uint16_t, N> k;
-         for (size_t i = 0; i < N; ++i) {
-            k[i] = uint16_t(keys[i][0]) | (uint16_t(keys[i][1]) << 8);
-         }
-
-         ranges::sort(k);
-
-         bool valid = true;
-         for (size_t i = 0; i < N - 1; ++i) {
-            const auto diff = k[i + 1] - k[i];
-            if (diff == 0) {
-               valid = false;
-               break;
-            }
-         }
-
-         if (valid) {
-            auto front_16_hash = [&] {
-               std::array<size_t, N> bucket_index{};
-               constexpr auto bsize = bucket_size(front_16, N);
-
-               for (size_t i = 0; i < primes_64.size(); ++i) {
-                  seed = primes_64[i];
-                  size_t index = 0;
-                  for (const auto& key : keys) {
-                     const auto hash = bitmix(uint16_t(key[0]) | (uint16_t(key[1]) << 8), seed);
-                     if (hash == seed) {
-                        break;
-                     }
-                     const auto bucket = hash % bsize;
-                     if (contains(std::span{bucket_index.data(), index}, bucket)) {
-                        break;
-                     }
-                     bucket_index[index] = bucket;
-                     ++index;
-                  }
-
-                  if (index == N) {
-                     // make sure the seed does not collide with any hashes
-                     const auto bucket = seed % bsize;
-                     if (not contains(std::span{bucket_index.data(), N}, bucket)) {
-                        return; // found working seed
-                     }
-                  }
-               }
-
-               seed = invalid_seed;
-            };
-
-            front_16_hash();
-            if (seed != invalid_seed) {
-               info.type = front_16;
-               return info;
-            }
-         }
+      if (front_bytes_hash_info<uint16_t>(keys, info)) {
+         return info;
+      }
+      else if (front_bytes_hash_info<uint32_t>(keys, info)) {
+         return info;
+      }
+      else if (front_bytes_hash_info<uint64_t>(keys, info)) {
+         return info;
       }
 
       if (const auto uindex = find_unique_sized_index(keys)) {
@@ -1381,15 +1456,40 @@ namespace glz::detail
             info.max_length = k_info.max_length;
             return info;
          }
-         else if constexpr (type == front_16) {
-            constexpr auto bsize = bucket_size(front_16, N);
-            hash_info_t<T, bsize> info{.type = front_16, .seed = k_info.seed};
+         else if constexpr (type == front_hash) {
+            constexpr auto bsize = bucket_size(front_hash, N);
+            hash_info_t<T, bsize> info{.type = front_hash, .seed = k_info.seed};
             info.min_length = k_info.min_length;
             info.max_length = k_info.max_length;
+            info.front_hash_bytes = k_info.front_hash_bytes;
             info.table.fill(uint8_t(N));
 
             for (uint8_t i = 0; i < N; ++i) {
-               const auto h = bitmix(uint16_t(keys[i][0]) | (uint16_t(keys[i][1]) << 8), info.seed) % bsize;
+               auto& key = keys[i];
+               const auto h = [&]() -> size_t {
+                  if (info.front_hash_bytes == sizeof(uint16_t)) {
+                     return bitmix(uint16_t(key[0]) | (uint16_t(key[1]) << 8), info.seed) % bsize;
+                  }
+                  else if (info.front_hash_bytes == sizeof(uint32_t)) {
+                     return bitmix(uint32_t(key[0]) //
+                                   | (uint32_t(key[1]) << 8) //
+                                   | (uint32_t(key[2]) << 16) //
+                                   | (uint32_t(key[3]) << 24), info.seed) % bsize;
+                  }
+                  else if (info.front_hash_bytes == sizeof(uint64_t)) {
+                     return rich_bitmix(uint64_t(key[0]) //
+                                   | (uint64_t(key[1]) << 8) //
+                                   | (uint64_t(key[2]) << 16) //
+                                   | (uint64_t(key[3]) << 24) //
+                                   | (uint64_t(key[4]) << 32) //
+                                   | (uint64_t(key[5]) << 40) //
+                                   | (uint64_t(key[6]) << 48) //
+                                   | (uint64_t(key[7]) << 56), info.seed) % bsize;
+                  }
+                  else {
+                     return N;
+                  }
+               }();
                info.table[h] = i;
             }
 
