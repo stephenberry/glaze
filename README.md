@@ -442,6 +442,21 @@ Produces this error:
 
 Denoting that x is invalid here.
 
+# Input Buffer (Null) Termination
+
+Input buffers must be null-terminated, unless the option `null_terminated` is set to `false`. Null terminated buffers result in faster performance.
+
+> [!WARNING]
+>
+> Currently, `null_terminated = false` is only valid for reading JSON, not BEVE or CSV.
+
+It is recommended to use a non-const `std::string` for your input buffers, as this allows Glaze to add temporary padding for performance and the buffer will be null terminated.
+
+```c++
+constexpr glz::opts options{.null_terminated = false};
+auto ec = glz::read<options>(value, buffer); // read in a non-null terminated buffer 
+```
+
 # Type Support
 
 ## Array Types
