@@ -28,10 +28,12 @@ namespace glz
    // Write padding bytes simplifies our dump calculations by making sure we have significant excess
    constexpr uint32_t write_padding_bytes = 256;
 
-   // We use a alias to a uint8_t for booleans so that compiler errors will print "0" or "1" rather than "true" or
+   // We use a alias to a char for booleans so that compiler errors will print "0" or "1" rather than "true" or
    // "false" This shortens compiler error printouts significantly.
    // We use a macro rather than an alias because some compilers print out alias definitions, extending length.
-#define bool_t uint8_t
+   // We tried a uint8_t in the past, but in many cases compilers would print out "unsigned char"
+   // int8_t also would produce "signed char"
+#define bool_t char
 
    // This macro exists so that we can change the default behavior
    // to easily run tests as if strings were not null terminated

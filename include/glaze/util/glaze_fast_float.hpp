@@ -243,10 +243,7 @@ namespace glz
 
       parsed_number_string_t<UC> pns = glz::parse_number_string<null_terminated, UC>(first, last);
       if (!pns.valid) [[unlikely]] {
-         from_chars_result_t<UC> answer;
-         answer.ec = std::errc::invalid_argument;
-         answer.ptr = first;
-         return answer;
+         return {.ptr = first, .ec = std::errc::invalid_argument};
       }
 
       return from_chars_advanced(pns, value);
