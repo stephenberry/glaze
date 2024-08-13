@@ -74,6 +74,11 @@ namespace glz
                }
                state[indent] = Array_Start;
                if constexpr (Opts.new_lines_in_arrays) {
+                  if constexpr (not Opts.null_terminated) {
+                     if (it == end) [[unlikely]] {
+                        break;
+                     }
+                  }
                   if (*it != ']') {
                      append_new_line<use_tabs, indent_width>(b, ix, indent);
                   }
@@ -120,6 +125,11 @@ namespace glz
                   state.resize(state.size() * 2);
                }
                state[indent] = Object_Start;
+               if constexpr (not Opts.null_terminated) {
+                  if (it == end) [[unlikely]] {
+                     break;
+                  }
+               }
                if (*it != '}') {
                   append_new_line<use_tabs, indent_width>(b, ix, indent);
                }
@@ -172,7 +182,14 @@ namespace glz
          if (bool(ctx.error)) [[unlikely]] {
             return;
          }
-         prettify_json<Opts>(ctx, it, end, out, ix);
+         
+         if constexpr (string_t<In>) {
+            prettify_json<opt_true<Opts, &opts::null_terminated>>(ctx, it, end, out, ix);
+         }
+         else {
+            prettify_json<Opts>(ctx, it, end, out, ix);
+         }
+         
          if constexpr (resizable<Out>) {
             out.resize(ix);
          }
