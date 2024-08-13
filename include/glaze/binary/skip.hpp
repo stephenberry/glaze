@@ -21,32 +21,50 @@ namespace glz::detail
       if (bool(ctx.error)) [[unlikely]] {
          return;
       }
+      if (uint64_t(end - it) < n) [[unlikely]] {
+         ctx.error = error_code::unexpected_end;
+         return;
+      }
       it += n;
    }
 
-   inline void skip_number_binary(is_context auto&&, auto&& it, auto&&) noexcept
+   inline void skip_number_binary(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       const auto tag = uint8_t(*it);
       const uint8_t byte_count = byte_count_lookup[tag >> 5];
       ++it;
+      if ((it + byte_count) >= end) [[unlikely]] {
+         ctx.error = error_code::unexpected_end;
+         return;
+      }
       it += byte_count;
    }
 
    template <opts Opts>
    inline void skip_object_binary(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
+      GLZ_END_CHECK();
       const auto tag = uint8_t(*it);
       ++it;
 
       const auto n_keys = int_from_compressed(ctx, it, end);
+      if (bool(ctx.error)) [[unlikely]] {
+         return;
+      }
 
       if ((tag & 0b00000'111) == tag::string) {
          for (size_t i = 0; i < n_keys; ++i) {
             const auto string_length = int_from_compressed(ctx, it, end);
-            it += string_length;
-            if (bool(ctx.error)) [[unlikely]]
+            if (bool(ctx.error)) [[unlikely]] {
                return;
-
+            }
+            if (uint64_t(end - it) < string_length) [[unlikely]] {
+               ctx.error = error_code::unexpected_end;
+               return;
+            }
+            
+            it += string_length;
+            
             skip_value_binary<Opts>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
                return;
@@ -56,9 +74,15 @@ namespace glz::detail
          const uint8_t byte_count = byte_count_lookup[tag >> 5];
          for (size_t i = 0; i < n_keys; ++i) {
             const auto n = int_from_compressed(ctx, it, end);
-            it += byte_count * n;
-            if (bool(ctx.error)) [[unlikely]]
+            if (bool(ctx.error)) [[unlikely]] {
                return;
+            }
+            if (uint64_t(end - it) < byte_count * n) [[unlikely]] {
+               ctx.error = error_code::unexpected_end;
+               return;
+            }
+            
+            it += byte_count * n;
 
             skip_value_binary<Opts>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
@@ -82,7 +106,14 @@ namespace glz::detail
       case 2: { // unsigned integer
          ++it;
          const auto n = int_from_compressed(ctx, it, end);
+         if (bool(ctx.error)) [[unlikely]] {
+            return;
+         }
          const uint8_t byte_count = byte_count_lookup[tag >> 5];
+         if (uint64_t(end - it) < byte_count * n) [[unlikely]] {
+            ctx.error = error_code::unexpected_end;
+            return;
+         }
          it += byte_count * n;
          break;
       }
@@ -91,11 +122,27 @@ namespace glz::detail
          ++it;
          if (is_bool) {
             const auto n = int_from_compressed(ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
+            
             const auto num_bytes = (n + 7) / 8;
+            if (uint64_t(end - it) < num_bytes) [[unlikely]] {
+               ctx.error = error_code::unexpected_end;
+               return;
+            }
             it += num_bytes;
          }
          else {
             const auto n = int_from_compressed(ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
+            if (uint64_t(end - it) < n) [[unlikely]] {
+               ctx.error = error_code::unexpected_end;
+               return;
+            }
+            
             it += n;
          }
          break;
@@ -110,6 +157,10 @@ namespace glz::detail
    {
       ++it;
       const auto n = int_from_compressed(ctx, it, end);
+      if (bool(ctx.error)) [[unlikely]] {
+         return;
+      }
+      
       for (size_t i = 0; i < n; ++i) {
          skip_value_binary<Opts>(ctx, it, end);
       }
@@ -125,6 +176,7 @@ namespace glz::detail
    template <opts Opts>
    inline void skip_value_binary(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
+      GLZ_END_CHECK();
       switch (uint8_t(*it) & 0b00000'111) {
       case tag::null: {
          ++it;

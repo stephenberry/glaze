@@ -130,7 +130,13 @@ namespace glz
          case tag::string: {
             ++it;
             const auto n = detail::int_from_compressed(ctx, it, end);
-            GLZ_N_CHECK();
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
+            if (uint64_t(end - it) < n) [[unlikely]] {
+               ctx.error = error_code::unexpected_end;
+               return;
+            }
             const sv value{reinterpret_cast<const char*>(it), n};
             to_json<sv>::template op<Opts>(value, ctx, out, ix);
             it += n;
@@ -151,14 +157,19 @@ namespace glz
             case 0: {
                // string key
                const auto n_fields = detail::int_from_compressed(ctx, it, end);
-               if (n_fields == std::numeric_limits<uint64_t>::max()) [[unlikely]] {
-                  ctx.error = error_code::unexpected_end;
+               if (bool(ctx.error)) {
                   return;
                }
                for (size_t i = 0; i < n_fields; ++i) {
                   // convert the key
                   const auto n = detail::int_from_compressed(ctx, it, end);
-                  GLZ_N_CHECK();
+                  if (bool(ctx.error)) [[unlikely]] {
+                     return;
+                  }
+                  if (uint64_t(end - it) < n) [[unlikely]] {
+                     ctx.error = error_code::unexpected_end;
+                     return;
+                  }
                   const sv key{reinterpret_cast<const char*>(it), n};
                   to_json<sv>::template op<Opts>(key, ctx, out, ix);
                   if constexpr (Opts.prettify) {
@@ -201,7 +212,14 @@ namespace glz
 
             auto write_array = [&]<class T>(T&& value) {
                const auto n = int_from_compressed(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
                for (size_t i = 0; i < n; ++i) {
+                  if ((it + sizeof(T)) > end) [[unlikely]] {
+                     ctx.error = error_code::unexpected_end;
+                     return;
+                  }
                   std::memcpy(&value, it, sizeof(T));
                   to_json<T>::template op<Opts>(value, ctx, out, ix);
                   it += sizeof(T);
@@ -297,8 +315,18 @@ namespace glz
                case 1: {
                   // array of strings
                   const auto n_strings = int_from_compressed(ctx, it, end);
+                  if (bool(ctx.error)) [[unlikely]] {
+                     return;
+                  }
                   for (size_t i = 0; i < n_strings; ++i) {
                      const auto n = detail::int_from_compressed(ctx, it, end);
+                     if (bool(ctx.error)) [[unlikely]] {
+                        return;
+                     }
+                     if (uint64_t(end - it) < n) [[unlikely]] {
+                        ctx.error = error_code::unexpected_end;
+                        return;
+                     }
                      const sv value{reinterpret_cast<const char*>(it), n};
                      to_json<sv>::template op<Opts>(value, ctx, out, ix);
                      it += n;
@@ -328,6 +356,9 @@ namespace glz
          case tag::generic_array: {
             ++it;
             const auto n = int_from_compressed(ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
             dump<'['>(out, ix);
             for (size_t i = 0; i < n; ++i) {
                beve_to_json_value<Opts>(ctx, it, end, out, ix);
@@ -470,6 +501,9 @@ namespace glz
                   // complex array
                   const auto number_tag = complex_header & 0b111'00000;
                   const auto n = int_from_compressed(ctx, it, end);
+                  if (bool(ctx.error)) [[unlikely]] {
+                     return;
+                  }
                   dump<'['>(out, ix);
                   for (size_t i = 0; i < n; ++i) {
                      dump<'['>(out, ix);

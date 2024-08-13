@@ -19,12 +19,6 @@ if (it >= end) [[unlikely]] { \
    return RETURN; \
 }
 
-#define GLZ_N_CHECK(RETURN) \
-if ((it + n) >= end) [[unlikely]] { \
-   ctx.error = error_code::unexpected_end; \
-   return RETURN; \
-}
-
 namespace glz::tag
 {
    constexpr uint8_t null = 0;
@@ -64,16 +58,13 @@ namespace glz::detail
    constexpr uint8_t byte_count = uint8_t(std::bit_width(sizeof(T)) - 1);
 
    inline constexpr std::array<uint8_t, 8> byte_count_lookup{1, 2, 4, 8, 16, 32, 64, 128};
-   
-   inline constexpr uint64_t beve_invalid = (std::numeric_limits<uint64_t>::max)();
 
-   // Instead of setting an error context, which would require us to both check the context and if
-   // our increment would go beyond the end, we instead return the max uint64_t as the error condition
-   [[nodiscard]] GLZ_ALWAYS_INLINE constexpr uint64_t int_from_compressed(auto&& it,
+   [[nodiscard]] GLZ_ALWAYS_INLINE constexpr uint64_t int_from_compressed(auto&& ctx, auto&& it,
                                                                         auto&& end) noexcept
    {
       if (it >= end) [[unlikely]] {
-         return beve_invalid;
+         ctx.error = error_code::unexpected_end;
+         return 0;
       }
       
       uint8_t header;
@@ -81,7 +72,8 @@ namespace glz::detail
       const uint8_t config = header & 0b000000'11;
 
       if ((it + byte_count_lookup[config]) > end) [[unlikely]] {
-         return beve_invalid;
+         ctx.error = error_code::unexpected_end;
+         return 0;
       }
 
       switch (config) {
