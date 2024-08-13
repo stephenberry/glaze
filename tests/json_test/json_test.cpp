@@ -8996,6 +8996,12 @@ suite minify_prettify_safety = [] {
       auto prettified = glz::prettify_json(buffer);
       expect(prettified == "");
    };
+   
+   "invalid prettify"_test = [] {
+      std::array<char, 4> buffer{ '7', '7', '7', '[' }; // non-null terminated
+      auto prettified = glz::prettify_json(buffer);
+      expect(prettified == "777[") << prettified;
+   };
 
    "prettify"_test = [] {
       const char* d = "{{{{{{{{{{{[{{{[{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{";
