@@ -1160,6 +1160,9 @@ namespace glz::repe
                ++b; // skip the tag
                const auto n = glz::detail::int_from_compressed(ctx, b, e);
                if (bool(ctx.error) || (n != 2)) [[unlikely]] {
+                  if (n != 2) [[unlikely]] {
+                     ctx.error = error_code::syntax_error;
+                  }
                   handle_error(b);
                   return finish();
                }
