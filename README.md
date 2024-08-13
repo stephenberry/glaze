@@ -444,18 +444,28 @@ Denoting that x is invalid here.
 
 # Input Buffer (Null) Termination
 
-Input buffers must be null-terminated, unless the option `null_terminated` is set to `false`. Null terminated buffers result in faster performance.
+It is recommended to use a non-const `std::string` for your input buffers, as this allows Glaze to add temporary padding for better performance and the buffer will be null terminated.
 
-> [!WARNING]
->
-> Currently, `null_terminated = false` is only valid for reading JSON, not BEVE or CSV.
+## JSON
 
-It is recommended to use a non-const `std::string` for your input buffers, as this allows Glaze to add temporary padding for performance and the buffer will be null terminated.
+Input buffers must be null-terminated when parsing JSON, unless the option `null_terminated` is set to `false`. Null terminated buffers result in faster performance when reading JSON.
 
 ```c++
 constexpr glz::opts options{.null_terminated = false};
 auto ec = glz::read<options>(value, buffer); // read in a non-null terminated buffer 
 ```
+
+
+## BEVE
+
+There is no difference between buffer handling for BEVE (binary) concerning null-termination. BEVE parsing doesn't care and can parse any non-null terminated buffer.
+
+## CSV
+
+> [!WARNING]
+>
+> Currently, `null_terminated = false` is not valid for CSV parsing.
+
 
 # Type Support
 
