@@ -51,7 +51,7 @@ namespace glz
                break;
             }
             case Number: {
-               const auto value = read_json_number(it);
+               const auto value = read_json_number<Opts.null_terminated>(it, end);
                dump_not_empty(value, b, ix);
                break;
             }
