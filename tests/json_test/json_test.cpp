@@ -69,7 +69,8 @@ suite starter = [] {
       std::string buffer{};
       expect(not glz::write_json(s, buffer));
       expect(buffer == R"({"i":287,"d":3.14,"hello":"Hello World","arr":[1,2,3]})");
-      expect(glz::prettify_json(buffer) == R"({
+      auto pretty = glz::prettify_json(buffer);
+      expect(pretty == R"({
    "i": 287,
    "d": 3.14,
    "hello": "Hello World",
@@ -78,14 +79,15 @@ suite starter = [] {
       2,
       3
    ]
-})");
+})") << pretty;
 
-      expect(glz::prettify_json<glz::opts{.new_lines_in_arrays = false}>(buffer) == R"({
+      pretty = glz::prettify_json<glz::opts{.new_lines_in_arrays = false}>(buffer);
+      expect(pretty == R"({
    "i": 287,
    "d": 3.14,
    "hello": "Hello World",
    "arr": [1, 2, 3]
-})");
+})") << pretty;
    };
 };
 

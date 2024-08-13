@@ -75,12 +75,14 @@ namespace glz
                state[indent] = Array_Start;
                if constexpr (Opts.new_lines_in_arrays) {
                   if constexpr (not Opts.null_terminated) {
-                     if (it == end) [[unlikely]] {
-                        break;
+                     if (it != end && *it != ']') {
+                        append_new_line<use_tabs, indent_width>(b, ix, indent);
                      }
                   }
-                  if (*it != ']') {
-                     append_new_line<use_tabs, indent_width>(b, ix, indent);
+                  else {
+                     if (*it != ']') {
+                        append_new_line<use_tabs, indent_width>(b, ix, indent);
+                     }
                   }
                }
                break;
@@ -126,12 +128,14 @@ namespace glz
                }
                state[indent] = Object_Start;
                if constexpr (not Opts.null_terminated) {
-                  if (it == end) [[unlikely]] {
-                     break;
+                  if (it != end && *it != '}') [[unlikely]] {
+                     append_new_line<use_tabs, indent_width>(b, ix, indent);
                   }
                }
-               if (*it != '}') {
-                  append_new_line<use_tabs, indent_width>(b, ix, indent);
+               else {
+                  if (*it != '}') {
+                     append_new_line<use_tabs, indent_width>(b, ix, indent);
+                  }
                }
                break;
             }
