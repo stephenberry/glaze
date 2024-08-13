@@ -178,7 +178,7 @@ namespace glz
             minify_json<opt_true<O, &opts::null_terminated>>(ctx, it, end, out, ix);
          }
          else {
-            minify_json<O>(ctx, it, end, out, ix);
+            minify_json<opt_false<O, &opts::null_terminated>>(ctx, it, end, out, ix);
          }
          
          if constexpr (resizable<Out>) {

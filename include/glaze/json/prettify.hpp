@@ -191,7 +191,7 @@ namespace glz
             prettify_json<opt_true<Opts, &opts::null_terminated>>(ctx, it, end, out, ix);
          }
          else {
-            prettify_json<Opts>(ctx, it, end, out, ix);
+            prettify_json<opt_false<Opts, &opts::null_terminated>>(ctx, it, end, out, ix);
          }
          
          if constexpr (resizable<Out>) {
