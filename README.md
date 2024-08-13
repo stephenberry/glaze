@@ -448,13 +448,16 @@ It is recommended to use a non-const `std::string` for your input buffers, as th
 
 ## JSON
 
-Input buffers must be null-terminated when parsing JSON, unless the option `null_terminated` is set to `false`. Null terminated buffers result in faster performance when reading JSON.
+By default the option `null_terminated` is set to `true` and thus null-terminated buffers must be used when parsing JSON. The option can be turned off with a small loss in performance:
 
 ```c++
 constexpr glz::opts options{.null_terminated = false};
-auto ec = glz::read<options>(value, buffer); // read in a non-null terminated buffer 
+auto ec = glz::read<options>(value, buffer); // read in a non-null terminated buffer
 ```
 
+> [!WARNING]
+>
+>  `glz::minify_json` currently requires a null terminated buffer.
 
 ## BEVE
 
