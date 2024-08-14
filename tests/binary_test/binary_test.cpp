@@ -59,8 +59,8 @@ struct glz::meta<sub_thing>
 {
    static constexpr std::string_view name = "sub_thing";
    static constexpr auto value = object(
-      "a", &sub_thing::a, "Test comment 1", //
-      "b", [](auto&& v) -> auto& { return v.b; }, "Test comment 2" //
+      "a", &sub_thing::a, //
+      "b", [](auto&& v) -> auto& { return v.b; } //
    );
 };
 
@@ -82,8 +82,8 @@ struct glz::meta<sub_thing2>
    using T = sub_thing2;
    static constexpr std::string_view name = "sub_thing2";
    static constexpr auto value = object("include", glz::file_include{}, //
-                                        "a", &T::a, "Test comment 1", //
-                                        "b", &T::b, "Test comment 2", //
+                                        "a", &T::a, //
+                                        "b", &T::b, //
                                         "c", &T::c, //
                                         "d", &T::d, //
                                         "e", &T::e, //
@@ -185,7 +185,7 @@ struct glz::meta<Thing>
       "deque", &T::deque, //
       "vector", [](auto&& v) -> auto& { return v.vector; }, //
       "i", [](auto&& v) -> auto& { return v.i; }, //
-      "d", &T::d, "double is the best type", //
+      "d", &T::d, //
       "b", &T::b, //
       "c", &T::c, //
       "v", &T::v, //
