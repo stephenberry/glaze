@@ -22,11 +22,9 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* Data, size_t Size)
    {
       const auto& input = buffer;
       [[maybe_unused]] auto s = glz::read_binary<my_struct>(input);
-      if (s) {
-         // valid
-         std::string json_output{};
-         [[maybe_unused]] auto ec = glz::beve_to_json(input, json_output);
-      }
+      
+      std::string json_output{};
+      [[maybe_unused]] auto ec = glz::beve_to_json(input, json_output);
    }
    
    // null terminated
@@ -34,11 +32,6 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* Data, size_t Size)
       buffer.push_back('\0');
       const auto& input = buffer;
       [[maybe_unused]] auto s = glz::read_binary<my_struct>(input);
-      if (s) {
-         // valid
-         std::string json_output{};
-         [[maybe_unused]] auto ec = glz::beve_to_json(input, json_output);
-      }
    }
    
    return 0;
