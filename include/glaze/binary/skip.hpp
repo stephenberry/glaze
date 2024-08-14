@@ -28,7 +28,7 @@ namespace glz::detail
       it += n;
    }
 
-   inline void skip_number_binary(is_context auto&& ctx, auto&& it, auto&& end) noexcept
+   GLZ_ALWAYS_INLINE void skip_number_binary(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       const auto tag = uint8_t(*it);
       const uint8_t byte_count = byte_count_lookup[tag >> 5];
@@ -167,7 +167,7 @@ namespace glz::detail
    }
 
    template <opts Opts>
-   inline void skip_additional_binary(is_context auto&& ctx, auto&& it, auto&& end) noexcept
+   GLZ_ALWAYS_INLINE void skip_additional_binary(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       ++it;
       skip_value_binary<Opts>(ctx, it, end);
