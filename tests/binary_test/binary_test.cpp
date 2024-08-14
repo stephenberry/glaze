@@ -2272,6 +2272,12 @@ suite past_fuzzing_issues = [] {
       std::vector<uint8_t> input = base64_decode(base64);
       expect(glz::read_binary<my_struct>(input).error());
    };
+   
+   "fuzz3"_test = [] {
+      std::string_view base64 = "AzoxKOUMYXJydCQkKOUMYXJydCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCkA";
+      std::vector<uint8_t> input = base64_decode(base64);
+      expect(glz::read_binary<my_struct>(input).error());
+   };
 };
 
 int main()

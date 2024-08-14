@@ -752,6 +752,12 @@ namespace glz
                         value.shrink_to_fit();
                      }
                   }
+                  else {
+                     if (n > value.size()) {
+                        ctx.error = error_code::syntax_error;
+                        return 0;
+                     }
+                  }
 
                   return n;
                };
