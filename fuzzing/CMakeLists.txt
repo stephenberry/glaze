@@ -40,6 +40,7 @@ macro(create_fuzztest testname)
     endif()
 endmacro()
 
+create_fuzztest(binary_reflection)
 create_fuzztest(json_generic)
 create_fuzztest(json_minify)
 create_fuzztest(json_prettify)
