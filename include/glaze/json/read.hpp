@@ -145,6 +145,7 @@ namespace glz
       {
          static constexpr auto TargetKey = get<I>(refl<T>.keys);
          static constexpr auto Length = TargetKey.size();
+         // The == end check is validating that we have space for a quote
          if ((it + Length) >= end) [[unlikely]] {
             if constexpr (Opts.error_on_unknown_keys) {
                ctx.error = error_code::unknown_key;

@@ -2029,14 +2029,6 @@ suite type_conversions = [] {
       expect(v == std::vector{1.0, 2.0, 3.0});
    };
 
-   "vector<double> -> vector<int>"_test = [] {
-      std::vector<double> input{1.1, 2.2, 3.3};
-      auto b = glz::write_binary(input).value_or("error");
-      std::vector<int> v{};
-      expect(!glz::read_binary(v, b));
-      expect(v == std::vector{1, 2, 3});
-   };
-
    "map<int32_t, double> -> map<uint32_t, float>"_test = [] {
       std::map<int32_t, double> input{{1, 1.1}, {2, 2.2}, {3, 3.3}};
       auto b = glz::write_binary(input).value_or("error");
@@ -2265,7 +2257,13 @@ std::vector<unsigned char> base64_decode(const std::string_view input) {
 suite past_fuzzing_issues = [] {
    "fuzz0"_test = [] {
       std::string_view base64 = "AwQEaWH//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////8A=";
-      std::vector<unsigned char> input = base64_decode(base64);
+      std::vector<uint8_t> input = base64_decode(base64);
+      expect(glz::read_binary<my_struct>(input).error());
+   };
+   
+   "fuzz1"_test = [] {
+      std::string_view base64 = "A4gEaWHw8PDw8PDw8PDw8PDw8PDw8PDw8PDw8PDw8PDw8PDw";
+      std::vector<uint8_t> input = base64_decode(base64);
       expect(glz::read_binary<my_struct>(input).error());
    };
 };

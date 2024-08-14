@@ -204,30 +204,33 @@ namespace glz
                            return;
                         }
                         std::memcpy(&i, it, sizeof(i));
-                        if constexpr (std::floating_point<std::decay_t<decltype(i)>>) {
-                           // Cross conversions are not allowed with infinite values
-                           // It is undefined behavior for integers
-                           if (not std::isfinite(i)) [[unlikely]] {
-                              ctx.error = error_code::syntax_error;
-                              return;
-                           }
-                        }
-                        
                         value = static_cast<V>(i);
                         it += sizeof(i);
                      };
 
                      switch (tag) {
                      case tag::f32: {
-                        static_assert(sizeof(float) == 4);
-                        // TODO: use float32_t in C++23
-                        decode(float{});
+                        if constexpr (std::integral<V>) {
+                           // We do not allow cross conversions from floats to integral types
+                           ctx.error = error_code::syntax_error;
+                        }
+                        else {
+                           static_assert(sizeof(float) == 4);
+                           // TODO: use float32_t in C++23
+                           decode(float{});
+                        }
                         return;
                      }
                      case tag::f64: {
-                        static_assert(sizeof(double) == 8);
-                        // TODO: use float64_t in C++23
-                        decode(double{});
+                        if constexpr (std::integral<V>) {
+                           // We do not allow cross conversions from floats to integral types
+                           ctx.error = error_code::syntax_error;
+                        }
+                        else {
+                           static_assert(sizeof(double) == 8);
+                           // TODO: use float64_t in C++23
+                           decode(double{});
+                        }
                         return;
                      }
                      case tag::i8: {
