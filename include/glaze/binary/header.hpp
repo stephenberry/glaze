@@ -96,7 +96,13 @@ namespace glz::detail
          uint64_t h;
          std::memcpy(&h, it, 8);
          it += 8;
-         return h >> 2;
+         h = h >> 2;
+         static constexpr uint64_t safety_limit = 1ull << 48; // 2^48
+         if (h > safety_limit) [[unlikely]] {
+            ctx.error = error_code::unexpected_end;
+            return 0;
+         }
+         return h;
       }
       default:
          return 0;
