@@ -6,12 +6,6 @@ Glaze also supports:
 - [BEVE](https://github.com/beve-org/beve) (binary efficient versatile encoding)
 - [CSV](./docs/csv.md) (comma separated value)
 
-> [!IMPORTANT]
->
-> Since v3.0.0, Glaze requires C++23.
->
-> See additional breaking changes for v3.0.0 in the [Version 3.0.0 Release Notes](https://github.com/stephenberry/glaze/releases/tag/v3.0.0)
-
 ## With compile time reflection for MSVC, Clang, and GCC!
 
 - Read/write aggregate initializable structs without writing any metadata or macros!
@@ -463,7 +457,7 @@ Null-termination is not required when parsing BEVE (binary). It makes no differe
 
 > [!WARNING]
 >
-> Currently, `null_terminated = false` is not valid for CSV parsing.
+> Currently, `null_terminated = false` is not valid for CSV parsing and buffers must be null terminated.
 
 
 # Type Support
