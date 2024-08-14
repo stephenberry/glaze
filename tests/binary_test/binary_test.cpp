@@ -2235,6 +2235,41 @@ suite early_end = [] {
    };
 };
 
+std::vector<unsigned char> base64_decode(const std::string_view input) {
+    static const std::string base64_chars =
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+        "abcdefghijklmnopqrstuvwxyz"
+        "0123456789+/";
+        
+    std::vector<unsigned char> decoded_data;
+    std::vector<int> decode_table(256, -1);
+    
+    for (int i = 0; i < 64; i++) {
+        decode_table[base64_chars[i]] = i;
+    }
+    
+    int val = 0, valb = -8;
+    for (unsigned char c : input) {
+        if (decode_table[c] == -1) break; // Stop decoding at padding '=' or invalid characters
+        val = (val << 6) + decode_table[c];
+        valb += 6;
+        if (valb >= 0) {
+            decoded_data.push_back((val >> valb) & 0xFF);
+            valb -= 8;
+        }
+    }
+    
+    return decoded_data;
+}
+
+suite past_fuzzing_issues = [] {
+   "fuzz0"_test = [] {
+      std::string_view base64 = "AwQEaWH//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////8A=";
+      std::vector<unsigned char> input = base64_decode(base64);
+      expect(glz::read_binary<my_struct>(input).error());
+   };
+};
+
 int main()
 {
    glz::trace_begin("binary_test");

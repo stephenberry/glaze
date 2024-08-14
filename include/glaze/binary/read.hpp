@@ -204,6 +204,15 @@ namespace glz
                            return;
                         }
                         std::memcpy(&i, it, sizeof(i));
+                        if constexpr (std::floating_point<std::decay_t<decltype(i)>>) {
+                           // Cross conversions are not allowed with infinite values
+                           // It is undefined behavior for integers
+                           if (not std::isfinite(i)) [[unlikely]] {
+                              ctx.error = error_code::syntax_error;
+                              return;
+                           }
+                        }
+                        
                         value = static_cast<V>(i);
                         it += sizeof(i);
                      };
@@ -1266,7 +1275,8 @@ namespace glz
                      }
 
                      std::visit(
-                        [&](auto&& element) { read<binary>::op<Opts>(get_member(value, element), ctx, it, end); },
+                        [&](auto&& element) { //
+                           read<binary>::op<Opts>(get_member(value, element), ctx, it, end); },
                         p->second);
 
                      if (bool(ctx.error)) [[unlikely]] {
