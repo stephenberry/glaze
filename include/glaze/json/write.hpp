@@ -150,24 +150,33 @@ namespace glz
       template <boolean_like T>
       struct to_json<T>
       {
-         template <auto Opts, class... Args>
-         GLZ_ALWAYS_INLINE static void op(const bool value, is_context auto&&, Args&&... args) noexcept
+         template <auto Opts, class B>
+         GLZ_ALWAYS_INLINE static void op(const bool value, is_context auto&&, B&& b, auto&& ix) noexcept
          {
-            constexpr auto checked = not has_write_unchecked(Opts);
+            static constexpr auto checked = not has_write_unchecked(Opts);
+            if constexpr (checked && vector_like<B>) {
+               if ((ix + 8) > b.size()) [[unlikely]] {
+                  b.resize((std::max)(b.size() * 2, ix + 8));
+               }
+            }
+            
             if constexpr (Opts.bools_as_numbers) {
                if (value) {
-                  dump<"1", checked>(std::forward<Args>(args)...);
+                  b[ix] = '1';
                }
                else {
-                  dump<"0", checked>(std::forward<Args>(args)...);
+                  b[ix] = '0';
                }
+               ++ix;
             }
             else {
                if (value) {
-                  dump<"true", checked>(std::forward<Args>(args)...);
+                  std::memcpy(b.data() + ix, "true", 4);
+                  ix += 4;
                }
                else {
-                  dump<"false", checked>(std::forward<Args>(args)...);
+                  std::memcpy(b.data() + ix, "false", 5);
+                  ix += 5;
                }
             }
          }
