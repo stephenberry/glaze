@@ -103,6 +103,10 @@ namespace glz
       template <glz::opts Opts, class Buffer>
       inline void beve_to_json_value(auto&& ctx, auto&& it, auto&& end, Buffer& out, auto&& ix) noexcept
       {
+         if (it >= end) [[unlikely]] {
+            ctx.error = error_code::syntax_error;
+            return;
+         }
          const auto tag = uint8_t(*it);
          const auto type = tag & 0b00000'111;
          switch (type) {
@@ -432,6 +436,10 @@ namespace glz
             case 2: {
                // matrices
                ++it;
+               if (it >= end) [[unlikely]] {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
                const auto matrix_header = uint8_t(*it);
                ++it;
 
@@ -493,6 +501,10 @@ namespace glz
             case 3: {
                // complex numbers
                ++it;
+               if (it >= end) [[unlikely]] {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
                const auto complex_header = uint8_t(*it);
                ++it;
 
