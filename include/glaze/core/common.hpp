@@ -435,7 +435,7 @@ namespace glz
 
       // member_ptr and lambda wrapper helper
       template <template <class> class Wrapper, class Wrapped>
-      struct wrap final
+      struct wrap
       {
          Wrapped wrapped;
          constexpr decltype(auto) operator()(auto&& value) const
