@@ -435,7 +435,7 @@ namespace glz
 
       // member_ptr and lambda wrapper helper
       template <template <class> class Wrapper, class Wrapped>
-      struct wrap
+      struct wrap final
       {
          Wrapped wrapped;
          constexpr decltype(auto) operator()(auto&& value) const
@@ -449,7 +449,7 @@ namespace glz
       // Output variants in the following format  ["variant_type", variant_json_data] with
       // glz::detail:array_variant(&T::var);
       template <is_variant T>
-      struct array_variant_wrapper
+      struct array_variant_wrapper final
       {
          T& value;
       };
@@ -498,7 +498,7 @@ namespace glz
    // This wraps glz::expected error (unexpected) values in an object with an "error" key
    // This makes them discernable from the expected value
    template <class T>
-   struct unexpected_wrapper
+   struct unexpected_wrapper final
    {
       T* unexpected;
 
