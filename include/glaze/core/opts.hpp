@@ -19,7 +19,12 @@ namespace glz
    constexpr uint8_t rowwise = 0;
    constexpr uint8_t colwise = 1;
 
-   enum struct float_precision : uint8_t { full, float32 = 4, float64 = 8, float128 = 16 };
+   enum struct float_precision : uint8_t { //
+      full, //
+      float32 = 4, //
+      float64 = 8, //
+      float128 = 16 //
+   };
 
    // We use 16 padding bytes because surrogate unicode pairs require 12 bytes
    // and we want a power of 2 buffer
