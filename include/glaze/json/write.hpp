@@ -1091,7 +1091,7 @@ namespace glz
 
             static constexpr auto N = refl<T>.N;
 
-            [[maybe_unused]] decltype(auto) t = [&]() -> decltype(auto) {
+            decltype(auto) t = [&]() -> decltype(auto) {
                if constexpr (reflectable<T>) {
                   return to_tuple(value);
                }
@@ -1100,10 +1100,10 @@ namespace glz
                }
             }();
 
-            [[maybe_unused]] bool first = true;
+            bool first = true;
             static constexpr auto first_is_written = object_info<Options, T>::first_will_be_written;
             invoke_table<N>([&]<size_t I>() {
-               constexpr auto Opts = opening_and_closing_handled_off<ws_handled_off<Options>()>();
+               static constexpr auto Opts = opening_and_closing_handled_off<ws_handled_off<Options>()>();
 
                using val_t = std::remove_cvref_t<refl_t<T, I>>;
 
@@ -1140,18 +1140,16 @@ namespace glz
                      return;
                   }
                   else {
-                     decltype(auto) mem = element();
-
                      if constexpr (null_t<val_t>) {
                         if constexpr (always_null_t<T>)
                            return;
                         else {
-                           auto is_null = [&]() {
+                           const auto is_null = [&]() {
                               if constexpr (nullable_wrapper<val_t>) {
-                                 return !bool(mem(value).val);
+                                 return !bool(element()(value).val);
                               }
                               else {
-                                 return !bool(get_member(value, mem));
+                                 return !bool(get_member(value, element()));
                               }
                            }();
                            if (is_null) return;
@@ -1173,10 +1171,10 @@ namespace glz
 
                      write_key();
                      if constexpr (supports_unchecked_write<val_t>) {
-                        to_json<val_t>::template op<write_unchecked_on<Opts>()>(get_member(value, mem), ctx, b, ix);
+                        to_json<val_t>::template op<write_unchecked_on<Opts>()>(get_member(value, element()), ctx, b, ix);
                      }
                      else {
-                        to_json<val_t>::template op<Opts>(get_member(value, mem), ctx, b, ix);
+                        to_json<val_t>::template op<Opts>(get_member(value, element()), ctx, b, ix);
                      }
                   }
                }
