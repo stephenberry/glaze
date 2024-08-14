@@ -89,7 +89,10 @@ namespace glz::detail
    template <size_t N, class Lambda>
    GLZ_ALWAYS_INLINE constexpr void jump_table(Lambda&& lambda, size_t index) noexcept
    {
-      if constexpr (N == 1) {
+      if constexpr (N == 0) {
+         return;
+      }
+      else if constexpr (N == 1) {
          static_cast<Lambda&&>(lambda).template operator()<0>();
       }
       GLZ_SWITCH(2, 0, 1)
@@ -178,7 +181,10 @@ namespace glz::detail
    template <size_t N, class Lambda>
    GLZ_ALWAYS_INLINE constexpr void invoke_table(Lambda&& lambda) noexcept
    {
-      if constexpr (N == 1) {
+      if constexpr (N == 0) {
+         return;
+      }
+      else if constexpr (N == 1) {
          static_cast<Lambda&&>(lambda).template operator()<0>();
       }
       GLZ_INVOKE_ALL(2, 0, 1)

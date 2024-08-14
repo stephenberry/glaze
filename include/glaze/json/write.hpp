@@ -1099,43 +1099,45 @@ namespace glz
                   return nullptr;
                }
             }();
+            
+            static constexpr auto Opts = opening_and_closing_handled_off<ws_handled_off<Options>()>();
+            
+            if constexpr (object_info<Options, T>::maybe_skipped) {
+               bool first = true;
+               static constexpr auto first_is_written = object_info<Options, T>::first_will_be_written;
+               invoke_table<N>([&]<size_t I>() {
 
-            bool first = true;
-            static constexpr auto first_is_written = object_info<Options, T>::first_will_be_written;
-            invoke_table<N>([&]<size_t I>() {
-               static constexpr auto Opts = opening_and_closing_handled_off<ws_handled_off<Options>()>();
+                  using val_t = std::remove_cvref_t<refl_t<T, I>>;
 
-               using val_t = std::remove_cvref_t<refl_t<T, I>>;
+                  decltype(auto) element = [&]() -> decltype(auto) {
+                     if constexpr (reflectable<T>) {
+                        return get<I>(t);
+                     }
+                     else {
+                        return get<I>(refl<T>.values);
+                     }
+                  };
 
-               decltype(auto) element = [&]() -> decltype(auto) {
-                  if constexpr (reflectable<T>) {
-                     return get<I>(t);
-                  }
-                  else {
-                     return get<I>(refl<T>.values);
-                  }
-               };
+                  // MSVC requires get<I> rather than keys[I]
+                  // GCC 14 requires this to exist outside the write_key lambda
+                  static constexpr auto key = get<I>(refl<T>.keys); // GCC 14 requires auto here
+                  static constexpr auto quoted_key = join_v < chars<"\"">, key,
+                                        Opts.prettify ? chars<"\": "> : chars < "\":" >>
+                     ;
 
-               // MSVC requires get<I> rather than keys[I]
-               // GCC 14 requires this to exist outside the write_key lambda
-               static constexpr auto key = get<I>(refl<T>.keys); // GCC 14 requires auto here
-               static constexpr auto quoted_key = join_v < chars<"\"">, key,
-                                     Opts.prettify ? chars<"\": "> : chars < "\":" >>
-                  ;
+                  // Keep this lambda for performance
+                  auto write_key = [&] {
+                     if constexpr (quoted_key.size() < 128) {
+                        // Using the same padding constant alows the compiler
+                        // to not need to load different lengths into the register
+                        maybe_pad<write_padding_bytes>(b, ix);
+                     }
+                     else {
+                        maybe_pad<quoted_key.size() + write_padding_bytes>(b);
+                     }
+                     dump<quoted_key, false>(b, ix);
+                  };
 
-               auto write_key = [&] {
-                  if constexpr (quoted_key.size() < 128) {
-                     // Using the same padding constant alows the compiler
-                     // to not need to load different lengths into the register
-                     maybe_pad<write_padding_bytes>(b, ix);
-                  }
-                  else {
-                     maybe_pad<quoted_key.size() + write_padding_bytes>(b);
-                  }
-                  dump<quoted_key, false>(b, ix);
-               };
-
-               if constexpr (object_info<Options, T>::maybe_skipped) {
                   if constexpr (is_includer<val_t> || std::same_as<val_t, hidden> || std::same_as<val_t, skip>) {
                      return;
                   }
@@ -1177,22 +1179,51 @@ namespace glz
                         to_json<val_t>::template op<Opts>(get_member(value, element()), ctx, b, ix);
                      }
                   }
-               }
-               else {
+               });
+            }
+            else {
+               invoke_table<N>([&]<size_t I>() {
+                  static constexpr auto Opts = opening_and_closing_handled_off<ws_handled_off<Options>()>();
+
+                  using val_t = std::remove_cvref_t<refl_t<T, I>>;
+
+                  // MSVC requires get<I> rather than keys[I]
+                  // GCC 14 requires this to exist outside the write_key lambda
+                  static constexpr auto key = get<I>(refl<T>.keys); // GCC 14 requires auto here
+                  static constexpr auto quoted_key = join_v < chars<"\"">, key,
+                                        Opts.prettify ? chars<"\": "> : chars < "\":" >>
+                     ;
+
+                  // Keep this lambda for performance
+                  auto write_key = [&] {
+                     if constexpr (quoted_key.size() < 128) {
+                        // Using the same padding constant alows the compiler
+                        // to not need to load different lengths into the register
+                        maybe_pad<write_padding_bytes>(b, ix);
+                     }
+                     else {
+                        maybe_pad<quoted_key.size() + write_padding_bytes>(b);
+                     }
+                     dump<quoted_key, false>(b, ix);
+                  };
+
                   // in this case we don't have values that are maybe skipped
                   if constexpr (I > 0) {
                      write_entry_separator<Opts>(ctx, b, ix);
                   }
 
                   write_key();
-                  if constexpr (supports_unchecked_write<val_t>) {
-                     to_json<val_t>::template op<write_unchecked_on<Opts>()>(get_member(value, element()), ctx, b, ix);
+                                    
+                  static constexpr auto check_opts = supports_unchecked_write<val_t> ? write_unchecked_on<Opts>() : Opts;
+                  if constexpr (reflectable<T>) {
+                     to_json<val_t>::template op<check_opts>(get_member(value, get<I>(t)), ctx, b, ix);
                   }
                   else {
-                     to_json<val_t>::template op<Opts>(get_member(value, element()), ctx, b, ix);
+                     to_json<val_t>::template op<check_opts>(get_member(value, get<I>(refl<T>.values)), ctx, b, ix);
                   }
-               }
-            });
+               });
+            }
+            
             if constexpr (!has_closing_handled(Options)) {
                if constexpr (Options.prettify) {
                   ctx.indentation_level -= Options.indentation_width;
