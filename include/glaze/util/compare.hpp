@@ -97,47 +97,9 @@ namespace glz
    }
 
    template <uint64_t Count, class Char>
-   inline bool compare(const Char* lhs, const Char* rhs) noexcept
+   GLZ_ALWAYS_INLINE bool compare(const Char* lhs, const Char* rhs) noexcept
    {
-      if constexpr (Count > 8) {
-         return internal_compare(lhs, rhs, Count);
-      }
-      else if constexpr (Count == 8) {
-         uint64_t v[2];
-         std::memcpy(v, lhs, Count);
-         std::memcpy(v + 1, rhs, Count);
-         return v[0] == v[1];
-      }
-      else if constexpr (Count > 4) {
-         uint64_t v[2]{}; // must default initialize
-         std::memcpy(v, lhs, Count);
-         std::memcpy(v + 1, rhs, Count);
-         return v[0] == v[1];
-      }
-      else if constexpr (Count == 4) {
-         uint32_t v[2];
-         std::memcpy(v, lhs, Count);
-         std::memcpy(v + 1, rhs, Count);
-         return v[0] == v[1];
-      }
-      else if constexpr (Count == 3) {
-         uint32_t v[2]{}; // must default initialize
-         std::memcpy(v, lhs, Count);
-         std::memcpy(v + 1, rhs, Count);
-         return v[0] == v[1];
-      }
-      else if constexpr (Count == 2) {
-         uint16_t v[2];
-         std::memcpy(v, lhs, Count);
-         std::memcpy(v + 1, rhs, Count);
-         return v[0] == v[1];
-      }
-      else if constexpr (Count == 1) {
-         return *lhs == *rhs;
-      }
-      else {
-         return true;
-      }
+      return 0 == std::memcmp(lhs, rhs, Count);
    }
 
    // compare_sv checks sizes
