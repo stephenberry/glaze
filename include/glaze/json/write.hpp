@@ -1069,8 +1069,9 @@ namespace glz
          }
 
          // handles glaze_object_t without extra unknown fields
+         // use always inline because this separation is only to make more readable code
          template <auto Options, class B>
-         static void op_base(auto&& value, is_context auto&& ctx, B&& b, auto&& ix) noexcept
+         GLZ_ALWAYS_INLINE static void op_base(auto&& value, is_context auto&& ctx, B&& b, auto&& ix) noexcept
          {
             if constexpr (!has_opening_handled(Options)) {
                if constexpr (Options.prettify) {
