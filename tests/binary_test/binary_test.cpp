@@ -2285,6 +2285,13 @@ suite past_fuzzing_issues = [] {
       std::string json{};
       expect(glz::beve_to_json(input, json));
    };
+   
+   "fuzz5"_test = [] {
+      std::string_view base64 = "CDE=";
+      std::vector<uint8_t> input = base64_decode(base64);
+      std::string json{};
+      expect(glz::beve_to_json(input, json));
+   };
 };
 
 int main()

@@ -11,12 +11,16 @@ namespace glz
    namespace detail
    {
       template <opts Opts>
-      inline void beve_to_json_number(auto&& tag, auto&& ctx, auto&& it, auto&&, auto& out, auto&& ix) noexcept
+      inline void beve_to_json_number(auto&& tag, auto&& ctx, auto&& it, auto&& end, auto& out, auto&& ix) noexcept
       {
          const auto number_type = (tag & 0b000'11'000) >> 3;
          const uint8_t byte_count = detail::byte_count_lookup[tag >> 5];
 
          auto write_number = [&]<class T>(T&& value) {
+            if ((it + sizeof(T)) > end) [[unlikely]] {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
             std::memcpy(&value, it, sizeof(T));
             to_json<T>::template op<Opts>(value, ctx, out, ix);
             it += sizeof(T);
