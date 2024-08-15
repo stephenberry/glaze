@@ -9303,9 +9303,9 @@ struct float_entry
 
 suite response_test = [] {
    "response"_test = [] {
-      std::vector<float_entry> entries{ {"bright", 5.6f}, {"dull", 6.7f} };
+      std::vector<float_entry> entries{{"bright", 5.6f}, {"dull", 6.7f}};
       response_t res{entries};
-      
+
       using T = decltype(res);
       static_assert(std::same_as<glz::refl_t<T, 0>, std::vector<float_entry>&>);
       static_assert(std::same_as<glz::refl_t<T, 1>, uint32_t&>);
