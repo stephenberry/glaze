@@ -1218,7 +1218,8 @@ namespace glz
                            b.resize((std::max)(b.size() * 2, k));
                         }
                      }
-                     dump<"{\n", false>(b, ix);
+                     std::memcpy(&b[ix], "{\n", 2);
+                     ix += 2;
                      dumpn_unchecked<Options.indentation_char>(ctx.indentation_level, b, ix);
                   }
                   else {
@@ -1284,7 +1285,8 @@ namespace glz
                                     b.resize((std::max)(b.size() * 2, k));
                                  }
                               }
-                              dump<",\n", false>(b, ix);
+                              std::memcpy(&b[ix], ",\n", 2);
+                              ix += 2;
                               dumpn_unchecked<Opts.indentation_char>(ctx.indentation_level, b, ix);
                            }
                            else {
@@ -1313,7 +1315,8 @@ namespace glz
                                        b.resize((std::max)(b.size() * 2, k));
                                     }
                                  }
-                                 dump<",\n", false>(b, ix);
+                                 std::memcpy(&b[ix], ",\n", 2);
+                                 ix += 2;
                                  dumpn_unchecked<Opts.indentation_char>(ctx.indentation_level, b, ix);
                               }
                               else {
@@ -1389,7 +1392,8 @@ namespace glz
                                  b.resize((std::max)(b.size() * 2, k));
                               }
                            }
-                           dump<",\n", false>(b, ix);
+                           std::memcpy(&b[ix], ",\n", 2);
+                           ix += 2;
                            dumpn_unchecked<Opts.indentation_char>(ctx.indentation_level, b, ix);
                         }
                         else {
@@ -1417,9 +1421,11 @@ namespace glz
                            b.resize((std::max)(b.size() * 2, k));
                         }
                      }
-                     dump<'\n', false>(b, ix);
+                     std::memcpy(&b[ix], "\n", 1);
+                     ++ix;
                      dumpn_unchecked<Options.indentation_char>(ctx.indentation_level, b, ix);
-                     dump<'}', false>(b, ix);
+                     std::memcpy(&b[ix], "}", 1);
+                     ++ix;
                   }
                   else {
                      dump<'}'>(b, ix);
