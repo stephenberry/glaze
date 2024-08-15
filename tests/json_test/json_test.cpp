@@ -213,7 +213,7 @@ enum class TestData : uint8_t {
    B,
    C,
    D,
-   ERROR = 0xFF
+   ERROR_E = 0xFF
 };
 
 struct DummyData {
@@ -232,7 +232,7 @@ struct DummyData {
 template <>
 struct glz::meta<TestData> {
    using enum TestData;
-   static constexpr auto value = enumerate(None, A, B, C, D, ERROR);
+   static constexpr auto value = enumerate(None, A, B, C, D, ERROR_E);
 };
 
 template <>
@@ -275,10 +275,10 @@ suite test_data_struct_tests = [] {
          DummyData{
             .id = 3,
             .a = -1,
-            .b = TestData::ERROR,
-            .c = TestData::ERROR,
-            .d = TestData::ERROR,
-            .e = TestData::ERROR,
+            .b = TestData::ERROR_E,
+            .c = TestData::ERROR_E,
+            .d = TestData::ERROR_E,
+            .e = TestData::ERROR_E,
             .f = 0xFFFFFFFF,
          },
       };
