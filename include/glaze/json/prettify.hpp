@@ -51,7 +51,7 @@ namespace glz
                break;
             }
             case Number: {
-               const auto value = read_json_number(it);
+               const auto value = read_json_number<Opts.null_terminated>(it, end);
                dump_not_empty(value, b, ix);
                break;
             }
@@ -74,8 +74,15 @@ namespace glz
                }
                state[indent] = Array_Start;
                if constexpr (Opts.new_lines_in_arrays) {
-                  if (*it != ']') {
-                     append_new_line<use_tabs, indent_width>(b, ix, indent);
+                  if constexpr (not Opts.null_terminated) {
+                     if (it != end && *it != ']') {
+                        append_new_line<use_tabs, indent_width>(b, ix, indent);
+                     }
+                  }
+                  else {
+                     if (*it != ']') {
+                        append_new_line<use_tabs, indent_width>(b, ix, indent);
+                     }
                   }
                }
                break;
@@ -120,8 +127,15 @@ namespace glz
                   state.resize(state.size() * 2);
                }
                state[indent] = Object_Start;
-               if (*it != '}') {
-                  append_new_line<use_tabs, indent_width>(b, ix, indent);
+               if constexpr (not Opts.null_terminated) {
+                  if (it != end && *it != '}') [[unlikely]] {
+                     append_new_line<use_tabs, indent_width>(b, ix, indent);
+                  }
+               }
+               else {
+                  if (*it != '}') {
+                     append_new_line<use_tabs, indent_width>(b, ix, indent);
+                  }
                }
                break;
             }
@@ -172,7 +186,14 @@ namespace glz
          if (bool(ctx.error)) [[unlikely]] {
             return;
          }
-         prettify_json<Opts>(ctx, it, end, out, ix);
+         
+         if constexpr (string_t<In>) {
+            prettify_json<opt_true<Opts, &opts::null_terminated>>(ctx, it, end, out, ix);
+         }
+         else {
+            prettify_json<opt_false<Opts, &opts::null_terminated>>(ctx, it, end, out, ix);
+         }
+         
          if constexpr (resizable<Out>) {
             out.resize(ix);
          }

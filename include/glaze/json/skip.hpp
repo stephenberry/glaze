@@ -12,13 +12,18 @@ namespace glz::detail
    {
       if constexpr (!Opts.validate_skipped) {
          ++it;
+         GLZ_INVALID_END();
          skip_until_closed<Opts, '{', '}'>(ctx, it, end);
       }
       else {
+         GLZ_ADD_LEVEL;
          ++it;
+         GLZ_INVALID_END();
          GLZ_SKIP_WS();
          if (*it == '}') {
+            GLZ_SUB_LEVEL;
             ++it;
+            GLZ_VALID_END();
             return;
          }
          while (true) {
@@ -38,9 +43,12 @@ namespace glz::detail
             GLZ_SKIP_WS();
             if (*it != ',') break;
             ++it;
+            GLZ_INVALID_END();
             GLZ_SKIP_WS();
          }
          match<'}'>(ctx, it);
+         GLZ_SUB_LEVEL;
+         GLZ_VALID_END();
       }
    }
 
@@ -49,13 +57,18 @@ namespace glz::detail
    {
       if constexpr (!Opts.validate_skipped) {
          ++it;
+         GLZ_INVALID_END();
          skip_until_closed<Opts, '[', ']'>(ctx, it, end);
       }
       else {
+         GLZ_ADD_LEVEL;
          ++it;
+         GLZ_INVALID_END();
          GLZ_SKIP_WS();
          if (*it == ']') {
+            GLZ_SUB_LEVEL;
             ++it;
+            GLZ_VALID_END();
             return;
          }
          while (true) {
@@ -65,9 +78,12 @@ namespace glz::detail
             GLZ_SKIP_WS();
             if (*it != ',') break;
             ++it;
+            GLZ_INVALID_END();
             GLZ_SKIP_WS();
          }
          match<']'>(ctx, it);
+         GLZ_SUB_LEVEL;
+         GLZ_VALID_END();
       }
    }
 
@@ -82,12 +98,14 @@ namespace glz::detail
             switch (*it) {
             case '{':
                ++it;
+               GLZ_INVALID_END();
                skip_until_closed<Opts, '{', '}'>(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
                   return;
                break;
             case '[':
                ++it;
+               GLZ_INVALID_END();
                skip_until_closed<Opts, '[', ']'>(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
                   return;
@@ -111,6 +129,7 @@ namespace glz::detail
                return;
             default: {
                ++it;
+               GLZ_INVALID_END();
                continue;
             }
             }

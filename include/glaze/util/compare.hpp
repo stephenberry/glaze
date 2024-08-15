@@ -97,45 +97,64 @@ namespace glz
    }
 
    template <uint64_t Count, class Char>
-   inline bool compare(const Char* lhs, const Char* rhs) noexcept
+   GLZ_ALWAYS_INLINE bool compare(const Char* lhs, const Char* rhs) noexcept
    {
       if constexpr (Count > 8) {
-         return internal_compare(lhs, rhs, Count);
+         return 0 == std::memcmp(lhs, rhs, Count);
+         //return internal_compare(lhs, rhs, Count);
       }
       else if constexpr (Count == 8) {
-         uint64_t v[2];
-         std::memcpy(v, lhs, Count);
-         std::memcpy(v + 1, rhs, Count);
-         return v[0] == v[1];
+         uint64_t l, r;
+         std::memcpy(&l, lhs, 8);
+         std::memcpy(&r, rhs, 8);
+         return l == r;
       }
-      else if constexpr (Count > 4) {
-         uint64_t v[2]{}; // must default initialize
-         std::memcpy(v, lhs, Count);
-         std::memcpy(v + 1, rhs, Count);
-         return v[0] == v[1];
+      else if constexpr (Count == 7) {
+         uint32_t l, r;
+         std::memcpy(&l, lhs, 4);
+         std::memcpy(&r, rhs, 4);
+         uint32_t l2, r2;
+         std::memcpy(&l2, lhs + 3, 4);
+         std::memcpy(&r2, rhs + 3, 4);
+         return (l == r) & (l2 == r2);
+      }
+      else if constexpr (Count == 6) {
+         uint32_t l, r;
+         std::memcpy(&l, lhs, 4);
+         std::memcpy(&r, rhs, 4);
+         uint16_t l2, r2;
+         std::memcpy(&l2, lhs + 4, 2);
+         std::memcpy(&r2, rhs + 4, 2);
+         return (l == r) & (l2 == r2);
+      }
+      else if constexpr (Count == 5) {
+         uint32_t l, r;
+         std::memcpy(&l, lhs, 4);
+         std::memcpy(&r, rhs, 4);
+         return (l == r) & (lhs[4] == rhs[4]);
       }
       else if constexpr (Count == 4) {
-         uint32_t v[2];
-         std::memcpy(v, lhs, Count);
-         std::memcpy(v + 1, rhs, Count);
-         return v[0] == v[1];
+         uint32_t l, r;
+         std::memcpy(&l, lhs, 4);
+         std::memcpy(&r, rhs, 4);
+         return l == r;
       }
       else if constexpr (Count == 3) {
-         uint32_t v[2]{}; // must default initialize
-         std::memcpy(v, lhs, Count);
-         std::memcpy(v + 1, rhs, Count);
-         return v[0] == v[1];
+         uint16_t l, r;
+         std::memcpy(&l, lhs, 2);
+         std::memcpy(&r, rhs, 2);
+         return (l == r) & (lhs[2] == rhs[2]);
       }
       else if constexpr (Count == 2) {
-         uint16_t v[2];
-         std::memcpy(v, lhs, Count);
-         std::memcpy(v + 1, rhs, Count);
-         return v[0] == v[1];
+         uint16_t l, r;
+         std::memcpy(&l, lhs, 2);
+         std::memcpy(&r, rhs, 2);
+         return l == r;
       }
       else if constexpr (Count == 1) {
          return *lhs == *rhs;
       }
-      else {
+      else if constexpr (Count == 0) {
          return true;
       }
    }

@@ -11,6 +11,11 @@
 #include "glaze/file/file_ops.hpp"
 #include "glaze/util/dump.hpp"
 
+// To handle invalid inputs we must check if (it >= end) at the beginning of each function
+// This way we can always call a function after incrementing the iterator without needed to do a tail check
+// If we know the first function called has an end check, we don't need a guard at the top of the function
+// Also, after almost every function call we need to check if an error was produced
+
 namespace glz
 {
    namespace detail
@@ -76,8 +81,9 @@ namespace glz
       struct from_binary<T>
       {
          template <auto Opts>
-         GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&& ctx, auto&& it, auto&&) noexcept
+         GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
+            GLZ_END_CHECK();
             if (uint8_t(*it)) [[unlikely]] {
                ctx.error = error_code::syntax_error;
                return;
@@ -102,6 +108,7 @@ namespace glz
          template <auto Opts>
          static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
+            GLZ_END_CHECK();
             const auto tag = uint8_t(*it);
 
             constexpr uint8_t type = uint8_t(3) << 3;
@@ -113,11 +120,6 @@ namespace glz
             }
 
             ++it;
-            if (it >= end) [[unlikely]] {
-               ctx.error = error_code::unexpected_end;
-               return;
-            }
-
             const auto n = int_from_compressed(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]] {
                return;
@@ -125,6 +127,7 @@ namespace glz
 
             const auto num_bytes = (value.size() + 7) / 8;
             for (size_t byte_i{}, i{}; byte_i < num_bytes; ++byte_i, ++it) {
+               GLZ_END_CHECK();
                uint8_t byte;
                std::memcpy(&byte, it, 1);
                for (size_t bit_i = 0; bit_i < 8 && i < n; ++bit_i, ++i) {
@@ -148,13 +151,17 @@ namespace glz
       struct from_binary<T>
       {
          template <auto Opts, is_context Ctx, class It0, class It1>
-         static void op(auto&& value, Ctx&&, It0&& it, It1&&)
+         static void op(auto&& value, Ctx&& ctx, It0&& it, It1&& end)
          {
             constexpr auto N = refl<T>.N;
 
             constexpr auto Length = byte_length<T>();
             uint8_t data[Length];
 
+            if ((it + Length) > end) [[unlikely]] {
+               ctx.error = error_code::unexpected_end;
+               return;
+            }
             std::memcpy(data, it, Length);
             it += Length;
 
@@ -175,8 +182,10 @@ namespace glz
          template <auto Opts>
             requires(has_no_header(Opts))
          GLZ_ALWAYS_INLINE static void op(auto&& value, const uint8_t tag, is_context auto&& ctx, auto&& it,
-                                          auto&&) noexcept
+                                          auto&& end) noexcept
          {
+            GLZ_END_CHECK();
+            
             using V = std::decay_t<decltype(value)>;
 
             constexpr auto is_volatile = std::is_volatile_v<std::remove_reference_t<decltype(value)>>;
@@ -190,6 +199,10 @@ namespace glz
                      }
 
                      auto decode = [&](auto&& i) {
+                        if ((it + sizeof(i)) > end) [[unlikely]] {
+                           ctx.error = error_code::unexpected_end;
+                           return;
+                        }
                         std::memcpy(&i, it, sizeof(i));
                         value = static_cast<V>(i);
                         it += sizeof(i);
@@ -197,15 +210,27 @@ namespace glz
 
                      switch (tag) {
                      case tag::f32: {
-                        static_assert(sizeof(float) == 4);
-                        // TODO: use float32_t in C++23
-                        decode(float{});
+                        if constexpr (std::integral<V>) {
+                           // We do not allow cross conversions from floats to integral types
+                           ctx.error = error_code::syntax_error;
+                        }
+                        else {
+                           static_assert(sizeof(float) == 4);
+                           // TODO: use float32_t in C++23
+                           decode(float{});
+                        }
                         return;
                      }
                      case tag::f64: {
-                        static_assert(sizeof(double) == 8);
-                        // TODO: use float64_t in C++23
-                        decode(double{});
+                        if constexpr (std::integral<V>) {
+                           // We do not allow cross conversions from floats to integral types
+                           ctx.error = error_code::syntax_error;
+                        }
+                        else {
+                           static_assert(sizeof(double) == 8);
+                           // TODO: use float64_t in C++23
+                           decode(double{});
+                        }
                         return;
                      }
                      case tag::i8: {
@@ -252,6 +277,11 @@ namespace glz
                   return;
                }
             }
+            
+            if ((it + sizeof(V)) > end) [[unlikely]] {
+               ctx.error = error_code::unexpected_end;
+               return;
+            }
 
             if constexpr (is_volatile) {
                V temp;
@@ -268,6 +298,7 @@ namespace glz
             requires(not has_no_header(Opts))
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
+            GLZ_END_CHECK();
             const auto tag = uint8_t(*it);
             ++it;
             op<no_header_on<Opts>()>(value, tag, ctx, it, end);
@@ -279,11 +310,16 @@ namespace glz
       struct from_binary<T>
       {
          template <auto Opts>
-         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&&) noexcept
+         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
             using V = std::underlying_type_t<std::decay_t<T>>;
 
             if constexpr (has_no_header(Opts)) {
+               if ((it + sizeof(V)) > end) [[unlikely]] {
+                  ctx.error = error_code::unexpected_end;
+                  return;
+               }
+               
                std::memcpy(&value, it, sizeof(V));
                it += sizeof(V);
             }
@@ -292,6 +328,7 @@ namespace glz
                   std::floating_point<V> ? 0 : (std::is_signed_v<V> ? 0b000'01'000 : 0b000'10'000);
                constexpr uint8_t header = tag::number | type | (byte_count<V> << 5);
 
+               GLZ_END_CHECK();
                const auto tag = uint8_t(*it);
                if (tag != header) {
                   ctx.error = error_code::syntax_error;
@@ -299,6 +336,10 @@ namespace glz
                }
 
                ++it;
+               if ((it + sizeof(V)) > end) [[unlikely]] {
+                  ctx.error = error_code::unexpected_end;
+                  return;
+               }
 
                std::memcpy(&value, it, sizeof(V));
                it += sizeof(V);
@@ -311,16 +352,22 @@ namespace glz
       struct from_binary<T>
       {
          template <auto Opts>
-         static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&&) noexcept
+         static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
             if constexpr (has_no_header(Opts)) {
                using V = std::decay_t<T>;
+               if ((it + sizeof(V)) > end) [[unlikely]] {
+                  ctx.error = error_code::unexpected_end;
+                  return;
+               }
+               
                std::memcpy(&value, it, sizeof(V));
                it += sizeof(V);
             }
             else {
                constexpr uint8_t header = tag::extensions | 0b00011'000;
 
+               GLZ_END_CHECK();
                const auto tag = uint8_t(*it);
                if (tag != header) {
                   ctx.error = error_code::syntax_error;
@@ -334,12 +381,18 @@ namespace glz
                constexpr uint8_t complex_number = 0;
                constexpr uint8_t complex_header = complex_number | type | (byte_count<V> << 5);
 
+               GLZ_END_CHECK();
                const auto complex_tag = uint8_t(*it);
                if (complex_tag != complex_header) {
                   ctx.error = error_code::syntax_error;
                   return;
                }
                ++it;
+               
+               if ((it + 2 * sizeof(V)) > end) [[unlikely]] {
+                  ctx.error = error_code::unexpected_end;
+                  return;
+               }
 
                std::memcpy(&value, it, 2 * sizeof(V));
                it += 2 * sizeof(V);
@@ -351,8 +404,9 @@ namespace glz
       struct from_binary<T>
       {
          template <auto Opts>
-         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& /* end */) noexcept
+         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
+            GLZ_END_CHECK();
             const auto tag = uint8_t(*it);
             if ((tag & 0b0000'1111) != tag::boolean) {
                ctx.error = error_code::syntax_error;
@@ -410,14 +464,19 @@ namespace glz
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
             constexpr uint8_t header = tag::extensions | 0b00001'000;
+            GLZ_END_CHECK();
             const auto tag = uint8_t(*it);
             if (tag != header) [[unlikely]] {
                ctx.error = error_code::syntax_error;
                return;
             }
+            
             ++it;
-
             const auto type_index = int_from_compressed(ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
+            
             if (value.index() != type_index) {
                value = runtime_variant_map<T>()[type_index];
             }
@@ -437,7 +496,10 @@ namespace glz
                                           auto&& end) noexcept
          {
             const auto n = int_from_compressed(ctx, it, end);
-            if ((it + n) > end) [[unlikely]] {
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
+            if (uint64_t(end - it) < n) [[unlikely]] {
                ctx.error = error_code::unexpected_end;
                return;
             }
@@ -452,6 +514,7 @@ namespace glz
          {
             constexpr uint8_t header = tag::string;
 
+            GLZ_END_CHECK();
             const auto tag = uint8_t(*it);
             if (tag != header) [[unlikely]] {
                ctx.error = error_code::syntax_error;
@@ -459,9 +522,11 @@ namespace glz
             }
 
             ++it;
-
             const auto n = int_from_compressed(ctx, it, end);
-            if ((it + n) > end) [[unlikely]] {
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
+            if (uint64_t(end - it) < n) [[unlikely]] {
                ctx.error = error_code::unexpected_end;
                return;
             }
@@ -487,6 +552,7 @@ namespace glz
          {
             using V = range_value_t<std::decay_t<T>>;
 
+            GLZ_END_CHECK();
             const auto tag = uint8_t(*it);
 
             if constexpr (boolean_like<V>) {
@@ -499,13 +565,16 @@ namespace glz
                }
 
                ++it;
-
                const auto n = int_from_compressed(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
 
                value.clear();
 
                const auto num_bytes = (value.size() + 7) / 8;
                for (size_t byte_i{}, i{}; byte_i < num_bytes; ++byte_i, ++it) {
+                  GLZ_END_CHECK();
                   uint8_t byte;
                   std::memcpy(&byte, it, 1);
                   for (size_t bit_i = 7; bit_i < 8 && i < n; --bit_i, ++i) {
@@ -525,7 +594,6 @@ namespace glz
                }
 
                ++it;
-
                const auto n = int_from_compressed(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]] {
                   return;
@@ -534,6 +602,11 @@ namespace glz
                value.clear();
 
                for (size_t i = 0; i < n; ++i) {
+                  if ((it + sizeof(V)) > end) [[unlikely]] {
+                     ctx.error = error_code::unexpected_end;
+                     return;
+                  }
+                  
                   V x;
                   std::memcpy(&x, it, sizeof(V));
                   it += sizeof(V);
@@ -551,9 +624,12 @@ namespace glz
                }
 
                ++it;
-
                const auto n = int_from_compressed(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
+               if (uint64_t(end - it) < n) [[unlikely]] {
+                  ctx.error = error_code::unexpected_end;
                   return;
                }
 
@@ -561,7 +637,10 @@ namespace glz
 
                for (size_t i = 0; i < n; ++i) {
                   const auto length = int_from_compressed(ctx, it, end);
-                  if ((it + length) > end) [[unlikely]] {
+                  if (bool(ctx.error)) [[unlikely]] {
+                     return;
+                  }
+                  if (uint64_t(end - it) < length) [[unlikely]] {
                      ctx.error = error_code::unexpected_end;
                      return;
                   }
@@ -581,8 +660,8 @@ namespace glz
                   ctx.error = error_code::syntax_error;
                   return;
                }
+               
                ++it;
-
                const auto n = int_from_compressed(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]] {
                   return;
@@ -607,6 +686,7 @@ namespace glz
          {
             using V = range_value_t<std::decay_t<T>>;
 
+            GLZ_END_CHECK();
             const auto tag = uint8_t(*it);
 
             if constexpr (boolean_like<V>) {
@@ -619,7 +699,6 @@ namespace glz
                }
 
                ++it;
-
                const auto n = int_from_compressed(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]] {
                   return;
@@ -635,6 +714,7 @@ namespace glz
 
                const auto num_bytes = (value.size() + 7) / 8;
                for (size_t byte_i{}, i{}; byte_i < num_bytes; ++byte_i, ++it) {
+                  GLZ_END_CHECK();
                   uint8_t byte;
                   std::memcpy(&byte, it, 1);
                   for (size_t bit_i = 7; bit_i < 8 && i < n; --bit_i, ++i) {
@@ -649,6 +729,7 @@ namespace glz
 
                auto prepare = [&](const size_t element_size) -> size_t {
                   ++it;
+                  GLZ_END_CHECK(0);
 
                   std::conditional_t<Opts.partial_read, size_t, const size_t> n = int_from_compressed(ctx, it, end);
                   if (bool(ctx.error)) [[unlikely]] {
@@ -669,6 +750,12 @@ namespace glz
 
                      if constexpr (Opts.shrink_to_fit) {
                         value.shrink_to_fit();
+                     }
+                  }
+                  else {
+                     if (n > value.size()) {
+                        ctx.error = error_code::syntax_error;
+                        return 0;
                      }
                   }
 
@@ -720,18 +807,32 @@ namespace glz
                   if constexpr (is_volatile) {
                      V temp;
                      for (size_t i = 0; i < n; ++i) {
+                        if ((it + sizeof(V)) > end) [[unlikely]] {
+                           ctx.error = error_code::unexpected_end;
+                           return;
+                        }
+                        
                         std::memcpy(&temp, it, sizeof(V));
                         value[i] = temp;
                         it += sizeof(V);
                      }
                   }
                   else {
+                     if ((it + n * sizeof(V)) > end) [[unlikely]] {
+                        ctx.error = error_code::unexpected_end;
+                        return;
+                     }
                      std::memcpy(value.data(), it, n * sizeof(V));
                      it += n * sizeof(V);
                   }
                }
                else {
                   for (auto&& x : value) {
+                     if ((it + sizeof(V)) > end) [[unlikely]] {
+                        ctx.error = error_code::unexpected_end;
+                        return;
+                     }
+                     
                      std::memcpy(&x, it, sizeof(V));
                      it += sizeof(V);
                   }
@@ -748,7 +849,6 @@ namespace glz
                }
 
                ++it;
-
                std::conditional_t<Opts.partial_read, size_t, const size_t> n = int_from_compressed(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]] {
                   return;
@@ -771,6 +871,11 @@ namespace glz
                   if (bool(ctx.error)) [[unlikely]] {
                      return;
                   }
+                  if (uint64_t(end - it) < length) [[unlikely]] {
+                     ctx.error = error_code::unexpected_end;
+                     return;
+                  }
+                  
                   x.resize(length);
 
                   if constexpr (Opts.shrink_to_fit) {
@@ -788,6 +893,7 @@ namespace glz
                   return;
                }
                ++it;
+               GLZ_END_CHECK();
 
                using X = typename V::value_type;
                constexpr uint8_t complex_array = 1;
@@ -800,7 +906,6 @@ namespace glz
                   return;
                }
                ++it;
-
                std::conditional_t<Opts.partial_read, size_t, const size_t> n = int_from_compressed(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]] {
                   return;
@@ -809,8 +914,8 @@ namespace glz
                if constexpr (Opts.partial_read) {
                   n = value.size();
                }
-
-               if ((it + n * sizeof(V)) > end) [[unlikely]] {
+               
+               if (uint64_t(end - it) < n * sizeof(V)) [[unlikely]] {
                   ctx.error = error_code::unexpected_end;
                   return;
                }
@@ -840,7 +945,6 @@ namespace glz
                   return;
                }
                ++it;
-
                std::conditional_t<Opts.partial_read, size_t, const size_t> n = int_from_compressed(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]] {
                   return;
@@ -877,6 +981,7 @@ namespace glz
             constexpr uint8_t byte_cnt = str_t<Key> ? 0 : byte_count<Key>;
             constexpr uint8_t header = tag::object | type | (byte_cnt << 5);
 
+            GLZ_END_CHECK();
             const auto tag = uint8_t(*it);
             if (tag != header) [[unlikely]] {
                ctx.error = error_code::syntax_error;
@@ -884,11 +989,11 @@ namespace glz
             }
 
             ++it;
-
             const auto n = int_from_compressed(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]] {
                return;
             }
+            
             if (n != 1) [[unlikely]] {
                ctx.error = error_code::syntax_error;
                return;
@@ -912,6 +1017,7 @@ namespace glz
             constexpr uint8_t byte_cnt = str_t<Key> ? 0 : byte_count<Key>;
             constexpr uint8_t header = tag::object | type | (byte_cnt << 5);
 
+            GLZ_END_CHECK();
             const auto tag = uint8_t(*it);
             if (tag != header) [[unlikely]] {
                if constexpr (Opts.allow_conversions) {
@@ -936,7 +1042,6 @@ namespace glz
             }
 
             ++it;
-
             std::conditional_t<Opts.partial_read, size_t, const size_t> n = int_from_compressed(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]] {
                return;
@@ -1000,6 +1105,7 @@ namespace glz
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
+            GLZ_END_CHECK();
             const auto tag = uint8_t(*it);
 
             if (tag == tag::null) {
@@ -1045,6 +1151,7 @@ namespace glz
             else {
                constexpr uint8_t header = tag::string;
 
+               GLZ_END_CHECK();
                const auto tag = uint8_t(*it);
                if (tag != header) [[unlikely]] {
                   ctx.error = error_code::syntax_error;
@@ -1052,7 +1159,6 @@ namespace glz
                }
 
                ++it;
-
                skip_compressed_int(ctx, it, end);
             }
          }
@@ -1077,10 +1183,13 @@ namespace glz
                   return;
                }
                ++it;
-
                using V = std::decay_t<T>;
                constexpr auto N = refl<V>.N;
-               if (int_from_compressed(ctx, it, end) != N) {
+               const auto n = int_from_compressed(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
+               if (n != N) {
                   ctx.error = error_code::syntax_error;
                   return;
                }
@@ -1097,6 +1206,7 @@ namespace glz
             constexpr uint8_t type = 0; // string key
             constexpr uint8_t header = tag::object | type;
 
+            GLZ_END_CHECK();
             const auto tag = uint8_t(*it);
             if (tag != header) [[unlikely]] {
                ctx.error = error_code::syntax_error;
@@ -1157,6 +1267,10 @@ namespace glz
                if (bool(ctx.error)) [[unlikely]] {
                   return;
                }
+               if (uint64_t(end - it) < length) [[unlikely]] {
+                  ctx.error = error_code::unexpected_end;
+                  return;
+               }
 
                const std::string_view key{it, length};
 
@@ -1170,7 +1284,8 @@ namespace glz
                      }
 
                      std::visit(
-                        [&](auto&& element) { read<binary>::op<Opts>(get_member(value, element), ctx, it, end); },
+                        [&](auto&& element) { //
+                           read<binary>::op<Opts>(get_member(value, element), ctx, it, end); },
                         p->second);
 
                      if (bool(ctx.error)) [[unlikely]] {
@@ -1209,6 +1324,7 @@ namespace glz
          template <auto Opts>
          static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
+            GLZ_END_CHECK();
             const auto tag = uint8_t(*it);
             if (tag != tag::generic_array) [[unlikely]] {
                ctx.error = error_code::syntax_error;
@@ -1217,7 +1333,11 @@ namespace glz
             ++it;
 
             constexpr auto N = refl<T>.N;
-            if (int_from_compressed(ctx, it, end) != N) {
+            const auto n = int_from_compressed(ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
+            if (n != N) {
                ctx.error = error_code::syntax_error;
                return;
             }
@@ -1234,6 +1354,7 @@ namespace glz
          template <auto Opts>
          static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
+            GLZ_END_CHECK();
             const auto tag = uint8_t(*it);
             if (tag != tag::generic_array) [[unlikely]] {
                ctx.error = error_code::syntax_error;
@@ -1245,6 +1366,9 @@ namespace glz
             constexpr auto N = glz::tuple_size_v<V>;
             if constexpr (Opts.partial_read) {
                const auto n = int_from_compressed(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
 
                if constexpr (is_std_tuple<T>) {
                   for_each_short_circuit<N>([&](auto I) {
@@ -1266,7 +1390,11 @@ namespace glz
                }
             }
             else {
-               if (int_from_compressed(ctx, it, end) != N) {
+               const auto n = int_from_compressed(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
+               if (n != N) {
                   ctx.error = error_code::syntax_error;
                   return;
                }

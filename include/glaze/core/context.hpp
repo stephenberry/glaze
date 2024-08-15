@@ -16,6 +16,7 @@ namespace glz
 
    GLZ_ENUM(error_code,
             none, //
+            end_reached, // A non-error code for non-null terminated input buffers
             no_read_input, //
             data_must_be_null_terminated, //
             parse_number_failure, //
@@ -106,3 +107,11 @@ namespace glz
    template <class T>
    concept is_context = std::same_as<std::decay_t<T>, context>;
 }
+
+#define GLZ_ADD_LEVEL if constexpr (not Opts.null_terminated) { \
+    ++ctx.indentation_level; \
+ }
+
+#define GLZ_SUB_LEVEL if constexpr (not Opts.null_terminated) { \
+    --ctx.indentation_level; \
+ }

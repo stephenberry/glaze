@@ -145,7 +145,7 @@ namespace glz::detail
    };
 
    template <class T>
-   concept vector_like = resizable<T> && accessible<T> && has_data<T>;
+   concept vector_like = resizable<std::remove_cvref_t<T>> && accessible<std::remove_cvref_t<T>> && has_data<std::remove_cvref_t<T>>;
 
    template <class T>
    concept map_subscriptable = requires(T container) {

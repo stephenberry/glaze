@@ -10,33 +10,47 @@
 namespace glz
 {
    // format
-   constexpr uint32_t binary = 0;
-   constexpr uint32_t json = 10;
-   constexpr uint32_t ndjson = 100; // new line delimited JSON
-   constexpr uint32_t csv = 10000;
+   inline constexpr uint32_t binary = 0;
+   inline constexpr uint32_t json = 10;
+   inline constexpr uint32_t ndjson = 100; // new line delimited JSON
+   inline constexpr uint32_t csv = 10000;
 
    // layout
-   constexpr uint8_t rowwise = 0;
-   constexpr uint8_t colwise = 1;
+   inline constexpr uint8_t rowwise = 0;
+   inline constexpr uint8_t colwise = 1;
 
-   enum struct float_precision : uint8_t { full, float32 = 4, float64 = 8, float128 = 16 };
+   enum struct float_precision : uint8_t { //
+      full, //
+      float32 = 4, //
+      float64 = 8, //
+      float128 = 16 //
+   };
 
    // We use 16 padding bytes because surrogate unicode pairs require 12 bytes
    // and we want a power of 2 buffer
-   constexpr uint32_t padding_bytes = 16;
+   inline constexpr uint32_t padding_bytes = 16;
 
    // Write padding bytes simplifies our dump calculations by making sure we have significant excess
-   constexpr uint32_t write_padding_bytes = 256;
+   inline constexpr size_t write_padding_bytes = 256;
 
-   // We use a alias to a uint8_t for booleans so that compiler errors will print "0" or "1" rather than "true" or
+   // We use a alias to a char for booleans so that compiler errors will print "0" or "1" rather than "true" or
    // "false" This shortens compiler error printouts significantly.
    // We use a macro rather than an alias because some compilers print out alias definitions, extending length.
-#define bool_t uint8_t
+   // We tried a uint8_t in the past, but in many cases compilers would print out "unsigned char"
+   // int8_t also would produce "signed char"
+#define bool_t char
+
+   // This macro exists so that we can change the default behavior
+   // to easily run tests as if strings were not null terminated
+#ifndef GLZ_NULL_TERMINATED
+#define GLZ_NULL_TERMINATED true
+#endif
 
    struct opts
    {
       // USER CONFIGURABLE
       uint32_t format = json;
+      bool_t null_terminated = GLZ_NULL_TERMINATED; // Whether the input buffer is null terminated
       bool_t comments = false; // Support reading in JSONC style comments
       bool_t error_on_unknown_keys = true; // Error when an unknown key is encountered
       bool_t skip_null_members = true; // Skip writing out params in an object if the value is null

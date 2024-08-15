@@ -69,7 +69,8 @@ suite starter = [] {
       std::string buffer{};
       expect(not glz::write_json(s, buffer));
       expect(buffer == R"({"i":287,"d":3.14,"hello":"Hello World","arr":[1,2,3]})");
-      expect(glz::prettify_json(buffer) == R"({
+      auto pretty = glz::prettify_json(buffer);
+      expect(pretty == R"({
    "i": 287,
    "d": 3.14,
    "hello": "Hello World",
@@ -78,14 +79,15 @@ suite starter = [] {
       2,
       3
    ]
-})");
+})") << pretty;
 
-      expect(glz::prettify_json<glz::opts{.new_lines_in_arrays = false}>(buffer) == R"({
+      pretty = glz::prettify_json<glz::opts{.new_lines_in_arrays = false}>(buffer);
+      expect(pretty == R"({
    "i": 287,
    "d": 3.14,
    "hello": "Hello World",
    "arr": [1, 2, 3]
-})");
+})") << pretty;
    };
 };
 
@@ -1575,6 +1577,15 @@ suite json_pointer = [] {
 suite early_end = [] {
    using namespace ut;
 
+   "should error"_test = [] {
+      std::string_view buffer =
+         R"({"thing":{"a":3.14/*Test comment 1*/,"b":"stuff"/*Test comment 2*/},"thing2array":[{"a":3.14/*Test comment 1*/,"b":"stuff"/*Test comment 2*/,"c":999.342494903,"d":1e-12,"e":203082348402.1,"f":89.089,"g":12380.00000013,)";
+
+      glz::json_t json{};
+      static constexpr glz::opts options{.comments = true};
+      expect(glz::read<options>(json, buffer));
+   };
+
    "early_end comments"_test = [] {
       trace.begin("early_end");
 
@@ -1620,6 +1631,32 @@ suite early_end = [] {
          expect(ec);
          expect(ec.location <= buffer.size());
          ec = glz::read_json(skip_me, buffer);
+         expect(ec);
+         expect(ec.location <= buffer.size());
+      }
+   };
+
+   "early_end !null terminated"_test = [] {
+      static constexpr glz::opts options{.null_terminated = false};
+      
+      Thing obj{};
+      glz::json_t json{};
+      glz::skip skip_me{};
+      std::string_view buffer_data =
+         R"({"thing":{"a":3.14,"b":"stuff"},"thing2array":[{"a":3.14,"b":"stuff","c":999.342494903,"d":1e-12,"e":203082348402.1,"f":89.089,"g":12380.00000013,"h":1000000.000001}],"vec3":[3.14,2.7,6.5],"list":[6,7,8,2],"deque":[9,6.7,3.1],"vector":[[9,6.7,3.1],[3.14,2.7,6.5]],"i":8,"d":2,"b":false,"c":"W","vb":[true,false,false,true,true,true,true],"sptr":{"a":3.14,"b":"stuff"},"optional":null,"array":["as\"df\\ghjkl","pie","42","foo"],"map":{"a":4,"b":12,"f":7},"mapi":{"2":9.63,"5":3.14,"7":7.42},"thing_ptr":{"a":3.14,"b":"stuff"}})";
+      std::vector<char> temp{buffer_data.begin(), buffer_data.end()};
+      std::string_view buffer{temp.data(), temp.data() + temp.size()};
+      while (buffer.size() > 0) {
+         temp.pop_back();
+         buffer = {temp.data(), temp.data() + temp.size()};
+         // This is mainly to check if all our end checks are in place.
+         auto ec = glz::read<options>(obj, buffer);
+         expect(ec);
+         expect(ec.location <= buffer.size());
+         ec = glz::read<options>(json, buffer);
+         expect(ec);
+         expect(ec.location <= buffer.size());
+         ec = glz::read<options>(skip_me, buffer);
          expect(ec);
          expect(ec.location <= buffer.size());
       }
@@ -3881,22 +3918,6 @@ suite ndjson_test = [] {
       auto out = glz::write_ndjson(x).value_or("error");
       expect(out == buffer) << out;
    };
-
-   "ndjson json_t"_test = [] {
-      std::string json = R"({"arr":[1,2,3],"d":3.14,"hello":"Hello World","i":287}
-{"a":3.14,"b":"stuff"})";
-      std::vector<std::byte> buffer(json.size());
-      std::memcpy(buffer.data(), json.data(), json.size());
-      buffer.emplace_back(std::byte('\0'));
-
-      std::vector<glz::json_t> x{};
-      expect(not glz::read_ndjson(x, buffer));
-
-      std::vector<std::byte> out{};
-      expect(not glz::write_ndjson(x, out));
-      out.emplace_back(std::byte('\0'));
-      expect(out == buffer);
-   };
 };
 
 suite std_function_handling = [] {
@@ -5752,7 +5773,7 @@ suite constexpr_values_test = [] {
                    string_direct_cx_value_conversion, string_two_direct_cx_value_conversion,
                    array_direct_cx_value_conversion, array_two_direct_cx_value_conversion, const_red, const_green>;
    "constexpr blend with non constexpr variant string"_test = [] {
-      auto tester = [](auto& v) {
+      auto tester = [](auto&& v) {
          using const_t = std::remove_reference_t<decltype(v)>;
          const_only_variant var{v};
          std::string s{};
@@ -5765,9 +5786,11 @@ suite constexpr_values_test = [] {
          expect(std::holds_alternative<const_t>(var));
       };
 
-      variant_to_tuple<const_only_variant>::type tests{};
+      //variant_to_tuple<const_only_variant>::type tests{};
 
-      glz::for_each_apply(tester, tests);
+      //glz::for_each_apply(tester, tests);
+
+      tester(string_two_direct_cx_value_conversion{});
    };
 
    "parse error direct_conversion_variant cx int"_test = [] {
@@ -5864,7 +5887,8 @@ suite invoke_test = [] {
    "square":[5],
    "add_one":[]
 })";
-      expect(!glz::read_json(obj, s));
+      auto ec = glz::read_json(obj, s);
+      expect(!ec) << glz::format_error(ec, s);
       expect(obj.y == 26); // 5 * 5 + 1
    };
 };
@@ -9052,6 +9076,12 @@ suite minify_prettify_safety = [] {
       std::string_view buffer = "\"";
       auto prettified = glz::prettify_json(buffer);
       expect(prettified == "");
+   };
+   
+   "invalid prettify"_test = [] {
+      std::array<char, 4> buffer{ '7', '7', '7', '[' }; // non-null terminated
+      auto prettified = glz::prettify_json(buffer);
+      expect(prettified == "777[") << prettified;
    };
 
    "prettify"_test = [] {

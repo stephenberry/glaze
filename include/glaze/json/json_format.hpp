@@ -178,11 +178,19 @@ namespace glz::detail
       return {};
    }
 
-   inline sv read_json_number(auto&& it) noexcept
+   template <bool null_terminated>
+   GLZ_ALWAYS_INLINE sv read_json_number(auto&& it, auto&& end) noexcept
    {
       auto start = it;
-      while (numeric_table[uint8_t(*it)]) {
-         ++it;
+      if constexpr (null_terminated) {
+         while (numeric_table[uint8_t(*it)]) {
+            ++it;
+         }
+      }
+      else {
+         while ((it < end) && numeric_table[uint8_t(*it)]) {
+            ++it;
+         }
       }
       return {start, size_t(it - start)};
    }

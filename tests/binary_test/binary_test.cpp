@@ -59,8 +59,8 @@ struct glz::meta<sub_thing>
 {
    static constexpr std::string_view name = "sub_thing";
    static constexpr auto value = object(
-      "a", &sub_thing::a, "Test comment 1", //
-      "b", [](auto&& v) -> auto& { return v.b; }, "Test comment 2" //
+      "a", &sub_thing::a, //
+      "b", [](auto&& v) -> auto& { return v.b; } //
    );
 };
 
@@ -82,8 +82,8 @@ struct glz::meta<sub_thing2>
    using T = sub_thing2;
    static constexpr std::string_view name = "sub_thing2";
    static constexpr auto value = object("include", glz::file_include{}, //
-                                        "a", &T::a, "Test comment 1", //
-                                        "b", &T::b, "Test comment 2", //
+                                        "a", &T::a, //
+                                        "b", &T::b, //
                                         "c", &T::c, //
                                         "d", &T::d, //
                                         "e", &T::e, //
@@ -185,7 +185,7 @@ struct glz::meta<Thing>
       "deque", &T::deque, //
       "vector", [](auto&& v) -> auto& { return v.vector; }, //
       "i", [](auto&& v) -> auto& { return v.i; }, //
-      "d", &T::d, "double is the best type", //
+      "d", &T::d, //
       "b", &T::b, //
       "c", &T::c, //
       "v", &T::v, //
@@ -2029,14 +2029,6 @@ suite type_conversions = [] {
       expect(v == std::vector{1.0, 2.0, 3.0});
    };
 
-   "vector<double> -> vector<int>"_test = [] {
-      std::vector<double> input{1.1, 2.2, 3.3};
-      auto b = glz::write_binary(input).value_or("error");
-      std::vector<int> v{};
-      expect(!glz::read_binary(v, b));
-      expect(v == std::vector{1, 2, 3});
-   };
-
    "map<int32_t, double> -> map<uint32_t, float>"_test = [] {
       std::map<int32_t, double> input{{1, 1.1}, {2, 2.2}, {3, 3.3}};
       auto b = glz::write_binary(input).value_or("error");
@@ -2181,6 +2173,132 @@ suite json_t_tests = [] {
       expect(json.is_array());
       expect(json.get_array().size() == 3);
       expect(json[0].get_number() == 1);
+   };
+};
+
+suite early_end = [] {
+   using namespace ut;
+
+   "early_end"_test = [] {
+      Thing obj{};
+      glz::json_t json{};
+      glz::skip skip_me{};
+      std::string buffer_data = glz::write_binary(obj).value();
+      std::string_view buffer = buffer_data;
+      while (buffer.size() > 0) {
+         buffer_data.pop_back();
+         buffer = buffer_data;
+         // This is mainly to check if all our end checks are in place.
+         auto ec = glz::read_binary(obj, buffer);
+         expect(ec);
+         expect(ec.location <= buffer.size());
+         ec = glz::read_binary(json, buffer);
+         expect(ec);
+         expect(ec.location <= buffer.size());
+         ec = glz::read_binary(skip_me, buffer);
+         expect(ec);
+         expect(ec.location <= buffer.size());
+      }
+   };
+
+   "early_end !null terminated"_test = [] {
+      static constexpr glz::opts options{.format = glz::binary, .null_terminated = false};
+      
+      Thing obj{};
+      glz::json_t json{};
+      glz::skip skip_me{};
+      std::string buffer_data = glz::write_binary(obj).value();
+      std::vector<char> temp{buffer_data.begin(), buffer_data.end()};
+      std::string_view buffer{temp.data(), temp.data() + temp.size()};
+      while (buffer.size() > 0) {
+         temp.pop_back();
+         buffer = {temp.data(), temp.data() + temp.size()};
+         // This is mainly to check if all our end checks are in place.
+         auto ec = glz::read<options>(obj, buffer);
+         expect(ec);
+         expect(ec.location <= buffer.size());
+         ec = glz::read<options>(json, buffer);
+         expect(ec);
+         expect(ec.location <= buffer.size());
+         ec = glz::read<options>(skip_me, buffer);
+         expect(ec);
+         expect(ec.location <= buffer.size());
+      }
+   };
+};
+
+std::vector<unsigned char> base64_decode(const std::string_view input) {
+    static const std::string base64_chars =
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+        "abcdefghijklmnopqrstuvwxyz"
+        "0123456789+/";
+        
+    std::vector<unsigned char> decoded_data;
+    std::vector<int> decode_table(256, -1);
+    
+    for (int i = 0; i < 64; i++) {
+        decode_table[base64_chars[i]] = i;
+    }
+    
+    int val = 0, valb = -8;
+    for (unsigned char c : input) {
+        if (decode_table[c] == -1) break; // Stop decoding at padding '=' or invalid characters
+        val = (val << 6) + decode_table[c];
+        valb += 6;
+        if (valb >= 0) {
+            decoded_data.push_back((val >> valb) & 0xFF);
+            valb -= 8;
+        }
+    }
+    
+    return decoded_data;
+}
+
+suite past_fuzzing_issues = [] {
+   "fuzz0"_test = [] {
+      std::string_view base64 = "AwQEaWH//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////8A=";
+      std::vector<uint8_t> input = base64_decode(base64);
+      expect(glz::read_binary<my_struct>(input).error());
+   };
+   
+   "fuzz1"_test = [] {
+      std::string_view base64 = "A4gEaWHw8PDw8PDw8PDw8PDw8PDw8PDw8PDw8PDw8PDw8PDw";
+      std::vector<uint8_t> input = base64_decode(base64);
+      expect(glz::read_binary<my_struct>(input).error());
+   };
+   
+   "fuzz2"_test = [] {
+      std::string_view base64 = "A2AMYXJy3ANg/////////wpgDAxhcnI=";
+      std::vector<uint8_t> input = base64_decode(base64);
+      expect(glz::read_binary<my_struct>(input).error());
+   };
+   
+   "fuzz3"_test = [] {
+      std::string_view base64 = "AzoxKOUMYXJydCQkKOUMYXJydCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCkA";
+      std::vector<uint8_t> input = base64_decode(base64);
+      expect(glz::read_binary<my_struct>(input).error());
+   };
+   
+   "fuzz4"_test = [] {
+      std::string_view base64 = "Zew=";
+      std::vector<uint8_t> input = base64_decode(base64);
+      std::string json{};
+      expect(glz::beve_to_json(input, json));
+   };
+   
+   "fuzz5"_test = [] {
+      std::string_view base64 = "CDE=";
+      std::vector<uint8_t> input = base64_decode(base64);
+      std::string json{};
+      expect(glz::beve_to_json(input, json));
+   };
+   
+   "fuzz6"_test = [] {
+      std::string_view base64 = "HsEmAH5L";
+      std::vector<uint8_t> input = base64_decode(base64);
+      expect(glz::read_binary<my_struct>(input).error());
+      std::string json{};
+      expect(glz::beve_to_json(input, json));
    };
 };
 

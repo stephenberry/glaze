@@ -12,7 +12,7 @@ namespace glz
 {
    // Assuming that you use no more than 19 digits, this will
    // parse an ASCII string.
-   template <class UC>
+   template <bool null_terminated, class UC>
    GLZ_ALWAYS_INLINE constexpr fast_float::parsed_number_string_t<UC> parse_number_string(UC const* p,
                                                                                           UC const* pend) noexcept
    {
@@ -25,6 +25,13 @@ namespace glz
       answer.negative = (*p == UC('-'));
       if (*p == UC('-')) { // C++17 20.19.3.(7.1) explicitly forbids '+' sign here
          ++p;
+         
+         if constexpr (not null_terminated) {
+            if (p == pend) [[unlikely]] {
+              return answer;
+            }
+         }
+         
          if (!is_integer(*p)) [[unlikely]] { // a sign must be followed by an integer
             return answer;
          }
@@ -32,13 +39,24 @@ namespace glz
       UC const* const start_digits = p;
 
       uint64_t i = 0; // an unsigned int avoids signed overflows (which are bad)
-
-      while (is_integer(*p)) {
-         // a multiplication by 10 is cheaper than an arbitrary integer
-         // multiplication
-         i = 10 * i + uint64_t(*p - UC('0')); // might overflow, we will handle the overflow later
-         ++p;
+      
+      if constexpr (null_terminated) {
+         while (is_integer(*p)) {
+            // a multiplication by 10 is cheaper than an arbitrary integer
+            // multiplication
+            i = 10 * i + uint64_t(*p - UC('0')); // might overflow, we will handle the overflow later
+            ++p;
+         }
       }
+      else {
+         while ((p != pend) && is_integer(*p)) {
+            // a multiplication by 10 is cheaper than an arbitrary integer
+            // multiplication
+            i = 10 * i + uint64_t(*p - UC('0')); // might overflow, we will handle the overflow later
+            ++p;
+         }
+      }
+      
       UC const* const end_of_integer_part = p;
       int64_t digit_count = int64_t(end_of_integer_part - start_digits);
       answer.integer = fast_float::span<const UC>(start_digits, size_t(digit_count));
@@ -49,7 +67,14 @@ namespace glz
       }
 
       int64_t exponent = 0;
-      const bool has_decimal_point = (*p == decimal_point);
+      const bool has_decimal_point = [&]{
+         if constexpr (null_terminated) {
+            return (*p == decimal_point);
+         }
+         else {
+            return (p != pend) && (*p == decimal_point);
+         }
+      }();
       if (has_decimal_point) {
          ++p;
          UC const* before = p;
@@ -57,10 +82,19 @@ namespace glz
          // for integers with many digits, digit parsing is the primary bottleneck.
          loop_parse_if_eight_digits(p, pend, i);
 
-         while (is_integer(*p)) {
-            uint8_t digit = uint8_t(*p - UC('0'));
-            ++p;
-            i = i * 10 + digit; // in rare cases, this will overflow, but that's ok
+         if constexpr (null_terminated) {
+            while (is_integer(*p)) {
+               uint8_t digit = uint8_t(*p - UC('0'));
+               ++p;
+               i = i * 10 + digit; // in rare cases, this will overflow, but that's ok
+            }
+         }
+         else {
+            while ((p != pend) && is_integer(*p)) {
+               uint8_t digit = uint8_t(*p - UC('0'));
+               ++p;
+               i = i * 10 + digit; // in rare cases, this will overflow, but that's ok
+            }
          }
          exponent = before - p;
          answer.fraction = fast_float::span<const UC>(before, size_t(p - before));
@@ -72,35 +106,70 @@ namespace glz
       }
 
       int64_t exp_number = 0; // explicit exponential part
-      if ((UC('e') == *p) || (UC('E') == *p)) {
-         UC const* location_of_e = p;
-         ++p;
-         bool neg_exp = false;
-         if (UC('-') == *p) {
-            neg_exp = true;
+      
+      if constexpr (null_terminated) {
+         if ((UC('e') == *p) || (UC('E') == *p)) {
+            UC const* location_of_e = p;
             ++p;
-         }
-         else if (UC('+') == *p) { // '+' on exponent is allowed by C++17 20.19.3.(7.1)
-            ++p;
-         }
-         if (!is_integer(*p)) {
-            // Otherwise, we will be ignoring the 'e'.
-            p = location_of_e;
-         }
-         else {
-            while (is_integer(*p)) {
-               uint8_t digit = uint8_t(*p - UC('0'));
-               if (exp_number < 0x10000000) {
-                  exp_number = 10 * exp_number + digit;
-               }
+            bool neg_exp = false;
+            if (UC('-') == *p) {
+               neg_exp = true;
                ++p;
             }
-            if (neg_exp) {
-               exp_number = -exp_number;
+            else if (UC('+') == *p) { // '+' on exponent is allowed by C++17 20.19.3.(7.1)
+               ++p;
             }
-            exponent += exp_number;
+            if (!is_integer(*p)) {
+               // Otherwise, we will be ignoring the 'e'.
+               p = location_of_e;
+            }
+            else {
+               while (is_integer(*p)) {
+                  uint8_t digit = uint8_t(*p - UC('0'));
+                  if (exp_number < 0x10000000) {
+                     exp_number = 10 * exp_number + digit;
+                  }
+                  ++p;
+               }
+               if (neg_exp) {
+                  exp_number = -exp_number;
+               }
+               exponent += exp_number;
+            }
          }
       }
+      else {
+         if ((p != pend) && ((UC('e') == *p) || (UC('E') == *p))) {
+            UC const* location_of_e = p;
+            ++p;
+            bool neg_exp = false;
+            if ((p != pend) && (UC('-') == *p)) {
+               neg_exp = true;
+               ++p;
+            }
+            else if ((p != pend) && (UC('+') == *p)) { // '+' on exponent is allowed by C++17 20.19.3.(7.1)
+               ++p;
+            }
+            if ((p == pend) || !is_integer(*p)) {
+               // Otherwise, we will be ignoring the 'e'.
+               p = location_of_e;
+            }
+            else {
+               while ((p != pend) && is_integer(*p)) {
+                  uint8_t digit = uint8_t(*p - UC('0'));
+                  if (exp_number < 0x10000000) {
+                     exp_number = 10 * exp_number + digit;
+                  }
+                  ++p;
+               }
+               if (neg_exp) {
+                  exp_number = -exp_number;
+               }
+               exponent += exp_number;
+            }
+         }
+      }
+      
       answer.lastmatch = p;
       answer.valid = true;
 
@@ -115,11 +184,21 @@ namespace glz
          // We need to be mindful of the case where we only have zeroes...
          // E.g., 0.000000000...000.
          UC const* start = start_digits;
-         while ((*start == UC('0') || *start == decimal_point)) {
-            if (*start == UC('0')) {
-               --digit_count;
+         if constexpr (null_terminated) {
+            while ((*start == UC('0') || *start == decimal_point)) {
+               if (*start == UC('0')) {
+                  --digit_count;
+               }
+               ++start;
             }
-            ++start;
+         }
+         else {
+            while ((start != pend) && (*start == UC('0') || *start == decimal_point)) {
+               if (*start == UC('0')) {
+                  --digit_count;
+               }
+               ++start;
+            }
          }
 
          if (digit_count > 19) {
@@ -155,19 +234,16 @@ namespace glz
       return answer;
    }
 
-   template <class T, class UC>
+   template <bool null_terminated, class T, class UC>
    constexpr fast_float::from_chars_result_t<UC> from_chars(UC const* first, UC const* last, T& value) noexcept
    {
       using namespace fast_float;
       static_assert(is_supported_float_type<T>(), "only some floating-point types are supported");
       static_assert(is_supported_char_type<UC>(), "only char, wchar_t, char16_t and char32_t are supported");
 
-      parsed_number_string_t<UC> pns = glz::parse_number_string<UC>(first, last);
+      parsed_number_string_t<UC> pns = glz::parse_number_string<null_terminated, UC>(first, last);
       if (!pns.valid) [[unlikely]] {
-         from_chars_result_t<UC> answer;
-         answer.ec = std::errc::invalid_argument;
-         answer.ptr = first;
-         return answer;
+         return {.ptr = first, .ec = std::errc::invalid_argument};
       }
 
       return from_chars_advanced(pns, value);

@@ -11,12 +11,16 @@ namespace glz
    namespace detail
    {
       template <opts Opts>
-      inline void beve_to_json_number(auto&& tag, auto&& ctx, auto&& it, auto&&, auto& out, auto&& ix) noexcept
+      inline void beve_to_json_number(auto&& tag, auto&& ctx, auto&& it, auto&& end, auto& out, auto&& ix) noexcept
       {
          const auto number_type = (tag & 0b000'11'000) >> 3;
          const uint8_t byte_count = detail::byte_count_lookup[tag >> 5];
 
          auto write_number = [&]<class T>(T&& value) {
+            if ((it + sizeof(T)) > end) [[unlikely]] {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
             std::memcpy(&value, it, sizeof(T));
             to_json<T>::template op<Opts>(value, ctx, out, ix);
             it += sizeof(T);
@@ -103,6 +107,10 @@ namespace glz
       template <glz::opts Opts, class Buffer>
       inline void beve_to_json_value(auto&& ctx, auto&& it, auto&& end, Buffer& out, auto&& ix) noexcept
       {
+         if (it >= end) [[unlikely]] {
+            ctx.error = error_code::syntax_error;
+            return;
+         }
          const auto tag = uint8_t(*it);
          const auto type = tag & 0b00000'111;
          switch (type) {
@@ -130,6 +138,13 @@ namespace glz
          case tag::string: {
             ++it;
             const auto n = detail::int_from_compressed(ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
+            if (uint64_t(end - it) < n) [[unlikely]] {
+               ctx.error = error_code::unexpected_end;
+               return;
+            }
             const sv value{reinterpret_cast<const char*>(it), n};
             to_json<sv>::template op<Opts>(value, ctx, out, ix);
             it += n;
@@ -150,9 +165,19 @@ namespace glz
             case 0: {
                // string key
                const auto n_fields = detail::int_from_compressed(ctx, it, end);
+               if (bool(ctx.error)) {
+                  return;
+               }
                for (size_t i = 0; i < n_fields; ++i) {
                   // convert the key
                   const auto n = detail::int_from_compressed(ctx, it, end);
+                  if (bool(ctx.error)) [[unlikely]] {
+                     return;
+                  }
+                  if (uint64_t(end - it) < n) [[unlikely]] {
+                     ctx.error = error_code::unexpected_end;
+                     return;
+                  }
                   const sv key{reinterpret_cast<const char*>(it), n};
                   to_json<sv>::template op<Opts>(key, ctx, out, ix);
                   if constexpr (Opts.prettify) {
@@ -195,7 +220,14 @@ namespace glz
 
             auto write_array = [&]<class T>(T&& value) {
                const auto n = int_from_compressed(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
                for (size_t i = 0; i < n; ++i) {
+                  if ((it + sizeof(T)) > end) [[unlikely]] {
+                     ctx.error = error_code::unexpected_end;
+                     return;
+                  }
                   std::memcpy(&value, it, sizeof(T));
                   to_json<T>::template op<Opts>(value, ctx, out, ix);
                   it += sizeof(T);
@@ -291,8 +323,18 @@ namespace glz
                case 1: {
                   // array of strings
                   const auto n_strings = int_from_compressed(ctx, it, end);
+                  if (bool(ctx.error)) [[unlikely]] {
+                     return;
+                  }
                   for (size_t i = 0; i < n_strings; ++i) {
                      const auto n = detail::int_from_compressed(ctx, it, end);
+                     if (bool(ctx.error)) [[unlikely]] {
+                        return;
+                     }
+                     if (uint64_t(end - it) < n) [[unlikely]] {
+                        ctx.error = error_code::unexpected_end;
+                        return;
+                     }
                      const sv value{reinterpret_cast<const char*>(it), n};
                      to_json<sv>::template op<Opts>(value, ctx, out, ix);
                      it += n;
@@ -322,6 +364,9 @@ namespace glz
          case tag::generic_array: {
             ++it;
             const auto n = int_from_compressed(ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
             dump<'['>(out, ix);
             for (size_t i = 0; i < n; ++i) {
                beve_to_json_value<Opts>(ctx, it, end, out, ix);
@@ -383,6 +428,9 @@ namespace glz
                }*/
 
                beve_to_json_value<Opts>(ctx, it, end, out, ix);
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
 
                /*if constexpr (Opts.prettify) {
                   ctx.indentation_level -= Opts.indentation_width;
@@ -395,6 +443,10 @@ namespace glz
             case 2: {
                // matrices
                ++it;
+               if (it >= end) [[unlikely]] {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
                const auto matrix_header = uint8_t(*it);
                ++it;
 
@@ -429,6 +481,9 @@ namespace glz
                }
 
                beve_to_json_value<Opts>(ctx, it, end, out, ix);
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
 
                dump<','>(out, ix);
                if constexpr (Opts.prettify) {
@@ -444,6 +499,9 @@ namespace glz
                }
 
                beve_to_json_value<Opts>(ctx, it, end, out, ix);
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
 
                if constexpr (Opts.prettify) {
                   ctx.indentation_level -= Opts.indentation_width;
@@ -456,6 +514,10 @@ namespace glz
             case 3: {
                // complex numbers
                ++it;
+               if (it >= end) [[unlikely]] {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
                const auto complex_header = uint8_t(*it);
                ++it;
 
@@ -464,12 +526,21 @@ namespace glz
                   // complex array
                   const auto number_tag = complex_header & 0b111'00000;
                   const auto n = int_from_compressed(ctx, it, end);
+                  if (bool(ctx.error)) [[unlikely]] {
+                     return;
+                  }
                   dump<'['>(out, ix);
                   for (size_t i = 0; i < n; ++i) {
                      dump<'['>(out, ix);
                      beve_to_json_number<Opts>(number_tag, ctx, it, end, out, ix);
+                     if (bool(ctx.error)) [[unlikely]] {
+                        return;
+                     }
                      dump<','>(out, ix);
                      beve_to_json_number<Opts>(number_tag, ctx, it, end, out, ix);
+                     if (bool(ctx.error)) [[unlikely]] {
+                        return;
+                     }
                      dump<']'>(out, ix);
                      if (i != n - 1) {
                         dump<','>(out, ix);
@@ -482,8 +553,14 @@ namespace glz
                   const auto number_tag = complex_header & 0b111'00000;
                   dump<'['>(out, ix);
                   beve_to_json_number<Opts>(number_tag, ctx, it, end, out, ix);
+                  if (bool(ctx.error)) [[unlikely]] {
+                     return;
+                  }
                   dump<','>(out, ix);
                   beve_to_json_number<Opts>(number_tag, ctx, it, end, out, ix);
+                  if (bool(ctx.error)) [[unlikely]] {
+                     return;
+                  }
                   dump<']'>(out, ix);
                }
 

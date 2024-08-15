@@ -121,6 +121,32 @@ struct integers
    };
 };*/
 
+suite float_tests = [] {
+   "float"_test = [] {
+      SKIP;
+      
+#ifdef NDEBUG
+      constexpr size_t n = 10000000;
+#else
+      constexpr size_t n = 100000;
+#endif
+
+      float v{};
+
+      std::string buffer;
+      auto t0 = std::chrono::steady_clock::now();
+      glz::error_ctx e;
+      for (uint32_t i = 0; i < n; ++i) {
+         std::ignore = glz::write_json(v, buffer);
+         e = glz::read_json(v, buffer);
+         std::memcpy(&v, &i, sizeof(float));
+      }
+      auto t1 = std::chrono::steady_clock::now();
+      auto duration = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-6;
+      std::cout << "float read/write: " << duration << '\n';
+   };
+};
+
 [[maybe_unused]] constexpr std::string_view json_minified =
    R"({"fixed_object":{"int_array":[0,1,2,3,4,5,6],"float_array":[0.1,0.2,0.3,0.4,0.5,0.6],"double_array":[3288398.238,2.33e+24,28.9,0.928759872,0.22222848,0.1,0.2,0.3,0.4]},"fixed_name_object":{"name0":"James","name1":"Abraham","name2":"Susan","name3":"Frank","name4":"Alicia"},"another_object":{"string":"here is some text","another_string":"Hello World","escaped_text":"{\"some key\":\"some string value\"}","boolean":false,"nested_object":{"v3s":[[0.12345,0.23456,0.001345],[0.3894675,97.39827,297.92387],[18.18,87.289,2988.298]],"id":"298728949872"}},"string_array":["Cat","Dog","Elephant","Tiger"],"string":"Hello world","number":3.14,"boolean":true,"another_bool":false})";
 

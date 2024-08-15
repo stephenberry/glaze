@@ -6,12 +6,6 @@ Glaze also supports:
 - [BEVE](https://github.com/beve-org/beve) (binary efficient versatile encoding)
 - [CSV](./docs/csv.md) (comma separated value)
 
-> [!IMPORTANT]
->
-> Since v3.0.0, Glaze requires C++23.
->
-> See additional breaking changes for v3.0.0 in the [Version 3.0.0 Release Notes](https://github.com/stephenberry/glaze/releases/tag/v3.0.0)
-
 ## With compile time reflection for MSVC, Clang, and GCC!
 
 - Read/write aggregate initializable structs without writing any metadata or macros!
@@ -20,6 +14,7 @@ Glaze also supports:
 ## Highlights
 
 - Pure, compile time reflection for structs
+- JSON [RFC 8259](https://datatracker.ietf.org/doc/html/rfc8259) compliance with UTF-8 validation
 - Standard C++ library support
 - Header only
 - Direct to memory serialization/deserialization
@@ -440,6 +435,30 @@ Produces this error:
 ```
 
 Denoting that x is invalid here.
+
+# Input Buffer (Null) Termination
+
+A non-const `std::string` is recommended for input buffers, as this allows Glaze to improve performance with temporary padding and the buffer will be null terminated.
+
+## JSON
+
+By default the option `null_terminated` is set to `true` and null-terminated buffers must be used when parsing JSON. The option can be turned off with a small loss in performance, which allows non-null terminated buffers:
+
+```c++
+constexpr glz::opts options{.null_terminated = false};
+auto ec = glz::read<options>(value, buffer); // read in a non-null terminated buffer
+```
+
+## BEVE
+
+Null-termination is not required when parsing BEVE (binary). It makes no difference in performance.
+
+## CSV
+
+> [!WARNING]
+>
+> Currently, `null_terminated = false` is not valid for CSV parsing and buffers must be null terminated.
+
 
 # Type Support
 
