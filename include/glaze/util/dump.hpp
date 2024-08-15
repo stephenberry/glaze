@@ -115,11 +115,8 @@ namespace glz::detail
                b.resize((std::max)(b.size() * 2, ix + n));
             }
          }
-         std::memcpy(b.data() + ix, s.data(), n);
       }
-      else {
-         std::memcpy(b + ix, s.data(), n);
-      }
+      std::memcpy(&b[ix], s.data(), n);
       ix += n;
    }
 
@@ -133,11 +130,8 @@ namespace glz::detail
                b.resize((std::max)(b.size() * 2, ix + n));
             }
          }
-         std::memcpy(b.data() + ix, str.data(), n);
       }
-      else {
-         std::memcpy(b + ix, str.data(), n);
-      }
+      std::memcpy(&b[ix], str.data(), n);
       ix += n;
    }
 
@@ -148,23 +142,15 @@ namespace glz::detail
          if (ix + n > b.size()) [[unlikely]] {
             b.resize((std::max)(b.size() * 2, ix + n));
          }
-         std::memset(b.data() + ix, c, n);
       }
-      else {
-         std::memset(b + ix, c, n);
-      }
+      std::memset(&b[ix], c, n);
       ix += n;
    }
 
    template <auto c, class B>
    GLZ_ALWAYS_INLINE void dumpn_unchecked(size_t n, B& b, auto& ix) noexcept
    {
-      if constexpr (vector_like<B>) {
-         std::memset(b.data() + ix, c, n);
-      }
-      else {
-         std::memset(b + ix, c, n);
-      }
+      std::memset(&b[ix], c, n);
       ix += n;
    }
 
@@ -179,12 +165,7 @@ namespace glz::detail
 
       assign_maybe_cast<'\n'>(b, ix);
       ++ix;
-      if constexpr (vector_like<B>) {
-         std::memset(b.data() + ix, IndentChar, n);
-      }
-      else {
-         std::memset(b + ix, IndentChar, n);
-      }
+      std::memset(&b[ix], IndentChar, n);
       ix += n;
    }
 
@@ -200,11 +181,8 @@ namespace glz::detail
                b.resize((std::max)(b.size() * 2, ix + n));
             }
          }
-         std::memcpy(b.data() + ix, s.data(), n);
       }
-      else {
-         std::memcpy(b + ix, s.data(), n);
-      }
+      std::memcpy(&b[ix], s.data(), n);
       ix += n;
    }
 
@@ -218,11 +196,8 @@ namespace glz::detail
                b.resize((std::max)(b.size() * 2, ix + n));
             }
          }
-         std::memcpy(b.data() + ix, str.data(), n);
       }
-      else {
-         std::memcpy(b + ix, str.data(), n);
-      }
+      std::memcpy(&b[ix], str.data(), n);
       ix += n;
    }
 
@@ -237,11 +212,8 @@ namespace glz::detail
                   b.resize((std::max)(b.size() * 2, ix + n));
                }
             }
-            std::memcpy(b.data() + ix, str.data(), n);
          }
-         else {
-            std::memcpy(b + ix, str.data(), n);
-         }
+         std::memcpy(&b[ix], str.data(), n);
          ix += n;
       }
    }
@@ -254,11 +226,8 @@ namespace glz::detail
          if (ix + n > b.size()) [[unlikely]] {
             b.resize((std::max)(b.size() * 2, ix + n));
          }
-         std::memcpy(b.data() + ix, bytes.data(), n);
       }
-      else {
-         std::memcpy(b + ix, bytes.data(), n);
-      }
+      std::memcpy(&b[ix], bytes.data(), n);
       ix += n;
    }
 
@@ -269,11 +238,9 @@ namespace glz::detail
          if (ix + N > b.size()) [[unlikely]] {
             b.resize((std::max)(b.size() * 2, ix + N));
          }
-         std::memcpy(b.data() + ix, bytes.data(), N);
+         
       }
-      else {
-         std::memcpy(b + ix, bytes.data(), N);
-      }
+      std::memcpy(&b[ix], bytes.data(), N);
       ix += N;
    }
 }
