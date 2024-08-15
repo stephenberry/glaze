@@ -186,10 +186,10 @@ namespace glz
             
             if constexpr (Opts.bools_as_numbers) {
                if (value) {
-                  assign_maybe_cast<'1'>(b, ix);
+                  std::memcpy(&b[ix], "1", 1);
                }
                else {
-                  assign_maybe_cast<'0'>(b, ix);
+                  std::memcpy(&b[ix], "0", 1);
                }
                ++ix;
             }
@@ -502,7 +502,7 @@ namespace glz
                   }
                }
             }
-            assign_maybe_cast<','>(b, ix);
+            std::memcpy(&b[ix], ",", 1);
             ++ix;
          }
       }
@@ -530,16 +530,54 @@ namespace glz
                ix += ctx.indentation_level;
             }
             else {
-               dump<'['>(b, ix);
+               if constexpr (vector_like<B>) {
+                  if (const auto k = ix + write_padding_bytes; k > b.size()) [[unlikely]] {
+                     b.resize((std::max)(b.size() * 2, k));
+                  }
+               }
+               dump<'[', false>(b, ix);
             }
 
             auto it = std::begin(value);
             using val_t = std::remove_cvref_t<decltype(*it)>;
-            to_json<val_t>::template op<Opts>(*it, ctx, b, ix);
+            if constexpr (supports_unchecked_write<val_t>) {
+               to_json<val_t>::template op<write_unchecked_on<Opts>()>(*it, ctx, b, ix);
+            }
+            else {
+               to_json<val_t>::template op<Opts>(*it, ctx, b, ix);
+            }
+            
             ++it;
             for (const auto fin = std::end(value); it != fin; ++it) {
-               write_entry_separator<Opts>(ctx, b, ix);
-               to_json<val_t>::template op<Opts>(*it, ctx, b, ix);
+               if constexpr (supports_unchecked_write<val_t>) {
+                  if constexpr (vector_like<B>) {
+                     if constexpr (Opts.prettify) {
+                        if (const auto k = ix + ctx.indentation_level + write_padding_bytes; k > b.size()) [[unlikely]] {
+                           b.resize((std::max)(b.size() * 2, k));
+                        }
+                     }
+                     else {
+                        if (const auto k = ix + write_padding_bytes; k > b.size()) [[unlikely]] {
+                           b.resize((std::max)(b.size() * 2, k));
+                        }
+                     }
+                  }
+                  
+                  if constexpr (Opts.prettify) {
+                     dump<",\n", false>(b, ix);
+                     dumpn_unchecked<Opts.indentation_char>(ctx.indentation_level, b, ix);
+                  }
+                  else {
+                     std::memcpy(&b[ix], ",", 1);
+                     ++ix;
+                  }
+                  
+                  to_json<val_t>::template op<write_unchecked_on<Opts>()>(*it, ctx, b, ix);
+               }
+               else {
+                  write_entry_separator<Opts>(ctx, b, ix);
+                  to_json<val_t>::template op<Opts>(*it, ctx, b, ix);
+               }
             }
             if constexpr (Opts.prettify) {
                ctx.indentation_level -= Opts.indentation_width;
@@ -1257,7 +1295,7 @@ namespace glz
                                     }
                                  }
                               }
-                              assign_maybe_cast<','>(b, ix);
+                              std::memcpy(&b[ix], ",", 1);
                               ++ix;
                            }
                         }
@@ -1286,7 +1324,7 @@ namespace glz
                                        }
                                     }
                                  }
-                                 assign_maybe_cast<','>(b, ix);
+                                 std::memcpy(&b[ix], ",", 1);
                                  ++ix;
                               }
                            }
@@ -1362,7 +1400,7 @@ namespace glz
                                  }
                               }
                            }
-                           assign_maybe_cast<','>(b, ix);
+                           std::memcpy(&b[ix], ",", 1);
                            ++ix;
                         }
                      }
