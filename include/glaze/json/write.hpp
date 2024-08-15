@@ -376,21 +376,26 @@ namespace glz
          template <auto Opts, class... Args>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
-            // TODO: Assumes people dont use strings with chars that need to be escaped for their enum names
-            // TODO: Could create a pre quoted map for better performance
-
-            const auto index = static_cast<std::underlying_type_t<T>>(value);
-            if (size_t(index) >= refl<T>.keys.size()) {
-               ctx.error = error_code::array_element_not_found;
-               return;
+            // TODO: Use new hashing approach for better performance
+            // TODO: Check if sequenced and use the value as the index if so
+            using key_t = std::underlying_type_t<T>;
+            static constexpr auto frozen_map = detail::make_enum_to_string_map<T>();
+            const auto& member_it = frozen_map.find(static_cast<key_t>(value));
+            if (member_it != frozen_map.end()) {
+               const sv str = {member_it->second.data(), member_it->second.size()};
+               // TODO: Assumes people dont use strings with chars that need to be escaped for their enum names
+               // TODO: Could create a pre quoted map for better performance
+               if constexpr (not Opts.raw) {
+                  dump<'"'>(args...);
+               }
+               dump_maybe_empty(str, args...);
+               if constexpr (not Opts.raw) {
+                  dump<'"'>(args...);
+               }
             }
-
-            if constexpr (not Opts.raw) {
-               dump<'"'>(args...);
-            }
-            dump_maybe_empty(refl<T>.keys[index], args...);
-            if constexpr (not Opts.raw) {
-               dump<'"'>(args...);
+            else [[unlikely]] {
+               // What do we want to happen if the value doesnt have a mapped string
+               write<json>::op<Opts>(static_cast<std::underlying_type_t<T>>(value), ctx, std::forward<Args>(args)...);
             }
          }
       };
