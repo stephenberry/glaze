@@ -207,6 +207,88 @@ suite glz_enum_test = [] {
    };
 };
 
+enum class TestData : uint8_t {
+   None,
+   A,
+   B,
+   C,
+   D,
+   ERROR = 0xFF,
+};
+struct DummyData {
+   uint32_t id{0};
+
+   int32_t a{0};
+
+   TestData b{TestData::None};
+   TestData c{TestData::None};
+   TestData d{TestData::None};
+   TestData e{TestData::None};
+
+   int64_t f{0};
+};
+
+template <>
+struct glz::meta<TestData> {
+   using enum TestData;
+   static constexpr auto value = enumerate(None, A, B, C, D, ERROR);
+};
+
+template <>
+struct glz::meta<DummyData> {
+   using T = DummyData;
+   static constexpr std::string_view name = "DummyData";
+   static constexpr auto value = object(&T::id, &T::a, &T::b, &T::c, &T::d, &T::e, &T::f);
+};
+
+suite test_data_struct_tests = [] {
+   "test_data_struct"_test = [] {
+      const std::vector<DummyData> test_data = {
+         DummyData{
+            .id = 0,
+            .a = 0,
+            .b = TestData::None,
+            .c = TestData::None,
+            .d = TestData::None,
+            .e = TestData::None,
+            .f = 0x00000000,
+         },
+         DummyData{
+            .id = 1,
+            .a = 1,
+            .b = TestData::A,
+            .c = TestData::B,
+            .d = TestData::A,
+            .e = TestData::B,
+            .f = 0xDDDDDDDD,
+         },
+         DummyData{
+            .id = 2,
+            .a = 6,
+            .b = TestData::A,
+            .c = TestData::B,
+            .d = TestData::C,
+            .e = TestData::D,
+            .f = 0xEEEEEEEE,
+         },
+         DummyData{
+            .id = 3,
+            .a = -1,
+            .b = TestData::ERROR,
+            .c = TestData::ERROR,
+            .d = TestData::ERROR,
+            .e = TestData::ERROR,
+            .f = 0xFFFFFFFF,
+         },
+      };
+      expect(glz::refl<TestData>.keys.size() == 6);
+      std::string s = glz::write_json(test_data).value_or("error");
+      expect(s != "error") << s;
+      std::vector<DummyData> in_test_data;
+      expect(not glz::read_json(in_test_data, s));
+   };
+};
+
 struct var1_t
 {
    double x{};
