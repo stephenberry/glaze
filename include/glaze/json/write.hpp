@@ -1116,6 +1116,10 @@ namespace glz
          }
          return fixed;
       }();
+      
+      inline constexpr uint64_t round_up_to_nearest_8(const uint64_t value) noexcept {
+          return (value + 7) & ~7ull;
+      }
 
       template <class T>
          requires glaze_object_t<T> || reflectable<T>
@@ -1175,7 +1179,7 @@ namespace glz
                   }
                }();
                
-               static constexpr auto padding = std::bit_ceil(maximum_key_size<T> + write_padding_bytes);
+               static constexpr auto padding = round_up_to_nearest_8(maximum_key_size<T> + write_padding_bytes);
                if constexpr (object_info<Options, T>::maybe_skipped) {
                   bool first = true;
                   static constexpr auto first_is_written = object_info<Options, T>::first_will_be_written;
