@@ -431,7 +431,7 @@ namespace glz
       }
 
       template <class T, class Element>
-      using member_t = decltype(get_member(std::declval<T>(), std::declval<Element>()));
+      using member_t = decltype(get_member(std::declval<std::add_lvalue_reference_t<T>>(), std::declval<Element>()));
 
       // member_ptr and lambda wrapper helper
       template <template <class> class Wrapper, class Wrapped>
