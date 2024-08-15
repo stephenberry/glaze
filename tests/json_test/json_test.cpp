@@ -9262,6 +9262,60 @@ suite shark_variant = [] {
    };
 };
 
+template <class T>
+struct response_t
+{
+   T& result;
+   uint32_t id{};
+   std::optional<std::string> error{};
+};
+
+template <class T>
+response_t(T) -> response_t<T>;
+
+template <>
+struct response_t<void>
+{
+   uint32_t id{};
+   std::optional<std::string> error{};
+};
+
+template <class V>
+struct glz::meta<response_t<V>>
+{
+   using T = response_t<V>;
+   static constexpr auto value = object(
+      "result", [](auto& s) -> auto& { return s.result; }, "id", &T::id, "error", &T::error);
+};
+
+template <>
+struct glz::meta<response_t<void>>
+{
+   using T = response_t<void>;
+   static constexpr auto value = object("id", &T::id, "error", &T::error);
+};
+
+struct float_entry
+{
+   std::string name{};
+   float value{};
+};
+
+suite response_test = [] {
+   "response"_test = [] {
+      std::vector<float_entry> entries{ {"bright", 5.6f}, {"dull", 6.7f} };
+      response_t res{entries};
+      
+      using T = decltype(res);
+      static_assert(std::same_as<glz::refl_t<T, 0>, std::vector<float_entry>&>);
+      static_assert(std::same_as<glz::refl_t<T, 1>, uint32_t&>);
+      static_assert(std::same_as<glz::refl_t<T, 2>, std::optional<std::string>&>);
+      std::string buffer{};
+      expect(not glz::write_json(res, buffer));
+      expect(buffer == R"({"result":[{"name":"bright","value":5.6},{"name":"dull","value":6.7}],"id":0})") << buffer;
+   };
+};
+
 int main()
 {
    trace.end("json_test");
