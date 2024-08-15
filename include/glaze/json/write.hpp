@@ -523,8 +523,7 @@ namespace glz
                   }
                }
                
-               static constexpr auto open = to_uint16_t("[\n");
-               std::memcpy(&b[ix], &open, 2);
+               std::memcpy(&b[ix], "[\n", 2);
                ix += 2;
                std::memset(&b[ix], Opts.indentation_char, ctx.indentation_level);
                ix += ctx.indentation_level;
@@ -535,7 +534,8 @@ namespace glz
                      b.resize((std::max)(b.size() * 2, k));
                   }
                }
-               dump<'[', false>(b, ix);
+               std::memcpy(&b[ix], "[", 1);
+               ++ix;
             }
 
             auto it = std::begin(value);
@@ -564,7 +564,8 @@ namespace glz
                   }
                   
                   if constexpr (Opts.prettify) {
-                     dump<",\n", false>(b, ix);
+                     std::memcpy(&b[ix], ",\n", 2);
+                     ix += 2;
                      dumpn_unchecked<Opts.indentation_char>(ctx.indentation_level, b, ix);
                   }
                   else {
