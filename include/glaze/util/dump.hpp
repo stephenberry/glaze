@@ -11,6 +11,7 @@
 
 #include "glaze/concepts/container_concepts.hpp"
 #include "glaze/core/opts.hpp"
+#include "glaze/util/convert.hpp"
 
 namespace glz::detail
 {

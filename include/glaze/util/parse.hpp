@@ -12,6 +12,7 @@
 #include "glaze/core/meta.hpp"
 #include "glaze/core/opts.hpp"
 #include "glaze/util/compare.hpp"
+#include "glaze/util/convert.hpp"
 #include "glaze/util/expected.hpp"
 #include "glaze/util/inline.hpp"
 #include "glaze/util/stoui64.hpp"
@@ -197,8 +198,6 @@ namespace glz::detail
       constexpr uint32_t surrogate_codepoint_mask = 0x03FF;
       constexpr uint32_t surrogate_codepoint_bits = 10;
    }
-
-   consteval uint16_t to_uint16_t(const char chars[2]) { return uint16_t(chars[0]) | (uint16_t(chars[1]) << 8); }
 
    template <class Char>
    [[nodiscard]] GLZ_ALWAYS_INLINE uint32_t handle_unicode_code_point(const Char*& it, Char*& dst,

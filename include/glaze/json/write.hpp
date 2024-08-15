@@ -199,12 +199,7 @@ namespace glz
                static constexpr uint64_t if_true_v = 434025983730;
 
                const uint64_t state = false_v - (value * if_true_v);
-               if constexpr (vector_like<B>) {
-                  std::memcpy(b.data() + ix, &state, 8);
-               }
-               else {
-                  std::memcpy(b + ix, &state, 8);
-               }
+               std::memcpy(&b[ix], &state, 8);
                ix += 5 - value;
             }
          }
@@ -512,34 +507,46 @@ namespace glz
          }
       }
 
-      template <opts Opts>
-      GLZ_ALWAYS_INLINE void write_array_to_json(auto&& value, is_context auto&& ctx, auto&&... args)
+      template <opts Opts, class B>
+      GLZ_ALWAYS_INLINE void write_array_to_json(auto&& value, is_context auto&& ctx, B&& b, auto&& ix) noexcept
       {
          if (empty_range(value)) {
-            dump<"[]">(args...);
+            dump<"[]">(b, ix);
          }
          else {
-            dump<'['>(args...);
-
             if constexpr (Opts.prettify) {
                ctx.indentation_level += Opts.indentation_width;
-               dump_newline_indent<Opts.indentation_char>(ctx.indentation_level, args...);
+               
+               if constexpr (vector_like<B>) {
+                  if (const auto k = ix + ctx.indentation_level + write_padding_bytes; k > b.size()) [[unlikely]] {
+                     b.resize((std::max)(b.size() * 2, k));
+                  }
+               }
+               
+               static constexpr auto open = to_uint16_t("[\n");
+               std::memcpy(&b[ix], &open, 2);
+               ix += 2;
+               std::memset(&b[ix], Opts.indentation_char, ctx.indentation_level);
+               ix += ctx.indentation_level;
+            }
+            else {
+               dump<'['>(b, ix);
             }
 
             auto it = std::begin(value);
             using val_t = std::remove_cvref_t<decltype(*it)>;
-            to_json<val_t>::template op<Opts>(*it, ctx, args...);
+            to_json<val_t>::template op<Opts>(*it, ctx, b, ix);
             ++it;
             for (const auto fin = std::end(value); it != fin; ++it) {
-               write_entry_separator<Opts>(ctx, args...);
-               to_json<val_t>::template op<Opts>(*it, ctx, args...);
+               write_entry_separator<Opts>(ctx, b, ix);
+               to_json<val_t>::template op<Opts>(*it, ctx, b, ix);
             }
             if constexpr (Opts.prettify) {
                ctx.indentation_level -= Opts.indentation_width;
-               dump_newline_indent<Opts.indentation_char>(ctx.indentation_level, args...);
+               dump_newline_indent<Opts.indentation_char>(ctx.indentation_level, b, ix);
             }
 
-            dump<']'>(args...);
+            dump<']'>(b, ix);
          }
       }
 
@@ -801,12 +808,7 @@ namespace glz
                }
             }
             static constexpr uint32_t null_v = 1819047278;
-            if constexpr (vector_like<B>) {
-               std::memcpy(b.data() + ix, &null_v, 4);
-            }
-            else {
-               std::memcpy(b + ix, &null_v, 4);
-            }
+            std::memcpy(&b[ix], &null_v, 4);
             ix += 4;
          }
       };
@@ -1297,12 +1299,7 @@ namespace glz
                            ;
                         
                         static constexpr auto n = quoted_key.size();
-                        if constexpr (vector_like<B>) {
-                           std::memcpy(b.data() + ix, quoted_key.data(), n);
-                        }
-                        else {
-                           std::memcpy(b + ix, quoted_key.data(), n);
-                        }
+                        std::memcpy(&b[ix], quoted_key.data(), n);
                         ix += n;
                         
                         static constexpr auto check_opts = supports_unchecked_write<val_t> ? write_unchecked_on<Opts>() : Opts;
@@ -1333,12 +1330,7 @@ namespace glz
                         ;
                      
                      static constexpr auto n = quoted_key.size();
-                     if constexpr (vector_like<B>) {
-                        std::memcpy(b.data() + ix, quoted_key.data(), n);
-                     }
-                     else {
-                        std::memcpy(b + ix, quoted_key.data(), n);
-                     }
+                     std::memcpy(&b[ix], quoted_key.data(), n);
                      ix += n;
                      
                      using val_t = std::remove_cvref_t<refl_t<T, I>>;
