@@ -1572,6 +1572,23 @@ suite json_pointer = [] {
       expect(glz::valid<Thing, "/vector/1", V3>() == true);
       expect(glz::valid<Thing, "/vector/1/0", double>() == true);
    };
+   
+   "id bug"_test = [] {
+      std::string json = R"({
+        "data": [
+            {
+                "id": 44
+            },
+            {
+                "id": 88
+            },
+        ]
+    })";
+
+    auto maybe_id = glz::get_sv_json<"/data/1/id">(json);
+      expect(maybe_id.has_value());
+      expect(maybe_id.value() == "88") << maybe_id.value();
+   };
 };
 
 suite early_end = [] {

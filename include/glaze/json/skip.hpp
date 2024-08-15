@@ -180,12 +180,15 @@ namespace glz::detail
       }
    }
 
+   // parse_value is used for JSON pointer reading
+   // we want the JSON pointer access to not care about trailing whitespace
+   // so we use validate_skipped for precise validation and value skipping
    // expects opening whitespace to be handled
    template <opts Opts>
    GLZ_ALWAYS_INLINE auto parse_value(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       auto start = it;
-      skip_value<Opts>(ctx, it, end);
+      skip_value<opt_true<Opts, &opts::validate_skipped>>(ctx, it, end);
       return std::span{start, size_t(it - start)};
    }
 }
