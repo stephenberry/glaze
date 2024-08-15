@@ -101,7 +101,7 @@ namespace glz
    {
       if constexpr (Count > 8) {
          return 0 == std::memcmp(lhs, rhs, Count);
-         //return internal_compare(lhs, rhs, Count);
+         // return internal_compare(lhs, rhs, Count);
       }
       else if constexpr (Count == 8) {
          uint64_t l, r;

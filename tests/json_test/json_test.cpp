@@ -1638,7 +1638,7 @@ suite early_end = [] {
 
    "early_end !null terminated"_test = [] {
       static constexpr glz::opts options{.null_terminated = false};
-      
+
       Thing obj{};
       glz::json_t json{};
       glz::skip skip_me{};
@@ -5786,9 +5786,9 @@ suite constexpr_values_test = [] {
          expect(std::holds_alternative<const_t>(var));
       };
 
-      //variant_to_tuple<const_only_variant>::type tests{};
+      // variant_to_tuple<const_only_variant>::type tests{};
 
-      //glz::for_each_apply(tester, tests);
+      // glz::for_each_apply(tester, tests);
 
       tester(string_two_direct_cx_value_conversion{});
    };
@@ -9077,9 +9077,9 @@ suite minify_prettify_safety = [] {
       auto prettified = glz::prettify_json(buffer);
       expect(prettified == "");
    };
-   
+
    "invalid prettify"_test = [] {
-      std::array<char, 4> buffer{ '7', '7', '7', '[' }; // non-null terminated
+      std::array<char, 4> buffer{'7', '7', '7', '['}; // non-null terminated
       auto prettified = glz::prettify_json(buffer);
       expect(prettified == "777[") << prettified;
    };

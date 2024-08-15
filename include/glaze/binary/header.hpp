@@ -13,11 +13,11 @@
 #include "glaze/core/context.hpp"
 #include "glaze/util/inline.hpp"
 
-#define GLZ_END_CHECK(RETURN) \
-if (it >= end) [[unlikely]] { \
-   ctx.error = error_code::unexpected_end; \
-   return RETURN; \
-}
+#define GLZ_END_CHECK(RETURN)                 \
+   if (it >= end) [[unlikely]] {              \
+      ctx.error = error_code::unexpected_end; \
+      return RETURN;                          \
+   }
 
 namespace glz::tag
 {
@@ -59,14 +59,13 @@ namespace glz::detail
 
    inline constexpr std::array<uint8_t, 8> byte_count_lookup{1, 2, 4, 8, 16, 32, 64, 128};
 
-   [[nodiscard]] GLZ_ALWAYS_INLINE constexpr uint64_t int_from_compressed(auto&& ctx, auto&& it,
-                                                                        auto&& end) noexcept
+   [[nodiscard]] GLZ_ALWAYS_INLINE constexpr uint64_t int_from_compressed(auto&& ctx, auto&& it, auto&& end) noexcept
    {
       if (it >= end) [[unlikely]] {
          ctx.error = error_code::unexpected_end;
          return 0;
       }
-      
+
       uint8_t header;
       std::memcpy(&header, it, 1);
       const uint8_t config = header & 0b000000'11;
@@ -112,7 +111,7 @@ namespace glz::detail
    GLZ_ALWAYS_INLINE constexpr void skip_compressed_int(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       GLZ_END_CHECK();
-      
+
       uint8_t header;
       std::memcpy(&header, it, 1);
       const uint8_t config = header & 0b000000'11;

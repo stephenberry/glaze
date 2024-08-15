@@ -124,7 +124,7 @@ struct integers
 suite float_tests = [] {
    "float"_test = [] {
       SKIP;
-      
+
 #ifdef NDEBUG
       constexpr size_t n = 10000000;
 #else

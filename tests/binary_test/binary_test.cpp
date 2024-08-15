@@ -58,9 +58,8 @@ template <>
 struct glz::meta<sub_thing>
 {
    static constexpr std::string_view name = "sub_thing";
-   static constexpr auto value = object(
-      "a", &sub_thing::a, //
-      "b", [](auto&& v) -> auto& { return v.b; } //
+   static constexpr auto value = object("a", &sub_thing::a, //
+                                        "b", [](auto&& v) -> auto& { return v.b; } //
    );
 };
 
@@ -2203,7 +2202,7 @@ suite early_end = [] {
 
    "early_end !null terminated"_test = [] {
       static constexpr glz::opts options{.format = glz::binary, .null_terminated = false};
-      
+
       Thing obj{};
       glz::json_t json{};
       glz::skip skip_me{};
@@ -2227,72 +2226,77 @@ suite early_end = [] {
    };
 };
 
-std::vector<unsigned char> base64_decode(const std::string_view input) {
-    static const std::string base64_chars =
-        "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-        "abcdefghijklmnopqrstuvwxyz"
-        "0123456789+/";
-        
-    std::vector<unsigned char> decoded_data;
-    std::vector<int> decode_table(256, -1);
-    
-    for (int i = 0; i < 64; i++) {
-        decode_table[base64_chars[i]] = i;
-    }
-    
-    int val = 0, valb = -8;
-    for (unsigned char c : input) {
-        if (decode_table[c] == -1) break; // Stop decoding at padding '=' or invalid characters
-        val = (val << 6) + decode_table[c];
-        valb += 6;
-        if (valb >= 0) {
-            decoded_data.push_back((val >> valb) & 0xFF);
-            valb -= 8;
-        }
-    }
-    
-    return decoded_data;
+std::vector<unsigned char> base64_decode(const std::string_view input)
+{
+   static const std::string base64_chars =
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+      "abcdefghijklmnopqrstuvwxyz"
+      "0123456789+/";
+
+   std::vector<unsigned char> decoded_data;
+   std::vector<int> decode_table(256, -1);
+
+   for (int i = 0; i < 64; i++) {
+      decode_table[base64_chars[i]] = i;
+   }
+
+   int val = 0, valb = -8;
+   for (unsigned char c : input) {
+      if (decode_table[c] == -1) break; // Stop decoding at padding '=' or invalid characters
+      val = (val << 6) + decode_table[c];
+      valb += 6;
+      if (valb >= 0) {
+         decoded_data.push_back((val >> valb) & 0xFF);
+         valb -= 8;
+      }
+   }
+
+   return decoded_data;
 }
 
 suite past_fuzzing_issues = [] {
    "fuzz0"_test = [] {
-      std::string_view base64 = "AwQEaWH//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////8A=";
+      std::string_view base64 =
+         "AwQEaWH//////////////////////////////////////////////////////////////////////////////////////////////////////"
+         "////////////////////////////////////////////////////////////8A=";
       std::vector<uint8_t> input = base64_decode(base64);
       expect(glz::read_binary<my_struct>(input).error());
    };
-   
+
    "fuzz1"_test = [] {
       std::string_view base64 = "A4gEaWHw8PDw8PDw8PDw8PDw8PDw8PDw8PDw8PDw8PDw8PDw";
       std::vector<uint8_t> input = base64_decode(base64);
       expect(glz::read_binary<my_struct>(input).error());
    };
-   
+
    "fuzz2"_test = [] {
       std::string_view base64 = "A2AMYXJy3ANg/////////wpgDAxhcnI=";
       std::vector<uint8_t> input = base64_decode(base64);
       expect(glz::read_binary<my_struct>(input).error());
    };
-   
+
    "fuzz3"_test = [] {
-      std::string_view base64 = "AzoxKOUMYXJydCQkKOUMYXJydCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCkA";
+      std::string_view base64 =
+         "AzoxKOUMYXJydCQkKOUMYXJydCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJ"
+         "CQkJCQkJCQkJCQkJCkA";
       std::vector<uint8_t> input = base64_decode(base64);
       expect(glz::read_binary<my_struct>(input).error());
    };
-   
+
    "fuzz4"_test = [] {
       std::string_view base64 = "Zew=";
       std::vector<uint8_t> input = base64_decode(base64);
       std::string json{};
       expect(glz::beve_to_json(input, json));
    };
-   
+
    "fuzz5"_test = [] {
       std::string_view base64 = "CDE=";
       std::vector<uint8_t> input = base64_decode(base64);
       std::string json{};
       expect(glz::beve_to_json(input, json));
    };
-   
+
    "fuzz6"_test = [] {
       std::string_view base64 = "HsEmAH5L";
       std::vector<uint8_t> input = base64_decode(base64);

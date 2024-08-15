@@ -21,9 +21,10 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* Data, size_t Size)
    // non-null terminated
    {
       my_struct obj{};
-      [[maybe_unused]] auto ec = glz::read<glz::opts{.null_terminated = false}>(obj, std::string_view{buffer.data(), Size});
+      [[maybe_unused]] auto ec =
+         glz::read<glz::opts{.null_terminated = false}>(obj, std::string_view{buffer.data(), Size});
    }
-   
+
    // null terminated
    {
       buffer.push_back('\0');
@@ -32,6 +33,6 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* Data, size_t Size)
          // hooray! valid json found
       }
    }
-   
+
    return 0;
 }

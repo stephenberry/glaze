@@ -129,11 +129,11 @@ namespace glz
                                             std::forward<Ctx>(ctx), std::forward<It0>(it), std::forward<It1>(end));
          }
       };
-      
+
 #define GLZ_PARSE_WS_COLON \
-GLZ_SKIP_WS(); \
-GLZ_MATCH_COLON(); \
-GLZ_SKIP_WS();
+   GLZ_SKIP_WS();          \
+   GLZ_MATCH_COLON();      \
+   GLZ_SKIP_WS();
 
       template <opts Opts, class T, size_t I, class Func, class Tuple, class Value>
          requires(glaze_object_t<T> || reflectable<T>)
@@ -451,8 +451,10 @@ GLZ_SKIP_WS();
                }
 
                uint64_t c{};
-               static constexpr uint64_t u_true = 0b00000000'00000000'00000000'00000000'01100101'01110101'01110010'01110100;
-               static constexpr uint64_t u_false = 0b00000000'00000000'00000000'01100101'01110011'01101100'01100001'01100110;
+               static constexpr uint64_t u_true =
+                  0b00000000'00000000'00000000'00000000'01100101'01110101'01110010'01110100;
+               static constexpr uint64_t u_false =
+                  0b00000000'00000000'00000000'01100101'01110011'01101100'01100001'01100110;
                if constexpr (Opts.null_terminated) {
                   // Note that because our buffer must be null terminated, we can read one more index without checking:
                   std::memcpy(&c, it, 5);
@@ -1692,7 +1694,7 @@ GLZ_SKIP_WS();
             invoke_table<N>([&]<size_t I>() {
                if (bool(ctx.error)) [[unlikely]]
                   return;
-               
+
                if (*it == ']') {
                   GLZ_SUB_LEVEL;
                   return;
@@ -2399,7 +2401,7 @@ GLZ_SKIP_WS();
                   }
                   else {
                      // For types like std::map, std::unordered_map
-                     
+
                      auto reading = [&](auto&& key) {
                         if constexpr (Opts.partial_read) {
                            if (auto element = value.find(key); element != value.end()) {
@@ -2414,7 +2416,7 @@ GLZ_SKIP_WS();
                            read<json>::op<ws_handled<Opts>()>(value[key], ctx, it, end);
                         }
                      };
-                     
+
                      // using Key = std::conditional_t<heterogeneous_map<T>, sv, typename T::key_type>;
                      using Key = typename T::key_type;
                      if constexpr (std::is_same_v<Key, std::string>) {

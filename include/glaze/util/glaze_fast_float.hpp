@@ -25,13 +25,13 @@ namespace glz
       answer.negative = (*p == UC('-'));
       if (*p == UC('-')) { // C++17 20.19.3.(7.1) explicitly forbids '+' sign here
          ++p;
-         
+
          if constexpr (not null_terminated) {
             if (p == pend) [[unlikely]] {
-              return answer;
+               return answer;
             }
          }
-         
+
          if (!is_integer(*p)) [[unlikely]] { // a sign must be followed by an integer
             return answer;
          }
@@ -39,7 +39,7 @@ namespace glz
       UC const* const start_digits = p;
 
       uint64_t i = 0; // an unsigned int avoids signed overflows (which are bad)
-      
+
       if constexpr (null_terminated) {
          while (is_integer(*p)) {
             // a multiplication by 10 is cheaper than an arbitrary integer
@@ -56,7 +56,7 @@ namespace glz
             ++p;
          }
       }
-      
+
       UC const* const end_of_integer_part = p;
       int64_t digit_count = int64_t(end_of_integer_part - start_digits);
       answer.integer = fast_float::span<const UC>(start_digits, size_t(digit_count));
@@ -67,7 +67,7 @@ namespace glz
       }
 
       int64_t exponent = 0;
-      const bool has_decimal_point = [&]{
+      const bool has_decimal_point = [&] {
          if constexpr (null_terminated) {
             return (*p == decimal_point);
          }
@@ -106,7 +106,7 @@ namespace glz
       }
 
       int64_t exp_number = 0; // explicit exponential part
-      
+
       if constexpr (null_terminated) {
          if ((UC('e') == *p) || (UC('E') == *p)) {
             UC const* location_of_e = p;
@@ -169,7 +169,7 @@ namespace glz
             }
          }
       }
-      
+
       answer.lastmatch = p;
       answer.valid = true;
 

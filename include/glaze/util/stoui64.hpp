@@ -494,7 +494,7 @@ namespace glz::detail
       }
       return true;
    }
-   
+
    // For non-null terminated buffers
    template <class T, bool json_conformance = true, class CharType>
       requires(std::is_unsigned_v<T>)
@@ -510,7 +510,7 @@ namespace glz::detail
          else {
             std::memcpy(data, cur, 64);
          }
-         
+
          const char* it = data;
          const auto valid = parse_int<T, json_conformance>(val, it);
          cur += size_t(it - data);

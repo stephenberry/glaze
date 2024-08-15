@@ -186,14 +186,14 @@ namespace glz
          if (bool(ctx.error)) [[unlikely]] {
             return;
          }
-         
+
          if constexpr (string_t<In>) {
             prettify_json<opt_true<Opts, &opts::null_terminated>>(ctx, it, end, out, ix);
          }
          else {
             prettify_json<opt_false<Opts, &opts::null_terminated>>(ctx, it, end, out, ix);
          }
-         
+
          if constexpr (resizable<Out>) {
             out.resize(ix);
          }

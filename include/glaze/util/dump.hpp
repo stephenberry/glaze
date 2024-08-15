@@ -238,7 +238,6 @@ namespace glz::detail
          if (ix + N > b.size()) [[unlikely]] {
             b.resize((std::max)(b.size() * 2, ix + N));
          }
-         
       }
       std::memcpy(&b[ix], bytes.data(), N);
       ix += N;

@@ -98,7 +98,7 @@ namespace glz
             ctx.error = error_code::none;
          }
       }
-      
+
       if constexpr (use_padded) {
          // Restore the original buffer state
          buffer.resize(buffer.size() - padding_bytes);

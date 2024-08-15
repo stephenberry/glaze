@@ -62,9 +62,9 @@ namespace glz::detail
                ctx.error = error_code::unexpected_end;
                return;
             }
-            
+
             it += string_length;
-            
+
             skip_value_binary<Opts>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
                return;
@@ -81,7 +81,7 @@ namespace glz::detail
                ctx.error = error_code::unexpected_end;
                return;
             }
-            
+
             it += byte_count * n;
 
             skip_value_binary<Opts>(ctx, it, end);
@@ -125,7 +125,7 @@ namespace glz::detail
             if (bool(ctx.error)) [[unlikely]] {
                return;
             }
-            
+
             const auto num_bytes = (n + 7) / 8;
             if (uint64_t(end - it) < num_bytes) [[unlikely]] {
                ctx.error = error_code::unexpected_end;
@@ -142,7 +142,7 @@ namespace glz::detail
                ctx.error = error_code::unexpected_end;
                return;
             }
-            
+
             it += n;
          }
          break;
@@ -160,7 +160,7 @@ namespace glz::detail
       if (bool(ctx.error)) [[unlikely]] {
          return;
       }
-      
+
       for (size_t i = 0; i < n; ++i) {
          skip_value_binary<Opts>(ctx, it, end);
       }

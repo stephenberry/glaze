@@ -185,7 +185,7 @@ namespace glz
                                           auto&& end) noexcept
          {
             GLZ_END_CHECK();
-            
+
             using V = std::decay_t<decltype(value)>;
 
             constexpr auto is_volatile = std::is_volatile_v<std::remove_reference_t<decltype(value)>>;
@@ -277,7 +277,7 @@ namespace glz
                   return;
                }
             }
-            
+
             if ((it + sizeof(V)) > end) [[unlikely]] {
                ctx.error = error_code::unexpected_end;
                return;
@@ -319,7 +319,7 @@ namespace glz
                   ctx.error = error_code::unexpected_end;
                   return;
                }
-               
+
                std::memcpy(&value, it, sizeof(V));
                it += sizeof(V);
             }
@@ -360,7 +360,7 @@ namespace glz
                   ctx.error = error_code::unexpected_end;
                   return;
                }
-               
+
                std::memcpy(&value, it, sizeof(V));
                it += sizeof(V);
             }
@@ -388,7 +388,7 @@ namespace glz
                   return;
                }
                ++it;
-               
+
                if ((it + 2 * sizeof(V)) > end) [[unlikely]] {
                   ctx.error = error_code::unexpected_end;
                   return;
@@ -470,13 +470,13 @@ namespace glz
                ctx.error = error_code::syntax_error;
                return;
             }
-            
+
             ++it;
             const auto type_index = int_from_compressed(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]] {
                return;
             }
-            
+
             if (value.index() != type_index) {
                value = runtime_variant_map<T>()[type_index];
             }
@@ -606,7 +606,7 @@ namespace glz
                      ctx.error = error_code::unexpected_end;
                      return;
                   }
-                  
+
                   V x;
                   std::memcpy(&x, it, sizeof(V));
                   it += sizeof(V);
@@ -660,7 +660,7 @@ namespace glz
                   ctx.error = error_code::syntax_error;
                   return;
                }
-               
+
                ++it;
                const auto n = int_from_compressed(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]] {
@@ -811,7 +811,7 @@ namespace glz
                            ctx.error = error_code::unexpected_end;
                            return;
                         }
-                        
+
                         std::memcpy(&temp, it, sizeof(V));
                         value[i] = temp;
                         it += sizeof(V);
@@ -832,7 +832,7 @@ namespace glz
                         ctx.error = error_code::unexpected_end;
                         return;
                      }
-                     
+
                      std::memcpy(&x, it, sizeof(V));
                      it += sizeof(V);
                   }
@@ -875,7 +875,7 @@ namespace glz
                      ctx.error = error_code::unexpected_end;
                      return;
                   }
-                  
+
                   x.resize(length);
 
                   if constexpr (Opts.shrink_to_fit) {
@@ -914,7 +914,7 @@ namespace glz
                if constexpr (Opts.partial_read) {
                   n = value.size();
                }
-               
+
                if (uint64_t(end - it) < n * sizeof(V)) [[unlikely]] {
                   ctx.error = error_code::unexpected_end;
                   return;
@@ -993,7 +993,7 @@ namespace glz
             if (bool(ctx.error)) [[unlikely]] {
                return;
             }
-            
+
             if (n != 1) [[unlikely]] {
                ctx.error = error_code::syntax_error;
                return;
@@ -1285,7 +1285,8 @@ namespace glz
 
                      std::visit(
                         [&](auto&& element) { //
-                           read<binary>::op<Opts>(get_member(value, element), ctx, it, end); },
+                           read<binary>::op<Opts>(get_member(value, element), ctx, it, end);
+                        },
                         p->second);
 
                      if (bool(ctx.error)) [[unlikely]] {

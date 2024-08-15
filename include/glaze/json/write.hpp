@@ -50,7 +50,7 @@ namespace glz
 
       template <class T>
       concept supports_unchecked_write = boolean_like<T> || num_t<T> || optional_like<T> || always_null_t<T>;
-      
+
       template <class T>
       inline constexpr std::optional<size_t> required_padding()
       {
@@ -60,8 +60,10 @@ namespace glz
          else if constexpr (num_t<T>) {
             return 64;
          }
-         else if constexpr (optional_like<T> && (requires { requires supports_unchecked_write<typename T::value_type>; } ||
-                            requires { requires supports_unchecked_write<typename T::element_type>; })) {
+         else if constexpr (optional_like<T> &&
+                            (
+                               requires { requires supports_unchecked_write<typename T::value_type>; } ||
+                               requires { requires supports_unchecked_write<typename T::element_type>; })) {
             if constexpr (requires { requires supports_unchecked_write<typename T::value_type>; }) {
                return required_padding<typename T::value_type>();
             }
@@ -183,7 +185,7 @@ namespace glz
                   b.resize((std::max)(b.size() * 2, ix + 8));
                }
             }
-            
+
             if constexpr (Opts.bools_as_numbers) {
                if (value) {
                   std::memcpy(&b[ix], "1", 1);
@@ -516,13 +518,13 @@ namespace glz
          else {
             if constexpr (Opts.prettify) {
                ctx.indentation_level += Opts.indentation_width;
-               
+
                if constexpr (vector_like<B>) {
                   if (const auto k = ix + ctx.indentation_level + write_padding_bytes; k > b.size()) [[unlikely]] {
                      b.resize((std::max)(b.size() * 2, k));
                   }
                }
-               
+
                std::memcpy(&b[ix], "[\n", 2);
                ix += 2;
                std::memset(&b[ix], Opts.indentation_char, ctx.indentation_level);
@@ -546,13 +548,14 @@ namespace glz
             else {
                to_json<val_t>::template op<Opts>(*it, ctx, b, ix);
             }
-            
+
             ++it;
             for (const auto fin = std::end(value); it != fin; ++it) {
                if constexpr (supports_unchecked_write<val_t>) {
                   if constexpr (vector_like<B>) {
                      if constexpr (Opts.prettify) {
-                        if (const auto k = ix + ctx.indentation_level + write_padding_bytes; k > b.size()) [[unlikely]] {
+                        if (const auto k = ix + ctx.indentation_level + write_padding_bytes; k > b.size())
+                           [[unlikely]] {
                            b.resize((std::max)(b.size() * 2, k));
                         }
                      }
@@ -562,7 +565,7 @@ namespace glz
                         }
                      }
                   }
-                  
+
                   if constexpr (Opts.prettify) {
                      std::memcpy(&b[ix], ",\n", 2);
                      ix += 2;
@@ -572,7 +575,7 @@ namespace glz
                      std::memcpy(&b[ix], ",", 1);
                      ++ix;
                   }
-                  
+
                   to_json<val_t>::template op<write_unchecked_on<Opts>()>(*it, ctx, b, ix);
                }
                else {
@@ -1138,9 +1141,9 @@ namespace glz
             dump<'}'>(b, ix);
          }
       };
-      
+
       template <class T>
-      inline constexpr size_t maximum_key_size = []{
+      inline constexpr size_t maximum_key_size = [] {
          constexpr auto N = refl<T>.N;
          size_t maximum{};
          for (size_t i = 0; i < N; ++i) {
@@ -1150,14 +1153,12 @@ namespace glz
          }
          return maximum + 2; // add quotes
       }();
-      
-      inline constexpr uint64_t round_up_to_nearest_16(const uint64_t value) noexcept {
-          return (value + 15) & ~15ull;
-      }
-      
+
+      inline constexpr uint64_t round_up_to_nearest_16(const uint64_t value) noexcept { return (value + 15) & ~15ull; }
+
       // Only use this if you are not prettifying
       template <class T>
-      inline constexpr std::optional<size_t> fixed_padding = []{
+      inline constexpr std::optional<size_t> fixed_padding = [] {
          constexpr auto N = refl<T>.N;
          std::optional<size_t> fixed = 2 + 16; // {} + extra padding
          for_each_short_circuit<N>([&](auto I) -> bool {
@@ -1208,13 +1209,15 @@ namespace glz
             }
             else {
                // handles glaze_object_t without extra unknown fields
-               static constexpr auto Opts = disable_write_unknown_off<opening_and_closing_handled_off<ws_handled_off<Options>()>()>();
-               
+               static constexpr auto Opts =
+                  disable_write_unknown_off<opening_and_closing_handled_off<ws_handled_off<Options>()>()>();
+
                if constexpr (!has_opening_handled(Options)) {
                   if constexpr (Options.prettify) {
                      ctx.indentation_level += Options.indentation_width;
                      if constexpr (vector_like<B>) {
-                        if (const auto k = ix + ctx.indentation_level + write_padding_bytes; k > b.size()) [[unlikely]] {
+                        if (const auto k = ix + ctx.indentation_level + write_padding_bytes; k > b.size())
+                           [[unlikely]] {
                            b.resize((std::max)(b.size() * 2, k));
                         }
                      }
@@ -1237,13 +1240,12 @@ namespace glz
                      return nullptr;
                   }
                }();
-               
+
                static constexpr auto padding = round_up_to_nearest_16(maximum_key_size<T> + write_padding_bytes);
                if constexpr (object_info<Opts, T>::maybe_skipped) {
                   bool first = true;
                   static constexpr auto first_is_written = object_info<Opts, T>::first_will_be_written;
                   invoke_table<N>([&]<size_t I>() {
-
                      using val_t = std::remove_cvref_t<refl_t<T, I>>;
 
                      if constexpr (is_includer<val_t> || std::same_as<val_t, hidden> || std::same_as<val_t, skip>) {
@@ -1263,7 +1265,7 @@ namespace glz
                                        return get<I>(refl<T>.values);
                                     }
                                  };
-                                 
+
                                  if constexpr (nullable_wrapper<val_t>) {
                                     return !bool(element()(value).val);
                                  }
@@ -1274,14 +1276,15 @@ namespace glz
                               if (is_null) return;
                            }
                         }
-                        
+
                         maybe_pad<padding>(b, ix);
 
                         if constexpr (first_is_written && I > 0) {
-                           //write_entry_separator<Opts, not supports_unchecked_write<val_t>>(ctx, b, ix);
+                           // write_entry_separator<Opts, not supports_unchecked_write<val_t>>(ctx, b, ix);
                            if constexpr (Opts.prettify) {
                               if constexpr (vector_like<B>) {
-                                 if (const auto k = ix + ctx.indentation_level + write_padding_bytes; k > b.size()) [[unlikely]] {
+                                 if (const auto k = ix + ctx.indentation_level + write_padding_bytes; k > b.size())
+                                    [[unlikely]] {
                                     b.resize((std::max)(b.size() * 2, k));
                                  }
                               }
@@ -1308,10 +1311,11 @@ namespace glz
                            }
                            else {
                               // Null members may be skipped so we cant just write it out for all but the last member
-                              //write_entry_separator<Opts, not supports_unchecked_write<val_t>>(ctx, b, ix);
+                              // write_entry_separator<Opts, not supports_unchecked_write<val_t>>(ctx, b, ix);
                               if constexpr (Opts.prettify) {
                                  if constexpr (vector_like<B>) {
-                                    if (const auto k = ix + ctx.indentation_level + write_padding_bytes; k > b.size()) [[unlikely]] {
+                                    if (const auto k = ix + ctx.indentation_level + write_padding_bytes; k > b.size())
+                                       [[unlikely]] {
                                        b.resize((std::max)(b.size() * 2, k));
                                     }
                                  }
@@ -1333,23 +1337,25 @@ namespace glz
                               }
                            }
                         }
-                        
+
                         // MSVC requires get<I> rather than keys[I]
                         static constexpr auto key = get<I>(refl<T>.keys); // GCC 14 requires auto here
                         static constexpr auto quoted_key = join_v < chars<"\"">, key,
                                               Opts.prettify ? chars<"\": "> : chars < "\":" >>
                            ;
-                        
+
                         static constexpr auto n = quoted_key.size();
                         std::memcpy(&b[ix], quoted_key.data(), n);
                         ix += n;
-                        
-                        static constexpr auto check_opts = supports_unchecked_write<val_t> ? write_unchecked_on<Opts>() : Opts;
+
+                        static constexpr auto check_opts =
+                           supports_unchecked_write<val_t> ? write_unchecked_on<Opts>() : Opts;
                         if constexpr (reflectable<T>) {
                            to_json<val_t>::template op<check_opts>(get_member(value, get<I>(t)), ctx, b, ix);
                         }
                         else {
-                           to_json<val_t>::template op<check_opts>(get_member(value, get<I>(refl<T>.values)), ctx, b, ix);
+                           to_json<val_t>::template op<check_opts>(get_member(value, get<I>(refl<T>.values)), ctx, b,
+                                                                   ix);
                         }
                      }
                   });
@@ -1359,36 +1365,38 @@ namespace glz
                   if constexpr (fixed_max_size) {
                      maybe_pad<fixed_max_size.value()>(b, ix);
                   }
-                  
+
                   invoke_table<N>([&]<size_t I>() {
                      if constexpr (not fixed_max_size) {
                         maybe_pad<padding>(b, ix);
                      }
-                     
+
                      // MSVC requires get<I> rather than keys[I]
                      static constexpr auto key = get<I>(refl<T>.keys); // GCC 14 requires auto here
                      static constexpr auto quoted_key = join_v < chars<"\"">, key,
                                            Opts.prettify ? chars<"\": "> : chars < "\":" >>
                         ;
-                     
+
                      static constexpr auto n = quoted_key.size();
                      std::memcpy(&b[ix], quoted_key.data(), n);
                      ix += n;
-                     
+
                      using val_t = std::remove_cvref_t<refl_t<T, I>>;
-                     
-                     static constexpr auto check_opts = supports_unchecked_write<val_t> ? write_unchecked_on<Opts>() : Opts;
+
+                     static constexpr auto check_opts =
+                        supports_unchecked_write<val_t> ? write_unchecked_on<Opts>() : Opts;
                      if constexpr (reflectable<T>) {
                         to_json<val_t>::template op<check_opts>(get_member(value, get<I>(t)), ctx, b, ix);
                      }
                      else {
                         to_json<val_t>::template op<check_opts>(get_member(value, get<I>(refl<T>.values)), ctx, b, ix);
                      }
-                     
+
                      if constexpr (I != (N - 1)) {
                         if constexpr (Opts.prettify) {
                            if constexpr (vector_like<B>) {
-                              if (const auto k = ix + ctx.indentation_level + write_padding_bytes; k > b.size()) [[unlikely]] {
+                              if (const auto k = ix + ctx.indentation_level + write_padding_bytes; k > b.size())
+                                 [[unlikely]] {
                                  b.resize((std::max)(b.size() * 2, k));
                               }
                            }
@@ -1411,13 +1419,14 @@ namespace glz
                      }
                   });
                }
-               
+
                // Options is required here, because it must be the top level
                if constexpr (!has_closing_handled(Options)) {
                   if constexpr (Options.prettify) {
                      ctx.indentation_level -= Options.indentation_width;
                      if constexpr (vector_like<B>) {
-                        if (const auto k = ix + ctx.indentation_level + write_padding_bytes; k > b.size()) [[unlikely]] {
+                        if (const auto k = ix + ctx.indentation_level + write_padding_bytes; k > b.size())
+                           [[unlikely]] {
                            b.resize((std::max)(b.size() * 2, k));
                         }
                      }

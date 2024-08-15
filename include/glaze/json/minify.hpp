@@ -62,8 +62,7 @@ namespace glz
             else {
                return it < end;
             }
-         }())
-         {
+         }()) {
             switch (json_types[uint8_t(*it)]) {
             case String: {
                const auto value = read_json_string<Opts>(it, end);
@@ -172,7 +171,7 @@ namespace glz
          if (bool(ctx.error)) [[unlikely]] {
             return;
          }
-         
+
          static constexpr auto O = is_padded_on<Opts>();
          if constexpr (string_t<In>) {
             minify_json<opt_true<O, &opts::null_terminated>>(ctx, it, end, out, ix);
@@ -180,7 +179,7 @@ namespace glz
          else {
             minify_json<opt_false<O, &opts::null_terminated>>(ctx, it, end, out, ix);
          }
-         
+
          if constexpr (resizable<Out>) {
             out.resize(ix);
          }

@@ -8,7 +8,7 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* Data, size_t Size)
    // non-null terminated
    {
       const std::vector<char> buffer{Data, Data + Size};
-      
+
       static constexpr glz::opts opts{.null_terminated = false};
       glz::json_t json{};
       auto ec = glz::read<opts>(json, buffer);
@@ -16,7 +16,7 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* Data, size_t Size)
          [[maybe_unused]] auto s = json.size();
       }
    }
-   
+
    // use a vector with null termination instead of a std::string to avoid
    // small string optimization to hide bounds problems
    std::vector<char> buffer{Data, Data + Size};
@@ -31,7 +31,7 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* Data, size_t Size)
          [[maybe_unused]] auto s = json.size();
       }
    }
-   
+
    // non-const input buffer
    {
       glz::json_t json{};
@@ -40,6 +40,6 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* Data, size_t Size)
          [[maybe_unused]] auto s = json.size();
       }
    }
-   
+
    return 0;
 }

@@ -108,10 +108,12 @@ namespace glz
    concept is_context = std::same_as<std::decay_t<T>, context>;
 }
 
-#define GLZ_ADD_LEVEL if constexpr (not Opts.null_terminated) { \
-    ++ctx.indentation_level; \
- }
+#define GLZ_ADD_LEVEL                        \
+   if constexpr (not Opts.null_terminated) { \
+      ++ctx.indentation_level;               \
+   }
 
-#define GLZ_SUB_LEVEL if constexpr (not Opts.null_terminated) { \
-    --ctx.indentation_level; \
- }
+#define GLZ_SUB_LEVEL                        \
+   if constexpr (not Opts.null_terminated) { \
+      --ctx.indentation_level;               \
+   }

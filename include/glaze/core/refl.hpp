@@ -1605,7 +1605,7 @@ namespace glz::detail
          return hash_info_t<T, 0>{};
       }
    }();
-   
+
    template <size_t min_length>
    GLZ_ALWAYS_INLINE constexpr const void* quote_memchr(auto&& it, auto&& end) noexcept
    {
