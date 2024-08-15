@@ -4,7 +4,7 @@ include(cmake/prelude.cmake)
 
 project(
     glaze
-    VERSION 3.2.5
+    VERSION 3.2.6
     LANGUAGES CXX
 )
 
