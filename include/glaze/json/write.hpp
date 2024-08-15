@@ -49,8 +49,33 @@ namespace glz
       concept optional_like = nullable_t<T> && (!is_expected<T> && !std::is_array_v<T>);
 
       template <class T>
-      concept supports_unchecked_write =
-         complex_t<T> || boolean_like<T> || num_t<T> || optional_like<T> || always_null_t<T>;
+      concept supports_unchecked_write = boolean_like<T> || num_t<T> || optional_like<T> || always_null_t<T>;
+      
+      template <class T>
+      inline constexpr std::optional<size_t> required_padding()
+      {
+         if constexpr (boolean_like<T>) {
+            return 8;
+         }
+         else if constexpr (num_t<T>) {
+            return 64;
+         }
+         else if constexpr (optional_like<T> && (requires { requires supports_unchecked_write<typename T::value_type>; } ||
+                            requires { requires supports_unchecked_write<typename T::element_type>; })) {
+            if constexpr (requires { requires supports_unchecked_write<typename T::value_type>; }) {
+               return required_padding<typename T::value_type>();
+            }
+            else if constexpr (requires { requires supports_unchecked_write<typename T::element_type>; }) {
+               return required_padding<typename T::element_type>();
+            }
+         }
+         else if constexpr (always_null_t<T>) {
+            return 8;
+         }
+         else {
+            return {};
+         }
+      }
 
       template <is_bitset T>
       struct to_json<T>
@@ -138,12 +163,11 @@ namespace glz
          template <auto Opts, class B>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, B&& b, auto&& ix) noexcept
          {
-            constexpr auto unchecked = has_write_unchecked(Opts) && (sizeof(typename T::value_type) <= 8);
-            dump<'[', not unchecked>(b, ix);
+            dump<'['>(b, ix);
             write<json>::op<Opts>(value.real(), ctx, b, ix);
-            dump<',', not unchecked>(b, ix);
+            dump<','>(b, ix);
             write<json>::op<Opts>(value.imag(), ctx, b, ix);
-            dump<']', not unchecked>(b, ix);
+            dump<']'>(b, ix);
          }
       };
 
@@ -464,7 +488,7 @@ if constexpr (Opts.prettify) { \
    dumpn_unchecked<Opts.indentation_char>(ctx.indentation_level, b, ix); \
 } \
 else { \
-   if constexpr (CHECK_MINIFIED && vector_like<B>) { \
+   if constexpr ((CHECK_MINIFIED) && vector_like<B>) { \
       if (ix == b.size()) [[unlikely]] { \
          b.resize((std::max)(b.size() * 2, size_t(128))); \
       } \
@@ -488,7 +512,7 @@ else { \
          else {
             if constexpr (minified_check && vector_like<B>) {
                if (ix == b.size()) [[unlikely]] {
-                  b.resize(b.size() == 0 ? 128 : b.size() * 2);
+                  b.resize((std::max)(b.size() * 2, size_t(128)));
                }
             }
             assign_maybe_cast<','>(b, ix);
@@ -1072,14 +1096,38 @@ else { \
       
       template <class T>
       inline constexpr size_t maximum_key_size = []{
-         const auto N = refl<T>.N;
+         constexpr auto N = refl<T>.N;
          size_t maximum{};
          for (size_t i = 0; i < N; ++i) {
             if (refl<T>.keys[i].size() > maximum) {
                maximum = refl<T>.keys[i].size();
             }
          }
-         return maximum;
+         return maximum + 2; // add quotes
+      }();
+      
+      // Only use this if you are not prettifying
+      template <class T>
+      inline constexpr std::optional<size_t> fixed_padding = []{
+         constexpr auto N = refl<T>.N;
+         std::optional<size_t> fixed = 2 + 16; // {} + extra padding
+         for_each_short_circuit<N>([&](auto I) -> bool {
+            using val_t = std::remove_cvref_t<refl_t<T, I>>;
+            if constexpr (supports_unchecked_write<val_t>) {
+               fixed.value() += required_padding<val_t>().value();
+               fixed.value() += refl<T>.keys[I].size() + 2; // key length
+               fixed.value() += 2; // colon and comma
+               return false; // continue
+            }
+            else {
+               fixed = {};
+               return true; // break
+            }
+         });
+         if (fixed) {
+            fixed = std::bit_ceil(fixed.value());
+         }
+         return fixed;
       }();
 
       template <class T>
@@ -1188,7 +1236,7 @@ else { \
                      maybe_pad<padding>(b, ix);
 
                      if constexpr (first_is_written && I > 0) {
-                        GLZ_WRITE_ENTRY_SEPARATOR(false);
+                        write_entry_separator<Opts, not supports_unchecked_write<val_t>>(ctx, b, ix);
                      }
                      else {
                         if (first) {
@@ -1196,7 +1244,7 @@ else { \
                         }
                         else {
                            // Null members may be skipped so we cant just write it out for all but the last member
-                           GLZ_WRITE_ENTRY_SEPARATOR(false);
+                           write_entry_separator<Opts, not supports_unchecked_write<val_t>>(ctx, b, ix);
                         }
                      }
                      
@@ -1226,12 +1274,17 @@ else { \
                });
             }
             else {
+               static constexpr std::optional<size_t> fixed_max_size = fixed_padding<T>;
+               if constexpr (fixed_max_size) {
+                  maybe_pad<fixed_max_size.value()>(b, ix);
+               }
+               
                invoke_table<N>([&]<size_t I>() {
                   static constexpr auto Opts = opening_and_closing_handled_off<ws_handled_off<Options>()>();
 
-                  using val_t = std::remove_cvref_t<refl_t<T, I>>;
-
-                  maybe_pad<padding>(b, ix);
+                  if constexpr (not fixed_max_size) {
+                     maybe_pad<padding>(b, ix);
+                  }
                   
                   // MSVC requires get<I> rather than keys[I]
                   static constexpr auto key = get<I>(refl<T>.keys); // GCC 14 requires auto here
@@ -1248,6 +1301,8 @@ else { \
                   }
                   ix += n;
                   
+                  using val_t = std::remove_cvref_t<refl_t<T, I>>;
+                  
                   static constexpr auto check_opts = supports_unchecked_write<val_t> ? write_unchecked_on<Opts>() : Opts;
                   if constexpr (reflectable<T>) {
                      to_json<val_t>::template op<check_opts>(get_member(value, get<I>(t)), ctx, b, ix);
@@ -1257,7 +1312,7 @@ else { \
                   }
                   
                   if constexpr (I != (N - 1)) {
-                     GLZ_WRITE_ENTRY_SEPARATOR(not supports_unchecked_write<val_t>);
+                     write_entry_separator<Opts, not supports_unchecked_write<val_t>>(ctx, b, ix);
                   }
                });
             }
