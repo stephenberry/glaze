@@ -377,6 +377,7 @@ namespace glz
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
             // TODO: Use new hashing approach for better performance
+            // TODO: Check if sequenced and use the value as the index if so
             using key_t = std::underlying_type_t<T>;
             static constexpr auto frozen_map = detail::make_enum_to_string_map<T>();
             const auto& member_it = frozen_map.find(static_cast<key_t>(value));
