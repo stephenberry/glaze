@@ -770,21 +770,21 @@ namespace glz
       template <optional_like T>
       struct to_json<T>
       {
-         template <auto Opts, class... Args>
-         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
+         template <auto Opts>
+         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix) noexcept
          {
             if (value) {
                if constexpr (
                   requires { requires supports_unchecked_write<typename T::value_type>; } ||
                   requires { requires supports_unchecked_write<typename T::element_type>; }) {
-                  write<json>::op<Opts>(*value, ctx, std::forward<Args>(args)...);
+                  write<json>::op<Opts>(*value, ctx, b, ix);
                }
                else {
-                  write<json>::op<write_unchecked_off<Opts>()>(*value, ctx, std::forward<Args>(args)...);
+                  write<json>::op<write_unchecked_off<Opts>()>(*value, ctx, b, ix);
                }
             }
             else {
-               dump<"null", not has_write_unchecked(Opts)>(std::forward<Args>(args)...);
+               dump<"null", not has_write_unchecked(Opts)>(b, ix);
             }
          }
       };
