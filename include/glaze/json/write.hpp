@@ -186,10 +186,10 @@ namespace glz
             
             if constexpr (Opts.bools_as_numbers) {
                if (value) {
-                  b[ix] = '1';
+                  assign_maybe_cast<'1'>(b, ix);
                }
                else {
-                  b[ix] = '0';
+                  assign_maybe_cast<'0'>(b, ix);
                }
                ++ix;
             }
@@ -199,7 +199,12 @@ namespace glz
                static constexpr uint64_t if_true_v = 434025983730;
 
                const uint64_t state = false_v - (value * if_true_v);
-               std::memcpy(b.data() + ix, &state, 8);
+               if constexpr (vector_like<B>) {
+                  std::memcpy(b.data() + ix, &state, 8);
+               }
+               else {
+                  std::memcpy(b + ix, &state, 8);
+               }
                ix += 5 - value;
             }
          }
@@ -787,10 +792,22 @@ namespace glz
       template <always_null_t T>
       struct to_json<T>
       {
-         template <auto Opts>
-         GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&&, auto&&... args) noexcept
+         template <auto Opts, class B>
+         GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&&, B&& b, auto&& ix) noexcept
          {
-            dump<"null", not has_write_unchecked(Opts)>(args...);
+            if constexpr (not has_write_unchecked(Opts)) {
+               if (ix + 4 > b.size()) [[unlikely]] {
+                  b.resize(b.size() * 2);
+               }
+            }
+            static constexpr uint32_t null_v = 1819047278;
+            if constexpr (vector_like<B>) {
+               std::memcpy(b.data() + ix, &null_v, 4);
+            }
+            else {
+               std::memcpy(b + ix, &null_v, 4);
+            }
+            ix += 4;
          }
       };
 
