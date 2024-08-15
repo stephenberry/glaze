@@ -1180,9 +1180,9 @@ namespace glz
                }();
                
                static constexpr auto padding = round_up_to_nearest_8(maximum_key_size<T> + write_padding_bytes);
-               if constexpr (object_info<Options, T>::maybe_skipped) {
+               if constexpr (object_info<Opts, T>::maybe_skipped) {
                   bool first = true;
-                  static constexpr auto first_is_written = object_info<Options, T>::first_will_be_written;
+                  static constexpr auto first_is_written = object_info<Opts, T>::first_will_be_written;
                   invoke_table<N>([&]<size_t I>() {
 
                      using val_t = std::remove_cvref_t<refl_t<T, I>>;
@@ -1305,8 +1305,6 @@ namespace glz
                   }
                   
                   invoke_table<N>([&]<size_t I>() {
-                     static constexpr auto Opts = opening_and_closing_handled_off<ws_handled_off<Options>()>();
-
                      if constexpr (not fixed_max_size) {
                         maybe_pad<padding>(b, ix);
                      }
@@ -1362,6 +1360,7 @@ namespace glz
                   });
                }
                
+               // Options is required here, because it must be the top level
                if constexpr (!has_closing_handled(Options)) {
                   if constexpr (Options.prettify) {
                      ctx.indentation_level -= Options.indentation_width;
