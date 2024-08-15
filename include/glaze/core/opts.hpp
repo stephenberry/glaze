@@ -31,7 +31,7 @@ namespace glz
    inline constexpr uint32_t padding_bytes = 16;
 
    // Write padding bytes simplifies our dump calculations by making sure we have significant excess
-   inline constexpr uint32_t write_padding_bytes = 256;
+   inline constexpr size_t write_padding_bytes = 256;
 
    // We use a alias to a char for booleans so that compiler errors will print "0" or "1" rather than "true" or
    // "false" This shortens compiler error printouts significantly.

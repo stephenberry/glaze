@@ -428,6 +428,9 @@ namespace glz
                }*/
 
                beve_to_json_value<Opts>(ctx, it, end, out, ix);
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
 
                /*if constexpr (Opts.prettify) {
                   ctx.indentation_level -= Opts.indentation_width;
@@ -478,6 +481,9 @@ namespace glz
                }
 
                beve_to_json_value<Opts>(ctx, it, end, out, ix);
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
 
                dump<','>(out, ix);
                if constexpr (Opts.prettify) {
@@ -493,6 +499,9 @@ namespace glz
                }
 
                beve_to_json_value<Opts>(ctx, it, end, out, ix);
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
 
                if constexpr (Opts.prettify) {
                   ctx.indentation_level -= Opts.indentation_width;
@@ -524,8 +533,14 @@ namespace glz
                   for (size_t i = 0; i < n; ++i) {
                      dump<'['>(out, ix);
                      beve_to_json_number<Opts>(number_tag, ctx, it, end, out, ix);
+                     if (bool(ctx.error)) [[unlikely]] {
+                        return;
+                     }
                      dump<','>(out, ix);
                      beve_to_json_number<Opts>(number_tag, ctx, it, end, out, ix);
+                     if (bool(ctx.error)) [[unlikely]] {
+                        return;
+                     }
                      dump<']'>(out, ix);
                      if (i != n - 1) {
                         dump<','>(out, ix);
@@ -538,8 +553,14 @@ namespace glz
                   const auto number_tag = complex_header & 0b111'00000;
                   dump<'['>(out, ix);
                   beve_to_json_number<Opts>(number_tag, ctx, it, end, out, ix);
+                  if (bool(ctx.error)) [[unlikely]] {
+                     return;
+                  }
                   dump<','>(out, ix);
                   beve_to_json_number<Opts>(number_tag, ctx, it, end, out, ix);
+                  if (bool(ctx.error)) [[unlikely]] {
+                     return;
+                  }
                   dump<']'>(out, ix);
                }
 

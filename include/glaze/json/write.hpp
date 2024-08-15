@@ -476,26 +476,6 @@ namespace glz
             dump_maybe_empty(value.str, b, ix);
          }
       };
-      
-#define GLZ_WRITE_ENTRY_SEPARATOR(CHECK_MINIFIED) \
-if constexpr (Opts.prettify) { \
-   if constexpr (vector_like<B>) { \
-      if (const auto k = ix + ctx.indentation_level + write_padding_bytes; k > b.size()) [[unlikely]] { \
-         b.resize((std::max)(b.size() * 2, k)); \
-      } \
-   } \
-   dump<",\n", false>(b, ix); \
-   dumpn_unchecked<Opts.indentation_char>(ctx.indentation_level, b, ix); \
-} \
-else { \
-   if constexpr ((CHECK_MINIFIED) && vector_like<B>) { \
-      if (ix == b.size()) [[unlikely]] { \
-         b.resize((std::max)(b.size() * 2, size_t(128))); \
-      } \
-   } \
-   assign_maybe_cast<','>(b, ix); \
-   ++ix; \
-}
 
       template <opts Opts, bool minified_check = true, class B>
       GLZ_ALWAYS_INLINE void write_entry_separator(is_context auto&& ctx, B&& b, auto&& ix) noexcept
@@ -510,9 +490,11 @@ else { \
             dumpn_unchecked<Opts.indentation_char>(ctx.indentation_level, b, ix);
          }
          else {
-            if constexpr (minified_check && vector_like<B>) {
-               if (ix == b.size()) [[unlikely]] {
-                  b.resize((std::max)(b.size() * 2, size_t(128)));
+            if constexpr (vector_like<B>) {
+               if constexpr (minified_check) {
+                  if (ix == b.size()) [[unlikely]] {
+                     b.resize((std::max)(b.size() * 2, size_t(128)));
+                  }
                }
             }
             assign_maybe_cast<','>(b, ix);
@@ -1165,7 +1147,7 @@ else { \
          // handles glaze_object_t without extra unknown fields
          // use always inline because this separation is only to make more readable code
          template <auto Options, class B>
-         GLZ_ALWAYS_INLINE static void op_base(auto&& value, is_context auto&& ctx, B&& b, auto&& ix) noexcept
+         GLZ_ALWAYS_INLINE static void op_base(auto&& value, is_context auto&& ctx, B& b, auto&& ix) noexcept
          {
             if constexpr (!has_opening_handled(Options)) {
                if constexpr (Options.prettify) {
@@ -1236,7 +1218,28 @@ else { \
                      maybe_pad<padding>(b, ix);
 
                      if constexpr (first_is_written && I > 0) {
-                        write_entry_separator<Opts, not supports_unchecked_write<val_t>>(ctx, b, ix);
+                        //write_entry_separator<Opts, not supports_unchecked_write<val_t>>(ctx, b, ix);
+                        if constexpr (Opts.prettify) {
+                           if constexpr (vector_like<B>) {
+                              if (const auto k = ix + ctx.indentation_level + write_padding_bytes; k > b.size()) [[unlikely]] {
+                                 b.resize((std::max)(b.size() * 2, k));
+                              }
+                           }
+                           dump<",\n", false>(b, ix);
+                           dumpn_unchecked<Opts.indentation_char>(ctx.indentation_level, b, ix);
+                        }
+                        else {
+                           if constexpr (vector_like<B>) {
+                              static_assert(vector_like<B>);
+                              if constexpr (not supports_unchecked_write<val_t>) {
+                                 if (ix == b.size()) [[unlikely]] {
+                                    b.resize(b.size() * 2);
+                                 }
+                              }
+                           }
+                           assign_maybe_cast<','>(b, ix);
+                           ++ix;
+                        }
                      }
                      else {
                         if (first) {
@@ -1244,7 +1247,28 @@ else { \
                         }
                         else {
                            // Null members may be skipped so we cant just write it out for all but the last member
-                           write_entry_separator<Opts, not supports_unchecked_write<val_t>>(ctx, b, ix);
+                           //write_entry_separator<Opts, not supports_unchecked_write<val_t>>(ctx, b, ix);
+                           if constexpr (Opts.prettify) {
+                              if constexpr (vector_like<B>) {
+                                 if (const auto k = ix + ctx.indentation_level + write_padding_bytes; k > b.size()) [[unlikely]] {
+                                    b.resize((std::max)(b.size() * 2, k));
+                                 }
+                              }
+                              dump<",\n", false>(b, ix);
+                              dumpn_unchecked<Opts.indentation_char>(ctx.indentation_level, b, ix);
+                           }
+                           else {
+                              if constexpr (vector_like<B>) {
+                                 static_assert(vector_like<B>);
+                                 if constexpr (not supports_unchecked_write<val_t>) {
+                                    if (ix == b.size()) [[unlikely]] {
+                                       b.resize(b.size() * 2);
+                                    }
+                                 }
+                              }
+                              assign_maybe_cast<','>(b, ix);
+                              ++ix;
+                           }
                         }
                      }
                      
@@ -1312,7 +1336,27 @@ else { \
                   }
                   
                   if constexpr (I != (N - 1)) {
-                     write_entry_separator<Opts, not supports_unchecked_write<val_t>>(ctx, b, ix);
+                     if constexpr (Opts.prettify) {
+                        if constexpr (vector_like<B>) {
+                           if (const auto k = ix + ctx.indentation_level + write_padding_bytes; k > b.size()) [[unlikely]] {
+                              b.resize((std::max)(b.size() * 2, k));
+                           }
+                        }
+                        dump<",\n", false>(b, ix);
+                        dumpn_unchecked<Opts.indentation_char>(ctx.indentation_level, b, ix);
+                     }
+                     else {
+                        if constexpr (vector_like<B>) {
+                           static_assert(vector_like<B>);
+                           if constexpr (not supports_unchecked_write<val_t>) {
+                              if (ix == b.size()) [[unlikely]] {
+                                 b.resize(b.size() * 2);
+                              }
+                           }
+                        }
+                        assign_maybe_cast<','>(b, ix);
+                        ++ix;
+                     }
                   }
                });
             }
