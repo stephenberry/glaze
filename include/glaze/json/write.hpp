@@ -1163,7 +1163,7 @@ namespace glz
          std::optional<size_t> fixed = 2 + 16; // {} + extra padding
          for_each_short_circuit<N>([&](auto I) -> bool {
             using val_t = std::remove_cvref_t<refl_t<T, I>>;
-            if constexpr (supports_unchecked_write<val_t>) {
+            if constexpr (supports_unchecked_write<val_t> && required_padding<val_t>().has_value()) {
                fixed.value() += required_padding<val_t>().value();
                fixed.value() += refl<T>.keys[I].size() + 2; // key length
                fixed.value() += 2; // colon and comma
