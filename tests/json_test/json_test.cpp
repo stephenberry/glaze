@@ -207,16 +207,10 @@ suite glz_enum_test = [] {
    };
 };
 
-enum class TestData : uint8_t {
-   None,
-   A,
-   B,
-   C,
-   D,
-   ERROR_E = 0xFF
-};
+enum class TestData : uint8_t { None, A, B, C, D, ERROR_E = 0xFF };
 
-struct DummyData {
+struct DummyData
+{
    uint32_t id{0};
 
    int32_t a{0};
@@ -230,13 +224,15 @@ struct DummyData {
 };
 
 template <>
-struct glz::meta<TestData> {
+struct glz::meta<TestData>
+{
    using enum TestData;
    static constexpr auto value = enumerate(None, A, B, C, D, ERROR_E);
 };
 
 template <>
-struct glz::meta<DummyData> {
+struct glz::meta<DummyData>
+{
    using T = DummyData;
    static constexpr std::string_view name = "DummyData";
    static constexpr auto value = object(&T::id, &T::a, &T::b, &T::c, &T::d, &T::e, &T::f);
