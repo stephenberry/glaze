@@ -19,21 +19,9 @@ my_struct s{};
 glz::read_binary(s, buffer);
 ```
 
-> [!WARNING]
+> [!NOTE]
 >
-> Reading binary has few checks for valid input. This is intentional for maximum performance, as safety can be achieved through commonly used mechanisms.
->
->  Binary format errors may occur if data is incorrectly written, corrupted, or maliciously manipulated.
->
-> - Do not write binary by hand, to ensure valid formatting.
-> - Use protocols like TCP or other checksum methods to ensure data is not corrupted.
-> - Use proper cryptographic solutions where malicious attacks are possible.
->
-> Glaze does include some validation for binary input, but this should be seen as a final line of defense.
-
-> [!IMPORTANT]
->
-> Glaze will be adding a fully checked binary (BEVE) parsing option, but this does not currently exist. So, do not use BEVE for open APIs where users could send corrupt/invalid input with the current codebase.
+> As of v3.3.0 reading binary is now completely safe for invalid input and doesn't require null terminated buffers.
 
 ## Untagged Binary
 
