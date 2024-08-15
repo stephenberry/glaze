@@ -213,8 +213,9 @@ enum class TestData : uint8_t {
    B,
    C,
    D,
-   ERROR = 0xFF,
+   ERROR = 0xFF
 };
+
 struct DummyData {
    uint32_t id{0};
 
