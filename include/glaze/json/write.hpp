@@ -1121,9 +1121,9 @@ namespace glz
          requires glaze_object_t<T> || reflectable<T>
       struct to_json<T>
       {
-         template <auto Options, class V>
+         template <auto Options, class V, class B>
             requires(not std::is_pointer_v<std::remove_cvref_t<V>>)
-         static void op(V&& value, is_context auto&& ctx, auto&& b, auto&& ix) noexcept
+         static void op(V&& value, is_context auto&& ctx, B&& b, auto&& ix) noexcept
          {
             using ValueType = std::decay_t<V>;
             if constexpr (detail::has_unknown_writer<ValueType> && not has_disable_write_unknown(Options)) {
@@ -1145,113 +1145,76 @@ namespace glz
                }
             }
             else {
-               op_base<disable_write_unknown_off<Options>()>(std::forward<V>(value), ctx, b, ix);
-            }
-         }
-
-         // handles glaze_object_t without extra unknown fields
-         // use always inline because this separation is only to make more readable code
-         template <auto Options, class B>
-         GLZ_ALWAYS_INLINE static void op_base(auto&& value, is_context auto&& ctx, B& b, auto&& ix) noexcept
-         {
-            if constexpr (!has_opening_handled(Options)) {
-               if constexpr (Options.prettify) {
-                  ctx.indentation_level += Options.indentation_width;
-                  if constexpr (vector_like<B>) {
-                     if (const auto k = ix + ctx.indentation_level + write_padding_bytes; k > b.size()) [[unlikely]] {
-                        b.resize((std::max)(b.size() * 2, k));
+               // handles glaze_object_t without extra unknown fields
+               static constexpr auto Opts = disable_write_unknown_off<opening_and_closing_handled_off<ws_handled_off<Options>()>()>();
+               
+               if constexpr (!has_opening_handled(Options)) {
+                  if constexpr (Options.prettify) {
+                     ctx.indentation_level += Options.indentation_width;
+                     if constexpr (vector_like<B>) {
+                        if (const auto k = ix + ctx.indentation_level + write_padding_bytes; k > b.size()) [[unlikely]] {
+                           b.resize((std::max)(b.size() * 2, k));
+                        }
                      }
-                  }
-                  dump<"{\n", false>(b, ix);
-                  dumpn_unchecked<Options.indentation_char>(ctx.indentation_level, b, ix);
-               }
-               else {
-                  dump<'{'>(b, ix);
-               }
-            }
-
-            static constexpr auto N = refl<T>.N;
-
-            decltype(auto) t = [&]() -> decltype(auto) {
-               if constexpr (reflectable<T>) {
-                  return to_tuple(value);
-               }
-               else {
-                  return nullptr;
-               }
-            }();
-            
-            static constexpr auto Opts = opening_and_closing_handled_off<ws_handled_off<Options>()>();
-            
-            static constexpr auto padding = std::bit_ceil(maximum_key_size<T> + write_padding_bytes);
-            if constexpr (object_info<Options, T>::maybe_skipped) {
-               bool first = true;
-               static constexpr auto first_is_written = object_info<Options, T>::first_will_be_written;
-               invoke_table<N>([&]<size_t I>() {
-
-                  using val_t = std::remove_cvref_t<refl_t<T, I>>;
-
-                  if constexpr (is_includer<val_t> || std::same_as<val_t, hidden> || std::same_as<val_t, skip>) {
-                     return;
+                     dump<"{\n", false>(b, ix);
+                     dumpn_unchecked<Options.indentation_char>(ctx.indentation_level, b, ix);
                   }
                   else {
-                     if constexpr (null_t<val_t>) {
-                        if constexpr (always_null_t<T>)
-                           return;
-                        else {
-                           const auto is_null = [&]() {
-                              decltype(auto) element = [&]() -> decltype(auto) {
-                                 if constexpr (reflectable<T>) {
-                                    return get<I>(t);
-                                 }
-                                 else {
-                                    return get<I>(refl<T>.values);
-                                 }
-                              };
-                              
-                              if constexpr (nullable_wrapper<val_t>) {
-                                 return !bool(element()(value).val);
-                              }
-                              else {
-                                 return !bool(get_member(value, element()));
-                              }
-                           }();
-                           if (is_null) return;
-                        }
-                     }
-                     
-                     maybe_pad<padding>(b, ix);
+                     dump<'{'>(b, ix);
+                  }
+               }
 
-                     if constexpr (first_is_written && I > 0) {
-                        //write_entry_separator<Opts, not supports_unchecked_write<val_t>>(ctx, b, ix);
-                        if constexpr (Opts.prettify) {
-                           if constexpr (vector_like<B>) {
-                              if (const auto k = ix + ctx.indentation_level + write_padding_bytes; k > b.size()) [[unlikely]] {
-                                 b.resize((std::max)(b.size() * 2, k));
-                              }
-                           }
-                           dump<",\n", false>(b, ix);
-                           dumpn_unchecked<Opts.indentation_char>(ctx.indentation_level, b, ix);
-                        }
-                        else {
-                           if constexpr (vector_like<B>) {
-                              static_assert(vector_like<B>);
-                              if constexpr (not supports_unchecked_write<val_t>) {
-                                 if (ix == b.size()) [[unlikely]] {
-                                    b.resize(b.size() * 2);
-                                 }
-                              }
-                           }
-                           assign_maybe_cast<','>(b, ix);
-                           ++ix;
-                        }
+               static constexpr auto N = refl<T>.N;
+
+               decltype(auto) t = [&]() -> decltype(auto) {
+                  if constexpr (reflectable<T>) {
+                     return to_tuple(value);
+                  }
+                  else {
+                     return nullptr;
+                  }
+               }();
+               
+               static constexpr auto padding = std::bit_ceil(maximum_key_size<T> + write_padding_bytes);
+               if constexpr (object_info<Options, T>::maybe_skipped) {
+                  bool first = true;
+                  static constexpr auto first_is_written = object_info<Options, T>::first_will_be_written;
+                  invoke_table<N>([&]<size_t I>() {
+
+                     using val_t = std::remove_cvref_t<refl_t<T, I>>;
+
+                     if constexpr (is_includer<val_t> || std::same_as<val_t, hidden> || std::same_as<val_t, skip>) {
+                        return;
                      }
                      else {
-                        if (first) {
-                           first = false;
+                        if constexpr (null_t<val_t>) {
+                           if constexpr (always_null_t<T>)
+                              return;
+                           else {
+                              const auto is_null = [&]() {
+                                 decltype(auto) element = [&]() -> decltype(auto) {
+                                    if constexpr (reflectable<T>) {
+                                       return get<I>(t);
+                                    }
+                                    else {
+                                       return get<I>(refl<T>.values);
+                                    }
+                                 };
+                                 
+                                 if constexpr (nullable_wrapper<val_t>) {
+                                    return !bool(element()(value).val);
+                                 }
+                                 else {
+                                    return !bool(get_member(value, element()));
+                                 }
+                              }();
+                              if (is_null) return;
+                           }
                         }
-                        else {
-                           // Null members may be skipped so we cant just write it out for all but the last member
+                        
+                        maybe_pad<padding>(b, ix);
+
+                        if constexpr (first_is_written && I > 0) {
                            //write_entry_separator<Opts, not supports_unchecked_write<val_t>>(ctx, b, ix);
                            if constexpr (Opts.prettify) {
                               if constexpr (vector_like<B>) {
@@ -1275,6 +1238,73 @@ namespace glz
                               ++ix;
                            }
                         }
+                        else {
+                           if (first) {
+                              first = false;
+                           }
+                           else {
+                              // Null members may be skipped so we cant just write it out for all but the last member
+                              //write_entry_separator<Opts, not supports_unchecked_write<val_t>>(ctx, b, ix);
+                              if constexpr (Opts.prettify) {
+                                 if constexpr (vector_like<B>) {
+                                    if (const auto k = ix + ctx.indentation_level + write_padding_bytes; k > b.size()) [[unlikely]] {
+                                       b.resize((std::max)(b.size() * 2, k));
+                                    }
+                                 }
+                                 dump<",\n", false>(b, ix);
+                                 dumpn_unchecked<Opts.indentation_char>(ctx.indentation_level, b, ix);
+                              }
+                              else {
+                                 if constexpr (vector_like<B>) {
+                                    static_assert(vector_like<B>);
+                                    if constexpr (not supports_unchecked_write<val_t>) {
+                                       if (ix == b.size()) [[unlikely]] {
+                                          b.resize(b.size() * 2);
+                                       }
+                                    }
+                                 }
+                                 assign_maybe_cast<','>(b, ix);
+                                 ++ix;
+                              }
+                           }
+                        }
+                        
+                        // MSVC requires get<I> rather than keys[I]
+                        static constexpr auto key = get<I>(refl<T>.keys); // GCC 14 requires auto here
+                        static constexpr auto quoted_key = join_v < chars<"\"">, key,
+                                              Opts.prettify ? chars<"\": "> : chars < "\":" >>
+                           ;
+                        
+                        static constexpr auto n = quoted_key.size();
+                        if constexpr (vector_like<B>) {
+                           std::memcpy(b.data() + ix, quoted_key.data(), n);
+                        }
+                        else {
+                           std::memcpy(b + ix, quoted_key.data(), n);
+                        }
+                        ix += n;
+                        
+                        static constexpr auto check_opts = supports_unchecked_write<val_t> ? write_unchecked_on<Opts>() : Opts;
+                        if constexpr (reflectable<T>) {
+                           to_json<val_t>::template op<check_opts>(get_member(value, get<I>(t)), ctx, b, ix);
+                        }
+                        else {
+                           to_json<val_t>::template op<check_opts>(get_member(value, get<I>(refl<T>.values)), ctx, b, ix);
+                        }
+                     }
+                  });
+               }
+               else {
+                  static constexpr std::optional<size_t> fixed_max_size = fixed_padding<T>;
+                  if constexpr (fixed_max_size) {
+                     maybe_pad<fixed_max_size.value()>(b, ix);
+                  }
+                  
+                  invoke_table<N>([&]<size_t I>() {
+                     static constexpr auto Opts = opening_and_closing_handled_off<ws_handled_off<Options>()>();
+
+                     if constexpr (not fixed_max_size) {
+                        maybe_pad<padding>(b, ix);
                      }
                      
                      // MSVC requires get<I> rather than keys[I]
@@ -1292,6 +1322,8 @@ namespace glz
                      }
                      ix += n;
                      
+                     using val_t = std::remove_cvref_t<refl_t<T, I>>;
+                     
                      static constexpr auto check_opts = supports_unchecked_write<val_t> ? write_unchecked_on<Opts>() : Opts;
                      if constexpr (reflectable<T>) {
                         to_json<val_t>::template op<check_opts>(get_member(value, get<I>(t)), ctx, b, ix);
@@ -1299,87 +1331,48 @@ namespace glz
                      else {
                         to_json<val_t>::template op<check_opts>(get_member(value, get<I>(refl<T>.values)), ctx, b, ix);
                      }
-                  }
-               });
-            }
-            else {
-               static constexpr std::optional<size_t> fixed_max_size = fixed_padding<T>;
-               if constexpr (fixed_max_size) {
-                  maybe_pad<fixed_max_size.value()>(b, ix);
-               }
-               
-               invoke_table<N>([&]<size_t I>() {
-                  static constexpr auto Opts = opening_and_closing_handled_off<ws_handled_off<Options>()>();
-
-                  if constexpr (not fixed_max_size) {
-                     maybe_pad<padding>(b, ix);
-                  }
-                  
-                  // MSVC requires get<I> rather than keys[I]
-                  static constexpr auto key = get<I>(refl<T>.keys); // GCC 14 requires auto here
-                  static constexpr auto quoted_key = join_v < chars<"\"">, key,
-                                        Opts.prettify ? chars<"\": "> : chars < "\":" >>
-                     ;
-                  
-                  static constexpr auto n = quoted_key.size();
-                  if constexpr (vector_like<B>) {
-                     std::memcpy(b.data() + ix, quoted_key.data(), n);
-                  }
-                  else {
-                     std::memcpy(b + ix, quoted_key.data(), n);
-                  }
-                  ix += n;
-                  
-                  using val_t = std::remove_cvref_t<refl_t<T, I>>;
-                  
-                  static constexpr auto check_opts = supports_unchecked_write<val_t> ? write_unchecked_on<Opts>() : Opts;
-                  if constexpr (reflectable<T>) {
-                     to_json<val_t>::template op<check_opts>(get_member(value, get<I>(t)), ctx, b, ix);
-                  }
-                  else {
-                     to_json<val_t>::template op<check_opts>(get_member(value, get<I>(refl<T>.values)), ctx, b, ix);
-                  }
-                  
-                  if constexpr (I != (N - 1)) {
-                     if constexpr (Opts.prettify) {
-                        if constexpr (vector_like<B>) {
-                           if (const auto k = ix + ctx.indentation_level + write_padding_bytes; k > b.size()) [[unlikely]] {
-                              b.resize((std::max)(b.size() * 2, k));
-                           }
-                        }
-                        dump<",\n", false>(b, ix);
-                        dumpn_unchecked<Opts.indentation_char>(ctx.indentation_level, b, ix);
-                     }
-                     else {
-                        if constexpr (vector_like<B>) {
-                           static_assert(vector_like<B>);
-                           if constexpr (not supports_unchecked_write<val_t>) {
-                              if (ix == b.size()) [[unlikely]] {
-                                 b.resize(b.size() * 2);
+                     
+                     if constexpr (I != (N - 1)) {
+                        if constexpr (Opts.prettify) {
+                           if constexpr (vector_like<B>) {
+                              if (const auto k = ix + ctx.indentation_level + write_padding_bytes; k > b.size()) [[unlikely]] {
+                                 b.resize((std::max)(b.size() * 2, k));
                               }
                            }
+                           dump<",\n", false>(b, ix);
+                           dumpn_unchecked<Opts.indentation_char>(ctx.indentation_level, b, ix);
                         }
-                        assign_maybe_cast<','>(b, ix);
-                        ++ix;
+                        else {
+                           if constexpr (vector_like<B>) {
+                              static_assert(vector_like<B>);
+                              if constexpr (not supports_unchecked_write<val_t>) {
+                                 if (ix == b.size()) [[unlikely]] {
+                                    b.resize(b.size() * 2);
+                                 }
+                              }
+                           }
+                           assign_maybe_cast<','>(b, ix);
+                           ++ix;
+                        }
                      }
-                  }
-               });
-            }
-            
-            if constexpr (!has_closing_handled(Options)) {
-               if constexpr (Options.prettify) {
-                  ctx.indentation_level -= Options.indentation_width;
-                  if constexpr (vector_like<B>) {
-                     if (const auto k = ix + ctx.indentation_level + write_padding_bytes; k > b.size()) [[unlikely]] {
-                        b.resize((std::max)(b.size() * 2, k));
-                     }
-                  }
-                  dump<'\n', false>(b, ix);
-                  dumpn_unchecked<Options.indentation_char>(ctx.indentation_level, b, ix);
-                  dump<'}', false>(b, ix);
+                  });
                }
-               else {
-                  dump<'}'>(b, ix);
+               
+               if constexpr (!has_closing_handled(Options)) {
+                  if constexpr (Options.prettify) {
+                     ctx.indentation_level -= Options.indentation_width;
+                     if constexpr (vector_like<B>) {
+                        if (const auto k = ix + ctx.indentation_level + write_padding_bytes; k > b.size()) [[unlikely]] {
+                           b.resize((std::max)(b.size() * 2, k));
+                        }
+                     }
+                     dump<'\n', false>(b, ix);
+                     dumpn_unchecked<Options.indentation_char>(ctx.indentation_level, b, ix);
+                     dump<'}', false>(b, ix);
+                  }
+                  else {
+                     dump<'}'>(b, ix);
+                  }
                }
             }
          }
