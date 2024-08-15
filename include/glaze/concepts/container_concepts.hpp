@@ -145,7 +145,7 @@ namespace glz::detail
    };
 
    template <class T>
-   concept vector_like = resizable<T> && accessible<T> && has_data<T>;
+   concept vector_like = resizable<std::decay_t<T>> && accessible<std::decay_t<T>> && has_data<std::decay_t<T>>;
 
    template <class T>
    concept map_subscriptable = requires(T container) {

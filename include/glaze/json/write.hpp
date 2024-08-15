@@ -452,9 +452,29 @@ namespace glz
             dump_maybe_empty(value.str, b, ix);
          }
       };
+      
+#define GLZ_WRITE_ENTRY_SEPARATOR(CHECK_MINIFIED) \
+if constexpr (Opts.prettify) { \
+   if constexpr (vector_like<B>) { \
+      if (const auto k = ix + ctx.indentation_level + write_padding_bytes; k > b.size()) [[unlikely]] { \
+         b.resize((std::max)(b.size() * 2, k)); \
+      } \
+   } \
+   dump<",\n", false>(b, ix); \
+   dumpn_unchecked<Opts.indentation_char>(ctx.indentation_level, b, ix); \
+} \
+else { \
+   if constexpr (CHECK_MINIFIED && vector_like<B>) { \
+      if (ix == b.size()) [[unlikely]] { \
+         b.resize((std::max)(b.size() * 2, size_t(128))); \
+      } \
+   } \
+   assign_maybe_cast<','>(b, ix); \
+   ++ix; \
+}
 
-      template <opts Opts, class B, class Ix>
-      GLZ_ALWAYS_INLINE void write_entry_separator(is_context auto&& ctx, B&& b, Ix&& ix) noexcept
+      template <opts Opts, bool minified_check = true, class B>
+      GLZ_ALWAYS_INLINE void write_entry_separator(is_context auto&& ctx, B&& b, auto&& ix) noexcept
       {
          if constexpr (Opts.prettify) {
             if constexpr (vector_like<B>) {
@@ -466,7 +486,13 @@ namespace glz
             dumpn_unchecked<Opts.indentation_char>(ctx.indentation_level, b, ix);
          }
          else {
-            dump<','>(b, ix);
+            if constexpr (minified_check && vector_like<B>) {
+               if (ix == b.size()) [[unlikely]] {
+                  b.resize(b.size() == 0 ? 128 : b.size() * 2);
+               }
+            }
+            assign_maybe_cast<','>(b, ix);
+            ++ix;
          }
       }
 
@@ -1043,6 +1069,18 @@ namespace glz
             dump<'}'>(b, ix);
          }
       };
+      
+      template <class T>
+      inline constexpr size_t maximum_key_size = []{
+         const auto N = refl<T>.N;
+         size_t maximum{};
+         for (size_t i = 0; i < N; ++i) {
+            if (refl<T>.keys[i].size() > maximum) {
+               maximum = refl<T>.keys[i].size();
+            }
+         }
+         return maximum;
+      }();
 
       template <class T>
          requires glaze_object_t<T> || reflectable<T>
@@ -1110,41 +1148,13 @@ namespace glz
             
             static constexpr auto Opts = opening_and_closing_handled_off<ws_handled_off<Options>()>();
             
+            static constexpr auto padding = std::bit_ceil(maximum_key_size<T> + write_padding_bytes);
             if constexpr (object_info<Options, T>::maybe_skipped) {
                bool first = true;
                static constexpr auto first_is_written = object_info<Options, T>::first_will_be_written;
                invoke_table<N>([&]<size_t I>() {
 
                   using val_t = std::remove_cvref_t<refl_t<T, I>>;
-
-                  decltype(auto) element = [&]() -> decltype(auto) {
-                     if constexpr (reflectable<T>) {
-                        return get<I>(t);
-                     }
-                     else {
-                        return get<I>(refl<T>.values);
-                     }
-                  };
-
-                  // MSVC requires get<I> rather than keys[I]
-                  // GCC 14 requires this to exist outside the write_key lambda
-                  static constexpr auto key = get<I>(refl<T>.keys); // GCC 14 requires auto here
-                  static constexpr auto quoted_key = join_v < chars<"\"">, key,
-                                        Opts.prettify ? chars<"\": "> : chars < "\":" >>
-                     ;
-
-                  // Keep this lambda for performance
-                  auto write_key = [&] {
-                     if constexpr (quoted_key.size() < 128) {
-                        // Using the same padding constant alows the compiler
-                        // to not need to load different lengths into the register
-                        maybe_pad<write_padding_bytes>(b, ix);
-                     }
-                     else {
-                        maybe_pad<quoted_key.size() + write_padding_bytes>(b);
-                     }
-                     dump<quoted_key, false>(b, ix);
-                  };
 
                   if constexpr (is_includer<val_t> || std::same_as<val_t, hidden> || std::same_as<val_t, skip>) {
                      return;
@@ -1155,6 +1165,15 @@ namespace glz
                            return;
                         else {
                            const auto is_null = [&]() {
+                              decltype(auto) element = [&]() -> decltype(auto) {
+                                 if constexpr (reflectable<T>) {
+                                    return get<I>(t);
+                                 }
+                                 else {
+                                    return get<I>(refl<T>.values);
+                                 }
+                              };
+                              
                               if constexpr (nullable_wrapper<val_t>) {
                                  return !bool(element()(value).val);
                               }
@@ -1165,9 +1184,11 @@ namespace glz
                            if (is_null) return;
                         }
                      }
+                     
+                     maybe_pad<padding>(b, ix);
 
                      if constexpr (first_is_written && I > 0) {
-                        write_entry_separator<Opts>(ctx, b, ix);
+                        GLZ_WRITE_ENTRY_SEPARATOR(false);
                      }
                      else {
                         if (first) {
@@ -1175,16 +1196,31 @@ namespace glz
                         }
                         else {
                            // Null members may be skipped so we cant just write it out for all but the last member
-                           write_entry_separator<Opts>(ctx, b, ix);
+                           GLZ_WRITE_ENTRY_SEPARATOR(false);
                         }
                      }
-
-                     write_key();
-                     if constexpr (supports_unchecked_write<val_t>) {
-                        to_json<val_t>::template op<write_unchecked_on<Opts>()>(get_member(value, element()), ctx, b, ix);
+                     
+                     // MSVC requires get<I> rather than keys[I]
+                     static constexpr auto key = get<I>(refl<T>.keys); // GCC 14 requires auto here
+                     static constexpr auto quoted_key = join_v < chars<"\"">, key,
+                                           Opts.prettify ? chars<"\": "> : chars < "\":" >>
+                        ;
+                     
+                     static constexpr auto n = quoted_key.size();
+                     if constexpr (vector_like<B>) {
+                        std::memcpy(b.data() + ix, quoted_key.data(), n);
                      }
                      else {
-                        to_json<val_t>::template op<Opts>(get_member(value, element()), ctx, b, ix);
+                        std::memcpy(b + ix, quoted_key.data(), n);
+                     }
+                     ix += n;
+                     
+                     static constexpr auto check_opts = supports_unchecked_write<val_t> ? write_unchecked_on<Opts>() : Opts;
+                     if constexpr (reflectable<T>) {
+                        to_json<val_t>::template op<check_opts>(get_member(value, get<I>(t)), ctx, b, ix);
+                     }
+                     else {
+                        to_json<val_t>::template op<check_opts>(get_member(value, get<I>(refl<T>.values)), ctx, b, ix);
                      }
                   }
                });
@@ -1195,39 +1231,33 @@ namespace glz
 
                   using val_t = std::remove_cvref_t<refl_t<T, I>>;
 
+                  maybe_pad<padding>(b, ix);
+                  
                   // MSVC requires get<I> rather than keys[I]
-                  // GCC 14 requires this to exist outside the write_key lambda
                   static constexpr auto key = get<I>(refl<T>.keys); // GCC 14 requires auto here
                   static constexpr auto quoted_key = join_v < chars<"\"">, key,
                                         Opts.prettify ? chars<"\": "> : chars < "\":" >>
                      ;
-
-                  // Keep this lambda for performance
-                  auto write_key = [&] {
-                     if constexpr (quoted_key.size() < 128) {
-                        // Using the same padding constant alows the compiler
-                        // to not need to load different lengths into the register
-                        maybe_pad<write_padding_bytes>(b, ix);
-                     }
-                     else {
-                        maybe_pad<quoted_key.size() + write_padding_bytes>(b);
-                     }
-                     dump<quoted_key, false>(b, ix);
-                  };
-
-                  // in this case we don't have values that are maybe skipped
-                  if constexpr (I > 0) {
-                     write_entry_separator<Opts>(ctx, b, ix);
+                  
+                  static constexpr auto n = quoted_key.size();
+                  if constexpr (vector_like<B>) {
+                     std::memcpy(b.data() + ix, quoted_key.data(), n);
                   }
-
-                  write_key();
-                                    
+                  else {
+                     std::memcpy(b + ix, quoted_key.data(), n);
+                  }
+                  ix += n;
+                  
                   static constexpr auto check_opts = supports_unchecked_write<val_t> ? write_unchecked_on<Opts>() : Opts;
                   if constexpr (reflectable<T>) {
                      to_json<val_t>::template op<check_opts>(get_member(value, get<I>(t)), ctx, b, ix);
                   }
                   else {
                      to_json<val_t>::template op<check_opts>(get_member(value, get<I>(refl<T>.values)), ctx, b, ix);
+                  }
+                  
+                  if constexpr (I != (N - 1)) {
+                     GLZ_WRITE_ENTRY_SEPARATOR(not supports_unchecked_write<val_t>);
                   }
                });
             }
