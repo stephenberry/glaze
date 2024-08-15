@@ -103,6 +103,8 @@ namespace glz::detail
 
    template <class T>
    concept pair_t = requires(T pair) {
+      typename std::decay_t<T>::first_type;
+      typename std::decay_t<T>::second_type;
       {
          pair.first
       };
