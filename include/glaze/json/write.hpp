@@ -1110,6 +1110,10 @@ namespace glz
          return maximum + 2; // add quotes
       }();
       
+      inline constexpr uint64_t round_up_to_nearest_16(const uint64_t value) noexcept {
+          return (value + 15) & ~15ull;
+      }
+      
       // Only use this if you are not prettifying
       template <class T>
       inline constexpr std::optional<size_t> fixed_padding = []{
@@ -1129,14 +1133,10 @@ namespace glz
             }
          });
          if (fixed) {
-            fixed = std::bit_ceil(fixed.value());
+            fixed = round_up_to_nearest_16(fixed.value());
          }
          return fixed;
       }();
-      
-      inline constexpr uint64_t round_up_to_nearest_8(const uint64_t value) noexcept {
-          return (value + 7) & ~7ull;
-      }
 
       template <class T>
          requires glaze_object_t<T> || reflectable<T>
@@ -1196,7 +1196,7 @@ namespace glz
                   }
                }();
                
-               static constexpr auto padding = round_up_to_nearest_8(maximum_key_size<T> + write_padding_bytes);
+               static constexpr auto padding = round_up_to_nearest_16(maximum_key_size<T> + write_padding_bytes);
                if constexpr (object_info<Opts, T>::maybe_skipped) {
                   bool first = true;
                   static constexpr auto first_is_written = object_info<Opts, T>::first_will_be_written;
