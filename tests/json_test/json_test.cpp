@@ -9262,18 +9262,12 @@ suite shark_variant = [] {
    };
 };
 
-struct error_t
-{
-   int32_t code{};
-   std::string message{};
-};
-
 template <class T>
 struct response_t
 {
    T& result;
    uint32_t id{};
-   std::optional<error_t> error{};
+   std::optional<std::string> error{};
 };
 
 template <class T>
@@ -9283,7 +9277,7 @@ template <>
 struct response_t<void>
 {
    uint32_t id{};
-   std::optional<error_t> error{};
+   std::optional<std::string> error{};
 };
 
 template <class V>
@@ -9315,7 +9309,7 @@ suite response_test = [] {
       using T = decltype(res);
       static_assert(std::same_as<glz::refl_t<T, 0>, std::vector<float_entry>&>);
       static_assert(std::same_as<glz::refl_t<T, 1>, uint32_t&>);
-      static_assert(std::same_as<glz::refl_t<T, 2>, std::optional<error_t>&>);
+      static_assert(std::same_as<glz::refl_t<T, 2>, std::optional<std::string>&>);
       std::string buffer{};
       expect(not glz::write_json(res, buffer));
       expect(buffer == R"({"result":[{"name":"bright","value":5.6},{"name":"dull","value":6.7}],"id":0})") << buffer;
