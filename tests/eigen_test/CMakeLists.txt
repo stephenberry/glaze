@@ -10,13 +10,7 @@ if(NOT Eigen3_FOUND)
     GIT_TAG 3.4.0
     GIT_SHALLOW TRUE
   )
-  FetchContent_GetProperties(Eigen3)
-  if(NOT eigen3_POPULATED)
-    FetchContent_Populate(Eigen3)
-    add_library(Eigen3 INTERFACE IMPORTED GLOBAL)
-    add_library(Eigen3::Eigen ALIAS Eigen3)
-    target_include_directories(Eigen3 INTERFACE "${eigen3_SOURCE_DIR}")
-  endif()
+  FetchContent_MakeAvailable(Eigen3)
 endif()
 
 target_link_libraries(${PROJECT_NAME} PRIVATE glz_test_common Eigen3::Eigen)
