@@ -35,7 +35,7 @@ namespace glz::detail
    }
 
    template <uint32_t N, class B>
-   GLZ_ALWAYS_INLINE void maybe_pad(B& b, auto& ix) noexcept
+   GLZ_ALWAYS_INLINE void maybe_pad(B& b, size_t& ix) noexcept
    {
       if constexpr (vector_like<B>) {
          if (const auto k = ix + N; k > b.size()) [[unlikely]] {
@@ -45,7 +45,7 @@ namespace glz::detail
    }
 
    template <class B>
-   GLZ_ALWAYS_INLINE void maybe_pad(const size_t n, B& b, auto& ix) noexcept
+   GLZ_ALWAYS_INLINE void maybe_pad(const size_t n, B& b, size_t& ix) noexcept
    {
       if constexpr (vector_like<B>) {
          if (const auto k = ix + n; k > b.size()) [[unlikely]] {
@@ -55,7 +55,7 @@ namespace glz::detail
    }
 
    template <auto c>
-   GLZ_ALWAYS_INLINE void assign_maybe_cast(auto& b, auto& ix) noexcept
+   GLZ_ALWAYS_INLINE void assign_maybe_cast(auto& b, size_t& ix) noexcept
    {
       using V = std::decay_t<decltype(b[0])>;
       using C = std::decay_t<decltype(c)>;
@@ -67,7 +67,7 @@ namespace glz::detail
       }
    }
 
-   GLZ_ALWAYS_INLINE void assign_maybe_cast(const byte_sized auto c, auto& b, auto& ix) noexcept
+   GLZ_ALWAYS_INLINE void assign_maybe_cast(const byte_sized auto c, auto& b, size_t& ix) noexcept
    {
       using V = std::decay_t<decltype(b[0])>;
       using C = std::decay_t<decltype(c)>;
@@ -80,7 +80,7 @@ namespace glz::detail
    }
 
    template <bool Checked = true, class B>
-   GLZ_ALWAYS_INLINE void dump(const byte_sized auto c, B& b, auto& ix) noexcept
+   GLZ_ALWAYS_INLINE void dump(const byte_sized auto c, B& b, size_t& ix) noexcept
    {
       if constexpr (Checked && vector_like<B>) {
          if (ix == b.size()) [[unlikely]] {
@@ -92,7 +92,7 @@ namespace glz::detail
    }
 
    template <auto c, bool Checked = true, class B>
-   GLZ_ALWAYS_INLINE void dump(B& b, auto& ix) noexcept
+   GLZ_ALWAYS_INLINE void dump(B& b, size_t& ix) noexcept
    {
       if constexpr (Checked && vector_like<B>) {
          if (ix == b.size()) [[unlikely]] {
@@ -104,7 +104,7 @@ namespace glz::detail
    }
 
    template <string_literal str, bool Checked = true, class B>
-   GLZ_ALWAYS_INLINE void dump(B& b, auto& ix) noexcept
+   GLZ_ALWAYS_INLINE void dump(B& b, size_t& ix) noexcept
    {
       static constexpr auto s = str.sv();
       static constexpr auto n = s.size();
@@ -121,7 +121,7 @@ namespace glz::detail
    }
 
    template <bool Checked = true, class B>
-   GLZ_ALWAYS_INLINE void dump(const sv str, B& b, auto& ix) noexcept
+   GLZ_ALWAYS_INLINE void dump(const sv str, B& b, size_t& ix) noexcept
    {
       const auto n = str.size();
       if constexpr (vector_like<B>) {
@@ -136,7 +136,7 @@ namespace glz::detail
    }
 
    template <auto c, class B>
-   GLZ_ALWAYS_INLINE void dumpn(size_t n, B& b, auto& ix) noexcept
+   GLZ_ALWAYS_INLINE void dumpn(size_t n, B& b, size_t& ix) noexcept
    {
       if constexpr (vector_like<B>) {
          if (ix + n > b.size()) [[unlikely]] {
@@ -148,14 +148,14 @@ namespace glz::detail
    }
 
    template <auto c, class B>
-   GLZ_ALWAYS_INLINE void dumpn_unchecked(size_t n, B& b, auto& ix) noexcept
+   GLZ_ALWAYS_INLINE void dumpn_unchecked(size_t n, B& b, size_t& ix) noexcept
    {
       std::memset(&b[ix], c, n);
       ix += n;
    }
 
    template <char IndentChar, class B>
-   GLZ_ALWAYS_INLINE void dump_newline_indent(size_t n, B& b, auto& ix) noexcept
+   GLZ_ALWAYS_INLINE void dump_newline_indent(size_t n, B& b, size_t& ix) noexcept
    {
       if constexpr (vector_like<B>) {
          if (const auto k = ix + n + write_padding_bytes; k > b.size()) [[unlikely]] {
@@ -170,7 +170,7 @@ namespace glz::detail
    }
 
    template <const sv& str, bool Checked = true, class B>
-   GLZ_ALWAYS_INLINE void dump(B& b, auto& ix) noexcept
+   GLZ_ALWAYS_INLINE void dump(B& b, size_t& ix) noexcept
    {
       static constexpr auto s = str;
       static constexpr auto n = s.size();
@@ -187,7 +187,7 @@ namespace glz::detail
    }
 
    template <bool Checked = true, class B>
-   GLZ_ALWAYS_INLINE void dump_not_empty(const sv str, B& b, auto& ix) noexcept
+   GLZ_ALWAYS_INLINE void dump_not_empty(const sv str, B& b, size_t& ix) noexcept
    {
       const auto n = str.size();
       if constexpr (vector_like<B>) {
@@ -202,7 +202,7 @@ namespace glz::detail
    }
 
    template <bool Checked = true, class B>
-   GLZ_ALWAYS_INLINE void dump_maybe_empty(const sv str, B& b, auto& ix) noexcept
+   GLZ_ALWAYS_INLINE void dump_maybe_empty(const sv str, B& b, size_t& ix) noexcept
    {
       const auto n = str.size();
       if (n) {
@@ -219,7 +219,7 @@ namespace glz::detail
    }
 
    template <class B>
-   GLZ_ALWAYS_INLINE void dump(const vector_like auto& bytes, B& b, auto& ix) noexcept
+   GLZ_ALWAYS_INLINE void dump(const vector_like auto& bytes, B& b, size_t& ix) noexcept
    {
       const auto n = bytes.size();
       if constexpr (vector_like<B>) {
@@ -232,7 +232,7 @@ namespace glz::detail
    }
 
    template <size_t N, class B>
-   GLZ_ALWAYS_INLINE void dump(const std::array<uint8_t, N>& bytes, B& b, auto& ix) noexcept
+   GLZ_ALWAYS_INLINE void dump(const std::array<uint8_t, N>& bytes, B& b, size_t& ix) noexcept
    {
       if constexpr (vector_like<B>) {
          if (ix + N > b.size()) [[unlikely]] {
