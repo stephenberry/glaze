@@ -16,7 +16,7 @@ namespace glz
       // std::hash<std::filesystem::path> not in the C++20 standard by default
       struct fs_path_hash {
          [[nodiscard]] auto operator()(const std::filesystem::path& path) const noexcept {
-            return std::hash_value(path);
+            return std::filesystem::hash_value(path);
          }
       };
    }
