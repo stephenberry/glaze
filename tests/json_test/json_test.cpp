@@ -9333,43 +9333,35 @@ suite response_test = [] {
    };
 };
 
-struct A_empty {
+struct A_empty
+{};
 
-};
-
-struct B_empty {
-
-};
+struct B_empty
+{};
 
 using C_empty = std::variant<A_empty, B_empty>;
 
-
 template <>
-struct glz::meta<C_empty> {
-    static constexpr std::string_view tag = "op";
+struct glz::meta<C_empty>
+{
+   static constexpr std::string_view tag = "op";
 };
 
 suite empty_variant_testing = [] {
    "empty_variant 1"_test = [] {
       std::string_view text = R"({"xxx":"x","op":"B_empty"})";
-      
+
       C_empty c;
-       auto ec = glz::read<glz::opts{
-           .error_on_unknown_keys = false,
-           .error_on_missing_keys = true
-       }>(c, text);
+      auto ec = glz::read<glz::opts{.error_on_unknown_keys = false, .error_on_missing_keys = true}>(c, text);
       expect(not ec) << glz::format_error(ec, text);
       expect(c.index() == 1);
    };
-   
+
    "empty_variant 2"_test = [] {
       std::string_view text = R"({"xx":"x","op":"B_empty"})";
 
       C_empty c;
-       auto ec = glz::read<glz::opts{
-           .error_on_unknown_keys = false,
-           .error_on_missing_keys = true
-       }>(c, text);
+      auto ec = glz::read<glz::opts{.error_on_unknown_keys = false, .error_on_missing_keys = true}>(c, text);
       expect(not ec) << glz::format_error(ec, text);
       expect(c.index() == 1);
    };

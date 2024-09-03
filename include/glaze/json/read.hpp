@@ -2679,7 +2679,7 @@ namespace glz
                         if (it != start) {
                            GLZ_MATCH_COMMA;
                         }
-                        
+
                         GLZ_SKIP_WS();
                         GLZ_MATCH_QUOTE;
                         GLZ_INVALID_END();
@@ -2698,7 +2698,7 @@ namespace glz
                               return;
                            key = {start, size_t(it - start)};
                         }
-                        
+
                         GLZ_MATCH_QUOTE;
                         GLZ_INVALID_END();
 
