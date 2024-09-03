@@ -52,7 +52,7 @@ elseif(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
     target_compile_options(glz_test_exceptions INTERFACE /W4 /wd4459 /wd4805)
 endif()
 
-add_subdirectory(asio_repe)
+add_subdirectory(repe_server_client)
 add_subdirectory(api_test)
 add_subdirectory(binary_test)
 add_subdirectory(cli_menu_test)
@@ -69,6 +69,7 @@ add_subdirectory(mock_json_test)
 add_subdirectory(stencil_test)
 add_subdirectory(reflection_test)
 add_subdirectory(repe_test)
+add_subdirectory(socket_test)
 
 # We don't run find_package_test or glaze-install_test with MSVC/Windows, because the Github action runner often chokes
 # Don't run find_package on Clang, because Linux runs with Clang try to use GCC standard library and have errors before Clang 18
