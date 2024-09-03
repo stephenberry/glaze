@@ -2679,9 +2679,26 @@ namespace glz
                         if (it != start) {
                            GLZ_MATCH_COMMA;
                         }
-                        const sv key = parse_object_key<T, Opts, tag_literal>(ctx, it, end);
-                        if (bool(ctx.error)) [[unlikely]]
-                           return;
+                        
+                        GLZ_SKIP_WS();
+                        GLZ_MATCH_QUOTE;
+                        GLZ_INVALID_END();
+
+                        sv key{};
+                        if constexpr (Opts.escaped_unicode_key_conversion && keys_may_contain_escape<T>()) {
+                           std::string& static_key = string_buffer();
+                           read<json>::op<opening_handled<Opts>()>(static_key, ctx, it, end);
+                           --it; // reveal the quote
+                           key = static_key;
+                        }
+                        else {
+                           auto* start = it;
+                           skip_string_view<Opts>(ctx, it, end);
+                           if (bool(ctx.error)) [[unlikely]]
+                              return;
+                           key = {start, size_t(it - start)};
+                        }
+                        
                         GLZ_MATCH_QUOTE;
                         GLZ_INVALID_END();
 
