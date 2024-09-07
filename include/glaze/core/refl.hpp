@@ -1077,8 +1077,8 @@ namespace glz::detail
    }
 
    // Do not call this at runtime, it is assumes the key lies within min_length and max_length
-   inline constexpr size_t full_hash_impl(const sv key, const uint64_t seed, const auto min_length,
-                                          const auto max_length) noexcept
+   inline constexpr uint64_t full_hash_impl(const sv key, const uint64_t seed, const auto min_length,
+                                            const auto max_length) noexcept
    {
       if (max_length < 8) {
          return bitmix(to_uint64_n_below_8(key.data(), key.size()), seed);
@@ -1113,8 +1113,8 @@ namespace glz::detail
    }
 
    // runtime full hash algorithm
-   template <size_t min_length, size_t max_length, size_t seed>
-   inline constexpr size_t full_hash(const auto* it, const size_t n) noexcept
+   template <uint64_t min_length, uint64_t max_length, uint64_t seed>
+   inline constexpr uint64_t full_hash(const auto* it, const size_t n) noexcept
    {
       if constexpr (max_length < 8) {
          if (n > 7) {
