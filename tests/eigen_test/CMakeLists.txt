@@ -11,6 +11,8 @@ if(NOT Eigen3_FOUND)
     GIT_SHALLOW TRUE
   )
   FetchContent_MakeAvailable(Eigen3)
+  # Exclude Eigen tests from being run by default
+  set_target_properties(Eigen3::Eigen PROPERTIES EXCLUDE_FROM_ALL TRUE)
 endif()
 
 target_link_libraries(${PROJECT_NAME} PRIVATE glz_test_common Eigen3::Eigen)
