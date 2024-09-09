@@ -822,12 +822,6 @@ namespace glz::repe
                if constexpr (std::same_as<Result, void>) {
                   methods[full_key] = [callback = func, chain = get_chain(full_key)](repe::state&& state) mutable {
                      {
-                        chain_invoke_lock lock{chain};
-                        if (not lock) {
-                           state.error = {error_e::timeout, std::string(full_key)};
-                           write_response<Opts>(state);
-                           return;
-                        }
                         callback();
                         if (state.header.notify) {
                            return;
@@ -839,12 +833,6 @@ namespace glz::repe
                else {
                   methods[full_key] = [callback = func, chain = get_chain(full_key)](repe::state&& state) mutable {
                      {
-                        chain_invoke_lock lock{chain};
-                        if (not lock) {
-                           state.error = {error_e::timeout, std::string(full_key)};
-                           write_response<Opts>(state);
-                           return;
-                        }
                         if (state.header.notify) {
                            std::ignore = callback();
                            return;
@@ -870,13 +858,6 @@ namespace glz::repe
                   }
 
                   {
-                     chain_invoke_lock lock{chain};
-                     if (not lock) {
-                        state.error = {error_e::timeout, std::string(full_key)};
-                        write_response<Opts>(state);
-                        return;
-                     }
-
                      if (state.header.notify) {
                         std::ignore = callback(params);
                         return;
@@ -965,12 +946,6 @@ namespace glz::repe
                      if constexpr (n_args == 0) {
                         methods[full_key] = [&value, &func, chain = get_chain(full_key)](repe::state&& state) mutable {
                            {
-                              chain_invoke_lock lock{chain};
-                              if (not lock) {
-                                 state.error = {error_e::timeout, std::string(full_key)};
-                                 write_response<Opts>(state);
-                                 return;
-                              }
                               (value.*func)();
                            }
 
@@ -993,12 +968,6 @@ namespace glz::repe
                            }
 
                            {
-                              chain_invoke_lock lock{chain};
-                              if (not lock) {
-                                 state.error = {error_e::timeout, std::string(full_key)};
-                                 write_response<Opts>(state);
-                                 return;
-                              }
                               (value.*func)(input);
                            }
 
@@ -1020,13 +989,6 @@ namespace glz::repe
                         methods[full_key] = [&value, &func, chain = get_chain(full_key)](repe::state&& state) mutable {
                            // using Result = std::decay_t<decltype((value.*func)())>;
                            {
-                              chain_invoke_lock lock{chain};
-                              if (not lock) {
-                                 state.error = {error_e::timeout, std::string(full_key)};
-                                 write_response<Opts>(state);
-                                 return;
-                              }
-
                               if (state.header.notify) {
                                  std::ignore = (value.*func)();
                                  return;
@@ -1050,13 +1012,6 @@ namespace glz::repe
 
                            // using Result = std::decay_t<decltype((value.*func)(input))>;
                            {
-                              chain_invoke_lock lock{chain};
-                              if (not lock) {
-                                 state.error = {error_e::timeout, std::string(full_key)};
-                                 write_response<Opts>(state);
-                                 return;
-                              }
-
                               if (state.header.notify) {
                                  std::ignore = (value.*func)(input);
                                  return;
