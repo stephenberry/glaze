@@ -166,7 +166,7 @@ auto ec = glz::write_file_json(obj, "./obj.json", std::string{});
 ## Compiler/System Support
 
 - Requires C++23
-- Only tested on 64bit systems, but should run on 32bit systems
+- Tested for both 64bit and 32bit
 - Only supports little-endian systems
 
 [Actions](https://github.com/stephenberry/glaze/actions) build and test with [Clang](https://clang.llvm.org) (15+), [MSVC](https://visualstudio.microsoft.com/vs/features/cplusplus/) (2022), and [GCC](https://gcc.gnu.org) (12+) on apple, windows, and linux.
