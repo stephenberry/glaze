@@ -469,6 +469,11 @@ namespace glz::repe
    {
       return try_lock_until(std::chrono::steady_clock::now() + std::chrono::nanoseconds(timeout_duration_ns()), l0);
    }
+   
+   // Any unique lock down the chain will block further access.
+   // We perform a unique lock on any read/write
+   // This means we cannot have asynchronous reads of the same value (address in the future).
+   // But, this allows asynchronous reads/writes as long as they lead down different paths.
 
    namespace detail
    {
@@ -485,7 +490,8 @@ namespace glz::repe
          else {
             for (size_t i = 0; i < (n - 1); ++i) {
                shared_mutex route{chain[i]->route};
-               const auto valid = try_lock_for(route, chain[i]->endpoint);
+               shared_mutex endpoint{chain[i]->endpoint};
+               const auto valid = try_lock_for(route, endpoint);
                if (not valid) {
                   return false;
                }
@@ -506,7 +512,7 @@ namespace glz::repe
          }
          else {
             for (size_t i = 0; i < (n - 1); ++i) {
-               chain[i]->endpoint.unlock();
+               chain[i]->endpoint.unlock_shared();
                chain[i]->route.unlock_shared();
             }
             chain.back()->endpoint.unlock();
@@ -522,17 +528,18 @@ namespace glz::repe
             return true;
          }
          else if (n == 1) {
-            return lock_shared(chain[0]->route, chain[0]->endpoint);
+            return try_lock_for(chain[0]->route, chain[0]->endpoint);
          }
          else {
             for (size_t i = 0; i < (n - 1); ++i) {
                shared_mutex route{chain[i]->route};
-               const bool valid = try_lock_for(route);
+               shared_mutex endpoint{chain[i]->endpoint};
+               const auto valid = try_lock_for(route, endpoint);
                if (not valid) {
                   return false;
                }
             }
-            return lock_shared(chain.back()->route, chain.back()->endpoint);
+            return try_lock_for(chain.back()->route, chain.back()->endpoint);
          }
       }
 
@@ -543,15 +550,16 @@ namespace glz::repe
             return;
          }
          else if (n == 1) {
-            chain[0]->endpoint.unlock_shared();
-            chain[0]->route.unlock_shared();
+            chain[0]->endpoint.unlock();
+            chain[0]->route.unlock();
          }
          else {
             for (size_t i = 0; i < (n - 1); ++i) {
+               chain[i]->endpoint.unlock_shared();
                chain[i]->route.unlock_shared();
             }
-            chain.back()->endpoint.unlock_shared();
-            chain.back()->route.unlock_shared();
+            chain.back()->endpoint.unlock();
+            chain.back()->route.unlock();
          }
       }
 
@@ -564,13 +572,13 @@ namespace glz::repe
             return true;
          }
          else if (n == 1) {
-            shared_mutex route{chain[0]->route};
-            return try_lock_for(route, chain[0]->endpoint);
+            return try_lock_for(chain[0]->route, chain[0]->endpoint);
          }
          else {
             for (size_t i = 0; i < (n - 2); ++i) {
                shared_mutex route{chain[i]->route};
-               const bool valid = try_lock_for(route, chain[i]->endpoint);
+               shared_mutex endpoint{chain[i]->endpoint};
+               const bool valid = try_lock_for(route, endpoint);
                if (not valid) {
                   return false;
                }
@@ -591,11 +599,11 @@ namespace glz::repe
          }
          else if (n == 1) {
             chain[0]->endpoint.unlock();
-            chain[0]->route.unlock_shared();
+            chain[0]->route.unlock();
          }
          else {
             for (size_t i = 0; i < (n - 2); ++i) {
-               chain[i]->endpoint.unlock();
+               chain[i]->endpoint.unlock_shared();
                chain[i]->route.unlock_shared();
             }
             chain.back()->endpoint.unlock();

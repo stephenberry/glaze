@@ -56,9 +56,80 @@ void asio_client_test()
    }
 }
 
+struct first_type
+{
+   std::function<int(int)> sum = [](int n) {
+      for (auto i = 0; i < n; ++i) {
+         std::cout << "n: " << n << '\n';
+         std::this_thread::sleep_for(std::chrono::seconds(1));
+      }
+      return n;
+   };
+};
+
+struct second_type
+{
+   std::function<int(int)> sum = [](int n) {
+      for (auto i = 0; i < n; ++i) {
+         std::cout << "n: " << n << '\n';
+         std::this_thread::sleep_for(std::chrono::seconds(1));
+      }
+      return n;
+   };
+};
+
+struct api
+{
+   first_type first{};
+   second_type second{};
+};
+
+void async_calls()
+{
+   std::future<void> server_thread = std::async([] {
+      glz::asio_server<> server{.port = 8080, .concurrency = 2};
+      api methods{};
+      server.on(methods);
+      server.run();
+   });
+   
+   std::this_thread::sleep_for(std::chrono::seconds(1));
+   
+   try {
+      glz::asio_client<> client{"localhost", "8080"};
+      glz::asio_client<> client2{"localhost", "8080"};
+      (void)client.init();
+      (void)client2.init();
+
+      std::vector<std::future<void>> threads;
+      
+      threads.emplace_back(std::async([&] {
+         int ret{};
+         (void)client.call({"/first/sum"}, 99, ret);
+      }));
+      
+      std::this_thread::sleep_for(std::chrono::seconds(1));
+      
+      threads.emplace_back(std::async([&] {
+         int ret{};
+         (void)client2.call({"/second/sum"}, 10, ret);
+      }));
+
+      for (auto& t : threads) {
+         t.get();
+      }
+   }
+   catch (const std::exception& e) {
+      std::cerr << e.what() << '\n';
+   }
+   
+   server_thread.get();
+}
+
 int main()
 {
    asio_client_test();
+   //async_calls();
 
    std::this_thread::sleep_for(std::chrono::seconds(5));
    return 0;
