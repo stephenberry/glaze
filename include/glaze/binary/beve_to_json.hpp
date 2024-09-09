@@ -370,6 +370,9 @@ namespace glz
             dump<'['>(out, ix);
             for (size_t i = 0; i < n; ++i) {
                beve_to_json_value<Opts>(ctx, it, end, out, ix);
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
                if (i != n - 1) {
                   dump<','>(out, ix);
                }
