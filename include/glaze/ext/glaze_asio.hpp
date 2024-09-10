@@ -321,11 +321,27 @@ namespace glz
             init();
          }
 
+         // Setup signal handling to stop the server
          signals->async_wait([&](auto, auto) { ctx->stop(); });
 
+         // Start the listener coroutine
          asio::co_spawn(*ctx, listener(), asio::detached);
 
+         // Run the io_context in multiple threads for concurrency
+         std::vector<std::thread> threads;
+         for (uint32_t i = 0; i < concurrency; ++i) {
+            threads.emplace_back([this]() { ctx->run(); });
+         }
+
+         // Optionally, run in the main thread as well
          ctx->run();
+
+         // Join all threads before exiting
+         for (auto& thread : threads) {
+            if (thread.joinable()) {
+               thread.join();
+            }
+         }
       }
 
       // stop the server
