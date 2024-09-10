@@ -469,7 +469,7 @@ namespace glz::repe
    {
       return try_lock_until(std::chrono::steady_clock::now() + std::chrono::nanoseconds(timeout_duration_ns()), l0);
    }
-   
+
    // Any unique lock down the chain will block further access.
    // We perform a unique lock on any read/write
    // This means we cannot have asynchronous reads of the same value (address in the future).

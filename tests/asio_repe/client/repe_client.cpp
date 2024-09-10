@@ -92,9 +92,9 @@ void async_calls()
       server.on(methods);
       server.run();
    });
-   
+
    std::this_thread::sleep_for(std::chrono::seconds(1));
-   
+
    try {
       glz::asio_client<> client{"localhost", "8080"};
       glz::asio_client<> client2{"localhost", "8080"};
@@ -102,14 +102,14 @@ void async_calls()
       (void)client2.init();
 
       std::vector<std::future<void>> threads;
-      
+
       threads.emplace_back(std::async([&] {
          int ret{};
          (void)client.call({"/first/sum"}, 99, ret);
       }));
-      
+
       std::this_thread::sleep_for(std::chrono::seconds(1));
-      
+
       threads.emplace_back(std::async([&] {
          int ret{};
          (void)client2.call({"/second/sum"}, 10, ret);
@@ -122,14 +122,14 @@ void async_calls()
    catch (const std::exception& e) {
       std::cerr << e.what() << '\n';
    }
-   
+
    server_thread.get();
 }
 
 int main()
 {
    asio_client_test();
-   //async_calls();
+   // async_calls();
 
    std::this_thread::sleep_for(std::chrono::seconds(5));
    return 0;
