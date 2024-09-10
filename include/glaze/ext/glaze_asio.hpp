@@ -91,6 +91,87 @@ namespace glz
 
    template <class T>
    using std_func_sig_t = typename func_traits<T>::std_func_sig;
+   
+   struct socket_pool
+   {
+      std::string host{"localhost"}; // host name
+      std::string service{""}; // often the port
+      std::mutex mtx{};
+      std::vector<std::shared_ptr<asio::ip::tcp::socket>> sockets{2};
+      std::vector<size_t> available{0, 1}; // indices of available sockets
+      
+      std::shared_ptr<asio::io_context> ctx{};
+
+      // provides a pointer to a socket and an index
+      std::tuple<std::shared_ptr<asio::ip::tcp::socket>, size_t, std::error_code> get()
+      {
+         std::unique_lock lock{mtx};
+         if (available.empty()) {
+            const auto current_size = sockets.size();
+            const auto new_size = sockets.size() * 2;
+            sockets.resize(new_size);
+            for (size_t i = current_size; i < new_size; ++i) {
+               available.emplace_back(i);
+            }
+         }
+
+         const auto index = available.back();
+         available.pop_back();
+         auto& socket = sockets[index];
+#if !defined(GLZ_USING_BOOST_ASIO)
+         std::error_code ec{};
+#else
+         boost::system::error_code ec{};
+#endif
+         if (socket) {
+            return {socket, index, ec};
+         }
+         else {
+            socket = std::make_shared<asio::ip::tcp::socket>(*ctx);
+            asio::ip::tcp::resolver resolver{*ctx};
+            const auto endpoint = resolver.resolve(host, service);
+            asio::connect(*socket, endpoint, ec);
+            if (ec) {
+               return {nullptr, index, ec};
+            }
+            socket->set_option(asio::ip::tcp::no_delay(true), ec);
+            if (ec) {
+               return {nullptr, index, ec};
+            }
+            return {socket, index, ec};
+         }
+      }
+
+      void free(const size_t index)
+      {
+         std::unique_lock lock{mtx};
+         available.emplace_back(index);
+      }
+   };
+   
+   struct unique_socket
+   {
+      socket_pool* pool{};
+      std::shared_ptr<asio::ip::tcp::socket> ptr{};
+      size_t index{};
+      std::error_code ec{};
+
+      std::shared_ptr<asio::ip::tcp::socket> value() { return ptr; }
+
+      const std::shared_ptr<asio::ip::tcp::socket> value() const { return ptr; }
+      
+      asio::ip::tcp::socket& operator*() { return *ptr; }
+      
+      const asio::ip::tcp::socket& operator*() const { return *ptr; }
+
+      unique_socket(socket_pool* input_pool) : pool(input_pool) { std::tie(ptr, index, ec) = pool->get(); }
+      unique_socket(const unique_socket&) = default;
+      unique_socket(unique_socket&&) = default;
+      unique_socket& operator=(const unique_socket&) = default;
+      unique_socket& operator=(unique_socket&&) = default;
+
+      ~unique_socket() { pool->free(index); }
+   };
 
    template <opts Opts = opts{}>
    struct asio_client
@@ -106,26 +187,26 @@ namespace glz
       };
 
       std::shared_ptr<asio::io_context> ctx{};
-      std::shared_ptr<asio::ip::tcp::socket> socket{};
+      std::shared_ptr<glz::socket_pool> socket_pool = std::make_shared<glz::socket_pool>();
 
       std::shared_ptr<repe::buffer_pool> buffer_pool = std::make_shared<repe::buffer_pool>();
 
       [[nodiscard]] std::error_code init()
       {
          ctx = std::make_shared<asio::io_context>(concurrency);
-         socket = std::make_shared<asio::ip::tcp::socket>(*ctx);
-         asio::ip::tcp::resolver resolver{*ctx};
-         const auto endpoint = resolver.resolve(host, service);
-#if !defined(GLZ_USING_BOOST_ASIO)
-         std::error_code ec{};
-#else
-         boost::system::error_code ec{};
-#endif
-         asio::connect(*socket, endpoint, ec);
-         if (ec) {
-            return ec;
+         socket_pool->ctx = ctx;
+         socket_pool->host = host;
+         socket_pool->service = service;
+         
+         unique_socket socket{socket_pool.get()};
+         if (socket.value()) {
+            // connection success
+            return {};
          }
-         return socket->set_option(asio::ip::tcp::no_delay(true), ec);
+         else {
+            // connection failure
+            return socket.ec;
+         }
       }
 
       template <class Params>
@@ -139,6 +220,8 @@ namespace glz
          if (bool(ec)) [[unlikely]] {
             return {repe::error_e::invalid_params, glz::format_error(ec, buffer)};
          }
+         
+         unique_socket socket{socket_pool.get()};
 
          send_buffer(*socket, buffer);
          return {};
@@ -156,6 +239,8 @@ namespace glz
          if (bool(ec)) [[unlikely]] {
             return {repe::error_e::invalid_params, glz::format_error(ec, buffer)};
          }
+         
+         unique_socket socket{socket_pool.get()};
 
          send_buffer(*socket, buffer);
          receive_buffer(*socket, buffer);
@@ -187,6 +272,8 @@ namespace glz
          if (bool(ec)) [[unlikely]] {
             return {repe::error_e::invalid_params, glz::format_error(ec, buffer)};
          }
+         
+         unique_socket socket{socket_pool.get()};
 
          send_buffer(*socket, buffer);
          receive_buffer(*socket, buffer);
@@ -205,6 +292,8 @@ namespace glz
          if (bool(ec)) [[unlikely]] {
             return {repe::error_e::invalid_params, glz::format_error(ec, buffer)};
          }
+         
+         unique_socket socket{socket_pool.get()};
 
          send_buffer(*socket, buffer);
          receive_buffer(*socket, buffer);
@@ -223,6 +312,8 @@ namespace glz
          if (bool(ec)) [[unlikely]] {
             return {repe::error_e::invalid_params, glz::format_error(ec, buffer)};
          }
+         
+         unique_socket socket{socket_pool.get()};
 
          send_buffer(*socket, buffer);
          receive_buffer(*socket, buffer);
@@ -271,6 +362,8 @@ namespace glz
             error = {repe::error_e::invalid_params, glz::format_error(ec, buffer)};
             return buffer;
          }
+         
+         unique_socket socket{socket_pool.get()};
 
          send_buffer(*socket, buffer);
          receive_buffer(*socket, buffer);
