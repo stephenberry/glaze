@@ -190,6 +190,11 @@ namespace glz
       std::shared_ptr<glz::socket_pool> socket_pool = std::make_shared<glz::socket_pool>();
 
       std::shared_ptr<repe::buffer_pool> buffer_pool = std::make_shared<repe::buffer_pool>();
+      std::shared_ptr<std::atomic<bool>> is_connected = std::make_shared<std::atomic<bool>>(false);
+      
+      bool connected() const {
+         return *is_connected;
+      }
 
       [[nodiscard]] std::error_code init()
       {
@@ -201,6 +206,7 @@ namespace glz
          unique_socket socket{socket_pool.get()};
          if (socket.value()) {
             // connection success
+            (*is_connected) = true;
             return {};
          }
          else {
