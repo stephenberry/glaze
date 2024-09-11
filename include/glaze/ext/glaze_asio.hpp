@@ -229,7 +229,14 @@ namespace glz
          
          unique_socket socket{socket_pool.get()};
 
-         send_buffer(*socket, buffer);
+         try {
+            send_buffer(*socket, buffer);
+         }
+         catch (const std::exception& e) {
+            socket.ptr = nullptr;
+            return {repe::error_e::server_error_upper, "asio send failure"};
+         }
+         
          return {};
       }
 
@@ -248,8 +255,21 @@ namespace glz
          
          unique_socket socket{socket_pool.get()};
 
-         send_buffer(*socket, buffer);
-         receive_buffer(*socket, buffer);
+         try {
+            send_buffer(*socket, buffer);
+         }
+         catch (const std::exception& e) {
+            socket.ptr = nullptr;
+            return {repe::error_e::server_error_upper, "asio send failure"};
+         }
+         
+         try {
+            receive_buffer(*socket, buffer);
+         }
+         catch (const std::exception& e) {
+            socket.ptr = nullptr;
+            return {repe::error_e::server_error_upper, "asio receive failure"};
+         }
 
          return repe::decode_response<Opts>(std::forward<Result>(result), buffer);
       }
@@ -281,8 +301,21 @@ namespace glz
          
          unique_socket socket{socket_pool.get()};
 
-         send_buffer(*socket, buffer);
-         receive_buffer(*socket, buffer);
+         try {
+            send_buffer(*socket, buffer);
+         }
+         catch (const std::exception& e) {
+            socket.ptr = nullptr;
+            return {repe::error_e::server_error_upper, "asio send failure"};
+         }
+         
+         try {
+            receive_buffer(*socket, buffer);
+         }
+         catch (const std::exception& e) {
+            socket.ptr = nullptr;
+            return {repe::error_e::server_error_upper, "asio receive failure"};
+         }
 
          return repe::decode_response<Opts>(buffer);
       }
@@ -301,8 +334,21 @@ namespace glz
          
          unique_socket socket{socket_pool.get()};
 
-         send_buffer(*socket, buffer);
-         receive_buffer(*socket, buffer);
+         try {
+            send_buffer(*socket, buffer);
+         }
+         catch (const std::exception& e) {
+            socket.ptr = nullptr;
+            return {repe::error_e::server_error_upper, "asio send failure"};
+         }
+         
+         try {
+            receive_buffer(*socket, buffer);
+         }
+         catch (const std::exception& e) {
+            socket.ptr = nullptr;
+            return {repe::error_e::server_error_upper, "asio receive failure"};
+         }
 
          return repe::decode_response<Opts>(std::forward<Result>(result), buffer);
       }
@@ -321,8 +367,21 @@ namespace glz
          
          unique_socket socket{socket_pool.get()};
 
-         send_buffer(*socket, buffer);
-         receive_buffer(*socket, buffer);
+         try {
+            send_buffer(*socket, buffer);
+         }
+         catch (const std::exception& e) {
+            socket.ptr = nullptr;
+            return {repe::error_e::server_error_upper, "asio send failure"};
+         }
+         
+         try {
+            receive_buffer(*socket, buffer);
+         }
+         catch (const std::exception& e) {
+            socket.ptr = nullptr;
+            return {repe::error_e::server_error_upper, "asio receive failure"};
+         }
 
          return repe::decode_response<Opts>(buffer);
       }
@@ -354,26 +413,6 @@ namespace glz
                return result;
             };
          }
-      }
-
-      template <class Params>
-      [[deprecated("We use a buffer pool now, so this would cause allocations")]] [[nodiscard]] std::string call_raw(
-         repe::header&& header, Params&& params, repe::error_t& error)
-      {
-         std::string buffer{};
-
-         header.notify = false;
-         const auto ec = repe::request<Opts>(std::move(header), std::forward<Params>(params), buffer);
-         if (bool(ec)) [[unlikely]] {
-            error = {repe::error_e::invalid_params, glz::format_error(ec, buffer)};
-            return buffer;
-         }
-         
-         unique_socket socket{socket_pool.get()};
-
-         send_buffer(*socket, buffer);
-         receive_buffer(*socket, buffer);
-         return buffer;
       }
    };
 
