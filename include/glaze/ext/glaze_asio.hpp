@@ -101,11 +101,20 @@ namespace glz
       std::vector<size_t> available{0, 1}; // indices of available sockets
       
       std::shared_ptr<asio::io_context> ctx{};
+      std::shared_ptr<std::atomic<bool>> is_connected = std::make_shared<std::atomic<bool>>(false);
 
       // provides a pointer to a socket and an index
       std::tuple<std::shared_ptr<asio::ip::tcp::socket>, size_t, std::error_code> get()
       {
          std::unique_lock lock{mtx};
+         
+         // reset all socket pointers if a connection failed
+         if (not *is_connected) {
+            for (auto& socket : sockets) {
+               socket.reset();
+            }
+         }
+         
          if (available.empty()) {
             const auto current_size = sockets.size();
             const auto new_size = sockets.size() * 2;
@@ -138,6 +147,7 @@ namespace glz
             if (ec) {
                return {nullptr, index, ec};
             }
+            (*is_connected) = true;
             return {socket, index, ec};
          }
       }
@@ -190,7 +200,7 @@ namespace glz
       std::shared_ptr<glz::socket_pool> socket_pool = std::make_shared<glz::socket_pool>();
 
       std::shared_ptr<repe::buffer_pool> buffer_pool = std::make_shared<repe::buffer_pool>();
-      std::shared_ptr<std::atomic<bool>> is_connected = std::make_shared<std::atomic<bool>>(false);
+      std::shared_ptr<std::atomic<bool>> is_connected = std::make_shared<std::atomic<bool>>(false); // will be set to pool's boolean
       
       bool connected() const {
          return *is_connected;
@@ -202,16 +212,14 @@ namespace glz
          socket_pool->ctx = ctx;
          socket_pool->host = host;
          socket_pool->service = service;
+         is_connected = socket_pool->is_connected;
          
          unique_socket socket{socket_pool.get()};
          if (socket.value()) {
-            // connection success
-            (*is_connected) = true;
-            return {};
+            return {}; // connection success
          }
          else {
-            // connection failure
-            return socket.ec;
+            return socket.ec; // connection failure
          }
       }
 
@@ -233,7 +241,8 @@ namespace glz
             send_buffer(*socket, buffer);
          }
          catch (const std::exception& e) {
-            socket.ptr = nullptr;
+            socket.ptr.reset();
+            (*is_connected) = false;
             return {repe::error_e::server_error_upper, "asio send failure"};
          }
          
@@ -259,7 +268,8 @@ namespace glz
             send_buffer(*socket, buffer);
          }
          catch (const std::exception& e) {
-            socket.ptr = nullptr;
+            socket.ptr.reset();
+            (*is_connected) = false;
             return {repe::error_e::server_error_upper, "asio send failure"};
          }
          
@@ -267,7 +277,8 @@ namespace glz
             receive_buffer(*socket, buffer);
          }
          catch (const std::exception& e) {
-            socket.ptr = nullptr;
+            socket.ptr.reset();
+            (*is_connected) = false;
             return {repe::error_e::server_error_upper, "asio receive failure"};
          }
 
@@ -305,7 +316,8 @@ namespace glz
             send_buffer(*socket, buffer);
          }
          catch (const std::exception& e) {
-            socket.ptr = nullptr;
+            socket.ptr.reset();
+            (*is_connected) = false;
             return {repe::error_e::server_error_upper, "asio send failure"};
          }
          
@@ -313,7 +325,8 @@ namespace glz
             receive_buffer(*socket, buffer);
          }
          catch (const std::exception& e) {
-            socket.ptr = nullptr;
+            socket.ptr.reset();
+            (*is_connected) = false;
             return {repe::error_e::server_error_upper, "asio receive failure"};
          }
 
@@ -338,7 +351,8 @@ namespace glz
             send_buffer(*socket, buffer);
          }
          catch (const std::exception& e) {
-            socket.ptr = nullptr;
+            socket.ptr.reset();
+            (*is_connected) = false;
             return {repe::error_e::server_error_upper, "asio send failure"};
          }
          
@@ -346,7 +360,8 @@ namespace glz
             receive_buffer(*socket, buffer);
          }
          catch (const std::exception& e) {
-            socket.ptr = nullptr;
+            socket.ptr.reset();
+            (*is_connected) = false;
             return {repe::error_e::server_error_upper, "asio receive failure"};
          }
 
@@ -371,7 +386,8 @@ namespace glz
             send_buffer(*socket, buffer);
          }
          catch (const std::exception& e) {
-            socket.ptr = nullptr;
+            socket.ptr.reset();
+            (*is_connected) = false;
             return {repe::error_e::server_error_upper, "asio send failure"};
          }
          
@@ -379,7 +395,8 @@ namespace glz
             receive_buffer(*socket, buffer);
          }
          catch (const std::exception& e) {
-            socket.ptr = nullptr;
+            socket.ptr.reset();
+            (*is_connected) = false;
             return {repe::error_e::server_error_upper, "asio receive failure"};
          }
 
