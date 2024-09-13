@@ -511,9 +511,8 @@ template <>
 struct glz::meta<glz::error_code>
 {
    static constexpr sv name = "glz::error_code";
-   using enum error_code;
-   static constexpr std::array keys{"error_code",
-                                    "none",
+   using enum glz::error_code;
+   static constexpr std::array keys{"none",
                                     "end_reached",
                                     "no_read_input",
                                     "data_must_be_null_terminated",
@@ -566,7 +565,7 @@ struct glz::meta<glz::error_code>
                                     "invalid_distribution_elements",
                                     "hostname_failure",
                                     "includer_error"};
-   static constexpr auto value = std::array{error_code,
+   static constexpr auto value = std::array{
       none, //
       end_reached, // A non-error code for non-null terminated input buffers
       no_read_input, //
