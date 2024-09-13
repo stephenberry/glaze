@@ -8030,11 +8030,44 @@ struct zoo_t
    };
 };
 
+struct animals_reflection_t
+{
+   std::string lion = "Lion";
+   std::string tiger = "Tiger";
+   std::string panda = "Panda";
+};
+
+struct zoo_reflection_t
+{
+   animals_reflection_t animals{};
+   std::string name{"My Awesome Zoo"};
+};
+
 suite partial_write_tests = [] {
    "partial write"_test = [] {
       static constexpr auto partial = glz::json_ptrs("/name", "/animals/tiger");
 
       zoo_t obj{};
+      std::string s{};
+      const auto ec = glz::write_json<partial>(obj, s);
+      expect(!ec);
+      expect(s == R"({"animals":{"tiger":"Tiger"},"name":"My Awesome Zoo"})") << s;
+   };
+   
+   "partial write const qualified"_test = [] {
+      static constexpr auto partial = glz::json_ptrs("/name", "/animals/tiger");
+
+      const zoo_t obj{};
+      std::string s{};
+      const auto ec = glz::write_json<partial>(obj, s);
+      expect(!ec);
+      expect(s == R"({"animals":{"tiger":"Tiger"},"name":"My Awesome Zoo"})") << s;
+   };
+   
+   "reflection partial write const qualified"_test = [] {
+      static constexpr auto partial = glz::json_ptrs("/name", "/animals/tiger");
+
+      const zoo_reflection_t obj{};
       std::string s{};
       const auto ec = glz::write_json<partial>(obj, s);
       expect(!ec);
