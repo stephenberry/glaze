@@ -177,12 +177,35 @@ suite get_enum_name_tests = [] {
 
 namespace glz
 {
-   GLZ_ENUM(Vehicle, Car, Truck, Plane);
-
-   GLZ_ENUM_MAP(Shapes, "Circle", circ, "Square", sq, "Triangle", triangle);
+   enum struct Vehicle : uint32_t
+   {
+      Vehicle, Car, Truck, Plane
+   };
+   
+   enum struct Shapes : uint32_t
+   {
+      circ, sq, triangle
+   };
 }
-static_assert(glz::nameof(glz::Vehicle::Truck) == "Truck");
-static_assert(glz::has_nameof<glz::Vehicle>);
+
+
+template <>
+struct glz::meta<glz::Vehicle>
+{
+   using enum Vehicle;
+   static constexpr std::array keys{"Vehicle", "Car", "Truck", "Plane"};
+   static constexpr std::array value{Vehicle, Car, Truck, Plane};
+};
+
+template <>
+struct glz::meta<glz::Shapes>
+{
+   using enum Vehicle;
+   static constexpr std::array keys{"Circle", "Square", "Triangle"};
+   static constexpr std::array value{circ, sq, triangle};
+};
+
+static_assert(glz::refl<glz::Vehicle>.keys[uint32_t(glz::Vehicle::Truck)] == "Truck");
 
 suite glz_enum_test = [] {
    "glz_enum"_test = [] {
@@ -9364,6 +9387,42 @@ suite empty_variant_testing = [] {
       auto ec = glz::read<glz::opts{.error_on_unknown_keys = false, .error_on_missing_keys = true}>(c, text);
       expect(not ec) << glz::format_error(ec, text);
       expect(c.index() == 1);
+   };
+};
+
+enum struct fishes
+{
+   salmon,
+   shark,
+   tuna
+};
+
+template <>
+struct glz::meta<fishes>
+{
+   using enum fishes;
+   static constexpr std::array keys{ "salmon", "shark", "tuna" };
+   static constexpr auto value = enumerate(salmon, shark, tuna);
+};
+
+suite meta_keys_tests = [] {
+   "fishes enum"_test = [] {
+      using enum fishes;
+      fishes fish = shark;
+      auto json = glz::write_json(fish).value();
+      expect(json == R"("shark")");
+      
+      fish = salmon;
+      expect(not glz::read_json(fish, json));
+      expect(fish == shark);
+      
+      fish = tuna;
+      json = glz::write_json(fish).value();
+      expect(json == R"("tuna")");
+      
+      fish = salmon;
+      expect(not glz::read_json(fish, json));
+      expect(fish == tuna);
    };
 };
 

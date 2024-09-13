@@ -135,29 +135,58 @@ namespace glz
          std::optional<std::vector<std::string_view>> examples{};
          schema attributes{};
       };
-
-      GLZ_ENUM_MAP(defined_formats, //
-                   "date-time", datetime, //
-                   "date", date, //
-                   "time", time, //
-                   "duration", duration, //
-                   "email", email, //
-                   "idn-email", idn_email, //
-                   "hostname", hostname, //
-                   "idn-hostname", idn_hostname, //
-                   "ipv4", ipv4, //
-                   "ipv6", ipv6, //
-                   "uri", uri, //
-                   "uri-reference", uri_reference, //
-                   "iri", iri, //
-                   "iri-reference", iri_reference, //
-                   "uuid", uuid, //
-                   "uri-template", uri_template, //
-                   "json-pointer", json_pointer, //
-                   "relative-json-pointer", relative_json_pointer, //
-                   "regex", regex);
-   }
+      
+      enum struct defined_formats : uint32_t
+      {
+         datetime, //
+         date, //
+         time, //
+         duration, //
+         email, //
+         idn_email, //
+         hostname, //
+         idn_hostname, //
+         ipv4, //
+         ipv6, //
+         uri, //
+         uri_reference, //
+         iri, //
+         iri_reference, //
+         uuid, //
+         uri_template, //
+         json_pointer, //
+         relative_json_pointer, //
+         regex
+      };
 }
+
+template <>
+struct glz::meta<glz::detail::defined_formats>
+{
+   static constexpr std::string_view name = "defined_formats";
+   using enum glz::detail::defined_formats;
+   static constexpr std::array keys{"date-time", "date", "time", "duration", "email", "idn-email", "hostname", "idn-hostname", "ipv4", "ipv6", "uri",
+      "uri-reference", "iri", "iri-reference", "uuid", "uri-template", "json-pointer", "relative-json-pointer", "regex"};
+   static constexpr std::array values{datetime, //
+      date, //
+      time, //
+      duration, //
+      email, //
+      idn_email, //
+      hostname, //
+      idn_hostname, //
+      ipv4, //
+      ipv6, //
+      uri, //
+      uri_reference, //
+      iri, //
+      iri_reference, //
+      uuid, //
+      uri_template, //
+      json_pointer, //
+      relative_json_pointer, //
+      regex};
+};
 
 template <>
 struct glz::meta<glz::detail::schematic>
@@ -200,12 +229,6 @@ struct glz::meta<glz::detail::schematic>
       "enum", [](auto&& self) -> auto& { return self.attributes.enumeration; }, //
       "ExtUnits", [](auto&& self) -> auto& { return self.attributes.ExtUnits; }, //
       "ExtAdvanced", [](auto&& self) -> auto& { return self.attributes.ExtAdvanced; });
-};
-
-template <>
-struct glz::meta<glz::detail::defined_formats>
-{
-   static constexpr std::string_view name = "defined_formats";
 };
 
 namespace glz

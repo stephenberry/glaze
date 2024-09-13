@@ -1219,47 +1219,10 @@ namespace glz
          template <auto Opts>
          static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
-            if constexpr (has_nameof<T>) {
-               if constexpr (!has_ws_handled(Opts)) {
-                  GLZ_SKIP_WS();
-               }
-
-               GLZ_MATCH_QUOTE;
-
-               const auto index = decode_hash<T, hash_info<T>>(it, end);
-               constexpr auto N = refl<T>.N;
-
-               if (index >= N) [[unlikely]] {
-                  ctx.error = error_code::unexpected_enum;
-                  return;
-               }
-
-               jump_table<N>(
-                  [&]<size_t I>() {
-                     static constexpr auto TargetKey = get<I>(refl<T>.keys);
-                     static constexpr auto Length = TargetKey.size();
-                     if ((it + Length) >= end) [[unlikely]] {
-                        ctx.error = error_code::unexpected_enum;
-                     }
-                     else [[likely]] {
-                        it += Length;
-                     }
-                  },
-                  index);
-               if (bool(ctx.error)) [[unlikely]]
-                  return;
-
-               GLZ_MATCH_QUOTE;
-
-               value = static_cast<std::decay_t<T>>(index);
-               return;
-            }
-            else {
-               // TODO: use std::bit_cast???
-               std::underlying_type_t<std::decay_t<T>> x{};
-               read<json>::op<Opts>(x, ctx, it, end);
-               value = static_cast<std::decay_t<T>>(x);
-            }
+            // TODO: use std::bit_cast???
+            std::underlying_type_t<std::decay_t<T>> x{};
+            read<json>::op<Opts>(x, ctx, it, end);
+            value = static_cast<std::decay_t<T>>(x);
          }
       };
 
