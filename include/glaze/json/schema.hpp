@@ -158,6 +158,7 @@ namespace glz
          relative_json_pointer, //
          regex
       };
+   }
 }
 
 template <>
