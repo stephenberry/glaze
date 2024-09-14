@@ -3260,8 +3260,8 @@ namespace jkj
             static constexpr int kappa = log::floor_log10_pow2(carrier_bits - significand_bits - 2) - 1;
             static_assert(kappa >= 1, "");
             static_assert(carrier_bits >= significand_bits + 2 + log::floor_log2_pow10(kappa + 1), "");
-			#undef min
-			#undef max
+#undef min
+#undef max
             static constexpr int min(int x, int y) noexcept { return x < y ? x : y; }
             static constexpr int max(int x, int y) noexcept { return x > y ? x : y; }
 
