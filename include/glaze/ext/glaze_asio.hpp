@@ -91,7 +91,7 @@ namespace glz
 
    template <class T>
    using std_func_sig_t = typename func_traits<T>::std_func_sig;
-   
+
    struct socket_pool
    {
       std::string host{"localhost"}; // host name
@@ -99,7 +99,7 @@ namespace glz
       std::mutex mtx{};
       std::vector<std::shared_ptr<asio::ip::tcp::socket>> sockets{2};
       std::vector<size_t> available{0, 1}; // indices of available sockets
-      
+
       std::shared_ptr<asio::io_context> ctx{};
       std::shared_ptr<std::atomic<bool>> is_connected = std::make_shared<std::atomic<bool>>(false);
 
@@ -107,14 +107,14 @@ namespace glz
       std::tuple<std::shared_ptr<asio::ip::tcp::socket>, size_t, std::error_code> get()
       {
          std::unique_lock lock{mtx};
-         
+
          // reset all socket pointers if a connection failed
          if (not *is_connected) {
             for (auto& socket : sockets) {
                socket.reset();
             }
          }
-         
+
          if (available.empty()) {
             const auto current_size = sockets.size();
             const auto new_size = sockets.size() * 2;
@@ -158,7 +158,7 @@ namespace glz
          available.emplace_back(index);
       }
    };
-   
+
    struct unique_socket
    {
       socket_pool* pool{};
@@ -169,9 +169,9 @@ namespace glz
       std::shared_ptr<asio::ip::tcp::socket> value() { return ptr; }
 
       const std::shared_ptr<asio::ip::tcp::socket> value() const { return ptr; }
-      
+
       asio::ip::tcp::socket& operator*() { return *ptr; }
-      
+
       const asio::ip::tcp::socket& operator*() const { return *ptr; }
 
       unique_socket(socket_pool* input_pool) : pool(input_pool) { std::tie(ptr, index, ec) = pool->get(); }
@@ -200,11 +200,10 @@ namespace glz
       std::shared_ptr<glz::socket_pool> socket_pool = std::make_shared<glz::socket_pool>();
 
       std::shared_ptr<repe::buffer_pool> buffer_pool = std::make_shared<repe::buffer_pool>();
-      std::shared_ptr<std::atomic<bool>> is_connected = std::make_shared<std::atomic<bool>>(false); // will be set to pool's boolean
-      
-      bool connected() const {
-         return *is_connected;
-      }
+      std::shared_ptr<std::atomic<bool>> is_connected =
+         std::make_shared<std::atomic<bool>>(false); // will be set to pool's boolean
+
+      bool connected() const { return *is_connected; }
 
       [[nodiscard]] std::error_code init()
       {
@@ -213,7 +212,7 @@ namespace glz
          socket_pool->host = host;
          socket_pool->service = service;
          is_connected = socket_pool->is_connected;
-         
+
          unique_socket socket{socket_pool.get()};
          if (socket.value()) {
             return {}; // connection success
@@ -234,7 +233,7 @@ namespace glz
          if (bool(ec)) [[unlikely]] {
             return {repe::error_e::invalid_params, glz::format_error(ec, buffer)};
          }
-         
+
          unique_socket socket{socket_pool.get()};
 
          try {
@@ -245,7 +244,7 @@ namespace glz
             (*is_connected) = false;
             return {repe::error_e::server_error_upper, "asio send failure"};
          }
-         
+
          return {};
       }
 
@@ -261,7 +260,7 @@ namespace glz
          if (bool(ec)) [[unlikely]] {
             return {repe::error_e::invalid_params, glz::format_error(ec, buffer)};
          }
-         
+
          unique_socket socket{socket_pool.get()};
 
          try {
@@ -272,7 +271,7 @@ namespace glz
             (*is_connected) = false;
             return {repe::error_e::server_error_upper, "asio send failure"};
          }
-         
+
          try {
             receive_buffer(*socket, buffer);
          }
@@ -309,7 +308,7 @@ namespace glz
          if (bool(ec)) [[unlikely]] {
             return {repe::error_e::invalid_params, glz::format_error(ec, buffer)};
          }
-         
+
          unique_socket socket{socket_pool.get()};
 
          try {
@@ -320,7 +319,7 @@ namespace glz
             (*is_connected) = false;
             return {repe::error_e::server_error_upper, "asio send failure"};
          }
-         
+
          try {
             receive_buffer(*socket, buffer);
          }
@@ -344,7 +343,7 @@ namespace glz
          if (bool(ec)) [[unlikely]] {
             return {repe::error_e::invalid_params, glz::format_error(ec, buffer)};
          }
-         
+
          unique_socket socket{socket_pool.get()};
 
          try {
@@ -355,7 +354,7 @@ namespace glz
             (*is_connected) = false;
             return {repe::error_e::server_error_upper, "asio send failure"};
          }
-         
+
          try {
             receive_buffer(*socket, buffer);
          }
@@ -379,7 +378,7 @@ namespace glz
          if (bool(ec)) [[unlikely]] {
             return {repe::error_e::invalid_params, glz::format_error(ec, buffer)};
          }
-         
+
          unique_socket socket{socket_pool.get()};
 
          try {
@@ -390,7 +389,7 @@ namespace glz
             (*is_connected) = false;
             return {repe::error_e::server_error_upper, "asio send failure"};
          }
-         
+
          try {
             receive_buffer(*socket, buffer);
          }
