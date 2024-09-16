@@ -4788,6 +4788,22 @@ suite get_sv = [] {
          expect(bomb->data.y == 200);
       }
    };
+   
+   "write_at"_test = [] {
+      std::string buffer = R"( { "action": "DELETE", "data": { "x": 10, "y": 200 }})";
+
+      auto ec = glz::write_at<"/action">(R"("GO!")", buffer);
+      expect(not ec);
+      expect(buffer == R"( { "action": "GO!", "data": { "x": 10, "y": 200 }})");
+   };
+   
+   "write_at"_test = [] {
+      std::string buffer = R"({"str":"hello","number":3.14,"sub":{"target":"X"}})";
+
+      auto ec = glz::write_at<"/sub/target">("42", buffer);
+      expect(not ec);
+      expect(buffer == R"({"str":"hello","number":3.14,"sub":{"target":42}})");
+   };
 };
 
 suite no_except_tests = [] {
