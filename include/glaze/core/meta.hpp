@@ -161,6 +161,9 @@ namespace glz
          static_assert(false_v<T>, "no keys or values provided");
       }
    }();
+   
+   template <class T>
+   using meta_keys_t = decay_keep_volatile_t<decltype(meta_keys_v<T>)>;
 
    template <class T>
    struct remove_meta_wrapper

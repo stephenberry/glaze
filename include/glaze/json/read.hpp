@@ -140,7 +140,7 @@ namespace glz
       void decode_index(Func&& func, Tuple&& tuple, Value&& value, is_context auto&& ctx, auto&& it,
                         auto&& end) noexcept
       {
-         static constexpr auto TargetKey = get<I>(refl<T>.keys);
+         static constexpr auto TargetKey = glz::get<I>(refl<T>.keys);
          static constexpr auto Length = TargetKey.size();
          // The == end check is validating that we have space for a quote
          if ((it + Length) >= end) [[unlikely]] {

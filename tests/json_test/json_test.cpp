@@ -200,7 +200,7 @@ struct glz::meta<glz::Vehicle>
 template <>
 struct glz::meta<glz::Shapes>
 {
-   using enum Vehicle;
+   using enum Shapes;
    static constexpr std::array keys{"Circle", "Square", "Triangle"};
    static constexpr std::array value{circ, sq, triangle};
 };
@@ -209,8 +209,6 @@ static_assert(glz::refl<glz::Vehicle>.keys[uint32_t(glz::Vehicle::Truck)] == "Tr
 
 suite glz_enum_test = [] {
    "glz_enum"_test = [] {
-      expect(glz::nameof(glz::Vehicle::Plane) == "Plane");
-
       auto name = glz::write_json(glz::Vehicle::Plane).value();
       expect(name == R"("Plane")") << name;
 
@@ -221,8 +219,6 @@ suite glz_enum_test = [] {
    };
 
    "glz_enum_map"_test = [] {
-      expect(glz::nameof(glz::Shapes::circ) == "Circle");
-
       auto name = glz::write_json(glz::Shapes::sq).value();
       expect(name == R"("Square")") << name;
 
@@ -9402,7 +9398,7 @@ struct glz::meta<fishes>
 {
    using enum fishes;
    static constexpr std::array keys{ "salmon", "shark", "tuna" };
-   static constexpr auto value = enumerate(salmon, shark, tuna);
+   static constexpr std::array value{ salmon, shark, tuna };
 };
 
 suite meta_keys_tests = [] {

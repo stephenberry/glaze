@@ -179,13 +179,13 @@ namespace glz
    };
    
    template <class T>
-      requires(detail::meta_keys<T> && detail::glaze_enum_t<T>)
+      requires(detail::meta_keys<T> && detail::glaze_t<T>)
    struct refl_info<T>
    {
       using V = std::remove_cvref_t<T>;
-      static constexpr auto N = tuple_size_v<meta_t<T>>;
+      static constexpr auto N = tuple_size_v<meta_keys_t<T>>;
 
-      static constexpr auto values = meta_v<T>;
+      static constexpr auto values = meta_wrapper_v<T>;
 
       static constexpr auto keys = meta_keys_v<T>;
 
@@ -547,7 +547,7 @@ namespace glz::detail
       return [&]<size_t... I>(std::index_sequence<I...>) {
          using key_t = std::underlying_type_t<T>;
          return normal_map<key_t, sv, N>(std::array<pair<key_t, sv>, N>{
-            pair<key_t, sv>{static_cast<key_t>(get<I>(refl<T>.values)), refl<T>.keys[I]}...});
+            pair<key_t, sv>{static_cast<key_t>(glz::get<I>(refl<T>.values)), refl<T>.keys[I]}...});
       }(std::make_index_sequence<N>{});
    }
 
@@ -566,7 +566,7 @@ namespace glz::detail
       constexpr auto N = refl<T>.N;
       return [&]<size_t... I>(std::index_sequence<I...>) {
          return normal_map<sv, T, N>(
-            std::array<pair<sv, T>, N>{pair<sv, T>{refl<T>.keys[I], T(get<I>(refl<T>.values))}...});
+            std::array<pair<sv, T>, N>{pair<sv, T>{refl<T>.keys[I], T(glz::get<I>(refl<T>.values))}...});
       }(std::make_index_sequence<N>{});
    }
 
@@ -620,7 +620,7 @@ namespace glz
       template <class T, size_t I>
       struct named_member
       {
-         static constexpr sv value = get<I>(member_names<T>);
+         static constexpr sv value = glz::get<I>(member_names<T>);
       };
 
       template <class T, bool use_hash_comparison, size_t... I>
@@ -639,11 +639,11 @@ namespace glz
          }
          else if constexpr (n == 1) {
             return micro_map1<value_t, named_member<T, I>::value...>{
-               pair<sv, value_t>{get<I>(members), std::add_pointer_t<glz::tuple_element_t<I, V>>{}}...};
+               pair<sv, value_t>{glz::get<I>(members), std::add_pointer_t<glz::tuple_element_t<I, V>>{}}...};
          }
          else if constexpr (n == 2) {
             return micro_map2<value_t, named_member<T, I>::value...>{
-               pair<sv, value_t>{get<I>(members), std::add_pointer_t<glz::tuple_element_t<I, V>>{}}...};
+               pair<sv, value_t>{glz::get<I>(members), std::add_pointer_t<glz::tuple_element_t<I, V>>{}}...};
          }
          else if constexpr (n < 64) // don't even attempt a first character hash if we have too many keys
          {
@@ -652,7 +652,7 @@ namespace glz
 
             if constexpr (front_desc.valid) {
                return make_single_char_map<value_t, front_desc>(
-                  {{get<I>(members), std::add_pointer_t<glz::tuple_element_t<I, V>>{}}...});
+                  {{glz::get<I>(members), std::add_pointer_t<glz::tuple_element_t<I, V>>{}}...});
             }
             else {
                constexpr single_char_hash_opts rear_hash{.is_front_hash = false};
