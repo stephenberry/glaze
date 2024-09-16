@@ -168,7 +168,7 @@ struct glz::meta<glz::detail::defined_formats>
    using enum glz::detail::defined_formats;
    static constexpr std::array keys{"date-time", "date", "time", "duration", "email", "idn-email", "hostname", "idn-hostname", "ipv4", "ipv6", "uri",
       "uri-reference", "iri", "iri-reference", "uuid", "uri-template", "json-pointer", "relative-json-pointer", "regex"};
-   static constexpr std::array values{datetime, //
+   static constexpr std::array value{datetime, //
       date, //
       time, //
       duration, //

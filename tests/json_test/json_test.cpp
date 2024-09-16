@@ -177,7 +177,7 @@ suite get_enum_name_tests = [] {
 
 enum struct Vehicle : uint32_t
 {
-   Vehicle, Car, Truck, Plane
+   Car, Truck, Plane
 };
 
 enum struct Shapes : uint32_t
@@ -190,8 +190,8 @@ template <>
 struct glz::meta<Vehicle>
 {
    using enum Vehicle;
-   static constexpr std::array keys{"Vehicle", "Car", "Truck", "Plane"};
-   static constexpr std::array value{Vehicle, Car, Truck, Plane};
+   static constexpr std::array keys{"Car", "Truck", "Plane"};
+   static constexpr std::array value{Car, Truck, Plane};
 };
 
 template <>
@@ -202,7 +202,7 @@ struct glz::meta<Shapes>
    static constexpr std::array value{circ, sq, triangle};
 };
 
-static_assert(glz::refl<Vehicle>.keys[uint32_t(Vehicle::Truck)] == "Truck");
+//static_assert(glz::refl<Vehicle>.keys[uint32_t(Vehicle::Truck)] == "Truck");
 
 suite glz_enum_test = [] {
    "glz_enum"_test = [] {

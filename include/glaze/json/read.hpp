@@ -1187,7 +1187,7 @@ namespace glz
       };
 
       template <class T>
-         requires(glaze_enum_t<T> && !custom_read<T>)
+         requires((glaze_enum_t<T> || (meta_keys<T> && std::is_enum_v<T>)) && !custom_read<T>)
       struct from_json<T>
       {
          template <auto Opts>
@@ -1213,7 +1213,7 @@ namespace glz
       };
 
       template <class T>
-         requires(std::is_enum_v<T> && !glaze_enum_t<T> && !custom_read<T>)
+         requires(std::is_enum_v<T> && !glaze_enum_t<T> && !meta_keys<T> && !custom_read<T>)
       struct from_json<T>
       {
          template <auto Opts>

@@ -13,7 +13,6 @@ namespace glz
    constexpr size_t max_recursive_depth_limit = 256;
 
    enum struct error_code : uint32_t {
-      error_code,
       none, //
       end_reached, // A non-error code for non-null terminated input buffers
       no_read_input, //
