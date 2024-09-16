@@ -34,8 +34,8 @@ namespace glz
       auto it = p.first;
       auto end = p.second;
 
-      // using span_t = std::span<std::remove_pointer_t<std::remove_reference_t<decltype(it)>>>;
-      using span_t = std::span<const char>; // TODO: should be more generic, but currently broken with mingw
+      // Don't const qualify the buffer so we can write to the view, which allows us to write to a JSON Pointer location
+      using span_t = std::span<std::conditional_t<std::is_const_v<std::remove_pointer_t<decltype(it)>>, const char, char>>;
       using result_t = expected<span_t, error_ctx>;
 
       auto start = it;
@@ -185,5 +185,23 @@ namespace glz
          return sv{reinterpret_cast<const char*>(s->data()), s->size()};
       }
       return unexpected(s.error());
+   }
+   
+   // Write raw text to a JSON value denoted by a JSON Pointer
+   template <string_literal Path, auto Opts = opts{}>
+   [[nodiscard]] inline error_ctx write_at(const std::string_view value, contiguous auto&& buffer)
+   {
+      auto view = glz::get_view_json<Path, Opts>(buffer);
+      if (view) {
+         // erase the current value
+         const size_t location = size_t(view->data() - buffer.data());
+         buffer.erase(location, view->size());
+         // insert the new value
+         buffer.insert(location, value);
+         return {};
+      }
+      else {
+         return view.error();
+      }
    }
 }
