@@ -97,9 +97,7 @@ void async_calls()
 
    try {
       glz::asio_client<> client{"localhost", "8080"};
-      glz::asio_client<> client2{"localhost", "8080"};
       (void)client.init();
-      (void)client2.init();
 
       std::vector<std::future<void>> threads;
 
@@ -112,7 +110,7 @@ void async_calls()
 
       threads.emplace_back(std::async([&] {
          int ret{};
-         (void)client2.call({"/second/sum"}, 10, ret);
+         (void)client.call({"/second/sum"}, 10, ret);
       }));
 
       for (auto& t : threads) {
@@ -128,8 +126,8 @@ void async_calls()
 
 int main()
 {
-   asio_client_test();
-   // async_calls();
+   //asio_client_test();
+   async_calls();
 
    std::this_thread::sleep_for(std::chrono::seconds(5));
    return 0;
