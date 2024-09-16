@@ -366,7 +366,7 @@ namespace glz
 
       template <class T>
       concept glaze_value_t =
-         glaze_t<T> && !(glaze_array_t<T> || glaze_object_t<T> || glaze_enum_t<T> || glaze_flags_t<T>);
+         glaze_t<T> && !(glaze_array_t<T> || glaze_object_t<T> || glaze_enum_t<T> || meta_keys<T> || glaze_flags_t<T>);
 
       template <class T>
       concept reflectable = std::is_aggregate_v<std::remove_cvref_t<T>> && std::is_class_v<std::remove_cvref_t<T>> &&
