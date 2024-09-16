@@ -162,7 +162,8 @@ namespace glz
             else {
                ++ctx.indentation_level;
             }
-            // We use indentation_level for recursive depth limit even though this means we have a shorter limit with prettified output
+            // We use indentation_level for recursive depth limit even though this means we have a shorter limit with
+            // prettified output
             if (ctx.indentation_level >= max_recursive_depth_limit) {
                ctx.error = error_code::exceeded_max_recursive_depth;
                return;
