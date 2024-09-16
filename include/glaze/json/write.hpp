@@ -478,7 +478,7 @@ namespace glz
             dump_maybe_empty(value.str, b, ix);
          }
       };
-      
+
       template <opts Opts, bool minified_check = true, class B>
       GLZ_ALWAYS_INLINE void write_array_entry_separator(is_context auto&& ctx, B&& b, auto&& ix) noexcept
       {
@@ -551,7 +551,7 @@ namespace glz
                      b.resize((std::max)(b.size() * 2, k));
                   }
                }
-               
+
                if constexpr (Opts.new_lines_in_arrays) {
                   std::memcpy(&b[ix], "[\n", 2);
                   ix += 2;

@@ -1207,7 +1207,7 @@ suite user_types = [] {
 })";
       expect(thing_pretty == buffer);
    };
-   
+
    "complex user obect opts prettify, new_lines_in_arrays = false"_test = [] {
       Thing obj{};
       std::string buffer{};
