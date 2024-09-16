@@ -245,7 +245,7 @@ namespace glz
                return;
             }
             ++it;
-            GLZ_INVALID_END();
+            GLZ_VALID_END();
 
             value = get<I>(refl<T>.values);
          }
