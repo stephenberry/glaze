@@ -1227,13 +1227,7 @@ namespace glz
                GLZ_SKIP_WS();
             }
             
-            static constexpr auto HashInfo = hash_info<T>;
-            constexpr auto type = HashInfo.type;
             constexpr auto N = refl<T>.N;
-            
-            if constexpr (not bool(type)) {
-               static_assert(false_v<T>, "invalid hash algorithm");
-            }
             
             if (*it != '"') [[unlikely]] {
                ctx.error = error_code::expected_quote;
@@ -1246,6 +1240,8 @@ namespace glz
                decode_index<Opts, T, 0>(value, ctx, it, end);
             }
             else {
+               static constexpr auto HashInfo = hash_info<T>;
+               
                const auto index = decode_hash<T, HashInfo>(it, end);
                
                if (index >= N) [[unlikely]] {
