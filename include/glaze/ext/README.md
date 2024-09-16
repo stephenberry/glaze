@@ -4,5 +4,5 @@ These extension headers are to be used with other libraries. Glaze expects devel
 
 > [!NOTE]
 >
-> `cli_menu.hpp` has no external dependencies and should be moved out
+> `jsonrpc.hpp` has no external dependencies and should be moved out
 
