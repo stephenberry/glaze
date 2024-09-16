@@ -135,9 +135,8 @@ namespace glz
          std::optional<std::vector<std::string_view>> examples{};
          schema attributes{};
       };
-      
-      enum struct defined_formats : uint32_t
-      {
+
+      enum struct defined_formats : uint32_t {
          datetime, //
          date, //
          time, //
@@ -166,27 +165,30 @@ struct glz::meta<glz::detail::defined_formats>
 {
    static constexpr std::string_view name = "defined_formats";
    using enum glz::detail::defined_formats;
-   static constexpr std::array keys{"date-time", "date", "time", "duration", "email", "idn-email", "hostname", "idn-hostname", "ipv4", "ipv6", "uri",
-      "uri-reference", "iri", "iri-reference", "uuid", "uri-template", "json-pointer", "relative-json-pointer", "regex"};
+   static constexpr std::array keys{
+      "date-time", "date",          "time", "duration",     "email",        "idn-email",
+      "hostname",  "idn-hostname",  "ipv4", "ipv6",         "uri",          "uri-reference",
+      "iri",       "iri-reference", "uuid", "uri-template", "json-pointer", "relative-json-pointer",
+      "regex"};
    static constexpr std::array value{datetime, //
-      date, //
-      time, //
-      duration, //
-      email, //
-      idn_email, //
-      hostname, //
-      idn_hostname, //
-      ipv4, //
-      ipv6, //
-      uri, //
-      uri_reference, //
-      iri, //
-      iri_reference, //
-      uuid, //
-      uri_template, //
-      json_pointer, //
-      relative_json_pointer, //
-      regex};
+                                     date, //
+                                     time, //
+                                     duration, //
+                                     email, //
+                                     idn_email, //
+                                     hostname, //
+                                     idn_hostname, //
+                                     ipv4, //
+                                     ipv6, //
+                                     uri, //
+                                     uri_reference, //
+                                     iri, //
+                                     iri_reference, //
+                                     uuid, //
+                                     uri_template, //
+                                     json_pointer, //
+                                     relative_json_pointer, //
+                                     regex};
 };
 
 template <>

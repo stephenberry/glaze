@@ -148,7 +148,8 @@ namespace glz
    };
 
    template <class T>
-      requires(!detail::meta_keys<T> && (detail::glaze_object_t<T> || detail::glaze_flags_t<T> || detail::glaze_enum_t<T>) &&
+      requires(!detail::meta_keys<T> &&
+               (detail::glaze_object_t<T> || detail::glaze_flags_t<T> || detail::glaze_enum_t<T>) &&
                (tuple_size_v<meta_t<T>> != 0))
    struct refl_info<T>
    {
@@ -177,7 +178,7 @@ namespace glz
       template <size_t I>
       using type = detail::member_t<V, decltype(get<I>(values))>;
    };
-   
+
    template <class T>
       requires(detail::meta_keys<T> && detail::glaze_t<T>)
    struct refl_info<T>
@@ -1477,8 +1478,7 @@ namespace glz::detail
 
    template <class T>
    constexpr auto hash_info = [] {
-      if constexpr ((glaze_object_t<T> || reflectable<T> ||
-                     (std::is_enum_v<std::remove_cvref_t<T>>)) &&
+      if constexpr ((glaze_object_t<T> || reflectable<T> || (std::is_enum_v<std::remove_cvref_t<T>>)) &&
                     (refl<T>.N > 0)) {
          constexpr auto& k_info = keys_info<T>;
          constexpr auto& type = k_info.type;
@@ -1773,7 +1773,10 @@ namespace glz
       }
    }
 
-   [[nodiscard]] inline std::string format_error(const error_ctx& pe) { return std::string{meta<error_code>::keys[uint32_t(pe.ec)]}; }
+   [[nodiscard]] inline std::string format_error(const error_ctx& pe)
+   {
+      return std::string{meta<error_code>::keys[uint32_t(pe.ec)]};
+   }
 
    template <class T>
    [[nodiscard]] std::string format_error(const expected<T, error_ctx>& pe)

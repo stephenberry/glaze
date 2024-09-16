@@ -80,7 +80,7 @@ namespace glz
 
       template <class T>
       concept local_meta_t = requires { T::glaze::value; };
-      
+
       template <class T>
       concept local_keys_t = requires { T::glaze::keys; };
 
@@ -89,7 +89,7 @@ namespace glz
 
       template <class T>
       concept glaze_t = requires { meta<std::decay_t<T>>::value; } || local_meta_t<std::decay_t<T>>;
-      
+
       template <class T>
       concept meta_keys = requires { meta<std::decay_t<T>>::keys; } || local_keys_t<std::decay_t<T>>;
 
@@ -148,7 +148,7 @@ namespace glz
 
    template <class T>
    using meta_wrapper_t = decay_keep_volatile_t<decltype(meta_wrapper_v<std::decay_t<T>>)>;
-   
+
    template <class T>
    inline constexpr auto meta_keys_v = [] {
       if constexpr (detail::local_meta_t<T>) {
@@ -161,7 +161,7 @@ namespace glz
          static_assert(false_v<T>, "no keys or values provided");
       }
    }();
-   
+
    template <class T>
    using meta_keys_t = decay_keep_volatile_t<decltype(meta_keys_v<T>)>;
 

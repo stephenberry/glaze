@@ -175,16 +175,9 @@ suite get_enum_name_tests = [] {
    };
 };
 
-enum struct Vehicle : uint32_t
-{
-   Car, Truck, Plane
-};
+enum struct Vehicle : uint32_t { Car, Truck, Plane };
 
-enum struct Shapes : uint32_t
-{
-   circ, sq, triangle
-};
-
+enum struct Shapes : uint32_t { circ, sq, triangle };
 
 template <>
 struct glz::meta<Vehicle>
@@ -202,7 +195,7 @@ struct glz::meta<Shapes>
    static constexpr std::array value{circ, sq, triangle};
 };
 
-//static_assert(glz::refl<Vehicle>.keys[uint32_t(Vehicle::Truck)] == "Truck");
+// static_assert(glz::refl<Vehicle>.keys[uint32_t(Vehicle::Truck)] == "Truck");
 
 suite glz_enum_test = [] {
    "glz_enum"_test = [] {
@@ -9383,19 +9376,14 @@ suite empty_variant_testing = [] {
    };
 };
 
-enum struct fishes
-{
-   salmon,
-   shark,
-   tuna
-};
+enum struct fishes { salmon, shark, tuna };
 
 template <>
 struct glz::meta<fishes>
 {
    using enum fishes;
-   static constexpr std::array keys{ "salmon", "shark", "tuna" };
-   static constexpr std::array value{ salmon, shark, tuna };
+   static constexpr std::array keys{"salmon", "shark", "tuna"};
+   static constexpr std::array value{salmon, shark, tuna};
 };
 
 suite meta_keys_tests = [] {
@@ -9404,15 +9392,15 @@ suite meta_keys_tests = [] {
       fishes fish = shark;
       auto json = glz::write_json(fish).value();
       expect(json == R"("shark")");
-      
+
       fish = salmon;
       expect(not glz::read_json(fish, json));
       expect(fish == shark);
-      
+
       fish = tuna;
       json = glz::write_json(fish).value();
       expect(json == R"("tuna")");
-      
+
       fish = salmon;
       expect(not glz::read_json(fish, json));
       expect(fish == tuna);
