@@ -404,7 +404,7 @@ namespace glz
       };
 
       template <class T>
-         requires((glaze_enum_t<T> || meta_keys<T>) && not custom_write<T>)
+         requires((glaze_enum_t<T> || (meta_keys<T> && std::is_enum_v<std::decay_t<T>>)) && not custom_write<T>)
       struct to_json<T>
       {
          template <auto Opts, class... Args>

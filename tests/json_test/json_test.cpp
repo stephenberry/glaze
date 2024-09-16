@@ -175,22 +175,19 @@ suite get_enum_name_tests = [] {
    };
 };
 
-namespace glz
+enum struct Vehicle : uint32_t
 {
-   enum struct Vehicle : uint32_t
-   {
-      Vehicle, Car, Truck, Plane
-   };
-   
-   enum struct Shapes : uint32_t
-   {
-      circ, sq, triangle
-   };
-}
+   Vehicle, Car, Truck, Plane
+};
+
+enum struct Shapes : uint32_t
+{
+   circ, sq, triangle
+};
 
 
 template <>
-struct glz::meta<glz::Vehicle>
+struct glz::meta<Vehicle>
 {
    using enum Vehicle;
    static constexpr std::array keys{"Vehicle", "Car", "Truck", "Plane"};
@@ -198,33 +195,33 @@ struct glz::meta<glz::Vehicle>
 };
 
 template <>
-struct glz::meta<glz::Shapes>
+struct glz::meta<Shapes>
 {
    using enum Shapes;
    static constexpr std::array keys{"Circle", "Square", "Triangle"};
    static constexpr std::array value{circ, sq, triangle};
 };
 
-static_assert(glz::refl<glz::Vehicle>.keys[uint32_t(glz::Vehicle::Truck)] == "Truck");
+static_assert(glz::refl<Vehicle>.keys[uint32_t(Vehicle::Truck)] == "Truck");
 
 suite glz_enum_test = [] {
    "glz_enum"_test = [] {
-      auto name = glz::write_json(glz::Vehicle::Plane).value();
+      auto name = glz::write_json(Vehicle::Plane).value();
       expect(name == R"("Plane")") << name;
 
-      glz::Vehicle vehicle{};
+      Vehicle vehicle{};
       auto ec = glz::read_json(vehicle, name);
       expect(not ec) << glz::format_error(ec, name);
-      expect(vehicle == glz::Vehicle::Plane);
+      expect(vehicle == Vehicle::Plane);
    };
 
    "glz_enum_map"_test = [] {
-      auto name = glz::write_json(glz::Shapes::sq).value();
+      auto name = glz::write_json(Shapes::sq).value();
       expect(name == R"("Square")") << name;
 
-      glz::Shapes shape{};
+      Shapes shape{};
       expect(not glz::read_json(shape, name));
-      expect(shape == glz::Shapes::sq);
+      expect(shape == Shapes::sq);
    };
 };
 
