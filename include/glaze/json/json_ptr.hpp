@@ -35,7 +35,8 @@ namespace glz
       auto end = p.second;
 
       // Don't const qualify the buffer so we can write to the view, which allows us to write to a JSON Pointer location
-      using span_t = std::span<std::conditional_t<std::is_const_v<std::remove_pointer_t<decltype(it)>>, const char, char>>;
+      using span_t =
+         std::span<std::conditional_t<std::is_const_v<std::remove_pointer_t<decltype(it)>>, const char, char>>;
       using result_t = expected<span_t, error_ctx>;
 
       auto start = it;
@@ -186,7 +187,7 @@ namespace glz
       }
       return unexpected(s.error());
    }
-   
+
    // Write raw text to a JSON value denoted by a JSON Pointer
    template <string_literal Path, auto Opts = opts{}>
    [[nodiscard]] inline error_ctx write_at(const std::string_view value, contiguous auto&& buffer)
