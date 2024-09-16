@@ -126,7 +126,7 @@ void async_calls()
 
 int main()
 {
-   //asio_client_test();
+   // asio_client_test();
    async_calls();
 
    std::this_thread::sleep_for(std::chrono::seconds(5));
