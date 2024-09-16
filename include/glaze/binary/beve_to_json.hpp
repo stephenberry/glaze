@@ -159,6 +159,15 @@ namespace glz
                dump<'\n'>(out, ix);
                dumpn<Opts.indentation_char>(ctx.indentation_level, out, ix);
             }
+            else {
+               ++ctx.indentation_level;
+            }
+            // We use indentation_level for recursive depth limit even though this means we have a shorter limit with
+            // prettified output
+            if (ctx.indentation_level >= max_recursive_depth_limit) {
+               ctx.error = error_code::exceeded_max_recursive_depth;
+               return;
+            }
 
             const auto key_type = (tag & 0b000'11'000) >> 3;
             switch (key_type) {
@@ -209,6 +218,9 @@ namespace glz
                ctx.indentation_level -= Opts.indentation_width;
                dump<'\n'>(out, ix);
                dumpn<Opts.indentation_char>(ctx.indentation_level, out, ix);
+            }
+            else {
+               --ctx.indentation_level;
             }
             dump<'}'>(out, ix);
             break;
@@ -458,6 +470,13 @@ namespace glz
                   ctx.indentation_level += Opts.indentation_width;
                   dump<'\n'>(out, ix);
                   dumpn<Opts.indentation_char>(ctx.indentation_level, out, ix);
+               }
+               else {
+                  ++ctx.indentation_level;
+               }
+               if (ctx.indentation_level >= max_recursive_depth_limit) {
+                  ctx.error = error_code::exceeded_max_recursive_depth;
+                  return;
                }
 
                if constexpr (Opts.prettify) {

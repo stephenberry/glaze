@@ -366,7 +366,7 @@ namespace glz
 
       template <class T>
       concept glaze_value_t =
-         glaze_t<T> && !(glaze_array_t<T> || glaze_object_t<T> || glaze_enum_t<T> || glaze_flags_t<T>);
+         glaze_t<T> && !(glaze_array_t<T> || glaze_object_t<T> || glaze_enum_t<T> || meta_keys<T> || glaze_flags_t<T>);
 
       template <class T>
       concept reflectable = std::is_aggregate_v<std::remove_cvref_t<T>> && std::is_class_v<std::remove_cvref_t<T>> &&
@@ -487,12 +487,6 @@ namespace glz
    constexpr auto flags(auto&&... args) noexcept { return detail::Flags{tuplet::tuple{args...}}; }
 }
 
-template <>
-struct glz::meta<glz::error_code>
-{
-   static constexpr sv name = "glz::error_code";
-};
-
 namespace glz
 {
    // This wraps glz::expected error (unexpected) values in an object with an "error" key
@@ -513,41 +507,120 @@ namespace glz
    unexpected_wrapper(T*) -> unexpected_wrapper<T>;
 }
 
-namespace glz
+template <>
+struct glz::meta<glz::error_code>
 {
-   [[nodiscard]] inline std::string format_error(const error_ctx& pe, const auto& buffer)
-   {
-      const auto error_type_str = nameof(pe.ec);
-
-      const auto info = detail::get_source_info(buffer, pe.location);
-      auto error_str = detail::generate_error_string(error_type_str, info);
-      if (pe.includer_error.size()) {
-         error_str.append(pe.includer_error);
-      }
-      return error_str;
-   }
-
-   template <class T>
-   [[nodiscard]] std::string format_error(const expected<T, error_ctx>& pe, const auto& buffer)
-   {
-      if (not pe) {
-         return format_error(pe.error(), buffer);
-      }
-      else {
-         return "";
-      }
-   }
-
-   [[nodiscard]] inline std::string format_error(const error_ctx& pe) { return std::string{nameof(pe.ec)}; }
-
-   template <class T>
-   [[nodiscard]] std::string format_error(const expected<T, error_ctx>& pe)
-   {
-      if (not pe) {
-         return format_error(pe.error());
-      }
-      else {
-         return "";
-      }
-   }
-}
+   static constexpr sv name = "glz::error_code";
+   using enum glz::error_code;
+   static constexpr std::array keys{"none",
+                                    "end_reached",
+                                    "no_read_input",
+                                    "data_must_be_null_terminated",
+                                    "parse_number_failure",
+                                    "expected_brace",
+                                    "expected_bracket",
+                                    "expected_quote",
+                                    "expected_comma",
+                                    "expected_colon",
+                                    "exceeded_static_array_size",
+                                    "exceeded_max_recursive_depth",
+                                    "unexpected_end",
+                                    "expected_end_comment",
+                                    "syntax_error",
+                                    "unexpected_enum",
+                                    "attempt_const_read",
+                                    "attempt_member_func_read",
+                                    "attempt_read_hidden",
+                                    "invalid_nullable_read",
+                                    "invalid_variant_object",
+                                    "invalid_variant_array",
+                                    "invalid_variant_string",
+                                    "no_matching_variant_type",
+                                    "expected_true_or_false",
+                                    "key_not_found",
+                                    "unknown_key",
+                                    "missing_key",
+                                    "invalid_flag_input",
+                                    "invalid_escape",
+                                    "u_requires_hex_digits",
+                                    "unicode_escape_conversion_failure",
+                                    "dump_int_error",
+                                    "file_open_failure",
+                                    "file_close_failure",
+                                    "file_include_error",
+                                    "file_extension_not_supported",
+                                    "could_not_determine_extension",
+                                    "get_nonexistent_json_ptr",
+                                    "get_wrong_type",
+                                    "seek_failure",
+                                    "cannot_be_referenced",
+                                    "invalid_get",
+                                    "invalid_get_fn",
+                                    "invalid_call",
+                                    "invalid_partial_key",
+                                    "name_mismatch",
+                                    "array_element_not_found",
+                                    "elements_not_convertible_to_design",
+                                    "unknown_distribution",
+                                    "invalid_distribution_elements",
+                                    "hostname_failure",
+                                    "includer_error"};
+   static constexpr auto value = std::array{none, //
+                                            end_reached, // A non-error code for non-null terminated input buffers
+                                            no_read_input, //
+                                            data_must_be_null_terminated, //
+                                            parse_number_failure, //
+                                            expected_brace, //
+                                            expected_bracket, //
+                                            expected_quote, //
+                                            expected_comma, //
+                                            expected_colon, //
+                                            exceeded_static_array_size, //
+                                            exceeded_max_recursive_depth, //
+                                            unexpected_end, //
+                                            expected_end_comment, //
+                                            syntax_error, //
+                                            unexpected_enum, //
+                                            attempt_const_read, //
+                                            attempt_member_func_read, //
+                                            attempt_read_hidden, //
+                                            invalid_nullable_read, //
+                                            invalid_variant_object, //
+                                            invalid_variant_array, //
+                                            invalid_variant_string, //
+                                            no_matching_variant_type, //
+                                            expected_true_or_false, //
+                                            // Key errors
+                                            key_not_found, //
+                                            unknown_key, //
+                                            missing_key, //
+                                            // Other errors
+                                            invalid_flag_input, //
+                                            invalid_escape, //
+                                            u_requires_hex_digits, //
+                                            unicode_escape_conversion_failure, //
+                                            dump_int_error, //
+                                            // File errors
+                                            file_open_failure, //
+                                            file_close_failure, //
+                                            file_include_error, //
+                                            file_extension_not_supported, //
+                                            could_not_determine_extension, //
+                                            // JSON pointer access errors
+                                            get_nonexistent_json_ptr, //
+                                            get_wrong_type, //
+                                            seek_failure, //
+                                            // Other errors
+                                            cannot_be_referenced, //
+                                            invalid_get, //
+                                            invalid_get_fn, //
+                                            invalid_call, //
+                                            invalid_partial_key, //
+                                            name_mismatch, //
+                                            array_element_not_found, //
+                                            elements_not_convertible_to_design, //
+                                            unknown_distribution, //
+                                            invalid_distribution_elements, //
+                                            hostname_failure, //
+                                            includer_error};
+};

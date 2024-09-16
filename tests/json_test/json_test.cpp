@@ -175,37 +175,46 @@ suite get_enum_name_tests = [] {
    };
 };
 
-namespace glz
-{
-   GLZ_ENUM(Vehicle, Car, Truck, Plane);
+enum struct Vehicle : uint32_t { Car, Truck, Plane };
 
-   GLZ_ENUM_MAP(Shapes, "Circle", circ, "Square", sq, "Triangle", triangle);
-}
-static_assert(glz::nameof(glz::Vehicle::Truck) == "Truck");
-static_assert(glz::has_nameof<glz::Vehicle>);
+enum struct Shapes : uint32_t { circ, sq, triangle };
+
+template <>
+struct glz::meta<Vehicle>
+{
+   using enum Vehicle;
+   static constexpr std::array keys{"Car", "Truck", "Plane"};
+   static constexpr std::array value{Car, Truck, Plane};
+};
+
+template <>
+struct glz::meta<Shapes>
+{
+   using enum Shapes;
+   static constexpr std::array keys{"Circle", "Square", "Triangle"};
+   static constexpr std::array value{circ, sq, triangle};
+};
+
+// static_assert(glz::refl<Vehicle>.keys[uint32_t(Vehicle::Truck)] == "Truck");
 
 suite glz_enum_test = [] {
    "glz_enum"_test = [] {
-      expect(glz::nameof(glz::Vehicle::Plane) == "Plane");
-
-      auto name = glz::write_json(glz::Vehicle::Plane).value();
+      auto name = glz::write_json(Vehicle::Plane).value();
       expect(name == R"("Plane")") << name;
 
-      glz::Vehicle vehicle{};
+      Vehicle vehicle{};
       auto ec = glz::read_json(vehicle, name);
       expect(not ec) << glz::format_error(ec, name);
-      expect(vehicle == glz::Vehicle::Plane);
+      expect(vehicle == Vehicle::Plane);
    };
 
    "glz_enum_map"_test = [] {
-      expect(glz::nameof(glz::Shapes::circ) == "Circle");
-
-      auto name = glz::write_json(glz::Shapes::sq).value();
+      auto name = glz::write_json(Shapes::sq).value();
       expect(name == R"("Square")") << name;
 
-      glz::Shapes shape{};
+      Shapes shape{};
       expect(not glz::read_json(shape, name));
-      expect(shape == glz::Shapes::sq);
+      expect(shape == Shapes::sq);
    };
 };
 
@@ -1197,6 +1206,61 @@ suite user_types = [] {
    }
 })";
       expect(thing_pretty == buffer);
+   };
+
+   "complex user obect opts prettify, new_lines_in_arrays = false"_test = [] {
+      Thing obj{};
+      std::string buffer{};
+      expect(not glz::write<glz::opts{.prettify = true, .new_lines_in_arrays = false}>(obj, buffer));
+      std::string_view thing_pretty = R"({
+   "thing": {
+      "a": 3.14,
+      "b": "stuff"
+   },
+   "thing2array": [{
+      "a": 3.14,
+      "b": "stuff",
+      "c": 999.342494903,
+      "d": 1E-12,
+      "e": 203082348402.1,
+      "f": 89.089,
+      "g": 12380.00000013,
+      "h": 1000000.000001
+   }],
+   "vec3": [3.14, 2.7, 6.5],
+   "list": [6, 7, 8, 2],
+   "deque": [9, 6.7, 3.1],
+   "vector": [[9, 6.7, 3.1], [3.14, 2.7, 6.5]],
+   "i": 8,
+   "d": 2,
+   "b": false,
+   "c": "W",
+   "v": {
+      "x": 0
+   },
+   "color": "Green",
+   "vb": [true, false, false, true, true, true, true],
+   "sptr": {
+      "a": 3.14,
+      "b": "stuff"
+   },
+   "array": ["as\"df\\ghjkl", "pie", "42", "foo"],
+   "map": {
+      "a": 4,
+      "b": 12,
+      "f": 7
+   },
+   "mapi": {
+      "2": 9.63,
+      "5": 3.14,
+      "7": 7.42
+   },
+   "thing_ptr": {
+      "a": 3.14,
+      "b": "stuff"
+   }
+})";
+      expect(thing_pretty == buffer) << buffer;
    };
 
    "complex user obect prettify_json/minify_json"_test = [] {
@@ -4778,6 +4842,22 @@ suite get_sv = [] {
          expect(bomb->data.x == 10);
          expect(bomb->data.y == 200);
       }
+   };
+
+   "write_at"_test = [] {
+      std::string buffer = R"( { "action": "DELETE", "data": { "x": 10, "y": 200 }})";
+
+      auto ec = glz::write_at<"/action">(R"("GO!")", buffer);
+      expect(not ec);
+      expect(buffer == R"( { "action": "GO!", "data": { "x": 10, "y": 200 }})");
+   };
+
+   "write_at"_test = [] {
+      std::string buffer = R"({"str":"hello","number":3.14,"sub":{"target":"X"}})";
+
+      auto ec = glz::write_at<"/sub/target">("42", buffer);
+      expect(not ec);
+      expect(buffer == R"({"str":"hello","number":3.14,"sub":{"target":42}})");
    };
 };
 
@@ -9397,6 +9477,37 @@ suite empty_variant_testing = [] {
       auto ec = glz::read<glz::opts{.error_on_unknown_keys = false, .error_on_missing_keys = true}>(c, text);
       expect(not ec) << glz::format_error(ec, text);
       expect(c.index() == 1);
+   };
+};
+
+enum struct fishes { salmon, shark, tuna };
+
+template <>
+struct glz::meta<fishes>
+{
+   using enum fishes;
+   static constexpr std::array keys{"salmon", "shark", "tuna"};
+   static constexpr std::array value{salmon, shark, tuna};
+};
+
+suite meta_keys_tests = [] {
+   "fishes enum"_test = [] {
+      using enum fishes;
+      fishes fish = shark;
+      auto json = glz::write_json(fish).value();
+      expect(json == R"("shark")");
+
+      fish = salmon;
+      expect(not glz::read_json(fish, json));
+      expect(fish == shark);
+
+      fish = tuna;
+      json = glz::write_json(fish).value();
+      expect(json == R"("tuna")");
+
+      fish = salmon;
+      expect(not glz::read_json(fish, json));
+      expect(fish == tuna);
    };
 };
 

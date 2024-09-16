@@ -616,6 +616,7 @@ namespace glz
 
 #include <array>
 #include <tuple>
+#include <variant>
 
 namespace glz
 {
