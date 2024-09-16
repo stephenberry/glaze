@@ -676,16 +676,4 @@ namespace glz
       static_assert(I < 2, "tuplet::pair only has 2 elements");
       using type = std::conditional_t<I == 0, A, B>;
    };
-   
-   /*template<std::size_t Index, typename T, std::size_t N>
-   constexpr T& get(std::array<T, N>& arr) noexcept {
-       static_assert(Index < N, "Index out of bounds");
-       return arr[Index];
-   }
-
-   template<std::size_t Index, typename T, std::size_t N>
-   constexpr const T& get(const std::array<T, N>& arr) noexcept {
-       static_assert(Index < N, "Index out of bounds");
-       return arr[Index];
-   }*/
 }
