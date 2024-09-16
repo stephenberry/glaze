@@ -1207,6 +1207,61 @@ suite user_types = [] {
 })";
       expect(thing_pretty == buffer);
    };
+   
+   "complex user obect opts prettify, new_lines_in_arrays = false"_test = [] {
+      Thing obj{};
+      std::string buffer{};
+      expect(not glz::write<glz::opts{.prettify = true, .new_lines_in_arrays = false}>(obj, buffer));
+      std::string_view thing_pretty = R"({
+   "thing": {
+      "a": 3.14,
+      "b": "stuff"
+   },
+   "thing2array": [{
+      "a": 3.14,
+      "b": "stuff",
+      "c": 999.342494903,
+      "d": 1E-12,
+      "e": 203082348402.1,
+      "f": 89.089,
+      "g": 12380.00000013,
+      "h": 1000000.000001
+   }],
+   "vec3": [3.14, 2.7, 6.5],
+   "list": [6, 7, 8, 2],
+   "deque": [9, 6.7, 3.1],
+   "vector": [[9, 6.7, 3.1], [3.14, 2.7, 6.5]],
+   "i": 8,
+   "d": 2,
+   "b": false,
+   "c": "W",
+   "v": {
+      "x": 0
+   },
+   "color": "Green",
+   "vb": [true, false, false, true, true, true, true],
+   "sptr": {
+      "a": 3.14,
+      "b": "stuff"
+   },
+   "array": ["as\"df\\ghjkl", "pie", "42", "foo"],
+   "map": {
+      "a": 4,
+      "b": 12,
+      "f": 7
+   },
+   "mapi": {
+      "2": 9.63,
+      "5": 3.14,
+      "7": 7.42
+   },
+   "thing_ptr": {
+      "a": 3.14,
+      "b": "stuff"
+   }
+})";
+      expect(thing_pretty == buffer) << buffer;
+   };
 
    "complex user obect prettify_json/minify_json"_test = [] {
       Thing obj{};
