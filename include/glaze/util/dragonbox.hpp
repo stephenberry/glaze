@@ -2142,7 +2142,7 @@ namespace jkj
             // Compute the base index.
             // Supposed to compute (k - min_k) / compression_ratio.
             static_assert(max_k - min_k <= 89 && compression_ratio == 13, "");
-            static_assert(max_k - min_k <= detail::stdr::numeric_limits<DecimalExponentType>::max(), "");
+            static_assert(max_k - min_k <= (detail::stdr::numeric_limits<DecimalExponentType>::max)(), "");
             const auto cache_index = DecimalExponentType(
                detail::stdr::uint_fast16_t(DecimalExponentType(k - min_k) * detail::stdr::int_fast16_t(79)) >> 10);
             const auto kb = DecimalExponentType(cache_index * compression_ratio + min_k);
@@ -2240,7 +2240,7 @@ namespace jkj
             // Compute the base index.
             // Supposed to compute (k - min_k) / compression_ratio.
             static_assert(max_k - min_k <= 619 && compression_ratio == 27, "");
-            static_assert(max_k - min_k <= detail::stdr::numeric_limits<DecimalExponentType>::max(), "");
+            static_assert(max_k - min_k <= (detail::stdr::numeric_limits<DecimalExponentType>::max)(), "");
             const auto cache_index = DecimalExponentType(
                detail::stdr::uint_fast32_t(DecimalExponentType(k - min_k) * detail::stdr::int_fast32_t(607)) >> 14);
             const auto kb = DecimalExponentType(cache_index * compression_ratio + min_k);
@@ -2961,7 +2961,7 @@ namespace jkj
 
                template <class FormatTraits, detail::stdr::uint_least64_t upper_bound>
                using remainder_type = typename detail::stdr::conditional<
-                  upper_bound <= detail::stdr::numeric_limits<detail::stdr::uint_least32_t>::max(),
+                  upper_bound <= (detail::stdr::numeric_limits<detail::stdr::uint_least32_t>::max)(),
                   detail::stdr::uint_least32_t, typename FormatTraits::carrier_uint>::type;
 
                template <class FormatTraits, detail::stdr::int_least32_t lower_bound,
@@ -2980,32 +2980,32 @@ namespace jkj
 
                template <class FormatTraits, detail::stdr::uint_least64_t upper_bound>
                using remainder_type = typename detail::stdr::conditional<
-                  upper_bound <= detail::stdr::numeric_limits<detail::stdr::uint_least8_t>::max(),
+                  upper_bound <= (detail::stdr::numeric_limits<detail::stdr::uint_least8_t>::max)(),
                   detail::stdr::uint_least8_t,
                   typename detail::stdr::conditional<
-                     upper_bound <= detail::stdr::numeric_limits<detail::stdr::uint_least16_t>::max(),
+                     upper_bound <= (detail::stdr::numeric_limits<detail::stdr::uint_least16_t>::max)(),
                      detail::stdr::uint_least16_t,
                      typename detail::stdr::conditional<
-                        upper_bound <= detail::stdr::numeric_limits<detail::stdr::uint_least32_t>::max(),
+                        upper_bound <= (detail::stdr::numeric_limits<detail::stdr::uint_least32_t>::max)(),
                         detail::stdr::uint_least32_t,
                         typename detail::stdr::conditional<
-                           upper_bound <= detail::stdr::numeric_limits<detail::stdr::uint_least64_t>::max(),
+                           upper_bound <= (detail::stdr::numeric_limits<detail::stdr::uint_least64_t>::max)(),
                            detail::stdr::uint_least64_t, typename FormatTraits::carrier_uint>::type>::type>::type>::
                   type;
 
                template <class FormatTraits, detail::stdr::int_least32_t lower_bound,
                          detail::stdr::uint_least32_t upper_bound>
                using decimal_exponent_type = typename detail::stdr::conditional<
-                  lower_bound >= detail::stdr::numeric_limits<detail::stdr::int_least8_t>::min() &&
-                     upper_bound <= detail::stdr::numeric_limits<detail::stdr::int_least8_t>::max(),
+                  lower_bound >= (detail::stdr::numeric_limits<detail::stdr::int_least8_t>::min)() &&
+                     upper_bound <= (detail::stdr::numeric_limits<detail::stdr::int_least8_t>::max)(),
                   detail::stdr::int_least8_t,
                   typename detail::stdr::conditional<
-                     lower_bound >= detail::stdr::numeric_limits<detail::stdr::int_least16_t>::min() &&
-                        upper_bound <= detail::stdr::numeric_limits<detail::stdr::int_least16_t>::max(),
+                     lower_bound >= (detail::stdr::numeric_limits<detail::stdr::int_least16_t>::min)() &&
+                        upper_bound <= (detail::stdr::numeric_limits<detail::stdr::int_least16_t>::max)(),
                      detail::stdr::int_least16_t,
                      typename detail::stdr::conditional<
-                        lower_bound >= detail::stdr::numeric_limits<detail::stdr::int_least32_t>::min() &&
-                           upper_bound <= detail::stdr::numeric_limits<detail::stdr::int_least32_t>::max(),
+                        lower_bound >= (detail::stdr::numeric_limits<detail::stdr::int_least32_t>::min)() &&
+                           upper_bound <= (detail::stdr::numeric_limits<detail::stdr::int_least32_t>::max)(),
                         detail::stdr::int_least32_t, typename FormatTraits::exponent_int>::type>::type>::type;
 
                template <class FormatTraits>
@@ -3260,7 +3260,8 @@ namespace jkj
             static constexpr int kappa = log::floor_log10_pow2(carrier_bits - significand_bits - 2) - 1;
             static_assert(kappa >= 1, "");
             static_assert(carrier_bits >= significand_bits + 2 + log::floor_log2_pow10(kappa + 1), "");
-
+#undef min
+#undef max
             static constexpr int min(int x, int y) noexcept { return x < y ? x : y; }
             static constexpr int max(int x, int y) noexcept { return x > y ? x : y; }
 

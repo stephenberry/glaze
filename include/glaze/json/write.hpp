@@ -404,7 +404,7 @@ namespace glz
       };
 
       template <class T>
-         requires(glaze_enum_t<T> && not custom_write<T>)
+         requires((glaze_enum_t<T> || (meta_keys<T> && std::is_enum_v<std::decay_t<T>>)) && not custom_write<T>)
       struct to_json<T>
       {
          template <auto Opts, class... Args>
@@ -435,20 +435,15 @@ namespace glz
       };
 
       template <class T>
-         requires(std::is_enum_v<std::decay_t<T>> && !glaze_enum_t<T> && !custom_write<T>)
+         requires(!meta_keys<T> && std::is_enum_v<std::decay_t<T>> && !glaze_enum_t<T> && !custom_write<T>)
       struct to_json<T>
       {
          template <auto Opts, class... Args>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
-            if constexpr (has_nameof<T>) {
-               write<json>::op<Opts>(nameof(value), ctx, std::forward<Args>(args)...);
-            }
-            else {
-               // serialize as underlying number
-               write<json>::op<Opts>(static_cast<std::underlying_type_t<std::decay_t<T>>>(value), ctx,
-                                     std::forward<Args>(args)...);
-            }
+            // serialize as underlying number
+            write<json>::op<Opts>(static_cast<std::underlying_type_t<std::decay_t<T>>>(value), ctx,
+                                  std::forward<Args>(args)...);
          }
       };
 
@@ -1339,7 +1334,7 @@ namespace glz
                         }
 
                         // MSVC requires get<I> rather than keys[I]
-                        static constexpr auto key = get<I>(refl<T>.keys); // GCC 14 requires auto here
+                        static constexpr auto key = glz::get<I>(refl<T>.keys); // GCC 14 requires auto here
                         static constexpr auto quoted_key = join_v < chars<"\"">, key,
                                               Opts.prettify ? chars<"\": "> : chars < "\":" >>
                            ;
@@ -1372,7 +1367,7 @@ namespace glz
                      }
 
                      // MSVC requires get<I> rather than keys[I]
-                     static constexpr auto key = get<I>(refl<T>.keys); // GCC 14 requires auto here
+                     static constexpr auto key = glz::get<I>(refl<T>.keys); // GCC 14 requires auto here
                      static constexpr auto quoted_key = join_v < chars<"\"">, key,
                                            Opts.prettify ? chars<"\": "> : chars < "\":" >>
                         ;
