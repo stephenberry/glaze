@@ -1544,83 +1544,39 @@ namespace glz
             static constexpr auto num_members = refl<T>.N;
 
             if constexpr ((num_members > 0) && (glaze_object_t<T> || reflectable<T>)) {
-               if constexpr (glaze_object_t<T>) {
-                  invoke_table<N>([&]<size_t I>() {
-                     if (bool(ctx.error)) [[unlikely]] {
-                        return;
-                     }
+               static constexpr auto HashInfo = hash_info<T>;
+               
+               invoke_table<N>([&]<size_t I>() {
+                  if (bool(ctx.error)) [[unlikely]] {
+                     return;
+                  }
 
-                     static constexpr auto group = glz::get<I>(groups);
+                  static constexpr auto group = glz::get<I>(groups);
 
-                     static constexpr auto key = get<0>(group);
-                     static constexpr auto quoted_key = join_v < chars<"\"">, key,
-                                           Opts.prettify ? chars<"\": "> : chars < "\":" >>
-                        ;
-                     dump<quoted_key>(b, ix);
+                  static constexpr auto key = get<0>(group);
+                  static constexpr auto quoted_key = join_v < chars<"\"">, key,
+                                        Opts.prettify ? chars<"\": "> : chars < "\":" >>
+                     ;
+                  dump<quoted_key>(b, ix);
 
-                     static constexpr auto sub_partial = get<1>(group);
-                     static constexpr auto frozen_map = make_map<T>();
-                     static constexpr auto member_it = frozen_map.find(key);
-                     static_assert(member_it != frozen_map.end(), "Invalid key passed to partial write");
-                     static constexpr auto index = member_it->second.index();
-                     static constexpr decltype(auto) member_ptr = get<index>(member_it->second);
+                  static constexpr auto sub_partial = get<1>(group);
+                  static constexpr auto index = decode_hash<T, HashInfo, HashInfo.type>::op(key.data(), key.data() + key.size());
+                  static_assert(index < num_members, "Invalid key passed to partial write");
+                  if constexpr (glaze_object_t<T>) {
+                     static constexpr auto member = get<index>(refl<T>.values);
 
-                     write_partial<json>::op<sub_partial, Opts>(get_member(value, member_ptr), ctx, b, ix);
+                     write_partial<json>::op<sub_partial, Opts>(get_member(value, member), ctx, b, ix);
                      if constexpr (I != N - 1) {
                         write_object_entry_separator<Opts>(ctx, b, ix);
                      }
-                  });
-               }
-               else {
-#if ((defined _MSC_VER) && (!defined __clang__))
-                  static thread_local auto cmap = make_map<T, Opts.use_hash_comparison>();
-#else
-                  static thread_local constinit auto cmap = make_map<T, Opts.use_hash_comparison>();
-#endif
-                  populate_map(value, cmap); // Function required for MSVC to build
-
-                  static constexpr auto members = member_names<T>;
-
-                  invoke_table<N>([&]<size_t I>() {
-                     if (bool(ctx.error)) [[unlikely]] {
-                        return;
-                     }
-
-                     static constexpr auto group = glz::get<I>(groups);
-
-                     static constexpr auto key = get<0>(group);
-                     constexpr auto mem_it = std::find(members.begin(), members.end(), key);
-                     static_assert(mem_it != members.end(), "Invalid key passed to partial write");
-
-                     static constexpr auto quoted_key = join_v < chars<"\"">, key,
-                                           Opts.prettify ? chars<"\": "> : chars < "\":" >>
-                        ;
-                     dump<quoted_key>(b, ix);
-
-                     static constexpr auto sub_partial = get<1>(group);
-                     auto member_it = cmap.find(key); // we verified at compile time that this exists
-                     std::visit(
-                        [&](auto&& member_ptr) {
-                           if constexpr (std::count(sub_partial.begin(), sub_partial.end(), "") > 0) {
-                              detail::write<json>::op<Opts>(get_member(value, member_ptr), ctx, b, ix);
-                           }
-                           else {
-                              decltype(auto) member = get_member(value, member_ptr);
-                              using M = std::decay_t<decltype(member)>;
-                              if constexpr (glaze_object_t<M> || writable_map_t<M> || reflectable<M>) {
-                                 write_partial<json>::op<sub_partial, Opts>(member, ctx, b, ix);
-                              }
-                              else {
-                                 detail::write<json>::op<Opts>(member, ctx, b, ix);
-                              }
-                           }
-                        },
-                        member_it->second);
+                  }
+                  else {
+                     write_partial<json>::op<sub_partial, Opts>(get_member(value, get<index>(to_tuple(value))), ctx, b, ix);
                      if constexpr (I != N - 1) {
                         write_object_entry_separator<Opts>(ctx, b, ix);
                      }
-                  });
-               }
+                  }
+               });
             }
             else if constexpr (writable_map_t<T>) {
                invoke_table<N>([&]<size_t I>() {
