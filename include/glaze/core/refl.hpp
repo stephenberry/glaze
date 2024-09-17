@@ -1639,17 +1639,17 @@ namespace glz::detail
          return std::memchr(it, '"', size_t(end - it));
       }
    }
-   
+
    template <class T, auto HashInfo, hash_type Type>
    struct decode_hash;
-   
+
    template <class T, auto HashInfo>
    struct decode_hash<T, HashInfo, hash_type::unique_index>
    {
       static constexpr auto N = refl<T>.N;
       static constexpr auto bsize = bucket_size(hash_type::unique_index, N);
       static constexpr auto uindex = HashInfo.unique_index;
-      
+
       GLZ_ALWAYS_INLINE static constexpr size_t op(auto&& it, auto&& end) noexcept
       {
          if constexpr (HashInfo.sized_hash) {
@@ -1695,13 +1695,13 @@ namespace glz::detail
          }
       }
    };
-   
+
    template <class T, auto HashInfo>
    struct decode_hash<T, HashInfo, hash_type::three_element_unique_index>
    {
       static constexpr auto N = refl<T>.N;
       static constexpr auto uindex = HashInfo.unique_index;
-      
+
       GLZ_ALWAYS_INLINE static constexpr size_t op(auto&& it, auto&& end) noexcept
       {
          if constexpr (uindex > 0) {
@@ -1720,13 +1720,13 @@ namespace glz::detail
          }
       }
    };
-   
+
    template <class T, auto HashInfo>
    struct decode_hash<T, HashInfo, hash_type::front_hash>
    {
       static constexpr auto N = refl<T>.N;
       static constexpr auto bsize = bucket_size(hash_type::front_hash, N);
-      
+
       GLZ_ALWAYS_INLINE static constexpr size_t op(auto&& it, auto&& end) noexcept
       {
          if constexpr (HashInfo.front_hash_bytes == 2) {
@@ -1782,13 +1782,13 @@ namespace glz::detail
          }
       }
    };
-   
+
    template <class T, auto HashInfo>
    struct decode_hash<T, HashInfo, hash_type::unique_per_length>
    {
       static constexpr auto N = refl<T>.N;
       static constexpr auto bsize = bucket_size(hash_type::unique_per_length, N);
-      
+
       GLZ_ALWAYS_INLINE static constexpr size_t op(auto&& it, auto&& end) noexcept
       {
          const auto* c = quote_memchr<HashInfo.min_length>(it, end);
@@ -1806,13 +1806,13 @@ namespace glz::detail
          }
       }
    };
-   
+
    template <class T, auto HashInfo>
    struct decode_hash<T, HashInfo, hash_type::full_flat>
    {
       static constexpr auto N = refl<T>.N;
       static constexpr auto bsize = bucket_size(hash_type::full_flat, N);
-      
+
       GLZ_ALWAYS_INLINE static constexpr size_t op(auto&& it, auto&& end) noexcept
       {
          const auto* c = quote_memchr<HashInfo.min_length>(it, end);

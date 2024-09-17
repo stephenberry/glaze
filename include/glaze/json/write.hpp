@@ -1545,7 +1545,7 @@ namespace glz
 
             if constexpr ((num_members > 0) && (glaze_object_t<T> || reflectable<T>)) {
                static constexpr auto HashInfo = hash_info<T>;
-               
+
                invoke_table<N>([&]<size_t I>() {
                   if (bool(ctx.error)) [[unlikely]] {
                      return;
@@ -1560,7 +1560,8 @@ namespace glz
                   dump<quoted_key>(b, ix);
 
                   static constexpr auto sub_partial = get<1>(group);
-                  static constexpr auto index = decode_hash<T, HashInfo, HashInfo.type>::op(key.data(), key.data() + key.size());
+                  static constexpr auto index =
+                     decode_hash<T, HashInfo, HashInfo.type>::op(key.data(), key.data() + key.size());
                   static_assert(index < num_members, "Invalid key passed to partial write");
                   if constexpr (glaze_object_t<T>) {
                      static constexpr auto member = get<index>(refl<T>.values);
@@ -1571,7 +1572,8 @@ namespace glz
                      }
                   }
                   else {
-                     write_partial<json>::op<sub_partial, Opts>(get_member(value, get<index>(to_tuple(value))), ctx, b, ix);
+                     write_partial<json>::op<sub_partial, Opts>(get_member(value, get<index>(to_tuple(value))), ctx, b,
+                                                                ix);
                      if constexpr (I != N - 1) {
                         write_object_entry_separator<Opts>(ctx, b, ix);
                      }

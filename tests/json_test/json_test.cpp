@@ -8133,7 +8133,7 @@ suite partial_write_tests = [] {
       expect(!ec);
       expect(s == R"({"animals":{"tiger":"Tiger"},"name":"My Awesome Zoo"})") << s;
    };
-   
+
    "partial write const qualified"_test = [] {
       static constexpr auto partial = glz::json_ptrs("/name", "/animals/tiger");
 
@@ -8143,7 +8143,7 @@ suite partial_write_tests = [] {
       expect(!ec);
       expect(s == R"({"animals":{"tiger":"Tiger"},"name":"My Awesome Zoo"})") << s;
    };
-   
+
    "reflection partial write const qualified"_test = [] {
       static constexpr auto partial = glz::json_ptrs("/name", "/animals/tiger");
 
