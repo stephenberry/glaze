@@ -46,13 +46,13 @@ namespace glz
                   }
 
                   sv key{s, size_t(it - s)};
-                  
+
                   static constexpr auto N = refl<T>.N;
                   static constexpr auto HashInfo = detail::hash_info<T>;
-                                    
+
                   const auto index =
                      detail::decode_hash<T, HashInfo, HashInfo.type>::op(key.data(), key.data() + key.size());
-                  
+
                   if (index >= N) [[unlikely]] {
                      ctx.error = error_code::unknown_key;
                      return unexpected(
@@ -60,29 +60,31 @@ namespace glz
                   }
                   else {
                      static thread_local std::string temp{};
-                     detail::jump_table<N>([&]<size_t I>() {
-                        static constexpr auto TargetKey = get<I>(refl<T>.keys);
-                        static constexpr auto Length = TargetKey.size();
-                        if (((s + Length) < end) && compare<Length>(TargetKey.data(), s)) [[likely]] {
-                           if constexpr (detail::reflectable<T> && N > 0) {
-                              std::ignore =
-                                 write<opt_true<Opts, &opts::raw>>(detail::get_member(value, get<I>(detail::to_tuple(value))), temp, ctx);
+                     detail::jump_table<N>(
+                        [&]<size_t I>() {
+                           static constexpr auto TargetKey = get<I>(refl<T>.keys);
+                           static constexpr auto Length = TargetKey.size();
+                           if (((s + Length) < end) && compare<Length>(TargetKey.data(), s)) [[likely]] {
+                              if constexpr (detail::reflectable<T> && N > 0) {
+                                 std::ignore = write<opt_true<Opts, &opts::raw>>(
+                                    detail::get_member(value, get<I>(detail::to_tuple(value))), temp, ctx);
+                              }
+                              else if constexpr (detail::glaze_object_t<T> && N > 0) {
+                                 std::ignore = write<opt_true<Opts, &opts::raw>>(
+                                    detail::get_member(value, get<I>(refl<T>.values)), temp, ctx);
+                              }
                            }
-                           else if constexpr (detail::glaze_object_t<T> && N > 0) {
-                              std::ignore =
-                                 write<opt_true<Opts, &opts::raw>>(detail::get_member(value, get<I>(refl<T>.values)), temp, ctx);
+                           else {
+                              ctx.error = error_code::unknown_key;
                            }
-                        }
-                        else {
-                           ctx.error = error_code::unknown_key;
-                        }
-                     }, index);
-                     
+                        },
+                        index);
+
                      if (bool(ctx.error)) [[unlikely]] {
                         return unexpected(
                            error_ctx{ctx.error, ctx.custom_error_message, size_t(it - start), ctx.includer_error});
                      }
-                     
+
                      result.append(temp);
                   }
 
