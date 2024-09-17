@@ -224,6 +224,36 @@ namespace glz
             }
          }
       }
+      
+      template <opts Opts, class T, size_t I, class Value>
+         requires(glaze_enum_t<T> || (meta_keys<T> && std::is_enum_v<T>))
+      void decode_index(Value&& value, is_context auto&& ctx, auto&& it,
+                        auto&& end) noexcept
+      {
+         static constexpr auto TargetKey = glz::get<I>(refl<T>.keys);
+         static constexpr auto Length = TargetKey.size();
+         // The == end check is validating that we have space for a quote
+         if ((it + Length) >= end) [[unlikely]] {
+            ctx.error = error_code::unexpected_enum;
+            return;
+         }
+
+         if (compare<Length>(TargetKey.data(), it)) [[likely]] {
+            it += Length;
+            if (*it != '"') [[unlikely]] {
+               ctx.error = error_code::unexpected_enum;
+               return;
+            }
+            value = get<I>(refl<T>.values);
+            
+            ++it;
+            GLZ_VALID_END();            
+         }
+         else [[unlikely]] {
+            ctx.error = error_code::unexpected_enum;
+            return;
+         }
+      }
 
       template <opts Opts, class T, auto HashInfo, class Func, class Tuple, class Value>
          requires(glaze_object_t<T> || reflectable<T>)
@@ -1196,18 +1226,30 @@ namespace glz
             if constexpr (!has_ws_handled(Opts)) {
                GLZ_SKIP_WS();
             }
-
-            const auto key = parse_key(ctx, it, end); // TODO: Use more optimal enum key parsing
-            if (bool(ctx.error)) [[unlikely]]
+            
+            constexpr auto N = refl<T>.N;
+            
+            if (*it != '"') [[unlikely]] {
+               ctx.error = error_code::expected_quote;
                return;
-
-            static constexpr auto frozen_map = detail::make_string_to_enum_map<T>();
-            const auto& member_it = frozen_map.find(key);
-            if (member_it != frozen_map.end()) {
-               value = member_it->second;
             }
-            else [[unlikely]] {
-               ctx.error = error_code::unexpected_enum;
+            ++it;
+            GLZ_INVALID_END();
+
+            if constexpr (N == 1) {
+               decode_index<Opts, T, 0>(value, ctx, it, end);
+            }
+            else {
+               static constexpr auto HashInfo = hash_info<T>;
+               
+               const auto index = decode_hash<T, HashInfo>(it, end);
+               
+               if (index >= N) [[unlikely]] {
+                  ctx.error = error_code::unexpected_enum;
+                  return;
+               }
+               
+               jump_table<N>([&]<size_t I>() { decode_index<Opts, T, I>(value, ctx, it, end); }, index);
             }
          }
       };
