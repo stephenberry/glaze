@@ -1,4 +1,4 @@
-project(stencil_test)
+project(mustache_test)
 
 add_compile_definitions(CURRENT_DIRECTORY="${CMAKE_CURRENT_SOURCE_DIR}")
 

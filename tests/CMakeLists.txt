@@ -66,7 +66,7 @@ add_subdirectory(json_test)
 add_subdirectory(jsonrpc_test)
 add_subdirectory(lib_test)
 add_subdirectory(mock_json_test)
-add_subdirectory(stencil_test)
+add_subdirectory(mustache_test)
 add_subdirectory(reflection_test)
 add_subdirectory(repe_test)
 
