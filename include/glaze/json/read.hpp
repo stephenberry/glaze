@@ -244,10 +244,10 @@ namespace glz
                ctx.error = error_code::unexpected_enum;
                return;
             }
-            ++it;
-            GLZ_VALID_END();
-
             value = get<I>(refl<T>.values);
+            
+            ++it;
+            GLZ_VALID_END();            
          }
          else [[unlikely]] {
             ctx.error = error_code::unexpected_enum;
