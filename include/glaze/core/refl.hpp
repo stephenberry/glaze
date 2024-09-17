@@ -178,11 +178,12 @@ namespace glz
       template <size_t I>
       using type = detail::member_t<V, decltype(get<I>(values))>;
    };
-   
+
    namespace detail
    {
       template <class T, size_t N>
-      inline constexpr auto c_style_to_sv(const std::array<T, N>& arr) {
+      inline constexpr auto c_style_to_sv(const std::array<T, N>& arr)
+      {
          std::array<sv, N> ret{};
          for (size_t i = 0; i < N; ++i) {
             ret[i] = arr[i];
@@ -1490,7 +1491,8 @@ namespace glz::detail
 
    template <class T>
    constexpr auto hash_info = [] {
-      if constexpr ((glaze_object_t<T> || reflectable<T> || ((std::is_enum_v<std::remove_cvref_t<T>> && meta_keys<T>) || glaze_enum_t<T>)) &&
+      if constexpr ((glaze_object_t<T> || reflectable<T> ||
+                     ((std::is_enum_v<std::remove_cvref_t<T>> && meta_keys<T>) || glaze_enum_t<T>)) &&
                     (refl<T>.N > 0)) {
          constexpr auto& k_info = keys_info<T>;
          constexpr auto& type = k_info.type;

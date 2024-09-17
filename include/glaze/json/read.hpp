@@ -224,11 +224,10 @@ namespace glz
             }
          }
       }
-      
+
       template <opts Opts, class T, size_t I, class Value>
          requires(glaze_enum_t<T> || (meta_keys<T> && std::is_enum_v<T>))
-      void decode_index(Value&& value, is_context auto&& ctx, auto&& it,
-                        auto&& end) noexcept
+      void decode_index(Value&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
       {
          static constexpr auto TargetKey = glz::get<I>(refl<T>.keys);
          static constexpr auto Length = TargetKey.size();
@@ -245,9 +244,9 @@ namespace glz
                return;
             }
             value = get<I>(refl<T>.values);
-            
+
             ++it;
-            GLZ_VALID_END();            
+            GLZ_VALID_END();
          }
          else [[unlikely]] {
             ctx.error = error_code::unexpected_enum;
@@ -1226,9 +1225,9 @@ namespace glz
             if constexpr (!has_ws_handled(Opts)) {
                GLZ_SKIP_WS();
             }
-            
+
             constexpr auto N = refl<T>.N;
-            
+
             if (*it != '"') [[unlikely]] {
                ctx.error = error_code::expected_quote;
                return;
@@ -1241,14 +1240,14 @@ namespace glz
             }
             else {
                static constexpr auto HashInfo = hash_info<T>;
-               
+
                const auto index = decode_hash<T, HashInfo>(it, end);
-               
+
                if (index >= N) [[unlikely]] {
                   ctx.error = error_code::unexpected_enum;
                   return;
                }
-               
+
                jump_table<N>([&]<size_t I>() { decode_index<Opts, T, I>(value, ctx, it, end); }, index);
             }
          }
