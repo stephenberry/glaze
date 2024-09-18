@@ -87,50 +87,49 @@ namespace glz
                      break;
                   }
 
-                  auto s = it;
+                  auto start = it;
                   while (it != end && *it != '}' && *it != ' ' && *it != '\t') {
                      ++it;
                   }
 
-                  const sv key{s, size_t(it - s)};
+                  const sv key{start, size_t(it - start)};
 
                   skip_whitespace();
 
-                  static constexpr auto num_members = refl<T>.N;
+                  static constexpr auto N = refl<T>.N;
+                  static constexpr auto HashInfo = detail::hash_info<T>;
+                  
+                  const auto index =
+                     detail::decode_hash_with_size<MUSTACHE, T, HashInfo, HashInfo.type>::op(start, end, key.size());
 
-                  decltype(auto) frozen_map = [&]() -> decltype(auto) {
-                     using V = decay_keep_volatile_t<decltype(value)>;
-                     if constexpr (detail::reflectable<T> && num_members > 0) {
-#if ((defined _MSC_VER) && (!defined __clang__))
-                        static thread_local auto cmap = detail::make_map<V, Opts.use_hash_comparison>();
-#else
-                        static thread_local constinit auto cmap = detail::make_map<V, Opts.use_hash_comparison>();
-#endif
-                        // We want to run this populate outside of the while loop
-                        populate_map(value, cmap); // Function required for MSVC to build
-                        return cmap;
-                     }
-                     else if constexpr (detail::glaze_object_t<T> && num_members > 0) {
-                        static constexpr auto cmap = detail::make_map<T, Opts.use_hash_comparison>();
-                        return cmap;
-                     }
-                     else {
-                        return nullptr;
-                     }
-                  }();
-
-                  if (const auto& member_it = frozen_map.find(key); member_it != frozen_map.end()) [[likely]] {
-                     std::visit(
-                        [&](auto&& member_ptr) {
-                           static thread_local std::string temp{};
-                           std::ignore =
-                              write<opt_true<Opts, &opts::raw>>(detail::get_member(value, member_ptr), temp, ctx);
-                           result.append(temp);
+                  if (index < N) [[likely]] {
+                     static thread_local std::string temp{};
+                     detail::jump_table<N>(
+                        [&]<size_t I>() {
+                           static constexpr auto TargetKey = get<I>(refl<T>.keys);
+                           static constexpr auto Length = TargetKey.size();
+                           if ((Length == key.size()) && compare<Length>(TargetKey.data(), start)) [[likely]] {
+                              if constexpr (detail::reflectable<T> && N > 0) {
+                                 std::ignore =
+                                    write<opt_true<Opts, &opts::raw>>(detail::get_member(value, get<I>(detail::to_tuple(value))), temp, ctx);
+                              }
+                              else if constexpr (detail::glaze_object_t<T> && N > 0) {
+                                 std::ignore =
+                                    write<opt_true<Opts, &opts::raw>>(detail::get_member(value, get<I>(refl<T>.values)), temp, ctx);
+                              }
+                           }
+                           else {
+                              ctx.error = error_code::unknown_key;
+                           }
                         },
-                        member_it->second);
-                     if (bool(ctx.error)) [[unlikely]]
+                        index);
+
+                     if (bool(ctx.error)) [[unlikely]] {
                         return unexpected(
                            error_ctx{ctx.error, ctx.custom_error_message, size_t(it - start), ctx.includer_error});
+                     }
+
+                     result.append(temp);
                   }
                   else {
                      // TODO: Is this an error?

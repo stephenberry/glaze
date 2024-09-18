@@ -66,7 +66,7 @@ namespace glz
                      return unexpected(
                         error_ctx{ctx.error, ctx.custom_error_message, size_t(it - start), ctx.includer_error});
                   }
-                  else {
+                  else [[likely]] {
                      static thread_local std::string temp{};
                      detail::jump_table<N>(
                         [&]<size_t I>() {
