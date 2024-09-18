@@ -44,6 +44,11 @@ namespace glz
                   while (it != end && *it != '}' && *it != ' ' && *it != '\t') {
                      ++it;
                   }
+                  
+                  if (it == end) {
+                     ctx.error = error_code::unexpected_end;
+                     return;
+                  }
 
                   const sv key{start, size_t(it - start)};
                   

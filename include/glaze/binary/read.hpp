@@ -1253,6 +1253,10 @@ namespace glz
                   if (bool(ctx.error)) [[unlikely]] {
                      return;
                   }
+                  if (uint64_t(end - it) < n) [[unlikely]] {
+                     ctx.error = error_code::unexpected_end;
+                     return;
+                  }
 
                   const auto index =
                      decode_hash_with_size<beve, T, HashInfo, HashInfo.type>::op(it, end, n);

@@ -1843,14 +1843,8 @@ namespace glz::detail
    template <uint32_t Format, class T, auto HashInfo>
    struct decode_hash_with_size<Format, T, HashInfo, hash_type::single_element>
    {
-      static constexpr auto N = refl<T>.N;
-      
-      GLZ_ALWAYS_INLINE static constexpr size_t op(auto&& it, auto&& end, const size_t n) noexcept
+      GLZ_ALWAYS_INLINE static constexpr size_t op(auto&&, auto&&, const size_t) noexcept
       {
-         if (uint64_t(end - it) < n) [[unlikely]] {
-            return N; // error
-         }
-         
          return 0;
       }
    };
@@ -1864,10 +1858,6 @@ namespace glz::detail
 
       GLZ_ALWAYS_INLINE static constexpr size_t op(auto&& it, auto&& end, const size_t n) noexcept
       {
-         if (uint64_t(end - it) < n) [[unlikely]] {
-            return N; // error
-         }
-         
          if constexpr (HashInfo.sized_hash) {
             if (n == 0 || n > HashInfo.max_length) {
                return N; // error
@@ -1911,12 +1901,8 @@ namespace glz::detail
       static constexpr auto N = refl<T>.N;
       static constexpr auto uindex = HashInfo.unique_index;
 
-      GLZ_ALWAYS_INLINE static constexpr size_t op(auto&& it, auto&& end, const size_t n) noexcept
+      GLZ_ALWAYS_INLINE static constexpr size_t op(auto&& it, auto&& end, const size_t) noexcept
       {
-         if (uint64_t(end - it) < n) [[unlikely]] {
-            return N; // error
-         }
-         
          if constexpr (uindex > 0) {
             if ((it + uindex) >= end) [[unlikely]] {
                return N; // error
@@ -1940,12 +1926,8 @@ namespace glz::detail
       static constexpr auto N = refl<T>.N;
       static constexpr auto bsize = bucket_size(hash_type::front_hash, N);
 
-      GLZ_ALWAYS_INLINE static constexpr size_t op(auto&& it, auto&& end, const size_t n) noexcept
+      GLZ_ALWAYS_INLINE static constexpr size_t op(auto&& it, auto&&, const size_t) noexcept
       {
-         if (uint64_t(end - it) < n) [[unlikely]] {
-            return N; // error
-         }
-         
          if constexpr (HashInfo.front_hash_bytes == 2) {
             uint16_t h;
             if (std::is_constant_evaluated()) {
@@ -1999,10 +1981,6 @@ namespace glz::detail
       
       GLZ_ALWAYS_INLINE static constexpr size_t op(auto&& it, auto&& end, const size_t n) noexcept
       {
-         if (uint64_t(end - it) < n) [[unlikely]] {
-            return N; // error
-         }
-         
          const auto pos = per_length_info<T>.unique_index[n];
          if ((it + pos) >= end) [[unlikely]] {
             return N; // error
@@ -2018,12 +1996,8 @@ namespace glz::detail
       static constexpr auto N = refl<T>.N;
       static constexpr auto bsize = bucket_size(hash_type::full_flat, N);
       
-      GLZ_ALWAYS_INLINE static constexpr size_t op(auto&& it, auto&& end, const size_t n) noexcept
+      GLZ_ALWAYS_INLINE static constexpr size_t op(auto&& it, auto&&, const size_t n) noexcept
       {
-         if (uint64_t(end - it) < n) [[unlikely]] {
-            return N; // error
-         }
-         
          const auto h = full_hash<HashInfo.min_length, HashInfo.max_length, HashInfo.seed>(it, n);
          return HashInfo.table[h % bsize];
       }
