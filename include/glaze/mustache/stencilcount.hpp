@@ -98,7 +98,7 @@ namespace glz
 
                   static constexpr auto N = refl<T>.N;
                   static constexpr auto HashInfo = detail::hash_info<T>;
-                  
+
                   const auto index =
                      detail::decode_hash_with_size<MUSTACHE, T, HashInfo, HashInfo.type>::op(start, end, key.size());
 
@@ -110,12 +110,12 @@ namespace glz
                            static constexpr auto Length = TargetKey.size();
                            if ((Length == key.size()) && compare<Length>(TargetKey.data(), start)) [[likely]] {
                               if constexpr (detail::reflectable<T> && N > 0) {
-                                 std::ignore =
-                                    write<opt_true<Opts, &opts::raw>>(detail::get_member(value, get<I>(detail::to_tuple(value))), temp, ctx);
+                                 std::ignore = write<opt_true<Opts, &opts::raw>>(
+                                    detail::get_member(value, get<I>(detail::to_tuple(value))), temp, ctx);
                               }
                               else if constexpr (detail::glaze_object_t<T> && N > 0) {
-                                 std::ignore =
-                                    write<opt_true<Opts, &opts::raw>>(detail::get_member(value, get<I>(refl<T>.values)), temp, ctx);
+                                 std::ignore = write<opt_true<Opts, &opts::raw>>(
+                                    detail::get_member(value, get<I>(refl<T>.values)), temp, ctx);
                               }
                            }
                            else {
