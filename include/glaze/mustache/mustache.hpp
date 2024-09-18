@@ -47,7 +47,8 @@ namespace glz
                   
                   if (it == end) {
                      ctx.error = error_code::unexpected_end;
-                     return;
+                     return unexpected(
+                        error_ctx{ctx.error, ctx.custom_error_message, size_t(it - start), ctx.includer_error});
                   }
 
                   const sv key{start, size_t(it - start)};
