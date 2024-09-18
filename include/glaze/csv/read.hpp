@@ -437,8 +437,8 @@ namespace glz
 
                   GLZ_MATCH_COMMA;
 
-                  const auto index = decode_hash_with_size<csv, T, HashInfo, HashInfo.type>::op(
-                     key.data(), end, key.size());
+                  const auto index =
+                     decode_hash_with_size<csv, T, HashInfo, HashInfo.type>::op(key.data(), end, key.size());
 
                   if (index < N) [[likely]] {
                      jump_table<N>(
