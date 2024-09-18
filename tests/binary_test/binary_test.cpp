@@ -2375,71 +2375,31 @@ suite past_fuzzing_issues = [] {
       expect(glz::beve_to_json(input, json));
    };
    
-   "fuzz9"_test = [] {
-      std::string_view base64 = "A10sAA==";
-      std::vector<uint8_t> input = base64_decode(base64);
-      expect(glz::read_binary<my_struct>(input).error());
-      std::string json{};
-      expect(glz::beve_to_json(input, json));
-      input.push_back('\0');
-      expect(glz::read_binary<my_struct>(input).error());
-      expect(glz::beve_to_json(input, json));
+   auto test_base64 = [](std::string_view base64) {
+      return [base64] {
+         std::vector<uint8_t> input = base64_decode(base64);
+         expect(glz::read_binary<my_struct>(input).error());
+         std::string json{};
+         expect(glz::beve_to_json(input, json));
+         input.push_back('\0');
+         expect(glz::read_binary<my_struct>(input).error());
+         expect(glz::beve_to_json(input, json));
+      };
    };
    
-   "fuzz10"_test = [] {
-      std::string_view base64 = "A4wA";
-      std::vector<uint8_t> input = base64_decode(base64);
-      expect(glz::read_binary<my_struct>(input).error());
-      std::string json{};
-      expect(glz::beve_to_json(input, json));
-      input.push_back('\0');
-      expect(glz::read_binary<my_struct>(input).error());
-      expect(glz::beve_to_json(input, json));
-   };
+   "fuzz9"_test = test_base64("A10sAA==");
    
-   "fuzz11"_test = [] {
-      std::string_view base64 = "AxQA";
-      std::vector<uint8_t> input = base64_decode(base64);
-      expect(glz::read_binary<my_struct>(input).error());
-      std::string json{};
-      expect(glz::beve_to_json(input, json));
-      input.push_back('\0');
-      expect(glz::read_binary<my_struct>(input).error());
-      expect(glz::beve_to_json(input, json));
-   };
+   "fuzz10"_test = test_base64("A4wA");
    
-   "fuzz12"_test = [] {
-      std::string_view base64 = "AzwAaGho";
-      std::vector<uint8_t> input = base64_decode(base64);
-      expect(glz::read_binary<my_struct>(input).error());
-      std::string json{};
-      expect(glz::beve_to_json(input, json));
-      input.push_back('\0');
-      expect(glz::read_binary<my_struct>(input).error());
-      expect(glz::beve_to_json(input, json));
-   };
+   "fuzz11"_test = test_base64("AxQA");
    
-   "fuzz13"_test = [] {
-      std::string_view base64 = "AzAAYQ==";
-      std::vector<uint8_t> input = base64_decode(base64);
-      expect(glz::read_binary<my_struct>(input).error());
-      std::string json{};
-      expect(glz::beve_to_json(input, json));
-      input.push_back('\0');
-      expect(glz::read_binary<my_struct>(input).error());
-      expect(glz::beve_to_json(input, json));
-   };
+   "fuzz12"_test = test_base64("AzwAaGho");
    
-   "fuzz14"_test = [] {
-      std::string_view base64 = "A5AAaGgAbg==";
-      std::vector<uint8_t> input = base64_decode(base64);
-      expect(glz::read_binary<my_struct>(input).error());
-      std::string json{};
-      expect(glz::beve_to_json(input, json));
-      input.push_back('\0');
-      expect(glz::read_binary<my_struct>(input).error());
-      expect(glz::beve_to_json(input, json));
-   };
+   "fuzz13"_test = test_base64("AzAAYQ==");
+   
+   "fuzz14"_test = test_base64("A5AAaGgAbg==");
+   
+   "fuzz15"_test = test_base64("AzEyAA==");
 };
 
 int main()
