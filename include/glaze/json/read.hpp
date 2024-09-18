@@ -254,15 +254,11 @@ namespace glz
          }
       }
 
-      template <opts Opts, class T, auto HashInfo, class Func, class Tuple, class Value>
+      template <opts Opts, class T, auto HashInfo, class Func, class Value>
          requires(glaze_object_t<T> || reflectable<T>)
-      GLZ_ALWAYS_INLINE constexpr void parse_and_invoke(Func&& func, Tuple&& tuple, Value&& value,
+      GLZ_ALWAYS_INLINE constexpr void parse_and_invoke(Func&& func, Value&& value,
                                                         is_context auto&& ctx, auto&& it, auto&& end) noexcept
       {
-         if constexpr (glaze_object_t<T>) {
-            (void)tuple;
-         }
-
          constexpr auto type = HashInfo.type;
          constexpr auto N = refl<T>.N;
 
@@ -271,7 +267,12 @@ namespace glz
          }
 
          if constexpr (N == 1) {
-            decode_index<Opts, T, 0>(func, tuple, value, ctx, it, end);
+            if constexpr (glaze_object_t<T>) {
+               decode_index<Opts, T, 0>(func, nullptr, value, ctx, it, end);
+            }
+            else {
+               decode_index<Opts, T, 0>(func, to_tuple(value), value, ctx, it, end);
+            }
          }
          else {
             const auto index = decode_hash<json, T, HashInfo, HashInfo.type>::op(it, end);
@@ -297,8 +298,18 @@ namespace glz
                   return;
                }
             }
-
-            jump_table<N>([&]<size_t I>() { decode_index<Opts, T, I>(func, tuple, value, ctx, it, end); }, index);
+            
+            if constexpr (glaze_object_t<T>) {
+               jump_table<N>([&]<size_t I>() {
+                  decode_index<Opts, T, I>(func, nullptr, value, ctx, it, end);
+               }, index);
+            }
+            else {
+               decltype(auto) tuple = to_tuple(value);
+               jump_table<N>([&]<size_t I>() {
+                  decode_index<Opts, T, I>(func, tuple, value, ctx, it, end);
+               }, index);
+            }
          }
       }
 
@@ -2251,15 +2262,6 @@ namespace glz
                      ++it;
                      GLZ_INVALID_END();
 
-                     decltype(auto) t = [&]() -> decltype(auto) {
-                        if constexpr (reflectable<T>) {
-                           return to_tuple(value);
-                        }
-                        else {
-                           return nullptr;
-                        }
-                     }();
-
                      parse_and_invoke<Opts, T, hash_info<T>>(
                         [&](auto&& element, const size_t index) {
                            if constexpr (Opts.error_on_missing_keys || is_partial_read<T> || Opts.partial_read) {
@@ -2285,7 +2287,7 @@ namespace glz
                                  get_member(value, element), ctx, it, end);
                            }
                         },
-                        t, value, ctx, it, end);
+                        value, ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
                   }
