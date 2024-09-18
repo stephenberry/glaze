@@ -2258,6 +2258,20 @@ inline std::vector<unsigned char> base64_decode(const std::string_view input)
    return decoded_data;
 }
 
+suite base64_decode_tests = [] {
+   "hello world"_test = [] {
+      std::string_view b64 = "aGVsbG8gd29ybGQ=";
+      std::vector<uint8_t> decoded = base64_decode(b64);
+      expect(std::string_view{(char*)decoded.data(), decoded.size()} == "hello world");
+   };
+   
+   "{\"key\":42}"_test = [] {
+      std::string_view b64 = "eyJrZXkiOjQyfQ==";
+      std::vector<uint8_t> decoded = base64_decode(b64);
+      expect(std::string_view{(char*)decoded.data(), decoded.size()} == "{\"key\":42}");
+   };
+};
+
 suite past_fuzzing_issues = [] {
    "fuzz0"_test = [] {
       std::string_view base64 =
