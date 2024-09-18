@@ -1266,9 +1266,8 @@ namespace glz
                         fields[index] = true;
                      }
                      
-                     auto start = it;
+                     const sv key{it, n};
                      it += n;
-                     const sv key{start, size_t(it - start)};
 
                      jump_table<N>(
                         [&]<size_t I>() {
