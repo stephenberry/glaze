@@ -3,9 +3,9 @@
 
 #pragma once
 
+#include "glaze/binary/header.hpp"
 #include "glaze/core/common.hpp"
 #include "glaze/util/primes_64.hpp"
-#include "glaze/binary/header.hpp"
 
 namespace glz::detail
 {
@@ -1643,14 +1643,11 @@ namespace glz::detail
 
    template <uint32_t Format, class T, auto HashInfo, hash_type Type>
    struct decode_hash;
-   
+
    template <class T, auto HashInfo>
    struct decode_hash<json, T, HashInfo, hash_type::single_element>
    {
-      GLZ_ALWAYS_INLINE static constexpr size_t op(auto&& /*it*/, auto&& /*end*/) noexcept
-      {
-         return 0;
-      }
+      GLZ_ALWAYS_INLINE static constexpr size_t op(auto&& /*it*/, auto&& /*end*/) noexcept { return 0; }
    };
 
    template <class T, auto HashInfo>
@@ -1836,19 +1833,16 @@ namespace glz::detail
          }
       }
    };
-   
+
    template <uint32_t Format, class T, auto HashInfo, hash_type Type>
    struct decode_hash_with_size;
-   
+
    template <uint32_t Format, class T, auto HashInfo>
    struct decode_hash_with_size<Format, T, HashInfo, hash_type::single_element>
    {
-      GLZ_ALWAYS_INLINE static constexpr size_t op(auto&&, auto&&, const size_t) noexcept
-      {
-         return 0;
-      }
+      GLZ_ALWAYS_INLINE static constexpr size_t op(auto&&, auto&&, const size_t) noexcept { return 0; }
    };
-   
+
    template <uint32_t Format, class T, auto HashInfo>
    struct decode_hash_with_size<Format, T, HashInfo, hash_type::unique_index>
    {
@@ -1890,7 +1884,7 @@ namespace glz::detail
          }
       }
    };
-   
+
    template <uint32_t Format, class T, auto HashInfo>
    struct decode_hash_with_size<Format, T, HashInfo, hash_type::three_element_unique_index>
    {
@@ -1915,7 +1909,7 @@ namespace glz::detail
          }
       }
    };
-   
+
    template <uint32_t Format, class T, auto HashInfo>
    struct decode_hash_with_size<Format, T, HashInfo, hash_type::front_hash>
    {
@@ -1968,13 +1962,13 @@ namespace glz::detail
          }
       }
    };
-   
+
    template <uint32_t Format, class T, auto HashInfo>
    struct decode_hash_with_size<Format, T, HashInfo, hash_type::unique_per_length>
    {
       static constexpr auto N = refl<T>.N;
       static constexpr auto bsize = bucket_size(hash_type::unique_per_length, N);
-      
+
       GLZ_ALWAYS_INLINE static constexpr size_t op(auto&& it, auto&& end, const size_t n) noexcept
       {
          const auto pos = per_length_info<T>.unique_index[uint8_t(n)];
@@ -1985,13 +1979,13 @@ namespace glz::detail
          return HashInfo.table[h % bsize];
       }
    };
-   
+
    template <uint32_t Format, class T, auto HashInfo>
    struct decode_hash_with_size<Format, T, HashInfo, hash_type::full_flat>
    {
       static constexpr auto N = refl<T>.N;
       static constexpr auto bsize = bucket_size(hash_type::full_flat, N);
-      
+
       GLZ_ALWAYS_INLINE static constexpr size_t op(auto&& it, auto&&, const size_t n) noexcept
       {
          const auto h = full_hash<HashInfo.min_length, HashInfo.max_length, HashInfo.seed>(it, n);

@@ -44,7 +44,7 @@ namespace glz
                   while (it != end && *it != '}' && *it != ' ' && *it != '\t') {
                      ++it;
                   }
-                  
+
                   if (it == end) {
                      ctx.error = error_code::unexpected_end;
                      return unexpected(
@@ -52,7 +52,7 @@ namespace glz
                   }
 
                   const sv key{start, size_t(it - start)};
-                  
+
                   skip_whitespace();
 
                   static constexpr auto N = refl<T>.N;

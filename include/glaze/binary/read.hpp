@@ -1248,7 +1248,7 @@ namespace glz
 
                if constexpr (N > 0) {
                   static constexpr auto HashInfo = hash_info<T>;
-                  
+
                   const auto n = int_from_compressed(ctx, it, end);
                   if (bool(ctx.error)) [[unlikely]] {
                      return;
@@ -1258,24 +1258,24 @@ namespace glz
                      return;
                   }
 
-                  const auto index =
-                     decode_hash_with_size<beve, T, HashInfo, HashInfo.type>::op(it, end, n);
+                  const auto index = decode_hash_with_size<beve, T, HashInfo, HashInfo.type>::op(it, end, n);
 
                   if (index < N) [[likely]] {
                      if constexpr (is_partial_read<T> || Opts.partial_read) {
                         fields[index] = true;
                      }
-                     
+
                      const sv key{it, n};
                      it += n;
 
                      jump_table<N>(
                         [&]<size_t I>() {
                            static constexpr auto TargetKey = get<I>(refl<T>.keys);
-                           static constexpr auto Length = TargetKey.size();                           
+                           static constexpr auto Length = TargetKey.size();
                            if ((Length == n) && compare<Length>(TargetKey.data(), key.data())) [[likely]] {
                               if constexpr (detail::reflectable<T>) {
-                                 read<binary>::op<Opts>(get_member(value, get<I>(detail::to_tuple(value))), ctx, it, end);
+                                 read<binary>::op<Opts>(get_member(value, get<I>(detail::to_tuple(value))), ctx, it,
+                                                        end);
                               }
                               else {
                                  read<binary>::op<Opts>(get_member(value, get<I>(refl<T>.values)), ctx, it, end);
