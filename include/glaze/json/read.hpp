@@ -256,8 +256,8 @@ namespace glz
 
       template <opts Opts, class T, auto HashInfo, class Func, class Value>
          requires(glaze_object_t<T> || reflectable<T>)
-      GLZ_ALWAYS_INLINE constexpr void parse_and_invoke(Func&& func, Value&& value,
-                                                        is_context auto&& ctx, auto&& it, auto&& end) noexcept
+      GLZ_ALWAYS_INLINE constexpr void parse_and_invoke(Func&& func, Value&& value, is_context auto&& ctx, auto&& it,
+                                                        auto&& end) noexcept
       {
          constexpr auto type = HashInfo.type;
          constexpr auto N = refl<T>.N;
@@ -298,17 +298,13 @@ namespace glz
                   return;
                }
             }
-            
+
             if constexpr (glaze_object_t<T>) {
-               jump_table<N>([&]<size_t I>() {
-                  decode_index<Opts, T, I>(func, nullptr, value, ctx, it, end);
-               }, index);
+               jump_table<N>([&]<size_t I>() { decode_index<Opts, T, I>(func, nullptr, value, ctx, it, end); }, index);
             }
             else {
                decltype(auto) tuple = to_tuple(value);
-               jump_table<N>([&]<size_t I>() {
-                  decode_index<Opts, T, I>(func, tuple, value, ctx, it, end);
-               }, index);
+               jump_table<N>([&]<size_t I>() { decode_index<Opts, T, I>(func, tuple, value, ctx, it, end); }, index);
             }
          }
       }
