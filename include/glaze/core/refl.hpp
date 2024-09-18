@@ -1981,7 +1981,7 @@ namespace glz::detail
       
       GLZ_ALWAYS_INLINE static constexpr size_t op(auto&& it, auto&& end, const size_t n) noexcept
       {
-         const auto pos = per_length_info<T>.unique_index[n];
+         const auto pos = per_length_info<T>.unique_index[uint8_t(n)];
          if ((it + pos) >= end) [[unlikely]] {
             return N; // error
          }
