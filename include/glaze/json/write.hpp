@@ -1561,7 +1561,7 @@ namespace glz
 
                   static constexpr auto sub_partial = get<1>(group);
                   static constexpr auto index =
-                     decode_hash<T, HashInfo, HashInfo.type>::op(key.data(), key.data() + key.size());
+                     decode_hash<json, T, HashInfo, HashInfo.type>::op(key.data(), key.data() + key.size());
                   static_assert(index < num_members, "Invalid key passed to partial write");
                   if constexpr (glaze_object_t<T>) {
                      static constexpr auto member = get<index>(refl<T>.values);

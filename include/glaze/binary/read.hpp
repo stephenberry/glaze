@@ -1246,29 +1246,25 @@ namespace glz
                   }
                }
 
-               const auto length = int_from_compressed(ctx, it, end);
-               if (bool(ctx.error)) [[unlikely]] {
-                  return;
-               }
-               if (uint64_t(end - it) < length) [[unlikely]] {
-                  ctx.error = error_code::unexpected_end;
-                  return;
-               }
-
-               const std::string_view key{it, length};
-
-               it += length;
-
                if constexpr (N > 0) {
                   static constexpr auto HashInfo = hash_info<T>;
+                  
+                  const auto n = int_from_compressed(ctx, it, end);
+                  if (bool(ctx.error)) [[unlikely]] {
+                     return;
+                  }
 
                   const auto index =
-                     decode_hash<T, HashInfo, HashInfo.type>::op(key.data(), key.data() + key.size());
+                     decode_hash_with_size<beve, T, HashInfo, HashInfo.type>::op(it, end, n);
 
                   if (index < N) [[likely]] {
                      if constexpr (is_partial_read<T> || Opts.partial_read) {
                         fields[index] = true;
                      }
+                     
+                     auto start = it;
+                     it += n;
+                     const sv key{start, size_t(it - start)};
 
                      jump_table<N>(
                         [&]<size_t I>() {
@@ -1283,7 +1279,15 @@ namespace glz
                               }
                            }
                            else {
-                              ctx.error = error_code::unknown_key;
+                              if constexpr (Opts.error_on_unknown_keys) {
+                                 ctx.error = error_code::unknown_key;
+                                 return;
+                              }
+                              else {
+                                 skip_value_binary<Opts>(ctx, it, end);
+                                 if (bool(ctx.error)) [[unlikely]]
+                                    return;
+                              }
                            }
                         },
                         index);
@@ -1298,6 +1302,7 @@ namespace glz
                         return;
                      }
                      else {
+                        it += n;
                         skip_value_binary<Opts>(ctx, it, end);
                         if (bool(ctx.error)) [[unlikely]]
                            return;

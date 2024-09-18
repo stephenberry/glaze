@@ -5,6 +5,7 @@
 
 #include "glaze/core/common.hpp"
 #include "glaze/util/primes_64.hpp"
+#include "glaze/binary/header.hpp"
 
 namespace glz::detail
 {
@@ -1640,20 +1641,20 @@ namespace glz::detail
       }
    }
 
-   template <class T, auto HashInfo, hash_type Type>
+   template <uint32_t Format, class T, auto HashInfo, hash_type Type>
    struct decode_hash;
    
    template <class T, auto HashInfo>
-   struct decode_hash<T, HashInfo, hash_type::single_element>
+   struct decode_hash<json, T, HashInfo, hash_type::single_element>
    {
-      GLZ_ALWAYS_INLINE static constexpr size_t op(auto&&, auto&&) noexcept
+      GLZ_ALWAYS_INLINE static constexpr size_t op(auto&& /*it*/, auto&& /*end*/) noexcept
       {
          return 0;
       }
    };
 
    template <class T, auto HashInfo>
-   struct decode_hash<T, HashInfo, hash_type::unique_index>
+   struct decode_hash<json, T, HashInfo, hash_type::unique_index>
    {
       static constexpr auto N = refl<T>.N;
       static constexpr auto bsize = bucket_size(hash_type::unique_index, N);
@@ -1706,7 +1707,7 @@ namespace glz::detail
    };
 
    template <class T, auto HashInfo>
-   struct decode_hash<T, HashInfo, hash_type::three_element_unique_index>
+   struct decode_hash<json, T, HashInfo, hash_type::three_element_unique_index>
    {
       static constexpr auto N = refl<T>.N;
       static constexpr auto uindex = HashInfo.unique_index;
@@ -1731,7 +1732,7 @@ namespace glz::detail
    };
 
    template <class T, auto HashInfo>
-   struct decode_hash<T, HashInfo, hash_type::front_hash>
+   struct decode_hash<json, T, HashInfo, hash_type::front_hash>
    {
       static constexpr auto N = refl<T>.N;
       static constexpr auto bsize = bucket_size(hash_type::front_hash, N);
@@ -1793,7 +1794,7 @@ namespace glz::detail
    };
 
    template <class T, auto HashInfo>
-   struct decode_hash<T, HashInfo, hash_type::unique_per_length>
+   struct decode_hash<json, T, HashInfo, hash_type::unique_per_length>
    {
       static constexpr auto N = refl<T>.N;
       static constexpr auto bsize = bucket_size(hash_type::unique_per_length, N);
@@ -1817,7 +1818,7 @@ namespace glz::detail
    };
 
    template <class T, auto HashInfo>
-   struct decode_hash<T, HashInfo, hash_type::full_flat>
+   struct decode_hash<json, T, HashInfo, hash_type::full_flat>
    {
       static constexpr auto N = refl<T>.N;
       static constexpr auto bsize = bucket_size(hash_type::full_flat, N);
@@ -1833,6 +1834,198 @@ namespace glz::detail
          else [[unlikely]] {
             return N;
          }
+      }
+   };
+   
+   template <uint32_t Format, class T, auto HashInfo, hash_type Type>
+   struct decode_hash_with_size;
+   
+   template <uint32_t Format, class T, auto HashInfo>
+   struct decode_hash_with_size<Format, T, HashInfo, hash_type::single_element>
+   {
+      static constexpr auto N = refl<T>.N;
+      
+      GLZ_ALWAYS_INLINE static constexpr size_t op(auto&& it, auto&& end, const size_t n) noexcept
+      {
+         if (uint64_t(end - it) < n) [[unlikely]] {
+            return N; // error
+         }
+         
+         return 0;
+      }
+   };
+   
+   template <uint32_t Format, class T, auto HashInfo>
+   struct decode_hash_with_size<Format, T, HashInfo, hash_type::unique_index>
+   {
+      static constexpr auto N = refl<T>.N;
+      static constexpr auto bsize = bucket_size(hash_type::unique_index, N);
+      static constexpr auto uindex = HashInfo.unique_index;
+
+      GLZ_ALWAYS_INLINE static constexpr size_t op(auto&& it, auto&& end, const size_t n) noexcept
+      {
+         if (uint64_t(end - it) < n) [[unlikely]] {
+            return N; // error
+         }
+         
+         if constexpr (HashInfo.sized_hash) {
+            if (n == 0 || n > HashInfo.max_length) {
+               return N; // error
+            }
+
+            const auto h = bitmix(uint16_t(it[HashInfo.unique_index]) | (uint16_t(n) << 8), HashInfo.seed);
+            return HashInfo.table[h % bsize];
+         }
+         else {
+            if constexpr (N == 2) {
+               if constexpr (uindex > 0) {
+                  if ((it + uindex) >= end) [[unlikely]] {
+                     return N; // error
+                  }
+               }
+               // Avoids using a hash table
+               if (std::is_constant_evaluated()) {
+                  constexpr auto first_key_char = refl<T>.keys[0][uindex];
+                  return size_t(bool(it[uindex] ^ first_key_char));
+               }
+               else {
+                  static constexpr auto first_key_char = refl<T>.keys[0][uindex];
+                  return size_t(bool(it[uindex] ^ first_key_char));
+               }
+            }
+            else {
+               if constexpr (uindex > 0) {
+                  if ((it + uindex) >= end) [[unlikely]] {
+                     return N; // error
+                  }
+               }
+               return HashInfo.table[uint8_t(it[uindex])];
+            }
+         }
+      }
+   };
+   
+   template <uint32_t Format, class T, auto HashInfo>
+   struct decode_hash_with_size<Format, T, HashInfo, hash_type::three_element_unique_index>
+   {
+      static constexpr auto N = refl<T>.N;
+      static constexpr auto uindex = HashInfo.unique_index;
+
+      GLZ_ALWAYS_INLINE static constexpr size_t op(auto&& it, auto&& end, const size_t n) noexcept
+      {
+         if (uint64_t(end - it) < n) [[unlikely]] {
+            return N; // error
+         }
+         
+         if constexpr (uindex > 0) {
+            if ((it + uindex) >= end) [[unlikely]] {
+               return N; // error
+            }
+         }
+         // Avoids using a hash table
+         if (std::is_constant_evaluated()) {
+            constexpr auto first_key_char = refl<T>.keys[0][uindex];
+            return (uint8_t(it[uindex] ^ first_key_char) * HashInfo.seed) % 4;
+         }
+         else {
+            static constexpr auto first_key_char = refl<T>.keys[0][uindex];
+            return (uint8_t(it[uindex] ^ first_key_char) * HashInfo.seed) % 4;
+         }
+      }
+   };
+   
+   template <uint32_t Format, class T, auto HashInfo>
+   struct decode_hash_with_size<Format, T, HashInfo, hash_type::front_hash>
+   {
+      static constexpr auto N = refl<T>.N;
+      static constexpr auto bsize = bucket_size(hash_type::front_hash, N);
+
+      GLZ_ALWAYS_INLINE static constexpr size_t op(auto&& it, auto&& end, const size_t n) noexcept
+      {
+         if (uint64_t(end - it) < n) [[unlikely]] {
+            return N; // error
+         }
+         
+         if constexpr (HashInfo.front_hash_bytes == 2) {
+            uint16_t h;
+            if (std::is_constant_evaluated()) {
+               h = 0;
+               for (size_t i = 0; i < 2; ++i) {
+                  h |= static_cast<uint16_t>(it[i]) << (8 * i);
+               }
+            }
+            else {
+               std::memcpy(&h, it, 2);
+            }
+            return HashInfo.table[bitmix(h, HashInfo.seed) % bsize];
+         }
+         else if constexpr (HashInfo.front_hash_bytes == 4) {
+            uint32_t h;
+            if (std::is_constant_evaluated()) {
+               h = 0;
+               for (size_t i = 0; i < 4; ++i) {
+                  h |= static_cast<uint32_t>(it[i]) << (8 * i);
+               }
+            }
+            else {
+               std::memcpy(&h, it, 4);
+            }
+            return HashInfo.table[bitmix(h, HashInfo.seed) % bsize];
+         }
+         else if constexpr (HashInfo.front_hash_bytes == 8) {
+            uint64_t h;
+            if (std::is_constant_evaluated()) {
+               h = 0;
+               for (size_t i = 0; i < 8; ++i) {
+                  h |= static_cast<uint64_t>(it[i]) << (8 * i);
+               }
+            }
+            else {
+               std::memcpy(&h, it, 8);
+            }
+            return HashInfo.table[rich_bitmix(h, HashInfo.seed) % bsize];
+         }
+         else {
+            static_assert(false_v<T>, "invalid hash algorithm");
+         }
+      }
+   };
+   
+   template <uint32_t Format, class T, auto HashInfo>
+   struct decode_hash_with_size<Format, T, HashInfo, hash_type::unique_per_length>
+   {
+      static constexpr auto N = refl<T>.N;
+      static constexpr auto bsize = bucket_size(hash_type::unique_per_length, N);
+      
+      GLZ_ALWAYS_INLINE static constexpr size_t op(auto&& it, auto&& end, const size_t n) noexcept
+      {
+         if (uint64_t(end - it) < n) [[unlikely]] {
+            return N; // error
+         }
+         
+         const auto pos = per_length_info<T>.unique_index[n];
+         if ((it + pos) >= end) [[unlikely]] {
+            return N; // error
+         }
+         const auto h = bitmix(uint16_t(it[pos]) | (uint16_t(n) << 8), HashInfo.seed);
+         return HashInfo.table[h % bsize];
+      }
+   };
+   
+   template <uint32_t Format, class T, auto HashInfo>
+   struct decode_hash_with_size<Format, T, HashInfo, hash_type::full_flat>
+   {
+      static constexpr auto N = refl<T>.N;
+      static constexpr auto bsize = bucket_size(hash_type::full_flat, N);
+      
+      GLZ_ALWAYS_INLINE static constexpr size_t op(auto&& it, auto&& end, const size_t n) noexcept
+      {
+         if (uint64_t(end - it) < n) [[unlikely]] {
+            return N; // error
+         }
+         
+         const auto h = full_hash<HashInfo.min_length, HashInfo.max_length, HashInfo.seed>(it, n);
+         return HashInfo.table[h % bsize];
       }
    };
 }

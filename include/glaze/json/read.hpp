@@ -274,7 +274,7 @@ namespace glz
             decode_index<Opts, T, 0>(func, tuple, value, ctx, it, end);
          }
          else {
-            const auto index = decode_hash<T, HashInfo, HashInfo.type>::op(it, end);
+            const auto index = decode_hash<json, T, HashInfo, HashInfo.type>::op(it, end);
 
             if (index >= N) [[unlikely]] {
                if constexpr (Opts.error_on_unknown_keys) {
@@ -1241,7 +1241,7 @@ namespace glz
             else {
                static constexpr auto HashInfo = hash_info<T>;
 
-               const auto index = decode_hash<T, HashInfo, HashInfo.type>::op(it, end);
+               const auto index = decode_hash<json, T, HashInfo, HashInfo.type>::op(it, end);
 
                if (index >= N) [[unlikely]] {
                   ctx.error = error_code::unexpected_enum;

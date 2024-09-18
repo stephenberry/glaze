@@ -40,18 +40,20 @@ namespace glz
                   ++it;
                   skip_whitespace();
 
-                  auto s = it;
-                  while (it != end && *it != '}') {
+                  auto start = it;
+                  while (it != end && *it != '}' && *it != ' ' && *it != '\t') {
                      ++it;
                   }
 
-                  sv key{s, size_t(it - s)};
+                  const sv key{start, size_t(it - start)};
+                  
+                  skip_whitespace();
 
                   static constexpr auto N = refl<T>.N;
                   static constexpr auto HashInfo = detail::hash_info<T>;
 
                   const auto index =
-                     detail::decode_hash<T, HashInfo, HashInfo.type>::op(key.data(), key.data() + key.size());
+                     detail::decode_hash_with_size<MUSTACHE, T, HashInfo, HashInfo.type>::op(start, end, key.size());
 
                   if (index >= N) [[unlikely]] {
                      ctx.error = error_code::unknown_key;
@@ -64,7 +66,7 @@ namespace glz
                         [&]<size_t I>() {
                            static constexpr auto TargetKey = get<I>(refl<T>.keys);
                            static constexpr auto Length = TargetKey.size();
-                           if (((s + Length) < end) && compare<Length>(TargetKey.data(), s)) [[likely]] {
+                           if (((start + Length) < end) && compare<Length>(TargetKey.data(), start)) [[likely]] {
                               if constexpr (detail::reflectable<T> && N > 0) {
                                  std::ignore = write<opt_true<Opts, &opts::raw>>(
                                     detail::get_member(value, get<I>(detail::to_tuple(value))), temp, ctx);
