@@ -1868,10 +1868,8 @@ namespace glz::detail
          }
          else {
             if constexpr (N == 2) {
-               if constexpr (uindex > 0) {
-                  if ((it + uindex) >= end) [[unlikely]] {
-                     return N; // error
-                  }
+               if ((it + uindex) >= end) [[unlikely]] {
+                  return N; // error
                }
                // Avoids using a hash table
                if (std::is_constant_evaluated()) {
@@ -1884,10 +1882,8 @@ namespace glz::detail
                }
             }
             else {
-               if constexpr (uindex > 0) {
-                  if ((it + uindex) >= end) [[unlikely]] {
-                     return N; // error
-                  }
+               if ((it + uindex) >= end) [[unlikely]] {
+                  return N; // error
                }
                return HashInfo.table[uint8_t(it[uindex])];
             }
