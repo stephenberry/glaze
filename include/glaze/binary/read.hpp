@@ -1253,7 +1253,7 @@ namespace glz
                   if (bool(ctx.error)) [[unlikely]] {
                      return;
                   }
-                  if (uint64_t(end - it) <= n) [[unlikely]] {
+                  if (uint64_t(end - it) < n) [[unlikely]] {
                      ctx.error = error_code::unexpected_end;
                      return;
                   }
@@ -1272,8 +1272,8 @@ namespace glz
                      jump_table<N>(
                         [&]<size_t I>() {
                            static constexpr auto TargetKey = get<I>(refl<T>.keys);
-                           static constexpr auto Length = TargetKey.size();
-                           if (compare<Length>(TargetKey.data(), key.data())) [[likely]] {
+                           static constexpr auto Length = TargetKey.size();                           
+                           if ((Length == n) && compare<Length>(TargetKey.data(), key.data())) [[likely]] {
                               if constexpr (detail::reflectable<T>) {
                                  read<binary>::op<Opts>(get_member(value, get<I>(detail::to_tuple(value))), ctx, it, end);
                               }
