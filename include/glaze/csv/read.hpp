@@ -412,27 +412,8 @@ namespace glz
          template <auto Opts, class It>
          static void op(auto&& value, is_context auto&& ctx, It&& it, auto&& end)
          {
-            static constexpr auto num_members = refl<T>.N;
-
-            decltype(auto) frozen_map = [&]() -> decltype(auto) {
-               if constexpr (reflectable<T> && num_members > 0) {
-#if ((defined _MSC_VER) && (!defined __clang__))
-                  static thread_local auto cmap = make_map<T, Opts.use_hash_comparison>();
-#else
-                  static thread_local constinit auto cmap = make_map<T, Opts.use_hash_comparison>();
-#endif
-                  // We want to run this populate outside of the while loop
-                  populate_map(value, cmap); // Function required for MSVC to build
-                  return cmap;
-               }
-               else if constexpr (glaze_object_t<T> && num_members > 0) {
-                  static constexpr auto cmap = make_map<T, Opts.use_hash_comparison>();
-                  return cmap;
-               }
-               else {
-                  return nullptr;
-               }
-            }();
+            static constexpr auto N = refl<T>.N;
+            static constexpr auto HashInfo = detail::hash_info<T>;
 
             if constexpr (Opts.layout == rowwise) {
                while (it != end) {
@@ -456,12 +437,21 @@ namespace glz
 
                   GLZ_MATCH_COMMA;
 
-                  const auto& member_it = frozen_map.find(key);
+                  const auto index = decode_hash_with_size<csv, T, HashInfo, HashInfo.type>::op(
+                     key.data(), end, key.size());
 
-                  if (member_it != frozen_map.end()) [[likely]] {
-                     std::visit(
-                        [&](auto&& member_ptr) {
-                           auto&& member = get_member(value, member_ptr);
+                  if (index < N) [[likely]] {
+                     jump_table<N>(
+                        [&]<size_t I>() {
+                           decltype(auto) member = [&]() -> decltype(auto) {
+                              if constexpr (reflectable<T>) {
+                                 return get_member(value, get<I>(to_tuple(value)));
+                              }
+                              else {
+                                 return get_member(value, get<I>(refl<T>.values));
+                              }
+                           }();
+
                            using M = std::decay_t<decltype(member)>;
                            if constexpr (fixed_array_value_t<M> && emplace_backable<M>) {
                               size_t col = 0;
@@ -533,7 +523,7 @@ namespace glz
                               }
                            }
                         },
-                        member_it->second);
+                        index);
 
                      if (bool(ctx.error)) [[unlikely]] {
                         return;
@@ -563,11 +553,22 @@ namespace glz
                if (!at_end) {
                   while (true) {
                      for (size_t i = 0; i < n_keys; ++i) {
-                        const auto& member_it = frozen_map.find(keys[i].first);
-                        if (member_it != frozen_map.end()) [[likely]] {
-                           std::visit(
-                              [&](auto&& member_ptr) {
-                                 auto&& member = get_member(value, member_ptr);
+                        const auto key = keys[i].first;
+                        const auto index = decode_hash_with_size<csv, T, HashInfo, HashInfo.type>::op(
+                           key.data(), key.data() + key.size(), key.size());
+
+                        if (index < N) [[likely]] {
+                           jump_table<N>(
+                              [&]<size_t I>() {
+                                 decltype(auto) member = [&]() -> decltype(auto) {
+                                    if constexpr (reflectable<T>) {
+                                       return get_member(value, get<I>(to_tuple(value)));
+                                    }
+                                    else {
+                                       return get_member(value, get<I>(refl<T>.values));
+                                    }
+                                 }();
+
                                  using M = std::decay_t<decltype(member)>;
                                  if constexpr (fixed_array_value_t<M> && emplace_backable<M>) {
                                     const auto index = keys[i].second;
@@ -582,12 +583,17 @@ namespace glz
                                     read<csv>::op<Opts>(member, ctx, it, end);
                                  }
                               },
-                              member_it->second);
+                              index);
+
+                           if (bool(ctx.error)) [[unlikely]] {
+                              return;
+                           }
                         }
                         else [[unlikely]] {
                            ctx.error = error_code::unknown_key;
                            return;
                         }
+
                         at_end = it == end;
                         if (!at_end && *it == ',') {
                            ++it;
@@ -601,8 +607,9 @@ namespace glz
                         at_end = it == end;
                         if (at_end) break;
                      }
-                     else
+                     else {
                         break;
+                     }
                   }
                }
             }
