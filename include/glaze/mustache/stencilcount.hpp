@@ -88,11 +88,13 @@ namespace glz
                   }
 
                   auto s = it;
-                  while (it != end && *it != '}') {
+                  while (it != end && *it != '}' && *it != ' ' && *it != '\t') {
                      ++it;
                   }
 
-                  sv key{s, size_t(it - s)};
+                  const sv key{s, size_t(it - s)};
+                  
+                  skip_whitespace();
 
                   static constexpr auto num_members = refl<T>.N;
 

@@ -10,9 +10,11 @@
 namespace glz
 {
    // format
-   inline constexpr uint32_t binary = 0;
+   inline constexpr uint32_t binary = 0; // same as BEVE format
+   inline constexpr uint32_t beve = 0;
    inline constexpr uint32_t json = 10;
    inline constexpr uint32_t ndjson = 100; // new line delimited JSON
+   inline constexpr uint32_t MUSTACHE = 500;
    inline constexpr uint32_t csv = 10000;
 
    // layout

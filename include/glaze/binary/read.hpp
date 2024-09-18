@@ -1239,23 +1239,6 @@ namespace glz
                return;
             }
 
-            decltype(auto) storage = [&]() -> decltype(auto) {
-               using V = decay_keep_volatile_t<decltype(value)>;
-               if constexpr (reflectable<T>) {
-#if ((defined _MSC_VER) && (!defined __clang__))
-                  static thread_local auto cmap = make_map<V, Opts.use_hash_comparison>();
-#else
-                  static thread_local constinit auto cmap = make_map<V, Opts.use_hash_comparison>();
-#endif
-                  populate_map(value, cmap); // Function required for MSVC to build
-                  return cmap;
-               }
-               else {
-                  static constexpr auto cmap = make_map<T, Opts.use_hash_comparison>();
-                  return cmap;
-               }
-            }();
-
             for (size_t i = 0; i < n_keys; ++i) {
                if constexpr (is_partial_read<T> || Opts.partial_read) {
                   if ((all_fields & fields) == all_fields) {
@@ -1263,31 +1246,54 @@ namespace glz
                   }
                }
 
-               const auto length = int_from_compressed(ctx, it, end);
-               if (bool(ctx.error)) [[unlikely]] {
-                  return;
-               }
-               if (uint64_t(end - it) < length) [[unlikely]] {
-                  ctx.error = error_code::unexpected_end;
-                  return;
-               }
-
-               const std::string_view key{it, length};
-
-               it += length;
-
                if constexpr (N > 0) {
-                  if (const auto& p = storage.find(key); p != storage.end()) [[likely]] {
+                  static constexpr auto HashInfo = hash_info<T>;
+                  
+                  const auto n = int_from_compressed(ctx, it, end);
+                  if (bool(ctx.error)) [[unlikely]] {
+                     return;
+                  }
+                  if (uint64_t(end - it) < n) [[unlikely]] {
+                     ctx.error = error_code::unexpected_end;
+                     return;
+                  }
+
+                  const auto index =
+                     decode_hash_with_size<beve, T, HashInfo, HashInfo.type>::op(it, end, n);
+
+                  if (index < N) [[likely]] {
                      if constexpr (is_partial_read<T> || Opts.partial_read) {
-                        auto index = p - storage.begin();
                         fields[index] = true;
                      }
+                     
+                     const sv key{it, n};
+                     it += n;
 
-                     std::visit(
-                        [&](auto&& element) { //
-                           read<binary>::op<Opts>(get_member(value, element), ctx, it, end);
+                     jump_table<N>(
+                        [&]<size_t I>() {
+                           static constexpr auto TargetKey = get<I>(refl<T>.keys);
+                           static constexpr auto Length = TargetKey.size();                           
+                           if ((Length == n) && compare<Length>(TargetKey.data(), key.data())) [[likely]] {
+                              if constexpr (detail::reflectable<T>) {
+                                 read<binary>::op<Opts>(get_member(value, get<I>(detail::to_tuple(value))), ctx, it, end);
+                              }
+                              else {
+                                 read<binary>::op<Opts>(get_member(value, get<I>(refl<T>.values)), ctx, it, end);
+                              }
+                           }
+                           else {
+                              if constexpr (Opts.error_on_unknown_keys) {
+                                 ctx.error = error_code::unknown_key;
+                                 return;
+                              }
+                              else {
+                                 skip_value_binary<Opts>(ctx, it, end);
+                                 if (bool(ctx.error)) [[unlikely]]
+                                    return;
+                              }
+                           }
                         },
-                        p->second);
+                        index);
 
                      if (bool(ctx.error)) [[unlikely]] {
                         return;
@@ -1299,6 +1305,7 @@ namespace glz
                         return;
                      }
                      else {
+                        it += n;
                         skip_value_binary<Opts>(ctx, it, end);
                         if (bool(ctx.error)) [[unlikely]]
                            return;

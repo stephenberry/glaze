@@ -2226,19 +2226,23 @@ suite early_end = [] {
    };
 };
 
-std::vector<unsigned char> base64_decode(const std::string_view input)
+inline std::vector<unsigned char> base64_decode(const std::string_view input)
 {
-   static const std::string base64_chars =
+   static constexpr std::string_view base64_chars =
       "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
       "abcdefghijklmnopqrstuvwxyz"
       "0123456789+/";
 
    std::vector<unsigned char> decoded_data;
-   std::vector<int> decode_table(256, -1);
-
-   for (int i = 0; i < 64; i++) {
-      decode_table[base64_chars[i]] = i;
-   }
+   static constexpr std::array<int, 256> decode_table = [] {
+      std::array<int, 256> t;
+      t.fill(-1);
+      
+      for (int i = 0; i < 64; ++i) {
+         t[base64_chars[i]] = i;
+      }
+      return t;
+   }();
 
    int val = 0, valb = -8;
    for (unsigned char c : input) {
@@ -2253,6 +2257,20 @@ std::vector<unsigned char> base64_decode(const std::string_view input)
 
    return decoded_data;
 }
+
+suite base64_decode_tests = [] {
+   "hello world"_test = [] {
+      std::string_view b64 = "aGVsbG8gd29ybGQ=";
+      std::vector<uint8_t> decoded = base64_decode(b64);
+      expect(std::string_view{(char*)decoded.data(), decoded.size()} == "hello world");
+   };
+   
+   "{\"key\":42}"_test = [] {
+      std::string_view b64 = "eyJrZXkiOjQyfQ==";
+      std::vector<uint8_t> decoded = base64_decode(b64);
+      expect(std::string_view{(char*)decoded.data(), decoded.size()} == "{\"key\":42}");
+   };
+};
 
 suite past_fuzzing_issues = [] {
    "fuzz0"_test = [] {
@@ -2356,6 +2374,32 @@ suite past_fuzzing_issues = [] {
       std::string json{};
       expect(glz::beve_to_json(input, json));
    };
+   
+   auto test_base64 = [](std::string_view base64) {
+      return [base64] {
+         std::vector<uint8_t> input = base64_decode(base64);
+         expect(glz::read_binary<my_struct>(input).error());
+         std::string json{};
+         expect(glz::beve_to_json(input, json));
+         input.push_back('\0');
+         expect(glz::read_binary<my_struct>(input).error());
+         expect(glz::beve_to_json(input, json));
+      };
+   };
+   
+   "fuzz9"_test = test_base64("A10sAA==");
+   
+   "fuzz10"_test = test_base64("A4wA");
+   
+   "fuzz11"_test = test_base64("AxQA");
+   
+   "fuzz12"_test = test_base64("AzwAaGho");
+   
+   "fuzz13"_test = test_base64("AzAAYQ==");
+   
+   "fuzz14"_test = test_base64("A5AAaGgAbg==");
+   
+   "fuzz15"_test = test_base64("AzEyAA==");
 };
 
 int main()
