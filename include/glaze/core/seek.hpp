@@ -99,8 +99,8 @@ namespace glz::detail
          static constexpr auto N = refl<T>.N;
          static constexpr auto HashInfo = detail::hash_info<T>;
 
-         const auto index =
-            decode_hash_with_size<JSON_PTR, T, HashInfo, HashInfo.type>::op(key.data(), key.data() + key.size(), key.size());
+         const auto index = decode_hash_with_size<JSON_PTR, T, HashInfo, HashInfo.type>::op(
+            key.data(), key.data() + key.size(), key.size());
 
          if (index < N) [[likely]] {
             bool ret{};
