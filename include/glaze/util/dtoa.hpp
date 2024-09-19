@@ -190,11 +190,19 @@ namespace glz
          *buf = '0';
          return buf + 1;
       }
+      
+      using ConversionTraits = jkj::dragonbox::default_float_bit_carrier_conversion_traits<T>;
+      using FormatTraits = jkj::dragonbox::ieee754_binary_traits<typename ConversionTraits::format, typename ConversionTraits::carrier_uint>;
 
       if constexpr (is_float) {
          /* binary to decimal */
-         const auto v = jkj::dragonbox::to_decimal(val, jkj::dragonbox::policy::sign::ignore,
-                                                   jkj::dragonbox::policy::trailing_zero::remove);
+         /*const auto v = jkj::dragonbox::to_decimal(val, jkj::dragonbox::policy::sign::ignore,
+                                                            jkj::dragonbox::policy::trailing_zero::remove);*/
+         
+         const auto s = jkj::dragonbox::signed_significand_bits<FormatTraits>(FormatTraits::remove_exponent_bits(ConversionTraits::float_to_carrier(val)));
+         const auto v = jkj::dragonbox::to_decimal_ex(s, exp_raw, jkj::dragonbox::policy::sign::ignore,
+                                                      jkj::dragonbox::policy::trailing_zero::remove);
+         
 
          uint32_t sig_dec = uint32_t(v.significand);
          int32_t exp_dec = v.exponent;
@@ -258,8 +266,12 @@ namespace glz
       }
       else {
          /* binary to decimal */
-         const auto v = jkj::dragonbox::to_decimal(val, jkj::dragonbox::policy::sign::ignore,
-                                                   jkj::dragonbox::policy::trailing_zero::ignore);
+         /*const auto v = jkj::dragonbox::to_decimal(val, jkj::dragonbox::policy::sign::ignore,
+                                                   jkj::dragonbox::policy::trailing_zero::ignore);*/
+         
+         const auto s = jkj::dragonbox::signed_significand_bits<FormatTraits>(FormatTraits::remove_exponent_bits(ConversionTraits::float_to_carrier(val)));
+         const auto v = jkj::dragonbox::to_decimal_ex(s, exp_raw, jkj::dragonbox::policy::sign::ignore,
+                                                      jkj::dragonbox::policy::trailing_zero::remove);
 
          uint64_t sig_dec = v.significand;
          int32_t exp_dec = v.exponent;
