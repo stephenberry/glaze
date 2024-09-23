@@ -12,6 +12,7 @@ namespace glz
    // format
    inline constexpr uint32_t binary = 0; // same as BEVE format
    inline constexpr uint32_t beve = 0;
+   inline constexpr uint32_t BSON = 5;
    inline constexpr uint32_t json = 10;
    inline constexpr uint32_t JSON_PTR = 20;
    inline constexpr uint32_t ndjson = 100; // new line delimited JSON
@@ -329,6 +330,12 @@ namespace glz
 
       template <class T = void>
       struct from_binary;
+      
+      template <class T = void>
+      struct to_bson;
+
+      template <class T = void>
+      struct from_bson;
 
       template <class T = void>
       struct to_json;
@@ -354,6 +361,12 @@ namespace glz
 
    template <class T>
    concept read_binary_supported = requires { detail::from_binary<std::remove_cvref_t<T>>{}; };
+   
+   template <class T>
+   concept write_bson_supported = requires { detail::to_bson<std::remove_cvref_t<T>>{}; };
+
+   template <class T>
+   concept read_bson_supported = requires { detail::from_bson<std::remove_cvref_t<T>>{}; };
 
    template <class T>
    concept write_json_supported = requires { detail::to_json<std::remove_cvref_t<T>>{}; };
@@ -379,6 +392,9 @@ namespace glz
       if constexpr (Format == binary) {
          return write_binary_supported<T>;
       }
+      else if constexpr (Format == BSON) {
+         return write_bson_supported<T>;
+      }
       else if constexpr (Format == json) {
          return write_json_supported<T>;
       }
@@ -398,6 +414,9 @@ namespace glz
    {
       if constexpr (Format == binary) {
          return read_binary_supported<T>;
+      }
+      if constexpr (Format == BSON) {
+         return read_bson_supported<T>;
       }
       else if constexpr (Format == json) {
          return read_json_supported<T>;

@@ -70,7 +70,8 @@ namespace glz
       unknown_distribution, //
       invalid_distribution_elements, //
       hostname_failure, //
-      includer_error //
+      includer_error, //
+      type_mismatch
    };
 
    struct error_ctx final
