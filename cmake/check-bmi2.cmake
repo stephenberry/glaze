@@ -24,7 +24,7 @@ if (BMI2_FLAG)
             target_compile_options(glaze_glaze INTERFACE "-mbmi2")
         endif()
         target_compile_definitions(glaze_glaze INTERFACE GLZ_HAS_BMI2)
-        message(STATUS "BMI2 instructions are being used. 
+        message(STATUS "Glaze: BMI2 instructions are being used. 
         If you are cross-compiling for a 32bit platform or older processors turn glaze_ENABLE_BMI2 off.")
     else()
         set(BMI2_FLAG "")
@@ -32,5 +32,5 @@ if (BMI2_FLAG)
 endif()
 
 if (NOT GLZ_HAS_BMI2)
-    message(STATUS "BMI2 instructions: not supported and not used.")
+    message(STATUS "Glaze: BMI2 instructions--not supported and not used.")
 endif()
