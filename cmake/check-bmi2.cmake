@@ -13,10 +13,8 @@ endif()
 
 # Check if the compiler supports the BMI2 flag
 if (BMI2_FLAG)
-    check_cxx_compiler_flag("${BMI2_FLAG}" COMPILER_SUPPORTS_BMI2_FLAG)
-    if (COMPILER_SUPPORTS_BMI2_FLAG)
-        message(STATUS "BMI2 instructions are supported.")
-
+    check_cxx_compiler_flag("${BMI2_FLAG}" GLZ_HAS_BMI2)
+    if (GLZ_HAS_BMI2)
         if(MSVC)
             target_compile_options(glaze_glaze INTERFACE "/arch:AVX2")
         else()
@@ -30,6 +28,6 @@ if (BMI2_FLAG)
     endif()
 endif()
 
-if (BMI2_FLAG)
+if (GLZ_HAS_BMI2)
     message(STATUS "BMI2 instructions: not supported and not used.")
 endif()
