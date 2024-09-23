@@ -199,8 +199,9 @@ namespace glz
          /*const auto v = jkj::dragonbox::to_decimal(val, jkj::dragonbox::policy::sign::ignore,
                                                             jkj::dragonbox::policy::trailing_zero::remove);*/
          
-         const auto s = jkj::dragonbox::signed_significand_bits<FormatTraits>(FormatTraits::remove_exponent_bits(ConversionTraits::float_to_carrier(val)));
-         const auto v = jkj::dragonbox::to_decimal_ex(s, exp_raw, jkj::dragonbox::policy::sign::ignore,
+         const auto s = jkj::dragonbox::signed_significand_bits<FormatTraits>(FormatTraits::remove_exponent_bits(raw));
+         const auto e = FormatTraits::extract_exponent_bits(raw);
+         const auto v = jkj::dragonbox::to_decimal_ex(s, e, jkj::dragonbox::policy::sign::ignore,
                                                       jkj::dragonbox::policy::trailing_zero::remove);
          
 
@@ -269,8 +270,9 @@ namespace glz
          /*const auto v = jkj::dragonbox::to_decimal(val, jkj::dragonbox::policy::sign::ignore,
                                                    jkj::dragonbox::policy::trailing_zero::ignore);*/
          
-         const auto s = jkj::dragonbox::signed_significand_bits<FormatTraits>(FormatTraits::remove_exponent_bits(ConversionTraits::float_to_carrier(val)));
-         const auto v = jkj::dragonbox::to_decimal_ex(s, exp_raw, jkj::dragonbox::policy::sign::ignore,
+         const auto s = jkj::dragonbox::signed_significand_bits<FormatTraits>(FormatTraits::remove_exponent_bits(raw));
+         const auto e = FormatTraits::extract_exponent_bits(raw);
+         const auto v = jkj::dragonbox::to_decimal_ex(s, e, jkj::dragonbox::policy::sign::ignore,
                                                       jkj::dragonbox::policy::trailing_zero::remove);
 
          uint64_t sig_dec = v.significand;
