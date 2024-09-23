@@ -38,21 +38,21 @@ set_property(TARGET glaze_glaze PROPERTY EXPORT_NAME glaze)
 
 target_compile_features(glaze_glaze INTERFACE cxx_std_23)
 target_include_directories(
-    glaze_glaze ${warning_guard}
-    INTERFACE "$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>"
+  glaze_glaze ${warning_guard}
+  INTERFACE "$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>"
 )
 
-if(APPLE)
-    option(glaze_ENABLE_BMI2 "Enable BMI2 instruction set" OFF)
+if (APPLE)
+  option(glaze_ENABLE_BMI2 "Enable BMI2 instruction set" OFF)
 else()
-    option(glaze_ENABLE_BMI2 "Enable BMI2 instruction set" ON)
+  option(glaze_ENABLE_BMI2 "Enable BMI2 instruction set" ON)
 endif()
 
-if(glaze_ENABLE_BMI2)
+if (glaze_ENABLE_BMI2)
   include(cmake/check-bmi2.cmake)
 endif()
 
-if(NOT CMAKE_SKIP_INSTALL_RULES)
+if (NOT CMAKE_SKIP_INSTALL_RULES)
   include(cmake/install-rules.cmake)
 endif()
 
@@ -62,6 +62,6 @@ endif()
 
 option(glaze_BUILD_EXAMPLES "Build GLAZE examples" OFF)
 
-if(glaze_BUILD_EXAMPLES)
+if (glaze_BUILD_EXAMPLES)
   add_subdirectory(examples)
 endif()

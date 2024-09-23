@@ -6,14 +6,17 @@ set(BMI2_FLAG "")
 
 if (MSVC)
     set(BMI2_FLAG "/arch:AVX2")
-elseif (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" OR
-        CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+elseif (CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     set(BMI2_FLAG "-mbmi2")
 endif()
 
 # Check if the compiler supports the BMI2 flag
 if (BMI2_FLAG)
-    check_cxx_compiler_flag("${BMI2_FLAG}" GLZ_HAS_BMI2)
+    check_cxx_compiler_flag("${BMI2_FLAG}" COMPILER_SUPPORTS_BMI2_FLAG)
+    if (COMPILER_SUPPORTS_BMI2_FLAG)
+        set(GLZ_HAS_BMI2 TRUE)
+    endif()
+
     if (GLZ_HAS_BMI2)
         if(MSVC)
             target_compile_options(glaze_glaze INTERFACE "/arch:AVX2")
