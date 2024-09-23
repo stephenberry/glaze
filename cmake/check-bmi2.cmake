@@ -2,7 +2,6 @@ include(CheckCXXSourceCompiles)
 include(CheckCXXCompilerFlag)
 
 set(GLZ_HAS_BMI2 FALSE)
-
 set(BMI2_FLAG "")
 
 if (MSVC)
@@ -19,7 +18,7 @@ if (BMI2_FLAG)
         # Append BMI2 flag to CMAKE_REQUIRED_FLAGS without overwriting existing flags
         set(CMAKE_REQUIRED_FLAGS "${CMAKE_REQUIRED_FLAGS} ${BMI2_FLAG}")
     else()
-        message(STATUS "BMI2 instructions: not supported and not used.")
+        set(BMI2_FLAG "")
     endif()
 endif()
 
@@ -35,14 +34,8 @@ if (BMI2_FLAG)
     }
     " GLZ_HAS_BMI2)
 
+    # Reset CMAKE_REQUIRED_FLAGS to avoid affecting other checks
     string(REGEX REPLACE "${BMI2_FLAG}" "" CMAKE_REQUIRED_FLAGS "${CMAKE_REQUIRED_FLAGS}")
-endif()
-
-# Reset CMAKE_REQUIRED_FLAGS to avoid affecting other checks
-if(MSVC)
-string(REGEX REPLACE "/arch:AVX2" "" CMAKE_REQUIRED_FLAGS "${CMAKE_REQUIRED_FLAGS}")
-else()
-string(REGEX REPLACE "-mbmi2" "" CMAKE_REQUIRED_FLAGS "${CMAKE_REQUIRED_FLAGS}")
 endif()
 
 if(GLZ_HAS_BMI2)
