@@ -262,7 +262,7 @@ namespace glz
 
                   dump<'"', false>(b, ix);
                   if (const auto escaped = char_escape_table[uint8_t(value)]; escaped) {
-                     std::memcpy(data_ptr(b) + ix, &escaped, 2);
+                     std::memcpy(&b[ix], &escaped, 2);
                      ix += 2;
                   }
                   else if (value == '\0') {
@@ -334,7 +334,7 @@ namespace glz
 
                      const auto* c = str.data();
                      const auto* const e = c + n;
-                     const auto start = data_ptr(b) + ix;
+                     const auto start = &b[ix];
                      auto data = start;
 
                      // We don't check for writing out invalid characters as this can be tested by the user if
