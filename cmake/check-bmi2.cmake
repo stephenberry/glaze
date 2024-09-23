@@ -31,6 +31,6 @@ if (BMI2_FLAG)
     endif()
 endif()
 
-if (GLZ_HAS_BMI2)
+if (NOT GLZ_HAS_BMI2)
     message(STATUS "BMI2 instructions: not supported and not used.")
 endif()
