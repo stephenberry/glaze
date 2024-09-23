@@ -9511,6 +9511,21 @@ suite meta_keys_tests = [] {
    };
 };
 
+struct point3d
+{
+   int x{}, y{}, z{};
+};
+
+suite simple_mod_hashes = [] {
+   "mod hash"_test = [] {
+      point3d obj{};
+      expect(not glz::read_json(obj, R"({"x":1,"y":2,"z":3})"));
+      expect(obj.x == 1);
+      expect(obj.y == 2);
+      expect(obj.z == 3);
+   };
+};
+
 int main()
 {
    trace.end("json_test");

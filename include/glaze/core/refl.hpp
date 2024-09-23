@@ -832,10 +832,16 @@ namespace glz::detail
       unique_index, // A unique character index is used
       front_hash, // Hash on the front bytes of the key
       single_element, // Map is a single element
+      mod4, // c % 4
+      xor_mod4, // (c ^ c0) % 4
+      minus_mod4, // (c - c0) % 4
       three_element_unique_index,
       unique_per_length, // Hash on a unique character index and the length of the key
       full_flat // Full key hash with a single table
    };
+   
+   // For N == 3 and N == 4 it is cheap to check mod4, xor_mod4, and minus_mod4 hashes.
+   // Consecuative values like "x", "y", "z" for keys work with minus_mod4
 
    struct unique_per_length_t
    {
@@ -930,6 +936,15 @@ namespace glz::detail
          return (N == 1) ? 1 : std::bit_ceil(N * N) / 2;
       }
       case single_element: {
+         return 0;
+      }
+      case mod4: {
+         return 0;
+      }
+      case xor_mod4: {
+         return 0;
+      }
+      case minus_mod4: {
          return 0;
       }
       case three_element_unique_index: {
@@ -1309,6 +1324,45 @@ namespace glz::detail
       }
 
       // N == 2 is optimized within other hashing methods
+      
+      if constexpr (N == 3 || N == 4) {
+         if (info.min_length > 0) {
+            bool valid = true;
+            for (size_t i = 0; i < N; ++i) {
+               if (keys[i][0] % 4 != uint8_t(i)) {
+                  valid = false;
+               }
+            }
+            if (valid) {
+               info.type = mod4;
+               return info;
+            }
+            
+            const auto c0 = keys[0][0];
+            
+            valid = true;
+            for (size_t i = 0; i < N; ++i) {
+               if ((keys[i][0] ^ c0) % 4 != uint8_t(i)) {
+                  valid = false;
+               }
+            }
+            if (valid) {
+               info.type = xor_mod4;
+               return info;
+            }
+            
+            valid = true;
+            for (size_t i = 0; i < N; ++i) {
+               if ((keys[i][0] - c0) % 4 != uint8_t(i)) {
+                  valid = false;
+               }
+            }
+            if (valid) {
+               info.type = minus_mod4;
+               return info;
+            }
+         }
+      }
 
       auto& seed = info.seed;
       constexpr uint64_t invalid_seed = 0;
@@ -1336,12 +1390,11 @@ namespace glz::detail
                   return info;
                }
             }
-            // Otherwise we failed to find a seed and we'll use another algorithm
+            // Otherwise we failed to find a seed and we'll use a normal unique_index hash
          }
-         else {
-            info.type = unique_index;
-            return info;
-         }
+         
+         info.type = unique_index;
+         return info;
       }
 
       if (front_bytes_hash_info<uint16_t>(keys, info)) {
@@ -1507,6 +1560,24 @@ namespace glz::detail
             info.max_length = k_info.max_length;
             return info;
          }
+         else if constexpr (type == mod4) {
+            hash_info_t<T, bucket_size(mod4, N)> info{.type = mod4};
+            info.min_length = k_info.min_length;
+            info.max_length = k_info.max_length;
+            return info;
+         }
+         else if constexpr (type == xor_mod4) {
+            hash_info_t<T, bucket_size(xor_mod4, N)> info{.type = xor_mod4};
+            info.min_length = k_info.min_length;
+            info.max_length = k_info.max_length;
+            return info;
+         }
+         else if constexpr (type == minus_mod4) {
+            hash_info_t<T, bucket_size(minus_mod4, N)> info{.type = minus_mod4};
+            info.min_length = k_info.min_length;
+            info.max_length = k_info.max_length;
+            return info;
+         }
          else if constexpr (type == three_element_unique_index) {
             hash_info_t<T, bucket_size(three_element_unique_index, N)> info{.type = three_element_unique_index};
             info.min_length = k_info.min_length;
@@ -1648,6 +1719,34 @@ namespace glz::detail
    struct decode_hash<json, T, HashInfo, hash_type::single_element>
    {
       GLZ_ALWAYS_INLINE static constexpr size_t op(auto&& /*it*/, auto&& /*end*/) noexcept { return 0; }
+   };
+   
+   template <class T, auto HashInfo>
+   struct decode_hash<json, T, HashInfo, hash_type::mod4>
+   {
+      GLZ_ALWAYS_INLINE static constexpr size_t op(auto&& it, auto&& /*end*/) noexcept {
+         return uint8_t(*it) % 4;
+      }
+   };
+   
+   template <class T, auto HashInfo>
+   struct decode_hash<json, T, HashInfo, hash_type::xor_mod4>
+   {
+      static constexpr auto first_key_char = refl<T>.keys[0][0];
+      
+      GLZ_ALWAYS_INLINE static constexpr size_t op(auto&& it, auto&& /*end*/) noexcept {
+         return (uint8_t(*it) ^ first_key_char) % 4;
+      }
+   };
+   
+   template <class T, auto HashInfo>
+   struct decode_hash<json, T, HashInfo, hash_type::minus_mod4>
+   {
+      static constexpr auto first_key_char = refl<T>.keys[0][0];
+      
+      GLZ_ALWAYS_INLINE static constexpr size_t op(auto&& it, auto&& /*end*/) noexcept {
+         return (uint8_t(*it) - first_key_char) % 4;
+      }
    };
 
    template <class T, auto HashInfo>
@@ -1841,6 +1940,34 @@ namespace glz::detail
    struct decode_hash_with_size<Format, T, HashInfo, hash_type::single_element>
    {
       GLZ_ALWAYS_INLINE static constexpr size_t op(auto&&, auto&&, const size_t) noexcept { return 0; }
+   };
+   
+   template <uint32_t Format, class T, auto HashInfo>
+   struct decode_hash_with_size<Format, T, HashInfo, hash_type::mod4>
+   {
+      GLZ_ALWAYS_INLINE static constexpr size_t op(auto&& it, auto&&, const size_t) noexcept {
+         return uint8_t(*it) % 4;
+      }
+   };
+   
+   template <uint32_t Format, class T, auto HashInfo>
+   struct decode_hash_with_size<Format, T, HashInfo, hash_type::xor_mod4>
+   {
+      static constexpr auto first_key_char = refl<T>.keys[0][0];
+      
+      GLZ_ALWAYS_INLINE static constexpr size_t op(auto&& it, auto&&, const size_t) noexcept {
+         return (uint8_t(*it) ^ first_key_char) % 4;
+      }
+   };
+   
+   template <uint32_t Format, class T, auto HashInfo>
+   struct decode_hash_with_size<Format, T, HashInfo, hash_type::minus_mod4>
+   {
+      static constexpr auto first_key_char = refl<T>.keys[0][0];
+      
+      GLZ_ALWAYS_INLINE static constexpr size_t op(auto&& it, auto&&, const size_t) noexcept {
+         return (uint8_t(*it) - first_key_char) % 4;
+      }
    };
 
    template <uint32_t Format, class T, auto HashInfo>

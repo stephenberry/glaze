@@ -1253,7 +1253,7 @@ namespace glz
                   if (bool(ctx.error)) [[unlikely]] {
                      return;
                   }
-                  if (uint64_t(end - it) < n) [[unlikely]] {
+                  if (uint64_t(end - it) < n || it == end) [[unlikely]] {
                      ctx.error = error_code::unexpected_end;
                      return;
                   }
