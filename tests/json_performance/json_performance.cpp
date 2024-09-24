@@ -393,7 +393,7 @@ auto glaze_test()
    t0 = std::chrono::steady_clock::now();
 
    for (size_t i = 0; i < iterations; ++i) {
-      if (glz::write_binary(obj, buffer)) {
+      if (glz::write_beve(obj, buffer)) {
          std::cout << "glaze error!\n";
          break;
       }
@@ -409,7 +409,7 @@ auto glaze_test()
    t0 = std::chrono::steady_clock::now();
 
    for (size_t i = 0; i < iterations; ++i) {
-      if (glz::read_binary(obj, buffer)) {
+      if (glz::read_beve(obj, buffer)) {
          std::cout << "glaze error!\n";
          break;
       }
@@ -424,11 +424,11 @@ auto glaze_test()
    t0 = std::chrono::steady_clock::now();
 
    for (size_t i = 0; i < iterations; ++i) {
-      if (glz::read_binary(obj, buffer)) {
+      if (glz::read_beve(obj, buffer)) {
          std::cout << "glaze error!\n";
          break;
       }
-      if (glz::write_binary(obj, buffer)) {
+      if (glz::write_beve(obj, buffer)) {
          std::cout << "glaze error!\n";
          break;
       }
@@ -746,7 +746,7 @@ auto benchmark_tester()
    t0 = std::chrono::steady_clock::now();
 
    for (size_t i = 0; i < N; ++i) {
-      if (glz::write_binary(obj, buffer)) {
+      if (glz::write_beve(obj, buffer)) {
          std::cout << "glaze error!\n";
          break;
       }
@@ -762,7 +762,7 @@ auto benchmark_tester()
    t0 = std::chrono::steady_clock::now();
 
    for (size_t i = 0; i < N; ++i) {
-      if (glz::read_binary(obj, buffer)) {
+      if (glz::read_beve(obj, buffer)) {
          std::cout << "glaze error!\n";
          break;
       }
@@ -777,11 +777,11 @@ auto benchmark_tester()
    t0 = std::chrono::steady_clock::now();
 
    for (size_t i = 0; i < N; ++i) {
-      if (glz::read_binary(obj, buffer)) {
+      if (glz::read_beve(obj, buffer)) {
          std::cout << "glaze error!\n";
          break;
       }
-      if (glz::write_binary(obj, buffer)) {
+      if (glz::write_beve(obj, buffer)) {
          std::cout << "glaze error!\n";
          break;
       }
@@ -1151,7 +1151,7 @@ auto generic_tester()
    t0 = std::chrono::steady_clock::now();
 
    for (size_t i = 0; i < iterations; ++i) {
-      if (glz::write_binary(obj, buffer)) {
+      if (glz::write_beve(obj, buffer)) {
          std::cout << "glaze error!\n";
          break;
       }
@@ -1167,7 +1167,7 @@ auto generic_tester()
    t0 = std::chrono::steady_clock::now();
 
    for (size_t i = 0; i < iterations; ++i) {
-      if (glz::read_binary(obj, buffer)) {
+      if (glz::read_beve(obj, buffer)) {
          std::cout << "glaze error!\n";
          break;
       }
@@ -1182,11 +1182,11 @@ auto generic_tester()
    t0 = std::chrono::steady_clock::now();
 
    for (size_t i = 0; i < iterations; ++i) {
-      if (glz::read_binary(obj, buffer)) {
+      if (glz::read_beve(obj, buffer)) {
          std::cout << "glaze error!\n";
          break;
       }
-      if (glz::write_binary(obj, buffer)) {
+      if (glz::write_beve(obj, buffer)) {
          std::cout << "glaze error!\n";
          break;
       }

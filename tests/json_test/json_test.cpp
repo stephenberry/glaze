@@ -8462,12 +8462,12 @@ suite c_style_arrays = [] {
    "struct_c_arrays_meta"_test = [] {
       struct_c_arrays_meta obj{};
       std::string s{};
-      expect(not glz::write_binary(obj, s));
+      expect(not glz::write_beve(obj, s));
 
       obj.ints[0] = 0;
       obj.ints[1] = 1;
       obj.floats[0] = 0.f;
-      expect(!glz::read_binary(obj, s));
+      expect(!glz::read_beve(obj, s));
       expect(obj.ints[0] == 1);
       expect(obj.ints[1] == 2);
       expect(obj.floats[0] == 3.14f);

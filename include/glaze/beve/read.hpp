@@ -1433,14 +1433,14 @@ namespace glz
       };
    }
 
-   template <read_binary_supported T, class Buffer>
-   [[nodiscard]] inline error_ctx read_binary(T&& value, Buffer&& buffer) noexcept
+   template <read_beve_supported T, class Buffer>
+   [[nodiscard]] inline error_ctx read_beve(T&& value, Buffer&& buffer) noexcept
    {
       return read<opts{.format = BEVE}>(value, std::forward<Buffer>(buffer));
    }
 
-   template <read_binary_supported T, class Buffer>
-   [[nodiscard]] inline expected<T, error_ctx> read_binary(Buffer&& buffer) noexcept
+   template <read_beve_supported T, class Buffer>
+   [[nodiscard]] inline expected<T, error_ctx> read_beve(Buffer&& buffer) noexcept
    {
       T value{};
       const auto pe = read<opts{.format = BEVE}>(value, std::forward<Buffer>(buffer));
@@ -1450,7 +1450,7 @@ namespace glz
       return value;
    }
 
-   template <opts Opts = opts{}, read_binary_supported T>
+   template <opts Opts = opts{}, read_beve_supported T>
    [[nodiscard]] inline error_ctx read_file_binary(T& value, const sv file_name, auto&& buffer) noexcept
    {
       context ctx{};
@@ -1465,14 +1465,14 @@ namespace glz
       return read<set_binary<Opts>()>(value, buffer, ctx);
    }
 
-   template <read_binary_supported T, class Buffer>
+   template <read_beve_supported T, class Buffer>
    [[nodiscard]] inline error_ctx read_binary_untagged(T&& value, Buffer&& buffer) noexcept
    {
       return read<opts{.format = BEVE, .structs_as_arrays = true}>(std::forward<T>(value),
                                                                      std::forward<Buffer>(buffer));
    }
 
-   template <read_binary_supported T, class Buffer>
+   template <read_beve_supported T, class Buffer>
    [[nodiscard]] inline expected<T, error_ctx> read_binary_untagged(Buffer&& buffer) noexcept
    {
       T value{};
@@ -1483,7 +1483,7 @@ namespace glz
       return value;
    }
 
-   template <opts Opts = opts{}, read_binary_supported T>
+   template <opts Opts = opts{}, read_beve_supported T>
    [[nodiscard]] inline error_ctx read_file_binary_untagged(T& value, const std::string& file_name,
                                                             auto&& buffer) noexcept
    {

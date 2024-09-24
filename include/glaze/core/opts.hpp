@@ -349,10 +349,10 @@ namespace glz
    }
 
    template <class T>
-   concept write_binary_supported = requires { detail::to_beve<std::remove_cvref_t<T>>{}; };
+   concept write_beve_supported = requires { detail::to_beve<std::remove_cvref_t<T>>{}; };
 
    template <class T>
-   concept read_binary_supported = requires { detail::from_beve<std::remove_cvref_t<T>>{}; };
+   concept read_beve_supported = requires { detail::from_beve<std::remove_cvref_t<T>>{}; };
 
    template <class T>
    concept write_json_supported = requires { detail::to_json<std::remove_cvref_t<T>>{}; };
@@ -376,7 +376,7 @@ namespace glz
    consteval bool write_format_supported()
    {
       if constexpr (Format == BEVE) {
-         return write_binary_supported<T>;
+         return write_beve_supported<T>;
       }
       else if constexpr (Format == json) {
          return write_json_supported<T>;
@@ -396,7 +396,7 @@ namespace glz
    consteval bool read_format_supported()
    {
       if constexpr (Format == BEVE) {
-         return read_binary_supported<T>;
+         return read_beve_supported<T>;
       }
       else if constexpr (Format == json) {
          return read_json_supported<T>;
