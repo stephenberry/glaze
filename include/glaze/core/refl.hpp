@@ -3,7 +3,7 @@
 
 #pragma once
 
-#include "glaze/binary/header.hpp"
+#include "glaze/beve/header.hpp"
 #include "glaze/core/common.hpp"
 #include "glaze/util/primes_64.hpp"
 

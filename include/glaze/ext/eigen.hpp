@@ -12,8 +12,8 @@ static_assert(false, "Eigen must be included to use glaze/ext/eigen.hpp");
 #include <span>
 
 #include "glaze/api/std/array.hpp"
-#include "glaze/binary/read.hpp"
-#include "glaze/binary/write.hpp"
+#include "glaze/beve/read.hpp"
+#include "glaze/beve/write.hpp"
 #include "glaze/core/common.hpp"
 #include "glaze/core/meta.hpp"
 #include "glaze/json/json_ptr.hpp"

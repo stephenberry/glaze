@@ -12,7 +12,7 @@
 #include <iterator>
 #include <random>
 
-#include "glaze/binary/beve_to_json.hpp"
+#include "glaze/beve/beve_to_json.hpp"
 #include "glaze/json/json_ptr.hpp"
 #include "glaze/json/ptr.hpp"
 #include "glaze/json/read.hpp"

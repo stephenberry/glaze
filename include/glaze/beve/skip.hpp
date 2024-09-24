@@ -3,7 +3,7 @@
 
 #pragma once
 
-#include "glaze/binary/header.hpp"
+#include "glaze/beve/header.hpp"
 #include "glaze/core/opts.hpp"
 #include "glaze/core/read.hpp"
 #include "glaze/file/file_ops.hpp"

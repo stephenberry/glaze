@@ -5,7 +5,7 @@
 
 #include <utility>
 
-#include "glaze/binary/header.hpp"
+#include "glaze/beve/header.hpp"
 #include "glaze/core/opts.hpp"
 #include "glaze/core/refl.hpp"
 #include "glaze/core/seek.hpp"

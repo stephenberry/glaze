@@ -16,9 +16,9 @@
 #include <unordered_set>
 
 #include "glaze/api/impl.hpp"
-#include "glaze/binary/beve_to_json.hpp"
-#include "glaze/binary/read.hpp"
-#include "glaze/binary/write.hpp"
+#include "glaze/beve/beve_to_json.hpp"
+#include "glaze/beve/read.hpp"
+#include "glaze/beve/write.hpp"
 #include "glaze/hardware/volatile_array.hpp"
 #include "glaze/json/json_ptr.hpp"
 #include "glaze/json/read.hpp"

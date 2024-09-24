@@ -3,8 +3,8 @@
 
 #pragma once
 
-#include "glaze/binary/read.hpp"
-#include "glaze/binary/write.hpp"
+#include "glaze/beve/read.hpp"
+#include "glaze/beve/write.hpp"
 #include "glaze/core/seek.hpp"
 #include "glaze/core/wrappers.hpp"
 

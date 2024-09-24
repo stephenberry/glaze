@@ -3,7 +3,7 @@
 
 #pragma once
 
-#include "glaze/binary/header.hpp"
+#include "glaze/beve/header.hpp"
 #include "glaze/json/write.hpp"
 
 namespace glz
