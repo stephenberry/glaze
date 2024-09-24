@@ -1107,6 +1107,10 @@ namespace glz::detail
 
       return best_index;
    }
+   
+   // For full hashing we perform a rich_bitmix on the tail end
+   // This is because most cases that require full hashes are because
+   // the tail end is the only unique part
 
    // Do not call this at runtime, it is assumes the key lies within min_length and max_length
    inline constexpr uint64_t full_hash_impl(const sv key, const uint64_t seed, const auto min_length,
@@ -1124,7 +1128,7 @@ namespace glz::detail
             h = bitmix(to_uint64(d0), h);
          }
          // Handle potential tail. We know we have at least 8
-         return bitmix(to_uint64(data + n - 8), h);
+         return rich_bitmix(to_uint64(data + n - 8), h);
       }
       else {
          const auto n = key.size();
@@ -1140,7 +1144,7 @@ namespace glz::detail
             h = bitmix(to_uint64(d0), h);
          }
          // Handle potential tail. We know we have at least 8
-         return bitmix(to_uint64(data + n - 8), h);
+         return rich_bitmix(to_uint64(data + n - 8), h);
       }
    }
 
@@ -1164,7 +1168,7 @@ namespace glz::detail
             h = bitmix(to_uint64(d0), h);
          }
          // Handle potential tail. We know we have at least 8
-         return bitmix(to_uint64(it + n - 8), h);
+         return rich_bitmix(to_uint64(it + n - 8), h);
       }
       else {
          if (n < 8) {
@@ -1177,7 +1181,7 @@ namespace glz::detail
             h = bitmix(to_uint64(d0), h);
          }
          // Handle potential tail. We know we have at least 8
-         return bitmix(to_uint64(it + n - 8), h);
+         return rich_bitmix(to_uint64(it + n - 8), h);
       }
    }
 
@@ -1918,17 +1922,44 @@ namespace glz::detail
    {
       static constexpr auto N = refl<T>.N;
       static constexpr auto bsize = bucket_size(hash_type::full_flat, N);
+      static constexpr auto min_length = HashInfo.min_length;
+      static constexpr auto max_length = HashInfo.max_length;
+      static constexpr auto length_range = max_length - min_length;
 
       GLZ_ALWAYS_INLINE static constexpr size_t op(auto&& it, auto&& end) noexcept
       {
-         const auto* c = quote_memchr<HashInfo.min_length>(it, end);
-         if (c) [[likely]] {
-            const auto n = uint8_t(static_cast<std::decay_t<decltype(it)>>(c) - it);
-            const auto h = full_hash<HashInfo.min_length, HashInfo.max_length, HashInfo.seed>(it, n);
+         // For JSON we require at a minimum ":1} characters after a key (1 being a single char number)
+         // This means that we can require all these characters to exist for SWAR parsing
+         
+         if constexpr (length_range == 0) {
+            if ((it + min_length) >= end) [[unlikely]] {
+               return N;
+            }
+            const auto h = full_hash<HashInfo.min_length, HashInfo.max_length, HashInfo.seed>(it, min_length);
             return HashInfo.table[h % bsize];
          }
-         else [[unlikely]] {
-            return N;
+         else {
+            if constexpr (length_range == 1) {
+               auto quote = it + min_length;
+               if ((quote + 1) >= end) [[unlikely]] {
+                  return N;
+               }
+               
+               const auto n = min_length + uint8_t(*quote != '"');
+               const auto h = full_hash<HashInfo.min_length, HashInfo.max_length, HashInfo.seed>(it, n);
+               return HashInfo.table[h % bsize];
+            }
+            else {
+               const auto* c = quote_memchr<HashInfo.min_length>(it, end);
+               if (c) [[likely]] {
+                  const auto n = uint8_t(static_cast<std::decay_t<decltype(it)>>(c) - it);
+                  const auto h = full_hash<HashInfo.min_length, HashInfo.max_length, HashInfo.seed>(it, n);
+                  return HashInfo.table[h % bsize];
+               }
+               else [[unlikely]] {
+                  return N;
+               }
+            }
          }
       }
    };
