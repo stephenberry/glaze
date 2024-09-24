@@ -301,7 +301,7 @@ struct glz::meta<my_struct> {
 
 ## Custom Read/Write
 
-Custom reading and writing can be achieved through the powerful `to_json`/`from_json` specialization approach, which is described here: [custom-serialization.md](https://github.com/stephenberry/glaze/blob/main/docs/custom-serialization.md). However, this only works for user defined types.
+Custom reading and writing can be achieved through the powerful `to`/`from` specialization approach, which is described here: [custom-serialization.md](https://github.com/stephenberry/glaze/blob/main/docs/custom-serialization.md). However, this only works for user defined types.
 
 For common use cases or cases where a specific member variable should have special reading and writing, you can use `glz::custom` to register read/write member functions, std::functions, or lambda functions.
 
@@ -695,8 +695,8 @@ For example: `glz::read<glz::opts{.error_on_unknown_keys = false}>(...)` will tu
 
 `glz::opts` can also switch between formats:
 
-- `glz::read<glz::opts{.format = glz::binary}>(...)` -> `glz::read_binary(...)`
-- `glz::read<glz::opts{.format = glz::json}>(...)` -> `glz::read_json(...)`
+- `glz::read<glz::opts{.format = glz::BEVE}>(...)` -> `glz::read_beve(...)`
+- `glz::read<glz::opts{.format = glz::JSON}>(...)` -> `glz::read_json(...)`
 
 ## Available Compile Time Options
 
