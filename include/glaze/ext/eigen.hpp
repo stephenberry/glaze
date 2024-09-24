@@ -133,7 +133,7 @@ namespace glz
          static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
             std::span<typename T::Scalar, T::RowsAtCompileTime * T::ColsAtCompileTime> view(value.data(), value.size());
-            detail::read<json>::op<Opts>(view, ctx, it, end);
+            detail::read<JSON>::op<Opts>(view, ctx, it, end);
          }
       };
 
@@ -145,7 +145,7 @@ namespace glz
          static void op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix) noexcept
          {
             std::span<typename T::Scalar, T::RowsAtCompileTime * T::ColsAtCompileTime> view(value.data(), value.size());
-            detail::write<json>::op<Opts>(view, ctx, b, ix);
+            detail::write<JSON>::op<Opts>(view, ctx, b, ix);
          }
       };
    } // namespace detail

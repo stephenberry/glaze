@@ -29,7 +29,7 @@ namespace glz
             auto& v = value;
             // check if we are decoding a string, which could be a file path
             if (*it == '"') {
-               read<json>::op<Opts>(v.str, ctx, it, end);
+               read<JSON>::op<Opts>(v.str, ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
                   return;
 

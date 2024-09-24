@@ -63,7 +63,7 @@ namespace glz
             };
 
             for (size_t i = 0; i < n; ++i) {
-               read<json>::op<Opts>(*value_it++, ctx, it, end);
+               read<JSON>::op<Opts>(*value_it++, ctx, it, end);
                if (it == end) {
                   if constexpr (erasable<T>) {
                      value.erase(value_it,
@@ -82,7 +82,7 @@ namespace glz
             // growing
             if constexpr (emplace_backable<T>) {
                while (it < end) {
-                  read<json>::op<Opts>(value.emplace_back(), ctx, it, end);
+                  read<JSON>::op<Opts>(value.emplace_back(), ctx, it, end);
                   if (bool(ctx.error)) {
                      return;
                   }
@@ -140,13 +140,13 @@ namespace glz
                   read_new_lines();
                }
                if constexpr (is_std_tuple<T>) {
-                  read<json>::op<Opts>(std::get<I>(value), ctx, it, end);
+                  read<JSON>::op<Opts>(std::get<I>(value), ctx, it, end);
                }
                else if constexpr (glaze_array_t<T>) {
-                  read<json>::op<Opts>(get_member(value, glz::get<I>(meta_v<T>)), ctx, it, end);
+                  read<JSON>::op<Opts>(get_member(value, glz::get<I>(meta_v<T>)), ctx, it, end);
                }
                else {
-                  read<json>::op<Opts>(glz::get<I>(value), ctx, it, end);
+                  read<JSON>::op<Opts>(glz::get<I>(value), ctx, it, end);
                }
             });
          }
@@ -180,12 +180,12 @@ namespace glz
 
             if (!is_empty) {
                auto it = value.begin();
-               write<json>::op<Opts>(*it, ctx, std::forward<Args>(args)...);
+               write<JSON>::op<Opts>(*it, ctx, std::forward<Args>(args)...);
                ++it;
                const auto end = value.end();
                for (; it != end; ++it) {
                   dump<'\n'>(std::forward<Args>(args)...);
-                  write<json>::op<Opts>(*it, ctx, std::forward<Args>(args)...);
+                  write<JSON>::op<Opts>(*it, ctx, std::forward<Args>(args)...);
                }
             }
          }
@@ -210,10 +210,10 @@ namespace glz
             using V = std::decay_t<T>;
             for_each<N>([&](auto I) {
                if constexpr (glaze_array_t<V>) {
-                  write<json>::op<Opts>(get_member(value, glz::get<I>(meta_v<T>)), ctx, std::forward<Args>(args)...);
+                  write<JSON>::op<Opts>(get_member(value, glz::get<I>(meta_v<T>)), ctx, std::forward<Args>(args)...);
                }
                else {
-                  write<json>::op<Opts>(glz::get<I>(value), ctx, std::forward<Args>(args)...);
+                  write<JSON>::op<Opts>(glz::get<I>(value), ctx, std::forward<Args>(args)...);
                }
                constexpr bool needs_new_line = I < N - 1;
                if constexpr (needs_new_line) {
@@ -242,10 +242,10 @@ namespace glz
             using V = std::decay_t<T>;
             for_each<N>([&](auto I) {
                if constexpr (glaze_array_t<V>) {
-                  write<json>::op<Opts>(value.*std::get<I>(meta_v<V>), ctx, std::forward<Args>(args)...);
+                  write<JSON>::op<Opts>(value.*std::get<I>(meta_v<V>), ctx, std::forward<Args>(args)...);
                }
                else {
-                  write<json>::op<Opts>(std::get<I>(value), ctx, std::forward<Args>(args)...);
+                  write<JSON>::op<Opts>(std::get<I>(value), ctx, std::forward<Args>(args)...);
                }
                constexpr bool needs_new_line = I < N - 1;
                if constexpr (needs_new_line) {

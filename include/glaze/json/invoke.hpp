@@ -54,7 +54,7 @@ namespace glz
                   }
                   else {
                      Tuple inputs{};
-                     read<json>::op<Opts>(inputs, ctx, it, end);
+                     read<JSON>::op<Opts>(inputs, ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
                      std::apply(
@@ -79,7 +79,7 @@ namespace glz
                   }
                   else {
                      Tuple inputs{};
-                     read<json>::op<Opts>(inputs, ctx, it, end);
+                     read<JSON>::op<Opts>(inputs, ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
                      std::apply(value.val, inputs);
@@ -109,7 +109,7 @@ namespace glz
                if constexpr (std::is_void_v<Ret>) {
                   using Tuple = typename function_traits<V>::arguments;
                   Tuple inputs{};
-                  write<json>::op<Opts>(inputs, ctx, args...);
+                  write<JSON>::op<Opts>(inputs, ctx, args...);
                }
                else {
                   static_assert(false_v<T>, "std::function must have void return");
@@ -203,7 +203,7 @@ namespace glz
                   if (input != value.prev) {
                      Tuple inputs{};
                      it = start;
-                     read<json>::op<Opts>(inputs, ctx, it, end);
+                     read<JSON>::op<Opts>(inputs, ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
                      std::apply(value.func, inputs);
@@ -227,7 +227,7 @@ namespace glz
             dump<'['>(args...);
             using Tuple = typename function_traits<V>::arguments;
             Tuple inputs{};
-            write<json>::op<Opts>(inputs, ctx, args...);
+            write<JSON>::op<Opts>(inputs, ctx, args...);
             dump<']'>(args...);
          }
       };

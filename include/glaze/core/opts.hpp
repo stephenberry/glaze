@@ -12,7 +12,7 @@ namespace glz
    // format
    inline constexpr uint32_t INVALID = 0;
    inline constexpr uint32_t BEVE = 1;
-   inline constexpr uint32_t json = 10;
+   inline constexpr uint32_t JSON = 10;
    inline constexpr uint32_t JSON_PTR = 20;
    inline constexpr uint32_t NDJSON = 100; // new line delimited JSON
    inline constexpr uint32_t MUSTACHE = 500;
@@ -52,7 +52,7 @@ namespace glz
    struct opts
    {
       // USER CONFIGURABLE
-      uint32_t format = json;
+      uint32_t format = JSON;
       bool_t null_terminated = GLZ_NULL_TERMINATED; // Whether the input buffer is null terminated
       bool_t comments = false; // Support reading in JSONC style comments
       bool_t error_on_unknown_keys = true; // Error when an unknown key is encountered
@@ -315,7 +315,7 @@ namespace glz
    constexpr auto set_json()
    {
       opts ret = Opts;
-      ret.format = json;
+      ret.format = JSON;
       return ret;
    }
 }
@@ -370,7 +370,7 @@ namespace glz
       if constexpr (Format == BEVE) {
          return write_beve_supported<T>;
       }
-      else if constexpr (Format == json) {
+      else if constexpr (Format == JSON) {
          return write_json_supported<T>;
       }
       else if constexpr (Format == NDJSON) {
@@ -390,7 +390,7 @@ namespace glz
       if constexpr (Format == BEVE) {
          return read_beve_supported<T>;
       }
-      else if constexpr (Format == json) {
+      else if constexpr (Format == JSON) {
          return read_json_supported<T>;
       }
       else if constexpr (Format == NDJSON) {

@@ -4331,7 +4331,7 @@ namespace glz::detail
       template <auto Opts>
       static void op(date& value, auto&&... args)
       {
-         read<json>::op<Opts>(value.human_readable, args...);
+         read<JSON>::op<Opts>(value.human_readable, args...);
          value.data = std::stoi(value.human_readable);
       }
    };
@@ -4343,7 +4343,7 @@ namespace glz::detail
       static void op(date& value, auto&&... args) noexcept
       {
          value.human_readable = std::to_string(value.data);
-         write<json>::op<Opts>(value.human_readable, args...);
+         write<JSON>::op<Opts>(value.human_readable, args...);
       }
    };
 }
@@ -8216,7 +8216,7 @@ namespace glz::detail
       template <auto Opts>
       static void op(custom_struct& value, auto&&... args)
       {
-         read<json>::op<Opts>(value.str, args...);
+         read<JSON>::op<Opts>(value.str, args...);
          value.str += "read";
       }
    };
@@ -8228,7 +8228,7 @@ namespace glz::detail
       static void op(custom_struct& value, auto&&... args) noexcept
       {
          value.str += "write";
-         write<json>::op<Opts>(value.str, args...);
+         write<JSON>::op<Opts>(value.str, args...);
       }
    };
 }

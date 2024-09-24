@@ -30,7 +30,7 @@ namespace glz
          static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept
          {
             static thread_local std::string s{};
-            read<json>::op<Opts>(s, ctx, args...);
+            read<JSON>::op<Opts>(s, ctx, args...);
             auto pe = glz::read<Opts>(value.val, s);
             if (pe) [[unlikely]] {
                ctx.error = pe.ec;
@@ -46,9 +46,9 @@ namespace glz
          {
             static thread_local std::string s(128, ' ');
             size_t ix = 0; // overwrite index
-            write<json>::op<Opts>(value.val, ctx, s, ix);
+            write<JSON>::op<Opts>(value.val, ctx, s, ix);
             s.resize(ix);
-            write<json>::op<Opts>(s, ctx, args...);
+            write<JSON>::op<Opts>(s, ctx, args...);
          }
       };
 
@@ -58,7 +58,7 @@ namespace glz
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&& value, auto&&... args) noexcept
          {
-            read<json>::op<opt_true<Opts, T::opts_member>>(value.val, args...);
+            read<JSON>::op<opt_true<Opts, T::opts_member>>(value.val, args...);
          }
       };
 
@@ -68,7 +68,7 @@ namespace glz
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept
          {
-            write<json>::op<opt_true<Opts, T::opts_member>>(value.val, ctx, args...);
+            write<JSON>::op<opt_true<Opts, T::opts_member>>(value.val, ctx, args...);
          }
       };
 

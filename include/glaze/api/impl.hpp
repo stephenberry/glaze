@@ -44,7 +44,7 @@ namespace glz
          error_ctx pe{};
          bool success;
 
-         if (format == json) {
+         if (format == JSON) {
             success = detail::seek_impl([&](auto&& val) { pe = glz::read<opts{}>(val, data); }, user, path);
          }
          else {
@@ -64,7 +64,7 @@ namespace glz
       bool write(const uint32_t format, const sv path, std::string& data) noexcept override
       {
          // TODO: Support write errors when seeking
-         if (format == json) {
+         if (format == JSON) {
             return detail::seek_impl([&](auto&& val) { std::ignore = glz::write_json(val, data); }, user, path);
          }
          else {

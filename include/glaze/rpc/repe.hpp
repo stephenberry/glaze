@@ -1109,7 +1109,7 @@ namespace glz::repe
             return finish();
          }
 
-         if constexpr (Opts.format == json) {
+         if constexpr (Opts.format == JSON) {
             if (*b == '[') {
                ++b;
             }
@@ -1144,7 +1144,7 @@ namespace glz::repe
             return finish();
          }
 
-         if constexpr (Opts.format == json) {
+         if constexpr (Opts.format == JSON) {
             if (*b == ',') {
                ++b;
             }
