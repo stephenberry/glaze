@@ -1107,7 +1107,7 @@ namespace glz::detail
 
       return best_index;
    }
-   
+
    // For full hashing we perform a rich_bitmix on the tail end
    // This is because most cases that require full hashes are because
    // the tail end is the only unique part
@@ -1930,7 +1930,7 @@ namespace glz::detail
       {
          // For JSON we require at a minimum ":1} characters after a key (1 being a single char number)
          // This means that we can require all these characters to exist for SWAR parsing
-         
+
          if constexpr (length_range == 0) {
             if ((it + min_length) >= end) [[unlikely]] {
                return N;
@@ -1944,7 +1944,7 @@ namespace glz::detail
                if ((quote + 1) >= end) [[unlikely]] {
                   return N;
                }
-               
+
                const auto n = min_length + uint8_t(*quote != '"');
                const auto h = full_hash<HashInfo.min_length, HashInfo.max_length, HashInfo.seed>(it, n);
                return HashInfo.table[h % bsize];

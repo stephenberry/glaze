@@ -9541,7 +9541,7 @@ suite same_length_keys_test = [] {
    "same_length_keys"_test = [] {
       static constexpr auto info = glz::detail::make_keys_info(glz::refl<same_length_keys>.keys);
       static_assert(info.type == glz::detail::hash_type::full_flat);
-      
+
       same_length_keys obj{};
       std::string buffer{};
       expect(not glz::write_json(obj, buffer));
@@ -9566,7 +9566,7 @@ suite offset_one_test = [] {
    "offset_one"_test = [] {
       static constexpr auto info = glz::detail::make_keys_info(glz::refl<same_length_keys>.keys);
       static_assert(info.type == glz::detail::hash_type::full_flat);
-      
+
       offset_one obj{};
       std::string buffer{};
       expect(not glz::write_json(obj, buffer));
