@@ -10,8 +10,7 @@
 namespace glz
 {
    // format
-   inline constexpr uint32_t binary = 0; // same as BEVE format
-   inline constexpr uint32_t beve = 0;
+   inline constexpr uint32_t BEVE = 0;
    inline constexpr uint32_t json = 10;
    inline constexpr uint32_t JSON_PTR = 20;
    inline constexpr uint32_t ndjson = 100; // new line delimited JSON
@@ -307,7 +306,7 @@ namespace glz
    constexpr auto set_binary()
    {
       opts ret = Opts;
-      ret.format = binary;
+      ret.format = BEVE;
       return ret;
    }
 
@@ -325,10 +324,10 @@ namespace glz
    namespace detail
    {
       template <class T = void>
-      struct to_binary;
+      struct to_beve;
 
       template <class T = void>
-      struct from_binary;
+      struct from_beve;
 
       template <class T = void>
       struct to_json;
@@ -350,10 +349,10 @@ namespace glz
    }
 
    template <class T>
-   concept write_binary_supported = requires { detail::to_binary<std::remove_cvref_t<T>>{}; };
+   concept write_binary_supported = requires { detail::to_beve<std::remove_cvref_t<T>>{}; };
 
    template <class T>
-   concept read_binary_supported = requires { detail::from_binary<std::remove_cvref_t<T>>{}; };
+   concept read_binary_supported = requires { detail::from_beve<std::remove_cvref_t<T>>{}; };
 
    template <class T>
    concept write_json_supported = requires { detail::to_json<std::remove_cvref_t<T>>{}; };
@@ -376,7 +375,7 @@ namespace glz
    template <uint32_t Format, class T>
    consteval bool write_format_supported()
    {
-      if constexpr (Format == binary) {
+      if constexpr (Format == BEVE) {
          return write_binary_supported<T>;
       }
       else if constexpr (Format == json) {
@@ -396,7 +395,7 @@ namespace glz
    template <uint32_t Format, class T>
    consteval bool read_format_supported()
    {
-      if constexpr (Format == binary) {
+      if constexpr (Format == BEVE) {
          return read_binary_supported<T>;
       }
       else if constexpr (Format == json) {

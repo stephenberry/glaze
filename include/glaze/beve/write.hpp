@@ -87,38 +87,38 @@ namespace glz
       }
 
       template <>
-      struct write<binary>
+      struct write<BEVE>
       {
          template <auto Opts, class T, is_context Ctx, class B, class IX>
          GLZ_ALWAYS_INLINE static void op(T&& value, Ctx&& ctx, B&& b, IX&& ix) noexcept
          {
-            to_binary<std::remove_cvref_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
+            to_beve<std::remove_cvref_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
                                                                  std::forward<B>(b), std::forward<IX>(ix));
          }
 
          template <auto Opts, class T, is_context Ctx, class B, class IX>
          GLZ_ALWAYS_INLINE static void no_header(T&& value, Ctx&& ctx, B&& b, IX&& ix) noexcept
          {
-            to_binary<std::remove_cvref_t<T>>::template no_header<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
+            to_beve<std::remove_cvref_t<T>>::template no_header<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
                                                                         std::forward<B>(b), std::forward<IX>(ix));
          }
       };
 
       template <class T>
          requires(glaze_value_t<T> && !custom_write<T>)
-      struct to_binary<T>
+      struct to_beve<T>
       {
          template <auto Opts, class Value, is_context Ctx, class B, class IX>
          GLZ_ALWAYS_INLINE static void op(Value&& value, Ctx&& ctx, B&& b, IX&& ix) noexcept
          {
             using V = std::remove_cvref_t<decltype(get_member(std::declval<Value>(), meta_wrapper_v<T>))>;
-            to_binary<V>::template op<Opts>(get_member(std::forward<Value>(value), meta_wrapper_v<T>),
+            to_beve<V>::template op<Opts>(get_member(std::forward<Value>(value), meta_wrapper_v<T>),
                                             std::forward<Ctx>(ctx), std::forward<B>(b), std::forward<IX>(ix));
          }
       };
 
       template <always_null_t T>
-      struct to_binary<T>
+      struct to_beve<T>
       {
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&&, auto&&... args) noexcept
@@ -128,7 +128,7 @@ namespace glz
       };
 
       template <>
-      struct to_binary<hidden>
+      struct to_beve<hidden>
       {
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&& value, auto&&, auto&&...) noexcept
@@ -138,7 +138,7 @@ namespace glz
       };
 
       template <is_bitset T>
-      struct to_binary<T>
+      struct to_beve<T>
       {
          template <auto Opts, class... Args>
          static void op(auto&& value, is_context auto&&, auto&&... args) noexcept
@@ -163,7 +163,7 @@ namespace glz
       };
 
       template <glaze_flags_t T>
-      struct to_binary<T>
+      struct to_beve<T>
       {
          template <auto Opts>
          static void op(auto&& value, is_context auto&&, auto&& b, auto&& ix)
@@ -181,7 +181,7 @@ namespace glz
       };
 
       template <is_member_function_pointer T>
-      struct to_binary<T>
+      struct to_beve<T>
       {
          template <auto Opts, class... Args>
          GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&&, Args&&...) noexcept
@@ -190,7 +190,7 @@ namespace glz
 
       // write includers as empty strings
       template <is_includer T>
-      struct to_binary<T>
+      struct to_beve<T>
       {
          template <auto Opts, class... Args>
          GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&&, Args&&... args) noexcept
@@ -203,7 +203,7 @@ namespace glz
       };
 
       template <boolean_like T>
-      struct to_binary<T> final
+      struct to_beve<T> final
       {
          template <auto Opts, class... Args>
          GLZ_ALWAYS_INLINE static void op(const bool value, is_context auto&&, Args&&... args) noexcept
@@ -213,32 +213,32 @@ namespace glz
       };
 
       template <func_t T>
-      struct to_binary<T> final
+      struct to_beve<T> final
       {
          template <auto Opts, class... Args>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
-            write<binary>::op<Opts>(name_v<std::decay_t<decltype(value)>>, ctx, args...);
+            write<BEVE>::op<Opts>(name_v<std::decay_t<decltype(value)>>, ctx, args...);
          }
       };
 
       template <class T>
-      struct to_binary<basic_raw_json<T>> final
+      struct to_beve<basic_raw_json<T>> final
       {
          template <auto Opts, class... Args>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
-            write<binary>::op<Opts>(value.str, ctx, std::forward<Args>(args)...);
+            write<BEVE>::op<Opts>(value.str, ctx, std::forward<Args>(args)...);
          }
       };
 
       template <class T>
-      struct to_binary<basic_text<T>> final
+      struct to_beve<basic_text<T>> final
       {
          template <auto Opts, class... Args>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
-            write<binary>::op<Opts>(value.str, ctx, std::forward<Args>(args)...);
+            write<BEVE>::op<Opts>(value.str, ctx, std::forward<Args>(args)...);
          }
       };
 
@@ -248,7 +248,7 @@ namespace glz
       }(std::make_index_sequence<std::variant_size_v<V>>{});
 
       template <is_variant T>
-      struct to_binary<T> final
+      struct to_beve<T> final
       {
          template <auto Opts, class... Args>
          static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
@@ -265,7 +265,7 @@ namespace glz
 
                   dump_type(tag, args...);
                   dump_compressed_int<index>(args...);
-                  write<binary>::op<Opts>(v, ctx, args...);
+                  write<BEVE>::op<Opts>(v, ctx, args...);
                },
                value);
          }
@@ -273,7 +273,7 @@ namespace glz
 
       template <class T>
          requires num_t<T> || char_t<T> || glaze_enum_t<T>
-      struct to_binary<T> final
+      struct to_beve<T> final
       {
          template <auto Opts, class... Args>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&&, Args&&... args) noexcept
@@ -293,7 +293,7 @@ namespace glz
 
       template <class T>
          requires(std::is_enum_v<T> && !glaze_enum_t<T>)
-      struct to_binary<T> final
+      struct to_beve<T> final
       {
          template <auto Opts, class... Args>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&&, Args&&... args) noexcept
@@ -315,7 +315,7 @@ namespace glz
 
       template <class T>
          requires complex_t<T>
-      struct to_binary<T> final
+      struct to_beve<T> final
       {
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&&, auto&&... args) noexcept
@@ -341,7 +341,7 @@ namespace glz
       };
 
       template <str_t T>
-      struct to_binary<T> final
+      struct to_beve<T> final
       {
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&&, auto&& b, auto&& ix) noexcept
@@ -385,7 +385,7 @@ namespace glz
       };
 
       template <writable_array_t T>
-      struct to_binary<T> final
+      struct to_beve<T> final
       {
          template <auto Opts, class... Args>
          static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
@@ -500,7 +500,7 @@ namespace glz
                dump_compressed_int<Opts>(value.size(), args...);
 
                for (auto&& x : value) {
-                  write<binary>::no_header<Opts>(x, ctx, args...);
+                  write<BEVE>::no_header<Opts>(x, ctx, args...);
                }
             }
             else {
@@ -509,14 +509,14 @@ namespace glz
                dump_compressed_int<Opts>(value.size(), args...);
 
                for (auto&& x : value) {
-                  write<binary>::op<Opts>(x, ctx, args...);
+                  write<BEVE>::op<Opts>(x, ctx, args...);
                }
             }
          }
       };
 
       template <pair_t T>
-      struct to_binary<T> final
+      struct to_beve<T> final
       {
          template <auto Opts, class... Args>
          GLZ_ALWAYS_INLINE static auto op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
@@ -530,13 +530,13 @@ namespace glz
 
             dump_compressed_int<Opts>(1, args...);
             const auto& [k, v] = value;
-            write<binary>::no_header<Opts>(k, ctx, args...);
-            write<binary>::op<Opts>(v, ctx, args...);
+            write<BEVE>::no_header<Opts>(k, ctx, args...);
+            write<BEVE>::op<Opts>(v, ctx, args...);
          }
       };
 
       template <writable_map_t T>
-      struct to_binary<T> final
+      struct to_beve<T> final
       {
          template <auto Opts, class... Args>
          static auto op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
@@ -550,32 +550,32 @@ namespace glz
 
             dump_compressed_int<Opts>(value.size(), args...);
             for (auto&& [k, v] : value) {
-               write<binary>::no_header<Opts>(k, ctx, args...);
-               write<binary>::op<Opts>(v, ctx, args...);
+               write<BEVE>::no_header<Opts>(k, ctx, args...);
+               write<BEVE>::op<Opts>(v, ctx, args...);
             }
          }
       };
 
       template <nullable_t T>
          requires(std::is_array_v<T>)
-      struct to_binary<T>
+      struct to_beve<T>
       {
          template <auto Opts, class V, size_t N, class... Args>
          GLZ_ALWAYS_INLINE static void op(const V (&value)[N], is_context auto&& ctx, Args&&... args) noexcept
          {
-            write<binary>::op<Opts>(std::span{value, N}, ctx, std::forward<Args>(args)...);
+            write<BEVE>::op<Opts>(std::span{value, N}, ctx, std::forward<Args>(args)...);
          }
       };
 
       template <nullable_t T>
          requires(!std::is_array_v<T>)
-      struct to_binary<T> final
+      struct to_beve<T> final
       {
          template <auto Opts, class... Args>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
             if (value) {
-               write<binary>::op<Opts>(*value, ctx, args...);
+               write<BEVE>::op<Opts>(*value, ctx, args...);
             }
             else {
                dump<tag::null>(args...);
@@ -585,7 +585,7 @@ namespace glz
 
       template <class T>
          requires is_specialization_v<T, glz::obj> || is_specialization_v<T, glz::obj_copy>
-      struct to_binary<T>
+      struct to_beve<T>
       {
          template <auto Options>
          static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept
@@ -602,8 +602,8 @@ namespace glz
 
             invoke_table<N>([&]<size_t I>() {
                constexpr auto Opts = opening_handled_off<Options>();
-               write<binary>::no_header<Opts>(get<2 * I>(value.value), ctx, args...);
-               write<binary>::op<Opts>(get<2 * I + 1>(value.value), ctx, args...);
+               write<BEVE>::no_header<Opts>(get<2 * I>(value.value), ctx, args...);
+               write<BEVE>::op<Opts>(get<2 * I + 1>(value.value), ctx, args...);
             });
          }
       };
@@ -628,7 +628,7 @@ namespace glz
 
       template <class T>
          requires is_specialization_v<T, glz::merge>
-      struct to_binary<T>
+      struct to_beve<T>
       {
          template <auto Opts>
          static void op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix) noexcept
@@ -642,14 +642,14 @@ namespace glz
             dump_compressed_int<merge_element_count<T>()>(b, ix);
 
             [&]<size_t... I>(std::index_sequence<I...>) {
-               (write<binary>::op<opening_handled<Opts>()>(glz::get<I>(value.value), ctx, b, ix), ...);
+               (write<BEVE>::op<opening_handled<Opts>()>(glz::get<I>(value.value), ctx, b, ix), ...);
             }(std::make_index_sequence<N>{});
          }
       };
 
       template <class T>
          requires(glaze_object_t<T> || reflectable<T>)
-      struct to_binary<T> final
+      struct to_beve<T> final
       {
          static constexpr auto N = refl<T>.N;
          static constexpr size_t count_to_write = [] {
@@ -692,10 +692,10 @@ namespace glz
                }
                else {
                   if constexpr (reflectable<T>) {
-                     write<binary>::op<Opts>(get_member(value, get<I>(t)), ctx, args...);
+                     write<BEVE>::op<Opts>(get_member(value, get<I>(t)), ctx, args...);
                   }
                   else {
-                     write<binary>::op<Opts>(get_member(value, get<I>(refl<T>.values)), ctx, args...);
+                     write<BEVE>::op<Opts>(get_member(value, get<I>(refl<T>.values)), ctx, args...);
                   }
                }
             });
@@ -730,7 +730,7 @@ namespace glz
                }
                else {
                   static constexpr sv key = refl<T>.keys[I];
-                  write<binary>::no_header<Opts>(key, ctx, args...);
+                  write<BEVE>::no_header<Opts>(key, ctx, args...);
 
                   decltype(auto) member = [&]() -> decltype(auto) {
                      if constexpr (reflectable<T>) {
@@ -741,7 +741,7 @@ namespace glz
                      }
                   }();
 
-                  write<binary>::op<Opts>(get_member(value, member), ctx, args...);
+                  write<BEVE>::op<Opts>(get_member(value, member), ctx, args...);
                }
             });
          }
@@ -749,7 +749,7 @@ namespace glz
 
       template <class T>
          requires glaze_array_t<T>
-      struct to_binary<T> final
+      struct to_beve<T> final
       {
          template <auto Opts, class... Args>
          static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
@@ -760,13 +760,13 @@ namespace glz
             dump_compressed_int<N>(args...);
 
             invoke_table<refl<T>.N>(
-               [&]<size_t I>() { write<binary>::op<Opts>(get_member(value, get<I>(refl<T>.values)), ctx, args...); });
+               [&]<size_t I>() { write<BEVE>::op<Opts>(get_member(value, get<I>(refl<T>.values)), ctx, args...); });
          }
       };
 
       template <class T>
          requires(tuple_t<T> || is_std_tuple<T>)
-      struct to_binary<T> final
+      struct to_beve<T> final
       {
          template <auto Opts, class... Args>
          static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
@@ -778,24 +778,24 @@ namespace glz
 
             if constexpr (is_std_tuple<T>) {
                [&]<size_t... I>(std::index_sequence<I...>) {
-                  (write<binary>::op<Opts>(std::get<I>(value), ctx, args...), ...);
+                  (write<BEVE>::op<Opts>(std::get<I>(value), ctx, args...), ...);
                }(std::make_index_sequence<N>{});
             }
             else {
                [&]<size_t... I>(std::index_sequence<I...>) {
-                  (write<binary>::op<Opts>(glz::get<I>(value), ctx, args...), ...);
+                  (write<BEVE>::op<Opts>(glz::get<I>(value), ctx, args...), ...);
                }(std::make_index_sequence<N>{});
             }
          }
       };
 
       template <filesystem_path T>
-      struct to_binary<T>
+      struct to_beve<T>
       {
          template <auto Opts, class... Args>
          GLZ_ALWAYS_INLINE static void op(auto&& value, Args&&... args) noexcept
          {
-            to_binary<decltype(value.string())>::template op<Opts>(value.string(), std::forward<Args>(args)...);
+            to_beve<decltype(value.string())>::template op<Opts>(value.string(), std::forward<Args>(args)...);
          }
       };
 
@@ -810,13 +810,13 @@ namespace glz
       };
 
       template <>
-      struct write_partial<binary>
+      struct write_partial<BEVE>
       {
          template <auto& Partial, auto Opts, class T, is_context Ctx, class B, class IX>
          static void op(T&& value, Ctx&& ctx, B&& b, IX&& ix) noexcept
          {
             if constexpr (std::count(Partial.begin(), Partial.end(), "") > 0) {
-               detail::write<binary>::op<Opts>(value, ctx, b, ix);
+               detail::write<BEVE>::op<Opts>(value, ctx, b, ix);
             }
             else if constexpr (write_binary_partial_invocable<Partial, Opts, T, Ctx, B, IX>) {
                to_binary_partial<std::remove_cvref_t<T>>::template op<Partial, Opts>(
@@ -862,8 +862,8 @@ namespace glz
                   static constexpr auto index = member_it->second.index();
                   static constexpr decltype(auto) element = get<index>(member_it->second);
 
-                  detail::write<binary>::no_header<Opts>(key, ctx, b, ix);
-                  write_partial<binary>::op<sub_partial, Opts>(glz::detail::get_member(value, element), ctx, b, ix);
+                  detail::write<BEVE>::no_header<Opts>(key, ctx, b, ix);
+                  write_partial<BEVE>::op<sub_partial, Opts>(glz::detail::get_member(value, element), ctx, b, ix);
                });
             }
             else if constexpr (writable_map_t<T>) {
@@ -877,10 +877,10 @@ namespace glz
                   static constexpr auto key_value = get<0>(group);
                   static constexpr auto sub_partial = get<1>(group);
                   if constexpr (findable<std::decay_t<T>, decltype(key_value)>) {
-                     detail::write<binary>::no_header<Opts>(key_value, ctx, b, ix);
+                     detail::write<BEVE>::no_header<Opts>(key_value, ctx, b, ix);
                      auto it = value.find(key_value);
                      if (it != value.end()) {
-                        write_partial<binary>::op<sub_partial, Opts>(it->second, ctx, b, ix);
+                        write_partial<BEVE>::op<sub_partial, Opts>(it->second, ctx, b, ix);
                      }
                      else {
                         ctx.error = error_code::invalid_partial_key;
@@ -890,10 +890,10 @@ namespace glz
                   else {
                      static thread_local auto key =
                         typename std::decay_t<T>::key_type(key_value); // TODO handle numeric keys
-                     detail::write<binary>::no_header<Opts>(key, ctx, b, ix);
+                     detail::write<BEVE>::no_header<Opts>(key, ctx, b, ix);
                      auto it = value.find(key);
                      if (it != value.end()) {
-                        write_partial<binary>::op<sub_partial, Opts>(it->second, ctx, b, ix);
+                        write_partial<BEVE>::op<sub_partial, Opts>(it->second, ctx, b, ix);
                      }
                      else {
                         ctx.error = error_code::invalid_partial_key;
@@ -909,7 +909,7 @@ namespace glz
    template <write_binary_supported T, class Buffer>
    [[nodiscard]] error_ctx write_binary(T&& value, Buffer&& buffer) noexcept
    {
-      return write<opts{.format = binary}>(std::forward<T>(value), std::forward<Buffer>(buffer));
+      return write<opts{.format = BEVE}>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
 
    template <opts Opts = opts{}, write_binary_supported T>
@@ -921,7 +921,7 @@ namespace glz
    template <auto& Partial, write_binary_supported T, class Buffer>
    [[nodiscard]] error_ctx write_binary(T&& value, Buffer&& buffer) noexcept
    {
-      return write<Partial, opts{.format = binary}>(std::forward<T>(value), std::forward<Buffer>(buffer));
+      return write<Partial, opts{.format = BEVE}>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
 
    // requires file_name to be null terminated
@@ -950,14 +950,14 @@ namespace glz
    template <write_binary_supported T, class Buffer>
    [[nodiscard]] error_ctx write_binary_untagged(T&& value, Buffer&& buffer) noexcept
    {
-      return write<opts{.format = binary, .structs_as_arrays = true}>(std::forward<T>(value),
+      return write<opts{.format = BEVE, .structs_as_arrays = true}>(std::forward<T>(value),
                                                                       std::forward<Buffer>(buffer));
    }
 
    template <write_binary_supported T>
    [[nodiscard]] error_ctx write_binary_untagged(T&& value) noexcept
    {
-      return write<opts{.format = binary, .structs_as_arrays = true}>(std::forward<T>(value));
+      return write<opts{.format = BEVE, .structs_as_arrays = true}>(std::forward<T>(value));
    }
 
    template <opts Opts = opts{}, write_binary_supported T>

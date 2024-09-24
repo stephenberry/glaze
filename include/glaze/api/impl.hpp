@@ -49,7 +49,7 @@ namespace glz
          }
          else {
             success =
-               detail::seek_impl([&](auto&& val) { pe = glz::read<opts{.format = binary}>(val, data); }, user, path);
+               detail::seek_impl([&](auto&& val) { pe = glz::read<opts{.format = BEVE}>(val, data); }, user, path);
          }
 
          if (success) {

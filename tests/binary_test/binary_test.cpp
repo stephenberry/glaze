@@ -434,8 +434,8 @@ void bench()
       auto tend = std::chrono::high_resolution_clock::now();
       auto duration = std::chrono::duration_cast<std::chrono::duration<double>>(tend - tstart).count();
       auto mbytes_per_sec = repeat * buffer.size() / (duration * 1048576);
-      std::cout << "to_binary size: " << buffer.size() << " bytes\n";
-      std::cout << "to_binary: " << duration << " s, " << mbytes_per_sec << " MB/s"
+      std::cout << "to_beve size: " << buffer.size() << " bytes\n";
+      std::cout << "to_beve: " << duration << " s, " << mbytes_per_sec << " MB/s"
                 << "\n";
 
       tstart = std::chrono::high_resolution_clock::now();
@@ -445,7 +445,7 @@ void bench()
       tend = std::chrono::high_resolution_clock::now();
       duration = std::chrono::duration_cast<std::chrono::duration<double>>(tend - tstart).count();
       mbytes_per_sec = repeat * buffer.size() / (duration * 1048576);
-      std::cout << "from_binary: " << duration << " s, " << mbytes_per_sec << " MB/s"
+      std::cout << "from_beve: " << duration << " s, " << mbytes_per_sec << " MB/s"
                 << "\n";
       glz::trace_end("bench");
    };
@@ -1000,7 +1000,7 @@ suite skip_test = [] {
       expect(not glz::write_binary(f, s));
 
       nothing obj{};
-      expect(!glz::read<glz::opts{.format = glz::binary, .error_on_unknown_keys = false}>(obj, s));
+      expect(!glz::read<glz::opts{.format = glz::BEVE, .error_on_unknown_keys = false}>(obj, s));
    };
 };
 
@@ -1365,7 +1365,7 @@ suite example_reflection_without_keys_test = [] {
    "example_reflection_without_keys"_test = [] {
       std::string without_keys;
       my_example obj{.i = 55, .d = 3.14, .hello = "happy"};
-      constexpr glz::opts options{.format = glz::binary, .structs_as_arrays = true};
+      constexpr glz::opts options{.format = glz::BEVE, .structs_as_arrays = true};
       expect(not glz::write<options>(obj, without_keys));
 
       std::string with_keys;
@@ -1408,7 +1408,7 @@ suite my_struct_without_keys_test = [] {
    "my_struct_without_keys"_test = [] {
       std::string without_keys;
       my_struct obj{.i = 55, .d = 3.14, .hello = "happy"};
-      constexpr glz::opts options{.format = glz::binary, .structs_as_arrays = true};
+      constexpr glz::opts options{.format = glz::BEVE, .structs_as_arrays = true};
       expect(not glz::write<options>(obj, without_keys));
 
       std::string with_keys;
@@ -1468,7 +1468,7 @@ namespace variants
          std::vector<uint8_t> out;
          D d{};
          expect(
-            not glz::write<glz::opts{.format = glz::binary, .structs_as_arrays = true}>(d, out)); // testing compilation
+            not glz::write<glz::opts{.format = glz::BEVE, .structs_as_arrays = true}>(d, out)); // testing compilation
       };
    };
 }
@@ -1859,7 +1859,7 @@ struct glz::meta<Header>
 };
 
 suite read_allocated_tests = [] {
-   static constexpr glz::opts partial{.format = glz::binary, .partial_read = true};
+   static constexpr glz::opts partial{.format = glz::BEVE, .partial_read = true};
 
    "partial_read tuple"_test = [] {
       std::tuple<std::string, int, std::string> input{"hello", 88, "a string we don't care about"};
@@ -1905,7 +1905,7 @@ suite read_allocated_tests = [] {
       auto s = glz::write_binary(input).value_or("error");
       partial_struct obj{};
       expect(
-         !glz::read<glz::opts{.format = glz::binary, .error_on_unknown_keys = false, .partial_read = true}>(obj, s));
+         !glz::read<glz::opts{.format = glz::BEVE, .error_on_unknown_keys = false, .partial_read = true}>(obj, s));
       expect(obj.string == "ha!");
       expect(obj.integer == 400);
    };
@@ -1923,7 +1923,7 @@ suite read_allocated_tests = [] {
       Header input{"51e2affb", "message_type"};
       auto buf = glz::write_binary(input).value_or("error");
       Header h{};
-      expect(!glz::read<glz::opts{.format = glz::binary, .error_on_unknown_keys = false}>(h, buf));
+      expect(!glz::read<glz::opts{.format = glz::BEVE, .error_on_unknown_keys = false}>(h, buf));
       expect(h.id == "51e2affb");
       expect(h.type == "message_type");
    };
@@ -2201,7 +2201,7 @@ suite early_end = [] {
    };
 
    "early_end !null terminated"_test = [] {
-      static constexpr glz::opts options{.format = glz::binary, .null_terminated = false};
+      static constexpr glz::opts options{.format = glz::BEVE, .null_terminated = false};
 
       Thing obj{};
       glz::json_t json{};
