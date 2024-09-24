@@ -83,7 +83,7 @@ namespace glz
 
       template <matrix_t T>
          requires(T::RowsAtCompileTime >= 0 && T::ColsAtCompileTime >= 0)
-      struct to_beve<T>
+      struct to<BEVE, T>
       {
          template <auto Opts>
          static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept
@@ -105,7 +105,7 @@ namespace glz
 
       template <matrix_t T>
          requires(T::RowsAtCompileTime < 0 || T::ColsAtCompileTime < 0)
-      struct to_beve<T>
+      struct to<BEVE, T>
       {
          template <auto Opts>
          static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept

@@ -10,7 +10,8 @@
 namespace glz
 {
    // format
-   inline constexpr uint32_t BEVE = 0;
+   inline constexpr uint32_t INVALID = 0;
+   inline constexpr uint32_t BEVE = 1;
    inline constexpr uint32_t json = 10;
    inline constexpr uint32_t JSON_PTR = 20;
    inline constexpr uint32_t ndjson = 100; // new line delimited JSON
@@ -323,8 +324,8 @@ namespace glz
 {
    namespace detail
    {
-      template <class T = void>
-      struct to_beve;
+      template <uint32_t Format = INVALID, class T = void>
+      struct to;
 
       template <class T = void>
       struct from_beve;
@@ -349,7 +350,7 @@ namespace glz
    }
 
    template <class T>
-   concept write_beve_supported = requires { detail::to_beve<std::remove_cvref_t<T>>{}; };
+   concept write_beve_supported = requires { detail::to<BEVE, std::remove_cvref_t<T>>{}; };
 
    template <class T>
    concept read_beve_supported = requires { detail::from_beve<std::remove_cvref_t<T>>{}; };
