@@ -13,7 +13,7 @@
 namespace glz::detail
 {
    template <is_opts_wrapper T>
-   struct from_beve<T>
+   struct from<BEVE, T>
    {
       template <auto Opts>
       GLZ_ALWAYS_INLINE static void op(auto&& value, auto&&... args) noexcept

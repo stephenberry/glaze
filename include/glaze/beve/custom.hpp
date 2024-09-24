@@ -12,7 +12,7 @@ namespace glz::detail
 {
    template <class T>
       requires(is_specialization_v<T, custom_t>)
-   struct from_beve<T>
+   struct from<BEVE, T>
    {
       template <auto Opts>
       static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept

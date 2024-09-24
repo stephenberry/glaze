@@ -38,7 +38,7 @@ namespace glz
             }
             else {
                using V = std::remove_cvref_t<T>;
-               from_beve<V>::template op<Opts>(std::forward<T>(value), std::forward<Tag>(tag), std::forward<Ctx>(ctx),
+               from<BEVE, V>::template op<Opts>(std::forward<T>(value), std::forward<Tag>(tag), std::forward<Ctx>(ctx),
                                                  std::forward<It0>(it), std::forward<It1>(end));
             }
          }
@@ -58,7 +58,7 @@ namespace glz
             }
             else {
                using V = std::remove_cvref_t<T>;
-               from_beve<V>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx), std::forward<It0>(it),
+               from<BEVE, V>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx), std::forward<It0>(it),
                                                  std::forward<It1>(end));
             }
          }
@@ -66,19 +66,19 @@ namespace glz
 
       template <class T>
          requires(glaze_value_t<T> && !custom_read<T>)
-      struct from_beve<T>
+      struct from<BEVE, T>
       {
          template <auto Opts, class Value, is_context Ctx, class It0, class It1>
          GLZ_ALWAYS_INLINE static void op(Value&& value, Ctx&& ctx, It0&& it, It1&& end) noexcept
          {
             using V = std::decay_t<decltype(get_member(std::declval<Value>(), meta_wrapper_v<T>))>;
-            from_beve<V>::template op<Opts>(get_member(std::forward<Value>(value), meta_wrapper_v<T>),
+            from<BEVE, V>::template op<Opts>(get_member(std::forward<Value>(value), meta_wrapper_v<T>),
                                               std::forward<Ctx>(ctx), std::forward<It0>(it), std::forward<It1>(end));
          }
       };
 
       template <always_null_t T>
-      struct from_beve<T>
+      struct from<BEVE, T>
       {
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&& ctx, auto&& it, auto&& end) noexcept
@@ -93,7 +93,7 @@ namespace glz
       };
 
       template <>
-      struct from_beve<hidden>
+      struct from<BEVE, hidden>
       {
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&& ctx, auto&&...) noexcept
@@ -103,7 +103,7 @@ namespace glz
       };
 
       template <is_bitset T>
-      struct from_beve<T>
+      struct from<BEVE, T>
       {
          template <auto Opts>
          static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
@@ -138,7 +138,7 @@ namespace glz
       };
 
       template <>
-      struct from_beve<skip>
+      struct from<BEVE, skip>
       {
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&& ctx, auto&&... args) noexcept
@@ -148,7 +148,7 @@ namespace glz
       };
 
       template <glaze_flags_t T>
-      struct from_beve<T>
+      struct from<BEVE, T>
       {
          template <auto Opts, is_context Ctx, class It0, class It1>
          static void op(auto&& value, Ctx&& ctx, It0&& it, It1&& end)
@@ -173,7 +173,7 @@ namespace glz
 
       template <class T>
          requires(num_t<T> || char_t<T> || glaze_enum_t<T>)
-      struct from_beve<T>
+      struct from<BEVE, T>
       {
          static constexpr uint8_t type =
             std::floating_point<T> ? 0 : (std::is_signed_v<T> ? 0b000'01'000 : 0b000'10'000);
@@ -307,7 +307,7 @@ namespace glz
 
       template <class T>
          requires(std::is_enum_v<T> && !glaze_enum_t<T>)
-      struct from_beve<T>
+      struct from<BEVE, T>
       {
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
@@ -349,7 +349,7 @@ namespace glz
 
       template <class T>
          requires complex_t<T>
-      struct from_beve<T>
+      struct from<BEVE, T>
       {
          template <auto Opts>
          static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
@@ -401,7 +401,7 @@ namespace glz
       };
 
       template <boolean_like T>
-      struct from_beve<T>
+      struct from<BEVE, T>
       {
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
@@ -419,7 +419,7 @@ namespace glz
       };
 
       template <is_member_function_pointer T>
-      struct from_beve<T>
+      struct from<BEVE, T>
       {
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&& /*value*/, is_context auto&& /*ctx*/, auto&& /*it*/,
@@ -428,7 +428,7 @@ namespace glz
       };
 
       template <func_t T>
-      struct from_beve<T>
+      struct from<BEVE, T>
       {
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&& /*value*/, is_context auto&& ctx, auto&& it, auto&& end) noexcept
@@ -438,7 +438,7 @@ namespace glz
       };
 
       template <class T>
-      struct from_beve<basic_raw_json<T>>
+      struct from<BEVE, basic_raw_json<T>>
       {
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
@@ -448,7 +448,7 @@ namespace glz
       };
 
       template <class T>
-      struct from_beve<basic_text<T>>
+      struct from<BEVE, basic_text<T>>
       {
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
@@ -458,7 +458,7 @@ namespace glz
       };
 
       template <is_variant T>
-      struct from_beve<T>
+      struct from<BEVE, T>
       {
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
@@ -485,7 +485,7 @@ namespace glz
       };
 
       template <str_t T>
-      struct from_beve<T> final
+      struct from<BEVE, T> final
       {
          using V = typename std::decay_t<T>::value_type;
          static_assert(sizeof(V) == 1);
@@ -545,7 +545,7 @@ namespace glz
       // for set types
       template <class T>
          requires(readable_array_t<T> && !emplace_backable<T> && !resizable<T> && emplaceable<T>)
-      struct from_beve<T> final
+      struct from<BEVE, T> final
       {
          template <auto Opts>
          static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
@@ -679,7 +679,7 @@ namespace glz
       };
 
       template <readable_array_t T>
-      struct from_beve<T> final
+      struct from<BEVE, T> final
       {
          template <auto Opts>
          static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
@@ -970,7 +970,7 @@ namespace glz
       };
 
       template <pair_t T>
-      struct from_beve<T> final
+      struct from<BEVE, T> final
       {
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(T& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
@@ -1006,7 +1006,7 @@ namespace glz
       };
 
       template <readable_map_t T>
-      struct from_beve<T> final
+      struct from<BEVE, T> final
       {
          template <auto Opts>
          static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
@@ -1089,7 +1089,7 @@ namespace glz
 
       template <nullable_t T>
          requires(std::is_array_v<T>)
-      struct from_beve<T> final
+      struct from<BEVE, T> final
       {
          template <auto Opts, class V, size_t N>
          GLZ_ALWAYS_INLINE static void op(V (&value)[N], is_context auto&& ctx, auto&& it, auto&& end) noexcept
@@ -1100,7 +1100,7 @@ namespace glz
 
       template <nullable_t T>
          requires(!std::is_array_v<T>)
-      struct from_beve<T> final
+      struct from<BEVE, T> final
       {
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
@@ -1140,7 +1140,7 @@ namespace glz
       };
 
       template <is_includer T>
-      struct from_beve<T>
+      struct from<BEVE, T>
       {
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&& ctx, auto&& it, auto&& end) noexcept
@@ -1166,7 +1166,7 @@ namespace glz
 
       template <class T>
          requires(glaze_object_t<T> || reflectable<T>)
-      struct from_beve<T> final
+      struct from<BEVE, T> final
       {
          template <auto Opts>
             requires(Opts.structs_as_arrays == true)
@@ -1327,7 +1327,7 @@ namespace glz
 
       template <class T>
          requires glaze_array_t<T>
-      struct from_beve<T> final
+      struct from<BEVE, T> final
       {
          template <auto Opts>
          static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
@@ -1357,7 +1357,7 @@ namespace glz
 
       template <class T>
          requires(tuple_t<T> || is_std_tuple<T>)
-      struct from_beve<T> final
+      struct from<BEVE, T> final
       {
          template <auto Opts>
          static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
@@ -1418,7 +1418,7 @@ namespace glz
       };
 
       template <filesystem_path T>
-      struct from_beve<T>
+      struct from<BEVE, T>
       {
          template <auto Opts>
          static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept
