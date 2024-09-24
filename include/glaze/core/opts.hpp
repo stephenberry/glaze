@@ -332,7 +332,7 @@ namespace glz
 
       template <uint32_t Format = INVALID, class T = void>
       struct from;
-      
+
       template <uint32_t Format = INVALID>
       struct skip_value;
    }

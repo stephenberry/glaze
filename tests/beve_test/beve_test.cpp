@@ -2404,7 +2404,7 @@ suite past_fuzzing_issues = [] {
 struct custom_load_t
 {
    std::vector<int> x{};
-   std::vector<int> y{1,2,3};
+   std::vector<int> y{1, 2, 3};
 
    struct glaze
    {

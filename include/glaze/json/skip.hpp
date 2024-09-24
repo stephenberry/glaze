@@ -10,10 +10,10 @@ namespace glz::detail
    template <>
    struct skip_value<JSON>
    {
-       template <opts Opts>
-       GLZ_ALWAYS_INLINE static void op(is_context auto&& ctx, auto&& it, auto&& end) noexcept;
+      template <opts Opts>
+      GLZ_ALWAYS_INLINE static void op(is_context auto&& ctx, auto&& it, auto&& end) noexcept;
    };
-   
+
    template <opts Opts>
    void skip_object(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
@@ -60,7 +60,7 @@ namespace glz::detail
    }
 
    template <opts Opts>
-      requires (Opts.format == JSON)
+      requires(Opts.format == JSON)
    void skip_array(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       if constexpr (!Opts.validate_skipped) {
@@ -94,7 +94,7 @@ namespace glz::detail
          GLZ_VALID_END();
       }
    }
-   
+
    template <opts Opts>
    GLZ_ALWAYS_INLINE void skip_value<JSON>::op(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {

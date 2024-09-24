@@ -14,8 +14,8 @@ namespace glz::detail
    template <>
    struct skip_value<BEVE>
    {
-       template <opts Opts>
-       inline static void op(is_context auto&& ctx, auto&& it, auto&& end) noexcept;
+      template <opts Opts>
+      inline static void op(is_context auto&& ctx, auto&& it, auto&& end) noexcept;
    };
 
    inline void skip_string_binary(is_context auto&& ctx, auto&& it, auto&& end) noexcept
@@ -169,9 +169,9 @@ namespace glz::detail
          skip_value<BEVE>::op<Opts>(ctx, it, end);
       }
    }
-   
+
    template <opts Opts>
-      requires (Opts.format == BEVE)
+      requires(Opts.format == BEVE)
    void skip_array(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       switch (uint8_t(*it) & 0b00000'111) {
