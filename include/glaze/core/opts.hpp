@@ -328,6 +328,9 @@ namespace glz
       struct to;
       
       template <uint32_t Format = INVALID, class T = void>
+      struct to_partial;
+      
+      template <uint32_t Format = INVALID, class T = void>
       struct from;
 
       template <class T = void>
