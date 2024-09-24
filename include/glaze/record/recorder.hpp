@@ -166,7 +166,7 @@ namespace glz
       };
 
       template <is_recorder T>
-      struct to_csv<T>
+      struct to<CSV, T>
       {
          template <auto Opts>
          static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept

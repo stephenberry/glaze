@@ -343,9 +343,6 @@ namespace glz
       struct from_ndjson;
 
       template <class T = void>
-      struct to_csv;
-
-      template <class T = void>
       struct from_csv;
    }
 
@@ -368,7 +365,7 @@ namespace glz
    concept read_ndjson_supported = requires { detail::from_ndjson<std::remove_cvref_t<T>>{}; };
 
    template <class T>
-   concept write_csv_supported = requires { detail::to_csv<std::remove_cvref_t<T>>{}; };
+   concept write_csv_supported = requires { detail::to<CSV, std::remove_cvref_t<T>>{}; };
 
    template <class T>
    concept read_csv_supported = requires { detail::from_csv<std::remove_cvref_t<T>>{}; };

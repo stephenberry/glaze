@@ -19,25 +19,25 @@ namespace glz
          template <auto Opts, class T, is_context Ctx, class B, class IX>
          static void op(T&& value, Ctx&& ctx, B&& b, IX&& ix) noexcept
          {
-            to_csv<std::decay_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
+            to<CSV, std::decay_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
                                                        std::forward<B>(b), std::forward<IX>(ix));
          }
       };
 
       template <glaze_value_t T>
-      struct to_csv<T>
+      struct to<CSV, T>
       {
          template <auto Opts, is_context Ctx, class B, class IX>
          static void op(auto&& value, Ctx&& ctx, B&& b, IX&& ix) noexcept
          {
             using V = decltype(get_member(std::declval<T>(), meta_wrapper_v<T>));
-            to_csv<V>::template op<Opts>(get_member(value, meta_wrapper_v<T>), std::forward<Ctx>(ctx),
+            to<CSV, V>::template op<Opts>(get_member(value, meta_wrapper_v<T>), std::forward<Ctx>(ctx),
                                          std::forward<B>(b), std::forward<IX>(ix));
          }
       };
 
       template <num_t T>
-      struct to_csv<T>
+      struct to<CSV, T>
       {
          template <auto Opts, class B>
          static void op(auto&& value, is_context auto&& ctx, B&& b, auto&& ix) noexcept
@@ -47,7 +47,7 @@ namespace glz
       };
 
       template <bool_t T>
-      struct to_csv<T>
+      struct to<CSV, T>
       {
          template <auto Opts, class B>
          static void op(auto&& value, is_context auto&&, B&& b, auto&& ix) noexcept
@@ -62,7 +62,7 @@ namespace glz
       };
 
       template <writable_array_t T>
-      struct to_csv<T>
+      struct to<CSV, T>
       {
          template <auto Opts, class B>
          static void op(auto&& value, is_context auto&& ctx, B&& b, auto&& ix) noexcept
@@ -97,7 +97,7 @@ namespace glz
 
       template <class T>
          requires str_t<T> || char_t<T>
-      struct to_csv<T>
+      struct to<CSV, T>
       {
          template <auto Opts, class B>
          static void op(auto&& value, is_context auto&&, B&& b, auto&& ix) noexcept
@@ -107,7 +107,7 @@ namespace glz
       };
 
       template <writable_map_t T>
-      struct to_csv<T>
+      struct to<CSV, T>
       {
          template <auto Opts, class B>
          static void op(auto&& value, is_context auto&& ctx, B&& b, auto&& ix) noexcept
@@ -171,7 +171,7 @@ namespace glz
 
       template <class T>
          requires(glaze_object_t<T> || reflectable<T>)
-      struct to_csv<T>
+      struct to<CSV, T>
       {
          template <auto Opts, class B>
          static void op(auto&& value, is_context auto&& ctx, B&& b, auto&& ix) noexcept
