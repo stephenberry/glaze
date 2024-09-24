@@ -29,7 +29,7 @@ namespace glz
 
       template <class T>
          requires(is_specialization_v<T, manage_t>)
-      struct from_json<T>
+      struct from<JSON, T>
       {
          template <auto Opts>
          static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept

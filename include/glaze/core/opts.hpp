@@ -332,9 +332,6 @@ namespace glz
       
       template <uint32_t Format = INVALID, class T = void>
       struct from;
-
-      template <class T = void>
-      struct from_json;
    }
 
    template <class T>
@@ -347,7 +344,7 @@ namespace glz
    concept write_json_supported = requires { detail::to<JSON, std::remove_cvref_t<T>>{}; };
 
    template <class T>
-   concept read_json_supported = requires { detail::from_json<std::remove_cvref_t<T>>{}; };
+   concept read_json_supported = requires { detail::from<JSON, std::remove_cvref_t<T>>{}; };
 
    template <class T>
    concept write_ndjson_supported = requires { detail::to<NDJSON, std::remove_cvref_t<T>>{}; };

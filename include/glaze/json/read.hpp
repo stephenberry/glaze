@@ -66,7 +66,7 @@ namespace glz
             }
             else {
                using V = std::remove_cvref_t<T>;
-               from_json<V>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx), std::forward<It0>(it),
+               from<JSON, V>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx), std::forward<It0>(it),
                                                std::forward<It1>(end));
             }
          }
@@ -119,13 +119,13 @@ namespace glz
 
       template <class T>
          requires(glaze_value_t<T> && !custom_read<T>)
-      struct from_json<T>
+      struct from<JSON, T>
       {
          template <auto Opts, class Value, is_context Ctx, class It0, class It1>
          GLZ_ALWAYS_INLINE static void op(Value&& value, Ctx&& ctx, It0&& it, It1&& end) noexcept
          {
             using V = std::decay_t<decltype(get_member(std::declval<Value>(), meta_wrapper_v<T>))>;
-            from_json<V>::template op<Opts>(get_member(std::forward<Value>(value), meta_wrapper_v<T>),
+            from<JSON, V>::template op<Opts>(get_member(std::forward<Value>(value), meta_wrapper_v<T>),
                                             std::forward<Ctx>(ctx), std::forward<It0>(it), std::forward<It1>(end));
          }
       };
@@ -310,7 +310,7 @@ namespace glz
       }
 
       template <is_member_function_pointer T>
-      struct from_json<T>
+      struct from<JSON, T>
       {
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&& ctx, auto&&...) noexcept
@@ -320,7 +320,7 @@ namespace glz
       };
 
       template <is_includer T>
-      struct from_json<T>
+      struct from<JSON, T>
       {
          template <auto Opts, class... Args>
          static void op(auto&&, is_context auto&& ctx, auto&& it, auto&& end) noexcept
@@ -334,7 +334,7 @@ namespace glz
       };
 
       template <is_bitset T>
-      struct from_json<T>
+      struct from<JSON, T>
       {
          template <auto Opts>
          static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
@@ -372,7 +372,7 @@ namespace glz
       };
 
       template <>
-      struct from_json<skip>
+      struct from<JSON, skip>
       {
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&& ctx, auto&&... args) noexcept
@@ -382,18 +382,18 @@ namespace glz
       };
 
       template <is_reference_wrapper T>
-      struct from_json<T>
+      struct from<JSON, T>
       {
          template <auto Opts, class... Args>
          GLZ_ALWAYS_INLINE static void op(auto&& value, Args&&... args) noexcept
          {
             using V = std::decay_t<decltype(value.get())>;
-            from_json<V>::template op<Opts>(value.get(), std::forward<Args>(args)...);
+            from<JSON, V>::template op<Opts>(value.get(), std::forward<Args>(args)...);
          }
       };
 
       template <>
-      struct from_json<hidden>
+      struct from<JSON, hidden>
       {
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&& ctx, auto&&...) noexcept
@@ -403,7 +403,7 @@ namespace glz
       };
 
       template <complex_t T>
-      struct from_json<T>
+      struct from<JSON, T>
       {
          template <auto Options>
          static void op(auto&& v, is_context auto&& ctx, auto&& it, auto&& end) noexcept
@@ -436,7 +436,7 @@ namespace glz
       };
 
       template <always_null_t T>
-      struct from_json<T>
+      struct from<JSON, T>
       {
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&& ctx, auto&& it, auto&& end) noexcept
@@ -449,7 +449,7 @@ namespace glz
       };
 
       template <bool_t T>
-      struct from_json<T>
+      struct from<JSON, T>
       {
          template <auto Opts>
          static void op(bool_t auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
@@ -544,7 +544,7 @@ namespace glz
       };
 
       template <num_t T>
-      struct from_json<T>
+      struct from<JSON, T>
       {
          template <auto Opts, class It>
          static void op(auto&& value, is_context auto&& ctx, It&& it, auto&& end) noexcept
@@ -729,7 +729,7 @@ namespace glz
       };
 
       template <string_t T>
-      struct from_json<T>
+      struct from<JSON, T>
       {
          template <auto Opts, class It, class End>
             requires(has_is_padded(Opts))
@@ -1110,7 +1110,7 @@ namespace glz
 
       template <class T>
          requires(string_view_t<T> || char_array_t<T>)
-      struct from_json<T>
+      struct from<JSON, T>
       {
          template <auto Opts, class It, class End>
          GLZ_ALWAYS_INLINE static void op(auto& value, is_context auto&& ctx, It&& it, End&& end) noexcept
@@ -1153,7 +1153,7 @@ namespace glz
       };
 
       template <char_t T>
-      struct from_json<T>
+      struct from<JSON, T>
       {
          template <auto Opts>
          static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
@@ -1224,7 +1224,7 @@ namespace glz
 
       template <class T>
          requires((glaze_enum_t<T> || (meta_keys<T> && std::is_enum_v<T>)) && !custom_read<T>)
-      struct from_json<T>
+      struct from<JSON, T>
       {
          template <auto Opts>
          static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
@@ -1262,7 +1262,7 @@ namespace glz
 
       template <class T>
          requires(std::is_enum_v<T> && !glaze_enum_t<T> && !meta_keys<T> && !custom_read<T>)
-      struct from_json<T>
+      struct from<JSON, T>
       {
          template <auto Opts>
          static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
@@ -1275,7 +1275,7 @@ namespace glz
       };
 
       template <func_t T>
-      struct from_json<T>
+      struct from<JSON, T>
       {
          template <auto Opts>
          static void op(auto& /*value*/, is_context auto&& ctx, auto&& it, auto&& end) noexcept
@@ -1294,7 +1294,7 @@ namespace glz
       };
 
       template <class T>
-      struct from_json<basic_raw_json<T>>
+      struct from<JSON, basic_raw_json<T>>
       {
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
@@ -1308,7 +1308,7 @@ namespace glz
       };
 
       template <class T>
-      struct from_json<basic_text<T>>
+      struct from<JSON, basic_text<T>>
       {
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&&, auto&& it, auto&& end) noexcept
@@ -1321,7 +1321,7 @@ namespace glz
       // for set types
       template <class T>
          requires(readable_array_t<T> && !emplace_backable<T> && !resizable<T> && emplaceable<T>)
-      struct from_json<T>
+      struct from<JSON, T>
       {
          template <auto Options>
          static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
@@ -1363,7 +1363,7 @@ namespace glz
       // for types like std::vector, std::array, std::deque, etc.
       template <class T>
          requires(readable_array_t<T> && (emplace_backable<T> || !resizable<T>) && !emplaceable<T>)
-      struct from_json<T>
+      struct from<JSON, T>
       {
          template <auto Options>
          static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
@@ -1645,7 +1645,7 @@ namespace glz
       // For types like std::forward_list
       template <class T>
          requires readable_array_t<T> && (!emplace_backable<T> && resizable<T>)
-      struct from_json<T>
+      struct from<JSON, T>
       {
          template <auto Options>
          static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
@@ -1680,7 +1680,7 @@ namespace glz
 
       template <class T>
          requires glaze_array_t<T> || tuple_t<T> || is_std_tuple<T>
-      struct from_json<T>
+      struct from<JSON, T>
       {
          template <auto Opts>
          static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
@@ -1746,7 +1746,7 @@ namespace glz
       };
 
       template <glaze_flags_t T>
-      struct from_json<T>
+      struct from<JSON, T>
       {
          template <auto Opts>
          static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
@@ -1789,7 +1789,7 @@ namespace glz
       };
 
       template <class T>
-      struct from_json<includer<T>>
+      struct from<JSON, includer<T>>
       {
          template <auto Options>
          static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
@@ -2001,7 +2001,7 @@ namespace glz
       }
 
       template <pair_t T>
-      struct from_json<T>
+      struct from<JSON, T>
       {
          template <opts Options, string_literal tag = "">
          static void op(T& value, is_context auto&& ctx, auto&& it, auto&& end)
@@ -2085,7 +2085,7 @@ namespace glz
                   }
                }
                else {
-                  from_json<std::remove_cvref_t<V>>::template op<ws_handled<Opts>()>(
+                  from<JSON, std::remove_cvref_t<V>>::template op<ws_handled<Opts>()>(
                      get_member(value, std::get<I>(variant)), ctx, it, end);
                }
             },
@@ -2094,7 +2094,7 @@ namespace glz
 
       template <class T>
          requires readable_map_t<T> || glaze_object_t<T> || reflectable<T>
-      struct from_json<T>
+      struct from<JSON, T>
       {
          template <auto Options, string_literal tag = "">
          static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
@@ -2279,7 +2279,7 @@ namespace glz
                               }
                            }
                            else {
-                              from_json<std::remove_cvref_t<V>>::template op<ws_handled<Opts>()>(
+                              from<JSON, std::remove_cvref_t<V>>::template op<ws_handled<Opts>()>(
                                  get_member(value, element), ctx, it, end);
                            }
                         },
@@ -2626,7 +2626,7 @@ namespace glz
       };
 
       template <is_variant T>
-      struct from_json<T>
+      struct from<JSON, T>
       {
          // Note that items in the variant are required to be default constructable for us to switch types
          template <auto Options>
@@ -2710,7 +2710,7 @@ namespace glz
                               if (key == tag_v<T>) {
                                  GLZ_PARSE_WS_COLON;
                                  sv type_id{};
-                                 from_json<sv>::template op<ws_handled<Opts>()>(type_id, ctx, it, end);
+                                 from<JSON, sv>::template op<ws_handled<Opts>()>(type_id, ctx, it, end);
                                  if (bool(ctx.error)) [[unlikely]]
                                     return;
                                  GLZ_SKIP_WS();
@@ -2730,7 +2730,7 @@ namespace glz
                                           using V = std::decay_t<decltype(v)>;
                                           constexpr bool is_object = glaze_object_t<V> || reflectable<V>;
                                           if constexpr (is_object) {
-                                             from_json<V>::template op<opening_handled<Opts>(), tag_literal>(v, ctx, it,
+                                             from<JSON, V>::template op<opening_handled<Opts>(), tag_literal>(v, ctx, it,
                                                                                                              end);
                                           }
                                           else if constexpr (is_memory_object<V>) {
@@ -2757,7 +2757,7 @@ namespace glz
                                                    // std::unique_ptr, or std::shared_ptr
                                                 }
                                              }
-                                             from_json<memory_type<V>>::template op<opening_handled<Opts>(),
+                                             from<JSON, memory_type<V>>::template op<opening_handled<Opts>(),
                                                                                     tag_literal>(*v, ctx, it, end);
                                           }
                                        },
@@ -2835,7 +2835,7 @@ namespace glz
                                  using V = std::decay_t<decltype(v)>;
                                  constexpr bool is_object = glaze_object_t<V> || reflectable<V>;
                                  if constexpr (is_object) {
-                                    from_json<V>::template op<opening_handled<Opts>(), tag_literal>(v, ctx, it, end);
+                                    from<JSON, V>::template op<opening_handled<Opts>(), tag_literal>(v, ctx, it, end);
                                  }
                                  else if constexpr (is_memory_object<V>) {
                                     if (!v) {
@@ -2861,7 +2861,7 @@ namespace glz
                                           // std::unique_ptr, or std::shared_ptr
                                        }
                                     }
-                                    from_json<memory_type<V>>::template op<opening_handled<Opts>(), tag_literal>(
+                                    from<JSON, memory_type<V>>::template op<opening_handled<Opts>(), tag_literal>(
                                        *v, ctx, it, end);
                                  }
                               },
@@ -2937,7 +2937,7 @@ namespace glz
       };
 
       template <class T>
-      struct from_json<array_variant_wrapper<T>>
+      struct from<JSON, array_variant_wrapper<T>>
       {
          template <auto Options>
          static void op(auto&& wrapper, is_context auto&& ctx, auto&& it, auto&& end)
@@ -2987,7 +2987,7 @@ namespace glz
       };
 
       template <is_expected T>
-      struct from_json<T>
+      struct from<JSON, T>
       {
          template <auto Opts, class... Args>
          static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
@@ -3068,7 +3068,7 @@ namespace glz
 
       template <nullable_t T>
          requires(std::is_array_v<T>)
-      struct from_json<T>
+      struct from<JSON, T>
       {
          template <auto Opts, class V, size_t N>
          GLZ_ALWAYS_INLINE static void op(V (&value)[N], is_context auto&& ctx, auto&& it, auto&& end) noexcept
@@ -3079,7 +3079,7 @@ namespace glz
 
       template <nullable_t T>
          requires(!is_expected<T> && !std::is_array_v<T>)
-      struct from_json<T>
+      struct from<JSON, T>
       {
          template <auto Options>
          static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
@@ -3129,7 +3129,7 @@ namespace glz
       };
 
       template <filesystem_path T>
-      struct from_json<T>
+      struct from<JSON, T>
       {
          template <auto Opts>
          static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept

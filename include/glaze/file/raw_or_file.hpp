@@ -20,7 +20,7 @@ namespace glz
    namespace detail
    {
       template <>
-      struct from_json<raw_or_file>
+      struct from<JSON, raw_or_file>
       {
          template <auto Options>
          static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept

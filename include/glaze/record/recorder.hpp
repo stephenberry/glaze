@@ -112,7 +112,7 @@ namespace glz
       };
 
       template <is_recorder T>
-      struct from_json<T>
+      struct from<JSON, T>
       {
          template <auto Options>
          static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept

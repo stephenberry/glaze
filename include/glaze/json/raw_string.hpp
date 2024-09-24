@@ -28,7 +28,7 @@ namespace glz
    namespace detail
    {
       template <class T>
-      struct from_json<raw_string_t<T>>
+      struct from<JSON, raw_string_t<T>>
       {
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&& value, auto&&... args) noexcept
@@ -49,7 +49,7 @@ namespace glz
       };
 
       template <class T>
-      struct from_json<escaped_t<T>>
+      struct from<JSON, escaped_t<T>>
       {
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&& value, auto&&... args) noexcept

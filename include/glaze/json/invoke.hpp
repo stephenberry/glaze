@@ -33,7 +33,7 @@ namespace glz
    namespace detail
    {
       template <class T>
-      struct from_json<invoke_t<T>>
+      struct from<JSON, invoke_t<T>>
       {
          template <auto Opts>
          static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
@@ -169,7 +169,7 @@ namespace glz
    namespace detail
    {
       template <is_invoke_update T>
-      struct from_json<T>
+      struct from<JSON, T>
       {
          template <auto Opts>
          static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept

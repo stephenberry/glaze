@@ -83,7 +83,7 @@ namespace glz
       }
 
       template <class T>
-      struct from_json<hostname_includer<T>>
+      struct from<JSON, hostname_includer<T>>
       {
          template <auto Options>
          static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept

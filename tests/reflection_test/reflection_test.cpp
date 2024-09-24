@@ -690,7 +690,7 @@ suite large_struct_tests = [] {
 namespace glz::detail
 {
    template <>
-   struct from_json<std::chrono::seconds>
+   struct from<JSON, std::chrono::seconds>
    {
       template <auto Opts>
       static void op(std::chrono::seconds& value, is_context auto&& ctx, auto&&... args)

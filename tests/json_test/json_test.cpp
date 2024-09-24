@@ -4326,7 +4326,7 @@ struct glz::meta<date>
 namespace glz::detail
 {
    template <>
-   struct from_json<date>
+   struct from<JSON, date>
    {
       template <auto Opts>
       static void op(date& value, auto&&... args)
@@ -8211,7 +8211,7 @@ struct custom_struct
 namespace glz::detail
 {
    template <>
-   struct from_json<custom_struct>
+   struct from<JSON, custom_struct>
    {
       template <auto Opts>
       static void op(custom_struct& value, auto&&... args)
@@ -9104,7 +9104,7 @@ struct glz::meta<custom_errors_t>
 namespace glz::detail
 {
    template <>
-   struct from_json<custom_errors_t>
+   struct from<JSON, custom_errors_t>
    {
       template <auto Opts>
       static void op(auto&, is_context auto& ctx, auto&&...)

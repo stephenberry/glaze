@@ -127,7 +127,7 @@ namespace glz
 
       template <matrix_t T>
          requires(T::RowsAtCompileTime >= 0 && T::ColsAtCompileTime >= 0)
-      struct from_json<T>
+      struct from<JSON, T>
       {
          template <auto Opts>
          static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end)
