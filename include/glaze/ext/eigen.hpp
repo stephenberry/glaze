@@ -139,7 +139,7 @@ namespace glz
 
       template <matrix_t T>
          requires(T::RowsAtCompileTime >= 0 && T::ColsAtCompileTime >= 0)
-      struct to_json<T>
+      struct to<JSON, T>
       {
          template <auto Opts>
          static void op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix) noexcept

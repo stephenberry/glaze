@@ -131,7 +131,7 @@ namespace glz
       };
 
       template <class T>
-      struct to_json<hostname_includer<T>>
+      struct to<JSON, hostname_includer<T>>
       {
          template <auto Opts>
          static void op(auto&&...) noexcept

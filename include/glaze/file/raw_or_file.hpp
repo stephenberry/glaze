@@ -75,7 +75,7 @@ namespace glz
       };
 
       template <>
-      struct to_json<raw_or_file>
+      struct to<JSON, raw_or_file>
       {
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&&, auto&& b, auto&& ix) noexcept

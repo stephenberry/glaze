@@ -334,9 +334,6 @@ namespace glz
       struct from;
 
       template <class T = void>
-      struct to_json;
-
-      template <class T = void>
       struct from_json;
    }
 
@@ -347,7 +344,7 @@ namespace glz
    concept read_beve_supported = requires { detail::from<BEVE, std::remove_cvref_t<T>>{}; };
 
    template <class T>
-   concept write_json_supported = requires { detail::to_json<std::remove_cvref_t<T>>{}; };
+   concept write_json_supported = requires { detail::to<JSON, std::remove_cvref_t<T>>{}; };
 
    template <class T>
    concept read_json_supported = requires { detail::from_json<std::remove_cvref_t<T>>{}; };

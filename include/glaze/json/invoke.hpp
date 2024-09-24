@@ -96,7 +96,7 @@ namespace glz
       };
 
       template <class T>
-      struct to_json<invoke_t<T>>
+      struct to<JSON, invoke_t<T>>
       {
          template <auto Opts>
          static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept
@@ -218,7 +218,7 @@ namespace glz
       };
 
       template <is_invoke_update T>
-      struct to_json<T>
+      struct to<JSON, T>
       {
          template <auto Opts>
          static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept

@@ -38,13 +38,13 @@ namespace glz
       };
 
       template <class T>
-      struct to_json<raw_string_t<T>>
+      struct to<JSON, raw_string_t<T>>
       {
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept
          {
             using val_t = std::remove_cvref_t<decltype(value.val)>;
-            to_json<val_t>::template op<opt_true<Opts, &opts::raw_string>>(value.val, ctx, args...);
+            to<JSON, val_t>::template op<opt_true<Opts, &opts::raw_string>>(value.val, ctx, args...);
          }
       };
 
@@ -59,13 +59,13 @@ namespace glz
       };
 
       template <class T>
-      struct to_json<escaped_t<T>>
+      struct to<JSON, escaped_t<T>>
       {
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept
          {
             using val_t = std::remove_cvref_t<decltype(value.val)>;
-            to_json<val_t>::template op<opt_false<Opts, &opts::raw_string>>(value.val, ctx, args...);
+            to<JSON, val_t>::template op<opt_false<Opts, &opts::raw_string>>(value.val, ctx, args...);
          }
       };
 

@@ -4337,7 +4337,7 @@ namespace glz::detail
    };
 
    template <>
-   struct to_json<date>
+   struct to<JSON, date>
    {
       template <auto Opts>
       static void op(date& value, auto&&... args) noexcept
@@ -8222,7 +8222,7 @@ namespace glz::detail
    };
 
    template <>
-   struct to_json<custom_struct>
+   struct to<JSON, custom_struct>
    {
       template <auto Opts>
       static void op(custom_struct& value, auto&&... args) noexcept
@@ -9114,7 +9114,7 @@ namespace glz::detail
    };
 
    template <>
-   struct to_json<custom_errors_t>
+   struct to<JSON, custom_errors_t>
    {
       template <auto Opts>
       static void op(auto&, is_context auto& ctx, auto&&...) noexcept

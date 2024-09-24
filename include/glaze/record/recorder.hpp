@@ -68,7 +68,7 @@ namespace glz
       concept is_recorder = is_specialization_v<T, recorder>;
 
       template <is_recorder T>
-      struct to_json<T>
+      struct to<JSON, T>
       {
          template <auto Opts, class... Args>
          static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept

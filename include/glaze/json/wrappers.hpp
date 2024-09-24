@@ -39,7 +39,7 @@ namespace glz
       };
 
       template <class T>
-      struct to_json<quoted_t<T>>
+      struct to<JSON, quoted_t<T>>
       {
          template <auto Opts>
          static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept
@@ -63,7 +63,7 @@ namespace glz
       };
 
       template <is_opts_wrapper T>
-      struct to_json<T>
+      struct to<JSON, T>
       {
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept

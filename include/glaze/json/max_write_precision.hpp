@@ -60,7 +60,7 @@ namespace glz
    namespace detail
    {
       template <class T>
-      struct to_json<write_float32_t<T>>
+      struct to<JSON, write_float32_t<T>>
       {
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept
@@ -71,7 +71,7 @@ namespace glz
       };
 
       template <class T>
-      struct to_json<write_float64_t<T>>
+      struct to<JSON, write_float64_t<T>>
       {
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept
@@ -82,7 +82,7 @@ namespace glz
       };
 
       template <class T>
-      struct to_json<write_float_full_t<T>>
+      struct to<JSON, write_float_full_t<T>>
       {
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept
