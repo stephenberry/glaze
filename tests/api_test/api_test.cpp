@@ -252,8 +252,8 @@ void tests()
       *io->get<int>("/x") = 1;
       *io2->get<int>("/x") = 5;
       std::string buffer{};
-      io2->write(glz::binary, "", buffer);
-      io->read(glz::binary, "", buffer);
+      io2->write(glz::BEVE, "", buffer);
+      io->read(glz::BEVE, "", buffer);
       expect(*io->get<int>("/x") == 5);
    };
 }
