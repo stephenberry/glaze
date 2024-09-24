@@ -1904,8 +1904,7 @@ suite read_allocated_tests = [] {
       full_struct input{"garbage", "ha!", 400, {1, 2, 3}};
       auto s = glz::write_beve(input).value_or("error");
       partial_struct obj{};
-      expect(
-         !glz::read<glz::opts{.format = glz::BEVE, .error_on_unknown_keys = false, .partial_read = true}>(obj, s));
+      expect(!glz::read<glz::opts{.format = glz::BEVE, .error_on_unknown_keys = false, .partial_read = true}>(obj, s));
       expect(obj.string == "ha!");
       expect(obj.integer == 400);
    };

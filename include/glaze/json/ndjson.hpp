@@ -17,7 +17,7 @@ namespace glz
          static void op(T&& value, Ctx&& ctx, It0&& it, It1&& end)
          {
             from<NDJSON, std::remove_reference_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
-                                                                       std::forward<It0>(it), std::forward<It1>(end));
+                                                                        std::forward<It0>(it), std::forward<It1>(end));
          }
       };
 
@@ -159,7 +159,7 @@ namespace glz
          static void op(T&& value, Ctx&& ctx, B&& b, IX&& ix)
          {
             to<NDJSON, std::decay_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
-                                                          std::forward<B>(b), std::forward<IX>(ix));
+                                                           std::forward<B>(b), std::forward<IX>(ix));
          }
       };
 

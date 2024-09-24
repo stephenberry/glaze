@@ -20,7 +20,7 @@ namespace glz
          static void op(T&& value, Ctx&& ctx, B&& b, IX&& ix) noexcept
          {
             to<CSV, std::decay_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
-                                                       std::forward<B>(b), std::forward<IX>(ix));
+                                                        std::forward<B>(b), std::forward<IX>(ix));
          }
       };
 
@@ -32,7 +32,7 @@ namespace glz
          {
             using V = decltype(get_member(std::declval<T>(), meta_wrapper_v<T>));
             to<CSV, V>::template op<Opts>(get_member(value, meta_wrapper_v<T>), std::forward<Ctx>(ctx),
-                                         std::forward<B>(b), std::forward<IX>(ix));
+                                          std::forward<B>(b), std::forward<IX>(ix));
          }
       };
 

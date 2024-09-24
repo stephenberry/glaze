@@ -93,14 +93,14 @@ namespace glz
          GLZ_ALWAYS_INLINE static void op(T&& value, Ctx&& ctx, B&& b, IX&& ix) noexcept
          {
             to<BEVE, std::remove_cvref_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
-                                                                 std::forward<B>(b), std::forward<IX>(ix));
+                                                                std::forward<B>(b), std::forward<IX>(ix));
          }
 
          template <auto Opts, class T, is_context Ctx, class B, class IX>
          GLZ_ALWAYS_INLINE static void no_header(T&& value, Ctx&& ctx, B&& b, IX&& ix) noexcept
          {
             to<BEVE, std::remove_cvref_t<T>>::template no_header<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
-                                                                        std::forward<B>(b), std::forward<IX>(ix));
+                                                                       std::forward<B>(b), std::forward<IX>(ix));
          }
       };
 
@@ -113,7 +113,7 @@ namespace glz
          {
             using V = std::remove_cvref_t<decltype(get_member(std::declval<Value>(), meta_wrapper_v<T>))>;
             to<BEVE, V>::template op<Opts>(get_member(std::forward<Value>(value), meta_wrapper_v<T>),
-                                            std::forward<Ctx>(ctx), std::forward<B>(b), std::forward<IX>(ix));
+                                           std::forward<Ctx>(ctx), std::forward<B>(b), std::forward<IX>(ix));
          }
       };
 
@@ -947,7 +947,7 @@ namespace glz
    [[nodiscard]] error_ctx write_beve_untagged(T&& value, Buffer&& buffer) noexcept
    {
       return write<opts{.format = BEVE, .structs_as_arrays = true}>(std::forward<T>(value),
-                                                                      std::forward<Buffer>(buffer));
+                                                                    std::forward<Buffer>(buffer));
    }
 
    template <write_beve_supported T>

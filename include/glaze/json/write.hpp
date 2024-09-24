@@ -28,7 +28,7 @@ namespace glz
          GLZ_ALWAYS_INLINE static void op(T&& value, Ctx&& ctx, B&& b, IX&& ix) noexcept
          {
             to<JSON, std::remove_cvref_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
-                                                               std::forward<B>(b), std::forward<IX>(ix));
+                                                                std::forward<B>(b), std::forward<IX>(ix));
          }
       };
 
@@ -41,7 +41,7 @@ namespace glz
          {
             using V = std::remove_cvref_t<decltype(get_member(std::declval<Value>(), meta_wrapper_v<T>))>;
             to<JSON, V>::template op<Opts>(get_member(std::forward<Value>(value), meta_wrapper_v<T>),
-                                          std::forward<Ctx>(ctx), std::forward<B>(b), std::forward<IX>(ix));
+                                           std::forward<Ctx>(ctx), std::forward<B>(b), std::forward<IX>(ix));
          }
       };
 
@@ -1402,7 +1402,7 @@ namespace glz
                         }
                         else {
                            to<JSON, val_t>::template op<check_opts>(get_member(value, get<I>(refl<T>.values)), ctx, b,
-                                                                   ix);
+                                                                    ix);
                         }
                      }
                   });

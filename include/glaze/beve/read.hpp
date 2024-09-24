@@ -39,7 +39,7 @@ namespace glz
             else {
                using V = std::remove_cvref_t<T>;
                from<BEVE, V>::template op<Opts>(std::forward<T>(value), std::forward<Tag>(tag), std::forward<Ctx>(ctx),
-                                                 std::forward<It0>(it), std::forward<It1>(end));
+                                                std::forward<It0>(it), std::forward<It1>(end));
             }
          }
 
@@ -59,7 +59,7 @@ namespace glz
             else {
                using V = std::remove_cvref_t<T>;
                from<BEVE, V>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx), std::forward<It0>(it),
-                                                 std::forward<It1>(end));
+                                                std::forward<It1>(end));
             }
          }
       };
@@ -73,7 +73,7 @@ namespace glz
          {
             using V = std::decay_t<decltype(get_member(std::declval<Value>(), meta_wrapper_v<T>))>;
             from<BEVE, V>::template op<Opts>(get_member(std::forward<Value>(value), meta_wrapper_v<T>),
-                                              std::forward<Ctx>(ctx), std::forward<It0>(it), std::forward<It1>(end));
+                                             std::forward<Ctx>(ctx), std::forward<It0>(it), std::forward<It1>(end));
          }
       };
 
@@ -1274,8 +1274,7 @@ namespace glz
                            static constexpr auto Length = TargetKey.size();
                            if ((Length == n) && compare<Length>(TargetKey.data(), key.data())) [[likely]] {
                               if constexpr (detail::reflectable<T>) {
-                                 read<BEVE>::op<Opts>(get_member(value, get<I>(detail::to_tuple(value))), ctx, it,
-                                                        end);
+                                 read<BEVE>::op<Opts>(get_member(value, get<I>(detail::to_tuple(value))), ctx, it, end);
                               }
                               else {
                                  read<BEVE>::op<Opts>(get_member(value, get<I>(refl<T>.values)), ctx, it, end);
@@ -1469,7 +1468,7 @@ namespace glz
    [[nodiscard]] inline error_ctx read_binary_untagged(T&& value, Buffer&& buffer) noexcept
    {
       return read<opts{.format = BEVE, .structs_as_arrays = true}>(std::forward<T>(value),
-                                                                     std::forward<Buffer>(buffer));
+                                                                   std::forward<Buffer>(buffer));
    }
 
    template <read_beve_supported T, class Buffer>

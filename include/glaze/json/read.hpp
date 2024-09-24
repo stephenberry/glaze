@@ -67,7 +67,7 @@ namespace glz
             else {
                using V = std::remove_cvref_t<T>;
                from<JSON, V>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx), std::forward<It0>(it),
-                                               std::forward<It1>(end));
+                                                std::forward<It1>(end));
             }
          }
 
@@ -126,7 +126,7 @@ namespace glz
          {
             using V = std::decay_t<decltype(get_member(std::declval<Value>(), meta_wrapper_v<T>))>;
             from<JSON, V>::template op<Opts>(get_member(std::forward<Value>(value), meta_wrapper_v<T>),
-                                            std::forward<Ctx>(ctx), std::forward<It0>(it), std::forward<It1>(end));
+                                             std::forward<Ctx>(ctx), std::forward<It0>(it), std::forward<It1>(end));
          }
       };
 
@@ -2730,8 +2730,8 @@ namespace glz
                                           using V = std::decay_t<decltype(v)>;
                                           constexpr bool is_object = glaze_object_t<V> || reflectable<V>;
                                           if constexpr (is_object) {
-                                             from<JSON, V>::template op<opening_handled<Opts>(), tag_literal>(v, ctx, it,
-                                                                                                             end);
+                                             from<JSON, V>::template op<opening_handled<Opts>(), tag_literal>(v, ctx,
+                                                                                                              it, end);
                                           }
                                           else if constexpr (is_memory_object<V>) {
                                              if (!v) {
@@ -2758,7 +2758,7 @@ namespace glz
                                                 }
                                              }
                                              from<JSON, memory_type<V>>::template op<opening_handled<Opts>(),
-                                                                                    tag_literal>(*v, ctx, it, end);
+                                                                                     tag_literal>(*v, ctx, it, end);
                                           }
                                        },
                                        value);
