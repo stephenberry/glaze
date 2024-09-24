@@ -61,7 +61,7 @@ namespace glz
                }
                else {
                   // do not read anything into the const value
-                  skip_value<Opts>(std::forward<Ctx>(ctx), std::forward<It0>(it), std::forward<It1>(end));
+                  skip_value<JSON>::op<Opts>(std::forward<Ctx>(ctx), std::forward<It0>(it), std::forward<It1>(end));
                }
             }
             else {
@@ -112,7 +112,7 @@ namespace glz
                }
             }
             else {
-               skip_value<Opts>(ctx, it, end);
+               skip_value<JSON>::op<Opts>(ctx, it, end);
             }
          }
       };
@@ -377,7 +377,7 @@ namespace glz
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&& ctx, auto&&... args) noexcept
          {
-            skip_value<Opts>(ctx, args...);
+            skip_value<JSON>::op<Opts>(ctx, args...);
          }
       };
 
@@ -1300,7 +1300,7 @@ namespace glz
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
             auto it_start = it;
-            skip_value<Opts>(ctx, it, end);
+            skip_value<JSON>::op<Opts>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
                return;
             value.str = {it_start, static_cast<size_t>(it - it_start)};
@@ -2081,7 +2081,7 @@ namespace glz
                   }
                   else {
                      // do not read anything into the const value
-                     skip_value<Opts>(ctx, it, end);
+                     skip_value<JSON>::op<Opts>(ctx, it, end);
                   }
                }
                else {
@@ -2275,7 +2275,7 @@ namespace glz
                               }
                               else {
                                  // do not read anything into the const value
-                                 skip_value<Opts>(ctx, it, end);
+                                 skip_value<JSON>::op<Opts>(ctx, it, end);
                               }
                            }
                            else {
@@ -2411,7 +2411,7 @@ namespace glz
                               read<JSON>::op<ws_handled<Opts>()>(element->second, ctx, it, end);
                            }
                            else {
-                              skip_value<Opts>(ctx, it, end);
+                              skip_value<JSON>::op<Opts>(ctx, it, end);
                            }
                         }
                         else {
@@ -2876,7 +2876,7 @@ namespace glz
                         }
                         GLZ_PARSE_WS_COLON;
 
-                        skip_value<Opts>(ctx, it, end);
+                        skip_value<JSON>::op<Opts>(ctx, it, end);
                         if (bool(ctx.error)) [[unlikely]]
                            return;
                         GLZ_SKIP_WS();

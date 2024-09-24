@@ -5,6 +5,7 @@
 
 #include <type_traits>
 
+#include "glaze/core/custom.hpp"
 #include "glaze/core/opts.hpp"
 #include "glaze/core/wrappers.hpp"
 #include "glaze/json/read.hpp"

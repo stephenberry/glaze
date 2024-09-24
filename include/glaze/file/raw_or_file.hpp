@@ -66,7 +66,7 @@ namespace glz
             }
             else {
                auto it_start = it;
-               skip_value<Opts>(ctx, it, end);
+               skip_value<JSON>::op<Opts>(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
                   return;
                value.str = {it_start, static_cast<size_t>(it - it_start)};

@@ -2401,6 +2401,31 @@ suite past_fuzzing_issues = [] {
    "fuzz15"_test = test_base64("AzEyAA==");
 };
 
+struct custom_load_t
+{
+   std::vector<int> x{};
+   std::vector<int> y{1,2,3};
+
+   struct glaze
+   {
+      static constexpr auto read_x = [](auto& s) -> auto& { return s.x; };
+      static constexpr auto write_x = [](auto& s) -> auto& { return s.y; };
+      static constexpr auto value = glz::object("x", glz::custom<read_x, write_x>);
+   };
+};
+
+suite custom_load_test = [] {
+   "custom_load"_test = [] {
+      custom_load_t obj{};
+      std::string s{};
+      expect(not glz::write_beve(obj, s));
+      expect(!glz::read_beve(obj, s));
+      expect(obj.x[0] == 1);
+      expect(obj.x[1] == 2);
+      expect(obj.x[2] == 3);
+   };
+};
+
 int main()
 {
    glz::trace_begin("binary_test");

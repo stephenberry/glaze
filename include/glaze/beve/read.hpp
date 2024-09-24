@@ -33,7 +33,7 @@ namespace glz
                }
                else {
                   // do not read anything into the const value
-                  skip_value_beve<Opts>(std::forward<Ctx>(ctx), std::forward<It0>(it), std::forward<It1>(end));
+                  skip_value<BEVE>::op<Opts>(std::forward<Ctx>(ctx), std::forward<It0>(it), std::forward<It1>(end));
                }
             }
             else {
@@ -53,7 +53,7 @@ namespace glz
                }
                else {
                   // do not read anything into the const value
-                  skip_value_beve<Opts>(std::forward<Ctx>(ctx), std::forward<It0>(it), std::forward<It1>(end));
+                  skip_value<BEVE>::op<Opts>(std::forward<Ctx>(ctx), std::forward<It0>(it), std::forward<It1>(end));
                }
             }
             else {
@@ -143,7 +143,7 @@ namespace glz
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&& ctx, auto&&... args) noexcept
          {
-            skip_value_beve<Opts>(ctx, args...);
+            skip_value<BEVE>::op<Opts>(ctx, args...);
          }
       };
 
@@ -1286,7 +1286,7 @@ namespace glz
                                  return;
                               }
                               else {
-                                 skip_value_beve<Opts>(ctx, it, end);
+                                 skip_value<BEVE>::op<Opts>(ctx, it, end);
                                  if (bool(ctx.error)) [[unlikely]]
                                     return;
                               }
@@ -1305,7 +1305,7 @@ namespace glz
                      }
                      else {
                         it += n;
-                        skip_value_beve<Opts>(ctx, it, end);
+                        skip_value<BEVE>::op<Opts>(ctx, it, end);
                         if (bool(ctx.error)) [[unlikely]]
                            return;
                      }
@@ -1316,7 +1316,7 @@ namespace glz
                   return;
                }
                else {
-                  skip_value_beve<Opts>(ctx, it, end);
+                  skip_value<BEVE>::op<Opts>(ctx, it, end);
                   if (bool(ctx.error)) [[unlikely]]
                      return;
                }
