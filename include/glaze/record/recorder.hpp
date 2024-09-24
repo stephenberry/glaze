@@ -181,7 +181,7 @@ namespace glz
 
                   std::visit(
                      [&](auto& x) {
-                        write<csv>::op<Opts>(x, ctx, args...); // write deque
+                        write<CSV>::op<Opts>(x, ctx, args...); // write deque
                      },
                      v.first);
 
@@ -217,7 +217,7 @@ namespace glz
                               breakout = true;
                               return;
                            }
-                           write<csv>::op<Opts>(v[row], ctx, args...); // write deque
+                           write<CSV>::op<Opts>(v[row], ctx, args...); // write deque
                         },
                         data.first);
 
