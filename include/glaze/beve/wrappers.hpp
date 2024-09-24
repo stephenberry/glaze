@@ -13,22 +13,22 @@
 namespace glz::detail
 {
    template <is_opts_wrapper T>
-   struct from_binary<T>
+   struct from<BEVE, T>
    {
       template <auto Opts>
       GLZ_ALWAYS_INLINE static void op(auto&& value, auto&&... args) noexcept
       {
-         read<binary>::op<opt_true<Opts, T::opts_member>>(value.val, args...);
+         read<BEVE>::op<opt_true<Opts, T::opts_member>>(value.val, args...);
       }
    };
 
    template <is_opts_wrapper T>
-   struct to_binary<T>
+   struct to<BEVE, T>
    {
       template <auto Opts>
       GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept
       {
-         write<binary>::op<opt_true<Opts, T::opts_member>>(value.val, ctx, args...);
+         write<BEVE>::op<opt_true<Opts, T::opts_member>>(value.val, ctx, args...);
       }
    };
 }

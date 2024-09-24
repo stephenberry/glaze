@@ -3,7 +3,7 @@
 
 #pragma once
 
-#include "glaze/binary/header.hpp"
+#include "glaze/beve/header.hpp"
 #include "glaze/json/write.hpp"
 
 namespace glz
@@ -22,7 +22,7 @@ namespace glz
                return;
             }
             std::memcpy(&value, it, sizeof(T));
-            to_json<T>::template op<Opts>(value, ctx, out, ix);
+            to<JSON, T>::template op<Opts>(value, ctx, out, ix);
             it += sizeof(T);
          };
 
@@ -146,7 +146,7 @@ namespace glz
                return;
             }
             const sv value{reinterpret_cast<const char*>(it), n};
-            to_json<sv>::template op<Opts>(value, ctx, out, ix);
+            to<JSON, sv>::template op<Opts>(value, ctx, out, ix);
             it += n;
             break;
          }
@@ -188,7 +188,7 @@ namespace glz
                      return;
                   }
                   const sv key{reinterpret_cast<const char*>(it), n};
-                  to_json<sv>::template op<Opts>(key, ctx, out, ix);
+                  to<JSON, sv>::template op<Opts>(key, ctx, out, ix);
                   if constexpr (Opts.prettify) {
                      dump<": ">(out, ix);
                   }
@@ -241,7 +241,7 @@ namespace glz
                      return;
                   }
                   std::memcpy(&value, it, sizeof(T));
-                  to_json<T>::template op<Opts>(value, ctx, out, ix);
+                  to<JSON, T>::template op<Opts>(value, ctx, out, ix);
                   it += sizeof(T);
                   if (i != n - 1) {
                      dump<','>(out, ix);
@@ -348,7 +348,7 @@ namespace glz
                         return;
                      }
                      const sv value{reinterpret_cast<const char*>(it), n};
-                     to_json<sv>::template op<Opts>(value, ctx, out, ix);
+                     to<JSON, sv>::template op<Opts>(value, ctx, out, ix);
                      it += n;
                      if (i != n_strings - 1) {
                         dump<','>(out, ix);
@@ -427,7 +427,7 @@ namespace glz
                   dump<R"("index":)">(out, ix);
                }
 
-               to_json<std::remove_cvref_t<decltype(index)>>::template op<Opts>(index, ctx, out, ix);
+               to<JSON, std::remove_cvref_t<decltype(index)>>::template op<Opts>(index, ctx, out, ix);
 
                dump<','>(out, ix);
                if constexpr (Opts.prettify) {

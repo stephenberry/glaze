@@ -14,30 +14,30 @@ namespace glz
    namespace detail
    {
       template <>
-      struct write<csv>
+      struct write<CSV>
       {
          template <auto Opts, class T, is_context Ctx, class B, class IX>
          static void op(T&& value, Ctx&& ctx, B&& b, IX&& ix) noexcept
          {
-            to_csv<std::decay_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
+            to<CSV, std::decay_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
                                                        std::forward<B>(b), std::forward<IX>(ix));
          }
       };
 
       template <glaze_value_t T>
-      struct to_csv<T>
+      struct to<CSV, T>
       {
          template <auto Opts, is_context Ctx, class B, class IX>
          static void op(auto&& value, Ctx&& ctx, B&& b, IX&& ix) noexcept
          {
             using V = decltype(get_member(std::declval<T>(), meta_wrapper_v<T>));
-            to_csv<V>::template op<Opts>(get_member(value, meta_wrapper_v<T>), std::forward<Ctx>(ctx),
+            to<CSV, V>::template op<Opts>(get_member(value, meta_wrapper_v<T>), std::forward<Ctx>(ctx),
                                          std::forward<B>(b), std::forward<IX>(ix));
          }
       };
 
       template <num_t T>
-      struct to_csv<T>
+      struct to<CSV, T>
       {
          template <auto Opts, class B>
          static void op(auto&& value, is_context auto&& ctx, B&& b, auto&& ix) noexcept
@@ -47,7 +47,7 @@ namespace glz
       };
 
       template <bool_t T>
-      struct to_csv<T>
+      struct to<CSV, T>
       {
          template <auto Opts, class B>
          static void op(auto&& value, is_context auto&&, B&& b, auto&& ix) noexcept
@@ -62,7 +62,7 @@ namespace glz
       };
 
       template <writable_array_t T>
-      struct to_csv<T>
+      struct to<CSV, T>
       {
          template <auto Opts, class B>
          static void op(auto&& value, is_context auto&& ctx, B&& b, auto&& ix) noexcept
@@ -71,7 +71,7 @@ namespace glz
                if constexpr (Opts.layout == rowwise) {
                   const auto n = value.size();
                   for (size_t i = 0; i < n; ++i) {
-                     write<csv>::op<Opts>(value[i], ctx, b, ix);
+                     write<CSV>::op<Opts>(value[i], ctx, b, ix);
 
                      if (i != (n - 1)) {
                         dump<','>(b, ix);
@@ -85,7 +85,7 @@ namespace glz
             else {
                const auto n = value.size();
                for (size_t i = 0; i < n; ++i) {
-                  write<csv>::op<Opts>(value[i], ctx, b, ix);
+                  write<CSV>::op<Opts>(value[i], ctx, b, ix);
 
                   if (i != (n - 1)) {
                      dump<','>(b, ix);
@@ -97,7 +97,7 @@ namespace glz
 
       template <class T>
          requires str_t<T> || char_t<T>
-      struct to_csv<T>
+      struct to<CSV, T>
       {
          template <auto Opts, class B>
          static void op(auto&& value, is_context auto&&, B&& b, auto&& ix) noexcept
@@ -107,7 +107,7 @@ namespace glz
       };
 
       template <writable_map_t T>
-      struct to_csv<T>
+      struct to<CSV, T>
       {
          template <auto Opts, class B>
          static void op(auto&& value, is_context auto&& ctx, B&& b, auto&& ix) noexcept
@@ -118,7 +118,7 @@ namespace glz
                   dump<','>(b, ix);
                   const auto n = data.size();
                   for (size_t i = 0; i < n; ++i) {
-                     write<csv>::op<Opts>(data[i], ctx, b, ix);
+                     write<CSV>::op<Opts>(data[i], ctx, b, ix);
                      if (i < n - 1) {
                         dump<','>(b, ix);
                      }
@@ -150,7 +150,7 @@ namespace glz
                         break;
                      }
 
-                     write<csv>::op<Opts>(data[row], ctx, b, ix);
+                     write<CSV>::op<Opts>(data[row], ctx, b, ix);
                      ++i;
                      if (i < n) {
                         dump<','>(b, ix);
@@ -171,7 +171,7 @@ namespace glz
 
       template <class T>
          requires(glaze_object_t<T> || reflectable<T>)
-      struct to_csv<T>
+      struct to<CSV, T>
       {
          template <auto Opts, class B>
          static void op(auto&& value, is_context auto&& ctx, B&& b, auto&& ix) noexcept
@@ -214,7 +214,7 @@ namespace glz
                         dump<','>(b, ix);
 
                         for (size_t j = 0; j < count; ++j) {
-                           write<csv>::op<Opts>(member[j][i], ctx, b, ix);
+                           write<CSV>::op<Opts>(member[j][i], ctx, b, ix);
                            if (j != count - 1) {
                               dump<','>(b, ix);
                            }
@@ -228,7 +228,7 @@ namespace glz
                   else {
                      dump<key>(b, ix);
                      dump<','>(b, ix);
-                     write<csv>::op<Opts>(get_member(value, mem), ctx, b, ix);
+                     write<CSV>::op<Opts>(get_member(value, mem), ctx, b, ix);
                      dump<'\n'>(b, ix);
                   }
                });
@@ -262,7 +262,7 @@ namespace glz
                      }
                   }
                   else {
-                     write<csv>::op<Opts>(key, ctx, b, ix);
+                     write<CSV>::op<Opts>(key, ctx, b, ix);
                   }
 
                   if (I != N - 1) {
@@ -297,7 +297,7 @@ namespace glz
 
                         const auto n = member[0].size();
                         for (size_t i = 0; i < n; ++i) {
-                           write<csv>::op<Opts>(member[row][i], ctx, b, ix);
+                           write<CSV>::op<Opts>(member[row][i], ctx, b, ix);
                            if (i != n - 1) {
                               dump<','>(b, ix);
                            }
@@ -310,7 +310,7 @@ namespace glz
                            return;
                         }
 
-                        write<csv>::op<Opts>(member[row], ctx, b, ix);
+                        write<CSV>::op<Opts>(member[row], ctx, b, ix);
 
                         if (I != N - 1) {
                            dump<','>(b, ix);
@@ -334,19 +334,19 @@ namespace glz
    template <uint32_t layout = rowwise, write_csv_supported T, class Buffer>
    [[nodiscard]] auto write_csv(T&& value, Buffer&& buffer) noexcept
    {
-      return write<opts{.format = csv, .layout = layout}>(std::forward<T>(value), std::forward<Buffer>(buffer));
+      return write<opts{.format = CSV, .layout = layout}>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
 
    template <uint32_t layout = rowwise, write_csv_supported T>
    [[nodiscard]] expected<std::string, error_ctx> write_csv(T&& value) noexcept
    {
-      return write<opts{.format = csv, .layout = layout}>(std::forward<T>(value));
+      return write<opts{.format = CSV, .layout = layout}>(std::forward<T>(value));
    }
 
    template <uint32_t layout = rowwise, write_csv_supported T>
    [[nodiscard]] error_ctx write_file_csv(T&& value, const std::string& file_name, auto&& buffer) noexcept
    {
-      const auto ec = write<opts{.format = csv, .layout = layout}>(std::forward<T>(value), buffer);
+      const auto ec = write<opts{.format = CSV, .layout = layout}>(std::forward<T>(value), buffer);
       if (bool(ec)) [[unlikely]] {
          return ec;
       }

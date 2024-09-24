@@ -12,8 +12,8 @@ static_assert(false, "Eigen must be included to use glaze/ext/eigen.hpp");
 #include <span>
 
 #include "glaze/api/std/array.hpp"
-#include "glaze/binary/read.hpp"
-#include "glaze/binary/write.hpp"
+#include "glaze/beve/read.hpp"
+#include "glaze/beve/write.hpp"
 #include "glaze/core/common.hpp"
 #include "glaze/core/meta.hpp"
 #include "glaze/json/json_ptr.hpp"
@@ -41,7 +41,7 @@ namespace glz
 
       template <matrix_t T>
          requires(T::RowsAtCompileTime >= 0 && T::ColsAtCompileTime >= 0)
-      struct from_binary<T>
+      struct from<BEVE, T>
       {
          template <auto Opts>
          static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end)
@@ -53,16 +53,16 @@ namespace glz
             }
             ++it;
             std::array<Eigen::Index, 2> extents;
-            detail::read<binary>::op<Opts>(extents, ctx, it, end);
+            detail::read<BEVE>::op<Opts>(extents, ctx, it, end);
 
             std::span<typename T::Scalar, T::RowsAtCompileTime * T::ColsAtCompileTime> view(value.data(), value.size());
-            detail::read<binary>::op<Opts>(view, ctx, it, end);
+            detail::read<BEVE>::op<Opts>(view, ctx, it, end);
          }
       };
 
       template <matrix_t T>
          requires(T::RowsAtCompileTime < 0 || T::ColsAtCompileTime < 0)
-      struct from_binary<T>
+      struct from<BEVE, T>
       {
          template <auto Opts>
          static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end)
@@ -74,16 +74,16 @@ namespace glz
             }
             ++it;
             std::array<Eigen::Index, 2> extents;
-            detail::read<binary>::op<Opts>(extents, ctx, it, end);
+            detail::read<BEVE>::op<Opts>(extents, ctx, it, end);
 
             std::span<typename T::Scalar> view(value.data(), extents[0] * extents[1]);
-            detail::read<binary>::op<Opts>(view, ctx, it, end);
+            detail::read<BEVE>::op<Opts>(view, ctx, it, end);
          }
       };
 
       template <matrix_t T>
          requires(T::RowsAtCompileTime >= 0 && T::ColsAtCompileTime >= 0)
-      struct to_binary<T>
+      struct to<BEVE, T>
       {
          template <auto Opts>
          static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept
@@ -96,16 +96,16 @@ namespace glz
             dump_type(layout, args...);
 
             std::array<Eigen::Index, 2> extents{T::RowsAtCompileTime, T::ColsAtCompileTime};
-            detail::write<binary>::op<Opts>(extents, ctx, args...);
+            detail::write<BEVE>::op<Opts>(extents, ctx, args...);
 
             std::span<typename T::Scalar, T::RowsAtCompileTime * T::ColsAtCompileTime> view(value.data(), value.size());
-            detail::write<binary>::op<Opts>(view, ctx, args...);
+            detail::write<BEVE>::op<Opts>(view, ctx, args...);
          }
       };
 
       template <matrix_t T>
          requires(T::RowsAtCompileTime < 0 || T::ColsAtCompileTime < 0)
-      struct to_binary<T>
+      struct to<BEVE, T>
       {
          template <auto Opts>
          static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept
@@ -118,34 +118,34 @@ namespace glz
             dump_type(layout, args...);
 
             std::array<Eigen::Index, 2> extents{value.rows(), value.cols()};
-            detail::write<binary>::op<Opts>(extents, ctx, args...);
+            detail::write<BEVE>::op<Opts>(extents, ctx, args...);
 
             std::span<typename T::Scalar> view(value.data(), extents[0] * extents[1]);
-            detail::write<binary>::op<Opts>(view, ctx, args...);
+            detail::write<BEVE>::op<Opts>(view, ctx, args...);
          }
       };
 
       template <matrix_t T>
          requires(T::RowsAtCompileTime >= 0 && T::ColsAtCompileTime >= 0)
-      struct from_json<T>
+      struct from<JSON, T>
       {
          template <auto Opts>
          static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
             std::span<typename T::Scalar, T::RowsAtCompileTime * T::ColsAtCompileTime> view(value.data(), value.size());
-            detail::read<json>::op<Opts>(view, ctx, it, end);
+            detail::read<JSON>::op<Opts>(view, ctx, it, end);
          }
       };
 
       template <matrix_t T>
          requires(T::RowsAtCompileTime >= 0 && T::ColsAtCompileTime >= 0)
-      struct to_json<T>
+      struct to<JSON, T>
       {
          template <auto Opts>
          static void op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix) noexcept
          {
             std::span<typename T::Scalar, T::RowsAtCompileTime * T::ColsAtCompileTime> view(value.data(), value.size());
-            detail::write<json>::op<Opts>(view, ctx, b, ix);
+            detail::write<JSON>::op<Opts>(view, ctx, b, ix);
          }
       };
    } // namespace detail

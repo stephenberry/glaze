@@ -285,7 +285,7 @@ namespace glz::repe
    [[nodiscard]] auto request_binary(H&& header)
    {
       header.empty = true; // because no value provided
-      return glz::write_binary(std::forward_as_tuple(std::forward<H>(header), nullptr));
+      return glz::write_beve(std::forward_as_tuple(std::forward<H>(header), nullptr));
    }
 
    template <class H = header>
@@ -304,7 +304,7 @@ namespace glz::repe
    template <class Value, class H = header>
    [[nodiscard]] auto request_binary(H&& header, Value&& value)
    {
-      return glz::write_binary(std::forward_as_tuple(std::forward<H>(header), std::forward<Value>(value)));
+      return glz::write_beve(std::forward_as_tuple(std::forward<H>(header), std::forward<Value>(value)));
    }
 
    // DESIGN NOTE: It might appear that we are locking ourselves into a poor design choice by using a runtime
@@ -1109,7 +1109,7 @@ namespace glz::repe
             return finish();
          }
 
-         if constexpr (Opts.format == json) {
+         if constexpr (Opts.format == JSON) {
             if (*b == '[') {
                ++b;
             }
@@ -1144,7 +1144,7 @@ namespace glz::repe
             return finish();
          }
 
-         if constexpr (Opts.format == json) {
+         if constexpr (Opts.format == JSON) {
             if (*b == ',') {
                ++b;
             }

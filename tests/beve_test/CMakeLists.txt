@@ -1,4 +1,4 @@
-project(binary_test)
+project(beve_test)
 
 add_executable(${PROJECT_NAME} ${PROJECT_NAME}.cpp)
 

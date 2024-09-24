@@ -12,7 +12,7 @@ namespace glz::detail
 {
    template <class T>
       requires(is_specialization_v<T, custom_t>)
-   struct from_json<T>
+   struct from<JSON, T>
    {
       template <auto Opts>
       static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
@@ -36,7 +36,7 @@ namespace glz::detail
                   }
                   else if constexpr (glz::tuple_size_v<Tuple> == 1) {
                      std::decay_t<glz::tuple_element_t<0, Tuple>> input{};
-                     read<json>::op<Opts>(input, ctx, it, end);
+                     read<JSON>::op<Opts>(input, ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
                      (value.val.*(value.from))(input);
@@ -65,7 +65,7 @@ namespace glz::detail
                      }
                      else if constexpr (glz::tuple_size_v<Tuple> == 1) {
                         std::decay_t<glz::tuple_element_t<0, Tuple>> input{};
-                        read<json>::op<Opts>(input, ctx, it, end);
+                        read<JSON>::op<Opts>(input, ctx, it, end);
                         if (bool(ctx.error)) [[unlikely]]
                            return;
                         from(input);
@@ -79,7 +79,7 @@ namespace glz::detail
                   }
                }
                else {
-                  read<json>::op<Opts>(from, ctx, it, end);
+                  read<JSON>::op<Opts>(from, ctx, it, end);
                }
             }
             else {
@@ -103,7 +103,7 @@ namespace glz::detail
                   }
                   else if constexpr (N == 2) {
                      std::decay_t<glz::tuple_element_t<1, Tuple>> input{};
-                     read<json>::op<Opts>(input, ctx, it, end);
+                     read<JSON>::op<Opts>(input, ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
                      value.from(value.val, input);
@@ -117,7 +117,7 @@ namespace glz::detail
                }
             }
             else if constexpr (std::invocable<From, decltype(value.val)>) {
-               read<json>::op<Opts>(value.from(value.val), ctx, it, end);
+               read<JSON>::op<Opts>(value.from(value.val), ctx, it, end);
             }
             else {
                static_assert(
@@ -133,7 +133,7 @@ namespace glz::detail
 
    template <class T>
       requires(is_specialization_v<T, custom_t>)
-   struct to_json<T>
+   struct to<JSON, T>
    {
       template <auto Opts>
       static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept
@@ -145,7 +145,7 @@ namespace glz::detail
             if constexpr (std::is_member_function_pointer_v<To>) {
                using Tuple = typename inputs_as_tuple<To>::type;
                if constexpr (glz::tuple_size_v<Tuple> == 0) {
-                  write<json>::op<Opts>((value.val.*(value.to))(), ctx, args...);
+                  write<JSON>::op<Opts>((value.val.*(value.to))(), ctx, args...);
                }
                else {
                   static_assert(false_v<T>, "function cannot have inputs");
@@ -163,7 +163,7 @@ namespace glz::detail
                   else {
                      using Tuple = typename function_traits<Func>::arguments;
                      if constexpr (glz::tuple_size_v<Tuple> == 0) {
-                        write<json>::op<Opts>(to(), ctx, args...);
+                        write<JSON>::op<Opts>(to(), ctx, args...);
                      }
                      else {
                         static_assert(false_v<T>, "std::function cannot have inputs");
@@ -171,7 +171,7 @@ namespace glz::detail
                   }
                }
                else {
-                  write<json>::op<Opts>(to, ctx, args...);
+                  write<JSON>::op<Opts>(to, ctx, args...);
                }
             }
             else {
@@ -180,7 +180,7 @@ namespace glz::detail
          }
          else {
             if constexpr (std::invocable<To, decltype(value.val)>) {
-               write<json>::op<Opts>(std::invoke(value.to, value.val), ctx, args...);
+               write<JSON>::op<Opts>(std::invoke(value.to, value.val), ctx, args...);
             }
             else {
                static_assert(false_v<To>,

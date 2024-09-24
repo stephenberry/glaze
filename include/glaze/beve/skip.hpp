@@ -3,7 +3,7 @@
 
 #pragma once
 
-#include "glaze/binary/header.hpp"
+#include "glaze/beve/header.hpp"
 #include "glaze/core/opts.hpp"
 #include "glaze/core/read.hpp"
 #include "glaze/file/file_ops.hpp"
@@ -12,7 +12,7 @@
 namespace glz::detail
 {
    template <opts Opts>
-   inline void skip_value_binary(is_context auto&&, auto&&, auto&&) noexcept;
+   inline void skip_value_beve(is_context auto&&, auto&&, auto&&) noexcept;
 
    inline void skip_string_binary(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
@@ -65,7 +65,7 @@ namespace glz::detail
 
             it += string_length;
 
-            skip_value_binary<Opts>(ctx, it, end);
+            skip_value_beve<Opts>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
                return;
          }
@@ -84,7 +84,7 @@ namespace glz::detail
 
             it += byte_count * n;
 
-            skip_value_binary<Opts>(ctx, it, end);
+            skip_value_beve<Opts>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
                return;
          }
@@ -162,7 +162,7 @@ namespace glz::detail
       }
 
       for (size_t i = 0; i < n; ++i) {
-         skip_value_binary<Opts>(ctx, it, end);
+         skip_value_beve<Opts>(ctx, it, end);
       }
    }
 
@@ -170,11 +170,11 @@ namespace glz::detail
    GLZ_ALWAYS_INLINE void skip_additional_binary(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       ++it;
-      skip_value_binary<Opts>(ctx, it, end);
+      skip_value_beve<Opts>(ctx, it, end);
    }
 
    template <opts Opts>
-   inline void skip_value_binary(is_context auto&& ctx, auto&& it, auto&& end) noexcept
+   inline void skip_value_beve(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       GLZ_END_CHECK();
       switch (uint8_t(*it) & 0b00000'111) {

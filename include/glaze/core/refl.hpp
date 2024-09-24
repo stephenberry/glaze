@@ -3,7 +3,7 @@
 
 #pragma once
 
-#include "glaze/binary/header.hpp"
+#include "glaze/beve/header.hpp"
 #include "glaze/core/common.hpp"
 #include "glaze/util/primes_64.hpp"
 
@@ -1720,19 +1720,19 @@ namespace glz::detail
    struct decode_hash;
 
    template <class T, auto HashInfo>
-   struct decode_hash<json, T, HashInfo, hash_type::single_element>
+   struct decode_hash<JSON, T, HashInfo, hash_type::single_element>
    {
       GLZ_ALWAYS_INLINE static constexpr size_t op(auto&& /*it*/, auto&& /*end*/) noexcept { return 0; }
    };
 
    template <class T, auto HashInfo>
-   struct decode_hash<json, T, HashInfo, hash_type::mod4>
+   struct decode_hash<JSON, T, HashInfo, hash_type::mod4>
    {
       GLZ_ALWAYS_INLINE static constexpr size_t op(auto&& it, auto&& /*end*/) noexcept { return uint8_t(*it) % 4; }
    };
 
    template <class T, auto HashInfo>
-   struct decode_hash<json, T, HashInfo, hash_type::xor_mod4>
+   struct decode_hash<JSON, T, HashInfo, hash_type::xor_mod4>
    {
       static constexpr auto first_key_char = refl<T>.keys[0][0];
 
@@ -1743,7 +1743,7 @@ namespace glz::detail
    };
 
    template <class T, auto HashInfo>
-   struct decode_hash<json, T, HashInfo, hash_type::minus_mod4>
+   struct decode_hash<JSON, T, HashInfo, hash_type::minus_mod4>
    {
       static constexpr auto first_key_char = refl<T>.keys[0][0];
 
@@ -1754,7 +1754,7 @@ namespace glz::detail
    };
 
    template <class T, auto HashInfo>
-   struct decode_hash<json, T, HashInfo, hash_type::unique_index>
+   struct decode_hash<JSON, T, HashInfo, hash_type::unique_index>
    {
       static constexpr auto N = refl<T>.N;
       static constexpr auto bsize = bucket_size(hash_type::unique_index, N);
@@ -1807,7 +1807,7 @@ namespace glz::detail
    };
 
    template <class T, auto HashInfo>
-   struct decode_hash<json, T, HashInfo, hash_type::three_element_unique_index>
+   struct decode_hash<JSON, T, HashInfo, hash_type::three_element_unique_index>
    {
       static constexpr auto N = refl<T>.N;
       static constexpr auto uindex = HashInfo.unique_index;
@@ -1832,7 +1832,7 @@ namespace glz::detail
    };
 
    template <class T, auto HashInfo>
-   struct decode_hash<json, T, HashInfo, hash_type::front_hash>
+   struct decode_hash<JSON, T, HashInfo, hash_type::front_hash>
    {
       static constexpr auto N = refl<T>.N;
       static constexpr auto bsize = bucket_size(hash_type::front_hash, N);
@@ -1894,7 +1894,7 @@ namespace glz::detail
    };
 
    template <class T, auto HashInfo>
-   struct decode_hash<json, T, HashInfo, hash_type::unique_per_length>
+   struct decode_hash<JSON, T, HashInfo, hash_type::unique_per_length>
    {
       static constexpr auto N = refl<T>.N;
       static constexpr auto bsize = bucket_size(hash_type::unique_per_length, N);
@@ -1918,7 +1918,7 @@ namespace glz::detail
    };
 
    template <class T, auto HashInfo>
-   struct decode_hash<json, T, HashInfo, hash_type::full_flat>
+   struct decode_hash<JSON, T, HashInfo, hash_type::full_flat>
    {
       static constexpr auto N = refl<T>.N;
       static constexpr auto bsize = bucket_size(hash_type::full_flat, N);
