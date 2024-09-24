@@ -5,6 +5,7 @@
 
 #include <iostream>
 #include <tuple>
+#include <unordered_set>
 
 #include "glaze/api/api.hpp"
 #include "interface.hpp"
