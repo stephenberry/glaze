@@ -1491,13 +1491,9 @@ namespace glz
          }
       };
 
-      template <class T = void>
-      struct to_json_partial
-      {};
-
       template <auto& Partial, auto Opts, class T, class Ctx, class B, class IX>
       concept write_json_partial_invocable = requires(T&& value, Ctx&& ctx, B&& b, IX&& ix) {
-         to_json_partial<std::remove_cvref_t<T>>::template op<Partial, Opts>(
+         to_partial<JSON, std::remove_cvref_t<T>>::template op<Partial, Opts>(
             std::forward<T>(value), std::forward<Ctx>(ctx), std::forward<B>(b), std::forward<IX>(ix));
       };
 
@@ -1511,7 +1507,7 @@ namespace glz
                detail::write<JSON>::op<Opts>(value, ctx, b, ix);
             }
             else if constexpr (write_json_partial_invocable<Partial, Opts, T, Ctx, B, IX>) {
-               to_json_partial<std::remove_cvref_t<T>>::template op<Partial, Opts>(
+               to_partial<JSON, std::remove_cvref_t<T>>::template op<Partial, Opts>(
                   std::forward<T>(value), std::forward<Ctx>(ctx), std::forward<B>(b), std::forward<IX>(ix));
             }
             else {
@@ -1523,7 +1519,7 @@ namespace glz
       // Only object types are supported for partial
       template <class T>
          requires(glaze_object_t<T> || writable_map_t<T> || reflectable<T>)
-      struct to_json_partial<T> final
+      struct to_partial<JSON, T> final
       {
          template <auto& Partial, auto Opts, class... Args>
          static void op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix) noexcept
