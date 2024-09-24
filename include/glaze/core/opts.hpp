@@ -14,7 +14,7 @@ namespace glz
    inline constexpr uint32_t BEVE = 1;
    inline constexpr uint32_t json = 10;
    inline constexpr uint32_t JSON_PTR = 20;
-   inline constexpr uint32_t ndjson = 100; // new line delimited JSON
+   inline constexpr uint32_t NDJSON = 100; // new line delimited JSON
    inline constexpr uint32_t MUSTACHE = 500;
    inline constexpr uint32_t CSV = 10000;
 
@@ -379,7 +379,7 @@ namespace glz
       else if constexpr (Format == json) {
          return write_json_supported<T>;
       }
-      else if constexpr (Format == ndjson) {
+      else if constexpr (Format == NDJSON) {
          return write_ndjson_supported<T>;
       }
       else if constexpr (Format == CSV) {
@@ -399,7 +399,7 @@ namespace glz
       else if constexpr (Format == json) {
          return read_json_supported<T>;
       }
-      else if constexpr (Format == ndjson) {
+      else if constexpr (Format == NDJSON) {
          return read_ndjson_supported<T>;
       }
       else if constexpr (Format == CSV) {
