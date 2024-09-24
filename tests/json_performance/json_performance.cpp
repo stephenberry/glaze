@@ -263,9 +263,9 @@ struct results
    std::optional<double> json_roundtrip{};
 
    std::optional<size_t> binary_byte_length{};
-   std::optional<double> binary_write{};
-   std::optional<double> binary_read{};
-   std::optional<double> binary_roundtrip{};
+   std::optional<double> beve_write{};
+   std::optional<double> beve_read{};
+   std::optional<double> beve_roundtrip{};
 
    void print(bool use_minified = true)
    {
@@ -299,32 +299,32 @@ struct results
          }
       }
 
-      if (binary_roundtrip) {
+      if (beve_roundtrip) {
          std::cout << '\n';
-         std::cout << name << " binary roundtrip: " << *binary_roundtrip << " s\n";
+         std::cout << name << " beve roundtrip: " << *beve_roundtrip << " s\n";
       }
 
       if (binary_byte_length) {
-         std::cout << name << " binary byte length: " << *binary_byte_length << '\n';
+         std::cout << name << " beve byte length: " << *binary_byte_length << '\n';
       }
 
-      if (binary_write) {
+      if (beve_write) {
          if (binary_byte_length) {
-            const auto MBs = iterations * *binary_byte_length / (*binary_write * 1048576);
-            std::cout << name << " binary write: " << *binary_write << " s, " << MBs << " MB/s\n";
+            const auto MBs = iterations * *binary_byte_length / (*beve_write * 1048576);
+            std::cout << name << " beve write: " << *beve_write << " s, " << MBs << " MB/s\n";
          }
          else {
-            std::cout << name << " binary write: " << *binary_write << " s\n";
+            std::cout << name << " beve write: " << *beve_write << " s\n";
          }
       }
 
-      if (binary_read) {
+      if (beve_read) {
          if (binary_byte_length) {
-            const auto MBs = iterations * *binary_byte_length / (*binary_read * 1048576);
-            std::cout << name << " binary read: " << *binary_read << " s, " << MBs << " MB/s\n";
+            const auto MBs = iterations * *binary_byte_length / (*beve_read * 1048576);
+            std::cout << name << " beve read: " << *beve_read << " s, " << MBs << " MB/s\n";
          }
          else {
-            std::cout << name << " binary read: " << *binary_read << " s\n";
+            std::cout << name << " beve read: " << *beve_read << " s\n";
          }
       }
 
@@ -388,7 +388,7 @@ auto glaze_test()
 
    r.json_read = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-6;
 
-   // binary write performance
+   // beve write performance
 
    t0 = std::chrono::steady_clock::now();
 
@@ -402,9 +402,9 @@ auto glaze_test()
    t1 = std::chrono::steady_clock::now();
 
    r.binary_byte_length = buffer.size();
-   r.binary_write = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-6;
+   r.beve_write = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-6;
 
-   // binary read performance
+   // beve read performance
 
    t0 = std::chrono::steady_clock::now();
 
@@ -417,9 +417,9 @@ auto glaze_test()
 
    t1 = std::chrono::steady_clock::now();
 
-   r.binary_read = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-6;
+   r.beve_read = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-6;
 
-   // binary round trip
+   // beve round trip
 
    t0 = std::chrono::steady_clock::now();
 
@@ -436,7 +436,7 @@ auto glaze_test()
 
    t1 = std::chrono::steady_clock::now();
 
-   r.binary_roundtrip = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-6;
+   r.beve_roundtrip = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-6;
 
    r.print();
 
@@ -741,7 +741,7 @@ auto benchmark_tester()
 
    r.json_read = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-6;
 
-   // binary write performance
+   // beve write performance
 
    t0 = std::chrono::steady_clock::now();
 
@@ -755,9 +755,9 @@ auto benchmark_tester()
    t1 = std::chrono::steady_clock::now();
 
    r.binary_byte_length = buffer.size();
-   r.binary_write = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-6;
+   r.beve_write = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-6;
 
-   // binary read performance
+   // beve read performance
 
    t0 = std::chrono::steady_clock::now();
 
@@ -770,9 +770,9 @@ auto benchmark_tester()
 
    t1 = std::chrono::steady_clock::now();
 
-   r.binary_read = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-6;
+   r.beve_read = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-6;
 
-   // binary round trip
+   // beve round trip
 
    t0 = std::chrono::steady_clock::now();
 
@@ -789,7 +789,7 @@ auto benchmark_tester()
 
    t1 = std::chrono::steady_clock::now();
 
-   r.binary_roundtrip = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-6;
+   r.beve_roundtrip = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-6;
 
    r.print();
 
@@ -1146,7 +1146,7 @@ auto generic_tester()
 
    r.json_read = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-6;
 
-   // binary write performance
+   // beve write performance
 
    t0 = std::chrono::steady_clock::now();
 
@@ -1160,9 +1160,9 @@ auto generic_tester()
    t1 = std::chrono::steady_clock::now();
 
    r.binary_byte_length = buffer.size();
-   r.binary_write = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-6;
+   r.beve_write = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-6;
 
-   // binary read performance
+   // beve read performance
 
    t0 = std::chrono::steady_clock::now();
 
@@ -1175,9 +1175,9 @@ auto generic_tester()
 
    t1 = std::chrono::steady_clock::now();
 
-   r.binary_read = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-6;
+   r.beve_read = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-6;
 
-   // binary round trip
+   // beve round trip
 
    t0 = std::chrono::steady_clock::now();
 
@@ -1194,7 +1194,7 @@ auto generic_tester()
 
    t1 = std::chrono::steady_clock::now();
 
-   r.binary_roundtrip = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-6;
+   r.beve_roundtrip = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-6;
 
    r.print();
 

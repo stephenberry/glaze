@@ -53,10 +53,10 @@ namespace glz
             }
             ++it;
             std::array<Eigen::Index, 2> extents;
-            detail::read<binary>::op<Opts>(extents, ctx, it, end);
+            detail::read<BEVE>::op<Opts>(extents, ctx, it, end);
 
             std::span<typename T::Scalar, T::RowsAtCompileTime * T::ColsAtCompileTime> view(value.data(), value.size());
-            detail::read<binary>::op<Opts>(view, ctx, it, end);
+            detail::read<BEVE>::op<Opts>(view, ctx, it, end);
          }
       };
 
@@ -74,10 +74,10 @@ namespace glz
             }
             ++it;
             std::array<Eigen::Index, 2> extents;
-            detail::read<binary>::op<Opts>(extents, ctx, it, end);
+            detail::read<BEVE>::op<Opts>(extents, ctx, it, end);
 
             std::span<typename T::Scalar> view(value.data(), extents[0] * extents[1]);
-            detail::read<binary>::op<Opts>(view, ctx, it, end);
+            detail::read<BEVE>::op<Opts>(view, ctx, it, end);
          }
       };
 
@@ -96,10 +96,10 @@ namespace glz
             dump_type(layout, args...);
 
             std::array<Eigen::Index, 2> extents{T::RowsAtCompileTime, T::ColsAtCompileTime};
-            detail::write<binary>::op<Opts>(extents, ctx, args...);
+            detail::write<BEVE>::op<Opts>(extents, ctx, args...);
 
             std::span<typename T::Scalar, T::RowsAtCompileTime * T::ColsAtCompileTime> view(value.data(), value.size());
-            detail::write<binary>::op<Opts>(view, ctx, args...);
+            detail::write<BEVE>::op<Opts>(view, ctx, args...);
          }
       };
 
@@ -118,10 +118,10 @@ namespace glz
             dump_type(layout, args...);
 
             std::array<Eigen::Index, 2> extents{value.rows(), value.cols()};
-            detail::write<binary>::op<Opts>(extents, ctx, args...);
+            detail::write<BEVE>::op<Opts>(extents, ctx, args...);
 
             std::span<typename T::Scalar> view(value.data(), extents[0] * extents[1]);
-            detail::write<binary>::op<Opts>(view, ctx, args...);
+            detail::write<BEVE>::op<Opts>(view, ctx, args...);
          }
       };
 

@@ -39,7 +39,7 @@ int main()
       expect(m(1, 1) == 4);
    };
 
-   "binary"_test = [] {
+   "beve"_test = [] {
       Eigen::Matrix<double, 2, 2> m{};
       m << 1, 2, 3, 4;
       std::string b;
@@ -50,7 +50,7 @@ int main()
       expect(boolean);
    };
 
-   "binary"_test = [] {
+   "beve"_test = [] {
       Eigen::MatrixXd m(2, 2);
       m << 1, 2, 3, 4;
       std::string b;
@@ -94,7 +94,7 @@ int main()
       expect(boolean);
    };
 
-   "dynamic array binary"_test = [] {
+   "dynamic array beve"_test = [] {
       Eigen::VectorXd m(10);
       for (int i = 0; i < m.size(); ++i) {
          m[i] = i;
