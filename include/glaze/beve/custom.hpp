@@ -21,7 +21,7 @@ namespace glz::detail
          using From = typename V::from_t;
 
          if constexpr (std::same_as<From, skip>) {
-            skip_value_beve<Opts>(ctx, it, end);
+            skip_value<BEVE>::op<Opts>(ctx, it, end);
          }
          else if constexpr (std::is_member_pointer_v<From>) {
             if constexpr (std::is_member_function_pointer_v<From>) {
