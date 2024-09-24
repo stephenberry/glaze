@@ -29,7 +29,7 @@ namespace glz::detail
                if constexpr (std::is_void_v<Ret>) {
                   using Tuple = typename inputs_as_tuple<From>::type;
                   if constexpr (glz::tuple_size_v<Tuple> == 0) {
-                     skip_array_binary<Opts>(ctx, it, end);
+                     skip_array<Opts>(ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
                      (value.val.*(value.from))();
@@ -58,7 +58,7 @@ namespace glz::detail
                   if constexpr (std::is_void_v<Ret>) {
                      using Tuple = typename function_traits<Func>::arguments;
                      if constexpr (glz::tuple_size_v<Tuple> == 0) {
-                        skip_array_binary<Opts>(ctx, it, end);
+                        skip_array<Opts>(ctx, it, end);
                         if (bool(ctx.error)) [[unlikely]]
                            return;
                         from();
@@ -96,7 +96,7 @@ namespace glz::detail
                      static_assert(false_v<T>, "lambda must take in the class as the first argument");
                   }
                   else if constexpr (N == 1) {
-                     skip_array_binary<Opts>(ctx, it, end);
+                     skip_array<Opts>(ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
                      value.from(value.val);

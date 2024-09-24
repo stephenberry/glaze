@@ -169,6 +169,24 @@ namespace glz::detail
          skip_value<BEVE>::op<Opts>(ctx, it, end);
       }
    }
+   
+   template <opts Opts>
+      requires (Opts.format == BEVE)
+   void skip_array(is_context auto&& ctx, auto&& it, auto&& end) noexcept
+   {
+      switch (uint8_t(*it) & 0b00000'111) {
+      case tag::typed_array: {
+         skip_typed_array_binary<Opts>(ctx, it, end);
+         break;
+      }
+      case tag::generic_array: {
+         skip_untyped_array_binary<Opts>(ctx, it, end);
+         break;
+      }
+      default:
+         ctx.error = error_code::syntax_error;
+      }
+   }
 
    template <opts Opts>
    GLZ_ALWAYS_INLINE void skip_additional_binary(is_context auto&& ctx, auto&& it, auto&& end) noexcept
