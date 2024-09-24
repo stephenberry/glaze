@@ -9526,6 +9526,56 @@ suite simple_mod_hashes = [] {
    };
 };
 
+struct same_length_keys
+{
+   int abcdefghijk{0};
+   int abcdefghijl{1};
+   int abcdefghijm{2};
+   int abcdefghijn{3};
+   int abcdefghikk{4};
+   int abcdefghill{5};
+   int abcdefghlll{6};
+};
+
+suite same_length_keys_test = [] {
+   "same_length_keys"_test = [] {
+      static constexpr auto info = glz::detail::make_keys_info(glz::refl<same_length_keys>.keys);
+      static_assert(info.type == glz::detail::hash_type::full_flat);
+      
+      same_length_keys obj{};
+      std::string buffer{};
+      expect(not glz::write_json(obj, buffer));
+      expect(not glz::read_json(obj, buffer));
+      expect(obj.abcdefghill == 5);
+      expect(obj.abcdefghlll == 6);
+   };
+};
+
+struct offset_one
+{
+   int abcdefghijk{0};
+   int abcdefghijl{1};
+   int abcdefghijm{2};
+   int abcdefghijn{3};
+   int abcdefghikk{4};
+   int abcdefghill{5};
+   int abcdefghlllo{6};
+};
+
+suite offset_one_test = [] {
+   "offset_one"_test = [] {
+      static constexpr auto info = glz::detail::make_keys_info(glz::refl<same_length_keys>.keys);
+      static_assert(info.type == glz::detail::hash_type::full_flat);
+      
+      offset_one obj{};
+      std::string buffer{};
+      expect(not glz::write_json(obj, buffer));
+      expect(not glz::read_json(obj, buffer));
+      expect(obj.abcdefghill == 5);
+      expect(obj.abcdefghlllo == 6);
+   };
+};
+
 int main()
 {
    trace.end("json_test");
