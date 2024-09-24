@@ -41,25 +41,25 @@ namespace glz
          template <auto Opts, class T, is_context Ctx, class It0, class It1>
          static void op(T&& value, Ctx&& ctx, It0&& it, It1 end) noexcept
          {
-            from_csv<std::decay_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
+            from<CSV, std::decay_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
                                                          std::forward<It0>(it), std::forward<It1>(end));
          }
       };
 
       template <glaze_value_t T>
-      struct from_csv<T>
+      struct from<CSV, T>
       {
          template <auto Opts, is_context Ctx, class It0, class It1>
          static void op(auto&& value, Ctx&& ctx, It0&& it, It1&& end) noexcept
          {
             using V = decltype(get_member(std::declval<T>(), meta_wrapper_v<T>));
-            from_csv<V>::template op<Opts>(get_member(value, meta_wrapper_v<T>), std::forward<Ctx>(ctx),
+            from<CSV, V>::template op<Opts>(get_member(value, meta_wrapper_v<T>), std::forward<Ctx>(ctx),
                                            std::forward<It0>(it), std::forward<It1>(end));
          }
       };
 
       template <num_t T>
-      struct from_csv<T>
+      struct from<CSV, T>
       {
          template <auto Opts, class It>
          static void op(auto&& value, is_context auto&& ctx, It&& it, auto&& end) noexcept
@@ -120,7 +120,7 @@ namespace glz
       };
 
       template <string_t T>
-      struct from_csv<T>
+      struct from<CSV, T>
       {
          template <auto Opts, class It>
          static void op(auto&& value, is_context auto&& ctx, It&& it, auto&& end) noexcept
@@ -160,7 +160,7 @@ namespace glz
       };
 
       template <bool_t T>
-      struct from_csv<T>
+      struct from<CSV, T>
       {
          template <auto Opts, class It>
          static void op(auto&& value, is_context auto&& ctx, It&& it, auto&&) noexcept
@@ -180,7 +180,7 @@ namespace glz
       };
 
       template <readable_array_t T>
-      struct from_csv<T>
+      struct from<CSV, T>
       {
          template <auto Opts, class It>
          static void op(auto&& value, is_context auto&& ctx, It&& it, auto&& end) noexcept
@@ -250,7 +250,7 @@ namespace glz
       }
 
       template <readable_map_t T>
-      struct from_csv<T>
+      struct from<CSV, T>
       {
          template <auto Opts, class It>
          static void op(auto&& value, is_context auto&& ctx, It&& it, auto&& end)
@@ -407,7 +407,7 @@ namespace glz
 
       template <class T>
          requires(glaze_object_t<T> || reflectable<T>)
-      struct from_csv<T>
+      struct from<CSV, T>
       {
          template <auto Opts, class It>
          static void op(auto&& value, is_context auto&& ctx, It&& it, auto&& end)
