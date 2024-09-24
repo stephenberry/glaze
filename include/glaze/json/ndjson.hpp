@@ -16,14 +16,14 @@ namespace glz
          template <auto Opts, class T, is_context Ctx, class It0, class It1>
          static void op(T&& value, Ctx&& ctx, It0&& it, It1&& end)
          {
-            from_ndjson<std::remove_reference_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
+            from<NDJSON, std::remove_reference_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
                                                                        std::forward<It0>(it), std::forward<It1>(end));
          }
       };
 
       template <class T>
          requires readable_array_t<T> && (emplace_backable<T> || !resizable<T>)
-      struct from_ndjson<T>
+      struct from<NDJSON, T>
       {
          template <auto Opts>
          static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end)
@@ -98,7 +98,7 @@ namespace glz
 
       template <class T>
          requires glaze_array_t<T> || tuple_t<T> || is_std_tuple<T>
-      struct from_ndjson<T>
+      struct from<NDJSON, T>
       {
          template <auto Opts>
          static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end)
@@ -158,13 +158,13 @@ namespace glz
          template <auto Opts, class T, is_context Ctx, class B, class IX>
          static void op(T&& value, Ctx&& ctx, B&& b, IX&& ix)
          {
-            to_ndjson<std::decay_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
+            to<NDJSON, std::decay_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
                                                           std::forward<B>(b), std::forward<IX>(ix));
          }
       };
 
       template <writable_array_t T>
-      struct to_ndjson<T>
+      struct to<NDJSON, T>
       {
          template <auto Opts, class... Args>
          static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
@@ -193,7 +193,7 @@ namespace glz
 
       template <class T>
          requires glaze_array_t<T> || tuple_t<T>
-      struct to_ndjson<T>
+      struct to<NDJSON, T>
       {
          template <auto Opts, class... Args>
          static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
@@ -225,7 +225,7 @@ namespace glz
 
       template <class T>
          requires is_std_tuple<std::decay_t<T>>
-      struct to_ndjson<T>
+      struct to<NDJSON, T>
       {
          template <auto Opts, class... Args>
          static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
