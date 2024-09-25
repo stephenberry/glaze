@@ -778,6 +778,8 @@ By default Glaze is strictly conformant with the latest JSON standard except in 
 
 It can be useful to acknowledge a keys existence in an object to prevent errors, and yet the value may not be needed or exist in C++. These cases are handled by registering a `glz::skip` type with the meta data.
 
+<details><summary>See example:</summary>
+
 ```c++
 struct S {
   int i{};
@@ -797,11 +799,15 @@ glz::read_json(s, buffer);
 expect(s.i == 7); // only the value i will be read into
 ```
 
+</details>
+
 ## Hide
 
 Glaze is designed to help with building generic APIs. Sometimes a value needs to be exposed to the API, but it is not desirable to read in or write out the value in JSON. This is the use case for `glz::hide`.
 
 `glz::hide` hides the value from JSON output while still allowing API (and JSON pointer) access.
+
+<details><summary>See example:</summary>
 
 ```c++
 struct hide_struct {
@@ -824,6 +830,8 @@ hide_struct s{};
 auto b = glz::write_json(s);
 expect(b == R"({"i":287,"d":3.14})"); // notice that "hello" is hidden from the output
 ```
+
+</details>
 
 ## Quoted Numbers
 
