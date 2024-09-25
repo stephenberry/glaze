@@ -13,7 +13,7 @@ namespace glz
       "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
       "abcdefghijklmnopqrstuvwxyz"
       "0123456789+/";
-   
+
    inline std::string read_base64(const std::string_view input)
    {
       std::string decoded_data;
@@ -39,26 +39,26 @@ namespace glz
 
       return decoded_data;
    }
-   
+
    inline std::string write_base64(const std::string_view input)
    {
-       std::string encoded_data;
+      std::string encoded_data;
 
-       int val = 0, valb = -6;
-       for (unsigned char c : input) {
-           val = (val << 8) + c;
-           valb += 8;
-           while (valb >= 0) {
-               encoded_data.push_back(base64_chars[(val >> valb) & 0x3F]);
-               valb -= 6;
-           }
-       }
-       if (valb > -6) {
-           encoded_data.push_back(base64_chars[((val << 8) >> (valb + 8)) & 0x3F]);
-       }
-       while (encoded_data.size() % 4) {
-           encoded_data.push_back('=');
-       }
-       return encoded_data;
+      int val = 0, valb = -6;
+      for (unsigned char c : input) {
+         val = (val << 8) + c;
+         valb += 8;
+         while (valb >= 0) {
+            encoded_data.push_back(base64_chars[(val >> valb) & 0x3F]);
+            valb -= 6;
+         }
+      }
+      if (valb > -6) {
+         encoded_data.push_back(base64_chars[((val << 8) >> (valb + 8)) & 0x3F]);
+      }
+      while (encoded_data.size() % 4) {
+         encoded_data.push_back('=');
+      }
+      return encoded_data;
    }
 }

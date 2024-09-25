@@ -1194,8 +1194,9 @@ namespace glz
                   return;
                }
 
-               invoke_table<N>(
-                  [&]<size_t I>() { read<BEVE>::op<Opts>(get_member(value, get<I>(reflect<V>::values)), ctx, it, end); });
+               invoke_table<N>([&]<size_t I>() {
+                  read<BEVE>::op<Opts>(get_member(value, get<I>(reflect<V>::values)), ctx, it, end);
+               });
             }
          }
 

@@ -1386,8 +1386,8 @@ namespace glz
                            to<JSON, val_t>::template op<check_opts>(get_member(value, get<I>(t)), ctx, b, ix);
                         }
                         else {
-                           to<JSON, val_t>::template op<check_opts>(get_member(value, get<I>(reflect<T>::values)), ctx, b,
-                                                                    ix);
+                           to<JSON, val_t>::template op<check_opts>(get_member(value, get<I>(reflect<T>::values)), ctx,
+                                                                    b, ix);
                         }
                      }
                   });
@@ -1421,7 +1421,8 @@ namespace glz
                         to<JSON, val_t>::template op<check_opts>(get_member(value, get<I>(t)), ctx, b, ix);
                      }
                      else {
-                        to<JSON, val_t>::template op<check_opts>(get_member(value, get<I>(reflect<T>::values)), ctx, b, ix);
+                        to<JSON, val_t>::template op<check_opts>(get_member(value, get<I>(reflect<T>::values)), ctx, b,
+                                                                 ix);
                      }
 
                      if constexpr (I != (N - 1)) {
