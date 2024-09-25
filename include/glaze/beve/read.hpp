@@ -153,7 +153,7 @@ namespace glz
          template <auto Opts, is_context Ctx, class It0, class It1>
          static void op(auto&& value, Ctx&& ctx, It0&& it, It1&& end)
          {
-            constexpr auto N = refl<T>::N;
+            constexpr auto N = refl<T>::size;
 
             constexpr auto Length = byte_length<T>();
             uint8_t data[Length];
@@ -1184,7 +1184,7 @@ namespace glz
                }
                ++it;
                using V = std::decay_t<T>;
-               constexpr auto N = refl<V>::N;
+               constexpr auto N = refl<V>::size;
                const auto n = int_from_compressed(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]] {
                   return;
@@ -1215,7 +1215,7 @@ namespace glz
 
             ++it;
 
-            static constexpr auto N = refl<T>::N;
+            static constexpr auto N = refl<T>::size;
 
             static constexpr bit_array<N> all_fields = [] {
                bit_array<N> arr{};
@@ -1339,7 +1339,7 @@ namespace glz
             }
             ++it;
 
-            constexpr auto N = refl<T>::N;
+            constexpr auto N = refl<T>::size;
             const auto n = int_from_compressed(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]] {
                return;

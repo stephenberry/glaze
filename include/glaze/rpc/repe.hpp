@@ -325,7 +325,7 @@ namespace glz::repe
    {
       using Mtx = std::mutex*;
       using namespace glz::detail;
-      constexpr auto N = refl<T>::N;
+      constexpr auto N = refl<T>::size;
       return [&]<size_t... I>(std::index_sequence<I...>) {
          return normal_map<sv, Mtx, N>(
             std::array<pair<sv, Mtx>, N>{pair<sv, Mtx>{join_v<parent, chars<"/">, key_name_v<I, T>>, Mtx{}}...});
@@ -745,7 +745,7 @@ namespace glz::repe
       void on(T& value)
       {
          using namespace glz::detail;
-         static constexpr auto N = refl<T>::N;
+         static constexpr auto N = refl<T>::size;
 
          [[maybe_unused]] decltype(auto) t = [&]() -> decltype(auto) {
             if constexpr (reflectable<T> && requires { to_tuple(value); }) {

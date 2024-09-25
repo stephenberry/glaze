@@ -96,7 +96,7 @@ namespace glz::detail
       }
 
       if constexpr (glaze_object_t<T> || reflectable<T>) {
-         static constexpr auto N = refl<T>::N;
+         static constexpr auto N = refl<T>::size;
          static constexpr auto HashInfo = detail::hash_info<T>;
 
          const auto index = decode_hash_with_size<JSON_PTR, T, HashInfo, HashInfo.type>::op(

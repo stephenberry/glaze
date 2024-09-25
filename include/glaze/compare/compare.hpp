@@ -19,7 +19,7 @@ namespace glz
             return lhs == rhs;
          }
          else {
-            constexpr auto N = refl<T>::N;
+            constexpr auto N = refl<T>::size;
 
             bool equal = true;
             for_each_short_circuit<N>([&](auto I) {
@@ -42,7 +42,7 @@ namespace glz
       template <detail::glaze_object_t T>
       constexpr bool operator()(T&& lhs, T&& rhs) noexcept
       {
-         constexpr auto N = refl<T>::N;
+         constexpr auto N = refl<T>::size;
 
          bool less_than = true;
          for_each_short_circuit<N>([&](auto I) {
@@ -64,7 +64,7 @@ namespace glz
       template <detail::glaze_object_t T>
       constexpr bool operator()(T&& lhs, T&& rhs) noexcept
       {
-         constexpr auto N = refl<T>::N;
+         constexpr auto N = refl<T>::size;
 
          bool less_than = true;
          for_each_short_circuit<N>([&](auto I) {
@@ -86,7 +86,7 @@ namespace glz
       template <detail::glaze_object_t T>
       constexpr bool operator()(T&& lhs, T&& rhs) noexcept
       {
-         constexpr auto N = refl<T>::N;
+         constexpr auto N = refl<T>::size;
 
          bool greater_than = true;
          for_each_short_circuit<N>([&](auto I) {
@@ -108,7 +108,7 @@ namespace glz
       template <detail::glaze_object_t T>
       constexpr bool operator()(T&& lhs, T&& rhs) noexcept
       {
-         constexpr auto N = refl<T>::N;
+         constexpr auto N = refl<T>::size;
 
          bool greater_than = true;
          for_each_short_circuit<N>([&](auto I) {

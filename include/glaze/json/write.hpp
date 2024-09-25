@@ -99,7 +99,7 @@ namespace glz
          template <auto Opts>
          static void op(auto&& value, is_context auto&&, auto&& b, auto&& ix) noexcept
          {
-            static constexpr auto N = refl<T>::N;
+            static constexpr auto N = refl<T>::size;
 
             dump<'['>(b, ix);
 
@@ -905,7 +905,7 @@ namespace glz
                   using V = std::decay_t<decltype(val)>;
 
                   if constexpr (Opts.write_type_info && !tag_v<T>.empty() && glaze_object_t<V>) {
-                     constexpr auto num_members = refl<V>::N;
+                     constexpr auto num_members = refl<V>::size;
 
                      // must first write out type
                      if constexpr (Opts.prettify) {
@@ -1191,7 +1191,7 @@ namespace glz
 
       template <class T>
       inline constexpr size_t maximum_key_size = [] {
-         constexpr auto N = refl<T>::N;
+         constexpr auto N = refl<T>::size;
          size_t maximum{};
          for (size_t i = 0; i < N; ++i) {
             if (refl<T>::keys[i].size() > maximum) {
@@ -1206,7 +1206,7 @@ namespace glz
       // Only use this if you are not prettifying
       template <class T>
       inline constexpr std::optional<size_t> fixed_padding = [] {
-         constexpr auto N = refl<T>::N;
+         constexpr auto N = refl<T>::size;
          std::optional<size_t> fixed = 2 + 16; // {} + extra padding
          for_each_short_circuit<N>([&](auto I) -> bool {
             using val_t = std::remove_cvref_t<refl_t<T, I>>;
@@ -1277,7 +1277,7 @@ namespace glz
                   }
                }
 
-               static constexpr auto N = refl<T>::N;
+               static constexpr auto N = refl<T>::size;
 
                decltype(auto) t = [&]() -> decltype(auto) {
                   if constexpr (reflectable<T>) {
@@ -1537,7 +1537,7 @@ namespace glz
             static constexpr auto groups = glz::group_json_ptrs<sorted>();
             static constexpr auto N = glz::tuple_size_v<std::decay_t<decltype(groups)>>;
 
-            static constexpr auto num_members = refl<T>::N;
+            static constexpr auto num_members = refl<T>::size;
 
             if constexpr ((num_members > 0) && (glaze_object_t<T> || reflectable<T>)) {
                static constexpr auto HashInfo = hash_info<T>;

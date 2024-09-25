@@ -140,7 +140,7 @@ namespace glz
                (tuple_size_v<meta_t<T>> == 0))
    struct refl<T>
    {
-      static constexpr auto N = 0;
+      static constexpr auto size = 0;
       static constexpr auto values = tuplet::tuple{};
       static constexpr std::array<sv, 0> keys{};
 
@@ -163,10 +163,10 @@ namespace glz
          }(std::make_index_sequence<value_indices.size()>{}); //
       }();
 
-      static constexpr auto N = tuple_size_v<decltype(values)>;
+      static constexpr auto size = tuple_size_v<decltype(values)>;
 
       static constexpr auto keys = [] {
-         std::array<sv, N> res{};
+         std::array<sv, size> res{};
          [&]<size_t... I>(std::index_sequence<I...>) { //
             ((res[I] = get_key_element<T, value_indices[I]>()), ...);
          }(std::make_index_sequence<value_indices.size()>{});
@@ -198,7 +198,7 @@ namespace glz
    struct refl<T>
    {
       using V = std::remove_cvref_t<T>;
-      static constexpr auto N = tuple_size_v<meta_keys_t<T>>;
+      static constexpr auto size = tuple_size_v<meta_keys_t<T>>;
 
       static constexpr auto values = meta_wrapper_v<T>;
 
@@ -224,7 +224,7 @@ namespace glz
 
       static constexpr auto values = meta_v<V>;
 
-      static constexpr auto N = tuple_size_v<decltype(values)>;
+      static constexpr auto size = tuple_size_v<decltype(values)>;
 
       template <size_t I>
       using elem = decltype(get<I>(values));
@@ -243,7 +243,7 @@ namespace glz
       // static constexpr auto values = typename detail::tuple_ptr<tuple>::type{};
 
       static constexpr auto keys = member_names<V>;
-      static constexpr auto N = keys.size();
+      static constexpr auto size = keys.size();
 
       template <size_t I>
       using elem = decltype(get<I>(std::declval<tuple>()));
@@ -256,7 +256,7 @@ namespace glz
       requires detail::readable_map_t<T>
    struct refl<T>
    {
-      static constexpr auto N = 0;
+      static constexpr auto size = 0;
    };
 
    template <class T, size_t I>
@@ -270,7 +270,7 @@ namespace glz
    struct object_info;
 
    template <opts Opts, class T>
-      requires(refl<T>::N == 0)
+      requires(refl<T>::size == 0)
    struct object_info<Opts, T>
    {
       static constexpr bool first_will_be_written = false;
@@ -278,10 +278,10 @@ namespace glz
    };
 
    template <opts Opts, class T>
-      requires(refl<T>::N > 0)
+      requires(refl<T>::size > 0)
    struct object_info<Opts, T>
    {
-      static constexpr auto N = refl<T>::N;
+      static constexpr auto N = refl<T>::size;
 
       // Allows us to remove a branch if the first item will always be written
       static constexpr bool first_will_be_written = [] {
@@ -345,7 +345,7 @@ namespace glz::detail
    template <class T, auto Opts>
    constexpr auto required_fields()
    {
-      constexpr auto N = refl<T>::N;
+      constexpr auto N = refl<T>::size;
 
       bit_array<N> fields{};
       if constexpr (Opts.error_on_missing_keys) {
@@ -391,7 +391,7 @@ namespace glz::detail
    struct tuple_ptr_variant<std::pair<Ts...>> : unique<std::variant<>, std::add_pointer_t<Ts>...>
    {};
 
-   template <class T, class = std::make_index_sequence<refl<T>::N>>
+   template <class T, class = std::make_index_sequence<refl<T>::size>>
    struct member_tuple_type;
 
    template <class T, size_t... I>
@@ -404,7 +404,7 @@ namespace glz::detail
    template <class T>
    using member_tuple_t = typename member_tuple_type<T>::type;
 
-   template <class T, class = std::make_index_sequence<refl<T>::N>>
+   template <class T, class = std::make_index_sequence<refl<T>::size>>
    struct value_variant;
 
    template <class T, size_t... I>
@@ -421,8 +421,8 @@ namespace glz::detail
    {
       return []<size_t... I>(std::index_sequence<I...>) {
          using value_t = value_variant_t<T>;
-         return std::array<value_t, refl<T>::N>{get<I>(refl<T>::values)...};
-      }(std::make_index_sequence<refl<T>::N>{});
+         return std::array<value_t, refl<T>::size>{get<I>(refl<T>::values)...};
+      }(std::make_index_sequence<refl<T>::size>{});
    }
 
    template <class Tuple, std::size_t... Is>
@@ -463,7 +463,7 @@ namespace glz::detail
    constexpr auto make_map_impl(std::index_sequence<I...>)
    {
       using value_t = value_variant_t<T>;
-      constexpr auto n = refl<T>::N;
+      constexpr auto n = refl<T>::size;
 
       if constexpr (n == 0) {
          return nullptr; // Hack to fix MSVC
@@ -519,16 +519,16 @@ namespace glz::detail
       requires(!reflectable<T>)
    constexpr auto make_map()
    {
-      constexpr auto indices = std::make_index_sequence<refl<T>::N>{};
+      constexpr auto indices = std::make_index_sequence<refl<T>::size>{};
       return make_map_impl<decay_keep_volatile_t<T>, use_hash_comparison>(indices);
    }
 
    template <class T>
    constexpr auto make_key_int_map()
    {
-      constexpr auto N = refl<T>::N;
+      constexpr auto N = refl<T>::size;
       return [&]<size_t... I>(std::index_sequence<I...>) {
-         return normal_map<sv, size_t, refl<T>::N>(pair<sv, size_t>{refl<T>::keys[I], I}...);
+         return normal_map<sv, size_t, refl<T>::size>(pair<sv, size_t>{refl<T>::keys[I], I}...);
       }(std::make_index_sequence<N>{});
    }
 }
@@ -555,7 +555,7 @@ namespace glz::detail
    template <class T>
    constexpr auto make_enum_to_string_map()
    {
-      constexpr auto N = refl<T>::N;
+      constexpr auto N = refl<T>::size;
       return [&]<size_t... I>(std::index_sequence<I...>) {
          using key_t = std::underlying_type_t<T>;
          return normal_map<key_t, sv, N>(std::array<pair<key_t, sv>, N>{
@@ -569,13 +569,13 @@ namespace glz::detail
    {
       return []<size_t... I>(std::index_sequence<I...>) {
          return std::array<sv, sizeof...(I)>{refl<T>::keys[I]...};
-      }(std::make_index_sequence<refl<T>::N>{});
+      }(std::make_index_sequence<refl<T>::size>{});
    }
 
    template <class T>
    constexpr auto make_string_to_enum_map() noexcept
    {
-      constexpr auto N = refl<T>::N;
+      constexpr auto N = refl<T>::size;
       return [&]<size_t... I>(std::index_sequence<I...>) {
          return normal_map<sv, T, N>(
             std::array<pair<sv, T>, N>{pair<sv, T>{refl<T>::keys[I], T(glz::get<I>(refl<T>::values))}...});
@@ -596,7 +596,7 @@ namespace glz::detail
    template <detail::glaze_flags_t T>
    consteval auto byte_length() noexcept
    {
-      constexpr auto N = refl<T>::N;
+      constexpr auto N = refl<T>::size;
 
       if constexpr (N % 8 == 0) {
          return N / 8;
@@ -733,10 +733,10 @@ namespace glz::detail
       for_each<N>([&](auto I) {
          using V = std::decay_t<std::variant_alternative_t<I, T>>;
          if constexpr (glaze_object_t<V> || reflectable<V>) {
-            res += refl<V>::N;
+            res += refl<V>::size;
          }
          else if constexpr (is_memory_object<V>) {
-            res += refl<memory_type<V>>::N;
+            res += refl<memory_type<V>>::size;
          }
       });
       return res;
@@ -755,7 +755,7 @@ namespace glz::detail
          using V = std::decay_t<std::variant_alternative_t<I, T>>;
          if constexpr (glaze_object_t<V> || reflectable<V> || is_memory_object<V>) {
             using X = std::conditional_t<is_memory_object<V>, memory_type<V>, V>;
-            for (size_t i = 0; i < refl<X>::N; ++i) {
+            for (size_t i = 0; i < refl<X>::size; ++i) {
                (*data_ptr)[index++] = refl<X>::keys[i];
             }
          }
@@ -789,7 +789,7 @@ namespace glz::detail
          using V = decay_keep_volatile_t<std::variant_alternative_t<I, T>>;
          if constexpr (glaze_object_t<V> || reflectable<V> || is_memory_object<V>) {
             using X = std::conditional_t<is_memory_object<V>, memory_type<V>, V>;
-            for_each<refl<X>::N>([&](auto J) { deduction_map.find(refl<X>::keys[J])->second[I] = true; });
+            for_each<refl<X>::size>([&](auto J) { deduction_map.find(refl<X>::keys[J])->second[I] = true; });
          }
       });
 
@@ -980,7 +980,7 @@ namespace glz::detail
    {
       hash_type type{};
 
-      static constexpr auto N = refl<T>::N;
+      static constexpr auto N = refl<T>::size;
       using V = bucket_value_t<N>;
       static constexpr auto invalid = static_cast<V>(N);
 
@@ -1548,10 +1548,10 @@ namespace glz::detail
    constexpr auto hash_info = [] {
       if constexpr ((glaze_object_t<T> || reflectable<T> ||
                      ((std::is_enum_v<std::remove_cvref_t<T>> && meta_keys<T>) || glaze_enum_t<T>)) &&
-                    (refl<T>::N > 0)) {
+                    (refl<T>::size > 0)) {
          constexpr auto& k_info = keys_info<T>;
          constexpr auto& type = k_info.type;
-         constexpr auto& N = refl<T>::N;
+         constexpr auto& N = refl<T>::size;
          constexpr auto& keys = refl<T>::keys;
 
          using enum hash_type;
@@ -1753,7 +1753,7 @@ namespace glz::detail
    template <class T, auto HashInfo>
    struct decode_hash<JSON, T, HashInfo, hash_type::unique_index>
    {
-      static constexpr auto N = refl<T>::N;
+      static constexpr auto N = refl<T>::size;
       static constexpr auto bsize = bucket_size(hash_type::unique_index, N);
       static constexpr auto uindex = HashInfo.unique_index;
 
@@ -1806,7 +1806,7 @@ namespace glz::detail
    template <class T, auto HashInfo>
    struct decode_hash<JSON, T, HashInfo, hash_type::three_element_unique_index>
    {
-      static constexpr auto N = refl<T>::N;
+      static constexpr auto N = refl<T>::size;
       static constexpr auto uindex = HashInfo.unique_index;
 
       GLZ_ALWAYS_INLINE static constexpr size_t op(auto&& it, auto&& end) noexcept
@@ -1831,7 +1831,7 @@ namespace glz::detail
    template <class T, auto HashInfo>
    struct decode_hash<JSON, T, HashInfo, hash_type::front_hash>
    {
-      static constexpr auto N = refl<T>::N;
+      static constexpr auto N = refl<T>::size;
       static constexpr auto bsize = bucket_size(hash_type::front_hash, N);
 
       GLZ_ALWAYS_INLINE static constexpr size_t op(auto&& it, auto&& end) noexcept
@@ -1893,7 +1893,7 @@ namespace glz::detail
    template <class T, auto HashInfo>
    struct decode_hash<JSON, T, HashInfo, hash_type::unique_per_length>
    {
-      static constexpr auto N = refl<T>::N;
+      static constexpr auto N = refl<T>::size;
       static constexpr auto bsize = bucket_size(hash_type::unique_per_length, N);
 
       GLZ_ALWAYS_INLINE static constexpr size_t op(auto&& it, auto&& end) noexcept
@@ -1917,7 +1917,7 @@ namespace glz::detail
    template <class T, auto HashInfo>
    struct decode_hash<JSON, T, HashInfo, hash_type::full_flat>
    {
-      static constexpr auto N = refl<T>::N;
+      static constexpr auto N = refl<T>::size;
       static constexpr auto bsize = bucket_size(hash_type::full_flat, N);
       static constexpr auto min_length = HashInfo.min_length;
       static constexpr auto max_length = HashInfo.max_length;
@@ -2004,7 +2004,7 @@ namespace glz::detail
    template <uint32_t Format, class T, auto HashInfo>
    struct decode_hash_with_size<Format, T, HashInfo, hash_type::unique_index>
    {
-      static constexpr auto N = refl<T>::N;
+      static constexpr auto N = refl<T>::size;
       static constexpr auto bsize = bucket_size(hash_type::unique_index, N);
       static constexpr auto uindex = HashInfo.unique_index;
 
@@ -2046,7 +2046,7 @@ namespace glz::detail
    template <uint32_t Format, class T, auto HashInfo>
    struct decode_hash_with_size<Format, T, HashInfo, hash_type::three_element_unique_index>
    {
-      static constexpr auto N = refl<T>::N;
+      static constexpr auto N = refl<T>::size;
       static constexpr auto uindex = HashInfo.unique_index;
 
       GLZ_ALWAYS_INLINE static constexpr size_t op(auto&& it, auto&& end, const size_t) noexcept
@@ -2071,7 +2071,7 @@ namespace glz::detail
    template <uint32_t Format, class T, auto HashInfo>
    struct decode_hash_with_size<Format, T, HashInfo, hash_type::front_hash>
    {
-      static constexpr auto N = refl<T>::N;
+      static constexpr auto N = refl<T>::size;
       static constexpr auto bsize = bucket_size(hash_type::front_hash, N);
 
       GLZ_ALWAYS_INLINE static constexpr size_t op(auto&& it, auto&&, const size_t) noexcept
@@ -2124,7 +2124,7 @@ namespace glz::detail
    template <uint32_t Format, class T, auto HashInfo>
    struct decode_hash_with_size<Format, T, HashInfo, hash_type::unique_per_length>
    {
-      static constexpr auto N = refl<T>::N;
+      static constexpr auto N = refl<T>::size;
       static constexpr auto bsize = bucket_size(hash_type::unique_per_length, N);
 
       GLZ_ALWAYS_INLINE static constexpr size_t op(auto&& it, auto&& end, const size_t n) noexcept
@@ -2141,7 +2141,7 @@ namespace glz::detail
    template <uint32_t Format, class T, auto HashInfo>
    struct decode_hash_with_size<Format, T, HashInfo, hash_type::full_flat>
    {
-      static constexpr auto N = refl<T>::N;
+      static constexpr auto N = refl<T>::size;
       static constexpr auto bsize = bucket_size(hash_type::full_flat, N);
 
       GLZ_ALWAYS_INLINE static constexpr size_t op(auto&& it, auto&&, const size_t n) noexcept

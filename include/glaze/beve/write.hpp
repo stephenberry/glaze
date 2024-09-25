@@ -168,7 +168,7 @@ namespace glz
          template <auto Opts>
          static void op(auto&& value, is_context auto&&, auto&& b, auto&& ix)
          {
-            static constexpr auto N = refl<T>::N;
+            static constexpr auto N = refl<T>::size;
 
             std::array<uint8_t, byte_length<T>()> data{};
 
@@ -651,7 +651,7 @@ namespace glz
          requires(glaze_object_t<T> || reflectable<T>)
       struct to<BEVE, T> final
       {
-         static constexpr auto N = refl<T>::N;
+         static constexpr auto N = refl<T>::size;
          static constexpr size_t count_to_write = [] {
             size_t count{};
             invoke_table<N>([&]<size_t I>() {
@@ -756,10 +756,10 @@ namespace glz
          {
             dump<tag::generic_array>(args...);
 
-            static constexpr auto N = refl<T>::N;
+            static constexpr auto N = refl<T>::size;
             dump_compressed_int<N>(args...);
 
-            invoke_table<refl<T>::N>(
+            invoke_table<refl<T>::size>(
                [&]<size_t I>() { write<BEVE>::op<Opts>(get_member(value, get<I>(refl<T>::values)), ctx, args...); });
          }
       };

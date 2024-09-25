@@ -351,7 +351,7 @@ namespace glz
             s.type = {"string"};
 
             // TODO use oneOf instead of enum to handle doc comments
-            static constexpr auto N = refl<T>::N;
+            static constexpr auto N = refl<T>::size;
             // s.enumeration = std::vector<std::string_view>(N);
             // for_each<N>([&](auto I) {
             //    static constexpr auto item = std::get<I>(meta_v<V>);
@@ -494,7 +494,7 @@ namespace glz
 
       template <class T>
       inline constexpr auto glaze_names = []() {
-         constexpr auto N = refl<T>::N;
+         constexpr auto N = refl<T>::size;
          std::array<sv, N> names{};
          for_each<N>([&](auto I) { names[I] = refl<T>::keys[I]; });
          return names;
@@ -566,7 +566,7 @@ namespace glz
                }
             }
 
-            static constexpr auto N = refl<T>::N;
+            static constexpr auto N = refl<T>::size;
 
             static constexpr auto schema_map = make_reflection_schema_map<T>();
 

@@ -260,7 +260,7 @@ namespace glz
                                                         auto&& end) noexcept
       {
          constexpr auto type = HashInfo.type;
-         constexpr auto N = refl<T>::N;
+         constexpr auto N = refl<T>::size;
 
          if constexpr (not bool(type)) {
             static_assert(false_v<T>, "invalid hash algorithm");
@@ -1233,7 +1233,7 @@ namespace glz
                GLZ_SKIP_WS();
             }
 
-            constexpr auto N = refl<T>::N;
+            constexpr auto N = refl<T>::size;
 
             if (*it != '"') [[unlikely]] {
                ctx.error = error_code::expected_quote;
@@ -1687,7 +1687,7 @@ namespace glz
          {
             static constexpr auto N = []() constexpr {
                if constexpr (glaze_array_t<T>) {
-                  return refl<T>::N;
+                  return refl<T>::size;
                }
                else {
                   return glz::tuple_size_v<T>;
@@ -1845,7 +1845,7 @@ namespace glz
             stats.min_length = tag_size;
          }
 
-         constexpr auto N = refl<T>::N;
+         constexpr auto N = refl<T>::size;
 
          for_each<N>([&](auto I) {
             constexpr sv key = refl<T>::keys[I];
@@ -1915,7 +1915,7 @@ namespace glz
          auto is_unicode = [](const auto c) { return (uint8_t(c) >> 7) > 0; };
 
          bool may_escape = false;
-         constexpr auto N = refl<T>::N;
+         constexpr auto N = refl<T>::size;
          for_each<N>([&](auto I) {
             constexpr auto key = refl<T>::keys[I];
             for (auto& c : key) {
@@ -1970,7 +1970,7 @@ namespace glz
                return std::variant_size_v<T>;
             }
             else {
-               return refl<T>::N;
+               return refl<T>::size;
             }
          }();
 
@@ -2099,7 +2099,7 @@ namespace glz
          template <auto Options, string_literal tag = "">
          static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
-            static constexpr auto num_members = refl<T>::N;
+            static constexpr auto num_members = refl<T>::size;
             if constexpr (num_members == 0 && is_partial_read<T>) {
                static_assert(false_v<T>, "No members to read for partial read");
             }

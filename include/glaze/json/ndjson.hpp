@@ -109,7 +109,7 @@ namespace glz
 
             static constexpr auto N = []() constexpr {
                if constexpr (glaze_array_t<T>) {
-                  return refl<T>::N;
+                  return refl<T>::size;
                }
                else {
                   return glz::tuple_size_v<T>;

@@ -55,7 +55,7 @@ namespace glz
 
                   skip_whitespace();
 
-                  static constexpr auto N = refl<T>::N;
+                  static constexpr auto N = refl<T>::size;
                   static constexpr auto HashInfo = detail::hash_info<T>;
 
                   const auto index =

@@ -176,7 +176,7 @@ namespace glz
          template <auto Opts, class B>
          static void op(auto&& value, is_context auto&& ctx, B&& b, auto&& ix) noexcept
          {
-            static constexpr auto N = refl<T>::N;
+            static constexpr auto N = refl<T>::size;
 
             [[maybe_unused]] decltype(auto) t = [&] {
                if constexpr (reflectable<T>) {
