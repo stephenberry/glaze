@@ -7,7 +7,7 @@
 
 #include "glaze/beve/header.hpp"
 #include "glaze/core/opts.hpp"
-#include "glaze/core/refl.hpp"
+#include "glaze/core/reflect.hpp"
 #include "glaze/core/seek.hpp"
 #include "glaze/core/write.hpp"
 #include "glaze/util/dump.hpp"
@@ -168,12 +168,12 @@ namespace glz
          template <auto Opts>
          static void op(auto&& value, is_context auto&&, auto&& b, auto&& ix)
          {
-            static constexpr auto N = refl<T>.N;
+            static constexpr auto N = reflect<T>::size;
 
             std::array<uint8_t, byte_length<T>()> data{};
 
             invoke_table<N>([&]<size_t I>() {
-               data[I / 8] |= static_cast<uint8_t>(get_member(value, get<I>(refl<T>.values))) << (7 - (I % 8));
+               data[I / 8] |= static_cast<uint8_t>(get_member(value, get<I>(reflect<T>::values))) << (7 - (I % 8));
             });
 
             dump(data, b, ix);
@@ -620,7 +620,7 @@ namespace glz
                count += glz::tuple_size_v<decltype(std::declval<Value>().value)> / 2;
             }
             else {
-               count += refl<Value>.N;
+               count += reflect<Value>::N;
             }
          });
          return count;
@@ -651,7 +651,7 @@ namespace glz
          requires(glaze_object_t<T> || reflectable<T>)
       struct to<BEVE, T> final
       {
-         static constexpr auto N = refl<T>.N;
+         static constexpr auto N = reflect<T>::size;
          static constexpr size_t count_to_write = [] {
             size_t count{};
             invoke_table<N>([&]<size_t I>() {
@@ -695,7 +695,7 @@ namespace glz
                      write<BEVE>::op<Opts>(get_member(value, get<I>(t)), ctx, args...);
                   }
                   else {
-                     write<BEVE>::op<Opts>(get_member(value, get<I>(refl<T>.values)), ctx, args...);
+                     write<BEVE>::op<Opts>(get_member(value, get<I>(reflect<T>::values)), ctx, args...);
                   }
                }
             });
@@ -729,7 +729,7 @@ namespace glz
                   return;
                }
                else {
-                  static constexpr sv key = refl<T>.keys[I];
+                  static constexpr sv key = reflect<T>::keys[I];
                   write<BEVE>::no_header<Opts>(key, ctx, args...);
 
                   decltype(auto) member = [&]() -> decltype(auto) {
@@ -737,7 +737,7 @@ namespace glz
                         return get<I>(t);
                      }
                      else {
-                        return get<I>(refl<T>.values);
+                        return get<I>(reflect<T>::values);
                      }
                   }();
 
@@ -756,11 +756,11 @@ namespace glz
          {
             dump<tag::generic_array>(args...);
 
-            static constexpr auto N = refl<T>.N;
+            static constexpr auto N = reflect<T>::size;
             dump_compressed_int<N>(args...);
 
-            invoke_table<refl<T>.N>(
-               [&]<size_t I>() { write<BEVE>::op<Opts>(get_member(value, get<I>(refl<T>.values)), ctx, args...); });
+            invoke_table<reflect<T>::size>(
+               [&]<size_t I>() { write<BEVE>::op<Opts>(get_member(value, get<I>(reflect<T>::values)), ctx, args...); });
          }
       };
 

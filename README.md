@@ -247,7 +247,7 @@ struct glz::meta<my_struct> {
 
 ## Local Glaze Meta
 
-Glaze also supports metadata provided within its associated class:
+<details><summary>Glaze also supports metadata within its associated class:</summary>
 
 ```c++
 struct my_struct
@@ -270,6 +270,8 @@ struct my_struct
   };
 };
 ```
+
+</details>
 
 ## Custom Key Names or Unnamed Types
 
@@ -296,16 +298,25 @@ struct glz::meta<my_struct> {
 > Names are required for:
 >
 > - static constexpr member variables
-> - Wrappers
+> - [Wrappers](./docs/wrappers.md)
 > - Lambda functions
 
-## Custom Read/Write
+# Reflection API
+
+Glaze provides a compile time reflection API that can be modified via `glz::meta` specializations. This reflection API uses pure reflection unless a `glz::meta` specialization is provided, in which case the default behavior is overridden by the developer.
+
+```c++
+static_assert(glz::reflect<my_struct>::size == 5); // Number of fields
+static_assert(glz::reflect<my_struct>::keys[0] == "i"); // Access keys
+```
+
+# Custom Read/Write
 
 Custom reading and writing can be achieved through the powerful `to`/`from` specialization approach, which is described here: [custom-serialization.md](https://github.com/stephenberry/glaze/blob/main/docs/custom-serialization.md). However, this only works for user defined types.
 
 For common use cases or cases where a specific member variable should have special reading and writing, you can use `glz::custom` to register read/write member functions, std::functions, or lambda functions.
 
-See an example:
+<details><summary>See example:</summary>
 
 ```c++
 struct custom_encoding
@@ -362,7 +373,9 @@ suite custom_encoding_test = [] {
 };
 ```
 
-## Object Mapping
+</details>
+
+# Object Mapping
 
 When using member pointers (e.g. `&T::a`) the C++ class structures must match the JSON interface. It may be desirable to map C++ classes with differing layouts to the same object interface. This is accomplished through registering lambda functions instead of member pointers.
 
@@ -381,7 +394,7 @@ Lambda functions by default copy returns, therefore the `auto&` return type is t
 
 > Note that remapping can also be achieved through pointers/references, as glaze treats values, pointers, and references in the same manner when writing/reading.
 
-## Value Types
+# Value Types
 
 A class can be treated as an underlying value as follows:
 
@@ -776,6 +789,8 @@ By default Glaze is strictly conformant with the latest JSON standard except in 
 
 It can be useful to acknowledge a keys existence in an object to prevent errors, and yet the value may not be needed or exist in C++. These cases are handled by registering a `glz::skip` type with the meta data.
 
+<details><summary>See example:</summary>
+
 ```c++
 struct S {
   int i{};
@@ -795,11 +810,15 @@ glz::read_json(s, buffer);
 expect(s.i == 7); // only the value i will be read into
 ```
 
+</details>
+
 ## Hide
 
 Glaze is designed to help with building generic APIs. Sometimes a value needs to be exposed to the API, but it is not desirable to read in or write out the value in JSON. This is the use case for `glz::hide`.
 
 `glz::hide` hides the value from JSON output while still allowing API (and JSON pointer) access.
+
+<details><summary>See example:</summary>
 
 ```c++
 struct hide_struct {
@@ -822,6 +841,8 @@ hide_struct s{};
 auto b = glz::write_json(s);
 expect(b == R"({"i":287,"d":3.14})"); // notice that "hello" is hidden from the output
 ```
+
+</details>
 
 ## Quoted Numbers
 

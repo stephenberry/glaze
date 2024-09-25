@@ -33,8 +33,8 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     endif()
 
     if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-      target_compile_options(glz_test_common INTERFACE -fsanitize=address -fsanitize-address-use-after-scope -fsanitize=undefined)
-      target_link_options(glz_test_common INTERFACE -fsanitize=address -fsanitize-address-use-after-scope -fsanitize=undefined)
+      target_compile_options(glz_test_common INTERFACE -ftime-trace -fsanitize=address -fsanitize-address-use-after-scope -fsanitize=undefined)
+      target_link_options(glz_test_common INTERFACE -ftime-trace -fsanitize=address -fsanitize-address-use-after-scope -fsanitize=undefined)
     endif()
 elseif(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
     target_compile_options(glz_test_common INTERFACE /GR- /bigobj) #/fsanitize=address
@@ -69,6 +69,7 @@ add_subdirectory(mock_json_test)
 add_subdirectory(mustache_test)
 add_subdirectory(reflection_test)
 add_subdirectory(repe_test)
+add_subdirectory(utility_formats)
 
 # We don't run find_package_test or glaze-install_test with MSVC/Windows, because the Github action runner often chokes
 # Don't run find_package on Clang, because Linux runs with Clang try to use GCC standard library and have errors before Clang 18

@@ -455,7 +455,7 @@ suite json_schema = [] {
 struct empty_t
 {};
 
-static_assert(glz::refl<empty_t>.N == 0);
+static_assert(glz::reflect<empty_t>::size == 0);
 static_assert(not glz::object_info<glz::opts{}, empty_t>::first_will_be_written);
 static_assert(not glz::object_info<glz::opts{}, empty_t>::maybe_skipped);
 
@@ -824,7 +824,7 @@ suite hash_tests = [] {
    "front_64"_test = [] {
       glz::detail::keys_info_t info{.min_length = 8, .max_length = 8};
       [[maybe_unused]] const auto valid =
-         glz::detail::front_bytes_hash_info<uint64_t>(glz::refl<front_64_t>.keys, info);
+         glz::detail::front_bytes_hash_info<uint64_t>(glz::reflect<front_64_t>::keys, info);
 
       front_64_t obj{};
       std::string_view buffer = R"({"aaaaaaaa":1,"aaaaaaaz":2,"aaaaaaza":3})";

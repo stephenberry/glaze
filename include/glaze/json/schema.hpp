@@ -351,7 +351,7 @@ namespace glz
             s.type = {"string"};
 
             // TODO use oneOf instead of enum to handle doc comments
-            static constexpr auto N = refl<T>.N;
+            static constexpr auto N = reflect<T>::size;
             // s.enumeration = std::vector<std::string_view>(N);
             // for_each<N>([&](auto I) {
             //    static constexpr auto item = std::get<I>(meta_v<V>);
@@ -362,10 +362,10 @@ namespace glz
                auto& enumeration = (*s.oneOf)[I];
                // Do not override if already set
                if (!enumeration.attributes.constant.has_value()) {
-                  enumeration.attributes.constant = refl<T>.keys[I];
+                  enumeration.attributes.constant = reflect<T>::keys[I];
                }
                if (!enumeration.attributes.title.has_value()) {
-                  enumeration.attributes.title = refl<T>.keys[I];
+                  enumeration.attributes.title = reflect<T>::keys[I];
                }
             });
          }
@@ -494,9 +494,9 @@ namespace glz
 
       template <class T>
       inline constexpr auto glaze_names = []() {
-         constexpr auto N = refl<T>.N;
+         constexpr auto N = reflect<T>::size;
          std::array<sv, N> names{};
-         for_each<N>([&](auto I) { names[I] = refl<T>.keys[I]; });
+         for_each<N>([&](auto I) { names[I] = reflect<T>::keys[I]; });
          return names;
       }();
 
@@ -566,7 +566,7 @@ namespace glz
                }
             }
 
-            static constexpr auto N = refl<T>.N;
+            static constexpr auto N = reflect<T>::size;
 
             static constexpr auto schema_map = make_reflection_schema_map<T>();
 
@@ -576,7 +576,7 @@ namespace glz
 
                auto& def = defs[name_v<val_t>];
 
-               constexpr sv key = refl<T>.keys[I];
+               constexpr sv key = reflect<T>::keys[I];
 
                schema ref_val{};
                if constexpr (schema_map.size()) {
