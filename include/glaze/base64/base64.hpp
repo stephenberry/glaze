@@ -9,18 +9,17 @@
 
 namespace glz
 {
-   inline std::vector<unsigned char> base64_decode(const std::string_view input)
+   inline constexpr std::string_view base64_chars =
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+      "abcdefghijklmnopqrstuvwxyz"
+      "0123456789+/";
+   
+   inline std::string read_base64(const std::string_view input)
    {
-      static constexpr std::string_view base64_chars =
-         "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-         "abcdefghijklmnopqrstuvwxyz"
-         "0123456789+/";
-
-      std::vector<unsigned char> decoded_data;
+      std::string decoded_data;
       static constexpr std::array<int, 256> decode_table = [] {
          std::array<int, 256> t;
          t.fill(-1);
-
          for (int i = 0; i < 64; ++i) {
             t[base64_chars[i]] = i;
          }
@@ -39,5 +38,27 @@ namespace glz
       }
 
       return decoded_data;
+   }
+   
+   inline std::string write_base64(const std::string_view input)
+   {
+       std::string encoded_data;
+
+       int val = 0, valb = -6;
+       for (unsigned char c : input) {
+           val = (val << 8) + c;
+           valb += 8;
+           while (valb >= 0) {
+               encoded_data.push_back(base64_chars[(val >> valb) & 0x3F]);
+               valb -= 6;
+           }
+       }
+       if (valb > -6) {
+           encoded_data.push_back(base64_chars[((val << 8) >> (valb + 8)) & 0x3F]);
+       }
+       while (encoded_data.size() % 4) {
+           encoded_data.push_back('=');
+       }
+       return encoded_data;
    }
 }
