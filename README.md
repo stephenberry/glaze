@@ -299,13 +299,13 @@ struct glz::meta<my_struct> {
 > - [Wrappers](./docs/wrappers.md)
 > - Lambda functions
 
-## Custom Read/Write
+# Custom Read/Write
 
 Custom reading and writing can be achieved through the powerful `to`/`from` specialization approach, which is described here: [custom-serialization.md](https://github.com/stephenberry/glaze/blob/main/docs/custom-serialization.md). However, this only works for user defined types.
 
 For common use cases or cases where a specific member variable should have special reading and writing, you can use `glz::custom` to register read/write member functions, std::functions, or lambda functions.
 
-See an example:
+<details><summary>See example:</summary>
 
 ```c++
 struct custom_encoding
@@ -362,7 +362,9 @@ suite custom_encoding_test = [] {
 };
 ```
 
-## Object Mapping
+</details>
+
+# Object Mapping
 
 When using member pointers (e.g. `&T::a`) the C++ class structures must match the JSON interface. It may be desirable to map C++ classes with differing layouts to the same object interface. This is accomplished through registering lambda functions instead of member pointers.
 
@@ -381,7 +383,7 @@ Lambda functions by default copy returns, therefore the `auto&` return type is t
 
 > Note that remapping can also be achieved through pointers/references, as glaze treats values, pointers, and references in the same manner when writing/reading.
 
-## Value Types
+# Value Types
 
 A class can be treated as an underlying value as follows:
 
