@@ -4,7 +4,7 @@
 #pragma once
 
 // Feature test macros
-#define glaze_v3_6_0_refl // Version 3.6.0 refl metadata
+#define glaze_v3_6_0_refl // Version 3.6.0 reflect metadata
 
 namespace glz::features
 {

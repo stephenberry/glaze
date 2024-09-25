@@ -4,7 +4,7 @@
 #pragma once
 
 #include "glaze/core/read.hpp"
-#include "glaze/core/refl.hpp"
+#include "glaze/core/reflect.hpp"
 #include "glaze/core/write.hpp"
 
 namespace glz
@@ -55,7 +55,7 @@ namespace glz
 
                   skip_whitespace();
 
-                  static constexpr auto N = refl<T>::size;
+                  static constexpr auto N = reflect<T>::size;
                   static constexpr auto HashInfo = detail::hash_info<T>;
 
                   const auto index =
@@ -70,7 +70,7 @@ namespace glz
                      static thread_local std::string temp{};
                      detail::jump_table<N>(
                         [&]<size_t I>() {
-                           static constexpr auto TargetKey = get<I>(refl<T>::keys);
+                           static constexpr auto TargetKey = get<I>(reflect<T>::keys);
                            static constexpr auto Length = TargetKey.size();
                            if ((Length == key.size()) && compare<Length>(TargetKey.data(), start)) [[likely]] {
                               if constexpr (detail::reflectable<T> && N > 0) {
@@ -79,7 +79,7 @@ namespace glz
                               }
                               else if constexpr (detail::glaze_object_t<T> && N > 0) {
                                  std::ignore = write<opt_true<Opts, &opts::raw>>(
-                                    detail::get_member(value, get<I>(refl<T>::values)), temp, ctx);
+                                    detail::get_member(value, get<I>(reflect<T>::values)), temp, ctx);
                               }
                            }
                            else {

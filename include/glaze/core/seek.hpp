@@ -4,7 +4,7 @@
 #pragma once
 
 #include "glaze/core/read.hpp"
-#include "glaze/core/refl.hpp"
+#include "glaze/core/reflect.hpp"
 #include "glaze/core/write.hpp"
 #include "glaze/util/glaze_fast_float.hpp"
 
@@ -96,7 +96,7 @@ namespace glz::detail
       }
 
       if constexpr (glaze_object_t<T> || reflectable<T>) {
-         static constexpr auto N = refl<T>::size;
+         static constexpr auto N = reflect<T>::size;
          static constexpr auto HashInfo = detail::hash_info<T>;
 
          const auto index = decode_hash_with_size<JSON_PTR, T, HashInfo, HashInfo.type>::op(
@@ -110,7 +110,7 @@ namespace glz::detail
                      ret = seek_impl(std::forward<F>(func), get_member(value, get<I>(to_tuple(value))), json_ptr);
                   }
                   else {
-                     ret = seek_impl(std::forward<F>(func), get_member(value, get<I>(refl<T>::values)), json_ptr);
+                     ret = seek_impl(std::forward<F>(func), get_member(value, get<I>(reflect<T>::values)), json_ptr);
                   }
                },
                index);

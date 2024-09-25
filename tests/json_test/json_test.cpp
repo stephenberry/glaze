@@ -195,7 +195,7 @@ struct glz::meta<Shapes>
    static constexpr std::array value{circ, sq, triangle};
 };
 
-// static_assert(glz::refl<Vehicle>::keys[uint32_t(Vehicle::Truck)] == "Truck");
+// static_assert(glz::reflect<Vehicle>::keys[uint32_t(Vehicle::Truck)] == "Truck");
 
 suite glz_enum_test = [] {
    "glz_enum"_test = [] {
@@ -289,7 +289,7 @@ suite test_data_struct_tests = [] {
             .f = 0xFFFFFFFF,
          },
       };
-      expect(glz::refl<TestData>::keys.size() == 6);
+      expect(glz::reflect<TestData>::keys.size() == 6);
       std::string s = glz::write_json(test_data).value_or("error");
       expect(s != "error") << s;
       std::vector<DummyData> in_test_data;
@@ -9539,7 +9539,7 @@ struct same_length_keys
 
 suite same_length_keys_test = [] {
    "same_length_keys"_test = [] {
-      static constexpr auto info = glz::detail::make_keys_info(glz::refl<same_length_keys>::keys);
+      static constexpr auto info = glz::detail::make_keys_info(glz::reflect<same_length_keys>::keys);
       static_assert(info.type == glz::detail::hash_type::full_flat);
 
       same_length_keys obj{};
@@ -9564,7 +9564,7 @@ struct offset_one
 
 suite offset_one_test = [] {
    "offset_one"_test = [] {
-      static constexpr auto info = glz::detail::make_keys_info(glz::refl<same_length_keys>::keys);
+      static constexpr auto info = glz::detail::make_keys_info(glz::reflect<same_length_keys>::keys);
       static_assert(info.type == glz::detail::hash_type::full_flat);
 
       offset_one obj{};

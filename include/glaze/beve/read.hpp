@@ -7,7 +7,7 @@
 #include "glaze/beve/skip.hpp"
 #include "glaze/core/opts.hpp"
 #include "glaze/core/read.hpp"
-#include "glaze/core/refl.hpp"
+#include "glaze/core/reflect.hpp"
 #include "glaze/file/file_ops.hpp"
 #include "glaze/util/dump.hpp"
 
@@ -153,7 +153,7 @@ namespace glz
          template <auto Opts, is_context Ctx, class It0, class It1>
          static void op(auto&& value, Ctx&& ctx, It0&& it, It1&& end)
          {
-            constexpr auto N = refl<T>::size;
+            constexpr auto N = reflect<T>::size;
 
             constexpr auto Length = byte_length<T>();
             uint8_t data[Length];
@@ -166,7 +166,7 @@ namespace glz
             it += Length;
 
             invoke_table<N>([&]<size_t I>() {
-               get_member(value, get<I>(refl<T>::values)) = data[I / 8] & (uint8_t{1} << (7 - (I % 8)));
+               get_member(value, get<I>(reflect<T>::values)) = data[I / 8] & (uint8_t{1} << (7 - (I % 8)));
             });
          }
       };
@@ -1184,7 +1184,7 @@ namespace glz
                }
                ++it;
                using V = std::decay_t<T>;
-               constexpr auto N = refl<V>::size;
+               constexpr auto N = reflect<V>::size;
                const auto n = int_from_compressed(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]] {
                   return;
@@ -1195,7 +1195,7 @@ namespace glz
                }
 
                invoke_table<N>(
-                  [&]<size_t I>() { read<BEVE>::op<Opts>(get_member(value, get<I>(refl<V>::values)), ctx, it, end); });
+                  [&]<size_t I>() { read<BEVE>::op<Opts>(get_member(value, get<I>(reflect<V>::values)), ctx, it, end); });
             }
          }
 
@@ -1215,7 +1215,7 @@ namespace glz
 
             ++it;
 
-            static constexpr auto N = refl<T>::size;
+            static constexpr auto N = reflect<T>::size;
 
             static constexpr bit_array<N> all_fields = [] {
                bit_array<N> arr{};
@@ -1270,14 +1270,14 @@ namespace glz
 
                      jump_table<N>(
                         [&]<size_t I>() {
-                           static constexpr auto TargetKey = get<I>(refl<T>::keys);
+                           static constexpr auto TargetKey = get<I>(reflect<T>::keys);
                            static constexpr auto Length = TargetKey.size();
                            if ((Length == n) && compare<Length>(TargetKey.data(), key.data())) [[likely]] {
                               if constexpr (detail::reflectable<T>) {
                                  read<BEVE>::op<Opts>(get_member(value, get<I>(detail::to_tuple(value))), ctx, it, end);
                               }
                               else {
-                                 read<BEVE>::op<Opts>(get_member(value, get<I>(refl<T>::values)), ctx, it, end);
+                                 read<BEVE>::op<Opts>(get_member(value, get<I>(reflect<T>::values)), ctx, it, end);
                               }
                            }
                            else {
@@ -1339,7 +1339,7 @@ namespace glz
             }
             ++it;
 
-            constexpr auto N = refl<T>::size;
+            constexpr auto N = reflect<T>::size;
             const auto n = int_from_compressed(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]] {
                return;
@@ -1350,7 +1350,7 @@ namespace glz
             }
 
             invoke_table<N>(
-               [&]<size_t I>() { read<BEVE>::op<Opts>(get_member(value, get<I>(refl<T>::values)), ctx, it, end); });
+               [&]<size_t I>() { read<BEVE>::op<Opts>(get_member(value, get<I>(reflect<T>::values)), ctx, it, end); });
          }
       };
 

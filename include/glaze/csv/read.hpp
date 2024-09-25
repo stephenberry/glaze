@@ -7,7 +7,7 @@
 
 #include "glaze/core/opts.hpp"
 #include "glaze/core/read.hpp"
-#include "glaze/core/refl.hpp"
+#include "glaze/core/reflect.hpp"
 #include "glaze/file/file_ops.hpp"
 #include "glaze/util/glaze_fast_float.hpp"
 #include "glaze/util/parse.hpp"
@@ -412,7 +412,7 @@ namespace glz
          template <auto Opts, class It>
          static void op(auto&& value, is_context auto&& ctx, It&& it, auto&& end)
          {
-            static constexpr auto N = refl<T>::size;
+            static constexpr auto N = reflect<T>::size;
             static constexpr auto HashInfo = detail::hash_info<T>;
 
             if constexpr (Opts.layout == rowwise) {
@@ -448,7 +448,7 @@ namespace glz
                                  return get_member(value, get<I>(to_tuple(value)));
                               }
                               else {
-                                 return get_member(value, get<I>(refl<T>::values));
+                                 return get_member(value, get<I>(reflect<T>::values));
                               }
                            }();
 
@@ -565,7 +565,7 @@ namespace glz
                                        return get_member(value, get<I>(to_tuple(value)));
                                     }
                                     else {
-                                       return get_member(value, get<I>(refl<T>::values));
+                                       return get_member(value, get<I>(reflect<T>::values));
                                     }
                                  }();
 
