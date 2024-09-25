@@ -299,6 +299,15 @@ struct glz::meta<my_struct> {
 > - [Wrappers](./docs/wrappers.md)
 > - Lambda functions
 
+# Reflection API
+
+Glaze provides a compile time reflection API that can be modified via `glz::meta` specializations. This reflection API uses pure reflection unless a `glz::meta` specialization is provided, in which case the default behavior is overridden by the developer.
+
+```c++
+static_assert(glz::refl<my_struct>::size == 5); // Number of fields
+static_assert(glz::refl<my_struct>::keys[0] == "i"); // Access keys
+```
+
 # Custom Read/Write
 
 Custom reading and writing can be achieved through the powerful `to`/`from` specialization approach, which is described here: [custom-serialization.md](https://github.com/stephenberry/glaze/blob/main/docs/custom-serialization.md). However, this only works for user defined types.

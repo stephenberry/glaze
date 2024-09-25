@@ -455,7 +455,7 @@ suite json_schema = [] {
 struct empty_t
 {};
 
-static_assert(glz::refl<empty_t>.N == 0);
+static_assert(glz::refl<empty_t>::size == 0);
 static_assert(not glz::object_info<glz::opts{}, empty_t>::first_will_be_written);
 static_assert(not glz::object_info<glz::opts{}, empty_t>::maybe_skipped);
 
