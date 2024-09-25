@@ -24,6 +24,7 @@
 #include <variant>
 
 #include "glaze/api/impl.hpp"
+#include "glaze/containers/flat_map.hpp"
 #include "glaze/file/hostname_include.hpp"
 #include "glaze/file/raw_or_file.hpp"
 #include "glaze/hardware/volatile_array.hpp"
@@ -9573,6 +9574,20 @@ suite offset_one_test = [] {
       expect(not glz::read_json(obj, buffer));
       expect(obj.abcdefghill == 5);
       expect(obj.abcdefghlllo == 6);
+   };
+};
+
+suite flat_map_tests = [] {
+   "flat_map"_test = [] {
+      glz::flat_map<std::string_view, int> map{ {"one", 1}, {"two", 2} };
+      
+      std::string buffer{};
+      expect(not glz::write_json(map, buffer));
+      expect(buffer == R"({"one":1,"two":2})") << buffer;
+      map.clear();
+      expect(not glz::read_json(map, buffer));
+      expect(map.at("one") == 1);
+      expect(map.at("two") == 2);
    };
 };
 
