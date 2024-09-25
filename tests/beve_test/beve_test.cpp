@@ -2426,6 +2426,31 @@ suite custom_load_test = [] {
    };
 };
 
+struct test_skip {
+     std::optional<char> o_;
+};
+
+suite optional_skip_tests = [] {
+   "optional skip"_test = [] {
+      std::vector<test_skip> a{{},{}};
+       std::string         buffer;
+       std::vector<char>      beve_buffer;
+
+       auto err{glz::write_json(a, buffer)};
+       auto beve_err{glz::write_beve(a, beve_buffer)};
+       expect(!err && !beve_err);
+
+       std::array<test_skip, 2> b{{{false}, {true}}};
+       auto beve_b{b};
+
+       err = glz::read_json(b, buffer);
+       beve_err = glz::read_beve(beve_b, beve_buffer);
+      expect(!err && !beve_err);
+
+      expect(b[0].o_ == beve_b[0].o_);
+   };
+};
+
 int main()
 {
    glz::trace_begin("binary_test");
