@@ -296,7 +296,7 @@ struct glz::meta<my_struct> {
 > Names are required for:
 >
 > - static constexpr member variables
-> - Wrappers
+> - [Wrappers](./docs/wrappers.md)
 > - Lambda functions
 
 ## Custom Read/Write
