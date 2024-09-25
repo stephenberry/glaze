@@ -69,6 +69,7 @@ add_subdirectory(mock_json_test)
 add_subdirectory(mustache_test)
 add_subdirectory(reflection_test)
 add_subdirectory(repe_test)
+add_subdirectory(utility_formats)
 
 # We don't run find_package_test or glaze-install_test with MSVC/Windows, because the Github action runner often chokes
 # Don't run find_package on Clang, because Linux runs with Clang try to use GCC standard library and have errors before Clang 18
