@@ -249,6 +249,8 @@ struct glz::meta<my_struct> {
 
 Glaze also supports metadata provided within its associated class:
 
+<details><summary>See example:</summary>
+
 ```c++
 struct my_struct
 {
@@ -270,6 +272,8 @@ struct my_struct
   };
 };
 ```
+
+</details>
 
 ## Custom Key Names or Unnamed Types
 
