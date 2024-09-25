@@ -412,7 +412,7 @@ namespace glz
          template <auto Opts, class It>
          static void op(auto&& value, is_context auto&& ctx, It&& it, auto&& end)
          {
-            static constexpr auto N = refl<T>.N;
+            static constexpr auto N = refl<T>::N;
             static constexpr auto HashInfo = detail::hash_info<T>;
 
             if constexpr (Opts.layout == rowwise) {
@@ -448,7 +448,7 @@ namespace glz
                                  return get_member(value, get<I>(to_tuple(value)));
                               }
                               else {
-                                 return get_member(value, get<I>(refl<T>.values));
+                                 return get_member(value, get<I>(refl<T>::values));
                               }
                            }();
 
@@ -565,7 +565,7 @@ namespace glz
                                        return get_member(value, get<I>(to_tuple(value)));
                                     }
                                     else {
-                                       return get_member(value, get<I>(refl<T>.values));
+                                       return get_member(value, get<I>(refl<T>::values));
                                     }
                                  }();
 

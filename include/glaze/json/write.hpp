@@ -99,14 +99,14 @@ namespace glz
          template <auto Opts>
          static void op(auto&& value, is_context auto&&, auto&& b, auto&& ix) noexcept
          {
-            static constexpr auto N = refl<T>.N;
+            static constexpr auto N = refl<T>::N;
 
             dump<'['>(b, ix);
 
             invoke_table<N>([&]<size_t I>() {
-               if (get_member(value, get<I>(refl<T>.values))) {
+               if (get_member(value, get<I>(refl<T>::values))) {
                   dump<'"'>(b, ix);
-                  dump_maybe_empty(refl<T>.keys[I], b, ix);
+                  dump_maybe_empty(refl<T>::keys[I], b, ix);
                   dump<"\",">(b, ix);
                }
             });
@@ -905,7 +905,7 @@ namespace glz
                   using V = std::decay_t<decltype(val)>;
 
                   if constexpr (Opts.write_type_info && !tag_v<T>.empty() && glaze_object_t<V>) {
-                     constexpr auto num_members = refl<V>.N;
+                     constexpr auto num_members = refl<V>::N;
 
                      // must first write out type
                      if constexpr (Opts.prettify) {
@@ -1191,11 +1191,11 @@ namespace glz
 
       template <class T>
       inline constexpr size_t maximum_key_size = [] {
-         constexpr auto N = refl<T>.N;
+         constexpr auto N = refl<T>::N;
          size_t maximum{};
          for (size_t i = 0; i < N; ++i) {
-            if (refl<T>.keys[i].size() > maximum) {
-               maximum = refl<T>.keys[i].size();
+            if (refl<T>::keys[i].size() > maximum) {
+               maximum = refl<T>::keys[i].size();
             }
          }
          return maximum + 2; // add quotes
@@ -1206,13 +1206,13 @@ namespace glz
       // Only use this if you are not prettifying
       template <class T>
       inline constexpr std::optional<size_t> fixed_padding = [] {
-         constexpr auto N = refl<T>.N;
+         constexpr auto N = refl<T>::N;
          std::optional<size_t> fixed = 2 + 16; // {} + extra padding
          for_each_short_circuit<N>([&](auto I) -> bool {
             using val_t = std::remove_cvref_t<refl_t<T, I>>;
             if constexpr (supports_unchecked_write<val_t> && required_padding<val_t>().has_value()) {
                fixed.value() += required_padding<val_t>().value();
-               fixed.value() += refl<T>.keys[I].size() + 2; // key length
+               fixed.value() += refl<T>::keys[I].size() + 2; // key length
                fixed.value() += 2; // colon and comma
                return false; // continue
             }
@@ -1277,7 +1277,7 @@ namespace glz
                   }
                }
 
-               static constexpr auto N = refl<T>.N;
+               static constexpr auto N = refl<T>::N;
 
                decltype(auto) t = [&]() -> decltype(auto) {
                   if constexpr (reflectable<T>) {
@@ -1309,7 +1309,7 @@ namespace glz
                                        return get<I>(t);
                                     }
                                     else {
-                                       return get<I>(refl<T>.values);
+                                       return get<I>(refl<T>::values);
                                     }
                                  };
 
@@ -1386,7 +1386,7 @@ namespace glz
                         }
 
                         // MSVC requires get<I> rather than keys[I]
-                        static constexpr auto key = glz::get<I>(refl<T>.keys); // GCC 14 requires auto here
+                        static constexpr auto key = glz::get<I>(refl<T>::keys); // GCC 14 requires auto here
                         static constexpr auto quoted_key = join_v < chars<"\"">, key,
                                               Opts.prettify ? chars<"\": "> : chars < "\":" >>
                            ;
@@ -1401,7 +1401,7 @@ namespace glz
                            to<JSON, val_t>::template op<check_opts>(get_member(value, get<I>(t)), ctx, b, ix);
                         }
                         else {
-                           to<JSON, val_t>::template op<check_opts>(get_member(value, get<I>(refl<T>.values)), ctx, b,
+                           to<JSON, val_t>::template op<check_opts>(get_member(value, get<I>(refl<T>::values)), ctx, b,
                                                                     ix);
                         }
                      }
@@ -1419,7 +1419,7 @@ namespace glz
                      }
 
                      // MSVC requires get<I> rather than keys[I]
-                     static constexpr auto key = glz::get<I>(refl<T>.keys); // GCC 14 requires auto here
+                     static constexpr auto key = glz::get<I>(refl<T>::keys); // GCC 14 requires auto here
                      static constexpr auto quoted_key = join_v < chars<"\"">, key,
                                            Opts.prettify ? chars<"\": "> : chars < "\":" >>
                         ;
@@ -1436,7 +1436,7 @@ namespace glz
                         to<JSON, val_t>::template op<check_opts>(get_member(value, get<I>(t)), ctx, b, ix);
                      }
                      else {
-                        to<JSON, val_t>::template op<check_opts>(get_member(value, get<I>(refl<T>.values)), ctx, b, ix);
+                        to<JSON, val_t>::template op<check_opts>(get_member(value, get<I>(refl<T>::values)), ctx, b, ix);
                      }
 
                      if constexpr (I != (N - 1)) {
@@ -1537,7 +1537,7 @@ namespace glz
             static constexpr auto groups = glz::group_json_ptrs<sorted>();
             static constexpr auto N = glz::tuple_size_v<std::decay_t<decltype(groups)>>;
 
-            static constexpr auto num_members = refl<T>.N;
+            static constexpr auto num_members = refl<T>::N;
 
             if constexpr ((num_members > 0) && (glaze_object_t<T> || reflectable<T>)) {
                static constexpr auto HashInfo = hash_info<T>;
@@ -1560,7 +1560,7 @@ namespace glz
                      decode_hash<JSON, T, HashInfo, HashInfo.type>::op(key.data(), key.data() + key.size());
                   static_assert(index < num_members, "Invalid key passed to partial write");
                   if constexpr (glaze_object_t<T>) {
-                     static constexpr auto member = get<index>(refl<T>.values);
+                     static constexpr auto member = get<index>(refl<T>::values);
 
                      write_partial<JSON>::op<sub_partial, Opts>(get_member(value, member), ctx, b, ix);
                      if constexpr (I != N - 1) {
