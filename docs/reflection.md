@@ -10,7 +10,7 @@ struct T
   std::array<float, 3> arr{};
 };
 
-static_assert(glz::refl<T>::size == 3);
-static_assert(glz::refl<T>::)
+static_assert(glz::reflect<T>::size == 3);
+static_assert(glz::reflect<T>::keys[0] == "a");
 ```
 
