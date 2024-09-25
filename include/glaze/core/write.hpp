@@ -111,19 +111,4 @@ namespace glz
       file.write(buffer.data(), buffer.size());
       return {};
    }
-   
-   template <opts Opts, class Value>
-   [[nodiscard]] GLZ_ALWAYS_INLINE constexpr bool skip_member(const Value& value) noexcept
-   {
-      if constexpr (null_t<Value> && Opts.skip_null_members) {
-         if constexpr (always_null_t<Value>)
-            return true;
-         else {
-            return !bool(value);
-         }
-      }
-      else {
-         return false;
-      }
-   }
 }
