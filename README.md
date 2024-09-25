@@ -305,7 +305,7 @@ Custom reading and writing can be achieved through the powerful `to`/`from` spec
 
 For common use cases or cases where a specific member variable should have special reading and writing, you can use `glz::custom` to register read/write member functions, std::functions, or lambda functions.
 
-<details><summary>**See example:**</summary>
+<details><summary>See example:</summary>
 
 ```c++
 struct custom_encoding
