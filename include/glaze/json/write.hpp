@@ -660,21 +660,6 @@ namespace glz
          write<JSON>::op<opening_and_closing_handled_off<Opts>()>(std::forward<Value>(value), ctx, args...);
       }
 
-      template <opts Opts, class Value>
-      [[nodiscard]] GLZ_ALWAYS_INLINE constexpr bool skip_member(const Value& value) noexcept
-      {
-         if constexpr (null_t<Value> && Opts.skip_null_members) {
-            if constexpr (always_null_t<Value>)
-               return true;
-            else {
-               return !bool(value);
-            }
-         }
-         else {
-            return false;
-         }
-      }
-
       template <pair_t T>
       struct to<JSON, T>
       {
