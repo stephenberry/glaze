@@ -247,9 +247,7 @@ struct glz::meta<my_struct> {
 
 ## Local Glaze Meta
 
-Glaze also supports metadata provided within its associated class:
-
-<details><summary>See example:</summary>
+<details><summary>Glaze also supports metadata provided within its associated class:</summary>
 
 ```c++
 struct my_struct
