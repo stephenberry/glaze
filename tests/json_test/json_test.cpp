@@ -195,7 +195,7 @@ struct glz::meta<Shapes>
    static constexpr std::array value{circ, sq, triangle};
 };
 
-// static_assert(glz::refl<Vehicle>.keys[uint32_t(Vehicle::Truck)] == "Truck");
+// static_assert(glz::refl<Vehicle>::keys[uint32_t(Vehicle::Truck)] == "Truck");
 
 suite glz_enum_test = [] {
    "glz_enum"_test = [] {
