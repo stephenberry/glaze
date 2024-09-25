@@ -14,16 +14,21 @@
 
 #include "glaze/util/expected.hpp"
 
-// A flat_map. This version uses a single container for key/value pairs for the sake of cache locality. The std::flat_map uses separate key/value arrays.
+// A flat_map. This version uses a single container for key/value pairs for the sake of cache locality. The
+// std::flat_map uses separate key/value arrays.
 
 namespace glz
 {
    template <typename K1, typename K2>
    concept KeyEqualComparable = requires(const K1& k1, const K2& k2) {
-      { k1 == k2 } -> std::convertible_to<bool>;
-      { k2 == k1 } -> std::convertible_to<bool>;
+      {
+         k1 == k2
+      } -> std::convertible_to<bool>;
+      {
+         k2 == k1
+      } -> std::convertible_to<bool>;
    };
-   
+
    template <class Key, class T, class Compare = std::less<>, class Container = std::vector<std::pair<Key, T>>>
    struct flat_map
    {
@@ -41,15 +46,14 @@ namespace glz
       using reverse_iterator = typename Container::reverse_iterator;
       using const_reverse_iterator = typename Container::const_reverse_iterator;
 
-   private:
+     private:
       Container data_;
       key_compare comp_;
 
       template <typename Comp>
-      static constexpr bool IsDefaultComparator =
-         std::same_as<Comp, std::less<>> || std::same_as<Comp, std::less<Key>>;
+      static constexpr bool IsDefaultComparator = std::same_as<Comp, std::less<>> || std::same_as<Comp, std::less<Key>>;
 
-   public:
+     public:
       // Constructors
       flat_map() : data_(), comp_() {}
 
@@ -97,11 +101,13 @@ namespace glz
       {
          auto it = lower_bound(value.first);
          if (it != data_.end()) {
-            if constexpr (IsDefaultComparator<Compare> && KeyEqualComparable<decltype(value.first), decltype(it->first)>) {
+            if constexpr (IsDefaultComparator<Compare> &&
+                          KeyEqualComparable<decltype(value.first), decltype(it->first)>) {
                if (value.first == it->first) {
                   return {it, false};
                }
-            } else {
+            }
+            else {
                if (!comp_(value.first, it->first) && !comp_(it->first, value.first)) {
                   return {it, false};
                }
@@ -114,11 +120,13 @@ namespace glz
       {
          auto it = lower_bound(value.first);
          if (it != data_.end()) {
-            if constexpr (IsDefaultComparator<Compare> && KeyEqualComparable<decltype(value.first), decltype(it->first)>) {
+            if constexpr (IsDefaultComparator<Compare> &&
+                          KeyEqualComparable<decltype(value.first), decltype(it->first)>) {
                if (value.first == it->first) {
                   return {it, false};
                }
-            } else {
+            }
+            else {
                if (!comp_(value.first, it->first) && !comp_(it->first, value.first)) {
                   return {it, false};
                }
@@ -171,7 +179,10 @@ namespace glz
 
       // Lookup
       template <typename K>
-      size_type count(const K& key) const { return find(key) != end() ? 1 : 0; }
+      size_type count(const K& key) const
+      {
+         return find(key) != end() ? 1 : 0;
+      }
 
       template <typename K>
       iterator find(const K& key)
@@ -182,7 +193,8 @@ namespace glz
                if (key == it->first) {
                   return it;
                }
-            } else {
+            }
+            else {
                if (!comp_(key, it->first) && !comp_(it->first, key)) {
                   return it;
                }
@@ -200,7 +212,8 @@ namespace glz
                if (key == it->first) {
                   return it;
                }
-            } else {
+            }
+            else {
                if (!comp_(key, it->first) && !comp_(it->first, key)) {
                   return it;
                }
@@ -210,7 +223,10 @@ namespace glz
       }
 
       template <typename K>
-      bool contains(const K& key) const { return find(key) != end(); }
+      bool contains(const K& key) const
+      {
+         return find(key) != end();
+      }
 
       template <typename K>
       iterator lower_bound(const K& key)

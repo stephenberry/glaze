@@ -9579,8 +9579,8 @@ suite offset_one_test = [] {
 
 suite flat_map_tests = [] {
    "flat_map"_test = [] {
-      glz::flat_map<std::string_view, int> map{ {"one", 1}, {"two", 2} };
-      
+      glz::flat_map<std::string_view, int> map{{"one", 1}, {"two", 2}};
+
       std::string buffer{};
       expect(not glz::write_json(map, buffer));
       expect(buffer == R"({"one":1,"two":2})") << buffer;
