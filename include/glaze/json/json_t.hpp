@@ -29,12 +29,9 @@ namespace glz
       using null_t = std::nullptr_t;
       using val_t = std::variant<null_t, double, std::string, bool, array_t, object_t>;
       val_t data{};
-      
+
       // Dump the value to JSON, returns an expected that will contain a std::string if valid
-      expected<std::string, error_ctx> dump() noexcept
-      {
-         return write_json(data);
-      }
+      expected<std::string, error_ctx> dump() noexcept { return write_json(data); }
 
       template <class T>
       [[nodiscard]] T& get()
