@@ -6,6 +6,12 @@ Glaze also supports:
 - [BEVE](https://github.com/beve-org/beve) (binary efficient versatile encoding)
 - [CSV](./docs/csv.md) (comma separated value)
 
+> [!IMPORTANT]
+>
+> Glaze [v3.5.0](https://github.com/stephenberry/glaze/releases/tag/v3.5.0) renamed the format specifier from `json` to `JSON`. Also, `glz::detail::to_json` and `glz::detail::from_json` specializations change to `glz::detail::to<JSON` and `glz::detail::from<JSON`. [See release notes](https://github.com/stephenberry/glaze/releases/tag/v3.5.0) for more information.
+>
+> `glz::read_binary` and `glz::write_binary` were also renamed to `glz::read_beve` and `glz::write_beve`
+
 ## With compile time reflection for MSVC, Clang, and GCC!
 
 - Read/write aggregate initializable structs without writing any metadata or macros!
