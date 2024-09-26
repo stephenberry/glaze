@@ -8,6 +8,7 @@
 #include <variant>
 #include <vector>
 
+#include "glaze/api/std/variant.hpp"
 #include "glaze/core/meta.hpp"
 #include "glaze/json/write.hpp"
 #include "glaze/util/expected.hpp"
