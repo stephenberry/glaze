@@ -15,8 +15,7 @@
 namespace glz
 {
    template <class T>
-   struct meta
-   {};
+   struct meta;
 
    template <>
    struct meta<std::string_view>
