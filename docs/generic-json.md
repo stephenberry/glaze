@@ -51,6 +51,10 @@ Calling `.empty()` on a `json_t` value will return true if it contains an empty 
 
 Calling `.size()` on a `json_t` value will return the number of items in an object or array, or the size of a string. Otherwise, returns zero.
 
+## .dump()
+
+Calling `.dump()` on a `json_t` value is equivalent to calling `glz::write_json(value)`, which returns an `expected<std::string, glz::error_ctx>`.
+
 ## glz::raw_json
 
 There are times when you want to parse JSON into a C++ string, to inspect or decode at a later point. `glz::raw_json` is a simple wrapper around a `std::string` that will decode and encode JSON without needing a concrete structure.
