@@ -77,14 +77,14 @@ suite structs_of_functions = [] {
 
       {
          auto request = repe::request_json({"/i"});
-         response = server.call(request.value());
+         response = server.call(request);
       }
 
       expect(response->value() == R"([[0,0,0,"/i",null],55])") << response->value();
 
       {
          auto request = repe::request_json({.method = "/i"}, 42);
-         response = server.call(request.value());
+         response = server.call(request);
       }
 
       expect(response->value() == R"([[0,0,2,"/i",null],null])") << response->value();
