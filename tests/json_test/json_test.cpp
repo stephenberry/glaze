@@ -3492,17 +3492,20 @@ suite generic_json_tests = [] {
       std::string buffer = R"([5,"Hello World",{"pi":3.14},null])";
       expect(glz::read_json(json, buffer) == glz::error_code::none);
       expect(glz::write_json(json) == buffer);
+      expect(json.dump().value() == buffer);
    };
 
    "generic_json_const"_test = [] {
       auto foo = [](const glz::json_t& json) { return json["s"].get<std::string>(); };
       glz::json_t json = {{"s", "hello world"}};
       expect(foo(json) == "hello world");
+      expect(json.dump().value() == R"({"s":"hello world"})");
    };
 
    "generic_json_int"_test = [] {
       glz::json_t json = {{"i", 1}};
       expect(json["i"].get<double>() == 1);
+      expect(json.dump().value() == R"({"i":1})");
    };
 
    "generic_json_as"_test = [] {
