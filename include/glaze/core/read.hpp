@@ -117,6 +117,9 @@ namespace glz
 
    template <class T>
    concept c_style_char_buffer = std::convertible_to<std::remove_cvref_t<T>, std::string_view> && !has_data<T>;
+   
+   template <class T>
+   concept is_buffer = c_style_char_buffer<T> || contiguous<T>;
 
    // for char array input
    template <opts Opts, class T, c_style_char_buffer Buffer>
