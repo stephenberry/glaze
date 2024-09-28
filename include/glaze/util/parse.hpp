@@ -1216,9 +1216,6 @@ namespace glz::detail
       }
    }
 
-   template <opts Opts>
-   GLZ_ALWAYS_INLINE void skip_value(is_context auto&& ctx, auto&& it, auto&& end) noexcept;
-
    // expects opening whitespace to be handled
    GLZ_ALWAYS_INLINE sv parse_key(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {

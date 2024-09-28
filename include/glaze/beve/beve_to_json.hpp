@@ -3,7 +3,7 @@
 
 #pragma once
 
-#include "glaze/binary/header.hpp"
+#include "glaze/beve/header.hpp"
 #include "glaze/json/write.hpp"
 
 namespace glz
@@ -22,7 +22,7 @@ namespace glz
                return;
             }
             std::memcpy(&value, it, sizeof(T));
-            to_json<T>::template op<Opts>(value, ctx, out, ix);
+            to<JSON, T>::template op<Opts>(value, ctx, out, ix);
             it += sizeof(T);
          };
 
@@ -146,7 +146,7 @@ namespace glz
                return;
             }
             const sv value{reinterpret_cast<const char*>(it), n};
-            to_json<sv>::template op<Opts>(value, ctx, out, ix);
+            to<JSON, sv>::template op<Opts>(value, ctx, out, ix);
             it += n;
             break;
          }
@@ -158,6 +158,15 @@ namespace glz
                ctx.indentation_level += Opts.indentation_width;
                dump<'\n'>(out, ix);
                dumpn<Opts.indentation_char>(ctx.indentation_level, out, ix);
+            }
+            else {
+               ++ctx.indentation_level;
+            }
+            // We use indentation_level for recursive depth limit even though this means we have a shorter limit with
+            // prettified output
+            if (ctx.indentation_level >= max_recursive_depth_limit) {
+               ctx.error = error_code::exceeded_max_recursive_depth;
+               return;
             }
 
             const auto key_type = (tag & 0b000'11'000) >> 3;
@@ -179,7 +188,7 @@ namespace glz
                      return;
                   }
                   const sv key{reinterpret_cast<const char*>(it), n};
-                  to_json<sv>::template op<Opts>(key, ctx, out, ix);
+                  to<JSON, sv>::template op<Opts>(key, ctx, out, ix);
                   if constexpr (Opts.prettify) {
                      dump<": ">(out, ix);
                   }
@@ -210,6 +219,9 @@ namespace glz
                dump<'\n'>(out, ix);
                dumpn<Opts.indentation_char>(ctx.indentation_level, out, ix);
             }
+            else {
+               --ctx.indentation_level;
+            }
             dump<'}'>(out, ix);
             break;
          }
@@ -229,7 +241,7 @@ namespace glz
                      return;
                   }
                   std::memcpy(&value, it, sizeof(T));
-                  to_json<T>::template op<Opts>(value, ctx, out, ix);
+                  to<JSON, T>::template op<Opts>(value, ctx, out, ix);
                   it += sizeof(T);
                   if (i != n - 1) {
                      dump<','>(out, ix);
@@ -336,7 +348,7 @@ namespace glz
                         return;
                      }
                      const sv value{reinterpret_cast<const char*>(it), n};
-                     to_json<sv>::template op<Opts>(value, ctx, out, ix);
+                     to<JSON, sv>::template op<Opts>(value, ctx, out, ix);
                      it += n;
                      if (i != n_strings - 1) {
                         dump<','>(out, ix);
@@ -370,6 +382,9 @@ namespace glz
             dump<'['>(out, ix);
             for (size_t i = 0; i < n; ++i) {
                beve_to_json_value<Opts>(ctx, it, end, out, ix);
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
                if (i != n - 1) {
                   dump<','>(out, ix);
                }
@@ -412,7 +427,7 @@ namespace glz
                   dump<R"("index":)">(out, ix);
                }
 
-               to_json<std::remove_cvref_t<decltype(index)>>::template op<Opts>(index, ctx, out, ix);
+               to<JSON, std::remove_cvref_t<decltype(index)>>::template op<Opts>(index, ctx, out, ix);
 
                dump<','>(out, ix);
                if constexpr (Opts.prettify) {
@@ -455,6 +470,13 @@ namespace glz
                   ctx.indentation_level += Opts.indentation_width;
                   dump<'\n'>(out, ix);
                   dumpn<Opts.indentation_char>(ctx.indentation_level, out, ix);
+               }
+               else {
+                  ++ctx.indentation_level;
+               }
+               if (ctx.indentation_level >= max_recursive_depth_limit) {
+                  ctx.error = error_code::exceeded_max_recursive_depth;
+                  return;
                }
 
                if constexpr (Opts.prettify) {

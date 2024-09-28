@@ -11,20 +11,20 @@
 namespace glz::ex
 {
    template <class T, class Buffer>
-   void read_binary(T& value, Buffer&& buffer)
+   void read_beve(T& value, Buffer&& buffer)
    {
-      auto ec = glz::read_binary(value, std::forward<Buffer>(buffer));
+      auto ec = glz::read_beve(value, std::forward<Buffer>(buffer));
       if (ec) {
-         throw std::runtime_error("read_binary error");
+         throw std::runtime_error("read_beve error");
       }
    }
 
    template <class T, class Buffer>
-   [[nodiscard]] T read_binary(Buffer&& buffer) noexcept
+   [[nodiscard]] T read_beve(Buffer&& buffer) noexcept
    {
-      const auto ex = glz::read_binary<T>(std::forward<Buffer>(buffer));
+      const auto ex = glz::read_beve<T>(std::forward<Buffer>(buffer));
       if (ex) {
-         throw std::runtime_error("read_binary error");
+         throw std::runtime_error("read_beve error");
       }
       return ex.value();
    }
@@ -42,26 +42,26 @@ namespace glz::ex
 namespace glz::ex
 {
    template <class T, class Buffer>
-   void write_binary(T&& value, Buffer&& buffer)
+   void write_beve(T&& value, Buffer&& buffer)
    {
-      glz::write_binary(std::forward<T>(value), std::forward<Buffer>(buffer));
+      glz::write_beve(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
 
    template <class T>
-   [[nodiscard]] auto write_binary(T&& value)
+   [[nodiscard]] auto write_beve(T&& value)
    {
-      return glz::write_binary(std::forward<T>(value));
+      return glz::write_beve(std::forward<T>(value));
    }
 
    template <class T>
-   void write_file_binary(T&& value, const std::string& file_name, auto&& buffer)
+   void write_file_beve(T&& value, const std::string& file_name, auto&& buffer)
    {
-      auto ec = glz::write_file_binary(std::forward<T>(value), file_name, buffer);
+      auto ec = glz::write_file_beve(std::forward<T>(value), file_name, buffer);
       if (ec == glz::error_code::file_open_failure) {
          throw std::runtime_error("file failed to open: " + file_name);
       }
       else if (ec) {
-         throw std::runtime_error("write_file_binary error for: " + file_name);
+         throw std::runtime_error("write_file_beve error for: " + file_name);
       }
    }
 }

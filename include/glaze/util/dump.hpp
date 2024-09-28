@@ -18,22 +18,6 @@ namespace glz::detail
    template <class T, class V = std::remove_cvref_t<T>>
    concept byte_sized = sizeof(T) == 1 && (std::same_as<V, char> || std::same_as<V, std::byte>);
 
-   template <class T>
-   [[nodiscard]] GLZ_ALWAYS_INLINE auto data_ptr(T& buffer) noexcept
-   {
-      if constexpr (has_data<T>) {
-         if constexpr (std::same_as<std::decay_t<typename T::value_type>, std::byte>) {
-            return reinterpret_cast<char*>(buffer.data());
-         }
-         else {
-            return buffer.data();
-         }
-      }
-      else {
-         return buffer;
-      }
-   }
-
    template <uint32_t N, class B>
    GLZ_ALWAYS_INLINE void maybe_pad(B& b, size_t& ix) noexcept
    {

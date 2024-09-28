@@ -2,7 +2,7 @@
 
 See [Custom Read/Write](https://github.com/stephenberry/glaze/tree/main#custom-readwrite) in the main README.md for using member functions for custom handling.
 
-Advanced custom serialization/deserialization is achievable by implementing your own `from_json` and `to_json` specializations within the glz::detail namespace.
+Advanced custom serialization/deserialization is achievable by implementing your own `from` and `to` specializations within the glz::detail namespace.
 
 > Note that the API within the `detail` namespace is subject to change and is therefore not expected to be as stable.
 
@@ -24,24 +24,24 @@ struct glz::meta<date>
 namespace glz::detail
 {
    template <>
-   struct from_json<date>
+   struct from<JSON, date>
    {
       template <auto Opts>
       static void op(date& value, auto&&... args)
       {
-         read<json>::op<Opts>(value.human_readable, args...);
+         read<JSON>::op<Opts>(value.human_readable, args...);
          value.data = std::stoi(value.human_readable);
       }
    };
 
    template <>
-   struct to_json<date>
+   struct to<JSON, date>
    {
       template <auto Opts>
       static void op(date& value, auto&&... args) noexcept
       {
          value.human_readable = std::to_string(value.data);
-         write<json>::op<Opts>(value.human_readable, args...);
+         write<JSON>::op<Opts>(value.human_readable, args...);
       }
    };
 }
@@ -73,7 +73,7 @@ Say we have a UUID library for converting a `uuid_t` from a `std::string_view` a
 namespace glz::detail
 {
    template <>
-   struct from_json<uuid_t>
+   struct from<JSON, uuid_t>
    {
       template <auto Opts>
       static void op(uuid_t& uuid, auto&&... args)
@@ -81,19 +81,19 @@ namespace glz::detail
          // Initialize a string_view with the appropriately lengthed buffer
          // Alternatively, use a std::string for any size (but this will allocate)
          std::string_view str = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX";
-         read<json>::op<Opts>(str, args...);
+         read<JSON>::op<Opts>(str, args...);
          uuid = uuid_lib::uuid_from_string_view(str);
       }
    };
 
    template <>
-   struct to_json<uuid_t>
+   struct to<JSON, uuid_t>
    {
       template <auto Opts>
       static void op(const uuid_t& uuid, auto&&... args) noexcept
       {
          std::string str = uuid_lib::uuid_to_string(uuid);
-         write<json>::op<Opts>(str, args...);
+         write<JSON>::op<Opts>(str, args...);
       }
    };
 }

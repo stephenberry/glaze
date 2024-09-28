@@ -18,7 +18,7 @@ namespace glz::ex
    {
       auto ec = glz::read<Opts>(value, buffer);
       if (ec) {
-         if constexpr (Opts.format == json) {
+         if constexpr (Opts.format == JSON) {
             throw std::runtime_error("read error: " + glz::format_error(ec, buffer));
          }
          else {

@@ -67,6 +67,25 @@ expect(view == "5.5");
 >
 > `get_sv_json` does not validate JSON beyond the targeted value. This is to avoid parsing the entire document once the targeted value is reached.
 
+## write_at
+
+`write_at` allows raw text to be written to a specific JSON value pointed at via JSON Pointer syntax.
+
+```c++
+std::string buffer = R"( { "action": "DELETE", "data": { "x": 10, "y": 200 }})";
+auto ec = glz::write_at<"/action">(R"("GO!")", buffer);
+expect(buffer == R"( { "action": "GO!", "data": { "x": 10, "y": 200 }})");
+```
+
+Another example:
+
+```c++
+std::string buffer = R"({"str":"hello","number":3.14,"sub":{"target":"X"}})";
+auto ec = glz::write_at<"/sub/target">("42", buffer);
+expect(not ec);
+expect(buffer == R"({"str":"hello","number":3.14,"sub":{"target":42}})");
+```
+
 ## Seek
 
 `glz::seek` allows you to call a lambda on a nested value.

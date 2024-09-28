@@ -20,7 +20,7 @@ namespace glz
    namespace detail
    {
       template <>
-      struct from_json<raw_or_file>
+      struct from<JSON, raw_or_file>
       {
          template <auto Options>
          static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
@@ -29,7 +29,7 @@ namespace glz
             auto& v = value;
             // check if we are decoding a string, which could be a file path
             if (*it == '"') {
-               read<json>::op<Opts>(v.str, ctx, it, end);
+               read<JSON>::op<Opts>(v.str, ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
                   return;
 
@@ -66,7 +66,7 @@ namespace glz
             }
             else {
                auto it_start = it;
-               skip_value<Opts>(ctx, it, end);
+               skip_value<JSON>::op<Opts>(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
                   return;
                value.str = {it_start, static_cast<size_t>(it - it_start)};
@@ -75,7 +75,7 @@ namespace glz
       };
 
       template <>
-      struct to_json<raw_or_file>
+      struct to<JSON, raw_or_file>
       {
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&&, auto&& b, auto&& ix) noexcept

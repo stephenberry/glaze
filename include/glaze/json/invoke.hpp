@@ -33,7 +33,7 @@ namespace glz
    namespace detail
    {
       template <class T>
-      struct from_json<invoke_t<T>>
+      struct from<JSON, invoke_t<T>>
       {
          template <auto Opts>
          static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
@@ -54,7 +54,7 @@ namespace glz
                   }
                   else {
                      Tuple inputs{};
-                     read<json>::op<Opts>(inputs, ctx, it, end);
+                     read<JSON>::op<Opts>(inputs, ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
                      std::apply(
@@ -79,7 +79,7 @@ namespace glz
                   }
                   else {
                      Tuple inputs{};
-                     read<json>::op<Opts>(inputs, ctx, it, end);
+                     read<JSON>::op<Opts>(inputs, ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
                      std::apply(value.val, inputs);
@@ -96,7 +96,7 @@ namespace glz
       };
 
       template <class T>
-      struct to_json<invoke_t<T>>
+      struct to<JSON, invoke_t<T>>
       {
          template <auto Opts>
          static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept
@@ -109,7 +109,7 @@ namespace glz
                if constexpr (std::is_void_v<Ret>) {
                   using Tuple = typename function_traits<V>::arguments;
                   Tuple inputs{};
-                  write<json>::op<Opts>(inputs, ctx, args...);
+                  write<JSON>::op<Opts>(inputs, ctx, args...);
                }
                else {
                   static_assert(false_v<T>, "std::function must have void return");
@@ -169,7 +169,7 @@ namespace glz
    namespace detail
    {
       template <is_invoke_update T>
-      struct from_json<T>
+      struct from<JSON, T>
       {
          template <auto Opts>
          static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
@@ -203,7 +203,7 @@ namespace glz
                   if (input != value.prev) {
                      Tuple inputs{};
                      it = start;
-                     read<json>::op<Opts>(inputs, ctx, it, end);
+                     read<JSON>::op<Opts>(inputs, ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
                      std::apply(value.func, inputs);
@@ -218,7 +218,7 @@ namespace glz
       };
 
       template <is_invoke_update T>
-      struct to_json<T>
+      struct to<JSON, T>
       {
          template <auto Opts>
          static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept
@@ -227,7 +227,7 @@ namespace glz
             dump<'['>(args...);
             using Tuple = typename function_traits<V>::arguments;
             Tuple inputs{};
-            write<json>::op<Opts>(inputs, ctx, args...);
+            write<JSON>::op<Opts>(inputs, ctx, args...);
             dump<']'>(args...);
          }
       };

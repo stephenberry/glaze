@@ -15,8 +15,7 @@
 namespace glz
 {
    template <class T>
-   struct meta
-   {};
+   struct meta;
 
    template <>
    struct meta<std::string_view>
@@ -82,10 +81,16 @@ namespace glz
       concept local_meta_t = requires { T::glaze::value; };
 
       template <class T>
+      concept local_keys_t = requires { T::glaze::keys; };
+
+      template <class T>
       concept global_meta_t = requires { meta<T>::value; };
 
       template <class T>
       concept glaze_t = requires { meta<std::decay_t<T>>::value; } || local_meta_t<std::decay_t<T>>;
+
+      template <class T>
+      concept meta_keys = requires { meta<std::decay_t<T>>::keys; } || local_keys_t<std::decay_t<T>>;
 
       template <class T>
       concept has_unknown_writer = requires { meta<T>::unknown_write; } || requires { T::glaze::unknown_write; };
@@ -142,6 +147,22 @@ namespace glz
 
    template <class T>
    using meta_wrapper_t = decay_keep_volatile_t<decltype(meta_wrapper_v<std::decay_t<T>>)>;
+
+   template <class T>
+   inline constexpr auto meta_keys_v = [] {
+      if constexpr (detail::local_meta_t<T>) {
+         return T::glaze::keys;
+      }
+      else if constexpr (detail::global_meta_t<T>) {
+         return meta<T>::keys;
+      }
+      else {
+         static_assert(false_v<T>, "no keys or values provided");
+      }
+   }();
+
+   template <class T>
+   using meta_keys_t = decay_keep_volatile_t<decltype(meta_keys_v<T>)>;
 
    template <class T>
    struct remove_meta_wrapper
