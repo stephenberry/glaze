@@ -11,7 +11,7 @@
 #if defined(__APPLE__)
 #elif defined(_MSC_VER)
 #include <intrin.h>
-#elif defined(GLZ_USE_AVX)
+#elif defined(GLZ_USE_AVX2)
 #include <immintrin.h>
 #endif
 
@@ -349,6 +349,7 @@ namespace glz
                      // showcase the error and make the JSON invalid. These would then be detected upon reading
                      // the JSON.
 
+                     // This 128bit SWAR approach tends to be slower than SIMD approaches
                      /*for (const auto end_m15 = e - 15; c < end_m15;) {
                         std::memcpy(data, c, 16);
                         __uint128_t swar;
@@ -378,7 +379,9 @@ namespace glz
                      }*/
 
 #if defined(__APPLE__)
-                     if (n > 15) {
+                     // This approach is faster when strings don't contain many escapes
+                     // But, this is not faster in the general case
+                     /*if (n > 15) {
                         const uint8x16_t lo7_mask = vdupq_n_u8(0b01111111);
                         const uint8x16_t quote_char = vdupq_n_u8('"');
                         const uint8x16_t backslash_char = vdupq_n_u8('\\');
@@ -426,8 +429,9 @@ namespace glz
                            data += 2;
                            ++c;
                         }
-                     }
-#elif defined(GLZ_USE_AVX)
+                     }*/
+#elif defined(GLZ_USE_AVX2)
+                     // Optimization for systems with AVX2 support
                      if (n > 31) {
                         const __m256i lo7_mask = _mm256_set1_epi8(0b01111111);
                         const __m256i quote_char = _mm256_set1_epi8('"');

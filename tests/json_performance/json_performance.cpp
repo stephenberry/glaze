@@ -9,7 +9,7 @@
 #include "glaze/glaze.hpp"
 #include "ut/ut.hpp"
 
-static constexpr bool skip = true;
+static constexpr bool skip = false;
 
 #define SKIP             \
    if constexpr (skip) { \
@@ -54,7 +54,7 @@ inline std::string generate_basic_string()
 
 suite string_performance = [] {
    "string_performance"_test = [] {
-      //SKIP;
+      SKIP;
 
 #ifdef NDEBUG
       constexpr size_t n = 10000;
@@ -97,7 +97,7 @@ suite string_performance = [] {
 
 suite basic_string_performance = [] {
    "basic_string_performance"_test = [] {
-      //SKIP;
+      SKIP;
 
 #ifdef NDEBUG
       constexpr size_t n = 10000;

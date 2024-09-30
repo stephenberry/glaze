@@ -51,12 +51,13 @@ if (glaze_DEVELOPER_MODE)
 endif()
 
 if (APPLE)
-  option(glaze_ENABLE_AVX "Enable AVX instruction set" OFF)
+  option(glaze_ENABLE_AVX2 "Enable AVX2 instruction set" OFF)
 else()
-  option(glaze_ENABLE_AVX "Enable AVX instruction set" ON)
+  option(glaze_ENABLE_AVX2 "Enable AVX2 instruction set" ON)
+  message("Glaze is being compiled with AVX2 instructions. Set glaze_ENABLE_AVX2 to OFF if you wish to disable this.")
 endif()
 
-if (glaze_ENABLE_AVX)
+if (glaze_ENABLE_AVX2)
   include(cmake/avx.cmake)
 endif()
 
