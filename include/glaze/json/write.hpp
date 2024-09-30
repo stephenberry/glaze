@@ -11,7 +11,7 @@
 #if defined(__APPLE__)
 #elif defined(_MSC_VER)
 #include <intrin.h>
-#elif defined(__builtin_cpu_supports("avx")) && GLZ_USE_AVX
+#elif GLZ_USE_AVX
 #include <immintrin.h>
 #endif
 
