@@ -11,7 +11,7 @@
 #if defined(__APPLE__)
 #elif defined(_MSC_VER)
 #include <intrin.h>
-#elif GLZ_USE_AVX
+#elif defined(GLZ_USE_AVX)
 #include <immintrin.h>
 #endif
 
@@ -427,7 +427,7 @@ namespace glz
                            ++c;
                         }
                      }
-#elif defined(__builtin_cpu_supports("avx"))
+#elif defined(GLZ_USE_AVX)
                      if (n > 31) {
                         const __m256i lo7_mask = _mm256_set1_epi8(0b01111111);
                         const __m256i quote_char = _mm256_set1_epi8('"');
