@@ -117,6 +117,13 @@ namespace glz::detail
    consteval uint32_t repeat_byte4(const auto repeat) { return uint32_t(0x01010101u) * uint8_t(repeat); }
 
    consteval uint64_t repeat_byte8(const uint8_t repeat) { return 0x0101010101010101ull * repeat; }
+   
+#if defined(__SIZEOF_INT128__)
+   consteval __uint128_t repeat_byte16(const uint8_t repeat) {
+      __uint128_t multiplier = (__uint128_t(0x0101010101010101ull) << 64) | 0x0101010101010101ull;
+      return multiplier * repeat;
+   }
+#endif
 
    consteval uint64_t not_repeat_byte8(const uint8_t repeat) { return ~(0x0101010101010101ull * repeat); }
 
@@ -704,6 +711,18 @@ namespace glz::detail
 #endif
 #endif
    }
+   
+#if defined(__SIZEOF_INT128__)
+   GLZ_ALWAYS_INLINE auto countr_zero(__uint128_t x) noexcept {
+      uint64_t low = uint64_t(x);
+      if (low != 0) {
+         return countr_zero(low);
+      } else {
+         uint64_t high = uint64_t(x >> 64);
+         return countr_zero(high) + 64;
+      }
+   }
+#endif
 
    GLZ_ALWAYS_INLINE void skip_till_quote(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {

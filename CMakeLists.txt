@@ -50,6 +50,16 @@ if (glaze_DEVELOPER_MODE)
   include(cmake/dev-mode.cmake)
 endif()
 
+if (APPLE)
+  option(glaze_ENABLE_AVX "Enable AVX instruction set" OFF)
+else()
+  option(glaze_ENABLE_AVX "Enable AVX instruction set" ON)
+endif()
+
+if (glaze_ENABLE_AVX)
+  include(cmake/avx.cmake)
+endif()
+
 option(glaze_BUILD_EXAMPLES "Build GLAZE examples" OFF)
 
 if(glaze_BUILD_EXAMPLES)
