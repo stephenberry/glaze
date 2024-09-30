@@ -3500,6 +3500,11 @@ suite generic_json_tests = [] {
       glz::json_t json = {{"s", "hello world"}};
       expect(foo(json) == "hello world");
       expect(json.dump().value() == R"({"s":"hello world"})");
+      
+      std::map<std::string, std::string> obj{};
+      expect(not glz::read_json(obj, json));
+      expect(obj.contains("s"));
+      expect(obj.at("s") == "hello world");
    };
 
    "generic_json_int"_test = [] {
@@ -3538,8 +3543,13 @@ suite generic_json_tests = [] {
 
    "json_t_contains"_test = [] {
       auto json = glz::read_json<glz::json_t>(R"({"foo":"bar"})");
+      expect(bool(json));
       expect(!json->contains("id"));
       expect(json->contains("foo"));
+      auto obj = glz::read_json<std::map<std::string, std::string>>(json.value());
+      expect(bool(obj));
+      expect(obj->contains("foo"));
+      expect(obj->at("foo") == "bar");
    };
 
    "buffer underrun"_test = [] {
@@ -3592,6 +3602,9 @@ suite generic_json_tests = [] {
       expect(not json.empty());
       expect(json.size() == 3);
       expect(json.get_array().size() == 3);
+      std::array<int, 3> v{};
+      expect(not glz::read<glz::opts{}>(v, json));
+      expect(v == std::array{1,2,3});
    };
 
    "json_t is_string"_test = [] {
@@ -3612,6 +3625,9 @@ suite generic_json_tests = [] {
       expect(not json.empty());
       expect(json.size() == 19);
       expect(json.get_string() == "Beautiful beginning");
+      std::string v{};
+      expect(not glz::read<glz::opts{}>(v, json));
+      expect(v == "Beautiful beginning");
    };
 
    "json_t is_number"_test = [] {
@@ -3622,6 +3638,9 @@ suite generic_json_tests = [] {
       expect(not json.empty());
       expect(json.size() == 0);
       expect(json.get_number() == 3.882e2);
+      double v{};
+      expect(not glz::read<glz::opts{}>(v, json));
+      expect(v == 3.882e2);
    };
 
    "json_t is_boolean"_test = [] {
@@ -3632,6 +3651,9 @@ suite generic_json_tests = [] {
       expect(not json.empty());
       expect(json.size() == 0);
       expect(json.get_boolean());
+      bool v{};
+      expect(not glz::read<glz::opts{}>(v, json));
+      expect(v);
    };
 
    "json_t is_null"_test = [] {
