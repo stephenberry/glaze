@@ -29,7 +29,7 @@ if (AVX2_SUPPORTED)
         #else
         #include <immintrin.h>
         #endif
-        
+
         int main() {
             __m256i a = _mm256_set1_epi32(0);
             return 0;
@@ -37,10 +37,10 @@ if (AVX2_SUPPORTED)
     " AVX2_CODE_COMPILES)
 
     if (AVX2_CODE_COMPILES)
-        message(STATUS "AVX2 intrinsics are supported.")
+        message(STATUS "Glaze: using AVX2 intrinsics. Set glaze_ENABLE_AVX2 to OFF to avoid use.")
     else()
         set(AVX2_SUPPORTED FALSE)
-        message(STATUS "Glaze: AVX2 intrinsics not supported on this platform.")
+        message(STATUS "Glaze: AVX2 not supported/not used.")
     endif()
 
     # Reset CMAKE_REQUIRED_FLAGS
