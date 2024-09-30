@@ -283,7 +283,7 @@ namespace glz
          return buffer.error();
       }
    }
-   
+
    template <read_json_supported T>
    [[nodiscard]] error_ctx read_json(T& value, const json_t& source) noexcept
    {

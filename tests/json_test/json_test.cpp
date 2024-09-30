@@ -3500,7 +3500,7 @@ suite generic_json_tests = [] {
       glz::json_t json = {{"s", "hello world"}};
       expect(foo(json) == "hello world");
       expect(json.dump().value() == R"({"s":"hello world"})");
-      
+
       std::map<std::string, std::string> obj{};
       expect(not glz::read_json(obj, json));
       expect(obj.contains("s"));
@@ -3604,7 +3604,7 @@ suite generic_json_tests = [] {
       expect(json.get_array().size() == 3);
       std::array<int, 3> v{};
       expect(not glz::read<glz::opts{}>(v, json));
-      expect(v == std::array{1,2,3});
+      expect(v == std::array{1, 2, 3});
    };
 
    "json_t is_string"_test = [] {
