@@ -463,7 +463,7 @@ namespace glz
                               continue;
                            }
 
-                           uint32_t length = __builtin_ctz(mask);
+                           uint32_t length = countr_zero(mask);
 
                            c += length;
                            data += length;

@@ -699,6 +699,19 @@ namespace glz::detail
 
    // std::countr_zero uses another branch check whether the input is zero,
    // we use this function when we know that x > 0
+   GLZ_ALWAYS_INLINE auto countr_zero(const uint32_t x) noexcept
+   {
+#ifdef _MSC_VER
+      return std::countr_zero(x);
+#else
+#if __has_builtin(__builtin_ctzll)
+      return __builtin_ctzl(x);
+#else
+      return std::countr_zero(x);
+#endif
+#endif
+   }
+   
    GLZ_ALWAYS_INLINE auto countr_zero(const uint64_t x) noexcept
    {
 #ifdef _MSC_VER
