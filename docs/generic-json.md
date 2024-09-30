@@ -71,7 +71,7 @@ expect(s == R"([0,1,2])");
 After parsing into a `json_t` it is sometimes desirable to parse into a concrete struct or a portion of the `json_t` into a struct. Glaze allows a `json_t` value to be used as the source where a buffer would normally be passed.
 
 ```c++
-glz::json_t json = glz::read_json<glz::json_t>(R"({"foo":"bar"})");
+auto json = glz::read_json<glz::json_t>(R"({"foo":"bar"})");
 expect(json->contains("foo"));
 auto obj = glz::read_json<std::map<std::string, std::string>>(json.value());
 // This reads the json_t into a std::map
