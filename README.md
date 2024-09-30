@@ -20,6 +20,8 @@ Glaze also supports:
 ## Highlights
 
 - Pure, compile time reflection for structs
+  - Powerful meta specialization system for custom names and behavior
+
 - JSON [RFC 8259](https://datatracker.ietf.org/doc/html/rfc8259) compliance with UTF-8 validation
 - Standard C++ library support
 - Header only
@@ -184,6 +186,10 @@ auto ec = glz::write_file_json(obj, "./obj.json", std::string{});
 ### MSVC Compiler Flags
 
 Glaze requires a C++ standard conformant pre-processor, which requires the `/Zc:preprocessor` flag when building with MSVC.
+
+### SIMD CMake Options
+
+The CMake has the option `glaze_ENABLE_AVX2`. This will attempt to use `AVX2` SIMD instructions in some cases to improve performance, as long as the system you are configuring on supports it. Set this option to `OFF` to disable the AVX2 instruction set, such as if you are cross-compiling for Arm. If you aren't using CMake the macro `GLZ_USE_AVX2` enables the feature if defined.
 
 ## How To Use Glaze
 

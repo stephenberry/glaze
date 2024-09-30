@@ -8,6 +8,13 @@
 #include <ostream>
 #include <variant>
 
+#if defined(__APPLE__)
+#elif defined(_MSC_VER)
+#include <intrin.h>
+#elif defined(GLZ_USE_AVX2)
+#include <immintrin.h>
+#endif
+
 #include "glaze/core/opts.hpp"
 #include "glaze/core/reflect.hpp"
 #include "glaze/core/write.hpp"
@@ -341,6 +348,132 @@ namespace glz
                      // necessary. In the case of invalid JSON characters we write out null characters to
                      // showcase the error and make the JSON invalid. These would then be detected upon reading
                      // the JSON.
+
+                     // This 128bit SWAR approach tends to be slower than SIMD approaches
+                     /*for (const auto end_m15 = e - 15; c < end_m15;) {
+                        std::memcpy(data, c, 16);
+                        __uint128_t swar;
+                        std::memcpy(&swar, c, 16);
+
+                        constexpr __uint128_t lo7_mask = repeat_byte16(0b01111111);
+                        const __uint128_t lo7 = swar & lo7_mask;
+                        const __uint128_t quote = (lo7 ^ repeat_byte16('"')) + lo7_mask;
+                        const __uint128_t backslash = (lo7 ^ repeat_byte16('\\')) + lo7_mask;
+                        const __uint128_t less_32 = (swar & repeat_byte16(0b01100000)) + lo7_mask;
+                        __uint128_t next = ~((quote & backslash & less_32) | swar);
+
+                        next &= repeat_byte16(0b10000000);
+                        if (next == 0) {
+                           data += 16;
+                           c += 16;
+                           continue;
+                        }
+
+                        const auto length = (countr_zero(next) >> 3);
+                        c += length;
+                        data += length;
+
+                        std::memcpy(data, &char_escape_table[uint8_t(*c)], 2);
+                        data += 2;
+                        ++c;
+                     }*/
+
+#if defined(__APPLE__)
+                     // This approach is faster when strings don't contain many escapes
+                     // But, this is not faster in the general case
+                     /*if (n > 15) {
+                        const uint8x16_t lo7_mask = vdupq_n_u8(0b01111111);
+                        const uint8x16_t quote_char = vdupq_n_u8('"');
+                        const uint8x16_t backslash_char = vdupq_n_u8('\\');
+                        const uint8x16_t less_32_mask = vdupq_n_u8(0b01100000);
+                        const uint8x16_t high_bit_mask = vdupq_n_u8(0b10000000);
+
+                        for (const auto end_m15 = e - 15; c < end_m15;) {
+                           uint8x16_t v = vld1q_u8(reinterpret_cast<const uint8_t*>(c));
+
+                           vst1q_u8(reinterpret_cast<uint8_t*>(data), v);
+
+                           const uint8x16_t lo7 = vandq_u8(v, lo7_mask);
+                           const uint8x16_t quote = vaddq_u8(veorq_u8(lo7, quote_char), lo7_mask);
+                           const uint8x16_t backslash = vaddq_u8(veorq_u8(lo7, backslash_char), lo7_mask);
+                           const uint8x16_t less_32 = vaddq_u8(vandq_u8(v, less_32_mask), lo7_mask);
+
+                           uint8x16_t temp = vandq_u8(quote, backslash);
+                           temp = vandq_u8(temp, less_32);
+                           temp = vorrq_u8(temp, v);
+                           uint8x16_t next = vmvnq_u8(temp);
+                           next = vandq_u8(next, high_bit_mask);
+
+                           uint64x2_t next64 = vreinterpretq_u64_u8(next);
+                           uint64_t next_low = vgetq_lane_u64(next64, 0);
+                           uint64_t next_high = vgetq_lane_u64(next64, 1);
+
+                           if (next_low == 0 && next_high == 0) {
+                              data += 16;
+                              c += 16;
+                              continue;
+                           }
+
+                           uint32_t length;
+                           if (next_low != 0) {
+                              length = (__builtin_ctzll(next_low)) >> 3;
+                           }
+                           else {
+                              length = (__builtin_ctzll(next_high) >> 3) + 8;
+                           }
+
+                           c += length;
+                           data += length;
+
+                           std::memcpy(data, &char_escape_table[uint8_t(*c)], 2);
+                           data += 2;
+                           ++c;
+                        }
+                     }*/
+#elif defined(GLZ_USE_AVX2)
+                     // Optimization for systems with AVX2 support
+                     if (n > 31) {
+                        const __m256i lo7_mask = _mm256_set1_epi8(0b01111111);
+                        const __m256i quote_char = _mm256_set1_epi8('"');
+                        const __m256i backslash_char = _mm256_set1_epi8('\\');
+                        const __m256i less_32_mask = _mm256_set1_epi8(0b01100000);
+                        const __m256i high_bit_mask = _mm256_set1_epi8(int8_t(0b10000000));
+
+                        for (const char* end_m31 = e - 31; c < end_m31;) {
+                           __m256i v = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(c));
+
+                           _mm256_storeu_si256(reinterpret_cast<__m256i*>(data), v);
+
+                           const __m256i lo7 = _mm256_and_si256(v, lo7_mask);
+                           const __m256i quote = _mm256_add_epi8(_mm256_xor_si256(lo7, quote_char), lo7_mask);
+                           const __m256i backslash = _mm256_add_epi8(_mm256_xor_si256(lo7, backslash_char), lo7_mask);
+                           const __m256i less_32 = _mm256_add_epi8(_mm256_and_si256(v, less_32_mask), lo7_mask);
+
+                           __m256i temp = _mm256_and_si256(quote, backslash);
+                           temp = _mm256_and_si256(temp, less_32);
+                           temp = _mm256_or_si256(temp, v);
+                           __m256i next = _mm256_andnot_si256(temp, _mm256_set1_epi8(-1)); // Equivalent to ~temp
+                           next = _mm256_and_si256(next, high_bit_mask);
+
+                           uint32_t mask = _mm256_movemask_epi8(next);
+
+                           if (mask == 0) {
+                              data += 32;
+                              c += 32;
+                              continue;
+                           }
+
+                           uint32_t length = countr_zero(mask);
+
+                           c += length;
+                           data += length;
+
+                           std::memcpy(data, &char_escape_table[uint8_t(*c)], 2);
+                           data += 2;
+                           ++c;
+                        }
+                     }
+#endif
 
                      if (n > 7) {
                         for (const auto end_m7 = e - 7; c < end_m7;) {
