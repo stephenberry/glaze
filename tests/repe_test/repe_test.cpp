@@ -83,7 +83,7 @@ suite structs_of_functions = [] {
       expect(response->value() == R"([[0,0,0,"/i",null],55])") << response->value();
 
       {
-         auto request = repe::request_json({.method = "/i"}, 42);
+         auto request = repe::request_json({.query = "/i"}, 42);
          response = server.call(request);
       }
 
@@ -91,14 +91,14 @@ suite structs_of_functions = [] {
 
       {
          auto request = repe::request_json({"/hello"});
-         response = server.call(request.value());
+         response = server.call(request);
       }
 
       expect(response->value() == R"([[0,0,0,"/hello",null],"Hello"])");
 
       {
          auto request = repe::request_json({"/get_number"});
-         response = server.call(request.value());
+         response = server.call(request);
       }
 
       expect(response->value() == R"([[0,0,0,"/get_number",null],42])");
@@ -115,42 +115,42 @@ suite structs_of_functions = [] {
 
       {
          auto request = repe::request_json({"/my_functions/void_func"});
-         response = server.call(request.value());
+         response = server.call(request);
       }
 
       expect(response->value() == R"([[0,0,2,"/my_functions/void_func",null],null])") << response->value();
 
       {
          auto request = repe::request_json({"/my_functions/hello"});
-         response = server.call(request.value());
+         response = server.call(request);
       }
 
       expect(response->value() == R"([[0,0,0,"/my_functions/hello",null],"Hello"])");
 
       {
          auto request = repe::request_json({"/meta_functions/hello"});
-         response = server.call(request.value());
+         response = server.call(request);
       }
 
       expect(response->value() == R"([[0,0,0,"/meta_functions/hello",null],"Hello"])");
 
       {
          auto request = repe::request_json({"/append_awesome"}, "you are");
-         response = server.call(request.value());
+         response = server.call(request);
       }
 
       expect(response->value() == R"([[0,0,0,"/append_awesome",null],"you are awesome!"])");
 
       {
          auto request = repe::request_json({"/my_string"}, "Howdy!");
-         response = server.call(request.value());
+         response = server.call(request);
       }
 
       expect(response->value() == R"([[0,0,2,"/my_string",null],null])");
 
       {
          auto request = repe::request_json({"/my_string"});
-         response = server.call(request.value());
+         response = server.call(request);
       }
 
       expect(response->value() == R"([[0,0,0,"/my_string",null],"Howdy!"])") << response->value();
@@ -159,7 +159,7 @@ suite structs_of_functions = [] {
 
       {
          auto request = repe::request_json({"/my_string"});
-         response = server.call(request.value());
+         response = server.call(request);
       }
 
       // we expect an empty string returned because we cleared it
@@ -167,14 +167,14 @@ suite structs_of_functions = [] {
 
       {
          auto request = repe::request_json({"/my_functions/max"}, std::vector<double>{1.1, 3.3, 2.25});
-         response = server.call(request.value());
+         response = server.call(request);
       }
 
       expect(response->value() == R"([[0,0,0,"/my_functions/max",null],3.3])") << response->value();
 
       {
          auto request = repe::request_json({"/my_functions"});
-         response = server.call(request.value());
+         response = server.call(request);
       }
 
       expect(
@@ -184,7 +184,7 @@ suite structs_of_functions = [] {
 
       {
          auto request = repe::request_json({""});
-         response = server.call(request.value());
+         response = server.call(request);
       }
 
       expect(
@@ -204,21 +204,21 @@ suite structs_of_functions = [] {
 
       {
          auto request = repe::request_json({"/name"}, "Susan");
-         response = server.call(request.value());
+         response = server.call(request);
       }
 
       expect(response->value() == R"([[0,0,2,"/name",null],null])") << response->value();
 
       {
          auto request = repe::request_json({"/get_name"});
-         response = server.call(request.value());
+         response = server.call(request);
       }
 
       expect(response->value() == R"([[0,0,0,"/get_name",null],"Susan"])") << response->value();
 
       {
          auto request = repe::request_json({"/get_name"}, "Bob");
-         response = server.call(request.value());
+         response = server.call(request);
       }
 
       expect(obj.name == "Susan"); // we expect the name to not have changed because this function take no inputs
@@ -226,7 +226,7 @@ suite structs_of_functions = [] {
 
       {
          auto request = repe::request_json({"/set_name"}, "Bob");
-         response = server.call(request.value());
+         response = server.call(request);
       }
 
       expect(obj.name == "Bob");
@@ -234,7 +234,7 @@ suite structs_of_functions = [] {
 
       {
          auto request = repe::request_json({"/custom_name"}, "Alice");
-         response = server.call(request.value());
+         response = server.call(request);
       }
 
       expect(obj.name == "Alice");
@@ -256,7 +256,7 @@ suite structs_of_functions_binary = [] {
 
       {
          auto request = repe::request_binary({"/i"});
-         response = server.call(request.value());
+         response = server.call(request);
       }
 
       std::string res{};
@@ -264,8 +264,8 @@ suite structs_of_functions_binary = [] {
       expect(res == R"([[0,0,0,"/i",null],55])") << res;
 
       {
-         auto request = repe::request_binary({.method = "/i"}, 42);
-         response = server.call(request.value());
+         auto request = repe::request_binary({.query = "/i"}, 42);
+         response = server.call(request);
       }
 
       expect(!glz::beve_to_json(response->value(), res));
@@ -273,7 +273,7 @@ suite structs_of_functions_binary = [] {
 
       {
          auto request = repe::request_binary({"/hello"});
-         response = server.call(request.value());
+         response = server.call(request);
       }
 
       expect(!glz::beve_to_json(response->value(), res));
@@ -281,7 +281,7 @@ suite structs_of_functions_binary = [] {
 
       {
          auto request = repe::request_binary({"/get_number"});
-         response = server.call(request.value());
+         response = server.call(request);
       }
 
       expect(!glz::beve_to_json(response->value(), res));
@@ -299,7 +299,7 @@ suite structs_of_functions_binary = [] {
 
       {
          auto request = repe::request_binary({"/my_functions/void_func"});
-         response = server.call(request.value());
+         response = server.call(request);
       }
 
       std::string res{};
@@ -308,7 +308,7 @@ suite structs_of_functions_binary = [] {
 
       {
          auto request = repe::request_binary({"/my_functions/hello"});
-         response = server.call(request.value());
+         response = server.call(request);
       }
 
       expect(!glz::beve_to_json(response->value(), res));
@@ -316,7 +316,7 @@ suite structs_of_functions_binary = [] {
 
       {
          auto request = repe::request_binary({"/meta_functions/hello"});
-         response = server.call(request.value());
+         response = server.call(request);
       }
 
       expect(!glz::beve_to_json(response->value(), res));
@@ -324,7 +324,7 @@ suite structs_of_functions_binary = [] {
 
       {
          auto request = repe::request_binary({"/append_awesome"}, "you are");
-         response = server.call(request.value());
+         response = server.call(request);
       }
 
       expect(!glz::beve_to_json(response->value(), res));
@@ -332,7 +332,7 @@ suite structs_of_functions_binary = [] {
 
       {
          auto request = repe::request_binary({"/my_string"}, "Howdy!");
-         response = server.call(request.value());
+         response = server.call(request);
       }
 
       expect(!glz::beve_to_json(response->value(), res));
@@ -340,7 +340,7 @@ suite structs_of_functions_binary = [] {
 
       {
          auto request = repe::request_binary({"/my_string"});
-         response = server.call(request.value());
+         response = server.call(request);
       }
 
       expect(!glz::beve_to_json(response->value(), res));
@@ -350,7 +350,7 @@ suite structs_of_functions_binary = [] {
 
       {
          auto request = repe::request_binary({"/my_string"});
-         response = server.call(request.value());
+         response = server.call(request);
       }
 
       expect(!glz::beve_to_json(response->value(), res));
@@ -359,7 +359,7 @@ suite structs_of_functions_binary = [] {
 
       {
          auto request = repe::request_binary({"/my_functions/max"}, std::vector<double>{1.1, 3.3, 2.25});
-         response = server.call(request.value());
+         response = server.call(request);
       }
 
       expect(!glz::beve_to_json(response->value(), res));
@@ -367,7 +367,7 @@ suite structs_of_functions_binary = [] {
 
       {
          auto request = repe::request_binary({"/my_functions"});
-         response = server.call(request.value());
+         response = server.call(request);
       }
 
       expect(!glz::beve_to_json(response->value(), res));
@@ -378,7 +378,7 @@ suite structs_of_functions_binary = [] {
 
       {
          auto request = repe::request_binary({""});
-         response = server.call(request.value());
+         response = server.call(request);
       }
 
       expect(!glz::beve_to_json(response->value(), res));
@@ -399,7 +399,7 @@ suite structs_of_functions_binary = [] {
 
       {
          auto request = repe::request_binary({"/name"}, "Susan");
-         response = server.call(request.value());
+         response = server.call(request);
       }
 
       std::string res{};
@@ -408,7 +408,7 @@ suite structs_of_functions_binary = [] {
 
       {
          auto request = repe::request_binary({"/get_name"});
-         response = server.call(request.value());
+         response = server.call(request);
       }
 
       expect(!glz::beve_to_json(response->value(), res));
@@ -416,7 +416,7 @@ suite structs_of_functions_binary = [] {
 
       {
          auto request = repe::request_binary({"/get_name"}, "Bob");
-         response = server.call(request.value());
+         response = server.call(request);
       }
 
       expect(!glz::beve_to_json(response->value(), res));
@@ -425,7 +425,7 @@ suite structs_of_functions_binary = [] {
 
       {
          auto request = repe::request_binary({"/set_name"}, "Bob");
-         response = server.call(request.value());
+         response = server.call(request);
       }
 
       expect(!glz::beve_to_json(response->value(), res));
@@ -434,7 +434,7 @@ suite structs_of_functions_binary = [] {
 
       {
          auto request = repe::request_binary({"/custom_name"}, "Alice");
-         response = server.call(request.value());
+         response = server.call(request);
       }
 
       expect(!glz::beve_to_json(response->value(), res));
@@ -467,14 +467,14 @@ suite wrapper_tests = [] {
 
       {
          auto request = repe::request_json({"/sub/my_functions/void_func"});
-         response = server.call(request.value());
+         response = server.call(request);
       }
 
       expect(response->value() == R"([[0,0,2,"/sub/my_functions/void_func",null],null])") << response->value();
 
       {
          auto request = repe::request_json({"/sub/my_functions/hello"});
-         response = server.call(request.value());
+         response = server.call(request);
       }
 
       expect(response->value() == R"([[0,0,0,"/sub/my_functions/hello",null],"Hello"])");
@@ -493,14 +493,14 @@ suite root_tests = [] {
 
       {
          auto request = repe::request_json({"/sub/my_functions/void_func"});
-         response = server.call(request.value());
+         response = server.call(request);
       }
 
       expect(response->value() == R"([[0,0,2,"/sub/my_functions/void_func",null],null])") << response->value();
 
       {
          auto request = repe::request_json({"/sub/my_functions/hello"});
-         response = server.call(request.value());
+         response = server.call(request);
       }
 
       expect(response->value() == R"([[0,0,0,"/sub/my_functions/hello",null],"Hello"])");
@@ -520,7 +520,7 @@ suite wrapper_tests_binary = [] {
 
       {
          auto request = repe::request_binary({"/sub/my_functions/void_func"});
-         response = server.call(request.value());
+         response = server.call(request);
       }
 
       std::string res{};
@@ -529,7 +529,7 @@ suite wrapper_tests_binary = [] {
 
       {
          auto request = repe::request_binary({"/sub/my_functions/hello"});
-         response = server.call(request.value());
+         response = server.call(request);
       }
 
       expect(!glz::beve_to_json(response->value(), res));
@@ -553,18 +553,18 @@ suite multi_threading_tests = [] {
 
       static constexpr size_t N = 10'000;
 
-      auto read_str = repe::request_json({"/str"}).value();
+      auto read_msg = repe::request_json({"/str"});
 
       std::thread reader_str([&] {
          size_t response_counter{};
          for (size_t i = 0; i < N; ++i) {
-            const auto response = registry.call(read_str);
+            const auto response = registry.call(read_msg);
             response_counter += response->value().size();
          }
          std::cout << "read str response_counter: " << response_counter << '\n';
       });
 
-      auto read_integer = repe::request_json({"/integer"}).value();
+      auto read_integer = repe::request_json({"/integer"});
 
       std::thread reader_integer([&] {
          size_t response_counter{};
@@ -575,7 +575,7 @@ suite multi_threading_tests = [] {
          std::cout << "read integer response_counter: " << response_counter << '\n';
       });
 
-      auto read_full = repe::request_json({""}).value();
+      auto read_full = repe::request_json({""});
 
       std::thread reader_full([&] {
          size_t response_counter{};
@@ -593,8 +593,8 @@ suite multi_threading_tests = [] {
          std::string message;
          for (size_t i = 0; i < N; ++i) {
             message.append("x");
-            auto write_str = repe::request_json({"/str"}, message).value();
-            const auto response = registry.call(write_str);
+            auto write_msg = repe::request_json({"/str"}, message);
+            const auto response = registry.call(write_msg);
             response_counter += response->value().size();
 
             if (i == 50) {
@@ -607,8 +607,8 @@ suite multi_threading_tests = [] {
       std::thread writer_integer([&] {
          size_t response_counter{};
          for (size_t i = 0; i < N; ++i) {
-            auto write_str = repe::request_json({"/integer"}, i).value();
-            const auto response = registry.call(write_str);
+            auto write_msg = repe::request_json({"/integer"}, i);
+            const auto response = registry.call(write_msg);
             response_counter += response->value().size();
          }
          std::cout << "write integer response_counter: " << response_counter << '\n';

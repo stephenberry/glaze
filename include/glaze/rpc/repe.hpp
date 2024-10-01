@@ -120,7 +120,7 @@ namespace glz::repe
       repe::header ret{.error = h.error, //
             .action = h.action, //
             .id = h.id, //
-            .query_length = h.method.size() //
+            .query_length = h.query.size() //
       };
       return ret;
    }
@@ -1135,6 +1135,39 @@ namespace glz::repe
       [[nodiscard]] bool call(H&& header, Value&& value, auto& buffer)
       {
          return call(request<Opts>(std::forward<H>(header), std::forward<Value>(value), buffer));
+      }
+      
+      // returns null for notifications
+      [[nodiscard]] shared_buffer call(message& msg)
+      {
+         shared_buffer u_buffer = std::make_shared<unique_buffer>(&buffers);
+         auto& response = *(u_buffer->ptr);
+
+         if (auto it = methods.find(msg.query); it != methods.end()) {
+            static thread_local error_t error{};
+            it->second(state{msg.body, msg.header, response, error}); // handle the body
+         }
+         else {
+            static constexpr error_e code = error_e::method_not_found;
+            static constexpr sv body{error_code_to_sv(code)};
+            
+            const auto body_length = 8 + body.size(); // 4 bytes for code, 4 bytes for size, + message
+            
+            response.resize(sizeof(header) + body_length);
+            header h{.error = true, .body_length = body_length};
+            std::memcpy(response.data(), &h, sizeof(header));
+            std::memcpy(response.data() + sizeof(header), &code, 4);
+            std::memcpy(response.data() + sizeof(header) + 4, &body_length, 4);
+            std::memcpy(response.data() + sizeof(header) + 8, body.data(), body.size());
+            return u_buffer;
+         }
+         
+         if (msg.header.notify()) {
+            return {};
+         }
+         else {
+            return u_buffer;
+         }
       }
 
       // returns null for notifications
