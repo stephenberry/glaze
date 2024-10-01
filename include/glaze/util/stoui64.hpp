@@ -30,9 +30,9 @@ namespace glz::detail
                                                         1000000000000000000ull,
                                                         10000000000000000000ull};
 
-   /*==============================================================================
-    * Digit Character Matcher
-    *============================================================================*/
+   //============================================================================
+   // Digit Character Matcher
+   //============================================================================
    // Digit type
    using digi_type = uint8_t;
    // Digit: '0'.
@@ -56,16 +56,16 @@ namespace glz::detail
       0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
       0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x20, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
       0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
-   /** Match a character with specified type. */
+   // Match a character with specified type.
    inline bool digi_is_type(uint8_t d, digi_type type) noexcept { return (digi_table[d] & type) != 0; }
-   /** Match a floating point indicator: '.', 'e', 'E'. */
+   // Match a floating point indicator: '.', 'e', 'E'.
    inline bool digi_is_fp(uint8_t d) noexcept { return digi_is_type(d, digi_type(DIGI_TYPE_DOT | DIGI_TYPE_EXP)); }
-   /** Match a digit or floating point indicator: [0-9], '.', 'e', 'E'. */
+   // Match a digit or floating point indicator: [0-9], '.', 'e', 'E'.
    inline bool digi_is_digit_or_fp(uint8_t d) noexcept
    {
       return digi_is_type(d, digi_type(DIGI_TYPE_ZERO | DIGI_TYPE_NONZERO | DIGI_TYPE_DOT | DIGI_TYPE_EXP));
    }
-/* Macros used for loop unrolling and other purpose. */
+// Macros used for loop unrolling and other purpose.
 #define repeat2(x) \
    {               \
       x x          \
@@ -107,9 +107,9 @@ namespace glz::detail
       x(1) x(2) x(3) x(4) x(5) x(6) x(7) x(8) x(9) x(10) x(11) x(12) x(13) x(14) x(15) x(16) x(17) x(18) \
    }
    constexpr auto e_bit = static_cast<uint8_t>('E' ^ 'e');
-   /*==============================================================================
-    * IEEE-754 Double Number Constants
-    *============================================================================*/
+   //============================================================================
+   // IEEE-754 Double Number Constants
+   //============================================================================
    // maximum decimal power of double number (1.7976931348623157e308)
    constexpr auto F64_MAX_DEC_EXP = 308;
    // minimum decimal power of double number (4.9406564584124654e-324)
@@ -271,7 +271,7 @@ namespace glz::detail
       uint64_t num_tmp; // temporary number for reading
       const CharType* tmp; // temporary cursor for reading
 
-      /* begin with non-zero digit */
+      // begin with non-zero digit
       if (sig > 9) [[unlikely]] {
          return false;
       }
@@ -290,13 +290,13 @@ namespace glz::detail
       if constexpr (json_conformance) {
          if (*cur == zero) return false;
       }
-      cur += 19; /* skip continuous 19 digits */
+      cur += 19; // skip continuous 19 digits
       if (!digi_is_digit_or_fp(*cur)) {
          val = static_cast<X>(sig);
          return true;
       }
-      goto digi_intg_more; /* read more digits in integral part */
-      /* process first non-digit character */
+      goto digi_intg_more; // read more digits in integral part
+      // process first non-digit character
 #define expr_sepr(i)                                              \
    digi_sepr_##i : if ((!digi_is_fp(uint8_t(cur[i])))) [[likely]] \
    {                                                              \
@@ -315,7 +315,7 @@ namespace glz::detail
    goto digi_exp_more;
       repeat_in_1_18(expr_sepr)
 #undef expr_sepr
-      /* read fraction part */
+      // read fraction part
 #define expr_frac(i)                                                                                 \
    digi_frac_##i : if (((num_tmp = uint64_t(cur[i + 1 + frac_zeros] - zero)) <= 9)) [[likely]] sig = \
                       num_tmp + sig * 10;                                                            \
@@ -325,20 +325,20 @@ namespace glz::detail
    }
          repeat_in_1_18(expr_frac)
 #undef expr_frac
-            cur += 20 + frac_zeros; /* skip 19 digits and 1 decimal point */
-      if (uint8_t(*cur - zero) > 9) goto digi_frac_end; /* fraction part end */
-      goto digi_frac_more; /* read more digits in fraction part */
-      /* significant part end */
+            cur += 20 + frac_zeros; // skip 19 digits and 1 decimal point
+      if (uint8_t(*cur - zero) > 9) goto digi_frac_end; // fraction part end
+      goto digi_frac_more; // read more digits in fraction part
+      // significant part end
 #define expr_stop(i)                          \
    digi_stop_##i : cur += i + 1 + frac_zeros; \
    goto digi_frac_end;
       repeat_in_1_18(expr_stop)
 #undef expr_stop
-         /* read more digits in integral part */
+         // read more digits in integral part
          digi_intg_more : static constexpr uint64_t U64_MAX = (std::numeric_limits<uint64_t>::max)(); // todo
       if ((num_tmp = *cur - zero) < 10) {
          if (!digi_is_digit_or_fp(cur[1])) {
-            /* this number is an integer consisting of 20 digits */
+            // this number is an integer consisting of 20 digits
             if ((sig < (U64_MAX / 10)) || (sig == (U64_MAX / 10) && num_tmp <= (U64_MAX % 10))) {
                sig = num_tmp + sig * 10;
                cur++;
@@ -357,10 +357,10 @@ namespace glz::detail
             return false;
          }
       }
-      /* read more digits in fraction part */
+      // read more digits in fraction part
    digi_frac_more:
-      sig_cut = cur; /* too large to fit in u64, excess digits need to be cut */
-      sig += (*cur >= '5'); /* round */
+      sig_cut = cur; // too large to fit in u64, excess digits need to be cut
+      sig += (*cur >= '5'); // round
       while (uint8_t(*++cur - zero) < 10) {
       }
       if (!dot_pos) {
@@ -375,7 +375,7 @@ namespace glz::detail
       }
       exp_sig = int32_t(dot_pos - sig_cut);
       exp_sig += (dot_pos < sig_cut);
-      /* ignore trailing zeros */
+      // ignore trailing zeros
       tmp = cur - 1;
       while (*tmp == '0' || *tmp == '.') tmp--;
       if (tmp < sig_cut) {
@@ -386,7 +386,7 @@ namespace glz::detail
       }
       if ((e_bit | *cur) == 'e') goto digi_exp_more;
       goto digi_exp_finish;
-      /* fraction part end */
+      // fraction part end
    digi_frac_end:
       sig_end = cur;
       exp_sig = -int32_t((cur - dot_pos) - 1);
@@ -405,7 +405,7 @@ namespace glz::detail
       else {
          goto digi_exp_more;
       }
-      /* read exponent part */
+      // read exponent part
    digi_exp_more:
       exp_sign = (*++cur == '-');
       cur += (*cur == '+' || *cur == '-');
@@ -418,7 +418,7 @@ namespace glz::detail
          }
       }
       while (*cur == '0') ++cur;
-      /* read exponent literal */
+      // read exponent literal
       tmp = cur;
       uint8_t c;
       while (uint8_t(c = *cur - zero) < 10) {
@@ -467,7 +467,7 @@ namespace glz::detail
          return false;
       }
       exp = exp_sig;
-      /* all digit read finished */
+      // all digit read finished
    digi_finish:
 
       if (exp <= -20) [[unlikely]] {
