@@ -2248,6 +2248,20 @@ suite read_tests = [] {
 
          expect(glz::read_json(res, in) == glz::error_code::parse_number_failure);
       }
+      {
+         auto in = R"(1.000000000000000000000000000000001)";
+         uint64_t res{};
+         expect(glz::read_json(res, in) == glz::error_code::none);
+
+         expect(res == 1);
+      }
+      {
+         auto in = R"(1.99999999999999999999999999)";
+         uint64_t res{};
+         expect(glz::read_json(res, in) == glz::error_code::none);
+
+         expect(res == 2);
+      }
    };
 
    "Read double"_test = [] {
