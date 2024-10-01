@@ -2248,6 +2248,20 @@ suite read_tests = [] {
 
          expect(glz::read_json(res, in) == glz::error_code::parse_number_failure);
       }
+      {
+         auto in = R"(1.000000000000000000000000000000001)";
+         uint64_t res{};
+         expect(glz::read_json(res, in) == glz::error_code::none);
+
+         expect(res == 1);
+      }
+      {
+         auto in = R"(1.99999999999999999999999999)";
+         uint64_t res{};
+         expect(glz::read_json(res, in) == glz::error_code::none);
+
+         expect(res == 2);
+      }
    };
 
    "Read double"_test = [] {
@@ -3492,17 +3506,25 @@ suite generic_json_tests = [] {
       std::string buffer = R"([5,"Hello World",{"pi":3.14},null])";
       expect(glz::read_json(json, buffer) == glz::error_code::none);
       expect(glz::write_json(json) == buffer);
+      expect(json.dump().value() == buffer);
    };
 
    "generic_json_const"_test = [] {
       auto foo = [](const glz::json_t& json) { return json["s"].get<std::string>(); };
       glz::json_t json = {{"s", "hello world"}};
       expect(foo(json) == "hello world");
+      expect(json.dump().value() == R"({"s":"hello world"})");
+
+      std::map<std::string, std::string> obj{};
+      expect(not glz::read_json(obj, json));
+      expect(obj.contains("s"));
+      expect(obj.at("s") == "hello world");
    };
 
    "generic_json_int"_test = [] {
       glz::json_t json = {{"i", 1}};
       expect(json["i"].get<double>() == 1);
+      expect(json.dump().value() == R"({"i":1})");
    };
 
    "generic_json_as"_test = [] {
@@ -3516,6 +3538,10 @@ suite generic_json_tests = [] {
       expect(json["list"][2].as<int>() == 2);
       expect(json["pi"].as<double>() == 3.141);
       expect(json["name"].as<std::string_view>() == "Niels");
+      expect(
+         json.dump().value() ==
+         R"({"answer":{"everything":42},"happy":true,"list":[1,0,2],"name":"Niels","nothing":null,"object":{"currency":"USD","value":42.99},"pi":3.141})")
+         << json.dump().value();
    };
 
    "generic_json_nested_initialization"_test = [] {
@@ -3531,8 +3557,13 @@ suite generic_json_tests = [] {
 
    "json_t_contains"_test = [] {
       auto json = glz::read_json<glz::json_t>(R"({"foo":"bar"})");
+      expect(bool(json));
       expect(!json->contains("id"));
       expect(json->contains("foo"));
+      auto obj = glz::read_json<std::map<std::string, std::string>>(json.value());
+      expect(bool(obj));
+      expect(obj->contains("foo"));
+      expect(obj->at("foo") == "bar");
    };
 
    "buffer underrun"_test = [] {
@@ -3585,6 +3616,9 @@ suite generic_json_tests = [] {
       expect(not json.empty());
       expect(json.size() == 3);
       expect(json.get_array().size() == 3);
+      std::array<int, 3> v{};
+      expect(not glz::read<glz::opts{}>(v, json));
+      expect(v == std::array{1, 2, 3});
    };
 
    "json_t is_string"_test = [] {
@@ -3605,6 +3639,9 @@ suite generic_json_tests = [] {
       expect(not json.empty());
       expect(json.size() == 19);
       expect(json.get_string() == "Beautiful beginning");
+      std::string v{};
+      expect(not glz::read<glz::opts{}>(v, json));
+      expect(v == "Beautiful beginning");
    };
 
    "json_t is_number"_test = [] {
@@ -3615,6 +3652,9 @@ suite generic_json_tests = [] {
       expect(not json.empty());
       expect(json.size() == 0);
       expect(json.get_number() == 3.882e2);
+      double v{};
+      expect(not glz::read<glz::opts{}>(v, json));
+      expect(v == 3.882e2);
    };
 
    "json_t is_boolean"_test = [] {
@@ -3625,6 +3665,9 @@ suite generic_json_tests = [] {
       expect(not json.empty());
       expect(json.size() == 0);
       expect(json.get_boolean());
+      bool v{};
+      expect(not glz::read<glz::opts{}>(v, json));
+      expect(v);
    };
 
    "json_t is_null"_test = [] {
