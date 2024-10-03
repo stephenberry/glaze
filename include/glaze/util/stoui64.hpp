@@ -66,43 +66,7 @@ namespace glz::detail
    {
       return digi_is_type(d, uint8_t(digi_type_zero | digi_type_nonzero | digi_type_dot | digi_type_exp));
    }
-// Macros used for loop unrolling and other purpose.
-#define repeat2(x) \
-   {               \
-      x x          \
-   }
-#define repeat3(x) \
-   {               \
-      x x x        \
-   }
-#define repeat4(x) \
-   {               \
-      x x x x      \
-   }
-#define repeat8(x)    \
-   {                  \
-      x x x x x x x x \
-   }
-#define repeat16(x)                   \
-   {                                  \
-      x x x x x x x x x x x x x x x x \
-   }
-#define repeat2_incr(x) \
-   {                    \
-      x(0) x(1)         \
-   }
-#define repeat4_incr(x)   \
-   {                      \
-      x(0) x(1) x(2) x(3) \
-   }
-#define repeat8_incr(x)                       \
-   {                                          \
-      x(0) x(1) x(2) x(3) x(4) x(5) x(6) x(7) \
-   }
-#define repeat16_incr(x)                                                                    \
-   {                                                                                        \
-      x(0) x(1) x(2) x(3) x(4) x(5) x(6) x(7) x(8) x(9) x(10) x(11) x(12) x(13) x(14) x(15) \
-   }
+// Macros used for loop unrolling
 #define repeat_in_1_18(x)                                                                                \
    {                                                                                                     \
       x(1) x(2) x(3) x(4) x(5) x(6) x(7) x(8) x(9) x(10) x(11) x(12) x(13) x(14) x(15) x(16) x(17) x(18) \
@@ -355,9 +319,8 @@ namespace glz::detail
    template <class T, class CharType, bool IsVolatile>
    GLZ_ALWAYS_INLINE bool digi_frac_end(bool& exp_sign, const CharType*& cur, const CharType*& tmp, T& val,
                                         int32_t& exp_sig, int32_t& exp_lit, uint64_t& sig, int32_t& exp,
-                                        const CharType* sig_end, const CharType* dotPos)
+                                        const CharType* dotPos)
    {
-      sig_end = cur;
       exp_sig = -int32_t((cur - dotPos) - 1);
       if (exp_sig == 0) [[unlikely]]
          return false;
@@ -379,7 +342,6 @@ namespace glz::detail
    template <class T, class CharType, bool IsVolatile, size_t I>
    GLZ_ALWAYS_INLINE int_parse_state digi_frac(bool& exp_sign, const CharType*& cur, const CharType*& tmp, T& val,
                                                int32_t& exp_sig, int32_t& exp_lit, uint64_t& sig, int32_t& exp,
-                                               const CharType* sig_cut, const CharType* sig_end,
                                                const CharType* dot_pos, uint32_t& frac_zeros, uint64_t& num_tmp)
    {
       if ((num_tmp = uint64_t(cur[I + 1 + frac_zeros] - zero)) <= 9) {
@@ -388,13 +350,13 @@ namespace glz::detail
       else {
          // digi_stop
          cur += I + 1 + frac_zeros;
-         const bool valid = digi_frac_end<T, CharType, IsVolatile>(exp_sign, cur, tmp, val, exp_sig, exp_lit, sig, exp,
-                                                                   sig_end, dot_pos);
+         const bool valid =
+            digi_frac_end<T, CharType, IsVolatile>(exp_sign, cur, tmp, val, exp_sig, exp_lit, sig, exp, dot_pos);
          return int_parse_state(valid);
       }
       if constexpr (I < 18) {
-         return digi_frac<T, CharType, IsVolatile, I + 1>(exp_sign, cur, tmp, val, exp_sig, exp_lit, sig, exp, sig_cut,
-                                                          sig_end, dot_pos, frac_zeros, num_tmp);
+         return digi_frac<T, CharType, IsVolatile, I + 1>(exp_sign, cur, tmp, val, exp_sig, exp_lit, sig, exp, dot_pos,
+                                                          frac_zeros, num_tmp);
       }
       else {
          return int_parse_state::more_frac_digits;
@@ -407,8 +369,7 @@ namespace glz::detail
    {
       using X = std::remove_volatile_t<T>;
       constexpr auto IsVolatile = std::is_volatile_v<std::remove_reference_t<decltype(val)>>;
-      const CharType* sig_cut{}; // significant part cutting position for long number
-      const CharType* sig_end{}; // significant part ending position
+      const CharType* sig_cut; // significant part cutting position for long number
       const CharType* dot_pos{}; // decimal point position
       uint32_t frac_zeros = 0;
       uint64_t sig = uint64_t(*cur - '0'); // significant part of the number
@@ -425,27 +386,35 @@ namespace glz::detail
          return false;
       }
       constexpr auto zero = uint8_t('0');
-#define expr_intg(i)                                              \
-   if ((num_tmp = cur[i] - zero) <= 9)                            \
-      sig = num_tmp + sig * 10;                                   \
-   else {                                                         \
-      if constexpr (json_conformance && i > 1) {                  \
-         if (*cur == zero) return false;                          \
-      }                                                           \
-      if (!digi_is_fp(uint8_t(cur[i]))) [[likely]] {              \
-         cur += i;                                                \
-         val = sig;                                               \
-         return true;                                             \
-      }                                                           \
-      dot_pos = cur + i;                                          \
-      if ((cur[i] == '.')) [[likely]] {                           \
-         if (sig == 0)                                            \
-            while (cur[frac_zeros + i + 1] == zero) ++frac_zeros; \
-         goto digi_frac;                                          \
-      }                                                           \
-      cur += i;                                                   \
-      sig_end = cur;                                              \
-      goto digi_exp_more;                                         \
+#define expr_intg(i)                                                                                                 \
+   if ((num_tmp = cur[i] - zero) <= 9)                                                                               \
+      sig = num_tmp + sig * 10;                                                                                      \
+   else {                                                                                                            \
+      if constexpr (json_conformance && i > 1) {                                                                     \
+         if (*cur == zero) return false;                                                                             \
+      }                                                                                                              \
+      if (!digi_is_fp(uint8_t(cur[i]))) [[likely]] {                                                                 \
+         cur += i;                                                                                                   \
+         val = sig;                                                                                                  \
+         return true;                                                                                                \
+      }                                                                                                              \
+      dot_pos = cur + i;                                                                                             \
+      if ((cur[i] == '.')) [[likely]] {                                                                              \
+         if (sig == 0)                                                                                               \
+            while (cur[frac_zeros + i + 1] == zero) ++frac_zeros;                                                    \
+         state = digi_frac<T, CharType, IsVolatile, i>(exp_sign, cur, tmp, val, exp_sig, exp_lit, sig, exp, dot_pos, \
+                                                       frac_zeros, num_tmp);                                         \
+         if (state == int_parse_state::more_frac_digits) [[unlikely]] {                                              \
+            cur += 20 + frac_zeros;                                                                                  \
+            if (uint8_t(*cur - zero) > 9) goto digi_frac_end;                                                        \
+            goto digi_frac_more;                                                                                     \
+         }                                                                                                           \
+         else [[likely]] {                                                                                           \
+            return bool(state);                                                                                      \
+         }                                                                                                           \
+      }                                                                                                              \
+      cur += i;                                                                                                      \
+      goto digi_exp_more;                                                                                            \
    }
       repeat_in_1_18(expr_intg);
 #undef expr_intg
@@ -480,18 +449,6 @@ namespace glz::detail
             return false;
          }
       }
-      goto digi_frac_more;
-   digi_frac:
-      state = digi_frac<T, CharType, IsVolatile, 1>(exp_sign, cur, tmp, val, exp_sig, exp_lit, sig, exp, sig_cut,
-                                                    sig_end, dot_pos, frac_zeros, num_tmp);
-      if (state == int_parse_state::more_frac_digits) [[unlikely]] {
-         cur += 20 + frac_zeros;
-         if (uint8_t(*cur - zero) > 9) goto digi_frac_end;
-         goto digi_frac_more;
-      }
-      else [[likely]] {
-         return bool(state);
-      }
       // read more digits in fraction part
    digi_frac_more:
       sig_cut = cur; // too large to fit in u64, excess digits need to be cut
@@ -513,17 +470,10 @@ namespace glz::detail
       // ignore trailing zeros
       tmp = cur - 1;
       while (*tmp == '0' || *tmp == '.') tmp--;
-      if (tmp < sig_cut) {
-         sig_cut = nullptr;
-      }
-      else {
-         sig_end = cur;
-      }
       if ((e_bit | *cur) == 'e') goto digi_exp_more;
       return digi_exp_finish<T, IsVolatile>(sig, val, exp_sig, exp);
       // fraction part end
    digi_frac_end:
-      sig_end = cur;
       exp_sig = -int32_t((cur - dot_pos) - 1);
       if constexpr (json_conformance) {
          if (exp_sig == 0) [[unlikely]]

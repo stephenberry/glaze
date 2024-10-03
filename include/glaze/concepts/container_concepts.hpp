@@ -135,7 +135,13 @@ namespace glz::detail
    };
 
    template <class T>
-   concept has_push_back = requires(T t, typename T::value_type v) { t.push_back(v); };
+   concept has_resize = requires(T t, typename T::size_type sz) { t.resize(sz); };
+
+   template <class T>
+   concept has_append = requires(T t, typename T::const_iterator it) { t.append(it, it); };
+
+   template <class T>
+   concept has_assign = requires(T t, const typename T::value_type* v, typename T::size_type sz) { t.assign(v, sz); };
 
    template <class T>
    concept accessible = requires(T container) {
