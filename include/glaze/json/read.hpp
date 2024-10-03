@@ -1364,6 +1364,8 @@ namespace glz
          requires(readable_array_t<T> && (emplace_backable<T> || !resizable<T>) && !emplaceable<T>)
       struct from<JSON, T>
       {
+         static constexpr bool is_const = std::is_const_v<std::remove_reference_t<typename T::value_type>>;
+         
          template <auto Options>
          static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
@@ -1390,6 +1392,13 @@ namespace glz
                }
                return;
             }
+            
+            // It is valid to clear a non-const container holding const elements
+            // But, once we read here we're trying to parse into const elements, which is invalid
+            if constexpr (is_const && Options.error_on_const_read) {
+               ctx.error = error_code::attempt_const_read;
+               return;
+            }
 
             const size_t ws_size = size_t(it - ws_start);
 
@@ -1398,7 +1407,15 @@ namespace glz
             auto value_it = value.begin();
 
             for (size_t i = 0; i < n; ++i) {
-               read<JSON>::op<ws_handled<Opts>()>(*value_it++, ctx, it, end);
+               if constexpr (is_const) {
+                  // do not read anything into the const value
+                  skip_value<JSON>::op<ws_handled<Opts>()>(ctx, it, end);
+               }
+               else {
+                  using V = std::remove_cvref_t<decltype(*value_it)>;
+                  from<JSON, V>::template op<ws_handled<Opts>()>(*value_it++, ctx, it, end);
+               }
+               
                if (bool(ctx.error)) [[unlikely]]
                   return;
                GLZ_SKIP_WS();
@@ -1442,7 +1459,7 @@ namespace glz
                   // It is faster to simply use emplace_back for small types and reasonably lengthed vectors
                   // (less than a million elements)
                   // https://baptiste-wicht.com/posts/2012/12/cpp-benchmark-vector-list-deque.html
-                  if constexpr (has_reserve<T> && has_capacity<T> &&
+                  if constexpr ((not is_const) && has_reserve<T> && has_capacity<T> &&
                                 requires { requires(sizeof(typename T::value_type) > 4096); }) {
                      // If we can reserve memmory, like std::vector, then we want to check the capacity
                      // and use a temporary buffer if the capacity needs to grow
@@ -1547,7 +1564,15 @@ namespace glz
                   else {
                      // If we don't have reserve (like std::deque) or we have small sized elements
                      while (it < end) {
-                        read<JSON>::op<ws_handled<Opts>()>(value.emplace_back(), ctx, it, end);
+                        if constexpr (is_const) {
+                           value.emplace_back();
+                           // do not read anything into the const value
+                           skip_value<JSON>::op<ws_handled<Opts>()>(ctx, it, end);
+                        }
+                        else {
+                           using V = std::remove_cvref_t<decltype(value.emplace_back())>;
+                           from<JSON, V>::template op<ws_handled<Opts>()>(value.emplace_back(), ctx, it, end);
+                        }
                         if (bool(ctx.error)) [[unlikely]]
                            return;
                         GLZ_SKIP_WS();
