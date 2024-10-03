@@ -212,7 +212,7 @@ suite integers_test = [] {
 
 suite read_int64_t_test = [] {
    "read int64_t"_test = [] {
-      //SKIP;
+      SKIP;
 
 #ifdef NDEBUG
       constexpr size_t n = 100000000;
@@ -236,6 +236,55 @@ suite read_int64_t_test = [] {
       auto t1 = std::chrono::steady_clock::now();
       auto duration = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-6;
       std::cout << "read int64_t read: " << duration << '\n';
+   };
+};
+
+suite vector_vector_vs_vector_array_test = [] {
+   "vector_vector_vs_vector_array"_test = [] {
+      //SKIP;
+
+#ifdef NDEBUG
+      constexpr size_t n = 10000000;
+#else
+      constexpr size_t n = 100000;
+#endif
+
+      {
+         std::vector<std::vector<size_t>> v{};
+         v.reserve(n);
+         
+         for (size_t i = 0; i < n; ++i) {
+            v.emplace_back(std::vector{i, i + 1, i + 2});
+         }
+         
+         std::string buffer{};
+         expect(not glz::write_json(v, buffer));
+
+         v.clear();
+         auto t0 = std::chrono::steady_clock::now();
+         expect(not glz::read_json(v, buffer));
+         auto t1 = std::chrono::steady_clock::now();
+         auto duration = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-6;
+         std::cout << "vector<vector<size_t>> read: " << duration << '\n';
+      }
+      {
+         std::vector<std::array<size_t, 3>> v{};
+         v.reserve(n);
+         
+         for (size_t i = 0; i < n; ++i) {
+            v.emplace_back(std::array{i, i + 1, i + 2});
+         }
+         
+         std::string buffer{};
+         expect(not glz::write_json(v, buffer));
+
+         v.clear();
+         auto t0 = std::chrono::steady_clock::now();
+         expect(not glz::read_json(v, buffer));
+         auto t1 = std::chrono::steady_clock::now();
+         auto duration = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-6;
+         std::cout << "vector<array<size_t, 3>> read: " << duration << '\n';
+      }
    };
 };
 
