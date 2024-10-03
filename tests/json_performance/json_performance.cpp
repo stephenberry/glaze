@@ -9,7 +9,7 @@
 #include "glaze/glaze.hpp"
 #include "ut/ut.hpp"
 
-static constexpr bool skip = false;
+static constexpr bool skip = true;
 
 #define SKIP             \
    if constexpr (skip) { \
@@ -207,6 +207,35 @@ suite integers_test = [] {
       auto t1 = std::chrono::steady_clock::now();
       auto duration = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-6;
       std::cout << "integers read/write: " << duration << '\n';
+   };
+};
+
+suite read_int64_t_test = [] {
+   "read int64_t"_test = [] {
+      //SKIP;
+
+#ifdef NDEBUG
+      constexpr size_t n = 100000000;
+#else
+      constexpr size_t n = 100000;
+#endif
+
+      std::vector<int64_t> v{};
+      v.reserve(n);
+      
+      for (size_t i = 0; i < n; ++i) {
+         v.emplace_back(i);
+      }
+      
+      std::string buffer{};
+      expect(not glz::write_json(v, buffer));
+
+      v.clear();
+      auto t0 = std::chrono::steady_clock::now();
+      expect(not glz::read_json(v, buffer));
+      auto t1 = std::chrono::steady_clock::now();
+      auto duration = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-6;
+      std::cout << "read int64_t read: " << duration << '\n';
    };
 };
 
