@@ -389,27 +389,36 @@ namespace glz::detail
          return false;
       }
       constexpr auto zero = uint8_t('0');
-#define expr_intg(i)                                              \
-   if ((num_tmp = cur[i] - zero) <= 9)                            \
-      sig = num_tmp + sig * 10;                                   \
-   else {                                                         \
-      if constexpr (json_conformance && i > 1) {                  \
-         if (*cur == zero) return false;                          \
-      }                                                           \
-      if (!digi_is_fp(uint8_t(cur[i]))) [[likely]] {              \
-         cur += i;                                                \
-         val = sig;                                               \
-         return true;                                             \
-      }                                                           \
-      dot_pos = cur + i;                                          \
-      if ((cur[i] == '.')) [[likely]] {                           \
-         if (sig == 0)                                            \
-            while (cur[frac_zeros + i + 1] == zero) ++frac_zeros; \
-         goto digi_frac;                                          \
-      }                                                           \
-      cur += i;                                                   \
-      sig_end = cur;                                              \
-      goto digi_exp_more;                                         \
+#define expr_intg(i)                                                                                                 \
+   if ((num_tmp = cur[i] - zero) <= 9)                                                                               \
+      sig = num_tmp + sig * 10;                                                                                      \
+   else {                                                                                                            \
+      if constexpr (json_conformance && i > 1) {                                                                     \
+         if (*cur == zero) return false;                                                                             \
+      }                                                                                                              \
+      if (!digi_is_fp(uint8_t(cur[i]))) [[likely]] {                                                                 \
+         cur += i;                                                                                                   \
+         val = sig;                                                                                                  \
+         return true;                                                                                                \
+      }                                                                                                              \
+      dot_pos = cur + i;                                                                                             \
+      if ((cur[i] == '.')) [[likely]] {                                                                              \
+         if (sig == 0)                                                                                               \
+            while (cur[frac_zeros + i + 1] == zero) ++frac_zeros;                                                    \
+         state = digi_frac<T, CharType, IsVolatile, i>(exp_sign, cur, tmp, val, exp_sig, exp_lit, sig, exp, sig_cut, \
+                                                       sig_end, dot_pos, frac_zeros, num_tmp);                       \
+         if (state == int_parse_state::more_frac_digits) [[unlikely]] {                                              \
+            cur += 20 + frac_zeros;                                                                                  \
+            if (uint8_t(*cur - zero) > 9) goto digi_frac_end;                                                        \
+            goto digi_frac_more;                                                                                     \
+         }                                                                                                           \
+         else [[likely]] {                                                                                           \
+            return bool(state);                                                                                      \
+         }                                                                                                           \
+      }                                                                                                              \
+      cur += i;                                                                                                      \
+      sig_end = cur;                                                                                                 \
+      goto digi_exp_more;                                                                                            \
    }
       repeat_in_1_18(expr_intg);
 #undef expr_intg
@@ -443,18 +452,6 @@ namespace glz::detail
          if (uint8_t(*cur - zero) > 9) [[unlikely]] {
             return false;
          }
-      }
-      goto digi_frac_more;
-   digi_frac:
-      state = digi_frac<T, CharType, IsVolatile, 1>(exp_sign, cur, tmp, val, exp_sig, exp_lit, sig, exp, sig_cut,
-                                                    sig_end, dot_pos, frac_zeros, num_tmp);
-      if (state == int_parse_state::more_frac_digits) [[unlikely]] {
-         cur += 20 + frac_zeros;
-         if (uint8_t(*cur - zero) > 9) goto digi_frac_end;
-         goto digi_frac_more;
-      }
-      else [[likely]] {
-         return bool(state);
       }
       // read more digits in fraction part
    digi_frac_more:
