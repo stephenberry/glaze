@@ -343,7 +343,7 @@ namespace glz::detail
    template <class T, class CharType, bool IsVolatile, size_t I>
    GLZ_ALWAYS_INLINE int_parse_state digi_frac(bool& exp_sign, const CharType*& cur, const CharType*& tmp, T& val,
                                                int32_t& exp_sig, int32_t& exp_lit, uint64_t& sig, int32_t& exp,
-                                               const CharType* sig_cut, const CharType* sig_end,
+                                               const CharType* sig_end,
                                                const CharType* dot_pos, uint32_t& frac_zeros, uint64_t& num_tmp)
    {
       if ((num_tmp = uint64_t(cur[I + 1 + frac_zeros] - zero)) <= 9) {
@@ -357,7 +357,7 @@ namespace glz::detail
          return int_parse_state(valid);
       }
       if constexpr (I < 18) {
-         return digi_frac<T, CharType, IsVolatile, I + 1>(exp_sign, cur, tmp, val, exp_sig, exp_lit, sig, exp, sig_cut,
+         return digi_frac<T, CharType, IsVolatile, I + 1>(exp_sign, cur, tmp, val, exp_sig, exp_lit, sig, exp,
                                                           sig_end, dot_pos, frac_zeros, num_tmp);
       }
       else {
@@ -371,7 +371,7 @@ namespace glz::detail
    {
       using X = std::remove_volatile_t<T>;
       constexpr auto IsVolatile = std::is_volatile_v<std::remove_reference_t<decltype(val)>>;
-      const CharType* sig_cut{}; // significant part cutting position for long number
+      const CharType* sig_cut; // significant part cutting position for long number
       const CharType* sig_end{}; // significant part ending position
       const CharType* dot_pos{}; // decimal point position
       uint32_t frac_zeros = 0;
@@ -405,7 +405,7 @@ namespace glz::detail
       if ((cur[i] == '.')) [[likely]] {                                                                              \
          if (sig == 0)                                                                                               \
             while (cur[frac_zeros + i + 1] == zero) ++frac_zeros;                                                    \
-         state = digi_frac<T, CharType, IsVolatile, i>(exp_sign, cur, tmp, val, exp_sig, exp_lit, sig, exp, sig_cut, \
+         state = digi_frac<T, CharType, IsVolatile, i>(exp_sign, cur, tmp, val, exp_sig, exp_lit, sig, exp, \
                                                        sig_end, dot_pos, frac_zeros, num_tmp);                       \
          if (state == int_parse_state::more_frac_digits) [[unlikely]] {                                              \
             cur += 20 + frac_zeros;                                                                                  \
