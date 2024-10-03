@@ -2239,28 +2239,42 @@ suite read_tests = [] {
          std::string in = R"(-1224125asdasf)";
          int res{};
          expect(glz::read_json(res, in) == glz::error_code::none);
-
          expect(res == -1224125);
       }
       {
          std::string in = R"(null)";
          int res{};
-
          expect(glz::read_json(res, in) == glz::error_code::parse_number_failure);
       }
       {
          auto in = R"(1.000000000000000000000000000000001)";
          uint64_t res{};
          expect(glz::read_json(res, in) == glz::error_code::none);
-
          expect(res == 1);
       }
       {
          auto in = R"(1.99999999999999999999999999)";
          uint64_t res{};
          expect(glz::read_json(res, in) == glz::error_code::none);
-
          expect(res == 2);
+      }
+      {
+         auto in = R"(122.2345678910)";
+         uint64_t res{};
+         expect(glz::read_json(res, in) == glz::error_code::none);
+         expect(res == 122);
+      }
+      {
+         auto in = R"(100000.300e7)";
+         uint64_t res{};
+         expect(glz::read_json(res, in) == glz::error_code::none);
+         expect(res == 1000003000000);
+      }
+      {
+         auto in = R"(1002.34e+9)";
+         uint64_t res{};
+         expect(glz::read_json(res, in) == glz::error_code::none);
+         expect(res == 1002340000000);
       }
    };
 
