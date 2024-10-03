@@ -1171,7 +1171,7 @@ namespace glz::repe
       }
 
       // returns null for notifications
-      [[nodiscard]] shared_buffer call(const sv msg)
+      /*[[nodiscard]] shared_buffer call(const sv msg)
       {
          shared_buffer u_buffer = std::make_shared<unique_buffer>(&buffers);
          auto& response = *(u_buffer->ptr);
@@ -1252,6 +1252,6 @@ namespace glz::repe
          else {
             return u_buffer;
          }
-      }
+      }*/
    };
 }
