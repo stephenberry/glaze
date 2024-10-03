@@ -387,7 +387,7 @@ namespace glz::detail
    if ((num_tmp = cur[i] - zero) <= 9)                                                                               \
       sig = num_tmp + sig * 10;                                                                                      \
    else {                                                                                                            \
-      if constexpr (json_conformance && i > 1) {                                                                     \
+      if constexpr (json_conformance && i == 2) {                                                                     \
          if (*cur == zero) return false;                                                                             \
       }                                                                                                              \
       if (!digi_is_fp(uint8_t(cur[i]))) [[likely]] {                                                                 \
