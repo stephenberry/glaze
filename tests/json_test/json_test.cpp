@@ -2276,6 +2276,19 @@ suite read_tests = [] {
          expect(glz::read_json(res, in) == glz::error_code::none);
          expect(res == 1002340000000);
       }
+      {
+         std::mt19937_64 gen{std::random_device{}()};
+         std::uniform_real_distribution<double> dist{-1.0e9, 1.0e9};
+         std::string buffer{};
+         for (size_t i = 0; i < 1000; ++i) {
+            const auto f = dist(gen);
+            expect(not glz::write_json(f, buffer));
+            int64_t integer{};
+            auto ec = glz::read_json(integer, buffer);
+            expect(not ec) << glz::format_error(ec, buffer);
+            expect(integer == static_cast<int64_t>(f));
+         }
+      }
    };
 
    "Read double"_test = [] {
