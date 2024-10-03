@@ -1399,208 +1399,209 @@ namespace glz
                ctx.error = error_code::attempt_const_read;
                return;
             }
+            else {
+               const size_t ws_size = size_t(it - ws_start);
 
-            const size_t ws_size = size_t(it - ws_start);
+               const auto n = value.size();
 
-            const auto n = value.size();
+               auto value_it = value.begin();
 
-            auto value_it = value.begin();
+               for (size_t i = 0; i < n; ++i) {
+                  if constexpr (is_const) {
+                     // do not read anything into the const value
+                     skip_value<JSON>::op<ws_handled<Opts>()>(ctx, it, end);
+                  }
+                  else {
+                     using V = std::remove_cvref_t<decltype(*value_it)>;
+                     from<JSON, V>::template op<ws_handled<Opts>()>(*value_it++, ctx, it, end);
+                  }
+                  
+                  if (bool(ctx.error)) [[unlikely]]
+                     return;
+                  GLZ_SKIP_WS();
+                  if (*it == ',') {
+                     ++it;
 
-            for (size_t i = 0; i < n; ++i) {
-               if constexpr (is_const) {
-                  // do not read anything into the const value
-                  skip_value<JSON>::op<ws_handled<Opts>()>(ctx, it, end);
+                     if constexpr (!Opts.minified) {
+                        if (ws_size && ws_size < size_t(end - it)) {
+                           skip_matching_ws(ws_start, it, ws_size);
+                        }
+                     }
+
+                     GLZ_SKIP_WS();
+                  }
+                  else if (*it == ']') {
+                     GLZ_SUB_LEVEL;
+                     ++it;
+                     if constexpr (erasable<T>) {
+                        value.erase(value_it,
+                                    value.end()); // use erase rather than resize for non-default constructible elements
+
+                        if constexpr (Opts.shrink_to_fit) {
+                           value.shrink_to_fit();
+                        }
+                     }
+                     return;
+                  }
+                  else [[unlikely]] {
+                     ctx.error = error_code::expected_bracket;
+                     return;
+                  }
+               }
+
+               if constexpr (Opts.partial_read) {
+                  return;
                }
                else {
-                  using V = std::remove_cvref_t<decltype(*value_it)>;
-                  from<JSON, V>::template op<ws_handled<Opts>()>(*value_it++, ctx, it, end);
-               }
-               
-               if (bool(ctx.error)) [[unlikely]]
-                  return;
-               GLZ_SKIP_WS();
-               if (*it == ',') {
-                  ++it;
+                  // growing
+                  if constexpr (emplace_backable<T>) {
+                     // This optimization is useful when a std::vector contains large types (greater than 4096 bytes)
+                     // It is faster to simply use emplace_back for small types and reasonably lengthed vectors
+                     // (less than a million elements)
+                     // https://baptiste-wicht.com/posts/2012/12/cpp-benchmark-vector-list-deque.html
+                     if constexpr ((not is_const) && has_reserve<T> && has_capacity<T> &&
+                                   requires { requires(sizeof(typename T::value_type) > 4096); }) {
+                        // If we can reserve memmory, like std::vector, then we want to check the capacity
+                        // and use a temporary buffer if the capacity needs to grow
+                        if (value.capacity() == 0) {
+                           value.reserve(1); // we want to directly use our vector for the first element
+                        }
+                        const auto capacity = value.capacity();
+                        for (size_t i = value.size(); i < capacity; ++i) {
+                           // emplace_back while we have capacity
+                           read<JSON>::op<ws_handled<Opts>()>(value.emplace_back(), ctx, it, end);
+                           if (bool(ctx.error)) [[unlikely]]
+                              return;
+                           GLZ_SKIP_WS();
+                           if (*it == ',') [[likely]] {
+                              ++it;
 
-                  if constexpr (!Opts.minified) {
-                     if (ws_size && ws_size < size_t(end - it)) {
-                        skip_matching_ws(ws_start, it, ws_size);
-                     }
-                  }
-
-                  GLZ_SKIP_WS();
-               }
-               else if (*it == ']') {
-                  GLZ_SUB_LEVEL;
-                  ++it;
-                  if constexpr (erasable<T>) {
-                     value.erase(value_it,
-                                 value.end()); // use erase rather than resize for non-default constructible elements
-
-                     if constexpr (Opts.shrink_to_fit) {
-                        value.shrink_to_fit();
-                     }
-                  }
-                  return;
-               }
-               else [[unlikely]] {
-                  ctx.error = error_code::expected_bracket;
-                  return;
-               }
-            }
-
-            if constexpr (Opts.partial_read) {
-               return;
-            }
-            else {
-               // growing
-               if constexpr (emplace_backable<T>) {
-                  // This optimization is useful when a std::vector contains large types (greater than 4096 bytes)
-                  // It is faster to simply use emplace_back for small types and reasonably lengthed vectors
-                  // (less than a million elements)
-                  // https://baptiste-wicht.com/posts/2012/12/cpp-benchmark-vector-list-deque.html
-                  if constexpr ((not is_const) && has_reserve<T> && has_capacity<T> &&
-                                requires { requires(sizeof(typename T::value_type) > 4096); }) {
-                     // If we can reserve memmory, like std::vector, then we want to check the capacity
-                     // and use a temporary buffer if the capacity needs to grow
-                     if (value.capacity() == 0) {
-                        value.reserve(1); // we want to directly use our vector for the first element
-                     }
-                     const auto capacity = value.capacity();
-                     for (size_t i = value.size(); i < capacity; ++i) {
-                        // emplace_back while we have capacity
-                        read<JSON>::op<ws_handled<Opts>()>(value.emplace_back(), ctx, it, end);
-                        if (bool(ctx.error)) [[unlikely]]
-                           return;
-                        GLZ_SKIP_WS();
-                        if (*it == ',') [[likely]] {
-                           ++it;
-
-                           if constexpr (!Opts.minified) {
-                              if (ws_size && ws_size < size_t(end - it)) {
-                                 skip_matching_ws(ws_start, it, ws_size);
+                              if constexpr (!Opts.minified) {
+                                 if (ws_size && ws_size < size_t(end - it)) {
+                                    skip_matching_ws(ws_start, it, ws_size);
+                                 }
                               }
+
+                              GLZ_SKIP_WS();
+                           }
+                           else if (*it == ']') {
+                              GLZ_SUB_LEVEL;
+                              ++it;
+                              return;
+                           }
+                           else [[unlikely]] {
+                              ctx.error = error_code::expected_bracket;
+                              return;
+                           }
+                        }
+
+                        using value_type = typename T::value_type;
+
+                        std::vector<std::vector<value_type>> intermediate;
+                        intermediate.reserve(48);
+                        auto* active = &intermediate.emplace_back();
+                        active->reserve(2);
+                        while (it < end) {
+                           if (active->size() == active->capacity()) {
+                              // we want to populate the next vector
+                              const auto former_capacity = active->capacity();
+                              active = &intermediate.emplace_back();
+                              active->reserve(2 * former_capacity);
                            }
 
+                           read<JSON>::op<ws_handled<Opts>()>(active->emplace_back(), ctx, it, end);
+                           if (bool(ctx.error)) [[unlikely]]
+                              return;
                            GLZ_SKIP_WS();
-                        }
-                        else if (*it == ']') {
-                           GLZ_SUB_LEVEL;
-                           ++it;
-                           return;
-                        }
-                        else [[unlikely]] {
-                           ctx.error = error_code::expected_bracket;
-                           return;
-                        }
-                     }
+                           if (*it == ',') [[likely]] {
+                              ++it;
 
-                     using value_type = typename T::value_type;
+                              if constexpr (!Opts.minified) {
+                                 if (ws_size && ws_size < size_t(end - it)) {
+                                    skip_matching_ws(ws_start, it, ws_size);
+                                 }
+                              }
 
-                     std::vector<std::vector<value_type>> intermediate;
-                     intermediate.reserve(48);
-                     auto* active = &intermediate.emplace_back();
-                     active->reserve(2);
-                     while (it < end) {
-                        if (active->size() == active->capacity()) {
-                           // we want to populate the next vector
-                           const auto former_capacity = active->capacity();
-                           active = &intermediate.emplace_back();
-                           active->reserve(2 * former_capacity);
+                              GLZ_SKIP_WS();
+                           }
+                           else if (*it == ']') {
+                              GLZ_SUB_LEVEL;
+                              ++it;
+                              break;
+                           }
+                           else [[unlikely]] {
+                              ctx.error = error_code::expected_bracket;
+                              return;
+                           }
                         }
 
-                        read<JSON>::op<ws_handled<Opts>()>(active->emplace_back(), ctx, it, end);
-                        if (bool(ctx.error)) [[unlikely]]
-                           return;
-                        GLZ_SKIP_WS();
-                        if (*it == ',') [[likely]] {
-                           ++it;
+                        const auto intermediate_size = intermediate.size();
+                        size_t reserve_size = value.size();
+                        for (size_t i = 0; i < intermediate_size; ++i) {
+                           reserve_size += intermediate[i].size();
+                        }
 
-                           if constexpr (!Opts.minified) {
-                              if (ws_size && ws_size < size_t(end - it)) {
-                                 skip_matching_ws(ws_start, it, ws_size);
+                        if constexpr (std::is_trivially_copyable_v<value_type> && !std::same_as<T, std::vector<bool>>) {
+                           const auto original_size = value.size();
+                           value.resize(reserve_size);
+                           auto* dest = value.data() + original_size;
+                           for (const auto& vector : intermediate) {
+                              const auto vector_size = vector.size();
+                              std::memcpy(dest, vector.data(), vector_size * sizeof(value_type));
+                              dest += vector_size;
+                           }
+                        }
+                        else {
+                           value.reserve(reserve_size);
+                           for (const auto& vector : intermediate) {
+                              const auto inter_end = vector.end();
+                              for (auto inter = vector.begin(); inter < inter_end; ++inter) {
+                                 value.emplace_back(std::move(*inter));
                               }
                            }
-
-                           GLZ_SKIP_WS();
-                        }
-                        else if (*it == ']') {
-                           GLZ_SUB_LEVEL;
-                           ++it;
-                           break;
-                        }
-                        else [[unlikely]] {
-                           ctx.error = error_code::expected_bracket;
-                           return;
-                        }
-                     }
-
-                     const auto intermediate_size = intermediate.size();
-                     size_t reserve_size = value.size();
-                     for (size_t i = 0; i < intermediate_size; ++i) {
-                        reserve_size += intermediate[i].size();
-                     }
-
-                     if constexpr (std::is_trivially_copyable_v<value_type> && !std::same_as<T, std::vector<bool>>) {
-                        const auto original_size = value.size();
-                        value.resize(reserve_size);
-                        auto* dest = value.data() + original_size;
-                        for (const auto& vector : intermediate) {
-                           const auto vector_size = vector.size();
-                           std::memcpy(dest, vector.data(), vector_size * sizeof(value_type));
-                           dest += vector_size;
                         }
                      }
                      else {
-                        value.reserve(reserve_size);
-                        for (const auto& vector : intermediate) {
-                           const auto inter_end = vector.end();
-                           for (auto inter = vector.begin(); inter < inter_end; ++inter) {
-                              value.emplace_back(std::move(*inter));
+                        // If we don't have reserve (like std::deque) or we have small sized elements
+                        while (it < end) {
+                           if constexpr (is_const) {
+                              value.emplace_back();
+                              // do not read anything into the const value
+                              skip_value<JSON>::op<ws_handled<Opts>()>(ctx, it, end);
+                           }
+                           else {
+                              using V = std::remove_cvref_t<decltype(value.emplace_back())>;
+                              from<JSON, V>::template op<ws_handled<Opts>()>(value.emplace_back(), ctx, it, end);
+                           }
+                           if (bool(ctx.error)) [[unlikely]]
+                              return;
+                           GLZ_SKIP_WS();
+                           if (*it == ',') [[likely]] {
+                              ++it;
+
+                              if constexpr (!Opts.minified) {
+                                 if (ws_size && ws_size < size_t(end - it)) {
+                                    skip_matching_ws(ws_start, it, ws_size);
+                                 }
+                              }
+
+                              GLZ_SKIP_WS();
+                           }
+                           else if (*it == ']') {
+                              GLZ_SUB_LEVEL;
+                              ++it;
+                              return;
+                           }
+                           else [[unlikely]] {
+                              ctx.error = error_code::expected_bracket;
+                              return;
                            }
                         }
                      }
                   }
                   else {
-                     // If we don't have reserve (like std::deque) or we have small sized elements
-                     while (it < end) {
-                        if constexpr (is_const) {
-                           value.emplace_back();
-                           // do not read anything into the const value
-                           skip_value<JSON>::op<ws_handled<Opts>()>(ctx, it, end);
-                        }
-                        else {
-                           using V = std::remove_cvref_t<decltype(value.emplace_back())>;
-                           from<JSON, V>::template op<ws_handled<Opts>()>(value.emplace_back(), ctx, it, end);
-                        }
-                        if (bool(ctx.error)) [[unlikely]]
-                           return;
-                        GLZ_SKIP_WS();
-                        if (*it == ',') [[likely]] {
-                           ++it;
-
-                           if constexpr (!Opts.minified) {
-                              if (ws_size && ws_size < size_t(end - it)) {
-                                 skip_matching_ws(ws_start, it, ws_size);
-                              }
-                           }
-
-                           GLZ_SKIP_WS();
-                        }
-                        else if (*it == ']') {
-                           GLZ_SUB_LEVEL;
-                           ++it;
-                           return;
-                        }
-                        else [[unlikely]] {
-                           ctx.error = error_code::expected_bracket;
-                           return;
-                        }
-                     }
+                     ctx.error = error_code::exceeded_static_array_size;
                   }
-               }
-               else {
-                  ctx.error = error_code::exceeded_static_array_size;
                }
             }
          }
