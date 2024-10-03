@@ -9,7 +9,7 @@
 #include "glaze/glaze.hpp"
 #include "ut/ut.hpp"
 
-static constexpr bool skip = true;
+static constexpr bool skip = false;
 
 #define SKIP             \
    if constexpr (skip) { \
@@ -241,7 +241,7 @@ suite read_int64_t_test = [] {
 
 suite vector_vector_vs_vector_array_test = [] {
    "vector_vector_vs_vector_array"_test = [] {
-      //SKIP;
+      SKIP;
 
 #ifdef NDEBUG
       constexpr size_t n = 10000000;
