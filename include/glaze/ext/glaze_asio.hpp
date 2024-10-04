@@ -25,14 +25,6 @@ namespace glz
 #if defined(GLZ_USING_BOOST_ASIO)
    namespace asio = boost::asio;
 #endif
-   inline void send_buffer(asio::ip::tcp::socket& socket, const std::string_view str)
-   {
-      const uint64_t size = str.size();
-      std::array<asio::const_buffer, 2> buffers{asio::buffer(&size, sizeof(uint64_t)), asio::buffer(str)};
-
-      asio::write(socket, buffers, asio::transfer_exactly(sizeof(uint64_t) + size));
-   }
-   
    inline void send_buffer(asio::ip::tcp::socket& socket, const repe::message& msg)
    {
       if (msg.header.length == repe::no_length_provided) {
@@ -42,14 +34,6 @@ namespace glz
       std::array<asio::const_buffer, 3> buffers{asio::buffer(&msg.header, sizeof(msg.header)), asio::buffer(msg.query), asio::buffer(msg.body)};
 
       asio::write(socket, buffers, asio::transfer_exactly(msg.header.length));
-   }
-
-   inline void receive_buffer(asio::ip::tcp::socket& socket, std::string& str)
-   {
-      uint64_t size;
-      asio::read(socket, asio::buffer(&size, sizeof(size)), asio::transfer_exactly(sizeof(uint64_t)));
-      str.resize(size);
-      asio::read(socket, asio::buffer(str), asio::transfer_exactly(size));
    }
    
    inline void receive_buffer(asio::ip::tcp::socket& socket, repe::message& msg)
@@ -66,18 +50,9 @@ namespace glz
       msg.body.resize(msg.header.body_length);
       asio::read(socket, asio::buffer(msg.body), asio::transfer_exactly(msg.header.body_length));
    }
-
-   inline asio::awaitable<void> co_send_buffer(asio::ip::tcp::socket& socket, const std::string_view str)
-   {
-      const uint64_t size = str.size();
-      std::array<asio::const_buffer, 2> buffers{asio::buffer(&size, sizeof(uint64_t)), asio::buffer(str)};
-
-      co_await asio::async_write(socket, buffers, asio::transfer_exactly(sizeof(uint64_t) + size), asio::use_awaitable);
-   }
    
    inline asio::awaitable<void> co_send_buffer(asio::ip::tcp::socket& socket, const repe::message& msg)
    {
-       // Validate the header lengths
        if (msg.header.length == repe::no_length_provided) {
            throw std::runtime_error("No length provided in REPE header");
        }
@@ -100,15 +75,6 @@ namespace glz
 
        // Asynchronously write the buffers to the socket
        co_await asio::async_write(socket, buffers, asio::transfer_exactly(total_length), asio::use_awaitable);
-   }
-
-   inline asio::awaitable<void> co_receive_buffer(asio::ip::tcp::socket& socket, std::string& str)
-   {
-      uint64_t size;
-      co_await asio::async_read(socket, asio::buffer(&size, sizeof(size)), asio::transfer_exactly(sizeof(uint64_t)),
-                                asio::use_awaitable);
-      str.resize(size);
-      co_await asio::async_read(socket, asio::buffer(str), asio::transfer_exactly(size), asio::use_awaitable);
    }
    
    inline asio::awaitable<void> co_receive_buffer(asio::ip::tcp::socket& socket, repe::message& msg)
@@ -135,12 +101,6 @@ namespace glz
        co_await asio::async_read(socket, asio::buffer(msg.body),
                                  asio::transfer_exactly(msg.header.body_length),
                                  asio::use_awaitable);
-   }
-
-   inline asio::awaitable<void> call_rpc(asio::ip::tcp::socket& socket, std::string& buffer)
-   {
-      co_await co_send_buffer(socket, buffer);
-      co_await co_receive_buffer(socket, buffer);
    }
 
    struct socket_pool

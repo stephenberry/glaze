@@ -184,6 +184,9 @@ namespace glz::repe
       case timeout: {
          return "7 [timeout]";
       }
+      case error: {
+         return "8 [error]";
+      }
       default: {
          return "unknown_error_code";
          break;
@@ -269,15 +272,20 @@ namespace glz::repe
    template <opts Opts, class Value>
    void write_response(Value&& value, is_state auto&& state)
    {
-      state.out.header = state.in.header;
       if (state.error) {
          state.out.header.error = true;
+         state.out.header.query_length = state.out.query.size();
+         state.out.header.body_length = state.out.body.size();
+         state.out.header.length = sizeof(repe::header) + state.out.query.size() + state.out.body.size();
       }
       else {
          const auto ec = write<Opts>(std::forward<Value>(value), state.out.body);
          if (bool(ec)) [[unlikely]] {
             state.out.header.error = true;
          }
+         state.out.header.query_length = state.out.query.size();
+         state.out.header.body_length = state.out.body.size();
+         state.out.header.length = sizeof(repe::header) + state.out.query.size() + state.out.body.size();
       }
    }
 
