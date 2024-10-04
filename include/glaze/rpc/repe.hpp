@@ -304,7 +304,7 @@ namespace glz::repe
    {
       if (response.header.error) {
          error_t error{};
-         glz::read<Opts>(error, response.body);
+         std::ignore = glz::read<Opts>(error, response.body); // TODO: handle this
          return error;
       }
 
@@ -312,7 +312,7 @@ namespace glz::repe
          const auto ec = glz::read<Opts>(result, response.body);
 
          if (bool(ec)) {
-            return {ec.code, format_error(ec, response.body)};
+            return {error_e::error, format_error(ec, response.body)};
          }
       }
 
@@ -325,7 +325,7 @@ namespace glz::repe
       return decode_response<Opts>(ignore_result{}, buffer);
    }
    
-   template <opts Opts, class H = header>
+   template <opts Opts, class H = user_header>
    [[nodiscard]] auto request(H&& h)
    {
       h.read(true); // because no value provided
@@ -336,7 +336,7 @@ namespace glz::repe
       return msg;
    }
 
-   template <opts Opts, class Value, class H = header>
+   template <opts Opts, class Value, class H = user_header>
    [[nodiscard]] auto request(H&& h, Value&& value)
    {
       message msg{.header = encode(h), .query = std::string{h.query}};

@@ -301,7 +301,7 @@ namespace glz
       }
 
       template <class Params>
-      [[nodiscard]] repe::error_t notify(repe::header&& header, Params&& params)
+      [[nodiscard]] repe::error_t notify(repe::user_header&& header, Params&& params)
       {
          auto request = repe::request<Opts>(std::move(header), std::forward<Params>(params));
          request.header.notify(true);
@@ -321,7 +321,7 @@ namespace glz
       }
 
       template <class Result>
-      [[nodiscard]] repe::error_t get(repe::header&& header, Result&& result)
+      [[nodiscard]] repe::error_t get(repe::user_header&& header, Result&& result)
       {
          auto request = repe::request<Opts>(std::move(header), nullptr);
          request.header.notify(false);
@@ -353,7 +353,7 @@ namespace glz
       }
 
       template <class Result = glz::raw_json>
-      [[nodiscard]] glz::expected<Result, repe::error_t> get(repe::header&& header)
+      [[nodiscard]] glz::expected<Result, repe::error_t> get(repe::user_header&& header)
       {
          std::decay_t<Result> result{};
          const auto error = get<Result>(std::move(header), result);
@@ -366,7 +366,7 @@ namespace glz
       }
 
       template <class Params>
-      [[nodiscard]] repe::error_t set(repe::header&& header, Params&& params)
+      [[nodiscard]] repe::error_t set(repe::user_header&& header, Params&& params)
       {
          auto request = repe::request<Opts>(std::move(header), std::forward<Params>(params));
 
@@ -395,7 +395,7 @@ namespace glz
       }
 
       template <class Params, class Result>
-      [[nodiscard]] repe::error_t call(repe::header&& header, Params&& params, Result&& result)
+      [[nodiscard]] repe::error_t call(repe::user_header&& header, Params&& params, Result&& result)
       {
          auto request = repe::request<Opts>(std::move(header), std::forward<Params>(params));
          
@@ -423,7 +423,7 @@ namespace glz
          return repe::decode_response<Opts>(std::forward<Result>(result), response);
       }
 
-      [[nodiscard]] repe::error_t call(repe::header&& header)
+      [[nodiscard]] repe::error_t call(repe::user_header&& header)
       {
          auto request = repe::request<Opts>(std::move(header));
          
