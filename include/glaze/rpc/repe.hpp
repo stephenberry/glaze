@@ -325,69 +325,74 @@ namespace glz::repe
       return decode_response<Opts>(ignore_result{}, buffer);
    }
    
-   template <opts Opts, class H = user_header>
-   [[nodiscard]] auto request(H&& h)
+   template <opts Opts>
+   error_t request(message& msg, const user_header& h)
    {
-      h.read(true); // because no value provided
-      message msg{.header = encode(h), .query = std::string{h.query}};
+      msg.header = encode(h);
+      msg.header.read(true); // because no value provided
+      msg.query = std::string{h.query};
       std::ignore = glz::write<Opts>(nullptr, msg.body);
       msg.header.body_length = msg.body.size();
       msg.header.length = sizeof(repe::header) + msg.query.size() + msg.body.size();
-      return msg;
+      return {};
    }
 
-   template <opts Opts, class Value, class H = user_header>
-   [[nodiscard]] auto request(H&& h, Value&& value)
+   template <opts Opts, class Value>
+   error_t request(message& msg, const user_header& h, Value&& value)
    {
-      message msg{.header = encode(h), .query = std::string{h.query}};
+      msg.header = encode(h);
+      msg.query = std::string{h.query};
+      msg.header.write(true);
       std::ignore = glz::write<Opts>(std::forward<Value>(value), msg.body);
       msg.header.body_length = msg.body.size();
       msg.header.length = sizeof(repe::header) + msg.query.size() + msg.body.size();
-      return msg;
+      return {};
    }
 
-   template <class H = user_header>
-   [[nodiscard]] auto request_beve(H&& h)
+   inline error_t request_beve(message& msg, const user_header& h)
    {
-      h.read(true); // because no value provided
-      message msg{.header = encode(h), .query = std::string{h.query}};
+      msg.header = encode(h);
+      msg.query = std::string{h.query};
+      msg.header.read(true); // because no value provided
       std::ignore = glz::write_beve(nullptr, msg.body);
       msg.header.body_length = msg.body.size();
       msg.header.length = sizeof(repe::header) + msg.query.size() + msg.body.size();
-      return msg;
+      return {};
    }
 
-   template <class H = user_header>
-   [[nodiscard]] auto request_json(H&& h)
+   inline error_t request_json(message& msg, const user_header& h)
    {
-      h.read(true); // because no value provided
-      message msg{.header = encode(h), .query = std::string{h.query}};
+      msg.header = encode(h);
+      msg.query = std::string{h.query};
+      msg.header.read(true); // because no value provided
       std::ignore = glz::write_json(nullptr, msg.body);
       msg.header.body_length = msg.body.size();
       msg.header.length = sizeof(repe::header) + msg.query.size() + msg.body.size();
-      return msg;
+      return {};
    }
 
-   template <class Value, class H = user_header>
-   [[nodiscard]] auto request_json(H&& h, Value&& value)
+   template <class Value>
+   error_t request_json(message& msg, const user_header& h, Value&& value)
    {
-      h.write(true);
-      message msg{.header = encode(h), .query = std::string{h.query}};
+      msg.header = encode(h);
+      msg.query = std::string{h.query};
+      msg.header.write(true);
       std::ignore = glz::write_json(std::forward<Value>(value), msg.body);
       msg.header.body_length = msg.body.size();
       msg.header.length = sizeof(repe::header) + msg.query.size() + msg.body.size();
-      return msg;
+      return {};
    }
 
-   template <class Value, class H = user_header>
-   [[nodiscard]] auto request_beve(H&& h, Value&& value)
+   template <class Value>
+   error_t request_beve(message& msg, const user_header& h, Value&& value)
    {
-      h.write(true);
-      message msg{.header = encode(h), .query = std::string{h.query}};
+      msg.header = encode(h);
+      msg.query = std::string{h.query};
+      msg.header.write(true);
       std::ignore = glz::write_beve(std::forward<Value>(value), msg.body);
       msg.header.body_length = msg.body.size();
       msg.header.length = sizeof(repe::header) + msg.query.size() + msg.body.size();
-      return msg;
+      return {};
    }
 
    // DESIGN NOTE: It might appear that we are locking ourselves into a poor design choice by using a runtime

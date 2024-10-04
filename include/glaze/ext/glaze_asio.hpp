@@ -397,7 +397,8 @@ namespace glz
       template <class Params, class Result>
       [[nodiscard]] repe::error_t call(repe::user_header&& header, Params&& params, Result&& result)
       {
-         auto request = repe::request<Opts>(std::move(header), std::forward<Params>(params));
+         repe::message request{};
+         std::ignore = repe::request<Opts>(request, std::move(header), std::forward<Params>(params));
          
          unique_socket socket{socket_pool.get()};
 
