@@ -50,6 +50,14 @@ namespace glz::repe
          return bool(uint32_t(action) & uint32_t(repe::action::write));
       }
       
+      void notify(bool enable) {
+         if (enable) {
+            action = static_cast<repe::action>(uint32_t(action) | uint32_t(action::notify));
+          } else {
+             action = static_cast<repe::action>(uint32_t(action) & ~uint32_t(action::notify));
+          }
+      }
+      
       void read(bool enable) {
          if (enable) {
             action = static_cast<repe::action>(uint32_t(action) | uint32_t(action::read));
@@ -97,6 +105,14 @@ namespace glz::repe
          return bool(uint32_t(action) & uint32_t(repe::action::write));
       }
       
+      void notify(bool enable) {
+         if (enable) {
+            action = static_cast<repe::action>(uint32_t(action) | uint32_t(action::notify));
+          } else {
+             action = static_cast<repe::action>(uint32_t(action) & ~uint32_t(action::notify));
+          }
+      }
+      
       void read(bool enable) {
          if (enable) {
             action = static_cast<repe::action>(uint32_t(action) | uint32_t(action::read));
@@ -136,7 +152,8 @@ namespace glz::repe
       invalid_body,
       parse_error,
       method_not_found,
-      timeout
+      timeout,
+      error
    };
 
    inline constexpr std::string_view error_code_to_sv(const error_e e) noexcept
@@ -283,55 +300,19 @@ namespace glz::repe
    {};
 
    template <opts Opts, class Result>
-   [[nodiscard]] error_t decode_response(Result&& result, auto& buffer)
+   [[nodiscard]] error_t decode_response(Result&& result, repe::message& response)
    {
-      repe::header h;
-      context ctx{};
-      auto [b, e] = read_iterators<Opts>(ctx, buffer);
-      if (bool(ctx.error)) [[unlikely]] {
-         return error_t{error_e::parse_error};
-      }
-      auto start = b;
-
-      auto handle_error = [&](auto& it) {
-         ctx.error = error_code::syntax_error;
-         error_ctx pe{ctx.error, ctx.custom_error_message, size_t(it - start), ctx.includer_error};
-         return error_t{error_e::parse_error, format_error(pe, buffer)};
-      };
-
-      if (*b == '[') {
-         ++b;
-      }
-      else {
-         return handle_error(b);
-      }
-
-      glz::detail::read<Opts.format>::template op<Opts>(h, ctx, b, e);
-
-      if (bool(ctx.error)) {
-         error_ctx pe{ctx.error, ctx.custom_error_message, size_t(b - start), ctx.includer_error};
-         return {error_e::parse_error, format_error(pe, buffer)};
-      }
-
-      if (*b == ',') {
-         ++b;
-      }
-      else {
-         return handle_error(b);
-      }
-
-      if (h.error) {
+      if (response.header.error) {
          error_t error{};
-         glz::detail::read<Opts.format>::template op<Opts>(error, ctx, b, e);
+         glz::read<Opts>(error, response.body);
          return error;
       }
 
       if constexpr (!std::same_as<std::decay_t<Result>, ignore_result>) {
-         glz::detail::read<Opts.format>::template op<Opts>(result, ctx, b, e);
+         const auto ec = glz::read<Opts>(result, response.body);
 
-         if (bool(ctx.error)) {
-            error_ctx pe{ctx.error, ctx.custom_error_message, size_t(b - start), ctx.includer_error};
-            return {error_e::parse_error, format_error(pe, buffer)};
+         if (bool(ec)) {
+            return {ec.code, format_error(ec, response.body)};
          }
       }
 
@@ -343,20 +324,36 @@ namespace glz::repe
    {
       return decode_response<Opts>(ignore_result{}, buffer);
    }
+   
+   template <opts Opts, class H = header>
+   [[nodiscard]] auto request(H&& h)
+   {
+      h.read(true); // because no value provided
+      message msg{.header = encode(h), .query = std::string{h.query}};
+      std::ignore = glz::write<Opts>(nullptr, msg.body);
+      msg.header.body_length = msg.body.size();
+      msg.header.length = sizeof(repe::header) + msg.query.size() + msg.body.size();
+      return msg;
+   }
 
    template <opts Opts, class Value, class H = header>
    [[nodiscard]] auto request(H&& h, Value&& value)
    {
       message msg{.header = encode(h), .query = std::string{h.query}};
       std::ignore = glz::write<Opts>(std::forward<Value>(value), msg.body);
+      msg.header.body_length = msg.body.size();
+      msg.header.length = sizeof(repe::header) + msg.query.size() + msg.body.size();
       return msg;
    }
 
    template <class H = user_header>
-   [[nodiscard]] auto request_binary(H&& h)
+   [[nodiscard]] auto request_beve(H&& h)
    {
       h.read(true); // because no value provided
       message msg{.header = encode(h), .query = std::string{h.query}};
+      std::ignore = glz::write_beve(nullptr, msg.body);
+      msg.header.body_length = msg.body.size();
+      msg.header.length = sizeof(repe::header) + msg.query.size() + msg.body.size();
       return msg;
    }
 
@@ -365,6 +362,9 @@ namespace glz::repe
    {
       h.read(true); // because no value provided
       message msg{.header = encode(h), .query = std::string{h.query}};
+      std::ignore = glz::write_json(nullptr, msg.body);
+      msg.header.body_length = msg.body.size();
+      msg.header.length = sizeof(repe::header) + msg.query.size() + msg.body.size();
       return msg;
    }
 
@@ -374,15 +374,19 @@ namespace glz::repe
       h.write(true);
       message msg{.header = encode(h), .query = std::string{h.query}};
       std::ignore = glz::write_json(std::forward<Value>(value), msg.body);
+      msg.header.body_length = msg.body.size();
+      msg.header.length = sizeof(repe::header) + msg.query.size() + msg.body.size();
       return msg;
    }
 
    template <class Value, class H = user_header>
-   [[nodiscard]] auto request_binary(H&& h, Value&& value)
+   [[nodiscard]] auto request_beve(H&& h, Value&& value)
    {
       h.write(true);
       message msg{.header = encode(h), .query = std::string{h.query}};
       std::ignore = glz::write_beve(std::forward<Value>(value), msg.body);
+      msg.header.body_length = msg.body.size();
+      msg.header.length = sizeof(repe::header) + msg.query.size() + msg.body.size();
       return msg;
    }
 

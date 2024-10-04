@@ -201,23 +201,23 @@ suite structs_of_functions_binary = [] {
       repe::message request{};
       repe::message response{};
 
-      request = repe::request_binary({"/i"});
+      request = repe::request_beve({"/i"});
       server.call(request, response);
       std::string res{};
       expect(!glz::beve_to_json(response.body, res));
       expect(res == R"(55)") << res;
 
-      request = repe::request_binary({.query = "/i"}, 42);
+      request = repe::request_beve({.query = "/i"}, 42);
       server.call(request, response);
       expect(!glz::beve_to_json(response.body, res));
       expect(res == R"(null)") << res;
 
-      request = repe::request_binary({"/hello"});
+      request = repe::request_beve({"/hello"});
       server.call(request, response);
       expect(!glz::beve_to_json(response.body, res));
       expect(res == R"("Hello")");
 
-      request = repe::request_binary({"/get_number"});
+      request = repe::request_beve({"/get_number"});
       server.call(request, response);
       expect(!glz::beve_to_json(response.body, res));
       expect(res == R"(42)");
@@ -233,52 +233,52 @@ suite structs_of_functions_binary = [] {
       repe::message request{};
       repe::message response{};
 
-      request = repe::request_binary({"/my_functions/void_func"});
+      request = repe::request_beve({"/my_functions/void_func"});
       server.call(request, response);
 
       std::string res{};
       expect(!glz::beve_to_json(response.body, res));
       expect(res == R"(null)") << res;
 
-      request = repe::request_binary({"/my_functions/hello"});
+      request = repe::request_beve({"/my_functions/hello"});
       server.call(request, response);
       expect(!glz::beve_to_json(response.body, res));
       expect(res == R"("Hello")");
 
-      request = repe::request_binary({"/meta_functions/hello"});
+      request = repe::request_beve({"/meta_functions/hello"});
       server.call(request, response);
       expect(!glz::beve_to_json(response.body, res));
       expect(res == R"("Hello")");
 
-      request = repe::request_binary({"/append_awesome"}, "you are");
+      request = repe::request_beve({"/append_awesome"}, "you are");
       server.call(request, response);
       expect(!glz::beve_to_json(response.body, res));
       expect(res == R"("you are awesome!")");
 
-      request = repe::request_binary({"/my_string"}, "Howdy!");
+      request = repe::request_beve({"/my_string"}, "Howdy!");
       server.call(request, response);
       expect(!glz::beve_to_json(response.body, res));
       expect(res == R"(null)");
 
-      request = repe::request_binary({"/my_string"});
+      request = repe::request_beve({"/my_string"});
       server.call(request, response);
       expect(!glz::beve_to_json(response.body, res));
       expect(res == R"("Howdy!")") << res;
 
       obj.my_string.clear();
 
-      request = repe::request_binary({"/my_string"});
+      request = repe::request_beve({"/my_string"});
       server.call(request, response);
       expect(!glz::beve_to_json(response.body, res));
       // we expect an empty string returned because we cleared it
       expect(res == R"("")");
 
-      request = repe::request_binary({"/my_functions/max"}, std::vector<double>{1.1, 3.3, 2.25});
+      request = repe::request_beve({"/my_functions/max"}, std::vector<double>{1.1, 3.3, 2.25});
       server.call(request, response);
       expect(!glz::beve_to_json(response.body, res));
       expect(res == R"(3.3)") << res;
 
-      request = repe::request_binary({"/my_functions"});
+      request = repe::request_beve({"/my_functions"});
       server.call(request, response);
       expect(!glz::beve_to_json(response.body, res));
       expect(
@@ -286,7 +286,7 @@ suite structs_of_functions_binary = [] {
          R"({"i":0,"hello":"std::function<std::string_view()>","world":"std::function<std::string_view()>","get_number":"std::function<int32_t()>","void_func":"std::function<void()>","max":"std::function<double(std::vector<double>&)>"})")
          << res;
 
-      request = repe::request_binary({""});
+      request = repe::request_beve({""});
       server.call(request, response);
       expect(!glz::beve_to_json(response.body, res));
       expect(
@@ -305,34 +305,34 @@ suite structs_of_functions_binary = [] {
       repe::message request{};
       repe::message response{};
 
-      request = repe::request_binary({"/name"}, "Susan");
+      request = repe::request_beve({"/name"}, "Susan");
       server.call(request, response);
 
       std::string res{};
       expect(!glz::beve_to_json(response.body, res));
       expect(res == R"(null)") << res;
 
-      request = repe::request_binary({"/get_name"});
+      request = repe::request_beve({"/get_name"});
       server.call(request, response);
 
       expect(!glz::beve_to_json(response.body, res));
       expect(res == R"("Susan")") << res;
 
-      request = repe::request_binary({"/get_name"}, "Bob");
+      request = repe::request_beve({"/get_name"}, "Bob");
       server.call(request, response);
 
       expect(!glz::beve_to_json(response.body, res));
       expect(obj.name == "Susan"); // we expect the name to not have changed because this function take no inputs
       expect(res == R"("Susan")") << res;
 
-      request = repe::request_binary({"/set_name"}, "Bob");
+      request = repe::request_beve({"/set_name"}, "Bob");
       server.call(request, response);
 
       expect(!glz::beve_to_json(response.body, res));
       expect(obj.name == "Bob");
       expect(res == R"(null)") << res;
 
-      request = repe::request_binary({"/custom_name"}, "Alice");
+      request = repe::request_beve({"/custom_name"}, "Alice");
       server.call(request, response);
 
       expect(!glz::beve_to_json(response.body, res));
@@ -407,14 +407,14 @@ suite wrapper_tests_binary = [] {
       repe::message request{};
       repe::message response{};
 
-      request = repe::request_binary({"/sub/my_functions/void_func"});
+      request = repe::request_beve({"/sub/my_functions/void_func"});
       server.call(request, response);
 
       std::string res{};
       expect(!glz::beve_to_json(response.body, res));
       expect(res == R"(null)") << res;
 
-      request = repe::request_binary({"/sub/my_functions/hello"});
+      request = repe::request_beve({"/sub/my_functions/hello"});
       server.call(request, response);
 
       expect(!glz::beve_to_json(response.body, res));
