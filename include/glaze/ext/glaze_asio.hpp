@@ -143,34 +143,6 @@ namespace glz
       co_await co_receive_buffer(socket, buffer);
    }
 
-   template <class>
-   struct func_traits;
-
-   template <class Result>
-   struct func_traits<Result()>
-   {
-      using result_type = Result;
-      using params_type = void;
-      using std_func_sig = std::function<Result()>;
-   };
-
-   template <class Result, class Params>
-   struct func_traits<Result(Params)>
-   {
-      using result_type = Result;
-      using params_type = Params;
-      using std_func_sig = std::function<Result(Params)>;
-   };
-
-   template <class T>
-   using func_result_t = typename func_traits<T>::result_type;
-
-   template <class T>
-   using func_params_t = typename func_traits<T>::params_type;
-
-   template <class T>
-   using std_func_sig_t = typename func_traits<T>::std_func_sig;
-
    struct socket_pool
    {
       std::string host{"localhost"}; // host name
