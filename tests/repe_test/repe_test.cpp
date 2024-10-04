@@ -422,7 +422,7 @@ suite wrapper_tests_binary = [] {
    };
 };
 
-/*struct tester
+struct tester
 {
    int integer{};
    double number{};
@@ -443,7 +443,8 @@ suite multi_threading_tests = [] {
       std::thread reader_str([&] {
          size_t response_counter{};
          for (size_t i = 0; i < N; ++i) {
-            const auto response = registry.call(read_msg);
+            repe::message response{};
+            registry.call(read_msg, response);
             response_counter += response.body.size();
          }
          std::cout << "read str response_counter: " << response_counter << '\n';
@@ -454,7 +455,8 @@ suite multi_threading_tests = [] {
       std::thread reader_integer([&] {
          size_t response_counter{};
          for (size_t i = 0; i < N; ++i) {
-            const auto response = registry.call(read_integer);
+            repe::message response{};
+            registry.call(read_integer, response);
             response_counter += response.body.size();
          }
          std::cout << "read integer response_counter: " << response_counter << '\n';
@@ -465,7 +467,8 @@ suite multi_threading_tests = [] {
       std::thread reader_full([&] {
          size_t response_counter{};
          for (size_t i = 0; i < N; ++i) {
-            const auto response = registry.call(read_full);
+            repe::message response{};
+            registry.call(read_full, response);
             response_counter += response.body.size();
          }
          std::cout << "read full response_counter: " << response_counter << '\n';
@@ -479,7 +482,8 @@ suite multi_threading_tests = [] {
          for (size_t i = 0; i < N; ++i) {
             message.append("x");
             auto write_msg = repe::request_json({"/str"}, message);
-            const auto response = registry.call(write_msg);
+            repe::message response{};
+            registry.call(write_msg, response);
             response_counter += response.body.size();
 
             if (i == 50) {
@@ -493,7 +497,8 @@ suite multi_threading_tests = [] {
          size_t response_counter{};
          for (size_t i = 0; i < N; ++i) {
             auto write_msg = repe::request_json({"/integer"}, i);
-            const auto response = registry.call(write_msg);
+            repe::message response{};
+            registry.call(write_msg, response);
             response_counter += response.body.size();
          }
          std::cout << "write integer response_counter: " << response_counter << '\n';
@@ -533,6 +538,6 @@ suite glaze_types_test = [] {
       glz::repe::registry<> registry{};
       registry.on(obj);
    };
-};*/
+};
 
 int main() { return 0; }
