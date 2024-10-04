@@ -697,6 +697,8 @@ suite basic_types = [] {
       expect(num == 33);
       expect(glz::read_json(num, ".") == glz::error_code::parse_number_failure);
       expect(num == 33);
+      expect(glz::read_json(num, "0045") == glz::error_code::parse_number_failure);
+      expect(num == 33);
    };
 
    "bool write"_test = [] {
@@ -9658,6 +9660,21 @@ suite flat_map_tests = [] {
       expect(not glz::read_json(map, buffer));
       expect(map.at("one") == 1);
       expect(map.at("two") == 2);
+   };
+};
+
+struct Foo
+{
+   int x;
+};
+
+suite ndjson_options = [] {
+   "ndjson_options"_test = [] {
+      std::vector<Foo> assets{};
+      const auto ec =
+         glz::read<glz::opts{.format = glz::NDJSON, .error_on_unknown_keys = false, .validate_skipped = true}>(
+            assets, "{\"x\":1}\n{\"x\":2}");
+      expect(not ec);
    };
 };
 

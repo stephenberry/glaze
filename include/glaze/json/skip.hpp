@@ -60,7 +60,7 @@ namespace glz::detail
    }
 
    template <opts Opts>
-      requires(Opts.format == JSON)
+      requires(Opts.format == JSON || Opts.format == NDJSON)
    void skip_array(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       if constexpr (!Opts.validate_skipped) {
