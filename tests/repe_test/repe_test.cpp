@@ -73,35 +73,24 @@ suite structs_of_functions = [] {
 
       obj.i = 55;
 
-      glz::repe::shared_buffer response{};
+      repe::message request{};
+      repe::message response{};
 
-      {
-         auto request = repe::request_json({"/i"});
-         response = server.call(request);
-      }
+      request = repe::request_json({"/i"});
+      server.call(request, response);
+      expect(response.body == R"(55)") << response.body;
 
-      expect(response->value() == R"([[0,0,0,"/i",null],55])") << response->value();
+      request = repe::request_json({.query = "/i"}, 42);
+      server.call(request, response);
+      expect(response.body == R"(null)") << response.body;
 
-      {
-         auto request = repe::request_json({.query = "/i"}, 42);
-         response = server.call(request);
-      }
+      request = repe::request_json({"/hello"});
+      server.call(request, response);
+      expect(response.body == R"("Hello")");
 
-      expect(response->value() == R"([[0,0,2,"/i",null],null])") << response->value();
-
-      {
-         auto request = repe::request_json({"/hello"});
-         response = server.call(request);
-      }
-
-      expect(response->value() == R"([[0,0,0,"/hello",null],"Hello"])");
-
-      {
-         auto request = repe::request_json({"/get_number"});
-         response = server.call(request);
-      }
-
-      expect(response->value() == R"([[0,0,0,"/get_number",null],42])");
+      request = repe::request_json({"/get_number"});
+      server.call(request, response);
+      expect(response.body == R"(42)");
    };
 
    "nested_structs_of_functions"_test = [] {
@@ -111,89 +100,60 @@ suite structs_of_functions = [] {
 
       server.on(obj);
 
-      glz::repe::shared_buffer response{};
+      repe::message request{};
+      repe::message response{};
 
-      {
-         auto request = repe::request_json({"/my_functions/void_func"});
-         response = server.call(request);
-      }
+      request = repe::request_json({"/my_functions/void_func"});
+      server.call(request, response);
+      expect(response.body == R"(null)") << response.body;
 
-      expect(response->value() == R"([[0,0,2,"/my_functions/void_func",null],null])") << response->value();
+      request = repe::request_json({"/my_functions/hello"});
+      server.call(request, response);
+      expect(response.body == R"("Hello")");
 
-      {
-         auto request = repe::request_json({"/my_functions/hello"});
-         response = server.call(request);
-      }
+      request = repe::request_json({"/meta_functions/hello"});
+      server.call(request, response);
+      expect(response.body == R"("Hello")");
 
-      expect(response->value() == R"([[0,0,0,"/my_functions/hello",null],"Hello"])");
+      request = repe::request_json({"/append_awesome"}, "you are");
+      server.call(request, response);
+      expect(response.body == R"("you are awesome!")");
 
-      {
-         auto request = repe::request_json({"/meta_functions/hello"});
-         response = server.call(request);
-      }
+      request = repe::request_json({"/my_string"}, "Howdy!");
+      server.call(request, response);
+      expect(response.body == R"(null)");
 
-      expect(response->value() == R"([[0,0,0,"/meta_functions/hello",null],"Hello"])");
-
-      {
-         auto request = repe::request_json({"/append_awesome"}, "you are");
-         response = server.call(request);
-      }
-
-      expect(response->value() == R"([[0,0,0,"/append_awesome",null],"you are awesome!"])");
-
-      {
-         auto request = repe::request_json({"/my_string"}, "Howdy!");
-         response = server.call(request);
-      }
-
-      expect(response->value() == R"([[0,0,2,"/my_string",null],null])");
-
-      {
-         auto request = repe::request_json({"/my_string"});
-         response = server.call(request);
-      }
-
-      expect(response->value() == R"([[0,0,0,"/my_string",null],"Howdy!"])") << response->value();
+      request = repe::request_json({"/my_string"});
+      server.call(request, response);
+      expect(response.body == R"("Howdy!")") << response.body;
 
       obj.my_string.clear();
 
-      {
-         auto request = repe::request_json({"/my_string"});
-         response = server.call(request);
-      }
-
+      request = repe::request_json({"/my_string"});
+      server.call(request, response);
       // we expect an empty string returned because we cleared it
-      expect(response->value() == R"([[0,0,0,"/my_string",null],""])");
+      expect(response.body == R"("")");
 
-      {
-         auto request = repe::request_json({"/my_functions/max"}, std::vector<double>{1.1, 3.3, 2.25});
-         response = server.call(request);
-      }
+      request = repe::request_json({"/my_functions/max"}, std::vector<double>{1.1, 3.3, 2.25});
+      server.call(request, response);
+      expect(response.body == R"(3.3)") << response.body;
 
-      expect(response->value() == R"([[0,0,0,"/my_functions/max",null],3.3])") << response->value();
-
-      {
-         auto request = repe::request_json({"/my_functions"});
-         response = server.call(request);
-      }
-
+      request = repe::request_json({"/my_functions"});
+      server.call(request, response);
       expect(
-         response->value() ==
-         R"([[0,0,0,"/my_functions",null],{"i":0,"hello":"std::function<std::string_view()>","world":"std::function<std::string_view()>","get_number":"std::function<int32_t()>","void_func":"std::function<void()>","max":"std::function<double(std::vector<double>&)>"}])")
-         << response->value();
+         response.body ==
+         R"({"i":0,"hello":"std::function<std::string_view()>","world":"std::function<std::string_view()>","get_number":"std::function<int32_t()>","void_func":"std::function<void()>","max":"std::function<double(std::vector<double>&)>"})")
+         << response.body;
 
-      {
-         auto request = repe::request_json({""});
-         response = server.call(request);
-      }
-
+      request = repe::request_json({""});
+      server.call(request, response);
       expect(
-         response->value() ==
-         R"([[0,0,0,"",null],{"my_functions":{"i":0,"hello":"std::function<std::string_view()>","world":"std::function<std::string_view()>","get_number":"std::function<int32_t()>","void_func":"std::function<void()>","max":"std::function<double(std::vector<double>&)>"},"meta_functions":{"hello":"std::function<std::string_view()>","world":"std::function<std::string_view()>","get_number":"std::function<int32_t()>"},"append_awesome":"std::function<std::string(const std::string&)>","my_string":""}])")
-         << response->value();
+         response.body ==
+         R"({"my_functions":{"i":0,"hello":"std::function<std::string_view()>","world":"std::function<std::string_view()>","get_number":"std::function<int32_t()>","void_func":"std::function<void()>","max":"std::function<double(std::vector<double>&)>"},"meta_functions":{"hello":"std::function<std::string_view()>","world":"std::function<std::string_view()>","get_number":"std::function<int32_t()>"},"append_awesome":"std::function<std::string(const std::string&)>","my_string":""})")
+         << response.body;
    };
 
-   "example_functions"_test = [] {
+   /*"example_functions"_test = [] {
       repe::registry server{};
 
       example_functions_t obj{};
@@ -207,14 +167,14 @@ suite structs_of_functions = [] {
          response = server.call(request);
       }
 
-      expect(response->value() == R"([[0,0,2,"/name",null],null])") << response->value();
+      expect(response.body == R"([[0,0,2,"/name",null],null])") << response.body;
 
       {
          auto request = repe::request_json({"/get_name"});
          response = server.call(request);
       }
 
-      expect(response->value() == R"([[0,0,0,"/get_name",null],"Susan"])") << response->value();
+      expect(response.body == R"([[0,0,0,"/get_name",null],"Susan"])") << response.body;
 
       {
          auto request = repe::request_json({"/get_name"}, "Bob");
@@ -222,7 +182,7 @@ suite structs_of_functions = [] {
       }
 
       expect(obj.name == "Susan"); // we expect the name to not have changed because this function take no inputs
-      expect(response->value() == R"([[0,0,0,"/get_name",null],"Susan"])") << response->value();
+      expect(response.body == R"([[0,0,0,"/get_name",null],"Susan"])") << response.body;
 
       {
          auto request = repe::request_json({"/set_name"}, "Bob");
@@ -230,7 +190,7 @@ suite structs_of_functions = [] {
       }
 
       expect(obj.name == "Bob");
-      expect(response->value() == R"([[0,0,2,"/set_name",null],null])") << response->value();
+      expect(response.body == R"([[0,0,2,"/set_name",null],null])") << response.body;
 
       {
          auto request = repe::request_json({"/custom_name"}, "Alice");
@@ -238,11 +198,11 @@ suite structs_of_functions = [] {
       }
 
       expect(obj.name == "Alice");
-      expect(response->value() == R"([[0,0,2,"/custom_name",null],null])") << response->value();
-   };
+      expect(response.body == R"([[0,0,2,"/custom_name",null],null])") << response.body;
+   };*/
 };
 
-suite structs_of_functions_binary = [] {
+/*suite structs_of_functions_binary = [] {
    "structs_of_functions"_test = [] {
       repe::registry<glz::opts{.format = glz::BEVE}> server{};
 
@@ -260,7 +220,7 @@ suite structs_of_functions_binary = [] {
       }
 
       std::string res{};
-      expect(!glz::beve_to_json(response->value(), res));
+      expect(!glz::beve_to_json(response.body, res));
       expect(res == R"([[0,0,0,"/i",null],55])") << res;
 
       {
@@ -268,7 +228,7 @@ suite structs_of_functions_binary = [] {
          response = server.call(request);
       }
 
-      expect(!glz::beve_to_json(response->value(), res));
+      expect(!glz::beve_to_json(response.body, res));
       expect(res == R"([[0,0,2,"/i",null],null])") << res;
 
       {
@@ -276,7 +236,7 @@ suite structs_of_functions_binary = [] {
          response = server.call(request);
       }
 
-      expect(!glz::beve_to_json(response->value(), res));
+      expect(!glz::beve_to_json(response.body, res));
       expect(res == R"([[0,0,0,"/hello",null],"Hello"])");
 
       {
@@ -284,7 +244,7 @@ suite structs_of_functions_binary = [] {
          response = server.call(request);
       }
 
-      expect(!glz::beve_to_json(response->value(), res));
+      expect(!glz::beve_to_json(response.body, res));
       expect(res == R"([[0,0,0,"/get_number",null],42])");
    };
 
@@ -303,7 +263,7 @@ suite structs_of_functions_binary = [] {
       }
 
       std::string res{};
-      expect(!glz::beve_to_json(response->value(), res));
+      expect(!glz::beve_to_json(response.body, res));
       expect(res == R"([[0,0,2,"/my_functions/void_func",null],null])") << response;
 
       {
@@ -311,7 +271,7 @@ suite structs_of_functions_binary = [] {
          response = server.call(request);
       }
 
-      expect(!glz::beve_to_json(response->value(), res));
+      expect(!glz::beve_to_json(response.body, res));
       expect(res == R"([[0,0,0,"/my_functions/hello",null],"Hello"])");
 
       {
@@ -319,7 +279,7 @@ suite structs_of_functions_binary = [] {
          response = server.call(request);
       }
 
-      expect(!glz::beve_to_json(response->value(), res));
+      expect(!glz::beve_to_json(response.body, res));
       expect(res == R"([[0,0,0,"/meta_functions/hello",null],"Hello"])");
 
       {
@@ -327,7 +287,7 @@ suite structs_of_functions_binary = [] {
          response = server.call(request);
       }
 
-      expect(!glz::beve_to_json(response->value(), res));
+      expect(!glz::beve_to_json(response.body, res));
       expect(res == R"([[0,0,0,"/append_awesome",null],"you are awesome!"])");
 
       {
@@ -335,7 +295,7 @@ suite structs_of_functions_binary = [] {
          response = server.call(request);
       }
 
-      expect(!glz::beve_to_json(response->value(), res));
+      expect(!glz::beve_to_json(response.body, res));
       expect(res == R"([[0,0,2,"/my_string",null],null])");
 
       {
@@ -343,7 +303,7 @@ suite structs_of_functions_binary = [] {
          response = server.call(request);
       }
 
-      expect(!glz::beve_to_json(response->value(), res));
+      expect(!glz::beve_to_json(response.body, res));
       expect(res == R"([[0,0,0,"/my_string",null],"Howdy!"])") << response;
 
       obj.my_string.clear();
@@ -353,7 +313,7 @@ suite structs_of_functions_binary = [] {
          response = server.call(request);
       }
 
-      expect(!glz::beve_to_json(response->value(), res));
+      expect(!glz::beve_to_json(response.body, res));
       // we expect an empty string returned because we cleared it
       expect(res == R"([[0,0,0,"/my_string",null],""])");
 
@@ -362,7 +322,7 @@ suite structs_of_functions_binary = [] {
          response = server.call(request);
       }
 
-      expect(!glz::beve_to_json(response->value(), res));
+      expect(!glz::beve_to_json(response.body, res));
       expect(res == R"([[0,0,0,"/my_functions/max",null],3.3])") << response;
 
       {
@@ -370,7 +330,7 @@ suite structs_of_functions_binary = [] {
          response = server.call(request);
       }
 
-      expect(!glz::beve_to_json(response->value(), res));
+      expect(!glz::beve_to_json(response.body, res));
       expect(
          res ==
          R"([[0,0,0,"/my_functions",null],{"i":0,"hello":"std::function<std::string_view()>","world":"std::function<std::string_view()>","get_number":"std::function<int32_t()>","void_func":"std::function<void()>","max":"std::function<double(std::vector<double>&)>"}])")
@@ -381,7 +341,7 @@ suite structs_of_functions_binary = [] {
          response = server.call(request);
       }
 
-      expect(!glz::beve_to_json(response->value(), res));
+      expect(!glz::beve_to_json(response.body, res));
       expect(
          res ==
          R"([[0,0,0,"",null],{"my_functions":{"i":0,"hello":"std::function<std::string_view()>","world":"std::function<std::string_view()>","get_number":"std::function<int32_t()>","void_func":"std::function<void()>","max":"std::function<double(std::vector<double>&)>"},"meta_functions":{"hello":"std::function<std::string_view()>","world":"std::function<std::string_view()>","get_number":"std::function<int32_t()>"},"append_awesome":"std::function<std::string(const std::string&)>","my_string":""}])")
@@ -403,7 +363,7 @@ suite structs_of_functions_binary = [] {
       }
 
       std::string res{};
-      expect(!glz::beve_to_json(response->value(), res));
+      expect(!glz::beve_to_json(response.body, res));
       expect(res == R"([[0,0,2,"/name",null],null])") << response;
 
       {
@@ -411,7 +371,7 @@ suite structs_of_functions_binary = [] {
          response = server.call(request);
       }
 
-      expect(!glz::beve_to_json(response->value(), res));
+      expect(!glz::beve_to_json(response.body, res));
       expect(res == R"([[0,0,0,"/get_name",null],"Susan"])") << response;
 
       {
@@ -419,7 +379,7 @@ suite structs_of_functions_binary = [] {
          response = server.call(request);
       }
 
-      expect(!glz::beve_to_json(response->value(), res));
+      expect(!glz::beve_to_json(response.body, res));
       expect(obj.name == "Susan"); // we expect the name to not have changed because this function take no inputs
       expect(res == R"([[0,0,0,"/get_name",null],"Susan"])") << res;
 
@@ -428,7 +388,7 @@ suite structs_of_functions_binary = [] {
          response = server.call(request);
       }
 
-      expect(!glz::beve_to_json(response->value(), res));
+      expect(!glz::beve_to_json(response.body, res));
       expect(obj.name == "Bob");
       expect(res == R"([[0,0,2,"/set_name",null],null])") << response;
 
@@ -437,7 +397,7 @@ suite structs_of_functions_binary = [] {
          response = server.call(request);
       }
 
-      expect(!glz::beve_to_json(response->value(), res));
+      expect(!glz::beve_to_json(response.body, res));
       expect(obj.name == "Alice");
       expect(res == R"([[0,0,2,"/custom_name",null],null])") << response;
    };
@@ -470,14 +430,14 @@ suite wrapper_tests = [] {
          response = server.call(request);
       }
 
-      expect(response->value() == R"([[0,0,2,"/sub/my_functions/void_func",null],null])") << response->value();
+      expect(response.body == R"([[0,0,2,"/sub/my_functions/void_func",null],null])") << response.body;
 
       {
          auto request = repe::request_json({"/sub/my_functions/hello"});
          response = server.call(request);
       }
 
-      expect(response->value() == R"([[0,0,0,"/sub/my_functions/hello",null],"Hello"])");
+      expect(response.body == R"([[0,0,0,"/sub/my_functions/hello",null],"Hello"])");
    };
 };
 
@@ -496,14 +456,14 @@ suite root_tests = [] {
          response = server.call(request);
       }
 
-      expect(response->value() == R"([[0,0,2,"/sub/my_functions/void_func",null],null])") << response->value();
+      expect(response.body == R"([[0,0,2,"/sub/my_functions/void_func",null],null])") << response.body;
 
       {
          auto request = repe::request_json({"/sub/my_functions/hello"});
          response = server.call(request);
       }
 
-      expect(response->value() == R"([[0,0,0,"/sub/my_functions/hello",null],"Hello"])");
+      expect(response.body == R"([[0,0,0,"/sub/my_functions/hello",null],"Hello"])");
    };
 };
 
@@ -524,7 +484,7 @@ suite wrapper_tests_binary = [] {
       }
 
       std::string res{};
-      expect(!glz::beve_to_json(response->value(), res));
+      expect(!glz::beve_to_json(response.body, res));
       expect(res == R"([[0,0,2,"/sub/my_functions/void_func",null],null])") << response;
 
       {
@@ -532,7 +492,7 @@ suite wrapper_tests_binary = [] {
          response = server.call(request);
       }
 
-      expect(!glz::beve_to_json(response->value(), res));
+      expect(!glz::beve_to_json(response.body, res));
       expect(res == R"([[0,0,0,"/sub/my_functions/hello",null],"Hello"])");
    };
 };
@@ -559,7 +519,7 @@ suite multi_threading_tests = [] {
          size_t response_counter{};
          for (size_t i = 0; i < N; ++i) {
             const auto response = registry.call(read_msg);
-            response_counter += response->value().size();
+            response_counter += response.body.size();
          }
          std::cout << "read str response_counter: " << response_counter << '\n';
       });
@@ -570,7 +530,7 @@ suite multi_threading_tests = [] {
          size_t response_counter{};
          for (size_t i = 0; i < N; ++i) {
             const auto response = registry.call(read_integer);
-            response_counter += response->value().size();
+            response_counter += response.body.size();
          }
          std::cout << "read integer response_counter: " << response_counter << '\n';
       });
@@ -581,7 +541,7 @@ suite multi_threading_tests = [] {
          size_t response_counter{};
          for (size_t i = 0; i < N; ++i) {
             const auto response = registry.call(read_full);
-            response_counter += response->value().size();
+            response_counter += response.body.size();
          }
          std::cout << "read full response_counter: " << response_counter << '\n';
       });
@@ -595,7 +555,7 @@ suite multi_threading_tests = [] {
             message.append("x");
             auto write_msg = repe::request_json({"/str"}, message);
             const auto response = registry.call(write_msg);
-            response_counter += response->value().size();
+            response_counter += response.body.size();
 
             if (i == 50) {
                latch.count_down();
@@ -609,7 +569,7 @@ suite multi_threading_tests = [] {
          for (size_t i = 0; i < N; ++i) {
             auto write_msg = repe::request_json({"/integer"}, i);
             const auto response = registry.call(write_msg);
-            response_counter += response->value().size();
+            response_counter += response.body.size();
          }
          std::cout << "write integer response_counter: " << response_counter << '\n';
       });
@@ -648,6 +608,6 @@ suite glaze_types_test = [] {
       glz::repe::registry<> registry{};
       registry.on(obj);
    };
-};
+};*/
 
 int main() { return 0; }

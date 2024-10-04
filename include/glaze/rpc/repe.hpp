@@ -192,10 +192,21 @@ namespace glz::repe
 
    struct state final
    {
-      const std::string_view message{};
-      repe::header& header;
-      std::string& response;
+      repe::message& in;
+      repe::message& out;
       error_t& error;
+      
+      bool notify() const {
+         return in.header.notify();
+      }
+      
+      bool read() const {
+         return in.header.read();
+      }
+      
+      bool write() const {
+         return in.header.write();
+      }
    };
 
    template <class T>
@@ -214,10 +225,10 @@ namespace glz::repe
 
    // returns 0 on error
    template <opts Opts, class Value>
-   size_t read_params(Value&& value, auto&& state, auto&& response)
+   size_t read_params(Value&& value, auto&& state)
    {
       glz::context ctx{};
-      auto [b, e] = read_iterators<Opts>(ctx, state.message);
+      auto [b, e] = read_iterators<Opts>(ctx, state.in.body);
       if (bool(ctx.error)) [[unlikely]] {
          return 0;
       }
@@ -226,11 +237,12 @@ namespace glz::repe
       glz::detail::read<Opts.format>::template op<Opts>(std::forward<Value>(value), ctx, b, e);
 
       if (bool(ctx.error)) {
+         state.out.header.error = true;
          error_ctx ec{ctx.error, ctx.custom_error_message, size_t(b - start), ctx.includer_error};
          std::ignore =
             write<Opts>(std::forward_as_tuple(header{.error = true},
-                                              error_t{error_e::parse_error, format_error(ec, state.message)}),
-                        response);
+                                              error_t{error_e::parse_error, format_error(ec, state.in.body)}),
+                        state.out.body);
          return 0;
       }
 
@@ -240,13 +252,14 @@ namespace glz::repe
    template <opts Opts, class Value>
    void write_response(Value&& value, is_state auto&& state)
    {
+      state.out.header = state.in.header;
       if (state.error) {
-         std::ignore = write<Opts>(std::forward_as_tuple(header{.error = true}, state.error), state.response);
+         state.out.header.error = true;
       }
       else {
-         const auto ec = write<Opts>(std::forward_as_tuple(state.header, std::forward<Value>(value)), state.response);
+         const auto ec = write<Opts>(std::forward<Value>(value), state.out.body);
          if (bool(ec)) [[unlikely]] {
-            std::ignore = write<Opts>(std::forward_as_tuple(header{.error = true}, ec.ec), state.response);
+            state.out.header.error = true;
          }
       }
    }
@@ -254,13 +267,14 @@ namespace glz::repe
    template <opts Opts>
    void write_response(is_state auto&& state)
    {
+      state.out.header = state.in.header;
       if (state.error) {
-         std::ignore = write<Opts>(std::forward_as_tuple(header{.error = true}, state.error), state.response);
+         state.out.header.error = true;
       }
       else {
-         const auto ec = write<Opts>(std::forward_as_tuple(state.header, nullptr), state.response);
+         const auto ec = write<Opts>(nullptr, state.out.body);
          if (bool(ec)) [[unlikely]] {
-            std::ignore = write<Opts>(std::forward_as_tuple(header{.error = true}, ec.ec), state.response);
+            state.out.header.error = true;
          }
       }
    }
@@ -357,6 +371,7 @@ namespace glz::repe
    template <class Value, class H = user_header>
    [[nodiscard]] auto request_json(H&& h, Value&& value)
    {
+      h.write(true);
       message msg{.header = encode(h), .query = std::string{h.query}};
       std::ignore = glz::write_json(std::forward<Value>(value), msg.body);
       return msg;
@@ -365,6 +380,7 @@ namespace glz::repe
    template <class Value, class H = user_header>
    [[nodiscard]] auto request_binary(H&& h, Value&& value)
    {
+      h.write(true);
       message msg{.header = encode(h), .query = std::string{h.query}};
       std::ignore = glz::write_beve(std::forward<Value>(value), msg.body);
       return msg;
@@ -394,58 +410,6 @@ namespace glz::repe
             std::array<pair<sv, Mtx>, N>{pair<sv, Mtx>{join_v<parent, chars<"/">, key_name_v<I, T>>, Mtx{}}...});
       }(std::make_index_sequence<N>{});
    }
-
-   struct buffer_pool
-   {
-      std::mutex mtx{};
-      std::deque<std::string> buffers{2};
-      std::vector<size_t> available{0, 1}; // indices of available buffers
-
-      // provides a pointer to a buffer and an index
-      std::tuple<std::string*, size_t> get()
-      {
-         std::unique_lock lock{mtx};
-         if (available.empty()) {
-            const auto current_size = buffers.size();
-            const auto new_size = buffers.size() * 2;
-            buffers.resize(new_size);
-            for (size_t i = current_size; i < new_size; ++i) {
-               available.emplace_back(i);
-            }
-         }
-
-         const auto index = available.back();
-         available.pop_back();
-         return {&buffers[index], index};
-      }
-
-      void free(const size_t index)
-      {
-         std::unique_lock lock{mtx};
-         available.emplace_back(index);
-      }
-   };
-
-   struct unique_buffer
-   {
-      buffer_pool* pool{};
-      std::string* ptr{};
-      size_t index{};
-
-      std::string& value() { return *ptr; }
-
-      const std::string& value() const { return *ptr; }
-
-      unique_buffer(buffer_pool* input_pool) : pool(input_pool) { std::tie(ptr, index) = pool->get(); }
-      unique_buffer(const unique_buffer&) = default;
-      unique_buffer(unique_buffer&&) = default;
-      unique_buffer& operator=(const unique_buffer&) = default;
-      unique_buffer& operator=(unique_buffer&&) = default;
-
-      ~unique_buffer() { pool->free(index); }
-   };
-
-   using shared_buffer = std::shared_ptr<unique_buffer>;
 
    struct mutex_link
    {
@@ -801,8 +765,6 @@ namespace glz::repe
          return chain_invoke_lock{chain};
       }
 
-      buffer_pool buffers{};
-
       template <const std::string_view& root = detail::empty_path, class T, const std::string_view& parent = root>
          requires(glz::detail::glaze_object_t<T> || glz::detail::reflectable<T>)
       void on(T& value)
@@ -823,23 +785,23 @@ namespace glz::repe
                                           reflectable<T>)&&!std::same_as<std::decay_t<decltype(t)>, std::nullptr_t>) {
             // build read/write calls to the top level object
             methods[root] = [&value, chain = get_chain(root)](repe::state&& state) mutable {
-               if (state.header.write()) {
+               if (state.write()) {
                   chain_read_lock lock{chain};
                   if (not lock) {
                      state.error = {error_e::timeout, std::string(root)};
                      write_response<Opts>(state);
                      return;
                   }
-                  if (read_params<Opts>(value, state, state.response) == 0) {
+                  if (read_params<Opts>(value, state) == 0) {
                      return;
                   }
                }
 
-               if (state.header.notify()) {
+               if (state.notify()) {
                   return;
                }
 
-               if (state.header.read()) {
+               if (state.read()) {
                   chain_write_lock lock{chain};
                   if (not lock) {
                      state.error = {error_e::timeout, std::string(root)};
@@ -886,7 +848,7 @@ namespace glz::repe
                   methods[full_key] = [callback = func, chain = get_chain(full_key)](repe::state&& state) mutable {
                      {
                         callback();
-                        if (state.header.notify()) {
+                        if (state.notify()) {
                            return;
                         }
                      }
@@ -896,7 +858,7 @@ namespace glz::repe
                else {
                   methods[full_key] = [callback = func, chain = get_chain(full_key)](repe::state&& state) mutable {
                      {
-                        if (state.header.notify()) {
+                        if (state.notify()) {
                            std::ignore = callback();
                            return;
                         }
@@ -916,12 +878,12 @@ namespace glz::repe
                methods[full_key] = [callback = func, chain = get_chain(full_key)](repe::state&& state) mutable {
                   static thread_local std::decay_t<Params> params{};
                   // no need lock locals
-                  if (read_params<Opts>(params, state, state.response) == 0) {
+                  if (read_params<Opts>(params, state) == 0) {
                      return;
                   }
 
                   {
-                     if (state.header.notify()) {
+                     if (state.notify()) {
                         std::ignore = callback(params);
                         return;
                      }
@@ -934,23 +896,23 @@ namespace glz::repe
 
                // build read/write calls to the object as a variable
                methods[full_key] = [&func, chain = get_chain(full_key)](repe::state&& state) mutable {
-                  if (state.header.write()) {
+                  if (state.write()) {
                      chain_read_lock lock{chain};
                      if (not lock) {
                         state.error = {error_e::timeout, std::string(full_key)};
                         write_response<Opts>(state);
                         return;
                      }
-                     if (read_params<Opts>(func, state, state.response) == 0) {
+                     if (read_params<Opts>(func, state) == 0) {
                         return;
                      }
                   }
 
-                  if (state.header.notify()) {
+                  if (state.notify()) {
                      return;
                   }
 
-                  if (state.header.read()) {
+                  if (state.read()) {
                      chain_write_lock lock{chain};
                      if (not lock) {
                         state.error = {error_e::timeout, std::string(full_key)};
@@ -967,23 +929,23 @@ namespace glz::repe
             else if constexpr (not std::is_lvalue_reference_v<Func>) {
                // For glz::custom, glz::manage, etc.
                methods[full_key] = [func, chain = get_chain(full_key)](repe::state&& state) mutable {
-                  if (state.header.write()) {
+                  if (state.write()) {
                      chain_read_lock lock{chain};
                      if (not lock) {
                         state.error = {error_e::timeout, std::string(full_key)};
                         write_response<Opts>(state);
                         return;
                      }
-                     if (read_params<Opts>(func, state, state.response) == 0) {
+                     if (read_params<Opts>(func, state) == 0) {
                         return;
                      }
                   }
 
-                  if (state.header.notify()) {
+                  if (state.notify()) {
                      return;
                   }
 
-                  if (state.header.read()) {
+                  if (state.read()) {
                      chain_write_lock lock{chain};
                      if (not lock) {
                         state.error = {error_e::timeout, std::string(full_key)};
@@ -1012,7 +974,7 @@ namespace glz::repe
                               (value.*func)();
                            }
 
-                           if (state.header.notify()) {
+                           if (state.notify()) {
                               return;
                            }
 
@@ -1023,8 +985,8 @@ namespace glz::repe
                         using Input = std::decay_t<glz::tuple_element_t<0, Tuple>>;
                         methods[full_key] = [&value, &func, chain = get_chain(full_key)](repe::state&& state) mutable {
                            static thread_local Input input{};
-                           if (state.header.write()) {
-                              if (read_params<Opts>(input, state, state.response) == 0) {
+                           if (state.write()) {
+                              if (read_params<Opts>(input, state) == 0) {
                                  return;
                               }
                            }
@@ -1033,7 +995,7 @@ namespace glz::repe
                               (value.*func)(input);
                            }
 
-                           if (state.header.notify()) {
+                           if (state.notify()) {
                               return;
                            }
 
@@ -1050,7 +1012,7 @@ namespace glz::repe
                         methods[full_key] = [&value, &func, chain = get_chain(full_key)](repe::state&& state) mutable {
                            // using Result = std::decay_t<decltype((value.*func)())>;
                            {
-                              if (state.header.notify()) {
+                              if (state.notify()) {
                                  std::ignore = (value.*func)();
                                  return;
                               }
@@ -1065,15 +1027,15 @@ namespace glz::repe
                                              chain = get_chain(full_key)](repe::state&& state) mutable {
                            static thread_local Input input{};
 
-                           if (state.header.write()) {
-                              if (read_params<Opts>(input, state, state.response) == 0) {
+                           if (state.write()) {
+                              if (read_params<Opts>(input, state) == 0) {
                                  return;
                               }
                            }
 
                            // using Result = std::decay_t<decltype((value.*func)(input))>;
                            {
-                              if (state.header.notify()) {
+                              if (state.notify()) {
                                  std::ignore = (value.*func)(input);
                                  return;
                               }
@@ -1090,23 +1052,23 @@ namespace glz::repe
                else {
                   // this is a variable and not a function, so we build RPC read/write calls
                   methods[full_key] = [&func, chain = get_chain(full_key)](repe::state&& state) mutable {
-                     if (state.header.write()) {
+                     if (state.write()) {
                         chain_read_lock lock{chain};
                         if (not lock) {
                            state.error = {error_e::timeout, std::string(full_key)};
                            write_response<Opts>(state);
                            return;
                         }
-                        if (read_params<Opts>(func, state, state.response) == 0) {
+                        if (read_params<Opts>(func, state) == 0) {
                            return;
                         }
                      }
 
-                     if (state.header.notify()) {
+                     if (state.notify()) {
                         return;
                      }
 
-                     if (state.header.read()) {
+                     if (state.read()) {
                         chain_write_lock lock{chain};
                         if (not lock) {
                            state.error = {error_e::timeout, std::string(full_key)};
@@ -1136,15 +1098,11 @@ namespace glz::repe
          return call(request<Opts>(std::forward<H>(header), std::forward<Value>(value), buffer));
       }
       
-      // returns null for notifications
-      [[nodiscard]] shared_buffer call(message& msg)
+      void call(message& in, message& out)
       {
-         shared_buffer u_buffer = std::make_shared<unique_buffer>(&buffers);
-         auto& response = *(u_buffer->ptr);
-
-         if (auto it = methods.find(msg.query); it != methods.end()) {
+         if (auto it = methods.find(in.query); it != methods.end()) {
             static thread_local error_t error{};
-            it->second(state{msg.body, msg.header, response, error}); // handle the body
+            it->second(state{in, out, error}); // handle the body
          }
          else {
             static constexpr error_e code = error_e::method_not_found;
@@ -1152,20 +1110,12 @@ namespace glz::repe
             
             const auto body_length = 8 + body.size(); // 4 bytes for code, 4 bytes for size, + message
             
-            response.resize(sizeof(header) + body_length);
+            out.body.resize(sizeof(header) + body_length);
             header h{.error = true, .body_length = body_length};
-            std::memcpy(response.data(), &h, sizeof(header));
-            std::memcpy(response.data() + sizeof(header), &code, 4);
-            std::memcpy(response.data() + sizeof(header) + 4, &body_length, 4);
-            std::memcpy(response.data() + sizeof(header) + 8, body.data(), body.size());
-            return u_buffer;
-         }
-         
-         if (msg.header.notify()) {
-            return {};
-         }
-         else {
-            return u_buffer;
+            std::memcpy(out.body.data(), &h, sizeof(header));
+            std::memcpy(out.body.data() + sizeof(header), &code, 4);
+            std::memcpy(out.body.data() + sizeof(header) + 4, &body_length, 4);
+            std::memcpy(out.body.data() + sizeof(header) + 8, body.data(), body.size());
          }
       }
 
