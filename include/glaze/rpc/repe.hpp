@@ -114,8 +114,7 @@ namespace glz::repe
       }
    };
    
-   template <class H = user_header>
-   inline repe::header encode(H&& h) noexcept
+   inline repe::header encode(const user_header& h) noexcept
    {
       repe::header ret{.error = h.error, //
             .action = h.action, //
