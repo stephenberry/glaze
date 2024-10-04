@@ -188,7 +188,7 @@ suite structs_of_functions = [] {
    };
 };
 
-/*suite structs_of_functions_binary = [] {
+suite structs_of_functions_binary = [] {
    "structs_of_functions"_test = [] {
       repe::registry<glz::opts{.format = glz::BEVE}> server{};
 
@@ -198,43 +198,32 @@ suite structs_of_functions = [] {
 
       obj.i = 55;
 
-      glz::repe::shared_buffer response{};
+      repe::message request{};
+      repe::message response{};
 
-      {
-         auto request = repe::request_binary({"/i"});
-         response = server.call(request);
-      }
-
+      request = repe::request_binary({"/i"});
+      server.call(request, response);
       std::string res{};
       expect(!glz::beve_to_json(response.body, res));
-      expect(res == R"([[0,0,0,"/i",null],55])") << res;
+      expect(res == R"(55)") << res;
 
-      {
-         auto request = repe::request_binary({.query = "/i"}, 42);
-         response = server.call(request);
-      }
-
+      request = repe::request_binary({.query = "/i"}, 42);
+      server.call(request, response);
       expect(!glz::beve_to_json(response.body, res));
-      expect(res == R"([[0,0,2,"/i",null],null])") << res;
+      expect(res == R"(null)") << res;
 
-      {
-         auto request = repe::request_binary({"/hello"});
-         response = server.call(request);
-      }
-
+      request = repe::request_binary({"/hello"});
+      server.call(request, response);
       expect(!glz::beve_to_json(response.body, res));
-      expect(res == R"([[0,0,0,"/hello",null],"Hello"])");
+      expect(res == R"("Hello")");
 
-      {
-         auto request = repe::request_binary({"/get_number"});
-         response = server.call(request);
-      }
-
+      request = repe::request_binary({"/get_number"});
+      server.call(request, response);
       expect(!glz::beve_to_json(response.body, res));
-      expect(res == R"([[0,0,0,"/get_number",null],42])");
+      expect(res == R"(42)");
    };
 
-   "nested_structs_of_functions"_test = [] {
+   /*"nested_structs_of_functions"_test = [] {
       repe::registry<glz::opts{.format = glz::BEVE}> server{};
 
       my_nested_functions_t obj{};
@@ -386,9 +375,9 @@ suite structs_of_functions = [] {
       expect(!glz::beve_to_json(response.body, res));
       expect(obj.name == "Alice");
       expect(res == R"([[0,0,2,"/custom_name",null],null])") << response;
-   };
+   };*/
 };
-
+/*
 template <class T>
 struct wrapper_t
 {
