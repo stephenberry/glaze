@@ -223,107 +223,79 @@ suite structs_of_functions_binary = [] {
       expect(res == R"(42)");
    };
 
-   /*"nested_structs_of_functions"_test = [] {
+   "nested_structs_of_functions"_test = [] {
       repe::registry<glz::opts{.format = glz::BEVE}> server{};
 
       my_nested_functions_t obj{};
 
       server.on(obj);
 
-      glz::repe::shared_buffer response{};
+      repe::message request{};
+      repe::message response{};
 
-      {
-         auto request = repe::request_binary({"/my_functions/void_func"});
-         response = server.call(request);
-      }
+      request = repe::request_binary({"/my_functions/void_func"});
+      server.call(request, response);
 
       std::string res{};
       expect(!glz::beve_to_json(response.body, res));
-      expect(res == R"([[0,0,2,"/my_functions/void_func",null],null])") << response;
+      expect(res == R"(null)") << response.body;
 
-      {
-         auto request = repe::request_binary({"/my_functions/hello"});
-         response = server.call(request);
-      }
-
+      request = repe::request_binary({"/my_functions/hello"});
+      server.call(request, response);
       expect(!glz::beve_to_json(response.body, res));
-      expect(res == R"([[0,0,0,"/my_functions/hello",null],"Hello"])");
+      expect(res == R"("Hello")");
 
-      {
-         auto request = repe::request_binary({"/meta_functions/hello"});
-         response = server.call(request);
-      }
-
+      request = repe::request_binary({"/meta_functions/hello"});
+      server.call(request, response);
       expect(!glz::beve_to_json(response.body, res));
-      expect(res == R"([[0,0,0,"/meta_functions/hello",null],"Hello"])");
+      expect(res == R"("Hello")");
 
-      {
-         auto request = repe::request_binary({"/append_awesome"}, "you are");
-         response = server.call(request);
-      }
-
+      request = repe::request_binary({"/append_awesome"}, "you are");
+      server.call(request, response);
       expect(!glz::beve_to_json(response.body, res));
-      expect(res == R"([[0,0,0,"/append_awesome",null],"you are awesome!"])");
+      expect(res == R"("you are awesome!")");
 
-      {
-         auto request = repe::request_binary({"/my_string"}, "Howdy!");
-         response = server.call(request);
-      }
-
+      request = repe::request_binary({"/my_string"}, "Howdy!");
+      server.call(request, response);
       expect(!glz::beve_to_json(response.body, res));
-      expect(res == R"([[0,0,2,"/my_string",null],null])");
+      expect(res == R"(null)");
 
-      {
-         auto request = repe::request_binary({"/my_string"});
-         response = server.call(request);
-      }
-
+      request = repe::request_binary({"/my_string"});
+      server.call(request, response);
       expect(!glz::beve_to_json(response.body, res));
-      expect(res == R"([[0,0,0,"/my_string",null],"Howdy!"])") << response;
+      expect(res == R"("Howdy!")") << response.body;
 
       obj.my_string.clear();
 
-      {
-         auto request = repe::request_binary({"/my_string"});
-         response = server.call(request);
-      }
-
+      request = repe::request_binary({"/my_string"});
+      server.call(request, response);
       expect(!glz::beve_to_json(response.body, res));
       // we expect an empty string returned because we cleared it
-      expect(res == R"([[0,0,0,"/my_string",null],""])");
+      expect(res == R"("")");
 
-      {
-         auto request = repe::request_binary({"/my_functions/max"}, std::vector<double>{1.1, 3.3, 2.25});
-         response = server.call(request);
-      }
-
+      request = repe::request_binary({"/my_functions/max"}, std::vector<double>{1.1, 3.3, 2.25});
+      server.call(request, response);
       expect(!glz::beve_to_json(response.body, res));
-      expect(res == R"([[0,0,0,"/my_functions/max",null],3.3])") << response;
+      expect(res == R"(3.3)") << response.body;
 
-      {
-         auto request = repe::request_binary({"/my_functions"});
-         response = server.call(request);
-      }
-
+      request = repe::request_binary({"/my_functions"});
+      server.call(request, response);
       expect(!glz::beve_to_json(response.body, res));
       expect(
          res ==
-         R"([[0,0,0,"/my_functions",null],{"i":0,"hello":"std::function<std::string_view()>","world":"std::function<std::string_view()>","get_number":"std::function<int32_t()>","void_func":"std::function<void()>","max":"std::function<double(std::vector<double>&)>"}])")
+         R"({"i":0,"hello":"std::function<std::string_view()>","world":"std::function<std::string_view()>","get_number":"std::function<int32_t()>","void_func":"std::function<void()>","max":"std::function<double(std::vector<double>&)>"})")
          << res;
 
-      {
-         auto request = repe::request_binary({""});
-         response = server.call(request);
-      }
-
+      request = repe::request_binary({""});
+      server.call(request, response);
       expect(!glz::beve_to_json(response.body, res));
       expect(
-         res ==
-         R"([[0,0,0,"",null],{"my_functions":{"i":0,"hello":"std::function<std::string_view()>","world":"std::function<std::string_view()>","get_number":"std::function<int32_t()>","void_func":"std::function<void()>","max":"std::function<double(std::vector<double>&)>"},"meta_functions":{"hello":"std::function<std::string_view()>","world":"std::function<std::string_view()>","get_number":"std::function<int32_t()>"},"append_awesome":"std::function<std::string(const std::string&)>","my_string":""}])")
+             res ==
+         R"({"my_functions":{"i":0,"hello":"std::function<std::string_view()>","world":"std::function<std::string_view()>","get_number":"std::function<int32_t()>","void_func":"std::function<void()>","max":"std::function<double(std::vector<double>&)>"},"meta_functions":{"hello":"std::function<std::string_view()>","world":"std::function<std::string_view()>","get_number":"std::function<int32_t()>"},"append_awesome":"std::function<std::string(const std::string&)>","my_string":""})")
          << res;
    };
 
-   "example_functions"_test = [] {
+   /*"example_functions"_test = [] {
       repe::registry<glz::opts{.format = glz::BEVE}> server{};
 
       example_functions_t obj{};
@@ -333,8 +305,8 @@ suite structs_of_functions_binary = [] {
       glz::repe::shared_buffer response{};
 
       {
-         auto request = repe::request_binary({"/name"}, "Susan");
-         response = server.call(request);
+         request = repe::request_binary({"/name"}, "Susan");
+         server.call(request, response);
       }
 
       std::string res{};
@@ -342,16 +314,16 @@ suite structs_of_functions_binary = [] {
       expect(res == R"([[0,0,2,"/name",null],null])") << response;
 
       {
-         auto request = repe::request_binary({"/get_name"});
-         response = server.call(request);
+         request = repe::request_binary({"/get_name"});
+         server.call(request, response);
       }
 
       expect(!glz::beve_to_json(response.body, res));
       expect(res == R"([[0,0,0,"/get_name",null],"Susan"])") << response;
 
       {
-         auto request = repe::request_binary({"/get_name"}, "Bob");
-         response = server.call(request);
+         request = repe::request_binary({"/get_name"}, "Bob");
+         server.call(request, response);
       }
 
       expect(!glz::beve_to_json(response.body, res));
@@ -359,8 +331,8 @@ suite structs_of_functions_binary = [] {
       expect(res == R"([[0,0,0,"/get_name",null],"Susan"])") << res;
 
       {
-         auto request = repe::request_binary({"/set_name"}, "Bob");
-         response = server.call(request);
+         request = repe::request_binary({"/set_name"}, "Bob");
+         server.call(request, response);
       }
 
       expect(!glz::beve_to_json(response.body, res));
@@ -368,8 +340,8 @@ suite structs_of_functions_binary = [] {
       expect(res == R"([[0,0,2,"/set_name",null],null])") << response;
 
       {
-         auto request = repe::request_binary({"/custom_name"}, "Alice");
-         response = server.call(request);
+         request = repe::request_binary({"/custom_name"}, "Alice");
+         server.call(request, response);
       }
 
       expect(!glz::beve_to_json(response.body, res));
@@ -402,14 +374,14 @@ suite wrapper_tests = [] {
 
       {
          auto request = repe::request_json({"/sub/my_functions/void_func"});
-         response = server.call(request);
+         server.call(request, response);
       }
 
       expect(response.body == R"([[0,0,2,"/sub/my_functions/void_func",null],null])") << response.body;
 
       {
          auto request = repe::request_json({"/sub/my_functions/hello"});
-         response = server.call(request);
+         server.call(request, response);
       }
 
       expect(response.body == R"([[0,0,0,"/sub/my_functions/hello",null],"Hello"])");
@@ -428,14 +400,14 @@ suite root_tests = [] {
 
       {
          auto request = repe::request_json({"/sub/my_functions/void_func"});
-         response = server.call(request);
+         server.call(request, response);
       }
 
       expect(response.body == R"([[0,0,2,"/sub/my_functions/void_func",null],null])") << response.body;
 
       {
          auto request = repe::request_json({"/sub/my_functions/hello"});
-         response = server.call(request);
+         server.call(request, response);
       }
 
       expect(response.body == R"([[0,0,0,"/sub/my_functions/hello",null],"Hello"])");
@@ -454,8 +426,8 @@ suite wrapper_tests_binary = [] {
       glz::repe::shared_buffer response{};
 
       {
-         auto request = repe::request_binary({"/sub/my_functions/void_func"});
-         response = server.call(request);
+         request = repe::request_binary({"/sub/my_functions/void_func"});
+         server.call(request, response);
       }
 
       std::string res{};
@@ -463,8 +435,8 @@ suite wrapper_tests_binary = [] {
       expect(res == R"([[0,0,2,"/sub/my_functions/void_func",null],null])") << response;
 
       {
-         auto request = repe::request_binary({"/sub/my_functions/hello"});
-         response = server.call(request);
+         request = repe::request_binary({"/sub/my_functions/hello"});
+         server.call(request, response);
       }
 
       expect(!glz::beve_to_json(response.body, res));
