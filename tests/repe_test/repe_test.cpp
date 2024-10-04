@@ -340,7 +340,7 @@ suite structs_of_functions_binary = [] {
       expect(res == R"(null)") << res;
    };
 };
-/*
+
 template <class T>
 struct wrapper_t
 {
@@ -361,21 +361,16 @@ suite wrapper_tests = [] {
 
       server.on(obj);
 
-      glz::repe::shared_buffer response{};
+      repe::message request{};
+      repe::message response{};
 
-      {
-         auto request = repe::request_json({"/sub/my_functions/void_func"});
-         server.call(request, response);
-      }
+      request = repe::request_json({"/sub/my_functions/void_func"});
+      server.call(request, response);
+      expect(response.body == R"(null)") << response.body;
 
-      expect(response.body == R"([[0,0,2,"/sub/my_functions/void_func",null],null])") << response.body;
-
-      {
-         auto request = repe::request_json({"/sub/my_functions/hello"});
-         server.call(request, response);
-      }
-
-      expect(response.body == R"([[0,0,0,"/sub/my_functions/hello",null],"Hello"])");
+      request = repe::request_json({"/sub/my_functions/hello"});
+      server.call(request, response);
+      expect(response.body == R"("Hello")");
    };
 };
 
@@ -387,25 +382,20 @@ suite root_tests = [] {
 
       server.on<glz::root<"/sub">>(obj);
 
-      glz::repe::shared_buffer response{};
+      repe::message request{};
+      repe::message response{};
 
-      {
-         auto request = repe::request_json({"/sub/my_functions/void_func"});
-         server.call(request, response);
-      }
+      request = repe::request_json({"/sub/my_functions/void_func"});
+      server.call(request, response);
+      expect(response.body == R"(null)") << response.body;
 
-      expect(response.body == R"([[0,0,2,"/sub/my_functions/void_func",null],null])") << response.body;
-
-      {
-         auto request = repe::request_json({"/sub/my_functions/hello"});
-         server.call(request, response);
-      }
-
-      expect(response.body == R"([[0,0,0,"/sub/my_functions/hello",null],"Hello"])");
+      request = repe::request_json({"/sub/my_functions/hello"});
+      server.call(request, response);
+      expect(response.body == R"("Hello")");
    };
 };
 
-suite wrapper_tests_binary = [] {
+/*suite wrapper_tests_binary = [] {
    "wrapper"_test = [] {
       repe::registry<glz::opts{.format = glz::BEVE}> server{};
 
