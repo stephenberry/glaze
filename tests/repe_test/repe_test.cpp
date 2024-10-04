@@ -395,7 +395,7 @@ suite root_tests = [] {
    };
 };
 
-/*suite wrapper_tests_binary = [] {
+suite wrapper_tests_binary = [] {
    "wrapper"_test = [] {
       repe::registry<glz::opts{.format = glz::BEVE}> server{};
 
@@ -404,28 +404,25 @@ suite root_tests = [] {
 
       server.on(obj);
 
-      glz::repe::shared_buffer response{};
+      repe::message request{};
+      repe::message response{};
 
-      {
-         request = repe::request_binary({"/sub/my_functions/void_func"});
-         server.call(request, response);
-      }
+      request = repe::request_binary({"/sub/my_functions/void_func"});
+      server.call(request, response);
 
       std::string res{};
       expect(!glz::beve_to_json(response.body, res));
-      expect(res == R"([[0,0,2,"/sub/my_functions/void_func",null],null])") << response;
+      expect(res == R"(null)") << res;
 
-      {
-         request = repe::request_binary({"/sub/my_functions/hello"});
-         server.call(request, response);
-      }
+      request = repe::request_binary({"/sub/my_functions/hello"});
+      server.call(request, response);
 
       expect(!glz::beve_to_json(response.body, res));
-      expect(res == R"([[0,0,0,"/sub/my_functions/hello",null],"Hello"])");
+      expect(res == R"("Hello")");
    };
 };
 
-struct tester
+/*struct tester
 {
    int integer{};
    double number{};
