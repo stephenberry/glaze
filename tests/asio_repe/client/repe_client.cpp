@@ -7,8 +7,39 @@
 #include "glaze/glaze.hpp"
 #include "glaze/rpc/repe.hpp"
 
+// This test code is self-contained and spawns both the server and the client
+
+struct api
+{
+   std::function<int(std::vector<int>& vec)> sum = [](std::vector<int>& vec) {
+      std::this_thread::sleep_for(std::chrono::seconds(1));
+      return std::reduce(vec.begin(), vec.end());
+   };
+   std::function<double(std::vector<double>& vec)> max = [](std::vector<double>& vec) { return std::ranges::max(vec); };
+};
+
 void asio_client_test()
 {
+   static constexpr int16_t port = 8431;
+   
+   std::future<void> server_thread = std::async([] {
+      std::cout << "Server active...\n";
+
+      try {
+         glz::asio_server<> server{.port = port, .concurrency = 4};
+         api methods{};
+         server.on(methods);
+         server.run();
+      }
+      catch (const std::exception& e) {
+         std::cerr << "Exception: " << e.what();
+      }
+
+      std::cout << "Server closed...\n";
+   });
+
+   std::this_thread::sleep_for(std::chrono::seconds(1));
+   
    try {
       constexpr auto N = 100;
       std::vector<glz::asio_client<>> clients;
@@ -18,7 +49,7 @@ void asio_client_test()
       threads.reserve(N);
 
       for (size_t i = 0; i < N; ++i) {
-         clients.emplace_back(glz::asio_client<>{"localhost", "8080"});
+         clients.emplace_back(glz::asio_client<>{"localhost", std::to_string(port)});
       }
 
       for (size_t i = 0; i < N; ++i) {
@@ -54,6 +85,8 @@ void asio_client_test()
    catch (const std::exception& e) {
       std::cerr << e.what() << '\n';
    }
+   
+   server_thread.get();
 }
 
 struct first_type
@@ -78,7 +111,7 @@ struct second_type
    };
 };
 
-struct api
+struct api2
 {
    first_type first{};
    second_type second{};
@@ -86,9 +119,11 @@ struct api
 
 void async_calls()
 {
+   static constexpr int16_t port = 8765;
+   
    std::future<void> server_thread = std::async([] {
-      glz::asio_server<> server{.port = 8080, .concurrency = 2};
-      api methods{};
+      glz::asio_server<> server{.port = port, .concurrency = 2};
+      api2 methods{};
       server.on(methods);
       server.run();
    });
@@ -96,7 +131,7 @@ void async_calls()
    std::this_thread::sleep_for(std::chrono::seconds(1));
 
    try {
-      glz::asio_client<> client{"localhost", "8080"};
+      glz::asio_client<> client{"localhost", std::to_string(port)};
       (void)client.init();
 
       std::vector<std::future<void>> threads;
@@ -126,8 +161,8 @@ void async_calls()
 
 int main()
 {
-   // asio_client_test();
-   async_calls();
+   //asio_client_test();
+   //async_calls();
 
    std::this_thread::sleep_for(std::chrono::seconds(5));
    return 0;
