@@ -153,53 +153,39 @@ suite structs_of_functions = [] {
          << response.body;
    };
 
-   /*"example_functions"_test = [] {
+   "example_functions"_test = [] {
       repe::registry server{};
 
       example_functions_t obj{};
 
       server.on(obj);
 
-      glz::repe::shared_buffer response{};
+      repe::message request{};
+      repe::message response{};
 
-      {
-         auto request = repe::request_json({"/name"}, "Susan");
-         response = server.call(request);
-      }
+      request = repe::request_json({"/name"}, "Susan");
+      server.call(request, response);
+      expect(response.body == R"(null)") << response.body;
 
-      expect(response.body == R"([[0,0,2,"/name",null],null])") << response.body;
+      request = repe::request_json({"/get_name"});
+      server.call(request, response);
+      expect(response.body == R"("Susan")") << response.body;
 
-      {
-         auto request = repe::request_json({"/get_name"});
-         response = server.call(request);
-      }
-
-      expect(response.body == R"([[0,0,0,"/get_name",null],"Susan"])") << response.body;
-
-      {
-         auto request = repe::request_json({"/get_name"}, "Bob");
-         response = server.call(request);
-      }
-
+      request = repe::request_json({"/get_name"}, "Bob");
+      server.call(request, response);
       expect(obj.name == "Susan"); // we expect the name to not have changed because this function take no inputs
-      expect(response.body == R"([[0,0,0,"/get_name",null],"Susan"])") << response.body;
+      expect(response.body == R"("Susan")") << response.body;
 
-      {
-         auto request = repe::request_json({"/set_name"}, "Bob");
-         response = server.call(request);
-      }
-
+      request = repe::request_json({"/set_name"}, "Bob");
+      server.call(request, response);
       expect(obj.name == "Bob");
-      expect(response.body == R"([[0,0,2,"/set_name",null],null])") << response.body;
+      expect(response.body == R"(null)") << response.body;
 
-      {
-         auto request = repe::request_json({"/custom_name"}, "Alice");
-         response = server.call(request);
-      }
-
+      request = repe::request_json({"/custom_name"}, "Alice");
+      server.call(request, response);
       expect(obj.name == "Alice");
-      expect(response.body == R"([[0,0,2,"/custom_name",null],null])") << response.body;
-   };*/
+      expect(response.body == R"(null)") << response.body;
+   };
 };
 
 /*suite structs_of_functions_binary = [] {
