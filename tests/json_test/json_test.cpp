@@ -9663,6 +9663,18 @@ suite flat_map_tests = [] {
    };
 };
 
+struct Foo  {
+   int x;
+};
+
+suite ndjson_options = [] {
+   "ndjson_options"_test = [] {
+      std::vector<Foo> assets{};
+      const auto ec = glz::read<glz::opts{.format = glz::NDJSON, .error_on_unknown_keys = false, .validate_skipped = true}>(assets, "{\"x\":1}\n{\"x\":2}");
+      expect(not ec);
+   };
+};
+
 int main()
 {
    trace.end("json_test");
