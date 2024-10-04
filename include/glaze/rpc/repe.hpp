@@ -272,20 +272,23 @@ namespace glz::repe
    template <opts Opts, class Value>
    void write_response(Value&& value, is_state auto&& state)
    {
+      auto& in = state.in;
+      auto& out = state.out;
+      out.header.id = in.header.id;
       if (state.error) {
-         state.out.header.error = true;
-         state.out.header.query_length = state.out.query.size();
-         state.out.header.body_length = state.out.body.size();
-         state.out.header.length = sizeof(repe::header) + state.out.query.size() + state.out.body.size();
+         out.header.error = true;
+         out.header.query_length = out.query.size();
+         out.header.body_length = out.body.size();
+         out.header.length = sizeof(repe::header) + out.query.size() + out.body.size();
       }
       else {
-         const auto ec = write<Opts>(std::forward<Value>(value), state.out.body);
+         const auto ec = write<Opts>(std::forward<Value>(value), out.body);
          if (bool(ec)) [[unlikely]] {
-            state.out.header.error = true;
+            out.header.error = true;
          }
-         state.out.header.query_length = state.out.query.size();
-         state.out.header.body_length = state.out.body.size();
-         state.out.header.length = sizeof(repe::header) + state.out.query.size() + state.out.body.size();
+         out.header.query_length = out.query.size();
+         out.header.body_length = out.body.size();
+         out.header.length = sizeof(repe::header) + out.query.size() + out.body.size();
       }
    }
 
