@@ -218,7 +218,7 @@ suite uint64_t_test = [] {
 #else
       constexpr size_t n = 100000;
 #endif
-      
+
       std::string buffer;
       auto t0 = std::chrono::steady_clock::now();
       glz::error_ctx e;
