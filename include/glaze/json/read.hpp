@@ -561,126 +561,18 @@ namespace glz
             using V = std::decay_t<decltype(value)>;
             if constexpr (int_t<V>) {
                static_assert(sizeof(*it) == sizeof(char));
-
-               static constexpr auto maximum = uint64_t((std::numeric_limits<V>::max)());
-               if constexpr (std::is_unsigned_v<V>) {
-                  if constexpr (std::same_as<V, uint64_t>) {
-                     if (*it == '-') [[unlikely]] {
-                        ctx.error = error_code::parse_number_failure;
-                        return;
-                     }
-
-                     const char* cur = reinterpret_cast<const char*>(it);
-                     const char* beg = cur;
-                     if constexpr (std::is_volatile_v<std::remove_reference_t<decltype(value)>>) {
-                        // Hardware may interact with value changes, so we parse into a temporary and assign in one
-                        // place
-                        uint64_t i{};
-                        if constexpr (Opts.null_terminated) {
-                           if (not parse_int<uint64_t>(i, cur)) [[unlikely]] {
-                              ctx.error = error_code::parse_number_failure;
-                              return;
-                           }
-                        }
-                        else {
-                           if (not parse_int<uint64_t>(i, cur, end)) [[unlikely]] {
-                              ctx.error = error_code::parse_number_failure;
-                              return;
-                           }
-                        }
-                        GLZ_VALID_END();
-                        value = i;
-                     }
-                     else {
-                        if constexpr (Opts.null_terminated) {
-                           if (not parse_int<decay_keep_volatile_t<decltype(value)>>(value, cur)) [[unlikely]] {
-                              ctx.error = error_code::parse_number_failure;
-                              return;
-                           }
-                        }
-                        else {
-                           if (not parse_int<decay_keep_volatile_t<decltype(value)>>(value, cur, end)) [[unlikely]] {
-                              ctx.error = error_code::parse_number_failure;
-                              return;
-                           }
-                        }
-                        GLZ_VALID_END();
-                     }
-
-                     it += (cur - beg);
-                  }
-                  else {
-                     uint64_t i{};
-                     if (*it == '-') [[unlikely]] {
-                        ctx.error = error_code::parse_number_failure;
-                        return;
-                     }
-
-                     const char* cur = reinterpret_cast<const char*>(it);
-                     const char* beg = cur;
-                     if constexpr (Opts.null_terminated) {
-                        if (not parse_int<std::decay_t<decltype(i)>>(i, cur)) [[unlikely]] {
-                           ctx.error = error_code::parse_number_failure;
-                           return;
-                        }
-                     }
-                     else {
-                        if (not parse_int<std::decay_t<decltype(i)>>(i, cur, end)) [[unlikely]] {
-                           ctx.error = error_code::parse_number_failure;
-                           return;
-                        }
-                     }
-                     GLZ_VALID_END();
-
-                     if (i > maximum) [[unlikely]] {
-                        ctx.error = error_code::parse_number_failure;
-                        return;
-                     }
-                     value = V(i);
-                     it += (cur - beg);
+               
+               if constexpr (Opts.null_terminated) {
+                  if (not glz::detail::atoi(value, it)) [[unlikely]] {
+                     ctx.error = error_code::parse_number_failure;
+                     return;
                   }
                }
                else {
-                  uint64_t i{};
-                  int sign = 1;
-                  if (*it == '-') {
-                     sign = -1;
-                     ++it;
-                     GLZ_VALID_END();
+                  if (not glz::detail::atoi(value, it, end)) [[unlikely]] {
+                     ctx.error = error_code::parse_number_failure;
+                     return;
                   }
-
-                  const char* cur = reinterpret_cast<const char*>(it);
-                  const char* beg = cur;
-                  if constexpr (Opts.null_terminated) {
-                     if (not parse_int<decay_keep_volatile_t<decltype(i)>>(i, cur)) [[unlikely]] {
-                        ctx.error = error_code::parse_number_failure;
-                        return;
-                     }
-                  }
-                  else {
-                     if (not parse_int<decay_keep_volatile_t<decltype(i)>>(i, cur, end)) [[unlikely]] {
-                        ctx.error = error_code::parse_number_failure;
-                        return;
-                     }
-                  }
-                  GLZ_VALID_END();
-
-                  if (sign == -1) {
-                     static constexpr auto min_abs = uint64_t((std::numeric_limits<V>::max)()) + 1;
-                     if (i > min_abs) [[unlikely]] {
-                        ctx.error = error_code::parse_number_failure;
-                        return;
-                     }
-                     value = V(sign * i);
-                  }
-                  else {
-                     if (i > maximum) [[unlikely]] {
-                        ctx.error = error_code::parse_number_failure;
-                        return;
-                     }
-                     value = V(i);
-                  }
-                  it += (cur - beg);
                }
             }
             else {
