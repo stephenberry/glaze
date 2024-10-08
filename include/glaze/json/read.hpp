@@ -561,7 +561,7 @@ namespace glz
             using V = std::decay_t<decltype(value)>;
             if constexpr (int_t<V>) {
                static_assert(sizeof(*it) == sizeof(char));
-               
+
                if constexpr (Opts.parse_ints_as_type_cast_doubles) {
                   double d{};
                   auto [ptr, ec] = glz::from_chars<Opts.null_terminated>(it, end, d);
