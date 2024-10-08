@@ -441,6 +441,52 @@ namespace glz::detail
       return valid;
    }
    
+   struct value128 final {
+     uint64_t low;
+     uint64_t high;
+   };
+   
+   // slow emulation routine for 32-bit
+   GLZ_ALWAYS_INLINE constexpr uint64_t emulu(uint32_t x, uint32_t y) {
+       return x * (uint64_t)y;
+   }
+   
+   GLZ_ALWAYS_INLINE constexpr uint64_t umul128_generic(uint64_t ab, uint64_t cd, uint64_t *hi) {
+     uint64_t ad = emulu((uint32_t)(ab >> 32), (uint32_t)cd);
+     uint64_t bd = emulu((uint32_t)ab, (uint32_t)cd);
+     uint64_t adbc = ad + emulu((uint32_t)ab, (uint32_t)(cd >> 32));
+     uint64_t adbc_carry = (uint64_t)(adbc < ad);
+     uint64_t lo = bd + (adbc << 32);
+     *hi = emulu((uint32_t)(ab >> 32), (uint32_t)(cd >> 32)) + (adbc >> 32) +
+           (adbc_carry << 32) + (uint64_t)(lo < bd);
+     return lo;
+   }
+   
+   // compute 64-bit a*b
+   GLZ_ALWAYS_INLINE constexpr value128 full_multiplication(uint64_t a, uint64_t b) {
+     if (std::is_constant_evaluated()) {
+       value128 answer;
+       answer.low = umul128_generic(a, b, &answer.high);
+       return answer;
+     }
+     value128 answer;
+   #if defined(_M_ARM64) && !defined(__MINGW32__)
+     // ARM64 has native support for 64-bit multiplications, no need to emulate
+     // But MinGW on ARM64 doesn't have native support for 64-bit multiplications
+     answer.high = __umulh(a, b);
+     answer.low = a * b;
+   #elif defined(FASTFLOAT_32BIT) || (defined(_WIN64) && !defined(__clang__))
+     answer.low = _umul128(a, b, &answer.high); // _umul128 not available on ARM64
+   #elif defined(FASTFLOAT_64BIT) && defined(__SIZEOF_INT128__)
+     __uint128_t r = ((__uint128_t)a) * b;
+     answer.low = uint64_t(r);
+     answer.high = uint64_t(r >> 64);
+   #else
+     answer.low = umul128_generic(a, b, &answer.high);
+   #endif
+     return answer;
+   }
+   
    template <std::integral T, class Char>
       requires(std::is_unsigned_v<T> && sizeof(T) == 8)
    GLZ_ALWAYS_INLINE constexpr bool atoi(T& v, const Char*& c) noexcept
@@ -646,9 +692,15 @@ namespace glz::detail
          return false;
       }
       
+#if defined(__SIZEOF_INT128__)
       const __uint128_t res = __uint128_t(v) * powers_of_ten_int[exp];
       v = T(res);
       return res <= (std::numeric_limits<T>::max)();
+#else
+      const auto res = full_multiplication(v, powers_of_ten_int[exp]);
+      v = T(res.low);
+      return res.high == 0;
+#endif
    }
    
    template <std::integral T, class Char>
@@ -1156,9 +1208,17 @@ namespace glz::detail
          return false;
       }
       
+      
+      
+#if defined(__SIZEOF_INT128__)
       const __uint128_t res = __uint128_t(i) * powers_of_ten_int[exp];
       v = T((uint64_t(res) ^ -sign) + sign);
       return (res - sign) <= (std::numeric_limits<T>::max)();
+#else
+      const auto res = full_multiplication(v, powers_of_ten_int[exp]);
+      v = T(res.low);
+      return res.high == 0;
+#endif
    }
    
    template <std::integral T, class Char>
