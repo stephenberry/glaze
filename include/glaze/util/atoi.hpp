@@ -3,6 +3,7 @@
 #include <array>
 #include <bit>
 #include <cmath>
+#include <cstdint>
 #include <iterator>
 
 #include "glaze/util/inline.hpp"
