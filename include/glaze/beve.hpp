@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include "glaze/thread/atomic.hpp"
 #include "glaze/beve/header.hpp"
 #include "glaze/beve/ptr.hpp"
 #include "glaze/beve/read.hpp"

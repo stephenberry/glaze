@@ -9678,6 +9678,25 @@ suite ndjson_options = [] {
    };
 };
 
+suite atomics = [] {
+   "atomics"_test = [] {
+      std::atomic<int> i{};
+      expect(not glz::read_json(i, R"(55)"));
+      expect(i.load() == 55);
+      
+      std::string buffer{};
+      expect(not glz::write_json(i, buffer));
+      expect(buffer == R"(55)");
+      
+      std::atomic<bool> b{};
+      expect(not glz::read_json(b, R"(true)"));
+      expect(b);
+      
+      expect(not glz::write_json(b, buffer));
+      expect(buffer == R"(true)");
+   };
+};
+
 int main()
 {
    trace.end("json_test");
