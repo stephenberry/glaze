@@ -167,35 +167,6 @@ namespace glz::detail
       return false;
    }
    
-   GLZ_ALWAYS_INLINE void parse_8_digits(uint64_t& v, const char* s) noexcept
-   {
-      uint64_t chunk;
-      std::memcpy(&chunk, s, 8);
-
-      // 1-byte mask trick (works on 4 pairs of single digits)
-      uint64_t lower_digits = (chunk & 0x0f000f000f000f00) >> 8;
-      uint64_t upper_digits = (chunk & 0x000f000f000f000f) * 10;
-      chunk = lower_digits + upper_digits;
-
-      // 2-byte mask trick (works on 2 pairs of two digits)
-      lower_digits = (chunk & 0x00ff000000ff0000) >> 16;
-      upper_digits = (chunk & 0x000000ff000000ff) * 100;
-      chunk = lower_digits + upper_digits;
-
-      // 4-byte mask trick (works on pair of four digits)
-      lower_digits = (chunk & 0x0000ffff00000000) >> 32;
-      upper_digits = (chunk & 0x000000000000ffff) * 10000;
-      v = lower_digits + upper_digits;
-   }
-   
-   GLZ_ALWAYS_INLINE void parse_16_digits(uint64_t& v, const char* s) noexcept
-   {
-      parse_8_digits(v, s);
-      uint64_t low;
-      parse_8_digits(low, s + 8);
-      v = v * 100000000ull + low;
-   }
-   
    // We don't allow decimals in integer parsing
    // We don't allow negative exponents
    // Thse cases can produce decimals which slower performance and add confusion
