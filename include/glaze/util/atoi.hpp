@@ -33,140 +33,6 @@ namespace glz::detail
 
    GLZ_ALWAYS_INLINE constexpr bool is_digit(const char c) noexcept { return c >= '0' && c <= '9'; }
 
-   GLZ_ALWAYS_INLINE constexpr bool is_safe_addition(uint64_t a, uint64_t b) noexcept
-   {
-      return a <= (std::numeric_limits<uint64_t>::max)() - b;
-   }
-
-   GLZ_ALWAYS_INLINE constexpr bool is_safe_multiplication10(uint64_t a) noexcept
-   {
-      constexpr auto b = (std::numeric_limits<uint64_t>::max)() / 10;
-      return a <= b;
-   }
-
-   template <class T = uint64_t>
-   GLZ_ALWAYS_INLINE constexpr bool stoui64(uint64_t& res, const char*& c) noexcept
-   {
-      if (!is_digit(*c)) [[unlikely]] {
-         return false;
-      }
-
-      // maximum number of digits need is: 3, 5, 10, 20, for byte sizes of 1, 2, 4, 8
-      // we need to store one extra space for a digit for sizes of 1, 2, and 4 because we avoid checking for overflow
-      // since we store in a uint64_t
-      constexpr std::array<int64_t, 4> max_digits_from_size = {4, 6, 11, 20};
-      constexpr auto N = max_digits_from_size[std::bit_width(sizeof(T)) - 1];
-
-      std::array<uint8_t, N> digits{0};
-      auto next_digit = digits.begin();
-      auto consume_digit = [&c, &next_digit, &digits]() {
-         if (next_digit < digits.cend()) [[likely]] {
-            *next_digit = (*c - '0');
-            ++next_digit;
-         }
-         ++c;
-      };
-
-      if (*c == '0') {
-         // digits[i] = 0; already set to zero
-         ++c;
-         ++next_digit;
-
-         if (*c == '0') [[unlikely]] {
-            return false;
-         }
-      }
-
-      while (is_digit(*c)) {
-         consume_digit();
-      }
-      auto n = int64_t(std::distance(digits.begin(), next_digit));
-
-      if (*c == '.') {
-         ++c;
-         while (is_digit(*c)) {
-            consume_digit();
-         }
-      }
-
-      if (*c == 'e' || *c == 'E') {
-         ++c;
-
-         bool negative = false;
-         if (*c == '+' || *c == '-') {
-            negative = (*c == '-');
-            ++c;
-         }
-         uint8_t exp = 0;
-         while (is_digit(*c) && exp < 128) {
-            exp = 10 * exp + (*c - '0');
-            ++c;
-         }
-         n += negative ? -exp : exp;
-      }
-
-      res = 0;
-      if (n < 0) [[unlikely]] {
-         return true;
-      }
-
-      if constexpr (std::same_as<T, uint64_t>) {
-         if (n > 20) [[unlikely]] {
-            return false;
-         }
-
-         if (n == 20) [[unlikely]] {
-            for (size_t k = 0; k < 19; ++k) {
-               res = 10 * res + digits[k];
-            }
-
-            if (is_safe_multiplication10(res)) [[likely]] {
-               res *= 10;
-            }
-            else [[unlikely]] {
-               return false;
-            }
-            if (is_safe_addition(res, digits.back())) [[likely]] {
-               res += digits.back();
-            }
-            else [[unlikely]] {
-               return false;
-            }
-         }
-         else [[likely]] {
-            for (int64_t k = 0; k < n; ++k) {
-               res = 10 * res + digits[k];
-            }
-         }
-      }
-      else {
-         // a value of n == N would result in reading digits[N], which is invalid
-         if (n >= N) [[unlikely]] {
-            return false;
-         }
-         else [[likely]] {
-            for (int64_t k = 0; k < n; ++k) {
-               res = 10 * res + digits[k];
-            }
-         }
-      }
-
-      return true;
-   }
-
-   template <class T = uint64_t>
-   GLZ_ALWAYS_INLINE constexpr bool stoui64(uint64_t& res, auto& it) noexcept
-   {
-      static_assert(sizeof(*it) == sizeof(char));
-      const char* cur = reinterpret_cast<const char*>(it);
-      const char* beg = cur;
-      if (stoui64(res, cur)) {
-         it += (cur - beg);
-         return true;
-      }
-      return false;
-   }
-
    // We don't allow decimals in integer parsing
    // We don't allow negative exponents
    // Thse cases can produce decimals which slower performance and add confusion
@@ -1274,5 +1140,142 @@ namespace glz::detail
       else [[unlikely]] {
          return false;
       }
+   }
+}
+
+namespace glz::detail
+{
+   GLZ_ALWAYS_INLINE constexpr bool is_safe_addition(uint64_t a, uint64_t b) noexcept
+   {
+      return a <= (std::numeric_limits<uint64_t>::max)() - b;
+   }
+
+   GLZ_ALWAYS_INLINE constexpr bool is_safe_multiplication10(uint64_t a) noexcept
+   {
+      constexpr auto b = (std::numeric_limits<uint64_t>::max)() / 10;
+      return a <= b;
+   }
+
+   template <class T = uint64_t>
+   GLZ_ALWAYS_INLINE constexpr bool stoui64(uint64_t& res, const char*& c) noexcept
+   {
+      if (!is_digit(*c)) [[unlikely]] {
+         return false;
+      }
+
+      // maximum number of digits need is: 3, 5, 10, 20, for byte sizes of 1, 2, 4, 8
+      // we need to store one extra space for a digit for sizes of 1, 2, and 4 because we avoid checking for overflow
+      // since we store in a uint64_t
+      constexpr std::array<int64_t, 4> max_digits_from_size = {4, 6, 11, 20};
+      constexpr auto N = max_digits_from_size[std::bit_width(sizeof(T)) - 1];
+
+      std::array<uint8_t, N> digits{0};
+      auto next_digit = digits.begin();
+      auto consume_digit = [&c, &next_digit, &digits]() {
+         if (next_digit < digits.cend()) [[likely]] {
+            *next_digit = (*c - '0');
+            ++next_digit;
+         }
+         ++c;
+      };
+
+      if (*c == '0') {
+         // digits[i] = 0; already set to zero
+         ++c;
+         ++next_digit;
+
+         if (*c == '0') [[unlikely]] {
+            return false;
+         }
+      }
+
+      while (is_digit(*c)) {
+         consume_digit();
+      }
+      auto n = int64_t(std::distance(digits.begin(), next_digit));
+
+      if (*c == '.') {
+         ++c;
+         while (is_digit(*c)) {
+            consume_digit();
+         }
+      }
+
+      if (*c == 'e' || *c == 'E') {
+         ++c;
+
+         bool negative = false;
+         if (*c == '+' || *c == '-') {
+            negative = (*c == '-');
+            ++c;
+         }
+         uint8_t exp = 0;
+         while (is_digit(*c) && exp < 128) {
+            exp = 10 * exp + (*c - '0');
+            ++c;
+         }
+         n += negative ? -exp : exp;
+      }
+
+      res = 0;
+      if (n < 0) [[unlikely]] {
+         return true;
+      }
+
+      if constexpr (std::same_as<T, uint64_t>) {
+         if (n > 20) [[unlikely]] {
+            return false;
+         }
+
+         if (n == 20) [[unlikely]] {
+            for (size_t k = 0; k < 19; ++k) {
+               res = 10 * res + digits[k];
+            }
+
+            if (is_safe_multiplication10(res)) [[likely]] {
+               res *= 10;
+            }
+            else [[unlikely]] {
+               return false;
+            }
+            if (is_safe_addition(res, digits.back())) [[likely]] {
+               res += digits.back();
+            }
+            else [[unlikely]] {
+               return false;
+            }
+         }
+         else [[likely]] {
+            for (int64_t k = 0; k < n; ++k) {
+               res = 10 * res + digits[k];
+            }
+         }
+      }
+      else {
+         // a value of n == N would result in reading digits[N], which is invalid
+         if (n >= N) [[unlikely]] {
+            return false;
+         }
+         else [[likely]] {
+            for (int64_t k = 0; k < n; ++k) {
+               res = 10 * res + digits[k];
+            }
+         }
+      }
+
+      return true;
+   }
+
+   template <class T = uint64_t>
+   GLZ_ALWAYS_INLINE constexpr bool stoui64(uint64_t& res, auto& it) noexcept
+   {
+      static_assert(sizeof(*it) == sizeof(char));
+      const char* cur = reinterpret_cast<const char*>(it);
+      const char* beg = cur;
+      if (stoui64(res, cur)) {
+         it += (cur - beg);
+         return true;
+      }
+      return false;
    }
 }
