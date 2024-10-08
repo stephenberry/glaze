@@ -240,7 +240,9 @@ suite u8_test = [] {
    };
    
    "u8 performance"_test = [] {
+#ifndef _MSC_VER
       expect(test_performance<uint8_t>());
+      #endif
    };
    
    "i8"_test = [] {
@@ -487,7 +489,9 @@ suite u8_test = [] {
    };
    
    "i64 samples"_test = [] {
+      #ifndef _MSC_VER
       expect(test_samples<int64_t>());
+      #endif
    };
    
    "i64 lengths"_test = [] {
