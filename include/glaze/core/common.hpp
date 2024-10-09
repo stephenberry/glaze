@@ -220,6 +220,10 @@ namespace glz
       template <class T>
       concept meta_value_t = glaze_t<std::decay_t<T>>;
 
+      // this concept requires that T is just a view
+      template <class T>
+      concept string_view_t = std::same_as<std::decay_t<T>, std::string_view>;
+
       template <class T>
       concept array_char_t =
          requires { std::tuple_size<T>::value; } && std::same_as<T, std::array<char, std::tuple_size_v<T>>>;
@@ -230,15 +234,11 @@ namespace glz
 
       // this concept requires that T is a writeable string. It can be resized, appended to, or assigned to
       template <class T>
-      concept string_t = str_t<T> && !std::same_as<std::decay_t<T>, std::string_view> &&
-                         (has_assign<T> || resizable<T> || has_append<T>);
+      concept string_t =
+         str_t<T> && !string_view_t<T> && (has_assign<T> || (resizable<T> && has_data<T>) || has_append<T>);
 
       template <class T>
       concept char_array_t = str_t<T> && std::is_array_v<std::remove_pointer_t<std::remove_reference_t<T>>>;
-
-      // this concept requires that T is just a view
-      template <class T>
-      concept string_view_t = std::same_as<std::decay_t<T>, std::string_view>;
 
       template <class T>
       concept readable_map_t = !custom_read<T> && !meta_value_t<T> && !str_t<T> && range<T> &&
@@ -257,7 +257,7 @@ namespace glz
       };
 
       template <class T>
-      concept array_t = (!meta_value_t<T> && !str_t<T> && !(readable_map_t<T> || writable_map_t<T>)&&range<T>);
+      concept array_t = (!meta_value_t<T> && !str_t<T> && !(readable_map_t<T> || writable_map_t<T>) && range<T>);
 
       template <class T>
       concept readable_array_t =
@@ -341,9 +341,7 @@ namespace glz
       template <class T>
       concept nullable_t = !meta_value_t<T> && !str_t<T> && requires(T t) {
          bool(t);
-         {
-            *t
-         };
+         { *t };
       };
 
       template <class T>
