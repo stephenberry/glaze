@@ -269,6 +269,7 @@ suite u8_test = [] {
       expect(glz::read_json(value, "[-00]"));
       expect(glz::read_json(value, "[01]"));
       expect(glz::read_json(value, "[128]"));
+      expect(glz::read_json(value, "[1e3]"));
    };
 
    "i8 full"_test = [] { expect(test_to_max<int8_t>()); };
@@ -289,6 +290,9 @@ suite u8_test = [] {
 
       expect(not glz::read_json(value, "[65534, 65535]"));
       expect(value == std::array<V, 2>{65534, 65535});
+      
+      expect(not glz::read_json(value, "[1e3, 1e3]"));
+      expect(value == std::array<V, 2>{1000, 1000});
 
       expect(glz::read_json(value, "[1e-1]"));
       expect(glz::read_json(value, "[1.0]"));
@@ -298,6 +302,7 @@ suite u8_test = [] {
       expect(glz::read_json(value, "[65536]"));
       expect(glz::read_json(value, "[65536e0]"));
       expect(glz::read_json(value, "[65535e1]"));
+      expect(glz::read_json(value, "[1e7]"));
    };
 
    "u16 sample"_test = [] { expect(test_to_max<uint16_t>()); };
@@ -321,6 +326,9 @@ suite u8_test = [] {
 
       expect(not glz::read_json(value, "[-32767, -32768]"));
       expect(value == std::array<V, 2>{-32767, -32768});
+      
+      expect(not glz::read_json(value, "[1e3, 1e3]"));
+      expect(value == std::array<V, 2>{1000, 1000});
 
       expect(glz::read_json(value, "[1e-1]"));
       expect(glz::read_json(value, "[1.0]"));
@@ -331,6 +339,7 @@ suite u8_test = [] {
       expect(glz::read_json(value, "[65536]"));
       expect(glz::read_json(value, "[65536e0]"));
       expect(glz::read_json(value, "[65535e1]"));
+      expect(glz::read_json(value, "[1e7]"));
    };
 
    "i16 full"_test = [] { expect(test_to_max<int16_t>()); };
@@ -354,6 +363,9 @@ suite u8_test = [] {
 
       expect(not glz::read_json(value, "[3034613894, 3034613894]"));
       expect(value == std::array<V, 2>{3034613894, 3034613894});
+      
+      expect(not glz::read_json(value, "[1e7, 1e7]"));
+      expect(value == std::array<V, 2>{10000000, 10000000});
 
       expect(glz::read_json(value, "[1e-1]"));
       expect(glz::read_json(value, "[1.0]"));
@@ -362,6 +374,7 @@ suite u8_test = [] {
       expect(glz::read_json(value, "[01]"));
       expect(glz::read_json(value, "[4294967296]"));
       expect(glz::read_json(value, "[4294967296e0]"));
+      expect(glz::read_json(value, "[1e10]"));
    };
 
    "u32 samples"_test = [] { expect(test_samples<uint32_t>()); };
@@ -385,6 +398,9 @@ suite u8_test = [] {
 
       expect(not glz::read_json(value, "[-2147483647, -2147483648]"));
       expect(value == std::array<V, 2>{-2147483647, -2147483648});
+      
+      expect(not glz::read_json(value, "[1e7, 1e7]"));
+      expect(value == std::array<V, 2>{10000000, 10000000});
 
       expect(glz::read_json(value, "[1e-1]"));
       expect(glz::read_json(value, "[1.0]"));
@@ -393,6 +409,7 @@ suite u8_test = [] {
       expect(glz::read_json(value, "[01]"));
       expect(glz::read_json(value, "[2147483648]"));
       expect(glz::read_json(value, "[2147483648e0]"));
+      expect(glz::read_json(value, "[1e10]"));
    };
 
    "i32 samples"_test = [] { expect(test_samples<int32_t>()); };
@@ -419,6 +436,9 @@ suite u8_test = [] {
 
       expect(not glz::read_json(value, "[73241774740596, 73241774740596]"));
       expect(value == std::array<V, 2>{73241774740596, 73241774740596});
+      
+      expect(not glz::read_json(value, "[1e10, 1e10]"));
+      expect(value == std::array<V, 2>{10000000000, 10000000000});
 
       expect(glz::read_json(value, "[1e-1]"));
       expect(glz::read_json(value, "[1.0]"));
@@ -427,6 +447,7 @@ suite u8_test = [] {
       expect(glz::read_json(value, "[01]"));
       expect(glz::read_json(value, "[18446744073709551616]"));
       expect(glz::read_json(value, "[18446744073709551616e0]"));
+      expect(glz::read_json(value, "[1e20]"));
    };
 
    "u64 samples"_test = [] { expect(test_samples<uint64_t>()); };
@@ -450,6 +471,9 @@ suite u8_test = [] {
 
       expect(not glz::read_json(value, "[-9223372036854775808, -9223372036854775808]"));
       expect(value == std::array<V, 2>{std::numeric_limits<V>::lowest(), std::numeric_limits<V>::lowest()});
+      
+      expect(not glz::read_json(value, "[1e10, 1e10]"));
+      expect(value == std::array<V, 2>{10000000000, 10000000000});
 
       expect(glz::read_json(value, "[1e-1]"));
       expect(glz::read_json(value, "[1.0]"));
@@ -458,6 +482,7 @@ suite u8_test = [] {
       expect(glz::read_json(value, "[01]"));
       expect(glz::read_json(value, "[9223372036854775808]"));
       expect(glz::read_json(value, "[9223372036854775808e0]"));
+      expect(glz::read_json(value, "[1e19]"));
    };
 
    "i64 samples"_test = [] {
