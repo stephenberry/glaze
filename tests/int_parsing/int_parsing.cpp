@@ -453,6 +453,10 @@ suite u8_test = [] {
    "u64 samples"_test = [] { expect(test_samples<uint64_t>()); };
 
    "u64 lengths"_test = [] { expect(test_lengths<uint64_t>()); };
+   
+   "u8 performance"_test = [] {
+      expect(test_performance<uint64_t>());
+   };
 
    "i64"_test = [] {
       using V = int64_t;
