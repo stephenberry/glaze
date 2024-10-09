@@ -4,6 +4,7 @@
 #define UT_RUN_TIME_ONLY
 
 #include <any>
+#include <atomic>
 #include <bitset>
 #include <chrono>
 #include <complex>
@@ -9666,6 +9667,7 @@ suite parse_ints_as_type_cast_doubles_test = [] {
 suite atomics = [] {
    "atomics"_test = [] {
       std::atomic<int> i{};
+      static_assert(glz::detail::is_atomic<decltype(i)>);
       expect(not glz::read_json(i, R"(55)"));
       expect(i.load() == 55);
       
