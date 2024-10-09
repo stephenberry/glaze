@@ -3,6 +3,6 @@
 
 #pragma once
 
-#include "glaze/thread/atomic.hpp"
 #include "glaze/csv/read.hpp"
 #include "glaze/csv/write.hpp"
+#include "glaze/thread/atomic.hpp"

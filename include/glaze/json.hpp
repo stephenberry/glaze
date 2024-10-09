@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include "glaze/thread/atomic.hpp"
 #include "glaze/json/invoke.hpp"
 #include "glaze/json/json_concepts.hpp"
 #include "glaze/json/json_ptr.hpp"
@@ -19,3 +18,4 @@
 #include "glaze/json/schema.hpp"
 #include "glaze/json/wrappers.hpp"
 #include "glaze/json/write.hpp"
+#include "glaze/thread/atomic.hpp"
