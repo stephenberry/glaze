@@ -1054,19 +1054,23 @@ namespace glz::detail
       return res.high == 0;
 #endif
    }
+   
+   static constexpr std::array<size_t, 4> int_buffer_lengths{8, 8, 16, 24};
 
    template <std::integral T, class Char>
    GLZ_ALWAYS_INLINE constexpr bool atoi(T& v, const Char*& it, const Char* end) noexcept
    {
+      // The number of characters needed at most for each type, rounded to nearest 8 bytes
+      constexpr auto buffer_length = int_buffer_lengths[std::bit_width(sizeof(T)) - 1];
       // We copy the rest of the buffer or 64 bytes into a null terminated buffer
-      std::array<char, 65> data{};
+      std::array<char, buffer_length> data{};
       const auto n = size_t(end - it);
       if (n > 0) [[likely]] {
-         if (n < 64) {
+         if (n < buffer_length) {
             std::memcpy(data.data(), it, n);
          }
          else {
-            std::memcpy(data.data(), it, 64);
+            std::memcpy(data.data(), it, buffer_length);
          }
 
          const auto start = data.data();
