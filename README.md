@@ -8,7 +8,14 @@ Glaze also supports:
 
 > [!IMPORTANT]
 >
-> Glaze v4.0.0 (to be released) is under active development on `main`. This will introduce a faster default integer parser. However, decimal values and negative exponents will by default be rejected for safety and importance. It will still be possible through various approaches to parse decimal values into integers, but it won't be the default behavior.
+> ### Upcoming Version 4
+>
+> Glaze v4.0.0 (to be released) is under active development on `main`. Version 4.0.0 introduces some breaking changes, but should not affect most users.
+>
+> - Decimal values and negative exponents will by default be rejected for safety and performance. It will still be possible through various approaches to parse decimal values into integers, but it won't be the default behavior.
+> - `std::array<char, ...>` is now handled as a JSON string `"abc"` rather than an array of characters `["a", "b", "c"]`
+>
+> ### Version 3.5
 >
 > Glaze [v3.5.0](https://github.com/stephenberry/glaze/releases/tag/v3.5.0) renamed the format specifier from `json` to `JSON`. Also, `glz::detail::to_json` and `glz::detail::from_json` specializations change to `glz::detail::to<JSON` and `glz::detail::from<JSON`. [See release notes](https://github.com/stephenberry/glaze/releases/tag/v3.5.0) for more information.
 >

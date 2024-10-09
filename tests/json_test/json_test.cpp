@@ -9464,6 +9464,26 @@ suite shark_variant = [] {
    };
 };
 
+suite string_view_value_tests = [] {
+   "string_view value"_test = [] {
+      std::string_view value = "";
+      expect(not glz::read_json(value, R"("hello")"));
+      expect(value == "hello");
+   };
+};
+
+suite array_char_tests = [] {
+   "array<char... value"_test = [] {
+      std::array<char, 8> value{};
+      expect(not glz::read_json(value, R"("hello")"));
+      expect(std::string_view{value.data()} == "hello");
+      expect(glz::write_json(value).value_or("error") == R"("hello")");
+      expect(glz::read_json(value, R"("hello---too long")"));
+      expect(not glz::read_json(value, R"("bye")"));
+      expect(std::string_view{value.data()} == "bye");
+   };
+};
+
 template <class T>
 struct response_t
 {
