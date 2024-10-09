@@ -1054,7 +1054,7 @@ namespace glz::detail
       return res.high == 0;
 #endif
    }
-   
+
    static constexpr std::array<size_t, 4> int_buffer_lengths{8, 8, 16, 24};
 
    template <std::integral T, class Char>
