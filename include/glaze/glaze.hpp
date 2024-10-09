@@ -32,8 +32,8 @@
 
 #pragma once
 
-#include "glaze/binary.hpp"
-#include "glaze/binary/beve_to_json.hpp"
+#include "glaze/beve.hpp"
+#include "glaze/beve/beve_to_json.hpp"
 #include "glaze/csv.hpp"
 #include "glaze/file/file_ops.hpp"
 #include "glaze/file/read_directory.hpp"

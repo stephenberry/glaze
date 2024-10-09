@@ -26,22 +26,43 @@ namespace glz
                skip_matching_ws(ws_start, it, ws_size);
             }
 
-            while (whitespace_table[uint8_t(*it)]) {
-               ++it;
+            if constexpr (Opts.null_terminated) {
+               while (whitespace_table[uint8_t(*it)]) {
+                  ++it;
+               }
+            }
+            else {
+               while ((it < end) && whitespace_table[uint8_t(*it)]) {
+                  ++it;
+               }
             }
             ws_start = new_ws_start;
             ws_size = size_t(it - new_ws_start);
          };
 
          auto skip_whitespace = [&] {
-            while (whitespace_table[uint8_t(*it)]) {
-               ++it;
+            if constexpr (Opts.null_terminated) {
+               while (whitespace_table[uint8_t(*it)]) {
+                  ++it;
+               }
+            }
+            else {
+               while ((it < end) && whitespace_table[uint8_t(*it)]) {
+                  ++it;
+               }
             }
          };
 
          skip_whitespace();
 
-         while (true) {
+         while ([&]() -> bool {
+            if constexpr (Opts.null_terminated) {
+               return true;
+            }
+            else {
+               return it < end;
+            }
+         }()) {
             switch (json_types[uint8_t(*it)]) {
             case String: {
                const auto value = read_json_string<Opts>(it, end);
@@ -56,7 +77,7 @@ namespace glz
                break;
             }
             case Number: {
-               const auto value = read_json_number(it);
+               const auto value = read_json_number<Opts.null_terminated>(it, end);
                dump<false>(value, b, ix); // we couldn't have gotten here without one valid character
                skip_whitespace();
                break;
@@ -150,7 +171,15 @@ namespace glz
          if (bool(ctx.error)) [[unlikely]] {
             return;
          }
-         minify_json<is_padded_on<Opts>()>(ctx, it, end, out, ix);
+
+         static constexpr auto O = is_padded_on<Opts>();
+         if constexpr (string_t<In>) {
+            minify_json<opt_true<O, &opts::null_terminated>>(ctx, it, end, out, ix);
+         }
+         else {
+            minify_json<opt_false<O, &opts::null_terminated>>(ctx, it, end, out, ix);
+         }
+
          if constexpr (resizable<Out>) {
             out.resize(ix);
          }

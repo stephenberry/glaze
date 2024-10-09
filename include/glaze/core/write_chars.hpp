@@ -69,13 +69,13 @@ namespace glz::detail
                // we cast to a lower precision floating point value before writing out
                if constexpr (uint8_t(Opts.float_max_write_precision) == 8) {
                   const auto reduced = static_cast<double>(value);
-                  const auto start = data_ptr(b) + ix;
+                  const auto start = reinterpret_cast<char*>(&b[ix]);
                   const auto end = glz::to_chars(start, reduced);
                   ix += size_t(end - start);
                }
                else if constexpr (uint8_t(Opts.float_max_write_precision) == 4) {
                   const auto reduced = static_cast<float>(value);
-                  const auto start = data_ptr(b) + ix;
+                  const auto start = reinterpret_cast<char*>(&b[ix]);
                   const auto end = glz::to_chars(start, reduced);
                   ix += size_t(end - start);
                }
@@ -84,13 +84,13 @@ namespace glz::detail
                }
             }
             else if constexpr (is_any_of<V, float, double>) {
-               const auto start = reinterpret_cast<char*>(data_ptr(b) + ix);
+               const auto start = reinterpret_cast<char*>(&b[ix]);
                const auto end = glz::to_chars(start, value);
                ix += size_t(end - start);
             }
             else if constexpr (is_float128<V>) {
-               const auto start = data_ptr(b) + ix;
-               const auto [ptr, ec] = std::to_chars(start, data_ptr(b) + b.size(), value, std::chars_format::general);
+               const auto start = reinterpret_cast<char*>(&b[ix]);
+               const auto [ptr, ec] = std::to_chars(start, &b[0] + b.size(), value, std::chars_format::general);
                if (ec != std::errc()) {
                   // TODO: Do we need to handle this error state?
                }
@@ -101,13 +101,13 @@ namespace glz::detail
             }
          }
          else if constexpr (is_any_of<V, int32_t, uint32_t, int64_t, uint64_t>) {
-            const auto start = data_ptr(b) + ix;
+            const auto start = reinterpret_cast<char*>(&b[ix]);
             const auto end = glz::to_chars(start, value);
             ix += size_t(end - start);
          }
          else if constexpr (std::integral<V>) {
             using X = std::decay_t<decltype(sized_integer_conversion<V>())>;
-            const auto start = data_ptr(b) + ix;
+            const auto start = reinterpret_cast<char*>(&b[ix]);
             const auto end = glz::to_chars(start, static_cast<X>(value));
             ix += size_t(end - start);
          }

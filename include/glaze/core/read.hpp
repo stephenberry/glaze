@@ -24,25 +24,11 @@ namespace glz
          return std::pair{it, end};
       }
 
-      using Buffer = std::remove_cvref_t<decltype(buffer)>;
-      if constexpr (is_specialization_v<Buffer, std::basic_string> ||
-                    is_specialization_v<Buffer, std::basic_string_view> || span<Buffer>) {
-         if constexpr (Padded) {
-            end += buffer.size() - padding_bytes;
-         }
-         else {
-            end += buffer.size();
-         }
+      if constexpr (Padded) {
+         end += buffer.size() - padding_bytes;
       }
       else {
-         // if not a std::string, std::string_view, or span, check that the last character is a null character
-         end += buffer.size() - 1;
-         if constexpr (Padded) {
-            end -= padding_bytes;
-         }
-         if (*end != '\0') {
-            ctx.error = error_code::data_must_be_null_terminated;
-         }
+         end += buffer.size();
       }
 
       return std::pair{it, end};
@@ -100,6 +86,19 @@ namespace glz
       }
 
    finish:
+      if constexpr (Opts.partial_read_nested || Opts.partial_read) {
+         // We don't do depth validation for partial reading
+         // This end_reached condition is set for valid end points in parsing
+         if (ctx.error == error_code::end_reached) {
+            ctx.error = error_code::none;
+         }
+      }
+      else {
+         if (ctx.error == error_code::end_reached && ctx.indentation_level == 0) {
+            ctx.error = error_code::none;
+         }
+      }
+
       if constexpr (use_padded) {
          // Restore the original buffer state
          buffer.resize(buffer.size() - padding_bytes);
@@ -118,6 +117,9 @@ namespace glz
 
    template <class T>
    concept c_style_char_buffer = std::convertible_to<std::remove_cvref_t<T>, std::string_view> && !has_data<T>;
+
+   template <class T>
+   concept is_buffer = c_style_char_buffer<T> || contiguous<T>;
 
    // for char array input
    template <opts Opts, class T, c_style_char_buffer Buffer>

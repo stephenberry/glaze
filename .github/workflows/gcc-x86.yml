@@ -1,0 +1,45 @@
+name: gcc-x86
+
+on:
+   push:
+      branches:
+         - main
+         - feature/*
+      paths-ignore:
+         - "**.md"
+   pull_request:
+      branches: [main]
+      paths-ignore:
+         - "**.md"
+   workflow_dispatch:
+
+jobs:
+   build:
+      runs-on: ubuntu-24.04
+
+      strategy:
+         fail-fast: false
+         matrix:
+            gcc: [12, 13, 14]
+            build_type: [Debug]
+            std: [23]
+
+      env:
+         CC: gcc-${{matrix.gcc}}
+         CXX: g++-${{matrix.gcc}}
+
+      steps:
+         - uses: actions/checkout@v4
+
+         - name: Setup environment
+           run: |
+              sudo apt update
+              sudo apt-get install -y gcc-${{matrix.gcc}}-multilib g++-${{matrix.gcc}}-multilib libc6-dev-i386
+         - name: Configure CMake
+           run: |
+              CXXFLAGS="-g3 -m32" cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{matrix.build_type}} -DCMAKE_CXX_STANDARD=${{matrix.std}}
+         - name: Build
+           run: cmake --build build -j $(nproc)
+
+         - name: Test
+           run: ctest --output-on-failure --test-dir ${{github.workspace}}/build

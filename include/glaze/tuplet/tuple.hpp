@@ -7,6 +7,8 @@
 #include <type_traits>
 #include <utility>
 
+#include "glaze/util/inline.hpp"
+
 #if (__has_cpp_attribute(no_unique_address))
 #define TUPLET_NO_UNIQUE_ADDRESS [[no_unique_address]]
 #elif (__has_cpp_attribute(msvc::no_unique_address)) || ((defined _MSC_VER) && (!defined __clang__))
@@ -525,7 +527,7 @@ namespace glz
    // glz::tie implementation
    // glz::apply implementation
    template <size_t I, tuplet::indexable Tup>
-   constexpr decltype(auto) get(Tup&& tup)
+   GLZ_ALWAYS_INLINE constexpr decltype(auto) get(Tup&& tup)
    {
       return static_cast<Tup&&>(tup)[tuplet::tag<I>()];
    }
@@ -614,6 +616,7 @@ namespace glz
 
 #include <array>
 #include <tuple>
+#include <variant>
 
 namespace glz
 {

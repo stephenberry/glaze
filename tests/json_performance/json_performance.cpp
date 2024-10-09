@@ -9,6 +9,13 @@
 #include "glaze/glaze.hpp"
 #include "ut/ut.hpp"
 
+static constexpr bool skip = false;
+
+#define SKIP             \
+   if constexpr (skip) { \
+      return;            \
+   }
+
 using namespace ut;
 
 std::mt19937 gen{};
@@ -29,8 +36,26 @@ inline std::string generate_string()
    return result;
 }
 
+static constexpr std::string_view basic_charset{
+   "!#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[]^_`abcdefghijklmnopqrstuvwxyz{|}~"};
+
+inline std::string generate_basic_string()
+{
+   auto length = std::uniform_int_distribution<uint32_t>{0, 512}(gen);
+   const auto charsetSize = basic_charset.size();
+   std::uniform_int_distribution<uint32_t> distribution(0, charsetSize - 1);
+   std::string result{};
+   result.reserve(length);
+   for (uint32_t x = 0; x < length; ++x) {
+      result += basic_charset[distribution(gen)];
+   }
+   return result;
+}
+
 suite string_performance = [] {
    "string_performance"_test = [] {
+      SKIP;
+
 #ifdef NDEBUG
       constexpr size_t n = 10000;
 #else
@@ -42,6 +67,49 @@ suite string_performance = [] {
 
       for (size_t i = 0; i < n; ++i) {
          vec.emplace_back(generate_string());
+      }
+
+      std::string buffer;
+      auto t0 = std::chrono::steady_clock::now();
+      for (auto i = 0; i < 100; ++i) {
+         std::ignore = glz::write_json(vec, buffer);
+      }
+      auto t1 = std::chrono::steady_clock::now();
+      auto duration = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-6;
+      std::cout << "write: " << duration << '\n';
+
+      vec.clear();
+      t0 = std::chrono::steady_clock::now();
+      glz::error_ctx e;
+      for (auto i = 0; i < 100; ++i) {
+         vec.clear();
+         e = glz::read_json(vec, buffer);
+      }
+      t1 = std::chrono::steady_clock::now();
+
+      expect(!e) << glz::format_error(e, buffer);
+
+      duration = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-6;
+      std::cout << "read: " << duration << '\n';
+      std::cout << '\n';
+   };
+};
+
+suite basic_string_performance = [] {
+   "basic_string_performance"_test = [] {
+      SKIP;
+
+#ifdef NDEBUG
+      constexpr size_t n = 10000;
+#else
+      constexpr size_t n = 100;
+#endif
+
+      std::vector<std::string> vec;
+      vec.reserve(n);
+
+      for (size_t i = 0; i < n; ++i) {
+         vec.emplace_back(generate_basic_string());
       }
 
       std::string buffer;
@@ -111,6 +179,89 @@ struct integers
       std::cout << '\n';
    };
 };*/
+
+suite integers_test = [] {
+   "integers"_test = [] {
+      SKIP;
+
+#ifdef NDEBUG
+      constexpr size_t n = 10000000;
+#else
+      constexpr size_t n = 100000;
+#endif
+
+      integers v{};
+
+      std::string buffer;
+      auto t0 = std::chrono::steady_clock::now();
+      glz::error_ctx e;
+      for (size_t i = 0; i < n; ++i) {
+         v.a = int32_t(i);
+         v.b = uint32_t(i);
+         v.c = int64_t(i);
+         v.d = uint64_t(i);
+         std::ignore = glz::write_json(v, buffer);
+         e = glz::read_json(v, buffer);
+      }
+      auto t1 = std::chrono::steady_clock::now();
+      auto duration = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-6;
+      std::cout << "integers read/write: " << duration << '\n';
+   };
+};
+
+suite uint64_t_test = [] {
+   "uint64_t"_test = [] {
+      SKIP;
+
+#ifdef NDEBUG
+      constexpr size_t n = 100000000;
+#else
+      constexpr size_t n = 100000;
+#endif
+
+      std::string buffer;
+      auto t0 = std::chrono::steady_clock::now();
+      glz::error_ctx e;
+      for (size_t i = 0; i < n; ++i) {
+         auto v = uint64_t(i);
+         std::ignore = glz::write_json(v, buffer);
+         e = glz::read_json(v, buffer);
+         if (bool(e)) {
+            break;
+         }
+      }
+      expect(not e);
+      auto t1 = std::chrono::steady_clock::now();
+      auto duration = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-6;
+      std::cout << "integers read/write: " << duration << '\n';
+   };
+};
+
+suite float_tests = [] {
+   "float"_test = [] {
+      SKIP;
+
+#ifdef NDEBUG
+      constexpr size_t n = 10000000;
+#else
+      constexpr size_t n = 100000;
+#endif
+
+      float v{};
+
+      std::string buffer;
+      auto t0 = std::chrono::steady_clock::now();
+      glz::error_ctx e;
+      for (uint32_t i = 0; i < n; ++i) {
+         std::ignore = glz::write_json(v, buffer);
+         e = glz::read_json(v, buffer);
+         std::memcpy(&v, &i, sizeof(float));
+      }
+      auto t1 = std::chrono::steady_clock::now();
+      auto duration = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-6;
+      std::cout << "float read/write: " << duration << '\n';
+   };
+};
 
 [[maybe_unused]] constexpr std::string_view json_minified =
    R"({"fixed_object":{"int_array":[0,1,2,3,4,5,6],"float_array":[0.1,0.2,0.3,0.4,0.5,0.6],"double_array":[3288398.238,2.33e+24,28.9,0.928759872,0.22222848,0.1,0.2,0.3,0.4]},"fixed_name_object":{"name0":"James","name1":"Abraham","name2":"Susan","name3":"Frank","name4":"Alicia"},"another_object":{"string":"here is some text","another_string":"Hello World","escaped_text":"{\"some key\":\"some string value\"}","boolean":false,"nested_object":{"v3s":[[0.12345,0.23456,0.001345],[0.3894675,97.39827,297.92387],[18.18,87.289,2988.298]],"id":"298728949872"}},"string_array":["Cat","Dog","Elephant","Tiger"],"string":"Hello world","number":3.14,"boolean":true,"another_bool":false})";
@@ -228,9 +379,9 @@ struct results
    std::optional<double> json_roundtrip{};
 
    std::optional<size_t> binary_byte_length{};
-   std::optional<double> binary_write{};
-   std::optional<double> binary_read{};
-   std::optional<double> binary_roundtrip{};
+   std::optional<double> beve_write{};
+   std::optional<double> beve_read{};
+   std::optional<double> beve_roundtrip{};
 
    void print(bool use_minified = true)
    {
@@ -264,32 +415,32 @@ struct results
          }
       }
 
-      if (binary_roundtrip) {
+      if (beve_roundtrip) {
          std::cout << '\n';
-         std::cout << name << " binary roundtrip: " << *binary_roundtrip << " s\n";
+         std::cout << name << " beve roundtrip: " << *beve_roundtrip << " s\n";
       }
 
       if (binary_byte_length) {
-         std::cout << name << " binary byte length: " << *binary_byte_length << '\n';
+         std::cout << name << " beve byte length: " << *binary_byte_length << '\n';
       }
 
-      if (binary_write) {
+      if (beve_write) {
          if (binary_byte_length) {
-            const auto MBs = iterations * *binary_byte_length / (*binary_write * 1048576);
-            std::cout << name << " binary write: " << *binary_write << " s, " << MBs << " MB/s\n";
+            const auto MBs = iterations * *binary_byte_length / (*beve_write * 1048576);
+            std::cout << name << " beve write: " << *beve_write << " s, " << MBs << " MB/s\n";
          }
          else {
-            std::cout << name << " binary write: " << *binary_write << " s\n";
+            std::cout << name << " beve write: " << *beve_write << " s\n";
          }
       }
 
-      if (binary_read) {
+      if (beve_read) {
          if (binary_byte_length) {
-            const auto MBs = iterations * *binary_byte_length / (*binary_read * 1048576);
-            std::cout << name << " binary read: " << *binary_read << " s, " << MBs << " MB/s\n";
+            const auto MBs = iterations * *binary_byte_length / (*beve_read * 1048576);
+            std::cout << name << " beve read: " << *beve_read << " s, " << MBs << " MB/s\n";
          }
          else {
-            std::cout << name << " binary read: " << *binary_read << " s\n";
+            std::cout << name << " beve read: " << *beve_read << " s\n";
          }
       }
 
@@ -353,12 +504,12 @@ auto glaze_test()
 
    r.json_read = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-6;
 
-   // binary write performance
+   // beve write performance
 
    t0 = std::chrono::steady_clock::now();
 
    for (size_t i = 0; i < iterations; ++i) {
-      if (glz::write_binary(obj, buffer)) {
+      if (glz::write_beve(obj, buffer)) {
          std::cout << "glaze error!\n";
          break;
       }
@@ -367,14 +518,14 @@ auto glaze_test()
    t1 = std::chrono::steady_clock::now();
 
    r.binary_byte_length = buffer.size();
-   r.binary_write = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-6;
+   r.beve_write = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-6;
 
-   // binary read performance
+   // beve read performance
 
    t0 = std::chrono::steady_clock::now();
 
    for (size_t i = 0; i < iterations; ++i) {
-      if (glz::read_binary(obj, buffer)) {
+      if (glz::read_beve(obj, buffer)) {
          std::cout << "glaze error!\n";
          break;
       }
@@ -382,18 +533,18 @@ auto glaze_test()
 
    t1 = std::chrono::steady_clock::now();
 
-   r.binary_read = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-6;
+   r.beve_read = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-6;
 
-   // binary round trip
+   // beve round trip
 
    t0 = std::chrono::steady_clock::now();
 
    for (size_t i = 0; i < iterations; ++i) {
-      if (glz::read_binary(obj, buffer)) {
+      if (glz::read_beve(obj, buffer)) {
          std::cout << "glaze error!\n";
          break;
       }
-      if (glz::write_binary(obj, buffer)) {
+      if (glz::write_beve(obj, buffer)) {
          std::cout << "glaze error!\n";
          break;
       }
@@ -401,14 +552,19 @@ auto glaze_test()
 
    t1 = std::chrono::steady_clock::now();
 
-   r.binary_roundtrip = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-6;
+   r.beve_roundtrip = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-6;
 
    r.print();
 
    return r;
 }
 
-suite object_performance = [] { "object_performance"_test = [] { glaze_test<glz::opts{}>(); }; };
+suite object_performance = [] {
+   "object_performance"_test = [] {
+      SKIP;
+      glaze_test<glz::opts{}>();
+   };
+};
 
 inline std::string emoji_unicode(auto& generator)
 {
@@ -485,13 +641,13 @@ struct test_generator
       if (theResult < 0) {
          theResult = -theResult;
       }
-      return theResult;
+      return static_cast<value_type_new>(theResult);
    }
 
    template <class V>
    V randomizeNumberUniform(V range)
    {
-      std::uniform_int_distribution<uint64_t> dis(0, range);
+      std::uniform_int_distribution<uint64_t> dis(0, uint64_t(range));
       return static_cast<V>(dis(gen));
    }
 
@@ -500,11 +656,11 @@ struct test_generator
    std::string generateString()
    {
       auto length{randomizeNumberNormal(64.0f, 16.0f)};
-      static constexpr uint32_t charsetSize = charset.size();
+      static constexpr auto charsetSize = charset.size();
       auto unicodeCount = randomizeNumberUniform(length / 8);
       std::string result{};
-      for (int32_t x = 0; x < length; ++x) {
-         if (x == static_cast<int32_t>(length / unicodeCount)) {
+      for (int32_t ix = 0; ix < length; ++ix) {
+         if (ix == static_cast<int32_t>(length / unicodeCount)) {
             insertUnicodeInJSON(result);
          }
          result += charset[randomizeNumberUniform(charsetSize - 1)];
@@ -701,12 +857,12 @@ auto benchmark_tester()
 
    r.json_read = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-6;
 
-   // binary write performance
+   // beve write performance
 
    t0 = std::chrono::steady_clock::now();
 
    for (size_t i = 0; i < N; ++i) {
-      if (glz::write_binary(obj, buffer)) {
+      if (glz::write_beve(obj, buffer)) {
          std::cout << "glaze error!\n";
          break;
       }
@@ -715,14 +871,14 @@ auto benchmark_tester()
    t1 = std::chrono::steady_clock::now();
 
    r.binary_byte_length = buffer.size();
-   r.binary_write = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-6;
+   r.beve_write = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-6;
 
-   // binary read performance
+   // beve read performance
 
    t0 = std::chrono::steady_clock::now();
 
    for (size_t i = 0; i < N; ++i) {
-      if (glz::read_binary(obj, buffer)) {
+      if (glz::read_beve(obj, buffer)) {
          std::cout << "glaze error!\n";
          break;
       }
@@ -730,18 +886,18 @@ auto benchmark_tester()
 
    t1 = std::chrono::steady_clock::now();
 
-   r.binary_read = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-6;
+   r.beve_read = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-6;
 
-   // binary round trip
+   // beve round trip
 
    t0 = std::chrono::steady_clock::now();
 
    for (size_t i = 0; i < N; ++i) {
-      if (glz::read_binary(obj, buffer)) {
+      if (glz::read_beve(obj, buffer)) {
          std::cout << "glaze error!\n";
          break;
       }
-      if (glz::write_binary(obj, buffer)) {
+      if (glz::write_beve(obj, buffer)) {
          std::cout << "glaze error!\n";
          break;
       }
@@ -749,13 +905,423 @@ auto benchmark_tester()
 
    t1 = std::chrono::steady_clock::now();
 
-   r.binary_roundtrip = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-6;
+   r.beve_roundtrip = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-6;
 
    r.print();
 
    return r;
 }
 
-suite benchmark_test = [] { "benchmark"_test = [] { benchmark_tester<glz::opts{}>(); }; };
+suite benchmark_test = [] {
+   "benchmark"_test = [] {
+      SKIP;
+      benchmark_tester<glz::opts{}>();
+   };
+};
+
+struct icon_emoji_data
+{
+   std::optional<std::string> name{};
+   std::nullptr_t id{nullptr};
+};
+
+struct permission_overwrite
+{
+   std::string allow{};
+   std::string deny{};
+   std::string id{};
+   int64_t type{};
+};
+
+struct channel_data
+{
+   std::vector<permission_overwrite> permission_overwrites{};
+   std::optional<std::string> last_message_id{};
+   int64_t default_thread_rate_limit_per_user{};
+   std::vector<std::nullptr_t> applied_tags{};
+   std::vector<std::nullptr_t> recipients{};
+   int64_t default_auto_archive_duration{};
+   std::nullptr_t status{nullptr};
+   std::string last_pin_timestamp{};
+   std::nullptr_t topic{nullptr};
+   int64_t rate_limit_per_user{};
+   icon_emoji_data icon_emoji{};
+   int64_t total_message_sent{};
+   int64_t video_quality_mode{};
+   std::string application_id{};
+   std::string permissions{};
+   int64_t message_count{};
+   std::string parent_id{};
+   int64_t member_count{};
+   std::string owner_id{};
+   std::string guild_id{};
+   int64_t user_limit{};
+   int64_t position{};
+   std::string name{};
+   std::string icon{};
+   int64_t version{};
+   int64_t bitrate{};
+   std::string id{};
+   int64_t flags{};
+   int64_t type{};
+   bool managed{};
+   bool nsfw{};
+};
+
+struct user_data
+{
+   std::nullptr_t avatar_decoration_data{nullptr};
+   std::optional<std::string> display_name{};
+   std::optional<std::string> global_name{};
+   std::optional<std::string> avatar{};
+   std::nullptr_t banner{nullptr};
+   std::nullptr_t locale{nullptr};
+   std::string discriminator{};
+   std::string user_name{};
+   int64_t accent_color{};
+   int64_t premium_type{};
+   int64_t public_flags{};
+   std::string email{};
+   bool mfa_enabled{};
+   std::string id{};
+   int64_t flags{};
+   bool verified{};
+   bool system{};
+   bool bot{};
+};
+
+struct member_data
+{
+   std::nullptr_t communication_disabled_until{nullptr};
+   std::nullptr_t premium_since{nullptr};
+   std::optional<std::string> nick{};
+   std::nullptr_t avatar{nullptr};
+   std::vector<std::string> roles{};
+   std::string permissions{};
+   std::string joined_at{};
+   std::string guild_id{};
+   user_data user{};
+   int64_t flags{};
+   bool pending{};
+   bool deaf{};
+   bool mute{};
+};
+
+struct tags_data
+{
+   std::nullptr_t premium_subscriber{nullptr};
+   std::optional<std::string> bot_id{};
+};
+
+struct role_data
+{
+   std::nullptr_t unicode_emoji{nullptr};
+   std::nullptr_t icon{nullptr};
+   std::string permissions{};
+   int64_t position{};
+   std::string name{};
+   bool mentionable{};
+   int64_t version{};
+   std::string id{};
+   tags_data tags{};
+   int64_t color{};
+   int64_t flags{};
+   bool managed{};
+   bool hoist{};
+};
+
+struct guild_data
+{
+   std::nullptr_t latest_on_boarding_question_id{nullptr};
+   std::vector<std::nullptr_t> guild_scheduled_events{};
+   std::nullptr_t safety_alerts_channel_id{nullptr};
+   std::nullptr_t inventory_settings{nullptr};
+   std::vector<std::nullptr_t> voice_states{};
+   std::nullptr_t discovery_splash{nullptr};
+   std::nullptr_t vanity_url_code{nullptr};
+   std::nullptr_t application_id{nullptr};
+   std::nullptr_t afk_channel_id{nullptr};
+   int64_t default_message_notifications{};
+   int64_t max_stage_video_channel_users{};
+   std::string public_updates_channel_id{};
+   std::nullptr_t description{nullptr};
+   std::vector<std::nullptr_t> threads{};
+   std::vector<channel_data> channels{};
+   int64_t premium_subscription_count{};
+   int64_t approximate_presence_count{};
+   std::vector<std::string> features{};
+   std::vector<std::string> stickers{};
+   bool premium_progress_bar_enabled{};
+   std::vector<member_data> members{};
+   std::nullptr_t hub_type{nullptr};
+   int64_t approximate_member_count{};
+   int64_t explicit_content_filter{};
+   int64_t max_video_channel_users{};
+   std::nullptr_t splash{nullptr};
+   std::nullptr_t banner{nullptr};
+   std::string system_channel_id{};
+   std::string widget_channel_id{};
+   std::string preferred_locale{};
+   int64_t system_channel_flags{};
+   std::string rules_channel_id{};
+   std::vector<role_data> roles{};
+   int64_t verification_level{};
+   std::string permissions{};
+   int64_t max_presences{};
+   std::string discovery{};
+   std::string joined_at{};
+   int64_t member_count{};
+   int64_t premium_tier{};
+   std::string owner_id{};
+   int64_t max_members{};
+   int64_t afk_timeout{};
+   bool widget_enabled{};
+   std::string region{};
+   int64_t nsfw_level{};
+   int64_t mfa_level{};
+   std::string name{};
+   std::string icon{};
+   bool unavailable{};
+   std::string id{};
+   int64_t flags{};
+   bool large{};
+   bool owner{};
+   bool nsfw{};
+   bool lazy{};
+};
+
+struct discord_message
+{
+   std::string t{};
+   guild_data d{};
+   int64_t op{};
+   int64_t s{};
+};
+
+template <>
+struct glz::meta<icon_emoji_data>
+{
+   using T = icon_emoji_data;
+   static constexpr auto value = object("name", &T::name, "id", &T::id);
+};
+
+template <>
+struct glz::meta<permission_overwrite>
+{
+   using T = permission_overwrite;
+   static constexpr auto value = object("allow", &T::allow, "deny", &T::deny, "id", &T::id, "type", &T::type);
+};
+
+template <>
+struct glz::meta<channel_data>
+{
+   using T = channel_data;
+   static constexpr auto value = object(
+      "permission_overwrites", &T::permission_overwrites, "last_message_id", &T::last_message_id,
+      "default_thread_rate_limit_per_user", &T::default_thread_rate_limit_per_user, "applied_tags", &T::applied_tags,
+      "recipients", &T::recipients, "default_auto_archive_duration", &T::default_auto_archive_duration, "status",
+      &T::status, "last_pin_timestamp", &T::last_pin_timestamp, "topic", &T::topic, "rate_limit_per_user",
+      &T::rate_limit_per_user, "icon_emoji", &T::icon_emoji, "total_message_sent", &T::total_message_sent,
+      "video_quality_mode", &T::video_quality_mode, "application_id", &T::application_id, "permissions",
+      &T::permissions, "message_count", &T::message_count, "parent_id", &T::parent_id, "member_count", &T::member_count,
+      "owner_id", &T::owner_id, "guild_id", &T::guild_id, "user_limit", &T::user_limit, "position", &T::position,
+      "name", &T::name, "icon", &T::icon, "version", &T::version, "bitrate", &T::bitrate, "id", &T::id, "flags",
+      &T::flags, "type", &T::type, "managed", &T::managed, "nsfw", &T::nsfw);
+};
+
+template <>
+struct glz::meta<user_data>
+{
+   using T = user_data;
+   static constexpr auto value =
+      object("avatar_decoration_data", &T::avatar_decoration_data, "display_name", &T::display_name, "global_name",
+             &T::global_name, "avatar", &T::avatar, "banner", &T::banner, "locale", &T::locale, "discriminator",
+             &T::discriminator, "user_name", &T::user_name, "accent_color", &T::accent_color, "premium_type",
+             &T::premium_type, "public_flags", &T::public_flags, "email", &T::email, "mfa_enabled", &T::mfa_enabled,
+             "id", &T::id, "flags", &T::flags, "verified", &T::verified, "system", &T::system, "bot", &T::bot);
+};
+
+template <>
+struct glz::meta<member_data>
+{
+   using T = member_data;
+   static constexpr auto value =
+      object("communication_disabled_until", &T::communication_disabled_until, "premium_since", &T::premium_since,
+             "nick", &T::nick, "avatar", &T::avatar, "roles", &T::roles, "permissions", &T::permissions, "joined_at",
+             &T::joined_at, "guild_id", &T::guild_id, "user", &T::user, "flags", &T::flags, "pending", &T::pending,
+             "deaf", &T::deaf, "mute", &T::mute);
+};
+
+template <>
+struct glz::meta<tags_data>
+{
+   using T = tags_data;
+   static constexpr auto value = object("premium_subscriber", &T::premium_subscriber, "bot_id", &T::bot_id);
+};
+
+template <>
+struct glz::meta<role_data>
+{
+   using T = role_data;
+   static constexpr auto value =
+      object("unicode_emoji", &T::unicode_emoji, "icon", &T::icon, "permissions", &T::permissions, "position",
+             &T::position, "name", &T::name, "mentionable", &T::mentionable, "version", &T::version, "id", &T::id,
+             "tags", &T::tags, "color", &T::color, "flags", &T::flags, "managed", &T::managed, "hoist", &T::hoist);
+};
+
+template <>
+struct glz::meta<guild_data>
+{
+   using T = guild_data;
+   static constexpr auto value = object(
+      "latest_on_boarding_question_id", &T::latest_on_boarding_question_id, "guild_scheduled_events",
+      &T::guild_scheduled_events, "safety_alerts_channel_id", &T::safety_alerts_channel_id, "inventory_settings",
+      &T::inventory_settings, "voice_states", &T::voice_states, "discovery_splash", &T::discovery_splash,
+      "vanity_url_code", &T::vanity_url_code, "application_id", &T::application_id, "afk_channel_id",
+      &T::afk_channel_id, "default_message_notifications", &T::default_message_notifications,
+      "max_stage_video_channel_users", &T::max_stage_video_channel_users, "public_updates_channel_id",
+      &T::public_updates_channel_id, "description", &T::description, "threads", &T::threads, "channels", &T::channels,
+      "premium_subscription_count", &T::premium_subscription_count, "approximate_presence_count",
+      &T::approximate_presence_count, "features", &T::features, "stickers", &T::stickers,
+      "premium_progress_bar_enabled", &T::premium_progress_bar_enabled, "members", &T::members, "hub_type",
+      &T::hub_type, "approximate_member_count", &T::approximate_member_count, "explicit_content_filter",
+      &T::explicit_content_filter, "max_video_channel_users", &T::max_video_channel_users, "splash", &T::splash,
+      "banner", &T::banner, "system_channel_id", &T::system_channel_id, "widget_channel_id", &T::widget_channel_id,
+      "preferred_locale", &T::preferred_locale, "system_channel_flags", &T::system_channel_flags, "rules_channel_id",
+      &T::rules_channel_id, "roles", &T::roles, "verification_level", &T::verification_level, "permissions",
+      &T::permissions, "max_presences", &T::max_presences, "discovery", &T::discovery, "joined_at", &T::joined_at,
+      "member_count", &T::member_count, "premium_tier", &T::premium_tier, "owner_id", &T::owner_id, "max_members",
+      &T::max_members, "afk_timeout", &T::afk_timeout, "widget_enabled", &T::widget_enabled, "region", &T::region,
+      "nsfw_level", &T::nsfw_level, "mfa_level", &T::mfa_level, "name", &T::name, "icon", &T::icon, "unavailable",
+      &T::unavailable, "id", &T::id, "flags", &T::flags, "large", &T::large, "owner", &T::owner, "nsfw", &T::nsfw,
+      "lazy", &T::lazy);
+};
+
+template <>
+struct glz::meta<discord_message>
+{
+   using value_type = discord_message;
+   static constexpr auto value =
+      object("t", &value_type::t, "d", &value_type::d, "op", &value_type::op, "s", &value_type::s);
+};
+
+template <class T, glz::opts Opts>
+auto generic_tester()
+{
+   T obj{};
+
+   std::string buffer{};
+   expect(not glz::write_json(obj, buffer));
+
+   auto t0 = std::chrono::steady_clock::now();
+
+   for (size_t i = 0; i < iterations; ++i) {
+      if (glz::read<Opts>(obj, buffer)) {
+         std::cout << "glaze error!\n";
+         break;
+      }
+      if (glz::write_json(obj, buffer)) {
+         std::cout << "glaze error!\n";
+         break;
+      }
+   }
+
+   auto t1 = std::chrono::steady_clock::now();
+
+   results r{Opts.minified ? "Glaze (.minified)" : "Glaze", "https://github.com/stephenberry/glaze", iterations};
+   r.json_roundtrip = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-6;
+
+   // write performance
+   t0 = std::chrono::steady_clock::now();
+
+   for (size_t i = 0; i < iterations; ++i) {
+      if (glz::write<Opts>(obj, buffer)) {
+         std::cout << "glaze error!\n";
+         break;
+      }
+   }
+
+   t1 = std::chrono::steady_clock::now();
+
+   r.json_byte_length = buffer.size();
+   minified_byte_length = *r.json_byte_length;
+   r.json_write = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-6;
+
+   // read performance
+
+   t0 = std::chrono::steady_clock::now();
+
+   for (size_t i = 0; i < iterations; ++i) {
+      if (glz::read_json(obj, buffer)) {
+         std::cout << "glaze error!\n";
+         break;
+      }
+   }
+
+   t1 = std::chrono::steady_clock::now();
+
+   r.json_read = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-6;
+
+   // beve write performance
+
+   t0 = std::chrono::steady_clock::now();
+
+   for (size_t i = 0; i < iterations; ++i) {
+      if (glz::write_beve(obj, buffer)) {
+         std::cout << "glaze error!\n";
+         break;
+      }
+   }
+
+   t1 = std::chrono::steady_clock::now();
+
+   r.binary_byte_length = buffer.size();
+   r.beve_write = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-6;
+
+   // beve read performance
+
+   t0 = std::chrono::steady_clock::now();
+
+   for (size_t i = 0; i < iterations; ++i) {
+      if (glz::read_beve(obj, buffer)) {
+         std::cout << "glaze error!\n";
+         break;
+      }
+   }
+
+   t1 = std::chrono::steady_clock::now();
+
+   r.beve_read = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-6;
+
+   // beve round trip
+
+   t0 = std::chrono::steady_clock::now();
+
+   for (size_t i = 0; i < iterations; ++i) {
+      if (glz::read_beve(obj, buffer)) {
+         std::cout << "glaze error!\n";
+         break;
+      }
+      if (glz::write_beve(obj, buffer)) {
+         std::cout << "glaze error!\n";
+         break;
+      }
+   }
+
+   t1 = std::chrono::steady_clock::now();
+
+   r.beve_roundtrip = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-6;
+
+   r.print();
+
+   return r;
+}
+
+suite discord_test = [] {
+   "discord"_test = [] {
+      SKIP;
+      generic_tester<discord_message, glz::opts{}>();
+   };
+};
 
 int main() { return 0; }

@@ -11,10 +11,11 @@
 #include "glaze/core/context.hpp"
 #include "glaze/core/meta.hpp"
 #include "glaze/core/opts.hpp"
+#include "glaze/util/atoi.hpp"
 #include "glaze/util/compare.hpp"
+#include "glaze/util/convert.hpp"
 #include "glaze/util/expected.hpp"
 #include "glaze/util/inline.hpp"
-#include "glaze/util/stoui64.hpp"
 #include "glaze/util/string_literal.hpp"
 
 namespace glz::detail
@@ -117,14 +118,21 @@ namespace glz::detail
 
    consteval uint64_t repeat_byte8(const uint8_t repeat) { return 0x0101010101010101ull * repeat; }
 
+#if defined(__SIZEOF_INT128__)
+   consteval __uint128_t repeat_byte16(const uint8_t repeat)
+   {
+      __uint128_t multiplier = (__uint128_t(0x0101010101010101ull) << 64) | 0x0101010101010101ull;
+      return multiplier * repeat;
+   }
+#endif
+
    consteval uint64_t not_repeat_byte8(const uint8_t repeat) { return ~(0x0101010101010101ull * repeat); }
 
    [[nodiscard]] GLZ_ALWAYS_INLINE uint32_t hex_to_u32(const char* c) noexcept
    {
       constexpr auto& t = digit_hex_table;
       const uint8_t arr[4]{t[uint8_t(c[3])], t[uint8_t(c[2])], t[uint8_t(c[1])], t[uint8_t(c[0])]};
-      uint32_t chunk;
-      std::memcpy(&chunk, arr, 4);
+      const auto chunk = std::bit_cast<uint32_t>(arr);
       // check that all hex characters are valid
       if (chunk & repeat_byte4(0b11110000u)) [[unlikely]] {
          return 0xFFFFFFFFu;
@@ -141,7 +149,7 @@ namespace glz::detail
    }
 
    template <class Char>
-   [[nodiscard]] GLZ_ALWAYS_INLINE uint32_t code_point_to_utf8(const uint32_t code_point, Char* c)
+   [[nodiscard]] GLZ_ALWAYS_INLINE uint32_t code_point_to_utf8(const uint32_t code_point, Char* c) noexcept
    {
       if (code_point <= 0x7F) {
          c[0] = Char(code_point);
@@ -168,7 +176,7 @@ namespace glz::detail
       return 0;
    }
 
-   [[nodiscard]] GLZ_ALWAYS_INLINE uint32_t skip_code_point(const uint32_t code_point)
+   [[nodiscard]] GLZ_ALWAYS_INLINE uint32_t skip_code_point(const uint32_t code_point) noexcept
    {
       if (code_point <= 0x7F) {
          return 1;
@@ -198,51 +206,6 @@ namespace glz::detail
       constexpr uint32_t surrogate_codepoint_mask = 0x03FF;
       constexpr uint32_t surrogate_codepoint_bits = 10;
    }
-
-   template <class Char>
-   [[nodiscard]] GLZ_ALWAYS_INLINE uint32_t handle_unicode_code_point(const Char*& it, Char*& dst) noexcept
-   {
-      using namespace unicode;
-
-      const uint32_t high = hex_to_u32(it);
-      if (high == 0xFFFFFFFFu) [[unlikely]] {
-         return false;
-      }
-      it += 4; // skip the code point characters
-
-      uint32_t code_point;
-
-      if ((high & generic_surrogate_mask) == generic_surrogate_value) {
-         // surrogate pair code points
-         if ((high & surrogate_mask) != high_surrogate_value) {
-            return false;
-         }
-
-         it += 2;
-         // verify that second unicode escape sequence is present
-         const uint32_t low = hex_to_u32(it);
-         if (low == 0xFFFFFFFFu) [[unlikely]] {
-            return false;
-         }
-         it += 4;
-
-         if ((low & surrogate_mask) != low_surrogate_value) [[unlikely]] {
-            return false;
-         }
-
-         code_point = (high & surrogate_codepoint_mask) << surrogate_codepoint_bits;
-         code_point |= (low & surrogate_codepoint_mask);
-         code_point += surrogate_codepoint_offset;
-      }
-      else {
-         code_point = high;
-      }
-      const uint32_t offset = code_point_to_utf8(code_point, dst);
-      dst += offset;
-      return offset;
-   }
-
-   consteval uint16_t to_uint16_t(const char chars[2]) { return uint16_t(chars[0]) | (uint16_t(chars[1]) << 8); }
 
    template <class Char>
    [[nodiscard]] GLZ_ALWAYS_INLINE uint32_t handle_unicode_code_point(const Char*& it, Char*& dst,
@@ -325,6 +288,12 @@ namespace glz::detail
          if (it + 6 >= end) [[unlikely]] {
             return false;
          }
+         // The next two characters must be `\u`
+         uint16_t u;
+         std::memcpy(&u, it, 2);
+         if (u != to_uint16_t(R"(\u)")) [[unlikely]] {
+            return false;
+         }
          it += 2;
          // verify that second unicode escape sequence is present
          const uint32_t low = hex_to_u32(it);
@@ -357,31 +326,49 @@ namespace glz::detail
       ++it;                                   \
    }
 
-#define GLZ_MATCH_COMMA                       \
-   if (*it != ',') [[unlikely]] {             \
-      ctx.error = error_code::expected_comma; \
-      return;                                 \
-   }                                          \
-   else [[likely]] {                          \
-      ++it;                                   \
+#define GLZ_MATCH_COMMA                          \
+   if (*it != ',') [[unlikely]] {                \
+      ctx.error = error_code::expected_comma;    \
+      return;                                    \
+   }                                             \
+   else [[likely]] {                             \
+      ++it;                                      \
+   }                                             \
+   if constexpr (not Opts.null_terminated) {     \
+      if (it == end) [[unlikely]] {              \
+         ctx.error = error_code::unexpected_end; \
+         return;                                 \
+      }                                          \
    }
 
-#define GLZ_MATCH_COLON(RETURN)               \
-   if (*it != ':') [[unlikely]] {             \
-      ctx.error = error_code::expected_colon; \
-      return RETURN;                          \
-   }                                          \
-   else [[likely]] {                          \
-      ++it;                                   \
+#define GLZ_MATCH_COLON(RETURN)                  \
+   if (*it != ':') [[unlikely]] {                \
+      ctx.error = error_code::expected_colon;    \
+      return RETURN;                             \
+   }                                             \
+   else [[likely]] {                             \
+      ++it;                                      \
+   }                                             \
+   if constexpr (not Opts.null_terminated) {     \
+      if (it == end) [[unlikely]] {              \
+         ctx.error = error_code::unexpected_end; \
+         return RETURN;                          \
+      }                                          \
    }
 
-#define GLZ_MATCH_OPEN_BRACKET                  \
-   if (*it != '[') [[unlikely]] {               \
-      ctx.error = error_code::expected_bracket; \
-      return;                                   \
-   }                                            \
-   else [[likely]] {                            \
-      ++it;                                     \
+#define GLZ_MATCH_OPEN_BRACKET                   \
+   if (*it != '[') [[unlikely]] {                \
+      ctx.error = error_code::expected_bracket;  \
+      return;                                    \
+   }                                             \
+   else [[likely]] {                             \
+      ++it;                                      \
+   }                                             \
+   if constexpr (not Opts.null_terminated) {     \
+      if (it == end) [[unlikely]] {              \
+         ctx.error = error_code::unexpected_end; \
+         return;                                 \
+      }                                          \
    }
 
 #define GLZ_MATCH_CLOSE_BRACKET                 \
@@ -393,13 +380,19 @@ namespace glz::detail
       ++it;                                     \
    }
 
-#define GLZ_MATCH_OPEN_BRACE                  \
-   if (*it != '{') [[unlikely]] {             \
-      ctx.error = error_code::expected_brace; \
-      return;                                 \
-   }                                          \
-   else [[likely]] {                          \
-      ++it;                                   \
+#define GLZ_MATCH_OPEN_BRACE                     \
+   if (*it != '{') [[unlikely]] {                \
+      ctx.error = error_code::expected_brace;    \
+      return;                                    \
+   }                                             \
+   else [[likely]] {                             \
+      ++it;                                      \
+   }                                             \
+   if constexpr (not Opts.null_terminated) {     \
+      if (it == end) [[unlikely]] {              \
+         ctx.error = error_code::unexpected_end; \
+         return;                                 \
+      }                                          \
    }
 
 #define GLZ_MATCH_CLOSE_BRACE                 \
@@ -409,6 +402,22 @@ namespace glz::detail
    }                                          \
    else [[likely]] {                          \
       ++it;                                   \
+   }
+
+#define GLZ_VALID_END(RETURN)                 \
+   if constexpr (not Opts.null_terminated) {  \
+      if (it == end) {                        \
+         ctx.error = error_code::end_reached; \
+         return RETURN;                       \
+      }                                       \
+   }
+
+#define GLZ_INVALID_END(RETURN)                  \
+   if constexpr (not Opts.null_terminated) {     \
+      if (it == end) [[unlikely]] {              \
+         ctx.error = error_code::unexpected_end; \
+         return RETURN;                          \
+      }                                          \
    }
 
    template <char c>
@@ -522,26 +531,56 @@ namespace glz::detail
       return (chunk & repeat_byte8(0b11110000u));
    }
 
-#define GLZ_SKIP_WS(RETURN)                               \
-   if constexpr (!Opts.minified) {                        \
-      if constexpr (Opts.comments) {                      \
-         while (whitespace_comment_table[uint8_t(*it)]) { \
-            if (*it == '/') [[unlikely]] {                \
-               skip_comment(ctx, it, end);                \
-               if (bool(ctx.error)) [[unlikely]] {        \
-                  return RETURN;                          \
-               }                                          \
-            }                                             \
-            else [[likely]] {                             \
-               ++it;                                      \
-            }                                             \
-         }                                                \
-      }                                                   \
-      else {                                              \
-         while (whitespace_table[uint8_t(*it)]) {         \
-            ++it;                                         \
-         }                                                \
-      }                                                   \
+#define GLZ_SKIP_WS(RETURN)                                              \
+   if constexpr (!Opts.minified) {                                       \
+      if constexpr (Opts.null_terminated) {                              \
+         if constexpr (Opts.comments) {                                  \
+            while (whitespace_comment_table[uint8_t(*it)]) {             \
+               if (*it == '/') [[unlikely]] {                            \
+                  skip_comment(ctx, it, end);                            \
+                  if (bool(ctx.error)) [[unlikely]] {                    \
+                     return RETURN;                                      \
+                  }                                                      \
+               }                                                         \
+               else [[likely]] {                                         \
+                  ++it;                                                  \
+               }                                                         \
+            }                                                            \
+         }                                                               \
+         else {                                                          \
+            while (whitespace_table[uint8_t(*it)]) {                     \
+               ++it;                                                     \
+            }                                                            \
+         }                                                               \
+      }                                                                  \
+      else {                                                             \
+         if constexpr (Opts.comments) {                                  \
+            while (it < end && whitespace_comment_table[uint8_t(*it)]) { \
+               if (*it == '/') [[unlikely]] {                            \
+                  skip_comment(ctx, it, end);                            \
+                  if (bool(ctx.error)) [[unlikely]] {                    \
+                     return RETURN;                                      \
+                  }                                                      \
+               }                                                         \
+               else [[likely]] {                                         \
+                  ++it;                                                  \
+               }                                                         \
+            }                                                            \
+            if (it == end) [[unlikely]] {                                \
+               ctx.error = error_code::end_reached;                      \
+               return RETURN;                                            \
+            }                                                            \
+         }                                                               \
+         else {                                                          \
+            while (it < end && whitespace_table[uint8_t(*it)]) {         \
+               ++it;                                                     \
+            }                                                            \
+            if (it == end) [[unlikely]] {                                \
+               ctx.error = error_code::end_reached;                      \
+               return RETURN;                                            \
+            }                                                            \
+         }                                                               \
+      }                                                                  \
    }
 
    // skip whitespace
@@ -549,22 +588,52 @@ namespace glz::detail
    GLZ_ALWAYS_INLINE void skip_ws(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       if constexpr (!Opts.minified) {
-         if constexpr (Opts.comments) {
-            while (whitespace_comment_table[uint8_t(*it)]) {
-               if (*it == '/') [[unlikely]] {
-                  skip_comment(ctx, it, end);
-                  if (bool(ctx.error)) [[unlikely]] {
-                     return;
+         if constexpr (Opts.null_terminated) {
+            if constexpr (Opts.comments) {
+               while (whitespace_comment_table[uint8_t(*it)]) {
+                  if (*it == '/') [[unlikely]] {
+                     skip_comment(ctx, it, end);
+                     if (bool(ctx.error)) [[unlikely]] {
+                        return;
+                     }
+                  }
+                  else [[likely]] {
+                     ++it;
                   }
                }
-               else [[likely]] {
+            }
+            else {
+               while (whitespace_table[uint8_t(*it)]) {
                   ++it;
                }
             }
          }
          else {
-            while (whitespace_table[uint8_t(*it)]) {
-               ++it;
+            if constexpr (Opts.comments) {
+               while (it < end && whitespace_comment_table[uint8_t(*it)]) {
+                  if (*it == '/') [[unlikely]] {
+                     skip_comment(ctx, it, end);
+                     if (bool(ctx.error)) [[unlikely]] {
+                        return;
+                     }
+                  }
+                  else [[likely]] {
+                     ++it;
+                  }
+               }
+               if (it == end) [[unlikely]] {
+                  ctx.error = error_code::end_reached;
+                  return;
+               }
+            }
+            else {
+               while (it < end && whitespace_table[uint8_t(*it)]) {
+                  ++it;
+               }
+               if (it == end) [[unlikely]] {
+                  ctx.error = error_code::end_reached;
+                  return;
+               }
             }
          }
       }
@@ -631,6 +700,19 @@ namespace glz::detail
 
    // std::countr_zero uses another branch check whether the input is zero,
    // we use this function when we know that x > 0
+   GLZ_ALWAYS_INLINE auto countr_zero(const uint32_t x) noexcept
+   {
+#ifdef _MSC_VER
+      return std::countr_zero(x);
+#else
+#if __has_builtin(__builtin_ctzll)
+      return __builtin_ctzl(x);
+#else
+      return std::countr_zero(x);
+#endif
+#endif
+   }
+
    GLZ_ALWAYS_INLINE auto countr_zero(const uint64_t x) noexcept
    {
 #ifdef _MSC_VER
@@ -643,6 +725,20 @@ namespace glz::detail
 #endif
 #endif
    }
+
+#if defined(__SIZEOF_INT128__)
+   GLZ_ALWAYS_INLINE auto countr_zero(__uint128_t x) noexcept
+   {
+      uint64_t low = uint64_t(x);
+      if (low != 0) {
+         return countr_zero(low);
+      }
+      else {
+         uint64_t high = uint64_t(x >> 64);
+         return countr_zero(high) + 64;
+      }
+   }
+#endif
 
    GLZ_ALWAYS_INLINE void skip_till_quote(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
@@ -659,8 +755,6 @@ namespace glz::detail
       requires(has_is_padded(Opts))
    GLZ_ALWAYS_INLINE void skip_string_view(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
-      static_assert(std::contiguous_iterator<std::decay_t<decltype(it)>>);
-
       while (it < end) [[likely]] {
          uint64_t chunk;
          std::memcpy(&chunk, it, 8);
@@ -689,8 +783,6 @@ namespace glz::detail
       requires(!has_is_padded(Opts))
    GLZ_ALWAYS_INLINE void skip_string_view(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
-      static_assert(std::contiguous_iterator<std::decay_t<decltype(it)>>);
-
       for (const auto fin = end - 7; it < fin;) {
          uint64_t chunk;
          std::memcpy(&chunk, it, 8);
@@ -1158,9 +1250,6 @@ namespace glz::detail
          skip_number_with_validation(ctx, it, end);
       }
    }
-
-   template <opts Opts>
-   GLZ_ALWAYS_INLINE void skip_value(is_context auto&& ctx, auto&& it, auto&& end) noexcept;
 
    // expects opening whitespace to be handled
    GLZ_ALWAYS_INLINE sv parse_key(is_context auto&& ctx, auto&& it, auto&& end) noexcept

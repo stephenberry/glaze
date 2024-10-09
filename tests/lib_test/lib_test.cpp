@@ -81,7 +81,12 @@ void tests()
 
    "span type name"_test = [] {
       std::string_view s = glz::name_v<std::span<double>>;
-      expect(s == "std::span<double,18446744073709551615>");
+      if constexpr (sizeof(size_t) == sizeof(uint64_t)) {
+         expect(s == "std::span<double,18446744073709551615>");
+      }
+      else if constexpr (sizeof(size_t) == sizeof(uint32_t)) {
+         expect(s == "std::span<double,4294967295>");
+      }
    };
 
    "my_api type io"_test = [&] {

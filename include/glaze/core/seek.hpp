@@ -4,9 +4,9 @@
 #pragma once
 
 #include "glaze/core/read.hpp"
-#include "glaze/core/refl.hpp"
+#include "glaze/core/reflect.hpp"
 #include "glaze/core/write.hpp"
-#include "glaze/util/fast_float.hpp"
+#include "glaze/util/glaze_fast_float.hpp"
 
 // Use JSON Pointer syntax to seek to a specific element
 // https://github.com/stephenberry/JSON-Pointer
@@ -83,9 +83,7 @@ namespace glz::detail
          json_ptr = json_ptr.substr(i);
       }
       else if constexpr (std::floating_point<Key>) {
-         static constexpr fast_float::parse_options options{fast_float::chars_format::json};
-         auto [ptr, ec] =
-            fast_float::from_chars_advanced(json_ptr.data(), json_ptr.data() + json_ptr.size(), key, options);
+         auto [ptr, ec] = glz::from_chars<false>(json_ptr.data(), json_ptr.data() + json_ptr.size(), key);
          if (ec != std::errc()) [[unlikely]] {
             return false;
          }
@@ -98,27 +96,25 @@ namespace glz::detail
       }
 
       if constexpr (glaze_object_t<T> || reflectable<T>) {
-         decltype(auto) frozen_map = [&]() -> decltype(auto) {
-            if constexpr (reflectable<T>) {
-#if ((defined _MSC_VER) && (!defined __clang__))
-               static thread_local auto cmap = make_map<T>();
-#else
-               static thread_local constinit auto cmap = make_map<T>();
-#endif
-               populate_map(value, cmap); // Function required for MSVC to build
-               return cmap;
-            }
-            else {
-               static constexpr auto cmap = make_map<T>();
-               return cmap;
-            }
-         }();
+         static constexpr auto N = reflect<T>::size;
+         static constexpr auto HashInfo = detail::hash_info<T>;
 
-         const auto& member_it = frozen_map.find(key);
-         if (member_it != frozen_map.end()) [[likely]] {
-            return std::visit(
-               [&](auto&& element) { return seek_impl(std::forward<F>(func), get_member(value, element), json_ptr); },
-               member_it->second);
+         const auto index = decode_hash_with_size<JSON_PTR, T, HashInfo, HashInfo.type>::op(
+            key.data(), key.data() + key.size(), key.size());
+
+         if (index < N) [[likely]] {
+            bool ret{};
+            jump_table<N>(
+               [&]<size_t I>() {
+                  if constexpr (reflectable<T>) {
+                     ret = seek_impl(std::forward<F>(func), get_member(value, get<I>(to_tuple(value))), json_ptr);
+                  }
+                  else {
+                     ret = seek_impl(std::forward<F>(func), get_member(value, get<I>(reflect<T>::values)), json_ptr);
+                  }
+               },
+               index);
+            return ret;
          }
          else [[unlikely]] {
             return false;

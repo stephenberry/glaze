@@ -244,7 +244,7 @@ suite structs_of_functions = [] {
 
 suite structs_of_functions_binary = [] {
    "structs_of_functions"_test = [] {
-      repe::registry<glz::opts{.format = glz::binary}> server{};
+      repe::registry<glz::opts{.format = glz::BEVE}> server{};
 
       my_functions_t obj{};
 
@@ -289,7 +289,7 @@ suite structs_of_functions_binary = [] {
    };
 
    "nested_structs_of_functions"_test = [] {
-      repe::registry<glz::opts{.format = glz::binary}> server{};
+      repe::registry<glz::opts{.format = glz::BEVE}> server{};
 
       my_nested_functions_t obj{};
 
@@ -389,7 +389,7 @@ suite structs_of_functions_binary = [] {
    };
 
    "example_functions"_test = [] {
-      repe::registry<glz::opts{.format = glz::binary}> server{};
+      repe::registry<glz::opts{.format = glz::BEVE}> server{};
 
       example_functions_t obj{};
 
@@ -509,7 +509,7 @@ suite root_tests = [] {
 
 suite wrapper_tests_binary = [] {
    "wrapper"_test = [] {
-      repe::registry<glz::opts{.format = glz::binary}> server{};
+      repe::registry<glz::opts{.format = glz::BEVE}> server{};
 
       my_nested_functions_t instance{};
       wrapper_t<my_nested_functions_t> obj{&instance};
@@ -551,7 +551,7 @@ suite multi_threading_tests = [] {
 
       registry.on(obj);
 
-      constexpr size_t N = 10'000;
+      static constexpr size_t N = 10'000;
 
       auto read_str = repe::request_json({"/str"}).value();
 

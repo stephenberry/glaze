@@ -8,7 +8,10 @@
 #include <variant>
 #include <vector>
 
-#include "glaze/core/meta.hpp"
+#include "glaze/api/std/string.hpp"
+#include "glaze/api/std/variant.hpp"
+#include "glaze/json/read.hpp"
+#include "glaze/json/write.hpp"
 #include "glaze/util/expected.hpp"
 
 #ifdef _MSC_VER
@@ -27,6 +30,9 @@ namespace glz
       using null_t = std::nullptr_t;
       using val_t = std::variant<null_t, double, std::string, bool, array_t, object_t>;
       val_t data{};
+
+      // Dump the value to JSON, returns an expected that will contain a std::string if valid
+      expected<std::string, error_ctx> dump() const noexcept { return write_json(data); }
 
       template <class T>
       [[nodiscard]] T& get()
@@ -130,15 +136,17 @@ namespace glz
 
       json_t(std::initializer_list<std::pair<const char*, json_t>>&& obj)
       {
-         // TODO try to see if there is a beter way to do this initialization withought copying the json_t
+         // TODO: Try to see if there is a beter way to do this initialization without copying the json_t
          // std::string in std::initializer_list<std::pair<const std::string, json_t>> would match with {"literal",
-         // "other_literal"} So we cant use std::string or std::string view. Luckily const char * will not match with
+         // "other_literal"} So we can't use std::string or std::string view. Luckily, `const char*` will not match with
          // {"literal", "other_literal"} but then we have to copy the data from the initializer list data =
          // object_t(obj); // This is what we would use if std::initializer_list<std::pair<const std::string, json_t>>
          // worked
          data.emplace<object_t>();
          auto& data_obj = std::get<object_t>(data);
          for (auto&& pair : obj) {
+            // std::move here shows the desired behavior,
+            // but std::initializer_list holds const values that cannot be moved
             data_obj.emplace(pair.first, std::move(pair.second));
          }
       }
@@ -259,6 +267,47 @@ struct glz::meta<glz::json_t>
    using T = glz::json_t;
    static constexpr auto value = &T::data;
 };
+
+namespace glz
+{
+   template <opts Opts, class T>
+      requires read_supported<Opts.format, T>
+   [[nodiscard]] error_ctx read(T& value, const json_t& source) noexcept
+   {
+      auto buffer = source.dump();
+      if (buffer) {
+         context ctx{};
+         return read<Opts>(value, *buffer, ctx);
+      }
+      else {
+         return buffer.error();
+      }
+   }
+
+   template <read_json_supported T>
+   [[nodiscard]] error_ctx read_json(T& value, const json_t& source) noexcept
+   {
+      auto buffer = source.dump();
+      if (buffer) {
+         return read_json(value, *buffer);
+      }
+      else {
+         return buffer.error();
+      }
+   }
+
+   template <read_json_supported T>
+   [[nodiscard]] expected<T, error_ctx> read_json(const json_t& source) noexcept
+   {
+      auto buffer = source.dump();
+      if (buffer) {
+         return read_json<T>(*buffer);
+      }
+      else {
+         return unexpected(buffer.error());
+      }
+   }
+}
 
 #ifdef _MSC_VER
 // restore disabled warning

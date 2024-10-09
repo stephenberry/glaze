@@ -3,16 +3,14 @@
 
 #pragma once
 
-#include "glaze/binary/read.hpp"
-#include "glaze/binary/write.hpp"
 #include "glaze/core/seek.hpp"
 #include "glaze/core/wrappers.hpp"
 
 namespace glz::detail
 {
-   template <class T>
+   template <uint32_t Format, class T>
       requires(is_specialization_v<T, custom_t>)
-   struct from_binary<T>
+   struct from<Format, T>
    {
       template <auto Opts>
       static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
@@ -21,7 +19,7 @@ namespace glz::detail
          using From = typename V::from_t;
 
          if constexpr (std::same_as<From, skip>) {
-            skip_value_binary<Opts>(ctx, it, end);
+            skip_value<Format>::template op<Opts>(ctx, it, end);
          }
          else if constexpr (std::is_member_pointer_v<From>) {
             if constexpr (std::is_member_function_pointer_v<From>) {
@@ -29,14 +27,14 @@ namespace glz::detail
                if constexpr (std::is_void_v<Ret>) {
                   using Tuple = typename inputs_as_tuple<From>::type;
                   if constexpr (glz::tuple_size_v<Tuple> == 0) {
-                     skip_array_binary<Opts>(ctx, it, end);
+                     skip_array<Opts>(ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
                      (value.val.*(value.from))();
                   }
                   else if constexpr (glz::tuple_size_v<Tuple> == 1) {
                      std::decay_t<glz::tuple_element_t<0, Tuple>> input{};
-                     read<binary>::op<Opts>(input, ctx, it, end);
+                     read<Format>::template op<Opts>(input, ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
                      (value.val.*(value.from))(input);
@@ -58,14 +56,14 @@ namespace glz::detail
                   if constexpr (std::is_void_v<Ret>) {
                      using Tuple = typename function_traits<Func>::arguments;
                      if constexpr (glz::tuple_size_v<Tuple> == 0) {
-                        skip_array_binary<Opts>(ctx, it, end);
+                        skip_array<Opts>(ctx, it, end);
                         if (bool(ctx.error)) [[unlikely]]
                            return;
                         from();
                      }
                      else if constexpr (glz::tuple_size_v<Tuple> == 1) {
                         std::decay_t<glz::tuple_element_t<0, Tuple>> input{};
-                        read<binary>::op<Opts>(input, ctx, it, end);
+                        read<Format>::template op<Opts>(input, ctx, it, end);
                         if (bool(ctx.error)) [[unlikely]]
                            return;
                         from(input);
@@ -79,7 +77,7 @@ namespace glz::detail
                   }
                }
                else {
-                  read<binary>::op<Opts>(from, ctx, it, end);
+                  read<Format>::template op<Opts>(from, ctx, it, end);
                }
             }
             else {
@@ -96,14 +94,14 @@ namespace glz::detail
                      static_assert(false_v<T>, "lambda must take in the class as the first argument");
                   }
                   else if constexpr (N == 1) {
-                     skip_array_binary<Opts>(ctx, it, end);
+                     skip_array<Opts>(ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
                      value.from(value.val);
                   }
                   else if constexpr (N == 2) {
                      std::decay_t<glz::tuple_element_t<1, Tuple>> input{};
-                     read<binary>::op<Opts>(input, ctx, it, end);
+                     read<Format>::template op<Opts>(input, ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
                      value.from(value.val, input);
@@ -117,7 +115,7 @@ namespace glz::detail
                }
             }
             else if constexpr (std::invocable<From, decltype(value.val)>) {
-               read<binary>::op<Opts>(value.from(value.val), ctx, it, end);
+               read<Format>::template op<Opts>(value.from(value.val), ctx, it, end);
             }
             else {
                static_assert(
@@ -131,9 +129,9 @@ namespace glz::detail
       }
    };
 
-   template <class T>
+   template <uint32_t Format, class T>
       requires(is_specialization_v<T, custom_t>)
-   struct to_binary<T>
+   struct to<Format, T>
    {
       template <auto Opts>
       static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept
@@ -145,7 +143,7 @@ namespace glz::detail
             if constexpr (std::is_member_function_pointer_v<To>) {
                using Tuple = typename inputs_as_tuple<To>::type;
                if constexpr (glz::tuple_size_v<Tuple> == 0) {
-                  write<binary>::op<Opts>((value.val.*(value.to))(), ctx, args...);
+                  write<Format>::template op<Opts>((value.val.*(value.to))(), ctx, args...);
                }
                else {
                   static_assert(false_v<T>, "function cannot have inputs");
@@ -163,7 +161,7 @@ namespace glz::detail
                   else {
                      using Tuple = typename function_traits<Func>::arguments;
                      if constexpr (glz::tuple_size_v<Tuple> == 0) {
-                        write<binary>::op<Opts>(to(), ctx, args...);
+                        write<Format>::template op<Opts>(to(), ctx, args...);
                      }
                      else {
                         static_assert(false_v<T>, "std::function cannot have inputs");
@@ -171,7 +169,7 @@ namespace glz::detail
                   }
                }
                else {
-                  write<binary>::op<Opts>(to, ctx, args...);
+                  write<Format>::template op<Opts>(to, ctx, args...);
                }
             }
             else {
@@ -180,7 +178,7 @@ namespace glz::detail
          }
          else {
             if constexpr (std::invocable<To, decltype(value.val)>) {
-               write<binary>::op<Opts>(std::invoke(value.to, value.val), ctx, args...);
+               write<Format>::template op<Opts>(std::invoke(value.to, value.val), ctx, args...);
             }
             else {
                static_assert(false_v<To>,

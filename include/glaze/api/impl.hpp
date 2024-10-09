@@ -19,8 +19,8 @@
 #include "glaze/api/std/vector.hpp"
 #include "glaze/api/tuplet.hpp"
 #include "glaze/api/type_support.hpp"
-#include "glaze/binary/read.hpp"
-#include "glaze/binary/write.hpp"
+#include "glaze/beve/read.hpp"
+#include "glaze/beve/write.hpp"
 #include "glaze/glaze.hpp"
 #include "glaze/json/read.hpp"
 #include "glaze/json/write.hpp"
@@ -44,12 +44,12 @@ namespace glz
          error_ctx pe{};
          bool success;
 
-         if (format == json) {
+         if (format == JSON) {
             success = detail::seek_impl([&](auto&& val) { pe = glz::read<opts{}>(val, data); }, user, path);
          }
          else {
             success =
-               detail::seek_impl([&](auto&& val) { pe = glz::read<opts{.format = binary}>(val, data); }, user, path);
+               detail::seek_impl([&](auto&& val) { pe = glz::read<opts{.format = BEVE}>(val, data); }, user, path);
          }
 
          if (success) {
@@ -64,11 +64,11 @@ namespace glz
       bool write(const uint32_t format, const sv path, std::string& data) noexcept override
       {
          // TODO: Support write errors when seeking
-         if (format == json) {
+         if (format == JSON) {
             return detail::seek_impl([&](auto&& val) { std::ignore = glz::write_json(val, data); }, user, path);
          }
          else {
-            return detail::seek_impl([&](auto&& val) { std::ignore = glz::write_binary(val, data); }, user, path);
+            return detail::seek_impl([&](auto&& val) { std::ignore = glz::write_beve(val, data); }, user, path);
          }
       }
 

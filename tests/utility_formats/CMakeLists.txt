@@ -1,4 +1,4 @@
-project(binary_test)
+project(utility_formats)
 
 add_executable(${PROJECT_NAME} ${PROJECT_NAME}.cpp)
 

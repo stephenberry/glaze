@@ -83,14 +83,14 @@ namespace glz
       }
 
       template <class T>
-      struct from_json<hostname_includer<T>>
+      struct from<JSON, hostname_includer<T>>
       {
          template <auto Options>
          static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
             constexpr auto Opts = ws_handled_off<Options>();
             std::string buffer{};
-            read<json>::op<Opts>(buffer, ctx, it, end);
+            read<JSON>::op<Opts>(buffer, ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
                return;
 
@@ -115,11 +115,13 @@ namespace glz
             const auto current_file = ctx.current_file;
             ctx.current_file = string_file_path;
 
-            const auto ecode = glz::read<Opts>(value.value, buffer, ctx);
+            std::string nested_buffer = buffer;
+            static constexpr auto NestedOpts = opt_true<disable_padding_on<Opts>(), &opts::null_terminated>;
+            const auto ecode = glz::read<NestedOpts>(value.value, nested_buffer, ctx);
             if (bool(ctx.error)) [[unlikely]] {
                ctx.error = error_code::includer_error;
                auto& error_msg = error_buffer();
-               error_msg = glz::format_error(ecode, buffer);
+               error_msg = glz::format_error(ecode, nested_buffer);
                ctx.includer_error = error_msg;
                return;
             }
@@ -129,7 +131,7 @@ namespace glz
       };
 
       template <class T>
-      struct to_json<hostname_includer<T>>
+      struct to<JSON, hostname_includer<T>>
       {
          template <auto Opts>
          static void op(auto&&...) noexcept

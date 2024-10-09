@@ -81,7 +81,7 @@ namespace glz::detail
       size_t max_length{};
    };
 
-   constexpr uint64_t to_uint64_n_below_8(const char* bytes, const size_t N) noexcept
+   inline constexpr uint64_t to_uint64_n_below_8(const char* bytes, const size_t N) noexcept
    {
       static_assert(std::endian::native == std::endian::little);
       uint64_t res{};

@@ -3,20 +3,25 @@
 
 #pragma once
 
-#include "glaze/binary/header.hpp"
-#include "glaze/binary/skip.hpp"
+#include "glaze/beve/header.hpp"
+#include "glaze/beve/skip.hpp"
 #include "glaze/core/opts.hpp"
 #include "glaze/core/read.hpp"
-#include "glaze/core/refl.hpp"
+#include "glaze/core/reflect.hpp"
 #include "glaze/file/file_ops.hpp"
 #include "glaze/util/dump.hpp"
+
+// To handle invalid inputs we must check if (it >= end) at the beginning of each function
+// This way we can always call a function after incrementing the iterator without needed to do a tail check
+// If we know the first function called has an end check, we don't need a guard at the top of the function
+// Also, after almost every function call we need to check if an error was produced
 
 namespace glz
 {
    namespace detail
    {
       template <>
-      struct read<binary>
+      struct read<BEVE>
       {
          template <auto Opts, class T, class Tag, is_context Ctx, class It0, class It1>
             requires(has_no_header(Opts))
@@ -28,13 +33,13 @@ namespace glz
                }
                else {
                   // do not read anything into the const value
-                  skip_value_binary<Opts>(std::forward<Ctx>(ctx), std::forward<It0>(it), std::forward<It1>(end));
+                  skip_value<BEVE>::op<Opts>(std::forward<Ctx>(ctx), std::forward<It0>(it), std::forward<It1>(end));
                }
             }
             else {
                using V = std::remove_cvref_t<T>;
-               from_binary<V>::template op<Opts>(std::forward<T>(value), std::forward<Tag>(tag), std::forward<Ctx>(ctx),
-                                                 std::forward<It0>(it), std::forward<It1>(end));
+               from<BEVE, V>::template op<Opts>(std::forward<T>(value), std::forward<Tag>(tag), std::forward<Ctx>(ctx),
+                                                std::forward<It0>(it), std::forward<It1>(end));
             }
          }
 
@@ -48,36 +53,37 @@ namespace glz
                }
                else {
                   // do not read anything into the const value
-                  skip_value_binary<Opts>(std::forward<Ctx>(ctx), std::forward<It0>(it), std::forward<It1>(end));
+                  skip_value<BEVE>::op<Opts>(std::forward<Ctx>(ctx), std::forward<It0>(it), std::forward<It1>(end));
                }
             }
             else {
                using V = std::remove_cvref_t<T>;
-               from_binary<V>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx), std::forward<It0>(it),
-                                                 std::forward<It1>(end));
+               from<BEVE, V>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx), std::forward<It0>(it),
+                                                std::forward<It1>(end));
             }
          }
       };
 
       template <class T>
          requires(glaze_value_t<T> && !custom_read<T>)
-      struct from_binary<T>
+      struct from<BEVE, T>
       {
          template <auto Opts, class Value, is_context Ctx, class It0, class It1>
          GLZ_ALWAYS_INLINE static void op(Value&& value, Ctx&& ctx, It0&& it, It1&& end) noexcept
          {
             using V = std::decay_t<decltype(get_member(std::declval<Value>(), meta_wrapper_v<T>))>;
-            from_binary<V>::template op<Opts>(get_member(std::forward<Value>(value), meta_wrapper_v<T>),
-                                              std::forward<Ctx>(ctx), std::forward<It0>(it), std::forward<It1>(end));
+            from<BEVE, V>::template op<Opts>(get_member(std::forward<Value>(value), meta_wrapper_v<T>),
+                                             std::forward<Ctx>(ctx), std::forward<It0>(it), std::forward<It1>(end));
          }
       };
 
       template <always_null_t T>
-      struct from_binary<T>
+      struct from<BEVE, T>
       {
          template <auto Opts>
-         GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&& ctx, auto&& it, auto&&) noexcept
+         GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
+            GLZ_END_CHECK();
             if (uint8_t(*it)) [[unlikely]] {
                ctx.error = error_code::syntax_error;
                return;
@@ -87,7 +93,7 @@ namespace glz
       };
 
       template <>
-      struct from_binary<hidden>
+      struct from<BEVE, hidden>
       {
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&& ctx, auto&&...) noexcept
@@ -97,11 +103,12 @@ namespace glz
       };
 
       template <is_bitset T>
-      struct from_binary<T>
+      struct from<BEVE, T>
       {
          template <auto Opts>
          static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
+            GLZ_END_CHECK();
             const auto tag = uint8_t(*it);
 
             constexpr uint8_t type = uint8_t(3) << 3;
@@ -113,11 +120,6 @@ namespace glz
             }
 
             ++it;
-            if (it >= end) [[unlikely]] {
-               ctx.error = error_code::unexpected_end;
-               return;
-            }
-
             const auto n = int_from_compressed(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]] {
                return;
@@ -125,6 +127,7 @@ namespace glz
 
             const auto num_bytes = (value.size() + 7) / 8;
             for (size_t byte_i{}, i{}; byte_i < num_bytes; ++byte_i, ++it) {
+               GLZ_END_CHECK();
                uint8_t byte;
                std::memcpy(&byte, it, 1);
                for (size_t bit_i = 0; bit_i < 8 && i < n; ++bit_i, ++i) {
@@ -135,38 +138,42 @@ namespace glz
       };
 
       template <>
-      struct from_binary<skip>
+      struct from<BEVE, skip>
       {
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&& ctx, auto&&... args) noexcept
          {
-            skip_value_binary<Opts>(ctx, args...);
+            skip_value<BEVE>::op<Opts>(ctx, args...);
          }
       };
 
       template <glaze_flags_t T>
-      struct from_binary<T>
+      struct from<BEVE, T>
       {
          template <auto Opts, is_context Ctx, class It0, class It1>
-         static void op(auto&& value, Ctx&&, It0&& it, It1&&)
+         static void op(auto&& value, Ctx&& ctx, It0&& it, It1&& end)
          {
-            constexpr auto N = refl<T>.N;
+            constexpr auto N = reflect<T>::size;
 
             constexpr auto Length = byte_length<T>();
             uint8_t data[Length];
 
+            if ((it + Length) > end) [[unlikely]] {
+               ctx.error = error_code::unexpected_end;
+               return;
+            }
             std::memcpy(data, it, Length);
             it += Length;
 
             invoke_table<N>([&]<size_t I>() {
-               get_member(value, get<I>(refl<T>.values)) = data[I / 8] & (uint8_t{1} << (7 - (I % 8)));
+               get_member(value, get<I>(reflect<T>::values)) = data[I / 8] & (uint8_t{1} << (7 - (I % 8)));
             });
          }
       };
 
       template <class T>
          requires(num_t<T> || char_t<T> || glaze_enum_t<T>)
-      struct from_binary<T>
+      struct from<BEVE, T>
       {
          static constexpr uint8_t type =
             std::floating_point<T> ? 0 : (std::is_signed_v<T> ? 0b000'01'000 : 0b000'10'000);
@@ -175,8 +182,10 @@ namespace glz
          template <auto Opts>
             requires(has_no_header(Opts))
          GLZ_ALWAYS_INLINE static void op(auto&& value, const uint8_t tag, is_context auto&& ctx, auto&& it,
-                                          auto&&) noexcept
+                                          auto&& end) noexcept
          {
+            GLZ_END_CHECK();
+
             using V = std::decay_t<decltype(value)>;
 
             constexpr auto is_volatile = std::is_volatile_v<std::remove_reference_t<decltype(value)>>;
@@ -190,6 +199,10 @@ namespace glz
                      }
 
                      auto decode = [&](auto&& i) {
+                        if ((it + sizeof(i)) > end) [[unlikely]] {
+                           ctx.error = error_code::unexpected_end;
+                           return;
+                        }
                         std::memcpy(&i, it, sizeof(i));
                         value = static_cast<V>(i);
                         it += sizeof(i);
@@ -197,15 +210,27 @@ namespace glz
 
                      switch (tag) {
                      case tag::f32: {
-                        static_assert(sizeof(float) == 4);
-                        // TODO: use float32_t in C++23
-                        decode(float{});
+                        if constexpr (std::integral<V>) {
+                           // We do not allow cross conversions from floats to integral types
+                           ctx.error = error_code::syntax_error;
+                        }
+                        else {
+                           static_assert(sizeof(float) == 4);
+                           // TODO: use float32_t in C++23
+                           decode(float{});
+                        }
                         return;
                      }
                      case tag::f64: {
-                        static_assert(sizeof(double) == 8);
-                        // TODO: use float64_t in C++23
-                        decode(double{});
+                        if constexpr (std::integral<V>) {
+                           // We do not allow cross conversions from floats to integral types
+                           ctx.error = error_code::syntax_error;
+                        }
+                        else {
+                           static_assert(sizeof(double) == 8);
+                           // TODO: use float64_t in C++23
+                           decode(double{});
+                        }
                         return;
                      }
                      case tag::i8: {
@@ -253,6 +278,11 @@ namespace glz
                }
             }
 
+            if ((it + sizeof(V)) > end) [[unlikely]] {
+               ctx.error = error_code::unexpected_end;
+               return;
+            }
+
             if constexpr (is_volatile) {
                V temp;
                std::memcpy(&temp, it, sizeof(V));
@@ -268,6 +298,7 @@ namespace glz
             requires(not has_no_header(Opts))
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
+            GLZ_END_CHECK();
             const auto tag = uint8_t(*it);
             ++it;
             op<no_header_on<Opts>()>(value, tag, ctx, it, end);
@@ -276,14 +307,19 @@ namespace glz
 
       template <class T>
          requires(std::is_enum_v<T> && !glaze_enum_t<T>)
-      struct from_binary<T>
+      struct from<BEVE, T>
       {
          template <auto Opts>
-         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&&) noexcept
+         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
             using V = std::underlying_type_t<std::decay_t<T>>;
 
             if constexpr (has_no_header(Opts)) {
+               if ((it + sizeof(V)) > end) [[unlikely]] {
+                  ctx.error = error_code::unexpected_end;
+                  return;
+               }
+
                std::memcpy(&value, it, sizeof(V));
                it += sizeof(V);
             }
@@ -292,6 +328,7 @@ namespace glz
                   std::floating_point<V> ? 0 : (std::is_signed_v<V> ? 0b000'01'000 : 0b000'10'000);
                constexpr uint8_t header = tag::number | type | (byte_count<V> << 5);
 
+               GLZ_END_CHECK();
                const auto tag = uint8_t(*it);
                if (tag != header) {
                   ctx.error = error_code::syntax_error;
@@ -299,6 +336,10 @@ namespace glz
                }
 
                ++it;
+               if ((it + sizeof(V)) > end) [[unlikely]] {
+                  ctx.error = error_code::unexpected_end;
+                  return;
+               }
 
                std::memcpy(&value, it, sizeof(V));
                it += sizeof(V);
@@ -308,19 +349,25 @@ namespace glz
 
       template <class T>
          requires complex_t<T>
-      struct from_binary<T>
+      struct from<BEVE, T>
       {
          template <auto Opts>
-         static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&&) noexcept
+         static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
             if constexpr (has_no_header(Opts)) {
                using V = std::decay_t<T>;
+               if ((it + sizeof(V)) > end) [[unlikely]] {
+                  ctx.error = error_code::unexpected_end;
+                  return;
+               }
+
                std::memcpy(&value, it, sizeof(V));
                it += sizeof(V);
             }
             else {
                constexpr uint8_t header = tag::extensions | 0b00011'000;
 
+               GLZ_END_CHECK();
                const auto tag = uint8_t(*it);
                if (tag != header) {
                   ctx.error = error_code::syntax_error;
@@ -334,12 +381,18 @@ namespace glz
                constexpr uint8_t complex_number = 0;
                constexpr uint8_t complex_header = complex_number | type | (byte_count<V> << 5);
 
+               GLZ_END_CHECK();
                const auto complex_tag = uint8_t(*it);
                if (complex_tag != complex_header) {
                   ctx.error = error_code::syntax_error;
                   return;
                }
                ++it;
+
+               if ((it + 2 * sizeof(V)) > end) [[unlikely]] {
+                  ctx.error = error_code::unexpected_end;
+                  return;
+               }
 
                std::memcpy(&value, it, 2 * sizeof(V));
                it += 2 * sizeof(V);
@@ -348,11 +401,12 @@ namespace glz
       };
 
       template <boolean_like T>
-      struct from_binary<T>
+      struct from<BEVE, T>
       {
          template <auto Opts>
-         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& /* end */) noexcept
+         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
+            GLZ_END_CHECK();
             const auto tag = uint8_t(*it);
             if ((tag & 0b0000'1111) != tag::boolean) {
                ctx.error = error_code::syntax_error;
@@ -365,7 +419,7 @@ namespace glz
       };
 
       template <is_member_function_pointer T>
-      struct from_binary<T>
+      struct from<BEVE, T>
       {
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&& /*value*/, is_context auto&& /*ctx*/, auto&& /*it*/,
@@ -374,7 +428,7 @@ namespace glz
       };
 
       template <func_t T>
-      struct from_binary<T>
+      struct from<BEVE, T>
       {
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&& /*value*/, is_context auto&& ctx, auto&& it, auto&& end) noexcept
@@ -384,49 +438,54 @@ namespace glz
       };
 
       template <class T>
-      struct from_binary<basic_raw_json<T>>
+      struct from<BEVE, basic_raw_json<T>>
       {
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
-            read<binary>::op<Opts>(value.str, ctx, it, end);
+            read<BEVE>::op<Opts>(value.str, ctx, it, end);
          }
       };
 
       template <class T>
-      struct from_binary<basic_text<T>>
+      struct from<BEVE, basic_text<T>>
       {
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
-            read<binary>::op<Opts>(value.str, ctx, it, end);
+            read<BEVE>::op<Opts>(value.str, ctx, it, end);
          }
       };
 
       template <is_variant T>
-      struct from_binary<T>
+      struct from<BEVE, T>
       {
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
             constexpr uint8_t header = tag::extensions | 0b00001'000;
+            GLZ_END_CHECK();
             const auto tag = uint8_t(*it);
             if (tag != header) [[unlikely]] {
                ctx.error = error_code::syntax_error;
                return;
             }
-            ++it;
 
+            ++it;
             const auto type_index = int_from_compressed(ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
+
             if (value.index() != type_index) {
                value = runtime_variant_map<T>()[type_index];
             }
-            std::visit([&](auto&& v) { read<binary>::op<Opts>(v, ctx, it, end); }, value);
+            std::visit([&](auto&& v) { read<BEVE>::op<Opts>(v, ctx, it, end); }, value);
          }
       };
 
       template <str_t T>
-      struct from_binary<T> final
+      struct from<BEVE, T> final
       {
          using V = typename std::decay_t<T>::value_type;
          static_assert(sizeof(V) == 1);
@@ -437,7 +496,10 @@ namespace glz
                                           auto&& end) noexcept
          {
             const auto n = int_from_compressed(ctx, it, end);
-            if ((it + n) > end) [[unlikely]] {
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
+            if (uint64_t(end - it) < n) [[unlikely]] {
                ctx.error = error_code::unexpected_end;
                return;
             }
@@ -452,6 +514,7 @@ namespace glz
          {
             constexpr uint8_t header = tag::string;
 
+            GLZ_END_CHECK();
             const auto tag = uint8_t(*it);
             if (tag != header) [[unlikely]] {
                ctx.error = error_code::syntax_error;
@@ -459,9 +522,11 @@ namespace glz
             }
 
             ++it;
-
             const auto n = int_from_compressed(ctx, it, end);
-            if ((it + n) > end) [[unlikely]] {
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
+            if (uint64_t(end - it) < n) [[unlikely]] {
                ctx.error = error_code::unexpected_end;
                return;
             }
@@ -480,13 +545,14 @@ namespace glz
       // for set types
       template <class T>
          requires(readable_array_t<T> && !emplace_backable<T> && !resizable<T> && emplaceable<T>)
-      struct from_binary<T> final
+      struct from<BEVE, T> final
       {
          template <auto Opts>
          static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
             using V = range_value_t<std::decay_t<T>>;
 
+            GLZ_END_CHECK();
             const auto tag = uint8_t(*it);
 
             if constexpr (boolean_like<V>) {
@@ -499,13 +565,16 @@ namespace glz
                }
 
                ++it;
-
                const auto n = int_from_compressed(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
 
                value.clear();
 
                const auto num_bytes = (value.size() + 7) / 8;
                for (size_t byte_i{}, i{}; byte_i < num_bytes; ++byte_i, ++it) {
+                  GLZ_END_CHECK();
                   uint8_t byte;
                   std::memcpy(&byte, it, 1);
                   for (size_t bit_i = 7; bit_i < 8 && i < n; --bit_i, ++i) {
@@ -525,7 +594,6 @@ namespace glz
                }
 
                ++it;
-
                const auto n = int_from_compressed(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]] {
                   return;
@@ -534,6 +602,11 @@ namespace glz
                value.clear();
 
                for (size_t i = 0; i < n; ++i) {
+                  if ((it + sizeof(V)) > end) [[unlikely]] {
+                     ctx.error = error_code::unexpected_end;
+                     return;
+                  }
+
                   V x;
                   std::memcpy(&x, it, sizeof(V));
                   it += sizeof(V);
@@ -551,9 +624,12 @@ namespace glz
                }
 
                ++it;
-
                const auto n = int_from_compressed(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
+               if (uint64_t(end - it) < n) [[unlikely]] {
+                  ctx.error = error_code::unexpected_end;
                   return;
                }
 
@@ -561,7 +637,10 @@ namespace glz
 
                for (size_t i = 0; i < n; ++i) {
                   const auto length = int_from_compressed(ctx, it, end);
-                  if ((it + length) > end) [[unlikely]] {
+                  if (bool(ctx.error)) [[unlikely]] {
+                     return;
+                  }
+                  if (uint64_t(end - it) < length) [[unlikely]] {
                      ctx.error = error_code::unexpected_end;
                      return;
                   }
@@ -581,8 +660,8 @@ namespace glz
                   ctx.error = error_code::syntax_error;
                   return;
                }
-               ++it;
 
+               ++it;
                const auto n = int_from_compressed(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]] {
                   return;
@@ -592,7 +671,7 @@ namespace glz
 
                for (size_t i = 0; i < n; ++i) {
                   V v;
-                  read<binary>::op<Opts>(v, ctx, it, end);
+                  read<BEVE>::op<Opts>(v, ctx, it, end);
                   value.emplace(std::move(v));
                }
             }
@@ -600,13 +679,14 @@ namespace glz
       };
 
       template <readable_array_t T>
-      struct from_binary<T> final
+      struct from<BEVE, T> final
       {
          template <auto Opts>
          static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
             using V = range_value_t<std::decay_t<T>>;
 
+            GLZ_END_CHECK();
             const auto tag = uint8_t(*it);
 
             if constexpr (boolean_like<V>) {
@@ -619,7 +699,6 @@ namespace glz
                }
 
                ++it;
-
                const auto n = int_from_compressed(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]] {
                   return;
@@ -635,6 +714,7 @@ namespace glz
 
                const auto num_bytes = (value.size() + 7) / 8;
                for (size_t byte_i{}, i{}; byte_i < num_bytes; ++byte_i, ++it) {
+                  GLZ_END_CHECK();
                   uint8_t byte;
                   std::memcpy(&byte, it, 1);
                   for (size_t bit_i = 7; bit_i < 8 && i < n; --bit_i, ++i) {
@@ -649,6 +729,7 @@ namespace glz
 
                auto prepare = [&](const size_t element_size) -> size_t {
                   ++it;
+                  GLZ_END_CHECK(0);
 
                   std::conditional_t<Opts.partial_read, size_t, const size_t> n = int_from_compressed(ctx, it, end);
                   if (bool(ctx.error)) [[unlikely]] {
@@ -669,6 +750,12 @@ namespace glz
 
                      if constexpr (Opts.shrink_to_fit) {
                         value.shrink_to_fit();
+                     }
+                  }
+                  else {
+                     if (n > value.size()) {
+                        ctx.error = error_code::syntax_error;
+                        return 0;
                      }
                   }
 
@@ -692,7 +779,7 @@ namespace glz
 
                            for (auto&& x : value) {
                               const uint8_t number_tag = tag::number | (tag & 0b11111000);
-                              read<binary>::op<no_header_on<Opts>()>(x, number_tag, ctx, it, end);
+                              read<BEVE>::op<no_header_on<Opts>()>(x, number_tag, ctx, it, end);
                            }
                            return;
                         }
@@ -720,18 +807,32 @@ namespace glz
                   if constexpr (is_volatile) {
                      V temp;
                      for (size_t i = 0; i < n; ++i) {
+                        if ((it + sizeof(V)) > end) [[unlikely]] {
+                           ctx.error = error_code::unexpected_end;
+                           return;
+                        }
+
                         std::memcpy(&temp, it, sizeof(V));
                         value[i] = temp;
                         it += sizeof(V);
                      }
                   }
                   else {
+                     if ((it + n * sizeof(V)) > end) [[unlikely]] {
+                        ctx.error = error_code::unexpected_end;
+                        return;
+                     }
                      std::memcpy(value.data(), it, n * sizeof(V));
                      it += n * sizeof(V);
                   }
                }
                else {
                   for (auto&& x : value) {
+                     if ((it + sizeof(V)) > end) [[unlikely]] {
+                        ctx.error = error_code::unexpected_end;
+                        return;
+                     }
+
                      std::memcpy(&x, it, sizeof(V));
                      it += sizeof(V);
                   }
@@ -748,7 +849,6 @@ namespace glz
                }
 
                ++it;
-
                std::conditional_t<Opts.partial_read, size_t, const size_t> n = int_from_compressed(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]] {
                   return;
@@ -771,6 +871,11 @@ namespace glz
                   if (bool(ctx.error)) [[unlikely]] {
                      return;
                   }
+                  if (uint64_t(end - it) < length) [[unlikely]] {
+                     ctx.error = error_code::unexpected_end;
+                     return;
+                  }
+
                   x.resize(length);
 
                   if constexpr (Opts.shrink_to_fit) {
@@ -788,6 +893,7 @@ namespace glz
                   return;
                }
                ++it;
+               GLZ_END_CHECK();
 
                using X = typename V::value_type;
                constexpr uint8_t complex_array = 1;
@@ -800,7 +906,6 @@ namespace glz
                   return;
                }
                ++it;
-
                std::conditional_t<Opts.partial_read, size_t, const size_t> n = int_from_compressed(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]] {
                   return;
@@ -810,7 +915,7 @@ namespace glz
                   n = value.size();
                }
 
-               if ((it + n * sizeof(V)) > end) [[unlikely]] {
+               if (uint64_t(end - it) < n * sizeof(V)) [[unlikely]] {
                   ctx.error = error_code::unexpected_end;
                   return;
                }
@@ -840,7 +945,6 @@ namespace glz
                   return;
                }
                ++it;
-
                std::conditional_t<Opts.partial_read, size_t, const size_t> n = int_from_compressed(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]] {
                   return;
@@ -859,14 +963,14 @@ namespace glz
                }
 
                for (auto&& item : value) {
-                  read<binary>::op<Opts>(item, ctx, it, end);
+                  read<BEVE>::op<Opts>(item, ctx, it, end);
                }
             }
          }
       };
 
       template <pair_t T>
-      struct from_binary<T> final
+      struct from<BEVE, T> final
       {
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(T& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
@@ -877,6 +981,7 @@ namespace glz
             constexpr uint8_t byte_cnt = str_t<Key> ? 0 : byte_count<Key>;
             constexpr uint8_t header = tag::object | type | (byte_cnt << 5);
 
+            GLZ_END_CHECK();
             const auto tag = uint8_t(*it);
             if (tag != header) [[unlikely]] {
                ctx.error = error_code::syntax_error;
@@ -884,24 +989,24 @@ namespace glz
             }
 
             ++it;
-
             const auto n = int_from_compressed(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]] {
                return;
             }
+
             if (n != 1) [[unlikely]] {
                ctx.error = error_code::syntax_error;
                return;
             }
 
             constexpr uint8_t key_tag = type == 0 ? tag::string : (tag::number | (byte_cnt << 5));
-            read<binary>::op<no_header_on<Opts>()>(value.first, key_tag, ctx, it, end);
-            read<binary>::op<Opts>(value.second, ctx, it, end);
+            read<BEVE>::op<no_header_on<Opts>()>(value.first, key_tag, ctx, it, end);
+            read<BEVE>::op<Opts>(value.second, ctx, it, end);
          }
       };
 
       template <readable_map_t T>
-      struct from_binary<T> final
+      struct from<BEVE, T> final
       {
          template <auto Opts>
          static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
@@ -912,6 +1017,7 @@ namespace glz
             constexpr uint8_t byte_cnt = str_t<Key> ? 0 : byte_count<Key>;
             constexpr uint8_t header = tag::object | type | (byte_cnt << 5);
 
+            GLZ_END_CHECK();
             const auto tag = uint8_t(*it);
             if (tag != header) [[unlikely]] {
                if constexpr (Opts.allow_conversions) {
@@ -936,7 +1042,6 @@ namespace glz
             }
 
             ++it;
-
             std::conditional_t<Opts.partial_read, size_t, const size_t> n = int_from_compressed(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]] {
                return;
@@ -951,15 +1056,15 @@ namespace glz
                Key key;
                for (size_t i = 0; i < n; ++i) {
                   if constexpr (Opts.partial_read) {
-                     read<binary>::op<no_header_on<Opts>()>(key, key_tag, ctx, it, end);
+                     read<BEVE>::op<no_header_on<Opts>()>(key, key_tag, ctx, it, end);
                      if (auto element = value.find(key); element != value.end()) {
-                        read<binary>::op<Opts>(element->second, ctx, it, end);
+                        read<BEVE>::op<Opts>(element->second, ctx, it, end);
                      }
                   }
                   else {
                      // convert the object tag to the key type tag
-                     read<binary>::op<no_header_on<Opts>()>(key, key_tag, ctx, it, end);
-                     read<binary>::op<Opts>(value[key], ctx, it, end);
+                     read<BEVE>::op<no_header_on<Opts>()>(key, key_tag, ctx, it, end);
+                     read<BEVE>::op<Opts>(value[key], ctx, it, end);
                   }
                }
             }
@@ -968,14 +1073,14 @@ namespace glz
                static thread_local Key key;
                for (size_t i = 0; i < n; ++i) {
                   if constexpr (Opts.partial_read) {
-                     read<binary>::op<no_header_on<Opts>()>(key, key_tag, ctx, it, end);
+                     read<BEVE>::op<no_header_on<Opts>()>(key, key_tag, ctx, it, end);
                      if (auto element = value.find(key); element != value.end()) {
-                        read<binary>::op<Opts>(element->second, ctx, it, end);
+                        read<BEVE>::op<Opts>(element->second, ctx, it, end);
                      }
                   }
                   else {
-                     read<binary>::op<no_header_on<Opts>()>(key, key_tag, ctx, it, end);
-                     read<binary>::op<Opts>(value[key], ctx, it, end);
+                     read<BEVE>::op<no_header_on<Opts>()>(key, key_tag, ctx, it, end);
+                     read<BEVE>::op<Opts>(value[key], ctx, it, end);
                   }
                }
             }
@@ -984,22 +1089,23 @@ namespace glz
 
       template <nullable_t T>
          requires(std::is_array_v<T>)
-      struct from_binary<T> final
+      struct from<BEVE, T> final
       {
          template <auto Opts, class V, size_t N>
          GLZ_ALWAYS_INLINE static void op(V (&value)[N], is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
-            read<binary>::op<Opts>(std::span{value, N}, ctx, it, end);
+            read<BEVE>::op<Opts>(std::span{value, N}, ctx, it, end);
          }
       };
 
       template <nullable_t T>
          requires(!std::is_array_v<T>)
-      struct from_binary<T> final
+      struct from<BEVE, T> final
       {
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
+            GLZ_END_CHECK();
             const auto tag = uint8_t(*it);
 
             if (tag == tag::null) {
@@ -1028,13 +1134,13 @@ namespace glz
                      // Cannot read into unset nullable that is not std::optional, std::unique_ptr, or std::shared_ptr
                   }
                }
-               read<binary>::op<Opts>(*value, ctx, it, end);
+               read<BEVE>::op<Opts>(*value, ctx, it, end);
             }
          }
       };
 
       template <is_includer T>
-      struct from_binary<T>
+      struct from<BEVE, T>
       {
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&& ctx, auto&& it, auto&& end) noexcept
@@ -1045,6 +1151,7 @@ namespace glz
             else {
                constexpr uint8_t header = tag::string;
 
+               GLZ_END_CHECK();
                const auto tag = uint8_t(*it);
                if (tag != header) [[unlikely]] {
                   ctx.error = error_code::syntax_error;
@@ -1052,7 +1159,6 @@ namespace glz
                }
 
                ++it;
-
                skip_compressed_int(ctx, it, end);
             }
          }
@@ -1060,7 +1166,7 @@ namespace glz
 
       template <class T>
          requires(glaze_object_t<T> || reflectable<T>)
-      struct from_binary<T> final
+      struct from<BEVE, T> final
       {
          template <auto Opts>
             requires(Opts.structs_as_arrays == true)
@@ -1068,7 +1174,7 @@ namespace glz
          {
             if constexpr (reflectable<T>) {
                auto t = to_tuple(value);
-               read<binary>::op<Opts>(t, ctx, it, end);
+               read<BEVE>::op<Opts>(t, ctx, it, end);
             }
             else {
                const auto tag = uint8_t(*it);
@@ -1077,16 +1183,20 @@ namespace glz
                   return;
                }
                ++it;
-
                using V = std::decay_t<T>;
-               constexpr auto N = refl<V>.N;
-               if (int_from_compressed(ctx, it, end) != N) {
+               constexpr auto N = reflect<V>::size;
+               const auto n = int_from_compressed(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
+               if (n != N) {
                   ctx.error = error_code::syntax_error;
                   return;
                }
 
-               invoke_table<N>(
-                  [&]<size_t I>() { read<binary>::op<Opts>(get_member(value, get<I>(refl<V>.values)), ctx, it, end); });
+               invoke_table<N>([&]<size_t I>() {
+                  read<BEVE>::op<Opts>(get_member(value, get<I>(reflect<V>::values)), ctx, it, end);
+               });
             }
          }
 
@@ -1097,6 +1207,7 @@ namespace glz
             constexpr uint8_t type = 0; // string key
             constexpr uint8_t header = tag::object | type;
 
+            GLZ_END_CHECK();
             const auto tag = uint8_t(*it);
             if (tag != header) [[unlikely]] {
                ctx.error = error_code::syntax_error;
@@ -1105,7 +1216,7 @@ namespace glz
 
             ++it;
 
-            static constexpr auto N = refl<T>.N;
+            static constexpr auto N = reflect<T>::size;
 
             static constexpr bit_array<N> all_fields = [] {
                bit_array<N> arr{};
@@ -1129,23 +1240,6 @@ namespace glz
                return;
             }
 
-            decltype(auto) storage = [&]() -> decltype(auto) {
-               using V = decay_keep_volatile_t<decltype(value)>;
-               if constexpr (reflectable<T>) {
-#if ((defined _MSC_VER) && (!defined __clang__))
-                  static thread_local auto cmap = make_map<V, Opts.use_hash_comparison>();
-#else
-                  static thread_local constinit auto cmap = make_map<V, Opts.use_hash_comparison>();
-#endif
-                  populate_map(value, cmap); // Function required for MSVC to build
-                  return cmap;
-               }
-               else {
-                  static constexpr auto cmap = make_map<T, Opts.use_hash_comparison>();
-                  return cmap;
-               }
-            }();
-
             for (size_t i = 0; i < n_keys; ++i) {
                if constexpr (is_partial_read<T> || Opts.partial_read) {
                   if ((all_fields & fields) == all_fields) {
@@ -1153,25 +1247,53 @@ namespace glz
                   }
                }
 
-               const auto length = int_from_compressed(ctx, it, end);
-               if (bool(ctx.error)) [[unlikely]] {
-                  return;
-               }
-
-               const std::string_view key{it, length};
-
-               it += length;
-
                if constexpr (N > 0) {
-                  if (const auto& p = storage.find(key); p != storage.end()) [[likely]] {
+                  static constexpr auto HashInfo = hash_info<T>;
+
+                  const auto n = int_from_compressed(ctx, it, end);
+                  if (bool(ctx.error)) [[unlikely]] {
+                     return;
+                  }
+                  if (uint64_t(end - it) < n || it == end) [[unlikely]] {
+                     ctx.error = error_code::unexpected_end;
+                     return;
+                  }
+
+                  const auto index = decode_hash_with_size<BEVE, T, HashInfo, HashInfo.type>::op(it, end, n);
+
+                  if (index < N) [[likely]] {
                      if constexpr (is_partial_read<T> || Opts.partial_read) {
-                        auto index = p - storage.begin();
                         fields[index] = true;
                      }
 
-                     std::visit(
-                        [&](auto&& element) { read<binary>::op<Opts>(get_member(value, element), ctx, it, end); },
-                        p->second);
+                     const sv key{it, n};
+                     it += n;
+
+                     jump_table<N>(
+                        [&]<size_t I>() {
+                           static constexpr auto TargetKey = get<I>(reflect<T>::keys);
+                           static constexpr auto Length = TargetKey.size();
+                           if ((Length == n) && compare<Length>(TargetKey.data(), key.data())) [[likely]] {
+                              if constexpr (detail::reflectable<T>) {
+                                 read<BEVE>::op<Opts>(get_member(value, get<I>(detail::to_tuple(value))), ctx, it, end);
+                              }
+                              else {
+                                 read<BEVE>::op<Opts>(get_member(value, get<I>(reflect<T>::values)), ctx, it, end);
+                              }
+                           }
+                           else {
+                              if constexpr (Opts.error_on_unknown_keys) {
+                                 ctx.error = error_code::unknown_key;
+                                 return;
+                              }
+                              else {
+                                 skip_value<BEVE>::op<Opts>(ctx, it, end);
+                                 if (bool(ctx.error)) [[unlikely]]
+                                    return;
+                              }
+                           }
+                        },
+                        index);
 
                      if (bool(ctx.error)) [[unlikely]] {
                         return;
@@ -1183,7 +1305,8 @@ namespace glz
                         return;
                      }
                      else {
-                        skip_value_binary<Opts>(ctx, it, end);
+                        it += n;
+                        skip_value<BEVE>::op<Opts>(ctx, it, end);
                         if (bool(ctx.error)) [[unlikely]]
                            return;
                      }
@@ -1194,7 +1317,7 @@ namespace glz
                   return;
                }
                else {
-                  skip_value_binary<Opts>(ctx, it, end);
+                  skip_value<BEVE>::op<Opts>(ctx, it, end);
                   if (bool(ctx.error)) [[unlikely]]
                      return;
                }
@@ -1204,11 +1327,12 @@ namespace glz
 
       template <class T>
          requires glaze_array_t<T>
-      struct from_binary<T> final
+      struct from<BEVE, T> final
       {
          template <auto Opts>
          static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
+            GLZ_END_CHECK();
             const auto tag = uint8_t(*it);
             if (tag != tag::generic_array) [[unlikely]] {
                ctx.error = error_code::syntax_error;
@@ -1216,24 +1340,29 @@ namespace glz
             }
             ++it;
 
-            constexpr auto N = refl<T>.N;
-            if (int_from_compressed(ctx, it, end) != N) {
+            constexpr auto N = reflect<T>::size;
+            const auto n = int_from_compressed(ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
+            if (n != N) {
                ctx.error = error_code::syntax_error;
                return;
             }
 
             invoke_table<N>(
-               [&]<size_t I>() { read<binary>::op<Opts>(get_member(value, get<I>(refl<T>.values)), ctx, it, end); });
+               [&]<size_t I>() { read<BEVE>::op<Opts>(get_member(value, get<I>(reflect<T>::values)), ctx, it, end); });
          }
       };
 
       template <class T>
          requires(tuple_t<T> || is_std_tuple<T>)
-      struct from_binary<T> final
+      struct from<BEVE, T> final
       {
          template <auto Opts>
          static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
+            GLZ_END_CHECK();
             const auto tag = uint8_t(*it);
             if (tag != tag::generic_array) [[unlikely]] {
                ctx.error = error_code::syntax_error;
@@ -1245,11 +1374,14 @@ namespace glz
             constexpr auto N = glz::tuple_size_v<V>;
             if constexpr (Opts.partial_read) {
                const auto n = int_from_compressed(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
 
                if constexpr (is_std_tuple<T>) {
                   for_each_short_circuit<N>([&](auto I) {
                      if (I < n) {
-                        read<binary>::op<Opts>(std::get<I>(value), ctx, it, end);
+                        read<BEVE>::op<Opts>(std::get<I>(value), ctx, it, end);
                         return false; // continue
                      }
                      return true; // short circuit
@@ -1258,7 +1390,7 @@ namespace glz
                else {
                   for_each_short_circuit<N>([&](auto I) {
                      if (I < n) {
-                        read<binary>::op<Opts>(glz::get<I>(value), ctx, it, end);
+                        read<BEVE>::op<Opts>(glz::get<I>(value), ctx, it, end);
                         return false; // continue
                      }
                      return true; // short circuit
@@ -1266,29 +1398,33 @@ namespace glz
                }
             }
             else {
-               if (int_from_compressed(ctx, it, end) != N) {
+               const auto n = int_from_compressed(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
+               if (n != N) {
                   ctx.error = error_code::syntax_error;
                   return;
                }
 
                if constexpr (is_std_tuple<T>) {
-                  invoke_table<N>([&]<size_t I>() { read<binary>::op<Opts>(std::get<I>(value), ctx, it, end); });
+                  invoke_table<N>([&]<size_t I>() { read<BEVE>::op<Opts>(std::get<I>(value), ctx, it, end); });
                }
                else {
-                  invoke_table<N>([&]<size_t I>() { read<binary>::op<Opts>(glz::get<I>(value), ctx, it, end); });
+                  invoke_table<N>([&]<size_t I>() { read<BEVE>::op<Opts>(glz::get<I>(value), ctx, it, end); });
                }
             }
          }
       };
 
       template <filesystem_path T>
-      struct from_binary<T>
+      struct from<BEVE, T>
       {
          template <auto Opts>
          static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept
          {
             static thread_local std::string buffer{};
-            read<binary>::op<Opts>(buffer, ctx, args...);
+            read<BEVE>::op<Opts>(buffer, ctx, args...);
             if (bool(ctx.error)) [[unlikely]] {
                return;
             }
@@ -1297,24 +1433,24 @@ namespace glz
       };
    }
 
-   template <read_binary_supported T, class Buffer>
-   [[nodiscard]] inline error_ctx read_binary(T&& value, Buffer&& buffer) noexcept
+   template <read_beve_supported T, class Buffer>
+   [[nodiscard]] inline error_ctx read_beve(T&& value, Buffer&& buffer) noexcept
    {
-      return read<opts{.format = binary}>(value, std::forward<Buffer>(buffer));
+      return read<opts{.format = BEVE}>(value, std::forward<Buffer>(buffer));
    }
 
-   template <read_binary_supported T, class Buffer>
-   [[nodiscard]] inline expected<T, error_ctx> read_binary(Buffer&& buffer) noexcept
+   template <read_beve_supported T, class Buffer>
+   [[nodiscard]] inline expected<T, error_ctx> read_beve(Buffer&& buffer) noexcept
    {
       T value{};
-      const auto pe = read<opts{.format = binary}>(value, std::forward<Buffer>(buffer));
+      const auto pe = read<opts{.format = BEVE}>(value, std::forward<Buffer>(buffer));
       if (pe) [[unlikely]] {
          return unexpected(pe);
       }
       return value;
    }
 
-   template <opts Opts = opts{}, read_binary_supported T>
+   template <opts Opts = opts{}, read_beve_supported T>
    [[nodiscard]] inline error_ctx read_file_binary(T& value, const sv file_name, auto&& buffer) noexcept
    {
       context ctx{};
@@ -1329,25 +1465,25 @@ namespace glz
       return read<set_binary<Opts>()>(value, buffer, ctx);
    }
 
-   template <read_binary_supported T, class Buffer>
+   template <read_beve_supported T, class Buffer>
    [[nodiscard]] inline error_ctx read_binary_untagged(T&& value, Buffer&& buffer) noexcept
    {
-      return read<opts{.format = binary, .structs_as_arrays = true}>(std::forward<T>(value),
-                                                                     std::forward<Buffer>(buffer));
+      return read<opts{.format = BEVE, .structs_as_arrays = true}>(std::forward<T>(value),
+                                                                   std::forward<Buffer>(buffer));
    }
 
-   template <read_binary_supported T, class Buffer>
+   template <read_beve_supported T, class Buffer>
    [[nodiscard]] inline expected<T, error_ctx> read_binary_untagged(Buffer&& buffer) noexcept
    {
       T value{};
-      const auto pe = read<opts{.format = binary, .structs_as_arrays = true}>(value, std::forward<Buffer>(buffer));
+      const auto pe = read<opts{.format = BEVE, .structs_as_arrays = true}>(value, std::forward<Buffer>(buffer));
       if (pe) [[unlikely]] {
          return unexpected(pe);
       }
       return value;
    }
 
-   template <opts Opts = opts{}, read_binary_supported T>
+   template <opts Opts = opts{}, read_beve_supported T>
    [[nodiscard]] inline error_ctx read_file_binary_untagged(T& value, const std::string& file_name,
                                                             auto&& buffer) noexcept
    {

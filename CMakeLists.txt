@@ -4,7 +4,7 @@ include(cmake/prelude.cmake)
 
 project(
     glaze
-    VERSION 3.2.1
+    VERSION 3.6.2
     LANGUAGES CXX
 )
 
@@ -50,8 +50,19 @@ if (glaze_DEVELOPER_MODE)
   include(cmake/dev-mode.cmake)
 endif()
 
-option(GLAZE_BUILD_EXAMPLES "Build GLAZE examples" OFF)
+if (APPLE)
+  option(glaze_ENABLE_AVX2 "Enable AVX2 instruction set" OFF)
+else()
+  option(glaze_ENABLE_AVX2 "Enable AVX2 instruction set" ON)
+  message("Glaze is being compiled with AVX2 instructions. Set glaze_ENABLE_AVX2 to OFF if you wish to disable this.")
+endif()
 
-if(GLAZE_BUILD_EXAMPLES)
+if (glaze_ENABLE_AVX2)
+  include(cmake/avx.cmake)
+endif()
+
+option(glaze_BUILD_EXAMPLES "Build GLAZE examples" OFF)
+
+if(glaze_BUILD_EXAMPLES)
   add_subdirectory(examples)
 endif()

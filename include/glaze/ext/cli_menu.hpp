@@ -60,7 +60,7 @@ namespace glz
    {
       using namespace detail;
 
-      static constexpr auto N = refl<T>.N;
+      static constexpr auto N = reflect<T>::size;
 
       auto execute_menu_item = [&](const auto item_number) {
          if (item_number == N + 1) {
@@ -88,7 +88,7 @@ namespace glz
                         return get_member(value, get<I>(t));
                      }
                      else {
-                        return get_member(value, get<I>(refl<T>.values));
+                        return get_member(value, get<I>(reflect<T>::values));
                      }
                   }.template operator()<I>();
 
@@ -150,7 +150,7 @@ namespace glz
                         run_cli_menu<Opts>(get<I>(t), menu_boolean);
                      }
                      else {
-                        decltype(auto) v = get_member(value, get<I>(refl<T>.values));
+                        decltype(auto) v = get_member(value, get<I>(reflect<T>::values));
                         run_cli_menu<Opts>(v, menu_boolean);
                      }
                   }
@@ -173,7 +173,7 @@ namespace glz
          std::printf("================================\n");
          for_each<N>([&](auto I) {
             using E = refl_t<T, I>;
-            constexpr sv key = refl<T>.keys[I];
+            constexpr sv key = reflect<T>::keys[I];
 
             if constexpr (glaze_object_t<E> || reflectable<E>) {
                std::printf("  %d   %.*s\n", uint32_t(I + 1), int(key.size()), key.data());
@@ -193,7 +193,7 @@ namespace glz
                      return get<I>(t);
                   }
                   else {
-                     return get_member(value, get<I>(refl<T>.values));
+                     return get_member(value, get<I>(reflect<T>::values));
                   }
                }();
 

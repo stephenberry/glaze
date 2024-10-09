@@ -92,6 +92,97 @@ namespace glz
    template <class T>
    using std_func_sig_t = typename func_traits<T>::std_func_sig;
 
+   struct socket_pool
+   {
+      std::string host{"localhost"}; // host name
+      std::string service{""}; // often the port
+      std::mutex mtx{};
+      std::vector<std::shared_ptr<asio::ip::tcp::socket>> sockets{2};
+      std::vector<size_t> available{0, 1}; // indices of available sockets
+
+      std::shared_ptr<asio::io_context> ctx{};
+      std::shared_ptr<std::atomic<bool>> is_connected = std::make_shared<std::atomic<bool>>(false);
+
+      // provides a pointer to a socket and an index
+      std::tuple<std::shared_ptr<asio::ip::tcp::socket>, size_t, std::error_code> get()
+      {
+         std::unique_lock lock{mtx};
+
+         // reset all socket pointers if a connection failed
+         if (not *is_connected) {
+            for (auto& socket : sockets) {
+               socket.reset();
+            }
+         }
+
+         if (available.empty()) {
+            const auto current_size = sockets.size();
+            const auto new_size = sockets.size() * 2;
+            sockets.resize(new_size);
+            for (size_t i = current_size; i < new_size; ++i) {
+               available.emplace_back(i);
+            }
+         }
+
+         const auto index = available.back();
+         available.pop_back();
+         auto& socket = sockets[index];
+#if !defined(GLZ_USING_BOOST_ASIO)
+         std::error_code ec{};
+#else
+         boost::system::error_code ec{};
+#endif
+         if (socket) {
+            return {socket, index, ec};
+         }
+         else {
+            socket = std::make_shared<asio::ip::tcp::socket>(*ctx);
+            asio::ip::tcp::resolver resolver{*ctx};
+            const auto endpoint = resolver.resolve(host, service);
+            asio::connect(*socket, endpoint, ec);
+            if (ec) {
+               return {nullptr, index, ec};
+            }
+            socket->set_option(asio::ip::tcp::no_delay(true), ec);
+            if (ec) {
+               return {nullptr, index, ec};
+            }
+            (*is_connected) = true;
+            return {socket, index, ec};
+         }
+      }
+
+      void free(const size_t index)
+      {
+         std::unique_lock lock{mtx};
+         available.emplace_back(index);
+      }
+   };
+
+   struct unique_socket
+   {
+      socket_pool* pool{};
+      std::shared_ptr<asio::ip::tcp::socket> ptr{};
+      size_t index{};
+      std::error_code ec{};
+
+      std::shared_ptr<asio::ip::tcp::socket> value() { return ptr; }
+
+      const std::shared_ptr<asio::ip::tcp::socket> value() const { return ptr; }
+
+      asio::ip::tcp::socket& operator*() { return *ptr; }
+
+      const asio::ip::tcp::socket& operator*() const { return *ptr; }
+
+      unique_socket(socket_pool* input_pool) : pool(input_pool) { std::tie(ptr, index, ec) = pool->get(); }
+      unique_socket(const unique_socket&) = default;
+      unique_socket(unique_socket&&) = default;
+      unique_socket& operator=(const unique_socket&) = default;
+      unique_socket& operator=(unique_socket&&) = default;
+
+      ~unique_socket() { pool->free(index); }
+   };
+
    template <opts Opts = opts{}>
    struct asio_client
    {
@@ -106,26 +197,29 @@ namespace glz
       };
 
       std::shared_ptr<asio::io_context> ctx{};
-      std::shared_ptr<asio::ip::tcp::socket> socket{};
+      std::shared_ptr<glz::socket_pool> socket_pool = std::make_shared<glz::socket_pool>();
 
       std::shared_ptr<repe::buffer_pool> buffer_pool = std::make_shared<repe::buffer_pool>();
+      std::shared_ptr<std::atomic<bool>> is_connected =
+         std::make_shared<std::atomic<bool>>(false); // will be set to pool's boolean
+
+      bool connected() const { return *is_connected; }
 
       [[nodiscard]] std::error_code init()
       {
          ctx = std::make_shared<asio::io_context>(concurrency);
-         socket = std::make_shared<asio::ip::tcp::socket>(*ctx);
-         asio::ip::tcp::resolver resolver{*ctx};
-         const auto endpoint = resolver.resolve(host, service);
-#if !defined(GLZ_USING_BOOST_ASIO)
-         std::error_code ec{};
-#else
-         boost::system::error_code ec{};
-#endif
-         asio::connect(*socket, endpoint, ec);
-         if (ec) {
-            return ec;
+         socket_pool->ctx = ctx;
+         socket_pool->host = host;
+         socket_pool->service = service;
+         is_connected = socket_pool->is_connected;
+
+         unique_socket socket{socket_pool.get()};
+         if (socket.value()) {
+            return {}; // connection success
          }
-         return socket->set_option(asio::ip::tcp::no_delay(true), ec);
+         else {
+            return socket.ec; // connection failure
+         }
       }
 
       template <class Params>
@@ -140,7 +234,17 @@ namespace glz
             return {repe::error_e::invalid_params, glz::format_error(ec, buffer)};
          }
 
-         send_buffer(*socket, buffer);
+         unique_socket socket{socket_pool.get()};
+
+         try {
+            send_buffer(*socket, buffer);
+         }
+         catch (const std::exception& e) {
+            socket.ptr.reset();
+            (*is_connected) = false;
+            return {repe::error_e::server_error_upper, "asio send failure"};
+         }
+
          return {};
       }
 
@@ -157,8 +261,25 @@ namespace glz
             return {repe::error_e::invalid_params, glz::format_error(ec, buffer)};
          }
 
-         send_buffer(*socket, buffer);
-         receive_buffer(*socket, buffer);
+         unique_socket socket{socket_pool.get()};
+
+         try {
+            send_buffer(*socket, buffer);
+         }
+         catch (const std::exception& e) {
+            socket.ptr.reset();
+            (*is_connected) = false;
+            return {repe::error_e::server_error_upper, "asio send failure"};
+         }
+
+         try {
+            receive_buffer(*socket, buffer);
+         }
+         catch (const std::exception& e) {
+            socket.ptr.reset();
+            (*is_connected) = false;
+            return {repe::error_e::server_error_upper, "asio receive failure"};
+         }
 
          return repe::decode_response<Opts>(std::forward<Result>(result), buffer);
       }
@@ -188,8 +309,25 @@ namespace glz
             return {repe::error_e::invalid_params, glz::format_error(ec, buffer)};
          }
 
-         send_buffer(*socket, buffer);
-         receive_buffer(*socket, buffer);
+         unique_socket socket{socket_pool.get()};
+
+         try {
+            send_buffer(*socket, buffer);
+         }
+         catch (const std::exception& e) {
+            socket.ptr.reset();
+            (*is_connected) = false;
+            return {repe::error_e::server_error_upper, "asio send failure"};
+         }
+
+         try {
+            receive_buffer(*socket, buffer);
+         }
+         catch (const std::exception& e) {
+            socket.ptr.reset();
+            (*is_connected) = false;
+            return {repe::error_e::server_error_upper, "asio receive failure"};
+         }
 
          return repe::decode_response<Opts>(buffer);
       }
@@ -206,8 +344,25 @@ namespace glz
             return {repe::error_e::invalid_params, glz::format_error(ec, buffer)};
          }
 
-         send_buffer(*socket, buffer);
-         receive_buffer(*socket, buffer);
+         unique_socket socket{socket_pool.get()};
+
+         try {
+            send_buffer(*socket, buffer);
+         }
+         catch (const std::exception& e) {
+            socket.ptr.reset();
+            (*is_connected) = false;
+            return {repe::error_e::server_error_upper, "asio send failure"};
+         }
+
+         try {
+            receive_buffer(*socket, buffer);
+         }
+         catch (const std::exception& e) {
+            socket.ptr.reset();
+            (*is_connected) = false;
+            return {repe::error_e::server_error_upper, "asio receive failure"};
+         }
 
          return repe::decode_response<Opts>(std::forward<Result>(result), buffer);
       }
@@ -224,8 +379,25 @@ namespace glz
             return {repe::error_e::invalid_params, glz::format_error(ec, buffer)};
          }
 
-         send_buffer(*socket, buffer);
-         receive_buffer(*socket, buffer);
+         unique_socket socket{socket_pool.get()};
+
+         try {
+            send_buffer(*socket, buffer);
+         }
+         catch (const std::exception& e) {
+            socket.ptr.reset();
+            (*is_connected) = false;
+            return {repe::error_e::server_error_upper, "asio send failure"};
+         }
+
+         try {
+            receive_buffer(*socket, buffer);
+         }
+         catch (const std::exception& e) {
+            socket.ptr.reset();
+            (*is_connected) = false;
+            return {repe::error_e::server_error_upper, "asio receive failure"};
+         }
 
          return repe::decode_response<Opts>(buffer);
       }
@@ -257,24 +429,6 @@ namespace glz
                return result;
             };
          }
-      }
-
-      template <class Params>
-      [[deprecated("We use a buffer pool now, so this would cause allocations")]] [[nodiscard]] std::string call_raw(
-         repe::header&& header, Params&& params, repe::error_t& error)
-      {
-         std::string buffer{};
-
-         header.notify = false;
-         const auto ec = repe::request<Opts>(std::move(header), std::forward<Params>(params), buffer);
-         if (bool(ec)) [[unlikely]] {
-            error = {repe::error_e::invalid_params, glz::format_error(ec, buffer)};
-            return buffer;
-         }
-
-         send_buffer(*socket, buffer);
-         receive_buffer(*socket, buffer);
-         return buffer;
       }
    };
 
@@ -321,11 +475,27 @@ namespace glz
             init();
          }
 
+         // Setup signal handling to stop the server
          signals->async_wait([&](auto, auto) { ctx->stop(); });
 
+         // Start the listener coroutine
          asio::co_spawn(*ctx, listener(), asio::detached);
 
+         // Run the io_context in multiple threads for concurrency
+         std::vector<std::thread> threads;
+         for (uint32_t i = 0; i < concurrency; ++i) {
+            threads.emplace_back([this]() { ctx->run(); });
+         }
+
+         // Optionally, run in the main thread as well
          ctx->run();
+
+         // Join all threads before exiting
+         for (auto& thread : threads) {
+            if (thread.joinable()) {
+               thread.join();
+            }
+         }
       }
 
       // stop the server

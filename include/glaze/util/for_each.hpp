@@ -16,18 +16,28 @@ namespace glz
    template <std::size_t N, class Func>
    constexpr void for_each(Func&& f)
    {
-      [&]<std::size_t... I>(std::index_sequence<I...>) constexpr {
-         (f(std::integral_constant<std::size_t, I>{}), ...);
-      }(std::make_index_sequence<N>{});
+      if constexpr (N == 0) {
+         return;
+      }
+      else {
+         [&]<std::size_t... I>(std::index_sequence<I...>) constexpr {
+            (f(std::integral_constant<std::size_t, I>{}), ...);
+         }(std::make_index_sequence<N>{});
+      }
    }
 
    // Runtime short circuiting if function returns true, return false to continue evaluation
    template <std::size_t N, class Func>
    constexpr void for_each_short_circuit(Func&& f)
    {
-      [&]<std::size_t... I>(std::index_sequence<I...>) constexpr {
-         (f(std::integral_constant<std::size_t, I>{}) || ...);
-      }(std::make_index_sequence<N>{});
+      if constexpr (N == 0) {
+         return;
+      }
+      else {
+         [&]<std::size_t... I>(std::index_sequence<I...>) constexpr {
+            (f(std::integral_constant<std::size_t, I>{}) || ...);
+         }(std::make_index_sequence<N>{});
+      }
    }
 
    template <class Func, class Tuple>
@@ -89,7 +99,10 @@ namespace glz::detail
    template <size_t N, class Lambda>
    GLZ_ALWAYS_INLINE constexpr void jump_table(Lambda&& lambda, size_t index) noexcept
    {
-      if constexpr (N == 1) {
+      if constexpr (N == 0) {
+         return;
+      }
+      else if constexpr (N == 1) {
          static_cast<Lambda&&>(lambda).template operator()<0>();
       }
       GLZ_SWITCH(2, 0, 1)
@@ -178,7 +191,10 @@ namespace glz::detail
    template <size_t N, class Lambda>
    GLZ_ALWAYS_INLINE constexpr void invoke_table(Lambda&& lambda) noexcept
    {
-      if constexpr (N == 1) {
+      if constexpr (N == 0) {
+         return;
+      }
+      else if constexpr (N == 1) {
          static_cast<Lambda&&>(lambda).template operator()<0>();
       }
       GLZ_INVOKE_ALL(2, 0, 1)

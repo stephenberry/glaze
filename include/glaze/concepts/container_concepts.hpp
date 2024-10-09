@@ -103,6 +103,8 @@ namespace glz::detail
 
    template <class T>
    concept pair_t = requires(T pair) {
+      typename std::decay_t<T>::first_type;
+      typename std::decay_t<T>::second_type;
       {
          pair.first
       };
@@ -133,7 +135,10 @@ namespace glz::detail
    };
 
    template <class T>
-   concept has_push_back = requires(T t, typename T::value_type v) { t.push_back(v); };
+   concept has_append = requires(T t, typename T::const_iterator it) { t.append(it, it); };
+
+   template <class T>
+   concept has_assign = requires(T t, const typename T::value_type* v, typename T::size_type sz) { t.assign(v, sz); };
 
    template <class T>
    concept accessible = requires(T container) {
@@ -143,7 +148,8 @@ namespace glz::detail
    };
 
    template <class T>
-   concept vector_like = resizable<T> && accessible<T> && has_data<T>;
+   concept vector_like =
+      resizable<std::remove_cvref_t<T>> && accessible<std::remove_cvref_t<T>> && has_data<std::remove_cvref_t<T>>;
 
    template <class T>
    concept map_subscriptable = requires(T container) {

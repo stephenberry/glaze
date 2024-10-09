@@ -29,7 +29,7 @@ namespace glz
 
       template <class T>
          requires(is_specialization_v<T, manage_t>)
-      struct from_json<T>
+      struct from<JSON, T>
       {
          template <auto Opts>
          static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
@@ -37,7 +37,7 @@ namespace glz
             using V = std::decay_t<decltype(value)>;
             using From = typename V::from_t;
 
-            read<json>::op<Opts>(get_member(value.val, value.member), ctx, it, end);
+            read<JSON>::op<Opts>(get_member(value.val, value.member), ctx, it, end);
 
             if constexpr (std::is_member_pointer_v<From>) {
                if constexpr (std::is_member_function_pointer_v<From>) {
@@ -74,7 +74,7 @@ namespace glz
 
       template <class T>
          requires(is_specialization_v<T, manage_t>)
-      struct to_json<T>
+      struct to<JSON, T>
       {
          template <auto Opts>
          static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept
@@ -113,7 +113,7 @@ namespace glz
                }
             }
 
-            write<json>::op<Opts>(get_member(value.val, value.member), ctx, args...);
+            write<JSON>::op<Opts>(get_member(value.val, value.member), ctx, args...);
          }
       };
 

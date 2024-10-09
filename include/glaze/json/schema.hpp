@@ -136,28 +136,60 @@ namespace glz
          schema attributes{};
       };
 
-      GLZ_ENUM_MAP(defined_formats, //
-                   "date-time", datetime, //
-                   "date", date, //
-                   "time", time, //
-                   "duration", duration, //
-                   "email", email, //
-                   "idn-email", idn_email, //
-                   "hostname", hostname, //
-                   "idn-hostname", idn_hostname, //
-                   "ipv4", ipv4, //
-                   "ipv6", ipv6, //
-                   "uri", uri, //
-                   "uri-reference", uri_reference, //
-                   "iri", iri, //
-                   "iri-reference", iri_reference, //
-                   "uuid", uuid, //
-                   "uri-template", uri_template, //
-                   "json-pointer", json_pointer, //
-                   "relative-json-pointer", relative_json_pointer, //
-                   "regex", regex);
+      enum struct defined_formats : uint32_t {
+         datetime, //
+         date, //
+         time, //
+         duration, //
+         email, //
+         idn_email, //
+         hostname, //
+         idn_hostname, //
+         ipv4, //
+         ipv6, //
+         uri, //
+         uri_reference, //
+         iri, //
+         iri_reference, //
+         uuid, //
+         uri_template, //
+         json_pointer, //
+         relative_json_pointer, //
+         regex
+      };
    }
 }
+
+template <>
+struct glz::meta<glz::detail::defined_formats>
+{
+   static constexpr std::string_view name = "defined_formats";
+   using enum glz::detail::defined_formats;
+   static constexpr std::array keys{
+      "date-time", "date",          "time", "duration",     "email",        "idn-email",
+      "hostname",  "idn-hostname",  "ipv4", "ipv6",         "uri",          "uri-reference",
+      "iri",       "iri-reference", "uuid", "uri-template", "json-pointer", "relative-json-pointer",
+      "regex"};
+   static constexpr std::array value{datetime, //
+                                     date, //
+                                     time, //
+                                     duration, //
+                                     email, //
+                                     idn_email, //
+                                     hostname, //
+                                     idn_hostname, //
+                                     ipv4, //
+                                     ipv6, //
+                                     uri, //
+                                     uri_reference, //
+                                     iri, //
+                                     iri_reference, //
+                                     uuid, //
+                                     uri_template, //
+                                     json_pointer, //
+                                     relative_json_pointer, //
+                                     regex};
+};
 
 template <>
 struct glz::meta<glz::detail::schematic>
@@ -200,12 +232,6 @@ struct glz::meta<glz::detail::schematic>
       "enum", [](auto&& self) -> auto& { return self.attributes.enumeration; }, //
       "ExtUnits", [](auto&& self) -> auto& { return self.attributes.ExtUnits; }, //
       "ExtAdvanced", [](auto&& self) -> auto& { return self.attributes.ExtAdvanced; });
-};
-
-template <>
-struct glz::meta<glz::detail::defined_formats>
-{
-   static constexpr std::string_view name = "defined_formats";
 };
 
 namespace glz
@@ -325,7 +351,7 @@ namespace glz
             s.type = {"string"};
 
             // TODO use oneOf instead of enum to handle doc comments
-            static constexpr auto N = refl<T>.N;
+            static constexpr auto N = reflect<T>::size;
             // s.enumeration = std::vector<std::string_view>(N);
             // for_each<N>([&](auto I) {
             //    static constexpr auto item = std::get<I>(meta_v<V>);
@@ -336,10 +362,10 @@ namespace glz
                auto& enumeration = (*s.oneOf)[I];
                // Do not override if already set
                if (!enumeration.attributes.constant.has_value()) {
-                  enumeration.attributes.constant = refl<T>.keys[I];
+                  enumeration.attributes.constant = reflect<T>::keys[I];
                }
                if (!enumeration.attributes.title.has_value()) {
-                  enumeration.attributes.title = refl<T>.keys[I];
+                  enumeration.attributes.title = reflect<T>::keys[I];
                }
             });
          }
@@ -468,9 +494,9 @@ namespace glz
 
       template <class T>
       inline constexpr auto glaze_names = []() {
-         constexpr auto N = refl<T>.N;
+         constexpr auto N = reflect<T>::size;
          std::array<sv, N> names{};
-         for_each<N>([&](auto I) { names[I] = refl<T>.keys[I]; });
+         for_each<N>([&](auto I) { names[I] = reflect<T>::keys[I]; });
          return names;
       }();
 
@@ -540,7 +566,7 @@ namespace glz
                }
             }
 
-            static constexpr auto N = refl<T>.N;
+            static constexpr auto N = reflect<T>::size;
 
             static constexpr auto schema_map = make_reflection_schema_map<T>();
 
@@ -550,7 +576,7 @@ namespace glz
 
                auto& def = defs[name_v<val_t>];
 
-               constexpr sv key = refl<T>.keys[I];
+               constexpr sv key = reflect<T>::keys[I];
 
                schema ref_val{};
                if constexpr (schema_map.size()) {

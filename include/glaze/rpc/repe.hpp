@@ -285,7 +285,7 @@ namespace glz::repe
    [[nodiscard]] auto request_binary(H&& header)
    {
       header.empty = true; // because no value provided
-      return glz::write_binary(std::forward_as_tuple(std::forward<H>(header), nullptr));
+      return glz::write_beve(std::forward_as_tuple(std::forward<H>(header), nullptr));
    }
 
    template <class H = header>
@@ -304,7 +304,7 @@ namespace glz::repe
    template <class Value, class H = header>
    [[nodiscard]] auto request_binary(H&& header, Value&& value)
    {
-      return glz::write_binary(std::forward_as_tuple(std::forward<H>(header), std::forward<Value>(value)));
+      return glz::write_beve(std::forward_as_tuple(std::forward<H>(header), std::forward<Value>(value)));
    }
 
    // DESIGN NOTE: It might appear that we are locking ourselves into a poor design choice by using a runtime
@@ -325,7 +325,7 @@ namespace glz::repe
    {
       using Mtx = std::mutex*;
       using namespace glz::detail;
-      constexpr auto N = refl<T>.N;
+      constexpr auto N = reflect<T>::size;
       return [&]<size_t... I>(std::index_sequence<I...>) {
          return normal_map<sv, Mtx, N>(
             std::array<pair<sv, Mtx>, N>{pair<sv, Mtx>{join_v<parent, chars<"/">, key_name_v<I, T>>, Mtx{}}...});
@@ -470,6 +470,11 @@ namespace glz::repe
       return try_lock_until(std::chrono::steady_clock::now() + std::chrono::nanoseconds(timeout_duration_ns()), l0);
    }
 
+   // Any unique lock down the chain will block further access.
+   // We perform a unique lock on any read/write
+   // This means we cannot have asynchronous reads of the same value (address in the future).
+   // But, this allows asynchronous reads/writes as long as they lead down different paths.
+
    namespace detail
    {
       // lock reading into a value (writing to C++ memory)
@@ -485,7 +490,8 @@ namespace glz::repe
          else {
             for (size_t i = 0; i < (n - 1); ++i) {
                shared_mutex route{chain[i]->route};
-               const auto valid = try_lock_for(route, chain[i]->endpoint);
+               shared_mutex endpoint{chain[i]->endpoint};
+               const auto valid = try_lock_for(route, endpoint);
                if (not valid) {
                   return false;
                }
@@ -506,7 +512,7 @@ namespace glz::repe
          }
          else {
             for (size_t i = 0; i < (n - 1); ++i) {
-               chain[i]->endpoint.unlock();
+               chain[i]->endpoint.unlock_shared();
                chain[i]->route.unlock_shared();
             }
             chain.back()->endpoint.unlock();
@@ -522,17 +528,18 @@ namespace glz::repe
             return true;
          }
          else if (n == 1) {
-            return lock_shared(chain[0]->route, chain[0]->endpoint);
+            return try_lock_for(chain[0]->route, chain[0]->endpoint);
          }
          else {
             for (size_t i = 0; i < (n - 1); ++i) {
                shared_mutex route{chain[i]->route};
-               const bool valid = try_lock_for(route);
+               shared_mutex endpoint{chain[i]->endpoint};
+               const auto valid = try_lock_for(route, endpoint);
                if (not valid) {
                   return false;
                }
             }
-            return lock_shared(chain.back()->route, chain.back()->endpoint);
+            return try_lock_for(chain.back()->route, chain.back()->endpoint);
          }
       }
 
@@ -543,15 +550,16 @@ namespace glz::repe
             return;
          }
          else if (n == 1) {
-            chain[0]->endpoint.unlock_shared();
-            chain[0]->route.unlock_shared();
+            chain[0]->endpoint.unlock();
+            chain[0]->route.unlock();
          }
          else {
             for (size_t i = 0; i < (n - 1); ++i) {
+               chain[i]->endpoint.unlock_shared();
                chain[i]->route.unlock_shared();
             }
-            chain.back()->endpoint.unlock_shared();
-            chain.back()->route.unlock_shared();
+            chain.back()->endpoint.unlock();
+            chain.back()->route.unlock();
          }
       }
 
@@ -564,13 +572,13 @@ namespace glz::repe
             return true;
          }
          else if (n == 1) {
-            shared_mutex route{chain[0]->route};
-            return try_lock_for(route, chain[0]->endpoint);
+            return try_lock_for(chain[0]->route, chain[0]->endpoint);
          }
          else {
             for (size_t i = 0; i < (n - 2); ++i) {
                shared_mutex route{chain[i]->route};
-               const bool valid = try_lock_for(route, chain[i]->endpoint);
+               shared_mutex endpoint{chain[i]->endpoint};
+               const bool valid = try_lock_for(route, endpoint);
                if (not valid) {
                   return false;
                }
@@ -591,11 +599,11 @@ namespace glz::repe
          }
          else if (n == 1) {
             chain[0]->endpoint.unlock();
-            chain[0]->route.unlock_shared();
+            chain[0]->route.unlock();
          }
          else {
             for (size_t i = 0; i < (n - 2); ++i) {
-               chain[i]->endpoint.unlock();
+               chain[i]->endpoint.unlock_shared();
                chain[i]->route.unlock_shared();
             }
             chain.back()->endpoint.unlock();
@@ -737,7 +745,7 @@ namespace glz::repe
       void on(T& value)
       {
          using namespace glz::detail;
-         static constexpr auto N = refl<T>.N;
+         static constexpr auto N = reflect<T>::size;
 
          [[maybe_unused]] decltype(auto) t = [&]() -> decltype(auto) {
             if constexpr (reflectable<T> && requires { to_tuple(value); }) {
@@ -789,11 +797,11 @@ namespace glz::repe
                   return get_member(value, get<I>(t));
                }
                else {
-                  return get_member(value, get<I>(refl<T>.values));
+                  return get_member(value, get<I>(reflect<T>::values));
                }
             }.template operator()<I>();
 
-            static constexpr auto key = refl<T>.keys[I];
+            static constexpr auto key = reflect<T>::keys[I];
 
             static constexpr std::string_view full_key = [&] {
                if constexpr (parent == detail::empty_path) {
@@ -814,12 +822,6 @@ namespace glz::repe
                if constexpr (std::same_as<Result, void>) {
                   methods[full_key] = [callback = func, chain = get_chain(full_key)](repe::state&& state) mutable {
                      {
-                        chain_invoke_lock lock{chain};
-                        if (not lock) {
-                           state.error = {error_e::timeout, std::string(full_key)};
-                           write_response<Opts>(state);
-                           return;
-                        }
                         callback();
                         if (state.header.notify) {
                            return;
@@ -831,12 +833,6 @@ namespace glz::repe
                else {
                   methods[full_key] = [callback = func, chain = get_chain(full_key)](repe::state&& state) mutable {
                      {
-                        chain_invoke_lock lock{chain};
-                        if (not lock) {
-                           state.error = {error_e::timeout, std::string(full_key)};
-                           write_response<Opts>(state);
-                           return;
-                        }
                         if (state.header.notify) {
                            std::ignore = callback();
                            return;
@@ -862,13 +858,6 @@ namespace glz::repe
                   }
 
                   {
-                     chain_invoke_lock lock{chain};
-                     if (not lock) {
-                        state.error = {error_e::timeout, std::string(full_key)};
-                        write_response<Opts>(state);
-                        return;
-                     }
-
                      if (state.header.notify) {
                         std::ignore = callback(params);
                         return;
@@ -957,12 +946,6 @@ namespace glz::repe
                      if constexpr (n_args == 0) {
                         methods[full_key] = [&value, &func, chain = get_chain(full_key)](repe::state&& state) mutable {
                            {
-                              chain_invoke_lock lock{chain};
-                              if (not lock) {
-                                 state.error = {error_e::timeout, std::string(full_key)};
-                                 write_response<Opts>(state);
-                                 return;
-                              }
                               (value.*func)();
                            }
 
@@ -985,12 +968,6 @@ namespace glz::repe
                            }
 
                            {
-                              chain_invoke_lock lock{chain};
-                              if (not lock) {
-                                 state.error = {error_e::timeout, std::string(full_key)};
-                                 write_response<Opts>(state);
-                                 return;
-                              }
                               (value.*func)(input);
                            }
 
@@ -1012,13 +989,6 @@ namespace glz::repe
                         methods[full_key] = [&value, &func, chain = get_chain(full_key)](repe::state&& state) mutable {
                            // using Result = std::decay_t<decltype((value.*func)())>;
                            {
-                              chain_invoke_lock lock{chain};
-                              if (not lock) {
-                                 state.error = {error_e::timeout, std::string(full_key)};
-                                 write_response<Opts>(state);
-                                 return;
-                              }
-
                               if (state.header.notify) {
                                  std::ignore = (value.*func)();
                                  return;
@@ -1042,13 +1012,6 @@ namespace glz::repe
 
                            // using Result = std::decay_t<decltype((value.*func)(input))>;
                            {
-                              chain_invoke_lock lock{chain};
-                              if (not lock) {
-                                 state.error = {error_e::timeout, std::string(full_key)};
-                                 write_response<Opts>(state);
-                                 return;
-                              }
-
                               if (state.header.notify) {
                                  std::ignore = (value.*func)(input);
                                  return;
@@ -1146,7 +1109,7 @@ namespace glz::repe
             return finish();
          }
 
-         if constexpr (Opts.format == json) {
+         if constexpr (Opts.format == JSON) {
             if (*b == '[') {
                ++b;
             }
@@ -1160,6 +1123,9 @@ namespace glz::repe
                ++b; // skip the tag
                const auto n = glz::detail::int_from_compressed(ctx, b, e);
                if (bool(ctx.error) || (n != 2)) [[unlikely]] {
+                  if (n != 2) [[unlikely]] {
+                     ctx.error = error_code::syntax_error;
+                  }
                   handle_error(b);
                   return finish();
                }
@@ -1178,7 +1144,7 @@ namespace glz::repe
             return finish();
          }
 
-         if constexpr (Opts.format == json) {
+         if constexpr (Opts.format == JSON) {
             if (*b == ',') {
                ++b;
             }

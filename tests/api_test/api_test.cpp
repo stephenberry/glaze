@@ -204,7 +204,12 @@ void tests()
 
    "span type name"_test = [] {
       std::string_view s = glz::name_v<std::span<double>>;
-      expect(s == "std::span<double,18446744073709551615>");
+      if constexpr (sizeof(size_t) == sizeof(uint64_t)) {
+         expect(s == "std::span<double,18446744073709551615>");
+      }
+      else if constexpr (sizeof(size_t) == sizeof(uint32_t)) {
+         expect(s == "std::span<double,4294967295>");
+      }
    };
 
    "tuple type name"_test = [] {
@@ -247,8 +252,8 @@ void tests()
       *io->get<int>("/x") = 1;
       *io2->get<int>("/x") = 5;
       std::string buffer{};
-      io2->write(glz::binary, "", buffer);
-      io->read(glz::binary, "", buffer);
+      io2->write(glz::BEVE, "", buffer);
+      io->read(glz::BEVE, "", buffer);
       expect(*io->get<int>("/x") == 5);
    };
 }
