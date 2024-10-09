@@ -67,6 +67,14 @@ namespace glz::detail
       t['e'] = true;
       return t;
    }();
+   
+   inline constexpr std::array<bool, 256> non_exp_table = [] {
+      std::array<bool, 256> t{};
+      t.fill(true);
+      t['E'] = false;
+      t['e'] = false;
+      return t;
+   }();
 
    inline constexpr std::array<bool, 256> digit_table = [] {
       std::array<bool, 256> t{};
@@ -440,6 +448,9 @@ namespace glz::detail
       if (digit_table[uint8_t(*c)]) {
          v = v * 10 + (*c - '0');
          ++c;
+      }
+      else {
+         goto finish;
       }
 
       if (digit_table[uint8_t(*c)]) {
