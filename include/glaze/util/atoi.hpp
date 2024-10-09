@@ -90,14 +90,19 @@ namespace glz::detail
       if (not digit_table[uint8_t(*c)]) [[unlikely]] {
          return false;
       }
+      v = *c - '0';
       ++c;
+      
+      if (digit_table[uint8_t(*c)]) {
+         v = v * 10 + (*c - '0');
+         ++c;
+      }
 
-      if (c[-1] == '0') {
-         if (digit_table[uint8_t(*c)] || *c == '.') [[unlikely]] {
+      if (c[-2] == '0') {
+         if (digit_table[uint8_t(c[-1])] || c[-1] == '.') [[unlikely]] {
             return false;
          }
-         if (*c == 'e' || *c == 'E') [[unlikely]] {
-            ++c;
+         if (c[-1] == 'e' || c[-1] == 'E') [[unlikely]] {
             c += (*c == '+');
             if (not digit_table[uint8_t(*c)]) [[unlikely]] {
                return false;
@@ -112,18 +117,10 @@ namespace glz::detail
                return false;
             }
          }
-         v = 0;
          return true;
       }
-
-      uint32_t i = c[-1] - '0';
-      if (digit_table[uint8_t(*c)]) {
-         i = i * 10 + (*c - '0');
-         ++c;
-      }
-      else {
-         goto finish;
-      }
+      
+      uint32_t i = v;
 
       if (digit_table[uint8_t(*c)]) {
          i = i * 10 + (*c - '0');
@@ -201,14 +198,19 @@ namespace glz::detail
       if (not digit_table[uint8_t(*c)]) [[unlikely]] {
          return false;
       }
+      v = *c - '0';
       ++c;
-
-      if (c[-1] == '0') {
-         if (digit_table[uint8_t(*c)] || *c == '.') [[unlikely]] {
+      
+      if (digit_table[uint8_t(*c)]) {
+         v = v * 10 + (*c - '0');
+         ++c;
+      }
+      
+      if (c[-2] == '0') {
+         if (digit_table[uint8_t(c[-1])] || c[-1] == '.') [[unlikely]] {
             return false;
          }
-         if (*c == 'e' || *c == 'E') [[unlikely]] {
-            ++c;
+         if (c[-1] == 'e' || c[-1] == 'E') [[unlikely]] {
             c += (*c == '+');
             if (not digit_table[uint8_t(*c)]) [[unlikely]] {
                return false;
@@ -223,18 +225,10 @@ namespace glz::detail
                return false;
             }
          }
-         v = 0;
          return true;
       }
-
-      uint64_t i = c[-1] - '0';
-      if (digit_table[uint8_t(*c)]) {
-         i = i * 10 + (*c - '0');
-         ++c;
-      }
-      else {
-         goto finish;
-      }
+      
+      uint64_t i = v;
 
       if (digit_table[uint8_t(*c)]) {
          i = i * 10 + (*c - '0');
@@ -382,14 +376,19 @@ namespace glz::detail
       if (not digit_table[uint8_t(*c)]) [[unlikely]] {
          return false;
       }
+      v = *c - '0';
       ++c;
-
-      if (c[-1] == '0') {
-         if (digit_table[uint8_t(*c)] || *c == '.') [[unlikely]] {
+      
+      if (digit_table[uint8_t(*c)]) {
+         v = v * 10 + (*c - '0');
+         ++c;
+      }
+      
+      if (c[-2] == '0') {
+         if (digit_table[uint8_t(c[-1])] || c[-1] == '.') [[unlikely]] {
             return false;
          }
-         if (*c == 'e' || *c == 'E') [[unlikely]] {
-            ++c;
+         if (c[-1] == 'e' || c[-1] == 'E') [[unlikely]] {
             c += (*c == '+');
             if (not digit_table[uint8_t(*c)]) [[unlikely]] {
                return false;
@@ -404,17 +403,7 @@ namespace glz::detail
                return false;
             }
          }
-         v = 0;
          return true;
-      }
-
-      v = c[-1] - '0';
-      if (digit_table[uint8_t(*c)]) {
-         v = v * 10 + (*c - '0');
-         ++c;
-      }
-      else {
-         goto finish;
       }
 
       if (digit_table[uint8_t(*c)]) {
@@ -608,14 +597,19 @@ namespace glz::detail
       if (not(digit_table[uint8_t(*c)])) [[unlikely]] {
          return false;
       }
+      v = *c - '0';
       ++c;
+      
+      if (digit_table[uint8_t(*c)]) {
+         v = v * 10 + (*c - '0');
+         ++c;
+      }
 
-      if (c[-1] == '0') {
-         if (digit_table[uint8_t(*c)] || *c == '.') [[unlikely]] {
+      if (c[-2] == '0') {
+         if (digit_table[uint8_t(c[-1])] || c[-1] == '.') [[unlikely]] {
             return false;
          }
-         if (*c == 'e' || *c == 'E') [[unlikely]] {
-            ++c;
+         if (c[-1] == 'e' || c[-1] == 'E') [[unlikely]] {
             c += (*c == '+');
             if (not digit_table[uint8_t(*c)]) [[unlikely]] {
                return false;
@@ -630,18 +624,10 @@ namespace glz::detail
                return false;
             }
          }
-         v = 0;
          return true;
       }
-
-      uint32_t i = c[-1] - '0';
-      if (digit_table[uint8_t(*c)]) {
-         i = i * 10 + (*c - '0');
-         ++c;
-      }
-      else {
-         goto finish;
-      }
+      
+      uint32_t i = v;
 
       if (digit_table[uint8_t(*c)]) {
          i = i * 10 + (*c - '0');
@@ -868,14 +854,19 @@ namespace glz::detail
       if (not(digit_table[uint8_t(*c)])) [[unlikely]] {
          return false;
       }
+      v = *c - '0';
       ++c;
+      
+      if (digit_table[uint8_t(*c)]) {
+         v = v * 10 + (*c - '0');
+         ++c;
+      }
 
-      if (c[-1] == '0') {
-         if (digit_table[uint8_t(*c)] || *c == '.') [[unlikely]] {
+      if (c[-2] == '0') {
+         if (digit_table[uint8_t(c[-1])] || c[-1] == '.') [[unlikely]] {
             return false;
          }
-         if (*c == 'e' || *c == 'E') [[unlikely]] {
-            ++c;
+         if (c[-1] == 'e' || c[-1] == 'E') [[unlikely]] {
             c += (*c == '+');
             if (not digit_table[uint8_t(*c)]) [[unlikely]] {
                return false;
@@ -890,18 +881,10 @@ namespace glz::detail
                return false;
             }
          }
-         v = 0;
          return true;
       }
-
-      uint64_t i = c[-1] - '0';
-      if (digit_table[uint8_t(*c)]) {
-         i = i * 10 + (*c - '0');
-         ++c;
-      }
-      else {
-         goto finish;
-      }
+      
+      uint64_t i = v;
 
       if (digit_table[uint8_t(*c)]) {
          i = i * 10 + (*c - '0');
