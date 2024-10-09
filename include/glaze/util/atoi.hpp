@@ -130,12 +130,11 @@ namespace glz::detail
          ++c;
       }
       else {
-         if (is_digit(*c)) [[unlikely]] {
+         if (is_digit(*c) || (*c == '.')) [[unlikely]] {
             return false;
          }
-         const bool valid = i <= (std::numeric_limits<T>::max)();
          v = T(i);
-         return valid && (*c != '.');
+         return i <= (std::numeric_limits<T>::max)();
       }
 
       c += (*c == '+');
@@ -168,9 +167,8 @@ namespace glz::detail
          static constexpr std::array<uint16_t, 5> powers_of_ten{1, 10, 100, 1000, 10000};
          i *= powers_of_ten[exp];
       }
-      const bool valid = i <= (std::numeric_limits<T>::max)();
       v = T(i);
-      return valid;
+      return i <= (std::numeric_limits<T>::max)();
    }
 
    template <std::integral T, class Char>
@@ -281,12 +279,11 @@ namespace glz::detail
          ++c;
       }
       else {
-         if (is_digit(*c)) [[unlikely]] {
+         if (is_digit(*c) || (*c == '.')) [[unlikely]] {
             return false;
          }
-         const bool valid = i <= (std::numeric_limits<T>::max)();
          v = T(i);
-         return valid && (*c != '.');
+         return i <= (std::numeric_limits<T>::max)();
       }
 
       c += (*c == '+');
@@ -305,9 +302,8 @@ namespace glz::detail
       }
 
       i *= powers_of_ten_int[exp];
-      const bool valid = i <= (std::numeric_limits<T>::max)();
       v = T(i);
-      return valid;
+      return i <= (std::numeric_limits<T>::max)();
    }
 
    struct value128 final
@@ -548,10 +544,10 @@ namespace glz::detail
          ++c;
       }
       else {
-         if (is_digit(*c)) [[unlikely]] {
+         if (is_digit(*c) || (*c == '.')) [[unlikely]] {
             return false;
          }
-         return (*c != '.');
+         return true;
       }
 
       c += (*c == '+');
@@ -652,17 +648,16 @@ namespace glz::detail
          ++c;
       }
       else {
-         if (is_digit(*c)) [[unlikely]] {
+         if (is_digit(*c) || (*c == '.')) [[unlikely]] {
             return false;
          }
-         const bool valid = (i - sign) <= (std::numeric_limits<T>::max)();
          if constexpr (sizeof(T) == 1) {
             v = T((uint8_t(i) ^ -sign) + sign);
          }
          else if constexpr (sizeof(T) == 2) {
             v = T((uint16_t(i) ^ -sign) + sign);
          }
-         return valid && (*c != '.');
+         return (i - sign) <= (std::numeric_limits<T>::max)();
       }
 
       c += (*c == '+');
@@ -695,14 +690,13 @@ namespace glz::detail
          static constexpr std::array<uint16_t, 5> powers_of_ten{1, 10, 100, 1000, 10000};
          i *= powers_of_ten[exp];
       }
-      const bool valid = (i - sign) <= (std::numeric_limits<T>::max)();
       if constexpr (sizeof(T) == 1) {
          v = T((uint8_t(i) ^ -sign) + sign);
       }
       else if constexpr (sizeof(T) == 2) {
          v = T((uint16_t(i) ^ -sign) + sign);
       }
-      return valid;
+      return (i - sign) <= (std::numeric_limits<T>::max)();
    }
 
    template <std::integral T, class Char>
@@ -815,12 +809,11 @@ namespace glz::detail
          ++c;
       }
       else {
-         if (is_digit(*c)) [[unlikely]] {
+         if (is_digit(*c) || (*c == '.')) [[unlikely]] {
             return false;
          }
-         const bool valid = (i - sign) <= (std::numeric_limits<T>::max)();
          v = T((uint32_t(i) ^ -sign) + sign);
-         return valid && (*c != '.');
+         return (i - sign) <= (std::numeric_limits<T>::max)();
       }
 
       c += (*c == '+');
@@ -839,9 +832,8 @@ namespace glz::detail
       }
 
       i *= powers_of_ten_int[exp];
-      const bool valid = (i - sign) <= (std::numeric_limits<T>::max)();
       v = T((uint32_t(i) ^ -sign) + sign);
-      return valid;
+      return (i - sign) <= (std::numeric_limits<T>::max)();
    }
 
    template <std::integral T, class Char>
@@ -1030,11 +1022,11 @@ namespace glz::detail
          ++c;
       }
       else {
-         if (is_digit(*c)) [[unlikely]] {
+         if (is_digit(*c) || (*c == '.')) [[unlikely]] {
             return false;
          }
          v = T((uint64_t(i) ^ -sign) + sign);
-         return (*c != '.');
+         return true;
       }
 
       c += (*c == '+');
