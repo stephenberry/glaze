@@ -59,7 +59,7 @@ namespace glz::detail
    // This ensures that we get proper errors when parsing and don't get confusing errors
    // It isn't technically required, because end validation would handle it, but it produces
    // much clearer errors
-   
+
    inline constexpr std::array<bool, 256> exp_dec_table = [] {
       std::array<bool, 256> t{};
       t['.'] = true;
@@ -82,7 +82,7 @@ namespace glz::detail
       t['9'] = true;
       return t;
    }();
-   
+
    inline constexpr std::array<bool, 256> non_zero_digit_table = [] {
       std::array<bool, 256> t{};
       t['1'] = true;
@@ -96,7 +96,7 @@ namespace glz::detail
       t['9'] = true;
       return t;
    }();
-   
+
    inline constexpr std::array<bool, 256> digit_or_dec_table = [] {
       std::array<bool, 256> t{};
       t['0'] = true;
@@ -146,12 +146,12 @@ namespace glz::detail
          }
       }
       ++c;
-      
+
       if (digit_table[uint8_t(*c)]) {
          v = v * 10 + (*c - '0');
          ++c;
       }
-      
+
       uint32_t i = v;
 
       if (digit_table[uint8_t(*c)]) {
@@ -256,12 +256,12 @@ namespace glz::detail
          }
       }
       ++c;
-      
+
       if (digit_table[uint8_t(*c)]) {
          v = v * 10 + (*c - '0');
          ++c;
       }
-      
+
       uint64_t i = v;
 
       if (digit_table[uint8_t(*c)]) {
@@ -436,7 +436,7 @@ namespace glz::detail
          }
       }
       ++c;
-      
+
       if (digit_table[uint8_t(*c)]) {
          v = v * 10 + (*c - '0');
          ++c;
@@ -659,12 +659,12 @@ namespace glz::detail
          }
       }
       ++c;
-      
+
       if (digit_table[uint8_t(*c)]) {
          v = v * 10 + (*c - '0');
          ++c;
       }
-      
+
       uint32_t i = v;
 
       if (digit_table[uint8_t(*c)]) {
@@ -782,7 +782,7 @@ namespace glz::detail
       }
       uint64_t i = v;
       ++c;
-      
+
       if (digit_table[uint8_t(*c)]) {
          i = i * 10 + (*c - '0');
          ++c;
@@ -919,12 +919,12 @@ namespace glz::detail
          }
       }
       ++c;
-      
+
       if (digit_table[uint8_t(*c)]) {
          v = v * 10 + (*c - '0');
          ++c;
       }
-      
+
       uint64_t i = v;
 
       if (digit_table[uint8_t(*c)]) {
