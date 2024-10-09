@@ -41,18 +41,17 @@ namespace glz::detail
    // But, this integer parsing is designed to be straightfoward and fast
    // Values like 1e6 are allowed because it enables less typing from the user
    // We allow only two exponent digits, as the JSON specification only requires support up to e53
-   
+
    // Valid JSON integer examples
    // 1234
    // 1234e1
    // 1e9
-   
-   
+
    // Invalid for this atoi algorithm
    // 1.234
    // 1234e-1
    // 0.0
-   
+
    // The standard JSON specification for numbers and the associated rules apply
 
    // *** We ensure that a decimal value being parsed will result in an error
