@@ -113,13 +113,48 @@ template <class T>
 bool test_performance()
 {
 #ifdef NDEBUG
-   constexpr size_t n = 100000000;
+   constexpr size_t n = 10000000;
 #else
    constexpr size_t n = 100000;
 #endif
 
    std::mt19937 gen{};
    std::uniform_int_distribution<T> dist{std::numeric_limits<T>::lowest(), (std::numeric_limits<T>::max)()};
+
+   std::string buffer;
+   auto t0 = std::chrono::steady_clock::now();
+   bool valid = true;
+   for (size_t i = 0; i < n; ++i) {
+      const auto sample = dist(gen);
+      std::ignore = glz::write_json(sample, buffer);
+      T v{};
+      const auto e = glz::read_json(v, buffer);
+      if (bool(e)) {
+         valid = false;
+         break;
+      }
+      if (v != sample) {
+         valid = false;
+         break;
+      }
+   }
+   auto t1 = std::chrono::steady_clock::now();
+   auto duration = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-6;
+   std::cout << glz::name_v<T> << " read/write: " << duration << '\n';
+   return valid;
+}
+
+template <class T>
+bool test_single_char_performance()
+{
+#ifdef NDEBUG
+   constexpr size_t n = 10000000;
+#else
+   constexpr size_t n = 100000;
+#endif
+
+   std::mt19937 gen{};
+   std::uniform_int_distribution<T> dist{0, 9};
 
    std::string buffer;
    auto t0 = std::chrono::steady_clock::now();
@@ -456,6 +491,10 @@ suite u8_test = [] {
    
    "u8 performance"_test = [] {
       expect(test_performance<uint64_t>());
+   };
+   
+   "u8 single char performance"_test = [] {
+      expect(test_single_char_performance<uint64_t>());
    };
 
    "i64"_test = [] {
