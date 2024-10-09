@@ -75,9 +75,6 @@ namespace glz::detail
          }
          if (*c == 'e' || *c == 'E') [[unlikely]] {
             ++c;
-            if (*c == '-') {
-               return false;
-            }
             c += (*c == '+');
             if (not is_digit(*c)) [[unlikely]] {
                return false;
@@ -147,9 +144,6 @@ namespace glz::detail
          return valid && (*c != '.');
       }
 
-      if (*c == '-') {
-         return false;
-      }
       c += (*c == '+');
 
       if (not is_digit(*c)) [[unlikely]] {
@@ -200,9 +194,6 @@ namespace glz::detail
          }
          if (*c == 'e' || *c == 'E') [[unlikely]] {
             ++c;
-            if (*c == '-') {
-               return false;
-            }
             c += (*c == '+');
             if (not is_digit(*c)) [[unlikely]] {
                return false;
@@ -310,9 +301,6 @@ namespace glz::detail
          return valid && (*c != '.');
       }
 
-      if (*c == '-') {
-         return false;
-      }
       c += (*c == '+');
 
       if (not is_digit(*c)) [[unlikely]] {
@@ -395,9 +383,6 @@ namespace glz::detail
          }
          if (*c == 'e' || *c == 'E') [[unlikely]] {
             ++c;
-            if (*c == '-') {
-               return false;
-            }
             c += (*c == '+');
             if (not is_digit(*c)) [[unlikely]] {
                return false;
@@ -587,9 +572,6 @@ namespace glz::detail
          return (*c != '.');
       }
 
-      if (*c == '-') {
-         return false;
-      }
       c += (*c == '+');
 
       if (not is_digit(*c)) [[unlikely]] {
@@ -633,9 +615,6 @@ namespace glz::detail
          }
          if (*c == 'e' || *c == 'E') [[unlikely]] {
             ++c;
-            if (*c == '-') {
-               return false;
-            }
             c += (*c == '+');
             if (not is_digit(*c)) [[unlikely]] {
                return false;
@@ -710,9 +689,6 @@ namespace glz::detail
          return valid && (*c != '.');
       }
 
-      if (*c == '-') {
-         return false;
-      }
       c += (*c == '+');
 
       if (not is_digit(*c)) [[unlikely]] {
@@ -770,9 +746,6 @@ namespace glz::detail
          }
          if (*c == 'e' || *c == 'E') [[unlikely]] {
             ++c;
-            if (*c == '-') {
-               return false;
-            }
             c += (*c == '+');
             if (not is_digit(*c)) [[unlikely]] {
                return false;
@@ -880,9 +853,6 @@ namespace glz::detail
          return valid && (*c != '.');
       }
 
-      if (*c == '-') {
-         return false;
-      }
       c += (*c == '+');
 
       if (not is_digit(*c)) [[unlikely]] {
@@ -921,9 +891,6 @@ namespace glz::detail
          }
          if (*c == 'e' || *c == 'E') [[unlikely]] {
             ++c;
-            if (*c == '-') {
-               return false;
-            }
             c += (*c == '+');
             if (not is_digit(*c)) [[unlikely]] {
                return false;
@@ -1106,9 +1073,6 @@ namespace glz::detail
          return (*c != '.');
       }
 
-      if (*c == '-') {
-         return false;
-      }
       c += (*c == '+');
 
       if (not is_digit(*c)) [[unlikely]] {
