@@ -88,8 +88,6 @@ namespace glz::detail
             if (is_digit(*c)) {
                return false;
             }
-            v = 0;
-            return true;
          }
          v = 0;
          return true;
@@ -125,13 +123,6 @@ namespace glz::detail
             i = i * 10 + (*c - '0');
             ++c;
          }
-         else {
-            goto finish;
-         }
-      }
-
-      if (is_digit(*c)) [[unlikely]] {
-         return false;
       }
 
    finish:
@@ -139,9 +130,11 @@ namespace glz::detail
          ++c;
       }
       else {
-         const bool valid = i <= (std::numeric_limits<T>::max)();
+         if (is_digit(*c) || (*c == '.')) [[unlikely]] {
+            return false;
+         }
          v = T(i);
-         return valid && (*c != '.');
+         return i <= (std::numeric_limits<T>::max)();
       }
 
       c += (*c == '+');
@@ -174,9 +167,8 @@ namespace glz::detail
          static constexpr std::array<uint16_t, 5> powers_of_ten{1, 10, 100, 1000, 10000};
          i *= powers_of_ten[exp];
       }
-      const bool valid = i <= (std::numeric_limits<T>::max)();
       v = T(i);
-      return valid;
+      return i <= (std::numeric_limits<T>::max)();
    }
 
    template <std::integral T, class Char>
@@ -207,8 +199,6 @@ namespace glz::detail
             if (is_digit(*c)) {
                return false;
             }
-            v = 0;
-            return true;
          }
          v = 0;
          return true;
@@ -283,22 +273,17 @@ namespace glz::detail
          i = i * 10 + (*c - '0');
          ++c;
       }
-      else {
-         goto finish;
-      }
-
-      if (is_digit(*c)) [[unlikely]] {
-         return false;
-      }
 
    finish:
       if (*c == 'e' || *c == 'E') {
          ++c;
       }
       else {
-         const bool valid = i <= (std::numeric_limits<T>::max)();
+         if (is_digit(*c) || (*c == '.')) [[unlikely]] {
+            return false;
+         }
          v = T(i);
-         return valid && (*c != '.');
+         return i <= (std::numeric_limits<T>::max)();
       }
 
       c += (*c == '+');
@@ -317,9 +302,8 @@ namespace glz::detail
       }
 
       i *= powers_of_ten_int[exp];
-      const bool valid = i <= (std::numeric_limits<T>::max)();
       v = T(i);
-      return valid;
+      return i <= (std::numeric_limits<T>::max)();
    }
 
    struct value128 final
@@ -396,8 +380,6 @@ namespace glz::detail
             if (is_digit(*c)) {
                return false;
             }
-            v = 0;
-            return true;
          }
          v = 0;
          return true;
@@ -556,20 +538,16 @@ namespace glz::detail
          }
          ++c;
       }
-      else {
-         goto finish;
-      }
-
-      if (is_digit(*c)) [[unlikely]] {
-         return false;
-      }
 
    finish:
       if (*c == 'e' || *c == 'E') {
          ++c;
       }
       else {
-         return (*c != '.');
+         if (is_digit(*c) || (*c == '.')) [[unlikely]] {
+            return false;
+         }
+         return true;
       }
 
       c += (*c == '+');
@@ -628,8 +606,6 @@ namespace glz::detail
             if (is_digit(*c)) {
                return false;
             }
-            v = 0;
-            return true;
          }
          v = 0;
          return true;
@@ -665,13 +641,6 @@ namespace glz::detail
             i = i * 10 + (*c - '0');
             ++c;
          }
-         else {
-            goto finish;
-         }
-      }
-
-      if (is_digit(*c)) [[unlikely]] {
-         return false;
       }
 
    finish:
@@ -679,14 +648,16 @@ namespace glz::detail
          ++c;
       }
       else {
-         const bool valid = (i - sign) <= (std::numeric_limits<T>::max)();
+         if (is_digit(*c) || (*c == '.')) [[unlikely]] {
+            return false;
+         }
          if constexpr (sizeof(T) == 1) {
             v = T((uint8_t(i) ^ -sign) + sign);
          }
          else if constexpr (sizeof(T) == 2) {
             v = T((uint16_t(i) ^ -sign) + sign);
          }
-         return valid && (*c != '.');
+         return (i - sign) <= (std::numeric_limits<T>::max)();
       }
 
       c += (*c == '+');
@@ -719,14 +690,13 @@ namespace glz::detail
          static constexpr std::array<uint16_t, 5> powers_of_ten{1, 10, 100, 1000, 10000};
          i *= powers_of_ten[exp];
       }
-      const bool valid = (i - sign) <= (std::numeric_limits<T>::max)();
       if constexpr (sizeof(T) == 1) {
          v = T((uint8_t(i) ^ -sign) + sign);
       }
       else if constexpr (sizeof(T) == 2) {
          v = T((uint16_t(i) ^ -sign) + sign);
       }
-      return valid;
+      return (i - sign) <= (std::numeric_limits<T>::max)();
    }
 
    template <std::integral T, class Char>
@@ -759,8 +729,6 @@ namespace glz::detail
             if (is_digit(*c)) {
                return false;
             }
-            v = 0;
-            return true;
          }
          v = 0;
          return true;
@@ -835,22 +803,17 @@ namespace glz::detail
          i = i * 10 + (*c - '0');
          ++c;
       }
-      else {
-         goto finish;
-      }
-
-      if (is_digit(*c)) [[unlikely]] {
-         return false;
-      }
 
    finish:
       if (*c == 'e' || *c == 'E') {
          ++c;
       }
       else {
-         const bool valid = (i - sign) <= (std::numeric_limits<T>::max)();
+         if (is_digit(*c) || (*c == '.')) [[unlikely]] {
+            return false;
+         }
          v = T((uint32_t(i) ^ -sign) + sign);
-         return valid && (*c != '.');
+         return (i - sign) <= (std::numeric_limits<T>::max)();
       }
 
       c += (*c == '+');
@@ -869,9 +832,8 @@ namespace glz::detail
       }
 
       i *= powers_of_ten_int[exp];
-      const bool valid = (i - sign) <= (std::numeric_limits<T>::max)();
       v = T((uint32_t(i) ^ -sign) + sign);
-      return valid;
+      return (i - sign) <= (std::numeric_limits<T>::max)();
    }
 
    template <std::integral T, class Char>
@@ -904,8 +866,6 @@ namespace glz::detail
             if (is_digit(*c)) {
                return false;
             }
-            v = 0;
-            return true;
          }
          v = 0;
          return true;
@@ -1056,21 +1016,17 @@ namespace glz::detail
          }
          ++c;
       }
-      else {
-         goto finish;
-      }
-
-      if (is_digit(*c)) [[unlikely]] {
-         return false;
-      }
 
    finish:
       if (*c == 'e' || *c == 'E') {
          ++c;
       }
       else {
+         if (is_digit(*c) || (*c == '.')) [[unlikely]] {
+            return false;
+         }
          v = T((uint64_t(i) ^ -sign) + sign);
-         return (*c != '.');
+         return true;
       }
 
       c += (*c == '+');
@@ -1098,19 +1054,23 @@ namespace glz::detail
       return res.high == 0;
 #endif
    }
+   
+   static constexpr std::array<size_t, 4> int_buffer_lengths{8, 8, 16, 24};
 
    template <std::integral T, class Char>
    GLZ_ALWAYS_INLINE constexpr bool atoi(T& v, const Char*& it, const Char* end) noexcept
    {
+      // The number of characters needed at most for each type, rounded to nearest 8 bytes
+      constexpr auto buffer_length = int_buffer_lengths[std::bit_width(sizeof(T)) - 1];
       // We copy the rest of the buffer or 64 bytes into a null terminated buffer
-      std::array<char, 65> data{};
+      std::array<char, buffer_length> data{};
       const auto n = size_t(end - it);
       if (n > 0) [[likely]] {
-         if (n < 64) {
+         if (n < buffer_length) {
             std::memcpy(data.data(), it, n);
          }
          else {
-            std::memcpy(data.data(), it, 64);
+            std::memcpy(data.data(), it, buffer_length);
          }
 
          const auto start = data.data();
