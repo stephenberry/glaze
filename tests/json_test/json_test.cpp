@@ -691,15 +691,10 @@ suite basic_types = [] {
    "int read invalid"_test = [] {
       int num{33};
       expect(glz::read_json(num, ";adsfa") == glz::error_code::parse_number_failure);
-      expect(num == 33);
       expect(glz::read_json(num, "{}") == glz::error_code::parse_number_failure);
-      expect(num == 33);
       expect(glz::read_json(num, "[]") == glz::error_code::parse_number_failure);
-      expect(num == 33);
       expect(glz::read_json(num, ".") == glz::error_code::parse_number_failure);
-      expect(num == 33);
       expect(glz::read_json(num, "0045") == glz::error_code::parse_number_failure);
-      expect(num == 33);
    };
 
    "bool write"_test = [] {

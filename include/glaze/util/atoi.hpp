@@ -780,7 +780,7 @@ namespace glz::detail
             return false;
          }
       }
-      uint32_t i = v;
+      uint64_t i = v;
       ++c;
       
       if (digit_table[uint8_t(*c)]) {
