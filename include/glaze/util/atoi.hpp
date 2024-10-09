@@ -35,12 +35,25 @@ namespace glz::detail
 
    // We don't allow decimals in integer parsing
    // We don't allow negative exponents
-   // Thse cases can produce decimals which slower performance and add confusion
-   // to how the integer should be parsed (truncation, rounding, etc.)
+   // Thse cases can produce decimals which slow performance and add confusion
+   // as to how the integer should be parsed (truncation, rounding, etc.)
    // We allow parsing as a float and casting elsewhere when needed
    // But, this integer parsing is designed to be straightfoward and fast
    // Values like 1e6 are allowed because it enables less typing from the user
    // We allow only two exponent digits, as the JSON specification only requires support up to e53
+   
+   // Valid JSON integer examples
+   // 1234
+   // 1234e1
+   // 1e9
+   
+   
+   // Invalid for this atoi algorithm
+   // 1.234
+   // 1234e-1
+   // 0.0
+   
+   // The standard JSON specification for numbers and the associated rules apply
 
    // *** We ensure that a decimal value being parsed will result in an error
    // 1.2 should not produce 1, but rather an error, even when a single field is parsed
