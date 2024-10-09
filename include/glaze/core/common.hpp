@@ -257,7 +257,7 @@ namespace glz
       };
 
       template <class T>
-      concept array_t = (!meta_value_t<T> && !str_t<T> && !(readable_map_t<T> || writable_map_t<T>) && range<T>);
+      concept array_t = (!meta_value_t<T> && !str_t<T> && !(readable_map_t<T> || writable_map_t<T>)&&range<T>);
 
       template <class T>
       concept readable_array_t =
@@ -341,7 +341,9 @@ namespace glz
       template <class T>
       concept nullable_t = !meta_value_t<T> && !str_t<T> && requires(T t) {
          bool(t);
-         { *t };
+         {
+            *t
+         };
       };
 
       template <class T>
