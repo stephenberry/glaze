@@ -4,6 +4,7 @@
 #define UT_RUN_TIME_ONLY
 
 #include <any>
+#include <atomic>
 #include <bitset>
 #include <chrono>
 #include <complex>
@@ -3098,8 +3099,8 @@ struct local_meta
    {
       static constexpr std::string_view name = "local_meta";
       using T = local_meta;
-      static constexpr auto value = glz::object("x", &T::x, "A comment for x", //
-                                                "y", &T::y, "A comment for y");
+      static constexpr auto value = glz::object("x", &T::x, //
+                                                "y", &T::y);
    };
 };
 
@@ -9660,6 +9661,26 @@ suite parse_ints_as_type_cast_doubles_test = [] {
       expect(v[0] == 1);
       expect(v[1] == 3);
       expect(v[2] == 5);
+   };
+};
+
+suite atomics = [] {
+   "atomics"_test = [] {
+      std::atomic<int> i{};
+      static_assert(glz::detail::is_atomic<decltype(i)>);
+      expect(not glz::read_json(i, R"(55)"));
+      expect(i.load() == 55);
+      
+      std::string buffer{};
+      expect(not glz::write_json(i, buffer));
+      expect(buffer == R"(55)");
+      
+      std::atomic<bool> b{};
+      expect(not glz::read_json(b, R"(true)"));
+      expect(b);
+      
+      expect(not glz::write_json(b, buffer));
+      expect(buffer == R"(true)");
    };
 };
 
