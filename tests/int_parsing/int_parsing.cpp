@@ -489,11 +489,11 @@ suite u8_test = [] {
 
    "u64 lengths"_test = [] { expect(test_lengths<uint64_t>()); };
    
-   "u8 performance"_test = [] {
+   "u64 performance"_test = [] {
       expect(test_performance<uint64_t>());
    };
    
-   "u8 single char performance"_test = [] {
+   "u64 single char performance"_test = [] {
       expect(test_single_char_performance<uint64_t>());
    };
 
@@ -535,6 +535,14 @@ suite u8_test = [] {
    };
 
    "i64 lengths"_test = [] { expect(test_lengths<int64_t>()); };
+   
+   "i64 performance"_test = [] {
+      expect(test_performance<int64_t>());
+   };
+   
+   "i64 single char performance"_test = [] {
+      expect(test_single_char_performance<int64_t>());
+   };
 };
 
 int main() { return 0; }
