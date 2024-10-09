@@ -67,7 +67,7 @@ namespace glz::detail
       t['e'] = true;
       return t;
    }();
-   
+
    inline constexpr std::array<bool, 256> non_exp_table = [] {
       std::array<bool, 256> t{};
       t.fill(true);
