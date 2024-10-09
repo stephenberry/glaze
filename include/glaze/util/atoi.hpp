@@ -123,13 +123,6 @@ namespace glz::detail
             i = i * 10 + (*c - '0');
             ++c;
          }
-         else {
-            goto finish;
-         }
-      }
-
-      if (is_digit(*c)) [[unlikely]] {
-         return false;
       }
 
    finish:
@@ -137,6 +130,9 @@ namespace glz::detail
          ++c;
       }
       else {
+         if (is_digit(*c)) [[unlikely]] {
+            return false;
+         }
          const bool valid = i <= (std::numeric_limits<T>::max)();
          v = T(i);
          return valid && (*c != '.');
@@ -279,19 +275,15 @@ namespace glz::detail
          i = i * 10 + (*c - '0');
          ++c;
       }
-      else {
-         goto finish;
-      }
-
-      if (is_digit(*c)) [[unlikely]] {
-         return false;
-      }
 
    finish:
       if (*c == 'e' || *c == 'E') {
          ++c;
       }
       else {
+         if (is_digit(*c)) [[unlikely]] {
+            return false;
+         }
          const bool valid = i <= (std::numeric_limits<T>::max)();
          v = T(i);
          return valid && (*c != '.');
@@ -550,19 +542,15 @@ namespace glz::detail
          }
          ++c;
       }
-      else {
-         goto finish;
-      }
-
-      if (is_digit(*c)) [[unlikely]] {
-         return false;
-      }
 
    finish:
       if (*c == 'e' || *c == 'E') {
          ++c;
       }
       else {
+         if (is_digit(*c)) [[unlikely]] {
+            return false;
+         }
          return (*c != '.');
       }
 
@@ -657,13 +645,6 @@ namespace glz::detail
             i = i * 10 + (*c - '0');
             ++c;
          }
-         else {
-            goto finish;
-         }
-      }
-
-      if (is_digit(*c)) [[unlikely]] {
-         return false;
       }
 
    finish:
@@ -671,6 +652,9 @@ namespace glz::detail
          ++c;
       }
       else {
+         if (is_digit(*c)) [[unlikely]] {
+            return false;
+         }
          const bool valid = (i - sign) <= (std::numeric_limits<T>::max)();
          if constexpr (sizeof(T) == 1) {
             v = T((uint8_t(i) ^ -sign) + sign);
@@ -825,19 +809,15 @@ namespace glz::detail
          i = i * 10 + (*c - '0');
          ++c;
       }
-      else {
-         goto finish;
-      }
-
-      if (is_digit(*c)) [[unlikely]] {
-         return false;
-      }
 
    finish:
       if (*c == 'e' || *c == 'E') {
          ++c;
       }
       else {
+         if (is_digit(*c)) [[unlikely]] {
+            return false;
+         }
          const bool valid = (i - sign) <= (std::numeric_limits<T>::max)();
          v = T((uint32_t(i) ^ -sign) + sign);
          return valid && (*c != '.');
@@ -1044,19 +1024,15 @@ namespace glz::detail
          }
          ++c;
       }
-      else {
-         goto finish;
-      }
-
-      if (is_digit(*c)) [[unlikely]] {
-         return false;
-      }
 
    finish:
       if (*c == 'e' || *c == 'E') {
          ++c;
       }
       else {
+         if (is_digit(*c)) [[unlikely]] {
+            return false;
+         }
          v = T((uint64_t(i) ^ -sign) + sign);
          return (*c != '.');
       }
