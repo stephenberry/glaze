@@ -1972,16 +1972,6 @@ suite read_tests = [] {
       }
    };
 
-   "multiple int from double text"_test = [] {
-      std::vector<int> v;
-      std::string buffer = "[1.66, 3.24, 5.555]";
-      expect(glz::read_json(v, buffer) == glz::error_code::none);
-      expect(v.size() == 3);
-      expect(v[0] == 1);
-      expect(v[1] == 3);
-      expect(v[2] == 5);
-   };
-
    "comments"_test = [] {
       {
          std::string b = "1/*a comment*/00";
@@ -2251,32 +2241,27 @@ suite read_tests = [] {
       {
          auto in = R"(1.000000000000000000000000000000001)";
          uint64_t res{};
-         expect(glz::read_json(res, in) == glz::error_code::none);
-         expect(res == 1);
+         expect(glz::read_json(res, in) == glz::error_code::parse_number_failure);
       }
       {
          auto in = R"(1.99999999999999999999999999)";
          uint64_t res{};
-         expect(glz::read_json(res, in) == glz::error_code::none);
-         expect(res == 2);
+         expect(glz::read_json(res, in) == glz::error_code::parse_number_failure);
       }
       {
          auto in = R"(122.2345678910)";
          uint64_t res{};
-         expect(glz::read_json(res, in) == glz::error_code::none);
-         expect(res == 122);
+         expect(glz::read_json(res, in) == glz::error_code::parse_number_failure);
       }
       {
          auto in = R"(100000.300e7)";
          uint64_t res{};
-         expect(glz::read_json(res, in) == glz::error_code::none);
-         expect(res == 1000003000000);
+         expect(glz::read_json(res, in) == glz::error_code::parse_number_failure);
       }
       {
          auto in = R"(1002.34e+9)";
          uint64_t res{};
-         expect(glz::read_json(res, in) == glz::error_code::none);
-         expect(res == 1002340000000);
+         expect(glz::read_json(res, in) == glz::error_code::parse_number_failure);
       }
       {
          std::mt19937_64 gen{std::random_device{}()};
@@ -2287,8 +2272,7 @@ suite read_tests = [] {
             expect(not glz::write_json(f, buffer));
             int64_t integer{};
             auto ec = glz::read_json(integer, buffer);
-            expect(not ec) << glz::format_error(ec, buffer);
-            expect(integer == static_cast<int64_t>(f));
+            expect(ec);
          }
       }
    };
@@ -6232,18 +6216,13 @@ suite number_reading = [] {
    "long float"_test = [] {
       std::string_view buffer{"0.00666666666666666600"};
       int i{5};
-      expect(!glz::read_json(i, buffer));
-      expect(i == 0);
+      expect(glz::read_json(i, buffer));
 
       buffer = "0.0000666666666666666600";
-      i = 5;
-      expect(!glz::read_json(i, buffer));
-      expect(i == 0);
+      expect(glz::read_json(i, buffer));
 
       buffer = "0.00000000000000000000000";
-      i = 5;
-      expect(!glz::read_json(i, buffer));
-      expect(i == 0);
+      expect(glz::read_json(i, buffer));
 
       buffer = "6E19";
       expect(glz::read_json(i, buffer) == glz::error_code::parse_number_failure);
@@ -6255,18 +6234,13 @@ suite number_reading = [] {
    "long float uint64_t"_test = [] {
       std::string_view buffer{"0.00666666666666666600"};
       uint64_t i{5};
-      expect(!glz::read_json(i, buffer));
-      expect(i == 0);
+      expect(glz::read_json(i, buffer));
 
       buffer = "0.0000666666666666666600";
-      i = 5;
-      expect(!glz::read_json(i, buffer));
-      expect(i == 0);
+      expect(glz::read_json(i, buffer));
 
       buffer = "0.00000000000000000000000";
-      i = 5;
-      expect(!glz::read_json(i, buffer));
-      expect(i == 0);
+      expect(glz::read_json(i, buffer));
 
       buffer = "6E19";
       expect(glz::read_json(i, buffer) == glz::error_code::parse_number_failure);
@@ -6275,8 +6249,7 @@ suite number_reading = [] {
       expect(glz::read_json(i, buffer) == glz::error_code::parse_number_failure);
 
       buffer = "0.1e-999999999999999999";
-      expect(!glz::read_json(i, buffer));
-      expect(i == 0);
+      expect(glz::read_json(i, buffer));
    };
 
    "long float double"_test = [] {
@@ -9675,6 +9648,18 @@ suite ndjson_options = [] {
          glz::read<glz::opts{.format = glz::NDJSON, .error_on_unknown_keys = false, .validate_skipped = true}>(
             assets, "{\"x\":1}\n{\"x\":2}");
       expect(not ec);
+   };
+};
+
+suite parse_ints_as_type_cast_doubles_test = [] {
+   "multiple int from double"_test = [] {
+      std::vector<int> v;
+      std::string buffer = "[1.66, 3.24, 5.555]";
+      expect(not glz::read<glz::opts{.parse_ints_as_type_cast_doubles = true}>(v, buffer));
+      expect(v.size() == 3);
+      expect(v[0] == 1);
+      expect(v[1] == 3);
+      expect(v[2] == 5);
    };
 };
 

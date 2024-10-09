@@ -11,11 +11,11 @@
 #include "glaze/core/context.hpp"
 #include "glaze/core/meta.hpp"
 #include "glaze/core/opts.hpp"
+#include "glaze/util/atoi.hpp"
 #include "glaze/util/compare.hpp"
 #include "glaze/util/convert.hpp"
 #include "glaze/util/expected.hpp"
 #include "glaze/util/inline.hpp"
-#include "glaze/util/stoui64.hpp"
 #include "glaze/util/string_literal.hpp"
 
 namespace glz::detail
