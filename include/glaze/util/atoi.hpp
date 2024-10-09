@@ -159,6 +159,7 @@ namespace glz::detail
       uint8_t exp = c[-1] - '0';
       if (is_digit(*c)) {
          exp = exp * 10 + (*c - '0');
+         ++c;
       }
       if constexpr (sizeof(T) == 1) {
          if (exp > 2) [[unlikely]] {
@@ -321,6 +322,7 @@ namespace glz::detail
       uint8_t exp = c[-1] - '0';
       if (is_digit(*c)) {
          exp = exp * 10 + (*c - '0');
+         ++c;
       }
       if (exp > 9) [[unlikely]] {
          return false;
@@ -597,6 +599,7 @@ namespace glz::detail
       uint8_t exp = c[-1] - '0';
       if (is_digit(*c)) {
          exp = exp * 10 + (*c - '0');
+         ++c;
       }
       if (exp > 19) [[unlikely]] {
          return false;
@@ -719,6 +722,7 @@ namespace glz::detail
       uint8_t exp = c[-1] - '0';
       if (is_digit(*c)) {
          exp = exp * 10 + (*c - '0');
+         ++c;
       }
       if constexpr (sizeof(T) == 1) {
          if (exp > 2) [[unlikely]] {
@@ -888,6 +892,7 @@ namespace glz::detail
       uint8_t exp = c[-1] - '0';
       if (is_digit(*c)) {
          exp = exp * 10 + (*c - '0');
+         ++c;
       }
       if (exp > 9) [[unlikely]] {
          return false;
@@ -1113,6 +1118,7 @@ namespace glz::detail
       uint8_t exp = c[-1] - '0';
       if (is_digit(*c)) {
          exp = exp * 10 + (*c - '0');
+         ++c;
       }
       if (exp > 18) [[unlikely]] {
          return false;
