@@ -21,9 +21,6 @@ namespace glz::detail
          using V = typename std::atomic<T>::value_type;
          V temp{};
          read<Format>::template op<Opts>(temp, ctx, it, end);
-         if (bool(ctx.error)) [[unlikely]] {
-            return;
-         }
          value.store(temp);
       }
    };

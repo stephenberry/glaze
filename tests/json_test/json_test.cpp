@@ -3098,8 +3098,8 @@ struct local_meta
    {
       static constexpr std::string_view name = "local_meta";
       using T = local_meta;
-      static constexpr auto value = glz::object("x", &T::x, "A comment for x", //
-                                                "y", &T::y, "A comment for y");
+      static constexpr auto value = glz::object("x", &T::x, //
+                                                "y", &T::y);
    };
 };
 
