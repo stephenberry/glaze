@@ -226,7 +226,7 @@ namespace glz
       // this concept requires that T is a writeable string. It can be resized, appended to, or assigned to
       template <class T>
       concept string_t = str_t<T> && !std::same_as<std::decay_t<T>, std::string_view> &&
-                         (has_assign<T> || has_resize<T> || has_append<T>);
+                         (has_assign<T> || resizable<T> || has_append<T>);
 
       template <class T>
       concept char_array_t = str_t<T> && std::is_array_v<std::remove_pointer_t<std::remove_reference_t<T>>>;
