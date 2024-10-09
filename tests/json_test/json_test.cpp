@@ -7141,8 +7141,8 @@ struct glz::meta<unknown_fields_2>
 {
    using T = unknown_fields_2;
    static constexpr auto value = object("a", &T::a, "missing", &T::missing, "end", &T::end);
-   static constexpr auto unknown_write{ &T::extra };
-   static constexpr auto unknown_read{ &T::extra };
+   static constexpr auto unknown_write{&T::extra};
+   static constexpr auto unknown_read{&T::extra};
 };
 
 suite unknown_fields_member_test = [] {
@@ -7171,7 +7171,7 @@ suite unknown_fields_member_test = [] {
          R"({"a":"aaa","missing":"","end":"end","unk":"zzz","unk2":{"sub":3,"sub2":[{"a":"b"}]},"unk3":[]})";
       expect(glz::write_json(obj) == result);
    };
-   
+
    "unknown_fields_2"_test = [] {
       unknown_fields_2 obj{};
       std::string buffer = R"({"unk":"zzz", "unk2":{"sub":3,"sub2":[{"a":"b"}]},"unk3":[]})";
