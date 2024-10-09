@@ -88,8 +88,6 @@ namespace glz::detail
             if (is_digit(*c)) {
                return false;
             }
-            v = 0;
-            return true;
          }
          v = 0;
          return true;
@@ -207,8 +205,6 @@ namespace glz::detail
             if (is_digit(*c)) {
                return false;
             }
-            v = 0;
-            return true;
          }
          v = 0;
          return true;
@@ -396,8 +392,6 @@ namespace glz::detail
             if (is_digit(*c)) {
                return false;
             }
-            v = 0;
-            return true;
          }
          v = 0;
          return true;
@@ -628,8 +622,6 @@ namespace glz::detail
             if (is_digit(*c)) {
                return false;
             }
-            v = 0;
-            return true;
          }
          v = 0;
          return true;
@@ -759,8 +751,6 @@ namespace glz::detail
             if (is_digit(*c)) {
                return false;
             }
-            v = 0;
-            return true;
          }
          v = 0;
          return true;
@@ -904,8 +894,6 @@ namespace glz::detail
             if (is_digit(*c)) {
                return false;
             }
-            v = 0;
-            return true;
          }
          v = 0;
          return true;
