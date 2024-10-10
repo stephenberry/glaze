@@ -37,6 +37,7 @@ bool test_samples()
          break;
       }
    }
+   expect(valid) << sample;
 
    // test max and min values
    sample = (std::numeric_limits<T>::max)();
@@ -513,6 +514,15 @@ suite u8_test = [] {
 
       expect(not glz::read_json(value, "[1e10, 12e10]"));
       expect(value == std::array<V, 2>{10000000000, 120000000000});
+      
+      expect(not glz::read_json(value, "[469490602178186175, 469490602178186175]"));
+      expect(value == std::array<V, 2>{469490602178186175ull, 469490602178186175ull});
+      
+      expect(not glz::read_json(value, "[-356839120500334504, -356839120500334504]"));
+      expect(value == std::array<V, 2>{-356839120500334504, -356839120500334504});
+      
+      expect(not glz::read_json(value, "[-5594732989048119398, -5594732989048119398]"));
+      expect(value == std::array<V, 2>{-5594732989048119398, -5594732989048119398});
 
       expect(glz::read_json(value, "[1e-1]"));
       expect(glz::read_json(value, "[1.0]"));
