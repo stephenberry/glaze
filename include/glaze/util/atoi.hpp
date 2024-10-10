@@ -144,7 +144,7 @@ namespace glz::detail
    
    template <class T>
    inline constexpr std::array<uint64_t, 256> peak_negative = [] {
-      constexpr auto peak{ size_t((std::numeric_limits<std::decay_t<T>>::max)()) + 1 };
+      constexpr auto peak{ uint64_t((std::numeric_limits<std::decay_t<T>>::max)()) + 1 };
       std::array<uint64_t, 256> t{};
       t['0'] = (peak - 0) / 10;
       t['1'] = (peak - 1) / 10;
