@@ -126,9 +126,9 @@ namespace glz::detail
    }();
    
    template <class T>
-   inline constexpr std::array<T, 256> peak_positive = [] {
-      constexpr auto peak{ (std::numeric_limits<T>::max)() };
-      std::array<T, 256> t{};
+   inline constexpr std::array<std::decay_t<T>, 256> peak_positive = [] {
+      constexpr auto peak{ (std::numeric_limits<std::decay_t<T>>::max)() };
+      std::array<std::decay_t<T>, 256> t{};
       t['0'] = (peak - 0) / 10;
       t['1'] = (peak - 1) / 10;
       t['2'] = (peak - 2) / 10;
@@ -143,9 +143,9 @@ namespace glz::detail
    }();
    
    template <class T>
-   inline constexpr std::array<T, 256> peak_negative = [] {
-      constexpr auto peak{ size_t(std::numeric_limits<T>::max()) + 1 };
-      std::array<T, 256> t{};
+   inline constexpr std::array<std::decay_t<T>, 256> peak_negative = [] {
+      constexpr auto peak{ size_t((std::numeric_limits<std::decay_t<T>>::max)()) + 1 };
+      std::array<std::decay_t<T>, 256> t{};
       t['0'] = (peak - 0) / 10;
       t['1'] = (peak - 1) / 10;
       t['2'] = (peak - 2) / 10;
@@ -1172,19 +1172,22 @@ namespace glz::detail
             if (v > peak_negative<T>[uint8_t(*c)]) [[unlikely]] {
                return false;
             }
+            v = (-v) * 10 - (*c - '0');
          }
          else {
             if (v > peak_positive<T>[uint8_t(*c)]) [[unlikely]] {
                return false;
             }
+            v = v * 10 + (*c - '0');
          }
-         v = v * 10 + (*c - '0');
          ++c;
          if (digit_table[uint8_t(*c)]) [[unlikely]] {
             return false;
          }
       }
-      v = sign ? -v : v;
+      else {
+         v = sign ? -v : v;
+      }
 
    finish:
       if (*c == 'e' || *c == 'E') {
