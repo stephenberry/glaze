@@ -1193,11 +1193,11 @@ namespace glz::detail
       
 #if defined(__SIZEOF_INT128__)
       const __uint128_t res = __uint128_t(v) * powers_of_ten_int[exp];
-      v = T(res);
+      v = uint64_t(res);
       return res <= (std::numeric_limits<T>::max)();
 #else
       const auto res = full_multiplication(v, powers_of_ten_int[exp]);
-      v = T(res.low);
+      v = uint64_t(res.low);
       return res.high == 0;
 #endif
    }
