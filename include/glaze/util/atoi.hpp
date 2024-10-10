@@ -90,21 +90,7 @@ namespace glz::detail
       t['9'] = true;
       return t;
    }();
-
-   inline constexpr std::array<bool, 256> non_zero_digit_table = [] {
-      std::array<bool, 256> t{};
-      t['1'] = true;
-      t['2'] = true;
-      t['3'] = true;
-      t['4'] = true;
-      t['5'] = true;
-      t['6'] = true;
-      t['7'] = true;
-      t['8'] = true;
-      t['9'] = true;
-      return t;
-   }();
-
+   
    inline constexpr std::array<bool, 256> digit_or_dec_table = [] {
       std::array<bool, 256> t{};
       t['0'] = true;
@@ -120,14 +106,32 @@ namespace glz::detail
       t['.'] = true;
       return t;
    }();
+   
+   inline constexpr std::array<bool, 256> digit_exp_dec_table = [] {
+      std::array<bool, 256> t{};
+      t['0'] = true;
+      t['1'] = true;
+      t['2'] = true;
+      t['3'] = true;
+      t['4'] = true;
+      t['5'] = true;
+      t['6'] = true;
+      t['7'] = true;
+      t['8'] = true;
+      t['9'] = true;
+      t['.'] = true;
+      t['e'] = true;
+      t['E'] = true;
+      return t;
+   }();
 
    template <std::integral T, class Char>
       requires(std::is_unsigned_v<T> && (sizeof(T) == 1 || sizeof(T) == 2))
    GLZ_ALWAYS_INLINE constexpr bool atoi(T& v, const Char*& c) noexcept
    {
       v = *c - '0';
-      if (not non_zero_digit_table[uint8_t(*c)]) [[unlikely]] {
-         if (*c == '0') [[likely]] {
+      if (v == 0 || v > 9) {
+         if (v == 0) [[likely]] {
             ++c;
             if (digit_or_dec_table[uint8_t(*c)]) [[unlikely]] {
                return false;
@@ -236,8 +240,8 @@ namespace glz::detail
    GLZ_ALWAYS_INLINE constexpr bool atoi(T& v, const Char*& c) noexcept
    {
       v = *c - '0';
-      if (not non_zero_digit_table[uint8_t(*c)]) [[unlikely]] {
-         if (*c == '0') [[likely]] {
+      if (v == 0 || v > 9) {
+         if (v == 0) [[likely]] {
             ++c;
             if (digit_or_dec_table[uint8_t(*c)]) [[unlikely]] {
                return false;
@@ -415,42 +419,24 @@ namespace glz::detail
       requires(std::is_unsigned_v<T> && sizeof(T) == 8)
    GLZ_ALWAYS_INLINE constexpr bool atoi(T& v, const Char*& c) noexcept
    {
-      v = *c - '0';
-      if (not non_zero_digit_table[uint8_t(*c)]) [[unlikely]] {
-         if (*c == '0') [[likely]] {
-            ++c;
-            if (digit_or_dec_table[uint8_t(*c)]) [[unlikely]] {
-               return false;
-            }
-            if (*c == 'e' || *c == 'E') {
-               c += (*c == '+');
-               if (not digit_table[uint8_t(*c)]) [[unlikely]] {
-                  return false;
-               }
-               if (digit_table[uint8_t(*c)]) {
-                  ++c;
-               }
-               if (digit_table[uint8_t(*c)]) {
-                  ++c;
-               }
-               if (digit_table[uint8_t(*c)]) {
-                  return false;
-               }
-            }
-            return true;
-         }
-         else [[unlikely]] {
-            return false;
-         }
+      if (digit_table[uint8_t(*c)]) [[likely]] {
+         v = *c - '0';
+         ++c;
       }
-      ++c;
-
+      else [[unlikely]] {
+         return false;
+      }
+      
       if (digit_table[uint8_t(*c)]) {
          v = v * 10 + (*c - '0');
          ++c;
       }
       else {
          goto finish;
+      }
+      
+      if (c[-2] == '0') [[unlikely]] {
+         return false;
       }
 
       if (digit_table[uint8_t(*c)]) {
@@ -642,8 +628,8 @@ namespace glz::detail
       const bool sign = *c == '-';
       c += sign;
       v = *c - '0';
-      if (not non_zero_digit_table[uint8_t(*c)]) [[unlikely]] {
-         if (*c == '0') [[likely]] {
+      if (v == 0 || v > 9) {
+         if (v == 0) [[likely]] {
             ++c;
             if (digit_or_dec_table[uint8_t(*c)]) [[unlikely]] {
                return false;
@@ -764,8 +750,8 @@ namespace glz::detail
       const bool sign = *c == '-';
       c += sign;
       v = *c - '0';
-      if (not non_zero_digit_table[uint8_t(*c)]) [[unlikely]] {
-         if (*c == '0') [[likely]] {
+      if (v == 0 || v > 9) {
+         if (v == 0) [[likely]] {
             ++c;
             if (digit_or_dec_table[uint8_t(*c)]) [[unlikely]] {
                return false;
@@ -902,8 +888,8 @@ namespace glz::detail
       const bool sign = *c == '-';
       c += sign;
       v = *c - '0';
-      if (not non_zero_digit_table[uint8_t(*c)]) [[unlikely]] {
-         if (*c == '0') [[likely]] {
+      if (v == 0 || v > 9) {
+         if (v == 0) [[likely]] {
             ++c;
             if (digit_or_dec_table[uint8_t(*c)]) [[unlikely]] {
                return false;
