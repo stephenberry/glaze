@@ -1208,8 +1208,15 @@ namespace glz::detail
    {
       bool valid;
       uint64_t x;
+#if defined(__SIZEOF_INT128__)
       return *c == '-' ? (++c, valid = atoi_signed_impl<T, Char, 1>(x, c), v = -x, valid)
                         : (valid = atoi_signed_impl<T, Char, 0>(x, c), v = x, valid);
+#else
+      const uint8_t sign = *c == '-';
+      return sign ? (++c, valid = atoi_signed_impl<T, Char, 1>(x, c), v = T((x ^ -sign) + sign), valid)
+                        : (valid = atoi_signed_impl<T, Char, 0>(x, c), v = x, valid);
+#endif
+      
    }
 
    static constexpr std::array<size_t, 4> int_buffer_lengths{8, 8, 16, 24};
