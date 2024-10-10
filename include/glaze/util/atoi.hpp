@@ -1221,7 +1221,7 @@ namespace glz::detail
       return (res - sign) <= (std::numeric_limits<T>::max)();
 #else
       const auto res = full_multiplication(uint64_t(v), powers_of_ten_int[exp]);
-      v = sign ? -T(uint64_t(res.low)) : T(res.low);
+      v = T((uint64_t(res) ^ -sign) + sign);
       return res.high == 0 && ((res.low - sign) <= (std::numeric_limits<T>::max)());
 #endif
    }
