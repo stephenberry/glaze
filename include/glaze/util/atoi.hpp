@@ -126,9 +126,9 @@ namespace glz::detail
    }();
    
    template <class T>
-   inline constexpr std::array<std::decay_t<T>, 256> peak_positive = [] {
+   inline constexpr std::array<uint64_t, 256> peak_positive = [] {
       constexpr auto peak{ (std::numeric_limits<std::decay_t<T>>::max)() };
-      std::array<std::decay_t<T>, 256> t{};
+      std::array<uint64_t, 256> t{};
       t['0'] = (peak - 0) / 10;
       t['1'] = (peak - 1) / 10;
       t['2'] = (peak - 2) / 10;
@@ -143,9 +143,9 @@ namespace glz::detail
    }();
    
    template <class T>
-   inline constexpr std::array<std::decay_t<T>, 256> peak_negative = [] {
+   inline constexpr std::array<uint64_t, 256> peak_negative = [] {
       constexpr auto peak{ size_t((std::numeric_limits<std::decay_t<T>>::max)()) + 1 };
-      std::array<std::decay_t<T>, 256> t{};
+      std::array<uint64_t, 256> t{};
       t['0'] = (peak - 0) / 10;
       t['1'] = (peak - 1) / 10;
       t['2'] = (peak - 2) / 10;
@@ -944,13 +944,10 @@ namespace glz::detail
       return (i - sign) <= (std::numeric_limits<T>::max)();
    }
    
-   template <std::integral T, class Char>
+   template <std::integral T, class Char, uint8_t Sign>
       requires(std::is_signed_v<T> && sizeof(T) == 8)
-   GLZ_ALWAYS_INLINE constexpr bool atoi(T& v, const Char*& c) noexcept
+   GLZ_ALWAYS_INLINE constexpr bool atoi_signed_impl(uint64_t& v, const Char*& c) noexcept
    {
-      const uint8_t sign = *c == '-';
-      c += sign;
-      
       if (digit_table[uint8_t(*c)]) [[likely]] {
          v = *c - '0';
          ++c;
@@ -965,7 +962,6 @@ namespace glz::detail
       }
       else {
          if (not exp_dec_table[uint8_t(*c)]) {
-            v = sign ? -v : v;
             return true;
          }
          goto finish;
@@ -981,7 +977,6 @@ namespace glz::detail
       }
       else {
          if (not exp_dec_table[uint8_t(*c)]) {
-            v = sign ? -v : v;
             return true;
          }
          goto finish;
@@ -993,7 +988,6 @@ namespace glz::detail
       }
       else {
          if (not exp_dec_table[uint8_t(*c)]) {
-            v = sign ? -v : v;
             return true;
          }
          goto finish;
@@ -1005,7 +999,6 @@ namespace glz::detail
       }
       else {
          if (not exp_dec_table[uint8_t(*c)]) {
-            v = sign ? -v : v;
             return true;
          }
          goto finish;
@@ -1017,7 +1010,6 @@ namespace glz::detail
       }
       else {
          if (not exp_dec_table[uint8_t(*c)]) {
-            v = sign ? -v : v;
             return true;
          }
          goto finish;
@@ -1029,7 +1021,6 @@ namespace glz::detail
       }
       else {
          if (not exp_dec_table[uint8_t(*c)]) {
-            v = sign ? -v : v;
             return true;
          }
          goto finish;
@@ -1041,7 +1032,6 @@ namespace glz::detail
       }
       else {
          if (not exp_dec_table[uint8_t(*c)]) {
-            v = sign ? -v : v;
             return true;
          }
          goto finish;
@@ -1053,7 +1043,6 @@ namespace glz::detail
       }
       else {
          if (not exp_dec_table[uint8_t(*c)]) {
-            v = sign ? -v : v;
             return true;
          }
          goto finish;
@@ -1065,7 +1054,6 @@ namespace glz::detail
       }
       else {
          if (not exp_dec_table[uint8_t(*c)]) {
-            v = sign ? -v : v;
             return true;
          }
          goto finish;
@@ -1077,7 +1065,6 @@ namespace glz::detail
       }
       else {
          if (not exp_dec_table[uint8_t(*c)]) {
-            v = sign ? -v : v;
             return true;
          }
          goto finish;
@@ -1089,7 +1076,6 @@ namespace glz::detail
       }
       else {
          if (not exp_dec_table[uint8_t(*c)]) {
-            v = sign ? -v : v;
             return true;
          }
          goto finish;
@@ -1101,7 +1087,6 @@ namespace glz::detail
       }
       else {
          if (not exp_dec_table[uint8_t(*c)]) {
-            v = sign ? -v : v;
             return true;
          }
          goto finish;
@@ -1113,7 +1098,6 @@ namespace glz::detail
       }
       else {
          if (not exp_dec_table[uint8_t(*c)]) {
-            v = sign ? -v : v;
             return true;
          }
          goto finish;
@@ -1125,7 +1109,6 @@ namespace glz::detail
       }
       else {
          if (not exp_dec_table[uint8_t(*c)]) {
-            v = sign ? -v : v;
             return true;
          }
          goto finish;
@@ -1137,7 +1120,6 @@ namespace glz::detail
       }
       else {
          if (not exp_dec_table[uint8_t(*c)]) {
-            v = sign ? -v : v;
             return true;
          }
          goto finish;
@@ -1149,7 +1131,6 @@ namespace glz::detail
       }
       else {
          if (not exp_dec_table[uint8_t(*c)]) {
-            v = sign ? -v : v;
             return true;
          }
          goto finish;
@@ -1161,32 +1142,27 @@ namespace glz::detail
       }
       else {
          if (not exp_dec_table[uint8_t(*c)]) {
-            v = sign ? -v : v;
             return true;
          }
          goto finish;
       }
 
       if (digit_table[uint8_t(*c)]) {
-         if (sign) {
+         if constexpr (Sign) {
             if (v > peak_negative<T>[uint8_t(*c)]) [[unlikely]] {
                return false;
             }
-            v = (-v) * 10 - (*c - '0');
          }
          else {
             if (v > peak_positive<T>[uint8_t(*c)]) [[unlikely]] {
                return false;
             }
-            v = v * 10 + (*c - '0');
          }
+         v = v * 10 + (*c - '0');
          ++c;
          if (digit_table[uint8_t(*c)]) [[unlikely]] {
             return false;
          }
-      }
-      else {
-         v = sign ? -v : v;
       }
 
    finish:
@@ -1214,16 +1190,26 @@ namespace glz::detail
       if (exp > 19) [[unlikely]] {
          return false;
       }
-
+      
 #if defined(__SIZEOF_INT128__)
       const __uint128_t res = __uint128_t(v) * powers_of_ten_int[exp];
-      v = T((uint64_t(res) ^ -sign) + sign);
-      return (res - sign) <= (std::numeric_limits<T>::max)();
+      v = T(res);
+      return res <= (std::numeric_limits<T>::max)();
 #else
-      const auto res = full_multiplication(uint64_t(v), powers_of_ten_int[exp]);
-      v = T((uint64_t(res.low) ^ -sign) + sign);
-      return res.high == 0 && ((res.low - sign) <= (std::numeric_limits<T>::max)());
+      const auto res = full_multiplication(v, powers_of_ten_int[exp]);
+      v = T(res.low);
+      return res.high == 0;
 #endif
+   }
+   
+   template <std::integral T, class Char>
+      requires(std::is_signed_v<T> && sizeof(T) == 8)
+   GLZ_ALWAYS_INLINE constexpr bool atoi(T& v, const Char*& c) noexcept
+   {
+      bool valid;
+      uint64_t x;
+      return *c == '-' ? (++c, valid = atoi_signed_impl<T, Char, 1>(x, c), v = -x, valid)
+                        : (valid = atoi_signed_impl<T, Char, 0>(x, c), v = x, valid);
    }
 
    static constexpr std::array<size_t, 4> int_buffer_lengths{8, 8, 16, 24};
