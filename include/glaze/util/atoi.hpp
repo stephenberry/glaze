@@ -129,42 +129,29 @@ namespace glz::detail
       requires(std::is_unsigned_v<T> && (sizeof(T) == 1 || sizeof(T) == 2))
    GLZ_ALWAYS_INLINE constexpr bool atoi(T& v, const Char*& c) noexcept
    {
-      v = *c - '0';
-      if (v == 0 || v > 9) {
-         if (v == 0) [[likely]] {
-            ++c;
-            if (digit_or_dec_table[uint8_t(*c)]) [[unlikely]] {
-               return false;
-            }
-            if (*c == 'e' || *c == 'E') {
-               c += (*c == '+');
-               if (not digit_table[uint8_t(*c)]) [[unlikely]] {
-                  return false;
-               }
-               if (digit_table[uint8_t(*c)]) {
-                  ++c;
-               }
-               if (digit_table[uint8_t(*c)]) {
-                  ++c;
-               }
-               if (digit_table[uint8_t(*c)]) {
-                  return false;
-               }
-            }
-            return true;
-         }
-         else [[unlikely]] {
-            return false;
-         }
-      }
-      ++c;
-
-      if (digit_table[uint8_t(*c)]) {
-         v = v * 10 + (*c - '0');
+      if (digit_table[uint8_t(*c)]) [[likely]] {
+         v = *c - '0';
          ++c;
       }
-
+      else [[unlikely]] {
+         return false;
+      }
+      
       uint32_t i = v;
+      if (digit_table[uint8_t(*c)]) {
+         i = i * 10 + (*c - '0');
+         ++c;
+      }
+      else {
+         if (not exp_dec_table[uint8_t(*c)]) {
+            return true;
+         }
+         goto finish;
+      }
+      
+      if (c[-2] == '0') [[unlikely]] {
+         return false;
+      }
 
       if (digit_table[uint8_t(*c)]) {
          i = i * 10 + (*c - '0');
@@ -239,42 +226,29 @@ namespace glz::detail
       requires(std::is_unsigned_v<T> && sizeof(T) == 4)
    GLZ_ALWAYS_INLINE constexpr bool atoi(T& v, const Char*& c) noexcept
    {
-      v = *c - '0';
-      if (v == 0 || v > 9) {
-         if (v == 0) [[likely]] {
-            ++c;
-            if (digit_or_dec_table[uint8_t(*c)]) [[unlikely]] {
-               return false;
-            }
-            if (*c == 'e' || *c == 'E') {
-               c += (*c == '+');
-               if (not digit_table[uint8_t(*c)]) [[unlikely]] {
-                  return false;
-               }
-               if (digit_table[uint8_t(*c)]) {
-                  ++c;
-               }
-               if (digit_table[uint8_t(*c)]) {
-                  ++c;
-               }
-               if (digit_table[uint8_t(*c)]) {
-                  return false;
-               }
-            }
-            return true;
-         }
-         else [[unlikely]] {
-            return false;
-         }
-      }
-      ++c;
-
-      if (digit_table[uint8_t(*c)]) {
-         v = v * 10 + (*c - '0');
+      if (digit_table[uint8_t(*c)]) [[likely]] {
+         v = *c - '0';
          ++c;
       }
-
+      else [[unlikely]] {
+         return false;
+      }
+      
       uint64_t i = v;
+      if (digit_table[uint8_t(*c)]) {
+         i = i * 10 + (*c - '0');
+         ++c;
+      }
+      else {
+         if (not exp_dec_table[uint8_t(*c)]) {
+            return true;
+         }
+         goto finish;
+      }
+      
+      if (c[-2] == '0') [[unlikely]] {
+         return false;
+      }
 
       if (digit_table[uint8_t(*c)]) {
          i = i * 10 + (*c - '0');
@@ -432,6 +406,9 @@ namespace glz::detail
          ++c;
       }
       else {
+         if (not exp_dec_table[uint8_t(*c)]) {
+            return true;
+         }
          goto finish;
       }
       
@@ -625,44 +602,33 @@ namespace glz::detail
       requires(std::is_signed_v<T> && (sizeof(T) == 1 || sizeof(T) == 2))
    GLZ_ALWAYS_INLINE constexpr bool atoi(T& v, const Char*& c) noexcept
    {
-      const bool sign = *c == '-';
+      const uint8_t sign = *c == '-';
       c += sign;
-      v = *c - '0';
-      if (v == 0 || v > 9) {
-         if (v == 0) [[likely]] {
-            ++c;
-            if (digit_or_dec_table[uint8_t(*c)]) [[unlikely]] {
-               return false;
-            }
-            if (*c == 'e' || *c == 'E') {
-               c += (*c == '+');
-               if (not digit_table[uint8_t(*c)]) [[unlikely]] {
-                  return false;
-               }
-               if (digit_table[uint8_t(*c)]) {
-                  ++c;
-               }
-               if (digit_table[uint8_t(*c)]) {
-                  ++c;
-               }
-               if (digit_table[uint8_t(*c)]) {
-                  return false;
-               }
-            }
-            return true;
-         }
-         else [[unlikely]] {
-            return false;
-         }
-      }
-      ++c;
-
-      if (digit_table[uint8_t(*c)]) {
-         v = v * 10 + (*c - '0');
+      
+      if (digit_table[uint8_t(*c)]) [[likely]] {
+         v = *c - '0';
          ++c;
       }
-
+      else [[unlikely]] {
+         return false;
+      }
+      
       uint32_t i = v;
+      if (digit_table[uint8_t(*c)]) {
+         i = i * 10 + (*c - '0');
+         ++c;
+      }
+      else {
+         if (not exp_dec_table[uint8_t(*c)]) {
+            v *= sign ? -1 : 1;
+            return true;
+         }
+         goto finish;
+      }
+      
+      if (c[-2] == '0') [[unlikely]] {
+         return false;
+      }
 
       if (digit_table[uint8_t(*c)]) {
          i = i * 10 + (*c - '0');
@@ -747,45 +713,32 @@ namespace glz::detail
       requires(std::is_signed_v<T> && (sizeof(T) == 4))
    GLZ_ALWAYS_INLINE constexpr bool atoi(T& v, const Char*& c) noexcept
    {
-      const bool sign = *c == '-';
+      const uint8_t sign = *c == '-';
       c += sign;
-      v = *c - '0';
-      if (v == 0 || v > 9) {
-         if (v == 0) [[likely]] {
-            ++c;
-            if (digit_or_dec_table[uint8_t(*c)]) [[unlikely]] {
-               return false;
-            }
-            if (*c == 'e' || *c == 'E') {
-               c += (*c == '+');
-               if (not digit_table[uint8_t(*c)]) [[unlikely]] {
-                  return false;
-               }
-               if (digit_table[uint8_t(*c)]) {
-                  ++c;
-               }
-               if (digit_table[uint8_t(*c)]) {
-                  ++c;
-               }
-               if (digit_table[uint8_t(*c)]) {
-                  return false;
-               }
-            }
-            return true;
-         }
-         else [[unlikely]] {
-            return false;
-         }
+      
+      if (digit_table[uint8_t(*c)]) [[likely]] {
+         v = *c - '0';
+         ++c;
       }
+      else [[unlikely]] {
+         return false;
+      }
+      
       uint64_t i = v;
-      ++c;
-
       if (digit_table[uint8_t(*c)]) {
          i = i * 10 + (*c - '0');
          ++c;
       }
       else {
+         if (not exp_dec_table[uint8_t(*c)]) {
+            v *= sign ? -1 : 1;
+            return true;
+         }
          goto finish;
+      }
+      
+      if (c[-2] == '0') [[unlikely]] {
+         return false;
       }
 
       if (digit_table[uint8_t(*c)]) {
@@ -885,44 +838,33 @@ namespace glz::detail
       requires(std::is_signed_v<T> && (sizeof(T) == 8))
    GLZ_ALWAYS_INLINE constexpr bool atoi(T& v, const Char*& c) noexcept
    {
-      const bool sign = *c == '-';
+      const uint8_t sign = *c == '-';
       c += sign;
-      v = *c - '0';
-      if (v == 0 || v > 9) {
-         if (v == 0) [[likely]] {
-            ++c;
-            if (digit_or_dec_table[uint8_t(*c)]) [[unlikely]] {
-               return false;
-            }
-            if (*c == 'e' || *c == 'E') {
-               c += (*c == '+');
-               if (not digit_table[uint8_t(*c)]) [[unlikely]] {
-                  return false;
-               }
-               if (digit_table[uint8_t(*c)]) {
-                  ++c;
-               }
-               if (digit_table[uint8_t(*c)]) {
-                  ++c;
-               }
-               if (digit_table[uint8_t(*c)]) {
-                  return false;
-               }
-            }
-            return true;
-         }
-         else [[unlikely]] {
-            return false;
-         }
-      }
-      ++c;
-
-      if (digit_table[uint8_t(*c)]) {
-         v = v * 10 + (*c - '0');
+      
+      if (digit_table[uint8_t(*c)]) [[likely]] {
+         v = *c - '0';
          ++c;
       }
-
+      else [[unlikely]] {
+         return false;
+      }
+      
       uint64_t i = v;
+      if (digit_table[uint8_t(*c)]) {
+         i = i * 10 + (*c - '0');
+         ++c;
+      }
+      else {
+         if (not exp_dec_table[uint8_t(*c)]) {
+            v *= sign ? -1 : 1;
+            return true;
+         }
+         goto finish;
+      }
+      
+      if (c[-2] == '0') [[unlikely]] {
+         return false;
+      }
 
       if (digit_table[uint8_t(*c)]) {
          i = i * 10 + (*c - '0');
