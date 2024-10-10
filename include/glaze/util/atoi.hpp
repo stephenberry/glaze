@@ -124,10 +124,10 @@ namespace glz::detail
       t['E'] = true;
       return t;
    }();
-   
+
    template <class T>
    inline constexpr std::array<uint64_t, 256> peak_positive = [] {
-      constexpr auto peak{ (std::numeric_limits<std::decay_t<T>>::max)() };
+      constexpr auto peak{(std::numeric_limits<std::decay_t<T>>::max)()};
       std::array<uint64_t, 256> t{};
       t['0'] = (peak - 0) / 10;
       t['1'] = (peak - 1) / 10;
@@ -141,10 +141,10 @@ namespace glz::detail
       t['9'] = (peak - 9) / 10;
       return t;
    }();
-   
+
    template <class T>
    inline constexpr std::array<uint64_t, 256> peak_negative = [] {
-      constexpr auto peak{ uint64_t((std::numeric_limits<std::decay_t<T>>::max)()) + 1 };
+      constexpr auto peak{uint64_t((std::numeric_limits<std::decay_t<T>>::max)()) + 1};
       std::array<uint64_t, 256> t{};
       t['0'] = (peak - 0) / 10;
       t['1'] = (peak - 1) / 10;
@@ -943,7 +943,7 @@ namespace glz::detail
       v = T((uint32_t(i) ^ -sign) + sign);
       return (i - sign) <= (std::numeric_limits<T>::max)();
    }
-   
+
    template <std::integral T, class Char, uint8_t Sign>
       requires(std::is_signed_v<T> && sizeof(T) == 8)
    GLZ_ALWAYS_INLINE constexpr bool atoi_signed_impl(uint64_t& v, const Char*& c) noexcept
@@ -1190,7 +1190,7 @@ namespace glz::detail
       if (exp > 19) [[unlikely]] {
          return false;
       }
-      
+
 #if defined(__SIZEOF_INT128__)
       const __uint128_t res = __uint128_t(v) * powers_of_ten_int[exp];
       v = uint64_t(res);
@@ -1201,7 +1201,7 @@ namespace glz::detail
       return res.high == 0 && (v <= (9223372036854775807ull + Sign));
 #endif
    }
-   
+
    template <std::integral T, class Char>
       requires(std::is_signed_v<T> && sizeof(T) == 8)
    GLZ_ALWAYS_INLINE constexpr bool atoi(T& v, const Char*& c) noexcept
@@ -1209,7 +1209,7 @@ namespace glz::detail
       bool valid;
       uint64_t x;
       return *c == '-' ? (++c, valid = atoi_signed_impl<T, Char, 1>(x, c), v = -x, valid)
-                        : (valid = atoi_signed_impl<T, Char, 0>(x, c), v = x, valid);
+                       : (valid = atoi_signed_impl<T, Char, 0>(x, c), v = x, valid);
    }
 
    static constexpr std::array<size_t, 4> int_buffer_lengths{8, 8, 16, 24};
