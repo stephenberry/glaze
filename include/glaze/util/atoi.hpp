@@ -1217,7 +1217,7 @@ namespace glz::detail
 
 #if defined(__SIZEOF_INT128__)
       const __uint128_t res = __uint128_t(v) * powers_of_ten_int[exp];
-      v = sign ? -T(res) : T(res);
+      v = T((uint64_t(res) ^ -sign) + sign);
       return (res - sign) <= (std::numeric_limits<T>::max)();
 #else
       const auto res = full_multiplication(uint64_t(v), powers_of_ten_int[exp]);
