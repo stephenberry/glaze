@@ -124,6 +124,40 @@ namespace glz::detail
       t['E'] = true;
       return t;
    }();
+   
+   template <class T>
+   inline constexpr std::array<uint64_t, 256> peak_positive = [] {
+      constexpr auto peak{ (std::numeric_limits<std::decay_t<T>>::max)() };
+      std::array<uint64_t, 256> t{};
+      t['0'] = (peak - 0) / 10;
+      t['1'] = (peak - 1) / 10;
+      t['2'] = (peak - 2) / 10;
+      t['3'] = (peak - 3) / 10;
+      t['4'] = (peak - 4) / 10;
+      t['5'] = (peak - 5) / 10;
+      t['6'] = (peak - 6) / 10;
+      t['7'] = (peak - 7) / 10;
+      t['8'] = (peak - 8) / 10;
+      t['9'] = (peak - 9) / 10;
+      return t;
+   }();
+   
+   template <class T>
+   inline constexpr std::array<uint64_t, 256> peak_negative = [] {
+      constexpr auto peak{ uint64_t((std::numeric_limits<std::decay_t<T>>::max)()) + 1 };
+      std::array<uint64_t, 256> t{};
+      t['0'] = (peak - 0) / 10;
+      t['1'] = (peak - 1) / 10;
+      t['2'] = (peak - 2) / 10;
+      t['3'] = (peak - 3) / 10;
+      t['4'] = (peak - 4) / 10;
+      t['5'] = (peak - 5) / 10;
+      t['6'] = (peak - 6) / 10;
+      t['7'] = (peak - 7) / 10;
+      t['8'] = (peak - 8) / 10;
+      t['9'] = (peak - 9) / 10;
+      return t;
+   }();
 
    template <std::integral T, class Char>
       requires(std::is_unsigned_v<T> && (sizeof(T) == 1 || sizeof(T) == 2))
@@ -234,9 +268,8 @@ namespace glz::detail
          return false;
       }
 
-      uint64_t i = v;
       if (digit_table[uint8_t(*c)]) {
-         i = i * 10 + (*c - '0');
+         v = v * 10 + (*c - '0');
          ++c;
       }
       else {
@@ -251,72 +284,96 @@ namespace glz::detail
       }
 
       if (digit_table[uint8_t(*c)]) {
-         i = i * 10 + (*c - '0');
+         v = v * 10 + (*c - '0');
          ++c;
       }
       else {
+         if (not exp_dec_table[uint8_t(*c)]) {
+            return true;
+         }
          goto finish;
       }
 
       if (digit_table[uint8_t(*c)]) {
-         i = i * 10 + (*c - '0');
+         v = v * 10 + (*c - '0');
          ++c;
       }
       else {
+         if (not exp_dec_table[uint8_t(*c)]) {
+            return true;
+         }
          goto finish;
       }
 
       if (digit_table[uint8_t(*c)]) {
-         i = i * 10 + (*c - '0');
+         v = v * 10 + (*c - '0');
          ++c;
       }
       else {
+         if (not exp_dec_table[uint8_t(*c)]) {
+            return true;
+         }
          goto finish;
       }
 
       if (digit_table[uint8_t(*c)]) {
-         i = i * 10 + (*c - '0');
+         v = v * 10 + (*c - '0');
          ++c;
       }
       else {
+         if (not exp_dec_table[uint8_t(*c)]) {
+            return true;
+         }
          goto finish;
       }
 
       if (digit_table[uint8_t(*c)]) {
-         i = i * 10 + (*c - '0');
+         v = v * 10 + (*c - '0');
          ++c;
       }
       else {
+         if (not exp_dec_table[uint8_t(*c)]) {
+            return true;
+         }
          goto finish;
       }
 
       if (digit_table[uint8_t(*c)]) {
-         i = i * 10 + (*c - '0');
+         v = v * 10 + (*c - '0');
          ++c;
       }
       else {
+         if (not exp_dec_table[uint8_t(*c)]) {
+            return true;
+         }
          goto finish;
       }
 
       if (digit_table[uint8_t(*c)]) {
-         i = i * 10 + (*c - '0');
+         v = v * 10 + (*c - '0');
          ++c;
       }
       else {
+         if (not exp_dec_table[uint8_t(*c)]) {
+            return true;
+         }
          goto finish;
-      }
-
-      if (digit_table[uint8_t(*c)]) {
-         i = i * 10 + (*c - '0');
-         ++c;
       }
 
    finish:
-      if (*c == 'e' || *c == 'E') {
+      uint64_t i = v;
+      if (digit_table[uint8_t(*c)]) {
+         i = i * 10 + (*c - '0');
+         ++c;
+         if (digit_table[uint8_t(*c)]) [[unlikely]] {
+            return false;
+         }
+      }
+      if (*c == 'e' || *c == 'E') [[likely]] {
          ++c;
       }
-      else {
-         if (digit_table[uint8_t(*c)] || (*c == '.')) [[unlikely]] {
+      else [[unlikely]] {
+         if (*c == '.') [[unlikely]] {
             return false;
          }
          v = T(i);
@@ -421,6 +478,9 @@ namespace glz::detail
          ++c;
       }
       else {
+         if (not exp_dec_table[uint8_t(*c)]) {
+            return true;
+         }
          goto finish;
       }
 
@@ -429,6 +489,9 @@ namespace glz::detail
          ++c;
       }
       else {
+         if (not exp_dec_table[uint8_t(*c)]) {
+            return true;
+         }
          goto finish;
       }
 
@@ -437,6 +500,9 @@ namespace glz::detail
          ++c;
       }
       else {
+         if (not exp_dec_table[uint8_t(*c)]) {
+            return true;
+         }
          goto finish;
       }
 
@@ -445,6 +511,9 @@ namespace glz::detail
          ++c;
       }
       else {
+         if (not exp_dec_table[uint8_t(*c)]) {
+            return true;
+         }
          goto finish;
       }
 
@@ -453,6 +522,9 @@ namespace glz::detail
          ++c;
       }
       else {
+         if (not exp_dec_table[uint8_t(*c)]) {
+            return true;
+         }
          goto finish;
       }
 
@@ -461,6 +533,9 @@ namespace glz::detail
          ++c;
       }
       else {
+         if (not exp_dec_table[uint8_t(*c)]) {
+            return true;
+         }
          goto finish;
       }
 
@@ -469,6 +544,9 @@ namespace glz::detail
          ++c;
       }
       else {
+         if (not exp_dec_table[uint8_t(*c)]) {
+            return true;
+         }
          goto finish;
       }
 
@@ -477,6 +555,9 @@ namespace glz::detail
          ++c;
       }
       else {
+         if (not exp_dec_table[uint8_t(*c)]) {
+            return true;
+         }
          goto finish;
       }
 
@@ -485,6 +566,9 @@ namespace glz::detail
          ++c;
       }
       else {
+         if (not exp_dec_table[uint8_t(*c)]) {
+            return true;
+         }
          goto finish;
       }
 
@@ -493,6 +577,9 @@ namespace glz::detail
          ++c;
       }
       else {
+         if (not exp_dec_table[uint8_t(*c)]) {
+            return true;
+         }
          goto finish;
       }
 
@@ -501,6 +588,9 @@ namespace glz::detail
          ++c;
       }
       else {
+         if (not exp_dec_table[uint8_t(*c)]) {
+            return true;
+         }
          goto finish;
       }
 
@@ -509,6 +599,9 @@ namespace glz::detail
          ++c;
       }
       else {
+         if (not exp_dec_table[uint8_t(*c)]) {
+            return true;
+         }
          goto finish;
       }
 
@@ -517,6 +610,9 @@ namespace glz::detail
          ++c;
       }
       else {
+         if (not exp_dec_table[uint8_t(*c)]) {
+            return true;
+         }
          goto finish;
       }
 
@@ -525,6 +621,9 @@ namespace glz::detail
          ++c;
       }
       else {
+         if (not exp_dec_table[uint8_t(*c)]) {
+            return true;
+         }
          goto finish;
       }
 
@@ -533,6 +632,9 @@ namespace glz::detail
          ++c;
       }
       else {
+         if (not exp_dec_table[uint8_t(*c)]) {
+            return true;
+         }
          goto finish;
       }
 
@@ -541,6 +643,9 @@ namespace glz::detail
          ++c;
       }
       else {
+         if (not exp_dec_table[uint8_t(*c)]) {
+            return true;
+         }
          goto finish;
       }
 
@@ -549,16 +654,21 @@ namespace glz::detail
          ++c;
       }
       else {
+         if (not exp_dec_table[uint8_t(*c)]) {
+            return true;
+         }
          goto finish;
       }
 
       if (digit_table[uint8_t(*c)]) {
-         const bool valid = v <= (std::numeric_limits<T>::max)() / 10;
-         v = v * 10 + (*c - '0');
-         if (not valid || (v < 16)) {
+         if (v > peak_positive<T>[uint8_t(*c)]) [[unlikely]] {
             return false;
          }
+         v = v * 10 + (*c - '0');
          ++c;
+         if (digit_table[uint8_t(*c)]) [[unlikely]] {
+            return false;
+         }
       }
 
    finish:
@@ -566,7 +676,7 @@ namespace glz::detail
          ++c;
       }
       else {
-         if (digit_table[uint8_t(*c)] || (*c == '.')) [[unlikely]] {
+         if (*c == '.') [[unlikely]] {
             return false;
          }
          return true;
@@ -620,7 +730,7 @@ namespace glz::detail
       }
       else {
          if (not exp_dec_table[uint8_t(*c)]) {
-            v *= sign ? -1 : 1;
+            v = sign ? -v : v;
             return true;
          }
          goto finish;
@@ -731,7 +841,7 @@ namespace glz::detail
       }
       else {
          if (not exp_dec_table[uint8_t(*c)]) {
-            v *= sign ? -1 : 1;
+            v = sign ? -v : v;
             return true;
          }
          goto finish;
@@ -833,14 +943,11 @@ namespace glz::detail
       v = T((uint32_t(i) ^ -sign) + sign);
       return (i - sign) <= (std::numeric_limits<T>::max)();
    }
-
-   template <std::integral T, class Char>
-      requires(std::is_signed_v<T> && (sizeof(T) == 8))
-   GLZ_ALWAYS_INLINE constexpr bool atoi(T& v, const Char*& c) noexcept
+   
+   template <std::integral T, class Char, uint8_t Sign>
+      requires(std::is_signed_v<T> && sizeof(T) == 8)
+   GLZ_ALWAYS_INLINE constexpr bool atoi_signed_impl(uint64_t& v, const Char*& c) noexcept
    {
-      const uint8_t sign = *c == '-';
-      c += sign;
-
       if (digit_table[uint8_t(*c)]) [[likely]] {
          v = *c - '0';
          ++c;
@@ -849,14 +956,12 @@ namespace glz::detail
          return false;
       }
 
-      uint64_t i = v;
       if (digit_table[uint8_t(*c)]) {
-         i = i * 10 + (*c - '0');
+         v = v * 10 + (*c - '0');
          ++c;
       }
       else {
          if (not exp_dec_table[uint8_t(*c)]) {
-            v *= sign ? -1 : 1;
             return true;
          }
          goto finish;
@@ -867,140 +972,197 @@ namespace glz::detail
       }
 
       if (digit_table[uint8_t(*c)]) {
-         i = i * 10 + (*c - '0');
+         v = v * 10 + (*c - '0');
          ++c;
       }
       else {
+         if (not exp_dec_table[uint8_t(*c)]) {
+            return true;
+         }
          goto finish;
       }
 
       if (digit_table[uint8_t(*c)]) {
-         i = i * 10 + (*c - '0');
+         v = v * 10 + (*c - '0');
          ++c;
       }
       else {
+         if (not exp_dec_table[uint8_t(*c)]) {
+            return true;
+         }
          goto finish;
       }
 
       if (digit_table[uint8_t(*c)]) {
-         i = i * 10 + (*c - '0');
+         v = v * 10 + (*c - '0');
          ++c;
       }
       else {
+         if (not exp_dec_table[uint8_t(*c)]) {
+            return true;
+         }
          goto finish;
       }
 
       if (digit_table[uint8_t(*c)]) {
-         i = i * 10 + (*c - '0');
+         v = v * 10 + (*c - '0');
          ++c;
       }
       else {
+         if (not exp_dec_table[uint8_t(*c)]) {
+            return true;
+         }
          goto finish;
       }
 
       if (digit_table[uint8_t(*c)]) {
-         i = i * 10 + (*c - '0');
+         v = v * 10 + (*c - '0');
          ++c;
       }
       else {
+         if (not exp_dec_table[uint8_t(*c)]) {
+            return true;
+         }
          goto finish;
       }
 
       if (digit_table[uint8_t(*c)]) {
-         i = i * 10 + (*c - '0');
+         v = v * 10 + (*c - '0');
          ++c;
       }
       else {
+         if (not exp_dec_table[uint8_t(*c)]) {
+            return true;
+         }
          goto finish;
       }
 
       if (digit_table[uint8_t(*c)]) {
-         i = i * 10 + (*c - '0');
+         v = v * 10 + (*c - '0');
          ++c;
       }
       else {
+         if (not exp_dec_table[uint8_t(*c)]) {
+            return true;
+         }
          goto finish;
       }
 
       if (digit_table[uint8_t(*c)]) {
-         i = i * 10 + (*c - '0');
+         v = v * 10 + (*c - '0');
          ++c;
       }
       else {
+         if (not exp_dec_table[uint8_t(*c)]) {
+            return true;
+         }
          goto finish;
       }
 
       if (digit_table[uint8_t(*c)]) {
-         i = i * 10 + (*c - '0');
+         v = v * 10 + (*c - '0');
          ++c;
       }
       else {
+         if (not exp_dec_table[uint8_t(*c)]) {
+            return true;
+         }
          goto finish;
       }
 
       if (digit_table[uint8_t(*c)]) {
-         i = i * 10 + (*c - '0');
+         v = v * 10 + (*c - '0');
          ++c;
       }
       else {
+         if (not exp_dec_table[uint8_t(*c)]) {
+            return true;
+         }
          goto finish;
       }
 
       if (digit_table[uint8_t(*c)]) {
-         i = i * 10 + (*c - '0');
+         v = v * 10 + (*c - '0');
          ++c;
       }
       else {
+         if (not exp_dec_table[uint8_t(*c)]) {
+            return true;
+         }
          goto finish;
       }
 
       if (digit_table[uint8_t(*c)]) {
-         i = i * 10 + (*c - '0');
+         v = v * 10 + (*c - '0');
          ++c;
       }
       else {
+         if (not exp_dec_table[uint8_t(*c)]) {
+            return true;
+         }
          goto finish;
       }
 
       if (digit_table[uint8_t(*c)]) {
-         i = i * 10 + (*c - '0');
+         v = v * 10 + (*c - '0');
          ++c;
       }
       else {
+         if (not exp_dec_table[uint8_t(*c)]) {
+            return true;
+         }
          goto finish;
       }
 
       if (digit_table[uint8_t(*c)]) {
-         i = i * 10 + (*c - '0');
+         v = v * 10 + (*c - '0');
          ++c;
       }
       else {
+         if (not exp_dec_table[uint8_t(*c)]) {
+            return true;
+         }
          goto finish;
       }
 
       if (digit_table[uint8_t(*c)]) {
-         i = i * 10 + (*c - '0');
+         v = v * 10 + (*c - '0');
          ++c;
       }
       else {
+         if (not exp_dec_table[uint8_t(*c)]) {
+            return true;
+         }
          goto finish;
       }
 
       if (digit_table[uint8_t(*c)]) {
-         i = i * 10 + (*c - '0');
+         v = v * 10 + (*c - '0');
          ++c;
       }
       else {
+         if (not exp_dec_table[uint8_t(*c)]) {
+            return true;
+         }
          goto finish;
       }
 
       if (digit_table[uint8_t(*c)]) {
-         const bool valid = (i - sign) <= (std::numeric_limits<T>::max)() / 10;
-         i = i * 10 + (*c - '0');
-         if (not valid || ((i - sign) > (std::numeric_limits<T>::max)())) {
+         if constexpr (Sign) {
+            if (v > peak_negative<T>[uint8_t(*c)]) [[unlikely]] {
+               return false;
+            }
+         }
+         else {
+            if (v > peak_positive<T>[uint8_t(*c)]) [[unlikely]] {
+               return false;
+            }
+         }
+         v = v * 10 + (*c - '0');
+         ++c;
+         if (digit_table[uint8_t(*c)]) [[unlikely]] {
             return false;
          }
-         ++c;
       }
 
    finish:
@@ -1008,10 +1170,9 @@ namespace glz::detail
          ++c;
       }
       else {
-         if (digit_table[uint8_t(*c)] || (*c == '.')) [[unlikely]] {
+         if (*c == '.') [[unlikely]] {
             return false;
          }
-         v = T((uint64_t(i) ^ -sign) + sign);
          return true;
       }
 
@@ -1026,19 +1187,29 @@ namespace glz::detail
          exp = exp * 10 + (*c - '0');
          ++c;
       }
-      if (exp > 18) [[unlikely]] {
+      if (exp > 19) [[unlikely]] {
          return false;
       }
-
+      
 #if defined(__SIZEOF_INT128__)
-      const __uint128_t res = __uint128_t(i) * powers_of_ten_int[exp];
-      v = T((uint64_t(res) ^ -sign) + sign);
-      return (res - sign) <= (std::numeric_limits<T>::max)();
+      const __uint128_t res = __uint128_t(v) * powers_of_ten_int[exp];
+      v = uint64_t(res);
+      return v <= (9223372036854775807ull + Sign);
 #else
-      const auto res = full_multiplication(i, powers_of_ten_int[exp]);
-      v = T(res.low);
-      return res.high == 0;
+      const auto res = full_multiplication(v, powers_of_ten_int[exp]);
+      v = uint64_t(res.low);
+      return res.high == 0 && (v <= (9223372036854775807ull + Sign));
 #endif
+   }
+   
+   template <std::integral T, class Char>
+      requires(std::is_signed_v<T> && sizeof(T) == 8)
+   GLZ_ALWAYS_INLINE constexpr bool atoi(T& v, const Char*& c) noexcept
+   {
+      bool valid;
+      uint64_t x;
+      return *c == '-' ? (++c, valid = atoi_signed_impl<T, Char, 1>(x, c), v = -x, valid)
+                        : (valid = atoi_signed_impl<T, Char, 0>(x, c), v = x, valid);
    }
 
    static constexpr std::array<size_t, 4> int_buffer_lengths{8, 8, 16, 24};
