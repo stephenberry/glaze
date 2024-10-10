@@ -1194,11 +1194,11 @@ namespace glz::detail
 #if defined(__SIZEOF_INT128__)
       const __uint128_t res = __uint128_t(v) * powers_of_ten_int[exp];
       v = uint64_t(res);
-      return res <= (std::numeric_limits<T>::max)();
+      return v <= (9223372036854775807ull + Sign);
 #else
       const auto res = full_multiplication(v, powers_of_ten_int[exp]);
       v = uint64_t(res.low);
-      return res.high == 0;
+      return res.high == 0 && (v <= (9223372036854775807ull + Sign));
 #endif
    }
    
@@ -1208,15 +1208,8 @@ namespace glz::detail
    {
       bool valid;
       uint64_t x;
-#if defined(__SIZEOF_INT128__)
       return *c == '-' ? (++c, valid = atoi_signed_impl<T, Char, 1>(x, c), v = -x, valid)
                         : (valid = atoi_signed_impl<T, Char, 0>(x, c), v = x, valid);
-#else
-      const uint8_t sign = *c == '-';
-      return sign ? (++c, valid = atoi_signed_impl<T, Char, 1>(x, c), v = T((x ^ -sign) + sign), valid)
-                        : (valid = atoi_signed_impl<T, Char, 0>(x, c), v = x, valid);
-#endif
-      
    }
 
    static constexpr std::array<size_t, 4> int_buffer_lengths{8, 8, 16, 24};
