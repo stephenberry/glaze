@@ -421,6 +421,9 @@ namespace glz::detail
          ++c;
       }
       else {
+         if (not exp_dec_table[uint8_t(*c)]) {
+            return true;
+         }
          goto finish;
       }
 
@@ -429,6 +432,9 @@ namespace glz::detail
          ++c;
       }
       else {
+         if (not exp_dec_table[uint8_t(*c)]) {
+            return true;
+         }
          goto finish;
       }
 
@@ -437,6 +443,9 @@ namespace glz::detail
          ++c;
       }
       else {
+         if (not exp_dec_table[uint8_t(*c)]) {
+            return true;
+         }
          goto finish;
       }
 
@@ -445,6 +454,9 @@ namespace glz::detail
          ++c;
       }
       else {
+         if (not exp_dec_table[uint8_t(*c)]) {
+            return true;
+         }
          goto finish;
       }
 
@@ -453,6 +465,9 @@ namespace glz::detail
          ++c;
       }
       else {
+         if (not exp_dec_table[uint8_t(*c)]) {
+            return true;
+         }
          goto finish;
       }
 
@@ -461,6 +476,9 @@ namespace glz::detail
          ++c;
       }
       else {
+         if (not exp_dec_table[uint8_t(*c)]) {
+            return true;
+         }
          goto finish;
       }
 
@@ -469,6 +487,9 @@ namespace glz::detail
          ++c;
       }
       else {
+         if (not exp_dec_table[uint8_t(*c)]) {
+            return true;
+         }
          goto finish;
       }
 
@@ -477,6 +498,9 @@ namespace glz::detail
          ++c;
       }
       else {
+         if (not exp_dec_table[uint8_t(*c)]) {
+            return true;
+         }
          goto finish;
       }
 
@@ -485,6 +509,9 @@ namespace glz::detail
          ++c;
       }
       else {
+         if (not exp_dec_table[uint8_t(*c)]) {
+            return true;
+         }
          goto finish;
       }
 
@@ -493,6 +520,9 @@ namespace glz::detail
          ++c;
       }
       else {
+         if (not exp_dec_table[uint8_t(*c)]) {
+            return true;
+         }
          goto finish;
       }
 
@@ -501,6 +531,9 @@ namespace glz::detail
          ++c;
       }
       else {
+         if (not exp_dec_table[uint8_t(*c)]) {
+            return true;
+         }
          goto finish;
       }
 
@@ -509,6 +542,9 @@ namespace glz::detail
          ++c;
       }
       else {
+         if (not exp_dec_table[uint8_t(*c)]) {
+            return true;
+         }
          goto finish;
       }
 
@@ -517,6 +553,9 @@ namespace glz::detail
          ++c;
       }
       else {
+         if (not exp_dec_table[uint8_t(*c)]) {
+            return true;
+         }
          goto finish;
       }
 
@@ -525,6 +564,9 @@ namespace glz::detail
          ++c;
       }
       else {
+         if (not exp_dec_table[uint8_t(*c)]) {
+            return true;
+         }
          goto finish;
       }
 
@@ -533,6 +575,9 @@ namespace glz::detail
          ++c;
       }
       else {
+         if (not exp_dec_table[uint8_t(*c)]) {
+            return true;
+         }
          goto finish;
       }
 
@@ -541,6 +586,9 @@ namespace glz::detail
          ++c;
       }
       else {
+         if (not exp_dec_table[uint8_t(*c)]) {
+            return true;
+         }
          goto finish;
       }
 
@@ -549,6 +597,9 @@ namespace glz::detail
          ++c;
       }
       else {
+         if (not exp_dec_table[uint8_t(*c)]) {
+            return true;
+         }
          goto finish;
       }
 
@@ -559,6 +610,9 @@ namespace glz::detail
             return false;
          }
          ++c;
+         if (digit_table[uint8_t(*c)]) [[unlikely]] {
+            return false;
+         }
       }
 
    finish:
@@ -566,7 +620,7 @@ namespace glz::detail
          ++c;
       }
       else {
-         if (digit_table[uint8_t(*c)] || (*c == '.')) [[unlikely]] {
+         if (*c == '.') [[unlikely]] {
             return false;
          }
          return true;
