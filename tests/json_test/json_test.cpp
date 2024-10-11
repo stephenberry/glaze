@@ -4052,6 +4052,15 @@ suite ndjson_test = [] {
       auto out = glz::write_ndjson(x).value_or("error");
       expect(out == buffer) << out;
    };
+   
+   "empty json lines input"_test = [] {
+      std::vector<int> foo;
+      const auto json = glz::write_ndjson(foo).value();
+      expect(json == R"()");
+      std::vector<int> v{1, 2, 3};
+      expect(not glz::read_ndjson<>(v, json));
+      expect(v.size() == 0);
+   };
 };
 
 suite std_function_handling = [] {

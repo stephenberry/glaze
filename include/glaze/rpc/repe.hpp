@@ -153,7 +153,10 @@ namespace glz::repe
    size_t read_params(Value&& value, auto&& state, auto&& response)
    {
       glz::context ctx{};
-      auto [b, e] = read_iterators<Opts>(ctx, state.message);
+      auto [b, e] = read_iterators<Opts>(state.message);
+      if (state.message.empty()) [[unlikely]] {
+         ctx.error = error_code::no_read_input;
+      }
       if (bool(ctx.error)) [[unlikely]] {
          return 0;
       }
@@ -212,7 +215,10 @@ namespace glz::repe
    {
       repe::header h;
       context ctx{};
-      auto [b, e] = read_iterators<Opts>(ctx, buffer);
+      auto [b, e] = read_iterators<Opts>(buffer);
+      if (buffer.empty()) [[unlikely]] {
+         ctx.error = error_code::no_read_input;
+      }
       if (bool(ctx.error)) [[unlikely]] {
          return error_t{error_e::parse_error};
       }
@@ -1082,8 +1088,11 @@ namespace glz::repe
          auto& response = *(u_buffer->ptr);
 
          context ctx{};
-         auto [b, e] = read_iterators<Opts>(ctx, msg);
+         auto [b, e] = read_iterators<Opts>(msg);
          auto start = b;
+         if (msg.empty()) [[unlikely]] {
+            ctx.error = error_code::no_read_input;
+         }
 
          auto handle_error = [&](auto& it) {
             ctx.error = error_code::syntax_error;
