@@ -167,7 +167,7 @@ namespace glz
             out.resize(in.size() + padding_bytes);
          }
          size_t ix = 0;
-         auto [it, end] = read_iterators<Opts, true>(ctx, in);
+         auto [it, end] = read_iterators<Opts, true>(in);
          if (bool(ctx.error)) [[unlikely]] {
             return;
          }

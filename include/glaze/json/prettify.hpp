@@ -182,7 +182,7 @@ namespace glz
             out.resize(in.size() * 2);
          }
          size_t ix = 0;
-         auto [it, end] = read_iterators<Opts>(ctx, in);
+         auto [it, end] = read_iterators<Opts>(in);
          if (bool(ctx.error)) [[unlikely]] {
             return;
          }

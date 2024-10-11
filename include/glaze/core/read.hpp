@@ -12,18 +12,13 @@
 namespace glz
 {
    template <opts Opts, bool Padded = false>
-   auto read_iterators(is_context auto&& ctx, contiguous auto&& buffer) noexcept
+   auto read_iterators(contiguous auto&& buffer) noexcept
    {
       static_assert(sizeof(decltype(*buffer.data())) == 1);
 
       auto it = reinterpret_cast<const char*>(buffer.data());
       auto end = reinterpret_cast<const char*>(buffer.data()); // to be incremented
-
-      if (buffer.empty()) [[unlikely]] {
-         ctx.error = error_code::no_read_input;
-         return std::pair{it, end};
-      }
-
+      
       if constexpr (Padded) {
          end += buffer.size() - padding_bytes;
       }
@@ -41,9 +36,11 @@ namespace glz
       static_assert(sizeof(decltype(*buffer.data())) == 1);
       using Buffer = std::remove_reference_t<decltype(buffer)>;
 
-      if (buffer.empty()) [[unlikely]] {
-         ctx.error = error_code::no_read_input;
-         return {ctx.error, ctx.custom_error_message, 0, ctx.includer_error};
+      if constexpr (Opts.format != NDJSON) {
+         if (buffer.empty()) [[unlikely]] {
+            ctx.error = error_code::no_read_input;
+            return {ctx.error, ctx.custom_error_message, 0, ctx.includer_error};
+         }
       }
 
       constexpr bool use_padded = resizable<Buffer> && non_const_buffer<Buffer> && !has_disable_padding(Opts);
@@ -53,7 +50,7 @@ namespace glz
          buffer.resize(buffer.size() + padding_bytes);
       }
 
-      auto [it, end] = read_iterators<Opts, use_padded>(ctx, buffer);
+      auto [it, end] = read_iterators<Opts, use_padded>(buffer);
       auto start = it;
       if (bool(ctx.error)) [[unlikely]] {
          goto finish;
