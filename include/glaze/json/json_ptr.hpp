@@ -82,7 +82,7 @@ namespace glz
                         return;
                      }
                      else {
-                        skip_value<Opts>(ctx, it, end);
+                        skip_value<JSON>::op<Opts>(ctx, it, end);
                         if (bool(ctx.error)) [[unlikely]] {
                            return;
                         }
@@ -100,7 +100,7 @@ namespace glz
                   static constexpr auto n = stoui(key);
                   if constexpr (n) {
                      for_each<n.value()>([&](auto) {
-                        skip_value<Opts>(ctx, it, end);
+                        skip_value<JSON>::op<Opts>(ctx, it, end);
                         if (bool(ctx.error)) [[unlikely]] {
                            return;
                         }
@@ -146,7 +146,7 @@ namespace glz
                      return;
                   }
                   else {
-                     skip_value<Opts>(ctx, it, end);
+                     skip_value<JSON>::op<Opts>(ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]] {
                         return;
                      }

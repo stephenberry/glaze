@@ -10,14 +10,13 @@
 namespace glz
 {
    // format
-   inline constexpr uint32_t binary = 0; // same as BEVE format
-   inline constexpr uint32_t beve = 0;
-   inline constexpr uint32_t BSON = 5;
-   inline constexpr uint32_t json = 10;
+   inline constexpr uint32_t INVALID = 0;
+   inline constexpr uint32_t BEVE = 1;
+   inline constexpr uint32_t JSON = 10;
    inline constexpr uint32_t JSON_PTR = 20;
-   inline constexpr uint32_t ndjson = 100; // new line delimited JSON
+   inline constexpr uint32_t NDJSON = 100; // new line delimited JSON
    inline constexpr uint32_t MUSTACHE = 500;
-   inline constexpr uint32_t csv = 10000;
+   inline constexpr uint32_t CSV = 10000;
 
    // layout
    inline constexpr uint8_t rowwise = 0;
@@ -53,7 +52,7 @@ namespace glz
    struct opts
    {
       // USER CONFIGURABLE
-      uint32_t format = json;
+      uint32_t format = JSON;
       bool_t null_terminated = GLZ_NULL_TERMINATED; // Whether the input buffer is null terminated
       bool_t comments = false; // Support reading in JSONC style comments
       bool_t error_on_unknown_keys = true; // Error when an unknown key is encountered
@@ -78,6 +77,11 @@ namespace glz
 
       // The maximum precision type used for writing floats, higher precision floats will be cast down to this precision
       float_precision float_max_write_precision{};
+      bool_t parse_ints_as_type_cast_doubles{}; // By default Glaze rejects decimals and negative exponents when parsing
+                                                // integers
+      // Turn on this option to read JSON integers with double precision that is cast to the integer type
+      // Note: it is not recommended to use this option generally, instead use a floating point type if necessary or
+      // use glz::custom to define your desired conversion precision and approach (truncation vs rounding)
 
       bool_t bools_as_numbers = false; // Read and write booleans with 1's and 0's
 
@@ -308,7 +312,7 @@ namespace glz
    constexpr auto set_binary()
    {
       opts ret = Opts;
-      ret.format = binary;
+      ret.format = BEVE;
       return ret;
    }
 
@@ -316,7 +320,7 @@ namespace glz
    constexpr auto set_json()
    {
       opts ret = Opts;
-      ret.format = json;
+      ret.format = JSON;
       return ret;
    }
 }
@@ -325,83 +329,56 @@ namespace glz
 {
    namespace detail
    {
-      template <class T = void>
-      struct to_binary;
+      template <uint32_t Format = INVALID, class T = void>
+      struct to;
 
-      template <class T = void>
-      struct from_binary;
-      
-      template <class T = void>
-      struct to_bson;
+      template <uint32_t Format = INVALID, class T = void>
+      struct to_partial;
 
-      template <class T = void>
-      struct from_bson;
+      template <uint32_t Format = INVALID, class T = void>
+      struct from;
 
-      template <class T = void>
-      struct to_json;
-
-      template <class T = void>
-      struct from_json;
-
-      template <class T = void>
-      struct to_ndjson;
-
-      template <class T = void>
-      struct from_ndjson;
-
-      template <class T = void>
-      struct to_csv;
-
-      template <class T = void>
-      struct from_csv;
+      template <uint32_t Format = INVALID>
+      struct skip_value;
    }
 
    template <class T>
-   concept write_binary_supported = requires { detail::to_binary<std::remove_cvref_t<T>>{}; };
+   concept write_beve_supported = requires { detail::to<BEVE, std::remove_cvref_t<T>>{}; };
 
    template <class T>
-   concept read_binary_supported = requires { detail::from_binary<std::remove_cvref_t<T>>{}; };
-   
-   template <class T>
-   concept write_bson_supported = requires { detail::to_bson<std::remove_cvref_t<T>>{}; };
+   concept read_beve_supported = requires { detail::from<BEVE, std::remove_cvref_t<T>>{}; };
 
    template <class T>
-   concept read_bson_supported = requires { detail::from_bson<std::remove_cvref_t<T>>{}; };
+   concept write_json_supported = requires { detail::to<JSON, std::remove_cvref_t<T>>{}; };
 
    template <class T>
-   concept write_json_supported = requires { detail::to_json<std::remove_cvref_t<T>>{}; };
+   concept read_json_supported = requires { detail::from<JSON, std::remove_cvref_t<T>>{}; };
 
    template <class T>
-   concept read_json_supported = requires { detail::from_json<std::remove_cvref_t<T>>{}; };
+   concept write_ndjson_supported = requires { detail::to<NDJSON, std::remove_cvref_t<T>>{}; };
 
    template <class T>
-   concept write_ndjson_supported = requires { detail::to_ndjson<std::remove_cvref_t<T>>{}; };
+   concept read_ndjson_supported = requires { detail::from<NDJSON, std::remove_cvref_t<T>>{}; };
 
    template <class T>
-   concept read_ndjson_supported = requires { detail::from_ndjson<std::remove_cvref_t<T>>{}; };
+   concept write_csv_supported = requires { detail::to<CSV, std::remove_cvref_t<T>>{}; };
 
    template <class T>
-   concept write_csv_supported = requires { detail::to_csv<std::remove_cvref_t<T>>{}; };
-
-   template <class T>
-   concept read_csv_supported = requires { detail::from_csv<std::remove_cvref_t<T>>{}; };
+   concept read_csv_supported = requires { detail::from<CSV, std::remove_cvref_t<T>>{}; };
 
    template <uint32_t Format, class T>
    consteval bool write_format_supported()
    {
-      if constexpr (Format == binary) {
-         return write_binary_supported<T>;
+      if constexpr (Format == BEVE) {
+         return write_beve_supported<T>;
       }
-      else if constexpr (Format == BSON) {
-         return write_bson_supported<T>;
-      }
-      else if constexpr (Format == json) {
+      else if constexpr (Format == JSON) {
          return write_json_supported<T>;
       }
-      else if constexpr (Format == ndjson) {
+      else if constexpr (Format == NDJSON) {
          return write_ndjson_supported<T>;
       }
-      else if constexpr (Format == csv) {
+      else if constexpr (Format == CSV) {
          return write_csv_supported<T>;
       }
       else {
@@ -412,19 +389,16 @@ namespace glz
    template <uint32_t Format, class T>
    consteval bool read_format_supported()
    {
-      if constexpr (Format == binary) {
-         return read_binary_supported<T>;
+      if constexpr (Format == BEVE) {
+         return read_beve_supported<T>;
       }
-      if constexpr (Format == BSON) {
-         return read_bson_supported<T>;
-      }
-      else if constexpr (Format == json) {
+      else if constexpr (Format == JSON) {
          return read_json_supported<T>;
       }
-      else if constexpr (Format == ndjson) {
+      else if constexpr (Format == NDJSON) {
          return read_ndjson_supported<T>;
       }
-      else if constexpr (Format == csv) {
+      else if constexpr (Format == CSV) {
          return read_csv_supported<T>;
       }
       else {

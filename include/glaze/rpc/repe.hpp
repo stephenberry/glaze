@@ -285,7 +285,7 @@ namespace glz::repe
    [[nodiscard]] auto request_binary(H&& header)
    {
       header.empty = true; // because no value provided
-      return glz::write_binary(std::forward_as_tuple(std::forward<H>(header), nullptr));
+      return glz::write_beve(std::forward_as_tuple(std::forward<H>(header), nullptr));
    }
 
    template <class H = header>
@@ -304,7 +304,7 @@ namespace glz::repe
    template <class Value, class H = header>
    [[nodiscard]] auto request_binary(H&& header, Value&& value)
    {
-      return glz::write_binary(std::forward_as_tuple(std::forward<H>(header), std::forward<Value>(value)));
+      return glz::write_beve(std::forward_as_tuple(std::forward<H>(header), std::forward<Value>(value)));
    }
 
    // DESIGN NOTE: It might appear that we are locking ourselves into a poor design choice by using a runtime
@@ -325,7 +325,7 @@ namespace glz::repe
    {
       using Mtx = std::mutex*;
       using namespace glz::detail;
-      constexpr auto N = refl<T>.N;
+      constexpr auto N = reflect<T>::size;
       return [&]<size_t... I>(std::index_sequence<I...>) {
          return normal_map<sv, Mtx, N>(
             std::array<pair<sv, Mtx>, N>{pair<sv, Mtx>{join_v<parent, chars<"/">, key_name_v<I, T>>, Mtx{}}...});
@@ -745,7 +745,7 @@ namespace glz::repe
       void on(T& value)
       {
          using namespace glz::detail;
-         static constexpr auto N = refl<T>.N;
+         static constexpr auto N = reflect<T>::size;
 
          [[maybe_unused]] decltype(auto) t = [&]() -> decltype(auto) {
             if constexpr (reflectable<T> && requires { to_tuple(value); }) {
@@ -797,11 +797,11 @@ namespace glz::repe
                   return get_member(value, get<I>(t));
                }
                else {
-                  return get_member(value, get<I>(refl<T>.values));
+                  return get_member(value, get<I>(reflect<T>::values));
                }
             }.template operator()<I>();
 
-            static constexpr auto key = refl<T>.keys[I];
+            static constexpr auto key = reflect<T>::keys[I];
 
             static constexpr std::string_view full_key = [&] {
                if constexpr (parent == detail::empty_path) {
@@ -1109,7 +1109,7 @@ namespace glz::repe
             return finish();
          }
 
-         if constexpr (Opts.format == json) {
+         if constexpr (Opts.format == JSON) {
             if (*b == '[') {
                ++b;
             }
@@ -1144,7 +1144,7 @@ namespace glz::repe
             return finish();
          }
 
-         if constexpr (Opts.format == json) {
+         if constexpr (Opts.format == JSON) {
             if (*b == ',') {
                ++b;
             }

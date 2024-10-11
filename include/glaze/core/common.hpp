@@ -220,19 +220,25 @@ namespace glz
       template <class T>
       concept meta_value_t = glaze_t<std::decay_t<T>>;
 
-      template <class T>
-      concept str_t = !std::same_as<std::nullptr_t, T> && std::convertible_to<std::decay_t<T>, std::string_view>;
-
-      // this concept requires that T is string and copies the string in json
-      template <class T>
-      concept string_t = str_t<T> && !std::same_as<std::decay_t<T>, std::string_view> && has_push_back<T>;
-
-      template <class T>
-      concept char_array_t = str_t<T> && std::is_array_v<std::remove_pointer_t<std::remove_reference_t<T>>>;
-
       // this concept requires that T is just a view
       template <class T>
       concept string_view_t = std::same_as<std::decay_t<T>, std::string_view>;
+
+      template <class T>
+      concept array_char_t =
+         requires { std::tuple_size<T>::value; } && std::same_as<T, std::array<char, std::tuple_size_v<T>>>;
+
+      template <class T>
+      concept str_t = (!std::same_as<std::nullptr_t, T> && std::convertible_to<std::decay_t<T>, std::string_view>) ||
+                      array_char_t<T>;
+
+      // this concept requires that T is a writeable string. It can be resized, appended to, or assigned to
+      template <class T>
+      concept string_t =
+         str_t<T> && !string_view_t<T> && (has_assign<T> || (resizable<T> && has_data<T>) || has_append<T>);
+
+      template <class T>
+      concept char_array_t = str_t<T> && std::is_array_v<std::remove_pointer_t<std::remove_reference_t<T>>>;
 
       template <class T>
       concept readable_map_t = !custom_read<T> && !meta_value_t<T> && !str_t<T> && range<T> &&
@@ -505,6 +511,24 @@ namespace glz
 
    template <class T>
    unexpected_wrapper(T*) -> unexpected_wrapper<T>;
+}
+
+namespace glz::detail
+{
+   template <opts Opts, class Value>
+   [[nodiscard]] GLZ_ALWAYS_INLINE constexpr bool skip_member(const Value& value) noexcept
+   {
+      if constexpr (null_t<Value> && Opts.skip_null_members) {
+         if constexpr (always_null_t<Value>)
+            return true;
+         else {
+            return !bool(value);
+         }
+      }
+      else {
+         return false;
+      }
+   }
 }
 
 template <>

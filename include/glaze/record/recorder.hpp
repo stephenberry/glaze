@@ -68,7 +68,7 @@ namespace glz
       concept is_recorder = is_specialization_v<T, recorder>;
 
       template <is_recorder T>
-      struct to_json<T>
+      struct to<JSON, T>
       {
          template <auto Opts, class... Args>
          static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
@@ -84,14 +84,14 @@ namespace glz
             const size_t n = value.data.size();
             for (size_t i = 0; i < n; ++i) {
                auto& [name, v] = value.data[i];
-               write<json>::op<Opts>(name, ctx, std::forward<Args>(args)...); // write name as key
+               write<JSON>::op<Opts>(name, ctx, std::forward<Args>(args)...); // write name as key
 
                dump<':'>(std::forward<Args>(args)...);
                if constexpr (Opts.prettify) {
                   dump<' '>(args...);
                }
 
-               write<json>::op<Opts>(v.first, ctx, std::forward<Args>(args)...); // write deque
+               write<JSON>::op<Opts>(v.first, ctx, std::forward<Args>(args)...); // write deque
                if (i < n - 1) {
                   dump<','>(std::forward<Args>(args)...);
                }
@@ -112,7 +112,7 @@ namespace glz
       };
 
       template <is_recorder T>
-      struct from_json<T>
+      struct from<JSON, T>
       {
          template <auto Options>
          static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
@@ -151,7 +151,7 @@ namespace glz
                GLZ_MATCH_COLON();
                GLZ_SKIP_WS();
 
-               std::visit([&](auto&& deq) { read<json>::op<Opts>(deq, ctx, it, end); }, v.first);
+               std::visit([&](auto&& deq) { read<JSON>::op<Opts>(deq, ctx, it, end); }, v.first);
 
                if (i < n - 1) {
                   GLZ_SKIP_WS();
@@ -166,7 +166,7 @@ namespace glz
       };
 
       template <is_recorder T>
-      struct to_csv<T>
+      struct to<CSV, T>
       {
          template <auto Opts>
          static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept
@@ -181,7 +181,7 @@ namespace glz
 
                   std::visit(
                      [&](auto& x) {
-                        write<csv>::op<Opts>(x, ctx, args...); // write deque
+                        write<CSV>::op<Opts>(x, ctx, args...); // write deque
                      },
                      v.first);
 
@@ -217,7 +217,7 @@ namespace glz
                               breakout = true;
                               return;
                            }
-                           write<csv>::op<Opts>(v[row], ctx, args...); // write deque
+                           write<CSV>::op<Opts>(v[row], ctx, args...); // write deque
                         },
                         data.first);
 
