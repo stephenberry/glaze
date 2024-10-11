@@ -1088,7 +1088,7 @@ namespace glz::repe
          auto& response = *(u_buffer->ptr);
 
          context ctx{};
-         auto [b, e] = read_iterators<Opts>(ctx, msg);
+         auto [b, e] = read_iterators<Opts>(msg);
          auto start = b;
          if (msg.empty()) [[unlikely]] {
             ctx.error = error_code::no_read_input;
