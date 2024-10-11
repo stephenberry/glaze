@@ -25,7 +25,7 @@ namespace glz
       auto it = p.first;
       auto end = p.second;
       auto start = it;
-      if (buffer.empty()) [[unlikely]] {
+      if (tmp.empty()) [[unlikely]] {
          ctx.error = error_code::no_read_input;
       }
       if (not bool(ctx.error)) [[likely]] {
