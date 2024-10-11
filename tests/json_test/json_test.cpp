@@ -4052,7 +4052,7 @@ suite ndjson_test = [] {
       auto out = glz::write_ndjson(x).value_or("error");
       expect(out == buffer) << out;
    };
-   
+
    "empty json lines input"_test = [] {
       std::vector<int> foo;
       const auto json = glz::write_ndjson(foo).value();

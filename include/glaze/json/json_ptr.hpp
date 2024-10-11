@@ -40,7 +40,7 @@ namespace glz
       using result_t = expected<span_t, error_ctx>;
 
       auto start = it;
-      
+
       if (buffer.empty()) [[unlikely]] {
          ctx.error = error_code::no_read_input;
       }

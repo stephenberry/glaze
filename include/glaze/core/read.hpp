@@ -18,7 +18,7 @@ namespace glz
 
       auto it = reinterpret_cast<const char*>(buffer.data());
       auto end = reinterpret_cast<const char*>(buffer.data()); // to be incremented
-      
+
       if constexpr (Padded) {
          end += buffer.size() - padding_bytes;
       }
