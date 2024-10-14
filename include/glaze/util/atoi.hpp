@@ -269,148 +269,129 @@ namespace glz::detail
       return i <= (std::numeric_limits<T>::max)();
    }
 
-   template <std::integral T, class Char>
+   template <std::integral T>
       requires(std::is_unsigned_v<T> && sizeof(T) == 4)
-   GLZ_ALWAYS_INLINE constexpr bool atoi(T& v, const Char*& c) noexcept
+   GLZ_ALWAYS_INLINE constexpr const uint8_t* parse_int(T& v, const uint8_t*& c) noexcept
    {
-      if (digit_table[uint8_t(*c)]) [[likely]] {
+      if (digit_table[*c]) [[likely]] {
          v = *c - '0';
          ++c;
       }
       else [[unlikely]] {
-         return false;
+         return {};
       }
 
-      if (digit_table[uint8_t(*c)]) {
+      if (digit_table[*c]) {
          v = v * 10 + (*c - '0');
          ++c;
       }
       else {
-         if (not exp_dec_table[uint8_t(*c)]) {
-            return true;
-         }
-         goto finish;
+         return c;
       }
 
       if (c[-2] == '0') [[unlikely]] {
-         return false;
+         return {};
       }
 
-      if (digit_table[uint8_t(*c)]) {
+      if (digit_table[*c]) {
          v = v * 10 + (*c - '0');
          ++c;
       }
       else {
-         if (not exp_dec_table[uint8_t(*c)]) {
-            return true;
-         }
-         goto finish;
+         return c;
       }
 
-      if (digit_table[uint8_t(*c)]) {
+      if (digit_table[*c]) {
          v = v * 10 + (*c - '0');
          ++c;
       }
       else {
-         if (not exp_dec_table[uint8_t(*c)]) {
-            return true;
-         }
-         goto finish;
+         return c;
       }
 
-      if (digit_table[uint8_t(*c)]) {
+      if (digit_table[*c]) {
          v = v * 10 + (*c - '0');
          ++c;
       }
       else {
-         if (not exp_dec_table[uint8_t(*c)]) {
-            return true;
-         }
-         goto finish;
+         return c;
       }
 
-      if (digit_table[uint8_t(*c)]) {
+      if (digit_table[*c]) {
          v = v * 10 + (*c - '0');
          ++c;
       }
       else {
-         if (not exp_dec_table[uint8_t(*c)]) {
-            return true;
-         }
-         goto finish;
+         return c;
       }
 
-      if (digit_table[uint8_t(*c)]) {
+      if (digit_table[*c]) {
          v = v * 10 + (*c - '0');
          ++c;
       }
       else {
-         if (not exp_dec_table[uint8_t(*c)]) {
-            return true;
-         }
-         goto finish;
+         return c;
       }
 
-      if (digit_table[uint8_t(*c)]) {
+      if (digit_table[*c]) {
          v = v * 10 + (*c - '0');
          ++c;
       }
       else {
-         if (not exp_dec_table[uint8_t(*c)]) {
-            return true;
-         }
-         goto finish;
+         return c;
       }
 
-      if (digit_table[uint8_t(*c)]) {
+      if (digit_table[*c]) {
          v = v * 10 + (*c - '0');
          ++c;
       }
-      else {
-         if (not exp_dec_table[uint8_t(*c)]) {
-            return true;
+      return c;
+   }
+   
+   template <std::integral T, class Char>
+      requires(std::is_unsigned_v<T> && sizeof(T) == 4)
+   GLZ_ALWAYS_INLINE constexpr bool atoi(T& v, const Char*& c) noexcept
+   {
+      if (parse_int(v, reinterpret_cast<const uint8_t*&>(c))) {
+         uint64_t i = v;
+         if (digit_table[uint8_t(*c)]) {
+            i = i * 10 + (*c - '0');
+            ++c;
+            if (digit_table[uint8_t(*c)]) [[unlikely]] {
+               return false;
+            }
          }
-         goto finish;
-      }
+         if (*c == 'e' || *c == 'E') [[likely]] {
+            ++c;
+         }
+         else [[unlikely]] {
+            if (*c == '.') [[unlikely]] {
+               return false;
+            }
+            v = T(i);
+            return i <= (std::numeric_limits<T>::max)();
+         }
 
-   finish:
-      uint64_t i = v;
-      if (digit_table[uint8_t(*c)]) {
-         i = i * 10 + (*c - '0');
-         ++c;
-         if (digit_table[uint8_t(*c)]) [[unlikely]] {
+         c += (*c == '+');
+
+         if (not digit_table[uint8_t(*c)]) [[unlikely]] {
             return false;
          }
-      }
-      if (*c == 'e' || *c == 'E') [[likely]] {
          ++c;
-      }
-      else [[unlikely]] {
-         if (*c == '.') [[unlikely]] {
+         uint8_t exp = c[-1] - '0';
+         if (digit_table[uint8_t(*c)]) {
+            exp = exp * 10 + (*c - '0');
+            ++c;
+         }
+         if (exp > 9) [[unlikely]] {
             return false;
          }
+
+         i *= powers_of_ten_int[exp];
          v = T(i);
          return i <= (std::numeric_limits<T>::max)();
       }
-
-      c += (*c == '+');
-
-      if (not digit_table[uint8_t(*c)]) [[unlikely]] {
-         return false;
-      }
-      ++c;
-      uint8_t exp = c[-1] - '0';
-      if (digit_table[uint8_t(*c)]) {
-         exp = exp * 10 + (*c - '0');
-         ++c;
-      }
-      if (exp > 9) [[unlikely]] {
-         return false;
-      }
-
-      i *= powers_of_ten_int[exp];
-      v = T(i);
-      return i <= (std::numeric_limits<T>::max)();
+      return false;
    }
 
    struct value128 final
