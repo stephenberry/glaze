@@ -384,16 +384,6 @@ namespace glz::detail
          }
       }
 
-      if (digit_table[*c]) {
-         if (v > peak_positive<T>[*c]) [[unlikely]] {
-            return {};
-         }
-         v = v * 10 + (*c - '0');
-         ++c;
-         if (digit_table[*c]) [[unlikely]] {
-            return {};
-         }
-      }
       return c;
    }
    
@@ -401,18 +391,26 @@ namespace glz::detail
       requires(std::is_unsigned_v<T>)
    GLZ_ALWAYS_INLINE constexpr bool atoi(T& v, Char*& c) noexcept
    {
-      if constexpr (Mode == int_parse_mode::no_decimals_no_exponents) {
-         if (parse_int(v, reinterpret_cast<const uint8_t*&>(c))) [[likely]] {
+      if (parse_int(v, reinterpret_cast<const uint8_t*&>(c))) [[likely]] {
+         if (digit_table[*c]) {
+            if (v > peak_positive<T>[*c]) [[unlikely]] {
+               return false;
+            }
+            v = v * 10 + (*c - '0');
+            ++c;
+            if (digit_table[*c]) [[unlikely]] {
+               return false;
+            }
+         }
+         
+         if constexpr (Mode == int_parse_mode::no_decimals_no_exponents) {
             if (exp_dec_table[uint8_t(*c)]) [[unlikely]] {
                return false;
             }
             return true;
          }
-         return false;
-      }
-      else if constexpr (Mode == int_parse_mode::no_decimals_no_negative_exponents)
-      {
-         if (parse_int(v, reinterpret_cast<const uint8_t*&>(c))) [[likely]] {
+         else if constexpr (Mode == int_parse_mode::no_decimals_no_negative_exponents)
+         {
             if (*c == 'e' || *c == 'E') {
                ++c;
             }
@@ -449,11 +447,11 @@ namespace glz::detail
       #endif
             return true;
          }
-         return false;
+         else {
+            static_assert(false_v<T>, "TODO");
+         }
       }
-      else {
-         static_assert(false_v<T>, "TODO");
-      }
+      return false;
    }
 
    template <std::integral T, class Char>
