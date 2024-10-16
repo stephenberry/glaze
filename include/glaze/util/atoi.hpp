@@ -104,40 +104,6 @@ namespace glz::detail
       return t;
    }();
 
-   inline constexpr std::array<bool, 256> digit_or_dec_table = [] {
-      std::array<bool, 256> t{};
-      t['0'] = true;
-      t['1'] = true;
-      t['2'] = true;
-      t['3'] = true;
-      t['4'] = true;
-      t['5'] = true;
-      t['6'] = true;
-      t['7'] = true;
-      t['8'] = true;
-      t['9'] = true;
-      t['.'] = true;
-      return t;
-   }();
-
-   inline constexpr std::array<bool, 256> digit_exp_dec_table = [] {
-      std::array<bool, 256> t{};
-      t['0'] = true;
-      t['1'] = true;
-      t['2'] = true;
-      t['3'] = true;
-      t['4'] = true;
-      t['5'] = true;
-      t['6'] = true;
-      t['7'] = true;
-      t['8'] = true;
-      t['9'] = true;
-      t['.'] = true;
-      t['e'] = true;
-      t['E'] = true;
-      return t;
-   }();
-
    template <class T>
    inline constexpr std::array<uint64_t, 256> peak_positive = [] {
       constexpr auto peak{(std::numeric_limits<std::decay_t<T>>::max)()};
