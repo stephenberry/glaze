@@ -219,7 +219,7 @@ namespace glz::detail
    }
 
    template <std::integral T>
-   GLZ_ALWAYS_INLINE constexpr const uint8_t* parse_int(auto& v, const uint8_t*& c, uint8_t sign) noexcept
+   GLZ_ALWAYS_INLINE constexpr const uint8_t* parse_int(auto& v, const uint8_t*& c, const uint8_t sign) noexcept
    {
       if constexpr (std::is_unsigned_v<T>) {
          (void)sign;
@@ -404,12 +404,12 @@ namespace glz::detail
       else {
          if (digit_table[*c]) {
             if (sign) {
-               if (v > peak_negative<T>[uint8_t(*c)]) [[unlikely]] {
+               if (v > peak_negative<T>[*c]) [[unlikely]] {
                   return {};
                }
             }
             else {
-               if (v > peak_positive<T>[uint8_t(*c)]) [[unlikely]] {
+               if (v > peak_positive<T>[*c]) [[unlikely]] {
                   return {};
                }
             }
@@ -482,17 +482,24 @@ namespace glz::detail
                   return false;
                }
             }
-
-      #if defined(__SIZEOF_INT128__)
-            const __uint128_t res = __uint128_t(v) * powers_of_ten_int[exp];
-            v = T(res);
-            return res <= (std::numeric_limits<T>::max)();
-      #else
-            const auto res = full_multiplication(v, powers_of_ten_int[exp]);
-            v = T(res.low);
-            return res.high == 0;
-      #endif
-            return true;
+            
+            if constexpr (sizeof(T) < 8) {
+               const uint64_t i = v * powers_of_ten_int[exp];
+               v = T(i);
+               return i <= (std::numeric_limits<T>::max)();
+            }
+            else {
+#if defined(__SIZEOF_INT128__)
+               const __uint128_t res = __uint128_t(v) * powers_of_ten_int[exp];
+               v = T(res);
+               return res <= (std::numeric_limits<T>::max)();
+#else
+               const auto res = full_multiplication(v, powers_of_ten_int[exp]);
+               v = T(res.low);
+               return res.high == 0;
+#endif
+               return true;
+            }
          }
          else {
             static_assert(false_v<T>, "TODO");
@@ -513,7 +520,7 @@ namespace glz::detail
             if (exp_dec_table[uint8_t(*c)]) [[unlikely]] {
                return false;
             }
-            v = T((uint64_t(i) ^ -sign) + sign);
+            v = T((i ^ -sign) + sign);
             return true;
          }
          else if constexpr (Mode == int_parse_mode::no_decimals_no_negative_exponents)
@@ -525,7 +532,7 @@ namespace glz::detail
                if (*c == '.') [[unlikely]] {
                   return false;
                }
-               v = T((uint64_t(i) ^ -sign) + sign);
+               v = T((i ^ -sign) + sign);
                return true;
             }
 
