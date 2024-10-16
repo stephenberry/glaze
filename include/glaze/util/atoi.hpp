@@ -14,13 +14,13 @@ namespace glz::detail
    enum struct int_parse_mode : uint32_t
    {
       // Rejects all inputs with '.', 'e', or 'E'
-      no_decimals_no_exponents,
+      no_dec_no_exp,
       
       // Rejects all inputs with '.' or negative exponents (e.g. '5e-2')
-      no_decimals_no_negative_exponents,
+      no_dec_no_neg_exp,
       
       // Parses exponents and decimals, but truncates the decimal value
-      decimals_and_exponents_with_truncation
+      truncation
    };
    
    constexpr std::array<uint64_t, 20> powers_of_ten_int{1ull,
@@ -424,18 +424,18 @@ namespace glz::detail
       return c;
    }
    
-   template <int_parse_mode Mode = int_parse_mode::no_decimals_no_negative_exponents, std::integral T, class Char>
+   template <int_parse_mode Mode = int_parse_mode::no_dec_no_neg_exp, std::integral T, class Char>
       requires(std::is_unsigned_v<T>)
    GLZ_ALWAYS_INLINE constexpr bool atoi(T& v, Char*& c) noexcept
    {
       if (parse_int<T>(v, reinterpret_cast<const uint8_t*&>(c), 0)) [[likely]] {
-         if constexpr (Mode == int_parse_mode::no_decimals_no_exponents) {
+         if constexpr (Mode == int_parse_mode::no_dec_no_exp) {
             if (exp_dec_table[uint8_t(*c)]) [[unlikely]] {
                return false;
             }
             return true;
          }
-         else if constexpr (Mode == int_parse_mode::no_decimals_no_negative_exponents)
+         else if constexpr (Mode == int_parse_mode::no_dec_no_neg_exp)
          {
             if (*c == 'e' || *c == 'E') {
                ++c;
@@ -508,7 +508,7 @@ namespace glz::detail
       return false;
    }
    
-   template <int_parse_mode Mode = int_parse_mode::no_decimals_no_negative_exponents, std::integral T, class Char>
+   template <int_parse_mode Mode = int_parse_mode::no_dec_no_neg_exp, std::integral T, class Char>
       requires(std::is_signed_v<T>)
    GLZ_ALWAYS_INLINE constexpr bool atoi(T& v, Char*& c) noexcept
    {
@@ -516,14 +516,14 @@ namespace glz::detail
       c += sign;
       uint64_t i;
       if (parse_int<T>(i, reinterpret_cast<const uint8_t*&>(c), sign)) [[likely]] {
-         if constexpr (Mode == int_parse_mode::no_decimals_no_exponents) {
+         if constexpr (Mode == int_parse_mode::no_dec_no_exp) {
             if (exp_dec_table[uint8_t(*c)]) [[unlikely]] {
                return false;
             }
             v = T((i ^ -sign) + sign);
             return true;
          }
-         else if constexpr (Mode == int_parse_mode::no_decimals_no_negative_exponents)
+         else if constexpr (Mode == int_parse_mode::no_dec_no_neg_exp)
          {
             if (*c == 'e' || *c == 'E') {
                ++c;
