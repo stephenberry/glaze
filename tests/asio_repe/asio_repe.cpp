@@ -4,8 +4,6 @@
 #include <iostream>
 
 #include "glaze/ext/glaze_asio.hpp"
-#include "glaze/glaze.hpp"
-#include "glaze/rpc/repe.hpp"
 
 // This test code is self-contained and spawns both the server and the client
 
