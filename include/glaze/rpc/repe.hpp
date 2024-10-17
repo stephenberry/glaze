@@ -147,59 +147,9 @@ namespace glz::repe
 
 namespace glz::repe
 {
-   enum struct error_e {
-      ok,
-      version_mismatch,
-      invalid_header,
-      invalid_query,
-      invalid_body,
-      parse_error,
-      method_not_found,
-      timeout,
-      error
-   };
-
-   inline constexpr std::string_view error_code_to_sv(const error_e e) noexcept
-   {
-      using enum error_e;
-      switch (e) {
-      case ok: {
-         return "0 [ok]";
-      }
-      case version_mismatch: {
-         return "1 [version_mismatch]";
-      }
-      case invalid_header: {
-         return "2 [invalid_header]";
-      }
-      case invalid_query: {
-         return "3 [invalid_query]";
-      }
-      case invalid_body: {
-         return "4 [invalid_body]";
-      }
-      case parse_error: {
-         return "5 [parse_error]";
-      }
-      case method_not_found: {
-         return "6 [method_not_found]";
-      }
-      case timeout: {
-         return "7 [timeout]";
-      }
-      case error: {
-         return "8 [error]";
-      }
-      default: {
-         return "unknown_error_code";
-         break;
-      }
-      };
-   }
-
    struct error_t final
    {
-      error_e code = error_e::ok;
+      error_code code = error_code::none;
       std::string message = "";
 
       operator bool() const noexcept { return bool(code); }
@@ -207,7 +157,7 @@ namespace glz::repe
 
    inline std::string format_error(const error_t& e) noexcept
    {
-      std::string result = "error: " + std::string(error_code_to_sv(e.code));
+      std::string result = "error: " + std::string(meta<error_code>::keys[uint32_t(e.code)]);
       result += "\n";
       result += e.message;
       return result;
@@ -261,7 +211,7 @@ namespace glz::repe
          error_ctx ec{ctx.error, ctx.custom_error_message, size_t(b - start), ctx.includer_error};
          std::ignore =
             write<Opts>(std::forward_as_tuple(header{.error = true},
-                                              error_t{error_e::parse_error, format_error(ec, state.in.body)}),
+                                              error_t{error_code::parse_error, format_error(ec, state.in.body)}),
                         state.out.body);
          return 0;
       }
@@ -320,14 +270,14 @@ namespace glz::repe
          ctx.error = error_code::no_read_input;
       }
       if (bool(ctx.error)) [[unlikely]] {
-         return error_t{error_e::parse_error};
+         return error_t{error_code::parse_error};
       }
       auto start = b;
 
       auto handle_error = [&](auto& it) {
          ctx.error = error_code::syntax_error;
          error_ctx pe{ctx.error, ctx.custom_error_message, size_t(it - start), ctx.includer_error};
-         return error_t{error_e::parse_error, format_error(pe, buffer)};
+         return error_t{error_code::parse_error, format_error(pe, buffer)};
       };
 
       if (*b == '[') {
@@ -341,7 +291,7 @@ namespace glz::repe
 
       if (bool(ctx.error)) {
          error_ctx pe{ctx.error, ctx.custom_error_message, size_t(b - start), ctx.includer_error};
-         return {error_e::parse_error, format_error(pe, buffer)};
+         return {error_code::parse_error, format_error(pe, buffer)};
       }
 
       if (*b == ',') {
@@ -362,7 +312,7 @@ namespace glz::repe
 
          if (bool(ctx.error)) {
             error_ctx pe{ctx.error, ctx.custom_error_message, size_t(b - start), ctx.includer_error};
-            return {error_e::parse_error, format_error(pe, buffer)};
+            return {error_code::parse_error, format_error(pe, buffer)};
          }
       }
 
@@ -847,7 +797,7 @@ namespace glz::repe
                if (state.write()) {
                   chain_read_lock lock{chain};
                   if (not lock) {
-                     state.error = {error_e::timeout, std::string(root)};
+                     state.error = {error_code::timeout, std::string(root)};
                      write_response<Opts>(state);
                      return;
                   }
@@ -863,7 +813,7 @@ namespace glz::repe
                if (state.read()) {
                   chain_write_lock lock{chain};
                   if (not lock) {
-                     state.error = {error_e::timeout, std::string(root)};
+                     state.error = {error_code::timeout, std::string(root)};
                      write_response<Opts>(state);
                      return;
                   }
@@ -958,7 +908,7 @@ namespace glz::repe
                   if (state.write()) {
                      chain_read_lock lock{chain};
                      if (not lock) {
-                        state.error = {error_e::timeout, std::string(full_key)};
+                        state.error = {error_code::timeout, std::string(full_key)};
                         write_response<Opts>(state);
                         return;
                      }
@@ -974,7 +924,7 @@ namespace glz::repe
                   if (state.read()) {
                      chain_write_lock lock{chain};
                      if (not lock) {
-                        state.error = {error_e::timeout, std::string(full_key)};
+                        state.error = {error_code::timeout, std::string(full_key)};
                         write_response<Opts>(state);
                         return;
                      }
@@ -991,7 +941,7 @@ namespace glz::repe
                   if (state.write()) {
                      chain_read_lock lock{chain};
                      if (not lock) {
-                        state.error = {error_e::timeout, std::string(full_key)};
+                        state.error = {error_code::timeout, std::string(full_key)};
                         write_response<Opts>(state);
                         return;
                      }
@@ -1007,7 +957,7 @@ namespace glz::repe
                   if (state.read()) {
                      chain_write_lock lock{chain};
                      if (not lock) {
-                        state.error = {error_e::timeout, std::string(full_key)};
+                        state.error = {error_code::timeout, std::string(full_key)};
                         write_response<Opts>(state);
                         return;
                      }
@@ -1114,7 +1064,7 @@ namespace glz::repe
                      if (state.write()) {
                         chain_read_lock lock{chain};
                         if (not lock) {
-                           state.error = {error_e::timeout, std::string(full_key)};
+                           state.error = {error_code::timeout, std::string(full_key)};
                            write_response<Opts>(state);
                            return;
                         }
@@ -1130,7 +1080,7 @@ namespace glz::repe
                      if (state.read()) {
                         chain_write_lock lock{chain};
                         if (not lock) {
-                           state.error = {error_e::timeout, std::string(full_key)};
+                           state.error = {error_code::timeout, std::string(full_key)};
                            write_response<Opts>(state);
                            return;
                         }
@@ -1164,8 +1114,8 @@ namespace glz::repe
             it->second(state{in, out, error}); // handle the body
          }
          else {
-            static constexpr error_e code = error_e::method_not_found;
-            static constexpr sv body{error_code_to_sv(code)};
+            static constexpr error_code code = error_code::method_not_found;
+            static constexpr sv body{"method not found"};
 
             const auto body_length = 8 + body.size(); // 4 bytes for code, 4 bytes for size, + message
 

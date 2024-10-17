@@ -249,7 +249,7 @@ namespace glz
          catch (const std::exception& e) {
             socket.ptr.reset();
             (*is_connected) = false;
-            return {repe::error_e::error, "asio send failure"};
+            return {error_code::send_error, "asio send failure"};
          }
 
          return {};
@@ -270,7 +270,7 @@ namespace glz
          catch (const std::exception& e) {
             socket.ptr.reset();
             (*is_connected) = false;
-            return {repe::error_e::error, "asio send failure"};
+            return {error_code::send_error, "asio send failure"};
          }
          
          repe::message response{};
@@ -281,7 +281,7 @@ namespace glz
          catch (const std::exception& e) {
             socket.ptr.reset();
             (*is_connected) = false;
-            return {repe::error_e::error, "asio receive failure"};
+            return {error_code::send_error, "asio receive failure"};
          }
 
          return repe::decode_response<Opts>(std::forward<Result>(result), response);
@@ -313,7 +313,7 @@ namespace glz
          catch (const std::exception& e) {
             socket.ptr.reset();
             (*is_connected) = false;
-            return {repe::error_e::error, "asio send failure"};
+            return {error_code::send_error, "asio send failure"};
          }
          
          repe::message response{};
@@ -323,7 +323,7 @@ namespace glz
          catch (const std::exception& e) {
             socket.ptr.reset();
             (*is_connected) = false;
-            return {repe::error_e::error, "asio receive failure"};
+            return {error_code::send_error, "asio receive failure"};
          }
 
          return repe::decode_response<Opts>(response);
@@ -343,7 +343,7 @@ namespace glz
          catch (const std::exception& e) {
             socket.ptr.reset();
             (*is_connected) = false;
-            return {repe::error_e::error, "asio send failure"};
+            return {error_code::send_error, "asio send failure"};
          }
 
          auto response = message_pool->borrow();
@@ -353,7 +353,7 @@ namespace glz
          catch (const std::exception& e) {
             socket.ptr.reset();
             (*is_connected) = false;
-            return {repe::error_e::error, "asio receive failure"};
+            return {error_code::send_error, "asio receive failure"};
          }
 
          return repe::decode_response<Opts>(std::forward<Result>(result), response->body);
@@ -371,7 +371,7 @@ namespace glz
          catch (const std::exception& e) {
             socket.ptr.reset();
             (*is_connected) = false;
-            return {repe::error_e::error, "asio send failure"};
+            return {error_code::send_error, "asio send failure"};
          }
 
          repe::message response{};
@@ -381,7 +381,7 @@ namespace glz
          catch (const std::exception& e) {
             socket.ptr.reset();
             (*is_connected) = false;
-            return {repe::error_e::error, "asio receive failure"};
+            return {error_code::send_error, "asio receive failure"};
          }
 
          return repe::decode_response<Opts>(response);
