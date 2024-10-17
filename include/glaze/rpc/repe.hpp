@@ -249,7 +249,7 @@ namespace glz::repe
    {
       glz::context ctx{};
       auto [b, e] = read_iterators<Opts>(state.in.body);
-      if (state.message.empty()) [[unlikely]] {
+      if (state.in.body.empty()) [[unlikely]] {
          ctx.error = error_code::no_read_input;
       }
       if (bool(ctx.error)) [[unlikely]] {
