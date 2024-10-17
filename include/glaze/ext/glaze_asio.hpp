@@ -393,6 +393,10 @@ namespace glz
    {
       uint16_t port{};
       uint32_t concurrency{1}; // how many threads to use
+      
+      ~asio_server() {
+         stop();
+      }
 
       struct glaze
       {
@@ -438,6 +442,8 @@ namespace glz
 
          // Start the listener coroutine
          asio::co_spawn(*ctx, listener(), asio::detached);
+         
+         stop_server = false;
          
          std::thread stop_thread([this]() {
                // Wait for stop_server to be set to true
