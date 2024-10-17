@@ -12,71 +12,73 @@
 namespace glz::repe
 {
    // read/write are from the client's perspective
-   enum struct action : uint32_t
-   {
-     notify = 1 << 0, // If this message does not require a response
-     read = 1 << 1, // Read a value or return the result of invoking a function
-     write = 1 << 2 // Write a value or invoke a function
+   enum struct action : uint32_t {
+      notify = 1 << 0, // If this message does not require a response
+      read = 1 << 1, // Read a value or return the result of invoking a function
+      write = 1 << 2 // Write a value or invoke a function
    };
-   
+
    inline constexpr auto no_length_provided = (std::numeric_limits<uint64_t>::max)();
 
    // C++ pseudocode representing layout
-   struct header {
-     uint64_t length{no_length_provided}; // Total length of [header, query, body]
-     //
-     uint16_t spec{0x1507}; // (5383) Magic two bytes to denote the REPE specification
-     uint8_t version = 1; // REPE version
-     bool error{}; // Whether an error has occurred
-     repe::action action{}; // Action to take, multiple actions may be bit-packed together
-     //
-     uint64_t id{}; // Identifier
-     //
-     uint64_t query_length{no_length_provided}; // The total length of the query (-1 denotes no size given)
-     //
-     uint64_t body_length{no_length_provided}; // The total length of the body (-1 denotes no size given)
-     //
-     uint64_t reserved{}; // Must be set to zero
-      
-      bool notify() const {
-         return bool(uint32_t(action) & uint32_t(repe::action::notify));
-      }
-      
-      bool read() const {
-         return bool(uint32_t(action) & uint32_t(repe::action::read));
-      }
-      
-      bool write() const {
-         return bool(uint32_t(action) & uint32_t(repe::action::write));
-      }
-      
-      void notify(bool enable) {
+   struct header
+   {
+      uint64_t length{no_length_provided}; // Total length of [header, query, body]
+      //
+      uint16_t spec{0x1507}; // (5383) Magic two bytes to denote the REPE specification
+      uint8_t version = 1; // REPE version
+      bool error{}; // Whether an error has occurred
+      repe::action action{}; // Action to take, multiple actions may be bit-packed together
+      //
+      uint64_t id{}; // Identifier
+      //
+      uint64_t query_length{no_length_provided}; // The total length of the query (-1 denotes no size given)
+      //
+      uint64_t body_length{no_length_provided}; // The total length of the body (-1 denotes no size given)
+      //
+      uint16_t query_format{};
+      uint16_t body_format{};
+      uint32_t reserved{}; // Must be set to zero
+
+      bool notify() const { return bool(uint32_t(action) & uint32_t(repe::action::notify)); }
+
+      bool read() const { return bool(uint32_t(action) & uint32_t(repe::action::read)); }
+
+      bool write() const { return bool(uint32_t(action) & uint32_t(repe::action::write)); }
+
+      void notify(bool enable)
+      {
          if (enable) {
             action = static_cast<repe::action>(uint32_t(action) | uint32_t(action::notify));
-          } else {
-             action = static_cast<repe::action>(uint32_t(action) & ~uint32_t(action::notify));
-          }
+         }
+         else {
+            action = static_cast<repe::action>(uint32_t(action) & ~uint32_t(action::notify));
+         }
       }
-      
-      void read(bool enable) {
+
+      void read(bool enable)
+      {
          if (enable) {
             action = static_cast<repe::action>(uint32_t(action) | uint32_t(action::read));
-          } else {
-             action = static_cast<repe::action>(uint32_t(action) & ~uint32_t(action::read));
-          }
+         }
+         else {
+            action = static_cast<repe::action>(uint32_t(action) & ~uint32_t(action::read));
+         }
       }
-      
-      void write(bool enable) {
+
+      void write(bool enable)
+      {
          if (enable) {
             action = static_cast<repe::action>(uint32_t(action) | uint32_t(action::write));
-          } else {
-             action = static_cast<repe::action>(uint32_t(action) & ~uint32_t(action::write));
-          }
+         }
+         else {
+            action = static_cast<repe::action>(uint32_t(action) & ~uint32_t(action::write));
+         }
       }
    };
-   
+
    static_assert(sizeof(header) == 48);
-   
+
    struct message final
    {
       repe::header header{};
@@ -92,50 +94,51 @@ namespace glz::repe
       bool error{}; // Whether an error has occurred
 
       repe::action action{}; // Action to take, multiple actions may be bit-packed together
-      
-      bool notify() const {
-         return bool(uint32_t(action) & uint32_t(repe::action::notify));
-      }
-      
-      bool read() const {
-         return bool(uint32_t(action) & uint32_t(repe::action::read));
-      }
-      
-      bool write() const {
-         return bool(uint32_t(action) & uint32_t(repe::action::write));
-      }
-      
-      void notify(bool enable) {
+
+      bool notify() const { return bool(uint32_t(action) & uint32_t(repe::action::notify)); }
+
+      bool read() const { return bool(uint32_t(action) & uint32_t(repe::action::read)); }
+
+      bool write() const { return bool(uint32_t(action) & uint32_t(repe::action::write)); }
+
+      void notify(bool enable)
+      {
          if (enable) {
             action = static_cast<repe::action>(uint32_t(action) | uint32_t(action::notify));
-          } else {
-             action = static_cast<repe::action>(uint32_t(action) & ~uint32_t(action::notify));
-          }
+         }
+         else {
+            action = static_cast<repe::action>(uint32_t(action) & ~uint32_t(action::notify));
+         }
       }
-      
-      void read(bool enable) {
+
+      void read(bool enable)
+      {
          if (enable) {
             action = static_cast<repe::action>(uint32_t(action) | uint32_t(action::read));
-          } else {
-             action = static_cast<repe::action>(uint32_t(action) & ~uint32_t(action::read));
-          }
+         }
+         else {
+            action = static_cast<repe::action>(uint32_t(action) & ~uint32_t(action::read));
+         }
       }
-      
-      void write(bool enable) {
+
+      void write(bool enable)
+      {
          if (enable) {
             action = static_cast<repe::action>(uint32_t(action) | uint32_t(action::write));
-          } else {
-             action = static_cast<repe::action>(uint32_t(action) & ~uint32_t(action::write));
-          }
+         }
+         else {
+            action = static_cast<repe::action>(uint32_t(action) & ~uint32_t(action::write));
+         }
       }
    };
-   
+
    inline repe::header encode(const user_header& h) noexcept
    {
-      repe::header ret{.error = h.error, //
-            .action = h.action, //
-            .id = h.id, //
-            .query_length = h.query.size() //
+      repe::header ret{
+         .error = h.error, //
+         .action = h.action, //
+         .id = h.id, //
+         .query_length = h.query.size() //
       };
       return ret;
    }
@@ -143,8 +146,7 @@ namespace glz::repe
 
 namespace glz::repe
 {
-   enum struct error_e
-   {
+   enum struct error_e {
       ok,
       version_mismatch,
       invalid_header,
@@ -215,18 +217,12 @@ namespace glz::repe
       repe::message& in;
       repe::message& out;
       error_t& error;
-      
-      bool notify() const {
-         return in.header.notify();
-      }
-      
-      bool read() const {
-         return in.header.read();
-      }
-      
-      bool write() const {
-         return in.header.write();
-      }
+
+      bool notify() const { return in.header.notify(); }
+
+      bool read() const { return in.header.read(); }
+
+      bool write() const { return in.header.write(); }
    };
 
    template <class T>
@@ -377,7 +373,7 @@ namespace glz::repe
    {
       return decode_response<Opts>(ignore_result{}, buffer);
    }
-   
+
    template <opts Opts>
    error_t request(message& msg, const user_header& h)
    {
@@ -1159,7 +1155,7 @@ namespace glz::repe
       {
          return call(request<Opts>(std::forward<H>(header), std::forward<Value>(value), buffer));
       }
-      
+
       void call(message& in, message& out)
       {
          if (auto it = methods.find(in.query); it != methods.end()) {
@@ -1169,9 +1165,9 @@ namespace glz::repe
          else {
             static constexpr error_e code = error_e::method_not_found;
             static constexpr sv body{error_code_to_sv(code)};
-            
+
             const auto body_length = 8 + body.size(); // 4 bytes for code, 4 bytes for size, + message
-            
+
             out.body.resize(sizeof(header) + body_length);
             header h{.error = true, .body_length = body_length};
             std::memcpy(out.body.data(), &h, sizeof(header));

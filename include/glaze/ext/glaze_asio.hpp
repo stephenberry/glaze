@@ -11,7 +11,7 @@
 #endif
 #include <boost/asio.hpp>
 #else
-static_assert(false, "standalone asio must be included to use glaze/ext/glaze_asio.hpp");
+static_assert(false, "standalone or boost asio must be included to use glaze/ext/glaze_asio.hpp");
 #endif
 
 #include <cassert>
@@ -19,6 +19,7 @@ static_assert(false, "standalone asio must be included to use glaze/ext/glaze_as
 #include <iostream>
 
 #include "glaze/rpc/repe.hpp"
+#include "glaze/util/buffer_pool.hpp"
 
 namespace glz
 {
@@ -209,6 +210,7 @@ namespace glz
 
       std::shared_ptr<asio::io_context> ctx{};
       std::shared_ptr<glz::socket_pool> socket_pool = std::make_shared<glz::socket_pool>();
+      std::shared_ptr<glz::buffer_pool> buffer_pool = std::make_shared<glz::buffer_pool>();
 
       std::shared_ptr<std::atomic<bool>> is_connected =
          std::make_shared<std::atomic<bool>>(false); // will be set to pool's boolean
@@ -353,7 +355,7 @@ namespace glz
             return {repe::error_e::error, "asio receive failure"};
          }
 
-         return repe::decode_response<Opts>(std::forward<Result>(result), response);
+         return repe::decode_response<Opts>(std::forward<Result>(result), response.body);
       }
 
       [[nodiscard]] repe::error_t call(repe::user_header&& header)
