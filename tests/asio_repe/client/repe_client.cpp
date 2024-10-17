@@ -129,7 +129,7 @@ void async_calls()
       server.run();
    });
 
-   std::this_thread::sleep_for(std::chrono::seconds(1));
+   std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
    try {
       glz::asio_client<> client{"localhost", std::to_string(port)};
@@ -141,8 +141,6 @@ void async_calls()
          int ret{};
          (void)client.call({"/first/sum"}, 25, ret);
       }));
-
-      std::this_thread::sleep_for(std::chrono::seconds(1));
 
       threads.emplace_back(std::async([&] {
          int ret{};

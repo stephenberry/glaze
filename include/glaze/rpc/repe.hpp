@@ -20,7 +20,6 @@ namespace glz::repe
 
    inline constexpr auto no_length_provided = (std::numeric_limits<uint64_t>::max)();
 
-   // C++ pseudocode representing layout
    struct header
    {
       uint64_t length{no_length_provided}; // Total length of [header, query, body]
