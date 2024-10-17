@@ -13,18 +13,6 @@
 
 namespace glz::detail
 {
-   enum struct int_parse_mode : uint32_t
-   {
-      // Rejects all inputs with '.', 'e', or 'E'
-      no_dec_no_exp,
-      
-      // Rejects all inputs with '.' or negative exponents (e.g. '5e-2')
-      no_dec_no_neg_exp,
-      
-      // Parses exponents and decimals, but truncates the decimal value
-      truncation
-   };
-   
    constexpr std::array<uint64_t, 20> powers_of_ten_int{1ull,
                                                         10ull,
                                                         100ull,
@@ -399,103 +387,91 @@ namespace glz::detail
       return c;
    }
    
-   template <int_parse_mode Mode = int_parse_mode::no_dec_no_neg_exp, std::integral T, class Char>
+   template <std::integral T, class Char>
       requires(std::is_unsigned_v<T>)
    GLZ_ALWAYS_INLINE constexpr bool atoi(T& v, Char*& c) noexcept
    {
       if (parse_int<T>(v, reinterpret_cast<const uint8_t*&>(c), 0)) [[likely]] {
-         if constexpr (Mode == int_parse_mode::no_dec_no_exp) {
-            if (exp_dec_table[uint8_t(*c)]) [[unlikely]] {
+         if (*c == 'e' || *c == 'E') {
+            ++c;
+         }
+         else {
+            if (*c == '.') [[unlikely]] {
                return false;
             }
             return true;
          }
-         else if constexpr (Mode == int_parse_mode::no_dec_no_neg_exp)
-         {
-            if (*c == 'e' || *c == 'E') {
-               ++c;
-            }
-            else {
-               if (*c == '.') [[unlikely]] {
-                  return false;
-               }
-               return true;
-            }
 
-            c += (*c == '+');
+         c += (*c == '+');
 
-            if (not is_digit(*c)) [[unlikely]] {
+         if (not is_digit(*c)) [[unlikely]] {
+            return false;
+         }
+         ++c;
+         uint8_t exp = c[-1] - '0';
+         if (is_digit(*c)) {
+            exp = exp * 10 + (*c - '0');
+            ++c;
+         }
+         if (is_digit(*c)) {
+            exp = exp * 10 + (*c - '0');
+            ++c;
+         }
+         if constexpr (sizeof(T) == 1) {
+            if (exp > 2) [[unlikely]] {
                return false;
             }
-            ++c;
-            uint8_t exp = c[-1] - '0';
-            if (is_digit(*c)) {
-               exp = exp * 10 + (*c - '0');
-               ++c;
+         }
+         else if constexpr (sizeof(T) == 2) {
+            if (exp > 4) [[unlikely]] {
+               return false;
             }
-            if (is_digit(*c)) {
-               exp = exp * 10 + (*c - '0');
-               ++c;
-            }
-            if constexpr (sizeof(T) == 1) {
-               if (exp > 2) [[unlikely]] {
-                  return false;
-               }
-            }
-            else if constexpr (sizeof(T) == 2) {
-               if (exp > 4) [[unlikely]] {
-                  return false;
-               }
-            }
-            else if constexpr (sizeof(T) == 4) {
-               if (exp > 9) [[unlikely]] {
-                  return false;
-               }
-            }
-            else {
-               if (exp > 19) [[unlikely]] {
-                  return false;
-               }
-            }
-            
-            if constexpr (sizeof(T) == 1) {
-               static constexpr std::array<uint8_t, 3> powers_of_ten{1, 10, 100};
-               const uint64_t i = v * powers_of_ten[exp];
-               v = T(i);
-               return i <= (std::numeric_limits<T>::max)();
-            }
-            else if constexpr (sizeof(T) == 2) {
-               static constexpr std::array<uint16_t, 5> powers_of_ten{1, 10, 100, 1000, 10000};
-               const uint64_t i = v * powers_of_ten[exp];
-               v = T(i);
-               return i <= (std::numeric_limits<T>::max)();
-            }
-            else if constexpr (sizeof(T) < 8) {
-               const uint64_t i = v * powers_of_ten_int[exp];
-               v = T(i);
-               return i <= (std::numeric_limits<T>::max)();
-            }
-            else {
-#if defined(__SIZEOF_INT128__)
-               const __uint128_t res = __uint128_t(v) * powers_of_ten_int[exp];
-               v = T(res);
-               return res <= (std::numeric_limits<T>::max)();
-#else
-               const auto res = full_multiplication(v, powers_of_ten_int[exp]);
-               v = T(res.low);
-               return res.high == 0;
-#endif
-               return true;
+         }
+         else if constexpr (sizeof(T) == 4) {
+            if (exp > 9) [[unlikely]] {
+               return false;
             }
          }
          else {
-            static_assert(false_v<T>, "TODO");
+            if (exp > 19) [[unlikely]] {
+               return false;
+            }
+         }
+         
+         if constexpr (sizeof(T) == 1) {
+            static constexpr std::array<uint8_t, 3> powers_of_ten{1, 10, 100};
+            const uint64_t i = v * powers_of_ten[exp];
+            v = T(i);
+            return i <= (std::numeric_limits<T>::max)();
+         }
+         else if constexpr (sizeof(T) == 2) {
+            static constexpr std::array<uint16_t, 5> powers_of_ten{1, 10, 100, 1000, 10000};
+            const uint64_t i = v * powers_of_ten[exp];
+            v = T(i);
+            return i <= (std::numeric_limits<T>::max)();
+         }
+         else if constexpr (sizeof(T) < 8) {
+            const uint64_t i = v * powers_of_ten_int[exp];
+            v = T(i);
+            return i <= (std::numeric_limits<T>::max)();
+         }
+         else {
+#if defined(__SIZEOF_INT128__)
+            const __uint128_t res = __uint128_t(v) * powers_of_ten_int[exp];
+            v = T(res);
+            return res <= (std::numeric_limits<T>::max)();
+#else
+            const auto res = full_multiplication(v, powers_of_ten_int[exp]);
+            v = T(res.low);
+            return res.high == 0;
+#endif
+            return true;
          }
       }
       return false;
    }
    
-   template <int_parse_mode Mode = int_parse_mode::no_dec_no_neg_exp, std::integral T, class Char>
+   template <std::integral T, class Char>
       requires(std::is_signed_v<T>)
    GLZ_ALWAYS_INLINE constexpr bool atoi(T& v, Char*& c) noexcept
    {
@@ -503,95 +479,82 @@ namespace glz::detail
       c += sign;
       uint64_t i;
       if (parse_int<T>(i, reinterpret_cast<const uint8_t*&>(c), sign)) [[likely]] {
-         if constexpr (Mode == int_parse_mode::no_dec_no_exp) {
-            if (exp_dec_table[uint8_t(*c)]) [[unlikely]] {
+         if (*c == 'e' || *c == 'E') {
+            ++c;
+         }
+         else {
+            if (*c == '.') [[unlikely]] {
                return false;
             }
             v = T((i ^ -sign) + sign);
             return true;
          }
-         else if constexpr (Mode == int_parse_mode::no_dec_no_neg_exp)
-         {
-            if (*c == 'e' || *c == 'E') {
-               ++c;
-            }
-            else {
-               if (*c == '.') [[unlikely]] {
-                  return false;
-               }
-               v = T((i ^ -sign) + sign);
-               return true;
-            }
 
-            c += (*c == '+');
+         c += (*c == '+');
 
-            if (not is_digit(*c)) [[unlikely]] {
+         if (not is_digit(*c)) [[unlikely]] {
+            return false;
+         }
+         ++c;
+         uint8_t exp = c[-1] - '0';
+         if (is_digit(*c)) {
+            exp = exp * 10 + (*c - '0');
+            ++c;
+         }
+         if constexpr (sizeof(T) == 1) {
+            if (exp > 2) [[unlikely]] {
                return false;
             }
-            ++c;
-            uint8_t exp = c[-1] - '0';
-            if (is_digit(*c)) {
-               exp = exp * 10 + (*c - '0');
-               ++c;
+         }
+         else if constexpr (sizeof(T) == 2) {
+            if (exp > 4) [[unlikely]] {
+               return false;
             }
-            if constexpr (sizeof(T) == 1) {
-               if (exp > 2) [[unlikely]] {
-                  return false;
-               }
-            }
-            else if constexpr (sizeof(T) == 2) {
-               if (exp > 4) [[unlikely]] {
-                  return false;
-               }
-            }
-            else if constexpr (sizeof(T) == 4) {
-               if (exp > 9) [[unlikely]] {
-                  return false;
-               }
-            }
-            else {
-               if (exp > 18) [[unlikely]] {
-                  return false;
-               }
-            }
-            
-            if constexpr (sizeof(T) == 1) {
-               static constexpr std::array<uint8_t, 3> powers_of_ten{1, 10, 100};
-               i *= powers_of_ten[exp];
-               v = T((uint8_t(i) ^ -sign) + sign);
-               return (i - sign) <= (std::numeric_limits<T>::max)();
-            }
-            else if constexpr (sizeof(T) == 2) {
-               static constexpr std::array<uint16_t, 5> powers_of_ten{1, 10, 100, 1000, 10000};
-               i *= powers_of_ten[exp];
-               v = T((uint16_t(i) ^ -sign) + sign);
-               return (i - sign) <= (std::numeric_limits<T>::max)();
-            }
-            else if constexpr (sizeof(T) == 4) {
-               i *= powers_of_ten_int[exp];
-               v = T((uint32_t(i) ^ -sign) + sign);
-               return (i - sign) <= (std::numeric_limits<T>::max)();
-            }
-            else {
-#if defined(__SIZEOF_INT128__)
-               const __uint128_t res = __uint128_t(i) * powers_of_ten_int[exp];
-               v = T((uint64_t(res) ^ -sign) + sign);
-               return uint64_t(res) <= (9223372036854775807ull + sign);
-#else
-               const auto res = full_multiplication(i, powers_of_ten_int[exp]);
-               v = T((uint64_t(res.low) ^ -sign) + sign);
-               return res.high == 0 && (uint64_t(res.low) <= (9223372036854775807ull + sign));
-#endif
+         }
+         else if constexpr (sizeof(T) == 4) {
+            if (exp > 9) [[unlikely]] {
+               return false;
             }
          }
          else {
-            static_assert(false_v<T>, "TODO");
+            if (exp > 18) [[unlikely]] {
+               return false;
+            }
+         }
+         
+         if constexpr (sizeof(T) == 1) {
+            static constexpr std::array<uint8_t, 3> powers_of_ten{1, 10, 100};
+            i *= powers_of_ten[exp];
+            v = T((uint8_t(i) ^ -sign) + sign);
+            return (i - sign) <= (std::numeric_limits<T>::max)();
+         }
+         else if constexpr (sizeof(T) == 2) {
+            static constexpr std::array<uint16_t, 5> powers_of_ten{1, 10, 100, 1000, 10000};
+            i *= powers_of_ten[exp];
+            v = T((uint16_t(i) ^ -sign) + sign);
+            return (i - sign) <= (std::numeric_limits<T>::max)();
+         }
+         else if constexpr (sizeof(T) == 4) {
+            i *= powers_of_ten_int[exp];
+            v = T((uint32_t(i) ^ -sign) + sign);
+            return (i - sign) <= (std::numeric_limits<T>::max)();
+         }
+         else {
+#if defined(__SIZEOF_INT128__)
+            const __uint128_t res = __uint128_t(i) * powers_of_ten_int[exp];
+            v = T((uint64_t(res) ^ -sign) + sign);
+            return uint64_t(res) <= (9223372036854775807ull + sign);
+#else
+            const auto res = full_multiplication(i, powers_of_ten_int[exp]);
+            v = T((uint64_t(res.low) ^ -sign) + sign);
+            return res.high == 0 && (uint64_t(res.low) <= (9223372036854775807ull + sign));
+#endif
          }
       }
       return false;
    }
 
-   static constexpr std::array<size_t, 4> int_buffer_lengths{8, 8, 16, 24};
+   inline constexpr std::array<size_t, 4> int_buffer_lengths{8, 8, 16, 24};
 
    template <std::integral T, class Char>
    GLZ_ALWAYS_INLINE constexpr bool atoi(T& v, const Char*& it, const Char* end) noexcept
