@@ -76,8 +76,8 @@ namespace glz
                      ctx.error = error_code::parse_number_failure;
                      return;
                   }
-                  auto e = stoui64<V>(i, it);
-                  if (!e) [[unlikely]] {
+                  
+                  if (not glz::detail::atoi(i, it)) [[unlikely]] {
                      ctx.error = error_code::parse_number_failure;
                      return;
                   }
@@ -95,8 +95,7 @@ namespace glz
                      sign = -1;
                      ++it;
                   }
-                  auto e = stoui64<V>(i, it);
-                  if (!e) [[unlikely]] {
+                  if (not glz::detail::atoi(i, it)) [[unlikely]] {
                      ctx.error = error_code::parse_number_failure;
                      return;
                   }
@@ -170,8 +169,7 @@ namespace glz
             }
 
             uint64_t temp;
-            auto s = stoui64(temp, it);
-            if (!s) [[unlikely]] {
+            if (not glz::detail::atoi(temp, it)) [[unlikely]] {
                ctx.error = error_code::expected_true_or_false;
                return;
             }

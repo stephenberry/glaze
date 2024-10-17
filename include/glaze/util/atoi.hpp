@@ -34,8 +34,6 @@ namespace glz::detail
                                                         1000000000000000000ull,
                                                         10000000000000000000ull};
 
-   GLZ_ALWAYS_INLINE constexpr bool is_digit(const char c) noexcept { return c >= '0' && c <= '9'; }
-
    // We don't allow decimals in integer parsing
    // We don't allow negative exponents
    // Thse cases can produce decimals which slow performance and add confusion
