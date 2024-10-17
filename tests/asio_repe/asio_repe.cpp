@@ -19,7 +19,7 @@ struct api
 void asio_client_test()
 {
    static constexpr int16_t port = 8431;
-   
+
    std::future<void> server_thread = std::async([] {
       std::cout << "Server active...\n";
 
@@ -37,7 +37,7 @@ void asio_client_test()
    });
 
    std::this_thread::sleep_for(std::chrono::seconds(1));
-   
+
    try {
       constexpr auto N = 100;
       std::vector<glz::asio_client<>> clients;
@@ -83,7 +83,7 @@ void asio_client_test()
    catch (const std::exception& e) {
       std::cerr << e.what() << '\n';
    }
-   
+
    server_thread.get();
 }
 
@@ -118,9 +118,9 @@ struct api2
 void async_calls()
 {
    static constexpr int16_t port = 8765;
-   
+
    glz::asio_server<> server{.port = port, .concurrency = 2};
-   
+
    std::future<void> server_thread = std::async([&] {
       api2 methods{};
       server.on(methods);
@@ -148,7 +148,7 @@ void async_calls()
       for (auto& t : threads) {
          t.get();
       }
-      
+
       server.stop();
    }
    catch (const std::exception& e) {
@@ -160,8 +160,8 @@ void async_calls()
 
 int main()
 {
-   //asio_client_test();
+   // asio_client_test();
    async_calls();
-   
+
    return 0;
 }

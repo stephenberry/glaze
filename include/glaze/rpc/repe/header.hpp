@@ -4,9 +4,9 @@
 #pragma once
 
 #include <cstdint>
+#include <limits>
 #include <string>
 #include <string_view>
-#include <limits>
 
 namespace glz::repe
 {

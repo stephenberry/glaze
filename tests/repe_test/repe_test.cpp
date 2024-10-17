@@ -3,13 +3,12 @@
 
 #define UT_RUN_TIME_ONLY
 
-#include "glaze/rpc/repe/registry.hpp"
-
 #include <latch>
 #include <thread>
 
 #include "glaze/ext/cli_menu.hpp"
 #include "glaze/glaze.hpp"
+#include "glaze/rpc/repe/registry.hpp"
 #include "ut/ut.hpp"
 
 using namespace ut;
@@ -290,7 +289,7 @@ suite structs_of_functions_binary = [] {
       server.call(request, response);
       expect(!glz::beve_to_json(response.body, res));
       expect(
-             res ==
+         res ==
          R"({"my_functions":{"i":0,"hello":"std::function<std::string_view()>","world":"std::function<std::string_view()>","get_number":"std::function<int32_t()>","void_func":"std::function<void()>","max":"std::function<double(std::vector<double>&)>"},"meta_functions":{"hello":"std::function<std::string_view()>","world":"std::function<std::string_view()>","get_number":"std::function<int32_t()>"},"append_awesome":"std::function<std::string(const std::string&)>","my_string":""})")
          << res;
    };
@@ -437,7 +436,7 @@ suite multi_threading_tests = [] {
       registry.on(obj);
 
       static constexpr size_t N = 10'000;
-      
+
       repe::message read_msg{};
       repe::request_json(read_msg, {"/str"});
 

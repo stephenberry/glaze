@@ -9,7 +9,7 @@
 namespace glz
 {
    template <class T>
-      requires (std::is_default_constructible_v<T>)
+      requires(std::is_default_constructible_v<T>)
    struct memory_pool final
    {
       memory_pool() = default;

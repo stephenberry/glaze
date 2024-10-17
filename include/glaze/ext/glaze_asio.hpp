@@ -31,12 +31,13 @@ namespace glz
       if (msg.header.length == repe::no_length_provided) {
          throw std::runtime_error("No length provided in REPE header");
       }
-      
-      std::array<asio::const_buffer, 3> buffers{asio::buffer(&msg.header, sizeof(msg.header)), asio::buffer(msg.query), asio::buffer(msg.body)};
+
+      std::array<asio::const_buffer, 3> buffers{asio::buffer(&msg.header, sizeof(msg.header)), asio::buffer(msg.query),
+                                                asio::buffer(msg.body)};
 
       asio::write(socket, buffers, asio::transfer_exactly(msg.header.length));
    }
-   
+
    inline void receive_buffer(asio::ip::tcp::socket& socket, repe::message& msg)
    {
       asio::read(socket, asio::buffer(&msg.header, sizeof(msg.header)), asio::transfer_exactly(sizeof(msg.header)));
@@ -51,57 +52,51 @@ namespace glz
       msg.body.resize(msg.header.body_length);
       asio::read(socket, asio::buffer(msg.body), asio::transfer_exactly(msg.header.body_length));
    }
-   
+
    inline asio::awaitable<void> co_send_buffer(asio::ip::tcp::socket& socket, const repe::message& msg)
    {
-       if (msg.header.length == repe::no_length_provided) {
-           throw std::runtime_error("No length provided in REPE header");
-       }
-       if (msg.header.query_length != msg.query.size()) {
-           throw std::runtime_error("Query length mismatch in REPE header");
-       }
-       if (msg.header.body_length != msg.body.size()) {
-           throw std::runtime_error("Body length mismatch in REPE header");
-       }
+      if (msg.header.length == repe::no_length_provided) {
+         throw std::runtime_error("No length provided in REPE header");
+      }
+      if (msg.header.query_length != msg.query.size()) {
+         throw std::runtime_error("Query length mismatch in REPE header");
+      }
+      if (msg.header.body_length != msg.body.size()) {
+         throw std::runtime_error("Body length mismatch in REPE header");
+      }
 
-       // Prepare the buffers: header, query, and body
-       std::array<asio::const_buffer, 3> buffers{
-           asio::buffer(&msg.header, sizeof(msg.header)),
-           asio::buffer(msg.query),
-           asio::buffer(msg.body)
-       };
+      // Prepare the buffers: header, query, and body
+      std::array<asio::const_buffer, 3> buffers{asio::buffer(&msg.header, sizeof(msg.header)), asio::buffer(msg.query),
+                                                asio::buffer(msg.body)};
 
-       // Calculate the total bytes to send
-       std::size_t total_length = sizeof(msg.header) + msg.header.query_length + msg.header.body_length;
+      // Calculate the total bytes to send
+      std::size_t total_length = sizeof(msg.header) + msg.header.query_length + msg.header.body_length;
 
-       // Asynchronously write the buffers to the socket
-       co_await asio::async_write(socket, buffers, asio::transfer_exactly(total_length), asio::use_awaitable);
+      // Asynchronously write the buffers to the socket
+      co_await asio::async_write(socket, buffers, asio::transfer_exactly(total_length), asio::use_awaitable);
    }
-   
+
    inline asio::awaitable<void> co_receive_buffer(asio::ip::tcp::socket& socket, repe::message& msg)
    {
-       // Asynchronously read the header
-       co_await asio::async_read(socket, asio::buffer(&msg.header, sizeof(msg.header)),
-                                 asio::transfer_exactly(sizeof(msg.header)),
-                                 asio::use_awaitable);
+      // Asynchronously read the header
+      co_await asio::async_read(socket, asio::buffer(&msg.header, sizeof(msg.header)),
+                                asio::transfer_exactly(sizeof(msg.header)), asio::use_awaitable);
 
-       // Validate and read the query
-       if (msg.header.query_length == repe::no_length_provided) {
-           throw std::runtime_error("No query_length provided in REPE header");
-       }
-       msg.query.resize(msg.header.query_length);
-       co_await asio::async_read(socket, asio::buffer(msg.query),
-                                 asio::transfer_exactly(msg.header.query_length),
-                                 asio::use_awaitable);
+      // Validate and read the query
+      if (msg.header.query_length == repe::no_length_provided) {
+         throw std::runtime_error("No query_length provided in REPE header");
+      }
+      msg.query.resize(msg.header.query_length);
+      co_await asio::async_read(socket, asio::buffer(msg.query), asio::transfer_exactly(msg.header.query_length),
+                                asio::use_awaitable);
 
-       // Validate and read the body
-       if (msg.header.body_length == repe::no_length_provided) {
-           throw std::runtime_error("No body_length provided in REPE header");
-       }
-       msg.body.resize(msg.header.body_length);
-       co_await asio::async_read(socket, asio::buffer(msg.body),
-                                 asio::transfer_exactly(msg.header.body_length),
-                                 asio::use_awaitable);
+      // Validate and read the body
+      if (msg.header.body_length == repe::no_length_provided) {
+         throw std::runtime_error("No body_length provided in REPE header");
+      }
+      msg.body.resize(msg.header.body_length);
+      co_await asio::async_read(socket, asio::buffer(msg.body), asio::transfer_exactly(msg.header.body_length),
+                                asio::use_awaitable);
    }
 
    // TODO: Make this socket_pool behave more like the object_pool and return a shared_ptr<socket>
@@ -211,7 +206,8 @@ namespace glz
 
       std::shared_ptr<asio::io_context> ctx{};
       std::shared_ptr<glz::socket_pool> socket_pool = std::make_shared<glz::socket_pool>();
-      std::shared_ptr<glz::memory_pool<repe::message>> message_pool = std::make_shared<glz::memory_pool<repe::message>>();
+      std::shared_ptr<glz::memory_pool<repe::message>> message_pool =
+         std::make_shared<glz::memory_pool<repe::message>>();
 
       std::shared_ptr<std::atomic<bool>> is_connected =
          std::make_shared<std::atomic<bool>>(false); // will be set to pool's boolean
@@ -272,7 +268,7 @@ namespace glz
             (*is_connected) = false;
             return {error_code::send_error, "asio send failure"};
          }
-         
+
          repe::message response{};
 
          try {
@@ -315,7 +311,7 @@ namespace glz
             (*is_connected) = false;
             return {error_code::send_error, "asio send failure"};
          }
-         
+
          repe::message response{};
          try {
             receive_buffer(*socket, response);
@@ -334,7 +330,7 @@ namespace glz
       {
          auto request = message_pool->borrow();
          std::ignore = repe::request<Opts>(*request, std::move(header), std::forward<Params>(params));
-         
+
          unique_socket socket{socket_pool.get()};
 
          try {
@@ -362,7 +358,7 @@ namespace glz
       [[nodiscard]] repe::error_t call(repe::user_header&& header)
       {
          auto request = repe::request<Opts>(std::move(header));
-         
+
          unique_socket socket{socket_pool.get()};
 
          try {
@@ -393,10 +389,8 @@ namespace glz
    {
       uint16_t port{};
       uint32_t concurrency{1}; // how many threads to use
-      
-      ~asio_server() {
-         stop();
-      }
+
+      ~asio_server() { stop(); }
 
       struct glaze
       {
@@ -428,7 +422,7 @@ namespace glz
          }
          initialized = true;
       }
-      
+
       std::atomic<bool> stop_server{false}; // Atomic flag to control stopping the server
 
       void run()
@@ -442,16 +436,16 @@ namespace glz
 
          // Start the listener coroutine
          asio::co_spawn(*ctx, listener(), asio::detached);
-         
+
          stop_server = false;
-         
+
          std::thread stop_thread([this]() {
-               // Wait for stop_server to be set to true
-               while (!stop_server) {
-                  std::this_thread::sleep_for(std::chrono::milliseconds(100));
-               }
-               ctx->stop(); // Stop the server's io_context
-            });
+            // Wait for stop_server to be set to true
+            while (!stop_server) {
+               std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            }
+            ctx->stop(); // Stop the server's io_context
+         });
 
          // Run the io_context in multiple threads for concurrency
          std::vector<std::thread> threads;
@@ -468,17 +462,14 @@ namespace glz
                thread.join();
             }
          }
-         
+
          if (stop_thread.joinable()) {
-               stop_thread.join();
-            }
+            stop_thread.join();
+         }
       }
 
       // stop the server
-      void stop()
-      {
-         stop_server = true;
-      }
+      void stop() { stop_server = true; }
 
       asio::awaitable<void> run_instance(asio::ip::tcp::socket socket)
       {
