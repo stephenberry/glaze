@@ -27,7 +27,7 @@ namespace glz
             requires(has_no_header(Opts))
          GLZ_ALWAYS_INLINE static void op(T&& value, Tag&& tag, Ctx&& ctx, It0&& it, It1&& end) noexcept
          {
-            if constexpr (std::is_const_v<std::remove_reference_t<T>>) {
+            if constexpr (const_value_v<T>) {
                if constexpr (Opts.error_on_const_read) {
                   ctx.error = error_code::attempt_const_read;
                }
@@ -47,7 +47,7 @@ namespace glz
             requires(not has_no_header(Opts))
          GLZ_ALWAYS_INLINE static void op(T&& value, Ctx&& ctx, It0&& it, It1&& end) noexcept
          {
-            if constexpr (std::is_const_v<std::remove_reference_t<T>>) {
+            if constexpr (const_value_v<T>) {
                if constexpr (Opts.error_on_const_read) {
                   ctx.error = error_code::attempt_const_read;
                }

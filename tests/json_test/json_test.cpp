@@ -9733,6 +9733,39 @@ suite atomics = [] {
    };
 };
 
+namespace trr
+{
+   struct Address {
+     std::string street;
+   };
+
+   struct Person {
+     Person(Address *const p_add) : p_add(p_add) {};
+     std::string name;
+     Address *const p_add; // pointer is const, Address object is mutable
+   };
+}
+
+
+template <> struct glz::meta<trr::Person> {
+  using T = trr::Person;
+  static constexpr auto value = object(&T::name, &T::p_add);
+};
+
+suite const_pointer_tests = [] {
+   "const pointer"_test = [] {
+      std::string buffer = R"({"name":"Foo Bar","p_add":{"street":"Baz Yaz"}})";
+      trr::Address add{};
+      trr::Person p{&add};
+      auto ec = glz::read<glz::opts{.format = glz::JSON, .error_on_const_read = true}>(p, buffer);
+      if (ec) {
+        std::cout << glz::format_error(ec, buffer) << std::endl;
+      }
+      expect(p.name == "Foo Bar");
+      expect(p.p_add->street == "Baz Yaz");
+   };
+};
+
 int main()
 {
    trace.end("json_test");

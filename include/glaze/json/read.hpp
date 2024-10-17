@@ -54,7 +54,7 @@ namespace glz
          template <auto Opts, class T, is_context Ctx, class It0, class It1>
          GLZ_ALWAYS_INLINE static void op(T&& value, Ctx&& ctx, It0&& it, It1&& end) noexcept
          {
-            if constexpr (std::is_const_v<std::remove_reference_t<T>>) {
+            if constexpr (const_value_v<T>) {
                if constexpr (Opts.error_on_const_read) {
                   ctx.error = error_code::attempt_const_read;
                }
@@ -1981,7 +1981,7 @@ namespace glz
             [&]<size_t I>() {
                using V = decltype(get_member(value, std::get<I>(variant)));
 
-               if constexpr (std::is_const_v<std::remove_reference_t<V>>) {
+               if constexpr (const_value_v<V>) {
                   if constexpr (Opts.error_on_const_read) {
                      ctx.error = error_code::attempt_const_read;
                   }
@@ -2175,7 +2175,7 @@ namespace glz
 
                            using V = decltype(get_member(value, element));
 
-                           if constexpr (std::is_const_v<std::remove_reference_t<V>>) {
+                           if constexpr (const_value_v<V>) {
                               if constexpr (Opts.error_on_const_read) {
                                  ctx.error = error_code::attempt_const_read;
                               }
