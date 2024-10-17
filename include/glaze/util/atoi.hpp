@@ -4,10 +4,12 @@
 #include <bit>
 #include <cmath>
 #include <cstdint>
+#include <cstring>
 #include <iterator>
 
 #include "glaze/util/inline.hpp"
 #include "glaze/util/for_each.hpp"
+#include "glaze/util/type_traits.hpp"
 
 namespace glz::detail
 {
