@@ -298,7 +298,7 @@ suite u8_test = [] {
 
       expect(not glz::read_json(value, "[-2e1, -3e0]"));
       expect(value == std::array<V, 2>{-20, -3});
-      
+
       expect(not glz::read_json(value, "[-99, -100]"));
       expect(value == std::array<V, 2>{-99, -100});
 

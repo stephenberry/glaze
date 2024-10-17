@@ -76,7 +76,7 @@ namespace glz
                      ctx.error = error_code::parse_number_failure;
                      return;
                   }
-                  
+
                   if (not glz::detail::atoi(i, it)) [[unlikely]] {
                      ctx.error = error_code::parse_number_failure;
                      return;

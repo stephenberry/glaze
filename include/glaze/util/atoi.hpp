@@ -7,8 +7,8 @@
 #include <cstring>
 #include <iterator>
 
-#include "glaze/util/inline.hpp"
 #include "glaze/util/for_each.hpp"
+#include "glaze/util/inline.hpp"
 #include "glaze/util/type_traits.hpp"
 
 namespace glz::detail
@@ -125,11 +125,8 @@ namespace glz::detail
       t['9'] = (peak - 9) / 10;
       return t;
    }();
-   
-   GLZ_ALWAYS_INLINE constexpr bool is_digit(const uint8_t c) noexcept
-   {
-      return c <= '9' && c >= '0';
-   }
+
+   GLZ_ALWAYS_INLINE constexpr bool is_digit(const uint8_t c) noexcept { return c <= '9' && c >= '0'; }
 
    struct value128 final
    {
@@ -183,7 +180,7 @@ namespace glz::detail
       if constexpr (std::is_unsigned_v<T>) {
          (void)sign;
       }
-      
+
       if (is_digit(*c)) [[likely]] {
          v = *c - '0';
          ++c;
@@ -203,7 +200,7 @@ namespace glz::detail
       if (c[-2] == '0') [[unlikely]] {
          return {};
       }
-      
+
       if constexpr (sizeof(T) > 1) {
          if (is_digit(*c)) {
             v = v * 10 + (*c - '0');
@@ -220,7 +217,7 @@ namespace glz::detail
          else {
             return c;
          }
-         
+
          if constexpr (sizeof(T) > 2) {
             if (is_digit(*c)) {
                v = v * 10 + (*c - '0');
@@ -347,7 +344,7 @@ namespace glz::detail
             }
          }
       }
-      
+
       if constexpr (std::is_unsigned_v<T>) {
          if (is_digit(*c)) {
             v = v * 10 + (*c - '0');
@@ -384,7 +381,7 @@ namespace glz::detail
 
       return c;
    }
-   
+
    template <std::integral T, class Char>
       requires(std::is_unsigned_v<T>)
    GLZ_ALWAYS_INLINE constexpr bool atoi(T& v, Char*& c) noexcept
@@ -435,7 +432,7 @@ namespace glz::detail
                return false;
             }
          }
-         
+
          if constexpr (sizeof(T) == 1) {
             static constexpr std::array<uint8_t, 3> powers_of_ten{1, 10, 100};
             const uint64_t i = v * powers_of_ten[exp];
@@ -468,7 +465,7 @@ namespace glz::detail
       }
       return false;
    }
-   
+
    template <std::integral T, class Char>
       requires(std::is_signed_v<T>)
    GLZ_ALWAYS_INLINE constexpr bool atoi(T& v, Char*& c) noexcept
@@ -519,7 +516,7 @@ namespace glz::detail
                return false;
             }
          }
-         
+
          if constexpr (sizeof(T) == 1) {
             static constexpr std::array<uint8_t, 3> powers_of_ten{1, 10, 100};
             i *= powers_of_ten[exp];
