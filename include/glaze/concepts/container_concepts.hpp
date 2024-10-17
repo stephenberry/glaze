@@ -263,7 +263,7 @@ namespace glz
 
    template <class Buffer>
    concept output_buffer = range<Buffer> && (sizeof(range_value_t<Buffer>) == sizeof(char)) && non_const_buffer<Buffer>;
-   
+
    template <class T>
    constexpr bool const_value_v = std::is_const_v<std::remove_pointer_t<std::remove_reference_t<T>>>;
 }
