@@ -356,15 +356,16 @@ namespace glz::repe
 
       if (h.error) {
          error_t error{};
-         std::ignore = glz::read<Opts>(error, response.body); // TODO: handle this
+         glz::detail::read<Opts.format>::template op<Opts>(error, ctx, b, e);
          return error;
       }
 
       if constexpr (!std::same_as<std::decay_t<Result>, ignore_result>) {
-         const auto ec = glz::read<Opts>(result, response.body);
+         glz::detail::read<Opts.format>::template op<Opts>(result, ctx, b, e);
 
-         if (bool(ec)) {
-            return {error_e::error, format_error(ec, response.body)};
+         if (bool(ctx.error)) {
+            error_ctx pe{ctx.error, ctx.custom_error_message, size_t(b - start), ctx.includer_error};
+            return {error_e::parse_error, format_error(pe, buffer)};
          }
       }
 
