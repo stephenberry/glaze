@@ -11,6 +11,34 @@
 #include "glaze/util/inline.hpp"
 #include "glaze/util/type_traits.hpp"
 
+// Characters to integer parsing
+
+// - We don't allow decimals in integer parsing
+// - We don't allow negative exponents
+// Thse cases can produce fractions which slow performance and add confusion
+// as to how the integer ought to be parsed (truncation, rounding, etc.)
+// This integer parsing is designed to be straightfoward and fast
+// Values like 1e6 are allowed because it enables less typing from the user
+// and has a clear integer value
+
+// Valid JSON integer examples
+// 1234
+// 1234e1
+// 1e9
+
+// Invalid for this atoi algorithm
+// 1.234
+// 1234e-1
+// 0.0
+
+// The standard JSON specification for numbers and the associated rules apply
+
+// *** We ensure that a decimal value being parsed will result in an error
+// 1.2 should not produce 1, but rather an error, even when a single field is parsed
+// This ensures that we get proper errors when parsing and don't get confusing errors
+// It isn't technically required, because end validation would handle it, but it produces
+// much clearer errors, especially when we don't perform trailing validation.
+
 namespace glz::detail
 {
    constexpr std::array<uint64_t, 20> powers_of_ten_int{1ull,
@@ -33,33 +61,6 @@ namespace glz::detail
                                                         100000000000000000ull,
                                                         1000000000000000000ull,
                                                         10000000000000000000ull};
-
-   // We don't allow decimals in integer parsing
-   // We don't allow negative exponents
-   // Thse cases can produce decimals which slow performance and add confusion
-   // as to how the integer should be parsed (truncation, rounding, etc.)
-   // We allow parsing as a float and casting elsewhere when needed
-   // But, this integer parsing is designed to be straightfoward and fast
-   // Values like 1e6 are allowed because it enables less typing from the user
-   // We allow only two exponent digits, as the JSON specification only requires support up to e53
-
-   // Valid JSON integer examples
-   // 1234
-   // 1234e1
-   // 1e9
-
-   // Invalid for this atoi algorithm
-   // 1.234
-   // 1234e-1
-   // 0.0
-
-   // The standard JSON specification for numbers and the associated rules apply
-
-   // *** We ensure that a decimal value being parsed will result in an error
-   // 1.2 should not produce 1, but rather an error, even when a single field is parsed
-   // This ensures that we get proper errors when parsing and don't get confusing errors
-   // It isn't technically required, because end validation would handle it, but it produces
-   // much clearer errors
 
    inline constexpr std::array<bool, 256> exp_dec_table = [] {
       std::array<bool, 256> t{};
