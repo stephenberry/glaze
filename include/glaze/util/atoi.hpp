@@ -139,6 +139,11 @@ namespace glz::detail
       t['9'] = (peak - 9) / 10;
       return t;
    }();
+   
+   GLZ_ALWAYS_INLINE constexpr bool is_digit(const uint8_t c) noexcept
+   {
+      return c <= '9' && c >= '0';
+   }
 
    struct value128 final
    {
@@ -193,7 +198,7 @@ namespace glz::detail
          (void)sign;
       }
       
-      if (digit_table[*c]) [[likely]] {
+      if (is_digit(*c)) [[likely]] {
          v = *c - '0';
          ++c;
       }
@@ -201,7 +206,7 @@ namespace glz::detail
          return {};
       }
 
-      if (digit_table[*c]) {
+      if (is_digit(*c)) {
          v = v * 10 + (*c - '0');
          ++c;
       }
@@ -214,7 +219,7 @@ namespace glz::detail
       }
       
       if constexpr (sizeof(T) > 1) {
-         if (digit_table[*c]) {
+         if (is_digit(*c)) {
             v = v * 10 + (*c - '0');
             ++c;
          }
@@ -222,7 +227,7 @@ namespace glz::detail
             return c;
          }
 
-         if (digit_table[*c]) {
+         if (is_digit(*c)) {
             v = v * 10 + (*c - '0');
             ++c;
          }
@@ -231,7 +236,7 @@ namespace glz::detail
          }
          
          if constexpr (sizeof(T) > 2) {
-            if (digit_table[*c]) {
+            if (is_digit(*c)) {
                v = v * 10 + (*c - '0');
                ++c;
             }
@@ -239,7 +244,7 @@ namespace glz::detail
                return c;
             }
 
-            if (digit_table[*c]) {
+            if (is_digit(*c)) {
                v = v * 10 + (*c - '0');
                ++c;
             }
@@ -247,7 +252,7 @@ namespace glz::detail
                return c;
             }
 
-            if (digit_table[*c]) {
+            if (is_digit(*c)) {
                v = v * 10 + (*c - '0');
                ++c;
             }
@@ -255,7 +260,7 @@ namespace glz::detail
                return c;
             }
 
-            if (digit_table[*c]) {
+            if (is_digit(*c)) {
                v = v * 10 + (*c - '0');
                ++c;
             }
@@ -263,7 +268,7 @@ namespace glz::detail
                return c;
             }
 
-            if (digit_table[*c]) {
+            if (is_digit(*c)) {
                v = v * 10 + (*c - '0');
                ++c;
             }
@@ -272,7 +277,7 @@ namespace glz::detail
             }
 
             if constexpr (sizeof(T) > 4) {
-               if (digit_table[*c]) {
+               if (is_digit(*c)) {
                   v = v * 10 + (*c - '0');
                   ++c;
                }
@@ -280,7 +285,7 @@ namespace glz::detail
                   return c;
                }
 
-               if (digit_table[*c]) {
+               if (is_digit(*c)) {
                   v = v * 10 + (*c - '0');
                   ++c;
                }
@@ -288,7 +293,7 @@ namespace glz::detail
                   return c;
                }
 
-               if (digit_table[*c]) {
+               if (is_digit(*c)) {
                   v = v * 10 + (*c - '0');
                   ++c;
                }
@@ -296,7 +301,7 @@ namespace glz::detail
                   return c;
                }
 
-               if (digit_table[*c]) {
+               if (is_digit(*c)) {
                   v = v * 10 + (*c - '0');
                   ++c;
                }
@@ -304,7 +309,7 @@ namespace glz::detail
                   return c;
                }
 
-               if (digit_table[*c]) {
+               if (is_digit(*c)) {
                   v = v * 10 + (*c - '0');
                   ++c;
                }
@@ -312,7 +317,7 @@ namespace glz::detail
                   return c;
                }
 
-               if (digit_table[*c]) {
+               if (is_digit(*c)) {
                   v = v * 10 + (*c - '0');
                   ++c;
                }
@@ -320,7 +325,7 @@ namespace glz::detail
                   return c;
                }
 
-               if (digit_table[*c]) {
+               if (is_digit(*c)) {
                   v = v * 10 + (*c - '0');
                   ++c;
                }
@@ -328,7 +333,7 @@ namespace glz::detail
                   return c;
                }
 
-               if (digit_table[*c]) {
+               if (is_digit(*c)) {
                   v = v * 10 + (*c - '0');
                   ++c;
                }
@@ -336,7 +341,7 @@ namespace glz::detail
                   return c;
                }
 
-               if (digit_table[*c]) {
+               if (is_digit(*c)) {
                   v = v * 10 + (*c - '0');
                   ++c;
                }
@@ -345,7 +350,7 @@ namespace glz::detail
                }
 
                if constexpr (std::is_unsigned_v<T>) {
-                  if (digit_table[*c]) {
+                  if (is_digit(*c)) {
                      v = v * 10 + (*c - '0');
                      ++c;
                   }
@@ -358,19 +363,21 @@ namespace glz::detail
       }
       
       if constexpr (std::is_unsigned_v<T>) {
-         if (digit_table[*c]) {
-            if (v > peak_positive<T>[*c]) [[unlikely]] {
+         if (is_digit(*c)) {
+            v = v * 10 + (*c - '0');
+            constexpr auto split = (std::numeric_limits<T>::max)() / 10 - 10;
+            if (v < split) [[unlikely]] {
+               // due to overflow
                return {};
             }
-            v = v * 10 + (*c - '0');
             ++c;
-            if (digit_table[*c]) [[unlikely]] {
+            if (is_digit(*c)) [[unlikely]] {
                return {};
             }
          }
       }
       else {
-         if (digit_table[*c]) {
+         if (is_digit(*c)) {
             if (sign) {
                if (v > peak_negative<T>[*c]) [[unlikely]] {
                   return {};
@@ -383,7 +390,7 @@ namespace glz::detail
             }
             v = v * 10 + (*c - '0');
             ++c;
-            if (digit_table[*c]) [[unlikely]] {
+            if (is_digit(*c)) [[unlikely]] {
                return {};
             }
          }
@@ -417,16 +424,16 @@ namespace glz::detail
 
             c += (*c == '+');
 
-            if (not digit_table[uint8_t(*c)]) [[unlikely]] {
+            if (not is_digit(*c)) [[unlikely]] {
                return false;
             }
             ++c;
             uint8_t exp = c[-1] - '0';
-            if (digit_table[uint8_t(*c)]) {
+            if (is_digit(*c)) {
                exp = exp * 10 + (*c - '0');
                ++c;
             }
-            if (digit_table[uint8_t(*c)]) {
+            if (is_digit(*c)) {
                exp = exp * 10 + (*c - '0');
                ++c;
             }
@@ -451,7 +458,19 @@ namespace glz::detail
                }
             }
             
-            if constexpr (sizeof(T) < 8) {
+            if constexpr (sizeof(T) == 1) {
+               static constexpr std::array<uint8_t, 3> powers_of_ten{1, 10, 100};
+               const uint64_t i = v * powers_of_ten[exp];
+               v = T(i);
+               return i <= (std::numeric_limits<T>::max)();
+            }
+            else if constexpr (sizeof(T) == 2) {
+               static constexpr std::array<uint16_t, 5> powers_of_ten{1, 10, 100, 1000, 10000};
+               const uint64_t i = v * powers_of_ten[exp];
+               v = T(i);
+               return i <= (std::numeric_limits<T>::max)();
+            }
+            else if constexpr (sizeof(T) < 8) {
                const uint64_t i = v * powers_of_ten_int[exp];
                v = T(i);
                return i <= (std::numeric_limits<T>::max)();
@@ -506,12 +525,12 @@ namespace glz::detail
 
             c += (*c == '+');
 
-            if (not digit_table[uint8_t(*c)]) [[unlikely]] {
+            if (not is_digit(*c)) [[unlikely]] {
                return false;
             }
             ++c;
             uint8_t exp = c[-1] - '0';
-            if (digit_table[uint8_t(*c)]) {
+            if (is_digit(*c)) {
                exp = exp * 10 + (*c - '0');
                ++c;
             }
