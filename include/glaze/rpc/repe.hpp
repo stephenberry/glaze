@@ -248,7 +248,10 @@ namespace glz::repe
    size_t read_params(Value&& value, auto&& state)
    {
       glz::context ctx{};
-      auto [b, e] = read_iterators<Opts>(ctx, state.in.body);
+      auto [b, e] = read_iterators<Opts>(state.in.body);
+      if (state.message.empty()) [[unlikely]] {
+         ctx.error = error_code::no_read_input;
+      }
       if (bool(ctx.error)) [[unlikely]] {
          return 0;
       }
@@ -311,9 +314,47 @@ namespace glz::repe
    {};
 
    template <opts Opts, class Result>
-   [[nodiscard]] error_t decode_response(Result&& result, repe::message& response)
+   [[nodiscard]] error_t decode_response(Result&& result, auto& buffer)
    {
-      if (response.header.error) {
+      repe::header h;
+      context ctx{};
+      auto [b, e] = read_iterators<Opts>(buffer);
+      if (buffer.empty()) [[unlikely]] {
+         ctx.error = error_code::no_read_input;
+      }
+      if (bool(ctx.error)) [[unlikely]] {
+         return error_t{error_e::parse_error};
+      }
+      auto start = b;
+
+      auto handle_error = [&](auto& it) {
+         ctx.error = error_code::syntax_error;
+         error_ctx pe{ctx.error, ctx.custom_error_message, size_t(it - start), ctx.includer_error};
+         return error_t{error_e::parse_error, format_error(pe, buffer)};
+      };
+
+      if (*b == '[') {
+         ++b;
+      }
+      else {
+         return handle_error(b);
+      }
+
+      glz::detail::read<Opts.format>::template op<Opts>(h, ctx, b, e);
+
+      if (bool(ctx.error)) {
+         error_ctx pe{ctx.error, ctx.custom_error_message, size_t(b - start), ctx.includer_error};
+         return {error_e::parse_error, format_error(pe, buffer)};
+      }
+
+      if (*b == ',') {
+         ++b;
+      }
+      else {
+         return handle_error(b);
+      }
+
+      if (h.error) {
          error_t error{};
          std::ignore = glz::read<Opts>(error, response.body); // TODO: handle this
          return error;

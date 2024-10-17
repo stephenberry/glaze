@@ -25,7 +25,7 @@ ut::suite valid_vector_test_cases_server = [] {
          // No id is valid
          R"({"jsonrpc": "2.0","method": "add", "params": [1, 2, 3]})", ""),
       std::pair(R"({"jsonrpc": "2.0","method": "add", "params": [1, 2, 3],"id": null})", ""),
-      std::pair(R"({"jsonrpc": "2.0","method": "add", "params": [1, 2, 3],"id": 2.0})",
+      std::pair(R"({"jsonrpc": "2.0","method": "add", "params": [1, 2, 3],"id": 2})",
                 R"({"jsonrpc": "2.0","result": 6, "id": 2})"),
       std::pair(R"({"jsonrpc": "2.0","method": "add","params": [1, 2, 3],"id": "some_client_22"})",
                 R"({"jsonrpc": "2.0","result": 6, "id": "some_client_22"})")};

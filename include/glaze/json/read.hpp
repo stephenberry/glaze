@@ -54,7 +54,7 @@ namespace glz
          template <auto Opts, class T, is_context Ctx, class It0, class It1>
          GLZ_ALWAYS_INLINE static void op(T&& value, Ctx&& ctx, It0&& it, It1&& end) noexcept
          {
-            if constexpr (std::is_const_v<std::remove_reference_t<T>>) {
+            if constexpr (const_value_v<T>) {
                if constexpr (Opts.error_on_const_read) {
                   ctx.error = error_code::attempt_const_read;
                }
@@ -562,125 +562,29 @@ namespace glz
             if constexpr (int_t<V>) {
                static_assert(sizeof(*it) == sizeof(char));
 
-               static constexpr auto maximum = uint64_t((std::numeric_limits<V>::max)());
-               if constexpr (std::is_unsigned_v<V>) {
-                  if constexpr (std::same_as<V, uint64_t>) {
-                     if (*it == '-') [[unlikely]] {
-                        ctx.error = error_code::parse_number_failure;
-                        return;
-                     }
-
-                     const char* cur = reinterpret_cast<const char*>(it);
-                     const char* beg = cur;
-                     if constexpr (std::is_volatile_v<std::remove_reference_t<decltype(value)>>) {
-                        // Hardware may interact with value changes, so we parse into a temporary and assign in one
-                        // place
-                        uint64_t i{};
-                        if constexpr (Opts.null_terminated) {
-                           if (not parse_int<uint64_t>(i, cur)) [[unlikely]] {
-                              ctx.error = error_code::parse_number_failure;
-                              return;
-                           }
-                        }
-                        else {
-                           if (not parse_int<uint64_t>(i, cur, end)) [[unlikely]] {
-                              ctx.error = error_code::parse_number_failure;
-                              return;
-                           }
-                        }
-                        GLZ_VALID_END();
-                        value = i;
-                     }
-                     else {
-                        if constexpr (Opts.null_terminated) {
-                           if (not parse_int<decay_keep_volatile_t<decltype(value)>>(value, cur)) [[unlikely]] {
-                              ctx.error = error_code::parse_number_failure;
-                              return;
-                           }
-                        }
-                        else {
-                           if (not parse_int<decay_keep_volatile_t<decltype(value)>>(value, cur, end)) [[unlikely]] {
-                              ctx.error = error_code::parse_number_failure;
-                              return;
-                           }
-                        }
-                        GLZ_VALID_END();
-                     }
-
-                     it += (cur - beg);
+               if constexpr (Opts.parse_ints_as_type_cast_doubles) {
+                  double d{};
+                  auto [ptr, ec] = glz::from_chars<Opts.null_terminated>(it, end, d);
+                  if (ec != std::errc()) [[unlikely]] {
+                     ctx.error = error_code::parse_number_failure;
+                     return;
                   }
-                  else {
-                     uint64_t i{};
-                     if (*it == '-') [[unlikely]] {
-                        ctx.error = error_code::parse_number_failure;
-                        return;
-                     }
-
-                     const char* cur = reinterpret_cast<const char*>(it);
-                     const char* beg = cur;
-                     if constexpr (Opts.null_terminated) {
-                        if (not parse_int<std::decay_t<decltype(i)>>(i, cur)) [[unlikely]] {
-                           ctx.error = error_code::parse_number_failure;
-                           return;
-                        }
-                     }
-                     else {
-                        if (not parse_int<std::decay_t<decltype(i)>>(i, cur, end)) [[unlikely]] {
-                           ctx.error = error_code::parse_number_failure;
-                           return;
-                        }
-                     }
-                     GLZ_VALID_END();
-
-                     if (i > maximum) [[unlikely]] {
-                        ctx.error = error_code::parse_number_failure;
-                        return;
-                     }
-                     value = V(i);
-                     it += (cur - beg);
-                  }
+                  it = ptr;
+                  value = static_cast<V>(d);
                }
                else {
-                  uint64_t i{};
-                  int sign = 1;
-                  if (*it == '-') {
-                     sign = -1;
-                     ++it;
-                     GLZ_VALID_END();
-                  }
-
-                  const char* cur = reinterpret_cast<const char*>(it);
-                  const char* beg = cur;
                   if constexpr (Opts.null_terminated) {
-                     if (not parse_int<decay_keep_volatile_t<decltype(i)>>(i, cur)) [[unlikely]] {
+                     if (not glz::detail::atoi(value, it)) [[unlikely]] {
                         ctx.error = error_code::parse_number_failure;
                         return;
                      }
                   }
                   else {
-                     if (not parse_int<decay_keep_volatile_t<decltype(i)>>(i, cur, end)) [[unlikely]] {
+                     if (not glz::detail::atoi(value, it, end)) [[unlikely]] {
                         ctx.error = error_code::parse_number_failure;
                         return;
                      }
                   }
-                  GLZ_VALID_END();
-
-                  if (sign == -1) {
-                     static constexpr auto min_abs = uint64_t((std::numeric_limits<V>::max)()) + 1;
-                     if (i > min_abs) [[unlikely]] {
-                        ctx.error = error_code::parse_number_failure;
-                        return;
-                     }
-                     value = V(sign * i);
-                  }
-                  else {
-                     if (i > maximum) [[unlikely]] {
-                        ctx.error = error_code::parse_number_failure;
-                        return;
-                     }
-                     value = V(i);
-                  }
-                  it += (cur - beg);
                }
             }
             else {
@@ -1108,7 +1012,7 @@ namespace glz
       };
 
       template <class T>
-         requires(string_view_t<T> || char_array_t<T>)
+         requires(string_view_t<T> || char_array_t<T> || array_char_t<T>)
       struct from<JSON, T>
       {
          template <auto Opts, class It, class End>
@@ -1124,30 +1028,33 @@ namespace glz
             }
 
             auto start = it;
+            skip_string_view<Opts>(ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]]
+               return;
 
             if constexpr (string_view_t<T>) {
-               skip_string_view<Opts>(ctx, it, end);
-               if (bool(ctx.error)) [[unlikely]]
-                  return;
                value = {start, size_t(it - start)};
-               ++it; // skip closing quote
-               GLZ_VALID_END();
             }
             else if constexpr (char_array_t<T>) {
-               skip_string_view<Opts>(ctx, it, end);
-               if (bool(ctx.error)) [[unlikely]]
-                  return;
-
                const size_t n = it - start;
-               if ((sizeof(value) - 1) < n) {
+               if ((n + 1) > sizeof(value)) {
                   ctx.error = error_code::unexpected_end;
                   return;
                }
                std::memcpy(value, start, n);
                value[n] = '\0';
-               ++it; // skip closing quote
-               GLZ_VALID_END();
             }
+            else if constexpr (array_char_t<T>) {
+               const size_t n = it - start;
+               if ((n + 1) > value.size()) {
+                  ctx.error = error_code::unexpected_end;
+                  return;
+               }
+               std::memcpy(value.data(), start, n);
+               value[n] = '\0';
+            }
+            ++it; // skip closing quote
+            GLZ_VALID_END();
          }
       };
 
@@ -2074,7 +1981,7 @@ namespace glz
             [&]<size_t I>() {
                using V = decltype(get_member(value, std::get<I>(variant)));
 
-               if constexpr (std::is_const_v<std::remove_reference_t<V>>) {
+               if constexpr (const_value_v<V>) {
                   if constexpr (Opts.error_on_const_read) {
                      ctx.error = error_code::attempt_const_read;
                   }
@@ -2268,7 +2175,7 @@ namespace glz
 
                            using V = decltype(get_member(value, element));
 
-                           if constexpr (std::is_const_v<std::remove_reference_t<V>>) {
+                           if constexpr (const_value_v<V>) {
                               if constexpr (Opts.error_on_const_read) {
                                  ctx.error = error_code::attempt_const_read;
                               }

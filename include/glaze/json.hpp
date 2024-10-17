@@ -18,3 +18,4 @@
 #include "glaze/json/schema.hpp"
 #include "glaze/json/wrappers.hpp"
 #include "glaze/json/write.hpp"
+#include "glaze/thread/atomic.hpp"

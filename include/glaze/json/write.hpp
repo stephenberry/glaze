@@ -313,6 +313,9 @@ namespace glz
                      if constexpr (!char_array_t<T> && std::is_pointer_v<std::decay_t<T>>) {
                         return value ? value : "";
                      }
+                     else if constexpr (array_char_t<T>) {
+                        return *value.data() ? sv{value.data()} : "";
+                     }
                      else {
                         return value;
                      }
@@ -1292,9 +1295,23 @@ namespace glz
             static constexpr auto N = glz::tuple_size_v<V>;
 
             invoke_table<N>([&]<size_t I>() {
-               write<JSON>::op<opening_and_closing_handled<Options>()>(glz::get<I>(value.value), ctx, b, ix);
-               if constexpr (I < N - 1) {
-                  dump<','>(b, ix);
+               if constexpr (Options.skip_null_members) {
+                  // It is possible that all fields were skipped if skip_null_members is true
+                  // In this case we don't want to dump a comma
+                  const auto ix_start = ix;
+                  write<JSON>::op<opening_and_closing_handled<Options>()>(glz::get<I>(value.value), ctx, b, ix);
+                  if constexpr (I < N - 1) {
+                     if (ix > ix_start) // we wrote something
+                     {
+                        dump<','>(b, ix);
+                     }
+                  }
+               }
+               else {
+                  write<JSON>::op<opening_and_closing_handled<Options>()>(glz::get<I>(value.value), ctx, b, ix);
+                  if constexpr (I < N - 1) {
+                     dump<','>(b, ix);
+                  }
                }
             });
 

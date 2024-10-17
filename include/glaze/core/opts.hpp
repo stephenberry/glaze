@@ -77,6 +77,11 @@ namespace glz
 
       // The maximum precision type used for writing floats, higher precision floats will be cast down to this precision
       float_precision float_max_write_precision{};
+      bool_t parse_ints_as_type_cast_doubles{}; // By default Glaze rejects decimals and negative exponents when parsing
+                                                // integers
+      // Turn on this option to read JSON integers with double precision that is cast to the integer type
+      // Note: it is not recommended to use this option generally, instead use a floating point type if necessary or
+      // use glz::custom to define your desired conversion precision and approach (truncation vs rounding)
 
       bool_t bools_as_numbers = false; // Read and write booleans with 1's and 0's
 

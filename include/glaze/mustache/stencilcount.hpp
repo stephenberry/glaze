@@ -22,8 +22,11 @@ namespace glz
          return unexpected(error_ctx{ctx.error, ctx.custom_error_message, 0, ctx.includer_error});
       }
 
-      auto [it, end] = read_iterators<Opts, false>(ctx, tmp);
+      auto [it, end] = read_iterators<Opts, false>(tmp);
       auto start = it;
+      if (tmp.empty()) [[unlikely]] {
+         ctx.error = error_code::no_read_input;
+      }
       if (not bool(ctx.error)) [[likely]] {
          auto skip_whitespace = [&] {
             while (detail::whitespace_table[uint8_t(*it)]) {
