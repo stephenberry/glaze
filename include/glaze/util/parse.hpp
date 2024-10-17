@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include <algorithm>
 #include <bit>
 #include <cstring>
 #include <iterator>
