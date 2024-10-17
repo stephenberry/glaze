@@ -3,7 +3,7 @@
 
 #define UT_RUN_TIME_ONLY
 
-#include "glaze/rpc/repe.hpp"
+#include "glaze/rpc/repe/registry.hpp"
 
 #include <latch>
 #include <thread>
