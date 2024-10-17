@@ -19,7 +19,7 @@ static_assert(false, "standalone or boost asio must be included to use glaze/ext
 #include <iostream>
 
 #include "glaze/rpc/repe.hpp"
-#include "glaze/util/buffer_pool.hpp"
+#include "glaze/util/memory_pool.hpp"
 
 namespace glz
 {
@@ -104,6 +104,7 @@ namespace glz
                                  asio::use_awaitable);
    }
 
+   // TODO: Make this socket_pool behave more like the object_pool and return a shared_ptr<socket>
    struct socket_pool
    {
       std::string host{"localhost"}; // host name
@@ -210,7 +211,7 @@ namespace glz
 
       std::shared_ptr<asio::io_context> ctx{};
       std::shared_ptr<glz::socket_pool> socket_pool = std::make_shared<glz::socket_pool>();
-      std::shared_ptr<glz::buffer_pool> buffer_pool = std::make_shared<glz::buffer_pool>();
+      std::shared_ptr<glz::memory_pool<repe::message>> message_pool = std::make_shared<glz::memory_pool<repe::message>>();
 
       std::shared_ptr<std::atomic<bool>> is_connected =
          std::make_shared<std::atomic<bool>>(false); // will be set to pool's boolean
@@ -331,13 +332,13 @@ namespace glz
       template <class Params, class Result>
       [[nodiscard]] repe::error_t call(repe::user_header&& header, Params&& params, Result&& result)
       {
-         repe::message request{};
-         std::ignore = repe::request<Opts>(request, std::move(header), std::forward<Params>(params));
+         auto request = message_pool->borrow();
+         std::ignore = repe::request<Opts>(*request, std::move(header), std::forward<Params>(params));
          
          unique_socket socket{socket_pool.get()};
 
          try {
-            send_buffer(*socket, request);
+            send_buffer(*socket, *request);
          }
          catch (const std::exception& e) {
             socket.ptr.reset();
@@ -345,9 +346,9 @@ namespace glz
             return {repe::error_e::error, "asio send failure"};
          }
 
-         repe::message response{};
+         auto response = message_pool->borrow();
          try {
-            receive_buffer(*socket, response);
+            receive_buffer(*socket, *response);
          }
          catch (const std::exception& e) {
             socket.ptr.reset();
@@ -355,7 +356,7 @@ namespace glz
             return {repe::error_e::error, "asio receive failure"};
          }
 
-         return repe::decode_response<Opts>(std::forward<Result>(result), response.body);
+         return repe::decode_response<Opts>(std::forward<Result>(result), response->body);
       }
 
       [[nodiscard]] repe::error_t call(repe::user_header&& header)
@@ -423,6 +424,8 @@ namespace glz
          }
          initialized = true;
       }
+      
+      std::atomic<bool> stop_server{false}; // Atomic flag to control stopping the server
 
       void run()
       {
@@ -435,6 +438,14 @@ namespace glz
 
          // Start the listener coroutine
          asio::co_spawn(*ctx, listener(), asio::detached);
+         
+         std::thread stop_thread([this]() {
+               // Wait for stop_server to be set to true
+               while (!stop_server) {
+                  std::this_thread::sleep_for(std::chrono::milliseconds(100));
+               }
+               ctx->stop(); // Stop the server's io_context
+            });
 
          // Run the io_context in multiple threads for concurrency
          std::vector<std::thread> threads;
@@ -442,7 +453,7 @@ namespace glz
             threads.emplace_back([this]() { ctx->run(); });
          }
 
-         // Optionally, run in the main thread as well
+         // Run in the main thread as well
          ctx->run();
 
          // Join all threads before exiting
@@ -451,14 +462,16 @@ namespace glz
                thread.join();
             }
          }
+         
+         if (stop_thread.joinable()) {
+               stop_thread.join();
+            }
       }
 
       // stop the server
       void stop()
       {
-         if (ctx) {
-            ctx->stop();
-         }
+         stop_server = true;
       }
 
       asio::awaitable<void> run_instance(asio::ip::tcp::socket socket)

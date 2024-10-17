@@ -79,6 +79,7 @@ namespace glz::repe
 
    static_assert(sizeof(header) == 48);
 
+   // query and body are heap allocated and we want to be able to reuse memory
    struct message final
    {
       repe::header header{};

@@ -94,7 +94,7 @@ struct first_type
    std::function<int(int)> sum = [](int n) {
       for (auto i = 0; i < n; ++i) {
          std::cout << "n: " << n << '\n';
-         std::this_thread::sleep_for(std::chrono::seconds(1));
+         std::this_thread::sleep_for(std::chrono::milliseconds(10));
       }
       return n;
    };
@@ -105,7 +105,7 @@ struct second_type
    std::function<int(int)> sum = [](int n) {
       for (auto i = 0; i < n; ++i) {
          std::cout << "n: " << n << '\n';
-         std::this_thread::sleep_for(std::chrono::seconds(1));
+         std::this_thread::sleep_for(std::chrono::milliseconds(10));
       }
       return n;
    };
@@ -121,8 +121,9 @@ void async_calls()
 {
    static constexpr int16_t port = 8765;
    
-   std::future<void> server_thread = std::async([] {
-      glz::asio_server<> server{.port = port, .concurrency = 2};
+   glz::asio_server<> server{.port = port, .concurrency = 2};
+   
+   std::future<void> server_thread = std::async([&] {
       api2 methods{};
       server.on(methods);
       server.run();
@@ -138,19 +139,21 @@ void async_calls()
 
       threads.emplace_back(std::async([&] {
          int ret{};
-         (void)client.call({"/first/sum"}, 99, ret);
+         (void)client.call({"/first/sum"}, 25, ret);
       }));
 
       std::this_thread::sleep_for(std::chrono::seconds(1));
 
       threads.emplace_back(std::async([&] {
          int ret{};
-         (void)client.call({"/second/sum"}, 10, ret);
+         (void)client.call({"/second/sum"}, 5, ret);
       }));
 
       for (auto& t : threads) {
          t.get();
       }
+      
+      server.stop();
    }
    catch (const std::exception& e) {
       std::cerr << e.what() << '\n';
@@ -162,8 +165,7 @@ void async_calls()
 int main()
 {
    //asio_client_test();
-   //async_calls();
-
-   std::this_thread::sleep_for(std::chrono::seconds(5));
+   async_calls();
+   
    return 0;
 }
