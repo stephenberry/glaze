@@ -8,119 +8,21 @@
 #include <thread>
 
 #include "glaze/glaze.hpp"
+#include "glaze/rpc/repe/header.hpp"
 
 namespace glz::repe
 {
-   constexpr uint8_t notify = 0b00000001;
-   constexpr uint8_t empty = 0b00000010;
-
-   // Note: The method and id are at the top of the class for easier initialization
-   // The order in the serialized message follows the REPE specification
-   struct header final
-   {
-      std::string_view method = ""; // the RPC method (JSON pointer path) to call or member to access/assign (GET/POST)
-      std::variant<std::monostate, uint64_t, std::string_view> id{}; // an identifier
-      static constexpr uint8_t version = 0; // the REPE version
-      uint8_t error = 0; // 0 denotes no error (boolean: 0 or 1)
-
-      // Action: These booleans are packed into the a uint8_t action in the REPE header
-      bool notify{}; // no response returned
-      bool empty{}; // the body should be ignored (considered empty)
-   };
-
-   template <class T>
-   concept is_header = std::same_as<std::decay_t<T>, header>;
-}
-
-template <>
-struct glz::meta<glz::repe::header>
-{
-   using T = glz::repe::header;
-   static constexpr sv name = "glz::repe::header"; // Hack to fix MSVC (shouldn't be needed)
-   static constexpr auto read_action = [](T& self, const uint8_t input) {
-      self.notify = input & 0b00000001;
-      self.empty = input & 0b00000010;
-   };
-   static constexpr auto write_action = [](const T& self) {
-      uint8_t action{};
-      action |= self.notify;
-      action |= (self.empty << 1);
-      return action;
-   };
-   static constexpr auto value =
-      glz::array(&T::version, &T::error, custom<read_action, write_action>, &T::method, &T::id);
-};
-
-namespace glz::repe
-{
-   struct error_e
-   {
-      static constexpr int32_t no_error = 0;
-      static constexpr int32_t server_error_lower = -32000;
-      static constexpr int32_t server_error_upper = -32099;
-      static constexpr int32_t invalid_request = -32600;
-      static constexpr int32_t method_not_found = -32601;
-      static constexpr int32_t invalid_params = -32602;
-      static constexpr int32_t internal = -32603;
-      static constexpr int32_t parse_error = -32700;
-
-      static constexpr int32_t timeout = -6000;
-   };
-
-   inline constexpr std::string_view error_code_to_sv(const int32_t e) noexcept
-   {
-      switch (e) {
-      case error_e::no_error: {
-         return "0 [no_error]";
-      }
-      case error_e::server_error_lower: {
-         return "-32000 [server_error_lower]";
-      }
-      case error_e::server_error_upper: {
-         return "-32099 [server_error_upper]";
-      }
-      case error_e::invalid_request: {
-         return "-32600 [invalid_request]";
-      }
-      case error_e::method_not_found: {
-         return "-32601 [method_not_found]";
-      }
-      case error_e::invalid_params: {
-         return "-32602 [invalid_params]";
-      }
-      case error_e::internal: {
-         return "-32603 [internal]";
-      }
-      case error_e::parse_error: {
-         return "-32700 [parse_error]";
-      }
-      case error_e::timeout: {
-         return "-6000 [timeout]";
-      }
-      default: {
-         return "unknown_error_code";
-         break;
-      }
-      };
-   }
-
    struct error_t final
    {
-      int32_t code = error_e::no_error;
+      error_code code = error_code::none;
       std::string message = "";
 
       operator bool() const noexcept { return bool(code); }
-
-      struct glaze
-      {
-         using T = error_t;
-         static constexpr auto value = glz::array(&T::code, &T::message);
-      };
    };
 
    inline std::string format_error(const error_t& e) noexcept
    {
-      std::string result = "error: " + std::string(error_code_to_sv(e.code));
+      std::string result = "error: " + std::string(meta<error_code>::keys[uint32_t(e.code)]);
       result += "\n";
       result += e.message;
       return result;
@@ -128,10 +30,15 @@ namespace glz::repe
 
    struct state final
    {
-      const std::string_view message{};
-      repe::header& header;
-      std::string& response;
+      repe::message& in;
+      repe::message& out;
       error_t& error;
+
+      bool notify() const { return in.header.notify(); }
+
+      bool read() const { return in.header.read(); }
+
+      bool write() const { return in.header.write(); }
    };
 
    template <class T>
@@ -150,11 +57,11 @@ namespace glz::repe
 
    // returns 0 on error
    template <opts Opts, class Value>
-   size_t read_params(Value&& value, auto&& state, auto&& response)
+   size_t read_params(Value&& value, auto&& state)
    {
       glz::context ctx{};
-      auto [b, e] = read_iterators<Opts>(state.message);
-      if (state.message.empty()) [[unlikely]] {
+      auto [b, e] = read_iterators<Opts>(state.in.body);
+      if (state.in.body.empty()) [[unlikely]] {
          ctx.error = error_code::no_read_input;
       }
       if (bool(ctx.error)) [[unlikely]] {
@@ -165,11 +72,12 @@ namespace glz::repe
       glz::detail::read<Opts.format>::template op<Opts>(std::forward<Value>(value), ctx, b, e);
 
       if (bool(ctx.error)) {
+         state.out.header.error = true;
          error_ctx ec{ctx.error, ctx.custom_error_message, size_t(b - start), ctx.includer_error};
          std::ignore =
             write<Opts>(std::forward_as_tuple(header{.error = true},
-                                              error_t{error_e::parse_error, format_error(ec, state.message)}),
-                        response);
+                                              error_t{error_code::parse_error, format_error(ec, state.in.body)}),
+                        state.out.body);
          return 0;
       }
 
@@ -179,30 +87,37 @@ namespace glz::repe
    template <opts Opts, class Value>
    void write_response(Value&& value, is_state auto&& state)
    {
+      auto& in = state.in;
+      auto& out = state.out;
+      out.header.id = in.header.id;
       if (state.error) {
-         std::ignore = write<Opts>(std::forward_as_tuple(header{.error = true}, state.error), state.response);
+         out.header.error = true;
+         out.header.query_length = out.query.size();
+         out.header.body_length = out.body.size();
+         out.header.length = sizeof(repe::header) + out.query.size() + out.body.size();
       }
       else {
-         state.header.empty = false; // we are writing a response
-         const auto ec = write<Opts>(std::forward_as_tuple(state.header, std::forward<Value>(value)), state.response);
+         const auto ec = write<Opts>(std::forward<Value>(value), out.body);
          if (bool(ec)) [[unlikely]] {
-            std::ignore = write<Opts>(std::forward_as_tuple(header{.error = true}, ec.ec), state.response);
+            out.header.error = true;
          }
+         out.header.query_length = out.query.size();
+         out.header.body_length = out.body.size();
+         out.header.length = sizeof(repe::header) + out.query.size() + out.body.size();
       }
    }
 
    template <opts Opts>
    void write_response(is_state auto&& state)
    {
+      state.out.header = state.in.header;
       if (state.error) {
-         std::ignore = write<Opts>(std::forward_as_tuple(header{.error = true}, state.error), state.response);
+         state.out.header.error = true;
       }
       else {
-         state.header.notify = false;
-         state.header.empty = true;
-         const auto ec = write<Opts>(std::forward_as_tuple(state.header, nullptr), state.response);
+         const auto ec = write<Opts>(nullptr, state.out.body);
          if (bool(ec)) [[unlikely]] {
-            std::ignore = write<Opts>(std::forward_as_tuple(header{.error = true}, ec.ec), state.response);
+            state.out.header.error = true;
          }
       }
    }
@@ -220,14 +135,14 @@ namespace glz::repe
          ctx.error = error_code::no_read_input;
       }
       if (bool(ctx.error)) [[unlikely]] {
-         return error_t{error_e::parse_error};
+         return error_t{error_code::parse_error};
       }
       auto start = b;
 
       auto handle_error = [&](auto& it) {
          ctx.error = error_code::syntax_error;
          error_ctx pe{ctx.error, ctx.custom_error_message, size_t(it - start), ctx.includer_error};
-         return error_t{error_e::parse_error, format_error(pe, buffer)};
+         return error_t{error_code::parse_error, format_error(pe, buffer)};
       };
 
       if (*b == '[') {
@@ -241,7 +156,7 @@ namespace glz::repe
 
       if (bool(ctx.error)) {
          error_ctx pe{ctx.error, ctx.custom_error_message, size_t(b - start), ctx.includer_error};
-         return {error_e::parse_error, format_error(pe, buffer)};
+         return {error_code::parse_error, format_error(pe, buffer)};
       }
 
       if (*b == ',') {
@@ -262,7 +177,7 @@ namespace glz::repe
 
          if (bool(ctx.error)) {
             error_ctx pe{ctx.error, ctx.custom_error_message, size_t(b - start), ctx.includer_error};
-            return {error_e::parse_error, format_error(pe, buffer)};
+            return {error_code::parse_error, format_error(pe, buffer)};
          }
       }
 
@@ -275,42 +190,74 @@ namespace glz::repe
       return decode_response<Opts>(ignore_result{}, buffer);
    }
 
-   template <opts Opts, class Value, class H = header>
-   [[nodiscard]] auto request(H&& header, Value&& value)
+   template <opts Opts>
+   error_t request(message& msg, const user_header& h)
    {
-      return glz::write<Opts>(std::forward_as_tuple(std::forward<H>(header), std::forward<Value>(value)));
+      msg.header = encode(h);
+      msg.header.read(true); // because no value provided
+      msg.query = std::string{h.query};
+      std::ignore = glz::write<Opts>(nullptr, msg.body);
+      msg.header.body_length = msg.body.size();
+      msg.header.length = sizeof(repe::header) + msg.query.size() + msg.body.size();
+      return {};
    }
 
-   template <opts Opts, class Value, class H = header>
-   [[nodiscard]] auto request(H&& header, Value&& value, auto& buffer)
+   template <opts Opts, class Value>
+   error_t request(message& msg, const user_header& h, Value&& value)
    {
-      return glz::write<Opts>(std::forward_as_tuple(std::forward<H>(header), std::forward<Value>(value)), buffer);
+      msg.header = encode(h);
+      msg.query = std::string{h.query};
+      msg.header.write(true);
+      std::ignore = glz::write<Opts>(std::forward<Value>(value), msg.body);
+      msg.header.body_length = msg.body.size();
+      msg.header.length = sizeof(repe::header) + msg.query.size() + msg.body.size();
+      return {};
    }
 
-   template <class H = header>
-   [[nodiscard]] auto request_binary(H&& header)
+   inline error_t request_beve(message& msg, const user_header& h)
    {
-      header.empty = true; // because no value provided
-      return glz::write_beve(std::forward_as_tuple(std::forward<H>(header), nullptr));
+      msg.header = encode(h);
+      msg.query = std::string{h.query};
+      msg.header.read(true); // because no value provided
+      std::ignore = glz::write_beve(nullptr, msg.body);
+      msg.header.body_length = msg.body.size();
+      msg.header.length = sizeof(repe::header) + msg.query.size() + msg.body.size();
+      return {};
    }
 
-   template <class H = header>
-   [[nodiscard]] auto request_json(H&& h)
+   inline error_t request_json(message& msg, const user_header& h)
    {
-      h.empty = true; // because no value provided
-      return glz::write_json(std::forward_as_tuple(std::forward<H>(h), nullptr));
+      msg.header = encode(h);
+      msg.query = std::string{h.query};
+      msg.header.read(true); // because no value provided
+      std::ignore = glz::write_json(nullptr, msg.body);
+      msg.header.body_length = msg.body.size();
+      msg.header.length = sizeof(repe::header) + msg.query.size() + msg.body.size();
+      return {};
    }
 
-   template <class Value, class H = header>
-   [[nodiscard]] auto request_json(H&& header, Value&& value)
+   template <class Value>
+   error_t request_json(message& msg, const user_header& h, Value&& value)
    {
-      return glz::write_json(std::forward_as_tuple(std::forward<H>(header), std::forward<Value>(value)));
+      msg.header = encode(h);
+      msg.query = std::string{h.query};
+      msg.header.write(true);
+      std::ignore = glz::write_json(std::forward<Value>(value), msg.body);
+      msg.header.body_length = msg.body.size();
+      msg.header.length = sizeof(repe::header) + msg.query.size() + msg.body.size();
+      return {};
    }
 
-   template <class Value, class H = header>
-   [[nodiscard]] auto request_binary(H&& header, Value&& value)
+   template <class Value>
+   error_t request_beve(message& msg, const user_header& h, Value&& value)
    {
-      return glz::write_beve(std::forward_as_tuple(std::forward<H>(header), std::forward<Value>(value)));
+      msg.header = encode(h);
+      msg.query = std::string{h.query};
+      msg.header.write(true);
+      std::ignore = glz::write_beve(std::forward<Value>(value), msg.body);
+      msg.header.body_length = msg.body.size();
+      msg.header.length = sizeof(repe::header) + msg.query.size() + msg.body.size();
+      return {};
    }
 
    // DESIGN NOTE: It might appear that we are locking ourselves into a poor design choice by using a runtime
@@ -337,58 +284,6 @@ namespace glz::repe
             std::array<pair<sv, Mtx>, N>{pair<sv, Mtx>{join_v<parent, chars<"/">, key_name_v<I, T>>, Mtx{}}...});
       }(std::make_index_sequence<N>{});
    }
-
-   struct buffer_pool
-   {
-      std::mutex mtx{};
-      std::deque<std::string> buffers{2};
-      std::vector<size_t> available{0, 1}; // indices of available buffers
-
-      // provides a pointer to a buffer and an index
-      std::tuple<std::string*, size_t> get()
-      {
-         std::unique_lock lock{mtx};
-         if (available.empty()) {
-            const auto current_size = buffers.size();
-            const auto new_size = buffers.size() * 2;
-            buffers.resize(new_size);
-            for (size_t i = current_size; i < new_size; ++i) {
-               available.emplace_back(i);
-            }
-         }
-
-         const auto index = available.back();
-         available.pop_back();
-         return {&buffers[index], index};
-      }
-
-      void free(const size_t index)
-      {
-         std::unique_lock lock{mtx};
-         available.emplace_back(index);
-      }
-   };
-
-   struct unique_buffer
-   {
-      buffer_pool* pool{};
-      std::string* ptr{};
-      size_t index{};
-
-      std::string& value() { return *ptr; }
-
-      const std::string& value() const { return *ptr; }
-
-      unique_buffer(buffer_pool* input_pool) : pool(input_pool) { std::tie(ptr, index) = pool->get(); }
-      unique_buffer(const unique_buffer&) = default;
-      unique_buffer(unique_buffer&&) = default;
-      unique_buffer& operator=(const unique_buffer&) = default;
-      unique_buffer& operator=(unique_buffer&&) = default;
-
-      ~unique_buffer() { pool->free(index); }
-   };
-
-   using shared_buffer = std::shared_ptr<unique_buffer>;
 
    struct mutex_link
    {
@@ -744,8 +639,6 @@ namespace glz::repe
          return chain_invoke_lock{chain};
       }
 
-      buffer_pool buffers{};
-
       template <const std::string_view& root = detail::empty_path, class T, const std::string_view& parent = root>
          requires(glz::detail::glaze_object_t<T> || glz::detail::reflectable<T>)
       void on(T& value)
@@ -766,26 +659,26 @@ namespace glz::repe
                                           reflectable<T>)&&!std::same_as<std::decay_t<decltype(t)>, std::nullptr_t>) {
             // build read/write calls to the top level object
             methods[root] = [&value, chain = get_chain(root)](repe::state&& state) mutable {
-               if (not state.header.empty) {
+               if (state.write()) {
                   chain_read_lock lock{chain};
                   if (not lock) {
-                     state.error = {error_e::timeout, std::string(root)};
+                     state.error = {error_code::timeout, std::string(root)};
                      write_response<Opts>(state);
                      return;
                   }
-                  if (read_params<Opts>(value, state, state.response) == 0) {
+                  if (read_params<Opts>(value, state) == 0) {
                      return;
                   }
                }
 
-               if (state.header.notify) {
+               if (state.notify()) {
                   return;
                }
 
-               if (state.header.empty) {
+               if (state.read()) {
                   chain_write_lock lock{chain};
                   if (not lock) {
-                     state.error = {error_e::timeout, std::string(root)};
+                     state.error = {error_code::timeout, std::string(root)};
                      write_response<Opts>(state);
                      return;
                   }
@@ -829,7 +722,7 @@ namespace glz::repe
                   methods[full_key] = [callback = func, chain = get_chain(full_key)](repe::state&& state) mutable {
                      {
                         callback();
-                        if (state.header.notify) {
+                        if (state.notify()) {
                            return;
                         }
                      }
@@ -839,7 +732,7 @@ namespace glz::repe
                else {
                   methods[full_key] = [callback = func, chain = get_chain(full_key)](repe::state&& state) mutable {
                      {
-                        if (state.header.notify) {
+                        if (state.notify()) {
                            std::ignore = callback();
                            return;
                         }
@@ -859,12 +752,12 @@ namespace glz::repe
                methods[full_key] = [callback = func, chain = get_chain(full_key)](repe::state&& state) mutable {
                   static thread_local std::decay_t<Params> params{};
                   // no need lock locals
-                  if (read_params<Opts>(params, state, state.response) == 0) {
+                  if (read_params<Opts>(params, state) == 0) {
                      return;
                   }
 
                   {
-                     if (state.header.notify) {
+                     if (state.notify()) {
                         std::ignore = callback(params);
                         return;
                      }
@@ -877,26 +770,26 @@ namespace glz::repe
 
                // build read/write calls to the object as a variable
                methods[full_key] = [&func, chain = get_chain(full_key)](repe::state&& state) mutable {
-                  if (not state.header.empty) {
+                  if (state.write()) {
                      chain_read_lock lock{chain};
                      if (not lock) {
-                        state.error = {error_e::timeout, std::string(full_key)};
+                        state.error = {error_code::timeout, std::string(full_key)};
                         write_response<Opts>(state);
                         return;
                      }
-                     if (read_params<Opts>(func, state, state.response) == 0) {
+                     if (read_params<Opts>(func, state) == 0) {
                         return;
                      }
                   }
 
-                  if (state.header.notify) {
+                  if (state.notify()) {
                      return;
                   }
 
-                  if (state.header.empty) {
+                  if (state.read()) {
                      chain_write_lock lock{chain};
                      if (not lock) {
-                        state.error = {error_e::timeout, std::string(full_key)};
+                        state.error = {error_code::timeout, std::string(full_key)};
                         write_response<Opts>(state);
                         return;
                      }
@@ -910,26 +803,26 @@ namespace glz::repe
             else if constexpr (not std::is_lvalue_reference_v<Func>) {
                // For glz::custom, glz::manage, etc.
                methods[full_key] = [func, chain = get_chain(full_key)](repe::state&& state) mutable {
-                  if (not state.header.empty) {
+                  if (state.write()) {
                      chain_read_lock lock{chain};
                      if (not lock) {
-                        state.error = {error_e::timeout, std::string(full_key)};
+                        state.error = {error_code::timeout, std::string(full_key)};
                         write_response<Opts>(state);
                         return;
                      }
-                     if (read_params<Opts>(func, state, state.response) == 0) {
+                     if (read_params<Opts>(func, state) == 0) {
                         return;
                      }
                   }
 
-                  if (state.header.notify) {
+                  if (state.notify()) {
                      return;
                   }
 
-                  if (state.header.empty) {
+                  if (state.read()) {
                      chain_write_lock lock{chain};
                      if (not lock) {
-                        state.error = {error_e::timeout, std::string(full_key)};
+                        state.error = {error_code::timeout, std::string(full_key)};
                         write_response<Opts>(state);
                         return;
                      }
@@ -955,11 +848,10 @@ namespace glz::repe
                               (value.*func)();
                            }
 
-                           if (state.header.notify) {
+                           if (state.notify()) {
                               return;
                            }
 
-                           state.header.empty = false;
                            write_response<Opts>(state);
                         };
                      }
@@ -967,8 +859,8 @@ namespace glz::repe
                         using Input = std::decay_t<glz::tuple_element_t<0, Tuple>>;
                         methods[full_key] = [&value, &func, chain = get_chain(full_key)](repe::state&& state) mutable {
                            static thread_local Input input{};
-                           if (not state.header.empty) {
-                              if (read_params<Opts>(input, state, state.response) == 0) {
+                           if (state.write()) {
+                              if (read_params<Opts>(input, state) == 0) {
                                  return;
                               }
                            }
@@ -977,11 +869,10 @@ namespace glz::repe
                               (value.*func)(input);
                            }
 
-                           if (state.header.notify) {
+                           if (state.notify()) {
                               return;
                            }
 
-                           state.header.empty = false;
                            write_response<Opts>(state);
                         };
                      }
@@ -995,7 +886,7 @@ namespace glz::repe
                         methods[full_key] = [&value, &func, chain = get_chain(full_key)](repe::state&& state) mutable {
                            // using Result = std::decay_t<decltype((value.*func)())>;
                            {
-                              if (state.header.notify) {
+                              if (state.notify()) {
                                  std::ignore = (value.*func)();
                                  return;
                               }
@@ -1010,15 +901,15 @@ namespace glz::repe
                                              chain = get_chain(full_key)](repe::state&& state) mutable {
                            static thread_local Input input{};
 
-                           if (not state.header.empty) {
-                              if (read_params<Opts>(input, state, state.response) == 0) {
+                           if (state.write()) {
+                              if (read_params<Opts>(input, state) == 0) {
                                  return;
                               }
                            }
 
                            // using Result = std::decay_t<decltype((value.*func)(input))>;
                            {
-                              if (state.header.notify) {
+                              if (state.notify()) {
                                  std::ignore = (value.*func)(input);
                                  return;
                               }
@@ -1035,26 +926,26 @@ namespace glz::repe
                else {
                   // this is a variable and not a function, so we build RPC read/write calls
                   methods[full_key] = [&func, chain = get_chain(full_key)](repe::state&& state) mutable {
-                     if (not state.header.empty) {
+                     if (state.write()) {
                         chain_read_lock lock{chain};
                         if (not lock) {
-                           state.error = {error_e::timeout, std::string(full_key)};
+                           state.error = {error_code::timeout, std::string(full_key)};
                            write_response<Opts>(state);
                            return;
                         }
-                        if (read_params<Opts>(func, state, state.response) == 0) {
+                        if (read_params<Opts>(func, state) == 0) {
                            return;
                         }
                      }
 
-                     if (state.header.notify) {
+                     if (state.notify()) {
                         return;
                      }
 
-                     if (state.header.empty) {
+                     if (state.read()) {
                         chain_write_lock lock{chain};
                         if (not lock) {
-                           state.error = {error_e::timeout, std::string(full_key)};
+                           state.error = {error_code::timeout, std::string(full_key)};
                            write_response<Opts>(state);
                            return;
                         }
@@ -1081,99 +972,25 @@ namespace glz::repe
          return call(request<Opts>(std::forward<H>(header), std::forward<Value>(value), buffer));
       }
 
-      // returns null for notifications
-      [[nodiscard]] shared_buffer call(const sv msg)
+      void call(message& in, message& out)
       {
-         shared_buffer u_buffer = std::make_shared<unique_buffer>(&buffers);
-         auto& response = *(u_buffer->ptr);
-
-         context ctx{};
-         auto [b, e] = read_iterators<Opts>(msg);
-         auto start = b;
-         if (msg.empty()) [[unlikely]] {
-            ctx.error = error_code::no_read_input;
-         }
-
-         auto handle_error = [&](auto& it) {
-            ctx.error = error_code::syntax_error;
-            error_ctx pe{ctx.error, ctx.custom_error_message, size_t(it - start), ctx.includer_error};
-            std::ignore = write<Opts>(
-               std::forward_as_tuple(header{.error = true}, error_t{error_e::parse_error, format_error(pe, msg)}),
-               response);
-         };
-
-         header h{};
-
-         auto finish = [&]() -> std::shared_ptr<unique_buffer> {
-            if (h.notify) {
-               return {};
-            }
-            else {
-               return u_buffer;
-            }
-         };
-
-         if (bool(ctx.error)) [[unlikely]] {
-            // TODO: What should we do if we have read_iterators errors?
-            return finish();
-         }
-
-         if constexpr (Opts.format == JSON) {
-            if (*b == '[') {
-               ++b;
-            }
-            else {
-               handle_error(b);
-               return finish();
-            }
-         }
-         else {
-            if (*b == glz::tag::generic_array) {
-               ++b; // skip the tag
-               const auto n = glz::detail::int_from_compressed(ctx, b, e);
-               if (bool(ctx.error) || (n != 2)) [[unlikely]] {
-                  if (n != 2) [[unlikely]] {
-                     ctx.error = error_code::syntax_error;
-                  }
-                  handle_error(b);
-                  return finish();
-               }
-            }
-            else {
-               handle_error(b);
-               return finish();
-            }
-         }
-
-         glz::detail::read<Opts.format>::template op<Opts>(h, ctx, b, e);
-
-         if (bool(ctx.error)) [[unlikely]] {
-            error_ctx pe{ctx.error, ctx.custom_error_message, size_t(b - start), ctx.includer_error};
-            response = format_error(pe, msg);
-            return finish();
-         }
-
-         if constexpr (Opts.format == JSON) {
-            if (*b == ',') {
-               ++b;
-            }
-            else {
-               handle_error(b);
-               return finish();
-            }
-         }
-
-         if (auto it = methods.find(h.method); it != methods.end()) {
-            const sv body = msg.substr(size_t(b - start));
+         if (auto it = methods.find(in.query); it != methods.end()) {
             static thread_local error_t error{};
-            it->second(state{body, h, response, error}); // handle the body
+            it->second(state{in, out, error}); // handle the body
          }
          else {
-            std::ignore =
-               write<Opts>(std::forward_as_tuple(header{.error = true}, error_t{error_e::method_not_found}), response);
-         }
+            static constexpr error_code code = error_code::method_not_found;
+            static constexpr sv body{"method not found"};
 
-         return finish();
+            const auto body_length = 8 + body.size(); // 4 bytes for code, 4 bytes for size, + message
+
+            out.body.resize(sizeof(header) + body_length);
+            header h{.error = true, .body_length = body_length};
+            std::memcpy(out.body.data(), &h, sizeof(header));
+            std::memcpy(out.body.data() + sizeof(header), &code, 4);
+            std::memcpy(out.body.data() + sizeof(header) + 4, &body_length, 4);
+            std::memcpy(out.body.data() + sizeof(header) + 8, body.data(), body.size());
+         }
       }
    };
 }
