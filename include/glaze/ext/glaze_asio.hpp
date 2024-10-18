@@ -475,11 +475,11 @@ namespace glz
       {
          socket.set_option(asio::ip::tcp::no_delay(true));
          repe::message request{};
+         repe::message response{};
 
          try {
             while (true) {
                co_await co_receive_buffer(socket, request);
-               repe::message response{};
                registry.call(request, response);
                co_await co_send_buffer(socket, response);
             }
