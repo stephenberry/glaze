@@ -177,8 +177,8 @@ namespace glz
       }
 
       using Conversion = jkj::dragonbox::default_float_bit_carrier_conversion_traits<T>;
-      using FormatTraits = jkj::dragonbox::ieee754_binary_traits<typename Conversion::format,
-                                                                 typename Conversion::carrier_uint>;
+      using FormatTraits =
+         jkj::dragonbox::ieee754_binary_traits<typename Conversion::format, typename Conversion::carrier_uint>;
       static constexpr uint32_t exp_bits_count =
          numbits(std::numeric_limits<T>::max_exponent - std::numeric_limits<T>::min_exponent + 1);
       const auto float_bits = jkj::dragonbox::make_float_bits<T, Conversion, FormatTraits>(val);
