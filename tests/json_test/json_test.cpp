@@ -9701,18 +9701,6 @@ suite ndjson_options = [] {
    };
 };
 
-suite parse_ints_as_type_cast_doubles_test = [] {
-   "multiple int from double"_test = [] {
-      std::vector<int> v;
-      std::string buffer = "[1.66, 3.24, 5.555]";
-      expect(not glz::read<glz::opts{.parse_ints_as_type_cast_doubles = true}>(v, buffer));
-      expect(v.size() == 3);
-      expect(v[0] == 1);
-      expect(v[1] == 3);
-      expect(v[2] == 5);
-   };
-};
-
 suite atomics = [] {
    "atomics"_test = [] {
       std::atomic<int> i{};

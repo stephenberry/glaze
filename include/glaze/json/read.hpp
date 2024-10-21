@@ -562,28 +562,16 @@ namespace glz
             if constexpr (int_t<V>) {
                static_assert(sizeof(*it) == sizeof(char));
 
-               if constexpr (Opts.parse_ints_as_type_cast_doubles) {
-                  double d{};
-                  auto [ptr, ec] = glz::from_chars<Opts.null_terminated>(it, end, d);
-                  if (ec != std::errc()) [[unlikely]] {
+               if constexpr (Opts.null_terminated) {
+                  if (not glz::detail::atoi(value, it)) [[unlikely]] {
                      ctx.error = error_code::parse_number_failure;
                      return;
                   }
-                  it = ptr;
-                  value = static_cast<V>(d);
                }
                else {
-                  if constexpr (Opts.null_terminated) {
-                     if (not glz::detail::atoi(value, it)) [[unlikely]] {
-                        ctx.error = error_code::parse_number_failure;
-                        return;
-                     }
-                  }
-                  else {
-                     if (not glz::detail::atoi(value, it, end)) [[unlikely]] {
-                        ctx.error = error_code::parse_number_failure;
-                        return;
-                     }
+                  if (not glz::detail::atoi(value, it, end)) [[unlikely]] {
+                     ctx.error = error_code::parse_number_failure;
+                     return;
                   }
                }
             }
