@@ -15,11 +15,6 @@ Glaze also supports:
 > - Decimal values and negative exponents will by default be rejected for safety and performance. It will still be possible through various approaches to parse decimal values into integers, but it won't be the default behavior.
 > - `std::array<char, ...>` is now handled as a JSON string `"abc"` rather than an array of characters `["a", "b", "c"]`
 >
-> ### Version 3.5
->
-> Glaze [v3.5.0](https://github.com/stephenberry/glaze/releases/tag/v3.5.0) renamed the format specifier from `json` to `JSON`. Also, `glz::detail::to_json` and `glz::detail::from_json` specializations change to `glz::detail::to<JSON` and `glz::detail::from<JSON`. [See release notes](https://github.com/stephenberry/glaze/releases/tag/v3.5.0) for more information.
->
-> `glz::read_binary` and `glz::write_binary` were also renamed to `glz::read_beve` and `glz::write_beve`
 
 ## With compile time reflection for MSVC, Clang, and GCC!
 
