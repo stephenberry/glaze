@@ -17,6 +17,7 @@
 #include <numbers>
 #include <random>
 #include <ranges>
+#include <set>
 #if defined(__STDCPP_FLOAT128_T__)
 #include <stdfloat>
 #endif
@@ -347,7 +348,7 @@ struct Thing
    std::map<int, double> mapi{{5, 3.14}, {7, 7.42}, {2, 9.63}};
    sub_thing* thing_ptr{};
 
-   Thing() : thing_ptr(&thing){};
+   Thing() : thing_ptr(&thing) {};
 };
 
 template <>
@@ -4169,7 +4170,7 @@ struct glz::meta<cat>
 
 struct person
 {
-   void eat(const std::string&){};
+   void eat(const std::string&) {};
 };
 
 template <>
@@ -4701,7 +4702,14 @@ suite sets = [] {
 
       set.clear();
 
-      expect(glz::read_json(set, b) == glz::error_code::none);
+      std::string_view withSpaces = R"(
+      [
+         "hello",
+         "world"
+      ]
+      )";
+
+      expect(glz::read_json(set, withSpaces) == glz::error_code::none);
 
       expect(set.count("hello") == 1);
       expect(set.count("world") == 1);
@@ -4710,6 +4718,9 @@ suite sets = [] {
    "std::set<int>"_test = [] {
       std::set<int> set;
       expect(glz::read_json(set, "[]") == glz::error_code::none);
+      expect(set.empty());
+
+      expect(glz::read_json(set, " [  ] ") == glz::error_code::none);
       expect(set.empty());
 
       set = {5, 4, 3, 2, 1};
@@ -4731,6 +4742,19 @@ suite sets = [] {
       b = "[6,7,8,9,10]";
       expect(!glz::read_json(set, b)); // second reading
       expect(set.size() == 5);
+
+      std::set<int> set2;
+      std::string_view withSpaces = R"(
+      [
+         6,
+         7,
+         8,
+         9,
+         10
+      ]
+      )";
+      expect(!glz::read_json(set2, withSpaces)); // third reading with spaces
+      expect(set == set2);
    };
 
    "std::set<std::string>"_test = [] {
@@ -5954,7 +5978,7 @@ suite constexpr_values_test = [] {
 
    "parse error direct_conversion_variant cx int"_test = [] {
       const_only_variant var{direct_cx_value_conversion{}};
-      auto const parse_err{glz::read_json(var, R"(33)")};
+      const auto parse_err{glz::read_json(var, R"(33)")};
       expect(parse_err == glz::error_code::no_matching_variant_type);
    };
 
@@ -6336,9 +6360,8 @@ template <>
 struct glz::meta<test_mapping_t>
 {
    using T = test_mapping_t;
-   static constexpr auto value = object("id", &T::id, "coordinates", [](auto& self) {
-      return coordinates_t{&self.latitude, &self.longitude};
-   });
+   static constexpr auto value =
+      object("id", &T::id, "coordinates", [](auto& self) { return coordinates_t{&self.latitude, &self.longitude}; });
 };
 
 suite mapping_struct = [] {
@@ -8281,6 +8304,8 @@ suite expected_tests = [] {
 
 struct custom_struct
 {
+   auto operator<=>(const custom_struct&) const noexcept = default;
+
    std::string str{};
 };
 
@@ -8318,6 +8343,28 @@ suite custom_struct_tests = [] {
 
       expect(!glz::read_json(obj, s));
       expect(obj.str == R"(writeread)") << obj.str;
+
+      using custom_struct_set = std::set<custom_struct>;
+
+      // TODO: below commented code does not compile
+      // custom_struct_set obj_set{custom_struct{"hello"}, custom_struct{"world"}};
+
+      // expect(not glz::write_json(obj_set, s));
+      // expect(s == R"(["hellowrite","worldwrite"])");
+
+      // obj_set.clear();
+
+      custom_struct_set obj_set;
+
+      std::string_view withSpaces = R"(
+      [
+        "hello",
+        "world"
+      ]
+      )";
+
+      expect(!glz::read_json(obj_set, withSpaces));
+      expect(obj_set == custom_struct_set{custom_struct{"helloread"}, custom_struct{"worldread"}});
    };
 };
 
@@ -9510,8 +9557,8 @@ template <class V>
 struct glz::meta<response_t<V>>
 {
    using T = response_t<V>;
-   static constexpr auto value = object(
-      "result", [](auto& s) -> auto& { return s.result; }, "id", &T::id, "error", &T::error);
+   static constexpr auto value =
+      object("result", [](auto& s) -> auto& { return s.result; }, "id", &T::id, "error", &T::error);
 };
 
 template <>
@@ -9730,7 +9777,7 @@ namespace trr
 
    struct Person
    {
-      Person(Address* const p_add) : p_add(p_add){};
+      Person(Address* const p_add) : p_add(p_add) {};
       std::string name;
       Address* const p_add; // pointer is const, Address object is mutable
    };
