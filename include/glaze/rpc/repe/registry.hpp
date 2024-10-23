@@ -719,9 +719,9 @@ namespace glz::repe
             if constexpr (std::is_invocable_v<Func>) {
                using Result = std::decay_t<std::invoke_result_t<Func>>;
                if constexpr (std::same_as<Result, void>) {
-                  methods[full_key] = [callback = func, chain = get_chain(full_key)](repe::state&& state) mutable {
+                  methods[full_key] = [&func, chain = get_chain(full_key)](repe::state&& state) mutable {
                      {
-                        callback();
+                        func();
                         if (state.notify()) {
                            return;
                         }
@@ -730,13 +730,13 @@ namespace glz::repe
                   };
                }
                else {
-                  methods[full_key] = [callback = func, chain = get_chain(full_key)](repe::state&& state) mutable {
+                  methods[full_key] = [&func, chain = get_chain(full_key)](repe::state&& state) mutable {
                      {
                         if (state.notify()) {
-                           std::ignore = callback();
+                           std::ignore = func();
                            return;
                         }
-                        write_response<Opts>(callback(), state);
+                        write_response<Opts>(func(), state);
                      }
                   };
                }
@@ -749,7 +749,7 @@ namespace glz::repe
                using Params = glz::tuple_element_t<0, Tuple>;
                // using Result = std::invoke_result_t<Func, Params>;
 
-               methods[full_key] = [callback = func, chain = get_chain(full_key)](repe::state&& state) mutable {
+               methods[full_key] = [&func, chain = get_chain(full_key)](repe::state&& state) mutable {
                   static thread_local std::decay_t<Params> params{};
                   // no need lock locals
                   if (read_params<Opts>(params, state) == 0) {
@@ -758,10 +758,10 @@ namespace glz::repe
 
                   {
                      if (state.notify()) {
-                        std::ignore = callback(params);
+                        std::ignore = func(params);
                         return;
                      }
-                     write_response<Opts>(callback(params), state);
+                     write_response<Opts>(func(params), state);
                   }
                };
             }
