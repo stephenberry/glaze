@@ -19,7 +19,7 @@ struct api
 void asio_client_test()
 {
    static constexpr int16_t port = 8431;
-   
+
    glz::asio_server<> server{.port = port, .concurrency = 4};
 
    std::future<void> server_thread = std::async([&] {
@@ -80,7 +80,7 @@ void asio_client_test()
       for (auto& t : threads) {
          t.get();
       }
-      
+
       server.stop();
    }
    catch (const std::exception& e) {
@@ -163,7 +163,7 @@ void async_calls()
 
 int main()
 {
-   //asio_client_test();
+   // asio_client_test();
    async_calls();
 
    return 0;
