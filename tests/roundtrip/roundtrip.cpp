@@ -29,11 +29,11 @@ static constexpr glz::opts default_opts{.format = GLZ_TEST_FORMAT};
 
 struct my_struct
 {
-  int i = 287;
-  double d = 3.14;
-  std::string hello = "Hello World";
-  std::array<uint64_t, 3> arr = { 1, 2, 3 };
-  std::map<std::string, int> map{{"one", 1}, {"two", 2}};
+   int i = 287;
+   double d = 3.14;
+   std::string hello = "Hello World";
+   std::array<uint64_t, 3> arr = {1, 2, 3};
+   std::map<std::string, int> map{{"one", 1}, {"two", 2}};
 };
 
 template <glz::opts Opts, class T>
@@ -59,7 +59,7 @@ suite tests = [] {
       my_struct v{};
       roundtrip<default_opts>(v);
    };
-   
+
    "memory_struct"_test = [] {
       memory_struct v{};
       roundtrip<default_opts>(v);
