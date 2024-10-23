@@ -176,12 +176,12 @@ namespace glz
          return buf + 1;
       }
 
-      using Conversion = jkj::dragonbox::default_float_bit_carrier_conversion_traits<T>;
+      using Conversion = glz::jkj::dragonbox::default_float_bit_carrier_conversion_traits<T>;
       using FormatTraits =
-         jkj::dragonbox::ieee754_binary_traits<typename Conversion::format, typename Conversion::carrier_uint>;
+         glz::jkj::dragonbox::ieee754_binary_traits<typename Conversion::format, typename Conversion::carrier_uint>;
       static constexpr uint32_t exp_bits_count =
          numbits(std::numeric_limits<T>::max_exponent - std::numeric_limits<T>::min_exponent + 1);
-      const auto float_bits = jkj::dragonbox::make_float_bits<T, Conversion, FormatTraits>(val);
+      const auto float_bits = glz::jkj::dragonbox::make_float_bits<T, Conversion, FormatTraits>(val);
       const auto exp_bits = float_bits.extract_exponent_bits();
       const auto s = float_bits.remove_exponent_bits();
 
@@ -196,8 +196,8 @@ namespace glz
       buf += (val < zero);
 
       if constexpr (is_float) {
-         const auto v = jkj::dragonbox::to_decimal_ex(s, exp_bits, jkj::dragonbox::policy::sign::ignore,
-                                                      jkj::dragonbox::policy::trailing_zero::remove);
+         const auto v = glz::jkj::dragonbox::to_decimal_ex(s, exp_bits, glz::jkj::dragonbox::policy::sign::ignore,
+                                                           glz::jkj::dragonbox::policy::trailing_zero::remove);
 
          uint32_t sig_dec = uint32_t(v.significand);
          int32_t exp_dec = v.exponent;
@@ -256,8 +256,8 @@ namespace glz
          }
       }
       else {
-         const auto v = jkj::dragonbox::to_decimal_ex(s, exp_bits, jkj::dragonbox::policy::sign::ignore,
-                                                      jkj::dragonbox::policy::trailing_zero::ignore);
+         const auto v = glz::jkj::dragonbox::to_decimal_ex(s, exp_bits, glz::jkj::dragonbox::policy::sign::ignore,
+                                                           glz::jkj::dragonbox::policy::trailing_zero::ignore);
 
          uint64_t sig_dec = v.significand;
          int32_t exp_dec = v.exponent;

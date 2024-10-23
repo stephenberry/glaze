@@ -13,10 +13,9 @@ namespace glz
    // Assuming that you use no more than 19 digits, this will
    // parse an ASCII string.
    template <bool null_terminated, class UC>
-   GLZ_ALWAYS_INLINE constexpr fast_float::parsed_number_string_t<UC> parse_number_string(UC const* p,
-                                                                                          UC const* pend) noexcept
+   GLZ_ALWAYS_INLINE constexpr glz::fast_float::parsed_number_string_t<UC> parse_number_string(UC const* p, UC const* pend) noexcept
    {
-      using namespace fast_float;
+      using namespace glz::fast_float;
       static constexpr UC decimal_point = '.';
 
       parsed_number_string_t<UC> answer;
@@ -32,7 +31,7 @@ namespace glz
             }
          }
 
-         if (!is_integer(*p)) [[unlikely]] { // a sign must be followed by an integer
+         if (!glz::fast_float::is_integer(*p)) [[unlikely]] { // a sign must be followed by an integer
             return answer;
          }
       }
@@ -41,7 +40,7 @@ namespace glz
       uint64_t i = 0; // an unsigned int avoids signed overflows (which are bad)
 
       if constexpr (null_terminated) {
-         while (is_integer(*p)) {
+         while (glz::fast_float::is_integer(*p)) {
             // a multiplication by 10 is cheaper than an arbitrary integer
             // multiplication
             i = 10 * i + uint64_t(*p - UC('0')); // might overflow, we will handle the overflow later
@@ -49,7 +48,7 @@ namespace glz
          }
       }
       else {
-         while ((p != pend) && is_integer(*p)) {
+         while ((p != pend) && glz::fast_float::is_integer(*p)) {
             // a multiplication by 10 is cheaper than an arbitrary integer
             // multiplication
             i = 10 * i + uint64_t(*p - UC('0')); // might overflow, we will handle the overflow later
@@ -59,7 +58,7 @@ namespace glz
 
       UC const* const end_of_integer_part = p;
       int64_t digit_count = int64_t(end_of_integer_part - start_digits);
-      answer.integer = fast_float::span<const UC>(start_digits, size_t(digit_count));
+      answer.integer = glz::fast_float::span<const UC>(start_digits, size_t(digit_count));
 
       // at least 1 digit in integer part, without leading zeros
       if (digit_count == 0 || (start_digits[0] == UC('0') && digit_count > 1)) {
@@ -83,21 +82,21 @@ namespace glz
          loop_parse_if_eight_digits(p, pend, i);
 
          if constexpr (null_terminated) {
-            while (is_integer(*p)) {
+            while (glz::fast_float::is_integer(*p)) {
                uint8_t digit = uint8_t(*p - UC('0'));
                ++p;
                i = i * 10 + digit; // in rare cases, this will overflow, but that's ok
             }
          }
          else {
-            while ((p != pend) && is_integer(*p)) {
+            while ((p != pend) && glz::fast_float::is_integer(*p)) {
                uint8_t digit = uint8_t(*p - UC('0'));
                ++p;
                i = i * 10 + digit; // in rare cases, this will overflow, but that's ok
             }
          }
          exponent = before - p;
-         answer.fraction = fast_float::span<const UC>(before, size_t(p - before));
+         answer.fraction = glz::fast_float::span<const UC>(before, size_t(p - before));
          digit_count -= exponent;
       }
       // at least 1 digit in fractional part
@@ -119,12 +118,12 @@ namespace glz
             else if (UC('+') == *p) { // '+' on exponent is allowed by C++17 20.19.3.(7.1)
                ++p;
             }
-            if (!is_integer(*p)) {
+            if (!glz::fast_float::is_integer(*p)) {
                // Otherwise, we will be ignoring the 'e'.
                p = location_of_e;
             }
             else {
-               while (is_integer(*p)) {
+               while (glz::fast_float::is_integer(*p)) {
                   uint8_t digit = uint8_t(*p - UC('0'));
                   if (exp_number < 0x10000000) {
                      exp_number = 10 * exp_number + digit;
@@ -150,12 +149,12 @@ namespace glz
             else if ((p != pend) && (UC('+') == *p)) { // '+' on exponent is allowed by C++17 20.19.3.(7.1)
                ++p;
             }
-            if ((p == pend) || !is_integer(*p)) {
+            if ((p == pend) || !glz::fast_float::is_integer(*p)) {
                // Otherwise, we will be ignoring the 'e'.
                p = location_of_e;
             }
             else {
-               while ((p != pend) && is_integer(*p)) {
+               while ((p != pend) && glz::fast_float::is_integer(*p)) {
                   uint8_t digit = uint8_t(*p - UC('0'));
                   if (exp_number < 0x10000000) {
                      exp_number = 10 * exp_number + digit;
@@ -235,9 +234,9 @@ namespace glz
    }
 
    template <bool null_terminated, class T, class UC>
-   constexpr fast_float::from_chars_result_t<UC> from_chars(UC const* first, UC const* last, T& value) noexcept
+   constexpr glz::fast_float::from_chars_result_t<UC> from_chars(UC const* first, UC const* last, T& value) noexcept
    {
-      using namespace fast_float;
+      using namespace glz::fast_float;
       static_assert(is_supported_float_type<T>(), "only some floating-point types are supported");
       static_assert(is_supported_char_type<UC>(), "only char, wchar_t, char16_t and char32_t are supported");
 
