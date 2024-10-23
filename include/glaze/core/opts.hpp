@@ -43,7 +43,7 @@ namespace glz
    // int8_t also would produce "signed char"
 #define bool_t char
 
-   // This macro exists so that we can change the default behavior
+   // This macro exists so that Glaze tests can change the default behavior
    // to easily run tests as if strings were not null terminated
 #ifndef GLZ_NULL_TERMINATED
 #define GLZ_NULL_TERMINATED true
