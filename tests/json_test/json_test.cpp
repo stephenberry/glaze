@@ -8331,6 +8331,13 @@ namespace glz::detail
          value.str += "write";
          write<JSON>::op<Opts>(value.str, args...);
       }
+      
+      // For std::set testing, because iterators are const
+      template <auto Opts>
+      static void op(const custom_struct& value, auto&&... args) noexcept
+      {
+         write<JSON>::op<Opts>(value.str, args...);
+      }
    };
 }
 
@@ -8346,15 +8353,12 @@ suite custom_struct_tests = [] {
 
       using custom_struct_set = std::set<custom_struct>;
 
-      // TODO: below commented code does not compile
-      // custom_struct_set obj_set{custom_struct{"hello"}, custom_struct{"world"}};
+      custom_struct_set obj_set{custom_struct{"hello"}, custom_struct{"world"}};
 
-      // expect(not glz::write_json(obj_set, s));
-      // expect(s == R"(["hellowrite","worldwrite"])");
+      expect(not glz::write_json(obj_set, s));
+      expect(s == R"(["hello","world"])");
 
-      // obj_set.clear();
-
-      custom_struct_set obj_set;
+      obj_set.clear();
 
       std::string_view withSpaces = R"(
       [
