@@ -166,47 +166,46 @@ namespace glz
       static_assert(std::numeric_limits<T>::radix == 2);
       static_assert(std::is_same_v<float, T> || std::is_same_v<double, T>);
       static_assert(sizeof(float) == 4 && sizeof(double) == 8);
+      constexpr bool is_float = std::is_same_v<float, T>;
       using Raw = std::conditional_t<std::is_same_v<float, T>, uint32_t, uint64_t>;
 
-      Raw raw;
-      std::memcpy(&raw, &val, sizeof(T));
+      if (val == 0.0) {
+         *buf = '-';
+         buf += (std::bit_cast<Raw>(val) >> (sizeof(T) * 8 - 1)); // if negative
+         *buf = '0';
+         return buf + 1;
+      }
 
-      constexpr bool is_float = std::is_same_v<float, T>;
-      constexpr uint32_t exponent_bits =
+      using Conversion = glz::jkj::dragonbox::default_float_bit_carrier_conversion_traits<T>;
+      using FormatTraits =
+         glz::jkj::dragonbox::ieee754_binary_traits<typename Conversion::format, typename Conversion::carrier_uint>;
+      static constexpr uint32_t exp_bits_count =
          numbits(std::numeric_limits<T>::max_exponent - std::numeric_limits<T>::min_exponent + 1);
-      bool sign = (raw >> (sizeof(T) * 8 - 1));
-      int32_t exp_raw = raw << 1 >> (sizeof(Raw) * 8 - exponent_bits);
+      const auto float_bits = glz::jkj::dragonbox::make_float_bits<T, Conversion, FormatTraits>(val);
+      const auto exp_bits = float_bits.extract_exponent_bits();
+      const auto s = float_bits.remove_exponent_bits();
 
-      if (exp_raw == (uint32_t(1) << exponent_bits) - 1) [[unlikely]] {
-         // NaN or Infinity
+      // NaN or Infinity
+      if (exp_bits == (uint32_t(1) << exp_bits_count) - 1) [[unlikely]] {
          std::memcpy(buf, "null", 4);
          return buf + 4;
       }
 
       *buf = '-';
-      buf += sign;
-
-      if ((raw << 1) == 0) [[unlikely]] {
-         *buf = '0';
-         return buf + 1;
-      }
+      constexpr auto zero = T(0.0);
+      buf += (val < zero);
 
       if constexpr (is_float) {
-         /* binary to decimal */
-         const auto v = jkj::dragonbox::to_decimal(val, jkj::dragonbox::policy::sign::ignore,
-                                                   jkj::dragonbox::policy::trailing_zero::remove);
+         const auto v = glz::jkj::dragonbox::to_decimal_ex(s, exp_bits, glz::jkj::dragonbox::policy::sign::ignore,
+                                                           glz::jkj::dragonbox::policy::trailing_zero::remove);
 
          uint32_t sig_dec = uint32_t(v.significand);
          int32_t exp_dec = v.exponent;
-
-         /* Calculate number of digits */
-         const int32_t num_digits = fast_digit_count(sig_dec);
-
-         /* the decimal point position relative to the first digit */
-         int32_t dot_pos = num_digits + exp_dec;
+         const int32_t num_digits = int32_t(fast_digit_count(sig_dec));
+         int32_t dot_pos = num_digits + exp_dec; // the decimal point position relative to the first digit
 
          if (-6 < dot_pos && dot_pos <= 9) {
-            /* no need to write exponent part */
+            // no need to write exponent part
             if (dot_pos <= 0) {
                *buf++ = '0';
                *buf++ = '.';
@@ -234,11 +233,11 @@ namespace glz
             }
          }
          else {
-            /* write with scientific notation */
+            // write with scientific notation
             auto end = write_u32_len_1_to_9(buf + 1, sig_dec);
             exp_dec += int32_t(end - (buf + 1)) - 1; // Adjust exponent based on actual digits written
-            buf[0] = buf[1]; // First digit
-            buf[1] = '.'; // Decimal point
+            buf[0] = buf[1];
+            buf[1] = '.';
             if (end == buf + 2) { // Only one digit was written
                buf[2] = '0'; // Add trailing zero
                ++end;
@@ -257,63 +256,43 @@ namespace glz
          }
       }
       else {
-         /* binary to decimal */
-         const auto v = jkj::dragonbox::to_decimal(val, jkj::dragonbox::policy::sign::ignore,
-                                                   jkj::dragonbox::policy::trailing_zero::ignore);
+         const auto v = glz::jkj::dragonbox::to_decimal_ex(s, exp_bits, glz::jkj::dragonbox::policy::sign::ignore,
+                                                           glz::jkj::dragonbox::policy::trailing_zero::ignore);
 
          uint64_t sig_dec = v.significand;
          int32_t exp_dec = v.exponent;
 
-         // Adjust sig_len calculation for float and double
          int32_t sig_len = 17;
          sig_len -= (sig_dec < 100000000ull * 100000000ull);
          sig_len -= (sig_dec < 100000000ull * 10000000ull);
-
-         /* the decimal point position relative to the first digit */
          int32_t dot_pos = sig_len + exp_dec;
 
          if (-6 < dot_pos && dot_pos <= 21) {
-            /* no need to write exponent part */
+            // no need to write exponent part
             if (dot_pos <= 0) {
                auto num_hdr = buf + (2 - dot_pos);
                auto num_end = write_u64_len_15_to_17_trim(num_hdr, sig_dec);
                buf[0] = '0';
                buf[1] = '.';
                buf += 2;
-               std::memset(buf, '0', num_hdr - buf);
+               std::memset(buf, '0', size_t(num_hdr - buf));
                return num_end;
             }
             else {
-               /* dot after first digit */
-               /* such as 1.234, 1234.0, 123400000000000000000.0 */
+               // dot after first digit
+               // such as 1.234, 1234.0, 123400000000000000000.0
                std::memset(buf, '0', 24);
                auto num_hdr = buf + 1;
                auto num_end = write_u64_len_15_to_17_trim(num_hdr, sig_dec);
-               std::memmove(buf, buf + 1, dot_pos); // shift characters to the left
+               std::memmove(buf, buf + 1, size_t(dot_pos));
                buf[dot_pos] = '.';
                return ((num_end - num_hdr) <= dot_pos) ? buf + dot_pos : num_end;
-
-               ///* dot after first digit */
-               // auto num_hdr = buf;
-               // auto num_end = write_u64_len_15_to_17_trim(num_hdr, sig_dec);
-               // if (dot_pos < (num_end - num_hdr)) {
-               //    std::memmove(num_hdr + dot_pos + 1, num_hdr + dot_pos, (num_end - num_hdr) - dot_pos);
-               //    num_hdr[dot_pos] = '.';
-               //    return num_end + 1;
-               // }
-               // else if (dot_pos > (num_end - num_hdr)) {
-               //    std::memset(num_end, '0', dot_pos - (num_end - num_hdr));
-               //    return num_hdr + dot_pos;
-               // }
-               // else {
-               //    return num_end; // Whole number, no decimal point needed
-               // }
             }
          }
          else {
-            /* write with scientific notation */
+            // write with scientific notation
             auto end = write_u64_len_15_to_17_trim(buf + 1, sig_dec);
-            end -= (end == buf + 2); /* remove '.0', e.g. 2.0e34 -> 2e34 */
+            end -= (end == buf + 2); // remove '.0', e.g. 2.0e34 -> 2e34
             exp_dec += sig_len - 1;
             buf[0] = buf[1];
             buf[1] = '.';
@@ -328,8 +307,8 @@ namespace glz
                return buf + 2 - lz;
             }
             else {
-               const uint32_t hi = (uint32_t(exp_dec) * 656) >> 16; /* exp / 100 */
-               const uint32_t lo = uint32_t(exp_dec) - hi * 100; /* exp % 100 */
+               const uint32_t hi = (uint32_t(exp_dec) * 656) >> 16; // exp / 100
+               const uint32_t lo = uint32_t(exp_dec) - hi * 100; // exp % 100
                buf[0] = uint8_t(hi) + '0';
                std::memcpy(&buf[1], char_table + (lo * 2), 2);
                return buf + 3;

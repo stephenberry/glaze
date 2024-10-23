@@ -54,7 +54,7 @@ namespace glz
          template <auto Opts, class T, is_context Ctx, class It0, class It1>
          GLZ_ALWAYS_INLINE static void op(T&& value, Ctx&& ctx, It0&& it, It1&& end) noexcept
          {
-            if constexpr (std::is_const_v<std::remove_reference_t<T>>) {
+            if constexpr (const_value_v<T>) {
                if constexpr (Opts.error_on_const_read) {
                   ctx.error = error_code::attempt_const_read;
                }
@@ -562,28 +562,16 @@ namespace glz
             if constexpr (int_t<V>) {
                static_assert(sizeof(*it) == sizeof(char));
 
-               if constexpr (Opts.parse_ints_as_type_cast_doubles) {
-                  double d{};
-                  auto [ptr, ec] = glz::from_chars<Opts.null_terminated>(it, end, d);
-                  if (ec != std::errc()) [[unlikely]] {
+               if constexpr (Opts.null_terminated) {
+                  if (not glz::detail::atoi(value, it)) [[unlikely]] {
                      ctx.error = error_code::parse_number_failure;
                      return;
                   }
-                  it = ptr;
-                  value = static_cast<V>(d);
                }
                else {
-                  if constexpr (Opts.null_terminated) {
-                     if (not glz::detail::atoi(value, it)) [[unlikely]] {
-                        ctx.error = error_code::parse_number_failure;
-                        return;
-                     }
-                  }
-                  else {
-                     if (not glz::detail::atoi(value, it, end)) [[unlikely]] {
-                        ctx.error = error_code::parse_number_failure;
-                        return;
-                     }
+                  if (not glz::detail::atoi(value, it, end)) [[unlikely]] {
+                     ctx.error = error_code::parse_number_failure;
+                     return;
                   }
                }
             }
@@ -1262,6 +1250,7 @@ namespace glz
                   return;
                }
                GLZ_MATCH_COMMA;
+               GLZ_SKIP_WS();
             }
          }
       };
@@ -1981,7 +1970,7 @@ namespace glz
             [&]<size_t I>() {
                using V = decltype(get_member(value, std::get<I>(variant)));
 
-               if constexpr (std::is_const_v<std::remove_reference_t<V>>) {
+               if constexpr (const_value_v<V>) {
                   if constexpr (Opts.error_on_const_read) {
                      ctx.error = error_code::attempt_const_read;
                   }
@@ -2175,7 +2164,7 @@ namespace glz
 
                            using V = decltype(get_member(value, element));
 
-                           if constexpr (std::is_const_v<std::remove_reference_t<V>>) {
+                           if constexpr (const_value_v<V>) {
                               if constexpr (Opts.error_on_const_read) {
                                  ctx.error = error_code::attempt_const_read;
                               }

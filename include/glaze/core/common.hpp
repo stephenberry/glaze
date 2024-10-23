@@ -537,6 +537,14 @@ struct glz::meta<glz::error_code>
    static constexpr sv name = "glz::error_code";
    using enum glz::error_code;
    static constexpr std::array keys{"none",
+                                    "version_mismatch",
+                                    "invalid_header",
+                                    "invalid_query",
+                                    "invalid_body",
+                                    "parse_error",
+                                    "method_not_found",
+                                    "timeout",
+                                    "send_error",
                                     "end_reached",
                                     "no_read_input",
                                     "data_must_be_null_terminated",
@@ -590,6 +598,14 @@ struct glz::meta<glz::error_code>
                                     "hostname_failure",
                                     "includer_error"};
    static constexpr auto value = std::array{none, //
+                                            version_mismatch, //
+                                            invalid_header, //
+                                            invalid_query, //
+                                            invalid_body, //
+                                            parse_error, //
+                                            method_not_found, //
+                                            timeout, //
+                                            send_error, //
                                             end_reached, // A non-error code for non-null terminated input buffers
                                             no_read_input, //
                                             data_must_be_null_terminated, //

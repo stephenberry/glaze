@@ -17,6 +17,7 @@
 #include <numbers>
 #include <random>
 #include <ranges>
+#include <set>
 #if defined(__STDCPP_FLOAT128_T__)
 #include <stdfloat>
 #endif
@@ -4052,6 +4053,15 @@ suite ndjson_test = [] {
       auto out = glz::write_ndjson(x).value_or("error");
       expect(out == buffer) << out;
    };
+
+   "empty json lines input"_test = [] {
+      std::vector<int> foo;
+      const auto json = glz::write_ndjson(foo).value();
+      expect(json == R"()");
+      std::vector<int> v{1, 2, 3};
+      expect(not glz::read_ndjson<>(v, json));
+      expect(v.size() == 0);
+   };
 };
 
 suite std_function_handling = [] {
@@ -4692,7 +4702,14 @@ suite sets = [] {
 
       set.clear();
 
-      expect(glz::read_json(set, b) == glz::error_code::none);
+      std::string_view withSpaces = R"(
+      [
+         "hello",
+         "world"
+      ]
+      )";
+
+      expect(glz::read_json(set, withSpaces) == glz::error_code::none);
 
       expect(set.count("hello") == 1);
       expect(set.count("world") == 1);
@@ -4701,6 +4718,9 @@ suite sets = [] {
    "std::set<int>"_test = [] {
       std::set<int> set;
       expect(glz::read_json(set, "[]") == glz::error_code::none);
+      expect(set.empty());
+
+      expect(glz::read_json(set, " [  ] ") == glz::error_code::none);
       expect(set.empty());
 
       set = {5, 4, 3, 2, 1};
@@ -4722,6 +4742,19 @@ suite sets = [] {
       b = "[6,7,8,9,10]";
       expect(!glz::read_json(set, b)); // second reading
       expect(set.size() == 5);
+
+      std::set<int> set2;
+      std::string_view withSpaces = R"(
+      [
+         6,
+         7,
+         8,
+         9,
+         10
+      ]
+      )";
+      expect(!glz::read_json(set2, withSpaces)); // third reading with spaces
+      expect(set == set2);
    };
 
    "std::set<std::string>"_test = [] {
@@ -5945,7 +5978,7 @@ suite constexpr_values_test = [] {
 
    "parse error direct_conversion_variant cx int"_test = [] {
       const_only_variant var{direct_cx_value_conversion{}};
-      auto const parse_err{glz::read_json(var, R"(33)")};
+      const auto parse_err{glz::read_json(var, R"(33)")};
       expect(parse_err == glz::error_code::no_matching_variant_type);
    };
 
@@ -8272,6 +8305,8 @@ suite expected_tests = [] {
 
 struct custom_struct
 {
+   auto operator<=>(const custom_struct&) const noexcept = default;
+
    std::string str{};
 };
 
@@ -8297,6 +8332,13 @@ namespace glz::detail
          value.str += "write";
          write<JSON>::op<Opts>(value.str, args...);
       }
+
+      // For std::set testing, because iterators are const
+      template <auto Opts>
+      static void op(const custom_struct& value, auto&&... args) noexcept
+      {
+         write<JSON>::op<Opts>(value.str, args...);
+      }
    };
 }
 
@@ -8309,6 +8351,25 @@ suite custom_struct_tests = [] {
 
       expect(!glz::read_json(obj, s));
       expect(obj.str == R"(writeread)") << obj.str;
+
+      using custom_struct_set = std::set<custom_struct>;
+
+      custom_struct_set obj_set{custom_struct{"hello"}, custom_struct{"world"}};
+
+      expect(not glz::write_json(obj_set, s));
+      expect(s == R"(["hello","world"])");
+
+      obj_set.clear();
+
+      std::string_view withSpaces = R"(
+      [
+        "hello",
+        "world"
+      ]
+      )";
+
+      expect(!glz::read_json(obj_set, withSpaces));
+      expect(obj_set == custom_struct_set{custom_struct{"helloread"}, custom_struct{"worldread"}});
    };
 };
 
@@ -9692,18 +9753,6 @@ suite ndjson_options = [] {
    };
 };
 
-suite parse_ints_as_type_cast_doubles_test = [] {
-   "multiple int from double"_test = [] {
-      std::vector<int> v;
-      std::string buffer = "[1.66, 3.24, 5.555]";
-      expect(not glz::read<glz::opts{.parse_ints_as_type_cast_doubles = true}>(v, buffer));
-      expect(v.size() == 3);
-      expect(v[0] == 1);
-      expect(v[1] == 3);
-      expect(v[2] == 5);
-   };
-};
-
 suite atomics = [] {
    "atomics"_test = [] {
       std::atomic<int> i{};
@@ -9721,6 +9770,42 @@ suite atomics = [] {
 
       expect(not glz::write_json(b, buffer));
       expect(buffer == R"(true)");
+   };
+};
+
+namespace trr
+{
+   struct Address
+   {
+      std::string street;
+   };
+
+   struct Person
+   {
+      Person(Address* const p_add) : p_add(p_add){};
+      std::string name;
+      Address* const p_add; // pointer is const, Address object is mutable
+   };
+}
+
+template <>
+struct glz::meta<trr::Person>
+{
+   using T = trr::Person;
+   static constexpr auto value = object(&T::name, &T::p_add);
+};
+
+suite const_pointer_tests = [] {
+   "const pointer"_test = [] {
+      std::string buffer = R"({"name":"Foo Bar","p_add":{"street":"Baz Yaz"}})";
+      trr::Address add{};
+      trr::Person p{&add};
+      auto ec = glz::read<glz::opts{.format = glz::JSON, .error_on_const_read = true}>(p, buffer);
+      if (ec) {
+         std::cout << glz::format_error(ec, buffer) << std::endl;
+      }
+      expect(p.name == "Foo Bar");
+      expect(p.p_add->street == "Baz Yaz");
    };
 };
 

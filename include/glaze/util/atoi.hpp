@@ -4,9 +4,40 @@
 #include <bit>
 #include <cmath>
 #include <cstdint>
+#include <cstring>
 #include <iterator>
 
+#include "glaze/util/for_each.hpp"
 #include "glaze/util/inline.hpp"
+#include "glaze/util/type_traits.hpp"
+
+// Characters to integer parsing
+
+// - We don't allow decimals in integer parsing
+// - We don't allow negative exponents
+// Thse cases can produce fractions which slow performance and add confusion
+// as to how the integer ought to be parsed (truncation, rounding, etc.)
+// This integer parsing is designed to be straightfoward and fast
+// Values like 1e6 are allowed because it enables less typing from the user
+// and has a clear integer value
+
+// Valid JSON integer examples
+// 1234
+// 1234e1
+// 1e9
+
+// Invalid for this atoi algorithm
+// 1.234
+// 1234e-1
+// 0.0
+
+// The standard JSON specification for numbers and the associated rules apply
+
+// *** We ensure that a decimal value being parsed will result in an error
+// 1.2 should not produce 1, but rather an error, even when a single field is parsed
+// This ensures that we get proper errors when parsing and don't get confusing errors
+// It isn't technically required, because end validation would handle it, but it produces
+// much clearer errors, especially when we don't perform trailing validation.
 
 namespace glz::detail
 {
@@ -30,35 +61,6 @@ namespace glz::detail
                                                         100000000000000000ull,
                                                         1000000000000000000ull,
                                                         10000000000000000000ull};
-
-   GLZ_ALWAYS_INLINE constexpr bool is_digit(const char c) noexcept { return c >= '0' && c <= '9'; }
-
-   // We don't allow decimals in integer parsing
-   // We don't allow negative exponents
-   // Thse cases can produce decimals which slow performance and add confusion
-   // as to how the integer should be parsed (truncation, rounding, etc.)
-   // We allow parsing as a float and casting elsewhere when needed
-   // But, this integer parsing is designed to be straightfoward and fast
-   // Values like 1e6 are allowed because it enables less typing from the user
-   // We allow only two exponent digits, as the JSON specification only requires support up to e53
-
-   // Valid JSON integer examples
-   // 1234
-   // 1234e1
-   // 1e9
-
-   // Invalid for this atoi algorithm
-   // 1.234
-   // 1234e-1
-   // 0.0
-
-   // The standard JSON specification for numbers and the associated rules apply
-
-   // *** We ensure that a decimal value being parsed will result in an error
-   // 1.2 should not produce 1, but rather an error, even when a single field is parsed
-   // This ensures that we get proper errors when parsing and don't get confusing errors
-   // It isn't technically required, because end validation would handle it, but it produces
-   // much clearer errors
 
    inline constexpr std::array<bool, 256> exp_dec_table = [] {
       std::array<bool, 256> t{};
@@ -88,40 +90,6 @@ namespace glz::detail
       t['7'] = true;
       t['8'] = true;
       t['9'] = true;
-      return t;
-   }();
-
-   inline constexpr std::array<bool, 256> digit_or_dec_table = [] {
-      std::array<bool, 256> t{};
-      t['0'] = true;
-      t['1'] = true;
-      t['2'] = true;
-      t['3'] = true;
-      t['4'] = true;
-      t['5'] = true;
-      t['6'] = true;
-      t['7'] = true;
-      t['8'] = true;
-      t['9'] = true;
-      t['.'] = true;
-      return t;
-   }();
-
-   inline constexpr std::array<bool, 256> digit_exp_dec_table = [] {
-      std::array<bool, 256> t{};
-      t['0'] = true;
-      t['1'] = true;
-      t['2'] = true;
-      t['3'] = true;
-      t['4'] = true;
-      t['5'] = true;
-      t['6'] = true;
-      t['7'] = true;
-      t['8'] = true;
-      t['9'] = true;
-      t['.'] = true;
-      t['e'] = true;
-      t['E'] = true;
       return t;
    }();
 
@@ -159,246 +127,7 @@ namespace glz::detail
       return t;
    }();
 
-   template <std::integral T, class Char>
-      requires(std::is_unsigned_v<T> && (sizeof(T) == 1 || sizeof(T) == 2))
-   GLZ_ALWAYS_INLINE constexpr bool atoi(T& v, const Char*& c) noexcept
-   {
-      if (digit_table[uint8_t(*c)]) [[likely]] {
-         v = *c - '0';
-         ++c;
-      }
-      else [[unlikely]] {
-         return false;
-      }
-
-      uint32_t i = v;
-      if (digit_table[uint8_t(*c)]) {
-         i = i * 10 + (*c - '0');
-         ++c;
-      }
-      else {
-         if (not exp_dec_table[uint8_t(*c)]) {
-            return true;
-         }
-         goto finish;
-      }
-
-      if (c[-2] == '0') [[unlikely]] {
-         return false;
-      }
-
-      if (digit_table[uint8_t(*c)]) {
-         i = i * 10 + (*c - '0');
-         ++c;
-      }
-      else {
-         goto finish;
-      }
-
-      if constexpr (sizeof(T) == 2) {
-         if (digit_table[uint8_t(*c)]) {
-            i = i * 10 + (*c - '0');
-            ++c;
-         }
-         else {
-            goto finish;
-         }
-
-         if (digit_table[uint8_t(*c)]) {
-            i = i * 10 + (*c - '0');
-            ++c;
-         }
-      }
-
-   finish:
-      if (*c == 'e' || *c == 'E') {
-         ++c;
-      }
-      else {
-         if (digit_table[uint8_t(*c)] || (*c == '.')) [[unlikely]] {
-            return false;
-         }
-         v = T(i);
-         return i <= (std::numeric_limits<T>::max)();
-      }
-
-      c += (*c == '+');
-
-      if (not digit_table[uint8_t(*c)]) [[unlikely]] {
-         return false;
-      }
-      ++c;
-      uint8_t exp = c[-1] - '0';
-      if (digit_table[uint8_t(*c)]) {
-         exp = exp * 10 + (*c - '0');
-         ++c;
-      }
-      if constexpr (sizeof(T) == 1) {
-         if (exp > 2) [[unlikely]] {
-            return false;
-         }
-      }
-      else if constexpr (sizeof(T) == 2) {
-         if (exp > 4) [[unlikely]] {
-            return false;
-         }
-      }
-
-      if constexpr (sizeof(T) == 1) {
-         static constexpr std::array<uint8_t, 3> powers_of_ten{1, 10, 100};
-         i *= powers_of_ten[exp];
-      }
-      else {
-         static constexpr std::array<uint16_t, 5> powers_of_ten{1, 10, 100, 1000, 10000};
-         i *= powers_of_ten[exp];
-      }
-      v = T(i);
-      return i <= (std::numeric_limits<T>::max)();
-   }
-
-   template <std::integral T, class Char>
-      requires(std::is_unsigned_v<T> && sizeof(T) == 4)
-   GLZ_ALWAYS_INLINE constexpr bool atoi(T& v, const Char*& c) noexcept
-   {
-      if (digit_table[uint8_t(*c)]) [[likely]] {
-         v = *c - '0';
-         ++c;
-      }
-      else [[unlikely]] {
-         return false;
-      }
-
-      if (digit_table[uint8_t(*c)]) {
-         v = v * 10 + (*c - '0');
-         ++c;
-      }
-      else {
-         if (not exp_dec_table[uint8_t(*c)]) {
-            return true;
-         }
-         goto finish;
-      }
-
-      if (c[-2] == '0') [[unlikely]] {
-         return false;
-      }
-
-      if (digit_table[uint8_t(*c)]) {
-         v = v * 10 + (*c - '0');
-         ++c;
-      }
-      else {
-         if (not exp_dec_table[uint8_t(*c)]) {
-            return true;
-         }
-         goto finish;
-      }
-
-      if (digit_table[uint8_t(*c)]) {
-         v = v * 10 + (*c - '0');
-         ++c;
-      }
-      else {
-         if (not exp_dec_table[uint8_t(*c)]) {
-            return true;
-         }
-         goto finish;
-      }
-
-      if (digit_table[uint8_t(*c)]) {
-         v = v * 10 + (*c - '0');
-         ++c;
-      }
-      else {
-         if (not exp_dec_table[uint8_t(*c)]) {
-            return true;
-         }
-         goto finish;
-      }
-
-      if (digit_table[uint8_t(*c)]) {
-         v = v * 10 + (*c - '0');
-         ++c;
-      }
-      else {
-         if (not exp_dec_table[uint8_t(*c)]) {
-            return true;
-         }
-         goto finish;
-      }
-
-      if (digit_table[uint8_t(*c)]) {
-         v = v * 10 + (*c - '0');
-         ++c;
-      }
-      else {
-         if (not exp_dec_table[uint8_t(*c)]) {
-            return true;
-         }
-         goto finish;
-      }
-
-      if (digit_table[uint8_t(*c)]) {
-         v = v * 10 + (*c - '0');
-         ++c;
-      }
-      else {
-         if (not exp_dec_table[uint8_t(*c)]) {
-            return true;
-         }
-         goto finish;
-      }
-
-      if (digit_table[uint8_t(*c)]) {
-         v = v * 10 + (*c - '0');
-         ++c;
-      }
-      else {
-         if (not exp_dec_table[uint8_t(*c)]) {
-            return true;
-         }
-         goto finish;
-      }
-
-   finish:
-      uint64_t i = v;
-      if (digit_table[uint8_t(*c)]) {
-         i = i * 10 + (*c - '0');
-         ++c;
-         if (digit_table[uint8_t(*c)]) [[unlikely]] {
-            return false;
-         }
-      }
-      if (*c == 'e' || *c == 'E') [[likely]] {
-         ++c;
-      }
-      else [[unlikely]] {
-         if (*c == '.') [[unlikely]] {
-            return false;
-         }
-         v = T(i);
-         return i <= (std::numeric_limits<T>::max)();
-      }
-
-      c += (*c == '+');
-
-      if (not digit_table[uint8_t(*c)]) [[unlikely]] {
-         return false;
-      }
-      ++c;
-      uint8_t exp = c[-1] - '0';
-      if (digit_table[uint8_t(*c)]) {
-         exp = exp * 10 + (*c - '0');
-         ++c;
-      }
-      if (exp > 9) [[unlikely]] {
-         return false;
-      }
-
-      i *= powers_of_ten_int[exp];
-      v = T(i);
-      return i <= (std::numeric_limits<T>::max)();
-   }
+   GLZ_ALWAYS_INLINE constexpr bool is_digit(const uint8_t c) noexcept { return c <= '9' && c >= '0'; }
 
    struct value128 final
    {
@@ -446,773 +175,382 @@ namespace glz::detail
       return answer;
    }
 
-   template <std::integral T, class Char>
-      requires(std::is_unsigned_v<T> && sizeof(T) == 8)
-   GLZ_ALWAYS_INLINE constexpr bool atoi(T& v, const Char*& c) noexcept
+   template <std::integral T>
+   GLZ_ALWAYS_INLINE constexpr const uint8_t* parse_int(auto& v, const uint8_t*& c, const uint8_t sign) noexcept
    {
-      if (digit_table[uint8_t(*c)]) [[likely]] {
+      if constexpr (std::is_unsigned_v<T>) {
+         (void)sign;
+      }
+
+      if (is_digit(*c)) [[likely]] {
          v = *c - '0';
          ++c;
       }
       else [[unlikely]] {
-         return false;
+         return {};
       }
 
-      if (digit_table[uint8_t(*c)]) {
+      if (is_digit(*c)) {
          v = v * 10 + (*c - '0');
          ++c;
       }
       else {
-         if (not exp_dec_table[uint8_t(*c)]) {
-            return true;
-         }
-         goto finish;
+         return c;
       }
 
       if (c[-2] == '0') [[unlikely]] {
-         return false;
+         return {};
       }
 
-      if (digit_table[uint8_t(*c)]) {
-         v = v * 10 + (*c - '0');
-         ++c;
-      }
-      else {
-         if (not exp_dec_table[uint8_t(*c)]) {
-            return true;
-         }
-         goto finish;
-      }
-
-      if (digit_table[uint8_t(*c)]) {
-         v = v * 10 + (*c - '0');
-         ++c;
-      }
-      else {
-         if (not exp_dec_table[uint8_t(*c)]) {
-            return true;
-         }
-         goto finish;
-      }
-
-      if (digit_table[uint8_t(*c)]) {
-         v = v * 10 + (*c - '0');
-         ++c;
-      }
-      else {
-         if (not exp_dec_table[uint8_t(*c)]) {
-            return true;
-         }
-         goto finish;
-      }
-
-      if (digit_table[uint8_t(*c)]) {
-         v = v * 10 + (*c - '0');
-         ++c;
-      }
-      else {
-         if (not exp_dec_table[uint8_t(*c)]) {
-            return true;
-         }
-         goto finish;
-      }
-
-      if (digit_table[uint8_t(*c)]) {
-         v = v * 10 + (*c - '0');
-         ++c;
-      }
-      else {
-         if (not exp_dec_table[uint8_t(*c)]) {
-            return true;
-         }
-         goto finish;
-      }
-
-      if (digit_table[uint8_t(*c)]) {
-         v = v * 10 + (*c - '0');
-         ++c;
-      }
-      else {
-         if (not exp_dec_table[uint8_t(*c)]) {
-            return true;
-         }
-         goto finish;
-      }
-
-      if (digit_table[uint8_t(*c)]) {
-         v = v * 10 + (*c - '0');
-         ++c;
-      }
-      else {
-         if (not exp_dec_table[uint8_t(*c)]) {
-            return true;
-         }
-         goto finish;
-      }
-
-      if (digit_table[uint8_t(*c)]) {
-         v = v * 10 + (*c - '0');
-         ++c;
-      }
-      else {
-         if (not exp_dec_table[uint8_t(*c)]) {
-            return true;
-         }
-         goto finish;
-      }
-
-      if (digit_table[uint8_t(*c)]) {
-         v = v * 10 + (*c - '0');
-         ++c;
-      }
-      else {
-         if (not exp_dec_table[uint8_t(*c)]) {
-            return true;
-         }
-         goto finish;
-      }
-
-      if (digit_table[uint8_t(*c)]) {
-         v = v * 10 + (*c - '0');
-         ++c;
-      }
-      else {
-         if (not exp_dec_table[uint8_t(*c)]) {
-            return true;
-         }
-         goto finish;
-      }
-
-      if (digit_table[uint8_t(*c)]) {
-         v = v * 10 + (*c - '0');
-         ++c;
-      }
-      else {
-         if (not exp_dec_table[uint8_t(*c)]) {
-            return true;
-         }
-         goto finish;
-      }
-
-      if (digit_table[uint8_t(*c)]) {
-         v = v * 10 + (*c - '0');
-         ++c;
-      }
-      else {
-         if (not exp_dec_table[uint8_t(*c)]) {
-            return true;
-         }
-         goto finish;
-      }
-
-      if (digit_table[uint8_t(*c)]) {
-         v = v * 10 + (*c - '0');
-         ++c;
-      }
-      else {
-         if (not exp_dec_table[uint8_t(*c)]) {
-            return true;
-         }
-         goto finish;
-      }
-
-      if (digit_table[uint8_t(*c)]) {
-         v = v * 10 + (*c - '0');
-         ++c;
-      }
-      else {
-         if (not exp_dec_table[uint8_t(*c)]) {
-            return true;
-         }
-         goto finish;
-      }
-
-      if (digit_table[uint8_t(*c)]) {
-         v = v * 10 + (*c - '0');
-         ++c;
-      }
-      else {
-         if (not exp_dec_table[uint8_t(*c)]) {
-            return true;
-         }
-         goto finish;
-      }
-
-      if (digit_table[uint8_t(*c)]) {
-         v = v * 10 + (*c - '0');
-         ++c;
-      }
-      else {
-         if (not exp_dec_table[uint8_t(*c)]) {
-            return true;
-         }
-         goto finish;
-      }
-
-      if (digit_table[uint8_t(*c)]) {
-         v = v * 10 + (*c - '0');
-         ++c;
-      }
-      else {
-         if (not exp_dec_table[uint8_t(*c)]) {
-            return true;
-         }
-         goto finish;
-      }
-
-      if (digit_table[uint8_t(*c)]) {
-         if (v > peak_positive<T>[uint8_t(*c)]) [[unlikely]] {
-            return false;
-         }
-         v = v * 10 + (*c - '0');
-         ++c;
-         if (digit_table[uint8_t(*c)]) [[unlikely]] {
-            return false;
-         }
-      }
-
-   finish:
-      if (*c == 'e' || *c == 'E') {
-         ++c;
-      }
-      else {
-         if (*c == '.') [[unlikely]] {
-            return false;
-         }
-         return true;
-      }
-
-      c += (*c == '+');
-
-      if (not digit_table[uint8_t(*c)]) [[unlikely]] {
-         return false;
-      }
-      ++c;
-      uint8_t exp = c[-1] - '0';
-      if (digit_table[uint8_t(*c)]) {
-         exp = exp * 10 + (*c - '0');
-         ++c;
-      }
-      if (exp > 19) [[unlikely]] {
-         return false;
-      }
-
-#if defined(__SIZEOF_INT128__)
-      const __uint128_t res = __uint128_t(v) * powers_of_ten_int[exp];
-      v = T(res);
-      return res <= (std::numeric_limits<T>::max)();
-#else
-      const auto res = full_multiplication(v, powers_of_ten_int[exp]);
-      v = T(res.low);
-      return res.high == 0;
-#endif
-   }
-
-   template <std::integral T, class Char>
-      requires(std::is_signed_v<T> && (sizeof(T) == 1 || sizeof(T) == 2))
-   GLZ_ALWAYS_INLINE constexpr bool atoi(T& v, const Char*& c) noexcept
-   {
-      const uint8_t sign = *c == '-';
-      c += sign;
-
-      if (digit_table[uint8_t(*c)]) [[likely]] {
-         v = *c - '0';
-         ++c;
-      }
-      else [[unlikely]] {
-         return false;
-      }
-
-      uint32_t i = v;
-      if (digit_table[uint8_t(*c)]) {
-         i = i * 10 + (*c - '0');
-         ++c;
-      }
-      else {
-         if (not exp_dec_table[uint8_t(*c)]) {
-            v = sign ? -v : v;
-            return true;
-         }
-         goto finish;
-      }
-
-      if (c[-2] == '0') [[unlikely]] {
-         return false;
-      }
-
-      if (digit_table[uint8_t(*c)]) {
-         i = i * 10 + (*c - '0');
-         ++c;
-      }
-      else {
-         goto finish;
-      }
-
-      if constexpr (sizeof(T) == 2) {
-         if (digit_table[uint8_t(*c)]) {
-            i = i * 10 + (*c - '0');
+      if constexpr (sizeof(T) > 1) {
+         if (is_digit(*c)) {
+            v = v * 10 + (*c - '0');
             ++c;
          }
          else {
-            goto finish;
+            return c;
          }
 
-         if (digit_table[uint8_t(*c)]) {
-            i = i * 10 + (*c - '0');
+         if (is_digit(*c)) {
+            v = v * 10 + (*c - '0');
             ++c;
          }
+         else {
+            return c;
+         }
+
+         if constexpr (sizeof(T) > 2) {
+            if (is_digit(*c)) {
+               v = v * 10 + (*c - '0');
+               ++c;
+            }
+            else {
+               return c;
+            }
+
+            if (is_digit(*c)) {
+               v = v * 10 + (*c - '0');
+               ++c;
+            }
+            else {
+               return c;
+            }
+
+            if (is_digit(*c)) {
+               v = v * 10 + (*c - '0');
+               ++c;
+            }
+            else {
+               return c;
+            }
+
+            if (is_digit(*c)) {
+               v = v * 10 + (*c - '0');
+               ++c;
+            }
+            else {
+               return c;
+            }
+
+            if (is_digit(*c)) {
+               v = v * 10 + (*c - '0');
+               ++c;
+            }
+            else {
+               return c;
+            }
+
+            if constexpr (sizeof(T) > 4) {
+               if (is_digit(*c)) {
+                  v = v * 10 + (*c - '0');
+                  ++c;
+               }
+               else {
+                  return c;
+               }
+
+               if (is_digit(*c)) {
+                  v = v * 10 + (*c - '0');
+                  ++c;
+               }
+               else {
+                  return c;
+               }
+
+               if (is_digit(*c)) {
+                  v = v * 10 + (*c - '0');
+                  ++c;
+               }
+               else {
+                  return c;
+               }
+
+               if (is_digit(*c)) {
+                  v = v * 10 + (*c - '0');
+                  ++c;
+               }
+               else {
+                  return c;
+               }
+
+               if (is_digit(*c)) {
+                  v = v * 10 + (*c - '0');
+                  ++c;
+               }
+               else {
+                  return c;
+               }
+
+               if (is_digit(*c)) {
+                  v = v * 10 + (*c - '0');
+                  ++c;
+               }
+               else {
+                  return c;
+               }
+
+               if (is_digit(*c)) {
+                  v = v * 10 + (*c - '0');
+                  ++c;
+               }
+               else {
+                  return c;
+               }
+
+               if (is_digit(*c)) {
+                  v = v * 10 + (*c - '0');
+                  ++c;
+               }
+               else {
+                  return c;
+               }
+
+               if (is_digit(*c)) {
+                  v = v * 10 + (*c - '0');
+                  ++c;
+               }
+               else {
+                  return c;
+               }
+
+               if constexpr (std::is_unsigned_v<T>) {
+                  if (is_digit(*c)) {
+                     v = v * 10 + (*c - '0');
+                     ++c;
+                  }
+                  else {
+                     return c;
+                  }
+               }
+            }
+         }
       }
 
-   finish:
-      if (*c == 'e' || *c == 'E') {
-         ++c;
+      if constexpr (std::is_unsigned_v<T>) {
+         if (is_digit(*c)) {
+            v = v * 10 + (*c - '0');
+            constexpr auto split = (std::numeric_limits<T>::max)() / 10 - 10;
+            if (v < split) [[unlikely]] {
+               // due to overflow
+               return {};
+            }
+            ++c;
+            if (is_digit(*c)) [[unlikely]] {
+               return {};
+            }
+         }
       }
       else {
-         if (digit_table[uint8_t(*c)] || (*c == '.')) [[unlikely]] {
+         if (is_digit(*c)) {
+            if (sign) {
+               if (v > peak_negative<T>[*c]) [[unlikely]] {
+                  return {};
+               }
+            }
+            else {
+               if (v > peak_positive<T>[*c]) [[unlikely]] {
+                  return {};
+               }
+            }
+            v = v * 10 + (*c - '0');
+            ++c;
+            if (is_digit(*c)) [[unlikely]] {
+               return {};
+            }
+         }
+      }
+
+      return c;
+   }
+
+   template <std::integral T, class Char>
+      requires(std::is_unsigned_v<T>)
+   GLZ_ALWAYS_INLINE constexpr bool atoi(T& v, Char*& c) noexcept
+   {
+      if (parse_int<T>(v, reinterpret_cast<const uint8_t*&>(c), 0)) [[likely]] {
+         if (*c == 'e' || *c == 'E') {
+            ++c;
+         }
+         else {
+            if (*c == '.') [[unlikely]] {
+               return false;
+            }
+            return true;
+         }
+
+         c += (*c == '+');
+
+         if (not is_digit(*c)) [[unlikely]] {
             return false;
+         }
+         ++c;
+         uint8_t exp = c[-1] - '0';
+         if (is_digit(*c)) {
+            exp = exp * 10 + (*c - '0');
+            ++c;
+         }
+         if (is_digit(*c)) {
+            exp = exp * 10 + (*c - '0');
+            ++c;
          }
          if constexpr (sizeof(T) == 1) {
-            v = T((uint8_t(i) ^ -sign) + sign);
+            if (exp > 2) [[unlikely]] {
+               return false;
+            }
          }
          else if constexpr (sizeof(T) == 2) {
-            v = T((uint16_t(i) ^ -sign) + sign);
+            if (exp > 4) [[unlikely]] {
+               return false;
+            }
          }
-         return (i - sign) <= (std::numeric_limits<T>::max)();
-      }
-
-      c += (*c == '+');
-
-      if (not digit_table[uint8_t(*c)]) [[unlikely]] {
-         return false;
-      }
-      ++c;
-      uint8_t exp = c[-1] - '0';
-      if (digit_table[uint8_t(*c)]) {
-         exp = exp * 10 + (*c - '0');
-         ++c;
-      }
-      if constexpr (sizeof(T) == 1) {
-         if (exp > 2) [[unlikely]] {
-            return false;
-         }
-      }
-      else if constexpr (sizeof(T) == 2) {
-         if (exp > 4) [[unlikely]] {
-            return false;
-         }
-      }
-
-      if constexpr (sizeof(T) == 1) {
-         static constexpr std::array<uint8_t, 3> powers_of_ten{1, 10, 100};
-         i *= powers_of_ten[exp];
-      }
-      else if constexpr (sizeof(T) == 2) {
-         static constexpr std::array<uint16_t, 5> powers_of_ten{1, 10, 100, 1000, 10000};
-         i *= powers_of_ten[exp];
-      }
-      if constexpr (sizeof(T) == 1) {
-         v = T((uint8_t(i) ^ -sign) + sign);
-      }
-      else if constexpr (sizeof(T) == 2) {
-         v = T((uint16_t(i) ^ -sign) + sign);
-      }
-      return (i - sign) <= (std::numeric_limits<T>::max)();
-   }
-
-   template <std::integral T, class Char>
-      requires(std::is_signed_v<T> && (sizeof(T) == 4))
-   GLZ_ALWAYS_INLINE constexpr bool atoi(T& v, const Char*& c) noexcept
-   {
-      const uint8_t sign = *c == '-';
-      c += sign;
-
-      if (digit_table[uint8_t(*c)]) [[likely]] {
-         v = *c - '0';
-         ++c;
-      }
-      else [[unlikely]] {
-         return false;
-      }
-
-      uint64_t i = v;
-      if (digit_table[uint8_t(*c)]) {
-         i = i * 10 + (*c - '0');
-         ++c;
-      }
-      else {
-         if (not exp_dec_table[uint8_t(*c)]) {
-            v = sign ? -v : v;
-            return true;
-         }
-         goto finish;
-      }
-
-      if (c[-2] == '0') [[unlikely]] {
-         return false;
-      }
-
-      if (digit_table[uint8_t(*c)]) {
-         i = i * 10 + (*c - '0');
-         ++c;
-      }
-      else {
-         goto finish;
-      }
-
-      if (digit_table[uint8_t(*c)]) {
-         i = i * 10 + (*c - '0');
-         ++c;
-      }
-      else {
-         goto finish;
-      }
-
-      if (digit_table[uint8_t(*c)]) {
-         i = i * 10 + (*c - '0');
-         ++c;
-      }
-      else {
-         goto finish;
-      }
-
-      if (digit_table[uint8_t(*c)]) {
-         i = i * 10 + (*c - '0');
-         ++c;
-      }
-      else {
-         goto finish;
-      }
-
-      if (digit_table[uint8_t(*c)]) {
-         i = i * 10 + (*c - '0');
-         ++c;
-      }
-      else {
-         goto finish;
-      }
-
-      if (digit_table[uint8_t(*c)]) {
-         i = i * 10 + (*c - '0');
-         ++c;
-      }
-      else {
-         goto finish;
-      }
-
-      if (digit_table[uint8_t(*c)]) {
-         i = i * 10 + (*c - '0');
-         ++c;
-      }
-      else {
-         goto finish;
-      }
-
-      if (digit_table[uint8_t(*c)]) {
-         i = i * 10 + (*c - '0');
-         ++c;
-      }
-
-   finish:
-      if (*c == 'e' || *c == 'E') {
-         ++c;
-      }
-      else {
-         if (digit_table[uint8_t(*c)] || (*c == '.')) [[unlikely]] {
-            return false;
-         }
-         v = T((uint32_t(i) ^ -sign) + sign);
-         return (i - sign) <= (std::numeric_limits<T>::max)();
-      }
-
-      c += (*c == '+');
-
-      if (not digit_table[uint8_t(*c)]) [[unlikely]] {
-         return false;
-      }
-      ++c;
-      uint8_t exp = c[-1] - '0';
-      if (digit_table[uint8_t(*c)]) {
-         exp = exp * 10 + (*c - '0');
-         ++c;
-      }
-      if (exp > 9) [[unlikely]] {
-         return false;
-      }
-
-      i *= powers_of_ten_int[exp];
-      v = T((uint32_t(i) ^ -sign) + sign);
-      return (i - sign) <= (std::numeric_limits<T>::max)();
-   }
-
-   template <std::integral T, class Char, uint8_t Sign>
-      requires(std::is_signed_v<T> && sizeof(T) == 8)
-   GLZ_ALWAYS_INLINE constexpr bool atoi_signed_impl(uint64_t& v, const Char*& c) noexcept
-   {
-      if (digit_table[uint8_t(*c)]) [[likely]] {
-         v = *c - '0';
-         ++c;
-      }
-      else [[unlikely]] {
-         return false;
-      }
-
-      if (digit_table[uint8_t(*c)]) {
-         v = v * 10 + (*c - '0');
-         ++c;
-      }
-      else {
-         if (not exp_dec_table[uint8_t(*c)]) {
-            return true;
-         }
-         goto finish;
-      }
-
-      if (c[-2] == '0') [[unlikely]] {
-         return false;
-      }
-
-      if (digit_table[uint8_t(*c)]) {
-         v = v * 10 + (*c - '0');
-         ++c;
-      }
-      else {
-         if (not exp_dec_table[uint8_t(*c)]) {
-            return true;
-         }
-         goto finish;
-      }
-
-      if (digit_table[uint8_t(*c)]) {
-         v = v * 10 + (*c - '0');
-         ++c;
-      }
-      else {
-         if (not exp_dec_table[uint8_t(*c)]) {
-            return true;
-         }
-         goto finish;
-      }
-
-      if (digit_table[uint8_t(*c)]) {
-         v = v * 10 + (*c - '0');
-         ++c;
-      }
-      else {
-         if (not exp_dec_table[uint8_t(*c)]) {
-            return true;
-         }
-         goto finish;
-      }
-
-      if (digit_table[uint8_t(*c)]) {
-         v = v * 10 + (*c - '0');
-         ++c;
-      }
-      else {
-         if (not exp_dec_table[uint8_t(*c)]) {
-            return true;
-         }
-         goto finish;
-      }
-
-      if (digit_table[uint8_t(*c)]) {
-         v = v * 10 + (*c - '0');
-         ++c;
-      }
-      else {
-         if (not exp_dec_table[uint8_t(*c)]) {
-            return true;
-         }
-         goto finish;
-      }
-
-      if (digit_table[uint8_t(*c)]) {
-         v = v * 10 + (*c - '0');
-         ++c;
-      }
-      else {
-         if (not exp_dec_table[uint8_t(*c)]) {
-            return true;
-         }
-         goto finish;
-      }
-
-      if (digit_table[uint8_t(*c)]) {
-         v = v * 10 + (*c - '0');
-         ++c;
-      }
-      else {
-         if (not exp_dec_table[uint8_t(*c)]) {
-            return true;
-         }
-         goto finish;
-      }
-
-      if (digit_table[uint8_t(*c)]) {
-         v = v * 10 + (*c - '0');
-         ++c;
-      }
-      else {
-         if (not exp_dec_table[uint8_t(*c)]) {
-            return true;
-         }
-         goto finish;
-      }
-
-      if (digit_table[uint8_t(*c)]) {
-         v = v * 10 + (*c - '0');
-         ++c;
-      }
-      else {
-         if (not exp_dec_table[uint8_t(*c)]) {
-            return true;
-         }
-         goto finish;
-      }
-
-      if (digit_table[uint8_t(*c)]) {
-         v = v * 10 + (*c - '0');
-         ++c;
-      }
-      else {
-         if (not exp_dec_table[uint8_t(*c)]) {
-            return true;
-         }
-         goto finish;
-      }
-
-      if (digit_table[uint8_t(*c)]) {
-         v = v * 10 + (*c - '0');
-         ++c;
-      }
-      else {
-         if (not exp_dec_table[uint8_t(*c)]) {
-            return true;
-         }
-         goto finish;
-      }
-
-      if (digit_table[uint8_t(*c)]) {
-         v = v * 10 + (*c - '0');
-         ++c;
-      }
-      else {
-         if (not exp_dec_table[uint8_t(*c)]) {
-            return true;
-         }
-         goto finish;
-      }
-
-      if (digit_table[uint8_t(*c)]) {
-         v = v * 10 + (*c - '0');
-         ++c;
-      }
-      else {
-         if (not exp_dec_table[uint8_t(*c)]) {
-            return true;
-         }
-         goto finish;
-      }
-
-      if (digit_table[uint8_t(*c)]) {
-         v = v * 10 + (*c - '0');
-         ++c;
-      }
-      else {
-         if (not exp_dec_table[uint8_t(*c)]) {
-            return true;
-         }
-         goto finish;
-      }
-
-      if (digit_table[uint8_t(*c)]) {
-         v = v * 10 + (*c - '0');
-         ++c;
-      }
-      else {
-         if (not exp_dec_table[uint8_t(*c)]) {
-            return true;
-         }
-         goto finish;
-      }
-
-      if (digit_table[uint8_t(*c)]) {
-         v = v * 10 + (*c - '0');
-         ++c;
-      }
-      else {
-         if (not exp_dec_table[uint8_t(*c)]) {
-            return true;
-         }
-         goto finish;
-      }
-
-      if (digit_table[uint8_t(*c)]) {
-         if constexpr (Sign) {
-            if (v > peak_negative<T>[uint8_t(*c)]) [[unlikely]] {
+         else if constexpr (sizeof(T) == 4) {
+            if (exp > 9) [[unlikely]] {
                return false;
             }
          }
          else {
-            if (v > peak_positive<T>[uint8_t(*c)]) [[unlikely]] {
+            if (exp > 19) [[unlikely]] {
                return false;
             }
          }
-         v = v * 10 + (*c - '0');
-         ++c;
-         if (digit_table[uint8_t(*c)]) [[unlikely]] {
-            return false;
+
+         if constexpr (sizeof(T) == 1) {
+            static constexpr std::array<uint8_t, 3> powers_of_ten{1, 10, 100};
+            const uint64_t i = v * powers_of_ten[exp];
+            v = T(i);
+            return i <= (std::numeric_limits<T>::max)();
          }
-      }
-
-   finish:
-      if (*c == 'e' || *c == 'E') {
-         ++c;
-      }
-      else {
-         if (*c == '.') [[unlikely]] {
-            return false;
+         else if constexpr (sizeof(T) == 2) {
+            static constexpr std::array<uint16_t, 5> powers_of_ten{1, 10, 100, 1000, 10000};
+            const uint64_t i = v * powers_of_ten[exp];
+            v = T(i);
+            return i <= (std::numeric_limits<T>::max)();
          }
-         return true;
-      }
-
-      c += (*c == '+');
-
-      if (not digit_table[uint8_t(*c)]) [[unlikely]] {
-         return false;
-      }
-      ++c;
-      uint8_t exp = c[-1] - '0';
-      if (digit_table[uint8_t(*c)]) {
-         exp = exp * 10 + (*c - '0');
-         ++c;
-      }
-      if (exp > 19) [[unlikely]] {
-         return false;
-      }
-
+         else if constexpr (sizeof(T) < 8) {
+            const uint64_t i = v * powers_of_ten_int[exp];
+            v = T(i);
+            return i <= (std::numeric_limits<T>::max)();
+         }
+         else {
 #if defined(__SIZEOF_INT128__)
-      const __uint128_t res = __uint128_t(v) * powers_of_ten_int[exp];
-      v = uint64_t(res);
-      return v <= (9223372036854775807ull + Sign);
+            const __uint128_t res = __uint128_t(v) * powers_of_ten_int[exp];
+            v = T(res);
+            return res <= (std::numeric_limits<T>::max)();
 #else
-      const auto res = full_multiplication(v, powers_of_ten_int[exp]);
-      v = uint64_t(res.low);
-      return res.high == 0 && (v <= (9223372036854775807ull + Sign));
+            const auto res = full_multiplication(v, powers_of_ten_int[exp]);
+            v = T(res.low);
+            return res.high == 0;
 #endif
+            return true;
+         }
+      }
+      return false;
    }
 
    template <std::integral T, class Char>
-      requires(std::is_signed_v<T> && sizeof(T) == 8)
-   GLZ_ALWAYS_INLINE constexpr bool atoi(T& v, const Char*& c) noexcept
+      requires(std::is_signed_v<T>)
+   GLZ_ALWAYS_INLINE constexpr bool atoi(T& v, Char*& c) noexcept
    {
-      bool valid;
-      uint64_t x;
-      return *c == '-' ? (++c, valid = atoi_signed_impl<T, Char, 1>(x, c), v = -x, valid)
-                       : (valid = atoi_signed_impl<T, Char, 0>(x, c), v = x, valid);
+      const uint8_t sign = *c == '-';
+      c += sign;
+      uint64_t i;
+      if (parse_int<T>(i, reinterpret_cast<const uint8_t*&>(c), sign)) [[likely]] {
+         if (*c == 'e' || *c == 'E') {
+            ++c;
+         }
+         else {
+            if (*c == '.') [[unlikely]] {
+               return false;
+            }
+            v = T((i ^ -sign) + sign);
+            return true;
+         }
+
+         c += (*c == '+');
+
+         if (not is_digit(*c)) [[unlikely]] {
+            return false;
+         }
+         ++c;
+         uint8_t exp = c[-1] - '0';
+         if (is_digit(*c)) {
+            exp = exp * 10 + (*c - '0');
+            ++c;
+         }
+         if constexpr (sizeof(T) == 1) {
+            if (exp > 2) [[unlikely]] {
+               return false;
+            }
+         }
+         else if constexpr (sizeof(T) == 2) {
+            if (exp > 4) [[unlikely]] {
+               return false;
+            }
+         }
+         else if constexpr (sizeof(T) == 4) {
+            if (exp > 9) [[unlikely]] {
+               return false;
+            }
+         }
+         else {
+            if (exp > 18) [[unlikely]] {
+               return false;
+            }
+         }
+
+         if constexpr (sizeof(T) == 1) {
+            static constexpr std::array<uint8_t, 3> powers_of_ten{1, 10, 100};
+            i *= powers_of_ten[exp];
+            v = T((uint8_t(i) ^ -sign) + sign);
+            return (i - sign) <= (std::numeric_limits<T>::max)();
+         }
+         else if constexpr (sizeof(T) == 2) {
+            static constexpr std::array<uint16_t, 5> powers_of_ten{1, 10, 100, 1000, 10000};
+            i *= powers_of_ten[exp];
+            v = T((uint16_t(i) ^ -sign) + sign);
+            return (i - sign) <= (std::numeric_limits<T>::max)();
+         }
+         else if constexpr (sizeof(T) == 4) {
+            i *= powers_of_ten_int[exp];
+            v = T((uint32_t(i) ^ -sign) + sign);
+            return (i - sign) <= (std::numeric_limits<T>::max)();
+         }
+         else {
+#if defined(__SIZEOF_INT128__)
+            const __uint128_t res = __uint128_t(i) * powers_of_ten_int[exp];
+            v = T((uint64_t(res) ^ -sign) + sign);
+            return uint64_t(res) <= (9223372036854775807ull + sign);
+#else
+            const auto res = full_multiplication(i, powers_of_ten_int[exp]);
+            v = T((uint64_t(res.low) ^ -sign) + sign);
+            return res.high == 0 && (uint64_t(res.low) <= (9223372036854775807ull + sign));
+#endif
+         }
+      }
+      return false;
    }
 
-   static constexpr std::array<size_t, 4> int_buffer_lengths{8, 8, 16, 24};
+   inline constexpr std::array<size_t, 4> int_buffer_lengths{8, 8, 16, 24};
 
    template <std::integral T, class Char>
    GLZ_ALWAYS_INLINE constexpr bool atoi(T& v, const Char*& it, const Char* end) noexcept

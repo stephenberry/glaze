@@ -201,7 +201,7 @@
 #include <immintrin.h>
 #endif
 
-namespace jkj
+namespace glz::jkj
 {
    namespace dragonbox
    {
