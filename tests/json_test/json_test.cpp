@@ -348,7 +348,7 @@ struct Thing
    std::map<int, double> mapi{{5, 3.14}, {7, 7.42}, {2, 9.63}};
    sub_thing* thing_ptr{};
 
-   Thing() : thing_ptr(&thing) {};
+   Thing() : thing_ptr(&thing){};
 };
 
 template <>
@@ -4170,7 +4170,7 @@ struct glz::meta<cat>
 
 struct person
 {
-   void eat(const std::string&) {};
+   void eat(const std::string&){};
 };
 
 template <>
@@ -6360,8 +6360,9 @@ template <>
 struct glz::meta<test_mapping_t>
 {
    using T = test_mapping_t;
-   static constexpr auto value =
-      object("id", &T::id, "coordinates", [](auto& self) { return coordinates_t{&self.latitude, &self.longitude}; });
+   static constexpr auto value = object("id", &T::id, "coordinates", [](auto& self) {
+      return coordinates_t{&self.latitude, &self.longitude};
+   });
 };
 
 suite mapping_struct = [] {
@@ -8331,7 +8332,7 @@ namespace glz::detail
          value.str += "write";
          write<JSON>::op<Opts>(value.str, args...);
       }
-      
+
       // For std::set testing, because iterators are const
       template <auto Opts>
       static void op(const custom_struct& value, auto&&... args) noexcept
@@ -9561,8 +9562,8 @@ template <class V>
 struct glz::meta<response_t<V>>
 {
    using T = response_t<V>;
-   static constexpr auto value =
-      object("result", [](auto& s) -> auto& { return s.result; }, "id", &T::id, "error", &T::error);
+   static constexpr auto value = object(
+      "result", [](auto& s) -> auto& { return s.result; }, "id", &T::id, "error", &T::error);
 };
 
 template <>
@@ -9781,7 +9782,7 @@ namespace trr
 
    struct Person
    {
-      Person(Address* const p_add) : p_add(p_add) {};
+      Person(Address* const p_add) : p_add(p_add){};
       std::string name;
       Address* const p_add; // pointer is const, Address object is mutable
    };
