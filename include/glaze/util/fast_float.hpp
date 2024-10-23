@@ -149,7 +149,7 @@
   #endif
 #endif
 
-namespace fast_float {
+namespace glz::fast_float {
 
 #define FASTFLOAT_JSONFMT (1 << 5)
 #define FASTFLOAT_FORTRANFMT (1 << 6)
@@ -315,7 +315,7 @@ using parse_options = parse_options_t<char>;
 #define FASTFLOAT_ENABLE_IF(...) typename std::enable_if<(__VA_ARGS__), int>::type
 
 
-namespace fast_float {
+namespace glz::fast_float {
 
 fastfloat_really_inline constexpr bool cpp20_and_in_constexpr() {
 #if FASTFLOAT_HAS_IS_CONSTANT_EVALUATED
@@ -897,7 +897,7 @@ constexpr size_t max_digits_u64(int base) { return int_luts<>::maxdigits_u64[bas
 fastfloat_really_inline
 constexpr uint64_t min_safe_u64(int base) { return int_luts<>::min_safe_u64[base - 2]; }
 
-} // namespace fast_float
+} // namespace glz::fast_float
 
 #endif
 
@@ -906,7 +906,7 @@ constexpr uint64_t min_safe_u64(int base) { return int_luts<>::min_safe_u64[base
 #define FASTFLOAT_FAST_FLOAT_H
 
 
-namespace fast_float {
+namespace glz::fast_float {
 /**
  * This function parses the character sequence [first,last) for a number. It parses floating-point numbers expecting
  * a locale-indepent format equivalent to what is used by std::strtod in the default ("C") locale.
@@ -945,7 +945,7 @@ template <typename T, typename UC = char, typename = FASTFLOAT_ENABLE_IF(!is_sup
 FASTFLOAT_CONSTEXPR20
 from_chars_result_t<UC> from_chars(UC const * first, UC const * last, T& value, int base = 10) noexcept;
 
-} // namespace fast_float
+} // namespace glz::fast_float
 #endif // FASTFLOAT_FAST_FLOAT_H
 
 #ifndef FASTFLOAT_ASCII_NUMBER_H
@@ -967,7 +967,7 @@ from_chars_result_t<UC> from_chars(UC const * first, UC const * last, T& value, 
 #include <arm_neon.h>
 #endif
 
-namespace fast_float {
+namespace glz::fast_float {
 
 template <typename UC>
 fastfloat_really_inline constexpr bool has_simd_opt() {
@@ -1472,7 +1472,7 @@ from_chars_result_t<UC> parse_int_string(UC const* p, UC const* pend, T& value, 
   return answer;
 }
 
-} // namespace fast_float
+} // namespace glz::fast_float
 
 #endif
 
@@ -1481,7 +1481,7 @@ from_chars_result_t<UC> parse_int_string(UC const* p, UC const* pend, T& value, 
 
 #include <cstdint>
 
-namespace fast_float {
+namespace glz::fast_float {
 
 /**
  * When mapping numbers from decimal to binary,
@@ -2173,7 +2173,7 @@ constexpr uint64_t powers_template<unused>::power_of_five_128[number_of_entries]
 
 using powers = powers_template<>;
 
-} // namespace fast_float
+} // namespace glz::fast_float
 
 #endif
 
@@ -2187,7 +2187,7 @@ using powers = powers_template<>;
 #include <cstdlib>
 #include <cstring>
 
-namespace fast_float {
+namespace glz::fast_float {
 
 // This will compute or rather approximate w * 5**q and return a pair of 64-bit words approximating
 // the result, with the "high" part corresponding to the most significant bits and the
@@ -2362,7 +2362,7 @@ adjusted_mantissa compute_float(int64_t q, uint64_t w)  noexcept  {
   return answer;
 }
 
-} // namespace fast_float
+} // namespace glz::fast_float
 
 #endif
 
@@ -2375,7 +2375,7 @@ adjusted_mantissa compute_float(int64_t q, uint64_t w)  noexcept  {
 #include <cstring>
 
 
-namespace fast_float {
+namespace glz::fast_float {
 
 // the limb width: we want efficient multiplication of double the bits in
 // limb, or for 64-bit limbs, at least 64-bit multiplication where we can
@@ -2979,7 +2979,7 @@ struct bigint : pow5_tables<> {
   }
 };
 
-} // namespace fast_float
+} // namespace glz::fast_float
 
 #endif
 
@@ -2992,7 +2992,7 @@ struct bigint : pow5_tables<> {
 #include <iterator>
 
 
-namespace fast_float {
+namespace glz::fast_float {
 
 // 1e0 to 1e19
 constexpr static uint64_t powers_of_ten_uint64[] = {
@@ -3403,7 +3403,7 @@ adjusted_mantissa digit_comp(parsed_number_string_t<UC>& num, adjusted_mantissa 
   }
 }
 
-} // namespace fast_float
+} // namespace glz::fast_float
 
 #endif
 
@@ -3415,7 +3415,7 @@ adjusted_mantissa digit_comp(parsed_number_string_t<UC>& num, adjusted_mantissa 
 #include <cstring>
 #include <limits>
 #include <system_error>
-namespace fast_float {
+namespace glz::fast_float {
 
 
 namespace detail {
@@ -3676,7 +3676,7 @@ from_chars_result_t<UC> from_chars_advanced(UC const * first, UC const * last,
 
   from_chars_result_t<UC> answer;
 #ifdef FASTFLOAT_SKIP_WHITE_SPACE  // disabled by default
-  while ((first != last) && fast_float::is_space(uint8_t(*first))) {
+  while ((first != last) && glz::fast_float::is_space(uint8_t(*first))) {
     first++;
   }
 #endif
@@ -3708,7 +3708,7 @@ from_chars_result_t<UC> from_chars(UC const* first, UC const* last, T& value, in
 
   from_chars_result_t<UC> answer;
 #ifdef FASTFLOAT_SKIP_WHITE_SPACE  // disabled by default
-  while ((first != last) && fast_float::is_space(uint8_t(*first))) {
+  while ((first != last) && glz::fast_float::is_space(uint8_t(*first))) {
     first++;
   }
 #endif
@@ -3720,7 +3720,7 @@ from_chars_result_t<UC> from_chars(UC const* first, UC const* last, T& value, in
   return parse_int_string(first, last, value, base);
 }
 
-} // namespace fast_float
+} // namespace glz::fast_float
 
 #endif
 
