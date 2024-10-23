@@ -18,7 +18,7 @@ namespace glz::detail
       inline static void op(is_context auto&& ctx, auto&& it, auto&& end) noexcept;
    };
 
-   inline void skip_string_binary(is_context auto&& ctx, auto&& it, auto&& end) noexcept
+   inline void skip_string_beve(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       ++it;
       const auto n = int_from_compressed(ctx, it, end);
@@ -32,7 +32,7 @@ namespace glz::detail
       it += n;
    }
 
-   GLZ_ALWAYS_INLINE void skip_number_binary(is_context auto&& ctx, auto&& it, auto&& end) noexcept
+   GLZ_ALWAYS_INLINE void skip_number_beve(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       const auto tag = uint8_t(*it);
       const uint8_t byte_count = byte_count_lookup[tag >> 5];
@@ -45,7 +45,7 @@ namespace glz::detail
    }
 
    template <opts Opts>
-   inline void skip_object_binary(is_context auto&& ctx, auto&& it, auto&& end) noexcept
+   inline void skip_object_beve(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       GLZ_END_CHECK();
       const auto tag = uint8_t(*it);
@@ -100,7 +100,7 @@ namespace glz::detail
    }
 
    template <opts Opts>
-   inline void skip_typed_array_binary(is_context auto&& ctx, auto&& it, auto&& end) noexcept
+   inline void skip_typed_array_beve(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       const auto tag = uint8_t(*it);
       const uint8_t type = (tag & 0b000'11'000) >> 3;
@@ -157,7 +157,7 @@ namespace glz::detail
    }
 
    template <opts Opts>
-   inline void skip_untyped_array_binary(is_context auto&& ctx, auto&& it, auto&& end) noexcept
+   inline void skip_untyped_array_beve(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       ++it;
       const auto n = int_from_compressed(ctx, it, end);
@@ -176,11 +176,11 @@ namespace glz::detail
    {
       switch (uint8_t(*it) & 0b00000'111) {
       case tag::typed_array: {
-         skip_typed_array_binary<Opts>(ctx, it, end);
+         skip_typed_array_beve<Opts>(ctx, it, end);
          break;
       }
       case tag::generic_array: {
-         skip_untyped_array_binary<Opts>(ctx, it, end);
+         skip_untyped_array_beve<Opts>(ctx, it, end);
          break;
       }
       default:
@@ -189,7 +189,7 @@ namespace glz::detail
    }
 
    template <opts Opts>
-   GLZ_ALWAYS_INLINE void skip_additional_binary(is_context auto&& ctx, auto&& it, auto&& end) noexcept
+   GLZ_ALWAYS_INLINE void skip_additional_beve(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       ++it;
       skip_value<BEVE>::op<Opts>(ctx, it, end);
@@ -205,27 +205,27 @@ namespace glz::detail
          break;
       }
       case tag::number: {
-         skip_number_binary(ctx, it, end);
+         skip_number_beve(ctx, it, end);
          break;
       }
       case tag::string: {
-         skip_string_binary(ctx, it, end);
+         skip_string_beve(ctx, it, end);
          break;
       }
       case tag::object: {
-         skip_object_binary<Opts>(ctx, it, end);
+         skip_object_beve<Opts>(ctx, it, end);
          break;
       }
       case tag::typed_array: {
-         skip_typed_array_binary<Opts>(ctx, it, end);
+         skip_typed_array_beve<Opts>(ctx, it, end);
          break;
       }
       case tag::generic_array: {
-         skip_untyped_array_binary<Opts>(ctx, it, end);
+         skip_untyped_array_beve<Opts>(ctx, it, end);
          break;
       }
       case tag::extensions: {
-         skip_additional_binary<Opts>(ctx, it, end);
+         skip_additional_beve<Opts>(ctx, it, end);
          break;
       }
       default:

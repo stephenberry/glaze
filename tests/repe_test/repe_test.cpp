@@ -187,7 +187,7 @@ suite structs_of_functions = [] {
    };
 };
 
-suite structs_of_functions_binary = [] {
+suite structs_of_functions_beve = [] {
    "structs_of_functions"_test = [] {
       repe::registry<glz::opts{.format = glz::BEVE}> server{};
 
@@ -394,7 +394,7 @@ suite root_tests = [] {
    };
 };
 
-suite wrapper_tests_binary = [] {
+suite wrapper_tests_beve = [] {
    "wrapper"_test = [] {
       repe::registry<glz::opts{.format = glz::BEVE}> server{};
 
