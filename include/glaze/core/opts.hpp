@@ -304,7 +304,7 @@ namespace glz
    }
 
    template <opts Opts>
-   constexpr auto set_binary()
+   constexpr auto set_beve()
    {
       opts ret = Opts;
       ret.format = BEVE;

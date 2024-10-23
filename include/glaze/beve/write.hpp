@@ -911,7 +911,7 @@ namespace glz
    template <opts Opts = opts{}, write_beve_supported T>
    [[nodiscard]] glz::expected<std::string, error_ctx> write_beve(T&& value) noexcept
    {
-      return write<set_binary<Opts>()>(std::forward<T>(value));
+      return write<set_beve<Opts>()>(std::forward<T>(value));
    }
 
    template <auto& Partial, write_beve_supported T, class Buffer>
@@ -926,7 +926,7 @@ namespace glz
    {
       static_assert(sizeof(decltype(*buffer.data())) == 1);
 
-      const auto ec = write<set_binary<Opts>()>(std::forward<T>(value), buffer);
+      const auto ec = write<set_beve<Opts>()>(std::forward<T>(value), buffer);
       if (bool(ec)) [[unlikely]] {
          return ec;
       }

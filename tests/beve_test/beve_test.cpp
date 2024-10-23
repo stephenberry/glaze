@@ -454,8 +454,8 @@ void bench()
 
 using namespace ut;
 
-suite binary_helpers = [] {
-   "binary_helpers"_test = [] {
+suite beve_helpers = [] {
+   "beve_helpers"_test = [] {
       my_struct v{22, 5.76, "ufo", {9, 5, 1}};
 
       std::string b;
@@ -583,7 +583,7 @@ void file_include_test()
    obj.i = 0;
    obj.j = true;
 
-   expect(glz::read_file_binary(obj, "../alabastar.beve", std::string{}) == glz::error_code::none);
+   expect(glz::read_file_beve(obj, "../alabastar.beve", std::string{}) == glz::error_code::none);
 
    expect(obj.str == "Hello") << obj.str;
    expect(obj.i == 55) << obj.i;
@@ -1282,7 +1282,7 @@ suite file_write_read_tests = [] {
 
       v.clear();
 
-      expect(!glz::read_file_binary(v, "file_read_write.beve", s));
+      expect(!glz::read_file_beve(v, "file_read_write.beve", s));
 
       expect(v == copy);
    };

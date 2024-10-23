@@ -30,11 +30,11 @@ namespace glz::ex
    }
 
    template <auto Opts = opts{}, class T>
-   void read_file_binary(T& value, const sv file_name, auto&& buffer)
+   void read_file_beve(T& value, const sv file_name, auto&& buffer)
    {
-      const auto ec = glz::read_file_binary(value, file_name, buffer);
+      const auto ec = glz::read_file_beve(value, file_name, buffer);
       if (ec) {
-         throw std::runtime_error("read_file_binary error for: " + std::string(file_name));
+         throw std::runtime_error("read_file_beve error for: " + std::string(file_name));
       }
    }
 }

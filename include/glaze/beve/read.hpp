@@ -433,7 +433,7 @@ namespace glz
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&& /*value*/, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
-            skip_string_binary(ctx, it, end);
+            skip_string_beve(ctx, it, end);
          }
       };
 
@@ -1451,7 +1451,7 @@ namespace glz
    }
 
    template <opts Opts = opts{}, read_beve_supported T>
-   [[nodiscard]] inline error_ctx read_file_binary(T& value, const sv file_name, auto&& buffer) noexcept
+   [[nodiscard]] inline error_ctx read_file_beve(T& value, const sv file_name, auto&& buffer) noexcept
    {
       context ctx{};
       ctx.current_file = file_name;
@@ -1462,7 +1462,7 @@ namespace glz
          return error_ctx{file_error};
       }
 
-      return read<set_binary<Opts>()>(value, buffer, ctx);
+      return read<set_beve<Opts>()>(value, buffer, ctx);
    }
 
    template <read_beve_supported T, class Buffer>
@@ -1484,9 +1484,9 @@ namespace glz
    }
 
    template <opts Opts = opts{}, read_beve_supported T>
-   [[nodiscard]] inline error_ctx read_file_binary_untagged(T& value, const std::string& file_name,
+   [[nodiscard]] inline error_ctx read_file_beve_untagged(T& value, const std::string& file_name,
                                                             auto&& buffer) noexcept
    {
-      return read_file_binary<opt_true<Opts, &opts::structs_as_arrays>>(value, file_name, buffer);
+      return read_file_beve<opt_true<Opts, &opts::structs_as_arrays>>(value, file_name, buffer);
    }
 }
