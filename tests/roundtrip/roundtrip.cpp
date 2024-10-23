@@ -36,12 +36,33 @@ struct my_struct
   std::map<std::string, int> map{{"one", 1}, {"two", 2}};
 };
 
-suite my_struct_test = [] {
+template <glz::opts Opts, class T>
+void roundtrip(T& v)
+{
+   std::string buffer{};
+   expect(not write<default_opts>(v, buffer));
+   expect(not buffer.empty());
+   expect(not read<default_opts>(v, buffer));
+   std::string buffer2{};
+   expect(not write<default_opts>(v, buffer2));
+   expect(buffer == buffer2);
+}
+
+struct memory_struct
+{
+   std::unique_ptr<int> i = std::make_unique<int>(287);
+   std::shared_ptr<double> d = std::make_shared<double>(3.14);
+};
+
+suite tests = [] {
    "my_struct"_test = [] {
-      my_struct obj{};
-      std::string buffer{};
-      expect(not write<default_opts>(obj, buffer));
-      expect(not read<default_opts>(obj, buffer));
+      my_struct v{};
+      roundtrip<default_opts>(v);
+   };
+   
+   "memory_struct"_test = [] {
+      memory_struct v{};
+      roundtrip<default_opts>(v);
    };
 };
 
