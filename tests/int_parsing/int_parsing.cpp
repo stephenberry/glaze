@@ -502,7 +502,7 @@ suite u8_test = [] {
 
       expect(not glz::read_json(value, "[1e10, 12e10]"));
       expect(value == std::array<V, 2>{10000000000, 120000000000});
-      
+
       expect(not glz::read<glz::opts{.minified = true}>(value, "[4774870093504525206]"));
 
       expect(glz::read_json(value, "[1e-1]"));
@@ -554,7 +554,7 @@ suite u8_test = [] {
 
       expect(not glz::read_json(value, "[-5594732989048119398, -5594732989048119398]"));
       expect(value == std::array<V, 2>{-5594732989048119398, -5594732989048119398});
-      
+
       expect(not glz::read<glz::opts{.minified = true}>(value, "[337184269,337184283]"));
 
       expect(glz::read_json(value, "[1e-1]"));
