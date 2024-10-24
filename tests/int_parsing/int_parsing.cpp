@@ -157,13 +157,13 @@ void test_struct_with_array_minified()
 {
    std::mt19937 gen{};
    std::uniform_int_distribution<T> dist{std::numeric_limits<T>::lowest(), (std::numeric_limits<T>::max)()};
-   
+
    vector_object<T> obj;
-   
+
    for (size_t i = 0; i < 1000; ++i) {
       obj.vec.emplace_back(dist(gen));
    }
-   
+
    std::string buffer{};
    expect(not glz::write_json(obj, buffer));
    expect(not glz::read<glz::opts{.minified = true}>(obj, buffer));
@@ -520,7 +520,7 @@ suite u8_test = [] {
    "u64 performance"_test = [] { expect(test_performance<uint64_t>()); };
 
    "u64 single char performance"_test = [] { expect(test_single_char_performance<uint64_t>()); };
-   
+
    "u64 array minified"_test = [] { test_struct_with_array_minified<uint64_t>(); };
 
    "i64"_test = [] {
@@ -574,7 +574,7 @@ suite u8_test = [] {
    "i64 performance"_test = [] { expect(test_performance<int64_t>()); };
 
    "i64 single char performance"_test = [] { expect(test_single_char_performance<int64_t>()); };
-   
+
    "i64 array minified"_test = [] { test_struct_with_array_minified<int64_t>(); };
 };
 

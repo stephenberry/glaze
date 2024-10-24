@@ -440,14 +440,14 @@ namespace glz::detail
       }
       return false;
    }
-   
+
    template <std::integral T>
       requires(std::is_signed_v<T> && (sizeof(T) <= 8))
    GLZ_ALWAYS_INLINE constexpr const uint8_t* parse_int(T& v, const uint8_t*& c) noexcept
    {
       const uint8_t sign = *c == '-';
       c += sign;
-      
+
       if (is_digit(*c)) [[likely]] {
          v = *c - '0';
          ++c;
@@ -660,7 +660,8 @@ namespace glz::detail
             }
             v *= -1;
             v = v * 10 - (*c - '0');
-         } else {
+         }
+         else {
             if (v > T(peak_positive<T>[*c])) [[unlikely]] {
                return {};
             }
@@ -685,7 +686,7 @@ namespace glz::detail
    {
       using X = std::decay_t<T>;
       using utype = std::make_unsigned_t<X>;
-      
+
       const uint8_t sign = *c == '-';
       if (parse_int(v, reinterpret_cast<const uint8_t*&>(c))) [[likely]] {
          if (*c == 'e' || *c == 'E') {
@@ -729,7 +730,7 @@ namespace glz::detail
                return false;
             }
          }
-         
+
          utype i = sign ? utype(-v) : utype(v);
          if constexpr (sizeof(T) == 1) {
             static constexpr std::array<utype, 3> powers_of_ten{1, 10, 100};
