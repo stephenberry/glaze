@@ -1,0 +1,24 @@
+# Site settings
+title: "Glaze"
+description: "Glaze: a high performance C++ JSON and interface library"
+baseurl: "/glaze"  # Replace 'repositoryname' with your repository name
+url: "https://stephenberry.github.io"  # Replace 'yourusername' with your GitHub username
+
+# Build settings
+theme: jekyll-theme-minimal  # Choose any supported theme
+markdown: kramdown
+plugins:
+  - jekyll-feed
+
+# Include the 'docs' folder in the build
+include:
+  - "docs"
+
+# Exclude unnecessary files or directories
+exclude:
+  - "Gemfile"
+  - "Gemfile.lock"
+  - "node_modules"
+  - ".github"
+
+# Other settings as needed
