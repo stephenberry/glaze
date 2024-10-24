@@ -15,23 +15,23 @@
 // is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
 // KIND, either express or implied.
 
-#ifndef JKJ_HEADER_DRAGONBOX
-#define JKJ_HEADER_DRAGONBOX
+#ifndef GLZ_JKJ_HEADER_DRAGONBOX
+#define GLZ_JKJ_HEADER_DRAGONBOX
 
 // Attribute for storing static data into a dedicated place, e.g. flash memory. Every ODR-used
 // static data declaration will be decorated with this macro. The users may define this macro,
 // before including the library headers, into whatever they want.
-#ifndef JKJ_STATIC_DATA_SECTION
-#define JKJ_STATIC_DATA_SECTION
+#ifndef GLZ_JKJ_STATIC_DATA_SECTION
+#define GLZ_JKJ_STATIC_DATA_SECTION
 #else
-#define JKJ_STATIC_DATA_SECTION_DEFINED 1
+#define GLZ_JKJ_STATIC_DATA_SECTION_DEFINED 1
 #endif
 
 // To use the library with toolchains without standard C++ headers, the users may define this macro
 // into their custom namespace which contains the defintions of all the standard C++ library
 // features used in this header. (The list can be found below.)
-#ifndef JKJ_STD_REPLACEMENT_NAMESPACE
-#define JKJ_STD_REPLACEMENT_NAMESPACE std
+#ifndef GLZ_JKJ_STD_REPLACEMENT_NAMESPACE
+#define GLZ_JKJ_STD_REPLACEMENT_NAMESPACE std
 #include <cassert>
 #include <cstdint>
 #include <cstring>
@@ -44,7 +44,7 @@
 #endif
 #endif
 #else
-#define JKJ_STD_REPLACEMENT_NAMESPACE_DEFINED 1
+#define GLZ_JKJ_STD_REPLACEMENT_NAMESPACE_DEFINED 1
 #endif
 
 ////////////////////////////////////////////////////////////////////////////////////////
@@ -53,146 +53,146 @@
 
 // C++14 constexpr
 #if defined(__cpp_constexpr) && __cpp_constexpr >= 201304L
-#define JKJ_HAS_CONSTEXPR14 1
+#define GLZ_JKJ_HAS_CONSTEXPR14 1
 #elif __cplusplus >= 201402L
-#define JKJ_HAS_CONSTEXPR14 1
+#define GLZ_JKJ_HAS_CONSTEXPR14 1
 #elif defined(_MSC_VER) && _MSC_VER >= 1910 && _MSVC_LANG >= 201402L
-#define JKJ_HAS_CONSTEXPR14 1
+#define GLZ_JKJ_HAS_CONSTEXPR14 1
 #else
-#define JKJ_HAS_CONSTEXPR14 0
+#define GLZ_JKJ_HAS_CONSTEXPR14 0
 #endif
 
-#if JKJ_HAS_CONSTEXPR14
-#define JKJ_CONSTEXPR14 constexpr
+#if GLZ_JKJ_HAS_CONSTEXPR14
+#define GLZ_JKJ_CONSTEXPR14 constexpr
 #else
-#define JKJ_CONSTEXPR14
+#define GLZ_JKJ_CONSTEXPR14
 #endif
 
 // C++17 constexpr lambdas
 #if defined(__cpp_constexpr) && __cpp_constexpr >= 201603L
-#define JKJ_HAS_CONSTEXPR17 1
+#define GLZ_JKJ_HAS_CONSTEXPR17 1
 #elif __cplusplus >= 201703L
-#define JKJ_HAS_CONSTEXPR17 1
+#define GLZ_JKJ_HAS_CONSTEXPR17 1
 #elif defined(_MSC_VER) && _MSC_VER >= 1911 && _MSVC_LANG >= 201703L
-#define JKJ_HAS_CONSTEXPR17 1
+#define GLZ_JKJ_HAS_CONSTEXPR17 1
 #else
-#define JKJ_HAS_CONSTEXPR17 0
+#define GLZ_JKJ_HAS_CONSTEXPR17 0
 #endif
 
 // C++17 inline variables
 #if defined(__cpp_inline_variables) && __cpp_inline_variables >= 201606L
-#define JKJ_HAS_INLINE_VARIABLE 1
+#define GLZ_JKJ_HAS_INLINE_VARIABLE 1
 #elif __cplusplus >= 201703L
-#define JKJ_HAS_INLINE_VARIABLE 1
+#define GLZ_JKJ_HAS_INLINE_VARIABLE 1
 #elif defined(_MSC_VER) && _MSC_VER >= 1912 && _MSVC_LANG >= 201703L
-#define JKJ_HAS_INLINE_VARIABLE 1
+#define GLZ_JKJ_HAS_INLINE_VARIABLE 1
 #else
-#define JKJ_HAS_INLINE_VARIABLE 0
+#define GLZ_JKJ_HAS_INLINE_VARIABLE 0
 #endif
 
-#if JKJ_HAS_INLINE_VARIABLE
-#define JKJ_INLINE_VARIABLE inline constexpr
+#if GLZ_JKJ_HAS_INLINE_VARIABLE
+#define GLZ_JKJ_INLINE_VARIABLE inline constexpr
 #else
-#define JKJ_INLINE_VARIABLE static constexpr
+#define GLZ_JKJ_INLINE_VARIABLE static constexpr
 #endif
 
 // C++17 if constexpr
 #if defined(__cpp_if_constexpr) && __cpp_if_constexpr >= 201606L
-#define JKJ_HAS_IF_CONSTEXPR 1
+#define GLZ_JKJ_HAS_IF_CONSTEXPR 1
 #elif __cplusplus >= 201703L
-#define JKJ_HAS_IF_CONSTEXPR 1
+#define GLZ_JKJ_HAS_IF_CONSTEXPR 1
 #elif defined(_MSC_VER) && _MSC_VER >= 1911 && _MSVC_LANG >= 201703L
-#define JKJ_HAS_IF_CONSTEXPR 1
+#define GLZ_JKJ_HAS_IF_CONSTEXPR 1
 #else
-#define JKJ_HAS_IF_CONSTEXPR 0
+#define GLZ_JKJ_HAS_IF_CONSTEXPR 0
 #endif
 
-#if JKJ_HAS_IF_CONSTEXPR
-#define JKJ_IF_CONSTEXPR if constexpr
+#if GLZ_JKJ_HAS_IF_CONSTEXPR
+#define GLZ_JKJ_IF_CONSTEXPR if constexpr
 #else
-#define JKJ_IF_CONSTEXPR if
+#define GLZ_JKJ_IF_CONSTEXPR if
 #endif
 
 // C++20 std::bit_cast
-#if JKJ_STD_REPLACEMENT_NAMESPACE_DEFINED
-#if JKJ_STD_REPLACEMENT_HAS_BIT_CAST
-#define JKJ_HAS_BIT_CAST 1
+#if GLZ_JKJ_STD_REPLACEMENT_NAMESPACE_DEFINED
+#if GLZ_JKJ_STD_REPLACEMENT_HAS_BIT_CAST
+#define GLZ_JKJ_HAS_BIT_CAST 1
 #else
-#define JKJ_HAS_BIT_CAST 0
+#define GLZ_JKJ_HAS_BIT_CAST 0
 #endif
 #elif defined(__cpp_lib_bit_cast) && __cpp_lib_bit_cast >= 201806L
 #include <bit>
-#define JKJ_HAS_BIT_CAST 1
+#define GLZ_JKJ_HAS_BIT_CAST 1
 #else
-#define JKJ_HAS_BIT_CAST 0
+#define GLZ_JKJ_HAS_BIT_CAST 0
 #endif
 
 // C++23 if consteval or C++20 std::is_constant_evaluated
 #if defined(__cpp_if_consteval) && __cpp_is_consteval >= 202106L
-#define JKJ_IF_CONSTEVAL if consteval
-#define JKJ_IF_NOT_CONSTEVAL if !consteval
-#define JKJ_CAN_BRANCH_ON_CONSTEVAL 1
-#define JKJ_USE_IS_CONSTANT_EVALUATED 0
-#elif JKJ_STD_REPLACEMENT_NAMESPACE_DEFINED
-#if JKJ_STD_REPLACEMENT_HAS_IS_CONSTANT_EVALUATED
-#define JKJ_IF_CONSTEVAL if (stdr::is_constant_evaluated())
-#define JKJ_IF_NOT_CONSTEVAL if (!stdr::is_constant_evaluated())
-#define JKJ_CAN_BRANCH_ON_CONSTEVAL 1
-#define JKJ_USE_IS_CONSTANT_EVALUATED 1
-#elif JKJ_HAS_IF_CONSTEXPR
-#define JKJ_IF_CONSTEVAL if constexpr (false)
-#define JKJ_IF_NOT_CONSTEVAL if constexpr (true)
-#define JKJ_CAN_BRANCH_ON_CONSTEVAL 0
-#define JKJ_USE_IS_CONSTANT_EVALUATED 0
+#define GLZ_JKJ_IF_CONSTEVAL if consteval
+#define GLZ_JKJ_IF_NOT_CONSTEVAL if !consteval
+#define GLZ_JKJ_CAN_BRANCH_ON_CONSTEVAL 1
+#define GLZ_JKJ_USE_IS_CONSTANT_EVALUATED 0
+#elif GLZ_JKJ_STD_REPLACEMENT_NAMESPACE_DEFINED
+#if GLZ_JKJ_STD_REPLACEMENT_HAS_IS_CONSTANT_EVALUATED
+#define GLZ_JKJ_IF_CONSTEVAL if (stdr::is_constant_evaluated())
+#define GLZ_JKJ_IF_NOT_CONSTEVAL if (!stdr::is_constant_evaluated())
+#define GLZ_JKJ_CAN_BRANCH_ON_CONSTEVAL 1
+#define GLZ_JKJ_USE_IS_CONSTANT_EVALUATED 1
+#elif GLZ_JKJ_HAS_IF_CONSTEXPR
+#define GLZ_JKJ_IF_CONSTEVAL if constexpr (false)
+#define GLZ_JKJ_IF_NOT_CONSTEVAL if constexpr (true)
+#define GLZ_JKJ_CAN_BRANCH_ON_CONSTEVAL 0
+#define GLZ_JKJ_USE_IS_CONSTANT_EVALUATED 0
 #else
-#define JKJ_IF_CONSTEVAL if (false)
-#define JKJ_IF_NOT_CONSTEVAL if (true)
-#define JKJ_CAN_BRANCH_ON_CONSTEVAL 0
-#define JKJ_USE_IS_CONSTANT_EVALUATED 0
+#define GLZ_JKJ_IF_CONSTEVAL if (false)
+#define GLZ_JKJ_IF_NOT_CONSTEVAL if (true)
+#define GLZ_JKJ_CAN_BRANCH_ON_CONSTEVAL 0
+#define GLZ_JKJ_USE_IS_CONSTANT_EVALUATED 0
 #endif
 #else
 #if defined(__cpp_lib_is_constant_evaluated) && __cpp_lib_is_constant_evaluated >= 201811L
-#define JKJ_IF_CONSTEVAL if (stdr::is_constant_evaluated())
-#define JKJ_IF_NOT_CONSTEVAL if (!stdr::is_constant_evaluated())
-#define JKJ_CAN_BRANCH_ON_CONSTEVAL 1
-#define JKJ_USE_IS_CONSTANT_EVALUATED 1
-#elif JKJ_HAS_IF_CONSTEXPR
-#define JKJ_IF_CONSTEVAL if constexpr (false)
-#define JKJ_IF_NOT_CONSTEVAL if constexpr (true)
-#define JKJ_CAN_BRANCH_ON_CONSTEVAL 0
-#define JKJ_USE_IS_CONSTANT_EVALUATED 0
+#define GLZ_JKJ_IF_CONSTEVAL if (stdr::is_constant_evaluated())
+#define GLZ_JKJ_IF_NOT_CONSTEVAL if (!stdr::is_constant_evaluated())
+#define GLZ_JKJ_CAN_BRANCH_ON_CONSTEVAL 1
+#define GLZ_JKJ_USE_IS_CONSTANT_EVALUATED 1
+#elif GLZ_JKJ_HAS_IF_CONSTEXPR
+#define GLZ_JKJ_IF_CONSTEVAL if constexpr (false)
+#define GLZ_JKJ_IF_NOT_CONSTEVAL if constexpr (true)
+#define GLZ_JKJ_CAN_BRANCH_ON_CONSTEVAL 0
+#define GLZ_JKJ_USE_IS_CONSTANT_EVALUATED 0
 #else
-#define JKJ_IF_CONSTEVAL if (false)
-#define JKJ_IF_NOT_CONSTEVAL if (true)
-#define JKJ_CAN_BRANCH_ON_CONSTEVAL 0
-#define JKJ_USE_IS_CONSTANT_EVALUATED 0
+#define GLZ_JKJ_IF_CONSTEVAL if (false)
+#define GLZ_JKJ_IF_NOT_CONSTEVAL if (true)
+#define GLZ_JKJ_CAN_BRANCH_ON_CONSTEVAL 0
+#define GLZ_JKJ_USE_IS_CONSTANT_EVALUATED 0
 #endif
 #endif
 
-#if JKJ_CAN_BRANCH_ON_CONSTEVAL && JKJ_HAS_BIT_CAST
-#define JKJ_CONSTEXPR20 constexpr
+#if GLZ_JKJ_CAN_BRANCH_ON_CONSTEVAL && GLZ_JKJ_HAS_BIT_CAST
+#define GLZ_JKJ_CONSTEXPR20 constexpr
 #else
-#define JKJ_CONSTEXPR20
+#define GLZ_JKJ_CONSTEXPR20
 #endif
 
 // Suppress additional buffer overrun check.
 // I have no idea why MSVC thinks some functions here are vulnerable to the buffer overrun
 // attacks. No, they aren't.
 #if defined(__GNUC__) || defined(__clang__)
-#define JKJ_SAFEBUFFERS
-#define JKJ_FORCEINLINE inline __attribute__((always_inline))
+#define GLZ_JKJ_SAFEBUFFERS
+#define GLZ_JKJ_FORCEINLINE inline __attribute__((always_inline))
 #elif defined(_MSC_VER)
-#define JKJ_SAFEBUFFERS __declspec(safebuffers)
-#define JKJ_FORCEINLINE __forceinline
+#define GLZ_JKJ_SAFEBUFFERS __declspec(safebuffers)
+#define GLZ_JKJ_FORCEINLINE __forceinline
 #else
-#define JKJ_SAFEBUFFERS
-#define JKJ_FORCEINLINE inline
+#define GLZ_JKJ_SAFEBUFFERS
+#define GLZ_JKJ_FORCEINLINE inline
 #endif
 
 #if defined(__has_builtin)
-#define JKJ_HAS_BUILTIN(x) __has_builtin(x)
+#define GLZ_JKJ_HAS_BUILTIN(x) __has_builtin(x)
 #else
-#define JKJ_HAS_BUILTIN(x) false
+#define GLZ_JKJ_HAS_BUILTIN(x) false
 #endif
 
 #if defined(_MSC_VER)
@@ -213,60 +213,60 @@ namespace glz::jkj
          namespace stdr
          {
             // <bit>
-#if JKJ_HAS_BIT_CAST
-            using JKJ_STD_REPLACEMENT_NAMESPACE::bit_cast;
+#if GLZ_JKJ_HAS_BIT_CAST
+            using GLZ_JKJ_STD_REPLACEMENT_NAMESPACE::bit_cast;
 #endif
 
             // <cassert>
             // We need assert() macro, but it is not namespaced anyway, so nothing to do here.
 
             // <cstdint>
-            using JKJ_STD_REPLACEMENT_NAMESPACE::int_fast16_t;
-            using JKJ_STD_REPLACEMENT_NAMESPACE::int_fast32_t;
-            using JKJ_STD_REPLACEMENT_NAMESPACE::int_fast8_t;
-            using JKJ_STD_REPLACEMENT_NAMESPACE::int_least16_t;
-            using JKJ_STD_REPLACEMENT_NAMESPACE::int_least32_t;
-            using JKJ_STD_REPLACEMENT_NAMESPACE::int_least8_t;
-            using JKJ_STD_REPLACEMENT_NAMESPACE::uint_fast16_t;
-            using JKJ_STD_REPLACEMENT_NAMESPACE::uint_fast32_t;
-            using JKJ_STD_REPLACEMENT_NAMESPACE::uint_fast8_t;
-            using JKJ_STD_REPLACEMENT_NAMESPACE::uint_least16_t;
-            using JKJ_STD_REPLACEMENT_NAMESPACE::uint_least32_t;
-            using JKJ_STD_REPLACEMENT_NAMESPACE::uint_least64_t;
-            using JKJ_STD_REPLACEMENT_NAMESPACE::uint_least8_t;
+            using GLZ_JKJ_STD_REPLACEMENT_NAMESPACE::int_fast16_t;
+            using GLZ_JKJ_STD_REPLACEMENT_NAMESPACE::int_fast32_t;
+            using GLZ_JKJ_STD_REPLACEMENT_NAMESPACE::int_fast8_t;
+            using GLZ_JKJ_STD_REPLACEMENT_NAMESPACE::int_least16_t;
+            using GLZ_JKJ_STD_REPLACEMENT_NAMESPACE::int_least32_t;
+            using GLZ_JKJ_STD_REPLACEMENT_NAMESPACE::int_least8_t;
+            using GLZ_JKJ_STD_REPLACEMENT_NAMESPACE::uint_fast16_t;
+            using GLZ_JKJ_STD_REPLACEMENT_NAMESPACE::uint_fast32_t;
+            using GLZ_JKJ_STD_REPLACEMENT_NAMESPACE::uint_fast8_t;
+            using GLZ_JKJ_STD_REPLACEMENT_NAMESPACE::uint_least16_t;
+            using GLZ_JKJ_STD_REPLACEMENT_NAMESPACE::uint_least32_t;
+            using GLZ_JKJ_STD_REPLACEMENT_NAMESPACE::uint_least64_t;
+            using GLZ_JKJ_STD_REPLACEMENT_NAMESPACE::uint_least8_t;
             // We need INT32_C, UINT32_C and UINT64_C macros too, but again there is nothing to do
             // here.
 
             // <cstring>
-            using JKJ_STD_REPLACEMENT_NAMESPACE::memcpy;
-            using JKJ_STD_REPLACEMENT_NAMESPACE::size_t;
+            using GLZ_JKJ_STD_REPLACEMENT_NAMESPACE::memcpy;
+            using GLZ_JKJ_STD_REPLACEMENT_NAMESPACE::size_t;
 
             // <limits>
             template <class T>
-            using numeric_limits = JKJ_STD_REPLACEMENT_NAMESPACE::numeric_limits<T>;
+            using numeric_limits = GLZ_JKJ_STD_REPLACEMENT_NAMESPACE::numeric_limits<T>;
 
             // <type_traits>
             template <bool cond, class T = void>
-            using enable_if = JKJ_STD_REPLACEMENT_NAMESPACE::enable_if<cond, T>;
+            using enable_if = GLZ_JKJ_STD_REPLACEMENT_NAMESPACE::enable_if<cond, T>;
             template <class T>
-            using add_rvalue_reference = JKJ_STD_REPLACEMENT_NAMESPACE::add_rvalue_reference<T>;
+            using add_rvalue_reference = GLZ_JKJ_STD_REPLACEMENT_NAMESPACE::add_rvalue_reference<T>;
             template <bool cond, class T_true, class T_false>
-            using conditional = JKJ_STD_REPLACEMENT_NAMESPACE::conditional<cond, T_true, T_false>;
-#if JKJ_USE_IS_CONSTANT_EVALUATED
-            using JKJ_STD_REPLACEMENT_NAMESPACE::is_constant_evaluated;
+            using conditional = GLZ_JKJ_STD_REPLACEMENT_NAMESPACE::conditional<cond, T_true, T_false>;
+#if GLZ_JKJ_USE_IS_CONSTANT_EVALUATED
+            using GLZ_JKJ_STD_REPLACEMENT_NAMESPACE::is_constant_evaluated;
 #endif
             template <class T1, class T2>
-            using is_same = JKJ_STD_REPLACEMENT_NAMESPACE::is_same<T1, T2>;
-#if !JKJ_HAS_BIT_CAST
+            using is_same = GLZ_JKJ_STD_REPLACEMENT_NAMESPACE::is_same<T1, T2>;
+#if !GLZ_JKJ_HAS_BIT_CAST
             template <class T>
-            using is_trivially_copyable = JKJ_STD_REPLACEMENT_NAMESPACE::is_trivially_copyable<T>;
+            using is_trivially_copyable = GLZ_JKJ_STD_REPLACEMENT_NAMESPACE::is_trivially_copyable<T>;
 #endif
             template <class T>
-            using is_integral = JKJ_STD_REPLACEMENT_NAMESPACE::is_integral<T>;
+            using is_integral = GLZ_JKJ_STD_REPLACEMENT_NAMESPACE::is_integral<T>;
             template <class T>
-            using is_signed = JKJ_STD_REPLACEMENT_NAMESPACE::is_signed<T>;
+            using is_signed = GLZ_JKJ_STD_REPLACEMENT_NAMESPACE::is_signed<T>;
             template <class T>
-            using is_unsigned = JKJ_STD_REPLACEMENT_NAMESPACE::is_unsigned<T>;
+            using is_unsigned = GLZ_JKJ_STD_REPLACEMENT_NAMESPACE::is_unsigned<T>;
          }
       }
 
@@ -275,7 +275,7 @@ namespace glz::jkj
       ////////////////////////////////////////////////////////////////////////////////////////
       namespace detail
       {
-#if !JKJ_HAS_CONSTEXPR17
+#if !GLZ_JKJ_HAS_CONSTEXPR17
          template <stdr::size_t... indices>
          struct index_sequence
          {};
@@ -306,7 +306,7 @@ namespace glz::jkj
          {
             T data_[N];
             constexpr T operator[](stdr::size_t idx) const noexcept { return data_[idx]; }
-            JKJ_CONSTEXPR14 T& operator[](stdr::size_t idx) noexcept { return data_[idx]; }
+            GLZ_JKJ_CONSTEXPR14 T& operator[](stdr::size_t idx) noexcept { return data_[idx]; }
          };
       }
 
@@ -328,9 +328,9 @@ namespace glz::jkj
          };
 
          template <typename To, typename From>
-         JKJ_CONSTEXPR20 To bit_cast(const From& from)
+         GLZ_JKJ_CONSTEXPR20 To bit_cast(const From& from)
          {
-#if JKJ_HAS_BIT_CAST
+#if GLZ_JKJ_HAS_BIT_CAST
             return stdr::bit_cast<To>(from);
 #else
             static_assert(sizeof(From) == sizeof(To), "");
@@ -492,13 +492,13 @@ namespace glz::jkj
                                                            ieee754_binary64>::type;
 
          // Converts the floating-point type into the bit-carrier unsigned integer type.
-         static JKJ_CONSTEXPR20 carrier_uint float_to_carrier(Float x) noexcept
+         static GLZ_JKJ_CONSTEXPR20 carrier_uint float_to_carrier(Float x) noexcept
          {
             return detail::bit_cast<carrier_uint>(x);
          }
 
          // Converts the bit-carrier unsigned integer type into the floating-point type.
-         static JKJ_CONSTEXPR20 Float carrier_to_float(carrier_uint x) noexcept { return detail::bit_cast<Float>(x); }
+         static GLZ_JKJ_CONSTEXPR20 Float carrier_to_float(carrier_uint x) noexcept { return detail::bit_cast<Float>(x); }
       };
 
       // Convenient wrappers for floating-point traits classes.
@@ -605,7 +605,7 @@ namespace glz::jkj
       template <class Float, class ConversionTraits = default_float_bit_carrier_conversion_traits<Float>,
                 class FormatTraits =
                    ieee754_binary_traits<typename ConversionTraits::format, typename ConversionTraits::carrier_uint>>
-      JKJ_CONSTEXPR20 float_bits<FormatTraits> make_float_bits(Float x) noexcept
+      GLZ_JKJ_CONSTEXPR20 float_bits<FormatTraits> make_float_bits(Float x) noexcept
       {
          return float_bits<FormatTraits>(ConversionTraits::float_to_carrier(x));
       }
@@ -621,7 +621,7 @@ namespace glz::jkj
             // Most compilers should be able to optimize this into the ROR instruction.
             // n is assumed to be at most of bit_width bits.
             template <stdr::size_t bit_width, class UInt>
-            JKJ_CONSTEXPR14 UInt rotr(UInt n, unsigned int r) noexcept
+            GLZ_JKJ_CONSTEXPR14 UInt rotr(UInt n, unsigned int r) noexcept
             {
                static_assert(bit_width > 0, "jkj::dragonbox: rotation bit-width must be positive");
                static_assert(bit_width <= value_bits<UInt>::value, "jkj::dragonbox: rotation bit-width is too large");
@@ -665,7 +665,7 @@ namespace glz::jkj
                constexpr stdr::uint_least64_t high() const noexcept { return high_; }
                constexpr stdr::uint_least64_t low() const noexcept { return low_; }
 
-               JKJ_CONSTEXPR20 uint128& operator+=(stdr::uint_least64_t n) & noexcept
+               GLZ_JKJ_CONSTEXPR20 uint128& operator+=(stdr::uint_least64_t n) & noexcept
                {
                   const auto generic_impl = [&] {
                      auto const sum = (low_ + n) & UINT64_C(0xffffffffffffffff);
@@ -675,21 +675,21 @@ namespace glz::jkj
                   // To suppress warning.
                   static_cast<void>(generic_impl);
 
-                  JKJ_IF_CONSTEXPR(value_bits<stdr::uint_least64_t>::value > 64)
+                  GLZ_JKJ_IF_CONSTEXPR(value_bits<stdr::uint_least64_t>::value > 64)
                   {
                      generic_impl();
                      return *this;
                   }
 
-                  JKJ_IF_CONSTEVAL
+                  GLZ_JKJ_IF_CONSTEVAL
                   {
                      generic_impl();
                      return *this;
                   }
 
                   // See https://github.com/fmtlib/fmt/pull/2985.
-#if JKJ_HAS_BUILTIN(__builtin_addcll) && !defined(__ibmxl__)
-                  JKJ_IF_CONSTEXPR(stdr::is_same<stdr::uint_least64_t, unsigned long long>::value)
+#if GLZ_JKJ_HAS_BUILTIN(__builtin_addcll) && !defined(__ibmxl__)
+                  GLZ_JKJ_IF_CONSTEXPR(stdr::is_same<stdr::uint_least64_t, unsigned long long>::value)
                   {
                      unsigned long long carry{};
                      low_ = stdr::uint_least64_t(__builtin_addcll(low_, n, 0, &carry));
@@ -697,8 +697,8 @@ namespace glz::jkj
                      return *this;
                   }
 #endif
-#if JKJ_HAS_BUILTIN(__builtin_addcl) && !defined(__ibmxl__)
-                  JKJ_IF_CONSTEXPR(stdr::is_same<stdr::uint_least64_t, unsigned long>::value)
+#if GLZ_JKJ_HAS_BUILTIN(__builtin_addcl) && !defined(__ibmxl__)
+                  GLZ_JKJ_IF_CONSTEXPR(stdr::is_same<stdr::uint_least64_t, unsigned long>::value)
                   {
                      unsigned long carry{};
                      low_ = stdr::uint_least64_t(
@@ -707,8 +707,8 @@ namespace glz::jkj
                      return *this;
                   }
 #endif
-#if JKJ_HAS_BUILTIN(__builtin_addc) && !defined(__ibmxl__)
-                  JKJ_IF_CONSTEXPR(stdr::is_same<stdr::uint_least64_t, unsigned int>::value)
+#if GLZ_JKJ_HAS_BUILTIN(__builtin_addc) && !defined(__ibmxl__)
+                  GLZ_JKJ_IF_CONSTEXPR(stdr::is_same<stdr::uint_least64_t, unsigned int>::value)
                   {
                      unsigned int carry{};
                      low_ = stdr::uint_least64_t(
@@ -718,7 +718,7 @@ namespace glz::jkj
                   }
 #endif
 
-#if JKJ_HAS_BUILTIN(__builtin_ia32_addcarry_u64)
+#if GLZ_JKJ_HAS_BUILTIN(__builtin_ia32_addcarry_u64)
                   // __builtin_ia32_addcarry_u64 is not documented, but it seems it takes unsigned
                   // long long arguments.
                   unsigned long long result{};
@@ -746,16 +746,16 @@ namespace glz::jkj
                }
             };
 
-            inline JKJ_CONSTEXPR20 stdr::uint_least64_t umul64(stdr::uint_least32_t x, stdr::uint_least32_t y) noexcept
+            inline GLZ_JKJ_CONSTEXPR20 stdr::uint_least64_t umul64(stdr::uint_least32_t x, stdr::uint_least32_t y) noexcept
             {
 #if defined(_MSC_VER) && defined(_M_IX86)
-               JKJ_IF_NOT_CONSTEVAL { return __emulu(x, y); }
+               GLZ_JKJ_IF_NOT_CONSTEVAL { return __emulu(x, y); }
 #endif
                return x * stdr::uint_least64_t(y);
             }
 
             // Get 128-bit result of multiplication of two 64-bit unsigned integers.
-            JKJ_SAFEBUFFERS inline JKJ_CONSTEXPR20 uint128 umul128(stdr::uint_least64_t x,
+            GLZ_JKJ_SAFEBUFFERS inline GLZ_JKJ_CONSTEXPR20 uint128 umul128(stdr::uint_least64_t x,
                                                                    stdr::uint_least64_t y) noexcept
             {
                const auto generic_impl = [=]() -> uint128 {
@@ -781,7 +781,7 @@ namespace glz::jkj
                const auto result = builtin_uint128_t(x) * builtin_uint128_t(y);
                return {stdr::uint_least64_t(result >> 64), stdr::uint_least64_t(result)};
 #elif defined(_MSC_VER) && defined(_M_X64)
-               JKJ_IF_CONSTEVAL
+               GLZ_JKJ_IF_CONSTEVAL
                {
                   // This redundant variable is to workaround MSVC's codegen bug caused by the
                   // interaction of NRVO and intrinsics.
@@ -802,7 +802,7 @@ namespace glz::jkj
 
             // Get high half of the 128-bit result of multiplication of two 64-bit unsigned
             // integers.
-            JKJ_SAFEBUFFERS inline JKJ_CONSTEXPR20 stdr::uint_least64_t umul128_upper64(stdr::uint_least64_t x,
+            GLZ_JKJ_SAFEBUFFERS inline GLZ_JKJ_CONSTEXPR20 stdr::uint_least64_t umul128_upper64(stdr::uint_least64_t x,
                                                                                         stdr::uint_least64_t y) noexcept
             {
                const auto generic_impl = [=]() -> stdr::uint_least64_t {
@@ -827,7 +827,7 @@ namespace glz::jkj
                const auto result = builtin_uint128_t(x) * builtin_uint128_t(y);
                return stdr::uint_least64_t(result >> 64);
 #elif defined(_MSC_VER) && defined(_M_X64)
-               JKJ_IF_CONSTEVAL
+               GLZ_JKJ_IF_CONSTEVAL
                {
                   // This redundant variable is to workaround MSVC's codegen bug caused by the
                   // interaction of NRVO and intrinsics.
@@ -848,7 +848,7 @@ namespace glz::jkj
 
             // Get upper 128-bits of multiplication of a 64-bit unsigned integer and a 128-bit
             // unsigned integer.
-            JKJ_SAFEBUFFERS inline JKJ_CONSTEXPR20 uint128 umul192_upper128(stdr::uint_least64_t x, uint128 y) noexcept
+            GLZ_JKJ_SAFEBUFFERS inline GLZ_JKJ_CONSTEXPR20 uint128 umul192_upper128(stdr::uint_least64_t x, uint128 y) noexcept
             {
                auto r = umul128(x, y.high());
                r += umul128_upper64(x, y.low());
@@ -857,7 +857,7 @@ namespace glz::jkj
 
             // Get upper 64-bits of multiplication of a 32-bit unsigned integer and a 64-bit
             // unsigned integer.
-            inline JKJ_CONSTEXPR20 stdr::uint_least64_t umul96_upper64(stdr::uint_least32_t x,
+            inline GLZ_JKJ_CONSTEXPR20 stdr::uint_least64_t umul96_upper64(stdr::uint_least32_t x,
                                                                        stdr::uint_least64_t y) noexcept
             {
 #if defined(__SIZEOF_INT128__) || (defined(_MSC_VER) && defined(_M_X64))
@@ -875,7 +875,7 @@ namespace glz::jkj
 
             // Get lower 128-bits of multiplication of a 64-bit unsigned integer and a 128-bit
             // unsigned integer.
-            JKJ_SAFEBUFFERS inline JKJ_CONSTEXPR20 uint128 umul192_lower128(stdr::uint_least64_t x, uint128 y) noexcept
+            GLZ_JKJ_SAFEBUFFERS inline GLZ_JKJ_CONSTEXPR20 uint128 umul192_lower128(stdr::uint_least64_t x, uint128 y) noexcept
             {
                const auto high = x * y.high();
                const auto high_low = umul128(x, y.low());
@@ -898,7 +898,7 @@ namespace glz::jkj
          constexpr Int compute_power(Int a) noexcept
          {
             static_assert(k >= 0, "");
-#if JKJ_HAS_CONSTEXPR14
+#if GLZ_JKJ_HAS_CONSTEXPR14
             Int p = 1;
             for (int i = 0; i < k; ++i) {
                p *= a;
@@ -913,7 +913,7 @@ namespace glz::jkj
          constexpr int count_factors(UInt n) noexcept
          {
             static_assert(a > 1, "");
-#if JKJ_HAS_CONSTEXPR14
+#if GLZ_JKJ_HAS_CONSTEXPR14
             int c = 0;
             while (n % a == 0) {
                n /= a;
@@ -940,7 +940,7 @@ namespace glz::jkj
             template <class UInt>
             constexpr int floor_log2(UInt n) noexcept
             {
-#if JKJ_HAS_CONSTEXPR14
+#if GLZ_JKJ_HAS_CONSTEXPR14
                int count = -1;
                while (n != 0) {
                   ++count;
@@ -983,7 +983,7 @@ namespace glz::jkj
                template <class ReturnType, class Int>
                static constexpr ReturnType compute(Int e) noexcept
                {
-#if JKJ_HAS_CONSTEXPR14
+#if GLZ_JKJ_HAS_CONSTEXPR14
                   assert(min_exponent <= e && e <= max_exponent);
 #endif
                   // The sign is irrelevant for the mathematical validity of the formula, but
@@ -1231,7 +1231,7 @@ namespace glz::jkj
             };
 
             template <int N, class UInt>
-            JKJ_CONSTEXPR14 bool check_divisibility_and_divide_by_pow10(UInt& n) noexcept
+            GLZ_JKJ_CONSTEXPR14 bool check_divisibility_and_divide_by_pow10(UInt& n) noexcept
             {
                // Make sure the computation for max_n does not overflow.
                static_assert(N + 1 <= log::floor_log10_pow2(int(value_bits<UInt>::value)), "");
@@ -1251,7 +1251,7 @@ namespace glz::jkj
             // Compute floor(n / 10^N) for small n and N.
             // Precondition: n <= 10^(N+1)
             template <int N, class UInt>
-            JKJ_CONSTEXPR14 UInt small_division_by_pow10(UInt n) noexcept
+            GLZ_JKJ_CONSTEXPR14 UInt small_division_by_pow10(UInt n) noexcept
             {
                // Make sure the computation for max_n does not overflow.
                static_assert(N + 1 <= log::floor_log10_pow2(int(value_bits<UInt>::value)), "");
@@ -1264,7 +1264,7 @@ namespace glz::jkj
             // Compute floor(n / 10^N) for small N.
             // Precondition: n <= n_max
             template <int N, class UInt, UInt n_max>
-            JKJ_CONSTEXPR20 UInt divide_by_pow10(UInt n) noexcept
+            GLZ_JKJ_CONSTEXPR20 UInt divide_by_pow10(UInt n) noexcept
             {
                static_assert(N >= 0, "");
 
@@ -1274,7 +1274,7 @@ namespace glz::jkj
                // code for 32-bit or smaller architectures. Even for 64-bit architectures, it seems
                // compilers tend to generate mov + mul instead of a single imul for an unknown
                // reason if we just write n / 10.
-               JKJ_IF_CONSTEXPR(stdr::is_same<UInt, stdr::uint_least32_t>::value && N == 1 &&
+               GLZ_JKJ_IF_CONSTEXPR(stdr::is_same<UInt, stdr::uint_least32_t>::value && N == 1 &&
                                 n_max <= UINT32_C(1073741828))
                {
                   return UInt(wuint::umul64(n, UINT32_C(429496730)) >> 32);
@@ -1282,7 +1282,7 @@ namespace glz::jkj
                // Specialize for 64-bit division by 10.
                // Without the bound on n_max (which compilers these days never leverage), the
                // minimum needed amount of shift is larger than 64.
-               else JKJ_IF_CONSTEXPR(stdr::is_same<UInt, stdr::uint_least64_t>::value && N == 1 &&
+               else GLZ_JKJ_IF_CONSTEXPR(stdr::is_same<UInt, stdr::uint_least64_t>::value && N == 1 &&
                                      n_max <= UINT64_C(4611686018427387908))
                {
                   return UInt(wuint::umul128_upper64(n, UINT64_C(1844674407370955162)));
@@ -1290,14 +1290,14 @@ namespace glz::jkj
                // Specialize for 32-bit division by 100.
                // It seems compilers tend to generate mov + mul instead of a single imul for an
                // unknown reason if we just write n / 100.
-               else JKJ_IF_CONSTEXPR(stdr::is_same<UInt, stdr::uint_least32_t>::value && N == 2)
+               else GLZ_JKJ_IF_CONSTEXPR(stdr::is_same<UInt, stdr::uint_least32_t>::value && N == 2)
                {
                   return UInt(wuint::umul64(n, UINT32_C(1374389535)) >> 37);
                }
                // Specialize for 64-bit division by 1000.
                // Without the bound on n_max (which compilers these days never leverage), the
                // smallest magic number for this computation does not fit into 64-bits.
-               else JKJ_IF_CONSTEXPR(stdr::is_same<UInt, stdr::uint_least64_t>::value && N == 3 &&
+               else GLZ_JKJ_IF_CONSTEXPR(stdr::is_same<UInt, stdr::uint_least64_t>::value && N == 3 &&
                                      n_max <= UINT64_C(15534100272597517998))
                {
                   return UInt(wuint::umul128_upper64(n, UINT64_C(4722366482869645214)) >> 8);
@@ -1400,7 +1400,7 @@ namespace glz::jkj
          static constexpr int min_k = -31;
          static constexpr int max_k = 46;
          static constexpr detail::array<cache_entry_type, detail::stdr::size_t(max_k - min_k + 1)> cache
-            JKJ_STATIC_DATA_SECTION = {
+            GLZ_JKJ_STATIC_DATA_SECTION = {
                {UINT64_C(0x81ceb32c4b43fcf5), UINT64_C(0xa2425ff75e14fc32), UINT64_C(0xcad2f7f5359a3b3f),
                 UINT64_C(0xfd87b5f28300ca0e), UINT64_C(0x9e74d1b791e07e49), UINT64_C(0xc612062576589ddb),
                 UINT64_C(0xf79687aed3eec552), UINT64_C(0x9abe14cd44753b53), UINT64_C(0xc16d9a0095928a28),
@@ -1428,7 +1428,7 @@ namespace glz::jkj
                 UINT64_C(0x92efd1b8d0cf37bf), UINT64_C(0xb7abc627050305ae), UINT64_C(0xe596b7b0c643c71a),
                 UINT64_C(0x8f7e32ce7bea5c70), UINT64_C(0xb35dbf821ae4f38c), UINT64_C(0xe0352f62a19e306f)}};
       };
-#if !JKJ_HAS_INLINE_VARIABLE
+#if !GLZ_JKJ_HAS_INLINE_VARIABLE
       // decltype(...) should not depend on Dummy; see
       // https://stackoverflow.com/questions/76438400/decltype-on-static-variable-in-template-class.
       template <class Dummy>
@@ -1443,7 +1443,7 @@ namespace glz::jkj
          static constexpr int min_k = -292;
          static constexpr int max_k = 326;
          static constexpr detail::array<cache_entry_type, detail::stdr::size_t(max_k - min_k + 1)> cache
-            JKJ_STATIC_DATA_SECTION = {{{UINT64_C(0xff77b1fcbebcdc4f), UINT64_C(0x25e8e89c13bb0f7b)},
+            GLZ_JKJ_STATIC_DATA_SECTION = {{{UINT64_C(0xff77b1fcbebcdc4f), UINT64_C(0x25e8e89c13bb0f7b)},
                                         {UINT64_C(0x9faacf3df73609b1), UINT64_C(0x77b191618c54e9ad)},
                                         {UINT64_C(0xc795830d75038c1d), UINT64_C(0xd59df5b9ef6a2418)},
                                         {UINT64_C(0xf97ae3d0d2446f25), UINT64_C(0x4b0573286b44ad1e)},
@@ -2063,7 +2063,7 @@ namespace glz::jkj
                                         {UINT64_C(0xc5a05277621be293), UINT64_C(0xc7098b7305241886)},
                                         {UINT64_C(0xf70867153aa2db38), UINT64_C(0xb8cbee4fc66d1ea8)}}};
       };
-#if !JKJ_HAS_INLINE_VARIABLE
+#if !GLZ_JKJ_HAS_INLINE_VARIABLE
       // decltype(...) should not depend on Dummy; see
       // https://stackoverflow.com/questions/76438400/decltype-on-static-variable-in-template-class.
       template <class Dummy>
@@ -2101,15 +2101,15 @@ namespace glz::jkj
          using cache_holder_t = detail::array<cache_entry_type, compressed_table_size>;
          using pow5_holder_t = detail::array<detail::stdr::uint_least16_t, pow5_table_size>;
 
-#if JKJ_HAS_CONSTEXPR17
-         static constexpr cache_holder_t cache JKJ_STATIC_DATA_SECTION = [] {
+#if GLZ_JKJ_HAS_CONSTEXPR17
+         static constexpr cache_holder_t cache GLZ_JKJ_STATIC_DATA_SECTION = [] {
             cache_holder_t res{};
             for (detail::stdr::size_t i = 0; i < compressed_table_size; ++i) {
                res[i] = cache_holder<ieee754_binary32>::cache[i * compression_ratio];
             }
             return res;
          }();
-         static constexpr pow5_holder_t pow5_table JKJ_STATIC_DATA_SECTION = [] {
+         static constexpr pow5_holder_t pow5_table GLZ_JKJ_STATIC_DATA_SECTION = [] {
             pow5_holder_t res{};
             detail::stdr::uint_least16_t p = 1;
             for (detail::stdr::size_t i = 0; i < pow5_table_size; ++i) {
@@ -2124,7 +2124,7 @@ namespace glz::jkj
          {
             return {cache_holder<ieee754_binary32>::cache[indices * compression_ratio]...};
          }
-         static constexpr cache_holder_t cache JKJ_STATIC_DATA_SECTION =
+         static constexpr cache_holder_t cache GLZ_JKJ_STATIC_DATA_SECTION =
             make_cache(detail::make_index_sequence<compressed_table_size>{});
 
          template <detail::stdr::size_t... indices>
@@ -2132,12 +2132,12 @@ namespace glz::jkj
          {
             return {detail::compute_power<indices>(detail::stdr::uint_least16_t(5))...};
          }
-         static constexpr pow5_holder_t pow5_table JKJ_STATIC_DATA_SECTION =
+         static constexpr pow5_holder_t pow5_table GLZ_JKJ_STATIC_DATA_SECTION =
             make_pow5_table(detail::make_index_sequence<pow5_table_size>{});
 #endif
 
          template <class ShiftAmountType, class DecimalExponentType>
-         static JKJ_CONSTEXPR20 cache_entry_type get_cache(DecimalExponentType k) noexcept
+         static GLZ_JKJ_CONSTEXPR20 cache_entry_type get_cache(DecimalExponentType k) noexcept
          {
             // Compute the base index.
             // Supposed to compute (k - min_k) / compression_ratio.
@@ -2175,7 +2175,7 @@ namespace glz::jkj
             }
          }
       };
-#if !JKJ_HAS_INLINE_VARIABLE
+#if !GLZ_JKJ_HAS_INLINE_VARIABLE
       template <class Dummy>
       constexpr typename compressed_cache_holder<ieee754_binary32, Dummy>::cache_holder_t
          compressed_cache_holder<ieee754_binary32, Dummy>::cache;
@@ -2199,15 +2199,15 @@ namespace glz::jkj
          using cache_holder_t = detail::array<cache_entry_type, compressed_table_size>;
          using pow5_holder_t = detail::array<detail::stdr::uint_least64_t, pow5_table_size>;
 
-#if JKJ_HAS_CONSTEXPR17
-         static constexpr cache_holder_t cache JKJ_STATIC_DATA_SECTION = [] {
+#if GLZ_JKJ_HAS_CONSTEXPR17
+         static constexpr cache_holder_t cache GLZ_JKJ_STATIC_DATA_SECTION = [] {
             cache_holder_t res{};
             for (detail::stdr::size_t i = 0; i < compressed_table_size; ++i) {
                res[i] = cache_holder<ieee754_binary64>::cache[i * compression_ratio];
             }
             return res;
          }();
-         static constexpr pow5_holder_t pow5_table JKJ_STATIC_DATA_SECTION = [] {
+         static constexpr pow5_holder_t pow5_table GLZ_JKJ_STATIC_DATA_SECTION = [] {
             pow5_holder_t res{};
             detail::stdr::uint_least64_t p = 1;
             for (detail::stdr::size_t i = 0; i < pow5_table_size; ++i) {
@@ -2222,7 +2222,7 @@ namespace glz::jkj
          {
             return {cache_holder<ieee754_binary64>::cache[indices * compression_ratio]...};
          }
-         static constexpr cache_holder_t cache JKJ_STATIC_DATA_SECTION =
+         static constexpr cache_holder_t cache GLZ_JKJ_STATIC_DATA_SECTION =
             make_cache(detail::make_index_sequence<compressed_table_size>{});
 
          template <detail::stdr::size_t... indices>
@@ -2230,12 +2230,12 @@ namespace glz::jkj
          {
             return {detail::compute_power<indices>(detail::stdr::uint_least64_t(5))...};
          }
-         static constexpr pow5_holder_t pow5_table JKJ_STATIC_DATA_SECTION =
+         static constexpr pow5_holder_t pow5_table GLZ_JKJ_STATIC_DATA_SECTION =
             make_pow5_table(detail::make_index_sequence<pow5_table_size>{});
 #endif
 
          template <class ShiftAmountType, class DecimalExponentType>
-         static JKJ_CONSTEXPR20 cache_entry_type get_cache(DecimalExponentType k) noexcept
+         static GLZ_JKJ_CONSTEXPR20 cache_entry_type get_cache(DecimalExponentType k) noexcept
          {
             // Compute the base index.
             // Supposed to compute (k - min_k) / compression_ratio.
@@ -2280,7 +2280,7 @@ namespace glz::jkj
             }
          }
       };
-#if !JKJ_HAS_INLINE_VARIABLE
+#if !GLZ_JKJ_HAS_INLINE_VARIABLE
       template <class Dummy>
       constexpr typename compressed_cache_holder<ieee754_binary64, Dummy>::cache_holder_t
          compressed_cache_holder<ieee754_binary64, Dummy>::cache;
@@ -2342,7 +2342,7 @@ namespace glz::jkj
       {
          namespace sign
          {
-            JKJ_INLINE_VARIABLE struct ignore_t
+            GLZ_JKJ_INLINE_VARIABLE struct ignore_t
             {
                using sign_policy = ignore_t;
                static constexpr bool return_has_sign = false;
@@ -2371,7 +2371,7 @@ namespace glz::jkj
 #endif
             } ignore = {};
 
-            JKJ_INLINE_VARIABLE struct return_sign_t
+            GLZ_JKJ_INLINE_VARIABLE struct return_sign_t
             {
                using sign_policy = return_sign_t;
                static constexpr bool return_has_sign = true;
@@ -2387,7 +2387,7 @@ namespace glz::jkj
 
          namespace trailing_zero
          {
-            JKJ_INLINE_VARIABLE struct ignore_t
+            GLZ_JKJ_INLINE_VARIABLE struct ignore_t
             {
                using trailing_zero_policy = ignore_t;
                static constexpr bool report_trailing_zeros = false;
@@ -2407,13 +2407,13 @@ namespace glz::jkj
                }
             } ignore = {};
 
-            JKJ_INLINE_VARIABLE struct remove_t
+            GLZ_JKJ_INLINE_VARIABLE struct remove_t
             {
                using trailing_zero_policy = remove_t;
                static constexpr bool report_trailing_zeros = false;
 
                template <class Format, class DecimalSignificand, class DecimalExponentType>
-               JKJ_FORCEINLINE static JKJ_CONSTEXPR14
+               GLZ_JKJ_FORCEINLINE static GLZ_JKJ_CONSTEXPR14
                   unsigned_decimal_fp<DecimalSignificand, DecimalExponentType, false>
                   on_trailing_zeros(DecimalSignificand significand, DecimalExponentType exponent) noexcept
                {
@@ -2430,13 +2430,13 @@ namespace glz::jkj
                }
             } remove = {};
 
-            JKJ_INLINE_VARIABLE struct remove_compact_t
+            GLZ_JKJ_INLINE_VARIABLE struct remove_compact_t
             {
                using trailing_zero_policy = remove_compact_t;
                static constexpr bool report_trailing_zeros = false;
 
                template <class Format, class DecimalSignificand, class DecimalExponentType>
-               JKJ_FORCEINLINE static JKJ_CONSTEXPR14
+               GLZ_JKJ_FORCEINLINE static GLZ_JKJ_CONSTEXPR14
                   unsigned_decimal_fp<DecimalSignificand, DecimalExponentType, false>
                   on_trailing_zeros(DecimalSignificand significand, DecimalExponentType exponent) noexcept
                {
@@ -2453,7 +2453,7 @@ namespace glz::jkj
                }
             } remove_compact = {};
 
-            JKJ_INLINE_VARIABLE struct report_t
+            GLZ_JKJ_INLINE_VARIABLE struct report_t
             {
                using trailing_zero_policy = report_t;
                static constexpr bool report_trailing_zeros = true;
@@ -2520,14 +2520,14 @@ namespace glz::jkj
                };
             }
 
-            JKJ_INLINE_VARIABLE struct nearest_to_even_t
+            GLZ_JKJ_INLINE_VARIABLE struct nearest_to_even_t
             {
                using decimal_to_binary_rounding_policy = nearest_to_even_t;
                using interval_type_provider = nearest_to_even_t;
                static constexpr auto tag = tag_t::to_nearest;
 
                template <class SignedSignificandBits, class Func, class... Args>
-               JKJ_FORCEINLINE JKJ_SAFEBUFFERS static constexpr decltype(Func{}(
+               GLZ_JKJ_FORCEINLINE GLZ_JKJ_SAFEBUFFERS static constexpr decltype(Func{}(
                   dragonbox::detail::declval<nearest_to_even_t>(), Args{}...))
                delegate(SignedSignificandBits, Func f, Args... args) noexcept
                {
@@ -2547,14 +2547,14 @@ namespace glz::jkj
                }
             } nearest_to_even = {};
 
-            JKJ_INLINE_VARIABLE struct nearest_to_odd_t
+            GLZ_JKJ_INLINE_VARIABLE struct nearest_to_odd_t
             {
                using decimal_to_binary_rounding_policy = nearest_to_odd_t;
                using interval_type_provider = nearest_to_odd_t;
                static constexpr auto tag = tag_t::to_nearest;
 
                template <class SignedSignificandBits, class Func, class... Args>
-               JKJ_FORCEINLINE JKJ_SAFEBUFFERS static constexpr decltype(Func{}(
+               GLZ_JKJ_FORCEINLINE GLZ_JKJ_SAFEBUFFERS static constexpr decltype(Func{}(
                   dragonbox::detail::declval<nearest_to_odd_t>(), Args{}...))
                delegate(SignedSignificandBits, Func f, Args... args) noexcept
                {
@@ -2573,14 +2573,14 @@ namespace glz::jkj
                }
             } nearest_to_odd = {};
 
-            JKJ_INLINE_VARIABLE struct nearest_toward_plus_infinity_t
+            GLZ_JKJ_INLINE_VARIABLE struct nearest_toward_plus_infinity_t
             {
                using decimal_to_binary_rounding_policy = nearest_toward_plus_infinity_t;
                using interval_type_provider = nearest_toward_plus_infinity_t;
                static constexpr auto tag = tag_t::to_nearest;
 
                template <class SignedSignificandBits, class Func, class... Args>
-               JKJ_FORCEINLINE JKJ_SAFEBUFFERS static constexpr decltype(Func{}(
+               GLZ_JKJ_FORCEINLINE GLZ_JKJ_SAFEBUFFERS static constexpr decltype(Func{}(
                   dragonbox::detail::declval<nearest_toward_plus_infinity_t>(), Args{}...))
                delegate(SignedSignificandBits, Func f, Args... args) noexcept
                {
@@ -2599,14 +2599,14 @@ namespace glz::jkj
                }
             } nearest_toward_plus_infinity = {};
 
-            JKJ_INLINE_VARIABLE struct nearest_toward_minus_infinity_t
+            GLZ_JKJ_INLINE_VARIABLE struct nearest_toward_minus_infinity_t
             {
                using decimal_to_binary_rounding_policy = nearest_toward_minus_infinity_t;
                using interval_type_provider = nearest_toward_minus_infinity_t;
                static constexpr auto tag = tag_t::to_nearest;
 
                template <class SignedSignificandBits, class Func, class... Args>
-               JKJ_FORCEINLINE JKJ_SAFEBUFFERS static constexpr decltype(Func{}(
+               GLZ_JKJ_FORCEINLINE GLZ_JKJ_SAFEBUFFERS static constexpr decltype(Func{}(
                   dragonbox::detail::declval<nearest_toward_minus_infinity_t>(), Args{}...))
                delegate(SignedSignificandBits, Func f, Args... args) noexcept
                {
@@ -2625,14 +2625,14 @@ namespace glz::jkj
                }
             } nearest_toward_minus_infinity = {};
 
-            JKJ_INLINE_VARIABLE struct nearest_toward_zero_t
+            GLZ_JKJ_INLINE_VARIABLE struct nearest_toward_zero_t
             {
                using decimal_to_binary_rounding_policy = nearest_toward_zero_t;
                using interval_type_provider = nearest_toward_zero_t;
                static constexpr auto tag = tag_t::to_nearest;
 
                template <class SignedSignificandBits, class Func, class... Args>
-               JKJ_FORCEINLINE JKJ_SAFEBUFFERS static constexpr decltype(Func{}(
+               GLZ_JKJ_FORCEINLINE GLZ_JKJ_SAFEBUFFERS static constexpr decltype(Func{}(
                   dragonbox::detail::declval<nearest_toward_zero_t>(), Args{}...))
                delegate(SignedSignificandBits, Func f, Args... args) noexcept
                {
@@ -2651,14 +2651,14 @@ namespace glz::jkj
                }
             } nearest_toward_zero = {};
 
-            JKJ_INLINE_VARIABLE struct nearest_away_from_zero_t
+            GLZ_JKJ_INLINE_VARIABLE struct nearest_away_from_zero_t
             {
                using decimal_to_binary_rounding_policy = nearest_away_from_zero_t;
                using interval_type_provider = nearest_away_from_zero_t;
                static constexpr auto tag = tag_t::to_nearest;
 
                template <class SignedSignificandBits, class Func, class... Args>
-               JKJ_FORCEINLINE JKJ_SAFEBUFFERS static constexpr decltype(Func{}(
+               GLZ_JKJ_FORCEINLINE GLZ_JKJ_SAFEBUFFERS static constexpr decltype(Func{}(
                   dragonbox::detail::declval<nearest_away_from_zero_t>(), Args{}...))
                delegate(SignedSignificandBits, Func f, Args... args) noexcept
                {
@@ -2713,12 +2713,12 @@ namespace glz::jkj
                };
             }
 
-            JKJ_INLINE_VARIABLE struct nearest_to_even_static_boundary_t
+            GLZ_JKJ_INLINE_VARIABLE struct nearest_to_even_static_boundary_t
             {
                using decimal_to_binary_rounding_policy = nearest_to_even_static_boundary_t;
 
                template <class SignedSignificandBits, class Func, class... Args>
-               JKJ_FORCEINLINE JKJ_SAFEBUFFERS static constexpr decltype(Func{}(detail::nearest_always_closed_t{},
+               GLZ_JKJ_FORCEINLINE GLZ_JKJ_SAFEBUFFERS static constexpr decltype(Func{}(detail::nearest_always_closed_t{},
                                                                                 Args{}...))
                delegate(SignedSignificandBits s, Func f, Args... args) noexcept
                {
@@ -2727,12 +2727,12 @@ namespace glz::jkj
                }
             } nearest_to_even_static_boundary = {};
 
-            JKJ_INLINE_VARIABLE struct nearest_to_odd_static_boundary_t
+            GLZ_JKJ_INLINE_VARIABLE struct nearest_to_odd_static_boundary_t
             {
                using decimal_to_binary_rounding_policy = nearest_to_odd_static_boundary_t;
 
                template <class SignedSignificandBits, class Func, class... Args>
-               JKJ_FORCEINLINE JKJ_SAFEBUFFERS static constexpr decltype(Func{}(detail::nearest_always_closed_t{},
+               GLZ_JKJ_FORCEINLINE GLZ_JKJ_SAFEBUFFERS static constexpr decltype(Func{}(detail::nearest_always_closed_t{},
                                                                                 Args{}...))
                delegate(SignedSignificandBits s, Func f, Args... args) noexcept
                {
@@ -2741,24 +2741,24 @@ namespace glz::jkj
                }
             } nearest_to_odd_static_boundary = {};
 
-            JKJ_INLINE_VARIABLE struct nearest_toward_plus_infinity_static_boundary_t
+            GLZ_JKJ_INLINE_VARIABLE struct nearest_toward_plus_infinity_static_boundary_t
             {
                using decimal_to_binary_rounding_policy = nearest_toward_plus_infinity_static_boundary_t;
 
                template <class SignedSignificandBits, class Func, class... Args>
-               JKJ_FORCEINLINE JKJ_SAFEBUFFERS static constexpr decltype(Func{}(nearest_toward_zero, Args{}...))
+               GLZ_JKJ_FORCEINLINE GLZ_JKJ_SAFEBUFFERS static constexpr decltype(Func{}(nearest_toward_zero, Args{}...))
                delegate(SignedSignificandBits s, Func f, Args... args) noexcept
                {
                   return s.is_negative() ? f(nearest_toward_zero, args...) : f(nearest_away_from_zero, args...);
                }
             } nearest_toward_plus_infinity_static_boundary = {};
 
-            JKJ_INLINE_VARIABLE struct nearest_toward_minus_infinity_static_boundary_t
+            GLZ_JKJ_INLINE_VARIABLE struct nearest_toward_minus_infinity_static_boundary_t
             {
                using decimal_to_binary_rounding_policy = nearest_toward_minus_infinity_static_boundary_t;
 
                template <class SignedSignificandBits, class Func, class... Args>
-               JKJ_FORCEINLINE JKJ_SAFEBUFFERS static constexpr decltype(Func{}(nearest_toward_zero, Args{}...))
+               GLZ_JKJ_FORCEINLINE GLZ_JKJ_SAFEBUFFERS static constexpr decltype(Func{}(nearest_toward_zero, Args{}...))
                delegate(SignedSignificandBits s, Func f, Args... args) noexcept
                {
                   return s.is_negative() ? f(nearest_away_from_zero, args...) : f(nearest_toward_zero, args...);
@@ -2777,12 +2777,12 @@ namespace glz::jkj
                };
             }
 
-            JKJ_INLINE_VARIABLE struct toward_plus_infinity_t
+            GLZ_JKJ_INLINE_VARIABLE struct toward_plus_infinity_t
             {
                using decimal_to_binary_rounding_policy = toward_plus_infinity_t;
 
                template <class SignedSignificandBits, class Func, class... Args>
-               JKJ_FORCEINLINE JKJ_SAFEBUFFERS static constexpr decltype(Func{}(detail::left_closed_directed_t{},
+               GLZ_JKJ_FORCEINLINE GLZ_JKJ_SAFEBUFFERS static constexpr decltype(Func{}(detail::left_closed_directed_t{},
                                                                                 Args{}...))
                delegate(SignedSignificandBits s, Func f, Args... args) noexcept
                {
@@ -2791,12 +2791,12 @@ namespace glz::jkj
                }
             } toward_plus_infinity = {};
 
-            JKJ_INLINE_VARIABLE struct toward_minus_infinity_t
+            GLZ_JKJ_INLINE_VARIABLE struct toward_minus_infinity_t
             {
                using decimal_to_binary_rounding_policy = toward_minus_infinity_t;
 
                template <class SignedSignificandBits, class Func, class... Args>
-               JKJ_FORCEINLINE JKJ_SAFEBUFFERS static constexpr decltype(Func{}(detail::left_closed_directed_t{},
+               GLZ_JKJ_FORCEINLINE GLZ_JKJ_SAFEBUFFERS static constexpr decltype(Func{}(detail::left_closed_directed_t{},
                                                                                 Args{}...))
                delegate(SignedSignificandBits s, Func f, Args... args) noexcept
                {
@@ -2805,12 +2805,12 @@ namespace glz::jkj
                }
             } toward_minus_infinity = {};
 
-            JKJ_INLINE_VARIABLE struct toward_zero_t
+            GLZ_JKJ_INLINE_VARIABLE struct toward_zero_t
             {
                using decimal_to_binary_rounding_policy = toward_zero_t;
 
                template <class SignedSignificandBits, class Func, class... Args>
-               JKJ_FORCEINLINE JKJ_SAFEBUFFERS static constexpr decltype(Func{}(detail::left_closed_directed_t{},
+               GLZ_JKJ_FORCEINLINE GLZ_JKJ_SAFEBUFFERS static constexpr decltype(Func{}(detail::left_closed_directed_t{},
                                                                                 Args{}...))
                delegate(SignedSignificandBits, Func f, Args... args) noexcept
                {
@@ -2818,12 +2818,12 @@ namespace glz::jkj
                }
             } toward_zero = {};
 
-            JKJ_INLINE_VARIABLE struct away_from_zero_t
+            GLZ_JKJ_INLINE_VARIABLE struct away_from_zero_t
             {
                using decimal_to_binary_rounding_policy = away_from_zero_t;
 
                template <class SignedSignificandBits, class Func, class... Args>
-               JKJ_FORCEINLINE JKJ_SAFEBUFFERS static constexpr decltype(Func{}(detail::right_closed_directed_t{},
+               GLZ_JKJ_FORCEINLINE GLZ_JKJ_SAFEBUFFERS static constexpr decltype(Func{}(detail::right_closed_directed_t{},
                                                                                 Args{}...))
                delegate(SignedSignificandBits, Func f, Args... args) noexcept
                {
@@ -2840,7 +2840,7 @@ namespace glz::jkj
 
             // The parameter significand corresponds to 10\tilde{s}+t in the paper.
 
-            JKJ_INLINE_VARIABLE struct do_not_care_t
+            GLZ_JKJ_INLINE_VARIABLE struct do_not_care_t
             {
                using binary_to_decimal_rounding_policy = do_not_care_t;
                static constexpr auto tag = tag_t::do_not_care;
@@ -2852,7 +2852,7 @@ namespace glz::jkj
                }
             } do_not_care = {};
 
-            JKJ_INLINE_VARIABLE struct to_even_t
+            GLZ_JKJ_INLINE_VARIABLE struct to_even_t
             {
                using binary_to_decimal_rounding_policy = to_even_t;
                static constexpr auto tag = tag_t::to_even;
@@ -2864,7 +2864,7 @@ namespace glz::jkj
                }
             } to_even = {};
 
-            JKJ_INLINE_VARIABLE struct to_odd_t
+            GLZ_JKJ_INLINE_VARIABLE struct to_odd_t
             {
                using binary_to_decimal_rounding_policy = to_odd_t;
                static constexpr auto tag = tag_t::to_odd;
@@ -2876,7 +2876,7 @@ namespace glz::jkj
                }
             } to_odd = {};
 
-            JKJ_INLINE_VARIABLE struct away_from_zero_t
+            GLZ_JKJ_INLINE_VARIABLE struct away_from_zero_t
             {
                using binary_to_decimal_rounding_policy = away_from_zero_t;
                static constexpr auto tag = tag_t::away_from_zero;
@@ -2888,7 +2888,7 @@ namespace glz::jkj
                }
             } away_from_zero = {};
 
-            JKJ_INLINE_VARIABLE struct toward_zero_t
+            GLZ_JKJ_INLINE_VARIABLE struct toward_zero_t
             {
                using binary_to_decimal_rounding_policy = toward_zero_t;
                static constexpr auto tag = tag_t::toward_zero;
@@ -2903,7 +2903,7 @@ namespace glz::jkj
 
          namespace cache
          {
-            JKJ_INLINE_VARIABLE struct full_t
+            GLZ_JKJ_INLINE_VARIABLE struct full_t
             {
                using cache_policy = full_t;
                template <class FloatFormat>
@@ -2913,7 +2913,7 @@ namespace glz::jkj
                static constexpr typename cache_holder_type<FloatFormat>::cache_entry_type get_cache(
                   DecimalExponentType k) noexcept
                {
-#if JKJ_HAS_CONSTEXPR14
+#if GLZ_JKJ_HAS_CONSTEXPR14
                   assert(k >= cache_holder_type<FloatFormat>::min_k && k <= cache_holder_type<FloatFormat>::max_k);
 #endif
                   return cache_holder_type<FloatFormat>::cache[detail::stdr::size_t(
@@ -2921,14 +2921,14 @@ namespace glz::jkj
                }
             } full = {};
 
-            JKJ_INLINE_VARIABLE struct compact_t
+            GLZ_JKJ_INLINE_VARIABLE struct compact_t
             {
                using cache_policy = compact_t;
                template <class FloatFormat>
                using cache_holder_type = compressed_cache_holder<FloatFormat>;
 
                template <class FloatFormat, class ShiftAmountType, class DecimalExponentType>
-               static JKJ_CONSTEXPR20 typename cache_holder<FloatFormat>::cache_entry_type get_cache(
+               static GLZ_JKJ_CONSTEXPR20 typename cache_holder<FloatFormat>::cache_entry_type get_cache(
                   DecimalExponentType k) noexcept
                {
                   assert(k >= cache_holder<FloatFormat>::min_k && k <= cache_holder<FloatFormat>::max_k);
@@ -2940,7 +2940,7 @@ namespace glz::jkj
 
          namespace preferred_integer_types
          {
-            JKJ_INLINE_VARIABLE struct match_t
+            GLZ_JKJ_INLINE_VARIABLE struct match_t
             {
                using preferred_integer_types_policy = match_t;
 
@@ -2955,7 +2955,7 @@ namespace glz::jkj
                using shift_amount_type = typename FormatTraits::exponent_int;
             } match;
 
-            JKJ_INLINE_VARIABLE struct prefer_32_t
+            GLZ_JKJ_INLINE_VARIABLE struct prefer_32_t
             {
                using preferred_integer_types_policy = prefer_32_t;
 
@@ -2974,7 +2974,7 @@ namespace glz::jkj
                using shift_amount_type = detail::stdr::int_least32_t;
             } prefer_32;
 
-            JKJ_INLINE_VARIABLE struct minimal_t
+            GLZ_JKJ_INLINE_VARIABLE struct minimal_t
             {
                using preferred_integer_types_policy = minimal_t;
 
@@ -3022,7 +3022,7 @@ namespace glz::jkj
       struct remove_trailing_zeros_traits<policy::trailing_zero::remove_t, ieee754_binary32,
                                           detail::stdr::uint_least32_t, DecimalExponentType>
       {
-         JKJ_FORCEINLINE static JKJ_CONSTEXPR14 void remove_trailing_zeros(detail::stdr::uint_least32_t& significand,
+         GLZ_JKJ_FORCEINLINE static GLZ_JKJ_CONSTEXPR14 void remove_trailing_zeros(detail::stdr::uint_least32_t& significand,
                                                                            DecimalExponentType& exponent) noexcept
          {
             // See https://github.com/jk-jeon/rtz_benchmark.
@@ -3052,7 +3052,7 @@ namespace glz::jkj
       struct remove_trailing_zeros_traits<policy::trailing_zero::remove_t, ieee754_binary64,
                                           detail::stdr::uint_least64_t, DecimalExponentType>
       {
-         JKJ_FORCEINLINE static JKJ_CONSTEXPR14 void remove_trailing_zeros(detail::stdr::uint_least64_t& significand,
+         GLZ_JKJ_FORCEINLINE static GLZ_JKJ_CONSTEXPR14 void remove_trailing_zeros(detail::stdr::uint_least64_t& significand,
                                                                            DecimalExponentType& exponent) noexcept
          {
             // See https://github.com/jk-jeon/rtz_benchmark.
@@ -3087,7 +3087,7 @@ namespace glz::jkj
       struct remove_trailing_zeros_traits<policy::trailing_zero::remove_compact_t, ieee754_binary32,
                                           detail::stdr::uint_least32_t, DecimalExponentType>
       {
-         JKJ_FORCEINLINE static JKJ_CONSTEXPR14 void remove_trailing_zeros(detail::stdr::uint_least32_t& significand,
+         GLZ_JKJ_FORCEINLINE static GLZ_JKJ_CONSTEXPR14 void remove_trailing_zeros(detail::stdr::uint_least32_t& significand,
                                                                            DecimalExponentType& exponent) noexcept
          {
             // See https://github.com/jk-jeon/rtz_benchmark.
@@ -3108,7 +3108,7 @@ namespace glz::jkj
       struct remove_trailing_zeros_traits<policy::trailing_zero::remove_compact_t, ieee754_binary64,
                                           detail::stdr::uint_least64_t, DecimalExponentType>
       {
-         JKJ_FORCEINLINE static JKJ_CONSTEXPR14 void remove_trailing_zeros(detail::stdr::uint_least64_t& significand,
+         GLZ_JKJ_FORCEINLINE static GLZ_JKJ_CONSTEXPR14 void remove_trailing_zeros(detail::stdr::uint_least64_t& significand,
                                                                            DecimalExponentType& exponent) noexcept
          {
             // See https://github.com/jk-jeon/rtz_benchmark.
@@ -3131,7 +3131,7 @@ namespace glz::jkj
          : public multiplication_traits_base<ieee754_binary_traits<ieee754_binary32, detail::stdr::uint_least32_t>,
                                              detail::stdr::uint_least64_t, 64>
       {
-         static JKJ_CONSTEXPR20 compute_mul_result compute_mul(carrier_uint u, const cache_entry_type& cache) noexcept
+         static GLZ_JKJ_CONSTEXPR20 compute_mul_result compute_mul(carrier_uint u, const cache_entry_type& cache) noexcept
          {
             const auto r = detail::wuint::umul96_upper64(u, cache);
             return {carrier_uint(r >> 32), carrier_uint(r) == 0};
@@ -3145,7 +3145,7 @@ namespace glz::jkj
          }
 
          template <class ShiftAmountType>
-         static JKJ_CONSTEXPR20 compute_mul_parity_result compute_mul_parity(carrier_uint two_f,
+         static GLZ_JKJ_CONSTEXPR20 compute_mul_parity_result compute_mul_parity(carrier_uint two_f,
                                                                              const cache_entry_type& cache,
                                                                              ShiftAmountType beta) noexcept
          {
@@ -3187,7 +3187,7 @@ namespace glz::jkj
          : public multiplication_traits_base<ieee754_binary_traits<ieee754_binary64, detail::stdr::uint_least64_t>,
                                              detail::wuint::uint128, 128>
       {
-         static JKJ_CONSTEXPR20 compute_mul_result compute_mul(carrier_uint u, const cache_entry_type& cache) noexcept
+         static GLZ_JKJ_CONSTEXPR20 compute_mul_result compute_mul(carrier_uint u, const cache_entry_type& cache) noexcept
          {
             const auto r = detail::wuint::umul192_upper128(u, cache);
             return {r.high(), r.low() == 0};
@@ -3201,7 +3201,7 @@ namespace glz::jkj
          }
 
          template <class ShiftAmountType>
-         static JKJ_CONSTEXPR20 compute_mul_parity_result compute_mul_parity(carrier_uint two_f,
+         static GLZ_JKJ_CONSTEXPR20 compute_mul_parity_result compute_mul_parity(carrier_uint two_f,
                                                                              const cache_entry_type& cache,
                                                                              ShiftAmountType beta) noexcept
          {
@@ -3307,7 +3307,7 @@ namespace glz::jkj
 
             template <class SignPolicy, class TrailingZeroPolicy, class IntervalTypeProvider,
                       class BinaryToDecimalRoundingPolicy, class CachePolicy, class PreferredIntegerTypesPolicy>
-            JKJ_SAFEBUFFERS static JKJ_CONSTEXPR20
+            GLZ_JKJ_SAFEBUFFERS static GLZ_JKJ_CONSTEXPR20
                return_type<SignPolicy, TrailingZeroPolicy, PreferredIntegerTypesPolicy>
                compute_nearest(signed_significand_bits<FormatTraits> s, exponent_int exponent_bits) noexcept
             {
@@ -3485,7 +3485,7 @@ namespace glz::jkj
                      // Exclude the right endpoint if necessary.
                      if ((r | remainder_type_(!z_result.is_integer) |
                           remainder_type_(interval_type.include_right_endpoint())) == 0) {
-                        JKJ_IF_CONSTEXPR(BinaryToDecimalRoundingPolicy::tag ==
+                        GLZ_JKJ_IF_CONSTEXPR(BinaryToDecimalRoundingPolicy::tag ==
                                          policy::binary_to_decimal_rounding::tag_t::do_not_care)
                         {
                            decimal_significand *= 10;
@@ -3527,7 +3527,7 @@ namespace glz::jkj
 
                decimal_significand *= 10;
 
-               JKJ_IF_CONSTEXPR(BinaryToDecimalRoundingPolicy::tag ==
+               GLZ_JKJ_IF_CONSTEXPR(BinaryToDecimalRoundingPolicy::tag ==
                                 policy::binary_to_decimal_rounding::tag_t::do_not_care)
                {
                   // Normally, we want to compute
@@ -3589,7 +3589,7 @@ namespace glz::jkj
             }
 
             template <class SignPolicy, class TrailingZeroPolicy, class CachePolicy, class PreferredIntegerTypesPolicy>
-            JKJ_FORCEINLINE JKJ_SAFEBUFFERS static JKJ_CONSTEXPR20
+            GLZ_JKJ_FORCEINLINE GLZ_JKJ_SAFEBUFFERS static GLZ_JKJ_CONSTEXPR20
                return_type<SignPolicy, TrailingZeroPolicy, PreferredIntegerTypesPolicy>
                compute_left_closed_directed(signed_significand_bits<FormatTraits> s,
                                             exponent_int exponent_bits) noexcept
@@ -3644,7 +3644,7 @@ namespace glz::jkj
                // and 29711844 * 2^-81
                // = 1.2288530660000000001731007559513386695471126586198806762695... * 10^-17
                // for binary32.
-               JKJ_IF_CONSTEXPR(stdr::is_same<format, ieee754_binary32>::value)
+               GLZ_JKJ_IF_CONSTEXPR(stdr::is_same<format, ieee754_binary32>::value)
                {
                   if (binary_exponent <= -80) {
                      x_result.is_integer = false;
@@ -3691,7 +3691,7 @@ namespace glz::jkj
                      // case, the recovered cache is two large to make compute_mul_parity
                      // mistakenly conclude that z is not an integer, but actually z = 16384 is
                      // an integer.
-                     JKJ_IF_CONSTEXPR(
+                     GLZ_JKJ_IF_CONSTEXPR(
                         stdr::is_same<cache_holder_type, compressed_cache_holder<ieee754_binary32>>::value)
                      {
                         if (two_fc == 33554430 && binary_exponent == -10) {
@@ -3722,7 +3722,7 @@ namespace glz::jkj
             }
 
             template <class SignPolicy, class TrailingZeroPolicy, class CachePolicy, class PreferredIntegerTypesPolicy>
-            JKJ_FORCEINLINE JKJ_SAFEBUFFERS static JKJ_CONSTEXPR20
+            GLZ_JKJ_FORCEINLINE GLZ_JKJ_SAFEBUFFERS static GLZ_JKJ_CONSTEXPR20
                return_type<SignPolicy, TrailingZeroPolicy, PreferredIntegerTypesPolicy>
                compute_right_closed_directed(signed_significand_bits<FormatTraits> s,
                                              exponent_int exponent_bits) noexcept
@@ -4132,26 +4132,26 @@ namespace glz::jkj
                                                                                   preferred_integer_types_policy>;
 
             template <class IntervalTypeProvider>
-            JKJ_FORCEINLINE JKJ_SAFEBUFFERS JKJ_CONSTEXPR20 return_type
+            GLZ_JKJ_FORCEINLINE GLZ_JKJ_SAFEBUFFERS GLZ_JKJ_CONSTEXPR20 return_type
             operator()(IntervalTypeProvider, signed_significand_bits<FormatTraits> s,
                        typename FormatTraits::exponent_int exponent_bits) noexcept
             {
                constexpr auto tag = IntervalTypeProvider::tag;
 
-               JKJ_IF_CONSTEXPR(tag == policy::decimal_to_binary_rounding::tag_t::to_nearest)
+               GLZ_JKJ_IF_CONSTEXPR(tag == policy::decimal_to_binary_rounding::tag_t::to_nearest)
                {
                   return impl<FormatTraits>::template compute_nearest<
                      sign_policy, trailing_zero_policy, IntervalTypeProvider, binary_to_decimal_rounding_policy,
                      cache_policy, preferred_integer_types_policy>(s, exponent_bits);
                }
-               else JKJ_IF_CONSTEXPR(tag == policy::decimal_to_binary_rounding::tag_t::left_closed_directed)
+               else GLZ_JKJ_IF_CONSTEXPR(tag == policy::decimal_to_binary_rounding::tag_t::left_closed_directed)
                {
                   return impl<FormatTraits>::template compute_left_closed_directed<
                      sign_policy, trailing_zero_policy, cache_policy, preferred_integer_types_policy>(s, exponent_bits);
                }
                else
                {
-#if JKJ_HAS_IF_CONSTEXPR
+#if GLZ_JKJ_HAS_IF_CONSTEXPR
                   static_assert(tag == policy::decimal_to_binary_rounding::tag_t::right_closed_directed, "");
 #endif
                   return impl<FormatTraits>::template compute_right_closed_directed<
@@ -4166,7 +4166,7 @@ namespace glz::jkj
       ////////////////////////////////////////////////////////////////////////////////////////
 
       template <class FormatTraits, class ExponentBits, class... Policies>
-      JKJ_FORCEINLINE JKJ_SAFEBUFFERS JKJ_CONSTEXPR20 detail::to_decimal_return_type<FormatTraits, Policies...>
+      GLZ_JKJ_FORCEINLINE GLZ_JKJ_SAFEBUFFERS GLZ_JKJ_CONSTEXPR20 detail::to_decimal_return_type<FormatTraits, Policies...>
       to_decimal_ex(signed_significand_bits<FormatTraits> s, ExponentBits exponent_bits, Policies...) noexcept
       {
          // Build policy holder type.
@@ -4180,7 +4180,7 @@ namespace glz::jkj
                 class FormatTraits =
                    ieee754_binary_traits<typename ConversionTraits::format, typename ConversionTraits::carrier_uint>,
                 class... Policies>
-      JKJ_FORCEINLINE JKJ_SAFEBUFFERS JKJ_CONSTEXPR20 detail::to_decimal_return_type<FormatTraits, Policies...>
+      GLZ_JKJ_FORCEINLINE GLZ_JKJ_SAFEBUFFERS GLZ_JKJ_CONSTEXPR20 detail::to_decimal_return_type<FormatTraits, Policies...>
       to_decimal(Float x, Policies... policies) noexcept
       {
          const auto br = make_float_bits<Float, ConversionTraits, FormatTraits>(x);
@@ -4193,31 +4193,31 @@ namespace glz::jkj
    }
 }
 
-#undef JKJ_HAS_BUILTIN
-#undef JKJ_FORCEINLINE
-#undef JKJ_SAFEBUFFERS
-#undef JKJ_CONSTEXPR20
-#undef JKJ_USE_IS_CONSTANT_EVALUATED
-#undef JKJ_CAN_BRANCH_ON_CONSTEVAL
-#undef JKJ_IF_NOT_CONSTEVAL
-#undef JKJ_IF_CONSTEVAL
-#undef JKJ_HAS_BIT_CAST
-#undef JKJ_IF_CONSTEXPR
-#undef JKJ_HAS_IF_CONSTEXPR
-#undef JKJ_INLINE_VARIABLE
-#undef JKJ_HAS_INLINE_VARIABLE
-#undef JKJ_HAS_CONSTEXPR17
-#undef JKJ_CONSTEXPR14
-#undef JKJ_HAS_CONSTEXPR14
-#if JKJ_STD_REPLACEMENT_NAMESPACE_DEFINED
-#undef JKJ_STD_REPLACEMENT_NAMESPACE_DEFINED
+#undef GLZ_JKJ_HAS_BUILTIN
+#undef GLZ_JKJ_FORCEINLINE
+#undef GLZ_JKJ_SAFEBUFFERS
+#undef GLZ_JKJ_CONSTEXPR20
+#undef GLZ_JKJ_USE_IS_CONSTANT_EVALUATED
+#undef GLZ_JKJ_CAN_BRANCH_ON_CONSTEVAL
+#undef GLZ_JKJ_IF_NOT_CONSTEVAL
+#undef GLZ_JKJ_IF_CONSTEVAL
+#undef GLZ_JKJ_HAS_BIT_CAST
+#undef GLZ_JKJ_IF_CONSTEXPR
+#undef GLZ_JKJ_HAS_IF_CONSTEXPR
+#undef GLZ_JKJ_INLINE_VARIABLE
+#undef GLZ_JKJ_HAS_INLINE_VARIABLE
+#undef GLZ_JKJ_HAS_CONSTEXPR17
+#undef GLZ_JKJ_CONSTEXPR14
+#undef GLZ_JKJ_HAS_CONSTEXPR14
+#if GLZ_JKJ_STD_REPLACEMENT_NAMESPACE_DEFINED
+#undef GLZ_JKJ_STD_REPLACEMENT_NAMESPACE_DEFINED
 #else
-#undef JKJ_STD_REPLACEMENT_NAMESPACE
+#undef GLZ_JKJ_STD_REPLACEMENT_NAMESPACE
 #endif
-#if JKJ_STATIC_DATA_SECTION_DEFINED
-#undef JKJ_STATIC_DATA_SECTION_DEFINED
+#if GLZ_JKJ_STATIC_DATA_SECTION_DEFINED
+#undef GLZ_JKJ_STATIC_DATA_SECTION_DEFINED
 #else
-#undef JKJ_STATIC_DATA_SECTION
+#undef GLZ_JKJ_STATIC_DATA_SECTION
 #endif
 
 #endif
