@@ -176,12 +176,9 @@ namespace glz::detail
    }
 
    template <std::integral T>
-   GLZ_ALWAYS_INLINE constexpr const uint8_t* parse_int(auto& v, const uint8_t*& c, const uint8_t sign) noexcept
+      requires(std::is_unsigned_v<T> && (sizeof(T) <= 8))
+   GLZ_ALWAYS_INLINE constexpr const uint8_t* parse_int(T& v, const uint8_t*& c) noexcept
    {
-      if constexpr (std::is_unsigned_v<T>) {
-         (void)sign;
-      }
-
       if (is_digit(*c)) [[likely]] {
          v = *c - '0';
          ++c;
@@ -333,50 +330,27 @@ namespace glz::detail
                   return c;
                }
 
-               if constexpr (std::is_unsigned_v<T>) {
-                  if (is_digit(*c)) {
-                     v = v * 10 + (*c - '0');
-                     ++c;
-                  }
-                  else {
-                     return c;
-                  }
+               if (is_digit(*c)) {
+                  v = v * 10 + (*c - '0');
+                  ++c;
+               }
+               else {
+                  return c;
                }
             }
          }
       }
 
-      if constexpr (std::is_unsigned_v<T>) {
-         if (is_digit(*c)) {
-            v = v * 10 + (*c - '0');
-            constexpr auto split = (std::numeric_limits<T>::max)() / 10 - 10;
-            if (v < split) [[unlikely]] {
-               // due to overflow
-               return {};
-            }
-            ++c;
-            if (is_digit(*c)) [[unlikely]] {
-               return {};
-            }
+      if (is_digit(*c)) {
+         v = v * 10 + (*c - '0');
+         constexpr auto split = (std::numeric_limits<T>::max)() / 10 - 10;
+         if (v < split) [[unlikely]] {
+            // due to overflow
+            return {};
          }
-      }
-      else {
-         if (is_digit(*c)) {
-            if (sign) {
-               if (v > peak_negative<T>[*c]) [[unlikely]] {
-                  return {};
-               }
-            }
-            else {
-               if (v > peak_positive<T>[*c]) [[unlikely]] {
-                  return {};
-               }
-            }
-            v = v * 10 + (*c - '0');
-            ++c;
-            if (is_digit(*c)) [[unlikely]] {
-               return {};
-            }
+         ++c;
+         if (is_digit(*c)) [[unlikely]] {
+            return {};
          }
       }
 
@@ -387,7 +361,7 @@ namespace glz::detail
       requires(std::is_unsigned_v<T>)
    GLZ_ALWAYS_INLINE constexpr bool atoi(T& v, Char*& c) noexcept
    {
-      if (parse_int<T>(v, reinterpret_cast<const uint8_t*&>(c), 0)) [[likely]] {
+      if (parse_int(v, reinterpret_cast<const uint8_t*&>(c))) [[likely]] {
          if (*c == 'e' || *c == 'E') {
             ++c;
          }
@@ -466,15 +440,254 @@ namespace glz::detail
       }
       return false;
    }
+   
+   template <std::integral T>
+      requires(std::is_signed_v<T> && (sizeof(T) <= 8))
+   GLZ_ALWAYS_INLINE constexpr const uint8_t* parse_int(T& v, const uint8_t*& c) noexcept
+   {
+      const uint8_t sign = *c == '-';
+      c += sign;
+      
+      if (is_digit(*c)) [[likely]] {
+         v = *c - '0';
+         ++c;
+      }
+      else [[unlikely]] {
+         return {};
+      }
+
+      if (is_digit(*c)) {
+         v = v * 10 + (*c - '0');
+         ++c;
+      }
+      else {
+         if (sign) {
+            v = -v;
+         }
+         return c;
+      }
+
+      if (c[-2] == '0') [[unlikely]] {
+         return {};
+      }
+
+      if constexpr (sizeof(T) > 1) {
+         if (is_digit(*c)) {
+            v = v * 10 + (*c - '0');
+            ++c;
+         }
+         else {
+            if (sign) {
+               v = -v;
+            }
+            return c;
+         }
+
+         if (is_digit(*c)) {
+            v = v * 10 + (*c - '0');
+            ++c;
+         }
+         else {
+            if (sign) {
+               v = -v;
+            }
+            return c;
+         }
+
+         if constexpr (sizeof(T) > 2) {
+            if (is_digit(*c)) {
+               v = v * 10 + (*c - '0');
+               ++c;
+            }
+            else {
+               if (sign) {
+                  v = -v;
+               }
+               return c;
+            }
+
+            if (is_digit(*c)) {
+               v = v * 10 + (*c - '0');
+               ++c;
+            }
+            else {
+               if (sign) {
+                  v = -v;
+               }
+               return c;
+            }
+
+            if (is_digit(*c)) {
+               v = v * 10 + (*c - '0');
+               ++c;
+            }
+            else {
+               if (sign) {
+                  v = -v;
+               }
+               return c;
+            }
+
+            if (is_digit(*c)) {
+               v = v * 10 + (*c - '0');
+               ++c;
+            }
+            else {
+               if (sign) {
+                  v = -v;
+               }
+               return c;
+            }
+
+            if (is_digit(*c)) {
+               v = v * 10 + (*c - '0');
+               ++c;
+            }
+            else {
+               if (sign) {
+                  v = -v;
+               }
+               return c;
+            }
+
+            if constexpr (sizeof(T) > 4) {
+               if (is_digit(*c)) {
+                  v = v * 10 + (*c - '0');
+                  ++c;
+               }
+               else {
+                  if (sign) {
+                     v = -v;
+                  }
+                  return c;
+               }
+
+               if (is_digit(*c)) {
+                  v = v * 10 + (*c - '0');
+                  ++c;
+               }
+               else {
+                  if (sign) {
+                     v = -v;
+                  }
+                  return c;
+               }
+
+               if (is_digit(*c)) {
+                  v = v * 10 + (*c - '0');
+                  ++c;
+               }
+               else {
+                  if (sign) {
+                     v = -v;
+                  }
+                  return c;
+               }
+
+               if (is_digit(*c)) {
+                  v = v * 10 + (*c - '0');
+                  ++c;
+               }
+               else {
+                  if (sign) {
+                     v = -v;
+                  }
+                  return c;
+               }
+
+               if (is_digit(*c)) {
+                  v = v * 10 + (*c - '0');
+                  ++c;
+               }
+               else {
+                  if (sign) {
+                     v = -v;
+                  }
+                  return c;
+               }
+
+               if (is_digit(*c)) {
+                  v = v * 10 + (*c - '0');
+                  ++c;
+               }
+               else {
+                  if (sign) {
+                     v = -v;
+                  }
+                  return c;
+               }
+
+               if (is_digit(*c)) {
+                  v = v * 10 + (*c - '0');
+                  ++c;
+               }
+               else {
+                  if (sign) {
+                     v = -v;
+                  }
+                  return c;
+               }
+
+               if (is_digit(*c)) {
+                  v = v * 10 + (*c - '0');
+                  ++c;
+               }
+               else {
+                  if (sign) {
+                     v = -v;
+                  }
+                  return c;
+               }
+
+               if (is_digit(*c)) {
+                  v = v * 10 + (*c - '0');
+                  ++c;
+               }
+               else {
+                  if (sign) {
+                     v = -v;
+                  }
+                  return c;
+               }
+            }
+         }
+      }
+
+      if (is_digit(*c)) {
+         if (sign) {
+            if (v > T(peak_negative<T>[*c])) [[unlikely]] {
+               return {};
+            }
+            v *= -1;
+            v = v * 10 - (*c - '0');
+         } else {
+            if (v > T(peak_positive<T>[*c])) [[unlikely]] {
+               return {};
+            }
+            v = v * 10 + (*c - '0');
+         }
+         ++c;
+         if (is_digit(*c)) [[unlikely]] {
+            return {};
+         }
+         return c;
+      }
+
+      if (sign) {
+         v = -v;
+      }
+      return c;
+   }
 
    template <std::integral T, class Char>
       requires(std::is_signed_v<T>)
    GLZ_ALWAYS_INLINE constexpr bool atoi(T& v, Char*& c) noexcept
    {
+      using X = std::decay_t<T>;
+      using utype = std::make_unsigned_t<X>;
+      
       const uint8_t sign = *c == '-';
-      c += sign;
-      uint64_t i;
-      if (parse_int<T>(i, reinterpret_cast<const uint8_t*&>(c), sign)) [[likely]] {
+      if (parse_int(v, reinterpret_cast<const uint8_t*&>(c))) [[likely]] {
          if (*c == 'e' || *c == 'E') {
             ++c;
          }
@@ -482,7 +695,6 @@ namespace glz::detail
             if (*c == '.') [[unlikely]] {
                return false;
             }
-            v = T((i ^ -sign) + sign);
             return true;
          }
 
@@ -517,31 +729,32 @@ namespace glz::detail
                return false;
             }
          }
-
+         
+         utype i = sign ? utype(-v) : utype(v);
          if constexpr (sizeof(T) == 1) {
-            static constexpr std::array<uint8_t, 3> powers_of_ten{1, 10, 100};
+            static constexpr std::array<utype, 3> powers_of_ten{1, 10, 100};
             i *= powers_of_ten[exp];
-            v = T((uint8_t(i) ^ -sign) + sign);
+            v = T((utype(i) ^ -sign) + sign);
             return (i - sign) <= (std::numeric_limits<T>::max)();
          }
          else if constexpr (sizeof(T) == 2) {
-            static constexpr std::array<uint16_t, 5> powers_of_ten{1, 10, 100, 1000, 10000};
+            static constexpr std::array<utype, 5> powers_of_ten{1, 10, 100, 1000, 10000};
             i *= powers_of_ten[exp];
-            v = T((uint16_t(i) ^ -sign) + sign);
+            v = T((utype(i) ^ -sign) + sign);
             return (i - sign) <= (std::numeric_limits<T>::max)();
          }
          else if constexpr (sizeof(T) == 4) {
             i *= powers_of_ten_int[exp];
-            v = T((uint32_t(i) ^ -sign) + sign);
+            v = T((utype(i) ^ -sign) + sign);
             return (i - sign) <= (std::numeric_limits<T>::max)();
          }
          else {
 #if defined(__SIZEOF_INT128__)
-            const __uint128_t res = __uint128_t(i) * powers_of_ten_int[exp];
+            const __uint128_t res = __uint128_t(reinterpret_cast<utype&>(v)) * powers_of_ten_int[exp];
             v = T((uint64_t(res) ^ -sign) + sign);
             return uint64_t(res) <= (9223372036854775807ull + sign);
 #else
-            const auto res = full_multiplication(i, powers_of_ten_int[exp]);
+            const auto res = full_multiplication(reinterpret_cast<utype&>(v), powers_of_ten_int[exp]);
             v = T((uint64_t(res.low) ^ -sign) + sign);
             return res.high == 0 && (uint64_t(res.low) <= (9223372036854775807ull + sign));
 #endif
