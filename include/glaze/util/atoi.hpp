@@ -163,9 +163,9 @@ namespace glz::detail
       // But MinGW on ARM64 doesn't have native support for 64-bit multiplications
       answer.high = __umulh(a, b);
       answer.low = a * b;
-#elif defined(FASTFLOAT_32BIT) || (defined(_WIN64) && !defined(__clang__))
+#elif defined(GLZ_FASTFLOAT_32BIT) || (defined(_WIN64) && !defined(__clang__))
       answer.low = _umul128(a, b, &answer.high); // _umul128 not available on ARM64
-#elif defined(FASTFLOAT_64BIT) && defined(__SIZEOF_INT128__)
+#elif defined(GLZ_FASTFLOAT_64BIT) && defined(__SIZEOF_INT128__)
       __uint128_t r = ((__uint128_t)a) * b;
       answer.low = uint64_t(r);
       answer.high = uint64_t(r >> 64);
