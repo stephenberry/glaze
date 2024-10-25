@@ -1,17 +1,18 @@
 name: gcc-x86
 
 on:
-   push:
-      branches:
-         - main
-         - feature/*
-      paths-ignore:
-         - "**.md"
-   pull_request:
-      branches: [main]
-      paths-ignore:
-         - "**.md"
-   workflow_dispatch:
+  push:
+    branches:
+      - main
+      - feature/*
+    paths-ignore:
+      - '**/*.md'
+  pull_request:
+    branches:
+      - main
+    paths-ignore:
+      - '**/*.md'
+  workflow_dispatch:
 
 jobs:
    build:

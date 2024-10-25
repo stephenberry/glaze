@@ -3,9 +3,9 @@ name: clang-format
 on: 
   push:
     branches:
-    - main
+      - main
     paths-ignore:
-    - '**.md'
+      - '**/*.md'
   workflow_dispatch:
 
 jobs:

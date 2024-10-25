@@ -3,10 +3,10 @@ name: msys2-mingw
 on:
   push:
     branches:
-    - main
-    - feature/*
+      - main
+      - feature/*
     paths-ignore:
-    - '**.md'
+      - '**/*.md'
   workflow_dispatch:
 
 env:
