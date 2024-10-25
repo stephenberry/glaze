@@ -731,7 +731,7 @@ namespace glz::detail
             }
          }
 
-         utype i = sign ? utype(-v) : utype(v);
+         utype i = utype((utype(v) ^ -sign) + sign);
          if constexpr (sizeof(T) == 1) {
             static constexpr std::array<utype, 3> powers_of_ten{1, 10, 100};
             i *= powers_of_ten[exp];
