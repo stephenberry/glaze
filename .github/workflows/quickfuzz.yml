@@ -3,14 +3,17 @@ name: quickfuzz
 on:
   push:
     branches:
-    - main
-    - feature/*
+      - main
+      - feature/*
     paths-ignore:
-    - '**.md'
+      - '**/*.md'
+      - 'docs/**'
   pull_request:
-    branches: [main]
+    branches:
+      - main
     paths-ignore:
-    - '**.md'
+      - '**/*.md'
+      - 'docs/**'
   workflow_dispatch:
 
 jobs:

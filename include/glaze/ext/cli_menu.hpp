@@ -226,6 +226,17 @@ namespace glz
             if (buf[0] == '\n') {
                goto restart_input;
             }
+           
+            auto* it = buf;
+            for (const auto* end = buf + 5; it < end; ++it) {
+               if (*it == '\n' || *it == '\0') {
+                  break;
+               }
+            }
+            std::string_view str{buf, size_t(it - buf)};
+            if (str == "cls" || str == "clear") {
+               continue;
+            }
 
             char* endptr{};
             errno = 0; // reset error number
