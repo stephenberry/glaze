@@ -73,3 +73,6 @@ The top menu when printed to console will look like:
 cmd> 
 ```
 
+## Clearing The Screen
+
+To bring the menu to the forefront, simply type `cls` or `clear` and press `ENTER`.
