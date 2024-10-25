@@ -177,7 +177,7 @@ namespace glz::detail
 
    template <std::integral T>
       requires(std::is_unsigned_v<T> && (sizeof(T) <= 8))
-   GLZ_ALWAYS_INLINE constexpr const uint8_t* parse_int(T& v, const uint8_t*& c) noexcept
+   GLZ_ALWAYS_INLINE constexpr const uint8_t* parse_int(T& v, const uint8_t* c) noexcept
    {
       if (is_digit(*c)) [[likely]] {
          v = *c - '0';
@@ -361,7 +361,8 @@ namespace glz::detail
       requires(std::is_unsigned_v<T>)
    GLZ_ALWAYS_INLINE constexpr bool atoi(T& v, Char*& c) noexcept
    {
-      if (parse_int(v, reinterpret_cast<const uint8_t*&>(c))) [[likely]] {
+      if (auto ptr = parse_int(v, reinterpret_cast<const uint8_t*>(c))) [[likely]] {
+         c = reinterpret_cast<const Char*>(ptr);
          if (*c == 'e' || *c == 'E') {
             ++c;
          }
@@ -443,7 +444,7 @@ namespace glz::detail
 
    template <std::integral T>
       requires(std::is_signed_v<T> && (sizeof(T) <= 8))
-   GLZ_ALWAYS_INLINE constexpr const uint8_t* parse_int(T& v, const uint8_t*& c) noexcept
+   GLZ_ALWAYS_INLINE constexpr const uint8_t* parse_int(T& v, const uint8_t* c) noexcept
    {
       const uint8_t sign = *c == '-';
       c += sign;
@@ -688,7 +689,8 @@ namespace glz::detail
       using utype = std::make_unsigned_t<X>;
 
       const uint8_t sign = *c == '-';
-      if (parse_int(v, reinterpret_cast<const uint8_t*&>(c))) [[likely]] {
+      if (auto ptr = parse_int(v, reinterpret_cast<const uint8_t*>(c))) [[likely]] {
+         c = reinterpret_cast<const Char*>(ptr);
          if (*c == 'e' || *c == 'E') {
             ++c;
          }
