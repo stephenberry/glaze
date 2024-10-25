@@ -3,14 +3,14 @@ name: clang-linux
 on:
   push:
     branches:
-    - main
-    - feature/*
+      - main
+      - feature/*
     paths-ignore:
-    - '**.md'
+      - '**.md'
   pull_request:
     branches: [main]
     paths-ignore:
-    - '**.md'
+      - '**.md'
   workflow_dispatch:
 
 jobs:
