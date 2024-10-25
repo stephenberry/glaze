@@ -11,6 +11,7 @@ struct my_functions
    std::function<void()> world = [] { std::printf("World\n"); };
 };
 
+// This glz::meta is optional unless you need to change the function name in the menu
 template <>
 struct glz::meta<my_functions>
 {
