@@ -2,6 +2,10 @@
 
 Glaze makes it easy to generate command line interface menus from nested structs. Make structs of callable and combine them to build your menu hierarchy. The command names will be reflected from the function names or use a `glz::meta` that you provide.
 
+## Clearing The Screen
+
+To bring the menu to the forefront, simply type `cls` or `clear` and press `ENTER`.
+
 ## Example
 
 ```c++
@@ -73,7 +77,3 @@ The top menu when printed to console will look like:
 --------------------------------
 cmd> 
 ```
-
-## Clearing The Screen
-
-To bring the menu to the forefront, simply type `cls` or `clear` and press `ENTER`.
