@@ -226,7 +226,7 @@ namespace glz
             if (buf[0] == '\n') {
                goto restart_input;
             }
-           
+
             auto* it = buf;
             for (const auto* end = buf + 5; it < end; ++it) {
                if (*it == '\n' || *it == '\0') {
