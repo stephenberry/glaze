@@ -8,6 +8,7 @@
 #include <functional>
 #include <future>
 #include <list>
+#include <deque>
 #include <mutex>
 #include <thread>
 #include <vector>
