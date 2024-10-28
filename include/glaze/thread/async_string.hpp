@@ -14,30 +14,30 @@
 
 namespace glz
 {
-   struct safe_string
+   struct async_string
    {
       std::string str;
       mutable std::shared_mutex mutex;
 
-      safe_string() = default;
-      safe_string(const char* s) : str(s) {}
-      safe_string(const std::string& s) : str(s) {}
-      safe_string(std::string&& s) : str(std::move(s)) {}
-      safe_string(const std::string_view& sv) : str(sv) {}
+      async_string() = default;
+      async_string(const char* s) : str(s) {}
+      async_string(const std::string& s) : str(s) {}
+      async_string(std::string&& s) : str(std::move(s)) {}
+      async_string(const std::string_view& sv) : str(sv) {}
 
-      safe_string(const safe_string& other)
+      async_string(const async_string& other)
       {
          std::shared_lock lock(other.mutex);
          str = other.str;
       }
 
-      safe_string(safe_string&& other) noexcept
+      async_string(async_string&& other) noexcept
       {
          std::unique_lock lock(other.mutex);
          str = std::move(other.str);
       }
 
-      safe_string& operator=(const safe_string& other)
+      async_string& operator=(const async_string& other)
       {
          if (this != &other) {
             std::unique_lock lock1(mutex, std::defer_lock);
@@ -48,7 +48,7 @@ namespace glz
          return *this;
       }
 
-      safe_string& operator=(safe_string&& other) noexcept
+      async_string& operator=(async_string&& other) noexcept
       {
          if (this != &other) {
             std::unique_lock lock1(mutex, std::defer_lock);
@@ -59,28 +59,28 @@ namespace glz
          return *this;
       }
 
-      safe_string& operator=(const std::string& s)
+      async_string& operator=(const std::string& s)
       {
          std::unique_lock lock(mutex);
          str = s;
          return *this;
       }
 
-      safe_string& operator=(std::string&& s)
+      async_string& operator=(std::string&& s)
       {
          std::unique_lock lock(mutex);
          str = std::move(s);
          return *this;
       }
 
-      safe_string& operator=(const char* s)
+      async_string& operator=(const char* s)
       {
          std::unique_lock lock(mutex);
          str = s;
          return *this;
       }
 
-      safe_string& operator=(const std::string_view& sv)
+      async_string& operator=(const std::string_view& sv)
       {
          std::unique_lock lock(mutex);
          str = sv;
@@ -125,34 +125,34 @@ namespace glz
          str.pop_back();
       }
 
-      safe_string& append(const std::string& s)
+      async_string& append(const std::string& s)
       {
          std::unique_lock lock(mutex);
          str.append(s);
          return *this;
       }
 
-      safe_string& append(const char* s)
+      async_string& append(const char* s)
       {
          std::unique_lock lock(mutex);
          str.append(s);
          return *this;
       }
 
-      safe_string& append(const std::string_view& sv)
+      async_string& append(const std::string_view& sv)
       {
          std::unique_lock lock(mutex);
          str.append(sv);
          return *this;
       }
 
-      safe_string& operator+=(const std::string& s) { return append(s); }
+      async_string& operator+=(const std::string& s) { return append(s); }
 
-      safe_string& operator+=(const char* s) { return append(s); }
+      async_string& operator+=(const char* s) { return append(s); }
 
-      safe_string& operator+=(const std::string_view& sv) { return append(sv); }
+      async_string& operator+=(const std::string_view& sv) { return append(sv); }
 
-      safe_string& operator+=(char c)
+      async_string& operator+=(char c)
       {
          std::unique_lock lock(mutex);
          str += c;
@@ -184,7 +184,7 @@ namespace glz
          return str.back();
       }
 
-      int compare(const safe_string& other) const
+      int compare(const async_string& other) const
       {
          std::shared_lock lock1(mutex, std::defer_lock);
          std::shared_lock lock2(other.mutex, std::defer_lock);
@@ -199,7 +199,7 @@ namespace glz
          return str;
       }
 
-      friend bool operator==(const safe_string& lhs, const safe_string& rhs)
+      friend bool operator==(const async_string& lhs, const async_string& rhs)
       {
          std::shared_lock lock1(lhs.mutex, std::defer_lock);
          std::shared_lock lock2(rhs.mutex, std::defer_lock);
@@ -207,9 +207,9 @@ namespace glz
          return lhs.str == rhs.str;
       }
 
-      friend bool operator!=(const safe_string& lhs, const safe_string& rhs) { return !(lhs == rhs); }
+      friend bool operator!=(const async_string& lhs, const async_string& rhs) { return !(lhs == rhs); }
 
-      friend bool operator<(const safe_string& lhs, const safe_string& rhs)
+      friend bool operator<(const async_string& lhs, const async_string& rhs)
       {
          std::shared_lock lock1(lhs.mutex, std::defer_lock);
          std::shared_lock lock2(rhs.mutex, std::defer_lock);
@@ -217,13 +217,13 @@ namespace glz
          return lhs.str < rhs.str;
       }
 
-      friend bool operator<=(const safe_string& lhs, const safe_string& rhs) { return !(rhs < lhs); }
+      friend bool operator<=(const async_string& lhs, const async_string& rhs) { return !(rhs < lhs); }
 
-      friend bool operator>(const safe_string& lhs, const safe_string& rhs) { return rhs < lhs; }
+      friend bool operator>(const async_string& lhs, const async_string& rhs) { return rhs < lhs; }
 
-      friend bool operator>=(const safe_string& lhs, const safe_string& rhs) { return !(lhs < rhs); }
+      friend bool operator>=(const async_string& lhs, const async_string& rhs) { return !(lhs < rhs); }
 
-      void swap(safe_string& other)
+      void swap(async_string& other)
       {
          if (this == &other) return;
          std::unique_lock lock1(mutex, std::defer_lock);
@@ -232,7 +232,7 @@ namespace glz
          str.swap(other.str);
       }
 
-      friend void swap(safe_string& lhs, safe_string& rhs) { lhs.swap(rhs); }
+      friend void swap(async_string& lhs, async_string& rhs) { lhs.swap(rhs); }
    };
 
 }
@@ -240,7 +240,7 @@ namespace glz
 namespace glz::detail
 {
    template <uint32_t Format>
-   struct from<Format, glz::safe_string>
+   struct from<Format, glz::async_string>
    {
       template <auto Opts>
       static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
@@ -251,7 +251,7 @@ namespace glz::detail
    };
 
    template <uint32_t Format>
-   struct to<Format, glz::safe_string>
+   struct to<Format, glz::async_string>
    {
       template <auto Opts>
       static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept

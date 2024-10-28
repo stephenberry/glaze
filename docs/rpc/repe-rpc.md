@@ -26,7 +26,7 @@ The `glz::repe::registry` allows users to expose C++ classes directly to the reg
 
 ## Thread Safe Classes
 
-- `glz::safe_string` in `glaze/thread/safe_string.hpp`
+- `glz::async_string` in `glaze/thread/async_string.hpp`
   - Provides a thread safe `std::string` wrapper, which Glaze can read/write from safely in asynchronous calls.
 
 ## asio

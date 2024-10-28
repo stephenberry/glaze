@@ -11,7 +11,7 @@
 #include "glaze/rpc/repe/registry.hpp"
 #include "ut/ut.hpp"
 
-#include "glaze/thread/safe_string.hpp"
+#include "glaze/thread/async_string.hpp"
 
 using namespace ut;
 
@@ -427,7 +427,7 @@ struct tester
 {
    std::atomic<int> integer{};
    std::atomic<double> number{};
-   glz::safe_string str{};
+   glz::async_string str{};
 };
 
 suite multi_threading_tests = [] {
