@@ -91,6 +91,16 @@ namespace glz
          return iter->second;
       }
       
+      json_t& operator=(const std::nullptr_t value) {
+         data = value;
+         return *this;
+      }
+      
+      json_t& operator=(const double value) {
+         data = value;
+         return *this;
+      }
+      
       json_t& operator=(const std::string& value) {
          data = value;
          return *this;
@@ -101,12 +111,17 @@ namespace glz
          return *this;
       }
       
-      json_t& operator=(const double value) {
+      json_t& operator=(const bool value) {
          data = value;
          return *this;
       }
       
-      json_t& operator=(const bool value) {
+      json_t& operator=(const array_t& value) {
+         data = value;
+         return *this;
+      }
+      
+      json_t& operator=(const object_t& value) {
          data = value;
          return *this;
       }
