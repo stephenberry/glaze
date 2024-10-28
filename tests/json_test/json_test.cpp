@@ -9816,6 +9816,40 @@ suite const_pointer_tests = [] {
    };
 };
 
+struct custom_skip_struct
+{
+    int i = 287;
+    double d = 3.14;
+};
+
+template <>
+struct glz::meta<custom_skip_struct> {
+    using T = custom_skip_struct;
+    static constexpr auto read_test = [](T&, const std::string&) {};
+    static constexpr auto write_test =
+        [](auto& s) ->std::unique_ptr<std::string> {
+        if (287 != s.i)
+            return std::make_unique<std::string>("expected: not 278");
+        else
+            return std::unique_ptr<std::string>();
+        };
+    static constexpr auto value = object(
+        "i", & T::i,
+        "d", & T::d,
+        "test", glz::custom<read_test, write_test>
+    );
+};
+
+suite custom_skip_struct_test = [] {
+   "custom_skip_struct"_test = [] {
+      custom_skip_struct obj{};
+      std::string buffer{};
+      expect(not glz::write_json(obj, buffer));
+      // We expect the null output of "test" to be skipped
+      expect(buffer == R"({"i":287,"d":3.14})") << buffer;
+   };
+};
+
 int main()
 {
    trace.end("json_test");
