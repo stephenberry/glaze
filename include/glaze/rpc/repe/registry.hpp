@@ -125,71 +125,6 @@ namespace glz::repe
    struct ignore_result final
    {};
 
-   template <opts Opts, class Result>
-   [[nodiscard]] error_t decode_response(Result&& result, auto& buffer)
-   {
-      repe::header h;
-      context ctx{};
-      auto [b, e] = read_iterators<Opts>(buffer);
-      if (buffer.empty()) [[unlikely]] {
-         ctx.error = error_code::no_read_input;
-      }
-      if (bool(ctx.error)) [[unlikely]] {
-         return error_t{error_code::parse_error};
-      }
-      auto start = b;
-
-      auto handle_error = [&](auto& it) {
-         ctx.error = error_code::syntax_error;
-         error_ctx pe{ctx.error, ctx.custom_error_message, size_t(it - start), ctx.includer_error};
-         return error_t{error_code::parse_error, format_error(pe, buffer)};
-      };
-
-      if (*b == '[') {
-         ++b;
-      }
-      else {
-         return handle_error(b);
-      }
-
-      glz::detail::read<Opts.format>::template op<Opts>(h, ctx, b, e);
-
-      if (bool(ctx.error)) {
-         error_ctx pe{ctx.error, ctx.custom_error_message, size_t(b - start), ctx.includer_error};
-         return {error_code::parse_error, format_error(pe, buffer)};
-      }
-
-      if (*b == ',') {
-         ++b;
-      }
-      else {
-         return handle_error(b);
-      }
-
-      if (h.error) {
-         error_t error{};
-         glz::detail::read<Opts.format>::template op<Opts>(error, ctx, b, e);
-         return error;
-      }
-
-      if constexpr (!std::same_as<std::decay_t<Result>, ignore_result>) {
-         glz::detail::read<Opts.format>::template op<Opts>(result, ctx, b, e);
-
-         if (bool(ctx.error)) {
-            error_ctx pe{ctx.error, ctx.custom_error_message, size_t(b - start), ctx.includer_error};
-            return {error_code::parse_error, format_error(pe, buffer)};
-         }
-      }
-
-      return {};
-   }
-
-   template <opts Opts>
-   [[nodiscard]] error_t decode_response(auto& buffer)
-   {
-      return decode_response<Opts>(ignore_result{}, buffer);
-   }
-
    template <opts Opts>
    error_t request(message& msg, const user_header& h)
    {
@@ -720,24 +655,20 @@ namespace glz::repe
                using Result = std::decay_t<std::invoke_result_t<Func>>;
                if constexpr (std::same_as<Result, void>) {
                   methods[full_key] = [&func, chain = get_chain(full_key)](repe::state&& state) mutable {
-                     {
-                        func();
-                        if (state.notify()) {
-                           return;
-                        }
+                     func();
+                     if (state.notify()) {
+                        return;
                      }
                      write_response<Opts>(state);
                   };
                }
                else {
                   methods[full_key] = [&func, chain = get_chain(full_key)](repe::state&& state) mutable {
-                     {
-                        if (state.notify()) {
-                           std::ignore = func();
-                           return;
-                        }
-                        write_response<Opts>(func(), state);
+                     if (state.notify()) {
+                        std::ignore = func();
+                        return;
                      }
+                     write_response<Opts>(func(), state);
                   };
                }
             }
@@ -747,7 +678,6 @@ namespace glz::repe
                static_assert(N == 1, "Only one input is allowed for your function");
 
                using Params = glz::tuple_element_t<0, Tuple>;
-               // using Result = std::invoke_result_t<Func, Params>;
 
                methods[full_key] = [&func, chain = get_chain(full_key)](repe::state&& state) mutable {
                   static thread_local std::decay_t<Params> params{};
@@ -755,14 +685,13 @@ namespace glz::repe
                   if (read_params<Opts>(params, state) == 0) {
                      return;
                   }
-
-                  {
-                     if (state.notify()) {
-                        std::ignore = func(params);
-                        return;
-                     }
-                     write_response<Opts>(func(params), state);
+                  
+                  if (state.notify()) {
+                     std::ignore = func(params);
+                     return;
                   }
+                  auto ret = func(params);
+                  write_response<Opts>(ret, state);
                };
             }
             else if constexpr (glaze_object_t<E> || reflectable<E>) {
@@ -865,9 +794,7 @@ namespace glz::repe
                               }
                            }
 
-                           {
-                              (value.*func)(input);
-                           }
+                           (value.*func)(input);
 
                            if (state.notify()) {
                               return;
@@ -884,15 +811,12 @@ namespace glz::repe
                      // Member function pointers
                      if constexpr (n_args == 0) {
                         methods[full_key] = [&value, &func, chain = get_chain(full_key)](repe::state&& state) mutable {
-                           // using Result = std::decay_t<decltype((value.*func)())>;
-                           {
-                              if (state.notify()) {
-                                 std::ignore = (value.*func)();
-                                 return;
-                              }
-
-                              write_response<Opts>((value.*func)(), state);
+                           if (state.notify()) {
+                              std::ignore = (value.*func)();
+                              return;
                            }
+
+                           write_response<Opts>((value.*func)(), state);
                         };
                      }
                      else if constexpr (n_args == 1) {
@@ -906,16 +830,13 @@ namespace glz::repe
                                  return;
                               }
                            }
-
-                           // using Result = std::decay_t<decltype((value.*func)(input))>;
-                           {
-                              if (state.notify()) {
-                                 std::ignore = (value.*func)(input);
-                                 return;
-                              }
-
-                              write_response<Opts>((value.*func)(input), state);
+                           
+                           if (state.notify()) {
+                              std::ignore = (value.*func)(input);
+                              return;
                            }
+
+                           write_response<Opts>((value.*func)(input), state);
                         };
                      }
                      else {

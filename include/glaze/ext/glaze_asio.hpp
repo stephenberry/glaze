@@ -269,18 +269,25 @@ namespace glz
             return {error_code::send_error, "asio send failure"};
          }
 
-         repe::message response{};
-
+         auto response = message_pool->borrow();
          try {
-            receive_buffer(*socket, response);
+            receive_buffer(*socket, *response);
          }
          catch (const std::exception& e) {
             socket.ptr.reset();
             (*is_connected) = false;
             return {error_code::send_error, "asio receive failure"};
          }
-
-         return repe::decode_response<Opts>(std::forward<Result>(result), response);
+         
+         if (response->header.error) {
+            return {error_code::send_error, "asio receive failure"};
+         }
+         
+         auto ec = glz::read<Opts>(std::forward<Result>(result), response->body);
+         if (ec) {
+            return { ec.ec, glz::format_error(ec, response->body) };
+         }
+         return {};
       }
 
       template <class Result = glz::raw_json>
@@ -312,9 +319,9 @@ namespace glz
             return {error_code::send_error, "asio send failure"};
          }
 
-         repe::message response{};
+         auto response = message_pool->borrow();
          try {
-            receive_buffer(*socket, response);
+            receive_buffer(*socket, *response);
          }
          catch (const std::exception& e) {
             socket.ptr.reset();
@@ -322,7 +329,10 @@ namespace glz
             return {error_code::send_error, "asio receive failure"};
          }
 
-         return repe::decode_response<Opts>(response);
+         if (response->header.error) {
+            return {error_code::send_error, "asio receive failure"};
+         }
+         return {};
       }
 
       template <class Params, class Result>
@@ -352,7 +362,15 @@ namespace glz
             return {error_code::send_error, "asio receive failure"};
          }
 
-         return repe::decode_response<Opts>(std::forward<Result>(result), response->body);
+         if (response->header.error) {
+            return {error_code::send_error, "asio receive failure"};
+         }
+         
+         auto ec = glz::read<Opts>(std::forward<Result>(result), response->body);
+         if (ec) {
+            return { ec.ec, glz::format_error(ec, response->body) };
+         }
+         return {};
       }
 
       [[nodiscard]] repe::error_t call(repe::user_header&& header)
@@ -380,7 +398,10 @@ namespace glz
             return {error_code::send_error, "asio receive failure"};
          }
 
-         return repe::decode_response<Opts>(response);
+         if (response.header.error) {
+            return {error_code::send_error, "asio receive failure"};
+         }
+         return {};
       }
    };
 

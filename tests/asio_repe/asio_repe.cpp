@@ -40,7 +40,7 @@ void asio_client_test()
    std::this_thread::sleep_for(std::chrono::seconds(1));
 
    try {
-      constexpr auto N = 1;
+      constexpr auto N = 100;
       std::vector<glz::asio_client<>> clients;
       clients.reserve(N);
 
@@ -163,7 +163,7 @@ void async_calls()
 
 int main()
 {
-   // asio_client_test();
+   asio_client_test();
    async_calls();
 
    return 0;

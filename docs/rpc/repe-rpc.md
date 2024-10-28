@@ -26,7 +26,9 @@ Locking is performed on JSON pointer path chains to allow multiple clients to re
 
 Locking is based on depth in the object tree. A chain of shared mutexes are locked, locking does the path to the write point. When reading from C++ memory, only shared locks are used at the read location.
 
-An invoke lock is also used for invoking functions. Unlike variable access, the invocation lock also locks everything at the same depth as the function, which allows member functions to safely manipulate member variables from the same class.
+> [!IMPORTANT]
+>
+> Functions that are registered are not locked when invoked. Thread safety when invoking functions must be handled by the user.
 
 > [!IMPORTANT]
 >
