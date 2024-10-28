@@ -7,7 +7,6 @@
 #include <condition_variable>
 #include <functional>
 #include <future>
-#include <list>
 #include <deque>
 #include <mutex>
 #include <thread>
