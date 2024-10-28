@@ -278,14 +278,14 @@ namespace glz
             (*is_connected) = false;
             return {error_code::send_error, "asio receive failure"};
          }
-         
+
          if (response->header.error) {
             return {error_code::send_error, "asio receive failure"};
          }
-         
+
          auto ec = glz::read<Opts>(std::forward<Result>(result), response->body);
          if (ec) {
-            return { ec.ec, glz::format_error(ec, response->body) };
+            return {ec.ec, glz::format_error(ec, response->body)};
          }
          return {};
       }
@@ -365,10 +365,10 @@ namespace glz
          if (response->header.error) {
             return {error_code::send_error, "asio receive failure"};
          }
-         
+
          auto ec = glz::read<Opts>(std::forward<Result>(result), response->body);
          if (ec) {
-            return { ec.ec, glz::format_error(ec, response->body) };
+            return {ec.ec, glz::format_error(ec, response->body)};
          }
          return {};
       }

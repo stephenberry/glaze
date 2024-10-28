@@ -685,7 +685,7 @@ namespace glz::repe
                   if (read_params<Opts>(params, state) == 0) {
                      return;
                   }
-                  
+
                   if (state.notify()) {
                      std::ignore = func(params);
                      return;
@@ -830,7 +830,7 @@ namespace glz::repe
                                  return;
                               }
                            }
-                           
+
                            if (state.notify()) {
                               std::ignore = (value.*func)(input);
                               return;
