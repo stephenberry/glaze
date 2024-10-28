@@ -151,48 +151,24 @@ namespace glz::repe
 
    inline error_t request_beve(message& msg, const user_header& h)
    {
-      msg.header = encode(h);
-      msg.query = std::string{h.query};
-      msg.header.read(true); // because no value provided
-      std::ignore = glz::write_beve(nullptr, msg.body);
-      msg.header.body_length = msg.body.size();
-      msg.header.length = sizeof(repe::header) + msg.query.size() + msg.body.size();
-      return {};
+      return request<opts{BEVE}>(msg, h);
+   }
+   
+   template <class Value>
+   error_t request_beve(message& msg, const user_header& h, Value&& value)
+   {
+      return request<opts{BEVE}>(msg, h, std::forward<Value>(value));
    }
 
    inline error_t request_json(message& msg, const user_header& h)
    {
-      msg.header = encode(h);
-      msg.query = std::string{h.query};
-      msg.header.read(true); // because no value provided
-      std::ignore = glz::write_json(nullptr, msg.body);
-      msg.header.body_length = msg.body.size();
-      msg.header.length = sizeof(repe::header) + msg.query.size() + msg.body.size();
-      return {};
+      return request<opts{JSON}>(msg, h);
    }
-
+   
    template <class Value>
    error_t request_json(message& msg, const user_header& h, Value&& value)
    {
-      msg.header = encode(h);
-      msg.query = std::string{h.query};
-      msg.header.write(true);
-      std::ignore = glz::write_json(std::forward<Value>(value), msg.body);
-      msg.header.body_length = msg.body.size();
-      msg.header.length = sizeof(repe::header) + msg.query.size() + msg.body.size();
-      return {};
-   }
-
-   template <class Value>
-   error_t request_beve(message& msg, const user_header& h, Value&& value)
-   {
-      msg.header = encode(h);
-      msg.query = std::string{h.query};
-      msg.header.write(true);
-      std::ignore = glz::write_beve(std::forward<Value>(value), msg.body);
-      msg.header.body_length = msg.body.size();
-      msg.header.length = sizeof(repe::header) + msg.query.size() + msg.body.size();
-      return {};
+      return request<opts{JSON}>(msg, h, std::forward<Value>(value));
    }
 
    // DESIGN NOTE: It might appear that we are locking ourselves into a poor design choice by using a runtime
