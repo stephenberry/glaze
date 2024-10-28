@@ -254,14 +254,15 @@ namespace glz
       template <class Result>
       [[nodiscard]] repe::error_t get(repe::user_header&& header, Result&& result)
       {
-         auto request = repe::request<Opts>(std::move(header), nullptr);
-         request.header.notify(false);
-         request.header.read(true);
+         auto request = message_pool->borrow();
+         header.notify(false);
+         header.read(true);
+         std::ignore = repe::request<Opts>(*request, std::move(header));
 
          unique_socket socket{socket_pool.get()};
 
          try {
-            send_buffer(*socket, request);
+            send_buffer(*socket, *request);
          }
          catch (const std::exception& e) {
             socket.ptr.reset();
@@ -290,28 +291,16 @@ namespace glz
          return {};
       }
 
-      template <class Result = glz::raw_json>
-      [[nodiscard]] glz::expected<Result, repe::error_t> get(repe::user_header&& header)
-      {
-         std::decay_t<Result> result{};
-         const auto error = get<Result>(std::move(header), result);
-         if (error) {
-            return glz::unexpected(error);
-         }
-         else {
-            return {result};
-         }
-      }
-
       template <class Params>
       [[nodiscard]] repe::error_t set(repe::user_header&& header, Params&& params)
       {
-         auto request = repe::request<Opts>(std::move(header), std::forward<Params>(params));
+         auto request = message_pool->borrow();
+         std::ignore = repe::request<Opts>(*request, std::move(header), std::forward<Params>(params));
 
          unique_socket socket{socket_pool.get()};
 
          try {
-            send_buffer(*socket, request);
+            send_buffer(*socket, *request);
          }
          catch (const std::exception& e) {
             socket.ptr.reset();

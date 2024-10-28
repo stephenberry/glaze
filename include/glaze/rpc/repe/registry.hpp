@@ -98,15 +98,21 @@ namespace glz::repe
    template <opts Opts>
    void write_response(is_state auto&& state)
    {
-      state.out.header = state.in.header;
+      auto& in = state.in;
+      auto& out = state.out;
+      out.header.id = in.header.id;
       if (state.error) {
-         state.out.header.error = true;
+         out.header.error = true;
+         out.header.query_length = out.query.size();
+         out.header.body_length = out.body.size();
+         out.header.length = sizeof(repe::header) + out.query.size() + out.body.size();
       }
       else {
-         const auto ec = write<Opts>(nullptr, state.out.body);
-         if (bool(ec)) [[unlikely]] {
-            state.out.header.error = true;
-         }
+         out.body.clear();
+         out.query.clear();
+         out.header.query_length = out.query.size();
+         out.header.body_length = out.body.size();
+         out.header.length = sizeof(repe::header) + out.query.size() + out.body.size();
       }
    }
    
