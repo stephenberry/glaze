@@ -11,6 +11,8 @@
 #include "glaze/rpc/repe/registry.hpp"
 #include "ut/ut.hpp"
 
+#include "glaze/thread/safe_string.hpp"
+
 using namespace ut;
 
 namespace repe = glz::repe;
@@ -423,9 +425,9 @@ suite wrapper_tests_beve = [] {
 
 struct tester
 {
-   int integer{};
-   double number{};
-   std::string str{};
+   std::atomic<int> integer{};
+   std::atomic<double> number{};
+   glz::safe_string str{};
 };
 
 suite multi_threading_tests = [] {
@@ -510,10 +512,8 @@ suite multi_threading_tests = [] {
 
       {
          latch.wait();
-         auto lock = registry.read_only_lock<"/str">();
-         expect(lock);
          bool valid = true;
-         for (char c : obj.str) {
+         for (char c : obj.str.string()) {
             if (c != 'x') {
                valid = false;
                break;
