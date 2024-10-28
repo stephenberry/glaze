@@ -12,6 +12,8 @@
 
 #include "glaze/core/common.hpp"
 
+// Provides a thread safe wrapper around a std::string, which Glaze knows how to serialize/deserialize safely
+
 namespace glz
 {
    struct async_string
