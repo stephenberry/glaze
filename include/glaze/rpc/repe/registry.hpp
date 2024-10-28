@@ -167,6 +167,7 @@ namespace glz::repe
 
       void clear() { methods.clear(); }
 
+      // Register a C++ type that stores pointers to the value, so be sure to keep the registered value alive
       template <const std::string_view& root = detail::empty_path, class T, const std::string_view& parent = root>
          requires(glz::detail::glaze_object_t<T> || glz::detail::reflectable<T>)
       void on(T& value)
