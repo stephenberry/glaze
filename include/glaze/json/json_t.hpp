@@ -90,38 +90,45 @@ namespace glz
          }
          return iter->second;
       }
-      
-      json_t& operator=(const std::nullptr_t value) {
+
+      json_t& operator=(const std::nullptr_t value)
+      {
          data = value;
          return *this;
       }
-      
-      json_t& operator=(const double value) {
+
+      json_t& operator=(const double value)
+      {
          data = value;
          return *this;
       }
-      
-      json_t& operator=(const std::string& value) {
+
+      json_t& operator=(const std::string& value)
+      {
          data = value;
          return *this;
       }
-      
-      json_t& operator=(const std::string_view value) {
+
+      json_t& operator=(const std::string_view value)
+      {
          data = std::string(value);
          return *this;
       }
-      
-      json_t& operator=(const bool value) {
+
+      json_t& operator=(const bool value)
+      {
          data = value;
          return *this;
       }
-      
-      json_t& operator=(const array_t& value) {
+
+      json_t& operator=(const array_t& value)
+      {
          data = value;
          return *this;
       }
-      
-      json_t& operator=(const object_t& value) {
+
+      json_t& operator=(const object_t& value)
+      {
          data = value;
          return *this;
       }
@@ -168,11 +175,8 @@ namespace glz
       {
          data = static_cast<double>(val);
       }
-      
-      json_t(const std::string_view value)
-      {
-         data = std::string(value);
-      }
+
+      json_t(const std::string_view value) { data = std::string(value); }
 
       json_t(std::initializer_list<std::pair<const char*, json_t>>&& obj)
       {

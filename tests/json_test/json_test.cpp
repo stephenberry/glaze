@@ -3693,7 +3693,7 @@ suite generic_json_tests = [] {
       glz::json_t json{};
       expect(glz::read_json(json, "\x22\x5c\x75\xff\x22"));
    };
-   
+
    "json_t string_view"_test = [] {
       glz::json_t json = std::string_view{"Hello"};
       expect(glz::write_json(json).value() == R"("Hello")");
