@@ -121,55 +121,42 @@ namespace glz::repe
          }
       }
    }
-
-   struct ignore_result final
-   {};
-
+   
+   namespace detail
+   {
+      template <opts Opts>
+      struct request_impl
+      {
+         error_t operator()(message& msg, const user_header& h) const
+         {
+            msg.header = encode(h);
+            msg.header.read(true); // because no value provided
+            msg.query = std::string{h.query};
+            std::ignore = glz::write<Opts>(nullptr, msg.body);
+            msg.header.body_length = msg.body.size();
+            msg.header.length = sizeof(repe::header) + msg.query.size() + msg.body.size();
+            return {};
+         }
+         
+         template <class Value>
+         error_t operator()(message& msg, const user_header& h, Value&& value) const
+         {
+            msg.header = encode(h);
+            msg.query = std::string{h.query};
+            msg.header.write(true);
+            std::ignore = glz::write<Opts>(std::forward<Value>(value), msg.body);
+            msg.header.body_length = msg.body.size();
+            msg.header.length = sizeof(repe::header) + msg.query.size() + msg.body.size();
+            return {};
+         }
+      };
+   }
+   
    template <opts Opts>
-   error_t request(message& msg, const user_header& h)
-   {
-      msg.header = encode(h);
-      msg.header.read(true); // because no value provided
-      msg.query = std::string{h.query};
-      std::ignore = glz::write<Opts>(nullptr, msg.body);
-      msg.header.body_length = msg.body.size();
-      msg.header.length = sizeof(repe::header) + msg.query.size() + msg.body.size();
-      return {};
-   }
-
-   template <opts Opts, class Value>
-   error_t request(message& msg, const user_header& h, Value&& value)
-   {
-      msg.header = encode(h);
-      msg.query = std::string{h.query};
-      msg.header.write(true);
-      std::ignore = glz::write<Opts>(std::forward<Value>(value), msg.body);
-      msg.header.body_length = msg.body.size();
-      msg.header.length = sizeof(repe::header) + msg.query.size() + msg.body.size();
-      return {};
-   }
-
-   inline error_t request_beve(message& msg, const user_header& h)
-   {
-      return request<opts{BEVE}>(msg, h);
-   }
+   inline constexpr auto request = detail::request_impl<Opts>{};
    
-   template <class Value>
-   error_t request_beve(message& msg, const user_header& h, Value&& value)
-   {
-      return request<opts{BEVE}>(msg, h, std::forward<Value>(value));
-   }
-
-   inline error_t request_json(message& msg, const user_header& h)
-   {
-      return request<opts{JSON}>(msg, h);
-   }
-   
-   template <class Value>
-   error_t request_json(message& msg, const user_header& h, Value&& value)
-   {
-      return request<opts{JSON}>(msg, h, std::forward<Value>(value));
-   }
+   inline constexpr auto request_beve = request<opts{BEVE}>;
+   inline constexpr auto request_json = request<opts{JSON}>;
 
    // DESIGN NOTE: It might appear that we are locking ourselves into a poor design choice by using a runtime
    // std::unordered_map. However, we can actually improve this in the future by allowing glz::meta specialization on
@@ -448,18 +435,6 @@ namespace glz::repe
                }
             }
          });
-      }
-
-      template <class Value, class H = header>
-      [[nodiscard]] bool call(H&& header, Value&& value)
-      {
-         return call(request<Opts>(std::forward<H>(header), std::forward<Value>(value)));
-      }
-
-      template <class Value, class H = header>
-      [[nodiscard]] bool call(H&& header, Value&& value, auto& buffer)
-      {
-         return call(request<Opts>(std::forward<H>(header), std::forward<Value>(value), buffer));
       }
 
       void call(message& in, message& out)
