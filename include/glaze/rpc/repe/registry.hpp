@@ -3,10 +3,6 @@
 
 #pragma once
 
-#include <mutex>
-#include <shared_mutex>
-#include <thread>
-
 #include "glaze/glaze.hpp"
 #include "glaze/rpc/repe/header.hpp"
 
@@ -19,14 +15,6 @@ namespace glz::repe
 
       operator bool() const noexcept { return bool(code); }
    };
-
-   inline std::string format_error(const error_t& e) noexcept
-   {
-      std::string result = "error: " + std::string(meta<error_code>::keys[uint32_t(e.code)]);
-      result += "\n";
-      result += e.message;
-      return result;
-   }
 
    struct state final
    {
