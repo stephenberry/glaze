@@ -1366,11 +1366,11 @@ namespace glz
                }
             }
          }
-         
+
          // for types like std::vector<std::pair...> that can't look up with operator[]
          // Intead of hashing or linear searching, we just clear the input and overwrite the entire contents
          template <auto Options>
-            requires (pair_t<range_value_t<T>> && Options.concatenate == true)
+            requires(pair_t<range_value_t<T>> && Options.concatenate == true)
          static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
             static constexpr auto Opts = opening_handled_off<ws_handled_off<Options>()>();
@@ -1382,23 +1382,22 @@ namespace glz
                GLZ_INVALID_END();
                GLZ_ADD_LEVEL;
             }
-            
+
             // clear all contents and repopulate
             value.clear();
-            
-            while (it < end)
-            {
+
+            while (it < end) {
                GLZ_SKIP_WS();
-               
+
                if (*it == '}') {
                   ++it;
                   GLZ_SUB_LEVEL;
                   GLZ_VALID_END();
                   return;
                }
-               
+
                auto& item = value.emplace_back();
-               
+
                using V = std::decay_t<decltype(item)>;
 
                if constexpr (str_t<typename V::first_type>) {
@@ -1428,19 +1427,19 @@ namespace glz
                }
 
                GLZ_PARSE_WS_COLON;
-               
+
                read<JSON>::op<Opts>(item.second, ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
                   return;
-               
+
                GLZ_SKIP_WS();
-               
+
                if (*it == ',') {
                   ++it;
                   GLZ_INVALID_END();
                }
             }
-            
+
             ctx.error = error_code::unexpected_end;
          }
       };

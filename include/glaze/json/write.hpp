@@ -669,7 +669,7 @@ namespace glz
             ++ix;
          }
       }
-      
+
       template <opts Opts, class Key, class Value, is_context Ctx>
       GLZ_ALWAYS_INLINE void write_pair_content(const Key& key, Value&& value, Ctx& ctx, auto&&... args) noexcept
       {
@@ -690,13 +690,13 @@ namespace glz
       }
 
       template <class T>
-         requires (writable_array_t<T> || writable_map_t<T>)
+         requires(writable_array_t<T> || writable_map_t<T>)
       struct to<JSON, T>
       {
          static constexpr bool map_like_array = writable_array_t<T> && pair_t<range_value_t<T>>;
-         
+
          template <auto Opts, class B>
-            requires (writable_array_t<T> && (map_like_array ? Opts.concatenate == false : true))
+            requires(writable_array_t<T> && (map_like_array ? Opts.concatenate == false : true))
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, B&& b, auto&& ix) noexcept
          {
             if (empty_range(value)) {
@@ -792,9 +792,9 @@ namespace glz
                dump<']'>(b, ix);
             }
          }
-         
+
          template <auto Opts>
-            requires (writable_map_t<T> || (map_like_array && Opts.concatenate == true))
+            requires(writable_map_t<T> || (map_like_array && Opts.concatenate == true))
          static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept
          {
             if constexpr (!has_opening_handled(Opts)) {

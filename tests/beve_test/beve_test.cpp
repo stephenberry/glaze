@@ -2380,9 +2380,9 @@ suite custom_load_test = [] {
 
 suite pair_ranges_tests = [] {
    static constexpr glz::opts concatenate_off{.format = glz::BEVE, .concatenate = false};
-   
+
    "vector pair"_test = [] {
-      std::vector<std::pair<int, int>> v{{1,2},{3,4}};
+      std::vector<std::pair<int, int>> v{{1, 2}, {3, 4}};
       auto s = glz::write<concatenate_off>(v).value_or("error");
       std::string json{};
       expect(not glz::beve_to_json(s, json));
@@ -2392,7 +2392,7 @@ suite pair_ranges_tests = [] {
       expect(x == v);
    };
    "vector pair roundtrip"_test = [] {
-      std::vector<std::pair<int, int>> v{{1,2},{3,4}};
+      std::vector<std::pair<int, int>> v{{1, 2}, {3, 4}};
       auto s = glz::write_beve(v).value_or("error");
       std::string json{};
       expect(not glz::beve_to_json(s, json));

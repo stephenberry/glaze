@@ -208,39 +208,40 @@ namespace glz
                }
                break;
             }
-               case 1: [[fallthrough]]; // signed integer key
-               case 2: {
-                  // unsigned integer key
-                  const auto n_fields = detail::int_from_compressed(ctx, it, end);
-                  if (bool(ctx.error)) {
+            case 1:
+               [[fallthrough]]; // signed integer key
+            case 2: {
+               // unsigned integer key
+               const auto n_fields = detail::int_from_compressed(ctx, it, end);
+               if (bool(ctx.error)) {
+                  return;
+               }
+               for (size_t i = 0; i < n_fields; ++i) {
+                  // convert the key
+                  dump<'"'>(out, ix);
+                  beve_to_json_number<Opts>(tag, ctx, it, end, out, ix);
+                  if (bool(ctx.error)) [[unlikely]] {
                      return;
                   }
-                  for (size_t i = 0; i < n_fields; ++i) {
-                     // convert the key
-                     dump<'"'>(out, ix);
-                     beve_to_json_number<Opts>(tag, ctx, it, end, out, ix);
-                     if (bool(ctx.error)) [[unlikely]] {
-                        return;
-                     }
-                     dump<'"'>(out, ix);
+                  dump<'"'>(out, ix);
+                  if constexpr (Opts.prettify) {
+                     dump<": ">(out, ix);
+                  }
+                  else {
+                     dump<':'>(out, ix);
+                  }
+                  // convert the value
+                  beve_to_json_value<Opts>(ctx, it, end, out, ix);
+                  if (i != n_fields - 1) {
+                     dump<','>(out, ix);
                      if constexpr (Opts.prettify) {
-                        dump<": ">(out, ix);
-                     }
-                     else {
-                        dump<':'>(out, ix);
-                     }
-                     // convert the value
-                     beve_to_json_value<Opts>(ctx, it, end, out, ix);
-                     if (i != n_fields - 1) {
-                        dump<','>(out, ix);
-                        if constexpr (Opts.prettify) {
-                           dump<'\n'>(out, ix);
-                           dumpn<Opts.indentation_char>(ctx.indentation_level, out, ix);
-                        }
+                        dump<'\n'>(out, ix);
+                        dumpn<Opts.indentation_char>(ctx.indentation_level, out, ix);
                      }
                   }
-                  break;
                }
+               break;
+            }
             default: {
                ctx.error = error_code::syntax_error;
                return;

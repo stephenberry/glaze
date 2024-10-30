@@ -388,9 +388,9 @@ namespace glz
       struct to<BEVE, T> final
       {
          static constexpr bool map_like_array = pair_t<range_value_t<T>>;
-         
+
          template <auto Opts>
-            requires (map_like_array ? Opts.concatenate == false : true)
+            requires(map_like_array ? Opts.concatenate == false : true)
          static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept
          {
             using V = range_value_t<std::decay_t<T>>;
@@ -516,9 +516,9 @@ namespace glz
                }
             }
          }
-         
+
          template <auto Opts>
-            requires (map_like_array && Opts.concatenate == true)
+            requires(map_like_array && Opts.concatenate == true)
          static auto op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept
          {
             using Element = typename T::value_type;
