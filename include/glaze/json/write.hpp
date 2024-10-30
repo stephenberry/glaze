@@ -669,114 +669,7 @@ namespace glz
             ++ix;
          }
       }
-
-      template <opts Opts, class B>
-      GLZ_ALWAYS_INLINE void write_array_to_json(auto&& value, is_context auto&& ctx, B&& b, auto&& ix) noexcept
-      {
-         if (empty_range(value)) {
-            dump<"[]">(b, ix);
-         }
-         else {
-            if constexpr (Opts.prettify) {
-               if constexpr (Opts.new_lines_in_arrays) {
-                  ctx.indentation_level += Opts.indentation_width;
-               }
-
-               if constexpr (vector_like<B>) {
-                  if (const auto k = ix + ctx.indentation_level + write_padding_bytes; k > b.size()) [[unlikely]] {
-                     b.resize((std::max)(b.size() * 2, k));
-                  }
-               }
-
-               if constexpr (Opts.new_lines_in_arrays) {
-                  std::memcpy(&b[ix], "[\n", 2);
-                  ix += 2;
-                  std::memset(&b[ix], Opts.indentation_char, ctx.indentation_level);
-                  ix += ctx.indentation_level;
-               }
-               else {
-                  std::memcpy(&b[ix], "[", 1);
-                  ++ix;
-               }
-            }
-            else {
-               if constexpr (vector_like<B>) {
-                  if (const auto k = ix + write_padding_bytes; k > b.size()) [[unlikely]] {
-                     b.resize((std::max)(b.size() * 2, k));
-                  }
-               }
-               std::memcpy(&b[ix], "[", 1);
-               ++ix;
-            }
-
-            auto it = std::begin(value);
-            using val_t = std::remove_cvref_t<decltype(*it)>;
-            if constexpr (supports_unchecked_write<val_t>) {
-               to<JSON, val_t>::template op<write_unchecked_on<Opts>()>(*it, ctx, b, ix);
-            }
-            else {
-               to<JSON, val_t>::template op<Opts>(*it, ctx, b, ix);
-            }
-
-            ++it;
-            for (const auto fin = std::end(value); it != fin; ++it) {
-               if constexpr (supports_unchecked_write<val_t>) {
-                  if constexpr (vector_like<B>) {
-                     if constexpr (Opts.prettify) {
-                        if (const auto k = ix + ctx.indentation_level + write_padding_bytes; k > b.size())
-                           [[unlikely]] {
-                           b.resize((std::max)(b.size() * 2, k));
-                        }
-                     }
-                     else {
-                        if (const auto k = ix + write_padding_bytes; k > b.size()) [[unlikely]] {
-                           b.resize((std::max)(b.size() * 2, k));
-                        }
-                     }
-                  }
-
-                  if constexpr (Opts.prettify) {
-                     if constexpr (Opts.new_lines_in_arrays) {
-                        std::memcpy(&b[ix], ",\n", 2);
-                        ix += 2;
-                        dumpn_unchecked<Opts.indentation_char>(ctx.indentation_level, b, ix);
-                     }
-                     else {
-                        std::memcpy(&b[ix], ", ", 2);
-                        ix += 2;
-                     }
-                  }
-                  else {
-                     std::memcpy(&b[ix], ",", 1);
-                     ++ix;
-                  }
-
-                  to<JSON, val_t>::template op<write_unchecked_on<Opts>()>(*it, ctx, b, ix);
-               }
-               else {
-                  write_array_entry_separator<Opts>(ctx, b, ix);
-                  to<JSON, val_t>::template op<Opts>(*it, ctx, b, ix);
-               }
-            }
-            if constexpr (Opts.prettify && Opts.new_lines_in_arrays) {
-               ctx.indentation_level -= Opts.indentation_width;
-               dump_newline_indent<Opts.indentation_char>(ctx.indentation_level, b, ix);
-            }
-
-            dump<']'>(b, ix);
-         }
-      }
-
-      template <writable_array_t T>
-      struct to<JSON, T>
-      {
-         template <auto Opts>
-         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept
-         {
-            write_array_to_json<Opts>(value, ctx, args...);
-         }
-      };
-
+      
       template <opts Opts, class Key, class Value, is_context Ctx>
       GLZ_ALWAYS_INLINE void write_pair_content(const Key& key, Value&& value, Ctx& ctx, auto&&... args) noexcept
       {
@@ -796,57 +689,113 @@ namespace glz
          write<JSON>::op<opening_and_closing_handled_off<Opts>()>(std::forward<Value>(value), ctx, args...);
       }
 
-      template <pair_t T>
+      template <class T>
+         requires (writable_array_t<T> || writable_map_t<T>)
       struct to<JSON, T>
       {
-         template <glz::opts Opts, class B, class Ix>
-         static void op(const T& value, is_context auto&& ctx, B&& b, Ix&& ix) noexcept
+         static constexpr bool map_like_array = writable_array_t<T> && pair_t<range_value_t<T>>;
+         
+         template <auto Opts, class B>
+            requires (writable_array_t<T> && (map_like_array ? Opts.concatenate == false : true))
+         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, B&& b, auto&& ix) noexcept
          {
-            const auto& [key, val] = value;
-            if (skip_member<Opts>(val)) {
-               return dump<"{}">(b, ix);
+            if (empty_range(value)) {
+               dump<"[]">(b, ix);
             }
+            else {
+               if constexpr (Opts.prettify) {
+                  if constexpr (Opts.new_lines_in_arrays) {
+                     ctx.indentation_level += Opts.indentation_width;
+                  }
 
-            if constexpr (Opts.prettify) {
-               ctx.indentation_level += Opts.indentation_width;
-               if constexpr (vector_like<B>) {
-                  if (const auto k = ix + ctx.indentation_level + 2; k > b.size()) [[unlikely]] {
-                     b.resize((std::max)(b.size() * 2, k));
+                  if constexpr (vector_like<B>) {
+                     if (const auto k = ix + ctx.indentation_level + write_padding_bytes; k > b.size()) [[unlikely]] {
+                        b.resize((std::max)(b.size() * 2, k));
+                     }
+                  }
+
+                  if constexpr (Opts.new_lines_in_arrays) {
+                     std::memcpy(&b[ix], "[\n", 2);
+                     ix += 2;
+                     std::memset(&b[ix], Opts.indentation_char, ctx.indentation_level);
+                     ix += ctx.indentation_level;
+                  }
+                  else {
+                     std::memcpy(&b[ix], "[", 1);
+                     ++ix;
                   }
                }
-               dump<"{\n", false>(b, ix);
-               dumpn_unchecked<Opts.indentation_char>(ctx.indentation_level, b, ix);
-            }
-            else {
-               dump<'{'>(b, ix);
-            }
+               else {
+                  if constexpr (vector_like<B>) {
+                     if (const auto k = ix + write_padding_bytes; k > b.size()) [[unlikely]] {
+                        b.resize((std::max)(b.size() * 2, k));
+                     }
+                  }
+                  std::memcpy(&b[ix], "[", 1);
+                  ++ix;
+               }
 
-            write_pair_content<Opts>(key, val, ctx, b, ix);
+               auto it = std::begin(value);
+               using val_t = std::remove_cvref_t<decltype(*it)>;
+               if constexpr (supports_unchecked_write<val_t>) {
+                  to<JSON, val_t>::template op<write_unchecked_on<Opts>()>(*it, ctx, b, ix);
+               }
+               else {
+                  to<JSON, val_t>::template op<Opts>(*it, ctx, b, ix);
+               }
 
-            if constexpr (Opts.prettify) {
-               ctx.indentation_level -= Opts.indentation_width;
-               dump_newline_indent<Opts.indentation_char>(ctx.indentation_level, b, ix);
-               dump<'}', false>(b, ix);
-            }
-            else {
-               dump<'}'>(b, ix);
+               ++it;
+               for (const auto fin = std::end(value); it != fin; ++it) {
+                  if constexpr (supports_unchecked_write<val_t>) {
+                     if constexpr (vector_like<B>) {
+                        if constexpr (Opts.prettify) {
+                           if (const auto k = ix + ctx.indentation_level + write_padding_bytes; k > b.size())
+                              [[unlikely]] {
+                              b.resize((std::max)(b.size() * 2, k));
+                           }
+                        }
+                        else {
+                           if (const auto k = ix + write_padding_bytes; k > b.size()) [[unlikely]] {
+                              b.resize((std::max)(b.size() * 2, k));
+                           }
+                        }
+                     }
+
+                     if constexpr (Opts.prettify) {
+                        if constexpr (Opts.new_lines_in_arrays) {
+                           std::memcpy(&b[ix], ",\n", 2);
+                           ix += 2;
+                           dumpn_unchecked<Opts.indentation_char>(ctx.indentation_level, b, ix);
+                        }
+                        else {
+                           std::memcpy(&b[ix], ", ", 2);
+                           ix += 2;
+                        }
+                     }
+                     else {
+                        std::memcpy(&b[ix], ",", 1);
+                        ++ix;
+                     }
+
+                     to<JSON, val_t>::template op<write_unchecked_on<Opts>()>(*it, ctx, b, ix);
+                  }
+                  else {
+                     write_array_entry_separator<Opts>(ctx, b, ix);
+                     to<JSON, val_t>::template op<Opts>(*it, ctx, b, ix);
+                  }
+               }
+               if constexpr (Opts.prettify && Opts.new_lines_in_arrays) {
+                  ctx.indentation_level -= Opts.indentation_width;
+                  dump_newline_indent<Opts.indentation_char>(ctx.indentation_level, b, ix);
+               }
+
+               dump<']'>(b, ix);
             }
          }
-      };
-
-      template <writable_map_t T>
-      struct to<JSON, T>
-      {
-         template <glz::opts Opts, class... Args>
-            requires(!Opts.concatenate)
-         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
-         {
-            write_array_to_json<Opts>(value, ctx, args...);
-         }
-
-         template <glz::opts Opts, class... Args>
-            requires(bool(Opts.concatenate))
-         static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
+         
+         template <auto Opts>
+            requires (writable_map_t<T> || (map_like_array && Opts.concatenate == true))
+         static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept
          {
             if constexpr (!has_opening_handled(Opts)) {
                dump<'{'>(args...);
@@ -945,6 +894,44 @@ namespace glz
 
             if constexpr (!has_closing_handled(Opts)) {
                dump<'}'>(args...);
+            }
+         }
+      };
+
+      template <pair_t T>
+      struct to<JSON, T>
+      {
+         template <glz::opts Opts, class B, class Ix>
+         static void op(const T& value, is_context auto&& ctx, B&& b, Ix&& ix) noexcept
+         {
+            const auto& [key, val] = value;
+            if (skip_member<Opts>(val)) {
+               return dump<"{}">(b, ix);
+            }
+
+            if constexpr (Opts.prettify) {
+               ctx.indentation_level += Opts.indentation_width;
+               if constexpr (vector_like<B>) {
+                  if (const auto k = ix + ctx.indentation_level + 2; k > b.size()) [[unlikely]] {
+                     b.resize((std::max)(b.size() * 2, k));
+                  }
+               }
+               dump<"{\n", false>(b, ix);
+               dumpn_unchecked<Opts.indentation_char>(ctx.indentation_level, b, ix);
+            }
+            else {
+               dump<'{'>(b, ix);
+            }
+
+            write_pair_content<Opts>(key, val, ctx, b, ix);
+
+            if constexpr (Opts.prettify) {
+               ctx.indentation_level -= Opts.indentation_width;
+               dump_newline_indent<Opts.indentation_char>(ctx.indentation_level, b, ix);
+               dump<'}', false>(b, ix);
+            }
+            else {
+               dump<'}'>(b, ix);
             }
          }
       };

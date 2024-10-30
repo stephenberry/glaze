@@ -246,7 +246,7 @@ namespace glz
 
       template <class T>
       concept writable_map_t =
-         !custom_write<T> && !meta_value_t<T> && !str_t<T> && range<T> && pair_t<range_value_t<T>>;
+         !custom_write<T> && !meta_value_t<T> && !str_t<T> && range<T> && pair_t<range_value_t<T>> && map_subscriptable<std::decay_t<T>>;
 
       template <class Map>
       concept heterogeneous_map = requires {

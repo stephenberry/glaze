@@ -387,8 +387,11 @@ namespace glz
       template <writable_array_t T>
       struct to<BEVE, T> final
       {
-         template <auto Opts, class... Args>
-         static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
+         static constexpr bool map_like_array = pair_t<range_value_t<T>>;
+         
+         template <auto Opts>
+            requires (map_like_array ? Opts.concatenate == false : true)
+         static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept
          {
             using V = range_value_t<std::decay_t<T>>;
 
@@ -511,6 +514,25 @@ namespace glz
                for (auto&& x : value) {
                   write<BEVE>::op<Opts>(x, ctx, args...);
                }
+            }
+         }
+         
+         template <auto Opts>
+            requires (map_like_array && Opts.concatenate == true)
+         static auto op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept
+         {
+            using Element = typename T::value_type;
+            using Key = typename Element::first_type;
+
+            constexpr uint8_t type = str_t<Key> ? 0 : (std::is_signed_v<Key> ? 0b000'01'000 : 0b000'10'000);
+            constexpr uint8_t byte_cnt = str_t<Key> ? 0 : byte_count<Key>;
+            constexpr uint8_t tag = tag::object | type | (byte_cnt << 5);
+            dump_type(tag, args...);
+
+            dump_compressed_int<Opts>(value.size(), args...);
+            for (auto&& [k, v] : value) {
+               write<BEVE>::no_header<Opts>(k, ctx, args...);
+               write<BEVE>::op<Opts>(v, ctx, args...);
             }
          }
       };
