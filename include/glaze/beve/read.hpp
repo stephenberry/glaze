@@ -967,6 +967,70 @@ namespace glz
                }
             }
          }
+         
+         // for types like std::vector<std::pair...> that can't look up with operator[]
+         // Intead of hashing or linear searching, we just clear the input and overwrite the entire contents
+         template <auto Opts>
+            requires (pair_t<range_value_t<T>> && Opts.concatenate == true)
+         static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
+         {
+            using Element = typename T::value_type;
+            using Key = typename Element::first_type;
+
+            constexpr uint8_t type = str_t<Key> ? 0 : (std::is_signed_v<Key> ? 0b000'01'000 : 0b000'10'000);
+            constexpr uint8_t byte_cnt = str_t<Key> ? 0 : byte_count<Key>;
+            constexpr uint8_t header = tag::object | type | (byte_cnt << 5);
+
+            GLZ_END_CHECK();
+            const auto tag = uint8_t(*it);
+            if (tag != header) [[unlikely]] {
+               if constexpr (Opts.allow_conversions) {
+                  const auto key_type = tag & 0b000'11'000;
+                  if constexpr (str_t<Key>) {
+                     if (key_type != 0) {
+                        ctx.error = error_code::syntax_error;
+                        return;
+                     }
+                  }
+                  else {
+                     if (key_type == 0) {
+                        ctx.error = error_code::syntax_error;
+                        return;
+                     }
+                  }
+               }
+               else {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
+            }
+
+            ++it;
+            const size_t n = int_from_compressed(ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
+
+            value.clear();
+
+            if constexpr (std::is_arithmetic_v<std::decay_t<Key>>) {
+               constexpr uint8_t key_tag = tag::number | type | (byte_cnt << 5);
+               for (size_t i = 0; i < n; ++i) {
+                  // convert the object tag to the key type tag
+                  auto& item = value.emplace_back();
+                  read<BEVE>::op<no_header_on<Opts>()>(item.first, key_tag, ctx, it, end);
+                  read<BEVE>::op<Opts>(item.second, ctx, it, end);
+               }
+            }
+            else {
+               constexpr uint8_t key_tag = tag::string;
+               for (size_t i = 0; i < n; ++i) {
+                  auto& item = value.emplace_back();
+                  read<BEVE>::op<no_header_on<Opts>()>(item.first, key_tag, ctx, it, end);
+                  read<BEVE>::op<Opts>(item.second, ctx, it, end);
+               }
+            }
+         }
       };
 
       template <pair_t T>
@@ -999,7 +1063,7 @@ namespace glz
                return;
             }
 
-            constexpr uint8_t key_tag = type == 0 ? tag::string : (tag::number | (byte_cnt << 5));
+            constexpr uint8_t key_tag = type == 0 ? tag::string : (tag::number | type | (byte_cnt << 5));
             read<BEVE>::op<no_header_on<Opts>()>(value.first, key_tag, ctx, it, end);
             read<BEVE>::op<Opts>(value.second, ctx, it, end);
          }
