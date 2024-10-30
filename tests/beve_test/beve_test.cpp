@@ -2378,7 +2378,7 @@ suite custom_load_test = [] {
    };
 };
 
-/*suite pair_ranges_tests = [] {
+suite pair_ranges_tests = [] {
    static constexpr glz::opts concatenate_off{.format = glz::BEVE, .concatenate = false};
    
    "vector pair"_test = [] {
@@ -2401,7 +2401,7 @@ suite custom_load_test = [] {
       expect(!glz::read_beve(x, s));
       expect(x == v);
    };
-};*/
+};
 
 int main()
 {
