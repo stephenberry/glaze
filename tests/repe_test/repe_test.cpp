@@ -9,9 +9,8 @@
 #include "glaze/ext/cli_menu.hpp"
 #include "glaze/glaze.hpp"
 #include "glaze/rpc/repe/registry.hpp"
-#include "ut/ut.hpp"
-
 #include "glaze/thread/async_string.hpp"
+#include "ut/ut.hpp"
 
 using namespace ut;
 

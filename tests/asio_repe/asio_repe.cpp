@@ -25,7 +25,7 @@ void async_clients_test()
    static constexpr int16_t port = 8431;
 
    glz::asio_server<> server{.port = port, .concurrency = 4};
-   
+
    std::future<void> server_thread = std::async([&] {
       std::cout << "Server active...\n";
 
@@ -40,7 +40,7 @@ void async_clients_test()
 
       std::cout << "Server closed...\n";
    });
-   
+
    try {
       glz::asio_client<> client{"localhost", std::to_string(port)};
 
@@ -48,16 +48,16 @@ void async_clients_test()
       if (ec) {
          throw std::runtime_error(ec.message());
       }
-      
+
       if (auto e_call = client.set({"/age"}, 29)) {
          std::cerr << glz::write_json(e_call).value_or("error") << '\n';
       }
-      
+
       int age{};
       if (auto e_call = client.get({"/age"}, age)) {
          std::cerr << glz::write_json(e_call).value_or("error") << '\n';
       }
-      
+
       expect(age == 29);
 
       server.stop();
@@ -65,7 +65,7 @@ void async_clients_test()
    catch (const std::exception& e) {
       std::cerr << e.what() << '\n';
    }
-   
+
    server_thread.get();
 }
 

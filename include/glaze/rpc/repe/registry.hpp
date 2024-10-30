@@ -115,7 +115,7 @@ namespace glz::repe
          out.header.length = sizeof(repe::header) + out.query.size() + out.body.size();
       }
    }
-   
+
    namespace detail
    {
       template <opts Opts>
@@ -131,7 +131,7 @@ namespace glz::repe
             msg.header.length = sizeof(repe::header) + msg.query.size() + msg.body.size();
             return {};
          }
-         
+
          template <class Value>
          error_t operator()(message& msg, const user_header& h, Value&& value) const
          {
@@ -145,10 +145,10 @@ namespace glz::repe
          }
       };
    }
-   
+
    template <opts Opts>
    inline constexpr auto request = detail::request_impl<Opts>{};
-   
+
    inline constexpr auto request_beve = request<opts{BEVE}>;
    inline constexpr auto request_json = request<opts{JSON}>;
 
@@ -163,7 +163,7 @@ namespace glz::repe
    {
       static constexpr std::string_view empty_path = "";
    }
-   
+
    // This registry does not support adding methods from RPC calls or adding methods once RPC calls can be made.
    template <opts Opts = opts{}>
    struct registry
