@@ -243,6 +243,10 @@ namespace glz
       template <class T>
       concept readable_map_t = !custom_read<T> && !meta_value_t<T> && !str_t<T> && range<T> &&
                                pair_t<range_value_t<T>> && map_subscriptable<std::decay_t<T>>;
+      
+      template <class T>
+      concept unaccessible_map_t = !custom_read<T> && !meta_value_t<T> && !str_t<T> && range<T> &&
+                               pair_t<range_value_t<T>> && !map_subscriptable<std::decay_t<T>>;
 
       template <class T>
       concept writable_map_t =
@@ -261,7 +265,7 @@ namespace glz
 
       template <class T>
       concept readable_array_t =
-         (range<T> && !custom_read<T> && !meta_value_t<T> && !str_t<T> && !readable_map_t<T> && !filesystem_path<T>);
+         (range<T> && !custom_read<T> && !meta_value_t<T> && !str_t<T> && !readable_map_t<T> && !unaccessible_map_t<T> && !filesystem_path<T>);
 
       template <class T>
       concept writable_array_t =

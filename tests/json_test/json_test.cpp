@@ -834,14 +834,14 @@ suite container_types = [] {
    };
    "vector pair"_test = [] {
       std::vector<std::pair<int, int>> v;
-      expect(!glz::read_json(v, R"([{"1":2},{"3":4}])"));
+      expect(!glz::read<glz::opts{.concatenate = false}>(v, R"([{"1":2},{"3":4}])"));
       static_assert(glz::detail::writable_map_t<decltype(v)>);
       const auto s = glz::write_json(v).value_or("error");
       expect(s == R"({"1":2,"3":4})") << s;
    };
    "vector pair"_test = [] {
       std::vector<std::pair<int, int>> v;
-      expect(!glz::read_json(v, R"([{"1":2},{"3":4}])"));
+      expect(!glz::read<glz::opts{.concatenate = false}>(v, R"([{"1":2},{"3":4}])"));
       const auto s = glz::write<glz::opts{.prettify = true}>(v).value_or("error");
       expect(s == R"({
    "1": 2,

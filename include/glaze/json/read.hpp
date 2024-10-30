@@ -1852,6 +1852,88 @@ namespace glz
             GLZ_VALID_END();
          }
       };
+      
+      // for types like std::vector<std::pair...> that can't look up with operator[]
+      // Intead of hashing or linear searching, we just clear the input and overwrite the entire contents
+      template <class T>
+         requires unaccessible_map_t<T>
+      struct from<JSON, T>
+      {
+         template <auto Options>
+            requires (Options.concatenate == true)
+         static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
+         {
+            static constexpr auto Opts = opening_handled_off<ws_handled_off<Options>()>();
+            if constexpr (!has_opening_handled(Options)) {
+               if constexpr (!has_ws_handled(Options)) {
+                  GLZ_SKIP_WS();
+               }
+               GLZ_MATCH_OPEN_BRACE;
+               GLZ_INVALID_END();
+               GLZ_ADD_LEVEL;
+            }
+            
+            // clear all contents and repopulate
+            value.clear();
+            
+            while (it < end)
+            {
+               GLZ_SKIP_WS();
+               
+               if (*it == '}') {
+                  ++it;
+                  GLZ_SUB_LEVEL;
+                  GLZ_VALID_END();
+                  return;
+               }
+               
+               auto& item = value.emplace_back();
+               
+               using V = std::decay_t<decltype(item)>;
+
+               if constexpr (str_t<typename V::first_type>) {
+                  read<JSON>::op<Opts>(item.first, ctx, it, end);
+                  if (bool(ctx.error)) [[unlikely]]
+                     return;
+               }
+               else {
+                  std::string_view key;
+                  read<JSON>::op<Opts>(key, ctx, it, end);
+                  if (bool(ctx.error)) [[unlikely]]
+                     return;
+                  if constexpr (Opts.null_terminated) {
+                     read<JSON>::op<Opts>(item.first, ctx, key.data(), key.data() + key.size());
+                  }
+                  else {
+                     if (size_t(end - it) == key.size()) [[unlikely]] {
+                        ctx.error = error_code::unexpected_end;
+                        return;
+                     }
+                     // For the non-null terminated case we just want one more character so that we don't parse
+                     // until the end of the buffer and create an end_reached code (unless there is an error).
+                     read<JSON>::op<Opts>(item.first, ctx, key.data(), key.data() + key.size() + 1);
+                  }
+                  if (bool(ctx.error)) [[unlikely]]
+                     return;
+               }
+
+               GLZ_PARSE_WS_COLON;
+               
+               read<JSON>::op<Opts>(item.second, ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
+               
+               GLZ_SKIP_WS();
+               
+               if (*it == ',') {
+                  ++it;
+                  GLZ_INVALID_END();
+               }
+            }
+            
+            ctx.error = error_code::unexpected_end;
+         }
+      };
 
       template <opts Opts>
       GLZ_ALWAYS_INLINE void read_json_visitor(auto&& value, auto&& variant, auto&& ctx, auto&& it, auto&& end) noexcept
