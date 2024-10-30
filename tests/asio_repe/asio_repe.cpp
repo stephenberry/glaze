@@ -1,16 +1,78 @@
 // Glaze Library
 // For the license information refer to glaze.hpp
 
+#define UT_RUN_TIME_ONLY
+
+#include "ut/ut.hpp"
+
+using namespace ut;
+
 #include <iostream>
 
 #include "glaze/ext/glaze_asio.hpp"
+#include "glaze/thread/async_string.hpp"
 
 // This test code is self-contained and spawns both the server and the client
+
+struct my_data
+{
+   glz::async_string name{};
+   std::atomic<int> age{};
+};
+
+void async_clients_test()
+{
+   static constexpr int16_t port = 8431;
+
+   glz::asio_server<> server{.port = port, .concurrency = 4};
+   
+   std::future<void> server_thread = std::async([&] {
+      std::cout << "Server active...\n";
+
+      try {
+         my_data data{};
+         server.on(data);
+         server.run();
+      }
+      catch (const std::exception& e) {
+         std::cerr << "Exception: " << e.what();
+      }
+
+      std::cout << "Server closed...\n";
+   });
+   
+   try {
+      glz::asio_client<> client{"localhost", std::to_string(port)};
+
+      const auto ec = client.init();
+      if (ec) {
+         throw std::runtime_error(ec.message());
+      }
+      
+      if (auto e_call = client.set({"/age"}, 29)) {
+         std::cerr << glz::write_json(e_call).value_or("error") << '\n';
+      }
+      
+      int age{};
+      if (auto e_call = client.get({"/age"}, age)) {
+         std::cerr << glz::write_json(e_call).value_or("error") << '\n';
+      }
+      
+      expect(age == 29);
+
+      server.stop();
+   }
+   catch (const std::exception& e) {
+      std::cerr << e.what() << '\n';
+   }
+   
+   server_thread.get();
+}
 
 struct api
 {
    std::function<int(std::vector<int>& vec)> sum = [](std::vector<int>& vec) {
-      std::this_thread::sleep_for(std::chrono::seconds(1));
+      std::this_thread::sleep_for(std::chrono::milliseconds(100));
       return std::reduce(vec.begin(), vec.end());
    };
    std::function<double(std::vector<double>& vec)> max = [](std::vector<double>& vec) { return std::ranges::max(vec); };
@@ -55,10 +117,7 @@ void asio_client_test()
          threads.emplace_back(std::async([&, i] {
             auto& client = clients[i];
             const auto ec = client.init();
-            if (!ec) {
-               std::cout << "Connected to server" << std::endl;
-            }
-            else {
+            if (ec) {
                std::cerr << "Error: " << ec.message() << std::endl;
             }
 
@@ -163,6 +222,7 @@ void async_calls()
 
 int main()
 {
+   async_clients_test();
    asio_client_test();
    async_calls();
 

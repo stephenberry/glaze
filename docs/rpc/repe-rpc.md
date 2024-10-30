@@ -20,41 +20,14 @@ The `glz::repe::registry` produces an API for function invocation and variable a
 
 The `glz::repe::registry` allows users to expose C++ classes directly to the registry as an interface for network RPC calls and POST/GET calls.
 
-The registry handles the thread safety required to directly manipulate C++ memory and read/write from JSON or BEVE messages. In most cases unlimited clients can read and write from your registered structures in a thread-safe manner that reduces locks, permits asynchronous reads, and non-blocking writes where valid.
-
-Locking is performed on JSON pointer path chains to allow multiple clients to read/write from the same object at the same time.
-
-Locking is based on depth in the object tree. A chain of shared mutexes are locked, locking does the path to the write point. When reading from C++ memory, only shared locks are used at the read location.
-
 > [!IMPORTANT]
 >
-> Functions that are registered are not locked when invoked. Thread safety when invoking functions must be handled by the user.
+> Like most registry implementations, no locks are acquired for reading/writing to the registry and all thread safety must be managed by the user. This allows flexible, performant interfaces to be developed on top of the registry. It is recommended to register safe types, such as `std::atomic<int>`. Glaze provides some higher level thread safe classes to be used in these asynchronous interfaces.
 
-> [!IMPORTANT]
->
-> Pointers to parent members or functions that manipulate shallower depth members are not thread safe and safety has to be added by the developer.
+## Thread Safe Classes
 
-### Locking Example
-
-Suppose we have the following C++ structs:
-
-```c++
-struct person
-{
-  uint8_t age{};
-  std::string name{};
-};
-
-struct family
-{
-  person father{};
-  person mother{};
-};
-```
-
-The registry will allow non-conflicting paths to simultaneously read and write. `/family/father/age` and `/family/mother/age` can be asynchronously read/written by two different clients. If the same path is attempted to be read by multiple clients a lock is shared between them. Only writes and invocations require unique locks.
-
-If `/family/father/age` is written to, this will also block a shared lock on `/family`, which prevents reading from memory that has child fields being manipulated.
+- `glz::async_string` in `glaze/thread/async_string.hpp`
+  - Provides a thread safe `std::string` wrapper, which Glaze can read/write from safely in asynchronous calls.
 
 ## asio
 
