@@ -492,8 +492,7 @@ namespace glz
 
          template <auto Opts>
             requires(has_no_header(Opts))
-         GLZ_ALWAYS_INLINE static void op(auto&& value, const uint8_t, is_context auto&& ctx, auto&& it,
-                                          auto&& end)
+         GLZ_ALWAYS_INLINE static void op(auto&& value, const uint8_t, is_context auto&& ctx, auto&& it, auto&& end)
          {
             const auto n = int_from_compressed(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]] {
@@ -1548,8 +1547,7 @@ namespace glz
    }
 
    template <opts Opts = opts{}, read_beve_supported T>
-   [[nodiscard]] inline error_ctx read_file_beve_untagged(T& value, const std::string& file_name,
-                                                          auto&& buffer)
+   [[nodiscard]] inline error_ctx read_file_beve_untagged(T& value, const std::string& file_name, auto&& buffer)
    {
       return read_file_beve<opt_true<Opts, &opts::structs_as_arrays>>(value, file_name, buffer);
    }

@@ -16,16 +16,14 @@ using namespace ut;
 
 struct notify_api
 {
-   std::function<void()> hello = []{
-      std::cout << "HELLO\n";
-   };
+   std::function<void()> hello = [] { std::cout << "HELLO\n"; };
 };
 
 void notify_test()
 {
    static constexpr int16_t port = 8431;
    glz::asio_server<> server{.port = port, .concurrency = 4};
-   
+
    std::future<void> server_thread = std::async([&] {
       try {
          notify_api api{};
@@ -36,7 +34,7 @@ void notify_test()
          std::cerr << "Exception: " << e.what();
       }
    });
-   
+
    try {
       glz::asio_client<> client{"localhost", std::to_string(port)};
 
@@ -46,7 +44,7 @@ void notify_test()
       }
 
       if (auto e_call = client.notify({"/hello"})) {
-         throw std::runtime_error( glz::write_json(e_call).value_or("error"));
+         throw std::runtime_error(glz::write_json(e_call).value_or("error"));
       }
 
       server.stop();

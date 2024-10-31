@@ -136,8 +136,7 @@ namespace glz
 
       template <opts Opts, class T, size_t I, class Func, class Tuple, class Value>
          requires(glaze_object_t<T> || reflectable<T>)
-      void decode_index(Func&& func, Tuple&& tuple, Value&& value, is_context auto&& ctx, auto&& it,
-                        auto&& end)
+      void decode_index(Func&& func, Tuple&& tuple, Value&& value, is_context auto&& ctx, auto&& it, auto&& end)
       {
          static constexpr auto TargetKey = glz::get<I>(reflect<T>::keys);
          static constexpr auto Length = TargetKey.size();
