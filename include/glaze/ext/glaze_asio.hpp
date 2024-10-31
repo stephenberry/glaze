@@ -236,7 +236,10 @@ namespace glz
       {
          auto request = message_pool->borrow();
          header.notify(true);
-         std::ignore = repe::request<Opts>(*request, std::move(header), std::forward<Params>(params)...);
+         auto err = repe::request<Opts>(*request, std::move(header), std::forward<Params>(params)...);
+         if (err) {
+            return err;
+         }
 
          unique_socket socket{socket_pool.get()};
 
@@ -258,7 +261,10 @@ namespace glz
          auto request = message_pool->borrow();
          header.notify(false);
          header.read(true);
-         std::ignore = repe::request<Opts>(*request, std::move(header));
+         auto err = repe::request<Opts>(*request, std::move(header));
+         if (err) {
+            return err;
+         }
 
          unique_socket socket{socket_pool.get()};
 
@@ -296,7 +302,10 @@ namespace glz
       [[nodiscard]] repe::error_t set(repe::user_header&& header, Params&& params)
       {
          auto request = message_pool->borrow();
-         std::ignore = repe::request<Opts>(*request, std::move(header), std::forward<Params>(params));
+         auto err = repe::request<Opts>(*request, std::move(header), std::forward<Params>(params));
+         if (err) {
+            return err;
+         }
 
          unique_socket socket{socket_pool.get()};
 
@@ -329,7 +338,10 @@ namespace glz
       [[nodiscard]] repe::error_t call(repe::user_header&& header, Params&& params, Result&& result)
       {
          auto request = message_pool->borrow();
-         std::ignore = repe::request<Opts>(*request, std::move(header), std::forward<Params>(params));
+         auto err = repe::request<Opts>(*request, std::move(header), std::forward<Params>(params));
+         if (err) {
+            return err;
+         }
 
          unique_socket socket{socket_pool.get()};
 
