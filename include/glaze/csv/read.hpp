@@ -39,7 +39,7 @@ namespace glz
       struct read<CSV>
       {
          template <auto Opts, class T, is_context Ctx, class It0, class It1>
-         static void op(T&& value, Ctx&& ctx, It0&& it, It1 end) noexcept
+         static void op(T&& value, Ctx&& ctx, It0&& it, It1 end)
          {
             from<CSV, std::decay_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
                                                           std::forward<It0>(it), std::forward<It1>(end));
@@ -50,7 +50,7 @@ namespace glz
       struct from<CSV, T>
       {
          template <auto Opts, is_context Ctx, class It0, class It1>
-         static void op(auto&& value, Ctx&& ctx, It0&& it, It1&& end) noexcept
+         static void op(auto&& value, Ctx&& ctx, It0&& it, It1&& end)
          {
             using V = decltype(get_member(std::declval<T>(), meta_wrapper_v<T>));
             from<CSV, V>::template op<Opts>(get_member(value, meta_wrapper_v<T>), std::forward<Ctx>(ctx),
@@ -122,7 +122,7 @@ namespace glz
       struct from<CSV, T>
       {
          template <auto Opts, class It>
-         static void op(auto&& value, is_context auto&& ctx, It&& it, auto&& end) noexcept
+         static void op(auto&& value, is_context auto&& ctx, It&& it, auto&& end)
          {
             if (bool(ctx.error)) [[unlikely]] {
                return;
@@ -181,7 +181,7 @@ namespace glz
       struct from<CSV, T>
       {
          template <auto Opts, class It>
-         static void op(auto&& value, is_context auto&& ctx, It&& it, auto&& end) noexcept
+         static void op(auto&& value, is_context auto&& ctx, It&& it, auto&& end)
          {
             read<CSV>::op<Opts>(value.emplace_back(), ctx, it, end);
          }
@@ -616,13 +616,13 @@ namespace glz
    }
 
    template <uint32_t layout = rowwise, read_csv_supported T, class Buffer>
-   [[nodiscard]] inline auto read_csv(T&& value, Buffer&& buffer) noexcept
+   [[nodiscard]] inline auto read_csv(T&& value, Buffer&& buffer)
    {
       return read<opts{.format = CSV, .layout = layout}>(value, std::forward<Buffer>(buffer));
    }
 
    template <uint32_t layout = rowwise, read_csv_supported T, class Buffer>
-   [[nodiscard]] inline auto read_csv(Buffer&& buffer) noexcept
+   [[nodiscard]] inline auto read_csv(Buffer&& buffer)
    {
       T value{};
       read<opts{.format = CSV, .layout = layout}>(value, std::forward<Buffer>(buffer));

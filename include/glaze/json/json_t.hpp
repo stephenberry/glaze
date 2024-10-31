@@ -32,7 +32,7 @@ namespace glz
       val_t data{};
 
       // Dump the value to JSON, returns an expected that will contain a std::string if valid
-      expected<std::string, error_ctx> dump() const noexcept { return write_json(data); }
+      expected<std::string, error_ctx> dump() const { return write_json(data); }
 
       template <class T>
       [[nodiscard]] T& get()

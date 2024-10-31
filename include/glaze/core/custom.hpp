@@ -13,7 +13,7 @@ namespace glz::detail
    struct from<Format, T>
    {
       template <auto Opts>
-      static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+      static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
       {
          using V = std::decay_t<decltype(value)>;
          using From = typename V::from_t;
@@ -134,7 +134,7 @@ namespace glz::detail
    struct to<Format, T>
    {
       template <auto Opts>
-      static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept
+      static void op(auto&& value, is_context auto&& ctx, auto&&... args)
       {
          using V = std::decay_t<decltype(value)>;
          using To = typename V::to_t;

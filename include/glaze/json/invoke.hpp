@@ -36,7 +36,7 @@ namespace glz
       struct from<JSON, invoke_t<T>>
       {
          template <auto Opts>
-         static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+         static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
             using V = std::decay_t<decltype(value.val)>;
 
@@ -99,7 +99,7 @@ namespace glz
       struct to<JSON, invoke_t<T>>
       {
          template <auto Opts>
-         static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept
+         static void op(auto&& value, is_context auto&& ctx, auto&&... args)
          {
             using V = std::decay_t<decltype(value.val)>;
             dump<'['>(args...);
@@ -120,7 +120,7 @@ namespace glz
       };
 
       template <auto MemPtr>
-      inline constexpr decltype(auto) invoke_impl() noexcept
+      inline constexpr decltype(auto) invoke_impl()
       {
          using V = decltype(MemPtr);
          if constexpr (std::is_member_function_pointer_v<V>) {
@@ -172,7 +172,7 @@ namespace glz
       struct from<JSON, T>
       {
          template <auto Opts>
-         static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+         static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
             using V = std::decay_t<decltype(value.func)>;
 
@@ -221,7 +221,7 @@ namespace glz
       struct to<JSON, T>
       {
          template <auto Opts>
-         static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept
+         static void op(auto&& value, is_context auto&& ctx, auto&&... args)
          {
             using V = std::decay_t<decltype(value.val)>;
             dump<'['>(args...);

@@ -263,7 +263,7 @@ namespace glz
       struct to_json_schema
       {
          template <auto Opts>
-         static void op(auto& s, auto& defs) noexcept
+         static void op(auto& s, auto& defs)
          {
             // &T::member
             if constexpr (glaze_t<T> && std::is_member_object_pointer_v<meta_wrapper_t<T>>) {
@@ -294,7 +294,7 @@ namespace glz
       struct to_json_schema<T>
       {
          template <auto Opts>
-         static void op(auto& s, auto&) noexcept
+         static void op(auto& s, auto&)
          {
             s.type = {"boolean"};
          }
@@ -304,7 +304,7 @@ namespace glz
       struct to_json_schema<T>
       {
          template <auto Opts>
-         static void op(auto& s, auto&) noexcept
+         static void op(auto& s, auto&)
          {
             using V = std::decay_t<T>;
             if constexpr (std::integral<V>) {
@@ -325,7 +325,7 @@ namespace glz
       struct to_json_schema<T>
       {
          template <auto Opts>
-         static void op(auto& s, auto&) noexcept
+         static void op(auto& s, auto&)
          {
             s.type = {"string"};
          }
@@ -335,7 +335,7 @@ namespace glz
       struct to_json_schema<T>
       {
          template <auto Opts>
-         static void op(auto& s, auto&) noexcept
+         static void op(auto& s, auto&)
          {
             s.type = {"null"};
             s.attributes.constant = std::monostate{};
@@ -346,7 +346,7 @@ namespace glz
       struct to_json_schema<T>
       {
          template <auto Opts>
-         static void op(auto& s, auto&) noexcept
+         static void op(auto& s, auto&)
          {
             s.type = {"string"};
 
@@ -375,7 +375,7 @@ namespace glz
       struct to_json_schema<basic_raw_json<T>>
       {
          template <auto Opts>
-         static void op(auto& s, auto&) noexcept
+         static void op(auto& s, auto&)
          {
             s.type = {"number", "string", "boolean", "object", "array", "null"};
          }
@@ -385,7 +385,7 @@ namespace glz
       struct to_json_schema<T>
       {
          template <auto Opts>
-         static void op(auto& s, auto& defs) noexcept
+         static void op(auto& s, auto& defs)
          {
             using V = std::decay_t<range_value_t<std::decay_t<T>>>;
             s.type = {"array"};
@@ -405,7 +405,7 @@ namespace glz
       struct to_json_schema<T>
       {
          template <auto Opts>
-         static void op(auto& s, auto& defs) noexcept
+         static void op(auto& s, auto& defs)
          {
             using V = std::decay_t<glz::tuple_element_t<1, range_value_t<std::decay_t<T>>>>;
             s.type = {"object"};
@@ -421,7 +421,7 @@ namespace glz
       struct to_json_schema<T>
       {
          template <auto Opts>
-         static void op(auto& s, auto& defs) noexcept
+         static void op(auto& s, auto& defs)
          {
             using V = std::decay_t<decltype(*std::declval<std::decay_t<T>>())>;
             to_json_schema<V>::template op<Opts>(s, defs);
@@ -438,7 +438,7 @@ namespace glz
       struct to_json_schema<T>
       {
          template <auto Opts>
-         static void op(auto& s, auto& defs) noexcept
+         static void op(auto& s, auto& defs)
          {
             static constexpr auto N = std::variant_size_v<T>;
             using type_counts = variant_type_count<T>;
@@ -484,7 +484,7 @@ namespace glz
       struct to_json_schema<T>
       {
          template <auto Opts>
-         static void op(auto& s, auto&) noexcept
+         static void op(auto& s, auto&)
          {
             // TODO: Actually handle this. We can specify a schema per item in items
             //      We can also do size restrictions on static arrays
@@ -540,7 +540,7 @@ namespace glz
       struct to_json_schema<T>
       {
          template <auto Opts>
-         static void op(auto& s, auto& defs) noexcept
+         static void op(auto& s, auto& defs)
          {
             static_assert(json_schema_matches_object_keys<T>());
 
@@ -603,7 +603,7 @@ namespace glz
    }
 
    template <class T, opts Opts = opts{}, class Buffer>
-   [[nodiscard]] error_ctx write_json_schema(Buffer&& buffer) noexcept
+   [[nodiscard]] error_ctx write_json_schema(Buffer&& buffer)
    {
       detail::schematic s{};
       s.defs.emplace();
@@ -612,7 +612,7 @@ namespace glz
    }
 
    template <class T, opts Opts = opts{}>
-   [[nodiscard]] glz::expected<std::string, error_ctx> write_json_schema() noexcept
+   [[nodiscard]] glz::expected<std::string, error_ctx> write_json_schema()
    {
       std::string buffer{};
       const error_ctx ec = write_json_schema<T, Opts>(buffer);

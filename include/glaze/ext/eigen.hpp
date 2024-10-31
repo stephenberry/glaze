@@ -86,7 +86,7 @@ namespace glz
       struct to<BEVE, T>
       {
          template <auto Opts>
-         static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept
+         static void op(auto&& value, is_context auto&& ctx, auto&&... args)
          {
             constexpr uint8_t matrix = 0b00010'000;
             constexpr uint8_t tag = tag::extensions | matrix;
@@ -108,7 +108,7 @@ namespace glz
       struct to<BEVE, T>
       {
          template <auto Opts>
-         static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept
+         static void op(auto&& value, is_context auto&& ctx, auto&&... args)
          {
             constexpr uint8_t matrix = 0b00010'000;
             constexpr uint8_t tag = tag::extensions | matrix;
@@ -142,7 +142,7 @@ namespace glz
       struct to<JSON, T>
       {
          template <auto Opts>
-         static void op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix) noexcept
+         static void op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix)
          {
             std::span<typename T::Scalar, T::RowsAtCompileTime * T::ColsAtCompileTime> view(value.data(), value.size());
             detail::write<JSON>::op<Opts>(view, ctx, b, ix);

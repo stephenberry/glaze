@@ -28,7 +28,7 @@ namespace glz
       struct from<JSON, quoted_t<T>>
       {
          template <auto Opts>
-         static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept
+         static void op(auto&& value, is_context auto&& ctx, auto&&... args)
          {
             static thread_local std::string s{};
             read<JSON>::op<Opts>(s, ctx, args...);
@@ -43,7 +43,7 @@ namespace glz
       struct to<JSON, quoted_t<T>>
       {
          template <auto Opts>
-         static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept
+         static void op(auto&& value, is_context auto&& ctx, auto&&... args)
          {
             static thread_local std::string s(128, ' ');
             size_t ix = 0; // overwrite index
@@ -57,7 +57,7 @@ namespace glz
       struct from<JSON, T>
       {
          template <auto Opts>
-         GLZ_ALWAYS_INLINE static void op(auto&& value, auto&&... args) noexcept
+         GLZ_ALWAYS_INLINE static void op(auto&& value, auto&&... args)
          {
             read<JSON>::op<opt_true<Opts, T::opts_member>>(value.val, args...);
          }
@@ -67,7 +67,7 @@ namespace glz
       struct to<JSON, T>
       {
          template <auto Opts>
-         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept
+         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&&... args)
          {
             write<JSON>::op<opt_true<Opts, T::opts_member>>(value.val, ctx, args...);
          }

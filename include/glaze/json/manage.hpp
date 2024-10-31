@@ -32,7 +32,7 @@ namespace glz
       struct from<JSON, T>
       {
          template <auto Opts>
-         static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+         static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
             using V = std::decay_t<decltype(value)>;
             using From = typename V::from_t;
@@ -77,7 +77,7 @@ namespace glz
       struct to<JSON, T>
       {
          template <auto Opts>
-         static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept
+         static void op(auto&& value, is_context auto&& ctx, auto&&... args)
          {
             using V = std::decay_t<decltype(value)>;
             using To = typename V::to_t;
@@ -118,7 +118,7 @@ namespace glz
       };
 
       template <auto Member, auto From, auto To>
-      inline constexpr decltype(auto) manage_impl() noexcept
+      inline constexpr decltype(auto) manage_impl()
       {
          return [](auto&& v) { return manage_t{v, Member, From, To}; };
       }

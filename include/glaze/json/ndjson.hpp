@@ -167,7 +167,7 @@ namespace glz
       struct to<NDJSON, T>
       {
          template <auto Opts, class... Args>
-         static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
+         static void op(auto&& value, is_context auto&& ctx, Args&&... args)
          {
             const auto is_empty = [&]() -> bool {
                if constexpr (has_size<T>) {
@@ -196,7 +196,7 @@ namespace glz
       struct to<NDJSON, T>
       {
          template <auto Opts, class... Args>
-         static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
+         static void op(auto&& value, is_context auto&& ctx, Args&&... args)
          {
             static constexpr auto N = []() constexpr {
                if constexpr (glaze_array_t<std::decay_t<T>>) {
@@ -228,7 +228,7 @@ namespace glz
       struct to<NDJSON, T>
       {
          template <auto Opts, class... Args>
-         static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
+         static void op(auto&& value, is_context auto&& ctx, Args&&... args)
          {
             static constexpr auto N = []() constexpr {
                if constexpr (glaze_array_t<std::decay_t<T>>) {
@@ -257,7 +257,7 @@ namespace glz
    } // namespace detail
 
    template <read_ndjson_supported T, class Buffer>
-   [[nodiscard]] auto read_ndjson(T& value, Buffer&& buffer) noexcept
+   [[nodiscard]] auto read_ndjson(T& value, Buffer&& buffer)
    {
       context ctx{};
       return read<opts{.format = NDJSON}>(value, std::forward<Buffer>(buffer), ctx);
@@ -276,7 +276,7 @@ namespace glz
    }
 
    template <auto Opts = opts{.format = NDJSON}, read_ndjson_supported T>
-   [[nodiscard]] error_ctx read_file_ndjson(T& value, const sv file_name) noexcept
+   [[nodiscard]] error_ctx read_file_ndjson(T& value, const sv file_name)
    {
       context ctx{};
       ctx.current_file = file_name;
@@ -293,19 +293,19 @@ namespace glz
    }
 
    template <write_ndjson_supported T, class Buffer>
-   [[nodiscard]] error_ctx write_ndjson(T&& value, Buffer&& buffer) noexcept
+   [[nodiscard]] error_ctx write_ndjson(T&& value, Buffer&& buffer)
    {
       return write<opts{.format = NDJSON}>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
 
    template <write_ndjson_supported T>
-   [[nodiscard]] expected<std::string, error_ctx> write_ndjson(T&& value) noexcept
+   [[nodiscard]] expected<std::string, error_ctx> write_ndjson(T&& value)
    {
       return write<opts{.format = NDJSON}>(std::forward<T>(value));
    }
 
    template <write_ndjson_supported T>
-   [[nodiscard]] error_ctx write_file_ndjson(T&& value, const std::string& file_name, auto&& buffer) noexcept
+   [[nodiscard]] error_ctx write_file_ndjson(T&& value, const std::string& file_name, auto&& buffer)
    {
       write<opts{.format = NDJSON}>(std::forward<T>(value), buffer);
       return {buffer_to_file(buffer, file_name)};

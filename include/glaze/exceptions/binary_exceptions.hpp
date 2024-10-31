@@ -20,7 +20,7 @@ namespace glz::ex
    }
 
    template <class T, class Buffer>
-   [[nodiscard]] T read_beve(Buffer&& buffer) noexcept
+   [[nodiscard]] T read_beve(Buffer&& buffer)
    {
       const auto ex = glz::read_beve<T>(std::forward<Buffer>(buffer));
       if (ex) {

@@ -25,7 +25,7 @@ namespace glz
       {
          template <auto Opts, class T, class Tag, is_context Ctx, class It0, class It1>
             requires(has_no_header(Opts))
-         GLZ_ALWAYS_INLINE static void op(T&& value, Tag&& tag, Ctx&& ctx, It0&& it, It1&& end) noexcept
+         GLZ_ALWAYS_INLINE static void op(T&& value, Tag&& tag, Ctx&& ctx, It0&& it, It1&& end)
          {
             if constexpr (const_value_v<T>) {
                if constexpr (Opts.error_on_const_read) {
@@ -45,7 +45,7 @@ namespace glz
 
          template <auto Opts, class T, is_context Ctx, class It0, class It1>
             requires(not has_no_header(Opts))
-         GLZ_ALWAYS_INLINE static void op(T&& value, Ctx&& ctx, It0&& it, It1&& end) noexcept
+         GLZ_ALWAYS_INLINE static void op(T&& value, Ctx&& ctx, It0&& it, It1&& end)
          {
             if constexpr (const_value_v<T>) {
                if constexpr (Opts.error_on_const_read) {
@@ -69,7 +69,7 @@ namespace glz
       struct from<BEVE, T>
       {
          template <auto Opts, class Value, is_context Ctx, class It0, class It1>
-         GLZ_ALWAYS_INLINE static void op(Value&& value, Ctx&& ctx, It0&& it, It1&& end) noexcept
+         GLZ_ALWAYS_INLINE static void op(Value&& value, Ctx&& ctx, It0&& it, It1&& end)
          {
             using V = std::decay_t<decltype(get_member(std::declval<Value>(), meta_wrapper_v<T>))>;
             from<BEVE, V>::template op<Opts>(get_member(std::forward<Value>(value), meta_wrapper_v<T>),
@@ -441,7 +441,7 @@ namespace glz
       struct from<BEVE, basic_raw_json<T>>
       {
          template <auto Opts>
-         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
             read<BEVE>::op<Opts>(value.str, ctx, it, end);
          }
@@ -451,7 +451,7 @@ namespace glz
       struct from<BEVE, basic_text<T>>
       {
          template <auto Opts>
-         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
             read<BEVE>::op<Opts>(value.str, ctx, it, end);
          }
@@ -493,7 +493,7 @@ namespace glz
          template <auto Opts>
             requires(has_no_header(Opts))
          GLZ_ALWAYS_INLINE static void op(auto&& value, const uint8_t, is_context auto&& ctx, auto&& it,
-                                          auto&& end) noexcept
+                                          auto&& end)
          {
             const auto n = int_from_compressed(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]] {
@@ -510,7 +510,7 @@ namespace glz
 
          template <auto Opts>
             requires(not has_no_header(Opts))
-         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
             constexpr uint8_t header = tag::string;
 
@@ -548,7 +548,7 @@ namespace glz
       struct from<BEVE, T> final
       {
          template <auto Opts>
-         static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+         static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
             using V = range_value_t<std::decay_t<T>>;
 
@@ -682,7 +682,7 @@ namespace glz
       struct from<BEVE, T> final
       {
          template <auto Opts>
-         static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+         static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
             using V = range_value_t<std::decay_t<T>>;
 
@@ -1037,7 +1037,7 @@ namespace glz
       struct from<BEVE, T> final
       {
          template <auto Opts>
-         GLZ_ALWAYS_INLINE static void op(T& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+         GLZ_ALWAYS_INLINE static void op(T& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
             using Key = typename T::first_type;
 
@@ -1073,7 +1073,7 @@ namespace glz
       struct from<BEVE, T> final
       {
          template <auto Opts>
-         static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+         static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
             using Key = typename T::key_type;
 
@@ -1167,7 +1167,7 @@ namespace glz
       struct from<BEVE, T> final
       {
          template <auto Opts>
-         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
             GLZ_END_CHECK();
             const auto tag = uint8_t(*it);
@@ -1234,7 +1234,7 @@ namespace glz
       {
          template <auto Opts>
             requires(Opts.structs_as_arrays == true)
-         static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+         static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
             if constexpr (reflectable<T>) {
                auto t = to_tuple(value);
@@ -1266,7 +1266,7 @@ namespace glz
 
          template <auto Opts>
             requires(Opts.structs_as_arrays == false)
-         static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+         static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
             constexpr uint8_t type = 0; // string key
             constexpr uint8_t header = tag::object | type;
@@ -1394,7 +1394,7 @@ namespace glz
       struct from<BEVE, T> final
       {
          template <auto Opts>
-         static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+         static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
             GLZ_END_CHECK();
             const auto tag = uint8_t(*it);
@@ -1424,7 +1424,7 @@ namespace glz
       struct from<BEVE, T> final
       {
          template <auto Opts>
-         static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+         static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
             GLZ_END_CHECK();
             const auto tag = uint8_t(*it);
@@ -1485,7 +1485,7 @@ namespace glz
       struct from<BEVE, T>
       {
          template <auto Opts>
-         static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept
+         static void op(auto&& value, is_context auto&& ctx, auto&&... args)
          {
             static thread_local std::string buffer{};
             read<BEVE>::op<Opts>(buffer, ctx, args...);
@@ -1498,13 +1498,13 @@ namespace glz
    }
 
    template <read_beve_supported T, class Buffer>
-   [[nodiscard]] inline error_ctx read_beve(T&& value, Buffer&& buffer) noexcept
+   [[nodiscard]] inline error_ctx read_beve(T&& value, Buffer&& buffer)
    {
       return read<opts{.format = BEVE}>(value, std::forward<Buffer>(buffer));
    }
 
    template <read_beve_supported T, class Buffer>
-   [[nodiscard]] inline expected<T, error_ctx> read_beve(Buffer&& buffer) noexcept
+   [[nodiscard]] inline expected<T, error_ctx> read_beve(Buffer&& buffer)
    {
       T value{};
       const auto pe = read<opts{.format = BEVE}>(value, std::forward<Buffer>(buffer));
@@ -1515,7 +1515,7 @@ namespace glz
    }
 
    template <opts Opts = opts{}, read_beve_supported T>
-   [[nodiscard]] inline error_ctx read_file_beve(T& value, const sv file_name, auto&& buffer) noexcept
+   [[nodiscard]] inline error_ctx read_file_beve(T& value, const sv file_name, auto&& buffer)
    {
       context ctx{};
       ctx.current_file = file_name;
@@ -1530,14 +1530,14 @@ namespace glz
    }
 
    template <read_beve_supported T, class Buffer>
-   [[nodiscard]] inline error_ctx read_binary_untagged(T&& value, Buffer&& buffer) noexcept
+   [[nodiscard]] inline error_ctx read_binary_untagged(T&& value, Buffer&& buffer)
    {
       return read<opts{.format = BEVE, .structs_as_arrays = true}>(std::forward<T>(value),
                                                                    std::forward<Buffer>(buffer));
    }
 
    template <read_beve_supported T, class Buffer>
-   [[nodiscard]] inline expected<T, error_ctx> read_binary_untagged(Buffer&& buffer) noexcept
+   [[nodiscard]] inline expected<T, error_ctx> read_binary_untagged(Buffer&& buffer)
    {
       T value{};
       const auto pe = read<opts{.format = BEVE, .structs_as_arrays = true}>(value, std::forward<Buffer>(buffer));
@@ -1549,7 +1549,7 @@ namespace glz
 
    template <opts Opts = opts{}, read_beve_supported T>
    [[nodiscard]] inline error_ctx read_file_beve_untagged(T& value, const std::string& file_name,
-                                                          auto&& buffer) noexcept
+                                                          auto&& buffer)
    {
       return read_file_beve<opt_true<Opts, &opts::structs_as_arrays>>(value, file_name, buffer);
    }

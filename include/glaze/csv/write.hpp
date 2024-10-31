@@ -17,7 +17,7 @@ namespace glz
       struct write<CSV>
       {
          template <auto Opts, class T, is_context Ctx, class B, class IX>
-         static void op(T&& value, Ctx&& ctx, B&& b, IX&& ix) noexcept
+         static void op(T&& value, Ctx&& ctx, B&& b, IX&& ix)
          {
             to<CSV, std::decay_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
                                                         std::forward<B>(b), std::forward<IX>(ix));
@@ -28,7 +28,7 @@ namespace glz
       struct to<CSV, T>
       {
          template <auto Opts, is_context Ctx, class B, class IX>
-         static void op(auto&& value, Ctx&& ctx, B&& b, IX&& ix) noexcept
+         static void op(auto&& value, Ctx&& ctx, B&& b, IX&& ix)
          {
             using V = decltype(get_member(std::declval<T>(), meta_wrapper_v<T>));
             to<CSV, V>::template op<Opts>(get_member(value, meta_wrapper_v<T>), std::forward<Ctx>(ctx),
@@ -40,7 +40,7 @@ namespace glz
       struct to<CSV, T>
       {
          template <auto Opts, class B>
-         static void op(auto&& value, is_context auto&& ctx, B&& b, auto&& ix) noexcept
+         static void op(auto&& value, is_context auto&& ctx, B&& b, auto&& ix)
          {
             write_chars::op<Opts>(value, ctx, b, ix);
          }
@@ -50,7 +50,7 @@ namespace glz
       struct to<CSV, T>
       {
          template <auto Opts, class B>
-         static void op(auto&& value, is_context auto&&, B&& b, auto&& ix) noexcept
+         static void op(auto&& value, is_context auto&&, B&& b, auto&& ix)
          {
             if (value) {
                dump<'1'>(b, ix);
@@ -65,7 +65,7 @@ namespace glz
       struct to<CSV, T>
       {
          template <auto Opts, class B>
-         static void op(auto&& value, is_context auto&& ctx, B&& b, auto&& ix) noexcept
+         static void op(auto&& value, is_context auto&& ctx, B&& b, auto&& ix)
          {
             if constexpr (resizable<T>) {
                if constexpr (Opts.layout == rowwise) {
@@ -100,7 +100,7 @@ namespace glz
       struct to<CSV, T>
       {
          template <auto Opts, class B>
-         static void op(auto&& value, is_context auto&&, B&& b, auto&& ix) noexcept
+         static void op(auto&& value, is_context auto&&, B&& b, auto&& ix)
          {
             dump_maybe_empty(value, b, ix);
          }
@@ -110,7 +110,7 @@ namespace glz
       struct to<CSV, T>
       {
          template <auto Opts, class B>
-         static void op(auto&& value, is_context auto&& ctx, B&& b, auto&& ix) noexcept
+         static void op(auto&& value, is_context auto&& ctx, B&& b, auto&& ix)
          {
             if constexpr (Opts.layout == rowwise) {
                for (auto& [name, data] : value) {
@@ -174,7 +174,7 @@ namespace glz
       struct to<CSV, T>
       {
          template <auto Opts, class B>
-         static void op(auto&& value, is_context auto&& ctx, B&& b, auto&& ix) noexcept
+         static void op(auto&& value, is_context auto&& ctx, B&& b, auto&& ix)
          {
             static constexpr auto N = reflect<T>::size;
 
@@ -332,19 +332,19 @@ namespace glz
    }
 
    template <uint32_t layout = rowwise, write_csv_supported T, class Buffer>
-   [[nodiscard]] auto write_csv(T&& value, Buffer&& buffer) noexcept
+   [[nodiscard]] auto write_csv(T&& value, Buffer&& buffer)
    {
       return write<opts{.format = CSV, .layout = layout}>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
 
    template <uint32_t layout = rowwise, write_csv_supported T>
-   [[nodiscard]] expected<std::string, error_ctx> write_csv(T&& value) noexcept
+   [[nodiscard]] expected<std::string, error_ctx> write_csv(T&& value)
    {
       return write<opts{.format = CSV, .layout = layout}>(std::forward<T>(value));
    }
 
    template <uint32_t layout = rowwise, write_csv_supported T>
-   [[nodiscard]] error_ctx write_file_csv(T&& value, const std::string& file_name, auto&& buffer) noexcept
+   [[nodiscard]] error_ctx write_file_csv(T&& value, const std::string& file_name, auto&& buffer)
    {
       const auto ec = write<opts{.format = CSV, .layout = layout}>(std::forward<T>(value), buffer);
       if (bool(ec)) [[unlikely]] {

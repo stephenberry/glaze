@@ -71,7 +71,7 @@ namespace glz
       struct to<JSON, T>
       {
          template <auto Opts, class... Args>
-         static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
+         static void op(auto&& value, is_context auto&& ctx, Args&&... args)
          {
             dump<'{'>(std::forward<Args>(args)...);
 
@@ -115,7 +115,7 @@ namespace glz
       struct from<JSON, T>
       {
          template <auto Options>
-         static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+         static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
             if (bool(ctx.error)) [[unlikely]] {
                return;
@@ -169,7 +169,7 @@ namespace glz
       struct to<CSV, T>
       {
          template <auto Opts>
-         static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept
+         static void op(auto&& value, is_context auto&& ctx, auto&&... args)
          {
             if constexpr (Opts.layout == rowwise) {
                const size_t n = value.data.size();
