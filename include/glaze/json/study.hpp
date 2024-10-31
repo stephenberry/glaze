@@ -106,7 +106,7 @@ namespace glz
 
          std::size_t size() const { return max_index; }
 
-         [[nodiscard]] expected<State, error_code> generate(const size_t i) noexcept
+         [[nodiscard]] expected<State, error_code> generate(const size_t i)
          {
             size_t deconst_index = i;
             for (auto& param_set : param_sets) {

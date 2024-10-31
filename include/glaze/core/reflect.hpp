@@ -846,7 +846,7 @@ namespace glz::detail
       std::array<uint8_t, 256> unique_index{};
    };
 
-   inline constexpr unique_per_length_t unique_per_length_info(const auto& input_strings) noexcept
+   inline constexpr unique_per_length_t unique_per_length_info(const auto& input_strings)
    {
       // TODO: MSVC fixed the related compiler bug, but GitHub Actions has not caught up yet
 #if !defined(_MSC_VER)

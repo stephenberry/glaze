@@ -18,7 +18,7 @@
 namespace glz
 {
    template <class T>
-   [[nodiscard]] error_code file_to_buffer(T& buffer, auto* file, const std::string_view path) noexcept
+   [[nodiscard]] error_code file_to_buffer(T& buffer, auto* file, const std::string_view path)
    {
       if (!file) {
          return error_code::file_open_failure;
@@ -45,14 +45,14 @@ namespace glz
    }
 
    template <class T>
-   [[nodiscard]] error_code file_to_buffer(T& buffer, const std::string_view file_name) noexcept
+   [[nodiscard]] error_code file_to_buffer(T& buffer, const std::string_view file_name)
    {
       auto* file = std::fopen(file_name.data(), "rb");
       return file_to_buffer(buffer, file, file_name);
    }
 
    template <class T>
-   std::string file_to_buffer(T&& file_name) noexcept
+   std::string file_to_buffer(T&& file_name)
    {
       std::string buffer{};
       file_to_buffer(buffer, std::forward<T>(file_name));
@@ -60,7 +60,7 @@ namespace glz
    }
 
    inline std::filesystem::path relativize_if_not_absolute(const std::filesystem::path& working_directory,
-                                                           const std::filesystem::path& filepath) noexcept
+                                                           const std::filesystem::path& filepath)
    {
       if (filepath.is_absolute()) {
          return filepath;

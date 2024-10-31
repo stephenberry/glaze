@@ -410,6 +410,8 @@ namespace glz
          return make_variant_id_map_impl<T>(indices, ids_v<T>);
       }
 
+      // TODO: Should noexcept be removed and will this have performance implications?
+      // The invocations could potentially throw, though unlikely
       template <class Value, class Element>
       inline decltype(auto) get_member(Value&& value, Element&& element) noexcept
       {

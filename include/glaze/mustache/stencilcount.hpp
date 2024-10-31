@@ -11,7 +11,7 @@
 namespace glz
 {
    template <opts Opts = opts{}, class T, class Template>
-   expected<std::string, error_ctx> stencilcount(T&& value, Template&& tmp) noexcept
+   expected<std::string, error_ctx> stencilcount(T&& value, Template&& tmp)
    {
       std::string result{};
 

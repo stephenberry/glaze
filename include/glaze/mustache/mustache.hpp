@@ -10,7 +10,7 @@
 namespace glz
 {
    template <opts Opts = opts{}, class T, class Template>
-   expected<std::string, error_ctx> mustache(T&& value, Template&& tmp) noexcept
+   expected<std::string, error_ctx> mustache(T&& value, Template&& tmp)
    {
       std::string result{};
 
@@ -136,7 +136,7 @@ namespace glz
 
    template <opts Opts = opts{}, class T>
       requires(requires { std::decay_t<T>::glaze_mustache; })
-   expected<std::string, error_ctx> mustache(T&& value) noexcept
+   expected<std::string, error_ctx> mustache(T&& value)
    {
       return mustache(std::forward<T>(value), sv{std::decay_t<T>::glaze_mustache});
    }

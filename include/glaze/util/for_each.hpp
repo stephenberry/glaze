@@ -97,7 +97,7 @@ namespace glz::detail
 #define GLZ_60 GLZ_50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60
 
    template <size_t N, class Lambda>
-   GLZ_ALWAYS_INLINE constexpr void jump_table(Lambda&& lambda, size_t index) noexcept
+   GLZ_ALWAYS_INLINE constexpr void jump_table(Lambda&& lambda, size_t index)
    {
       if constexpr (N == 0) {
          return;
@@ -189,7 +189,7 @@ namespace glz::detail
    }
 
    template <size_t N, class Lambda>
-   GLZ_ALWAYS_INLINE constexpr void invoke_table(Lambda&& lambda) noexcept
+   GLZ_ALWAYS_INLINE constexpr void invoke_table(Lambda&& lambda)
    {
       if constexpr (N == 0) {
          return;

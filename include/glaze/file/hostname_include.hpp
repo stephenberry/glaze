@@ -58,7 +58,7 @@ namespace glz
          }
       }
 
-      inline std::string get_hostname(context& ctx) noexcept
+      inline std::string get_hostname(context& ctx)
       {
          char hostname[256]{};
 
@@ -86,7 +86,7 @@ namespace glz
       struct from<JSON, hostname_includer<T>>
       {
          template <auto Options>
-         static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+         static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
             constexpr auto Opts = ws_handled_off<Options>();
             std::string buffer{};

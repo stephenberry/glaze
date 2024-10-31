@@ -32,7 +32,7 @@ namespace glz
       val_t data{};
 
       // Dump the value to JSON, returns an expected that will contain a std::string if valid
-      expected<std::string, error_ctx> dump() const noexcept { return write_json(data); }
+      expected<std::string, error_ctx> dump() const { return write_json(data); }
 
       template <class T>
       [[nodiscard]] T& get()
@@ -237,20 +237,20 @@ namespace glz
 
       [[nodiscard]] bool is_null() const noexcept { return holds<std::nullptr_t>(); }
 
-      [[nodiscard]] array_t& get_array() noexcept { return get<array_t>(); }
-      [[nodiscard]] const array_t& get_array() const noexcept { return get<array_t>(); }
+      [[nodiscard]] array_t& get_array() { return get<array_t>(); }
+      [[nodiscard]] const array_t& get_array() const { return get<array_t>(); }
 
-      [[nodiscard]] object_t& get_object() noexcept { return get<object_t>(); }
-      [[nodiscard]] const object_t& get_object() const noexcept { return get<object_t>(); }
+      [[nodiscard]] object_t& get_object() { return get<object_t>(); }
+      [[nodiscard]] const object_t& get_object() const { return get<object_t>(); }
 
-      [[nodiscard]] double& get_number() noexcept { return get<double>(); }
-      [[nodiscard]] const double& get_number() const noexcept { return get<double>(); }
+      [[nodiscard]] double& get_number() { return get<double>(); }
+      [[nodiscard]] const double& get_number() const { return get<double>(); }
 
-      [[nodiscard]] std::string& get_string() noexcept { return get<std::string>(); }
-      [[nodiscard]] const std::string& get_string() const noexcept { return get<std::string>(); }
+      [[nodiscard]] std::string& get_string() { return get<std::string>(); }
+      [[nodiscard]] const std::string& get_string() const { return get<std::string>(); }
 
-      [[nodiscard]] bool& get_boolean() noexcept { return get<bool>(); }
-      [[nodiscard]] const bool& get_boolean() const noexcept { return get<bool>(); }
+      [[nodiscard]] bool& get_boolean() { return get<bool>(); }
+      [[nodiscard]] const bool& get_boolean() const { return get<bool>(); }
 
       // empty() returns true if the value is an empty JSON object, array, or string, or a null value
       // otherwise returns false
@@ -291,17 +291,17 @@ namespace glz
       }
    };
 
-   [[nodiscard]] inline bool is_array(const json_t& value) { return value.is_array(); }
+   [[nodiscard]] inline bool is_array(const json_t& value) noexcept { return value.is_array(); }
 
-   [[nodiscard]] inline bool is_object(const json_t& value) { return value.is_object(); }
+   [[nodiscard]] inline bool is_object(const json_t& value) noexcept { return value.is_object(); }
 
-   [[nodiscard]] inline bool is_number(const json_t& value) { return value.is_number(); }
+   [[nodiscard]] inline bool is_number(const json_t& value) noexcept { return value.is_number(); }
 
-   [[nodiscard]] inline bool is_string(const json_t& value) { return value.is_string(); }
+   [[nodiscard]] inline bool is_string(const json_t& value) noexcept { return value.is_string(); }
 
-   [[nodiscard]] inline bool is_boolean(const json_t& value) { return value.is_boolean(); }
+   [[nodiscard]] inline bool is_boolean(const json_t& value) noexcept { return value.is_boolean(); }
 
-   [[nodiscard]] inline bool is_null(const json_t& value) { return value.is_null(); }
+   [[nodiscard]] inline bool is_null(const json_t& value) noexcept { return value.is_null(); }
 }
 
 template <>
@@ -318,7 +318,7 @@ namespace glz
 
    template <opts Opts, class T>
       requires read_supported<Opts.format, T>
-   [[nodiscard]] error_ctx read(T& value, const json_t& source) noexcept
+   [[nodiscard]] error_ctx read(T& value, const json_t& source)
    {
       auto buffer = source.dump();
       if (buffer) {
@@ -331,7 +331,7 @@ namespace glz
    }
 
    template <read_json_supported T>
-   [[nodiscard]] error_ctx read_json(T& value, const json_t& source) noexcept
+   [[nodiscard]] error_ctx read_json(T& value, const json_t& source)
    {
       auto buffer = source.dump();
       if (buffer) {
@@ -343,7 +343,7 @@ namespace glz
    }
 
    template <read_json_supported T>
-   [[nodiscard]] expected<T, error_ctx> read_json(const json_t& source) noexcept
+   [[nodiscard]] expected<T, error_ctx> read_json(const json_t& source)
    {
       auto buffer = source.dump();
       if (buffer) {
