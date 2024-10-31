@@ -245,6 +245,7 @@ namespace glz::repe
                   methods[full_key] = [&func](repe::state&& state) mutable {
                      func();
                      if (state.notify()) {
+                        state.out.header.notify(true);
                         return;
                      }
                      write_response<Opts>(state);
@@ -254,6 +255,7 @@ namespace glz::repe
                   methods[full_key] = [&func](repe::state&& state) mutable {
                      if (state.notify()) {
                         std::ignore = func();
+                        state.out.header.notify(true);
                         return;
                      }
                      write_response<Opts>(func(), state);
@@ -276,6 +278,7 @@ namespace glz::repe
 
                   if (state.notify()) {
                      std::ignore = func(params);
+                     state.out.header.notify(true);
                      return;
                   }
                   auto ret = func(params);
@@ -315,6 +318,7 @@ namespace glz::repe
                   }
 
                   if (state.notify()) {
+                     state.out.header.notify(true);
                      return;
                   }
 
@@ -342,6 +346,7 @@ namespace glz::repe
                            }
 
                            if (state.notify()) {
+                              state.out.header.notify(true);
                               return;
                            }
 
@@ -361,6 +366,7 @@ namespace glz::repe
                            (value.*func)(input);
 
                            if (state.notify()) {
+                              state.out.header.notify(true);
                               return;
                            }
 
@@ -396,6 +402,7 @@ namespace glz::repe
 
                            if (state.notify()) {
                               std::ignore = (value.*func)(input);
+                              state.out.header.notify(true);
                               return;
                            }
 
@@ -417,6 +424,7 @@ namespace glz::repe
                      }
 
                      if (state.notify()) {
+                        state.out.header.notify(true);
                         return;
                      }
 

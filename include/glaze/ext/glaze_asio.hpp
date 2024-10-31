@@ -231,16 +231,17 @@ namespace glz
          }
       }
 
-      template <class Params>
-      [[nodiscard]] repe::error_t notify(repe::user_header&& header, Params&& params)
+      template <class... Params>
+      [[nodiscard]] repe::error_t notify(repe::user_header&& header, Params&&... params)
       {
-         auto request = repe::request<Opts>(std::move(header), std::forward<Params>(params));
-         request.header.notify(true);
+         auto request = message_pool->borrow();
+         header.notify(true);
+         std::ignore = repe::request<Opts>(*request, std::move(header), std::forward<Params>(params)...);
 
          unique_socket socket{socket_pool.get()};
 
          try {
-            send_buffer(*socket, request);
+            send_buffer(*socket, *request);
          }
          catch (const std::exception& e) {
             socket.ptr.reset();
@@ -491,7 +492,9 @@ namespace glz
             while (true) {
                co_await co_receive_buffer(socket, request);
                registry.call(request, response);
-               co_await co_send_buffer(socket, response);
+               if (not response.header.notify()) {
+                  co_await co_send_buffer(socket, response);
+               }
             }
          }
          catch (const std::exception& e) {

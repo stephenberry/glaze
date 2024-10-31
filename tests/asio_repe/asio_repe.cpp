@@ -14,6 +14,50 @@ using namespace ut;
 
 // This test code is self-contained and spawns both the server and the client
 
+struct notify_api
+{
+   std::function<void()> hello = []{
+      std::cout << "HELLO\n";
+   };
+};
+
+void notify_test()
+{
+   static constexpr int16_t port = 8431;
+   glz::asio_server<> server{.port = port, .concurrency = 4};
+   
+   std::future<void> server_thread = std::async([&] {
+      try {
+         notify_api api{};
+         server.on(api);
+         server.run();
+      }
+      catch (const std::exception& e) {
+         std::cerr << "Exception: " << e.what();
+      }
+   });
+   
+   try {
+      glz::asio_client<> client{"localhost", std::to_string(port)};
+
+      const auto ec = client.init();
+      if (ec) {
+         throw std::runtime_error(ec.message());
+      }
+
+      if (auto e_call = client.notify({"/hello"})) {
+         throw std::runtime_error( glz::write_json(e_call).value_or("error"));
+      }
+
+      server.stop();
+   }
+   catch (const std::exception& e) {
+      expect(false) << e.what();
+   }
+
+   server_thread.get();
+}
+
 struct my_data
 {
    glz::async_string name{};
@@ -27,8 +71,6 @@ void async_clients_test()
    glz::asio_server<> server{.port = port, .concurrency = 4};
 
    std::future<void> server_thread = std::async([&] {
-      std::cout << "Server active...\n";
-
       try {
          my_data data{};
          server.on(data);
@@ -37,8 +79,6 @@ void async_clients_test()
       catch (const std::exception& e) {
          std::cerr << "Exception: " << e.what();
       }
-
-      std::cout << "Server closed...\n";
    });
 
    try {
@@ -63,7 +103,7 @@ void async_clients_test()
       server.stop();
    }
    catch (const std::exception& e) {
-      std::cerr << e.what() << '\n';
+      expect(false) << e.what();
    }
 
    server_thread.get();
@@ -143,7 +183,7 @@ void asio_client_test()
       server.stop();
    }
    catch (const std::exception& e) {
-      std::cerr << e.what() << '\n';
+      expect(false) << e.what();
    }
 
    server_thread.get();
@@ -214,7 +254,7 @@ void async_calls()
       server.stop();
    }
    catch (const std::exception& e) {
-      std::cerr << e.what() << '\n';
+      expect(false) << e.what();
    }
 
    server_thread.get();
@@ -222,6 +262,7 @@ void async_calls()
 
 int main()
 {
+   notify_test();
    async_clients_test();
    asio_client_test();
    async_calls();
