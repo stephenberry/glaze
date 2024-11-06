@@ -108,7 +108,10 @@ namespace glz::repe
          out.header.length = sizeof(repe::header) + out.query.size() + out.body.size();
       }
       else {
-         out.body.clear();
+         const auto ec = write<Opts>(nullptr, out.body);
+         if (bool(ec)) [[unlikely]] {
+            out.header.error = true;
+         }
          out.query.clear();
          out.header.query_length = out.query.size();
          out.header.body_length = out.body.size();
