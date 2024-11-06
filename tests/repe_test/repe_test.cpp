@@ -63,6 +63,14 @@ struct example_functions_t
    };
 };
 
+suite header_tests = [] {
+   "header"_test = [] {
+      glz::repe::header h{.action = glz::repe::action::read};
+      expect(not h.notify());
+      expect(h.read());
+   };
+};
+
 suite structs_of_functions = [] {
    "structs_of_functions"_test = [] {
       repe::registry server{};
