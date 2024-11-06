@@ -3700,6 +3700,13 @@ suite generic_json_tests = [] {
       json = std::string_view{"World"};
       expect(glz::write_json(json).value() == R"("World")");
    };
+   
+   "json_t int"_test = [] {
+      glz::json_t json = 55;
+      expect(glz::write_json(json).value() == "55");
+      json = 44;
+      expect(glz::write_json(json).value() == "44");
+   };
 };
 
 struct holder0_t
