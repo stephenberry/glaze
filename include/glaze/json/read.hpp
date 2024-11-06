@@ -1193,7 +1193,12 @@ namespace glz
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
             auto it_start = it;
-            skip_value<JSON>::op<Opts>(ctx, it, end);
+            if (is_digit(uint8_t(*it))) {
+               skip_number<Opts>(ctx, it, end);
+            }
+            else {
+               skip_value<JSON>::op<Opts>(ctx, it, end);
+            }
             if (bool(ctx.error)) [[unlikely]]
                return;
             value.str = {it_start, static_cast<size_t>(it - it_start)};

@@ -3121,15 +3121,21 @@ suite raw_json_tests = [] {
       std::string s;
       expect(not glz::write_json(v, s));
       expect(s == R"([0,1,2])");
-      expect(glz::read_json(v, s) == glz::error_code::none);
+      expect(not glz::read_json(v, s));
    };
    "raw_json_view_read"_test = [] {
       std::vector<glz::raw_json_view> v{};
       std::string s = R"([0,1,2])";
-      expect(glz::read_json(v, s) == glz::error_code::none);
+      expect(not glz::read_json(v, s));
       expect(v[0].str == "0");
       expect(v[1].str == "1");
       expect(v[2].str == "2");
+   };
+   "glz::raw_json"_test = [] {
+      glz::raw_json v{};
+      std::string s = R"(12345678)";
+      expect(not glz::read_json(v, s));
+      expect(v.str == "12345678");
    };
 };
 
