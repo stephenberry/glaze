@@ -102,6 +102,14 @@ namespace glz
          data = value;
          return *this;
       }
+      
+      // for integers
+      template <detail::int_t T>
+      json_t& operator=(const T value)
+      {
+         data = static_cast<double>(value);
+         return *this;
+      }
 
       json_t& operator=(const std::string& value)
       {
