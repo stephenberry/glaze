@@ -212,6 +212,14 @@ suite async_map_tests = [] {
          expect(key.size() == 3);
          expect(*value < 3);
       }
+      
+      for (auto&& [key, value] : map) {
+         expect(key.size() == 3);
+         *value = 3;
+      }
+      
+      expect(*map.at("one").value() == 3);
+      expect(*map.at("two").value() == 3);
    };
 };
 
