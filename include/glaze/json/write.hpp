@@ -1638,6 +1638,17 @@ namespace glz
             }
          }
       };
+      
+      template <class T>
+      consteval size_t key_index(const std::string_view key) {
+         const auto n = reflect<T>::keys.size();
+         for (size_t i = 0; i < n; ++i) {
+            if (key == reflect<T>::keys[i]) {
+               return i;
+            }
+         }
+         return n;
+      }
 
       // Only object types are supported for partial
       template <class T>
@@ -1663,8 +1674,6 @@ namespace glz
             static constexpr auto num_members = reflect<T>::size;
 
             if constexpr ((num_members > 0) && (glaze_object_t<T> || reflectable<T>)) {
-               static constexpr auto HashInfo = hash_info<T>;
-
                invoke_table<N>([&]<size_t I>() {
                   if (bool(ctx.error)) [[unlikely]] {
                      return;
@@ -1679,8 +1688,7 @@ namespace glz
                   dump<quoted_key>(b, ix);
 
                   static constexpr auto sub_partial = get<1>(group);
-                  static constexpr auto index =
-                     decode_hash<JSON, T, HashInfo, HashInfo.type>::op(key.data(), key.data() + key.size());
+                  static constexpr auto index = key_index<T>(key);
                   static_assert(index < num_members, "Invalid key passed to partial write");
                   if constexpr (glaze_object_t<T>) {
                      static constexpr auto member = get<index>(reflect<T>::values);
