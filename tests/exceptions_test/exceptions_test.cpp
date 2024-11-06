@@ -6,6 +6,7 @@
 #include "glaze/glaze_exceptions.hpp"
 #include "glaze/thread/threadpool.hpp"
 #include "ut/ut.hpp"
+#include "glaze/thread/async_map.hpp"
 
 using namespace ut;
 
@@ -195,6 +196,17 @@ suite thread_pool = [] {
          pool.wait();
          future.get();
       }));
+   };
+};
+
+suite async_map_tests = [] {
+   "async_map"_test = [] {
+      glz::async_map<std::string, std::unique_ptr<std::atomic<int>>> map;
+      map.emplace("one", std::make_unique<std::atomic<int>>(1));
+      map.emplace("two", std::make_unique<std::atomic<int>>(2));
+      expect(*map.at("one").value() == 1);
+      expect(*map.at("two").value() == 2);
+      expect(map.size() == 2);
    };
 };
 
