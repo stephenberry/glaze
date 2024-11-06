@@ -377,12 +377,16 @@ namespace glz
 
       [[nodiscard]] repe::error_t call(repe::user_header&& header)
       {
-         auto request = repe::request<Opts>(std::move(header));
+         auto request = message_pool->borrow();
+         auto err = repe::request<Opts>(*request, std::move(header));
+         if (err) {
+            return err;
+         }
 
          unique_socket socket{socket_pool.get()};
 
          try {
-            send_buffer(*socket, request);
+            send_buffer(*socket, *request);
          }
          catch (const std::exception& e) {
             socket.ptr.reset();
@@ -390,9 +394,9 @@ namespace glz
             return {error_code::send_error, "asio send failure"};
          }
 
-         repe::message response{};
+         auto response = message_pool->borrow();
          try {
-            receive_buffer(*socket, response);
+            receive_buffer(*socket, *response);
          }
          catch (const std::exception& e) {
             socket.ptr.reset();
@@ -400,7 +404,7 @@ namespace glz
             return {error_code::send_error, "asio receive failure"};
          }
 
-         if (response.header.error) {
+         if (response->header.error) {
             return {error_code::send_error, "asio receive failure"};
          }
          return {};
