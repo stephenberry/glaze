@@ -19,10 +19,12 @@
 
 #include "glaze/core/common.hpp"
 
+// This async_map is intended to hold thread safe value types (V)
+
 namespace glz
 {
-   template <typename K, typename V>
-   class async_map
+   template <class K, class V>
+   struct async_map
    {
      private:
       std::vector<K> keys;
@@ -55,7 +57,7 @@ namespace glz
       {
         public:
          using iterator_category = std::forward_iterator_tag;
-         using value_type = safe_key_map::value_type;
+         using value_type = async_map::value_type;
          using difference_type = std::ptrdiff_t;
          using pointer = value_type*;
          using reference = value_type&;
@@ -63,13 +65,13 @@ namespace glz
         private:
          typename std::vector<K>::const_iterator key_it;
          typename std::vector<V>::iterator value_it;
-         safe_key_map* map;
+         async_map* map;
          std::shared_ptr<std::shared_lock<std::shared_mutex>> shared_lock_ptr;
          std::shared_ptr<std::unique_lock<std::shared_mutex>> unique_lock_ptr;
 
         public:
          iterator(typename std::vector<K>::const_iterator key_it, typename std::vector<V>::iterator value_it,
-                  safe_key_map* map,
+                  async_map* map,
                   std::shared_ptr<std::shared_lock<std::shared_mutex>> existing_shared_lock = nullptr,
                   std::shared_ptr<std::unique_lock<std::shared_mutex>> existing_unique_lock = nullptr)
             : key_it(key_it),
@@ -149,7 +151,7 @@ namespace glz
       {
         public:
          using iterator_category = std::forward_iterator_tag;
-         using value_type = safe_key_map::const_value_type;
+         using value_type = async_map::const_value_type;
          using difference_type = std::ptrdiff_t;
          using pointer = const value_type*;
          using reference = const value_type&;
@@ -157,12 +159,12 @@ namespace glz
         private:
          typename std::vector<K>::const_iterator key_it;
          typename std::vector<V>::const_iterator value_it;
-         const safe_key_map* map;
+         const async_map* map;
          std::shared_ptr<std::shared_lock<std::shared_mutex>> shared_lock_ptr;
 
         public:
          const_iterator(typename std::vector<K>::const_iterator key_it,
-                        typename std::vector<V>::const_iterator value_it, const safe_key_map* map,
+                        typename std::vector<V>::const_iterator value_it, const async_map* map,
                         std::shared_ptr<std::shared_lock<std::shared_mutex>> existing_shared_lock = nullptr)
             : key_it(key_it), value_it(value_it), map(map), shared_lock_ptr(existing_shared_lock)
          {
@@ -251,12 +253,18 @@ namespace glz
 
          // Access the value
          V& value() { return value_ref; }
+         
+         const V& value() const { return value_ref; }
 
          // Arrow Operator
          V* operator->() { return &value_ref; }
 
          // Implicit Conversion to V&
          operator V&() { return value_ref; }
+         
+         bool operator==(const V& other) const {
+            return value() == other;
+         }
       };
 
       // Const Value Proxy Class Definition
@@ -289,6 +297,10 @@ namespace glz
 
          // Implicit Conversion to const V&
          operator const V&() const { return value_ref; }
+         
+         bool operator==(const V& other) const {
+            return value() == other;
+         }
       };
 
       // Insert method behaves like std::map::insert
@@ -308,6 +320,27 @@ namespace glz
             auto index = std::distance(keys.cbegin(), it);
             keys.insert(it, pair.first);
             values.insert(values.begin() + index, pair.second);
+            return {iterator(keys.cbegin() + index, values.begin() + index, this, nullptr, unique_lock_ptr), true};
+         }
+      }
+      
+      template <class Key, class Value>
+      std::pair<iterator, bool> emplace(Key&& key, Value&& value)
+      {
+         auto unique_lock_ptr = std::make_shared<std::unique_lock<std::shared_mutex>>(mutex);
+
+         // Perform binary search to find the key
+         auto [it, found] = binary_search_key(key);
+
+         if (found) {
+            auto index = std::distance(keys.cbegin(), it);
+            return {iterator(keys.cbegin() + index, values.begin() + index, this, nullptr, unique_lock_ptr), false};
+         }
+         else {
+            // Insert while maintaining sorted order
+            auto index = std::distance(keys.cbegin(), it);
+            keys.insert(it, key);
+            values.insert(values.begin() + index, std::forward<Value>(value));
             return {iterator(keys.cbegin() + index, values.begin() + index, this, nullptr, unique_lock_ptr), true};
          }
       }
@@ -466,6 +499,12 @@ namespace glz
          std::shared_lock lock(mutex);
          auto [it, found] = binary_search_key(key);
          return found ? 1 : 0;
+      }
+      
+      size_t size() const
+      {
+         std::shared_lock lock(mutex);
+         return keys.size();
       }
 
       // Check if the map contains the key
