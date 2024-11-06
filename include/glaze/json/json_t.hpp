@@ -102,7 +102,7 @@ namespace glz
          data = value;
          return *this;
       }
-      
+
       // for integers
       template <detail::int_t T>
       json_t& operator=(const T value)
