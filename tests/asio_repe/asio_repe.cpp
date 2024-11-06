@@ -46,7 +46,7 @@ void notify_test()
       if (auto e_call = client.notify({"/hello"})) {
          throw std::runtime_error(glz::write_json(e_call).value_or("error"));
       }
-      
+
       if (auto e_call = client.call({"/hello"})) {
          throw std::runtime_error(glz::write_json(e_call).value_or("error"));
       }
