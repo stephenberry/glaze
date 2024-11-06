@@ -4,9 +4,9 @@
 #define UT_RUN_TIME_ONLY
 
 #include "glaze/glaze_exceptions.hpp"
+#include "glaze/thread/async_map.hpp"
 #include "glaze/thread/threadpool.hpp"
 #include "ut/ut.hpp"
-#include "glaze/thread/async_map.hpp"
 
 using namespace ut;
 
@@ -207,17 +207,17 @@ suite async_map_tests = [] {
       expect(*map.at("one").value() == 1);
       expect(*map.at("two").value() == 2);
       expect(map.size() == 2);
-      
+
       for (const auto& [key, value] : map) {
          expect(key.size() == 3);
          expect(*value < 3);
       }
-      
+
       for (auto&& [key, value] : map) {
          expect(key.size() == 3);
          *value = 3;
       }
-      
+
       expect(*map.at("one").value() == 3);
       expect(*map.at("two").value() == 3);
    };

@@ -71,8 +71,7 @@ namespace glz
 
         public:
          iterator(typename std::vector<K>::const_iterator key_it, typename std::vector<V>::iterator value_it,
-                  async_map* map,
-                  std::shared_ptr<std::shared_lock<std::shared_mutex>> existing_shared_lock = nullptr,
+                  async_map* map, std::shared_ptr<std::shared_lock<std::shared_mutex>> existing_shared_lock = nullptr,
                   std::shared_ptr<std::unique_lock<std::shared_mutex>> existing_unique_lock = nullptr)
             : key_it(key_it),
               value_it(value_it),
@@ -253,7 +252,7 @@ namespace glz
 
          // Access the value
          V& value() { return value_ref; }
-         
+
          const V& value() const { return value_ref; }
 
          // Arrow Operator
@@ -261,10 +260,8 @@ namespace glz
 
          // Implicit Conversion to V&
          operator V&() { return value_ref; }
-         
-         bool operator==(const V& other) const {
-            return value() == other;
-         }
+
+         bool operator==(const V& other) const { return value() == other; }
       };
 
       // Const Value Proxy Class Definition
@@ -297,10 +294,8 @@ namespace glz
 
          // Implicit Conversion to const V&
          operator const V&() const { return value_ref; }
-         
-         bool operator==(const V& other) const {
-            return value() == other;
-         }
+
+         bool operator==(const V& other) const { return value() == other; }
       };
 
       // Insert method behaves like std::map::insert
@@ -323,7 +318,7 @@ namespace glz
             return {iterator(keys.cbegin() + index, values.begin() + index, this, nullptr, unique_lock_ptr), true};
          }
       }
-      
+
       template <class Key, class Value>
       std::pair<iterator, bool> emplace(Key&& key, Value&& value)
       {
@@ -500,7 +495,7 @@ namespace glz
          auto [it, found] = binary_search_key(key);
          return found ? 1 : 0;
       }
-      
+
       size_t size() const
       {
          std::shared_lock lock(mutex);
