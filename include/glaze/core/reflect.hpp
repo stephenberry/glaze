@@ -1698,18 +1698,29 @@ namespace glz::detail
    template <size_t min_length>
    GLZ_ALWAYS_INLINE constexpr const void* quote_memchr(auto&& it, auto&& end) noexcept
    {
-      if constexpr (min_length >= 4) {
-         // Skipping makes the bifurcation worth it
-         const auto* start = it + min_length;
-         if (start >= end) [[unlikely]] {
-            return nullptr;
+      if (std::is_constant_evaluated()) {
+         const auto count = size_t(end - it);
+         for (std::size_t i = 0; i < count; ++i) {
+            if (it[i] == '"') {
+               return it + i;
+            }
          }
-         else [[likely]] {
-            return std::memchr(start, '"', size_t(end - start));
-         }
+         return nullptr;
       }
       else {
-         return std::memchr(it, '"', size_t(end - it));
+         if constexpr (min_length >= 4) {
+            // Skipping makes the bifurcation worth it
+            const auto* start = it + min_length;
+            if (start >= end) [[unlikely]] {
+               return nullptr;
+            }
+            else [[likely]] {
+               return std::memchr(start, '"', size_t(end - start));
+            }
+         }
+         else {
+            return std::memchr(it, '"', size_t(end - it));
+         }
       }
    }
 

@@ -8237,6 +8237,15 @@ struct zoo_reflection_t
    std::string name{"My Awesome Zoo"};
 };
 
+struct partial_write_tester
+{
+   int magnitude{};
+   int thresh_hi{};
+   int thresh_lo{};
+   int option_one{};
+   int option_two{};
+};
+
 suite partial_write_tests = [] {
    "partial write"_test = [] {
       static constexpr auto partial = glz::json_ptrs("/name", "/animals/tiger");
@@ -8275,6 +8284,14 @@ suite partial_write_tests = [] {
       const auto length = glz::write_json<json_ptrs>(obj, buf);
       expect(length.has_value());
       expect(std::string_view{buf} == R"({"name":"My Awesome Zoo"})");
+   };
+   
+   "partial_write_tester"_test = [] {
+      static constexpr auto partial = glz::json_ptrs("/magnitude", "/thresh_hi", "/thresh_lo");
+      partial_write_tester obj{};
+      std::string buffer{};
+      expect(not glz::write_json<partial>(obj, buffer));
+      expect(buffer == R"({"magnitude":0,"thresh_hi":0,"thresh_lo":0})") << buffer;
    };
 };
 
