@@ -8285,7 +8285,7 @@ suite partial_write_tests = [] {
       expect(length.has_value());
       expect(std::string_view{buf} == R"({"name":"My Awesome Zoo"})");
    };
-   
+
    "partial_write_tester"_test = [] {
       static constexpr auto partial = glz::json_ptrs("/magnitude", "/thresh_hi", "/thresh_lo");
       partial_write_tester obj{};
