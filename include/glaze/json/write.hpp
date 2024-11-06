@@ -1638,9 +1638,10 @@ namespace glz
             }
          }
       };
-      
+
       template <class T>
-      consteval size_t key_index(const std::string_view key) {
+      consteval size_t key_index(const std::string_view key)
+      {
          const auto n = reflect<T>::keys.size();
          for (size_t i = 0; i < n; ++i) {
             if (key == reflect<T>::keys[i]) {
