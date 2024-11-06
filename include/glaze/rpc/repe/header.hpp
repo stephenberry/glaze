@@ -47,30 +47,30 @@ namespace glz::repe
       void notify(bool enable)
       {
          if (enable) {
-            action = static_cast<repe::action>(uint32_t(action) | uint32_t(action::notify));
+            action = static_cast<repe::action>(uint32_t(action) | uint32_t(repe::action::notify));
          }
          else {
-            action = static_cast<repe::action>(uint32_t(action) & ~uint32_t(action::notify));
+            action = static_cast<repe::action>(uint32_t(action) & ~uint32_t(repe::action::notify));
          }
       }
 
       void read(bool enable)
       {
          if (enable) {
-            action = static_cast<repe::action>(uint32_t(action) | uint32_t(action::read));
+            action = static_cast<repe::action>(uint32_t(action) | uint32_t(repe::action::read));
          }
          else {
-            action = static_cast<repe::action>(uint32_t(action) & ~uint32_t(action::read));
+            action = static_cast<repe::action>(uint32_t(action) & ~uint32_t(repe::action::read));
          }
       }
 
       void write(bool enable)
       {
          if (enable) {
-            action = static_cast<repe::action>(uint32_t(action) | uint32_t(action::write));
+            action = static_cast<repe::action>(uint32_t(action) | uint32_t(repe::action::write));
          }
          else {
-            action = static_cast<repe::action>(uint32_t(action) & ~uint32_t(action::write));
+            action = static_cast<repe::action>(uint32_t(action) & ~uint32_t(repe::action::write));
          }
       }
    };

@@ -508,7 +508,7 @@ namespace glz
             while (true) {
                co_await co_receive_buffer(socket, request);
                registry.call(request, response);
-               if (not response.header.notify()) {
+               if (not request.header.notify()) {
                   co_await co_send_buffer(socket, response);
                }
             }
