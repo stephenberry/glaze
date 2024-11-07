@@ -1551,4 +1551,10 @@ namespace glz
    {
       return read_file_beve<opt_true<Opts, &opts::structs_as_arrays>>(value, file_name, buffer);
    }
+
+   template <class T>
+   struct read_format_supported<BEVE, T>
+   {
+      static constexpr auto value = read_beve_supported<T>;
+   };
 }

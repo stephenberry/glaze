@@ -3101,4 +3101,10 @@ namespace glz
       constexpr auto Options = opt_true<set_json<Opts>(), &opts::comments>;
       return read<Options>(value, buffer, ctx);
    }
+
+   template <class T>
+   struct read_format_supported<JSON, T>
+   {
+      static constexpr auto value = read_json_supported<T>;
+   };
 }

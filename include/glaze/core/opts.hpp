@@ -361,49 +361,17 @@ namespace glz
    template <class T>
    concept read_csv_supported = requires { detail::from<CSV, std::remove_cvref_t<T>>{}; };
 
+   // specialize this struct for every format for writing to
    template <uint32_t Format, class T>
-   consteval bool write_format_supported()
-   {
-      if constexpr (Format == BEVE) {
-         return write_beve_supported<T>;
-      }
-      else if constexpr (Format == JSON) {
-         return write_json_supported<T>;
-      }
-      else if constexpr (Format == NDJSON) {
-         return write_ndjson_supported<T>;
-      }
-      else if constexpr (Format == CSV) {
-         return write_csv_supported<T>;
-      }
-      else {
-         static_assert(false_v<T>, "Glaze metadata is probably needed for your type");
-      }
-   }
+   struct write_format_supported;
 
    template <uint32_t Format, class T>
-   consteval bool read_format_supported()
-   {
-      if constexpr (Format == BEVE) {
-         return read_beve_supported<T>;
-      }
-      else if constexpr (Format == JSON) {
-         return read_json_supported<T>;
-      }
-      else if constexpr (Format == NDJSON) {
-         return read_ndjson_supported<T>;
-      }
-      else if constexpr (Format == CSV) {
-         return read_csv_supported<T>;
-      }
-      else {
-         static_assert(false_v<T>, "Glaze metadata is probably needed for your type");
-      }
-   }
+   concept write_supported = write_format_supported<Format, T>::value;
+
+   // specialize this struct for every format for reading from
+   template <uint32_t Format, class T>
+   struct read_format_supported;
 
    template <uint32_t Format, class T>
-   concept write_supported = write_format_supported<Format, T>();
-
-   template <uint32_t Format, class T>
-   concept read_supported = read_format_supported<Format, T>();
+   concept read_supported = read_format_supported<Format, T>::value;
 }

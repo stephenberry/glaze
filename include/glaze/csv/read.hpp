@@ -644,4 +644,10 @@ namespace glz
 
       return read<opts{.format = CSV, .layout = layout}>(value, buffer, ctx);
    }
+
+   template <class T>
+   struct read_format_supported<CSV, T>
+   {
+      static constexpr auto value = read_csv_supported<T>;
+   };
 }

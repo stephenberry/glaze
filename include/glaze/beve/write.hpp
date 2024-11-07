@@ -983,4 +983,10 @@ namespace glz
    {
       return write_file_beve<opt_true<Opts, &opts::structs_as_arrays>>(std::forward<T>(value), file_name, buffer);
    }
+
+   template <class T>
+   struct write_format_supported<BEVE, T>
+   {
+      static constexpr auto value = write_beve_supported<T>;
+   };
 }

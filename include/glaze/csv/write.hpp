@@ -352,4 +352,10 @@ namespace glz
       }
       return {buffer_to_file(buffer, file_name)};
    }
+
+   template <class T>
+   struct write_format_supported<CSV, T>
+   {
+      static constexpr auto value = write_csv_supported<T>;
+   };
 }

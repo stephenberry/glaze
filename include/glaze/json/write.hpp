@@ -1820,4 +1820,10 @@ namespace glz
       }
       return {buffer_to_file(buffer, file_name)};
    }
+
+   template <class T>
+   struct write_format_supported<JSON, T>
+   {
+      static constexpr auto value = write_json_supported<T>;
+   };
 }

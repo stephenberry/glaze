@@ -292,6 +292,12 @@ namespace glz
       return read<Opts>(value, buffer, ctx);
    }
 
+   template <class T>
+   struct read_format_supported<NDJSON, T>
+   {
+      static constexpr auto value = read_ndjson_supported<T>;
+   };
+
    template <write_ndjson_supported T, class Buffer>
    [[nodiscard]] error_ctx write_ndjson(T&& value, Buffer&& buffer)
    {
@@ -310,4 +316,10 @@ namespace glz
       write<opts{.format = NDJSON}>(std::forward<T>(value), buffer);
       return {buffer_to_file(buffer, file_name)};
    }
+
+   template <class T>
+   struct write_format_supported<NDJSON, T>
+   {
+      static constexpr auto value = write_ndjson_supported<T>;
+   };
 }
