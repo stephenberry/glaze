@@ -126,24 +126,24 @@ namespace glz
 
 #undef bool_t
 
-   consteval bool has_opening_handled(opts o) { return o.internal & uint32_t(opts::internal::opening_handled); }
+   consteval bool has_opening_handled(const opts& o) { return o.internal & uint32_t(opts::internal::opening_handled); }
 
-   consteval bool has_closing_handled(opts o) { return o.internal & uint32_t(opts::internal::closing_handled); }
+   consteval bool has_closing_handled(const opts& o) { return o.internal & uint32_t(opts::internal::closing_handled); }
 
-   consteval bool has_ws_handled(opts o) { return o.internal & uint32_t(opts::internal::ws_handled); }
+   consteval bool has_ws_handled(const opts& o) { return o.internal & uint32_t(opts::internal::ws_handled); }
 
-   consteval bool has_no_header(opts o) { return o.internal & uint32_t(opts::internal::no_header); }
+   consteval bool has_no_header(const opts& o) { return o.internal & uint32_t(opts::internal::no_header); }
 
-   consteval bool has_disable_write_unknown(opts o)
+   consteval bool has_disable_write_unknown(const opts& o)
    {
       return o.internal & uint32_t(opts::internal::disable_write_unknown);
    }
 
-   consteval bool has_is_padded(opts o) { return o.internal & uint32_t(opts::internal::is_padded); }
+   consteval bool has_is_padded(const opts& o) { return o.internal & uint32_t(opts::internal::is_padded); }
 
-   consteval bool has_disable_padding(opts o) { return o.internal & uint32_t(opts::internal::disable_padding); }
+   consteval bool has_disable_padding(const opts& o) { return o.internal & uint32_t(opts::internal::disable_padding); }
 
-   consteval bool has_write_unchecked(opts o) { return o.internal & uint32_t(opts::internal::write_unchecked); }
+   consteval bool has_write_unchecked(const opts& o) { return o.internal & uint32_t(opts::internal::write_unchecked); }
 
    template <opts Opts>
    constexpr auto opening_handled()
