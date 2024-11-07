@@ -69,6 +69,13 @@ namespace glz
          std::shared_ptr<std::shared_lock<std::shared_mutex>> shared_lock_ptr;
          std::shared_ptr<std::unique_lock<std::shared_mutex>> unique_lock_ptr;
 
+         struct proxy
+         {
+            std::pair<const K&, V&> p;
+
+            std::pair<const K&, V&>* operator->() { return &p; }
+         };
+
         public:
          iterator(typename std::vector<K>::const_iterator key_it, typename std::vector<V>::iterator value_it,
                   async_map* map, std::shared_ptr<std::shared_lock<std::shared_mutex>> existing_shared_lock = nullptr,
@@ -132,11 +139,9 @@ namespace glz
             return tmp;
          }
 
-         // Dereference
          value_type operator*() const { return {*key_it, *value_it}; }
 
-         // Arrow Operator
-         std::unique_ptr<value_type> operator->() const { return std::make_unique<value_type>(*key_it, *value_it); }
+         proxy operator->() const { return proxy(*key_it, *value_it); }
 
          // Equality Comparison
          bool operator==(const iterator& other) const { return key_it == other.key_it; }
@@ -145,7 +150,6 @@ namespace glz
          bool operator!=(const iterator& other) const { return !(*this == other); }
       };
 
-      // Const Iterator Class Definition
       class const_iterator
       {
         public:
@@ -160,6 +164,13 @@ namespace glz
          typename std::vector<V>::const_iterator value_it;
          const async_map* map;
          std::shared_ptr<std::shared_lock<std::shared_mutex>> shared_lock_ptr;
+
+         struct proxy
+         {
+            std::pair<const K&, const V&> p;
+
+            const std::pair<const K&, const V&>* operator->() const { return &p; }
+         };
 
         public:
          const_iterator(typename std::vector<K>::const_iterator key_it,
@@ -214,11 +225,9 @@ namespace glz
             return tmp;
          }
 
-         // Dereference
          value_type operator*() const { return {*key_it, *value_it}; }
 
-         // Arrow Operator
-         std::unique_ptr<value_type> operator->() const { return std::make_unique<value_type>(*key_it, *value_it); }
+         proxy operator->() const { return proxy(*key_it, *value_it); }
 
          // Equality Comparison
          bool operator==(const const_iterator& other) const { return key_it == other.key_it; }
