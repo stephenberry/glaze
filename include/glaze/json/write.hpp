@@ -1363,14 +1363,26 @@ namespace glz
 
                using WriterType = meta_unknown_write_t<ValueType>;
                if constexpr (std::is_member_object_pointer_v<WriterType>) {
-                  // TODO: This intermediate is added to get GCC 14 to build
-                  decltype(auto) merged = glz::merge{value, value.*writer};
-                  write<JSON>::op<disable_write_unknown_on<Options>()>(std::move(merged), ctx, b, ix);
+                  decltype(auto) unknown_writer = value.*writer;
+                  if (unknown_writer.size() > 0) {
+                     // TODO: This intermediate is added to get GCC 14 to build
+                     decltype(auto) merged = glz::merge{value, unknown_writer};
+                     write<JSON>::op<disable_write_unknown_on<Options>()>(std::move(merged), ctx, b, ix);
+                  }
+                  else {
+                     write<JSON>::op<disable_write_unknown_on<Options>()>(value, ctx, b, ix);
+                  }
                }
                else if constexpr (std::is_member_function_pointer_v<WriterType>) {
-                  // TODO: This intermediate is added to get GCC 14 to build
-                  decltype(auto) merged = glz::merge{value, (value.*writer)()};
-                  write<JSON>::op<disable_write_unknown_on<Options>()>(std::move(merged), ctx, b, ix);
+                  decltype(auto) unknown_writer = (value.*writer)();
+                  if (unknown_writer.size() > 0) {
+                     // TODO: This intermediate is added to get GCC 14 to build
+                     decltype(auto) merged = glz::merge{value, unknown_writer};
+                     write<JSON>::op<disable_write_unknown_on<Options>()>(std::move(merged), ctx, b, ix);
+                  }
+                  else {
+                     write<JSON>::op<disable_write_unknown_on<Options>()>(value, ctx, b, ix);
+                  }
                }
                else {
                   static_assert(false_v<T>, "unknown_write type not handled");
