@@ -221,6 +221,16 @@ suite async_map_tests = [] {
       expect(*map.at("one").value() == 3);
       expect(*map.at("two").value() == 3);
    };
+   
+   "async_map json"_test = [] {
+      glz::async_map<std::string, std::unique_ptr<std::atomic<int>>> map;
+      map.emplace("one", std::make_unique<std::atomic<int>>(1));
+      map.emplace("two", std::make_unique<std::atomic<int>>(2));
+      
+      std::string buffer{};
+      expect(not glz::write_json(map, buffer));
+      expect(buffer == R"()") << buffer;
+   };
 };
 
 int main() { return 0; }

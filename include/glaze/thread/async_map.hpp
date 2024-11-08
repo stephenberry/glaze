@@ -141,7 +141,7 @@ namespace glz
 
          value_type operator*() const { return {*key_it, *value_it}; }
 
-         proxy operator->() const { return proxy(*key_it, *value_it); }
+         proxy operator->() const { return {*key_it, *value_it}; }
 
          // Equality Comparison
          bool operator==(const iterator& other) const { return key_it == other.key_it; }
@@ -227,7 +227,7 @@ namespace glz
 
          value_type operator*() const { return {*key_it, *value_it}; }
 
-         proxy operator->() const { return proxy(*key_it, *value_it); }
+         proxy operator->() const { return {*key_it, *value_it}; }
 
          // Equality Comparison
          bool operator==(const const_iterator& other) const { return key_it == other.key_it; }
