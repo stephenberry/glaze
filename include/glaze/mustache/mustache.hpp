@@ -21,7 +21,7 @@ namespace glz
          return unexpected(error_ctx{ctx.error, ctx.custom_error_message, 0, ctx.includer_error});
       }
 
-      auto p = read_iterators<Opts, false>(tmp);
+      auto p = read_iterators<Opts, false>(ctx, tmp);
       auto it = p.first;
       auto end = p.second;
       auto start = it;

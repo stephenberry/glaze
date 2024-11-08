@@ -11,22 +11,31 @@
 
 namespace glz
 {
-   template <opts Opts, bool Padded = false>
-   auto read_iterators(contiguous auto&& buffer) noexcept
+   namespace detail
    {
-      static_assert(sizeof(decltype(*buffer.data())) == 1);
+      template <bool Padded = false>
+      auto read_iterators_impl(contiguous auto&& buffer) noexcept
+      {
+         static_assert(sizeof(decltype(*buffer.data())) == 1);
 
-      auto it = reinterpret_cast<const char*>(buffer.data());
-      auto end = reinterpret_cast<const char*>(buffer.data()); // to be incremented
+         auto it = reinterpret_cast<const char*>(buffer.data());
+         auto end = reinterpret_cast<const char*>(buffer.data()); // to be incremented
 
-      if constexpr (Padded) {
-         end += buffer.size() - padding_bytes;
+         if constexpr (Padded) {
+            end += buffer.size() - padding_bytes;
+         }
+         else {
+            end += buffer.size();
+         }
+
+         return std::pair{it, end};
       }
-      else {
-         end += buffer.size();
-      }
+   } // namespace detail
 
-      return std::pair{it, end};
+   template <opts Opts, bool Padded = false>
+   auto read_iterators(is_context auto&&, contiguous auto&& buffer) noexcept
+   {
+      return detail::read_iterators_impl<Padded>(buffer);
    }
 
    template <opts Opts, class T>
@@ -50,7 +59,7 @@ namespace glz
          buffer.resize(buffer.size() + padding_bytes);
       }
 
-      auto [it, end] = read_iterators<Opts, use_padded>(buffer);
+      auto [it, end] = read_iterators<Opts, use_padded>(ctx, buffer);
       auto start = it;
       if (bool(ctx.error)) [[unlikely]] {
          goto finish;

@@ -29,7 +29,7 @@ namespace glz
       static constexpr auto N = tokens.size();
 
       context ctx{};
-      auto p = read_iterators<Opts>(buffer);
+      auto p = read_iterators<Opts>(ctx, buffer);
 
       auto it = p.first;
       auto end = p.second;

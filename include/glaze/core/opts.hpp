@@ -145,6 +145,8 @@ namespace glz
 
    consteval bool has_write_unchecked(const opts& o) { return o.internal & uint32_t(opts::internal::write_unchecked); }
 
+   consteval bool has_format(const opts& o, std::uint32_t format) { return o.format == format; }
+
    template <opts Opts>
    constexpr auto opening_handled()
    {

@@ -48,7 +48,7 @@ namespace glz::repe
    size_t read_params(Value&& value, auto&& state)
    {
       glz::context ctx{};
-      auto [b, e] = read_iterators<Opts>(state.in.body);
+      auto [b, e] = read_iterators<Opts>(ctx, state.in.body);
       if (state.in.body.empty()) [[unlikely]] {
          ctx.error = error_code::no_read_input;
       }
