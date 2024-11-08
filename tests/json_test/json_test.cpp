@@ -7195,22 +7195,20 @@ struct glz::meta<unknown_fields_2>
 
 struct my_unknown_struct
 {
-    int i = 287;
-    std::unordered_map<std::string, std::string> unknown;
-
+   int i = 287;
+   std::unordered_map<std::string, std::string> unknown;
 };
 
 template <>
-struct glz::meta<my_unknown_struct> {
-    using T = my_unknown_struct;
-    static constexpr auto value = glz::object(
-        "i", &T::i
-    );
+struct glz::meta<my_unknown_struct>
+{
+   using T = my_unknown_struct;
+   static constexpr auto value = glz::object("i", &T::i);
 
-    static constexpr auto unknown_write{ &T::unknown };
-    //static constexpr auto unknown_read{
-    //    &T::unknown
-    //};
+   static constexpr auto unknown_write{&T::unknown};
+   // static constexpr auto unknown_read{
+   //     &T::unknown
+   // };
 };
 
 suite unknown_fields_member_test = [] {
@@ -7249,16 +7247,16 @@ suite unknown_fields_member_test = [] {
       expect(not glz::write_json(obj, out));
       expect(out == R"({"unk":"zzz","unk2":{"sub":3,"sub2":[{"a":"b"}]},"unk3":[]})") << out;
    };
-   
+
    "my_unknown_struct"_test = [] {
       my_unknown_struct obj;
       std::string buffer;
-      expect(not glz::write < glz::opts{ .prettify = true } > (obj, buffer));
+      expect(not glz::write<glz::opts{.prettify = true}>(obj, buffer));
       expect(buffer == R"({
    "i": 287
 })") << buffer;
-      
-      expect(not glz::write < glz::opts{ } > (obj, buffer));
+
+      expect(not glz::write<glz::opts{}>(obj, buffer));
       expect(buffer == R"({"i":287})") << buffer;
    };
 };
