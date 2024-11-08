@@ -2405,15 +2405,15 @@ suite pair_ranges_tests = [] {
 
 int main()
 {
-   glz::trace_begin("binary_test");
+   glz::trace_begin("beve_test");
    write_tests();
    bench();
    test_partial();
    file_include_test();
    container_types();
 
-   glz::trace_end("binary_test");
-   const auto ec = glz::write_file_trace("binary_test.trace.json", std::string{});
+   glz::trace_end("beve_test");
+   const auto ec = glz::write_file_trace("beve_test.trace.json", std::string{});
    if (ec) {
       std::cerr << "trace output failed\n";
    }
