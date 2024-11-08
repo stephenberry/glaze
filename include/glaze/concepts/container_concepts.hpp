@@ -68,7 +68,10 @@ namespace glz::detail
    concept int_t = std::integral<std::remove_cvref_t<T>> && !char_t<T> && !wide_char_t<T> && !bool_t<T>;
 
    template <class T>
-   concept num_t = std::floating_point<std::remove_cvref_t<T>> || int_t<T>;
+   concept float_t = std::floating_point<std::remove_cvref_t<T>>;
+
+   template <class T>
+   concept num_t = float_t<T> || int_t<T>;
 
    template <class T>
    concept is_float128 = requires(T x) {
