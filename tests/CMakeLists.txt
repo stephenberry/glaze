@@ -80,6 +80,9 @@ add_subdirectory(stencil)
 add_subdirectory(threading_test)
 add_subdirectory(toml_test)
 add_subdirectory(utility_formats)
+if(glaze_ERLANG_FORMAT)
+    add_subdirectory(eetf_test)
+endif(glaze_ERLANG_FORMAT)
 
 # We don't run find_package_test or glaze-install_test with MSVC/Windows, because the Github action runner often chokes
 # Don't run find_package on Clang, because Linux runs with Clang try to use GCC standard library and have errors before Clang 18
