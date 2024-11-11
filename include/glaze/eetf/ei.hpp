@@ -96,8 +96,8 @@ namespace glz
       return type;
    }
 
-   template <class It>
-   auto skip_term(is_context auto&& ctx, It&& it)
+   template <class It0, class It1>
+   auto skip_term(is_context auto&& ctx, It0&& it, It1&& end)
    {
       int index{};
       if (ei_skip_term(it, &index) < 0) {
@@ -105,7 +105,8 @@ namespace glz
          index = 0;
       }
 
-      return it + index;
+      CHECK_OFFSET(index);
+      std::advance(it, index);
    }
 
    template <detail::num_t T, class... Args>

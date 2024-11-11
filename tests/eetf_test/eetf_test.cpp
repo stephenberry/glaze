@@ -20,7 +20,7 @@ glz::trace trace{};
 suite start_trace = [] { trace.begin("eetf_test", "Full test suite duration."); };
 
 /*
-T = #{d=>3.1415926, hello=>"Hello Erlang Term", a=>atom_term, arr=>[9, 8, 7], i=>1}.
+T = #{a => atom_term, arr => [9,8,7], d => 3.1415926, hello => "Hello Erlang Term", i => 1}.
 io:format("~p", [erlang:term_to_binary(T)]).
 */
 
@@ -72,6 +72,16 @@ suite etf_tests = [] {
       auto ec = glz::read_term(s, term001);
       expect(not ec) << glz::format_error(ec, "can't read");
       expect(s.a == "atom_term");
+      expect(s.d == 3.1415926);
+      expect(s.i == 1);
+      expect(s.arr == decltype(s.arr){9,8,7});
+      expect(s.hello == "Hello Erlang Term");
+   };
+
+   "read_term_meta"_test = [] {
+      my_struct_meta s{};
+      auto ec = glz::read<glz::opts{.format = glz::ERLANG, .error_on_unknown_keys = false}>(s, term001);
+      expect(not ec) << glz::format_error(ec, "can't read");
       expect(s.d == 3.1415926);
       expect(s.i == 1);
       expect(s.arr == decltype(s.arr){9,8,7});
