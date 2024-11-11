@@ -54,7 +54,7 @@ namespace glz
          }
 
          index = resize_buffer(b, ix, index);
-         if (func(b.data(), &index) < 0) {
+         if (func(reinterpret_cast<char*>(b.data()), &index) < 0) {
             ctx.error = error_code::seek_failure;
             return;
          }
@@ -330,7 +330,7 @@ namespace glz
    GLZ_ALWAYS_INLINE void encode_version(is_context auto&& ctx, B&& b, IX&& ix)
    {
       int index{static_cast<int>(ix)};
-      if (ei_encode_version(b.data(), &index) < 0) [[unlikely]] {
+      if (ei_encode_version(reinterpret_cast<char*>(b.data()), &index) < 0) [[unlikely]] {
          ctx.error = error_code::unexpected_end;
          return;
       }

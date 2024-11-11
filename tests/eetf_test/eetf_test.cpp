@@ -8,7 +8,7 @@
 #include <string>
 
 #include "glaze/eetf/read.hpp"
-// #include "glaze/eetf/write.hpp"
+#include "glaze/eetf/write.hpp"
 #include "glaze/trace/trace.hpp"
 #include "ut/ut.hpp"
 
@@ -68,6 +68,7 @@ static_assert(glz::read_eetf_supported<my_struct_meta>);
 
 suite etf_tests = [] {
    "read_term"_test = [] {
+      trace.begin("read_term");
       my_struct s{};
       auto ec = glz::read_term(s, term001);
       expect(not ec) << glz::format_error(ec, "can't read");
@@ -76,9 +77,11 @@ suite etf_tests = [] {
       expect(s.i == 1);
       expect(s.arr == decltype(s.arr){9,8,7});
       expect(s.hello == "Hello Erlang Term");
+      trace.end("read_term");
    };
 
    "read_term_meta"_test = [] {
+      trace.begin("read_term_meta");
       my_struct_meta s{};
       auto ec = glz::read<glz::opts{.format = glz::ERLANG, .error_on_unknown_keys = false}>(s, term001);
       expect(not ec) << glz::format_error(ec, "can't read");
@@ -86,6 +89,27 @@ suite etf_tests = [] {
       expect(s.i == 1);
       expect(s.arr == decltype(s.arr){9,8,7});
       expect(s.hello == "Hello Erlang Term");
+      trace.end("read_term_meta");
+   };
+
+   "write_term"_test = [] {
+      trace.begin("write_term");
+      my_struct sw{.i = 123, .d = 2.71827, .hello = "Hello write", .a = "qwe"_atom, .arr = {45, 67, 89}};
+      std::vector<std::uint8_t> buff;
+      auto ec = glz::write_term(sw, buff);
+      trace.end("write_term");
+
+      expect(not ec) << glz::format_error(ec, "can't write");
+
+      my_struct s{};
+      ec = glz::read_term(s, buff);
+      expect(not ec) << glz::format_error(ec, "can't read");
+
+      expect(s.a == "qwe");
+      expect(s.d == 2.71827);
+      expect(s.i == 123);
+      expect(s.arr == decltype(s.arr){45,67,89});
+      expect(s.hello == "Hello write");
    };
 };
 
