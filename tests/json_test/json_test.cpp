@@ -9888,7 +9888,6 @@ struct glz::meta<custom_skip_struct>
 {
    using T = custom_skip_struct;
    static constexpr auto skip_default_i = [](const T& t) { return t.i == 287; };
-
    static constexpr auto value =
       object("i", glz::custom<&T::i, &T::i, skip_default_i, skip_default_flag>, "j", &T::j, "k", &T::k);
 };
@@ -9904,7 +9903,6 @@ template <>
 struct glz::meta<skip_write_default_struct>
 {
    using T = skip_write_default_struct;
-
    static constexpr auto value = object("i", glz::skip_write_default<&T::i>, "j", &T::j, "k", &T::k);
 };
 
