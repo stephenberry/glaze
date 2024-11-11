@@ -520,7 +520,7 @@ namespace glz::detail
    template <opts Opts, class Value>
    [[nodiscard]] GLZ_ALWAYS_INLINE constexpr bool skip_member(const Value& value) noexcept
    {
-      if constexpr (null_t<Value> && Opts.skip_null_members) {
+      if constexpr (null_t<Value> && (Opts.skip_null_members & skip_null_flag)) {
          if constexpr (always_null_t<Value>)
             return true;
          else {

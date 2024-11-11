@@ -39,26 +39,51 @@ namespace glz
          };
       }
 
+      struct always_write_t
+      {
+         bool operator()() const { return true; }
+      };
+
       // custom_t allows a user to register member functions (and std::function members) to implement custom reading and
       // writing
-      template <class T, class From, class To>
+      template <class T, class From, class To, class Skippable, class SkipMask>
       struct custom_t final
       {
          static constexpr auto glaze_reflect = false;
+         static constexpr auto glaze_wrapper = true;
+         static constexpr auto glaze_skip_write_mask = SkipMask::value;
          using from_t = From;
          using to_t = To;
          T& val;
          From from;
          To to;
+         constexpr bool write_skippable() const { return Skippable()(val); }
       };
 
-      template <class T, class From, class To>
-      custom_t(T&, From, To) -> custom_t<T, From, To>;
-
-      template <auto From, auto To>
+      template <auto From, auto To, auto WriteSkippable, uint8_t SkipMask>
       inline constexpr auto custom_impl() noexcept
       {
-         return [](auto&& v) { return custom_t{v, From, To}; };
+         return [](auto&& v) {
+            using skippable_t = decltype(WriteSkippable);
+            using skip_mask_t =
+               std::conditional_t<std::is_same_v<skippable_t, always_write_t>, std::integral_constant<uint8_t, 0>,
+                                  std::integral_constant<uint8_t, SkipMask>>;
+            return custom_t<std::remove_reference_t<decltype(v)>, decltype(From), decltype(To), skippable_t,
+                            skip_mask_t>{v, From, To};
+         };
+      }
+
+      struct deduct_default_t {};
+
+      template <auto MemPtr, auto Default, class T>
+      bool is_default(const T& val)
+      {
+         if constexpr (std::same_as<decltype(Default), deduct_default_t>) {
+            return val.*MemPtr == T{}.*MemPtr;
+         }
+         else {
+            return val.*MemPtr == Default;
+         }
       }
    }
 
@@ -82,6 +107,12 @@ namespace glz
    template <auto MemPtr>
    constexpr auto partial_read = detail::opts_wrapper<MemPtr, &opts::partial_read>();
 
-   template <auto From, auto To>
-   constexpr auto custom = detail::custom_impl<From, To>();
+   template <auto From, auto To, auto WriteSkippable = detail::always_write_t{}, uint8_t SkipMask = UINT8_MAX>
+   constexpr auto custom = detail::custom_impl<From, To, WriteSkippable, SkipMask>();
+
+   // Skip writing out default value
+   template <auto MemPtr, auto Default = detail::deduct_default_t{}>
+   constexpr auto skip_write_default =
+      detail::custom_impl<MemPtr, MemPtr, [](const auto& val) { return detail::is_default<MemPtr, Default>(val); },
+                          skip_default_flag>();
 }
