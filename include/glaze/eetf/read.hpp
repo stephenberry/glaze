@@ -22,13 +22,14 @@ namespace glz
 
    namespace detail
    {
-      // TODO skip value
       template <>
       struct skip_value<ERLANG>
       {
          template <auto Opts>
-         GLZ_ALWAYS_INLINE static void op(is_context auto&& /* ctx */, auto&& /* it */, auto&& /* end */) noexcept
-         {}
+         GLZ_ALWAYS_INLINE static void op(is_context auto&& ctx, auto&& it, auto&& end) noexcept
+         {
+            skip_term(ctx, it, end);
+         }
       };
 
       template <>
@@ -177,24 +178,18 @@ namespace glz
 
             std::size_t fields_count{0};
             if (eetf::is_map(tag)) [[likely]] {
-               [[maybe_unused]] auto [arity, idx] = decode_map_header(std::forward<Ctx>(ctx), it);
+               // parse map #{name=>value, name=>value, ...}
+               auto [arity, idx] = decode_map_header(std::forward<Ctx>(ctx), it);
                if (bool(ctx.error)) [[unlikely]] {
                   return;
                }
 
-               if (it + idx > end) [[unlikely]] {
-                  ctx.error = error_code::unexpected_end;
-                  return;
-               }
-
-               it += idx;
+               CHECK_OFFSET(idx);
+               std::advance(it, idx);
                fields_count = arity;
             }
-            else if (eetf::is_tuple(tag)) {
-               // parse tuple
-            }
             else if (eetf::is_list(tag)) {
-               // parse list
+               // parse list [{name, value}, {name, value}, ...]
             }
             else [[unlikely]] {
                // error
@@ -211,7 +206,7 @@ namespace glz
                if constexpr (N > 0) {
                   static constexpr auto HashInfo = hash_info<T>;
 
-                  // TODO this is only for erlmap + atom keys
+                  // TODO this is only for erlmap with atom keys
                   eetf::atom mkey;
                   from<ERLANG, eetf::atom>::op<Opts>(mkey, ctx, it, end);
                   if (bool(ctx.error)) [[unlikely]] {
@@ -219,7 +214,8 @@ namespace glz
                   }
 
                   const auto n = mkey.size();
-                  const auto index = decode_hash_with_size<ERLANG, T, HashInfo, HashInfo.type>::op(mkey.data(), end, n);
+                  const auto index =
+                     decode_hash_with_size<ERLANG, T, HashInfo, HashInfo.type>::op(mkey.data(), mkey.data() + n, n);
                   if (index < N) [[likely]] {
                      const sv key{mkey.data(), n};
 
@@ -260,7 +256,6 @@ namespace glz
                         return;
                      }
                      else {
-                        it += n;
                         skip_value<ERLANG>::op<Opts>(ctx, it, end);
                         if (bool(ctx.error)) [[unlikely]]
                            return;
