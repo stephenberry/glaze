@@ -77,7 +77,7 @@ namespace glz
       template <auto MemPtr, auto Default, class T>
       bool is_default(const T& val)
       {
-         if constexpr (std::same_as<decltype(Default), deduct_default_t>) {
+         if constexpr (std::same_as<std::decay_t<decltype(Default)>, deduct_default_t>) {
             return val.*MemPtr == T{}.*MemPtr;
          }
          else {
