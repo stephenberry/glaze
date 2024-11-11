@@ -40,9 +40,7 @@ namespace glz
       }
 
       struct always_write_t
-      {
-         bool operator()() const { return true; }
-      };
+      {};
 
       // custom_t allows a user to register member functions (and std::function members) to implement custom reading and
       // writing
@@ -64,16 +62,17 @@ namespace glz
       inline constexpr auto custom_impl() noexcept
       {
          return [](auto&& v) {
-            using skippable_t = decltype(WriteSkippable);
+            using skippable_t = std::decay_t<decltype(WriteSkippable)>;
             using skip_mask_t =
                std::conditional_t<std::is_same_v<skippable_t, always_write_t>, std::integral_constant<uint8_t, 0>,
                                   std::integral_constant<uint8_t, SkipMask>>;
-            return custom_t<std::remove_reference_t<decltype(v)>, decltype(From), decltype(To), skippable_t,
-                            skip_mask_t>{v, From, To};
+            return custom_t<std::remove_reference_t<decltype(v)>, std::decay_t<decltype(From)>,
+                            std::decay_t<decltype(To)>, skippable_t, skip_mask_t>{v, From, To};
          };
       }
 
-      struct deduct_default_t {};
+      struct deduct_default_t
+      {};
 
       template <auto MemPtr, auto Default, class T>
       bool is_default(const T& val)
