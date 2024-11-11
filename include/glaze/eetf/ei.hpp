@@ -53,7 +53,7 @@ namespace glz
          }
 
          index = resize_buffer(b, ix, index);
-         if (func(b.data(), &index) < 0) {
+         if (func(reinterpret_cast<char*>(b.data()), &index) < 0) {
             ctx.error = error_code::seek_failure;
             return;
          }
@@ -114,7 +114,7 @@ namespace glz
    {
       using namespace std::placeholders;
       using V = std::remove_cvref_t<T>;
-      if constexpr (detail::float_t<T>) {
+      if constexpr (std::floating_point<std::remove_cvref_t<T>>) {
          double v;
          detail::decode_impl(std::bind(ei_decode_double, _1, _2, &v), std::forward<Args>(args)...);
          value = static_cast<std::remove_cvref_t<T>>(v);
@@ -329,7 +329,7 @@ namespace glz
    GLZ_ALWAYS_INLINE void encode_version(is_context auto&& ctx, B&& b, IX&& ix)
    {
       int index{static_cast<int>(ix)};
-      if (ei_encode_version(b.data(), &index) < 0) [[unlikely]] {
+      if (ei_encode_version(reinterpret_cast<char*>(b.data()), &index) < 0) [[unlikely]] {
          ctx.error = error_code::unexpected_end;
          return;
       }
@@ -350,7 +350,7 @@ namespace glz
       using namespace std::placeholders;
 
       using V = std::remove_cvref_t<T>;
-      if constexpr (detail::float_t<V>) {
+      if constexpr (std::floating_point<std::remove_cvref_t<T>>) {
          detail::encode_impl(std::bind(ei_encode_double, _1, _2, value), std::forward<Args>(args)...);
       }
       else if constexpr (sizeof(T) > sizeof(long)) {
