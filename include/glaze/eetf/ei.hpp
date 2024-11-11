@@ -204,7 +204,7 @@ namespace glz
       }
 
       [[maybe_unused]] long szl{};
-      if constexpr (sizeof(V) == sizeof(std::uint8_t)) [[likely]] {
+      if constexpr (sizeof(V) == sizeof(std::uint8_t)) {
          detail::decode_impl(std::bind(ei_decode_binary, _1, _2, value.data(), &szl), ctx, it, end);
       }
       else {
@@ -255,7 +255,7 @@ namespace glz
       // TODO handle elang list endings
    }
 
-   template <auto Opts, class T, is_context Ctx, class It0, class It1>
+   template <opts Opts, class T, is_context Ctx, class It0, class It1>
    GLZ_ALWAYS_INLINE void decode_sequence(T&& value, Ctx&& ctx, It0&& it, It1&& end)
    {
       int index{};
@@ -274,7 +274,18 @@ namespace glz
          if (eetf::is_string(type)) {
             std::string buff;
             decode_token(buff, std::forward<Ctx>(ctx), std::forward<It0>(it), std::forward<It1>(end));
-            // value.resize(buff.size());
+            if constexpr (resizable<T>) {
+               value.resize(sz);
+               if constexpr (Opts.shrink_to_fit) {
+                  value.shrink_to_fit();
+               }
+            }
+            else {
+               if (static_cast<std::size_t>(sz) > value.size()) {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
+            }
             std::copy(buff.begin(), buff.end(), value.begin());
          }
          else {
