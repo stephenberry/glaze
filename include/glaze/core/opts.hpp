@@ -103,6 +103,8 @@ namespace glz
 
       bool_t hide_non_invocable =
          true; // Hides non-invocable members from the cli_menu (may be applied elsewhere in the future)
+      
+      bool_t predict_key_order = true; // If the order of keys is expected to follow the sequence in your code, this option enables faster reading
 
       enum struct internal : uint32_t {
          none = 0,

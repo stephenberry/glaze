@@ -255,7 +255,7 @@ namespace glz
       template <opts Opts, class T, auto HashInfo, class Func, class Value>
          requires(glaze_object_t<T> || reflectable<T>)
       GLZ_ALWAYS_INLINE constexpr void parse_and_invoke(Func&& func, Value&& value, is_context auto&& ctx, auto&& it,
-                                                        auto&& end)
+                                                        auto&& end, const size_t next_predicted_index)
       {
          constexpr auto type = HashInfo.type;
          constexpr auto N = reflect<T>::size;
@@ -273,7 +273,20 @@ namespace glz
             }
          }
          else {
-            const auto index = decode_hash<JSON, T, HashInfo, HashInfo.type>::op(it, end);
+            bool expected_found = false;
+            if constexpr (Opts.predict_key_order) {
+               if (next_predicted_index < N) {
+                  jump_table<N>([&]<size_t I>() {
+                     static constexpr auto ExpectedKey = glz::get<I>(reflect<T>::keys);
+                     static constexpr auto Length = ExpectedKey.size();
+                     if ((it + Length) < end) [[likely]] {
+                        expected_found = compare<Length>(ExpectedKey.data(), it);
+                     }
+                  }, next_predicted_index);
+               }
+            }
+            
+            const auto index = expected_found ? next_predicted_index : decode_hash<JSON, T, HashInfo, HashInfo.type>::op(it, end);
 
             if (index >= N) [[unlikely]] {
                if constexpr (Opts.error_on_unknown_keys) {
@@ -1982,6 +1995,8 @@ namespace glz
             const auto ws_start = it;
             GLZ_SKIP_WS();
             const size_t ws_size = size_t(it - ws_start);
+            
+            size_t next_predicted_index{};
 
             if constexpr ((glaze_object_t<T> || reflectable<T>)&&num_members == 0 && Opts.error_on_unknown_keys) {
                if (*it == '}') [[likely]] {
@@ -2129,9 +2144,7 @@ namespace glz
                            if constexpr (Opts.error_on_missing_keys || is_partial_read<T> || Opts.partial_read) {
                               fields[index] = true;
                            }
-                           else {
-                              (void)index;
-                           }
+                           next_predicted_index = index + 1;
 
                            using V = decltype(get_member(value, element));
 
@@ -2149,7 +2162,7 @@ namespace glz
                                  get_member(value, element), ctx, it, end);
                            }
                         },
-                        value, ctx, it, end);
+                        value, ctx, it, end, next_predicted_index);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
                   }
