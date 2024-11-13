@@ -71,6 +71,7 @@ namespace glz
          };
       }
 
+      // Used for determining the default value
       struct deduct_default_t
       {};
 
@@ -78,7 +79,8 @@ namespace glz
       bool is_default(const T& val)
       {
          if constexpr (std::same_as<std::decay_t<decltype(Default)>, deduct_default_t>) {
-            return val.*MemPtr == T{}.*MemPtr;
+            static thread_local auto defaulted = T{};
+            return val.*MemPtr == defaulted.*MemPtr;
          }
          else {
             return val.*MemPtr == Default;

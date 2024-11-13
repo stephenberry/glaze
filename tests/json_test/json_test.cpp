@@ -9906,6 +9906,19 @@ struct glz::meta<skip_write_default_struct>
    static constexpr auto value = object("i", glz::skip_write_default<&T::i>, "j", &T::j, "k", &T::k);
 };
 
+struct skip_write_default_heap_allocated_struct
+{
+   std::string str = "Here is a decently long string to avoid short string optimization";
+};
+
+template <>
+struct glz::meta<skip_write_default_heap_allocated_struct>
+{
+   using T = skip_write_default_heap_allocated_struct;
+   static constexpr auto value = object("str", glz::skip_write_default<&T::str>);
+};
+
+
 suite skip_struct_test = [] {
    auto skip_test = [](auto obj) {
       std::string buffer{};
@@ -9924,6 +9937,13 @@ suite skip_struct_test = [] {
 
    "custom_skip_struct"_test = [&] { skip_test(custom_skip_struct{}); };
    "skip_write_default_struct"_test = [&] { skip_test(skip_write_default_struct{}); };
+   
+   "skip_write_default_heap_allocated_struct"_test = [] {
+      skip_write_default_heap_allocated_struct obj{};
+      std::string buffer{};
+      expect(not glz::write<glz::opts{.skip_null_members = glz::skip_default_flag}>(obj, buffer));
+      expect(buffer == R"({})") << buffer;
+   };
 };
 
 int main()
