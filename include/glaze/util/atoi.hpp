@@ -659,7 +659,7 @@ namespace glz::detail
             if (v > T(peak_negative<T>[*c])) [[unlikely]] {
                return {};
             }
-            v *= -1;
+            v = -1 * v;
             v = v * 10 - (*c - '0');
          }
          else {
