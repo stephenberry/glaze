@@ -438,7 +438,8 @@ struct tester
 };
 
 suite multi_threading_tests = [] {
-   // TODO: There is a test case that is randomly failing with this code only on Linux with Clang, need to investigate this further
+   // TODO: There is a test case that is randomly failing with this code only on Linux with Clang, need to investigate
+   // this further
    /*"multi-threading"_test = [] {
       repe::registry registry{};
       tester obj{};
