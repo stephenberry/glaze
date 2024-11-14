@@ -296,13 +296,21 @@ namespace glz
                   return;
                }
             }
-
+            
+            // We see better performance with an array of function pointers than a glz::jump_table here.
             if constexpr (glaze_object_t<T>) {
-               jump_table<N>([&]<size_t I>() { decode_index<Opts, T, I>(func, nullptr, value, ctx, it, end); }, index);
+               static constexpr auto decoders = [&]<size_t... I>(std::index_sequence<I...>) constexpr {
+                  return std::array{&decode_index<Opts, T, I, decltype(func), decltype(nullptr), decltype(value), decltype(ctx), decltype(it), decltype(end)>...};
+               }(std::make_index_sequence<N>{});
+               
+               decoders[index](std::forward<Func>(func), nullptr, value, ctx, it, end);
             }
             else {
-               decltype(auto) tuple = to_tuple(value);
-               jump_table<N>([&]<size_t I>() { decode_index<Opts, T, I>(func, tuple, value, ctx, it, end); }, index);
+               static constexpr auto decoders = [&]<size_t... I>(std::index_sequence<I...>) constexpr {
+                  return std::array{&decode_index<Opts, T, I, decltype(func), decltype(to_tuple(value)), decltype(value), decltype(ctx), decltype(it), decltype(end)>...};
+               }(std::make_index_sequence<N>{});
+               
+               decoders[index](std::forward<Func>(func), to_tuple(value), value, ctx, it, end);
             }
          }
       }
