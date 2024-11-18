@@ -19,9 +19,13 @@ namespace glz
    inline constexpr uint32_t CSV = 10000;
    inline constexpr uint32_t ERLANG = 20000;
 
-   // layout
+   // layout csv
    inline constexpr uint8_t rowwise = 0;
    inline constexpr uint8_t colwise = 1;
+
+   // layout erlang term
+   inline constexpr uint8_t map = 0;
+   inline constexpr uint8_t proplist = 1;
 
    enum struct float_precision : uint8_t { //
       full, //
@@ -147,6 +151,8 @@ namespace glz
    consteval bool has_write_unchecked(const opts& o) { return o.internal & uint32_t(opts::internal::write_unchecked); }
 
    consteval bool has_format(const opts& o, std::uint32_t format) { return o.format == format; }
+
+   consteval bool has_layout(const opts& o, std::uint8_t layout) { return o.layout == layout; }
 
    template <opts Opts>
    constexpr auto opening_handled()
