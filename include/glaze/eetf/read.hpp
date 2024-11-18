@@ -67,7 +67,7 @@ namespace glz
          {
             GLZ_END_CHECK();
             decode_sequence<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx), std::forward<It0>(it),
-                                           std::forward<It1>(end));
+                                  std::forward<It1>(end));
          }
       };
 
@@ -79,7 +79,7 @@ namespace glz
          {
             GLZ_END_CHECK();
             decode_boolean(std::forward<T>(value), std::forward<Ctx>(ctx), std::forward<It0>(it),
-                                    std::forward<It1>(end));
+                           std::forward<It1>(end));
          }
       };
 
@@ -92,7 +92,7 @@ namespace glz
             GLZ_END_CHECK();
 
             decode_number(std::forward<T>(value), std::forward<Ctx>(ctx), std::forward<It0>(it),
-                                   std::forward<It1>(end));
+                          std::forward<It1>(end));
          }
       };
 
@@ -104,8 +104,7 @@ namespace glz
          {
             GLZ_END_CHECK();
 
-            decode_token(std::forward<T>(value), std::forward<Ctx>(ctx), std::forward<It0>(it),
-                                  std::forward<It1>(end));
+            decode_token(std::forward<T>(value), std::forward<Ctx>(ctx), std::forward<It0>(it), std::forward<It1>(end));
          }
       };
 
@@ -117,8 +116,7 @@ namespace glz
          {
             GLZ_END_CHECK();
 
-            decode_token(std::forward<T>(value), std::forward<Ctx>(ctx), std::forward<It0>(it),
-                                  std::forward<It1>(end));
+            decode_token(std::forward<T>(value), std::forward<Ctx>(ctx), std::forward<It0>(it), std::forward<It1>(end));
          }
       };
 
@@ -164,45 +162,96 @@ namespace glz
          requires glaze_object_t<T> || reflectable<T>
       struct from<ERLANG, T> final
       {
-         template <auto Opts, is_context Ctx, class It0, class It1>
-         static void op(auto&& value, Ctx&& ctx, It0&& it, It1&& end) noexcept
+         template <is_context Ctx, class It0, class It1>
+         class field_iterator
          {
-            GLZ_END_CHECK();
-
-            const auto tag = get_type(ctx, it);
-            if (bool(ctx.error)) [[unlikely]] {
-               return;
-            }
-
-            static constexpr auto N = reflect<T>::size;
-
-            std::size_t fields_count{0};
-            if (eetf::is_map(tag)) [[likely]] {
-               // parse map #{name=>value, name=>value, ...}
-               auto [arity, idx] = decode_map_header(std::forward<Ctx>(ctx), it);
+           public:
+            template <typename F>
+            field_iterator(F&& f, Ctx&& ctx, It0&& it, It1&& end)
+            {
+               term_header = f(ctx, it);
                if (bool(ctx.error)) [[unlikely]] {
                   return;
                }
 
-               CHECK_OFFSET(idx);
-               std::advance(it, idx);
-               fields_count = arity;
+               CHECK_OFFSET(term_header.second);
+               std::advance(it, term_header.second);
             }
-            else if (eetf::is_list(tag)) {
-               // parse list [{name, value}, {name, value}, ...]
+
+            field_iterator(error_code ec, Ctx&& ctx) : term_header{-1ull, -1ull} { ctx.error = ec; }
+
+            template <auto Opts>
+            bool next(Ctx&& ctx, It0&& it, It1&& end)
+            {
+               if (term_header.first == 0) {
+                  return false;
+               }
+
+               if constexpr (Opts.layout == glz::proplist) {
+                  const auto header = decode_tuple_header(ctx, it);
+                  if (bool(ctx.error)) [[unlikely]] {
+                     return false;
+                  }
+
+                  if (header.first != 2) [[unlikely]] {
+                     ctx.error = error_code::syntax_error;
+                     return false;
+                  }
+
+                  if ((it + header.second) > end) [[unlikely]] {
+                     ctx.error = error_code::unexpected_end;
+                     return false;
+                  }
+
+                  std::advance(it, header.second);
+               }
+
+               term_header.first -= 1;
+               return true;
             }
-            else [[unlikely]] {
-               // error
-               ctx.error = error_code::elements_not_convertible_to_design;
+
+            bool empty() const { return term_header.first == 0; }
+
+           private:
+            header_pair term_header;
+         };
+
+         template <auto Opts, is_context Ctx, class It0, class It1>
+         static auto make_term_iterator(Ctx&& ctx, It0&& it, It1&& end)
+         {
+            using fi = field_iterator<Ctx, It0, It1>;
+            const auto tag = get_type(ctx, it);
+            if (bool(ctx.error)) [[unlikely]] {
+               return fi(ctx.error, ctx);
+            }
+
+            if (eetf::is_map(tag) && Opts.layout == glz::map) {
+               return fi(decode_map_header<Ctx, It0>, ctx, it, end);
+            }
+            else if (eetf::is_list(tag) && Opts.layout == glz::proplist) {
+               return fi(decode_list_header<Ctx, It0>, ctx, it, end);
+            }
+
+            return fi(error_code::invalid_header, ctx);
+         }
+
+         template <opts Opts, is_context Ctx, class It0, class It1>
+         static void op(auto&& value, Ctx&& ctx, It0&& it, It1&& end) noexcept
+         {
+            GLZ_END_CHECK();
+
+            auto term_it = make_term_iterator<Opts>(ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]] {
                return;
             }
 
             // empty term
-            if (fields_count == 0) {
+            if (term_it.empty()) [[unlikely]] {
                return;
             }
 
-            for (size_t i = 0; i < fields_count; ++i) {
+            static constexpr auto N = reflect<T>::size;
+            while (term_it.template next<Opts>(ctx, it, end)) {
                if constexpr (N > 0) {
                   static constexpr auto HashInfo = hash_info<T>;
 
@@ -287,18 +336,18 @@ namespace glz
       static constexpr auto value = read_eetf_supported<T>;
    };
 
-   template <read_eetf_supported T, class Buffer>
+   template <uint32_t layout = glz::map, read_eetf_supported T, class Buffer>
    [[nodiscard]] inline error_ctx read_term(T&& value, Buffer&& buffer) noexcept
    {
-      return read<opts{.format = ERLANG}>(value, std::forward<Buffer>(buffer));
+      return read<opts{.format = ERLANG, .layout = layout}>(value, std::forward<Buffer>(buffer));
    }
 
-   template <read_eetf_supported T, is_buffer Buffer>
+   template <uint32_t layout = glz::map, read_eetf_supported T, is_buffer Buffer>
    [[nodiscard]] expected<T, error_ctx> read_term(Buffer&& buffer) noexcept
    {
       T value{};
       context ctx{};
-      const error_ctx ec = read<opts{.format = ERLANG}>(value, std::forward<Buffer>(buffer), ctx);
+      const error_ctx ec = read<opts{.format = ERLANG, .layout = layout}>(value, std::forward<Buffer>(buffer), ctx);
       if (ec) {
          return unexpected<error_ctx>(ec);
       }

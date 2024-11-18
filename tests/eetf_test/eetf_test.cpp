@@ -12,6 +12,8 @@
 #include "glaze/trace/trace.hpp"
 #include "ut/ut.hpp"
 
+#include "glaze/eetf/wrappers.hpp"
+
 using namespace glz::eetf;
 
 using namespace ut;
@@ -24,11 +26,19 @@ T = #{a => atom_term, arr => [9,8,7], d => 3.1415926, hello => "Hello Erlang Ter
 io:format("~p", [erlang:term_to_binary(T)]).
 */
 
-std::array<std::uint8_t, 81> term001{131, 116, 0,   0,   0,   5,   100, 0,   1,   97,  100, 0,   9,  97,  116, 111, 109,
-                                     95,  116, 101, 114, 109, 100, 0,   3,   97,  114, 114, 107, 0,  3,   9,   8,   7,
-                                     100, 0,   1,   100, 70,  64,  9,   33,  251, 77,  18,  216, 74, 100, 0,   5,   104,
-                                     101, 108, 108, 111, 107, 0,   17,  72,  101, 108, 108, 111, 32, 69,  114, 108, 97,
-                                     110, 103, 32,  84,  101, 114, 109, 100, 0,   1,   105, 97,  1};
+std::array<std::uint8_t, 81> term_map_001{
+   131, 116, 0,   0,   0,  5,   100, 0,   1,   97,  100, 0,   9,   97,  116, 111, 109, 95,  116, 101, 114,
+   109, 100, 0,   3,   97, 114, 114, 107, 0,   3,   9,   8,   7,   100, 0,   1,   100, 70,  64,  9,   33,
+   251, 77,  18,  216, 74, 100, 0,   5,   104, 101, 108, 108, 111, 107, 0,   17,  72,  101, 108, 108, 111,
+   32,  69,  114, 108, 97, 110, 103, 32,  84,  101, 114, 109, 100, 0,   1,   105, 97,  1};
+
+std::array<std::uint8_t, 92> term_proplist_001{
+   131, 108, 0,   0,   0,   5,   104, 2,   100, 0,   1,  97,  100, 0,   9,   97,  116, 111, 109, 95,  116, 101, 114,
+   109, 104, 2,   100, 0,   3,   97,  114, 114, 107, 0,  3,   9,   8,   7,   104, 2,   100, 0,   1,   100, 70,  64,
+   9,   33,  251, 77,  18,  216, 74,  104, 2,   100, 0,  5,   104, 101, 108, 108, 111, 107, 0,   17,  72,  101, 108,
+   108, 111, 32,  69,  114, 108, 97,  110, 103, 32,  84, 101, 114, 109, 104, 2,   100, 0,   1,   105, 97,  1,   106};
+
+std::array<std::uint8_t, 16> term_atom{131, 116, 0, 0, 0, 1, 100, 0, 1, 97, 100, 0, 3, 113, 119, 101};
 
 struct my_struct
 {
@@ -44,52 +54,90 @@ static_assert(glz::read_eetf_supported<my_struct>);
 
 struct my_struct_meta
 {
-   my_struct_meta() : i{287}, d{3.14}, hello{"Hello World"}, arr{1, 2, 3} {}
+   my_struct_meta() : val_i{287}, val_d{3.14}, val_str{"Hello World"}, val_arr{1, 2, 3} {}
 
-   int i;
-   double d;
-   std::string hello;
-   std::array<uint64_t, 3> arr;
+   int val_i;
+   double val_d;
+   std::string val_str;
+   std::vector<uint64_t> val_arr;
 };
 
 template <>
 struct glz::meta<my_struct_meta>
 {
    using T = my_struct_meta;
-   static constexpr auto value = object("i", &T::i, //
-                                        "d", &T::d, //
-                                        "hello", &T::hello, //
-                                        "arr", &T::arr //
+   static constexpr auto value = object("i", &T::val_i, //
+                                        "d", &T::val_d, //
+                                        "hello", &T::val_str, //
+                                        "arr", &T::val_arr //
    );
 };
 
-// static_assert(glz::write_eetf_supported<my_struct_meta>);
+struct atom_rw
+{
+   std::string a;
+};
+
+template <>
+struct glz::meta<atom_rw>
+{
+   using T = atom_rw;
+   static constexpr auto value = object("a", glz::detail::string_as_atom<&T::a>());
+};
+
+static_assert(glz::write_eetf_supported<my_struct_meta>);
 static_assert(glz::read_eetf_supported<my_struct_meta>);
 
 suite etf_tests = [] {
-   "read_term"_test = [] {
-      trace.begin("read_term");
+   "read_map_term"_test = [] {
+      trace.begin("read_map_term");
       my_struct s{};
-      auto ec = glz::read_term(s, term001);
+      auto ec = glz::read_term(s, term_map_001);
       expect(not ec) << glz::format_error(ec, "can't read");
       expect(s.a == "atom_term");
       expect(s.d == 3.1415926);
       expect(s.i == 1);
-      expect(s.arr == decltype(s.arr){9,8,7});
+      expect(s.arr == decltype(s.arr){9, 8, 7});
       expect(s.hello == "Hello Erlang Term");
-      trace.end("read_term");
+      trace.end("read_map_term");
    };
 
-   "read_term_meta"_test = [] {
-      trace.begin("read_term_meta");
+   "read_map_term_meta"_test = [] {
+      trace.begin("read_map_term_meta");
       my_struct_meta s{};
-      auto ec = glz::read<glz::opts{.format = glz::ERLANG, .error_on_unknown_keys = false}>(s, term001);
+      auto ec = glz::read<glz::opts{.format = glz::ERLANG, .error_on_unknown_keys = false}>(s, term_map_001);
       expect(not ec) << glz::format_error(ec, "can't read");
+      expect(s.val_d == 3.1415926);
+      expect(s.val_i == 1);
+      expect(s.val_arr == decltype(s.val_arr){9, 8, 7});
+      expect(s.val_str == "Hello Erlang Term");
+      trace.end("read_map_term_meta");
+   };
+
+   "read_proplist_term"_test = [] {
+      trace.begin("read_proplist_term");
+      my_struct s{};
+      auto ec = glz::read_term<glz::proplist>(s, term_proplist_001);
+      expect(not ec) << glz::format_error(ec, "can't read");
+      expect(s.a == "atom_term");
       expect(s.d == 3.1415926);
       expect(s.i == 1);
-      expect(s.arr == decltype(s.arr){9,8,7});
+      expect(s.arr == decltype(s.arr){9, 8, 7});
       expect(s.hello == "Hello Erlang Term");
-      trace.end("read_term_meta");
+      trace.end("read_proplist_term");
+   };
+
+   "read_proplist_term_meta"_test = [] {
+      trace.begin("read_proplist_term_meta");
+      my_struct_meta s{};
+      auto ec = glz::read<glz::opts{.format = glz::ERLANG, .error_on_unknown_keys = false, .layout = glz::proplist}>(
+         s, term_proplist_001);
+      expect(not ec) << glz::format_error(ec, "can't read");
+      expect(s.val_d == 3.1415926);
+      expect(s.val_i == 1);
+      expect(s.val_arr == decltype(s.val_arr){9, 8, 7});
+      expect(s.val_str == "Hello Erlang Term");
+      trace.end("read_proplist_term_meta");
    };
 
    "write_term"_test = [] {
@@ -108,8 +156,23 @@ suite etf_tests = [] {
       expect(s.a == "qwe");
       expect(s.d == 2.71827);
       expect(s.i == 123);
-      expect(s.arr == decltype(s.arr){45,67,89});
+      expect(s.arr == decltype(s.arr){45, 67, 89});
       expect(s.hello == "Hello write");
+   };
+
+   "read_write_string_as_atom"_test = [] {
+      trace.begin("read_write_string_as_atom");
+      atom_rw s{}, r{};
+      auto ec = glz::read_term(s, term_atom);
+      expect(not ec) << glz::format_error(ec, "can't read");
+      expect(s.a == "qwe");
+
+      std::vector<std::uint8_t> out{};
+      expect(not glz::write_term(s, out)) << "can't write";
+      expect(not glz::read_term(r, out)) << "can't read agan";
+      expect(r.a == "qwe");
+
+      trace.end("read_write_string_as_atom");
    };
 };
 

@@ -18,6 +18,8 @@ namespace glz
       return;                                 \
    }
 
+   using header_pair = std::pair<std::size_t, std::size_t>;
+
    namespace detail
    {
       template <class F, is_context Ctx, class It0, class It1>
@@ -214,15 +216,26 @@ namespace glz
       }
    }
 
+   template <is_context Ctx, class It>
+   GLZ_ALWAYS_INLINE auto decode_list_header(Ctx&& ctx, It&& it)
+   {
+      int arity{};
+      int index{};
+      if (ei_decode_list_header(it, &index, &arity) < 0) [[unlikely]] {
+         ctx.error = error_code::syntax_error;
+         return header_pair(-1ull, -1ull);
+      }
+
+      return header_pair(static_cast<std::size_t>(arity), static_cast<std::size_t>(index));
+   }
+
    template <auto Opts, class T>
    GLZ_ALWAYS_INLINE void decode_list(T&& value, is_context auto&& ctx, auto&& it, auto&& end)
    {
       using V = range_value_t<std::decay_t<T>>;
 
-      int index{};
-      int arity{};
-      if (ei_decode_list_header(it, &index, &arity) < 0) [[unlikely]] {
-         ctx.error = error_code::syntax_error;
+      auto [arity, index] = decode_list_header(ctx, it);
+      if (bool(ctx.error)) {
          return;
       }
 
@@ -242,7 +255,7 @@ namespace glz
       CHECK_OFFSET(index);
       std::advance(it, index);
 
-      for (int idx = 0; idx < arity; idx++) {
+      for (std::size_t idx = 0; idx < arity; idx++) {
          V v;
          detail::from<ERLANG, V>::template op<Opts>(v, ctx, it, end);
          if (bool(ctx.error)) [[unlikely]] {
@@ -299,30 +312,30 @@ namespace glz
       }
    }
 
-   template <class It>
-   GLZ_ALWAYS_INLINE auto decode_map_header(is_context auto&& ctx, It&& it)
+   template <is_context Ctx, class It>
+   GLZ_ALWAYS_INLINE auto decode_map_header(Ctx&& ctx, It&& it)
    {
       int arity{};
       int index{};
       if (ei_decode_map_header(it, &index, &arity) < 0) [[unlikely]] {
          ctx.error = error_code::syntax_error;
-         return std::pair<std::size_t, std::size_t>(-1ull, -1ull);
+         return header_pair(-1ull, -1ull);
       }
 
-      return std::pair<std::size_t, std::size_t>(static_cast<std::size_t>(arity), static_cast<std::size_t>(index));
+      return header_pair(static_cast<std::size_t>(arity), static_cast<std::size_t>(index));
    }
 
-   template <class It>
-   GLZ_ALWAYS_INLINE auto decode_tuple_header(is_context auto&& ctx, It&& it)
+   template <is_context Ctx, class It>
+   GLZ_ALWAYS_INLINE auto decode_tuple_header(Ctx&& ctx, It&& it)
    {
       int arity{};
       int index{};
       if (ei_decode_tuple_header(it, &index, &arity) < 0) [[unlikely]] {
          ctx.error = error_code::syntax_error;
-         return std::pair<std::size_t, std::size_t>(-1ull, -1ull);
+         return header_pair(-1ull, -1ull);
       }
 
-      return std::pair<std::size_t, std::size_t>(static_cast<std::size_t>(arity), static_cast<std::size_t>(index));
+      return header_pair(static_cast<std::size_t>(arity), static_cast<std::size_t>(index));
    }
 
    template <class B, class IX>
