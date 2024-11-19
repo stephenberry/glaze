@@ -348,7 +348,7 @@ namespace glz
          try {
             send_buffer(*socket, *request);
          }
-         catch (const std::exception& e) {
+         catch (const std::exception&) {
             socket.ptr.reset();
             (*is_connected) = false;
             return {error_code::send_error, "asio send failure"};
@@ -388,7 +388,7 @@ namespace glz
          try {
             send_buffer(*socket, *request);
          }
-         catch (const std::exception& e) {
+         catch (const std::exception&) {
             socket.ptr.reset();
             (*is_connected) = false;
             return {error_code::send_error, "asio send failure"};

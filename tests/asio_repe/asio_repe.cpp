@@ -262,12 +262,47 @@ void async_calls()
    server_thread.get();
 }
 
+struct raw_json_api
+{
+   std::function<void()> do_nothing = []() {};
+};
+
+void raw_json_tests()
+{
+   static constexpr int16_t port = 8765;
+
+   glz::asio_server<> server{.port = port, .concurrency = 2};
+
+   std::future<void> server_thread = std::async([&] {
+      api2 methods{};
+      raw_json_api api{};
+      server.on(api);
+      server.run();
+   });
+
+   std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+   glz::raw_json results{};
+
+   glz::asio_client<> client{"localhost", std::to_string(port)};
+   (void)client.init();
+
+   auto ec = client.get({"/do_nothing"}, results);
+   expect(not ec);
+   if (ec) {
+      std::cerr << ec.message << '\n';
+   }
+
+   server.stop();
+}
+
 int main()
 {
    notify_test();
    async_clients_test();
    asio_client_test();
    async_calls();
+   raw_json_tests();
 
    return 0;
 }

@@ -1203,7 +1203,10 @@ namespace glz
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
             auto it_start = it;
-            if (is_digit(uint8_t(*it))) {
+            if (*it == 'n') {
+               match<"null", Opts>(ctx, it, end);
+            }
+            else if (is_digit(uint8_t(*it))) {
                skip_number<Opts>(ctx, it, end);
             }
             else {
