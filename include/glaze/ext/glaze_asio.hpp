@@ -415,7 +415,7 @@ namespace glz
    struct asio_server
    {
       uint16_t port{};
-      uint32_t concurrency{1}; // how many threads to use
+      uint32_t concurrency{1}; // How many threads to use (a call to .run() is inclusive on the main thread)
 
       ~asio_server() { stop(); }
 
@@ -427,6 +427,7 @@ namespace glz
 
       std::shared_ptr<asio::io_context> ctx{};
       std::shared_ptr<asio::signal_set> signals{};
+      std::shared_ptr<std::vector<std::thread>> threads{};
 
       repe::registry<Opts> registry{};
 
@@ -444,15 +445,16 @@ namespace glz
       void init()
       {
          if (!initialized) {
+            if (concurrency == 0) {
+               throw std::runtime_error("concurrency == 0");
+            }
             ctx = std::make_shared<asio::io_context>(concurrency);
             signals = std::make_shared<asio::signal_set>(*ctx, SIGINT, SIGTERM);
          }
          initialized = true;
       }
 
-      std::atomic<bool> stop_server{false}; // Atomic flag to control stopping the server
-
-      void run()
+      void run(bool run_on_main_thread = true)
       {
          if (!initialized) {
             init();
@@ -464,39 +466,38 @@ namespace glz
          // Start the listener coroutine
          asio::co_spawn(*ctx, listener(), asio::detached);
 
-         stop_server = false;
-
-         std::thread stop_thread([this]() {
-            // Wait for stop_server to be set to true
-            while (!stop_server) {
-               std::this_thread::sleep_for(std::chrono::milliseconds(100));
+         // Run the io_context in multiple threads for concurrency
+         threads = std::shared_ptr<std::vector<std::thread>>(new std::vector<std::thread>{}, [](auto* ptr) {
+            // Join all threads before exiting
+            for (auto& thread : *ptr) {
+               if (thread.joinable()) {
+                  thread.join();
+               }
             }
-            ctx->stop(); // Stop the server's io_context
          });
 
-         // Run the io_context in multiple threads for concurrency
-         std::vector<std::thread> threads;
-         for (uint32_t i = 0; i < concurrency; ++i) {
-            threads.emplace_back([this]() { ctx->run(); });
+         threads->reserve(concurrency - size_t(run_on_main_thread));
+         for (uint32_t i = size_t(run_on_main_thread); i < concurrency; ++i) {
+            threads->emplace_back([this]() { ctx->run(); });
          }
 
-         // Run in the main thread as well
-         ctx->run();
+         if (run_on_main_thread) {
+            // Run in the main thread as well, which will block
+            ctx->run();
 
-         // Join all threads before exiting
-         for (auto& thread : threads) {
-            if (thread.joinable()) {
-               thread.join();
-            }
-         }
-
-         if (stop_thread.joinable()) {
-            stop_thread.join();
+            threads.reset(); // join all threads
          }
       }
 
+      void run_async() { run(false); }
+
       // stop the server
-      void stop() { stop_server = true; }
+      void stop()
+      {
+         if (ctx) {
+            ctx->stop(); // Stop the server's io_context
+         }
+      }
 
       asio::awaitable<void> run_instance(asio::ip::tcp::socket socket)
       {

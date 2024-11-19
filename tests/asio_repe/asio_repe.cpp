@@ -296,6 +296,32 @@ void raw_json_tests()
    server.stop();
 }
 
+struct async_api
+{
+   std::function<int(int)> times_two = [](int x) { return 2 * x; };
+};
+
+void async_server_test()
+{
+   static constexpr int16_t port = 8765;
+
+   glz::asio_server<> server{.port = port, .concurrency = 1};
+
+   async_api api{};
+   server.on(api);
+
+   server.run_async();
+
+   glz::asio_client<> client{"localhost", std::to_string(port)};
+   (void)client.init();
+
+   int result{};
+   auto ec = client.call({"/times_two"}, 100, result);
+   expect(not ec);
+
+   expect(result == 200);
+}
+
 int main()
 {
    notify_test();
@@ -303,6 +329,7 @@ int main()
    asio_client_test();
    async_calls();
    raw_json_tests();
+   async_server_test();
 
    return 0;
 }
