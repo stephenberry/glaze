@@ -467,7 +467,7 @@ namespace glz
                using V = std::decay_t<std::variant_alternative_t<I, T>>;
                auto& schema_val = (*s.oneOf)[I];
                to_json_schema<V>::template op<Opts>(schema_val, defs);
-               if constexpr ((glaze_object_t<V> || reflectable<V>)&&!tag_v<T>.empty()) {
+               if constexpr ((glaze_object_t<V> || reflectable<V>) && !tag_v<T>.empty()) {
                   if (!schema_val.required) {
                      schema_val.required = std::vector<sv>{};
                   }
@@ -608,7 +608,7 @@ namespace glz
       detail::schematic s{};
       s.defs.emplace();
       detail::to_json_schema<std::decay_t<T>>::template op<Opts>(s, *s.defs);
-      return write<opt_false<Opts, &opts::write_type_info>>(std::move(s), std::forward<Buffer>(buffer));
+      return write<opt_false2<Opts, option::write_type_info>>(std::move(s), std::forward<Buffer>(buffer));
    }
 
    template <class T, opts Opts = opts{}>

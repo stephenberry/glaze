@@ -32,7 +32,7 @@ namespace glz
             case Comma: {
                dump<','>(b, ix);
                ++it;
-               if constexpr (Opts.new_lines_in_arrays) {
+               if constexpr (has(Opts, option::new_lines_in_arrays)) {
                   append_new_line<use_tabs, indent_width>(b, ix, indent);
                }
                else {
@@ -51,7 +51,7 @@ namespace glz
                break;
             }
             case Number: {
-               const auto value = read_json_number<Opts.null_terminated>(it, end);
+               const auto value = read_json_number<has(Opts, option::null_terminated)>(it, end);
                dump_not_empty(value, b, ix);
                break;
             }
@@ -73,8 +73,8 @@ namespace glz
                   state.resize(state.size() * 2);
                }
                state[indent] = Array_Start;
-               if constexpr (Opts.new_lines_in_arrays) {
-                  if constexpr (not Opts.null_terminated) {
+               if constexpr (has(Opts, option::new_lines_in_arrays)) {
+                  if constexpr (not has(Opts, option::null_terminated)) {
                      if (it != end && *it != ']') {
                         append_new_line<use_tabs, indent_width>(b, ix, indent);
                      }
@@ -93,7 +93,7 @@ namespace glz
                   ctx.error = error_code::syntax_error;
                   return;
                }
-               if constexpr (Opts.new_lines_in_arrays) {
+               if constexpr (has(Opts, option::new_lines_in_arrays)) {
                   if (it[-1] != '[') {
                      append_new_line<use_tabs, indent_width>(b, ix, indent);
                   }
@@ -127,7 +127,7 @@ namespace glz
                   state.resize(state.size() * 2);
                }
                state[indent] = Object_Start;
-               if constexpr (not Opts.null_terminated) {
+               if constexpr (not has(Opts, option::null_terminated)) {
                   if (it != end && *it != '}') [[unlikely]] {
                      append_new_line<use_tabs, indent_width>(b, ix, indent);
                   }
@@ -153,7 +153,7 @@ namespace glz
                break;
             }
             case Comment: {
-               if constexpr (Opts.comments) {
+               if constexpr (has(Opts, option::comments)) {
                   const auto value = read_jsonc_comment(it, end);
                   dump_not_empty(value, b, ix);
                   break;
@@ -162,11 +162,10 @@ namespace glz
                   [[fallthrough]];
                }
             }
-               [[unlikely]] default:
-               {
-                  ctx.error = error_code::syntax_error;
-                  return;
-               }
+            [[unlikely]] default: {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
             }
          }
       }
@@ -188,10 +187,10 @@ namespace glz
          }
 
          if constexpr (string_t<In>) {
-            prettify_json<opt_true<Opts, &opts::null_terminated>>(ctx, it, end, out, ix);
+            prettify_json<opt_true2<Opts, option::null_terminated>>(ctx, it, end, out, ix);
          }
          else {
-            prettify_json<opt_false<Opts, &opts::null_terminated>>(ctx, it, end, out, ix);
+            prettify_json<opt_false2<Opts, option::null_terminated>>(ctx, it, end, out, ix);
          }
 
          if constexpr (resizable<Out>) {
@@ -227,7 +226,7 @@ namespace glz
    inline void prettify_jsonc(const auto& in, auto& out)
    {
       context ctx{};
-      detail::prettify_json<opt_true<Opts, &opts::comments>>(ctx, in, out);
+      detail::prettify_json<opt_true2<Opts, option::comments>>(ctx, in, out);
    }
 
    /// <summary>
@@ -238,7 +237,7 @@ namespace glz
    {
       context ctx{};
       std::string out{};
-      detail::prettify_json<opt_true<Opts, &opts::comments>>(ctx, in, out);
+      detail::prettify_json<opt_true2<Opts, option::comments>>(ctx, in, out);
       return out;
    }
 }

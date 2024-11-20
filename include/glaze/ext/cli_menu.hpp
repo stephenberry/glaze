@@ -18,9 +18,7 @@ namespace glz
    // To support bool and std::atomic<bool> and other custom boolean types
    template <class T>
    concept cli_menu_boolean = requires(T t) {
-      {
-         t
-      } -> std::convertible_to<bool>;
+      { t } -> std::convertible_to<bool>;
    };
 
    namespace detail
@@ -54,7 +52,8 @@ namespace glz
       }
    }
 
-   template <opts Opts = opts{.prettify = true}, class T>
+   template <opts Opts = opts{.bits = glz::options(glz::json_options_default).set(glz::option::prettify, true)},
+             class T>
       requires(detail::glaze_object_t<T> || detail::reflectable<T>)
    inline void run_cli_menu(T& value, cli_menu_boolean auto& show_menu)
    {
@@ -251,7 +250,8 @@ namespace glz
       }
    }
 
-   template <opts Opts = opts{.prettify = true}, class T>
+   template <opts Opts = opts{.bits = glz::options(glz::json_options_default).set(glz::option::prettify, true)},
+             class T>
       requires(detail::glaze_object_t<T> || detail::reflectable<T>)
    inline void run_cli_menu(T& value)
    {

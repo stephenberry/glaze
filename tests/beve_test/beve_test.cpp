@@ -436,8 +436,7 @@ void bench()
       auto duration = std::chrono::duration_cast<std::chrono::duration<double>>(tend - tstart).count();
       auto mbytes_per_sec = repeat * buffer.size() / (duration * 1048576);
       std::cout << "to_beve size: " << buffer.size() << " bytes\n";
-      std::cout << "to_beve: " << duration << " s, " << mbytes_per_sec << " MB/s"
-                << "\n";
+      std::cout << "to_beve: " << duration << " s, " << mbytes_per_sec << " MB/s" << "\n";
 
       tstart = std::chrono::high_resolution_clock::now();
       for (size_t i{}; i < repeat; ++i) {
@@ -446,8 +445,7 @@ void bench()
       tend = std::chrono::high_resolution_clock::now();
       duration = std::chrono::duration_cast<std::chrono::duration<double>>(tend - tstart).count();
       mbytes_per_sec = repeat * buffer.size() / (duration * 1048576);
-      std::cout << "from_beve: " << duration << " s, " << mbytes_per_sec << " MB/s"
-                << "\n";
+      std::cout << "from_beve: " << duration << " s, " << mbytes_per_sec << " MB/s" << "\n";
       glz::trace_end("bench");
    };
 }
@@ -1001,7 +999,10 @@ suite skip_test = [] {
       expect(not glz::write_beve(f, s));
 
       nothing obj{};
-      expect(!glz::read<glz::opts{.format = glz::BEVE, .error_on_unknown_keys = false}>(obj, s));
+      expect(
+         !glz::read<glz::opts{
+            .format = glz::BEVE,
+            .bits = glz::options(glz::json_options_default).set(glz::option::error_on_unknown_keys, false)}>(obj, s));
    };
 };
 
@@ -1574,7 +1575,8 @@ suite beve_to_json_tests = [] {
       expect(!glz::beve_to_json(buffer, json));
       expect(json == R"({"first":1,"second":2,"third":3})") << json;
 
-      expect(!glz::beve_to_json<glz::opts{.prettify = true}>(buffer, json));
+      expect(!glz::beve_to_json<glz::opts{
+                .bits = glz::options(glz::json_options_default).set(glz::option::prettify, true)}>(buffer, json));
       expect(json == //
              R"({
    "first": 1,
@@ -1639,7 +1641,8 @@ suite beve_to_json_tests = [] {
       expect(not glz::write_beve(v, buffer));
 
       std::string json{};
-      expect(!glz::beve_to_json<glz::opts{.prettify = true}>(buffer, json));
+      expect(!glz::beve_to_json<glz::opts{
+                .bits = glz::options(glz::json_options_default).set(glz::option::prettify, true)}>(buffer, json));
       expect(json == //
              R"(99)")
          << json;
@@ -1905,7 +1908,10 @@ suite read_allocated_tests = [] {
       full_struct input{"garbage", "ha!", 400, {1, 2, 3}};
       auto s = glz::write_beve(input).value_or("error");
       partial_struct obj{};
-      expect(!glz::read<glz::opts{.format = glz::BEVE, .error_on_unknown_keys = false, .partial_read = true}>(obj, s));
+      expect(!glz::read<glz::opts{
+                .format = glz::BEVE,
+                .bits = glz::options(glz::json_options_default).set(glz::option::error_on_unknown_keys, false),
+                .partial_read = true}>(obj, s));
       expect(obj.string == "ha!");
       expect(obj.integer == 400);
    };
@@ -1923,7 +1929,10 @@ suite read_allocated_tests = [] {
       Header input{"51e2affb", "message_type"};
       auto buf = glz::write_beve(input).value_or("error");
       Header h{};
-      expect(!glz::read<glz::opts{.format = glz::BEVE, .error_on_unknown_keys = false}>(h, buf));
+      expect(
+         !glz::read<glz::opts{
+            .format = glz::BEVE,
+            .bits = glz::options(glz::json_options_default).set(glz::option::error_on_unknown_keys, false)}>(h, buf));
       expect(h.id == "51e2affb");
       expect(h.type == "message_type");
    };
@@ -2201,7 +2210,8 @@ suite early_end = [] {
    };
 
    "early_end !null terminated"_test = [] {
-      static constexpr glz::opts options{.format = glz::BEVE, .null_terminated = false};
+      static constexpr glz::opts options{
+         .format = glz::BEVE, .bits = glz::options(glz::json_options_default).set(glz::option::null_terminated, false)};
 
       Thing obj{};
       glz::json_t json{};

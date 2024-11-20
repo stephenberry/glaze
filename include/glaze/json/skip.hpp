@@ -17,7 +17,7 @@ namespace glz::detail
    template <opts Opts>
    void skip_object(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
-      if constexpr (!Opts.validate_skipped) {
+      if constexpr (!has(Opts, option::validate_skipped)) {
          ++it;
          GLZ_INVALID_END();
          skip_until_closed<Opts, '{', '}'>(ctx, it, end);
@@ -63,7 +63,7 @@ namespace glz::detail
       requires(Opts.format == JSON || Opts.format == NDJSON)
    void skip_array(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
-      if constexpr (!Opts.validate_skipped) {
+      if constexpr (!has(Opts, option::validate_skipped)) {
          ++it;
          GLZ_INVALID_END();
          skip_until_closed<Opts, '[', ']'>(ctx, it, end);
@@ -98,7 +98,7 @@ namespace glz::detail
    template <opts Opts>
    GLZ_ALWAYS_INLINE void skip_value<JSON>::op(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
-      if constexpr (!Opts.validate_skipped) {
+      if constexpr (!has(Opts, option::validate_skipped)) {
          if constexpr (!has_ws_handled(Opts)) {
             GLZ_SKIP_WS();
          }
@@ -196,7 +196,7 @@ namespace glz::detail
    GLZ_ALWAYS_INLINE auto parse_value(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       auto start = it;
-      skip_value<JSON>::op<opt_true<Opts, &opts::validate_skipped>>(ctx, it, end);
+      skip_value<JSON>::op<opt_true2<Opts, option::validate_skipped>>(ctx, it, end);
       return std::span{start, size_t(it - start)};
    }
 }

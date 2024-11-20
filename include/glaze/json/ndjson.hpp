@@ -36,7 +36,7 @@ namespace glz
                if constexpr (resizable<T>) {
                   value.clear();
 
-                  if constexpr (Opts.shrink_to_fit) {
+                  if constexpr (has(Opts, option::shrink_to_fit)) {
                      value.shrink_to_fit();
                   }
                }
@@ -69,7 +69,7 @@ namespace glz
                      value.erase(value_it,
                                  value.end()); // use erase rather than resize for non-default constructible elements
 
-                     if constexpr (Opts.shrink_to_fit) {
+                     if constexpr (has(Opts, option::shrink_to_fit)) {
                         value.shrink_to_fit();
                      }
                   }

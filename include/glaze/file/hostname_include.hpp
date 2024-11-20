@@ -116,7 +116,7 @@ namespace glz
             ctx.current_file = string_file_path;
 
             std::string nested_buffer = buffer;
-            static constexpr auto NestedOpts = opt_true<disable_padding_on<Opts>(), &opts::null_terminated>;
+            static constexpr auto NestedOpts = opt_true2<disable_padding_on<Opts>(), option::null_terminated>;
             const auto ecode = glz::read<NestedOpts>(value.value, nested_buffer, ctx);
             if (bool(ctx.error)) [[unlikely]] {
                ctx.error = error_code::includer_error;

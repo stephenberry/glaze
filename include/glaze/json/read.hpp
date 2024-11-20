@@ -55,7 +55,7 @@ namespace glz
          GLZ_ALWAYS_INLINE static void op(T&& value, Ctx&& ctx, It0&& it, It1&& end)
          {
             if constexpr (const_value_v<T>) {
-               if constexpr (Opts.error_on_const_read) {
+               if constexpr (has(Opts, option::error_on_const_read)) {
                   ctx.error = error_code::attempt_const_read;
                }
                else {
@@ -142,7 +142,7 @@ namespace glz
          static constexpr auto Length = TargetKey.size();
          // The == end check is validating that we have space for a quote
          if ((it + Length) >= end) [[unlikely]] {
-            if constexpr (Opts.error_on_unknown_keys) {
+            if constexpr (has(Opts, option::error_on_unknown_keys)) {
                ctx.error = error_code::unknown_key;
                return;
             }
@@ -165,7 +165,7 @@ namespace glz
          if (compare<Length>(TargetKey.data(), it)) [[likely]] {
             it += Length;
             if (*it != '"') [[unlikely]] {
-               if constexpr (Opts.error_on_unknown_keys) {
+               if constexpr (has(Opts, option::error_on_unknown_keys)) {
                   ctx.error = error_code::unknown_key;
                   return;
                }
@@ -204,7 +204,7 @@ namespace glz
             }
          }
          else [[unlikely]] {
-            if constexpr (Opts.error_on_unknown_keys) {
+            if constexpr (has(Opts, option::error_on_unknown_keys)) {
                ctx.error = error_code::unknown_key;
             }
             else {
@@ -276,7 +276,7 @@ namespace glz
             const auto index = decode_hash<JSON, T, HashInfo, HashInfo.type>::op(it, end);
 
             if (index >= N) [[unlikely]] {
-               if constexpr (Opts.error_on_unknown_keys) {
+               if constexpr (has(Opts, option::error_on_unknown_keys)) {
                   ctx.error = error_code::unknown_key;
                   return;
                }
@@ -489,7 +489,7 @@ namespace glz
                   0b00000000'00000000'00000000'00000000'01100101'01110101'01110010'01110100;
                static constexpr uint64_t u_false =
                   0b00000000'00000000'00000000'01100101'01110011'01101100'01100001'01100110;
-               if constexpr (Opts.null_terminated) {
+               if constexpr (has(Opts, option::null_terminated)) {
                   // Note that because our buffer must be null terminated, we can read one more index without checking:
                   std::memcpy(&c, it, 5);
                   // We have to wipe the 5th character for true testing
@@ -561,7 +561,7 @@ namespace glz
             if constexpr (int_t<V>) {
                static_assert(sizeof(*it) == sizeof(char));
 
-               if constexpr (Opts.null_terminated) {
+               if constexpr (has(Opts, option::null_terminated)) {
                   if (not glz::detail::atoi(value, it)) [[unlikely]] {
                      ctx.error = error_code::parse_number_failure;
                      return;
@@ -588,7 +588,7 @@ namespace glz
                      // Hardware may interact with value changes, so we parse into a temporary and assign in one
                      // place
                      V temp;
-                     auto [ptr, ec] = glz::from_chars<Opts.null_terminated>(it, end, temp);
+                     auto [ptr, ec] = glz::from_chars<has(Opts, option::null_terminated)>(it, end, temp);
                      if (ec != std::errc()) [[unlikely]] {
                         ctx.error = error_code::parse_number_failure;
                         return;
@@ -597,7 +597,7 @@ namespace glz
                      it = ptr;
                   }
                   else {
-                     auto [ptr, ec] = glz::from_chars<Opts.null_terminated>(it, end, value);
+                     auto [ptr, ec] = glz::from_chars<has(Opts, option::null_terminated)>(it, end, value);
                      if (ec != std::errc()) [[unlikely]] {
                         ctx.error = error_code::parse_number_failure;
                         return;
@@ -1284,7 +1284,7 @@ namespace glz
                if constexpr (resizable<T>) {
                   value.clear();
 
-                  if constexpr (Opts.shrink_to_fit) {
+                  if constexpr (has(Opts, option::shrink_to_fit)) {
                      value.shrink_to_fit();
                   }
                }
@@ -1305,7 +1305,7 @@ namespace glz
                if (*it == ',') {
                   ++it;
 
-                  if constexpr (!Opts.minified) {
+                  if constexpr (!has(Opts, option::minified)) {
                      if (ws_size && ws_size < size_t(end - it)) {
                         skip_matching_ws(ws_start, it, ws_size);
                      }
@@ -1320,7 +1320,7 @@ namespace glz
                      value.erase(value_it,
                                  value.end()); // use erase rather than resize for non-default constructible elements
 
-                     if constexpr (Opts.shrink_to_fit) {
+                     if constexpr (has(Opts, option::shrink_to_fit)) {
                         value.shrink_to_fit();
                      }
                   }
@@ -1346,7 +1346,7 @@ namespace glz
                      if (*it == ',') [[likely]] {
                         ++it;
 
-                        if constexpr (!Opts.minified) {
+                        if constexpr (!has(Opts, option::minified)) {
                            if (ws_size && ws_size < size_t(end - it)) {
                               skip_matching_ws(ws_start, it, ws_size);
                            }
@@ -1414,7 +1414,7 @@ namespace glz
                   read<JSON>::op<Opts>(key, ctx, it, end);
                   if (bool(ctx.error)) [[unlikely]]
                      return;
-                  if constexpr (Opts.null_terminated) {
+                  if constexpr (has(Opts, option::null_terminated)) {
                      read<JSON>::op<Opts>(item.first, ctx, key.data(), key.data() + key.size());
                   }
                   else {
@@ -1685,7 +1685,7 @@ namespace glz
 
             // We need to allocate a new buffer here because we could call another includer that uses the buffer
             std::string nested_buffer = buffer;
-            static constexpr auto NestedOpts = opt_true<disable_padding_on<Opts>(), &opts::null_terminated>;
+            static constexpr auto NestedOpts = opt_true2<disable_padding_on<Opts>(), option::null_terminated>;
             const auto ecode = glz::read<NestedOpts>(value.value, nested_buffer, ctx);
             if (bool(ctx.error)) [[unlikely]] {
                ctx.error = error_code::includer_error;
@@ -1887,7 +1887,7 @@ namespace glz
 
             if (*it == '}') {
                GLZ_SUB_LEVEL;
-               if constexpr (Opts.error_on_missing_keys) {
+               if constexpr (has(Opts, option::error_on_missing_keys)) {
                   ctx.error = error_code::missing_key;
                }
                return;
@@ -1903,7 +1903,7 @@ namespace glz
                read<JSON>::op<Opts>(key, ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
                   return;
-               if constexpr (Opts.null_terminated) {
+               if constexpr (has(Opts, option::null_terminated)) {
                   read<JSON>::op<Opts>(value.first, ctx, key.data(), key.data() + key.size());
                }
                else {
@@ -1942,7 +1942,7 @@ namespace glz
                using V = decltype(get_member(value, std::get<I>(variant)));
 
                if constexpr (const_value_v<V>) {
-                  if constexpr (Opts.error_on_const_read) {
+                  if constexpr (has(Opts, option::error_on_const_read)) {
                      ctx.error = error_code::attempt_const_read;
                   }
                   else {
@@ -1983,7 +1983,8 @@ namespace glz
             GLZ_SKIP_WS();
             const size_t ws_size = size_t(it - ws_start);
 
-            if constexpr ((glaze_object_t<T> || reflectable<T>)&&num_members == 0 && Opts.error_on_unknown_keys) {
+            if constexpr ((glaze_object_t<T> || reflectable<T>) && num_members == 0 &&
+                          has(Opts, option::error_on_unknown_keys)) {
                if (*it == '}') [[likely]] {
                   GLZ_SUB_LEVEL;
                   ++it;
@@ -1995,8 +1996,8 @@ namespace glz
             }
             else {
                decltype(auto) fields = [&]() -> decltype(auto) {
-                  if constexpr ((glaze_object_t<T> || reflectable<T>)&&(Opts.error_on_missing_keys ||
-                                                                        is_partial_read<T> || Opts.partial_read)) {
+                  if constexpr ((glaze_object_t<T> || reflectable<T>) &&
+                                (has(Opts, option::error_on_missing_keys) || is_partial_read<T> || Opts.partial_read)) {
                      return bit_array<num_members>{};
                   }
                   else {
@@ -2018,16 +2019,16 @@ namespace glz
                   using V = decay_keep_volatile_t<decltype(value)>;
                   if constexpr (!direct_maps && reflectable<T> && num_members > 0) {
 #if ((defined _MSC_VER) && (!defined __clang__))
-                     static thread_local auto cmap = make_map<V, Opts.use_hash_comparison>();
+                     static thread_local auto cmap = make_map<V, has(Opts, option::use_hash_comparison)>();
 #else
-                     static thread_local constinit auto cmap = make_map<V, Opts.use_hash_comparison>();
+                     static thread_local constinit auto cmap = make_map<V, has(Opts, option::use_hash_comparison)>();
 #endif
                      // We want to run this populate outside of the while loop
                      populate_map(value, cmap); // Function required for MSVC to build
                      return cmap;
                   }
                   else if constexpr (!direct_maps && glaze_object_t<T> && num_members > 0) {
-                     static constexpr auto cmap = make_map<T, Opts.use_hash_comparison>();
+                     static constexpr auto cmap = make_map<T, has(Opts, option::use_hash_comparison)>();
                      return cmap;
                   }
                   else {
@@ -2037,7 +2038,7 @@ namespace glz
 
                bool first = true;
                while (true) {
-                  if constexpr ((glaze_object_t<T> || reflectable<T>)&&(is_partial_read<T> || Opts.partial_read)) {
+                  if constexpr ((glaze_object_t<T> || reflectable<T>) && (is_partial_read<T> || Opts.partial_read)) {
                      static constexpr bit_array<num_members> all_fields = [] {
                         bit_array<num_members> arr{};
                         for (size_t i = 0; i < num_members; ++i) {
@@ -2056,14 +2057,16 @@ namespace glz
 
                   if (*it == '}') {
                      GLZ_SUB_LEVEL;
-                     if constexpr ((glaze_object_t<T> || reflectable<T>)&&((is_partial_read<T> || Opts.partial_read) &&
-                                                                           Opts.error_on_missing_keys)) {
+                     if constexpr ((glaze_object_t<T> || reflectable<T>) &&
+                                   ((is_partial_read<T> || Opts.partial_read) &&
+                                    has(Opts, option::error_on_missing_keys))) {
                         ctx.error = error_code::missing_key;
                         return;
                      }
                      else {
                         ++it;
-                        if constexpr ((glaze_object_t<T> || reflectable<T>)&&Opts.error_on_missing_keys) {
+                        if constexpr ((glaze_object_t<T> || reflectable<T>) &&
+                                      has(Opts, option::error_on_missing_keys)) {
                            constexpr auto req_fields = required_fields<T, Opts>();
                            if ((req_fields & fields) != req_fields) {
                               ctx.error = error_code::missing_key;
@@ -2081,7 +2084,8 @@ namespace glz
                      GLZ_MATCH_COMMA;
                      GLZ_INVALID_END();
 
-                     if constexpr ((not Opts.minified) && (num_members > 1 || !Opts.error_on_unknown_keys)) {
+                     if constexpr ((not has(Opts, option::minified)) &&
+                                   (num_members > 1 || !has(Opts, option::error_on_unknown_keys))) {
                         if (ws_size && ws_size < size_t(end - it)) {
                            skip_matching_ws(ws_start, it, ws_size);
                         }
@@ -2090,10 +2094,11 @@ namespace glz
                      GLZ_SKIP_WS();
                   }
 
-                  if constexpr ((glaze_object_t<T> || reflectable<T>)&&num_members == 0 && Opts.error_on_unknown_keys) {
+                  if constexpr ((glaze_object_t<T> || reflectable<T>) && num_members == 0 &&
+                                has(Opts, option::error_on_unknown_keys)) {
                      static_assert(false_v<T>, "This should be unreachable");
                   }
-                  else if constexpr ((glaze_object_t<T> || reflectable<T>)&&num_members == 0) {
+                  else if constexpr ((glaze_object_t<T> || reflectable<T>) && num_members == 0) {
                      GLZ_MATCH_QUOTE;
                      GLZ_INVALID_END();
 
@@ -2126,7 +2131,8 @@ namespace glz
 
                      parse_and_invoke<Opts, T, hash_info<T>>(
                         [&](auto&& element, const size_t index) {
-                           if constexpr (Opts.error_on_missing_keys || is_partial_read<T> || Opts.partial_read) {
+                           if constexpr (has(Opts, option::error_on_missing_keys) || is_partial_read<T> ||
+                                         Opts.partial_read) {
                               fields[index] = true;
                            }
                            else {
@@ -2136,7 +2142,7 @@ namespace glz
                            using V = decltype(get_member(value, element));
 
                            if constexpr (const_value_v<V>) {
-                              if constexpr (Opts.error_on_const_read) {
+                              if constexpr (has(Opts, option::error_on_const_read)) {
                                  ctx.error = error_code::attempt_const_read;
                               }
                               else {
@@ -2155,7 +2161,7 @@ namespace glz
                   }
                   else if constexpr (glaze_object_t<T> || reflectable<T>) {
                      static_assert(!std::same_as<std::decay_t<decltype(frozen_map)>, std::nullptr_t>);
-                     std::conditional_t<Opts.error_on_unknown_keys, const sv, sv> key =
+                     std::conditional_t<has(Opts, option::error_on_unknown_keys), const sv, sv> key =
                         parse_object_key<T, ws_handled<Opts>(), tag>(ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
@@ -2163,7 +2169,7 @@ namespace glz
                      // Because parse_object_key does not necessarily return a valid JSON key, the logic for handling
                      // whitespace and the colon must run after checking if the key exists
 
-                     if constexpr (Opts.error_on_unknown_keys) {
+                     if constexpr (has(Opts, option::error_on_unknown_keys)) {
                         if (*it != '"') [[unlikely]] {
                            ctx.error = error_code::unknown_key;
                            return;
@@ -2174,7 +2180,8 @@ namespace glz
                         if (const auto& member_it = frozen_map.find(key); member_it != frozen_map.end()) [[likely]] {
                            GLZ_PARSE_WS_COLON;
 
-                           if constexpr (Opts.error_on_missing_keys || is_partial_read<T> || Opts.partial_read) {
+                           if constexpr (has(Opts, option::error_on_missing_keys) || is_partial_read<T> ||
+                                         Opts.partial_read) {
                               // TODO: Kludge/hack. Should work but could easily cause memory issues with small
                               // changes. At the very least if we are going to do this add a get_index method to the
                               // maps and call that
@@ -2234,7 +2241,8 @@ namespace glz
 
                               GLZ_PARSE_WS_COLON;
 
-                              if constexpr (Opts.error_on_missing_keys || is_partial_read<T> || Opts.partial_read) {
+                              if constexpr (has(Opts, option::error_on_missing_keys) || is_partial_read<T> ||
+                                            Opts.partial_read) {
                                  // TODO: Kludge/hack. Should work but could easily cause memory issues with small
                                  // changes. At the very least if we are going to do this add a get_index method to
                                  // the maps and call that
@@ -2465,7 +2473,7 @@ namespace glz
                      }
                   }
                   else {
-                     if constexpr (not Options.null_terminated) {
+                     if constexpr (not has(Options, option::null_terminated)) {
                         if (ctx.error == error_code::end_reached) {
                            // reset the context for next attempt
                            ctx.error = error_code::none;
@@ -2530,7 +2538,7 @@ namespace glz
                      using V = glz::tuple_element_t<0, object_types>;
                      if (!std::holds_alternative<V>(value)) value = V{};
                      read<JSON>::op<opening_handled<Opts>()>(std::get<V>(value), ctx, it, end);
-                     if constexpr (Opts.null_terminated) {
+                     if constexpr (has(Opts, option::null_terminated)) {
                         // In the null terminated case this guards for stack overflow
                         // Depth counting is done at the object level when not null terminated
                         --ctx.indentation_level;
@@ -2629,7 +2637,7 @@ namespace glz
                                        },
                                        value);
 
-                                    if constexpr (Opts.null_terminated) {
+                                    if constexpr (has(Opts, option::null_terminated)) {
                                        // In the null terminated case this guards for stack overflow
                                        // Depth counting is done at the object level when not null terminated
                                        --ctx.indentation_level;
@@ -2647,7 +2655,7 @@ namespace glz
                            if (deduction_it != deduction_map.end()) [[likely]] {
                               possible_types &= deduction_it->second;
                            }
-                           else if constexpr (Opts.error_on_unknown_keys) {
+                           else if constexpr (has(Opts, option::error_on_unknown_keys)) {
                               ctx.error = error_code::unknown_key;
                               return;
                            }
@@ -2676,12 +2684,12 @@ namespace glz
                                  return;
                               }
                            }
-                           else if constexpr (Opts.error_on_unknown_keys) {
+                           else if constexpr (has(Opts, option::error_on_unknown_keys)) {
                               ctx.error = error_code::unknown_key;
                               return;
                            }
                         }
-                        else if constexpr (Opts.error_on_unknown_keys) {
+                        else if constexpr (has(Opts, option::error_on_unknown_keys)) {
                            ctx.error = error_code::unknown_key;
                            return;
                         }
@@ -2733,7 +2741,7 @@ namespace glz
                               },
                               value);
 
-                           if constexpr (Opts.null_terminated) {
+                           if constexpr (has(Opts, option::null_terminated)) {
                               // In the null terminated case this guards for stack overflow
                               // Depth counting is done at the object level when not null terminated
                               --ctx.indentation_level;
@@ -2757,13 +2765,13 @@ namespace glz
                      ctx.error = error_code::exceeded_max_recursive_depth;
                      return;
                   }
-                  if constexpr (Opts.null_terminated) {
+                  if constexpr (has(Opts, option::null_terminated)) {
                      // In the null terminated case this guards for stack overflow
                      // Depth counting is done at the object level when not null terminated
                      ++ctx.indentation_level;
                   }
                   process_arithmetic_boolean_string_or_array<array_types>::template op<Opts>(value, ctx, it, end);
-                  if constexpr (Opts.null_terminated) {
+                  if constexpr (has(Opts, option::null_terminated)) {
                      --ctx.indentation_level;
                   }
                   break;
@@ -3002,7 +3010,7 @@ namespace glz
          {
             std::string& buffer = string_buffer();
             read<JSON>::op<Opts>(buffer, ctx, it, end);
-            if constexpr (Opts.null_terminated) {
+            if constexpr (has(Opts, option::null_terminated)) {
                if (bool(ctx.error)) [[unlikely]]
                   return;
             }
@@ -3021,7 +3029,9 @@ namespace glz
    {
       context ctx{};
       glz::skip skip_value{};
-      return read<opts{.validate_skipped = true, .validate_trailing_whitespace = true}>(
+      return read<opts{.bits = glz::options(glz::json_options_default)
+                                  .set(glz::option::validate_skipped, true)
+                                  .set(glz::option::validate_trailing_whitespace, true)}>(
          skip_value, std::forward<Buffer>(buffer), ctx);
    }
 
@@ -3030,7 +3040,9 @@ namespace glz
    {
       context ctx{};
       glz::skip skip_value{};
-      return read<opts{.validate_trailing_whitespace = true}>(skip_value, std::forward<Buffer>(buffer), ctx);
+      return read<opts{
+         .bits = glz::options(glz::json_options_default).set(glz::option::validate_trailing_whitespace, true)}>(
+         skip_value, std::forward<Buffer>(buffer), ctx);
    }
 
    template <read_json_supported T, is_buffer Buffer>
@@ -3056,7 +3068,8 @@ namespace glz
    [[nodiscard]] error_ctx read_jsonc(T& value, Buffer&& buffer)
    {
       context ctx{};
-      return read<opts{.comments = true}>(value, std::forward<Buffer>(buffer), ctx);
+      return read<opts{.bits = options(json_options_default).set(option::comments, true)}>(
+         value, std::forward<Buffer>(buffer), ctx);
    }
 
    template <read_json_supported T, is_buffer Buffer>
@@ -3064,7 +3077,8 @@ namespace glz
    {
       T value{};
       context ctx{};
-      const error_ctx ec = read<opts{.comments = true}>(value, std::forward<Buffer>(buffer), ctx);
+      const error_ctx ec = read<opts{.bits = options(json_options_default).set(option::comments, true)}>(
+         value, std::forward<Buffer>(buffer), ctx);
       if (ec) {
          return unexpected<error_ctx>(ec);
       }
@@ -3098,7 +3112,7 @@ namespace glz
          return {ec};
       }
 
-      constexpr auto Options = opt_true<set_json<Opts>(), &opts::comments>;
+      constexpr auto Options = opt_true2<set_json<Opts>(), option::comments>;
       return read<Options>(value, buffer, ctx);
    }
 

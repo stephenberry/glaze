@@ -327,49 +327,49 @@ namespace glz::detail
       ++it;                                   \
    }
 
-#define GLZ_MATCH_COMMA                          \
-   if (*it != ',') [[unlikely]] {                \
-      ctx.error = error_code::expected_comma;    \
-      return;                                    \
-   }                                             \
-   else [[likely]] {                             \
-      ++it;                                      \
-   }                                             \
-   if constexpr (not Opts.null_terminated) {     \
-      if (it == end) [[unlikely]] {              \
-         ctx.error = error_code::unexpected_end; \
-         return;                                 \
-      }                                          \
+#define GLZ_MATCH_COMMA                                    \
+   if (*it != ',') [[unlikely]] {                          \
+      ctx.error = error_code::expected_comma;              \
+      return;                                              \
+   }                                                       \
+   else [[likely]] {                                       \
+      ++it;                                                \
+   }                                                       \
+   if constexpr (not has(Opts, option::null_terminated)) { \
+      if (it == end) [[unlikely]] {                        \
+         ctx.error = error_code::unexpected_end;           \
+         return;                                           \
+      }                                                    \
    }
 
-#define GLZ_MATCH_COLON(RETURN)                  \
-   if (*it != ':') [[unlikely]] {                \
-      ctx.error = error_code::expected_colon;    \
-      return RETURN;                             \
-   }                                             \
-   else [[likely]] {                             \
-      ++it;                                      \
-   }                                             \
-   if constexpr (not Opts.null_terminated) {     \
-      if (it == end) [[unlikely]] {              \
-         ctx.error = error_code::unexpected_end; \
-         return RETURN;                          \
-      }                                          \
+#define GLZ_MATCH_COLON(RETURN)                            \
+   if (*it != ':') [[unlikely]] {                          \
+      ctx.error = error_code::expected_colon;              \
+      return RETURN;                                       \
+   }                                                       \
+   else [[likely]] {                                       \
+      ++it;                                                \
+   }                                                       \
+   if constexpr (not has(Opts, option::null_terminated)) { \
+      if (it == end) [[unlikely]] {                        \
+         ctx.error = error_code::unexpected_end;           \
+         return RETURN;                                    \
+      }                                                    \
    }
 
-#define GLZ_MATCH_OPEN_BRACKET                   \
-   if (*it != '[') [[unlikely]] {                \
-      ctx.error = error_code::expected_bracket;  \
-      return;                                    \
-   }                                             \
-   else [[likely]] {                             \
-      ++it;                                      \
-   }                                             \
-   if constexpr (not Opts.null_terminated) {     \
-      if (it == end) [[unlikely]] {              \
-         ctx.error = error_code::unexpected_end; \
-         return;                                 \
-      }                                          \
+#define GLZ_MATCH_OPEN_BRACKET                             \
+   if (*it != '[') [[unlikely]] {                          \
+      ctx.error = error_code::expected_bracket;            \
+      return;                                              \
+   }                                                       \
+   else [[likely]] {                                       \
+      ++it;                                                \
+   }                                                       \
+   if constexpr (not has(Opts, option::null_terminated)) { \
+      if (it == end) [[unlikely]] {                        \
+         ctx.error = error_code::unexpected_end;           \
+         return;                                           \
+      }                                                    \
    }
 
 #define GLZ_MATCH_CLOSE_BRACKET                 \
@@ -381,19 +381,19 @@ namespace glz::detail
       ++it;                                     \
    }
 
-#define GLZ_MATCH_OPEN_BRACE                     \
-   if (*it != '{') [[unlikely]] {                \
-      ctx.error = error_code::expected_brace;    \
-      return;                                    \
-   }                                             \
-   else [[likely]] {                             \
-      ++it;                                      \
-   }                                             \
-   if constexpr (not Opts.null_terminated) {     \
-      if (it == end) [[unlikely]] {              \
-         ctx.error = error_code::unexpected_end; \
-         return;                                 \
-      }                                          \
+#define GLZ_MATCH_OPEN_BRACE                               \
+   if (*it != '{') [[unlikely]] {                          \
+      ctx.error = error_code::expected_brace;              \
+      return;                                              \
+   }                                                       \
+   else [[likely]] {                                       \
+      ++it;                                                \
+   }                                                       \
+   if constexpr (not has(Opts, option::null_terminated)) { \
+      if (it == end) [[unlikely]] {                        \
+         ctx.error = error_code::unexpected_end;           \
+         return;                                           \
+      }                                                    \
    }
 
 #define GLZ_MATCH_CLOSE_BRACE                 \
@@ -405,20 +405,20 @@ namespace glz::detail
       ++it;                                   \
    }
 
-#define GLZ_VALID_END(RETURN)                 \
-   if constexpr (not Opts.null_terminated) {  \
-      if (it == end) {                        \
-         ctx.error = error_code::end_reached; \
-         return RETURN;                       \
-      }                                       \
+#define GLZ_VALID_END(RETURN)                              \
+   if constexpr (not has(Opts, option::null_terminated)) { \
+      if (it == end) {                                     \
+         ctx.error = error_code::end_reached;              \
+         return RETURN;                                    \
+      }                                                    \
    }
 
-#define GLZ_INVALID_END(RETURN)                  \
-   if constexpr (not Opts.null_terminated) {     \
-      if (it == end) [[unlikely]] {              \
-         ctx.error = error_code::unexpected_end; \
-         return RETURN;                          \
-      }                                          \
+#define GLZ_INVALID_END(RETURN)                            \
+   if constexpr (not has(Opts, option::null_terminated)) { \
+      if (it == end) [[unlikely]] {                        \
+         ctx.error = error_code::unexpected_end;           \
+         return RETURN;                                    \
+      }                                                    \
    }
 
    template <char c>
@@ -476,8 +476,7 @@ namespace glz::detail
          ctx.error = error_code::unexpected_end;
       }
       else if (*it == '/') {
-         while (++it != end && *it != '\n')
-            ;
+         while (++it != end && *it != '\n');
       }
       else if (*it == '*') {
          while (++it != end) {
@@ -533,9 +532,9 @@ namespace glz::detail
    }
 
 #define GLZ_SKIP_WS(RETURN)                                              \
-   if constexpr (!Opts.minified) {                                       \
-      if constexpr (Opts.null_terminated) {                              \
-         if constexpr (Opts.comments) {                                  \
+   if constexpr (!has(Opts, option::minified)) {                         \
+      if constexpr (has(Opts, option::null_terminated)) {                \
+         if constexpr (has(Opts, option::comments)) {                    \
             while (whitespace_comment_table[uint8_t(*it)]) {             \
                if (*it == '/') [[unlikely]] {                            \
                   skip_comment(ctx, it, end);                            \
@@ -555,7 +554,7 @@ namespace glz::detail
          }                                                               \
       }                                                                  \
       else {                                                             \
-         if constexpr (Opts.comments) {                                  \
+         if constexpr (has(Opts, option::comments)) {                    \
             while (it < end && whitespace_comment_table[uint8_t(*it)]) { \
                if (*it == '/') [[unlikely]] {                            \
                   skip_comment(ctx, it, end);                            \
@@ -588,9 +587,9 @@ namespace glz::detail
    template <opts Opts>
    GLZ_ALWAYS_INLINE void skip_ws(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
-      if constexpr (!Opts.minified) {
-         if constexpr (Opts.null_terminated) {
-            if constexpr (Opts.comments) {
+      if constexpr (!has(Opts, option::minified)) {
+         if constexpr (has(Opts, option::null_terminated)) {
+            if constexpr (has(Opts, option::comments)) {
                while (whitespace_comment_table[uint8_t(*it)]) {
                   if (*it == '/') [[unlikely]] {
                      skip_comment(ctx, it, end);
@@ -610,7 +609,7 @@ namespace glz::detail
             }
          }
          else {
-            if constexpr (Opts.comments) {
+            if constexpr (has(Opts, option::comments)) {
                while (it < end && whitespace_comment_table[uint8_t(*it)]) {
                   if (*it == '/') [[unlikely]] {
                      skip_comment(ctx, it, end);
@@ -857,7 +856,7 @@ namespace glz::detail
 
       auto start = it;
 
-      if constexpr (Opts.error_on_unknown_keys) {
+      if constexpr (has(Opts, option::error_on_unknown_keys)) {
          it += stats.min_length; // immediately skip minimum length
       }
       else {
@@ -991,7 +990,7 @@ namespace glz::detail
          ++it;
       }
 
-      if constexpr (Opts.validate_skipped) {
+      if constexpr (has(Opts, option::validate_skipped)) {
          while (true) {
             if ((*it & 0b11100000) == 0) [[unlikely]] {
                ctx.error = error_code::syntax_error;
@@ -1242,7 +1241,7 @@ namespace glz::detail
    template <opts Opts>
    GLZ_ALWAYS_INLINE void skip_number(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
-      if constexpr (!Opts.validate_skipped) {
+      if constexpr (!has(Opts, option::validate_skipped)) {
          while (numeric_table[uint8_t(*it)]) {
             ++it;
          }

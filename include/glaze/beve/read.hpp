@@ -28,7 +28,7 @@ namespace glz
          GLZ_ALWAYS_INLINE static void op(T&& value, Tag&& tag, Ctx&& ctx, It0&& it, It1&& end)
          {
             if constexpr (const_value_v<T>) {
-               if constexpr (Opts.error_on_const_read) {
+               if constexpr (has(Opts, option::error_on_const_read)) {
                   ctx.error = error_code::attempt_const_read;
                }
                else {
@@ -48,7 +48,7 @@ namespace glz
          GLZ_ALWAYS_INLINE static void op(T&& value, Ctx&& ctx, It0&& it, It1&& end)
          {
             if constexpr (const_value_v<T>) {
-               if constexpr (Opts.error_on_const_read) {
+               if constexpr (has(Opts, option::error_on_const_read)) {
                   ctx.error = error_code::attempt_const_read;
                }
                else {
@@ -706,7 +706,7 @@ namespace glz
                if constexpr (resizable<T>) {
                   value.resize(n);
 
-                  if constexpr (Opts.shrink_to_fit) {
+                  if constexpr (has(Opts, option::shrink_to_fit)) {
                      value.shrink_to_fit();
                   }
                }
@@ -747,7 +747,7 @@ namespace glz
                   if constexpr (resizable<T>) {
                      value.resize(n);
 
-                     if constexpr (Opts.shrink_to_fit) {
+                     if constexpr (has(Opts, option::shrink_to_fit)) {
                         value.shrink_to_fit();
                      }
                   }
@@ -860,7 +860,7 @@ namespace glz
                if constexpr (resizable<T>) {
                   value.resize(n);
 
-                  if constexpr (Opts.shrink_to_fit) {
+                  if constexpr (has(Opts, option::shrink_to_fit)) {
                      value.shrink_to_fit();
                   }
                }
@@ -877,7 +877,7 @@ namespace glz
 
                   x.resize(length);
 
-                  if constexpr (Opts.shrink_to_fit) {
+                  if constexpr (has(Opts, option::shrink_to_fit)) {
                      value.shrink_to_fit();
                   }
 
@@ -922,7 +922,7 @@ namespace glz
                if constexpr (resizable<T>) {
                   value.resize(n);
 
-                  if constexpr (Opts.shrink_to_fit) {
+                  if constexpr (has(Opts, option::shrink_to_fit)) {
                      value.shrink_to_fit();
                   }
                }
@@ -956,7 +956,7 @@ namespace glz
                if constexpr (resizable<T>) {
                   value.resize(n);
 
-                  if constexpr (Opts.shrink_to_fit) {
+                  if constexpr (has(Opts, option::shrink_to_fit)) {
                      value.shrink_to_fit();
                   }
                }
@@ -1345,7 +1345,7 @@ namespace glz
                               }
                            }
                            else {
-                              if constexpr (Opts.error_on_unknown_keys) {
+                              if constexpr (has(Opts, option::error_on_unknown_keys)) {
                                  ctx.error = error_code::unknown_key;
                                  return;
                               }
@@ -1363,7 +1363,7 @@ namespace glz
                      }
                   }
                   else [[unlikely]] {
-                     if constexpr (Opts.error_on_unknown_keys) {
+                     if constexpr (has(Opts, option::error_on_unknown_keys)) {
                         ctx.error = error_code::unknown_key;
                         return;
                      }
@@ -1375,7 +1375,7 @@ namespace glz
                      }
                   }
                }
-               else if constexpr (Opts.error_on_unknown_keys) {
+               else if constexpr (has(Opts, option::error_on_unknown_keys)) {
                   ctx.error = error_code::unknown_key;
                   return;
                }

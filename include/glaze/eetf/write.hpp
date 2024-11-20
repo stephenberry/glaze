@@ -198,11 +198,11 @@ namespace glz
       template <class T>
       struct to<ERLANG, T> final
       {
-         // template <auto Opts, is_context Ctx, output_buffer B>
-         // GLZ_ALWAYS_INLINE static void op(T && /* value */, Ctx && /* ctx */, B && /* b */) noexcept
-         // {
-         // 	// std::cerr << "here\n";
-         // }
+         template <auto Opts, is_context Ctx, output_buffer B>
+         GLZ_ALWAYS_INLINE static void op(T&& /* value */, Ctx&& /* ctx */, B&& /* b */) noexcept
+         {
+            static_assert(false_v<T>, "type is not supported");
+         }
       };
 
    } // namespace detail

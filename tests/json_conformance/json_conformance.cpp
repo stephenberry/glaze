@@ -110,7 +110,7 @@ inline void should_fail()
       }
    };
 
-   if constexpr (Opts.validate_trailing_whitespace) {
+   if constexpr (glz::has(Opts, glz::option::validate_trailing_whitespace)) {
       "comma after close"_test = [] {
          constexpr sv s = R"(["Comma after the close"],)";
          {
@@ -350,13 +350,17 @@ suite json_conformance = [] {
    };
 
    "error_on_unknown_keys = false"_test = [] {
-      should_fail<glz::opts{.error_on_unknown_keys = false}>();
-      should_pass<glz::opts{.error_on_unknown_keys = false}>();
+      should_fail<glz::opts{
+         .bits = glz::options(glz::json_options_default).set(glz::option::error_on_unknown_keys, false)}>();
+      should_pass<glz::opts{
+         .bits = glz::options(glz::json_options_default).set(glz::option::error_on_unknown_keys, false)}>();
    };
 
    "validate_trailing_whitespace = true"_test = [] {
-      should_fail<glz::opts{.validate_trailing_whitespace = true}>();
-      should_pass<glz::opts{.validate_trailing_whitespace = true}>();
+      should_fail<glz::opts{
+         .bits = glz::options(glz::json_options_default).set(glz::option::validate_trailing_whitespace, true)}>();
+      should_pass<glz::opts{
+         .bits = glz::options(glz::json_options_default).set(glz::option::validate_trailing_whitespace, true)}>();
    };
 };
 

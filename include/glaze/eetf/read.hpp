@@ -282,7 +282,7 @@ namespace glz
                               }
                            }
                            else {
-                              if constexpr (Opts.error_on_unknown_keys) {
+                              if constexpr (has(Opts, option::error_on_unknown_keys)) {
                                  ctx.error = error_code::unknown_key;
                                  return;
                               }
@@ -300,7 +300,7 @@ namespace glz
                      }
                   }
                   else [[unlikely]] {
-                     if constexpr (Opts.error_on_unknown_keys) {
+                     if constexpr (has(Opts, option::error_on_unknown_keys)) {
                         ctx.error = error_code::unknown_key;
                         return;
                      }
@@ -311,7 +311,7 @@ namespace glz
                      }
                   }
                }
-               else if constexpr (Opts.error_on_unknown_keys) {
+               else if constexpr (has(Opts, option::error_on_unknown_keys)) {
                   ctx.error = error_code::unknown_key;
                   return;
                }

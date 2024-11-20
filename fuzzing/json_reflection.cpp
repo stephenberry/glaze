@@ -22,7 +22,8 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* Data, size_t Size)
    {
       my_struct obj{};
       [[maybe_unused]] auto ec =
-         glz::read<glz::opts{.null_terminated = false}>(obj, std::string_view{buffer.data(), Size});
+         glz::read<glz::opts{.bits = glz::options(glz::json_options_default).set(glz::option::null_terminated, false)}>(
+            obj, std::string_view{buffer.data(), Size});
    }
 
    // null terminated

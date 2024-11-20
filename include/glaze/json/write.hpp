@@ -618,13 +618,13 @@ namespace glz
       template <opts Opts, bool minified_check = true, class B>
       GLZ_ALWAYS_INLINE void write_array_entry_separator(is_context auto&& ctx, B&& b, auto&& ix)
       {
-         if constexpr (Opts.prettify) {
+         if constexpr (has(Opts, option::prettify)) {
             if constexpr (vector_like<B>) {
                if (const auto k = ix + ctx.indentation_level + write_padding_bytes; k > b.size()) [[unlikely]] {
                   b.resize((std::max)(b.size() * 2, k));
                }
             }
-            if constexpr (Opts.new_lines_in_arrays) {
+            if constexpr (has(Opts, option::new_lines_in_arrays)) {
                dump<",\n", false>(b, ix);
                dumpn_unchecked<Opts.indentation_char>(ctx.indentation_level, b, ix);
             }
@@ -648,7 +648,7 @@ namespace glz
       template <opts Opts, bool minified_check = true, class B>
       GLZ_ALWAYS_INLINE void write_object_entry_separator(is_context auto&& ctx, B&& b, auto&& ix)
       {
-         if constexpr (Opts.prettify) {
+         if constexpr (has(Opts, option::prettify)) {
             if constexpr (vector_like<B>) {
                if (const auto k = ix + ctx.indentation_level + write_padding_bytes; k > b.size()) [[unlikely]] {
                   b.resize((std::max)(b.size() * 2, k));
@@ -679,7 +679,7 @@ namespace glz
          else {
             write<JSON>::op<opt_false<Opts, &opts::raw_string>>(quoted_t<const Key>{key}, ctx, args...);
          }
-         if constexpr (Opts.prettify) {
+         if constexpr (has(Opts, option::prettify)) {
             dump<": ">(args...);
          }
          else {
@@ -703,8 +703,8 @@ namespace glz
                dump<"[]">(b, ix);
             }
             else {
-               if constexpr (Opts.prettify) {
-                  if constexpr (Opts.new_lines_in_arrays) {
+               if constexpr (has(Opts, option::prettify)) {
+                  if constexpr (has(Opts, option::new_lines_in_arrays)) {
                      ctx.indentation_level += Opts.indentation_width;
                   }
 
@@ -714,7 +714,7 @@ namespace glz
                      }
                   }
 
-                  if constexpr (Opts.new_lines_in_arrays) {
+                  if constexpr (has(Opts, option::new_lines_in_arrays)) {
                      std::memcpy(&b[ix], "[\n", 2);
                      ix += 2;
                      std::memset(&b[ix], Opts.indentation_char, ctx.indentation_level);
@@ -748,7 +748,7 @@ namespace glz
                for (const auto fin = std::end(value); it != fin; ++it) {
                   if constexpr (supports_unchecked_write<val_t>) {
                      if constexpr (vector_like<B>) {
-                        if constexpr (Opts.prettify) {
+                        if constexpr (has(Opts, option::prettify)) {
                            if (const auto k = ix + ctx.indentation_level + write_padding_bytes; k > b.size())
                               [[unlikely]] {
                               b.resize((std::max)(b.size() * 2, k));
@@ -761,8 +761,8 @@ namespace glz
                         }
                      }
 
-                     if constexpr (Opts.prettify) {
-                        if constexpr (Opts.new_lines_in_arrays) {
+                     if constexpr (has(Opts, option::prettify)) {
+                        if constexpr (has(Opts, option::new_lines_in_arrays)) {
                            std::memcpy(&b[ix], ",\n", 2);
                            ix += 2;
                            dumpn_unchecked<Opts.indentation_char>(ctx.indentation_level, b, ix);
@@ -784,7 +784,7 @@ namespace glz
                      to<JSON, val_t>::template op<Opts>(*it, ctx, b, ix);
                   }
                }
-               if constexpr (Opts.prettify && Opts.new_lines_in_arrays) {
+               if constexpr (has(Opts, option::prettify) && has(Opts, option::new_lines_in_arrays)) {
                   ctx.indentation_level -= Opts.indentation_width;
                   dump_newline_indent<Opts.indentation_char>(ctx.indentation_level, b, ix);
                }
@@ -803,7 +803,7 @@ namespace glz
 
             if (!empty_range(value)) {
                if constexpr (!has_opening_handled(Opts)) {
-                  if constexpr (Opts.prettify) {
+                  if constexpr (has(Opts, option::prettify)) {
                      ctx.indentation_level += Opts.indentation_width;
                      dump_newline_indent<Opts.indentation_char>(ctx.indentation_level, args...);
                   }
@@ -849,7 +849,7 @@ namespace glz
                      // When Opts.skip_null_members, *any* entry may be skipped, meaning separator dumping must be
                      // conditional for every entry. Avoid this branch when not skipping null members.
                      // Alternatively, write separator after each entry except last but then branch is permanent
-                     if constexpr (Opts.skip_null_members) {
+                     if constexpr (has(Opts, option::skip_null_members)) {
                         if (!starting) {
                            write_object_entry_separator<Opts>(ctx, args...);
                         }
@@ -869,7 +869,7 @@ namespace glz
                      // When Opts.skip_null_members, *any* entry may be skipped, meaning separator dumping must be
                      // conditional for every entry. Avoid this branch when not skipping null members.
                      // Alternatively, write separator after each entry except last but then branch is permanent
-                     if constexpr (Opts.skip_null_members) {
+                     if constexpr (has(Opts, option::skip_null_members)) {
                         if (!starting) {
                            write_object_entry_separator<Opts>(ctx, args...);
                         }
@@ -885,7 +885,7 @@ namespace glz
                }
 
                if constexpr (!has_closing_handled(Opts)) {
-                  if constexpr (Opts.prettify) {
+                  if constexpr (has(Opts, option::prettify)) {
                      ctx.indentation_level -= Opts.indentation_width;
                      dump_newline_indent<Opts.indentation_char>(ctx.indentation_level, args...);
                   }
@@ -909,7 +909,7 @@ namespace glz
                return dump<"{}">(b, ix);
             }
 
-            if constexpr (Opts.prettify) {
+            if constexpr (has(Opts, option::prettify)) {
                ctx.indentation_level += Opts.indentation_width;
                if constexpr (vector_like<B>) {
                   if (const auto k = ix + ctx.indentation_level + 2; k > b.size()) [[unlikely]] {
@@ -925,7 +925,7 @@ namespace glz
 
             write_pair_content<Opts>(key, val, ctx, b, ix);
 
-            if constexpr (Opts.prettify) {
+            if constexpr (has(Opts, option::prettify)) {
                ctx.indentation_level -= Opts.indentation_width;
                dump_newline_indent<Opts.indentation_char>(ctx.indentation_level, b, ix);
                dump<'}', false>(b, ix);
@@ -1012,11 +1012,11 @@ namespace glz
                [&](auto&& val) {
                   using V = std::decay_t<decltype(val)>;
 
-                  if constexpr (Opts.write_type_info && !tag_v<T>.empty() && glaze_object_t<V>) {
+                  if constexpr (has(Opts, option::write_type_info) && !tag_v<T>.empty() && glaze_object_t<V>) {
                      constexpr auto num_members = reflect<V>::size;
 
                      // must first write out type
-                     if constexpr (Opts.prettify) {
+                     if constexpr (has(Opts, option::prettify)) {
                         dump<"{\n">(args...);
                         ctx.indentation_level += Opts.indentation_width;
                         dumpn<Opts.indentation_char>(ctx.indentation_level, args...);
@@ -1062,18 +1062,18 @@ namespace glz
          {
             auto& value = wrapper.value;
             dump<'['>(args...);
-            if constexpr (Opts.prettify) {
+            if constexpr (has(Opts, option::prettify)) {
                ctx.indentation_level += Opts.indentation_width;
                dump_newline_indent<Opts.indentation_char>(ctx.indentation_level, args...);
             }
             dump<'"'>(args...);
             dump_maybe_empty(ids_v<T>[value.index()], args...);
             dump<"\",">(args...);
-            if constexpr (Opts.prettify) {
+            if constexpr (has(Opts, option::prettify)) {
                dump_newline_indent<Opts.indentation_char>(ctx.indentation_level, args...);
             }
             std::visit([&](auto&& v) { write<JSON>::op<Opts>(v, ctx, args...); }, value);
-            if constexpr (Opts.prettify) {
+            if constexpr (has(Opts, option::prettify)) {
                ctx.indentation_level -= Opts.indentation_width;
                dump_newline_indent<Opts.indentation_char>(ctx.indentation_level, args...);
             }
@@ -1092,8 +1092,8 @@ namespace glz
             static constexpr auto N = glz::tuple_size_v<V>;
 
             dump<'['>(args...);
-            if constexpr (N > 0 && Opts.prettify) {
-               if constexpr (Opts.new_lines_in_arrays) {
+            if constexpr (N > 0 && has(Opts, option::prettify)) {
+               if constexpr (has(Opts, option::new_lines_in_arrays)) {
                   ctx.indentation_level += Opts.indentation_width;
                   dump_newline_indent<Opts.indentation_char>(ctx.indentation_level, args...);
                }
@@ -1110,8 +1110,8 @@ namespace glz
                   write_array_entry_separator<Opts>(ctx, args...);
                }
             });
-            if constexpr (N > 0 && Opts.prettify) {
-               if constexpr (Opts.new_lines_in_arrays) {
+            if constexpr (N > 0 && has(Opts, option::prettify)) {
+               if constexpr (has(Opts, option::new_lines_in_arrays)) {
                   ctx.indentation_level -= Opts.indentation_width;
                   dump_newline_indent<Opts.indentation_char>(ctx.indentation_level, args...);
                }
@@ -1137,8 +1137,8 @@ namespace glz
             }();
 
             dump<'['>(args...);
-            if constexpr (N > 0 && Opts.prettify) {
-               if constexpr (Opts.new_lines_in_arrays) {
+            if constexpr (N > 0 && has(Opts, option::prettify)) {
+               if constexpr (has(Opts, option::new_lines_in_arrays)) {
                   ctx.indentation_level += Opts.indentation_width;
                   dump_newline_indent<Opts.indentation_char>(ctx.indentation_level, args...);
                }
@@ -1159,8 +1159,8 @@ namespace glz
                   write_array_entry_separator<Opts>(ctx, args...);
                }
             });
-            if constexpr (N > 0 && Opts.prettify) {
-               if constexpr (Opts.new_lines_in_arrays) {
+            if constexpr (N > 0 && has(Opts, option::prettify)) {
+               if constexpr (has(Opts, option::new_lines_in_arrays)) {
                   ctx.indentation_level -= Opts.indentation_width;
                   dump_newline_indent<Opts.indentation_char>(ctx.indentation_level, args...);
                }
@@ -1197,7 +1197,7 @@ namespace glz
          {
             if constexpr (!has_opening_handled(Options)) {
                dump<'{'>(b, ix);
-               if constexpr (Options.prettify) {
+               if constexpr (has(Options, option::prettify)) {
                   ctx.indentation_level += Options.indentation_width;
                   dump<'\n'>(b, ix);
                   dumpn<Options.indentation_char>(ctx.indentation_level, b, ix);
@@ -1237,14 +1237,14 @@ namespace glz
                      const sv key = glz::get<2 * I>(value.value);
                      to<JSON, decltype(key)>::template op<Opts>(key, ctx, b, ix);
                      dump<':'>(b, ix);
-                     if constexpr (Opts.prettify) {
+                     if constexpr (has(Opts, option::prettify)) {
                         dump<' '>(b, ix);
                      }
                   }
                   else {
                      dump<'"'>(b, ix);
                      to<JSON, val_t>::template op<Opts>(item, ctx, b, ix);
-                     dump_not_empty(Opts.prettify ? "\": " : "\":", b, ix);
+                     dump_not_empty(has(Opts, option::prettify) ? "\": " : "\":", b, ix);
                   }
 
                   to<JSON, val_t>::template op<Opts>(item, ctx, b, ix);
@@ -1252,7 +1252,7 @@ namespace glz
             });
 
             if constexpr (!has_closing_handled(Options)) {
-               if constexpr (Options.prettify) {
+               if constexpr (has(Options, option::prettify)) {
                   ctx.indentation_level -= Options.indentation_width;
                   dump<'\n'>(b, ix);
                   dumpn<Options.indentation_char>(ctx.indentation_level, b, ix);
@@ -1271,7 +1271,7 @@ namespace glz
          {
             if constexpr (!has_opening_handled(Options)) {
                dump<'{'>(b, ix);
-               if constexpr (Options.prettify) {
+               if constexpr (has(Options, option::prettify)) {
                   ctx.indentation_level += Options.indentation_width;
                   dump<'\n'>(b, ix);
                   dumpn<Options.indentation_char>(ctx.indentation_level, b, ix);
@@ -1282,7 +1282,7 @@ namespace glz
             static constexpr auto N = glz::tuple_size_v<V>;
 
             invoke_table<N>([&]<size_t I>() {
-               if constexpr (Options.skip_null_members) {
+               if constexpr (has(Options, option::skip_null_members)) {
                   // It is possible that all fields were skipped if skip_null_members is true
                   // In this case we don't want to dump a comma
                   const auto ix_start = ix;
@@ -1302,7 +1302,7 @@ namespace glz
                }
             });
 
-            if constexpr (Options.prettify) {
+            if constexpr (has(Options, option::prettify)) {
                ctx.indentation_level -= Options.indentation_width;
                dump<'\n'>(b, ix);
                dumpn<Options.indentation_char>(ctx.indentation_level, b, ix);
@@ -1394,7 +1394,7 @@ namespace glz
                   disable_write_unknown_off<opening_and_closing_handled_off<ws_handled_off<Options>()>()>();
 
                if constexpr (!has_opening_handled(Options)) {
-                  if constexpr (Options.prettify) {
+                  if constexpr (has(Options, option::prettify)) {
                      ctx.indentation_level += Options.indentation_width;
                      if constexpr (vector_like<B>) {
                         if (const auto k = ix + ctx.indentation_level + write_padding_bytes; k > b.size())
@@ -1462,7 +1462,7 @@ namespace glz
 
                         if constexpr (first_is_written && I > 0) {
                            // write_object_entry_separator<Opts, not supports_unchecked_write<val_t>>(ctx, b, ix);
-                           if constexpr (Opts.prettify) {
+                           if constexpr (has(Opts, option::prettify)) {
                               if constexpr (vector_like<B>) {
                                  if (const auto k = ix + ctx.indentation_level + write_padding_bytes; k > b.size())
                                     [[unlikely]] {
@@ -1493,7 +1493,7 @@ namespace glz
                            else {
                               // Null members may be skipped so we cant just write it out for all but the last member
                               // write_object_entry_separator<Opts, not supports_unchecked_write<val_t>>(ctx, b, ix);
-                              if constexpr (Opts.prettify) {
+                              if constexpr (has(Opts, option::prettify)) {
                                  if constexpr (vector_like<B>) {
                                     if (const auto k = ix + ctx.indentation_level + write_padding_bytes; k > b.size())
                                        [[unlikely]] {
@@ -1522,7 +1522,7 @@ namespace glz
                         // MSVC requires get<I> rather than keys[I]
                         static constexpr auto key = glz::get<I>(reflect<T>::keys); // GCC 14 requires auto here
                         static constexpr auto quoted_key = join_v < chars<"\"">, key,
-                                              Opts.prettify ? chars<"\": "> : chars < "\":" >>
+                                              has(Opts, option::prettify) ? chars<"\": "> : chars < "\":" >>
                            ;
 
                         static constexpr auto n = quoted_key.size();
@@ -1555,7 +1555,7 @@ namespace glz
                      // MSVC requires get<I> rather than keys[I]
                      static constexpr auto key = glz::get<I>(reflect<T>::keys); // GCC 14 requires auto here
                      static constexpr auto quoted_key = join_v < chars<"\"">, key,
-                                           Opts.prettify ? chars<"\": "> : chars < "\":" >>
+                                           has(Opts, option::prettify) ? chars<"\": "> : chars < "\":" >>
                         ;
 
                      static constexpr auto n = quoted_key.size();
@@ -1575,7 +1575,7 @@ namespace glz
                      }
 
                      if constexpr (I != (N - 1)) {
-                        if constexpr (Opts.prettify) {
+                        if constexpr (has(Opts, option::prettify)) {
                            if constexpr (vector_like<B>) {
                               if (const auto k = ix + ctx.indentation_level + write_padding_bytes; k > b.size())
                                  [[unlikely]] {
@@ -1604,7 +1604,7 @@ namespace glz
 
                // Options is required here, because it must be the top level
                if constexpr (!has_closing_handled(Options)) {
-                  if constexpr (Options.prettify) {
+                  if constexpr (has(Options, option::prettify)) {
                      ctx.indentation_level -= Options.indentation_width;
                      if constexpr (vector_like<B>) {
                         if (const auto k = ix + ctx.indentation_level + write_padding_bytes; k > b.size())
@@ -1673,7 +1673,7 @@ namespace glz
          {
             if constexpr (!has_opening_handled(Opts)) {
                dump<'{'>(b, ix);
-               if constexpr (Opts.prettify) {
+               if constexpr (has(Opts, option::prettify)) {
                   ctx.indentation_level += Opts.indentation_width;
                   dump<'\n'>(b, ix);
                   dumpn<Opts.indentation_char>(ctx.indentation_level, b, ix);
@@ -1696,7 +1696,7 @@ namespace glz
 
                   static constexpr auto key = get<0>(group);
                   static constexpr auto quoted_key = join_v < chars<"\"">, key,
-                                        Opts.prettify ? chars<"\": "> : chars < "\":" >>
+                                        has(Opts, option::prettify) ? chars<"\": "> : chars < "\":" >>
                      ;
                   dump<quoted_key>(b, ix);
 
@@ -1730,7 +1730,7 @@ namespace glz
 
                   static constexpr auto key = std::get<0>(group);
                   static constexpr auto quoted_key = join_v < chars<"\"">, key,
-                                        Opts.prettify ? chars<"\": "> : chars < "\":" >>
+                                        has(Opts, option::prettify) ? chars<"\": "> : chars < "\":" >>
                      ;
                   dump<key>(b, ix);
 
@@ -1802,13 +1802,14 @@ namespace glz
    template <write_json_supported T, class Buffer>
    [[nodiscard]] error_ctx write_jsonc(T&& value, Buffer&& buffer)
    {
-      return write<opts{.comments = true}>(std::forward<T>(value), std::forward<Buffer>(buffer));
+      return write<opts{.bits = options(json_options_default).set(option::comments, true)}>(
+         std::forward<T>(value), std::forward<Buffer>(buffer));
    }
 
    template <write_json_supported T>
    [[nodiscard]] glz::expected<std::string, error_ctx> write_jsonc(T&& value)
    {
-      return write<opts{.comments = true}>(std::forward<T>(value));
+      return write<opts{.bits = options(json_options_default).set(option::comments, true)}>(std::forward<T>(value));
    }
 
    template <opts Opts = opts{}, write_json_supported T>

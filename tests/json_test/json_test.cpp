@@ -84,7 +84,8 @@ suite starter = [] {
    ]
 })") << pretty;
 
-      pretty = glz::prettify_json<glz::opts{.new_lines_in_arrays = false}>(buffer);
+      pretty = glz::prettify_json<glz::opts{
+         .bits = glz::options(glz::json_options_default).set(glz::option::new_lines_in_arrays, false)}>(buffer);
       expect(pretty == R"({
    "i": 287,
    "d": 3.14,
@@ -841,7 +842,9 @@ suite container_types = [] {
    "vector pair"_test = [] {
       std::vector<std::pair<int, int>> v;
       expect(!glz::read<glz::opts{.concatenate = false}>(v, R"([{"1":2},{"3":4}])"));
-      const auto s = glz::write<glz::opts{.prettify = true, .concatenate = false}>(v).value_or("error");
+      const auto s = glz::write<glz::opts{
+         .bits = glz::options(glz::json_options_default).set(glz::option::prettify, true), .concatenate = false}>(v)
+                        .value_or("error");
       expect(s == R"([
    {
       "1": 2
@@ -860,7 +863,9 @@ suite container_types = [] {
    "vector pair roundtrip"_test = [] {
       std::vector<std::pair<int, int>> v;
       expect(!glz::read_json(v, R"({"1":2,"3":4})"));
-      const auto s = glz::write<glz::opts{.prettify = true}>(v).value_or("error");
+      const auto s =
+         glz::write<glz::opts{.bits = glz::options(glz::json_options_default).set(glz::option::prettify, true)}>(v)
+            .value_or("error");
       expect(s == R"({
    "1": 2,
    "3": 4
@@ -1074,14 +1079,17 @@ suite user_types = [] {
 
       // Should skip invalid keys
       // glaze::read_json(obj,"{/**/ \"b\":\"fox\", \"c\":7.7/**/, \"d\": {\"a\": \"}\"} //\n   /**/, \"a\":322}");
-      expect(glz::read<glz::opts{.comments = true, .error_on_unknown_keys = false}>(
+      expect(glz::read<glz::opts{.bits = glz::options(glz::json_options_default)
+                                            .set(glz::option::comments, true)
+                                            .set(glz::option::error_on_unknown_keys, false)}>(
                 obj,
                 R"({/**/ "b":"fox", "c":7.7/**/, "d": {"a": "}"} //
 /**/, "a":322})") == glz::error_code::none);
 
       // glaze::read_json(obj,"{/**/ \"b\":\"fox\", \"c\":7.7/**/, \"d\": {\"a\": \"}\"} //\n   /**/, \"a\":322}");
-      auto ec = glz::read<glz::opts{.comments = true}>(obj,
-                                                       R"({/**/ "b":"fox", "c":7.7/**/, "d": {"a": "}"} //
+      auto ec = glz::read<glz::opts{.bits = glz::options(glz::json_options_default).set(glz::option::comments, true)}>(
+         obj,
+         R"({/**/ "b":"fox", "c":7.7/**/, "d": {"a": "}"} //
    /**/, "a":322})");
       expect(ec != glz::error_code::none);
       expect(obj.a == 322.0 && obj.b == "fox");
@@ -1097,7 +1105,9 @@ suite user_types = [] {
          << buffer;
 
       buffer.clear();
-      expect(not glz::write<glz::opts{.skip_null_members = false}>(obj, buffer));
+      expect(
+         not glz::write<glz::opts{
+            .bits = glz::options(glz::json_options_default).set(glz::option::skip_null_members, false)}>(obj, buffer));
       expect(
          buffer ==
          R"({"thing":{"a":3.14,"b":"stuff"},"thing2array":[{"a":3.14,"b":"stuff","c":999.342494903,"d":1E-12,"e":203082348402.1,"f":89.089,"g":12380.00000013,"h":1000000.000001}],"vec3":[3.14,2.7,6.5],"list":[6,7,8,2],"deque":[9,6.7,3.1],"vector":[[9,6.7,3.1],[3.14,2.7,6.5]],"i":8,"d":2,"b":false,"c":"W","v":{"x":0},"color":"Green","vb":[true,false,false,true,true,true,true],"sptr":{"a":3.14,"b":"stuff"},"optional":null,"array":["as\"df\\ghjkl","pie","42","foo"],"map":{"a":4,"b":12,"f":7},"mapi":{"2":9.63,"5":3.14,"7":7.42},"thing_ptr":{"a":3.14,"b":"stuff"}})")
@@ -1117,7 +1127,9 @@ suite user_types = [] {
    "complex user obect opts prettify"_test = [] {
       Thing obj{};
       std::string buffer{};
-      expect(not glz::write<glz::opts{.prettify = true}>(obj, buffer));
+      expect(
+         not glz::write<glz::opts{.bits = glz::options(glz::json_options_default).set(glz::option::prettify, true)}>(
+            obj, buffer));
       std::string thing_pretty = R"({
    "thing": {
       "a": 3.14,
@@ -1211,7 +1223,9 @@ suite user_types = [] {
    "complex user obect opts prettify, new_lines_in_arrays = false"_test = [] {
       Thing obj{};
       std::string buffer{};
-      expect(not glz::write<glz::opts{.prettify = true, .new_lines_in_arrays = false}>(obj, buffer));
+      expect(not glz::write<glz::opts{.bits = glz::options(glz::json_options_default)
+                                                 .set(glz::option::prettify, true)
+                                                 .set(glz::option::new_lines_in_arrays, false)}>(obj, buffer));
       std::string_view thing_pretty = R"({
    "thing": {
       "a": 3.14,
@@ -1361,7 +1375,9 @@ suite user_types = [] {
 
       const auto minified = glz::minify_json(thing_pretty);
       expect(json == minified);
-      const auto ec = glz::read<glz::opts{.minified = true}>(obj, minified);
+      const auto ec =
+         glz::read<glz::opts{.bits = glz::options(glz::json_options_default).set(glz::option::prettify, true)}>(
+            obj, minified);
       expect(!ec) << glz::format_error(ec, minified);
    };
 
@@ -1491,7 +1507,9 @@ suite user_types = [] {
       obj.mapi = {{5, 5.0}, {7, 7.1}, {2, 2.22222}};
 
       // glz::write_json(obj, buffer);
-      expect(not glz::write<glz::opts{.skip_null_members = false}>(obj, buffer)); // Sets sptr to null
+      expect(not glz::write<glz::opts{
+                .bits = glz::options(glz::json_options_default).set(glz::option::skip_null_members, false)}>(
+         obj, buffer)); // Sets sptr to null
 
       Thing obj2{};
       expect(glz::read_json(obj2, buffer) == glz::error_code::none);
@@ -1663,14 +1681,16 @@ suite early_end = [] {
          R"({"thing":{"a":3.14/*Test comment 1*/,"b":"stuff"/*Test comment 2*/},"thing2array":[{"a":3.14/*Test comment 1*/,"b":"stuff"/*Test comment 2*/,"c":999.342494903,"d":1e-12,"e":203082348402.1,"f":89.089,"g":12380.00000013,)";
 
       glz::json_t json{};
-      static constexpr glz::opts options{.comments = true};
+      static constexpr glz::opts options{.bits =
+                                            glz::options(glz::json_options_default).set(glz::option::comments, true)};
       expect(glz::read<options>(json, buffer));
    };
 
    "early_end comments"_test = [] {
       trace.begin("early_end");
 
-      static constexpr glz::opts options{.comments = true};
+      static constexpr glz::opts options{.bits =
+                                            glz::options(glz::json_options_default).set(glz::option::comments, true)};
       Thing obj{};
       glz::json_t json{};
       glz::skip skip_me{};
@@ -1718,7 +1738,8 @@ suite early_end = [] {
    };
 
    "early_end !null terminated"_test = [] {
-      static constexpr glz::opts options{.null_terminated = false};
+      static constexpr glz::opts options{
+         .bits = glz::options(glz::json_options_default).set(glz::option::null_terminated, false)};
 
       Thing obj{};
       glz::json_t json{};
@@ -1763,7 +1784,8 @@ suite minified_custom_object = [] {
       std::string buffer = glz::write_json(obj).value_or("error");
       std::string prettified = glz::prettify_json(buffer);
       std::string minified = glz::minify_json(prettified);
-      expect(!glz::read<glz::opts{.minified = true}>(obj, minified));
+      expect(!glz::read<glz::opts{.bits = glz::options(glz::json_options_default).set(glz::option::prettify, true)}>(
+         obj, minified));
       expect(buffer == minified);
    };
 };
@@ -1805,8 +1827,7 @@ suite bench = [] {
       auto duration = std::chrono::duration_cast<std::chrono::duration<double>>(tend - tstart).count();
       auto mbytes_per_sec = repeat * buffer.size() / (duration * 1048576);
       std::cout << "write_json size: " << buffer.size() << " bytes\n";
-      std::cout << "write_json: " << duration << " s, " << mbytes_per_sec << " MB/s"
-                << "\n";
+      std::cout << "write_json: " << duration << " s, " << mbytes_per_sec << " MB/s" << "\n";
 
       trace.begin("read_bench");
       tstart = std::chrono::high_resolution_clock::now();
@@ -1817,8 +1838,7 @@ suite bench = [] {
       trace.end("read_bench", "JSON reading benchmark");
       duration = std::chrono::duration_cast<std::chrono::duration<double>>(tend - tstart).count();
       mbytes_per_sec = repeat * buffer.size() / (duration * 1048576);
-      std::cout << "read_json: " << duration << " s, " << mbytes_per_sec << " MB/s"
-                << "\n";
+      std::cout << "read_json: " << duration << " s, " << mbytes_per_sec << " MB/s" << "\n";
 
       trace.begin("json_ptr_bench");
       tstart = std::chrono::high_resolution_clock::now();
@@ -1828,8 +1848,7 @@ suite bench = [] {
       tend = std::chrono::high_resolution_clock::now();
       trace.end("json_ptr_bench", "JSON pointer benchmark");
       duration = std::chrono::duration_cast<std::chrono::duration<double>>(tend - tstart).count();
-      std::cout << "get: " << duration << " s, " << (repeat / duration) << " gets/s"
-                << "\n\n";
+      std::cout << "get: " << duration << " s, " << (repeat / duration) << " gets/s" << "\n\n";
       trace.end("bench");
    };
 };
@@ -2186,7 +2205,8 @@ suite read_tests = [] {
       {
          // allow unknown keys
          std::map<std::string_view, int> v{{"as", -1}, {"make", 10000}}, vr{{"as", 1}, {"so", 2}, {"make", 3}};
-         const auto err = glz::read<glz::opts{.error_on_unknown_keys = false}>(v, in);
+         const auto err = glz::read<glz::opts{
+            .bits = glz::options(glz::json_options_default).set(glz::option::error_on_unknown_keys, false)}>(v, in);
          expect(err == glz::error_code::none);
          const bool equal = (v == vr);
          expect(equal);
@@ -2643,7 +2663,9 @@ suite write_tests = [] {
       expect(glz::read_json(e, "{}") == glz::error_code::none);
       expect(glz::read_json(e, " {    } ") == glz::error_code::none);
       expect(glz::read_json(e, "{ \"reject\": 44 }") == glz::error_code::unknown_key);
-      expect(glz::read<glz::opts{.error_on_unknown_keys = false}>(e, "{ \"skipped\": 44 }") == glz::error_code::none);
+      expect(glz::read<glz::opts{
+                .bits = glz::options(glz::json_options_default).set(glz::option::error_on_unknown_keys, false)}>(
+                e, "{ \"skipped\": 44 }") == glz::error_code::none);
    };
 
    "Write c-string"_test = [] {
@@ -3302,7 +3324,8 @@ suite tagged_variant_tests = [] {
       expect(std::get<put_action>(var2).data["y"] == 200);
 
       //
-      const auto err = glz::read<glz::opts{.error_on_unknown_keys = false}>(
+      const auto err = glz::read<glz::opts{
+         .bits = glz::options(glz::json_options_default).set(glz::option::error_on_unknown_keys, false)}>(
          var2, R"({"type":"put_action","data":{"x":100,"y":200}})");
       expect(err == glz::error_code::none);
       expect(std::holds_alternative<put_action>(var2));
@@ -3325,7 +3348,9 @@ suite tagged_variant_tests = [] {
       s.clear();
 
       // prettifies valid JSON
-      expect(not glz::write<glz::opts{.prettify = true}>(var, s));
+      expect(
+         not glz::write<glz::opts{.bits = glz::options(glz::json_options_default).set(glz::option::prettify, true)}>(
+            var, s));
       tagged_variant parsed_var;
       expect(glz::read_json(parsed_var, s) == glz::error_code::none);
       expect(parsed_var == var);
@@ -4190,7 +4215,7 @@ struct glz::meta<cat>
 
 struct person
 {
-   void eat(const std::string&){};
+   void eat(const std::string&) {};
 };
 
 template <>
@@ -4983,7 +5008,9 @@ suite validation_tests = [] {
       // Tests are taken from the https://www.json.org/JSON_checker/ test suite
 
       std::string fail10 = R"({"Extra value after close": true} "misplaced quoted value")";
-      auto ec_fail10 = glz::read<glz::opts{.validate_trailing_whitespace = true}>(json, fail10);
+      auto ec_fail10 = glz::read<glz::opts{
+         .bits = glz::options(glz::json_options_default).set(glz::option::validate_trailing_whitespace, true)}>(json,
+                                                                                                                fail10);
       expect(ec_fail10 != glz::error_code::none);
       expect(glz::validate_json(fail10) != glz::error_code::none);
 
@@ -5125,12 +5152,16 @@ break"])";
       expect(glz::validate_json(fail6) != glz::error_code::none);
 
       std::string fail7 = R"(["Comma after the close"],)";
-      auto ec_fail7 = glz::read<glz::opts{.validate_trailing_whitespace = true}>(json, fail7);
+      auto ec_fail7 = glz::read<glz::opts{
+         .bits = glz::options(glz::json_options_default).set(glz::option::validate_trailing_whitespace, true)}>(json,
+                                                                                                                fail7);
       expect(ec_fail7 != glz::error_code::none);
       expect(glz::validate_json(fail7) != glz::error_code::none);
 
       std::string fail8 = R"(["Extra close"]])";
-      auto ec_fail8 = glz::read<glz::opts{.validate_trailing_whitespace = true}>(json, fail8);
+      auto ec_fail8 = glz::read<glz::opts{
+         .bits = glz::options(glz::json_options_default).set(glz::option::validate_trailing_whitespace, true)}>(json,
+                                                                                                                fail8);
       expect(ec_fail8 != glz::error_code::none);
       expect(glz::validate_json(fail8) != glz::error_code::none);
 
@@ -5251,8 +5282,12 @@ suite invalid_keys = [] {
       std::string test_str = R"({"a":1,"bbbbbb":"0","c":"Hello World","d":{"e":"123"} })";
       auto s = Sample{};
 
-      expect(glz::read<glz::opts{.error_on_unknown_keys = true}>(s, test_str) != glz::error_code::none);
-      expect(glz::read<glz::opts{.error_on_unknown_keys = false}>(s, test_str) == glz::error_code::none);
+      expect(glz::read<glz::opts{
+                .bits = glz::options(glz::json_options_default).set(glz::option::error_on_unknown_keys, true)}>(
+                s, test_str) != glz::error_code::none);
+      expect(glz::read<glz::opts{
+                .bits = glz::options(glz::json_options_default).set(glz::option::error_on_unknown_keys, false)}>(
+                s, test_str) == glz::error_code::none);
    };
 };
 
@@ -5393,7 +5428,9 @@ suite long_object = [] {
 )";
 
       OKX_OrderBook order_book{};
-      auto ec = glz::read<glz::opts{.error_on_unknown_keys = false}>(order_book, order_book_str);
+      auto ec = glz::read<glz::opts{
+         .bits = glz::options(glz::json_options_default).set(glz::option::error_on_unknown_keys, false)}>(
+         order_book, order_book_str);
       expect(ec == glz::error_code::none);
 
       std::string buffer{};
@@ -5436,7 +5473,8 @@ suite lamda_wrapper = [] {
       expect(buffer == R"({"x":"3.14","y":["1","2","3"],"z":[["1","2","3"]]})");
 
       buffer = R"({"x":"999.2","y":["4","5","6"],"z":[["4","5"]]})";
-      auto ec = glz::read<glz::opts{.error_on_missing_keys = true}>(a, buffer);
+      auto ec = glz::read<glz::opts{
+         .bits = glz::options(glz::json_options_default).set(glz::option::error_on_missing_keys, true)}>(a, buffer);
       expect(ec == glz::error_code::none) << glz::format_error(ec, buffer);
       expect(a.x == 999.2);
       expect(a.y == std::vector<uint32_t>{4, 5, 6});
@@ -5498,7 +5536,9 @@ suite nullable_quoted_num = [] {
    "nullable_quoted_num error_on_missing_keys"_test = [] {
       std::string_view json = R"({})";
       nullable_quoted_num_t obj{};
-      expect(!glz::read<glz::opts{.error_on_missing_keys = true}>(obj, json));
+      expect(
+         !glz::read<glz::opts{
+            .bits = glz::options(glz::json_options_default).set(glz::option::error_on_missing_keys, true)}>(obj, json));
       expect(!obj.i.has_value());
    };
 
@@ -5658,22 +5698,34 @@ suite required_keys = [] {
 
       buffer = R"({"i":287,"d":3.14,"hello":"Hello World","arr":[1,2,3]})";
       expect(glz::read_json(obj, buffer) == glz::error_code::none);
-      expect(glz::read<glz::opts{.error_on_missing_keys = true}>(obj, buffer) == glz::error_code::none);
+      expect(glz::read<glz::opts{
+                .bits = glz::options(glz::json_options_default).set(glz::option::error_on_missing_keys, true)}>(
+                obj, buffer) == glz::error_code::none);
       buffer = R"({"d":3.14,"arr":[1,2,3],"hello":"Hello World","i":287})";
       expect(glz::read_json(obj, buffer) == glz::error_code::none);
-      expect(glz::read<glz::opts{.error_on_missing_keys = true}>(obj, buffer) == glz::error_code::none);
+      expect(glz::read<glz::opts{
+                .bits = glz::options(glz::json_options_default).set(glz::option::error_on_missing_keys, true)}>(
+                obj, buffer) == glz::error_code::none);
       buffer = R"({"d":3.14,"hello":"Hello World","arr":[1,2,3]})";
       expect(glz::read_json(obj, buffer) == glz::error_code::none);
-      expect(glz::read<glz::opts{.error_on_missing_keys = true}>(obj, buffer) != glz::error_code::none);
+      expect(glz::read<glz::opts{
+                .bits = glz::options(glz::json_options_default).set(glz::option::error_on_missing_keys, true)}>(
+                obj, buffer) != glz::error_code::none);
       buffer = R"({"i":287,"hello":"Hello World","arr":[1,2,3]})";
       expect(glz::read_json(obj, buffer) == glz::error_code::none);
-      expect(glz::read<glz::opts{.error_on_missing_keys = true}>(obj, buffer) != glz::error_code::none);
+      expect(glz::read<glz::opts{
+                .bits = glz::options(glz::json_options_default).set(glz::option::error_on_missing_keys, true)}>(
+                obj, buffer) != glz::error_code::none);
       buffer = R"({"i":287,"d":3.14,"arr":[1,2,3]})";
       expect(glz::read_json(obj, buffer) == glz::error_code::none);
-      expect(glz::read<glz::opts{.error_on_missing_keys = true}>(obj, buffer) != glz::error_code::none);
+      expect(glz::read<glz::opts{
+                .bits = glz::options(glz::json_options_default).set(glz::option::error_on_missing_keys, true)}>(
+                obj, buffer) != glz::error_code::none);
       buffer = R"({"i":287,"d":3.14,"hello":"Hello World"})";
       expect(glz::read_json(obj, buffer) == glz::error_code::none);
-      expect(glz::read<glz::opts{.error_on_missing_keys = true}>(obj, buffer) != glz::error_code::none);
+      expect(glz::read<glz::opts{
+                .bits = glz::options(glz::json_options_default).set(glz::option::error_on_missing_keys, true)}>(
+                obj, buffer) != glz::error_code::none);
    };
 
    "required_keys_with_nullable"_test = [] {
@@ -5682,19 +5734,29 @@ suite required_keys = [] {
 
       buffer = R"({"req": 0, "opt": null, "req2": 0, "opt2": 0})";
       expect(glz::read_json(obj, buffer) == glz::error_code::none);
-      expect(glz::read<glz::opts{.error_on_missing_keys = true}>(obj, buffer) == glz::error_code::none);
+      expect(glz::read<glz::opts{
+                .bits = glz::options(glz::json_options_default).set(glz::option::error_on_missing_keys, true)}>(
+                obj, buffer) == glz::error_code::none);
       buffer = R"({"req": 0, "opt": null, "opt2": 0})";
       expect(glz::read_json(obj, buffer) == glz::error_code::none);
-      expect(glz::read<glz::opts{.error_on_missing_keys = true}>(obj, buffer) == glz::error_code::missing_key);
+      expect(glz::read<glz::opts{
+                .bits = glz::options(glz::json_options_default).set(glz::option::error_on_missing_keys, true)}>(
+                obj, buffer) == glz::error_code::missing_key);
       buffer = R"({"opt": null, "req2": 0, "opt2": 0})";
       expect(glz::read_json(obj, buffer) == glz::error_code::none);
-      expect(glz::read<glz::opts{.error_on_missing_keys = true}>(obj, buffer) == glz::error_code::missing_key);
+      expect(glz::read<glz::opts{
+                .bits = glz::options(glz::json_options_default).set(glz::option::error_on_missing_keys, true)}>(
+                obj, buffer) == glz::error_code::missing_key);
       buffer = R"({"req": 0, "req2": 0, "opt2": 0})";
       expect(glz::read_json(obj, buffer) == glz::error_code::none);
-      expect(glz::read<glz::opts{.error_on_missing_keys = true}>(obj, buffer) == glz::error_code::none);
+      expect(glz::read<glz::opts{
+                .bits = glz::options(glz::json_options_default).set(glz::option::error_on_missing_keys, true)}>(
+                obj, buffer) == glz::error_code::none);
       buffer = R"({"req": 0, "req2": 0})";
       expect(glz::read_json(obj, buffer) == glz::error_code::none);
-      expect(glz::read<glz::opts{.error_on_missing_keys = true}>(obj, buffer) == glz::error_code::none);
+      expect(glz::read<glz::opts{
+                .bits = glz::options(glz::json_options_default).set(glz::option::error_on_missing_keys, true)}>(
+                obj, buffer) == glz::error_code::none);
    };
 
    "required_keys_long_object"_test = [] {
@@ -5708,8 +5770,10 @@ suite required_keys = [] {
       )";
 
       OKX_OrderBook order_book{};
-      auto ec = glz::read<glz::opts{.error_on_unknown_keys = false, .error_on_missing_keys = true}>(order_book,
-                                                                                                    order_book_str);
+      auto ec =
+         glz::read<glz::opts{.bits = glz::options(glz::json_options_default)
+                                        .set(glz::option::error_on_unknown_keys, false)
+                                        .set(glz::option::error_on_missing_keys, true)}>(order_book, order_book_str);
       expect(ec == glz::error_code::none);
 
       std::string_view order_book_str_missing = R"(
@@ -5720,15 +5784,18 @@ suite required_keys = [] {
          "minSz":"0.00001","optType":"","quoteCcy":"USDT","settleCcy":"","state":"live","stk":"","tickSz":"0.1","uly":""}],
          "msg":""}
       )";
-      ec = glz::read<glz::opts{.error_on_unknown_keys = false, .error_on_missing_keys = true}>(order_book,
-                                                                                               order_book_str_missing);
+      ec = glz::read<glz::opts{.bits = glz::options(glz::json_options_default)
+                                          .set(glz::option::error_on_unknown_keys, false)
+                                          .set(glz::option::error_on_missing_keys, true)}>(order_book,
+                                                                                           order_book_str_missing);
       expect(ec == glz::error_code::missing_key);
    };
 
    "required_keys_format_error"_test = [] {
       my_struct obj{};
       std::string buffer = R"({"i":287,"hello":"Hello World","arr":[1,2,3]})";
-      auto err = glz::read<glz::opts{.error_on_missing_keys = true}>(obj, buffer);
+      auto err = glz::read<glz::opts{
+         .bits = glz::options(glz::json_options_default).set(glz::option::error_on_missing_keys, true)}>(obj, buffer);
       expect(err != glz::error_code::none);
       expect(glz::format_error(err, buffer) == "index 45: missing_key") << glz::format_error(err, buffer);
    };
@@ -6351,7 +6418,8 @@ suite const_read_error = [] {
    "const_read_error"_test = [] {
       const std::string hello = "world";
       std::string s = R"(explode)";
-      constexpr glz::opts opts{.error_on_const_read = true};
+      constexpr glz::opts opts{.bits =
+                                  glz::options(glz::json_options_default).set(glz::option::error_on_const_read, true)};
       expect(glz::read<opts>(hello, s) == glz::error_code::attempt_const_read);
    };
 };
@@ -6380,9 +6448,8 @@ template <>
 struct glz::meta<test_mapping_t>
 {
    using T = test_mapping_t;
-   static constexpr auto value = object("id", &T::id, "coordinates", [](auto& self) {
-      return coordinates_t{&self.latitude, &self.longitude};
-   });
+   static constexpr auto value =
+      object("id", &T::id, "coordinates", [](auto& self) { return coordinates_t{&self.latitude, &self.longitude}; });
 };
 
 suite mapping_struct = [] {
@@ -7217,7 +7284,9 @@ suite unknown_fields_member_test = [] {
 
       std::string buffer = R"({"a":"aaa","unk":"zzz", "unk2":{"sub":3,"sub2":[{"a":"b"}]},"unk3":[], "end":"end"})";
 
-      expect(not glz::read<glz::opts{.error_on_unknown_keys = false}>(obj, buffer));
+      expect(not glz::read<glz::opts{
+                .bits = glz::options(glz::json_options_default).set(glz::option::error_on_unknown_keys, false)}>(
+         obj, buffer));
 
       expect(obj.extra["unk"].str == R"("zzz")");
       expect(obj.extra["unk2"].str == R"({"sub":3,"sub2":[{"a":"b"}]})");
@@ -7241,7 +7310,8 @@ suite unknown_fields_member_test = [] {
    "unknown_fields_2"_test = [] {
       unknown_fields_2 obj{};
       std::string buffer = R"({"unk":"zzz", "unk2":{"sub":3,"sub2":[{"a":"b"}]},"unk3":[]})";
-      auto ec = glz::read<glz::opts{.error_on_unknown_keys = false}>(obj, buffer);
+      auto ec = glz::read<glz::opts{
+         .bits = glz::options(glz::json_options_default).set(glz::option::error_on_unknown_keys, false)}>(obj, buffer);
       expect(not ec) << glz::format_error(ec, buffer);
       std::string out{};
       expect(not glz::write_json(obj, out));
@@ -7251,7 +7321,9 @@ suite unknown_fields_member_test = [] {
    "my_unknown_struct"_test = [] {
       my_unknown_struct obj;
       std::string buffer;
-      expect(not glz::write<glz::opts{.prettify = true}>(obj, buffer));
+      expect(
+         not glz::write<glz::opts{.bits = glz::options(glz::json_options_default).set(glz::option::prettify, true)}>(
+            obj, buffer));
       expect(buffer == R"({
    "i": 287
 })") << buffer;
@@ -7291,7 +7363,9 @@ suite unknown_fields_method_test = [] {
 
       glz::context ctx{};
 
-      expect(!glz::read<glz::opts{.error_on_unknown_keys = false}>(obj, buffer, ctx));
+      expect(!glz::read<glz::opts{
+                .bits = glz::options(glz::json_options_default).set(glz::option::error_on_unknown_keys, false)}>(
+         obj, buffer, ctx));
 
       expect(obj.extra["unk"].str == R"("zzz")");
       expect(obj.extra["unk2"].str == R"({"sub":3,"sub2":[{"a":"b"}]})");
@@ -7335,7 +7409,9 @@ suite unknown_fields_known_type_test = [] {
       std::string buffer = R"({"a":"aaa","unk":5, "unk2":22,"unk3":355, "end":"end"})";
 
       unknown_fields_known_type obj{};
-      expect(!glz::read<glz::opts{.error_on_unknown_keys = false}>(obj, buffer));
+      expect(!glz::read<glz::opts{
+                .bits = glz::options(glz::json_options_default).set(glz::option::error_on_unknown_keys, false)}>(
+         obj, buffer));
 
       expect(obj.extra["unk"] == 5);
       expect(obj.extra["unk2"] == 22);
@@ -7481,7 +7557,8 @@ suite custom_object_variant_test = [] {
          Obj1{4, "text 4"},
       };
 
-      constexpr auto prettify_json = glz::opts{.prettify = true};
+      constexpr auto prettify_json =
+         glz::opts{.bits = glz::options(glz::json_options_default).set(glz::option::prettify, true)};
 
       std::string data = glz::write<prettify_json>(objects).value_or("error");
 
@@ -7915,7 +7992,9 @@ suite partial_read_tests = [] {
       Header h{};
       std::string buf = R"({"id":"51e2affb","unknown key":"value","type":"message_type"})";
 
-      expect(!glz::read<glz::opts{.error_on_unknown_keys = false}>(h, buf));
+      expect(
+         !glz::read<glz::opts{
+            .bits = glz::options(glz::json_options_default).set(glz::option::error_on_unknown_keys, false)}>(h, buf));
       expect(h.id == "51e2affb");
       expect(h.type == "message_type");
    };
@@ -7924,7 +8003,9 @@ suite partial_read_tests = [] {
       Header h{};
       std::string buf = R"({"id":"51e2affb","unknown key":"value","type":"message_type"garbage})";
 
-      expect(!glz::read<glz::opts{.error_on_unknown_keys = false}>(h, buf));
+      expect(
+         !glz::read<glz::opts{
+            .bits = glz::options(glz::json_options_default).set(glz::option::error_on_unknown_keys, false)}>(h, buf));
       expect(h.id == "51e2affb");
       expect(h.type == "message_type");
    };
@@ -7933,7 +8014,9 @@ suite partial_read_tests = [] {
       Header h{};
       std::string buf = R"({"id":"51e2affb","unknown key":"value"})";
 
-      expect(glz::read<glz::opts{.error_on_unknown_keys = false}>(h, buf) != glz::error_code::missing_key);
+      expect(glz::read<glz::opts{
+                .bits = glz::options(glz::json_options_default).set(glz::option::error_on_unknown_keys, false)}>(
+                h, buf) != glz::error_code::missing_key);
       expect(h.id == "51e2affb");
       expect(h.type.empty());
    };
@@ -7942,7 +8025,9 @@ suite partial_read_tests = [] {
       Header h{};
       std::string buf = R"({"id":"51e2affb","unknown key":"value"})";
 
-      expect(!glz::read<glz::opts{.error_on_unknown_keys = false, .error_on_missing_keys = false}>(h, buf));
+      expect(!glz::read<glz::opts{.bits = glz::options(glz::json_options_default)
+                                             .set(glz::option::error_on_unknown_keys, false)
+                                             .set(glz::option::error_on_missing_keys, false)}>(h, buf));
       expect(h.id == "51e2affb");
       expect(h.type.empty());
    };
@@ -7969,7 +8054,9 @@ suite partial_read_tests = [] {
       HeaderFlipped h{};
       std::string buf = R"({"id":"51e2affb","unknown key":"value","type":"message_type","another_field":409845})";
 
-      expect(glz::read<glz::opts{.error_on_unknown_keys = false}>(h, buf) == glz::error_code::none);
+      expect(glz::read<glz::opts{
+                .bits = glz::options(glz::json_options_default).set(glz::option::error_on_unknown_keys, false)}>(
+                h, buf) == glz::error_code::none);
       expect(h.id == "51e2affb");
       expect(h.type == "message_type");
    };
@@ -8040,8 +8127,10 @@ struct AccountUpdate
 
 inline void AccountUpdate::fromJson(AccountUpdate& accountUpdate, const std::string& jSon)
 {
-   auto ec = glz::read<glz::opts{.error_on_unknown_keys = false, .raw_string = true, .partial_read_nested = true}>(
-      accountUpdate, jSon);
+   auto ec = glz::read<glz::opts{
+      .bits = glz::options(glz::json_options_default).set(glz::option::error_on_unknown_keys, false),
+      .raw_string = true,
+      .partial_read_nested = true}>(accountUpdate, jSon);
    expect(not ec) << glz::format_error(ec, jSon);
 }
 
@@ -8120,7 +8209,10 @@ suite meta_schema_tests = [] {
       expect(not glz::write_json(obj, buffer));
       expect(buffer == R"({"x":0,"file_name":"","is_valid":false})") << buffer;
 
-      const auto json_schema = glz::write_json_schema<meta_schema_t, glz::opts{.prettify = true}>().value_or("error");
+      const auto json_schema =
+         glz::write_json_schema<meta_schema_t, glz::opts{.bits = glz::options(glz::json_options_default)
+                                                                    .set(glz::option::prettify, true)}>()
+            .value_or("error");
       expect(json_schema ==
              R"({
    "type": [
@@ -8340,7 +8432,9 @@ suite error_on_unknown_keys_test = [] {
    "error_on_unknown_keys"_test = [] {
       auto input = R"({"f1":"main","f1misc":"this should be dropped silently"})";
       S0 obj{};
-      expect(!glz::read<glz::opts{.error_on_unknown_keys = false}>(obj, input));
+      expect(!glz::read<glz::opts{
+                .bits = glz::options(glz::json_options_default).set(glz::option::error_on_unknown_keys, false)}>(
+         obj, input));
       const auto s = glz::write_json(obj).value_or("error");
       expect(s == R"({"f1":"main"})") << s;
       expect(obj.f1 == "main");
@@ -9023,7 +9117,9 @@ suite read_allocated_tests = [] {
    "partial_read partial_struct, error_on_unknown_keys = false"_test = [] {
       std::string s = R"({"skip":null,"integer":400,"string":"ha!",ignore})";
       partial_struct obj{};
-      expect(!glz::read<glz::opts{.error_on_unknown_keys = false, .partial_read = true}>(obj, s));
+      expect(!glz::read<glz::opts{
+                .bits = glz::options(glz::json_options_default).set(glz::option::error_on_unknown_keys, false),
+                .partial_read = true}>(obj, s));
       expect(obj.string == "ha!");
       expect(obj.integer == 400);
    };
@@ -9097,8 +9193,9 @@ suite error_on_missing_keys_symbols_tests = [] {
 
       single_symbol_info_js result;
       auto ec = glz::read<glz::opts{
-                             .error_on_unknown_keys = false,
-                             .error_on_missing_keys = true,
+                             .bits = glz::options(glz::json_options_default)
+                                        .set(glz::option::error_on_unknown_keys, false)
+                                        .set(glz::option::error_on_missing_keys, true),
                              .quoted_num = false,
                           },
                           single_symbol_info_js>(result, payload);
@@ -9247,9 +9344,11 @@ suite msvc_ice_tests = [] {
 
       WorkshopModConfig settings{};
 
-      auto ec = glz::write<glz::opts{
-         .comments = true, .error_on_unknown_keys = true, .skip_null_members = true, .prettify = false}>(settings,
-                                                                                                         buffer);
+      auto ec = glz::write<glz::opts{.bits = glz::options(glz::json_options_default)
+                                                .set(glz::option::comments, true)
+                                                .set(glz::option::error_on_unknown_keys, true)
+                                                .set(glz::option::skip_null_members, true)
+                                                .set(glz::option::prettify, false)}>(settings, buffer);
       expect(not ec) << glz::format_error(ec, buffer);
    };
 };
@@ -9436,12 +9535,16 @@ suite TestSettingsData_test = [] {
       expect(not ec) << glz::format_error(ec, buffer);
    };
 
-   static constexpr glz::opts write_options{.comments = 1U, .prettify = 1U, .allow_conversions = 1U};
-   static constexpr glz::opts read_options{.comments = 1U,
-                                           .error_on_unknown_keys = 0U,
-                                           .skip_null_members = 1U,
-                                           .error_on_missing_keys = 0U,
-                                           .allow_conversions = 1U};
+   static constexpr glz::opts write_options{.bits = glz::options(glz::json_options_default)
+                                                       .set(glz::option::comments, true)
+                                                       .set(glz::option::prettify, true)
+                                                       .set(glz::option::allow_conversions, true)};
+   static constexpr glz::opts read_options{.bits = glz::options(glz::json_options_default)
+                                                      .set(glz::option::comments, true)
+                                                      .set(glz::option::error_on_unknown_keys, false)
+                                                      .set(glz::option::skip_null_members, true)
+                                                      .set(glz::option::error_on_missing_keys, false)
+                                                      .set(glz::option::allow_conversions, false)};
 
    "TestSettingsData options"_test = [] {
       TestSettingsData obj{};
@@ -9629,8 +9732,8 @@ template <class V>
 struct glz::meta<response_t<V>>
 {
    using T = response_t<V>;
-   static constexpr auto value = object(
-      "result", [](auto& s) -> auto& { return s.result; }, "id", &T::id, "error", &T::error);
+   static constexpr auto value =
+      object("result", [](auto& s) -> auto& { return s.result; }, "id", &T::id, "error", &T::error);
 };
 
 template <>
@@ -9680,7 +9783,9 @@ suite empty_variant_testing = [] {
       std::string_view text = R"({"xxx":"x","op":"B_empty"})";
 
       C_empty c;
-      auto ec = glz::read<glz::opts{.error_on_unknown_keys = false, .error_on_missing_keys = true}>(c, text);
+      auto ec = glz::read<glz::opts{.bits = glz::options(glz::json_options_default)
+                                               .set(glz::option::error_on_unknown_keys, false)
+                                               .set(glz::option::error_on_missing_keys, true)}>(c, text);
       expect(not ec) << glz::format_error(ec, text);
       expect(c.index() == 1);
    };
@@ -9689,7 +9794,9 @@ suite empty_variant_testing = [] {
       std::string_view text = R"({"xx":"x","op":"B_empty"})";
 
       C_empty c;
-      auto ec = glz::read<glz::opts{.error_on_unknown_keys = false, .error_on_missing_keys = true}>(c, text);
+      auto ec = glz::read<glz::opts{.bits = glz::options(glz::json_options_default)
+                                               .set(glz::option::error_on_unknown_keys, false)
+                                               .set(glz::option::error_on_missing_keys, true)}>(c, text);
       expect(not ec) << glz::format_error(ec, text);
       expect(c.index() == 1);
    };
@@ -9814,8 +9921,10 @@ suite ndjson_options = [] {
    "ndjson_options"_test = [] {
       std::vector<Foo> assets{};
       const auto ec =
-         glz::read<glz::opts{.format = glz::NDJSON, .error_on_unknown_keys = false, .validate_skipped = true}>(
-            assets, "{\"x\":1}\n{\"x\":2}");
+         glz::read<glz::opts{.format = glz::NDJSON,
+                             .bits = glz::options(glz::json_options_default)
+                                        .set(glz::option::error_on_unknown_keys, false)
+                                        .set(glz::option::validate_skipped, true)}>(assets, "{\"x\":1}\n{\"x\":2}");
       expect(not ec);
    };
 };
@@ -9867,7 +9976,8 @@ suite const_pointer_tests = [] {
       std::string buffer = R"({"name":"Foo Bar","p_add":{"street":"Baz Yaz"}})";
       trr::Address add{};
       trr::Person p{&add};
-      auto ec = glz::read<glz::opts{.format = glz::JSON, .error_on_const_read = true}>(p, buffer);
+      auto ec = glz::read<glz::opts{
+         .bits = glz::options(glz::json_options_default).set(glz::option::error_on_const_read, true)}>(p, buffer);
       if (ec) {
          std::cout << glz::format_error(ec, buffer) << std::endl;
       }

@@ -79,7 +79,7 @@ namespace glz
       // The JSON RFC 8259 defines: JSON-text = ws value ws
       // So, trailing whitespace is permitted and sometimes we want to
       // validate this, even though this memory will not affect Glaze.
-      if constexpr (Opts.validate_trailing_whitespace) {
+      if constexpr (has(Opts, option::validate_trailing_whitespace)) {
          if (it < end) {
             detail::skip_ws<Opts>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]] {

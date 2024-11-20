@@ -288,7 +288,7 @@ namespace glz
          if constexpr (N > 0) {
             using V = std::remove_cvref_t<refl_t<T, 0>>;
 
-            if constexpr (detail::null_t<V> && Opts.skip_null_members) {
+            if constexpr (detail::null_t<V> && has(Opts, option::skip_null_members)) {
                return false;
             }
 
@@ -305,12 +305,12 @@ namespace glz
       }();
 
       static constexpr bool maybe_skipped = [] {
-         if constexpr (N > 0 && Opts.skip_null_members) {
+         if constexpr (N > 0 && has(Opts, option::skip_null_members)) {
             bool found_maybe_skipped{};
             for_each_short_circuit<N>([&](auto I) {
                using V = std::remove_cvref_t<refl_t<T, I>>;
 
-               if constexpr (Opts.skip_null_members && detail::null_t<V>) {
+               if constexpr (has(Opts, option::skip_null_members) && detail::null_t<V>) {
                   found_maybe_skipped = true;
                   return true; // early exit
                }
@@ -348,9 +348,9 @@ namespace glz::detail
       constexpr auto N = reflect<T>::size;
 
       bit_array<N> fields{};
-      if constexpr (Opts.error_on_missing_keys) {
+      if constexpr (has(Opts, option::error_on_missing_keys)) {
          for_each<N>([&](auto I) constexpr {
-            fields[I] = !bool(Opts.skip_null_members) || !null_t<std::decay_t<refl_t<T, I>>>;
+            fields[I] = !bool(has(Opts, option::skip_null_members)) || !null_t<std::decay_t<refl_t<T, I>>>;
          });
       }
       return fields;

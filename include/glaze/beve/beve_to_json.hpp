@@ -154,7 +154,7 @@ namespace glz
             ++it;
 
             dump<'{'>(out, ix);
-            if constexpr (Opts.prettify) {
+            if constexpr (has(Opts, option::prettify)) {
                ctx.indentation_level += Opts.indentation_width;
                dump<'\n'>(out, ix);
                dumpn<Opts.indentation_char>(ctx.indentation_level, out, ix);
@@ -189,7 +189,7 @@ namespace glz
                   }
                   const sv key{reinterpret_cast<const char*>(it), n};
                   to<JSON, sv>::template op<Opts>(key, ctx, out, ix);
-                  if constexpr (Opts.prettify) {
+                  if constexpr (has(Opts, option::prettify)) {
                      dump<": ">(out, ix);
                   }
                   else {
@@ -200,7 +200,7 @@ namespace glz
                   beve_to_json_value<Opts>(ctx, it, end, out, ix);
                   if (i != n_fields - 1) {
                      dump<','>(out, ix);
-                     if constexpr (Opts.prettify) {
+                     if constexpr (has(Opts, option::prettify)) {
                         dump<'\n'>(out, ix);
                         dumpn<Opts.indentation_char>(ctx.indentation_level, out, ix);
                      }
@@ -224,7 +224,7 @@ namespace glz
                      return;
                   }
                   dump<'"'>(out, ix);
-                  if constexpr (Opts.prettify) {
+                  if constexpr (has(Opts, option::prettify)) {
                      dump<": ">(out, ix);
                   }
                   else {
@@ -234,7 +234,7 @@ namespace glz
                   beve_to_json_value<Opts>(ctx, it, end, out, ix);
                   if (i != n_fields - 1) {
                      dump<','>(out, ix);
-                     if constexpr (Opts.prettify) {
+                     if constexpr (has(Opts, option::prettify)) {
                         dump<'\n'>(out, ix);
                         dumpn<Opts.indentation_char>(ctx.indentation_level, out, ix);
                      }
@@ -248,7 +248,7 @@ namespace glz
             }
             }
 
-            if constexpr (Opts.prettify) {
+            if constexpr (has(Opts, option::prettify)) {
                ctx.indentation_level -= Opts.indentation_width;
                dump<'\n'>(out, ix);
                dumpn<Opts.indentation_char>(ctx.indentation_level, out, ix);
@@ -448,13 +448,13 @@ namespace glz
                /*const auto index = int_from_compressed(ctx, it, end);
 
                dump<'{'>(out, ix);
-               if constexpr (Opts.prettify) {
+               if constexpr (has(Opts, option::prettify)) {
                   ctx.indentation_level += Opts.indentation_width;
                   dump<'\n'>(out, ix);
                   dumpn<Opts.indentation_char>(ctx.indentation_level, out, ix);
                }
 
-               if constexpr (Opts.prettify) {
+               if constexpr (has(Opts, option::prettify)) {
                   dump<R"("index": )">(out, ix);
                }
                else {
@@ -464,12 +464,12 @@ namespace glz
                to<JSON, std::remove_cvref_t<decltype(index)>>::template op<Opts>(index, ctx, out, ix);
 
                dump<','>(out, ix);
-               if constexpr (Opts.prettify) {
+               if constexpr (has(Opts, option::prettify)) {
                   dump<'\n'>(out, ix);
                   dumpn<Opts.indentation_char>(ctx.indentation_level, out, ix);
                }
 
-               if constexpr (Opts.prettify) {
+               if constexpr (has(Opts, option::prettify)) {
                   dump<R"("value": )">(out, ix);
                }
                else {
@@ -481,7 +481,7 @@ namespace glz
                   return;
                }
 
-               /*if constexpr (Opts.prettify) {
+               /*if constexpr (has(Opts, option::prettify)) {
                   ctx.indentation_level -= Opts.indentation_width;
                   dump<'\n'>(out, ix);
                   dumpn<Opts.indentation_char>(ctx.indentation_level, out, ix);
@@ -500,7 +500,7 @@ namespace glz
                ++it;
 
                dump<'{'>(out, ix);
-               if constexpr (Opts.prettify) {
+               if constexpr (has(Opts, option::prettify)) {
                   ctx.indentation_level += Opts.indentation_width;
                   dump<'\n'>(out, ix);
                   dumpn<Opts.indentation_char>(ctx.indentation_level, out, ix);
@@ -513,7 +513,7 @@ namespace glz
                   return;
                }
 
-               if constexpr (Opts.prettify) {
+               if constexpr (has(Opts, option::prettify)) {
                   dump<R"("layout": )">(out, ix);
                }
                else {
@@ -524,12 +524,12 @@ namespace glz
                layout ? dump<R"("layout_right")">(out, ix) : dump<R"("layout_left")">(out, ix);
 
                dump<','>(out, ix);
-               if constexpr (Opts.prettify) {
+               if constexpr (has(Opts, option::prettify)) {
                   dump<'\n'>(out, ix);
                   dumpn<Opts.indentation_char>(ctx.indentation_level, out, ix);
                }
 
-               if constexpr (Opts.prettify) {
+               if constexpr (has(Opts, option::prettify)) {
                   dump<R"("extents": )">(out, ix);
                }
                else {
@@ -542,12 +542,12 @@ namespace glz
                }
 
                dump<','>(out, ix);
-               if constexpr (Opts.prettify) {
+               if constexpr (has(Opts, option::prettify)) {
                   dump<'\n'>(out, ix);
                   dumpn<Opts.indentation_char>(ctx.indentation_level, out, ix);
                }
 
-               if constexpr (Opts.prettify) {
+               if constexpr (has(Opts, option::prettify)) {
                   dump<R"("value": )">(out, ix);
                }
                else {
@@ -559,7 +559,7 @@ namespace glz
                   return;
                }
 
-               if constexpr (Opts.prettify) {
+               if constexpr (has(Opts, option::prettify)) {
                   ctx.indentation_level -= Opts.indentation_width;
                   dump<'\n'>(out, ix);
                   dumpn<Opts.indentation_char>(ctx.indentation_level, out, ix);

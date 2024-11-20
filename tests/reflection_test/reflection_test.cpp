@@ -44,7 +44,9 @@ suite reflection = [] {
       expect(!glz::read_json(obj, buffer));
 
       buffer.clear();
-      expect(not glz::write<glz::opts{.prettify = true}>(obj, buffer));
+      expect(
+         not glz::write<glz::opts{.bits = glz::options(glz::json_options_default).set(glz::option::prettify, true)}>(
+            obj, buffer));
 
       expect(buffer == R"({
    "i": 287,
@@ -180,7 +182,9 @@ suite user_types = [] {
          << buffer;
 
       buffer.clear();
-      expect(not glz::write<glz::opts{.skip_null_members = false}>(obj, buffer));
+      expect(
+         not glz::write<glz::opts{
+            .bits = glz::options(glz::json_options_default).set(glz::option::skip_null_members, false)}>(obj, buffer));
       expect(
          buffer ==
          R"({"thing":{"a":3.14,"b":"stuff"},"thing2array":[{"a":3.14,"b":"stuff","c":999.342494903,"d":1E-12,"e":203082348402.1,"f":89.089,"g":12380.00000013,"h":1000000.000001}],"vec3":{"x":3.14,"y":2.7,"z":6.5},"array":["as\"df\\ghjkl","pie","42","foo"],"vector":[{"x":9,"y":6.7,"z":3.1},{"x":3.14,"y":2.7,"z":6.5}],"i":8,"d":2,"b":false,"c":"W","color":"Green","vb":[true,false,false,true,true,true,true],"optional":null,"thing_ptr":{"a":3.14,"b":"stuff"},"map":{"eleven":11,"twelve":12}})")
@@ -423,7 +427,8 @@ struct user
 suite error_on_missing_keys_test = [] {
    "error_on_missing_keys"_test = [] {
       constexpr std::string_view json = R"({"email":"test@email.com","age":20})";
-      constexpr glz::opts options = {.error_on_missing_keys = true};
+      constexpr glz::opts options{
+         .bits = glz::options(glz::json_options_default).set(glz::option::error_on_missing_keys, true)};
 
       user obj = {};
       const auto ec = glz::read<options>(obj, json);
@@ -432,7 +437,8 @@ suite error_on_missing_keys_test = [] {
 
    "success"_test = [] {
       constexpr std::string_view json = R"({"email":"test@email.com","age":20,"name":"Fred"})";
-      constexpr glz::opts options = {.error_on_missing_keys = true};
+      constexpr glz::opts options = {
+         .bits = glz::options(glz::json_options_default).set(glz::option::error_on_missing_keys, true)};
 
       user obj = {};
       expect(!glz::read<options>(obj, json));
@@ -510,7 +516,8 @@ suite prefix_key_name_test = [] {
    "prefix_key_name"_test = [] {
       port_struct obj;
       std::string buffer = R"({"portmanteau":14,"port":17})";
-      auto err = glz::read<glz::opts{.error_on_unknown_keys = false}>(obj, buffer);
+      auto err = glz::read<glz::opts{
+         .bits = glz::options(glz::json_options_default).set(glz::option::error_on_unknown_keys, false)}>(obj, buffer);
       expect(!err) << glz::format_error(err, buffer);
    };
 };

@@ -26,7 +26,7 @@ namespace glz
                skip_matching_ws(ws_start, it, ws_size);
             }
 
-            if constexpr (Opts.null_terminated) {
+            if constexpr (has(Opts, option::null_terminated)) {
                while (whitespace_table[uint8_t(*it)]) {
                   ++it;
                }
@@ -41,7 +41,7 @@ namespace glz
          };
 
          auto skip_whitespace = [&] {
-            if constexpr (Opts.null_terminated) {
+            if constexpr (has(Opts, option::null_terminated)) {
                while (whitespace_table[uint8_t(*it)]) {
                   ++it;
                }
@@ -56,7 +56,7 @@ namespace glz
          skip_whitespace();
 
          while ([&]() -> bool {
-            if constexpr (Opts.null_terminated) {
+            if constexpr (has(Opts, option::null_terminated)) {
                return true;
             }
             else {
@@ -77,7 +77,7 @@ namespace glz
                break;
             }
             case Number: {
-               const auto value = read_json_number<Opts.null_terminated>(it, end);
+               const auto value = read_json_number<has(Opts, option::null_terminated)>(it, end);
                dump<false>(value, b, ix); // we couldn't have gotten here without one valid character
                skip_whitespace();
                break;
@@ -133,7 +133,7 @@ namespace glz
                break;
             }
             case Comment: {
-               if constexpr (Opts.comments) {
+               if constexpr (has(Opts, option::comments)) {
                   const auto value = read_jsonc_comment(it, end);
                   if (value.size()) [[likely]] {
                      dump<false>(value, b, ix);
@@ -145,11 +145,10 @@ namespace glz
                   [[fallthrough]];
                }
             }
-               [[unlikely]] default:
-               {
-                  ctx.error = error_code::syntax_error;
-                  return;
-               }
+            [[unlikely]] default: {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
             }
          }
       }
@@ -174,10 +173,10 @@ namespace glz
 
          static constexpr auto O = is_padded_on<Opts>();
          if constexpr (string_t<In>) {
-            minify_json<opt_true<O, &opts::null_terminated>>(ctx, it, end, out, ix);
+            minify_json<opt_true2<O, option::null_terminated>>(ctx, it, end, out, ix);
          }
          else {
-            minify_json<opt_false<O, &opts::null_terminated>>(ctx, it, end, out, ix);
+            minify_json<opt_false2<O, option::null_terminated>>(ctx, it, end, out, ix);
          }
 
          if constexpr (resizable<Out>) {
@@ -211,7 +210,7 @@ namespace glz
    inline void minify_jsonc(const auto& in, auto& out)
    {
       context ctx{};
-      detail::minify_json<opt_true<Opts, &opts::comments>>(ctx, in, out);
+      detail::minify_json<opt_true2<Opts, option::comments>>(ctx, in, out);
    }
 
    template <opts Opts = opts{}>
@@ -219,7 +218,7 @@ namespace glz
    {
       context ctx{};
       std::string out{};
-      detail::minify_json<opt_true<Opts, &opts::comments>>(ctx, in, out);
+      detail::minify_json<opt_true2<Opts, option::comments>>(ctx, in, out);
       return out;
    }
 }

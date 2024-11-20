@@ -195,7 +195,7 @@ namespace glz
 
       if constexpr (resizable<T>) {
          value.resize(sz);
-         if constexpr (Opts.shrink_to_fit) {
+         if constexpr (has(Opts, option::shrink_to_fit)) {
             value.shrink_to_fit();
          }
       }
@@ -242,7 +242,7 @@ namespace glz
 
       if constexpr (resizable<T>) {
          value.resize(arity);
-         if constexpr (Opts.shrink_to_fit) {
+         if constexpr (has(Opts, option::shrink_to_fit)) {
             value.shrink_to_fit();
          }
       }
@@ -290,7 +290,7 @@ namespace glz
             decode_token(buff, std::forward<Ctx>(ctx), std::forward<It0>(it), std::forward<It1>(end));
             if constexpr (resizable<T>) {
                value.resize(sz);
-               if constexpr (Opts.shrink_to_fit) {
+               if constexpr (has(Opts, option::shrink_to_fit)) {
                   value.shrink_to_fit();
                }
             }

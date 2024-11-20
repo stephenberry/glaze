@@ -136,25 +136,25 @@ namespace glz
       uint32_t format = JSON;
       bits_class bits = json_options_default;
 
-      bool_t null_terminated = GLZ_NULL_TERMINATED; // Whether the input buffer is null terminated
-      bool_t comments = false; // Support reading in JSONC style comments
-      bool_t error_on_unknown_keys = true; // Error when an unknown key is encountered
-      bool_t skip_null_members = true; // Skip writing out params in an object if the value is null
-      bool_t use_hash_comparison = true; // Will replace some string equality checks with hash checks
-      bool_t prettify = false; // Write out prettified JSON
-      bool_t minified = false; // Require minified input for JSON, which results in faster read performance
+      // bool_t null_terminated = GLZ_NULL_TERMINATED; // Whether the input buffer is null terminated
+      // bool_t comments = false; // Support reading in JSONC style comments
+      // bool_t error_on_unknown_keys = true; // Error when an unknown key is encountered
+      // bool_t skip_null_members = true; // Skip writing out params in an object if the value is null
+      // bool_t use_hash_comparison = true; // Will replace some string equality checks with hash checks
+      // bool_t prettify = false; // Write out prettified JSON
+      // bool_t minified = false; // Require minified input for JSON, which results in faster read performance
       char indentation_char = ' '; // Prettified JSON indentation char
       uint8_t indentation_width = 3; // Prettified JSON indentation size
-      bool_t new_lines_in_arrays = true; // Whether prettified arrays should have new lines for each element
-      bool_t shrink_to_fit = false; // Shrinks dynamic containers to new size to save memory
-      bool_t write_type_info = true; // Write type info for meta objects in variants
-      bool_t error_on_missing_keys = false; // Require all non nullable keys to be present in the object. Use
+      // bool_t new_lines_in_arrays = true; // Whether prettified arrays should have new lines for each element
+      // bool_t shrink_to_fit = false; // Shrinks dynamic containers to new size to save memory
+      // bool_t write_type_info = true; // Write type info for meta objects in variants
+      // bool_t error_on_missing_keys = false; // Require all non nullable keys to be present in the object. Use
                                             // skip_null_members = false to require nullable members
-      bool_t error_on_const_read =
-         false; // Error if attempt is made to read into a const value, by default the value is skipped without error
-      bool_t validate_skipped = false; // If full validation should be performed on skipped values
-      bool_t validate_trailing_whitespace =
-         false; // If, after parsing a value, we want to validate the trailing whitespace
+      // bool_t error_on_const_read =
+      //    false; // Error if attempt is made to read into a const value, by default the value is skipped without error
+      // bool_t validate_skipped = false; // If full validation should be performed on skipped values
+      // bool_t validate_trailing_whitespace =
+      //    false; // If, after parsing a value, we want to validate the trailing whitespace
 
       uint8_t layout = rowwise; // CSV row wise output/input
 
@@ -203,8 +203,6 @@ namespace glz
 
       // INTERNAL USE
       uint32_t internal{}; // default should be 0
-
-      [[nodiscard]] constexpr bool operator==(const opts&) const noexcept = default;
    };
 
 #undef bool_t

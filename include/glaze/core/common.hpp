@@ -257,7 +257,7 @@ namespace glz
       };
 
       template <class T>
-      concept array_t = (!meta_value_t<T> && !str_t<T> && !(readable_map_t<T> || writable_map_t<T>)&&range<T>);
+      concept array_t = (!meta_value_t<T> && !str_t<T> && !(readable_map_t<T> || writable_map_t<T>) && range<T>);
 
       template <class T>
       concept readable_array_t =
@@ -341,9 +341,7 @@ namespace glz
       template <class T>
       concept nullable_t = !meta_value_t<T> && !str_t<T> && requires(T t) {
          bool(t);
-         {
-            *t
-         };
+         { *t };
       };
 
       template <class T>
@@ -520,7 +518,7 @@ namespace glz::detail
    template <opts Opts, class Value>
    [[nodiscard]] GLZ_ALWAYS_INLINE constexpr bool skip_member(const Value& value) noexcept
    {
-      if constexpr (null_t<Value> && Opts.skip_null_members) {
+      if constexpr (null_t<Value> && has(Opts, option::skip_null_members)) {
          if constexpr (always_null_t<Value>)
             return true;
          else {

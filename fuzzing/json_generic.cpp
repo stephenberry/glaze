@@ -9,7 +9,8 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* Data, size_t Size)
    {
       const std::vector<char> buffer{Data, Data + Size};
 
-      static constexpr glz::opts opts{.null_terminated = false};
+      static constexpr glz::opts opts{
+         .bits = glz::options(glz::json_options_default).set(glz::option::null_terminated, false)};
       glz::json_t json{};
       auto ec = glz::read<opts>(json, buffer);
       if (!ec) {

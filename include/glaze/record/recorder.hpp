@@ -75,7 +75,7 @@ namespace glz
          {
             dump<'{'>(std::forward<Args>(args)...);
 
-            if constexpr (Opts.prettify) {
+            if constexpr (has(Opts, option::prettify)) {
                ctx.indentation_level += Opts.indentation_width;
                dump<'\n'>(args...);
                dumpn<Opts.indentation_char>(ctx.indentation_level, args...);
@@ -87,7 +87,7 @@ namespace glz
                write<JSON>::op<Opts>(name, ctx, std::forward<Args>(args)...); // write name as key
 
                dump<':'>(std::forward<Args>(args)...);
-               if constexpr (Opts.prettify) {
+               if constexpr (has(Opts, option::prettify)) {
                   dump<' '>(args...);
                }
 
@@ -96,13 +96,13 @@ namespace glz
                   dump<','>(std::forward<Args>(args)...);
                }
 
-               if constexpr (Opts.prettify) {
+               if constexpr (has(Opts, option::prettify)) {
                   dump<'\n'>(args...);
                   dumpn<Opts.indentation_char>(ctx.indentation_level, args...);
                }
             }
 
-            if constexpr (Opts.prettify) {
+            if constexpr (has(Opts, option::prettify)) {
                ctx.indentation_level -= Opts.indentation_width;
                dump<'\n'>(args...);
                dumpn<Opts.indentation_char>(ctx.indentation_level, args...);

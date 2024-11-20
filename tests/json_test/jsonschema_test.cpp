@@ -85,98 +85,98 @@ auto expect_property(const test_case& test, std::string_view key, Value value)
 
 suite schema_attributes = [] {
    "parsing"_test = [] {
-      test_case const test{};
+      const test_case test{};
       expect(test.obj.has_value()) << format_error(!test.obj.has_value() ? test.obj.error() : glz::error_ctx{},
                                                    test.schema_str);
       expect[test.obj.has_value()];
    };
    "description"_test = [] {
-      test_case const test{};
+      const test_case test{};
       expect_property<&glz::schema::description>(test, "variable", std::string{"this is a description"});
    };
    "deprecated"_test = [] {
-      test_case const test{};
+      const test_case test{};
       expect_property<&glz::schema::deprecated>(test, "variable", true);
    };
    "readOnly"_test = [] {
-      test_case const test{};
+      const test_case test{};
       expect_property<&glz::schema::readOnly>(test, "variable", true);
    };
    "writeOnly"_test = [] {
-      test_case const test{};
+      const test_case test{};
       expect_property<&glz::schema::writeOnly>(test, "variable", true);
    };
    "minLength"_test = [] {
-      test_case const test{};
+      const test_case test{};
       expect_property<&glz::schema::minLength>(test, "variable", std::uint64_t{1});
    };
    "maxLength"_test = [] {
-      test_case const test{};
+      const test_case test{};
       expect_property<&glz::schema::maxLength>(test, "variable", std::uint64_t{2});
    };
    "pattern"_test = [] {
-      test_case const test{};
+      const test_case test{};
       expect_property<&glz::schema::pattern>(test, "variable", std::string_view{"[a-z]+"});
    };
    "format"_test = [] {
-      test_case const test{};
+      const test_case test{};
       expect_property<&glz::schema::format>(test, "variable", glz::detail::defined_formats::hostname);
    };
    "minimum"_test = [] {
-      test_case const test{};
+      const test_case test{};
       expect_property<&glz::schema::minimum>(test, "variable", std::int64_t{1});
    };
    "maximum"_test = [] {
-      test_case const test{};
+      const test_case test{};
       expect_property<&glz::schema::maximum>(test, "variable", std::int64_t{2});
    };
    "exclusiveMinimum"_test = [] {
-      test_case const test{};
+      const test_case test{};
       expect_property<&glz::schema::exclusiveMinimum>(test, "variable", std::int64_t{1});
    };
    "exclusiveMaximum"_test = [] {
-      test_case const test{};
+      const test_case test{};
       expect_property<&glz::schema::exclusiveMaximum>(test, "variable", std::int64_t{2});
    };
    "multipleOf"_test = [] {
-      test_case const test{};
+      const test_case test{};
       expect_property<&glz::schema::multipleOf>(test, "variable", std::int64_t{3});
    };
    "minProperties"_test = [] {
-      test_case const test{};
+      const test_case test{};
       expect_property<&glz::schema::minProperties>(test, "variable", std::uint64_t{4});
    };
    "maxProperties"_test = [] {
-      test_case const test{};
+      const test_case test{};
       expect_property<&glz::schema::maxProperties>(test, "variable", std::numeric_limits<std::uint64_t>::max());
    };
    "minItems"_test = [] {
-      test_case const test{};
+      const test_case test{};
       expect_property<&glz::schema::minItems>(test, "variable", std::uint64_t{1});
    };
    "maxItems"_test = [] {
-      test_case const test{};
+      const test_case test{};
       expect_property<&glz::schema::maxItems>(test, "variable", std::uint64_t{2});
    };
    "minContains"_test = [] {
-      test_case const test{};
+      const test_case test{};
       expect_property<&glz::schema::minContains>(test, "variable", std::uint64_t{1});
    };
    "maxContains"_test = [] {
-      test_case const test{};
+      const test_case test{};
       expect_property<&glz::schema::maxContains>(test, "variable", std::uint64_t{2});
    };
    "uniqueItems"_test = [] {
-      test_case const test{};
+      const test_case test{};
       expect_property<&glz::schema::uniqueItems>(test, "variable", true);
    };
    "extUnits"_test = [] {
-      test_case const test{};
+      const test_case test{};
       expect_property<&glz::schema::ExtUnits>(test, "variable",
                                               glz::detail::ExtUnits{.unitAscii = "m^2", .unitUnicode = "m²"});
    };
    "extAdvanced"_test = [] {
-      test_case const test{};
+      const test_case test{};
       expect_property<&glz::schema::ExtAdvanced>(test, "variable", true);
    };
 };
@@ -264,7 +264,9 @@ struct schematic_substitute
 auto read_json_ignore_unknown(auto&& value, auto&& buffer)
 {
    glz::context ctx{};
-   return read<glz::opts{.error_on_unknown_keys = false}>(value, std::forward<decltype(buffer)>(buffer), ctx);
+   return read<glz::opts{.bits =
+                            glz::options(glz::json_options_default).set(glz::option::error_on_unknown_keys, false)}>(
+      value, std::forward<decltype(buffer)>(buffer), ctx);
 }
 
 #if 0

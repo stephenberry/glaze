@@ -470,7 +470,8 @@ auto glaze_test()
 
    auto t1 = std::chrono::steady_clock::now();
 
-   results r{Opts.minified ? "Glaze (.minified)" : "Glaze", "https://github.com/stephenberry/glaze", iterations};
+   results r{glz::has(Opts, glz::option::minified) ? "Glaze (.minified)" : "Glaze",
+             "https://github.com/stephenberry/glaze", iterations};
    r.json_roundtrip = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-6;
 
    // write performance
@@ -823,7 +824,8 @@ auto benchmark_tester()
 
    auto t1 = std::chrono::steady_clock::now();
 
-   results r{Opts.minified ? "Glaze (.minified)" : "Glaze", "https://github.com/stephenberry/glaze", N};
+   results r{glz::has(Opts, glz::option::minified) ? "Glaze (.minified)" : "Glaze",
+             "https://github.com/stephenberry/glaze", N};
    r.json_roundtrip = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-6;
 
    // write performance
@@ -1228,7 +1230,8 @@ auto generic_tester()
 
    auto t1 = std::chrono::steady_clock::now();
 
-   results r{Opts.minified ? "Glaze (.minified)" : "Glaze", "https://github.com/stephenberry/glaze", iterations};
+   results r{glz::has(Opts, glz::option::minified) ? "Glaze (.minified)" : "Glaze",
+             "https://github.com/stephenberry/glaze", iterations};
    r.json_roundtrip = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-6;
 
    // write performance

@@ -166,7 +166,8 @@ void test_struct_with_array_minified()
 
    std::string buffer{};
    expect(not glz::write_json(obj, buffer));
-   expect(not glz::read<glz::opts{.minified = true}>(obj, buffer));
+   expect(not glz::read<glz::opts{.bits = glz::options(glz::json_options_default).set(glz::option::minified, true)}>(
+      obj, buffer));
 }
 
 template <class T>
@@ -503,7 +504,8 @@ suite u8_test = [] {
       expect(not glz::read_json(value, "[1e10, 12e10]"));
       expect(value == std::array<V, 2>{10000000000, 120000000000});
 
-      expect(not glz::read<glz::opts{.minified = true}>(value, "[4774870093504525206]"));
+      expect(not glz::read<glz::opts{.bits = glz::options(glz::json_options_default).set(glz::option::minified, true)}>(
+         value, "[4774870093504525206]"));
 
       expect(glz::read_json(value, "[1e-1]"));
       expect(glz::read_json(value, "[1.0]"));
@@ -555,8 +557,10 @@ suite u8_test = [] {
       expect(not glz::read_json(value, "[-5594732989048119398, -5594732989048119398]"));
       expect(value == std::array<V, 2>{-5594732989048119398, -5594732989048119398});
 
-      expect(not glz::read<glz::opts{.minified = true}>(value, "[337184269,337184283]"));
-      expect(not glz::read<glz::opts{.minified = true}>(value, "[-5637358391044507426,-4563386007050245647]"));
+      expect(not glz::read<glz::opts{.bits = glz::options(glz::json_options_default).set(glz::option::minified, true)}>(
+         value, "[337184269,337184283]"));
+      expect(not glz::read<glz::opts{.bits = glz::options(glz::json_options_default).set(glz::option::minified, true)}>(
+         value, "[-5637358391044507426,-4563386007050245647]"));
 
       expect(glz::read_json(value, "[1e-1]"));
       expect(glz::read_json(value, "[1.0]"));
