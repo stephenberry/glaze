@@ -691,7 +691,7 @@ namespace glz
          }();
 
          template <auto Opts, class... Args>
-            requires(Opts.structs_as_arrays == true)
+            requires(has(Opts, option::structs_as_arrays) == true)
          static void op(auto&& value, is_context auto&& ctx, Args&&... args)
          {
             dump<tag::generic_array>(args...);
@@ -724,7 +724,7 @@ namespace glz
          }
 
          template <auto Options, class... Args>
-            requires(Options.structs_as_arrays == false)
+            requires(has(Options, option::structs_as_arrays) == false)
          static void op(auto&& value, is_context auto&& ctx, Args&&... args)
          {
             if constexpr (!has_opening_handled(Options)) {
@@ -968,20 +968,21 @@ namespace glz
    template <write_beve_supported T, class Buffer>
    [[nodiscard]] error_ctx write_beve_untagged(T&& value, Buffer&& buffer)
    {
-      return write<opts{.format = BEVE, .structs_as_arrays = true}>(std::forward<T>(value),
-                                                                    std::forward<Buffer>(buffer));
+      return write<opts{.format = BEVE, .bits = options(json_options_default).set(option::structs_as_arrays, true)}>(
+         std::forward<T>(value), std::forward<Buffer>(buffer));
    }
 
    template <write_beve_supported T>
    [[nodiscard]] error_ctx write_beve_untagged(T&& value)
    {
-      return write<opts{.format = BEVE, .structs_as_arrays = true}>(std::forward<T>(value));
+      return write<opts{.format = BEVE, .bits = options(json_options_default).set(option::structs_as_arrays, true)}>(
+         std::forward<T>(value));
    }
 
    template <opts Opts = opts{}, write_beve_supported T>
    [[nodiscard]] error_ctx write_file_beve_untagged(T&& value, const std::string& file_name, auto&& buffer)
    {
-      return write_file_beve<opt_true<Opts, &opts::structs_as_arrays>>(std::forward<T>(value), file_name, buffer);
+      return write_file_beve<opt_true2<Opts, option::structs_as_arrays>>(std::forward<T>(value), file_name, buffer);
    }
 
    template <class T>

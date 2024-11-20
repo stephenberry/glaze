@@ -1367,7 +1367,9 @@ suite example_reflection_without_keys_test = [] {
    "example_reflection_without_keys"_test = [] {
       std::string without_keys;
       my_example obj{.i = 55, .d = 3.14, .hello = "happy"};
-      constexpr glz::opts options{.format = glz::BEVE, .structs_as_arrays = true};
+      constexpr glz::opts options{
+         .format = glz::BEVE,
+         .bits = glz::options(glz::json_options_default).set(glz::option::structs_as_arrays, true)};
       expect(not glz::write<options>(obj, without_keys));
 
       std::string with_keys;
@@ -1410,7 +1412,9 @@ suite my_struct_without_keys_test = [] {
    "my_struct_without_keys"_test = [] {
       std::string without_keys;
       my_struct obj{.i = 55, .d = 3.14, .hello = "happy"};
-      constexpr glz::opts options{.format = glz::BEVE, .structs_as_arrays = true};
+      constexpr glz::opts options{
+         .format = glz::BEVE,
+         .bits = glz::options(glz::json_options_default).set(glz::option::structs_as_arrays, true)};
       expect(not glz::write<options>(obj, without_keys));
 
       std::string with_keys;
@@ -1469,8 +1473,10 @@ namespace variants
       "variants"_test = [] {
          std::vector<uint8_t> out;
          D d{};
-         expect(
-            not glz::write<glz::opts{.format = glz::BEVE, .structs_as_arrays = true}>(d, out)); // testing compilation
+         expect(not glz::write<glz::opts{
+                   .format = glz::BEVE,
+                   .bits = glz::options(glz::json_options_default).set(glz::option::structs_as_arrays, true)}>(
+            d, out)); // testing compilation
       };
    };
 }

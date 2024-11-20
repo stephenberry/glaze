@@ -1232,7 +1232,7 @@ namespace glz
       struct from<BEVE, T> final
       {
          template <auto Opts>
-            requires(Opts.structs_as_arrays == true)
+            requires(has(Opts, option::structs_as_arrays) == true)
          static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
             if constexpr (reflectable<T>) {
@@ -1264,7 +1264,7 @@ namespace glz
          }
 
          template <auto Opts>
-            requires(Opts.structs_as_arrays == false)
+            requires(has(Opts, option::structs_as_arrays) == false)
          static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
             constexpr uint8_t type = 0; // string key
@@ -1531,15 +1531,17 @@ namespace glz
    template <read_beve_supported T, class Buffer>
    [[nodiscard]] inline error_ctx read_binary_untagged(T&& value, Buffer&& buffer)
    {
-      return read<opts{.format = BEVE, .structs_as_arrays = true}>(std::forward<T>(value),
-                                                                   std::forward<Buffer>(buffer));
+      return read<opts{.format = BEVE, .bits = options(json_options_default).set(option::structs_as_arrays, true)}>(
+         std::forward<T>(value), std::forward<Buffer>(buffer));
    }
 
    template <read_beve_supported T, class Buffer>
    [[nodiscard]] inline expected<T, error_ctx> read_binary_untagged(Buffer&& buffer)
    {
       T value{};
-      const auto pe = read<opts{.format = BEVE, .structs_as_arrays = true}>(value, std::forward<Buffer>(buffer));
+      const auto pe =
+         read<opts{.format = BEVE, .bits = options(json_options_default).set(option::structs_as_arrays, true)}>(
+            value, std::forward<Buffer>(buffer));
       if (pe) [[unlikely]] {
          return unexpected(pe);
       }
@@ -1549,7 +1551,7 @@ namespace glz
    template <opts Opts = opts{}, read_beve_supported T>
    [[nodiscard]] inline error_ctx read_file_beve_untagged(T& value, const std::string& file_name, auto&& buffer)
    {
-      return read_file_beve<opt_true<Opts, &opts::structs_as_arrays>>(value, file_name, buffer);
+      return read_file_beve<opt_true2<Opts, option::structs_as_arrays>>(value, file_name, buffer);
    }
 
    template <class T>
