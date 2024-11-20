@@ -100,7 +100,7 @@ namespace glz
 
    // Read numbers as strings and write these string as numbers
    template <auto MemPtr>
-   constexpr auto number = detail::opts_wrapper<MemPtr, &opts::number>();
+   constexpr auto number = detail::opts_wrapper2<MemPtr, option::number>();
 
    // Write out string like types without quotes
    template <auto MemPtr>

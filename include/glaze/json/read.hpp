@@ -625,7 +625,7 @@ namespace glz
             requires(has_is_padded(Opts))
          static void op(auto& value, is_context auto&& ctx, It&& it, End&& end)
          {
-            if constexpr (Opts.number) {
+            if constexpr (has(Opts, option::number)) {
                auto start = it;
                skip_number<Opts>(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]] {
@@ -757,7 +757,7 @@ namespace glz
             requires(not has_is_padded(Opts))
          static void op(auto& value, is_context auto&& ctx, It&& it, End&& end)
          {
-            if constexpr (Opts.number) {
+            if constexpr (has(Opts, option::number)) {
                auto start = it;
                skip_number<Opts>(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]] {

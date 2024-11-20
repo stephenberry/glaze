@@ -757,7 +757,8 @@ suite basic_types = [] {
 
          auto write_num = [](const auto& input) {
             std::string result{};
-            expect(not glz::write<glz::opts{.number = true}>(input, result));
+            expect(not glz::write<glz::opts{
+                      .bits = glz::options(glz::json_options_default).set(glz::option::number, true)}>(input, result));
             return result;
          };
          expect(write_num(std::string_view{}) == expected_nothing);

@@ -252,7 +252,7 @@ namespace glz
          template <auto Opts, class B>
          static void op(auto&& value, is_context auto&&, B&& b, auto&& ix)
          {
-            if constexpr (Opts.number) {
+            if constexpr (has(Opts, option::number)) {
                dump_maybe_empty(value, b, ix);
             }
             else if constexpr (char_t<T>) {
