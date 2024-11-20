@@ -256,7 +256,7 @@ namespace glz
                dump_maybe_empty(value, b, ix);
             }
             else if constexpr (char_t<T>) {
-               if constexpr (Opts.raw) {
+               if constexpr (has(Opts, option::raw)) {
                   dump(value, b, ix);
                }
                else {
@@ -334,7 +334,7 @@ namespace glz
                   }
                   // now we don't have to check writing
 
-                  if constexpr (Opts.raw) {
+                  if constexpr (has(Opts, option::raw)) {
                      if (str.size()) [[likely]] {
                         dump<false>(str, b, ix);
                      }
@@ -555,11 +555,11 @@ namespace glz
                const sv str = {member_it->second.data(), member_it->second.size()};
                // TODO: Assumes people dont use strings with chars that need to be escaped for their enum names
                // TODO: Could create a pre quoted map for better performance
-               if constexpr (not Opts.raw) {
+               if constexpr (not has(Opts, option::raw)) {
                   dump<'"'>(args...);
                }
                dump_maybe_empty(str, args...);
-               if constexpr (not Opts.raw) {
+               if constexpr (not has(Opts, option::raw)) {
                   dump<'"'>(args...);
                }
             }

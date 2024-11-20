@@ -739,7 +739,9 @@ suite basic_types = [] {
 
          auto write_raw = [](const auto& input) {
             std::string result{};
-            expect(not glz::write<glz::opts{.raw = true}>(input, result));
+            expect(
+               not glz::write<glz::opts{.bits = glz::options(glz::json_options_default).set(glz::option::raw, true)}>(
+                  input, result));
             return result;
          };
          expect(write_raw(std::string_view{}) == expected_nothing);

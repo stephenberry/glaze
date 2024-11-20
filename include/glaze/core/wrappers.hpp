@@ -104,7 +104,7 @@ namespace glz
 
    // Write out string like types without quotes
    template <auto MemPtr>
-   constexpr auto raw = detail::opts_wrapper<MemPtr, &opts::raw>();
+   constexpr auto raw = detail::opts_wrapper2<MemPtr, option::raw>();
 
    // Reads into only existing fields and elements and then exits without parsing the rest of the input
    template <auto MemPtr>
