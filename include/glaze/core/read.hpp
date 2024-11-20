@@ -92,7 +92,7 @@ namespace glz
       }
 
    finish:
-      if constexpr (Opts.partial_read_nested || Opts.partial_read) {
+      if constexpr (has(Opts, option::partial_read_nested) || has(Opts, option::partial_read)) {
          // We don't do depth validation for partial reading
          // This end_reached condition is set for valid end points in parsing
          if (ctx.error == error_code::end_reached) {

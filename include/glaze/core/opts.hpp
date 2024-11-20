@@ -177,11 +177,11 @@ namespace glz
       // bool_t allow_conversions = true; // Whether conversions between convertible types are
       // allowed in binary, e.g. double -> float
 
-      bool_t partial_read =
-         false; // Reads into only existing fields and elements and then exits without parsing the rest of the input
+      // bool_t partial_read =
+      //    false; // Reads into only existing fields and elements and then exits without parsing the rest of the input
 
       // glaze_object_t concepts
-      bool_t partial_read_nested = false; // Advance the partially read struct to the end of the struct
+      // bool_t partial_read_nested = false; // Advance the partially read struct to the end of the struct
       bool_t concatenate = true; // Concatenates ranges of std::pair into single objects when writing
 
       bool_t hide_non_invocable =

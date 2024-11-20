@@ -1332,7 +1332,7 @@ namespace glz
                }
             }
 
-            if constexpr (Opts.partial_read) {
+            if constexpr (has(Opts, option::partial_read)) {
                return;
             }
             else {
@@ -1598,7 +1598,7 @@ namespace glz
                GLZ_SKIP_WS();
             });
 
-            if constexpr (Opts.partial_read) {
+            if constexpr (has(Opts, option::partial_read)) {
                return;
             }
             else {
@@ -1997,7 +1997,8 @@ namespace glz
             else {
                decltype(auto) fields = [&]() -> decltype(auto) {
                   if constexpr ((glaze_object_t<T> || reflectable<T>) &&
-                                (has(Opts, option::error_on_missing_keys) || is_partial_read<T> || Opts.partial_read)) {
+                                (has(Opts, option::error_on_missing_keys) || is_partial_read<T> ||
+                                 has(Opts, option::partial_read))) {
                      return bit_array<num_members>{};
                   }
                   else {
@@ -2038,7 +2039,8 @@ namespace glz
 
                bool first = true;
                while (true) {
-                  if constexpr ((glaze_object_t<T> || reflectable<T>) && (is_partial_read<T> || Opts.partial_read)) {
+                  if constexpr ((glaze_object_t<T> || reflectable<T>) &&
+                                (is_partial_read<T> || has(Opts, option::partial_read))) {
                      static constexpr bit_array<num_members> all_fields = [] {
                         bit_array<num_members> arr{};
                         for (size_t i = 0; i < num_members; ++i) {
@@ -2048,7 +2050,7 @@ namespace glz
                      }();
 
                      if ((all_fields & fields) == all_fields) {
-                        if constexpr (Opts.partial_read_nested) {
+                        if constexpr (has(Opts, option::partial_read_nested)) {
                            skip_until_closed<Opts, '{', '}'>(ctx, it, end);
                         }
                         return;
@@ -2058,7 +2060,7 @@ namespace glz
                   if (*it == '}') {
                      GLZ_SUB_LEVEL;
                      if constexpr ((glaze_object_t<T> || reflectable<T>) &&
-                                   ((is_partial_read<T> || Opts.partial_read) &&
+                                   ((is_partial_read<T> || has(Opts, option::partial_read)) &&
                                     has(Opts, option::error_on_missing_keys))) {
                         ctx.error = error_code::missing_key;
                         return;
@@ -2132,7 +2134,7 @@ namespace glz
                      parse_and_invoke<Opts, T, hash_info<T>>(
                         [&](auto&& element, const size_t index) {
                            if constexpr (has(Opts, option::error_on_missing_keys) || is_partial_read<T> ||
-                                         Opts.partial_read) {
+                                         has(Opts, option::partial_read)) {
                               fields[index] = true;
                            }
                            else {
@@ -2181,7 +2183,7 @@ namespace glz
                            GLZ_PARSE_WS_COLON;
 
                            if constexpr (has(Opts, option::error_on_missing_keys) || is_partial_read<T> ||
-                                         Opts.partial_read) {
+                                         has(Opts, option::partial_read)) {
                               // TODO: Kludge/hack. Should work but could easily cause memory issues with small
                               // changes. At the very least if we are going to do this add a get_index method to the
                               // maps and call that
@@ -2242,7 +2244,7 @@ namespace glz
                               GLZ_PARSE_WS_COLON;
 
                               if constexpr (has(Opts, option::error_on_missing_keys) || is_partial_read<T> ||
-                                            Opts.partial_read) {
+                                            has(Opts, option::partial_read)) {
                                  // TODO: Kludge/hack. Should work but could easily cause memory issues with small
                                  // changes. At the very least if we are going to do this add a get_index method to
                                  // the maps and call that
@@ -2279,7 +2281,7 @@ namespace glz
                      // For types like std::map, std::unordered_map
 
                      auto reading = [&](auto&& key) {
-                        if constexpr (Opts.partial_read) {
+                        if constexpr (has(Opts, option::partial_read)) {
                            if (auto element = value.find(key); element != value.end()) {
                               ++read_count;
                               read<JSON>::op<ws_handled<Opts>()>(element->second, ctx, it, end);
@@ -2304,7 +2306,7 @@ namespace glz
                         GLZ_PARSE_WS_COLON;
 
                         reading(key);
-                        if constexpr (Opts.partial_read) {
+                        if constexpr (has(Opts, option::partial_read)) {
                            if (read_count == value.size()) {
                               return;
                            }
@@ -2321,7 +2323,7 @@ namespace glz
                         GLZ_PARSE_WS_COLON;
 
                         reading(key);
-                        if constexpr (Opts.partial_read) {
+                        if constexpr (has(Opts, option::partial_read)) {
                            if (read_count == value.size()) {
                               return;
                            }
@@ -2347,7 +2349,7 @@ namespace glz
                         GLZ_PARSE_WS_COLON;
 
                         reading(key_value);
-                        if constexpr (Opts.partial_read) {
+                        if constexpr (has(Opts, option::partial_read)) {
                            if (read_count == value.size()) {
                               return;
                            }

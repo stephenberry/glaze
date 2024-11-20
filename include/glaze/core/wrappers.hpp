@@ -108,7 +108,7 @@ namespace glz
 
    // Reads into only existing fields and elements and then exits without parsing the rest of the input
    template <auto MemPtr>
-   constexpr auto partial_read = detail::opts_wrapper<MemPtr, &opts::partial_read>();
+   constexpr auto partial_read = detail::opts_wrapper2<MemPtr, option::partial_read>();
 
    template <auto From, auto To>
    constexpr auto custom = detail::custom_impl<From, To>();

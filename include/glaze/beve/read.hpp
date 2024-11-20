@@ -730,12 +730,13 @@ namespace glz
                   ++it;
                   GLZ_END_CHECK(0);
 
-                  std::conditional_t<Opts.partial_read, size_t, const size_t> n = int_from_compressed(ctx, it, end);
+                  std::conditional_t<has(Opts, option::partial_read), size_t, const size_t> n =
+                     int_from_compressed(ctx, it, end);
                   if (bool(ctx.error)) [[unlikely]] {
                      return 0;
                   }
 
-                  if constexpr (Opts.partial_read) {
+                  if constexpr (has(Opts, option::partial_read)) {
                      n = value.size();
                   }
 
@@ -848,12 +849,13 @@ namespace glz
                }
 
                ++it;
-               std::conditional_t<Opts.partial_read, size_t, const size_t> n = int_from_compressed(ctx, it, end);
+               std::conditional_t<has(Opts, option::partial_read), size_t, const size_t> n =
+                  int_from_compressed(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]] {
                   return;
                }
 
-               if constexpr (Opts.partial_read) {
+               if constexpr (has(Opts, option::partial_read)) {
                   n = value.size();
                }
 
@@ -905,12 +907,13 @@ namespace glz
                   return;
                }
                ++it;
-               std::conditional_t<Opts.partial_read, size_t, const size_t> n = int_from_compressed(ctx, it, end);
+               std::conditional_t<has(Opts, option::partial_read), size_t, const size_t> n =
+                  int_from_compressed(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]] {
                   return;
                }
 
-               if constexpr (Opts.partial_read) {
+               if constexpr (has(Opts, option::partial_read)) {
                   n = value.size();
                }
 
@@ -944,12 +947,13 @@ namespace glz
                   return;
                }
                ++it;
-               std::conditional_t<Opts.partial_read, size_t, const size_t> n = int_from_compressed(ctx, it, end);
+               std::conditional_t<has(Opts, option::partial_read), size_t, const size_t> n =
+                  int_from_compressed(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]] {
                   return;
                }
 
-               if constexpr (Opts.partial_read) {
+               if constexpr (has(Opts, option::partial_read)) {
                   n = value.size();
                }
 
@@ -1105,12 +1109,13 @@ namespace glz
             }
 
             ++it;
-            std::conditional_t<Opts.partial_read, size_t, const size_t> n = int_from_compressed(ctx, it, end);
+            std::conditional_t<has(Opts, option::partial_read), size_t, const size_t> n =
+               int_from_compressed(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]] {
                return;
             }
 
-            if constexpr (Opts.partial_read) {
+            if constexpr (has(Opts, option::partial_read)) {
                n = value.size();
             }
 
@@ -1118,7 +1123,7 @@ namespace glz
                constexpr uint8_t key_tag = tag::number | type | (byte_cnt << 5);
                Key key;
                for (size_t i = 0; i < n; ++i) {
-                  if constexpr (Opts.partial_read) {
+                  if constexpr (has(Opts, option::partial_read)) {
                      read<BEVE>::op<no_header_on<Opts>()>(key, key_tag, ctx, it, end);
                      if (auto element = value.find(key); element != value.end()) {
                         read<BEVE>::op<Opts>(element->second, ctx, it, end);
@@ -1135,7 +1140,7 @@ namespace glz
                constexpr uint8_t key_tag = tag::string;
                static thread_local Key key;
                for (size_t i = 0; i < n; ++i) {
-                  if constexpr (Opts.partial_read) {
+                  if constexpr (has(Opts, option::partial_read)) {
                      read<BEVE>::op<no_header_on<Opts>()>(key, key_tag, ctx, it, end);
                      if (auto element = value.find(key); element != value.end()) {
                         read<BEVE>::op<Opts>(element->second, ctx, it, end);
@@ -1290,7 +1295,7 @@ namespace glz
             }();
 
             decltype(auto) fields = [&]() -> decltype(auto) {
-               if constexpr (is_partial_read<T> || Opts.partial_read) {
+               if constexpr (is_partial_read<T> || has(Opts, option::partial_read)) {
                   return bit_array<N>{};
                }
                else {
@@ -1304,7 +1309,7 @@ namespace glz
             }
 
             for (size_t i = 0; i < n_keys; ++i) {
-               if constexpr (is_partial_read<T> || Opts.partial_read) {
+               if constexpr (is_partial_read<T> || has(Opts, option::partial_read)) {
                   if ((all_fields & fields) == all_fields) {
                      return;
                   }
@@ -1325,7 +1330,7 @@ namespace glz
                   const auto index = decode_hash_with_size<BEVE, T, HashInfo, HashInfo.type>::op(it, end, n);
 
                   if (index < N) [[likely]] {
-                     if constexpr (is_partial_read<T> || Opts.partial_read) {
+                     if constexpr (is_partial_read<T> || has(Opts, option::partial_read)) {
                         fields[index] = true;
                      }
 
@@ -1435,7 +1440,7 @@ namespace glz
 
             using V = std::decay_t<T>;
             constexpr auto N = glz::tuple_size_v<V>;
-            if constexpr (Opts.partial_read) {
+            if constexpr (has(Opts, option::partial_read)) {
                const auto n = int_from_compressed(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]] {
                   return;

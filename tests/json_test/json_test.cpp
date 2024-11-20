@@ -8093,7 +8093,8 @@ suite nested_partial_read_tests = [] {
       std::string buf =
          R"({"method":"m1","header":{"id":"51e2affb","type":"message_type","unknown key":"value"},"number":51})";
 
-      expect(!glz::read<glz::opts{.partial_read_nested = true}>(n, buf));
+      expect(!glz::read<glz::opts{
+                .bits = glz::options(glz::json_options_default).set(glz::option::partial_read_nested, true)}>(n, buf));
       expect(n.method == "m1");
       expect(n.header.id == "51e2affb");
       expect(n.header.type == "message_type");
@@ -8104,7 +8105,8 @@ suite nested_partial_read_tests = [] {
       std::string buf =
          R"({"method":"m1","header":{"id":"51e2affb","type":"message_type","unknown key":"value",garbage},"number":51})";
 
-      expect(!glz::read<glz::opts{.partial_read_nested = true}>(n, buf));
+      expect(!glz::read<glz::opts{
+                .bits = glz::options(glz::json_options_default).set(glz::option::partial_read_nested, true)}>(n, buf));
       expect(n.method == "m1");
       expect(n.header.id == "51e2affb");
       expect(n.header.type == "message_type");
@@ -8140,8 +8142,8 @@ inline void AccountUpdate::fromJson(AccountUpdate& accountUpdate, const std::str
 {
    auto ec = glz::read<glz::opts{.bits = glz::options(glz::json_options_default)
                                             .set(glz::option::error_on_unknown_keys, false)
-                                            .set(glz::option::raw_string, true),
-                                 .partial_read_nested = true}>(accountUpdate, jSon);
+                                            .set(glz::option::raw_string, true)
+                                            .set(glz::option::partial_read_nested, true)}>(accountUpdate, jSon);
    expect(not ec) << glz::format_error(ec, jSon);
 }
 
@@ -9090,7 +9092,8 @@ struct partial_struct
 };
 
 suite read_allocated_tests = [] {
-   static constexpr glz::opts partial{.partial_read = true};
+   static constexpr glz::opts partial{.bits =
+                                         glz::options(glz::json_options_default).set(glz::option::partial_read, true)};
 
    "partial_read tuple"_test = [] {
       std::string s = R"(["hello",88,"a string we don't care about"])";
@@ -9120,7 +9123,9 @@ suite read_allocated_tests = [] {
    "partial_read partial_struct"_test = [] {
       std::string s = R"({"integer":400,"string":"ha!",ignore})";
       partial_struct obj{};
-      expect(!glz::read<glz::opts{.partial_read = true}>(obj, s));
+      expect(
+         !glz::read<glz::opts{.bits = glz::options(glz::json_options_default).set(glz::option::partial_read, true)}>(
+            obj, s));
       expect(obj.string == "ha!");
       expect(obj.integer == 400);
    };
@@ -9128,9 +9133,9 @@ suite read_allocated_tests = [] {
    "partial_read partial_struct, error_on_unknown_keys = false"_test = [] {
       std::string s = R"({"skip":null,"integer":400,"string":"ha!",ignore})";
       partial_struct obj{};
-      expect(!glz::read<glz::opts{
-                .bits = glz::options(glz::json_options_default).set(glz::option::error_on_unknown_keys, false),
-                .partial_read = true}>(obj, s));
+      expect(!glz::read<glz::opts{.bits = glz::options(glz::json_options_default)
+                                             .set(glz::option::error_on_unknown_keys, false)
+                                             .set(glz::option::partial_read, true)}>(obj, s));
       expect(obj.string == "ha!");
       expect(obj.integer == 400);
    };
