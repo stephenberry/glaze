@@ -7,6 +7,12 @@
 #include "glaze/core/common.hpp"
 #include "glaze/util/primes_64.hpp"
 
+#ifdef _MSC_VER
+// Turn off MSVC warning for unreferenced formal parameter, which is referenced in a constexpr branch
+#pragma warning(push)
+#pragma warning(disable : 4100)
+#endif
+
 namespace glz::detail
 {
    // We create const and not-const versions for when our reflected struct is const or non-const qualified
@@ -2204,3 +2210,8 @@ namespace glz
       }
    }
 }
+
+#ifdef _MSC_VER
+// restore disabled warnings
+#pragma warning(pop)
+#endif
