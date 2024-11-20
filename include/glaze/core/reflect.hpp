@@ -10,7 +10,7 @@
 #ifdef _MSC_VER
 // Turn off MSVC warning for unreferenced formal parameter, which is referenced in a constexpr branch
 #pragma warning(push)
-#pragma warning(disable : 4100)
+#pragma warning(disable : 4100 4189)
 #endif
 
 namespace glz::detail
@@ -1558,7 +1558,7 @@ namespace glz::detail
          constexpr auto& k_info = keys_info<T>;
          constexpr auto& type = k_info.type;
          constexpr auto& N = reflect<T>::size;
-         [[maybe_unused]] constexpr auto& keys = reflect<T>::keys; // maybe_unused to avoid invalid MSVC warning
+         constexpr auto& keys = reflect<T>::keys;
 
          using enum hash_type;
          if constexpr (type == single_element) {
