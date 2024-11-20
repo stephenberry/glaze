@@ -153,7 +153,7 @@ namespace glz
                         run_cli_menu<Opts>(v, menu_boolean);
                      }
                   }
-                  else if constexpr (Opts.hide_non_invocable) {
+                  else if constexpr (has(Opts, option::hide_non_invocable)) {
                   }
                   else {
                      static_assert(false_v<Func>, "Your function is not invocable or not concrete");
@@ -203,7 +203,7 @@ namespace glz
                else if constexpr (is_invocable_concrete<std::remove_cvref_t<Func>>) {
                   std::printf("  %d   %.*s\n", uint32_t(I + 1), int(key.size()), key.data());
                }
-               else if constexpr (Opts.hide_non_invocable) {
+               else if constexpr (has(Opts, option::hide_non_invocable)) {
                   // do not print non-invocable member
                }
                else {
