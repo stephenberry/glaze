@@ -23,6 +23,12 @@
 #include "glaze/util/type_traits.hpp"
 #include "glaze/util/variant.hpp"
 
+#ifdef _MSC_VER
+// Turn off MSVC warning for unreachable code due to constexpr branching
+#pragma warning(push)
+#pragma warning(disable : 4702)
+#endif
+
 namespace glz
 {
 
@@ -3115,3 +3121,8 @@ namespace glz
       return read<Options>(value, buffer, ctx);
    }
 }
+
+#ifdef _MSC_VER
+// restore disabled warnings
+#pragma warning(pop)
+#endif
