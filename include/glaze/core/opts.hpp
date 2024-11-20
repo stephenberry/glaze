@@ -4,6 +4,7 @@
 #pragma once
 
 #include <cstdint>
+#include <type_traits>
 
 #include "glaze/util/type_traits.hpp"
 
@@ -54,10 +55,87 @@ namespace glz
 #define GLZ_NULL_TERMINATED true
 #endif
 
+   using bits_class = std::uint64_t;
+
+   enum class option : std::uint8_t {
+      null_terminated = 0,
+      comments,
+      error_on_unknown_keys,
+      skip_null_members,
+      use_hash_comparison,
+      prettify,
+      minified,
+      new_lines_in_arrays,
+      shrink_to_fit,
+      write_type_info,
+      error_on_missing_keys,
+      error_on_const_read,
+      validate_skipped,
+      validate_trailing_whitespace,
+      bools_as_numbers,
+      escaped_unicode_key_conversion,
+      quoted_num,
+      number,
+      raw,
+      raw_string,
+      structs_as_arrays,
+      allow_conversions,
+      partial_read,
+      partial_read_nested,
+      concatenate,
+      hide_non_invocable,
+      indentation_char,
+      indentation_width = indentation_char + 8,
+      layout = indentation_width + 3,
+      float_max_write_precision,
+
+      last_option_terminator
+   };
+
+   static_assert(std::uint8_t(option::last_option_terminator) < sizeof(bits_class) * 8);
+
+   template <typename U>
+   struct options
+   {
+      // TODO make everything consteval for gcc14+
+      constexpr options() = default;
+      constexpr options(const options & o) = default;
+      constexpr options& set(option b, U v)
+      {
+         if (v) {
+            bits |= U(v) << static_cast<std::underlying_type_t<option>>(b);
+         }
+         else {
+            bits = bits & ~(U(1) << static_cast<std::underlying_type_t<option>>(b));
+         }
+         return *this;
+      }
+
+      consteval operator U() const { return bits; }
+
+      U bits{};
+   };
+
+   constexpr auto json_options_default = options<bits_class>()
+      .set(option::null_terminated, GLZ_NULL_TERMINATED)
+      .set(option::error_on_unknown_keys, true)
+      .set(option::skip_null_members, true)
+      .set(option::use_hash_comparison, true)
+      .set(option::new_lines_in_arrays, true)
+      .set(option::write_type_info, true)
+      .set(option::allow_conversions, true)
+      .set(option::concatenate, true)
+      .set(option::hide_non_invocable, true)
+      .set(option::indentation_char, ' ')
+      .set(option::indentation_width, 3)
+      .set(option::layout, rowwise);
+
    struct opts
    {
       // USER CONFIGURABLE
       uint32_t format = JSON;
+      bits_class bits = json_options_default;
+
       bool_t null_terminated = GLZ_NULL_TERMINATED; // Whether the input buffer is null terminated
       bool_t comments = false; // Support reading in JSONC style comments
       bool_t error_on_unknown_keys = true; // Error when an unknown key is encountered
@@ -130,6 +208,23 @@ namespace glz
    };
 
 #undef bool_t
+
+   template <std::uint8_t width, typename R>
+   requires (width > 0)
+   consteval R get(const opts& o, option b) {
+      static_assert(sizeof(R) * 8 >= width);
+      static_assert(std::is_same_v<R, bool> && width == 1);
+
+      R ret{};
+
+      return ret;
+   }
+
+   template <>
+   consteval bool get<1, bool>(const opts& o, option b) {
+       return o.bits & (uint64_t(1) << uint8_t(b));
+   }
+   consteval bool has(const opts& o, option b) { return get<1, bool>(o, b); }
 
    consteval bool has_opening_handled(const opts& o) { return o.internal & uint32_t(opts::internal::opening_handled); }
 
@@ -285,6 +380,17 @@ namespace glz
    template <opts Opts, auto member_ptr>
    inline constexpr auto opt_true = opt_on<Opts, member_ptr>();
 
+   template <opts Opts, auto bit>
+   constexpr auto opt_on2()
+   {
+      opts ret = Opts;
+      ret.bits |= decltype(ret.bits)(1 << uint8_t(bit));
+      return ret;
+   }
+
+   template <opts Opts, auto bit>
+   inline constexpr auto opt_true2 = opt_on2<Opts, bit>();
+
    template <opts Opts, auto member_ptr>
    constexpr auto opt_off()
    {
@@ -295,6 +401,17 @@ namespace glz
 
    template <opts Opts, auto member_ptr>
    inline constexpr auto opt_false = opt_off<Opts, member_ptr>();
+
+   template <opts Opts, auto bit>
+   constexpr auto opt_off2()
+   {
+      opts ret = Opts;
+      ret.bits = ret.bits & ~(decltype(ret.bits)(1) << uint8_t(bit));
+      return ret;
+   }
+
+   template <opts Opts, auto bit>
+   inline constexpr auto opt_false2 = opt_off2<Opts, bit>();
 
    template <opts Opts>
    constexpr auto disable_write_unknown_off()
