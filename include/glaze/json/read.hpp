@@ -258,7 +258,7 @@ namespace glz
          }
       }
 
-      template <opts Opts, class T, auto HashInfo, class Func, class Value>
+      template <opts Opts, class T, auto& HashInfo, class Func, class Value>
          requires(glaze_object_t<T> || reflectable<T>)
       GLZ_ALWAYS_INLINE constexpr void parse_and_invoke(Func&& func, Value&& value, is_context auto&& ctx, auto&& it,
                                                         auto&& end)

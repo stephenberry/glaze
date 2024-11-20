@@ -737,18 +737,18 @@ namespace glz::detail
             static constexpr std::array<utype, 3> powers_of_ten{1, 10, 100};
             i *= powers_of_ten[exp];
             v = T((utype(i) ^ -sign) + sign);
-            return (i - sign) <= (std::numeric_limits<T>::max)();
+            return (i - sign) <= static_cast<utype>((std::numeric_limits<T>::max)());
          }
          else if constexpr (sizeof(T) == 2) {
             static constexpr std::array<utype, 5> powers_of_ten{1, 10, 100, 1000, 10000};
             i *= powers_of_ten[exp];
             v = T((utype(i) ^ -sign) + sign);
-            return (i - sign) <= (std::numeric_limits<T>::max)();
+            return (i - sign) <= static_cast<utype>((std::numeric_limits<T>::max)());
          }
          else if constexpr (sizeof(T) == 4) {
             i *= powers_of_ten_int[exp];
             v = T((utype(i) ^ -sign) + sign);
-            return (i - sign) <= (std::numeric_limits<T>::max)();
+            return (i - sign) <= static_cast<utype>((std::numeric_limits<T>::max)());
          }
          else {
 #if defined(__SIZEOF_INT128__)
