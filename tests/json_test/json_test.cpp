@@ -4535,7 +4535,10 @@ suite unicode_tests = [] {
    "unicode_escaped"_test = [] {
       std::string str = R"({"\u11FF":"\u11FF"})";
       question_t obj{};
-      expect(glz::read<glz::opts{.escaped_unicode_key_conversion = true}>(obj, str) == glz::error_code::none);
+      expect(
+         glz::read<glz::opts{
+            .bits = glz::options(glz::json_options_default).set(glz::option::escaped_unicode_key_conversion, true)}>(
+            obj, str) == glz::error_code::none);
 
       expect(obj.text == "ᇿ");
    };

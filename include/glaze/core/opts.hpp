@@ -163,8 +163,8 @@ namespace glz
 
       bool_t bools_as_numbers = false; // Read and write booleans with 1's and 0's
 
-      bool_t escaped_unicode_key_conversion =
-         false; // JSON does not require escaped unicode keys to match with unescaped UTF-8
+      // bool_t escaped_unicode_key_conversion =
+      //    false; // JSON does not require escaped unicode keys to match with unescaped UTF-8
       // This enables automatic escaped unicode unescaping and matching for keys in glz::object, but it comes at a
       // performance cost.
 

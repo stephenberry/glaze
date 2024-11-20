@@ -1840,7 +1840,7 @@ namespace glz
             }
          }();
 
-         if constexpr (Opts.escaped_unicode_key_conversion && keys_may_contain_escape<T>()) {
+         if constexpr (has(Opts, option::escaped_unicode_key_conversion) && keys_may_contain_escape<T>()) {
             std::string& static_key = string_buffer();
             read<JSON>::op<opening_handled<Opts>()>(static_key, ctx, it, end);
             --it; // reveal the quote
@@ -2008,7 +2008,7 @@ namespace glz
                size_t read_count{}; // for partial_read
 
                static constexpr bool key_conversion =
-                  Opts.escaped_unicode_key_conversion && keys_may_contain_escape<T>();
+                  has(Opts, option::escaped_unicode_key_conversion) && keys_may_contain_escape<T>();
 
                static constexpr bool direct_maps = (glaze_object_t<T> || reflectable<T>) //
                                                    &&(not key_conversion) //
@@ -2561,7 +2561,8 @@ namespace glz
                         GLZ_INVALID_END();
 
                         sv key{};
-                        if constexpr (Opts.escaped_unicode_key_conversion && keys_may_contain_escape<T>()) {
+                        if constexpr (has(Opts, option::escaped_unicode_key_conversion) &&
+                                      keys_may_contain_escape<T>()) {
                            std::string& static_key = string_buffer();
                            read<JSON>::op<opening_handled<Opts>()>(static_key, ctx, it, end);
                            --it; // reveal the quote
