@@ -39,6 +39,12 @@
 // It isn't technically required, because end validation would handle it, but it produces
 // much clearer errors, especially when we don't perform trailing validation.
 
+#ifdef _MSC_VER
+// Turn off MSVC warning for possible loss of data: we are intentionally allowing well defined unsigned integer overflows
+#pragma warning(push)
+#pragma warning(disable : 4702)
+#endif
+
 namespace glz::detail
 {
    constexpr std::array<uint64_t, 20> powers_of_ten_int{1ull,
@@ -931,3 +937,8 @@ namespace glz::detail
       return false;
    }
 }
+
+#ifdef _MSC_VER
+// restore disabled warnings
+#pragma warning(pop)
+#endif
