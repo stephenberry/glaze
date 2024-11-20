@@ -174,7 +174,7 @@ namespace glz
       // bool_t raw_string =
       //    false; // do not decode/encode escaped characters for strings (improves read/write performance)
       // bool_t structs_as_arrays = false; // Handle structs (reading/writing) without keys, which applies
-      bool_t allow_conversions = true; // Whether conversions between convertible types are
+      // bool_t allow_conversions = true; // Whether conversions between convertible types are
       // allowed in binary, e.g. double -> float
 
       bool_t partial_read =

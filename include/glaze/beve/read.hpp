@@ -191,7 +191,7 @@ namespace glz
             constexpr auto is_volatile = std::is_volatile_v<std::remove_reference_t<decltype(value)>>;
 
             if (tag != header) {
-               if constexpr (Opts.allow_conversions) {
+               if constexpr (has(Opts, option::allow_conversions)) {
                   if constexpr (num_t<T>) {
                      if ((tag & 0b00000111) != tag::number) {
                         ctx.error = error_code::syntax_error;
@@ -762,9 +762,9 @@ namespace glz
                };
 
                if (tag != header) {
-                  if constexpr (Opts.allow_conversions) {
+                  if constexpr (has(Opts, option::allow_conversions)) {
                      if (tag != header) [[unlikely]] {
-                        if constexpr (Opts.allow_conversions) {
+                        if constexpr (has(Opts, option::allow_conversions)) {
                            if ((tag & 0b00000111) != tag::typed_array) {
                               ctx.error = error_code::syntax_error;
                               return;
@@ -983,7 +983,7 @@ namespace glz
             GLZ_END_CHECK();
             const auto tag = uint8_t(*it);
             if (tag != header) [[unlikely]] {
-               if constexpr (Opts.allow_conversions) {
+               if constexpr (has(Opts, option::allow_conversions)) {
                   const auto key_type = tag & 0b000'11'000;
                   if constexpr (str_t<Key>) {
                      if (key_type != 0) {
@@ -1083,7 +1083,7 @@ namespace glz
             GLZ_END_CHECK();
             const auto tag = uint8_t(*it);
             if (tag != header) [[unlikely]] {
-               if constexpr (Opts.allow_conversions) {
+               if constexpr (has(Opts, option::allow_conversions)) {
                   const auto key_type = tag & 0b000'11'000;
                   if constexpr (str_t<Key>) {
                      if (key_type != 0) {
