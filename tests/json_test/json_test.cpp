@@ -9071,7 +9071,8 @@ suite bools_as_numbers_test = [] {
    "bools_as_numbers_array"_test = [] {
       std::string s = R"([1,0,1,0])";
       std::array<bool, 4> obj{};
-      constexpr glz::opts opts{.bools_as_numbers = true};
+      constexpr glz::opts opts{.bits =
+                                  glz::options(glz::json_options_default).set(glz::option::bools_as_numbers, true)};
       expect(!glz::read<opts>(obj, s));
       expect(glz::write<opts>(obj) == s);
    };
@@ -9079,7 +9080,8 @@ suite bools_as_numbers_test = [] {
    "bools_as_numbers_vector"_test = [] {
       std::string s = R"([1,0,1,0])";
       std::vector<bool> obj{};
-      constexpr glz::opts opts{.bools_as_numbers = true};
+      constexpr glz::opts opts{.bits =
+                                  glz::options(glz::json_options_default).set(glz::option::bools_as_numbers, true)};
       expect(!glz::read<opts>(obj, s));
       expect(glz::write<opts>(obj) == s);
    };

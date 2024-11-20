@@ -161,7 +161,7 @@ namespace glz
       // The maximum precision type used for writing floats, higher precision floats will be cast down to this precision
       float_precision float_max_write_precision{};
 
-      bool_t bools_as_numbers = false; // Read and write booleans with 1's and 0's
+      // bool_t bools_as_numbers = false; // Read and write booleans with 1's and 0's
 
       // bool_t escaped_unicode_key_conversion =
       //    false; // JSON does not require escaped unicode keys to match with unescaped UTF-8

@@ -462,7 +462,7 @@ namespace glz
                GLZ_SKIP_WS();
             }
 
-            if constexpr (Opts.bools_as_numbers) {
+            if constexpr (has(Opts, option::bools_as_numbers)) {
                if (*it == '1') {
                   value = true;
                   ++it;
