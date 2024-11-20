@@ -1371,7 +1371,7 @@ namespace glz::detail
       if (const auto uindex = find_unique_index(keys)) {
          info.unique_index = uindex.value();
 
-         if (N == 3) {
+         if constexpr (N == 3) {
             // An xor of the first unique character with itself will result in 0 (our desired index)
             // We use a hash algorithm that will produce zero if zero is given, so we can avoid a branch
             // We need a seed produces hashes of [1, 2] for the 2nd and 3rd keys
@@ -1552,7 +1552,7 @@ namespace glz::detail
          constexpr auto& k_info = keys_info<T>;
          constexpr auto& type = k_info.type;
          constexpr auto& N = reflect<T>::size;
-         constexpr auto& keys = reflect<T>::keys;
+         [[maybe_unused]] constexpr auto& keys = reflect<T>::keys; // maybe_unused to avoid invalid MSVC warning
 
          using enum hash_type;
          if constexpr (type == single_element) {
@@ -1634,7 +1634,7 @@ namespace glz::detail
             hash_info_t<T, bucket_size(unique_index, N)> info{.type = unique_index, .seed = k_info.seed};
             info.min_length = k_info.min_length;
             info.max_length = k_info.max_length;
-            info.table.fill(N);
+            info.table.fill(bucket_value_t<N>(N));
             info.unique_index = k_info.unique_index;
 
             if constexpr (k_info.sized_hash) {

@@ -436,7 +436,6 @@ namespace glz::detail
             v = T(res.low);
             return res.high == 0;
 #endif
-            return true;
          }
       }
       return false;
