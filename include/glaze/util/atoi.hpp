@@ -42,7 +42,7 @@
 #ifdef _MSC_VER
 // Turn off MSVC warning for possible loss of data: we are intentionally allowing well defined unsigned integer overflows
 #pragma warning(push)
-#pragma warning(disable : 4702)
+#pragma warning(disable : 4244)
 #endif
 
 namespace glz::detail
