@@ -9195,12 +9195,10 @@ suite error_on_missing_keys_symbols_tests = [] {
           )";
 
       single_symbol_info_js result;
-      auto ec = glz::read<glz::opts{
-                             .bits = glz::options(glz::json_options_default)
-                                        .set(glz::option::error_on_unknown_keys, false)
-                                        .set(glz::option::error_on_missing_keys, true),
-                             .quoted_num = false,
-                          },
+      auto ec = glz::read<glz::opts{.bits = glz::options(glz::json_options_default)
+                                               .set(glz::option::error_on_unknown_keys, false)
+                                               .set(glz::option::error_on_missing_keys, true)
+                                               .set(glz::option::quoted_num, false)},
                           single_symbol_info_js>(result, payload);
       expect(not ec);
    };

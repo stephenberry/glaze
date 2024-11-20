@@ -452,7 +452,7 @@ namespace glz
          template <auto Opts>
          static void op(bool_t auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
-            if constexpr (Opts.quoted_num) {
+            if constexpr (has(Opts, option::quoted_num)) {
                GLZ_SKIP_WS();
                GLZ_MATCH_QUOTE;
                GLZ_INVALID_END();
@@ -530,7 +530,7 @@ namespace glz
                }
             }
 
-            if constexpr (Opts.quoted_num) {
+            if constexpr (has(Opts, option::quoted_num)) {
                GLZ_INVALID_END();
                GLZ_MATCH_QUOTE;
                GLZ_VALID_END();
@@ -547,7 +547,7 @@ namespace glz
          template <auto Opts, class It>
          static void op(auto&& value, is_context auto&& ctx, It&& it, auto&& end) noexcept
          {
-            if constexpr (Opts.quoted_num) {
+            if constexpr (has(Opts, option::quoted_num)) {
                GLZ_SKIP_WS();
                GLZ_MATCH_QUOTE;
                GLZ_INVALID_END();
@@ -607,7 +607,7 @@ namespace glz
                }
             }
 
-            if constexpr (Opts.quoted_num) {
+            if constexpr (has(Opts, option::quoted_num)) {
                GLZ_INVALID_END();
                GLZ_MATCH_QUOTE;
                GLZ_VALID_END();
@@ -2336,7 +2336,7 @@ namespace glz
                         }
                         else if constexpr (std::is_arithmetic_v<Key>) {
                            // prefer over quoted_t below to avoid double parsing of quoted_t
-                           read<JSON>::op<opt_true<Opts, &opts::quoted_num>>(key_value, ctx, it, end);
+                           read<JSON>::op<opt_true2<Opts, option::quoted_num>>(key_value, ctx, it, end);
                         }
                         else {
                            read<JSON>::op<opt_false<Opts, &opts::raw_string>>(quoted_t<Key>{key_value}, ctx, it, end);

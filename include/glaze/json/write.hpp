@@ -221,11 +221,11 @@ namespace glz
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, B&& b, auto&& ix)
          {
             constexpr auto checked = not has_write_unchecked(Opts);
-            if constexpr (Opts.quoted_num) {
+            if constexpr (has(Opts, option::quoted_num)) {
                dump<'"', checked>(b, ix);
             }
             write_chars::op<Opts>(value, ctx, b, ix);
-            if constexpr (Opts.quoted_num) {
+            if constexpr (has(Opts, option::quoted_num)) {
                dump<'"', checked>(b, ix);
             }
          }
@@ -673,7 +673,7 @@ namespace glz
       template <opts Opts, class Key, class Value, is_context Ctx>
       GLZ_ALWAYS_INLINE void write_pair_content(const Key& key, Value&& value, Ctx& ctx, auto&&... args)
       {
-         if constexpr (str_t<Key> || char_t<Key> || glaze_enum_t<Key> || Opts.quoted_num) {
+         if constexpr (str_t<Key> || char_t<Key> || glaze_enum_t<Key> || has(Opts, option::quoted_num)) {
             write<JSON>::op<Opts>(key, ctx, args...);
          }
          else {

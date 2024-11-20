@@ -168,7 +168,7 @@ namespace glz
       // This enables automatic escaped unicode unescaping and matching for keys in glz::object, but it comes at a
       // performance cost.
 
-      bool_t quoted_num = false; // treat numbers as quoted or array-like types as having quoted numbers
+      // bool_t quoted_num = false; // treat numbers as quoted or array-like types as having quoted numbers
       bool_t number = false; // read numbers as strings and write these string as numbers
       bool_t raw = false; // write out string like values without quotes
       bool_t raw_string =
