@@ -643,7 +643,7 @@ namespace glz
                   GLZ_INVALID_END();
                }
 
-               if constexpr (not Opts.raw_string) {
+               if constexpr (not has(Opts, option::raw_string)) {
                   static constexpr auto string_padding_bytes = 8;
 
                   auto start = it;
@@ -775,7 +775,7 @@ namespace glz
                   GLZ_INVALID_END();
                }
 
-               if constexpr (not Opts.raw_string) {
+               if constexpr (not has(Opts, option::raw_string)) {
                   static constexpr auto string_padding_bytes = 8;
 
                   if (size_t(end - it) >= 8) {
@@ -2339,7 +2339,7 @@ namespace glz
                            read<JSON>::op<opt_true2<Opts, option::quoted_num>>(key_value, ctx, it, end);
                         }
                         else {
-                           read<JSON>::op<opt_false<Opts, &opts::raw_string>>(quoted_t<Key>{key_value}, ctx, it, end);
+                           read<JSON>::op<opt_false2<Opts, option::raw_string>>(quoted_t<Key>{key_value}, ctx, it, end);
                         }
                         if (bool(ctx.error)) [[unlikely]]
                            return;

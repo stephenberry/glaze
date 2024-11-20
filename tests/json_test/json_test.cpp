@@ -750,7 +750,9 @@ suite basic_types = [] {
 
          auto write_raw_str = [](const auto& input) {
             std::string result{};
-            expect(not glz::write<glz::opts{.raw_string = true}>(input, result));
+            expect(
+               not glz::write<glz::opts{
+                  .bits = glz::options(glz::json_options_default).set(glz::option::raw_string, true)}>(input, result));
             return result;
          };
          expect(write_raw_str(std::string_view{}) == expected_empty);
@@ -7138,13 +7140,16 @@ suite raw_string_test = [] {
       raw_stuff obj{};
       std::string buffer = R"({"a":"Hello\nWorld","b":"Hello World","c":"\tHello\bWorld"})";
 
-      expect(!glz::read<glz::opts{.raw_string = true}>(obj, buffer));
+      expect(!glz::read<glz::opts{.bits = glz::options(glz::json_options_default).set(glz::option::raw_string, true)}>(
+         obj, buffer));
       expect(obj.a == R"(Hello\nWorld)");
       expect(obj.b == R"(Hello World)");
       expect(obj.c == R"(\tHello\bWorld)");
 
       buffer.clear();
-      expect(not glz::write<glz::opts{.raw_string = true}>(obj, buffer));
+      expect(
+         not glz::write<glz::opts{.bits = glz::options(glz::json_options_default).set(glz::option::raw_string, true)}>(
+            obj, buffer));
       expect(buffer == R"({"a":"Hello\nWorld","b":"Hello World","c":"\tHello\bWorld"})");
    };
 
@@ -8133,10 +8138,10 @@ struct AccountUpdate
 
 inline void AccountUpdate::fromJson(AccountUpdate& accountUpdate, const std::string& jSon)
 {
-   auto ec = glz::read<glz::opts{
-      .bits = glz::options(glz::json_options_default).set(glz::option::error_on_unknown_keys, false),
-      .raw_string = true,
-      .partial_read_nested = true}>(accountUpdate, jSon);
+   auto ec = glz::read<glz::opts{.bits = glz::options(glz::json_options_default)
+                                            .set(glz::option::error_on_unknown_keys, false)
+                                            .set(glz::option::raw_string, true),
+                                 .partial_read_nested = true}>(accountUpdate, jSon);
    expect(not ec) << glz::format_error(ec, jSon);
 }
 

@@ -282,7 +282,7 @@ namespace glz
                }
             }
             else {
-               if constexpr (Opts.raw_string) {
+               if constexpr (has(Opts, option::raw_string)) {
                   const sv str = [&]() -> const sv {
                      if constexpr (!char_array_t<T> && std::is_pointer_v<std::decay_t<T>>) {
                         return value ? value : "";
@@ -677,7 +677,7 @@ namespace glz
             write<JSON>::op<Opts>(key, ctx, args...);
          }
          else {
-            write<JSON>::op<opt_false<Opts, &opts::raw_string>>(quoted_t<const Key>{key}, ctx, args...);
+            write<JSON>::op<opt_false2<Opts, option::raw_string>>(quoted_t<const Key>{key}, ctx, args...);
          }
          if constexpr (has(Opts, option::prettify)) {
             dump<": ">(args...);
