@@ -2396,9 +2396,10 @@ suite custom_load_test = [] {
 };
 
 suite pair_ranges_tests = [] {
-   static constexpr glz::opts concatenate_off{.format = glz::BEVE, .concatenate = false};
-
    "vector pair"_test = [] {
+      static constexpr glz::opts concatenate_off{
+         .format = glz::BEVE, .bits = glz::options(glz::json_options_default).set(glz::option::concatenate, false)};
+
       std::vector<std::pair<int, int>> v{{1, 2}, {3, 4}};
       auto s = glz::write<concatenate_off>(v).value_or("error");
       std::string json{};

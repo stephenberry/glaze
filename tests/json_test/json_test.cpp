@@ -840,15 +840,22 @@ suite container_types = [] {
    };
    "vector pair"_test = [] {
       std::vector<std::pair<int, int>> v;
-      expect(!glz::read<glz::opts{.concatenate = false}>(v, R"([{"1":2},{"3":4}])"));
-      const auto s = glz::write<glz::opts{.concatenate = false}>(v).value_or("error");
+      expect(
+         !glz::read<glz::opts{.bits = glz::options(glz::json_options_default).set(glz::option::concatenate, false)}>(
+            v, R"([{"1":2},{"3":4}])"));
+      const auto s =
+         glz::write<glz::opts{.bits = glz::options(glz::json_options_default).set(glz::option::concatenate, false)}>(v)
+            .value_or("error");
       expect(s == R"([{"1":2},{"3":4}])") << s;
    };
    "vector pair"_test = [] {
       std::vector<std::pair<int, int>> v;
-      expect(!glz::read<glz::opts{.concatenate = false}>(v, R"([{"1":2},{"3":4}])"));
-      const auto s = glz::write<glz::opts{
-         .bits = glz::options(glz::json_options_default).set(glz::option::prettify, true), .concatenate = false}>(v)
+      expect(
+         !glz::read<glz::opts{.bits = glz::options(glz::json_options_default).set(glz::option::concatenate, false)}>(
+            v, R"([{"1":2},{"3":4}])"));
+      const auto s = glz::write<glz::opts{.bits = glz::options(glz::json_options_default)
+                                                     .set(glz::option::prettify, true)
+                                                     .set(glz::option::concatenate, false)}>(v)
                         .value_or("error");
       expect(s == R"([
    {

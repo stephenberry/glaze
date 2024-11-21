@@ -696,7 +696,7 @@ namespace glz
          static constexpr bool map_like_array = writable_array_t<T> && pair_t<range_value_t<T>>;
 
          template <auto Opts, class B>
-            requires(writable_array_t<T> && (map_like_array ? Opts.concatenate == false : true))
+            requires(writable_array_t<T> && (map_like_array ? (not has(Opts, option::concatenate)) : true))
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, B&& b, auto&& ix)
          {
             if (empty_range(value)) {
@@ -794,7 +794,7 @@ namespace glz
          }
 
          template <auto Opts>
-            requires(writable_map_t<T> || (map_like_array && Opts.concatenate == true))
+            requires(writable_map_t<T> || (map_like_array && has(Opts, option::concatenate)))
          static void op(auto&& value, is_context auto&& ctx, auto&&... args)
          {
             if constexpr (!has_opening_handled(Opts)) {

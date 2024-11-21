@@ -182,7 +182,7 @@ namespace glz
 
       // glaze_object_t concepts
       // bool_t partial_read_nested = false; // Advance the partially read struct to the end of the struct
-      bool_t concatenate = true; // Concatenates ranges of std::pair into single objects when writing
+      // bool_t concatenate = true; // Concatenates ranges of std::pair into single objects when writing
 
       // bool_t hide_non_invocable =
       //    true; // Hides non-invocable members from the cli_menu (may be applied elsewhere in the future)
