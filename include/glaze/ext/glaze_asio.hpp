@@ -32,10 +32,10 @@ namespace glz
          ec = {error_code::invalid_header, "No length provided in REPE header"};
          return;
       }
-      
+
       std::array<asio::const_buffer, 3> buffers{asio::buffer(&msg.header, sizeof(msg.header)), asio::buffer(msg.query),
-         asio::buffer(msg.body)};
-      
+                                                asio::buffer(msg.body)};
+
       asio::error_code e{};
       asio::write(socket, buffers, asio::transfer_exactly(msg.header.length), e);
       if (e) {
@@ -253,9 +253,9 @@ namespace glz
          }
 
          unique_socket socket{socket_pool.get()};
-         
+
          send_buffer(*socket, *request, ec);
-         
+
          if (ec) {
             socket.ptr.reset();
             (*is_connected) = false;
@@ -276,9 +276,9 @@ namespace glz
          }
 
          unique_socket socket{socket_pool.get()};
-         
+
          send_buffer(*socket, *request, ec);
-         
+
          if (ec) {
             socket.ptr.reset();
             (*is_connected) = false;
@@ -314,9 +314,9 @@ namespace glz
          }
 
          unique_socket socket{socket_pool.get()};
-         
+
          send_buffer(*socket, *request, ec);
-         
+
          if (ec) {
             socket.ptr.reset();
             (*is_connected) = false;
@@ -347,9 +347,9 @@ namespace glz
          }
 
          unique_socket socket{socket_pool.get()};
-         
+
          send_buffer(*socket, *request, ec);
-         
+
          if (ec) {
             socket.ptr.reset();
             (*is_connected) = false;
@@ -384,7 +384,7 @@ namespace glz
          }
 
          unique_socket socket{socket_pool.get()};
-         
+
          send_buffer(*socket, *request, ec);
 
          if (ec) {

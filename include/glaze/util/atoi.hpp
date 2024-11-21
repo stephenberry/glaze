@@ -40,7 +40,8 @@
 // much clearer errors, especially when we don't perform trailing validation.
 
 #ifdef _MSC_VER
-// Turn off MSVC warning for possible loss of data: we are intentionally allowing well defined unsigned integer overflows
+// Turn off MSVC warning for possible loss of data: we are intentionally allowing well defined unsigned integer
+// overflows
 #pragma warning(push)
 #pragma warning(disable : 4244)
 #endif
