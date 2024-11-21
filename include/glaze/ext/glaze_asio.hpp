@@ -26,16 +26,22 @@ namespace glz
 #if defined(GLZ_USING_BOOST_ASIO)
    namespace asio = boost::asio;
 #endif
-   inline void send_buffer(asio::ip::tcp::socket& socket, const repe::message& msg)
+   inline void send_buffer(asio::ip::tcp::socket& socket, const repe::message& msg, repe::error_t& ec)
    {
       if (msg.header.length == repe::no_length_provided) {
-         throw std::runtime_error("No length provided in REPE header");
+         ec.code = error_code::invalid_header;
+         ec.message = "No length provided in REPE header";
+         return;
       }
-
+      
       std::array<asio::const_buffer, 3> buffers{asio::buffer(&msg.header, sizeof(msg.header)), asio::buffer(msg.query),
-                                                asio::buffer(msg.body)};
-
-      asio::write(socket, buffers, asio::transfer_exactly(msg.header.length));
+         asio::buffer(msg.body)};
+      
+      asio::error_code e{};
+      asio::write(socket, buffers, asio::transfer_exactly(msg.header.length), e);
+      if (e) {
+         ec = {error_code::send_error, e.message()};
+      }
    }
 
    inline void receive_buffer(asio::ip::tcp::socket& socket, repe::message& msg)
@@ -236,23 +242,21 @@ namespace glz
       {
          auto request = message_pool->borrow();
          header.notify(true);
-         auto err = repe::request<Opts>(*request, std::move(header), std::forward<Params>(params)...);
-         if (err) {
-            return err;
+         auto ec = repe::request<Opts>(*request, std::move(header), std::forward<Params>(params)...);
+         if (ec) {
+            return ec;
          }
 
          unique_socket socket{socket_pool.get()};
-
-         try {
-            send_buffer(*socket, *request);
-         }
-         catch (const std::exception&) {
+         
+         send_buffer(*socket, *request, ec);
+         
+         if (ec) {
             socket.ptr.reset();
             (*is_connected) = false;
-            return {error_code::send_error, "asio send failure"};
          }
 
-         return {};
+         return ec;
       }
 
       template <class Result>
@@ -261,20 +265,19 @@ namespace glz
          auto request = message_pool->borrow();
          header.notify(false);
          header.read(true);
-         auto err = repe::request<Opts>(*request, std::move(header));
-         if (err) {
-            return err;
+         auto ec = repe::request<Opts>(*request, std::move(header));
+         if (ec) {
+            return ec;
          }
 
          unique_socket socket{socket_pool.get()};
-
-         try {
-            send_buffer(*socket, *request);
-         }
-         catch (const std::exception& e) {
+         
+         send_buffer(*socket, *request, ec);
+         
+         if (ec) {
             socket.ptr.reset();
             (*is_connected) = false;
-            return {error_code::send_error, "asio send failure"};
+            return ec;
          }
 
          auto response = message_pool->borrow();
@@ -291,9 +294,9 @@ namespace glz
             return {error_code::send_error, "asio receive failure"};
          }
 
-         auto ec = glz::read<Opts>(std::forward<Result>(result), response->body);
-         if (ec) {
-            return {ec.ec, glz::format_error(ec, response->body)};
+         auto e = glz::read<Opts>(std::forward<Result>(result), response->body);
+         if (e) {
+            return {e.ec, glz::format_error(e, response->body)};
          }
          return {};
       }
@@ -302,20 +305,19 @@ namespace glz
       [[nodiscard]] repe::error_t set(repe::user_header&& header, Params&& params)
       {
          auto request = message_pool->borrow();
-         auto err = repe::request<Opts>(*request, std::move(header), std::forward<Params>(params));
-         if (err) {
-            return err;
+         auto ec = repe::request<Opts>(*request, std::move(header), std::forward<Params>(params));
+         if (ec) {
+            return ec;
          }
 
          unique_socket socket{socket_pool.get()};
-
-         try {
-            send_buffer(*socket, *request);
-         }
-         catch (const std::exception& e) {
+         
+         send_buffer(*socket, *request, ec);
+         
+         if (ec) {
             socket.ptr.reset();
             (*is_connected) = false;
-            return {error_code::send_error, "asio send failure"};
+            return ec;
          }
 
          auto response = message_pool->borrow();
@@ -338,20 +340,19 @@ namespace glz
       [[nodiscard]] repe::error_t call(repe::user_header&& header, Params&& params, Result&& result)
       {
          auto request = message_pool->borrow();
-         auto err = repe::request<Opts>(*request, std::move(header), std::forward<Params>(params));
-         if (err) {
-            return err;
+         auto ec = repe::request<Opts>(*request, std::move(header), std::forward<Params>(params));
+         if (ec) {
+            return ec;
          }
 
          unique_socket socket{socket_pool.get()};
-
-         try {
-            send_buffer(*socket, *request);
-         }
-         catch (const std::exception&) {
+         
+         send_buffer(*socket, *request, ec);
+         
+         if (ec) {
             socket.ptr.reset();
             (*is_connected) = false;
-            return {error_code::send_error, "asio send failure"};
+            return ec;
          }
 
          auto response = message_pool->borrow();
@@ -368,9 +369,9 @@ namespace glz
             return {error_code::send_error, "asio receive failure"};
          }
 
-         auto ec = glz::read<Opts>(std::forward<Result>(result), response->body);
-         if (ec) {
-            return {ec.ec, glz::format_error(ec, response->body)};
+         auto e = glz::read<Opts>(std::forward<Result>(result), response->body);
+         if (e) {
+            return {e.ec, glz::format_error(e, response->body)};
          }
          return {};
       }
@@ -378,20 +379,19 @@ namespace glz
       [[nodiscard]] repe::error_t call(repe::user_header&& header)
       {
          auto request = message_pool->borrow();
-         auto err = repe::request<Opts>(*request, std::move(header));
-         if (err) {
-            return err;
+         auto ec = repe::request<Opts>(*request, std::move(header));
+         if (ec) {
+            return ec;
          }
 
          unique_socket socket{socket_pool.get()};
+         
+         send_buffer(*socket, *request, ec);
 
-         try {
-            send_buffer(*socket, *request);
-         }
-         catch (const std::exception&) {
+         if (ec) {
             socket.ptr.reset();
             (*is_connected) = false;
-            return {error_code::send_error, "asio send failure"};
+            return ec;
          }
 
          auto response = message_pool->borrow();
