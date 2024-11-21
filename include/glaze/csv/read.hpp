@@ -161,27 +161,16 @@ namespace glz
                   }
                }
                // After closing quote, expect comma, newline, or end of input
-               if (it != end) {
-                  if (*it == ',') {
-                     ++it; // Skip the comma
-                  } else if (*it == '\n') {
-                     // End of record, do nothing
-                  } else if (it == end) {
-                     // End of input
-                  } else {
-                     // Invalid character after closing quote
-                     ctx.error = error_code::syntax_error;
-                     return;
-                  }
+               if (it != end && *it != ',' && *it == '\n') {
+                  // Invalid character after closing quote
+                  ctx.error = error_code::syntax_error;
+                  return;
                }
             } else {
                // Unquoted field
                while (it != end && *it != ',' && *it != '\n') {
                   value.push_back(*it);
                   ++it;
-               }
-               if (it != end && *it == ',') {
-                  ++it; // Skip the comma
                }
             }
          }

@@ -599,11 +599,47 @@ struct CurrencyCSV {
 };
 
 suite currency_csv_test = [] {
-   "currency"_test = [] {
+   "currency_row"_test = [] {
+      CurrencyCSV obj{};
+      std::string buffer{};
+      // auto ec = glz::read_file_csv(obj, GLZ_TEST_DIRECTORY "/currency.csv", buffer);
+      // expect(not ec) << glz::format_error(ec, buffer) << '\n';
+   };
+   "currency_col"_test = [] {
       CurrencyCSV obj{};
       std::string buffer{};
       auto ec = glz::read_file_csv<glz::colwise>(obj, GLZ_TEST_DIRECTORY "/currency.csv", buffer);
       expect(not ec) << glz::format_error(ec, buffer) << '\n';
+
+      constexpr auto kExpectedSize = 445;
+
+      expect(obj.Entity.size() == kExpectedSize);
+      expect(obj.Currency.size() == kExpectedSize);
+      expect(obj.AlphabeticCode.size() == kExpectedSize);
+      expect(obj.NumericCode.size() == kExpectedSize);
+      expect(obj.MinorUnit.size() == kExpectedSize);
+      expect(obj.WithdrawalDate.size() == kExpectedSize);
+
+      expect(obj.Entity[0] == "AFGHANISTAN");
+      expect(obj.Currency[0] == "Afghani");
+      expect(obj.AlphabeticCode[0] == "AFN");
+      expect(obj.NumericCode[0] == "971");
+      expect(obj.MinorUnit[0] == "2");
+      expect(obj.WithdrawalDate[0] == "");
+
+      expect(obj.Entity[29] == "BONAIRE, SINT EUSTATIUS AND SABA");
+      expect(obj.Currency[29] == "US Dollar");
+      expect(obj.AlphabeticCode[29] == "USD");
+      expect(obj.NumericCode[29] == "840");
+      expect(obj.MinorUnit[29] == "2");
+      expect(obj.WithdrawalDate[29] == "");
+
+      expect(obj.Entity[324] == "EUROPEAN MONETARY CO-OPERATION FUND (EMCF)");
+      expect(obj.Currency[324] == "European Currency Unit (E.C.U)");
+      expect(obj.AlphabeticCode[324] == "XEU");
+      expect(obj.NumericCode[324] == "954");
+      expect(obj.MinorUnit[324] == "");
+      expect(obj.WithdrawalDate[324] == "1999-01");
    };
 };
 
