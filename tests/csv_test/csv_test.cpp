@@ -589,13 +589,14 @@ suite fish_record = [] {
    };
 };
 
-struct CurrencyCSV {
-  std::vector<std::string> Entity;
-  std::vector<std::string> Currency;
-  std::vector<std::string> AlphabeticCode;
-  std::vector<std::string> NumericCode;
-  std::vector<std::string> MinorUnit;
-  std::vector<std::string> WithdrawalDate;
+struct CurrencyCSV
+{
+   std::vector<std::string> Entity;
+   std::vector<std::string> Currency;
+   std::vector<std::string> AlphabeticCode;
+   std::vector<std::string> NumericCode;
+   std::vector<std::string> MinorUnit;
+   std::vector<std::string> WithdrawalDate;
 };
 
 suite currency_csv_test = [] {
