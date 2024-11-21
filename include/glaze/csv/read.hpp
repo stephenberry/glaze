@@ -584,7 +584,7 @@ namespace glz
                            key.data(), key.data() + key.size(), key.size());
 
                         if (index < N) [[likely]] {
-                           jump_table<N>(
+                           visit<N>(
                               [&]<size_t I>() {
                                  decltype(auto) member = [&]() -> decltype(auto) {
                                     if constexpr (reflectable<T>) {
