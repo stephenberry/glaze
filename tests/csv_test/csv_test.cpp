@@ -589,4 +589,61 @@ suite fish_record = [] {
    };
 };
 
+struct CurrencyCSV {
+  std::vector<std::string> Entity;
+  std::vector<std::string> Currency;
+  std::vector<std::string> AlphabeticCode;
+  std::vector<std::string> NumericCode;
+  std::vector<std::string> MinorUnit;
+  std::vector<std::string> WithdrawalDate;
+};
+
+suite currency_csv_test = [] {
+   "currency_col"_test = [] {
+      CurrencyCSV obj{};
+      std::string buffer{};
+      auto ec = glz::read_file_csv<glz::colwise>(obj, GLZ_TEST_DIRECTORY "/currency.csv", buffer);
+      expect(not ec) << glz::format_error(ec, buffer) << '\n';
+
+      constexpr auto kExpectedSize = 445;
+
+      expect(obj.Entity.size() == kExpectedSize);
+      expect(obj.Currency.size() == kExpectedSize);
+      expect(obj.AlphabeticCode.size() == kExpectedSize);
+      expect(obj.NumericCode.size() == kExpectedSize);
+      expect(obj.MinorUnit.size() == kExpectedSize);
+      expect(obj.WithdrawalDate.size() == kExpectedSize);
+
+      expect(obj.Entity[0] == "AFGHANISTAN");
+      expect(obj.Currency[0] == "Afghani");
+      expect(obj.AlphabeticCode[0] == "AFN");
+      expect(obj.NumericCode[0] == "971");
+      expect(obj.MinorUnit[0] == "2");
+      expect(obj.WithdrawalDate[0] == "");
+
+      expect(obj.Entity[29] == "BONAIRE, SINT EUSTATIUS AND SABA");
+      expect(obj.Currency[29] == "US Dollar");
+      expect(obj.AlphabeticCode[29] == "USD");
+      expect(obj.NumericCode[29] == "840");
+      expect(obj.MinorUnit[29] == "2");
+      expect(obj.WithdrawalDate[29] == "");
+
+      expect(obj.Entity[324] == "EUROPEAN MONETARY CO-OPERATION FUND (EMCF)");
+      expect(obj.Currency[324] == "European Currency Unit (E.C.U)");
+      expect(obj.AlphabeticCode[324] == "XEU");
+      expect(obj.NumericCode[324] == "954");
+      expect(obj.MinorUnit[324] == "");
+      expect(obj.WithdrawalDate[324] == "1999-01");
+   };
+   "currency_row"_test = [] {
+      /*CurrencyCSV obj{};
+      std::string buffer{};
+      auto ec = glz::read_file_csv<glz::colwise>(obj, GLZ_TEST_DIRECTORY "/currency.csv", buffer);
+      ec = glz::write_file_csv(obj, "currency_rowwise.csv", std::string{});
+      expect(not ec);
+      ec = glz::read_file_csv(obj, "currency_rowwise.csv", buffer);
+      expect(not ec) << glz::format_error(ec, buffer) << '\n';*/
+   };
+};
+
 int main() { return 0; }
