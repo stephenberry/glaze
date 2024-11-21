@@ -117,6 +117,9 @@ namespace glz
             }
          }
       };
+      
+      // CSV spec: https://www.ietf.org/rfc/rfc4180.txt
+      // Quotes are escaped via double quotes
 
       template <string_t T>
       struct from<CSV, T>
@@ -129,61 +132,61 @@ namespace glz
             }
 
             value.clear();
-            auto start = it;
-            
-            bool within_quotes = *it == '"';
-            it += size_t(within_quotes);
-            
-            while (it < end) {
-               switch (*it) {
-               case '"': {
-                  if (within_quotes) {
-                     within_quotes = false;
+
+            if (it == end) {
+               return;
+            }
+
+            if (*it == '"') {
+               // Quoted field
+               ++it; // Skip the opening quote
+               while (it != end) {
+                  if (*it == '"') {
+                     ++it; // Skip the quote
+                     if (it == end) {
+                        // End of input after closing quote
+                        break;
+                     }
+                     if (*it == '"') {
+                        // Escaped quote
+                        value.push_back('"');
+                        ++it;
+                     } else {
+                        // Closing quote
+                        break;
+                     }
+                  } else {
+                     value.push_back(*it);
                      ++it;
-                     if (*it == ',') {
-                        value.append(start, static_cast<size_t>(it - start));
-                        return;
-                     }
-                     else {
-                        ctx.error = error_code::syntax_error;
-                        return;
-                     }
                   }
-                  ++it;
                }
-               case ',': {
-                  if (within_quotes) {
-                     ++it;
-                  }
-                  else {
-                     value.append(start, static_cast<size_t>(it - start));
+               // After closing quote, expect comma, newline, or end of input
+               if (it != end) {
+                  if (*it == ',') {
+                     ++it; // Skip the comma
+                  } else if (*it == '\n') {
+                     // End of record, do nothing
+                  } else if (it == end) {
+                     // End of input
+                  } else {
+                     // Invalid character after closing quote
+                     ctx.error = error_code::syntax_error;
                      return;
                   }
                }
-               case '\n': {
-                  value.append(start, static_cast<size_t>(it - start));
-                  return;
-               }
-               case '\\':
-               case '\b':
-               case '\f':
-               case '\r':
-               case '\t': {
-                  ctx.error = error_code::syntax_error;
-                  return;
-               }
-               case '\0': {
-                  ctx.error = error_code::unexpected_end;
-                  return;
-               }
-               default:
+            } else {
+               // Unquoted field
+               while (it != end && *it != ',' && *it != '\n') {
+                  value.push_back(*it);
                   ++it;
                }
+               if (it != end && *it == ',') {
+                  ++it; // Skip the comma
+               }
             }
-
-            value.append(start, static_cast<size_t>(it - start));
          }
       };
+
 
       template <bool_t T>
       struct from<CSV, T>
