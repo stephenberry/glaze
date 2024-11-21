@@ -589,4 +589,22 @@ suite fish_record = [] {
    };
 };
 
+struct CurrencyCSV {
+  std::vector<std::string> Entity;
+  std::vector<std::string> Currency;
+  std::vector<std::string> AlphabeticCode;
+  std::vector<std::string> NumericCode;
+  std::vector<std::string> MinorUnit;
+  std::vector<std::string> WithdrawalDate;
+};
+
+suite currency_csv_test = [] {
+   "currency"_test = [] {
+      CurrencyCSV obj{};
+      std::string buffer{};
+      auto ec = glz::read_file_csv(obj, GLZ_TEST_DIRECTORY "/currency.csv", buffer);
+      expect(not ec) << glz::format_error(ec, buffer) << '\n';
+   };
+};
+
 int main() { return 0; }
