@@ -99,19 +99,32 @@ namespace glz
    static_assert(std::uint8_t(option::last_option_terminator) < sizeof(bits_class) * 8);
 
    template <typename U>
+      requires(std::is_integral_v<U> && std::is_unsigned_v<U>)
    struct options
    {
       // TODO make everything consteval for gcc14+
       constexpr options() = default;
-      constexpr options(const options & o) = default;
-      constexpr options& set(option b, U v)
+      constexpr options(const options& o) = default;
+
+      template <typename V, std::uint8_t width = 1>
+         requires(width <= sizeof(V) * 8)
+      constexpr options& set(option b, V v)
       {
-         if (v) {
-            bits |= U(v) << static_cast<std::underlying_type_t<option>>(b);
+         if constexpr (std::is_same_v<V, bool>) {
+            if (v) {
+               bits |= U(v) << static_cast<std::underlying_type_t<option>>(b);
+            }
+            else {
+               bits = bits & ~(U(1) << static_cast<std::underlying_type_t<option>>(b));
+            }
          }
          else {
-            bits = bits & ~(U(1) << static_cast<std::underlying_type_t<option>>(b));
+            static constexpr U mask = ((U(1) << (width + 1)) - 1);
+            auto val = (U(static_cast<std::make_unsigned_t<V>>(v)) & mask)
+                       << static_cast<std::underlying_type_t<option>>(b);
+            bits = (bits & ~(mask << static_cast<std::underlying_type_t<option>>(b))) | val;
          }
+
          return *this;
       }
 
@@ -169,19 +182,24 @@ namespace glz
 #undef bool_t
 
    template <std::uint8_t width, typename R>
-   requires (width > 0)
-   consteval R get(const opts& o, option b) {
-      static_assert(sizeof(R) * 8 >= width);
-      static_assert(std::is_same_v<R, bool> && width == 1);
+      requires((width > 0) && (width <= sizeof(R) * 8) && (not std::is_reference_v<R>))
+   consteval R get(const opts& o, option b)
+   {
+      using Ret = std::remove_cv_t<R>;
 
-      R ret{};
+      static_assert(std::is_same_v<Ret, bool> && width == 1);
 
+      using UR = std::make_unsigned_t<Ret>; //  TODO make it bigger
+      static constexpr UR mask = (UR(1) << width + 1) - 1;
+
+      Ret ret = (o.bits >> uint8_t(b)) & mask;
       return ret;
    }
 
    template <>
-   consteval bool get<1, bool>(const opts& o, option b) {
-       return o.bits & (uint64_t(1) << uint8_t(b));
+   consteval bool get<1, bool>(const opts& o, option b)
+   {
+      return o.bits & (uint64_t(1) << uint8_t(b));
    }
    consteval bool has(const opts& o, option b) { return get<1, bool>(o, b); }
 
