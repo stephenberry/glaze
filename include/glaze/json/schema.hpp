@@ -462,14 +462,21 @@ namespace glz
                (*s.type).emplace_back("null");
             }
             s.oneOf = std::vector<schematic>(N);
+            if (not tag_v<T>.empty()) {
+               if (not s.properties) {
+                  s.properties = std::map<std::string_view, schema, std::less<>>{}; // allocate
+               }
+               //(*s.properties)[tag_v<T>].type = "string";
+               (*s.properties)[tag_v<T>].enumeration = ids_v<T>;
+            }
 
             for_each<N>([&](auto I) {
                using V = std::decay_t<std::variant_alternative_t<I, T>>;
                auto& schema_val = (*s.oneOf)[I];
                to_json_schema<V>::template op<Opts>(schema_val, defs);
-               if constexpr ((glaze_object_t<V> || reflectable<V>)&&!tag_v<T>.empty()) {
-                  if (!schema_val.required) {
-                     schema_val.required = std::vector<sv>{};
+               if constexpr ((glaze_object_t<V> || reflectable<V>)&&not tag_v<T>.empty()) {
+                  if (not schema_val.required) {
+                     schema_val.required = std::vector<sv>{}; // allocate
                   }
                   schema_val.required->emplace_back(tag_v<T>);
                   auto& tag = (*schema_val.properties)[tag_v<T>];
