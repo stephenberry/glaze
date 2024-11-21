@@ -196,7 +196,7 @@ namespace glz::detail
    GLZ_ALWAYS_INLINE auto parse_value(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       auto start = it;
-      skip_value<JSON>::op<opt_true2<Opts, option::validate_skipped>>(ctx, it, end);
+      skip_value<JSON>::op<opt_true<Opts, option::validate_skipped>>(ctx, it, end);
       return std::span{start, size_t(it - start)};
    }
 }

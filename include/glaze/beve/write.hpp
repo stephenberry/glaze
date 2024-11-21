@@ -982,7 +982,7 @@ namespace glz
    template <opts Opts = opts{}, write_beve_supported T>
    [[nodiscard]] error_ctx write_file_beve_untagged(T&& value, const std::string& file_name, auto&& buffer)
    {
-      return write_file_beve<opt_true2<Opts, option::structs_as_arrays>>(std::forward<T>(value), file_name, buffer);
+      return write_file_beve<opt_true<Opts, option::structs_as_arrays>>(std::forward<T>(value), file_name, buffer);
    }
 
    template <class T>

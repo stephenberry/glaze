@@ -59,17 +59,7 @@ namespace glz
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&& value, auto&&... args)
          {
-            read<JSON>::op<opt_true<Opts, T::opts_member>>(value.val, args...);
-         }
-      };
-
-      template <is_opts_wrapper2 T>
-      struct from<JSON, T>
-      {
-         template <auto Opts>
-         GLZ_ALWAYS_INLINE static void op(auto&& value, auto&&... args)
-         {
-            read<JSON>::op<opt_true2<Opts, T::opts_bit>>(value.val, args...);
+            read<JSON>::op<opt_true<Opts, T::opts_bit>>(value.val, args...);
          }
       };
 
@@ -79,17 +69,7 @@ namespace glz
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&&... args)
          {
-            write<JSON>::op<opt_true<Opts, T::opts_member>>(value.val, ctx, args...);
-         }
-      };
-
-      template <is_opts_wrapper2 T>
-      struct to<JSON, T>
-      {
-         template <auto Opts>
-         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&&... args)
-         {
-            write<JSON>::op<opt_true2<Opts, T::opts_bit>>(value.val, ctx, args...);
+            write<JSON>::op<opt_true<Opts, T::opts_bit>>(value.val, ctx, args...);
          }
       };
 

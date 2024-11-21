@@ -58,32 +58,36 @@ namespace glz
    using bits_class = std::uint64_t;
 
    enum class option : std::uint8_t {
-      null_terminated = 0,
-      comments,
-      error_on_unknown_keys,
-      skip_null_members,
-      use_hash_comparison,
-      prettify,
-      minified,
-      new_lines_in_arrays,
-      shrink_to_fit,
-      write_type_info,
-      error_on_missing_keys,
-      error_on_const_read,
-      validate_skipped,
-      validate_trailing_whitespace,
-      bools_as_numbers,
-      escaped_unicode_key_conversion,
-      quoted_num,
-      number,
-      raw,
-      raw_string,
-      structs_as_arrays,
-      allow_conversions,
-      partial_read,
-      partial_read_nested,
-      concatenate,
-      hide_non_invocable,
+      null_terminated = 0, // Whether the input buffer is null terminated
+      comments, // Support reading in JSONC style comments
+      error_on_unknown_keys, // Error when an unknown key is encountered
+      skip_null_members, // Skip writing out params in an object if the value is null
+      use_hash_comparison, // Will replace some string equality checks with hash checks
+      prettify, // Write out prettified JSON
+      minified, // Require minified input for JSON, which results in faster read performance
+      new_lines_in_arrays, // Whether prettified arrays should have new lines for each element
+      shrink_to_fit, // Shrinks dynamic containers to new size to save memory
+      write_type_info, // Write type info for meta objects in variants
+      error_on_missing_keys, // Require all non nullable keys to be present in the object. Use skip_null_members = false
+                             // to require nullable members
+      error_on_const_read, // Error if attempt is made to read into a const value, by default the value is skipped
+                           // without error
+      validate_skipped, // If full validation should be performed on skipped values
+      validate_trailing_whitespace, // If, after parsing a value, we want to validate the trailing whitespace
+      bools_as_numbers, // Read and write booleans with 1's and 0's
+      escaped_unicode_key_conversion, // JSON does not require escaped unicode keys to match with unescaped UTF-8
+                                      // This enables automatic escaped unicode unescaping and matching for keys in
+                                      // glz::object, but it comes at a performance cost.
+      quoted_num, // Treat numbers as quoted or array-like types as having quoted numbers
+      number, // Read numbers as strings and write these string as numbers
+      raw, // Write out string like values without quotes
+      raw_string, // Do not decode/encode escaped characters for strings (improves read/write performance)
+      structs_as_arrays, // Handle structs (reading/writing) without keys, which applies
+      allow_conversions, // Whether conversions between convertible types are allowed in binary, e.g. double -> float
+      partial_read, // Reads into only existing fields and elements and then exits without parsing the rest of the input
+      partial_read_nested, // Advance the partially read struct to the end of the struct
+      concatenate, // Concatenates ranges of std::pair into single objects when writing
+      hide_non_invocable, // Hides non-invocable members from the cli_menu (may be applied elsewhere in the future)
       indentation_char,
       indentation_width = indentation_char + 8,
       layout = indentation_width + 3,
@@ -117,18 +121,18 @@ namespace glz
    };
 
    constexpr auto json_options_default = options<bits_class>()
-      .set(option::null_terminated, GLZ_NULL_TERMINATED)
-      .set(option::error_on_unknown_keys, true)
-      .set(option::skip_null_members, true)
-      .set(option::use_hash_comparison, true)
-      .set(option::new_lines_in_arrays, true)
-      .set(option::write_type_info, true)
-      .set(option::allow_conversions, true)
-      .set(option::concatenate, true)
-      .set(option::hide_non_invocable, true)
-      .set(option::indentation_char, ' ')
-      .set(option::indentation_width, 3)
-      .set(option::layout, rowwise);
+                                            .set(option::null_terminated, GLZ_NULL_TERMINATED)
+                                            .set(option::error_on_unknown_keys, true)
+                                            .set(option::skip_null_members, true)
+                                            .set(option::use_hash_comparison, true)
+                                            .set(option::new_lines_in_arrays, true)
+                                            .set(option::write_type_info, true)
+                                            .set(option::allow_conversions, true)
+                                            .set(option::concatenate, true)
+                                            .set(option::hide_non_invocable, true)
+                                            .set(option::indentation_char, ' ')
+                                            .set(option::indentation_width, 3)
+                                            .set(option::layout, rowwise);
 
    struct opts
    {
@@ -136,56 +140,13 @@ namespace glz
       uint32_t format = JSON;
       bits_class bits = json_options_default;
 
-      // bool_t null_terminated = GLZ_NULL_TERMINATED; // Whether the input buffer is null terminated
-      // bool_t comments = false; // Support reading in JSONC style comments
-      // bool_t error_on_unknown_keys = true; // Error when an unknown key is encountered
-      // bool_t skip_null_members = true; // Skip writing out params in an object if the value is null
-      // bool_t use_hash_comparison = true; // Will replace some string equality checks with hash checks
-      // bool_t prettify = false; // Write out prettified JSON
-      // bool_t minified = false; // Require minified input for JSON, which results in faster read performance
       char indentation_char = ' '; // Prettified JSON indentation char
       uint8_t indentation_width = 3; // Prettified JSON indentation size
-      // bool_t new_lines_in_arrays = true; // Whether prettified arrays should have new lines for each element
-      // bool_t shrink_to_fit = false; // Shrinks dynamic containers to new size to save memory
-      // bool_t write_type_info = true; // Write type info for meta objects in variants
-      // bool_t error_on_missing_keys = false; // Require all non nullable keys to be present in the object. Use
-                                            // skip_null_members = false to require nullable members
-      // bool_t error_on_const_read =
-      //    false; // Error if attempt is made to read into a const value, by default the value is skipped without error
-      // bool_t validate_skipped = false; // If full validation should be performed on skipped values
-      // bool_t validate_trailing_whitespace =
-      //    false; // If, after parsing a value, we want to validate the trailing whitespace
 
       uint8_t layout = rowwise; // CSV row wise output/input
 
       // The maximum precision type used for writing floats, higher precision floats will be cast down to this precision
       float_precision float_max_write_precision{};
-
-      // bool_t bools_as_numbers = false; // Read and write booleans with 1's and 0's
-
-      // bool_t escaped_unicode_key_conversion =
-      //    false; // JSON does not require escaped unicode keys to match with unescaped UTF-8
-      // This enables automatic escaped unicode unescaping and matching for keys in glz::object, but it comes at a
-      // performance cost.
-
-      // bool_t quoted_num = false; // treat numbers as quoted or array-like types as having quoted numbers
-      // bool_t number = false; // read numbers as strings and write these string as numbers
-      // bool_t raw = false; // write out string like values without quotes
-      // bool_t raw_string =
-      //    false; // do not decode/encode escaped characters for strings (improves read/write performance)
-      // bool_t structs_as_arrays = false; // Handle structs (reading/writing) without keys, which applies
-      // bool_t allow_conversions = true; // Whether conversions between convertible types are
-      // allowed in binary, e.g. double -> float
-
-      // bool_t partial_read =
-      //    false; // Reads into only existing fields and elements and then exits without parsing the rest of the input
-
-      // glaze_object_t concepts
-      // bool_t partial_read_nested = false; // Advance the partially read struct to the end of the struct
-      // bool_t concatenate = true; // Concatenates ranges of std::pair into single objects when writing
-
-      // bool_t hide_non_invocable =
-      //    true; // Hides non-invocable members from the cli_menu (may be applied elsewhere in the future)
 
       enum struct internal : uint32_t {
          none = 0,
@@ -367,19 +328,8 @@ namespace glz
       return ret;
    }
 
-   template <opts Opts, auto member_ptr>
-   constexpr auto opt_on()
-   {
-      opts ret = Opts;
-      ret.*member_ptr = true;
-      return ret;
-   }
-
-   template <opts Opts, auto member_ptr>
-   inline constexpr auto opt_true = opt_on<Opts, member_ptr>();
-
    template <opts Opts, auto bit>
-   constexpr auto opt_on2()
+   constexpr auto opt_on()
    {
       opts ret = Opts;
       ret.bits |= decltype(ret.bits)(1 << uint8_t(bit));
@@ -387,21 +337,10 @@ namespace glz
    }
 
    template <opts Opts, auto bit>
-   inline constexpr auto opt_true2 = opt_on2<Opts, bit>();
-
-   template <opts Opts, auto member_ptr>
-   constexpr auto opt_off()
-   {
-      opts ret = Opts;
-      ret.*member_ptr = false;
-      return ret;
-   }
-
-   template <opts Opts, auto member_ptr>
-   inline constexpr auto opt_false = opt_off<Opts, member_ptr>();
+   inline constexpr auto opt_true = opt_on<Opts, bit>();
 
    template <opts Opts, auto bit>
-   constexpr auto opt_off2()
+   constexpr auto opt_off()
    {
       opts ret = Opts;
       ret.bits = ret.bits & ~(decltype(ret.bits)(1) << uint8_t(bit));
@@ -409,7 +348,7 @@ namespace glz
    }
 
    template <opts Opts, auto bit>
-   inline constexpr auto opt_false2 = opt_off2<Opts, bit>();
+   inline constexpr auto opt_false = opt_off<Opts, bit>();
 
    template <opts Opts>
    constexpr auto disable_write_unknown_off()

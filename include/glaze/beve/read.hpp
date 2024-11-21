@@ -1556,7 +1556,7 @@ namespace glz
    template <opts Opts = opts{}, read_beve_supported T>
    [[nodiscard]] inline error_ctx read_file_beve_untagged(T& value, const std::string& file_name, auto&& buffer)
    {
-      return read_file_beve<opt_true2<Opts, option::structs_as_arrays>>(value, file_name, buffer);
+      return read_file_beve<opt_true<Opts, option::structs_as_arrays>>(value, file_name, buffer);
    }
 
    template <class T>

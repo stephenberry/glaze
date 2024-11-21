@@ -1685,7 +1685,7 @@ namespace glz
 
             // We need to allocate a new buffer here because we could call another includer that uses the buffer
             std::string nested_buffer = buffer;
-            static constexpr auto NestedOpts = opt_true2<disable_padding_on<Opts>(), option::null_terminated>;
+            static constexpr auto NestedOpts = opt_true<disable_padding_on<Opts>(), option::null_terminated>;
             const auto ecode = glz::read<NestedOpts>(value.value, nested_buffer, ctx);
             if (bool(ctx.error)) [[unlikely]] {
                ctx.error = error_code::includer_error;
@@ -2338,10 +2338,10 @@ namespace glz
                         }
                         else if constexpr (std::is_arithmetic_v<Key>) {
                            // prefer over quoted_t below to avoid double parsing of quoted_t
-                           read<JSON>::op<opt_true2<Opts, option::quoted_num>>(key_value, ctx, it, end);
+                           read<JSON>::op<opt_true<Opts, option::quoted_num>>(key_value, ctx, it, end);
                         }
                         else {
-                           read<JSON>::op<opt_false2<Opts, option::raw_string>>(quoted_t<Key>{key_value}, ctx, it, end);
+                           read<JSON>::op<opt_false<Opts, option::raw_string>>(quoted_t<Key>{key_value}, ctx, it, end);
                         }
                         if (bool(ctx.error)) [[unlikely]]
                            return;
@@ -3115,7 +3115,7 @@ namespace glz
          return {ec};
       }
 
-      constexpr auto Options = opt_true2<set_json<Opts>(), option::comments>;
+      constexpr auto Options = opt_true<set_json<Opts>(), option::comments>;
       return read<Options>(value, buffer, ctx);
    }
 

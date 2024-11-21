@@ -677,7 +677,7 @@ namespace glz
             write<JSON>::op<Opts>(key, ctx, args...);
          }
          else {
-            write<JSON>::op<opt_false2<Opts, option::raw_string>>(quoted_t<const Key>{key}, ctx, args...);
+            write<JSON>::op<opt_false<Opts, option::raw_string>>(quoted_t<const Key>{key}, ctx, args...);
          }
          if constexpr (has(Opts, option::prettify)) {
             dump<": ">(args...);

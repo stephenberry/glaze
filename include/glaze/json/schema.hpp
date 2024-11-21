@@ -608,7 +608,7 @@ namespace glz
       detail::schematic s{};
       s.defs.emplace();
       detail::to_json_schema<std::decay_t<T>>::template op<Opts>(s, *s.defs);
-      return write<opt_false2<Opts, option::write_type_info>>(std::move(s), std::forward<Buffer>(buffer));
+      return write<opt_false<Opts, option::write_type_info>>(std::move(s), std::forward<Buffer>(buffer));
    }
 
    template <class T, opts Opts = opts{}>

@@ -77,11 +77,11 @@ namespace glz
                            static constexpr auto Length = TargetKey.size();
                            if ((Length == key.size()) && compare<Length>(TargetKey.data(), start)) [[likely]] {
                               if constexpr (detail::reflectable<T> && N > 0) {
-                                 std::ignore = write<opt_true2<Opts, option::raw>>(
+                                 std::ignore = write<opt_true<Opts, option::raw>>(
                                     detail::get_member(value, get<I>(detail::to_tuple(value))), temp, ctx);
                               }
                               else if constexpr (detail::glaze_object_t<T> && N > 0) {
-                                 std::ignore = write<opt_true2<Opts, option::raw>>(
+                                 std::ignore = write<opt_true<Opts, option::raw>>(
                                     detail::get_member(value, get<I>(reflect<T>::values)), temp, ctx);
                               }
                            }

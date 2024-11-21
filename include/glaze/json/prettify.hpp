@@ -187,10 +187,10 @@ namespace glz
          }
 
          if constexpr (string_t<In>) {
-            prettify_json<opt_true2<Opts, option::null_terminated>>(ctx, it, end, out, ix);
+            prettify_json<opt_true<Opts, option::null_terminated>>(ctx, it, end, out, ix);
          }
          else {
-            prettify_json<opt_false2<Opts, option::null_terminated>>(ctx, it, end, out, ix);
+            prettify_json<opt_false<Opts, option::null_terminated>>(ctx, it, end, out, ix);
          }
 
          if constexpr (resizable<Out>) {
@@ -226,7 +226,7 @@ namespace glz
    inline void prettify_jsonc(const auto& in, auto& out)
    {
       context ctx{};
-      detail::prettify_json<opt_true2<Opts, option::comments>>(ctx, in, out);
+      detail::prettify_json<opt_true<Opts, option::comments>>(ctx, in, out);
    }
 
    /// <summary>
@@ -237,7 +237,7 @@ namespace glz
    {
       context ctx{};
       std::string out{};
-      detail::prettify_json<opt_true2<Opts, option::comments>>(ctx, in, out);
+      detail::prettify_json<opt_true<Opts, option::comments>>(ctx, in, out);
       return out;
    }
 }

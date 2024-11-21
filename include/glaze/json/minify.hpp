@@ -173,10 +173,10 @@ namespace glz
 
          static constexpr auto O = is_padded_on<Opts>();
          if constexpr (string_t<In>) {
-            minify_json<opt_true2<O, option::null_terminated>>(ctx, it, end, out, ix);
+            minify_json<opt_true<O, option::null_terminated>>(ctx, it, end, out, ix);
          }
          else {
-            minify_json<opt_false2<O, option::null_terminated>>(ctx, it, end, out, ix);
+            minify_json<opt_false<O, option::null_terminated>>(ctx, it, end, out, ix);
          }
 
          if constexpr (resizable<Out>) {
@@ -210,7 +210,7 @@ namespace glz
    inline void minify_jsonc(const auto& in, auto& out)
    {
       context ctx{};
-      detail::minify_json<opt_true2<Opts, option::comments>>(ctx, in, out);
+      detail::minify_json<opt_true<Opts, option::comments>>(ctx, in, out);
    }
 
    template <opts Opts = opts{}>
@@ -218,7 +218,7 @@ namespace glz
    {
       context ctx{};
       std::string out{};
-      detail::minify_json<opt_true2<Opts, option::comments>>(ctx, in, out);
+      detail::minify_json<opt_true<Opts, option::comments>>(ctx, in, out);
       return out;
    }
 }
