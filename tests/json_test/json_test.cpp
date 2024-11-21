@@ -8823,7 +8823,9 @@ suite max_write_precision_tests = [] {
       double pi = std::numbers::pi_v<double>;
       std::string json_double = glz::write_json(pi).value_or("error");
 
-      constexpr glz::opts options{.float_max_write_precision = glz::float_precision::float32};
+      constexpr glz::opts options{.bits = glz::options(glz::json_options_default)
+                                             .set<glz::fw_float_max_write_precision>(
+                                                glz::option::float_max_write_precision, glz::float_precision::float32)};
       std::string json_float = glz::write<options>(pi).value_or("error");
       expect(json_double != json_float);
       expect(json_float == glz::write_json(std::numbers::pi_v<float>));

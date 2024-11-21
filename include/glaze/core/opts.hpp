@@ -50,6 +50,11 @@ namespace glz
 
    using bits_class = std::uint64_t;
 
+   // width in bit for option fields
+   constexpr std::uint8_t fw_indentation_char = 8;
+   constexpr std::uint8_t fw_indentation_width = 3;
+   constexpr std::uint8_t fw_float_max_write_precision = 5;
+
    enum class option : std::uint8_t {
       null_terminated = 0, // Whether the input buffer is null terminated
       comments, // Support reading in JSONC style comments
@@ -82,9 +87,11 @@ namespace glz
       concatenate, // Concatenates ranges of std::pair into single objects when writing
       hide_non_invocable, // Hides non-invocable members from the cli_menu (may be applied elsewhere in the future)
       indentation_char,
-      indentation_width = indentation_char + 8,
-      float_max_write_precision = indentation_width + 3,
-      layout = float_max_write_precision + 4, // CSV row wise output/input
+      indentation_width = indentation_char + fw_indentation_char,
+      float_max_write_precision =
+         indentation_width + fw_indentation_width, // The maximum precision type used for writing floats, higher
+                                                   // precision floats will be cast down to this precision
+      layout = float_max_write_precision + fw_float_max_write_precision, // CSV row wise output/input
 
       last_option_terminator
    };
@@ -98,6 +105,7 @@ namespace glz
       // TODO make everything consteval for gcc14+
       constexpr options() = default;
       constexpr options(const options& o) = default;
+      constexpr options(const U& b) : bits{b} {};
 
       template <std::uint8_t width = 1, typename V>
          requires(width <= sizeof(V) * 8)
@@ -149,9 +157,6 @@ namespace glz
       char indentation_char = ' '; // Prettified JSON indentation char
       uint8_t indentation_width = 3; // Prettified JSON indentation size
 
-      // The maximum precision type used for writing floats, higher precision floats will be cast down to this precision
-      float_precision float_max_write_precision{};
-
       enum struct internal : uint32_t {
          none = 0,
          opening_handled = 1 << 0, // the opening character has been handled
@@ -188,6 +193,7 @@ namespace glz
    {
       return o.bits & (uint64_t(1) << uint8_t(b));
    }
+
    consteval bool has(const opts& o, option b) { return get<1, bool>(o, b); }
 
    consteval bool has_opening_handled(const opts& o) { return o.internal & uint32_t(opts::internal::opening_handled); }
@@ -333,6 +339,23 @@ namespace glz
    {
       opts ret = Opts;
       ret.*member_ptr = value;
+      return ret;
+   }
+
+   template <opts Opts, auto bit, std::uint8_t width, auto value>
+   constexpr auto set_opt2()
+   {
+      opts ret = Opts;
+
+      using T = decltype(value);
+      if constexpr (std::is_enum_v<T>) {
+         using U = std::underlying_type_t<T>;
+         ret.bits = options<bits_class>(Opts.bits).template set<width, U>(bit, static_cast<U>(value));
+      }
+      else {
+         ret.bits = options<bits_class>(Opts.bits).template set<width>(bit, value);
+      }
+
       return ret;
    }
 
