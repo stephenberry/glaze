@@ -39,6 +39,13 @@
 // It isn't technically required, because end validation would handle it, but it produces
 // much clearer errors, especially when we don't perform trailing validation.
 
+#ifdef _MSC_VER
+// Turn off MSVC warning for possible loss of data: we are intentionally allowing well defined unsigned integer
+// overflows
+#pragma warning(push)
+#pragma warning(disable : 4244)
+#endif
+
 namespace glz::detail
 {
    constexpr std::array<uint64_t, 20> powers_of_ten_int{1ull,
@@ -436,7 +443,6 @@ namespace glz::detail
             v = T(res.low);
             return res.high == 0;
 #endif
-            return true;
          }
       }
       return false;
@@ -738,18 +744,18 @@ namespace glz::detail
             static constexpr std::array<utype, 3> powers_of_ten{1, 10, 100};
             i *= powers_of_ten[exp];
             v = T((utype(i) ^ -sign) + sign);
-            return (i - sign) <= (std::numeric_limits<T>::max)();
+            return (i - sign) <= static_cast<utype>((std::numeric_limits<T>::max)());
          }
          else if constexpr (sizeof(T) == 2) {
             static constexpr std::array<utype, 5> powers_of_ten{1, 10, 100, 1000, 10000};
             i *= powers_of_ten[exp];
             v = T((utype(i) ^ -sign) + sign);
-            return (i - sign) <= (std::numeric_limits<T>::max)();
+            return (i - sign) <= static_cast<utype>((std::numeric_limits<T>::max)());
          }
          else if constexpr (sizeof(T) == 4) {
             i *= powers_of_ten_int[exp];
             v = T((utype(i) ^ -sign) + sign);
-            return (i - sign) <= (std::numeric_limits<T>::max)();
+            return (i - sign) <= static_cast<utype>((std::numeric_limits<T>::max)());
          }
          else {
 #if defined(__SIZEOF_INT128__)
@@ -932,3 +938,8 @@ namespace glz::detail
       return false;
    }
 }
+
+#ifdef _MSC_VER
+// restore disabled warnings
+#pragma warning(pop)
+#endif

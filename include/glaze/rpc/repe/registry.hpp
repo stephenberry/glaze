@@ -43,35 +43,6 @@ namespace glz::repe
       };
    }
 
-   // returns 0 on error
-   template <opts Opts, class Value>
-   size_t read_params(Value&& value, auto&& state)
-   {
-      glz::context ctx{};
-      auto [b, e] = read_iterators<Opts>(state.in.body);
-      if (state.in.body.empty()) [[unlikely]] {
-         ctx.error = error_code::no_read_input;
-      }
-      if (bool(ctx.error)) [[unlikely]] {
-         return 0;
-      }
-      auto start = b;
-
-      glz::detail::read<Opts.format>::template op<Opts>(std::forward<Value>(value), ctx, b, e);
-
-      if (bool(ctx.error)) {
-         state.out.header.error = true;
-         error_ctx ec{ctx.error, ctx.custom_error_message, size_t(b - start), ctx.includer_error};
-         std::ignore =
-            write<Opts>(std::forward_as_tuple(header{.error = true},
-                                              error_t{error_code::parse_error, format_error(ec, state.in.body)}),
-                        state.out.body);
-         return 0;
-      }
-
-      return size_t(b - start);
-   }
-
    template <opts Opts, class Value>
    void write_response(Value&& value, is_state auto&& state)
    {
@@ -117,6 +88,32 @@ namespace glz::repe
          out.header.body_length = out.body.size();
          out.header.length = sizeof(repe::header) + out.query.size() + out.body.size();
       }
+   }
+
+   // returns 0 on error
+   template <opts Opts, class Value>
+   size_t read_params(Value&& value, auto&& state)
+   {
+      glz::context ctx{};
+      auto [b, e] = read_iterators<Opts>(state.in.body);
+      if (state.in.body.empty()) [[unlikely]] {
+         ctx.error = error_code::no_read_input;
+      }
+      if (bool(ctx.error)) [[unlikely]] {
+         return 0;
+      }
+      auto start = b;
+
+      glz::detail::read<Opts.format>::template op<Opts>(std::forward<Value>(value), ctx, b, e);
+
+      if (bool(ctx.error)) {
+         state.out.header.error = true;
+         error_ctx ec{ctx.error, ctx.custom_error_message, size_t(b - start), ctx.includer_error};
+         write_response<Opts>(error_t{error_code::parse_error, format_error(ec, state.in.body)}, state);
+         return 0;
+      }
+
+      return size_t(b - start);
    }
 
    namespace detail
@@ -279,13 +276,26 @@ namespace glz::repe
                      return;
                   }
 
+                  using Result = std::invoke_result_t<decltype(func), Params>;
+
                   if (state.notify()) {
-                     std::ignore = func(params);
+                     if constexpr (std::same_as<Result, void>) {
+                        func(params);
+                     }
+                     else {
+                        std::ignore = func(params);
+                     }
                      state.out.header.notify(true);
                      return;
                   }
-                  auto ret = func(params);
-                  write_response<Opts>(ret, state);
+                  if constexpr (std::same_as<Result, void>) {
+                     func(params);
+                     write_response<Opts>(state);
+                  }
+                  else {
+                     auto ret = func(params);
+                     write_response<Opts>(ret, state);
+                  }
                };
             }
             else if constexpr (glaze_object_t<E> || reflectable<E>) {

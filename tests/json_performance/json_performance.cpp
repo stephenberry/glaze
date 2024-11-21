@@ -695,26 +695,26 @@ struct test_generator
          auto arraySize03 = randomizeNumberNormal(5ull, 1ull);
          v.resize(arraySize01);
          for (uint64_t x = 0; x < arraySize01; ++x) {
-            auto arraySize01 = randomizeNumberNormal(arraySize02, arraySize03);
-            for (uint64_t y = 0; y < arraySize01; ++y) {
+            auto arr = randomizeNumberNormal(arraySize02, arraySize03);
+            for (uint64_t y = 0; y < arr; ++y) {
                auto newString = generateString();
                v[x].testStrings.emplace_back(newString);
             }
-            arraySize01 = randomizeNumberNormal(arraySize02, arraySize03);
-            for (uint64_t y = 0; y < arraySize01; ++y) {
+            arr = randomizeNumberNormal(arraySize02, arraySize03);
+            for (uint64_t y = 0; y < arr; ++y) {
                v[x].testUints.emplace_back(generateUint());
             }
-            arraySize01 = randomizeNumberNormal(arraySize02, arraySize03);
-            for (uint64_t y = 0; y < arraySize01; ++y) {
+            arr = randomizeNumberNormal(arraySize02, arraySize03);
+            for (uint64_t y = 0; y < arr; ++y) {
                v[x].testInts.emplace_back(generateInt());
             }
-            arraySize01 = randomizeNumberNormal(arraySize02, arraySize03);
-            for (uint64_t y = 0; y < arraySize01; ++y) {
+            arr = randomizeNumberNormal(arraySize02, arraySize03);
+            for (uint64_t y = 0; y < arr; ++y) {
                auto newBool = generateBool();
                v[x].testBools.emplace_back(newBool);
             }
-            arraySize01 = randomizeNumberNormal(arraySize02, arraySize03);
-            for (uint64_t y = 0; y < arraySize01; ++y) {
+            arr = randomizeNumberNormal(arraySize02, arraySize03);
+            for (uint64_t y = 0; y < arr; ++y) {
                v[x].testDoubles.emplace_back(generateDouble());
             }
          }

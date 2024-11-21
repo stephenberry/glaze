@@ -26,31 +26,42 @@ namespace glz
 #if defined(GLZ_USING_BOOST_ASIO)
    namespace asio = boost::asio;
 #endif
-   inline void send_buffer(asio::ip::tcp::socket& socket, const repe::message& msg)
+   inline void send_buffer(asio::ip::tcp::socket& socket, const repe::message& msg, repe::error_t& ec)
    {
       if (msg.header.length == repe::no_length_provided) {
-         throw std::runtime_error("No length provided in REPE header");
+         ec = {error_code::invalid_header, "No length provided in REPE header"};
+         return;
       }
 
       std::array<asio::const_buffer, 3> buffers{asio::buffer(&msg.header, sizeof(msg.header)), asio::buffer(msg.query),
                                                 asio::buffer(msg.body)};
 
-      asio::write(socket, buffers, asio::transfer_exactly(msg.header.length));
+      asio::error_code e{};
+      asio::write(socket, buffers, asio::transfer_exactly(msg.header.length), e);
+      if (e) {
+         ec = {error_code::send_error, e.message()};
+      }
    }
 
-   inline void receive_buffer(asio::ip::tcp::socket& socket, repe::message& msg)
+   inline void receive_buffer(asio::ip::tcp::socket& socket, repe::message& msg, repe::error_t& ec)
    {
       asio::read(socket, asio::buffer(&msg.header, sizeof(msg.header)), asio::transfer_exactly(sizeof(msg.header)));
       if (msg.header.query_length == repe::no_length_provided) {
-         throw std::runtime_error("No query_length provided in REPE header");
+         ec = {error_code::invalid_query, "No query_length provided in REPE header"};
+         return;
       }
       msg.query.resize(msg.header.query_length);
       asio::read(socket, asio::buffer(msg.query), asio::transfer_exactly(msg.header.query_length));
       if (msg.header.body_length == repe::no_length_provided) {
-         throw std::runtime_error("No body_length provided in REPE header");
+         ec = {error_code::invalid_body, "No body_length provided in REPE header"};
+         return;
       }
       msg.body.resize(msg.header.body_length);
-      asio::read(socket, asio::buffer(msg.body), asio::transfer_exactly(msg.header.body_length));
+      asio::error_code e{};
+      asio::read(socket, asio::buffer(msg.body), asio::transfer_exactly(msg.header.body_length), e);
+      if (e) {
+         ec = {error_code::send_error, e.message()};
+      }
    }
 
    inline asio::awaitable<void> co_send_buffer(asio::ip::tcp::socket& socket, const repe::message& msg)
@@ -214,7 +225,7 @@ namespace glz
 
       bool connected() const { return *is_connected; }
 
-      [[nodiscard]] std::error_code init()
+      [[nodiscard]] repe::error_t init()
       {
          ctx = std::make_shared<asio::io_context>(concurrency);
          socket_pool->ctx = ctx;
@@ -227,7 +238,7 @@ namespace glz
             return {}; // connection success
          }
          else {
-            return socket.ec; // connection failure
+            return {error_code::connection_failure};
          }
       }
 
@@ -236,23 +247,21 @@ namespace glz
       {
          auto request = message_pool->borrow();
          header.notify(true);
-         auto err = repe::request<Opts>(*request, std::move(header), std::forward<Params>(params)...);
-         if (err) {
-            return err;
+         auto ec = repe::request<Opts>(*request, std::move(header), std::forward<Params>(params)...);
+         if (ec) {
+            return ec;
          }
 
          unique_socket socket{socket_pool.get()};
 
-         try {
-            send_buffer(*socket, *request);
-         }
-         catch (const std::exception& e) {
+         send_buffer(*socket, *request, ec);
+
+         if (ec) {
             socket.ptr.reset();
             (*is_connected) = false;
-            return {error_code::send_error, "asio send failure"};
          }
 
-         return {};
+         return ec;
       }
 
       template <class Result>
@@ -261,39 +270,36 @@ namespace glz
          auto request = message_pool->borrow();
          header.notify(false);
          header.read(true);
-         auto err = repe::request<Opts>(*request, std::move(header));
-         if (err) {
-            return err;
+         auto ec = repe::request<Opts>(*request, std::move(header));
+         if (ec) {
+            return ec;
          }
 
          unique_socket socket{socket_pool.get()};
 
-         try {
-            send_buffer(*socket, *request);
-         }
-         catch (const std::exception& e) {
+         send_buffer(*socket, *request, ec);
+
+         if (ec) {
             socket.ptr.reset();
             (*is_connected) = false;
-            return {error_code::send_error, "asio send failure"};
+            return ec;
          }
 
          auto response = message_pool->borrow();
-         try {
-            receive_buffer(*socket, *response);
-         }
-         catch (const std::exception& e) {
+         receive_buffer(*socket, *response, ec);
+         if (ec) {
             socket.ptr.reset();
             (*is_connected) = false;
-            return {error_code::send_error, "asio receive failure"};
+            return ec;
          }
 
          if (response->header.error) {
             return {error_code::send_error, "asio receive failure"};
          }
 
-         auto ec = glz::read<Opts>(std::forward<Result>(result), response->body);
-         if (ec) {
-            return {ec.ec, glz::format_error(ec, response->body)};
+         auto e = glz::read<Opts>(std::forward<Result>(result), response->body);
+         if (e) {
+            return {e.ec, glz::format_error(e, response->body)};
          }
          return {};
       }
@@ -302,30 +308,27 @@ namespace glz
       [[nodiscard]] repe::error_t set(repe::user_header&& header, Params&& params)
       {
          auto request = message_pool->borrow();
-         auto err = repe::request<Opts>(*request, std::move(header), std::forward<Params>(params));
-         if (err) {
-            return err;
+         auto ec = repe::request<Opts>(*request, std::move(header), std::forward<Params>(params));
+         if (ec) {
+            return ec;
          }
 
          unique_socket socket{socket_pool.get()};
 
-         try {
-            send_buffer(*socket, *request);
-         }
-         catch (const std::exception& e) {
+         send_buffer(*socket, *request, ec);
+
+         if (ec) {
             socket.ptr.reset();
             (*is_connected) = false;
-            return {error_code::send_error, "asio send failure"};
+            return ec;
          }
 
          auto response = message_pool->borrow();
-         try {
-            receive_buffer(*socket, *response);
-         }
-         catch (const std::exception& e) {
+         receive_buffer(*socket, *response, ec);
+         if (ec) {
             socket.ptr.reset();
             (*is_connected) = false;
-            return {error_code::send_error, "asio receive failure"};
+            return ec;
          }
 
          if (response->header.error) {
@@ -338,39 +341,36 @@ namespace glz
       [[nodiscard]] repe::error_t call(repe::user_header&& header, Params&& params, Result&& result)
       {
          auto request = message_pool->borrow();
-         auto err = repe::request<Opts>(*request, std::move(header), std::forward<Params>(params));
-         if (err) {
-            return err;
+         auto ec = repe::request<Opts>(*request, std::move(header), std::forward<Params>(params));
+         if (ec) {
+            return ec;
          }
 
          unique_socket socket{socket_pool.get()};
 
-         try {
-            send_buffer(*socket, *request);
-         }
-         catch (const std::exception& e) {
+         send_buffer(*socket, *request, ec);
+
+         if (ec) {
             socket.ptr.reset();
             (*is_connected) = false;
-            return {error_code::send_error, "asio send failure"};
+            return ec;
          }
 
          auto response = message_pool->borrow();
-         try {
-            receive_buffer(*socket, *response);
-         }
-         catch (const std::exception& e) {
+         receive_buffer(*socket, *response, ec);
+         if (ec) {
             socket.ptr.reset();
             (*is_connected) = false;
-            return {error_code::send_error, "asio receive failure"};
+            return ec;
          }
 
          if (response->header.error) {
             return {error_code::send_error, "asio receive failure"};
          }
 
-         auto ec = glz::read<Opts>(std::forward<Result>(result), response->body);
-         if (ec) {
-            return {ec.ec, glz::format_error(ec, response->body)};
+         auto e = glz::read<Opts>(std::forward<Result>(result), response->body);
+         if (e) {
+            return {e.ec, glz::format_error(e, response->body)};
          }
          return {};
       }
@@ -378,30 +378,27 @@ namespace glz
       [[nodiscard]] repe::error_t call(repe::user_header&& header)
       {
          auto request = message_pool->borrow();
-         auto err = repe::request<Opts>(*request, std::move(header));
-         if (err) {
-            return err;
+         auto ec = repe::request<Opts>(*request, std::move(header));
+         if (ec) {
+            return ec;
          }
 
          unique_socket socket{socket_pool.get()};
 
-         try {
-            send_buffer(*socket, *request);
-         }
-         catch (const std::exception& e) {
+         send_buffer(*socket, *request, ec);
+
+         if (ec) {
             socket.ptr.reset();
             (*is_connected) = false;
-            return {error_code::send_error, "asio send failure"};
+            return ec;
          }
 
          auto response = message_pool->borrow();
-         try {
-            receive_buffer(*socket, *response);
-         }
-         catch (const std::exception& e) {
+         receive_buffer(*socket, *response, ec);
+         if (ec) {
             socket.ptr.reset();
             (*is_connected) = false;
-            return {error_code::send_error, "asio receive failure"};
+            return ec;
          }
 
          if (response->header.error) {
@@ -415,7 +412,7 @@ namespace glz
    struct asio_server
    {
       uint16_t port{};
-      uint32_t concurrency{1}; // how many threads to use
+      uint32_t concurrency{1}; // How many threads to use (a call to .run() is inclusive on the main thread)
 
       ~asio_server() { stop(); }
 
@@ -427,6 +424,7 @@ namespace glz
 
       std::shared_ptr<asio::io_context> ctx{};
       std::shared_ptr<asio::signal_set> signals{};
+      std::shared_ptr<std::vector<std::thread>> threads{};
 
       repe::registry<Opts> registry{};
 
@@ -444,15 +442,16 @@ namespace glz
       void init()
       {
          if (!initialized) {
+            if (concurrency == 0) {
+               throw std::runtime_error("concurrency == 0");
+            }
             ctx = std::make_shared<asio::io_context>(concurrency);
             signals = std::make_shared<asio::signal_set>(*ctx, SIGINT, SIGTERM);
          }
          initialized = true;
       }
 
-      std::atomic<bool> stop_server{false}; // Atomic flag to control stopping the server
-
-      void run()
+      void run(bool run_on_main_thread = true)
       {
          if (!initialized) {
             init();
@@ -464,39 +463,38 @@ namespace glz
          // Start the listener coroutine
          asio::co_spawn(*ctx, listener(), asio::detached);
 
-         stop_server = false;
-
-         std::thread stop_thread([this]() {
-            // Wait for stop_server to be set to true
-            while (!stop_server) {
-               std::this_thread::sleep_for(std::chrono::milliseconds(100));
+         // Run the io_context in multiple threads for concurrency
+         threads = std::shared_ptr<std::vector<std::thread>>(new std::vector<std::thread>{}, [](auto* ptr) {
+            // Join all threads before exiting
+            for (auto& thread : *ptr) {
+               if (thread.joinable()) {
+                  thread.join();
+               }
             }
-            ctx->stop(); // Stop the server's io_context
          });
 
-         // Run the io_context in multiple threads for concurrency
-         std::vector<std::thread> threads;
-         for (uint32_t i = 0; i < concurrency; ++i) {
-            threads.emplace_back([this]() { ctx->run(); });
+         threads->reserve(concurrency - uint32_t(run_on_main_thread));
+         for (uint32_t i = uint32_t(run_on_main_thread); i < concurrency; ++i) {
+            threads->emplace_back([this]() { ctx->run(); });
          }
 
-         // Run in the main thread as well
-         ctx->run();
+         if (run_on_main_thread) {
+            // Run in the main thread as well, which will block
+            ctx->run();
 
-         // Join all threads before exiting
-         for (auto& thread : threads) {
-            if (thread.joinable()) {
-               thread.join();
-            }
-         }
-
-         if (stop_thread.joinable()) {
-            stop_thread.join();
+            threads.reset(); // join all threads
          }
       }
 
+      void run_async() { run(false); }
+
       // stop the server
-      void stop() { stop_server = true; }
+      void stop()
+      {
+         if (ctx) {
+            ctx->stop(); // Stop the server's io_context
+         }
+      }
 
       asio::awaitable<void> run_instance(asio::ip::tcp::socket socket)
       {
