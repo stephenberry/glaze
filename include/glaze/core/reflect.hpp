@@ -240,7 +240,7 @@ namespace glz
    };
 
    template <class T>
-      requires detail::reflectable<T>
+      requires (not detail::meta_keys<T> && detail::reflectable<T>)
    struct reflect<T>
    {
       using V = std::remove_cvref_t<T>;

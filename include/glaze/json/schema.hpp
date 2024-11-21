@@ -87,37 +87,68 @@ namespace glz
       // TODO We should be able to generate the json schema compiletime
       struct glaze
       {
+         static constexpr std::array keys{"$ref", //
+            "title", //
+            "description", //
+            "default", //
+            "deprecated", //
+            "examples", //
+            "readOnly", //
+            "writeOnly", //
+            "const", //
+            "minLength", //
+            "maxLength", //
+            "pattern", //
+            "format", //
+            "minimum", //
+            "maximum", //
+            "exclusiveMinimum", //
+            "exclusiveMaximum", //
+            "multipleOf", //
+            "minProperties", //
+            "maxProperties", //
+            //"dependentRequired", //
+            "required", //
+            "minItems", //
+            "maxItems", //
+            "minContains", //
+            "maxContains", //
+            "uniqueItems", //
+            "enum", //
+            "ExtUnits", //
+            "ExtAdvanced"};
+         
          using T = schema;
-         static constexpr auto value = glz::object("$ref", &T::ref, //
-                                                   "title", &T::title, //
-                                                   "description", &T::description, //
-                                                   "default", &T::defaultValue, //
-                                                   "deprecated", &T::deprecated, //
-                                                   "examples", raw<&T::examples>, //
-                                                   "readOnly", &T::readOnly, //
-                                                   "writeOnly", &T::writeOnly, //
-                                                   "const", &T::constant, //
-                                                   "minLength", &T::minLength, //
-                                                   "maxLength", &T::maxLength, //
-                                                   "pattern", &T::pattern, //
-                                                   "format", &T::format, //
-                                                   "minimum", &T::minimum, //
-                                                   "maximum", &T::maximum, //
-                                                   "exclusiveMinimum", &T::exclusiveMinimum, //
-                                                   "exclusiveMaximum", &T::exclusiveMaximum, //
-                                                   "multipleOf", &T::multipleOf, //
-                                                   "minProperties", &T::minProperties, //
-                                                   "maxProperties", &T::maxProperties, //
-                                                   //               "dependentRequired", &T::dependent_required, //
-                                                   "required", &T::required, //
-                                                   "minItems", &T::minItems, //
-                                                   "maxItems", &T::maxItems, //
-                                                   "minContains", &T::minContains, //
-                                                   "maxContains", &T::maxContains, //
-                                                   "uniqueItems", &T::uniqueItems, //
-                                                   "enum", &T::enumeration, //
-                                                   "ExtUnits", &T::ExtUnits, //
-                                                   "ExtAdvanced", &T::ExtAdvanced);
+         static constexpr glz::tuplet::tuple value{&T::ref, //
+            &T::title, //
+            &T::description, //
+            &T::defaultValue, //
+            &T::deprecated, //
+            raw<&T::examples>, //
+            &T::readOnly, //
+            &T::writeOnly, //
+            &T::constant, //
+            &T::minLength, //
+            &T::maxLength, //
+            &T::pattern, //
+            &T::format, //
+            &T::minimum, //
+            &T::maximum, //
+            &T::exclusiveMinimum, //
+            &T::exclusiveMaximum, //
+            &T::multipleOf, //
+            &T::minProperties, //
+            &T::maxProperties, //
+            //&T::dependent_required, //
+            &T::required, //
+            &T::minItems, //
+            &T::maxItems, //
+            &T::minContains, //
+            &T::maxContains, //
+            &T::uniqueItems, //
+            &T::enumeration, //
+            &T::ExtUnits, //
+            &T::ExtAdvanced};
       };
    };
 
