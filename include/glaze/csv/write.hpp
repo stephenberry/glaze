@@ -68,7 +68,7 @@ namespace glz
          static void op(auto&& value, is_context auto&& ctx, B&& b, auto&& ix)
          {
             if constexpr (resizable<T>) {
-               if constexpr (Opts.layout == rowwise) {
+               if constexpr (get<1, std::uint8_t>(Opts, option::layout) == rowwise) {
                   const auto n = value.size();
                   for (size_t i = 0; i < n; ++i) {
                      write<CSV>::op<Opts>(value[i], ctx, b, ix);
@@ -112,7 +112,7 @@ namespace glz
          template <auto Opts, class B>
          static void op(auto&& value, is_context auto&& ctx, B&& b, auto&& ix)
          {
-            if constexpr (Opts.layout == rowwise) {
+            if constexpr (get<1, std::uint8_t>(Opts, option::layout) == rowwise) {
                for (auto& [name, data] : value) {
                   dump_maybe_empty(name, b, ix);
                   dump<','>(b, ix);
@@ -187,7 +187,7 @@ namespace glz
                }
             }();
 
-            if constexpr (Opts.layout == rowwise) {
+            if constexpr (get<1, std::uint8_t>(Opts, option::layout) == rowwise) {
                for_each<N>([&](auto I) {
                   using value_type = typename std::decay_t<refl_t<T, I>>::value_type;
 
@@ -334,19 +334,25 @@ namespace glz
    template <uint32_t layout = rowwise, write_csv_supported T, class Buffer>
    [[nodiscard]] auto write_csv(T&& value, Buffer&& buffer)
    {
-      return write<opts{.format = CSV, .layout = layout}>(std::forward<T>(value), std::forward<Buffer>(buffer));
+      return write<opts{.format = CSV,
+                        .bits = glz::options(glz::json_options_default).set(glz::option::layout, layout)}>(
+         std::forward<T>(value), std::forward<Buffer>(buffer));
    }
 
    template <uint32_t layout = rowwise, write_csv_supported T>
    [[nodiscard]] expected<std::string, error_ctx> write_csv(T&& value)
    {
-      return write<opts{.format = CSV, .layout = layout}>(std::forward<T>(value));
+      return write<opts{.format = CSV,
+                        .bits = glz::options(glz::json_options_default).set(glz::option::layout, layout)}>(
+         std::forward<T>(value));
    }
 
    template <uint32_t layout = rowwise, write_csv_supported T>
    [[nodiscard]] error_ctx write_file_csv(T&& value, const std::string& file_name, auto&& buffer)
    {
-      const auto ec = write<opts{.format = CSV, .layout = layout}>(std::forward<T>(value), buffer);
+      const auto ec =
+         write<opts{.format = CSV, .bits = glz::options(glz::json_options_default).set(glz::option::layout, layout)}>(
+            std::forward<T>(value), buffer);
       if (bool(ec)) [[unlikely]] {
          return ec;
       }

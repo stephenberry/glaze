@@ -42,13 +42,6 @@ namespace glz
    // Write padding bytes simplifies our dump calculations by making sure we have significant excess
    inline constexpr size_t write_padding_bytes = 256;
 
-   // We use a alias to a char for booleans so that compiler errors will print "0" or "1" rather than "true" or
-   // "false" This shortens compiler error printouts significantly.
-   // We use a macro rather than an alias because some compilers print out alias definitions, extending length.
-   // We tried a uint8_t in the past, but in many cases compilers would print out "unsigned char"
-   // int8_t also would produce "signed char"
-#define bool_t char
-
    // This macro exists so that Glaze tests can change the default behavior
    // to easily run tests as if strings were not null terminated
 #ifndef GLZ_NULL_TERMINATED
@@ -90,13 +83,13 @@ namespace glz
       hide_non_invocable, // Hides non-invocable members from the cli_menu (may be applied elsewhere in the future)
       indentation_char,
       indentation_width = indentation_char + 8,
-      layout = indentation_width + 3,
-      float_max_write_precision,
+      float_max_write_precision = indentation_width + 3,
+      layout = float_max_write_precision + 4, // CSV row wise output/input
 
       last_option_terminator
    };
 
-   static_assert(std::uint8_t(option::last_option_terminator) < sizeof(bits_class) * 8);
+   static_assert(std::uint8_t(option::last_option_terminator) <= sizeof(bits_class) * 8);
 
    template <typename U>
       requires(std::is_integral_v<U> && std::is_unsigned_v<U>)
@@ -106,7 +99,7 @@ namespace glz
       constexpr options() = default;
       constexpr options(const options& o) = default;
 
-      template <typename V, std::uint8_t width = 1>
+      template <std::uint8_t width = 1, typename V>
          requires(width <= sizeof(V) * 8)
       constexpr options& set(option b, V v)
       {
@@ -156,8 +149,6 @@ namespace glz
       char indentation_char = ' '; // Prettified JSON indentation char
       uint8_t indentation_width = 3; // Prettified JSON indentation size
 
-      uint8_t layout = rowwise; // CSV row wise output/input
-
       // The maximum precision type used for writing floats, higher precision floats will be cast down to this precision
       float_precision float_max_write_precision{};
 
@@ -179,18 +170,14 @@ namespace glz
       uint32_t internal{}; // default should be 0
    };
 
-#undef bool_t
-
    template <std::uint8_t width, typename R>
       requires((width > 0) && (width <= sizeof(R) * 8) && (not std::is_reference_v<R>))
    consteval R get(const opts& o, option b)
    {
       using Ret = std::remove_cv_t<R>;
 
-      static_assert(std::is_same_v<Ret, bool> && width == 1);
-
       using UR = std::make_unsigned_t<Ret>; //  TODO make it bigger
-      static constexpr UR mask = (UR(1) << width + 1) - 1;
+      static constexpr UR mask = (UR(1) << (width + 1)) - 1;
 
       Ret ret = (o.bits >> uint8_t(b)) & mask;
       return ret;
@@ -224,7 +211,10 @@ namespace glz
 
    consteval bool has_format(const opts& o, std::uint32_t format) { return o.format == format; }
 
-   consteval bool has_layout(const opts& o, std::uint8_t layout) { return o.layout == layout; }
+   consteval bool has_layout(const opts& o, std::uint8_t layout)
+   {
+      return get<1, std::uint8_t>(o, option::layout) == layout;
+   }
 
    template <opts Opts>
    constexpr auto opening_handled()

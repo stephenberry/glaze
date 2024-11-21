@@ -73,7 +73,9 @@ suite csv_tests = [] {
 
       std::string out{};
 
-      expect(not glz::write<glz::opts{.format = glz::CSV, .layout = glz::colwise}>(obj, out));
+      expect(not glz::write<glz::opts{
+                .format = glz::CSV,
+                .bits = glz::options(glz::json_options_default).set(glz::option::layout, glz::colwise)}>(obj, out));
       expect(out ==
              R"(num1,num2,maybe,v3s[0],v3s[1],v3s[2]
 11,22,1,1,1,1
@@ -103,7 +105,9 @@ suite csv_tests = [] {
 
       std::string out{};
 
-      expect(not glz::write<glz::opts{.format = glz::CSV, .layout = glz::colwise}>(obj, out));
+      expect(not glz::write<glz::opts{
+                .format = glz::CSV,
+                .bits = glz::options(glz::json_options_default).set(glz::option::layout, glz::colwise)}>(obj, out));
       expect(out ==
              R"(num1,num2,maybe,v3s[0],v3s[1],v3s[2]
 11,22,1,1,1,1
@@ -138,7 +142,9 @@ suite csv_tests = [] {
 
       std::string out{};
 
-      expect(not glz::write<glz::opts{.format = glz::CSV, .layout = glz::colwise}>(obj, out));
+      expect(not glz::write<glz::opts{
+                .format = glz::CSV,
+                .bits = glz::options(glz::json_options_default).set(glz::option::layout, glz::colwise)}>(obj, out));
       expect(out ==
              R"(id,udl
 1,BRN
@@ -244,7 +250,9 @@ y,1,2,3,4,5,6,7,8,9,10
       }
 
       std::string out{};
-      expect(not glz::write<glz::opts{.format = glz::CSV, .layout = glz::colwise}>(m, out));
+      expect(not glz::write<glz::opts{
+                .format = glz::CSV,
+                .bits = glz::options(glz::json_options_default).set(glz::option::layout, glz::colwise)}>(m, out));
       expect(out == R"(x,y
 0,1
 1,2
@@ -259,10 +267,15 @@ y,1,2,3,4,5,6,7,8,9,10
 )");
 
       out.clear();
-      expect(not glz::write<glz::opts{.format = glz::CSV, .layout = glz::colwise}>(m, out));
+      expect(not glz::write<glz::opts{
+                .format = glz::CSV,
+                .bits = glz::options(glz::json_options_default).set(glz::option::layout, glz::colwise)}>(m, out));
 
       m.clear();
-      expect(!glz::read<glz::opts{.format = glz::CSV, .layout = glz::colwise}>(m, out));
+      expect(
+         !glz::read<glz::opts{.format = glz::CSV,
+                              .bits = glz::options(glz::json_options_default).set(glz::option::layout, glz::colwise)}>(
+            m, out));
 
       expect(m["x"] == std::vector<uint64_t>{0, 1, 2, 3, 4, 5, 6, 7, 8, 9});
       expect(m["y"] == std::vector<uint64_t>{1, 2, 3, 4, 5, 6, 7, 8, 9, 10});
@@ -330,7 +343,10 @@ x,1,2,3,4,5)");
       }
 
       std::string s;
-      expect(not write<glz::opts{.format = glz::CSV, .layout = glz::colwise}>(recorder, s));
+      expect(
+         not write<glz::opts{.format = glz::CSV,
+                             .bits = glz::options(glz::json_options_default).set(glz::option::layout, glz::colwise)}>(
+            recorder, s));
       expect(s ==
              R"(t,x
 0,1
@@ -348,8 +364,9 @@ x,1,2,3,4,5)");
 33,Krakow)";
       glz::context ctx{};
       issue_768_test_struct value;
-      glz::error_ctx glaze_err{
-         glz::read<glz::opts{.format = glz::CSV, .layout = glz::colwise}>(value, std::string{valid_record}, ctx)};
+      glz::error_ctx glaze_err{glz::read<glz::opts{
+         .format = glz::CSV, .bits = glz::options(glz::json_options_default).set(glz::option::layout, glz::colwise)}>(
+         value, std::string{valid_record}, ctx)};
       expect(!bool(glaze_err));
    };
    "issue 768 invalid_record 1"_test = [] {
@@ -361,8 +378,9 @@ x,1,2,3,4,5)");
 77,Reda)";
       glz::context ctx{};
       issue_768_test_struct value;
-      glz::error_ctx glaze_err{
-         glz::read<glz::opts{.format = glz::CSV, .layout = glz::colwise}>(value, std::string{invalid_record_1}, ctx)};
+      glz::error_ctx glaze_err{glz::read<glz::opts{
+         .format = glz::CSV, .bits = glz::options(glz::json_options_default).set(glz::option::layout, glz::colwise)}>(
+         value, std::string{invalid_record_1}, ctx)};
       expect(bool(glaze_err));
    };
 
@@ -375,8 +393,9 @@ x,1,2,3,4,5)");
 77,Reda)";
       glz::context ctx{};
       issue_768_test_struct value;
-      glz::error_ctx glaze_err{
-         glz::read<glz::opts{.format = glz::CSV, .layout = glz::colwise}>(value, std::string{invalid_record_2}, ctx)};
+      glz::error_ctx glaze_err{glz::read<glz::opts{
+         .format = glz::CSV, .bits = glz::options(glz::json_options_default).set(glz::option::layout, glz::colwise)}>(
+         value, std::string{invalid_record_2}, ctx)};
       expect(bool(glaze_err));
    };
 };
@@ -412,7 +431,9 @@ suite reflect_my_struct_test = [] {
 
       std::string out{};
 
-      expect(not glz::write<glz::opts{.format = glz::CSV, .layout = glz::colwise}>(obj, out));
+      expect(not glz::write<glz::opts{
+                .format = glz::CSV,
+                .bits = glz::options(glz::json_options_default).set(glz::option::layout, glz::colwise)}>(obj, out));
       expect(out ==
              R"(num1,num2,maybe,v3s[0],v3s[1],v3s[2]
 11,22,1,1,1,1

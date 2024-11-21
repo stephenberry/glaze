@@ -216,16 +216,20 @@ namespace glz
       static const auto value = write_term_supported<T>;
    };
 
-   template <uint32_t layout = glz::map, write_term_supported T, output_buffer Buffer>
+   template <uint8_t layout = glz::map, write_term_supported T, output_buffer Buffer>
    [[nodiscard]] error_ctx write_term(T&& value, Buffer&& buffer) noexcept
    {
-      return write<opts{.format = ERLANG, .layout = layout}>(std::forward<T>(value), std::forward<Buffer>(buffer));
+      return write<opts{.format = ERLANG,
+                        .bits = glz::options(glz::json_options_default).set(glz::option::layout, layout)}>(
+         std::forward<T>(value), std::forward<Buffer>(buffer));
    }
 
-   template <uint32_t layout = glz::map, write_term_supported T, raw_buffer Buffer>
+   template <uint8_t layout = glz::map, write_term_supported T, raw_buffer Buffer>
    [[nodiscard]] expected<size_t, error_ctx> write_term(T&& value, Buffer&& buffer) noexcept
    {
-      return write<opts{.format = ERLANG, .layout = layout}>(std::forward<T>(value), std::forward<Buffer>(buffer));
+      return write<opts{.format = ERLANG,
+                        .bits = glz::options(glz::json_options_default).set(glz::option::layout, layout)}>(
+         std::forward<T>(value), std::forward<Buffer>(buffer));
    }
 
    template <write_term_supported T>

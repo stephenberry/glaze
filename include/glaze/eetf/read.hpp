@@ -187,7 +187,7 @@ namespace glz
                   return false;
                }
 
-               if constexpr (Opts.layout == glz::proplist) {
+               if constexpr (get<1, std::uint8_t>(Opts, option::layout) == glz::proplist) {
                   const auto header = decode_tuple_header(ctx, it);
                   if (bool(ctx.error)) [[unlikely]] {
                      return false;
@@ -225,10 +225,10 @@ namespace glz
                return fi(ctx.error, ctx);
             }
 
-            if (eetf::is_map(tag) && Opts.layout == glz::map) {
+            if (eetf::is_map(tag) && get<1, std::uint8_t>(Opts, option::layout) == glz::map) {
                return fi(decode_map_header<Ctx, It0>, ctx, it, end);
             }
-            else if (eetf::is_list(tag) && Opts.layout == glz::proplist) {
+            else if (eetf::is_list(tag) && get<1, std::uint8_t>(Opts, option::layout) == glz::proplist) {
                return fi(decode_list_header<Ctx, It0>, ctx, it, end);
             }
 
@@ -336,18 +336,22 @@ namespace glz
       static constexpr auto value = read_eetf_supported<T>;
    };
 
-   template <uint32_t layout = glz::map, read_eetf_supported T, class Buffer>
+   template <uint8_t layout = glz::map, read_eetf_supported T, class Buffer>
    [[nodiscard]] inline error_ctx read_term(T&& value, Buffer&& buffer) noexcept
    {
-      return read<opts{.format = ERLANG, .layout = layout}>(value, std::forward<Buffer>(buffer));
+      return read<opts{.format = ERLANG,
+                       .bits = glz::options(glz::json_options_default).set(glz::option::layout, layout)}>(
+         value, std::forward<Buffer>(buffer));
    }
 
-   template <uint32_t layout = glz::map, read_eetf_supported T, is_buffer Buffer>
+   template <uint8_t layout = glz::map, read_eetf_supported T, is_buffer Buffer>
    [[nodiscard]] expected<T, error_ctx> read_term(Buffer&& buffer) noexcept
    {
       T value{};
       context ctx{};
-      const error_ctx ec = read<opts{.format = ERLANG, .layout = layout}>(value, std::forward<Buffer>(buffer), ctx);
+      const error_ctx ec =
+         read<opts{.format = ERLANG, .bits = glz::options(glz::json_options_default).set(glz::option::layout, layout)}>(
+            value, std::forward<Buffer>(buffer), ctx);
       if (ec) {
          return unexpected<error_ctx>(ec);
       }

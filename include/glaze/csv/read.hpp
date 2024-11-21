@@ -190,8 +190,7 @@ namespace glz
       template <char delim>
       inline void goto_delim(auto&& it, auto&& end) noexcept
       {
-         while (++it != end && *it != delim)
-            ;
+         while (++it != end && *it != delim);
       }
 
       inline auto read_column_wise_keys(auto&& ctx, auto&& it, auto&& end)
@@ -253,7 +252,7 @@ namespace glz
          template <auto Opts, class It>
          static void op(auto&& value, is_context auto&& ctx, It&& it, auto&& end)
          {
-            if constexpr (Opts.layout == rowwise) {
+            if constexpr (get<1, std::uint8_t>(Opts, option::layout) == rowwise) {
                while (it != end) {
                   auto start = it;
                   goto_delim<','>(it, end);
@@ -413,7 +412,7 @@ namespace glz
             static constexpr auto N = reflect<T>::size;
             static constexpr auto HashInfo = detail::hash_info<T>;
 
-            if constexpr (Opts.layout == rowwise) {
+            if constexpr (get<1, std::uint8_t>(Opts, option::layout) == rowwise) {
                while (it != end) {
                   auto start = it;
                   goto_delim<','>(it, end);
@@ -615,21 +614,24 @@ namespace glz
       };
    }
 
-   template <uint32_t layout = rowwise, read_csv_supported T, class Buffer>
+   template <uint8_t layout = rowwise, read_csv_supported T, class Buffer>
    [[nodiscard]] inline auto read_csv(T&& value, Buffer&& buffer)
    {
-      return read<opts{.format = CSV, .layout = layout}>(value, std::forward<Buffer>(buffer));
+      return read<opts{.format = CSV,
+                       .bits = glz::options(glz::json_options_default).set(glz::option::layout, layout)}>(
+         value, std::forward<Buffer>(buffer));
    }
 
-   template <uint32_t layout = rowwise, read_csv_supported T, class Buffer>
+   template <uint8_t layout = rowwise, read_csv_supported T, class Buffer>
    [[nodiscard]] inline auto read_csv(Buffer&& buffer)
    {
       T value{};
-      read<opts{.format = CSV, .layout = layout}>(value, std::forward<Buffer>(buffer));
+      read<opts{.format = CSV, .bits = glz::options(glz::json_options_default).set(glz::option::layout, layout)}>(
+         value, std::forward<Buffer>(buffer));
       return value;
    }
 
-   template <uint32_t layout = rowwise, read_csv_supported T>
+   template <uint8_t layout = rowwise, read_csv_supported T>
    [[nodiscard]] inline error_ctx read_file_csv(T& value, const sv file_name)
    {
       context ctx{};
@@ -642,7 +644,9 @@ namespace glz
          return {ec};
       }
 
-      return read<opts{.format = CSV, .layout = layout}>(value, buffer, ctx);
+      return read<opts{.format = CSV,
+                       .bits = glz::options(glz::json_options_default).set(glz::option::layout, layout)}>(value, buffer,
+                                                                                                          ctx);
    }
 
    template <class T>
