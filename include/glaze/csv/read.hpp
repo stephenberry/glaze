@@ -130,9 +130,36 @@ namespace glz
 
             value.clear();
             auto start = it;
+            
+            bool within_quotes = *it == '"';
+            it += size_t(within_quotes);
+            
             while (it < end) {
                switch (*it) {
-               case ',':
+               case '"': {
+                  if (within_quotes) {
+                     within_quotes = false;
+                     ++it;
+                     if (*it == ',') {
+                        value.append(start, static_cast<size_t>(it - start));
+                        return;
+                     }
+                     else {
+                        ctx.error = error_code::syntax_error;
+                        return;
+                     }
+                  }
+                  ++it;
+               }
+               case ',': {
+                  if (within_quotes) {
+                     ++it;
+                  }
+                  else {
+                     value.append(start, static_cast<size_t>(it - start));
+                     return;
+                  }
+               }
                case '\n': {
                   value.append(start, static_cast<size_t>(it - start));
                   return;

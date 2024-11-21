@@ -602,7 +602,7 @@ suite currency_csv_test = [] {
    "currency"_test = [] {
       CurrencyCSV obj{};
       std::string buffer{};
-      auto ec = glz::read_file_csv(obj, GLZ_TEST_DIRECTORY "/currency.csv", buffer);
+      auto ec = glz::read_file_csv<glz::colwise>(obj, GLZ_TEST_DIRECTORY "/currency.csv", buffer);
       expect(not ec) << glz::format_error(ec, buffer) << '\n';
    };
 };
