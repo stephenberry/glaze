@@ -474,7 +474,7 @@ namespace glz
                using V = std::decay_t<std::variant_alternative_t<I, T>>;
                auto& schema_val = (*s.oneOf)[I];
                to_json_schema<V>::template op<Opts>(schema_val, defs);
-               if constexpr ((glaze_object_t<V> || reflectable<V>)&& not tag_v<T>.empty()) {
+               if constexpr ((glaze_object_t<V> || reflectable<V>)&&not tag_v<T>.empty()) {
                   if (not schema_val.required) {
                      schema_val.required = std::vector<sv>{}; // allocate
                   }
