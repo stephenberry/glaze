@@ -214,7 +214,7 @@ namespace glz
 
       bool connected() const { return *is_connected; }
 
-      [[nodiscard]] std::error_code init()
+      [[nodiscard]] repe::error_t init()
       {
          ctx = std::make_shared<asio::io_context>(concurrency);
          socket_pool->ctx = ctx;
@@ -227,7 +227,7 @@ namespace glz
             return {}; // connection success
          }
          else {
-            return socket.ec; // connection failure
+            return {error_code::connection_failure};
          }
       }
 
@@ -476,8 +476,8 @@ namespace glz
             }
          });
 
-         threads->reserve(concurrency - size_t(run_on_main_thread));
-         for (uint32_t i = size_t(run_on_main_thread); i < concurrency; ++i) {
+         threads->reserve(concurrency - uint32_t(run_on_main_thread));
+         for (uint32_t i = uint32_t(run_on_main_thread); i < concurrency; ++i) {
             threads->emplace_back([this]() { ctx->run(); });
          }
 

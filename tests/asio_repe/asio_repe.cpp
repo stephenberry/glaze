@@ -38,17 +38,16 @@ void notify_test()
    try {
       glz::asio_client<> client{"localhost", std::to_string(port)};
 
-      const auto ec = client.init();
-      if (ec) {
-         throw std::runtime_error(ec.message());
+      if (auto ec = client.init()) {
+         throw std::runtime_error(glz::write_json(ec).value_or("error"));
       }
 
-      if (auto e_call = client.notify({"/hello"})) {
-         throw std::runtime_error(glz::write_json(e_call).value_or("error"));
+      if (auto ec = client.notify({"/hello"})) {
+         throw std::runtime_error(glz::write_json(ec).value_or("error"));
       }
 
-      if (auto e_call = client.call({"/hello"})) {
-         throw std::runtime_error(glz::write_json(e_call).value_or("error"));
+      if (auto ec = client.call({"/hello"})) {
+         throw std::runtime_error(glz::write_json(ec).value_or("error"));
       }
 
       server.stop();
@@ -86,18 +85,17 @@ void async_clients_test()
    try {
       glz::asio_client<> client{"localhost", std::to_string(port)};
 
-      const auto ec = client.init();
-      if (ec) {
-         throw std::runtime_error(ec.message());
+      if (auto ec = client.init()) {
+         throw std::runtime_error(glz::write_json(ec).value_or("error"));
       }
 
-      if (auto e_call = client.set({"/age"}, 29)) {
-         std::cerr << glz::write_json(e_call).value_or("error") << '\n';
+      if (auto ec = client.set({"/age"}, 29)) {
+         std::cerr << glz::write_json(ec).value_or("error") << '\n';
       }
 
       int age{};
-      if (auto e_call = client.get({"/age"}, age)) {
-         std::cerr << glz::write_json(e_call).value_or("error") << '\n';
+      if (auto ec = client.get({"/age"}, age)) {
+         std::cerr << glz::write_json(ec).value_or("error") << '\n';
       }
 
       expect(age == 29);
@@ -158,9 +156,8 @@ void asio_client_test()
       for (size_t i = 0; i < N; ++i) {
          threads.emplace_back(std::async([&, i] {
             auto& client = clients[i];
-            const auto ec = client.init();
-            if (ec) {
-               std::cerr << "Error: " << ec.message() << std::endl;
+            if (auto ec = client.init()) {
+               std::cerr << "Error: " << glz::write_json(ec).value_or("error") << std::endl;
             }
 
             std::vector<int> data;
@@ -169,8 +166,8 @@ void asio_client_test()
             }
 
             int sum{};
-            if (auto e_call = client.call({"/sum"}, data, sum); e_call) {
-               std::cerr << glz::write_json(e_call).value_or("error") << '\n';
+            if (auto ec = client.call({"/sum"}, data, sum)) {
+               std::cerr << glz::write_json(ec).value_or("error") << '\n';
             }
             else {
                std::cout << "i: " << i << ", " << sum << '\n';
