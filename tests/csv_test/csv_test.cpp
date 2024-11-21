@@ -599,12 +599,6 @@ struct CurrencyCSV {
 };
 
 suite currency_csv_test = [] {
-   "currency_row"_test = [] {
-      CurrencyCSV obj{};
-      std::string buffer{};
-      // auto ec = glz::read_file_csv(obj, GLZ_TEST_DIRECTORY "/currency.csv", buffer);
-      // expect(not ec) << glz::format_error(ec, buffer) << '\n';
-   };
    "currency_col"_test = [] {
       CurrencyCSV obj{};
       std::string buffer{};
@@ -640,6 +634,15 @@ suite currency_csv_test = [] {
       expect(obj.NumericCode[324] == "954");
       expect(obj.MinorUnit[324] == "");
       expect(obj.WithdrawalDate[324] == "1999-01");
+   };
+   "currency_row"_test = [] {
+      CurrencyCSV obj{};
+      std::string buffer{};
+      auto ec = glz::read_file_csv<glz::colwise>(obj, GLZ_TEST_DIRECTORY "/currency.csv", buffer);
+      ec = glz::write_file_csv(obj, "currency_rowwise.csv", std::string{});
+      expect(not ec);
+      ec = glz::read_file_csv(obj, "currency_rowwise.csv", buffer);
+      expect(not ec) << glz::format_error(ec, buffer) << '\n';
    };
 };
 
