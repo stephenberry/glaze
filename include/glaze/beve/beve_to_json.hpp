@@ -104,13 +104,17 @@ namespace glz
          }
       }
 
-      template <glz::opts Opts, class Buffer>
+      template <opts Opts, class Buffer>
       inline void beve_to_json_value(auto&& ctx, auto&& it, auto&& end, Buffer& out, auto&& ix)
       {
          if (it >= end) [[unlikely]] {
             ctx.error = error_code::syntax_error;
             return;
          }
+
+         static constexpr auto indentation_width =
+            get<fw_indentation_width, std::uint8_t>(Opts, option::indentation_width);
+
          const auto tag = uint8_t(*it);
          const auto type = tag & 0b00000'111;
          switch (type) {
@@ -155,7 +159,7 @@ namespace glz
 
             dump<'{'>(out, ix);
             if constexpr (has(Opts, option::prettify)) {
-               ctx.indentation_level += Opts.indentation_width;
+               ctx.indentation_level += indentation_width;
                dump<'\n'>(out, ix);
                dumpn<Opts.indentation_char>(ctx.indentation_level, out, ix);
             }
@@ -249,7 +253,7 @@ namespace glz
             }
 
             if constexpr (has(Opts, option::prettify)) {
-               ctx.indentation_level -= Opts.indentation_width;
+               ctx.indentation_level -= indentation_width;
                dump<'\n'>(out, ix);
                dumpn<Opts.indentation_char>(ctx.indentation_level, out, ix);
             }
@@ -501,7 +505,7 @@ namespace glz
 
                dump<'{'>(out, ix);
                if constexpr (has(Opts, option::prettify)) {
-                  ctx.indentation_level += Opts.indentation_width;
+                  ctx.indentation_level += indentation_width;
                   dump<'\n'>(out, ix);
                   dumpn<Opts.indentation_char>(ctx.indentation_level, out, ix);
                }
@@ -560,7 +564,7 @@ namespace glz
                }
 
                if constexpr (has(Opts, option::prettify)) {
-                  ctx.indentation_level -= Opts.indentation_width;
+                  ctx.indentation_level -= indentation_width;
                   dump<'\n'>(out, ix);
                   dumpn<Opts.indentation_char>(ctx.indentation_level, out, ix);
                }

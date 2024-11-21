@@ -52,7 +52,7 @@ namespace glz
 
    // width in bit for option fields
    constexpr std::uint8_t fw_indentation_char = 8;
-   constexpr std::uint8_t fw_indentation_width = 3;
+   constexpr std::uint8_t fw_indentation_width = 4;
    constexpr std::uint8_t fw_float_max_write_precision = 5;
 
    enum class option : std::uint8_t {
@@ -87,7 +87,7 @@ namespace glz
       concatenate, // Concatenates ranges of std::pair into single objects when writing
       hide_non_invocable, // Hides non-invocable members from the cli_menu (may be applied elsewhere in the future)
       indentation_char,
-      indentation_width = indentation_char + fw_indentation_char,
+      indentation_width = indentation_char + fw_indentation_char, // Prettified JSON indentation size
       float_max_write_precision =
          indentation_width + fw_indentation_width, // The maximum precision type used for writing floats, higher
                                                    // precision floats will be cast down to this precision
@@ -155,7 +155,6 @@ namespace glz
       bits_class bits = json_options_default;
 
       char indentation_char = ' '; // Prettified JSON indentation char
-      uint8_t indentation_width = 3; // Prettified JSON indentation size
 
       enum struct internal : uint32_t {
          none = 0,
