@@ -29,8 +29,7 @@ namespace glz
    inline void send_buffer(asio::ip::tcp::socket& socket, const repe::message& msg, repe::error_t& ec)
    {
       if (msg.header.length == repe::no_length_provided) {
-         ec.code = error_code::invalid_header;
-         ec.message = "No length provided in REPE header";
+         ec = {error_code::invalid_header, "No length provided in REPE header"};
          return;
       }
       
@@ -44,19 +43,25 @@ namespace glz
       }
    }
 
-   inline void receive_buffer(asio::ip::tcp::socket& socket, repe::message& msg)
+   inline void receive_buffer(asio::ip::tcp::socket& socket, repe::message& msg, repe::error_t& ec)
    {
       asio::read(socket, asio::buffer(&msg.header, sizeof(msg.header)), asio::transfer_exactly(sizeof(msg.header)));
       if (msg.header.query_length == repe::no_length_provided) {
-         throw std::runtime_error("No query_length provided in REPE header");
+         ec = {error_code::invalid_query, "No query_length provided in REPE header"};
+         return;
       }
       msg.query.resize(msg.header.query_length);
       asio::read(socket, asio::buffer(msg.query), asio::transfer_exactly(msg.header.query_length));
       if (msg.header.body_length == repe::no_length_provided) {
-         throw std::runtime_error("No body_length provided in REPE header");
+         ec = {error_code::invalid_body, "No body_length provided in REPE header"};
+         return;
       }
       msg.body.resize(msg.header.body_length);
-      asio::read(socket, asio::buffer(msg.body), asio::transfer_exactly(msg.header.body_length));
+      asio::error_code e{};
+      asio::read(socket, asio::buffer(msg.body), asio::transfer_exactly(msg.header.body_length), e);
+      if (e) {
+         ec = {error_code::send_error, e.message()};
+      }
    }
 
    inline asio::awaitable<void> co_send_buffer(asio::ip::tcp::socket& socket, const repe::message& msg)
@@ -281,13 +286,11 @@ namespace glz
          }
 
          auto response = message_pool->borrow();
-         try {
-            receive_buffer(*socket, *response);
-         }
-         catch (const std::exception& e) {
+         receive_buffer(*socket, *response, ec);
+         if (ec) {
             socket.ptr.reset();
             (*is_connected) = false;
-            return {error_code::send_error, "asio receive failure"};
+            return ec;
          }
 
          if (response->header.error) {
@@ -321,13 +324,11 @@ namespace glz
          }
 
          auto response = message_pool->borrow();
-         try {
-            receive_buffer(*socket, *response);
-         }
-         catch (const std::exception& e) {
+         receive_buffer(*socket, *response, ec);
+         if (ec) {
             socket.ptr.reset();
             (*is_connected) = false;
-            return {error_code::send_error, "asio receive failure"};
+            return ec;
          }
 
          if (response->header.error) {
@@ -356,13 +357,11 @@ namespace glz
          }
 
          auto response = message_pool->borrow();
-         try {
-            receive_buffer(*socket, *response);
-         }
-         catch (const std::exception& e) {
+         receive_buffer(*socket, *response, ec);
+         if (ec) {
             socket.ptr.reset();
             (*is_connected) = false;
-            return {error_code::send_error, "asio receive failure"};
+            return ec;
          }
 
          if (response->header.error) {
@@ -395,13 +394,11 @@ namespace glz
          }
 
          auto response = message_pool->borrow();
-         try {
-            receive_buffer(*socket, *response);
-         }
-         catch (const std::exception&) {
+         receive_buffer(*socket, *response, ec);
+         if (ec) {
             socket.ptr.reset();
             (*is_connected) = false;
-            return {error_code::send_error, "asio receive failure"};
+            return ec;
          }
 
          if (response->header.error) {
