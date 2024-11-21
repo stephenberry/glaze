@@ -7791,13 +7791,13 @@ suite address_sanitizer_test = [] {
 
    "invalid json_t read 1"_test = [] {
       glz::json_t json{};
-      auto blah = std::vector<char>{0x22, 0x5c, char(0xff), 0x22, 0x00};
+      auto blah = std::vector<char>{0x22, 0x5c, static_cast<char>(0xff), 0x22, 0x00};
       expect(glz::read_json(json, blah));
    };
 
    "invalid json_t 2"_test = [] {
       glz::json_t json{};
-      auto blah = std::vector<char>{0x22, 0x5c, 0x75, char(0xff), 0x22, 0x00};
+      auto blah = std::vector<char>{0x22, 0x5c, 0x75, static_cast<char>(0xff), 0x22, 0x00};
       expect(glz::read_json(json, blah));
    };
 

@@ -23,6 +23,7 @@ namespace glz
       method_not_found,
       timeout,
       send_error,
+      connection_failure,
       // Other errors
       end_reached, // A non-error code for non-null terminated input buffers
       no_read_input, //

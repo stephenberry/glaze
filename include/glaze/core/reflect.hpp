@@ -7,6 +7,12 @@
 #include "glaze/core/common.hpp"
 #include "glaze/util/primes_64.hpp"
 
+#ifdef _MSC_VER
+// Turn off MSVC warning for unreferenced formal parameter, which is referenced in a constexpr branch
+#pragma warning(push)
+#pragma warning(disable : 4100 4189)
+#endif
+
 namespace glz::detail
 {
    // We create const and not-const versions for when our reflected struct is const or non-const qualified
@@ -1371,7 +1377,7 @@ namespace glz::detail
       if (const auto uindex = find_unique_index(keys)) {
          info.unique_index = uindex.value();
 
-         if (N == 3) {
+         if constexpr (N == 3) {
             // An xor of the first unique character with itself will result in 0 (our desired index)
             // We use a hash algorithm that will produce zero if zero is given, so we can avoid a branch
             // We need a seed produces hashes of [1, 2] for the 2nd and 3rd keys
@@ -1634,7 +1640,7 @@ namespace glz::detail
             hash_info_t<T, bucket_size(unique_index, N)> info{.type = unique_index, .seed = k_info.seed};
             info.min_length = k_info.min_length;
             info.max_length = k_info.max_length;
-            info.table.fill(N);
+            info.table.fill(bucket_value_t<N>(N));
             info.unique_index = k_info.unique_index;
 
             if constexpr (k_info.sized_hash) {
@@ -2204,3 +2210,8 @@ namespace glz
       }
    }
 }
+
+#ifdef _MSC_VER
+// restore disabled warnings
+#pragma warning(pop)
+#endif

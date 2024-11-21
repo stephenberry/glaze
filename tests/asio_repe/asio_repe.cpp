@@ -38,17 +38,16 @@ void notify_test()
    try {
       glz::asio_client<> client{"localhost", std::to_string(port)};
 
-      const auto ec = client.init();
-      if (ec) {
-         throw std::runtime_error(ec.message());
+      if (auto ec = client.init()) {
+         throw std::runtime_error(glz::write_json(ec).value_or("error"));
       }
 
-      if (auto e_call = client.notify({"/hello"})) {
-         throw std::runtime_error(glz::write_json(e_call).value_or("error"));
+      if (auto ec = client.notify({"/hello"})) {
+         throw std::runtime_error(glz::write_json(ec).value_or("error"));
       }
 
-      if (auto e_call = client.call({"/hello"})) {
-         throw std::runtime_error(glz::write_json(e_call).value_or("error"));
+      if (auto ec = client.call({"/hello"})) {
+         throw std::runtime_error(glz::write_json(ec).value_or("error"));
       }
 
       server.stop();
@@ -86,18 +85,17 @@ void async_clients_test()
    try {
       glz::asio_client<> client{"localhost", std::to_string(port)};
 
-      const auto ec = client.init();
-      if (ec) {
-         throw std::runtime_error(ec.message());
+      if (auto ec = client.init()) {
+         throw std::runtime_error(glz::write_json(ec).value_or("error"));
       }
 
-      if (auto e_call = client.set({"/age"}, 29)) {
-         std::cerr << glz::write_json(e_call).value_or("error") << '\n';
+      if (auto ec = client.set({"/age"}, 29)) {
+         std::cerr << glz::write_json(ec).value_or("error") << '\n';
       }
 
       int age{};
-      if (auto e_call = client.get({"/age"}, age)) {
-         std::cerr << glz::write_json(e_call).value_or("error") << '\n';
+      if (auto ec = client.get({"/age"}, age)) {
+         std::cerr << glz::write_json(ec).value_or("error") << '\n';
       }
 
       expect(age == 29);
@@ -158,9 +156,8 @@ void asio_client_test()
       for (size_t i = 0; i < N; ++i) {
          threads.emplace_back(std::async([&, i] {
             auto& client = clients[i];
-            const auto ec = client.init();
-            if (ec) {
-               std::cerr << "Error: " << ec.message() << std::endl;
+            if (auto ec = client.init()) {
+               std::cerr << "Error: " << glz::write_json(ec).value_or("error") << std::endl;
             }
 
             std::vector<int> data;
@@ -169,8 +166,8 @@ void asio_client_test()
             }
 
             int sum{};
-            if (auto e_call = client.call({"/sum"}, data, sum); e_call) {
-               std::cerr << glz::write_json(e_call).value_or("error") << '\n';
+            if (auto ec = client.call({"/sum"}, data, sum)) {
+               std::cerr << glz::write_json(ec).value_or("error") << '\n';
             }
             else {
                std::cout << "i: " << i << ", " << sum << '\n';
@@ -262,12 +259,74 @@ void async_calls()
    server_thread.get();
 }
 
+struct raw_json_api
+{
+   std::function<void()> do_nothing = []() {};
+};
+
+void raw_json_tests()
+{
+   static constexpr int16_t port = 8765;
+
+   glz::asio_server<> server{.port = port, .concurrency = 2};
+
+   std::future<void> server_thread = std::async([&] {
+      api2 methods{};
+      raw_json_api api{};
+      server.on(api);
+      server.run();
+   });
+
+   std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+   glz::raw_json results{};
+
+   glz::asio_client<> client{"localhost", std::to_string(port)};
+   (void)client.init();
+
+   auto ec = client.get({"/do_nothing"}, results);
+   expect(not ec);
+   if (ec) {
+      std::cerr << ec.message << '\n';
+   }
+
+   server.stop();
+}
+
+struct async_api
+{
+   std::function<int(int)> times_two = [](int x) { return 2 * x; };
+};
+
+void async_server_test()
+{
+   static constexpr int16_t port = 8765;
+
+   glz::asio_server<> server{.port = port, .concurrency = 1};
+
+   async_api api{};
+   server.on(api);
+
+   server.run_async();
+
+   glz::asio_client<> client{"localhost", std::to_string(port)};
+   (void)client.init();
+
+   int result{};
+   auto ec = client.call({"/times_two"}, 100, result);
+   expect(not ec);
+
+   expect(result == 200);
+}
+
 int main()
 {
    notify_test();
    async_clients_test();
    asio_client_test();
    async_calls();
+   raw_json_tests();
+   async_server_test();
 
    return 0;
 }

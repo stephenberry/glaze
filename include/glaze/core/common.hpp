@@ -547,6 +547,7 @@ struct glz::meta<glz::error_code>
                                     "method_not_found",
                                     "timeout",
                                     "send_error",
+                                    "connection_failure",
                                     "end_reached",
                                     "no_read_input",
                                     "data_must_be_null_terminated",
@@ -608,6 +609,7 @@ struct glz::meta<glz::error_code>
                                             method_not_found, //
                                             timeout, //
                                             send_error, //
+                                            connection_failure, //
                                             end_reached, // A non-error code for non-null terminated input buffers
                                             no_read_input, //
                                             data_must_be_null_terminated, //

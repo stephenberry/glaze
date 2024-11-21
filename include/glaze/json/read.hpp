@@ -23,6 +23,12 @@
 #include "glaze/util/type_traits.hpp"
 #include "glaze/util/variant.hpp"
 
+#ifdef _MSC_VER
+// Turn off MSVC warning for unreachable code due to constexpr branching
+#pragma warning(push)
+#pragma warning(disable : 4702)
+#endif
+
 namespace glz
 {
 
@@ -252,7 +258,7 @@ namespace glz
          }
       }
 
-      template <opts Opts, class T, auto HashInfo, class Func, class Value>
+      template <opts Opts, class T, auto& HashInfo, class Func, class Value>
          requires(glaze_object_t<T> || reflectable<T>)
       GLZ_ALWAYS_INLINE constexpr void parse_and_invoke(Func&& func, Value&& value, is_context auto&& ctx, auto&& it,
                                                         auto&& end)
@@ -1203,7 +1209,10 @@ namespace glz
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
             auto it_start = it;
-            if (is_digit(uint8_t(*it))) {
+            if (*it == 'n') {
+               match<"null", Opts>(ctx, it, end);
+            }
+            else if (is_digit(uint8_t(*it))) {
                skip_number<Opts>(ctx, it, end);
             }
             else {
@@ -3112,3 +3121,8 @@ namespace glz
       return read<Options>(value, buffer, ctx);
    }
 }
+
+#ifdef _MSC_VER
+// restore disabled warnings
+#pragma warning(pop)
+#endif

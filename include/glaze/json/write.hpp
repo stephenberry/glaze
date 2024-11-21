@@ -440,7 +440,7 @@ namespace glz
                         const __m256i quote_char = _mm256_set1_epi8('"');
                         const __m256i backslash_char = _mm256_set1_epi8('\\');
                         const __m256i less_32_mask = _mm256_set1_epi8(0b01100000);
-                        const __m256i high_bit_mask = _mm256_set1_epi8(int8_t(0b10000000));
+                        const __m256i high_bit_mask = _mm256_set1_epi8(static_cast<int8_t>(0b10000000));
 
                         for (const char* end_m31 = e - 31; c < end_m31;) {
                            __m256i v = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(c));

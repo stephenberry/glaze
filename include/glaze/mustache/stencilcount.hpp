@@ -23,7 +23,7 @@ namespace glz
       }
 
       auto [it, end] = read_iterators<Opts, false>(tmp);
-      auto start = it;
+      auto outer_start = it;
       if (tmp.empty()) [[unlikely]] {
          ctx.error = error_code::no_read_input;
       }
@@ -167,7 +167,8 @@ namespace glz
       }
 
       if (bool(ctx.error)) [[unlikely]] {
-         return unexpected(error_ctx{ctx.error, ctx.custom_error_message, size_t(it - start), ctx.includer_error});
+         return unexpected(
+            error_ctx{ctx.error, ctx.custom_error_message, size_t(it - outer_start), ctx.includer_error});
       }
 
       return {result};
