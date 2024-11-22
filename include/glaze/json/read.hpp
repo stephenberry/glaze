@@ -1784,9 +1784,10 @@ namespace glz
             GLZ_VALID_END();
          }
       };
-      
+
       template <class T, string_literal Tag>
-      inline consteval bool contains_tag() {
+      inline consteval bool contains_tag()
+      {
          auto& keys = reflect<T>::keys;
          for (size_t i = 0; i < keys.size(); ++i) {
             if (Tag.sv() == keys[i]) {
@@ -1898,7 +1899,7 @@ namespace glz
 
                      GLZ_SKIP_WS();
                   }
-                  
+
                   constexpr auto reflection_type = glaze_object_t<T> || reflectable<T>;
 
                   if constexpr (reflection_type && (num_members == 0)) {
@@ -1931,18 +1932,18 @@ namespace glz
                   }
                   else if constexpr (reflection_type) {
                      static_assert(bool(hash_info<T>.type));
-                     
+
                      if (*it != '"') [[unlikely]] {
                         ctx.error = error_code::expected_quote;
                         return;
                      }
                      ++it;
                      GLZ_INVALID_END();
-                     
+
                      if constexpr (not tag.sv().empty() && not contains_tag<T, tag>()) {
                         // For tagged variants we first check to see if the key matches the tag
                         // We only need to do this if the tag is not part of the keys
-                        
+
                         const auto start = it;
                         skip_string_view<Opts>(ctx, it, end);
                         if (bool(ctx.error)) [[unlikely]]
@@ -1950,14 +1951,14 @@ namespace glz
                         const sv key{start, size_t(it - start)};
                         ++it;
                         GLZ_INVALID_END();
-                        
+
                         if (key == tag.sv()) {
                            GLZ_PARSE_WS_COLON;
 
                            read<JSON>::handle_unknown<Opts>(key, value, ctx, it, end);
                            if (bool(ctx.error)) [[unlikely]]
                               return;
-                           
+
                            GLZ_SKIP_WS();
                            continue;
                         }

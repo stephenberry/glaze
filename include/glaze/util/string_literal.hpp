@@ -30,7 +30,8 @@ namespace glz
       constexpr string_literal& operator=(const string_literal&) noexcept = default;
       constexpr string_literal& operator=(string_literal&&) noexcept = default;
 
-      constexpr string_literal(const char (&str)[N]) noexcept {
+      constexpr string_literal(const char (&str)[N]) noexcept
+      {
          for (size_t i = 0; i < N; ++i) {
             value[i] = str[i];
          }
