@@ -156,7 +156,8 @@ namespace glz
          }
       };
 
-      template <reflectable T>
+      template <class T>
+         requires glaze_object_t<T> || reflectable<T>
       struct to<ERLANG, T> final
       {
          template <auto Opts, is_context Ctx, class... Args>
@@ -194,29 +195,18 @@ namespace glz
             });
          }
       };
-
-      template <class T>
-      struct to<ERLANG, T> final
-      {
-         template <auto Opts, is_context Ctx, output_buffer B>
-         GLZ_ALWAYS_INLINE static void op(T&& /* value */, Ctx&& /* ctx */, B&& /* b */) noexcept
-         {
-            static_assert(false_v<T>, "type is not supported");
-         }
-      };
-
    } // namespace detail
 
    template <class T>
-   concept write_term_supported = requires { detail::to<ERLANG, std::remove_cvref_t<T>>{}; };
+   concept write_eetf_supported = requires { detail::to<ERLANG, std::remove_cvref_t<T>>{}; };
 
    template <class T>
    struct write_format_supported<ERLANG, T>
    {
-      static const auto value = write_term_supported<T>;
+      static const auto value = write_eetf_supported<T>;
    };
 
-   template <uint8_t layout = glz::map, write_term_supported T, output_buffer Buffer>
+   template <uint8_t layout = glz::map, write_eetf_supported T, output_buffer Buffer>
    [[nodiscard]] error_ctx write_term(T&& value, Buffer&& buffer) noexcept
    {
       return write<opts{.format = ERLANG,
@@ -224,7 +214,7 @@ namespace glz
          std::forward<T>(value), std::forward<Buffer>(buffer));
    }
 
-   template <uint8_t layout = glz::map, write_term_supported T, raw_buffer Buffer>
+   template <uint8_t layout = glz::map, write_eetf_supported T, raw_buffer Buffer>
    [[nodiscard]] expected<size_t, error_ctx> write_term(T&& value, Buffer&& buffer) noexcept
    {
       return write<opts{.format = ERLANG,
@@ -232,7 +222,7 @@ namespace glz
          std::forward<T>(value), std::forward<Buffer>(buffer));
    }
 
-   template <write_term_supported T>
+   template <write_eetf_supported T>
    [[nodiscard]] expected<std::string, error_ctx> write_term(T&& value) noexcept
    {
       return write<opts{.format = ERLANG}>(std::forward<T>(value));

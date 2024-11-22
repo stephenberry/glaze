@@ -119,19 +119,14 @@ namespace glz
          requires(width <= sizeof(V) * 8)
       constexpr options& set(option b, V v)
       {
+         auto shift = static_cast<std::underlying_type_t<option>>(b);
          if constexpr (std::is_same_v<V, bool>) {
-            if (v) {
-               bits |= U(v) << static_cast<std::underlying_type_t<option>>(b);
-            }
-            else {
-               bits = bits & ~(U(1) << static_cast<std::underlying_type_t<option>>(b));
-            }
+            bits = (bits & ~(U(1) << shift)) | (U(v) << shift);
          }
          else {
             static constexpr auto m = mask<width, U>();
-            auto val = (U(static_cast<std::make_unsigned_t<V>>(v)) & m)
-                       << static_cast<std::underlying_type_t<option>>(b);
-            bits = (bits & ~(m << static_cast<std::underlying_type_t<option>>(b))) | val;
+            auto val = (U(static_cast<std::make_unsigned_t<V>>(v)) & m) << shift;
+            bits = (bits & ~(m << shift)) | val;
          }
 
          return *this;

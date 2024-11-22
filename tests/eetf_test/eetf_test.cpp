@@ -12,6 +12,8 @@
 #include "glaze/trace/trace.hpp"
 #include "ut/ut.hpp"
 
+#include "glaze/eetf/wrappers.hpp"
+
 using namespace glz::eetf;
 
 using namespace ut;
@@ -35,6 +37,8 @@ std::array<std::uint8_t, 92> term_proplist_001{
    109, 104, 2,   100, 0,   3,   97,  114, 114, 107, 0,  3,   9,   8,   7,   104, 2,   100, 0,   1,   100, 70,  64,
    9,   33,  251, 77,  18,  216, 74,  104, 2,   100, 0,  5,   104, 101, 108, 108, 111, 107, 0,   17,  72,  101, 108,
    108, 111, 32,  69,  114, 108, 97,  110, 103, 32,  84, 101, 114, 109, 104, 2,   100, 0,   1,   105, 97,  1,   106};
+
+std::array<std::uint8_t, 16> term_atom{131, 116, 0, 0, 0, 1, 100, 0, 1, 97, 100, 0, 3, 113, 119, 101};
 
 struct my_struct
 {
@@ -69,7 +73,19 @@ struct glz::meta<my_struct_meta>
    );
 };
 
-// static_assert(glz::write_eetf_supported<my_struct_meta>);
+struct atom_rw
+{
+   std::string a;
+};
+
+template <>
+struct glz::meta<atom_rw>
+{
+   using T = atom_rw;
+   static constexpr auto value = object("a", glz::detail::string_as_atom<&T::a>());
+};
+
+static_assert(glz::write_eetf_supported<my_struct_meta>);
 static_assert(glz::read_eetf_supported<my_struct_meta>);
 
 suite etf_tests = [] {
@@ -147,6 +163,21 @@ suite etf_tests = [] {
       expect(s.i == 123);
       expect(s.arr == decltype(s.arr){45, 67, 89});
       expect(s.hello == "Hello write");
+   };
+
+   "read_write_string_as_atom"_test = [] {
+      trace.begin("read_write_string_as_atom");
+      atom_rw s{}, r{};
+      auto ec = glz::read_term(s, term_atom);
+      expect(not ec) << glz::format_error(ec, "can't read");
+      expect(s.a == "qwe");
+
+      std::vector<std::uint8_t> out{};
+      expect(not glz::write_term(s, out)) << "can't write";
+      expect(not glz::read_term(r, out)) << "can't read agan";
+      expect(r.a == "qwe");
+
+      trace.end("read_write_string_as_atom");
    };
 };
 
