@@ -4471,6 +4471,20 @@ struct glz::meta<question_t>
    static constexpr auto value = object("ᇿ", &T::text);
 };
 
+struct question_escaped_t
+{
+   std::string text{};
+};
+
+template <>
+struct glz::meta<question_escaped_t>
+{
+   using T = question_escaped_t;
+   static constexpr auto value = object("ᇿ", &T::text, escape_unicode<"ᇿ">, &T::text);
+};
+
+static_assert(glz::escape_unicode<"ᇿ"> == R"(\u11FF)");
+
 suite unicode_tests = [] {
    "unicode"_test = [] {
       std::string str = "😀😃😄🍌💐🌹🥀🌺🌷🌸💮🏵️🌻🌼";
@@ -4479,7 +4493,7 @@ suite unicode_tests = [] {
       expect(not glz::write_json(str, buffer));
 
       str.clear();
-      expect(glz::read_json(str, buffer) == glz::error_code::none);
+      expect(not glz::read_json(str, buffer));
 
       expect(str == "😀😃😄🍌💐🌹🥀🌺🌷🌸💮🏵️🌻🌼");
    };
@@ -4487,7 +4501,7 @@ suite unicode_tests = [] {
    "unicode_unescaped_smile"_test = [] {
       std::string str = R"({"😀":"smile"})";
       unicode_keys_t obj{};
-      expect(glz::read_json(obj, str) == glz::error_code::none);
+      expect(not glz::read_json(obj, str));
 
       expect(obj.happy == "smile");
    };
@@ -4502,15 +4516,15 @@ suite unicode_tests = [] {
    "unicode_unescaped"_test = [] {
       std::string str = R"({"ᇿ":"ᇿ"})";
       question_t obj{};
-      expect(glz::read_json(obj, str) == glz::error_code::none);
+      expect(not glz::read_json(obj, str));
 
       expect(obj.text == "ᇿ");
    };
 
    "unicode_escaped"_test = [] {
       std::string str = R"({"\u11FF":"\u11FF"})";
-      question_t obj{};
-      expect(glz::read<glz::opts{.escaped_unicode_key_conversion = true}>(obj, str) == glz::error_code::none);
+      question_escaped_t obj{};
+      expect(not glz::read_json(obj, str));
 
       expect(obj.text == "ᇿ");
    };

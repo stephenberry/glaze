@@ -3,7 +3,7 @@
 
 #pragma once
 
-#include <algorithm> // for std::copy_n
+#include <array>
 #include <string_view>
 
 namespace glz
@@ -30,7 +30,11 @@ namespace glz
       constexpr string_literal& operator=(const string_literal&) noexcept = default;
       constexpr string_literal& operator=(string_literal&&) noexcept = default;
 
-      constexpr string_literal(const char (&str)[N]) noexcept { std::copy_n(str, N, value); }
+      constexpr string_literal(const char (&str)[N]) noexcept {
+         for (size_t i = 0; i < N; ++i) {
+            value[i] = str[i];
+         }
+      }
 
       char value[N];
       constexpr const char* begin() const noexcept { return value; }
@@ -50,7 +54,9 @@ namespace glz
    constexpr auto string_literal_from_view(sv str)
    {
       string_literal<N + 1> sl{};
-      std::copy_n(str.data(), str.size(), sl.value);
+      for (size_t i = 0; i < str.size(); ++i) {
+         sl[i] = str[i];
+      }
       *(sl.value + N) = '\0';
       return sl;
    }

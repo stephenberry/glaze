@@ -600,7 +600,7 @@ struct glz::meta<glz::error_code>
                                     "invalid_distribution_elements",
                                     "hostname_failure",
                                     "includer_error"};
-   static constexpr auto value = std::array{none, //
+   static constexpr std::array value{none, //
                                             version_mismatch, //
                                             invalid_header, //
                                             invalid_query, //
