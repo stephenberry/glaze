@@ -462,13 +462,6 @@ namespace glz
                (*s.type).emplace_back("null");
             }
             s.oneOf = std::vector<schematic>(N);
-            if (not tag_v<T>.empty()) {
-               if (not s.properties) {
-                  s.properties = std::map<std::string_view, schema, std::less<>>{}; // allocate
-               }
-               //(*s.properties)[tag_v<T>].type = "string";
-               (*s.properties)[tag_v<T>].enumeration = ids_v<T>;
-            }
 
             const auto& ids = ids_v<T>;
 
