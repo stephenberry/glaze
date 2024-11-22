@@ -204,8 +204,8 @@ namespace glz::detail
 namespace glz
 {
    template <string_literal Str>
-   inline constexpr auto escape_unicode = []() -> std::string_view {
-      static constexpr auto escaped = []{
+   inline constexpr auto escape_unicode = []() constexpr -> std::string_view {
+      static constexpr auto escaped = []() constexpr {
          constexpr auto output_length = detail::escaped_length(Str.sv());
          std::array<char, output_length + 1> result{}; // + 1 for null character
          const auto escaped = detail::escape_json_string(Str.sv(), output_length);
