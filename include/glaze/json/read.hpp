@@ -1929,6 +1929,17 @@ namespace glz
             },
             variant.index());
       }
+      
+      template <class T, string_literal Tag>
+      inline consteval bool contains_tag() {
+         auto& keys = reflect<T>::keys;
+         for (size_t i = 0; i < keys.size(); ++i) {
+            if (Tag.sv() == keys[i]) {
+               return true;
+            }
+         }
+         return false;
+      }
 
       template <class T>
          requires readable_map_t<T> || glaze_object_t<T> || reflectable<T>
@@ -2072,6 +2083,33 @@ namespace glz
                      }
                      ++it;
                      GLZ_INVALID_END();
+                     
+                     if constexpr (not tag.sv().empty() && not contains_tag<T, tag>()) {
+                        // For tagged variants we first check to see if the key matches the tag
+                        // We only need to do this if the tag is not part of the keys
+                        
+                        const auto start = it;
+                        skip_string_view<Opts>(ctx, it, end);
+                        if (bool(ctx.error)) [[unlikely]]
+                           return;
+                        const sv key{start, size_t(it - start)};
+                        ++it;
+                        GLZ_INVALID_END();
+                        
+                        if (key == tag.sv()) {
+                           GLZ_PARSE_WS_COLON;
+
+                           read<JSON>::handle_unknown<Opts>(key, value, ctx, it, end);
+                           if (bool(ctx.error)) [[unlikely]]
+                              return;
+                           
+                           GLZ_SKIP_WS();
+                           continue;
+                        }
+                        else {
+                           it = start; // reset the iterator
+                        }
+                     }
 
                      parse_and_invoke<Opts, T, hash_info<T>>(
                         [&](auto&& element, const size_t index) {
