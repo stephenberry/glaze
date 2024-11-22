@@ -1838,53 +1838,6 @@ namespace glz
          return may_escape;
       }
 
-      // Key parsing for meta objects or variants of meta objects.
-      // We do not check for an ending quote, we simply parse up to the quote
-      // TODO: We could expand this to compiletime known strings in general like enums
-      template <class T, auto Opts, string_literal tag = "">
-      GLZ_ALWAYS_INLINE std::string_view parse_object_key(is_context auto&& ctx, auto&& it, auto&& end)
-      {
-         // skip white space and escape characters and find the string
-         GLZ_SKIP_WS({});
-         match<'"'>(ctx, it);
-         if (bool(ctx.error)) [[unlikely]]
-            return {};
-
-         constexpr auto N = [] {
-            if constexpr (is_variant<T>) {
-               return std::variant_size_v<T>;
-            }
-            else {
-               return reflect<T>::size;
-            }
-         }();
-
-         if constexpr (Opts.escaped_unicode_key_conversion && keys_may_contain_escape<T>()) {
-            std::string& static_key = string_buffer();
-            read<JSON>::op<opening_handled<Opts>()>(static_key, ctx, it, end);
-            --it; // reveal the quote
-            return static_key;
-         }
-         else {
-            if constexpr (N > 0) {
-               static constexpr auto stats = key_stats<T, tag>();
-               if constexpr (stats.length_range < 24) {
-                  if ((it + stats.max_length) < end) [[likely]] {
-                     return parse_key_cx<Opts, stats>(it);
-                  }
-               }
-               auto start = it;
-               skip_till_quote(ctx, it, end);
-               return {start, size_t(it - start)};
-            }
-            else {
-               auto start = it;
-               skip_till_quote(ctx, it, end);
-               return {start, size_t(it - start)};
-            }
-         }
-      }
-
       template <pair_t T>
       struct from<JSON, T>
       {
@@ -2025,35 +1978,6 @@ namespace glz
 
                size_t read_count{}; // for partial_read
 
-               static constexpr bool key_conversion =
-                  Opts.escaped_unicode_key_conversion && keys_may_contain_escape<T>();
-
-               static constexpr bool direct_maps = (glaze_object_t<T> || reflectable<T>) //
-                                                   &&(not key_conversion) //
-                                                   && (tag.sv() == "") // TODO: handle tag_v with variants
-                                                   && bool(hash_info<T>.type);
-
-               decltype(auto) frozen_map = [&]() -> decltype(auto) {
-                  using V = decay_keep_volatile_t<decltype(value)>;
-                  if constexpr (!direct_maps && reflectable<T> && num_members > 0) {
-#if ((defined _MSC_VER) && (!defined __clang__))
-                     static thread_local auto cmap = make_map<V, Opts.use_hash_comparison>();
-#else
-                     static thread_local constinit auto cmap = make_map<V, Opts.use_hash_comparison>();
-#endif
-                     // We want to run this populate outside of the while loop
-                     populate_map(value, cmap); // Function required for MSVC to build
-                     return cmap;
-                  }
-                  else if constexpr (!direct_maps && glaze_object_t<T> && num_members > 0) {
-                     static constexpr auto cmap = make_map<T, Opts.use_hash_comparison>();
-                     return cmap;
-                  }
-                  else {
-                     return nullptr;
-                  }
-               }();
-
                bool first = true;
                while (true) {
                   if constexpr ((glaze_object_t<T> || reflectable<T>)&&(is_partial_read<T> || Opts.partial_read)) {
@@ -2108,34 +2032,40 @@ namespace glz
 
                      GLZ_SKIP_WS();
                   }
+                  
+                  constexpr auto reflection_type = glaze_object_t<T> || reflectable<T>;
 
-                  if constexpr ((glaze_object_t<T> || reflectable<T>)&&num_members == 0 && Opts.error_on_unknown_keys) {
-                     static_assert(false_v<T>, "This should be unreachable");
+                  if constexpr (reflection_type && (num_members == 0)) {
+                     if constexpr (Opts.error_on_unknown_keys) {
+                        static_assert(false_v<T>, "This should be unreachable");
+                     }
+                     else {
+                        GLZ_MATCH_QUOTE;
+                        GLZ_INVALID_END();
+
+                        // parsing to an empty object, but at this point the JSON presents keys
+
+                        // Unknown key handler does not unescape keys. Unknown escaped keys are
+                        // handled by the user.
+
+                        const auto start = it;
+                        skip_string_view<Opts>(ctx, it, end);
+                        if (bool(ctx.error)) [[unlikely]]
+                           return;
+                        const sv key{start, size_t(it - start)};
+                        ++it;
+                        GLZ_INVALID_END();
+
+                        GLZ_PARSE_WS_COLON;
+
+                        read<JSON>::handle_unknown<Opts>(key, value, ctx, it, end);
+                        if (bool(ctx.error)) [[unlikely]]
+                           return;
+                     }
                   }
-                  else if constexpr ((glaze_object_t<T> || reflectable<T>)&&num_members == 0) {
-                     GLZ_MATCH_QUOTE;
-                     GLZ_INVALID_END();
-
-                     // parsing to an empty object, but at this point the JSON presents keys
-
-                     // Unknown key handler does not unescape keys. Unknown escaped keys are
-                     // handled by the user.
-
-                     const auto start = it;
-                     skip_string_view<Opts>(ctx, it, end);
-                     if (bool(ctx.error)) [[unlikely]]
-                        return;
-                     const sv key{start, size_t(it - start)};
-                     ++it;
-                     GLZ_INVALID_END();
-
-                     GLZ_PARSE_WS_COLON;
-
-                     read<JSON>::handle_unknown<Opts>(key, value, ctx, it, end);
-                     if (bool(ctx.error)) [[unlikely]]
-                        return;
-                  }
-                  else if constexpr (direct_maps) {
+                  else if constexpr (reflection_type) {
+                     static_assert(bool(hash_info<T>.type));
+                     
                      if (*it != '"') [[unlikely]] {
                         ctx.error = error_code::expected_quote;
                         return;
@@ -2171,120 +2101,6 @@ namespace glz
                         value, ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
-                  }
-                  else if constexpr (glaze_object_t<T> || reflectable<T>) {
-                     static_assert(!std::same_as<std::decay_t<decltype(frozen_map)>, std::nullptr_t>);
-                     std::conditional_t<Opts.error_on_unknown_keys, const sv, sv> key =
-                        parse_object_key<T, ws_handled<Opts>(), tag>(ctx, it, end);
-                     if (bool(ctx.error)) [[unlikely]]
-                        return;
-
-                     // Because parse_object_key does not necessarily return a valid JSON key, the logic for handling
-                     // whitespace and the colon must run after checking if the key exists
-
-                     if constexpr (Opts.error_on_unknown_keys) {
-                        if (*it != '"') [[unlikely]] {
-                           ctx.error = error_code::unknown_key;
-                           return;
-                        }
-                        ++it;
-                        GLZ_INVALID_END();
-
-                        if (const auto& member_it = frozen_map.find(key); member_it != frozen_map.end()) [[likely]] {
-                           GLZ_PARSE_WS_COLON;
-
-                           if constexpr (Opts.error_on_missing_keys || is_partial_read<T> || Opts.partial_read) {
-                              // TODO: Kludge/hack. Should work but could easily cause memory issues with small
-                              // changes. At the very least if we are going to do this add a get_index method to the
-                              // maps and call that
-                              auto index = member_it - frozen_map.begin();
-                              fields[index] = true;
-                           }
-
-                           read_json_visitor<Opts>(value, member_it->second, ctx, it, end);
-                           if (bool(ctx.error)) [[unlikely]]
-                              return;
-                        }
-                        else [[unlikely]] {
-                           if constexpr (tag.sv().empty()) {
-                              it -= int64_t(key.size());
-                              ctx.error = error_code::unknown_key;
-                              return;
-                           }
-                           else if (key != tag.sv()) {
-                              it -= int64_t(key.size());
-                              ctx.error = error_code::unknown_key;
-                              return;
-                           }
-                           else {
-                              // We duplicate this code to avoid generating unreachable code
-                              GLZ_PARSE_WS_COLON;
-
-                              read<JSON>::handle_unknown<Opts>(key, value, ctx, it, end);
-                              if (bool(ctx.error)) [[unlikely]]
-                                 return;
-                           }
-                        }
-                     }
-                     else {
-                        if (const auto& member_it = frozen_map.find(key); member_it != frozen_map.end()) [[likely]] {
-                           // This code should not error on valid unknown keys
-                           // We arrived here because the key was perhaps found, but if the quote does not exist
-                           // then this does not necessarily mean we have a syntax error.
-                           // We may have just found the prefix of a longer, unknown key.
-                           if (*it != '"') [[unlikely]] {
-                              auto* start = key.data();
-                              skip_string_view<Opts>(ctx, it, end);
-                              if (bool(ctx.error)) [[unlikely]]
-                                 return;
-                              key = {start, size_t(it - start)};
-                              ++it;
-                              GLZ_INVALID_END();
-
-                              GLZ_PARSE_WS_COLON;
-
-                              read<JSON>::handle_unknown<Opts>(key, value, ctx, it, end);
-                              if (bool(ctx.error)) [[unlikely]]
-                                 return;
-                           }
-                           else {
-                              ++it; // skip the quote
-                              GLZ_INVALID_END();
-
-                              GLZ_PARSE_WS_COLON;
-
-                              if constexpr (Opts.error_on_missing_keys || is_partial_read<T> || Opts.partial_read) {
-                                 // TODO: Kludge/hack. Should work but could easily cause memory issues with small
-                                 // changes. At the very least if we are going to do this add a get_index method to
-                                 // the maps and call that
-                                 auto index = member_it - frozen_map.begin();
-                                 fields[index] = true;
-                              }
-
-                              read_json_visitor<ws_handled<Opts>()>(value, member_it->second, ctx, it, end);
-                              if (bool(ctx.error)) [[unlikely]]
-                                 return;
-                           }
-                        }
-                        else [[unlikely]] {
-                           if (*it != '"') {
-                              // we need to search until we find the ending quote of the key
-                              skip_string_view<Opts>(ctx, it, end);
-                              if (bool(ctx.error)) [[unlikely]]
-                                 return;
-                              auto start = key.data();
-                              key = {start, size_t(it - start)};
-                           }
-                           ++it; // skip the quote
-                           GLZ_INVALID_END();
-
-                           GLZ_PARSE_WS_COLON;
-
-                           read<JSON>::handle_unknown<Opts>(key, value, ctx, it, end);
-                           if (bool(ctx.error)) [[unlikely]]
-                              return;
-                        }
-                     }
                   }
                   else {
                      // For types like std::map, std::unordered_map
@@ -2572,19 +2388,11 @@ namespace glz
                         GLZ_INVALID_END();
 
                         sv key{};
-                        if constexpr (Opts.escaped_unicode_key_conversion && keys_may_contain_escape<T>()) {
-                           std::string& static_key = string_buffer();
-                           read<JSON>::op<opening_handled<Opts>()>(static_key, ctx, it, end);
-                           --it; // reveal the quote
-                           key = static_key;
-                        }
-                        else {
-                           auto* start = it;
-                           skip_string_view<Opts>(ctx, it, end);
-                           if (bool(ctx.error)) [[unlikely]]
-                              return;
-                           key = {start, size_t(it - start)};
-                        }
+                        auto* start = it;
+                        skip_string_view<Opts>(ctx, it, end);
+                        if (bool(ctx.error)) [[unlikely]]
+                           return;
+                        key = {start, size_t(it - start)};
 
                         GLZ_MATCH_QUOTE;
                         GLZ_INVALID_END();

@@ -80,11 +80,6 @@ namespace glz
 
       bool_t bools_as_numbers = false; // Read and write booleans with 1's and 0's
 
-      bool_t escaped_unicode_key_conversion =
-         false; // JSON does not require escaped unicode keys to match with unescaped UTF-8
-      // This enables automatic escaped unicode unescaping and matching for keys in glz::object, but it comes at a
-      // performance cost.
-
       bool_t quoted_num = false; // treat numbers as quoted or array-like types as having quoted numbers
       bool_t number = false; // read numbers as strings and write these string as numbers
       bool_t raw = false; // write out string like values without quotes
