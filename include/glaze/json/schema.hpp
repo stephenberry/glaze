@@ -469,18 +469,18 @@ namespace glz
                //(*s.properties)[tag_v<T>].type = "string";
                (*s.properties)[tag_v<T>].enumeration = ids_v<T>;
             }
-            
+
             const auto& ids = ids_v<T>;
 
             for_each<N>([&](auto I) {
                using V = std::decay_t<std::variant_alternative_t<I, T>>;
                auto& schema_val = (*s.oneOf)[I];
                to_json_schema<V>::template op<Opts>(schema_val, defs);
-               
+
                if (not schema_val.attributes.title) {
                   schema_val.attributes.title = ids[I];
                }
-               
+
                if constexpr ((glaze_object_t<V> || reflectable<V>)&&not tag_v<T>.empty()) {
                   if (not schema_val.required) {
                      schema_val.required = std::vector<sv>{}; // allocate
