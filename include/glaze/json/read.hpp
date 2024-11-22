@@ -1784,31 +1784,6 @@ namespace glz
             GLZ_VALID_END();
          }
       };
-
-      template <opts Opts>
-      GLZ_ALWAYS_INLINE void read_json_visitor(auto&& value, auto&& variant, auto&& ctx, auto&& it, auto&& end)
-      {
-         constexpr auto variant_size = std::variant_size_v<std::decay_t<decltype(variant)>>;
-         jump_table<variant_size>(
-            [&]<size_t I>() {
-               using V = decltype(get_member(value, std::get<I>(variant)));
-
-               if constexpr (const_value_v<V>) {
-                  if constexpr (Opts.error_on_const_read) {
-                     ctx.error = error_code::attempt_const_read;
-                  }
-                  else {
-                     // do not read anything into the const value
-                     skip_value<JSON>::op<Opts>(ctx, it, end);
-                  }
-               }
-               else {
-                  from<JSON, std::remove_cvref_t<V>>::template op<ws_handled<Opts>()>(
-                     get_member(value, std::get<I>(variant)), ctx, it, end);
-               }
-            },
-            variant.index());
-      }
       
       template <class T, string_literal Tag>
       inline consteval bool contains_tag() {
