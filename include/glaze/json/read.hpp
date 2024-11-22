@@ -2387,12 +2387,11 @@ namespace glz
                         GLZ_MATCH_QUOTE;
                         GLZ_INVALID_END();
 
-                        sv key{};
-                        auto* start = it;
+                        auto* key_start = it;
                         skip_string_view<Opts>(ctx, it, end);
                         if (bool(ctx.error)) [[unlikely]]
                            return;
-                        key = {start, size_t(it - start)};
+                        const sv key = {key_start, size_t(it - key_start)};
 
                         GLZ_MATCH_QUOTE;
                         GLZ_INVALID_END();
@@ -2415,7 +2414,7 @@ namespace glz
                                  static constexpr auto id_map = make_variant_id_map<T>();
                                  auto id_it = id_map.find(type_id);
                                  if (id_it != id_map.end()) [[likely]] {
-                                    it = start;
+                                    it = start; // we restart our object parsing now that we know the target type
                                     const auto type_index = id_it->second;
                                     if (value.index() != type_index) value = runtime_variant_map<T>()[type_index];
                                     std::visit(
