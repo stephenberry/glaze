@@ -754,11 +754,6 @@ struct opts {
 
   bool bools_as_numbers = false; // Read and write booleans with 1's and 0's
 
-  bool escaped_unicode_key_conversion =
-     false; // JSON does not require escaped unicode keys to match with unescaped UTF-8
-  // This enables automatic escaped unicode unescaping and matching for keys in glz::object, but it comes at a
-  // performance cost.
-
   bool quoted_num = false; // treat numbers as quoted or array-like types as having quoted numbers
   bool number = false; // read numbers as strings and write these string as numbers
   bool raw = false; // write out string like values without quotes
