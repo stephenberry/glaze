@@ -88,7 +88,7 @@ namespace glz
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept
          {
             write<JSON>::op<set_opt2<Opts, option::float_max_write_precision, fw_float_max_write_precision,
-                                     float_precision::full>()>(value.val, ctx, args...);
+                                     float_precision::full_precision>()>(value.val, ctx, args...);
          }
       };
 

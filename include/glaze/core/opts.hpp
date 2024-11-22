@@ -28,8 +28,8 @@ namespace glz
    inline constexpr uint8_t map = 0;
    inline constexpr uint8_t proplist = 1;
 
-   enum struct float_precision : uint8_t { //
-      full, //
+   enum float_precision : uint8_t { //
+      full_precision, //
       float32 = 4, //
       float64 = 8, //
       float128 = 16 //
@@ -98,6 +98,14 @@ namespace glz
 
    static_assert(std::uint8_t(option::last_option_terminator) <= sizeof(bits_class) * 8);
 
+   template <std::uint8_t width = 1, typename T>
+      requires(std::is_integral_v<T>)
+   consteval auto mask()
+   {
+      using U = std::make_unsigned_t<T>;
+      return U(-1) >> (sizeof(T) * 8 - width);
+   }
+
    template <typename U>
       requires(std::is_integral_v<U> && std::is_unsigned_v<U>)
    struct options
@@ -120,10 +128,10 @@ namespace glz
             }
          }
          else {
-            static constexpr U mask = ((U(1) << (width + 1)) - 1);
-            auto val = (U(static_cast<std::make_unsigned_t<V>>(v)) & mask)
+            static constexpr auto m = mask<width, U>();
+            auto val = (U(static_cast<std::make_unsigned_t<V>>(v)) & m)
                        << static_cast<std::underlying_type_t<option>>(b);
-            bits = (bits & ~(mask << static_cast<std::underlying_type_t<option>>(b))) | val;
+            bits = (bits & ~(m << static_cast<std::underlying_type_t<option>>(b))) | val;
          }
 
          return *this;
@@ -144,8 +152,8 @@ namespace glz
                                             .set(option::allow_conversions, true)
                                             .set(option::concatenate, true)
                                             .set(option::hide_non_invocable, true)
-                                            .set(option::indentation_char, ' ')
-                                            .set(option::indentation_width, 3)
+                                            .set<fw_indentation_char>(option::indentation_char, ' ')
+                                            .set<fw_indentation_width>(option::indentation_width, 3)
                                             .set(option::layout, rowwise);
 
    struct opts
@@ -154,7 +162,7 @@ namespace glz
       uint32_t format = JSON;
       bits_class bits = json_options_default;
 
-      char indentation_char = ' '; // Prettified JSON indentation char
+      // char indentation_char = ' '; // Prettified JSON indentation char
 
       enum struct internal : uint32_t {
          none = 0,
@@ -179,12 +187,7 @@ namespace glz
    consteval R get(const opts& o, option b)
    {
       using Ret = std::remove_cv_t<R>;
-
-      using UR = std::make_unsigned_t<Ret>; //  TODO make it bigger
-      static constexpr UR mask = (UR(1) << (width + 1)) - 1;
-
-      Ret ret = (o.bits >> uint8_t(b)) & mask;
-      return ret;
+      return (o.bits >> uint8_t(b)) & mask<width, Ret>();
    }
 
    template <>
@@ -219,6 +222,22 @@ namespace glz
    consteval bool has_layout(const opts& o, std::uint8_t layout)
    {
       return get<1, std::uint8_t>(o, option::layout) == layout;
+   }
+
+   consteval std::uint8_t get_indentation_width(const opts& o)
+   {
+      return get<fw_indentation_width, std::uint8_t>(o, option::indentation_width);
+   }
+
+   consteval char get_indentation_char(const opts& o)
+   {
+      return get<fw_indentation_char, char>(o, option::indentation_char);
+   }
+
+   consteval std::uint8_t get_float_precision(const opts& o)
+   {
+      return static_cast<float_precision>(
+         get<fw_float_max_write_precision, std::uint8_t>(o, option::float_max_write_precision));
    }
 
    template <opts Opts>

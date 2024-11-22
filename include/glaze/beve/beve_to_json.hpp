@@ -112,8 +112,8 @@ namespace glz
             return;
          }
 
-         static constexpr auto indentation_width =
-            get<fw_indentation_width, std::uint8_t>(Opts, option::indentation_width);
+         static constexpr auto indentation_width = get_indentation_width(Opts);
+         static constexpr auto indentation_char = get_indentation_char(Opts);
 
          const auto tag = uint8_t(*it);
          const auto type = tag & 0b00000'111;
@@ -161,7 +161,7 @@ namespace glz
             if constexpr (has(Opts, option::prettify)) {
                ctx.indentation_level += indentation_width;
                dump<'\n'>(out, ix);
-               dumpn<Opts.indentation_char>(ctx.indentation_level, out, ix);
+               dumpn<indentation_char>(ctx.indentation_level, out, ix);
             }
             else {
                ++ctx.indentation_level;
@@ -206,7 +206,7 @@ namespace glz
                      dump<','>(out, ix);
                      if constexpr (has(Opts, option::prettify)) {
                         dump<'\n'>(out, ix);
-                        dumpn<Opts.indentation_char>(ctx.indentation_level, out, ix);
+                        dumpn<indentation_char>(ctx.indentation_level, out, ix);
                      }
                   }
                }
@@ -240,7 +240,7 @@ namespace glz
                      dump<','>(out, ix);
                      if constexpr (has(Opts, option::prettify)) {
                         dump<'\n'>(out, ix);
-                        dumpn<Opts.indentation_char>(ctx.indentation_level, out, ix);
+                        dumpn<indentation_char>(ctx.indentation_level, out, ix);
                      }
                   }
                }
@@ -255,7 +255,7 @@ namespace glz
             if constexpr (has(Opts, option::prettify)) {
                ctx.indentation_level -= indentation_width;
                dump<'\n'>(out, ix);
-               dumpn<Opts.indentation_char>(ctx.indentation_level, out, ix);
+               dumpn<indentation_char>(ctx.indentation_level, out, ix);
             }
             else {
                --ctx.indentation_level;
@@ -507,7 +507,7 @@ namespace glz
                if constexpr (has(Opts, option::prettify)) {
                   ctx.indentation_level += indentation_width;
                   dump<'\n'>(out, ix);
-                  dumpn<Opts.indentation_char>(ctx.indentation_level, out, ix);
+                  dumpn<indentation_char>(ctx.indentation_level, out, ix);
                }
                else {
                   ++ctx.indentation_level;
@@ -530,7 +530,7 @@ namespace glz
                dump<','>(out, ix);
                if constexpr (has(Opts, option::prettify)) {
                   dump<'\n'>(out, ix);
-                  dumpn<Opts.indentation_char>(ctx.indentation_level, out, ix);
+                  dumpn<indentation_char>(ctx.indentation_level, out, ix);
                }
 
                if constexpr (has(Opts, option::prettify)) {
@@ -548,7 +548,7 @@ namespace glz
                dump<','>(out, ix);
                if constexpr (has(Opts, option::prettify)) {
                   dump<'\n'>(out, ix);
-                  dumpn<Opts.indentation_char>(ctx.indentation_level, out, ix);
+                  dumpn<indentation_char>(ctx.indentation_level, out, ix);
                }
 
                if constexpr (has(Opts, option::prettify)) {
@@ -566,7 +566,7 @@ namespace glz
                if constexpr (has(Opts, option::prettify)) {
                   ctx.indentation_level -= indentation_width;
                   dump<'\n'>(out, ix);
-                  dumpn<Opts.indentation_char>(ctx.indentation_level, out, ix);
+                  dumpn<indentation_char>(ctx.indentation_level, out, ix);
                }
                dump<'}'>(out, ix);
                break;

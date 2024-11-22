@@ -14,8 +14,8 @@ namespace glz
       template <opts Opts>
       inline void prettify_json(is_context auto&& ctx, auto&& it, auto&& end, auto&& b, auto&& ix)
       {
-         constexpr bool use_tabs = Opts.indentation_char == '\t';
-         constexpr auto indent_width = get<fw_indentation_width, std::uint8_t>(Opts, option::indentation_width);
+         constexpr bool use_tabs = get_indentation_char(Opts) == '\t';
+         constexpr auto indent_width = get_indentation_width(Opts);
 
          using enum json_type;
 

@@ -626,7 +626,7 @@ namespace glz
             }
             if constexpr (has(Opts, option::new_lines_in_arrays)) {
                dump<",\n", false>(b, ix);
-               dumpn_unchecked<Opts.indentation_char>(ctx.indentation_level, b, ix);
+               dumpn_unchecked<get_indentation_char(Opts)>(ctx.indentation_level, b, ix);
             }
             else {
                dump<", ", false>(b, ix);
@@ -655,7 +655,7 @@ namespace glz
                }
             }
             dump<",\n", false>(b, ix);
-            dumpn_unchecked<Opts.indentation_char>(ctx.indentation_level, b, ix);
+            dumpn_unchecked<get_indentation_char(Opts)>(ctx.indentation_level, b, ix);
          }
          else {
             if constexpr (vector_like<B>) {
@@ -699,13 +699,14 @@ namespace glz
             requires(writable_array_t<T> && (map_like_array ? (not has(Opts, option::concatenate)) : true))
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, B&& b, auto&& ix)
          {
-            static constexpr auto indentation_width =
-               get<fw_indentation_width, std::uint8_t>(Opts, option::indentation_width);
+            static constexpr auto indentation_width = get_indentation_width(Opts);
 
             if (empty_range(value)) {
                dump<"[]">(b, ix);
             }
             else {
+               static constexpr auto indentation_char = get_indentation_char(Opts);
+
                if constexpr (has(Opts, option::prettify)) {
                   if constexpr (has(Opts, option::new_lines_in_arrays)) {
                      ctx.indentation_level += indentation_width;
@@ -720,7 +721,7 @@ namespace glz
                   if constexpr (has(Opts, option::new_lines_in_arrays)) {
                      std::memcpy(&b[ix], "[\n", 2);
                      ix += 2;
-                     std::memset(&b[ix], Opts.indentation_char, ctx.indentation_level);
+                     std::memset(&b[ix], indentation_char, ctx.indentation_level);
                      ix += ctx.indentation_level;
                   }
                   else {
@@ -768,7 +769,7 @@ namespace glz
                         if constexpr (has(Opts, option::new_lines_in_arrays)) {
                            std::memcpy(&b[ix], ",\n", 2);
                            ix += 2;
-                           dumpn_unchecked<Opts.indentation_char>(ctx.indentation_level, b, ix);
+                           dumpn_unchecked<indentation_char>(ctx.indentation_level, b, ix);
                         }
                         else {
                            std::memcpy(&b[ix], ", ", 2);
@@ -789,7 +790,7 @@ namespace glz
                }
                if constexpr (has(Opts, option::prettify) && has(Opts, option::new_lines_in_arrays)) {
                   ctx.indentation_level -= indentation_width;
-                  dump_newline_indent<Opts.indentation_char>(ctx.indentation_level, b, ix);
+                  dump_newline_indent<indentation_char>(ctx.indentation_level, b, ix);
                }
 
                dump<']'>(b, ix);
@@ -804,14 +805,15 @@ namespace glz
                dump<'{'>(args...);
             }
 
+            static constexpr auto indentation_char = get_indentation_char(Opts);
+
             if (!empty_range(value)) {
-               static constexpr auto indentation_width =
-                  get<fw_indentation_width, std::uint8_t>(Opts, option::indentation_width);
+               static constexpr auto indentation_width = get_indentation_width(Opts);
 
                if constexpr (!has_opening_handled(Opts)) {
                   if constexpr (has(Opts, option::prettify)) {
                      ctx.indentation_level += indentation_width;
-                     dump_newline_indent<Opts.indentation_char>(ctx.indentation_level, args...);
+                     dump_newline_indent<indentation_char>(ctx.indentation_level, args...);
                   }
                }
 
@@ -893,7 +895,7 @@ namespace glz
                if constexpr (!has_closing_handled(Opts)) {
                   if constexpr (has(Opts, option::prettify)) {
                      ctx.indentation_level -= indentation_width;
-                     dump_newline_indent<Opts.indentation_char>(ctx.indentation_level, args...);
+                     dump_newline_indent<indentation_char>(ctx.indentation_level, args...);
                   }
                }
             }
@@ -915,8 +917,9 @@ namespace glz
                return dump<"{}">(b, ix);
             }
 
-            static constexpr auto indentation_width =
-               get<fw_indentation_width, std::uint8_t>(Opts, option::indentation_width);
+            static constexpr auto indentation_width = get_indentation_width(Opts);
+
+            static constexpr auto indentation_char = get_indentation_char(Opts);
 
             if constexpr (has(Opts, option::prettify)) {
                ctx.indentation_level += indentation_width;
@@ -926,7 +929,7 @@ namespace glz
                   }
                }
                dump<"{\n", false>(b, ix);
-               dumpn_unchecked<Opts.indentation_char>(ctx.indentation_level, b, ix);
+               dumpn_unchecked<indentation_char>(ctx.indentation_level, b, ix);
             }
             else {
                dump<'{'>(b, ix);
@@ -936,7 +939,7 @@ namespace glz
 
             if constexpr (has(Opts, option::prettify)) {
                ctx.indentation_level -= indentation_width;
-               dump_newline_indent<Opts.indentation_char>(ctx.indentation_level, b, ix);
+               dump_newline_indent<indentation_char>(ctx.indentation_level, b, ix);
                dump<'}', false>(b, ix);
             }
             else {
@@ -1024,12 +1027,13 @@ namespace glz
                   if constexpr (has(Opts, option::write_type_info) && !tag_v<T>.empty() && glaze_object_t<V>) {
                      constexpr auto num_members = reflect<V>::size;
 
+                     static constexpr auto indentation_char = get_indentation_char(Opts);
+
                      // must first write out type
                      if constexpr (has(Opts, option::prettify)) {
                         dump<"{\n">(args...);
-                        ctx.indentation_level +=
-                           get<fw_indentation_width, std::uint8_t>(Opts, option::indentation_width);
-                        dumpn<Opts.indentation_char>(ctx.indentation_level, args...);
+                        ctx.indentation_level += get_indentation_width(Opts);
+                        dumpn<indentation_char>(ctx.indentation_level, args...);
                         dump<'"'>(args...);
                         dump_maybe_empty(tag_v<T>, args...);
                         dump<"\": \"">(args...);
@@ -1040,7 +1044,7 @@ namespace glz
                         else {
                            dump<"\",\n">(args...);
                         }
-                        dumpn<Opts.indentation_char>(ctx.indentation_level, args...);
+                        dumpn<indentation_char>(ctx.indentation_level, args...);
                      }
                      else {
                         dump<"{\"">(args...);
@@ -1070,25 +1074,26 @@ namespace glz
          template <auto Opts, class... Args>
          static void op(auto&& wrapper, is_context auto&& ctx, Args&&... args)
          {
-            static constexpr auto indentation_width =
-               get<fw_indentation_width, std::uint8_t>(Opts, option::indentation_width);
+            static constexpr auto indentation_width = get_indentation_width(Opts);
+
+            static constexpr auto indentation_char = get_indentation_char(Opts);
 
             auto& value = wrapper.value;
             dump<'['>(args...);
             if constexpr (has(Opts, option::prettify)) {
                ctx.indentation_level += indentation_width;
-               dump_newline_indent<Opts.indentation_char>(ctx.indentation_level, args...);
+               dump_newline_indent<indentation_char>(ctx.indentation_level, args...);
             }
             dump<'"'>(args...);
             dump_maybe_empty(ids_v<T>[value.index()], args...);
             dump<"\",">(args...);
             if constexpr (has(Opts, option::prettify)) {
-               dump_newline_indent<Opts.indentation_char>(ctx.indentation_level, args...);
+               dump_newline_indent<indentation_char>(ctx.indentation_level, args...);
             }
             std::visit([&](auto&& v) { write<JSON>::op<Opts>(v, ctx, args...); }, value);
             if constexpr (has(Opts, option::prettify)) {
                ctx.indentation_level -= indentation_width;
-               dump_newline_indent<Opts.indentation_char>(ctx.indentation_level, args...);
+               dump_newline_indent<indentation_char>(ctx.indentation_level, args...);
             }
             dump<']'>(args...);
          }
@@ -1104,14 +1109,15 @@ namespace glz
             using V = std::decay_t<decltype(value.value)>;
             static constexpr auto N = glz::tuple_size_v<V>;
 
-            static constexpr auto indentation_width =
-               get<fw_indentation_width, std::uint8_t>(Opts, option::indentation_width);
+            static constexpr auto indentation_width = get_indentation_width(Opts);
+
+            static constexpr auto indentation_char = get_indentation_char(Opts);
 
             dump<'['>(args...);
             if constexpr (N > 0 && has(Opts, option::prettify)) {
                if constexpr (has(Opts, option::new_lines_in_arrays)) {
                   ctx.indentation_level += indentation_width;
-                  dump_newline_indent<Opts.indentation_char>(ctx.indentation_level, args...);
+                  dump_newline_indent<indentation_char>(ctx.indentation_level, args...);
                }
             }
             invoke_table<N>([&]<size_t I>() {
@@ -1129,7 +1135,7 @@ namespace glz
             if constexpr (N > 0 && has(Opts, option::prettify)) {
                if constexpr (has(Opts, option::new_lines_in_arrays)) {
                   ctx.indentation_level -= indentation_width;
-                  dump_newline_indent<Opts.indentation_char>(ctx.indentation_level, args...);
+                  dump_newline_indent<indentation_char>(ctx.indentation_level, args...);
                }
             }
             dump<']'>(args...);
@@ -1152,14 +1158,15 @@ namespace glz
                }
             }();
 
-            static constexpr auto indentation_width =
-               get<fw_indentation_width, std::uint8_t>(Opts, option::indentation_width);
+            static constexpr auto indentation_width = get_indentation_width(Opts);
+
+            static constexpr auto indentation_char = get_indentation_char(Opts);
 
             dump<'['>(args...);
             if constexpr (N > 0 && has(Opts, option::prettify)) {
                if constexpr (has(Opts, option::new_lines_in_arrays)) {
                   ctx.indentation_level += indentation_width;
-                  dump_newline_indent<Opts.indentation_char>(ctx.indentation_level, args...);
+                  dump_newline_indent<indentation_char>(ctx.indentation_level, args...);
                }
             }
             using V = std::decay_t<T>;
@@ -1181,7 +1188,7 @@ namespace glz
             if constexpr (N > 0 && has(Opts, option::prettify)) {
                if constexpr (has(Opts, option::new_lines_in_arrays)) {
                   ctx.indentation_level -= indentation_width;
-                  dump_newline_indent<Opts.indentation_char>(ctx.indentation_level, args...);
+                  dump_newline_indent<indentation_char>(ctx.indentation_level, args...);
                }
             }
             dump<']'>(args...);
@@ -1214,15 +1221,15 @@ namespace glz
          template <auto Options>
          static void op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix)
          {
-            static constexpr auto indentation_width =
-               get<fw_indentation_width, std::uint8_t>(Options, option::indentation_width);
+            static constexpr auto indentation_width = get_indentation_width(Options);
+            static constexpr auto indentation_char = get_indentation_char(Options);
 
             if constexpr (!has_opening_handled(Options)) {
                dump<'{'>(b, ix);
                if constexpr (has(Options, option::prettify)) {
                   ctx.indentation_level += indentation_width;
                   dump<'\n'>(b, ix);
-                  dumpn<Options.indentation_char>(ctx.indentation_level, b, ix);
+                  dumpn<indentation_char>(ctx.indentation_level, b, ix);
                }
             }
 
@@ -1277,7 +1284,7 @@ namespace glz
                if constexpr (has(Options, option::prettify)) {
                   ctx.indentation_level -= indentation_width;
                   dump<'\n'>(b, ix);
-                  dumpn<Options.indentation_char>(ctx.indentation_level, b, ix);
+                  dumpn<indentation_char>(ctx.indentation_level, b, ix);
                }
                dump<'}'>(b, ix);
             }
@@ -1291,15 +1298,15 @@ namespace glz
          template <auto Options>
          static void op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix)
          {
-            static constexpr auto indentation_width =
-               get<fw_indentation_width, std::uint8_t>(Options, option::indentation_width);
+            static constexpr auto indentation_width = get_indentation_width(Options);
+            static constexpr auto indentation_char = get_indentation_char(Options);
 
             if constexpr (!has_opening_handled(Options)) {
                dump<'{'>(b, ix);
                if constexpr (has(Options, option::prettify)) {
                   ctx.indentation_level += indentation_width;
                   dump<'\n'>(b, ix);
-                  dumpn<Options.indentation_char>(ctx.indentation_level, b, ix);
+                  dumpn<indentation_char>(ctx.indentation_level, b, ix);
                }
             }
 
@@ -1330,7 +1337,7 @@ namespace glz
             if constexpr (has(Options, option::prettify)) {
                ctx.indentation_level -= indentation_width;
                dump<'\n'>(b, ix);
-               dumpn<Options.indentation_char>(ctx.indentation_level, b, ix);
+               dumpn<indentation_char>(ctx.indentation_level, b, ix);
             }
             dump<'}'>(b, ix);
          }
@@ -1418,8 +1425,9 @@ namespace glz
                static constexpr auto Opts =
                   disable_write_unknown_off<opening_and_closing_handled_off<ws_handled_off<Options>()>()>();
 
-               static constexpr auto indentation_width =
-                  get<fw_indentation_width, std::uint8_t>(Options, option::indentation_width);
+               static constexpr auto indentation_width = get_indentation_width(Opts);
+
+               static constexpr auto indentation_char = get_indentation_char(Opts);
 
                if constexpr (!has_opening_handled(Options)) {
                   if constexpr (has(Options, option::prettify)) {
@@ -1432,7 +1440,7 @@ namespace glz
                      }
                      std::memcpy(&b[ix], "{\n", 2);
                      ix += 2;
-                     dumpn_unchecked<Options.indentation_char>(ctx.indentation_level, b, ix);
+                     dumpn_unchecked<indentation_char>(ctx.indentation_level, b, ix);
                   }
                   else {
                      dump<'{'>(b, ix);
@@ -1499,7 +1507,7 @@ namespace glz
                               }
                               std::memcpy(&b[ix], ",\n", 2);
                               ix += 2;
-                              dumpn_unchecked<Opts.indentation_char>(ctx.indentation_level, b, ix);
+                              dumpn_unchecked<indentation_char>(ctx.indentation_level, b, ix);
                            }
                            else {
                               if constexpr (vector_like<B>) {
@@ -1530,7 +1538,7 @@ namespace glz
                                  }
                                  std::memcpy(&b[ix], ",\n", 2);
                                  ix += 2;
-                                 dumpn_unchecked<Opts.indentation_char>(ctx.indentation_level, b, ix);
+                                 dumpn_unchecked<indentation_char>(ctx.indentation_level, b, ix);
                               }
                               else {
                                  if constexpr (vector_like<B>) {
@@ -1612,7 +1620,7 @@ namespace glz
                            }
                            std::memcpy(&b[ix], ",\n", 2);
                            ix += 2;
-                           dumpn_unchecked<Opts.indentation_char>(ctx.indentation_level, b, ix);
+                           dumpn_unchecked<indentation_char>(ctx.indentation_level, b, ix);
                         }
                         else {
                            if constexpr (vector_like<B>) {
@@ -1642,7 +1650,7 @@ namespace glz
                      }
                      std::memcpy(&b[ix], "\n", 1);
                      ++ix;
-                     dumpn_unchecked<Options.indentation_char>(ctx.indentation_level, b, ix);
+                     dumpn_unchecked<indentation_char>(ctx.indentation_level, b, ix);
                      std::memcpy(&b[ix], "}", 1);
                      ++ix;
                   }
@@ -1702,9 +1710,9 @@ namespace glz
             if constexpr (!has_opening_handled(Opts)) {
                dump<'{'>(b, ix);
                if constexpr (has(Opts, option::prettify)) {
-                  ctx.indentation_level += get<fw_indentation_width, std::uint8_t>(Opts, option::indentation_width);
+                  ctx.indentation_level += get_indentation_width(Opts);
                   dump<'\n'>(b, ix);
-                  dumpn<Opts.indentation_char>(ctx.indentation_level, b, ix);
+                  dumpn<get_indentation_char(Opts)>(ctx.indentation_level, b, ix);
                }
             }
 

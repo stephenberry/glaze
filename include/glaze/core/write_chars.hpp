@@ -64,20 +64,15 @@ namespace glz::detail
          using V = std::decay_t<decltype(value)>;
 
          if constexpr (std::floating_point<V>) {
-            if constexpr (get<fw_float_max_write_precision, std::uint8_t>(Opts, option::float_max_write_precision) >
-                             0 &&
-                          get<fw_float_max_write_precision, std::uint8_t>(Opts, option::float_max_write_precision) <
-                             sizeof(V)) {
+            if constexpr (get_float_precision(Opts) > 0 && get_float_precision(Opts) < sizeof(V)) {
                // we cast to a lower precision floating point value before writing out
-               if constexpr (get<fw_float_max_write_precision, std::uint8_t>(Opts, option::float_max_write_precision) ==
-                             8) {
+               if constexpr (get_float_precision(Opts) == float_precision::float64) {
                   const auto reduced = static_cast<double>(value);
                   const auto start = reinterpret_cast<char*>(&b[ix]);
                   const auto end = glz::to_chars(start, reduced);
                   ix += size_t(end - start);
                }
-               else if constexpr (get<fw_float_max_write_precision, std::uint8_t>(
-                                     Opts, option::float_max_write_precision) == 4) {
+               else if constexpr (get_float_precision(Opts) == float_precision::float32) {
                   const auto reduced = static_cast<float>(value);
                   const auto start = reinterpret_cast<char*>(&b[ix]);
                   const auto end = glz::to_chars(start, reduced);
