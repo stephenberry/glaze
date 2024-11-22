@@ -54,7 +54,9 @@ namespace glz
    constexpr auto string_literal_from_view(sv str)
    {
       string_literal<N + 1> sl{};
-      std::copy_n(str.data(), str.size(), sl.value);
+      for (size_t i = 0; i < str.size(); ++i) {
+         sl[i] = str[i];
+      }
       *(sl.value + N) = '\0';
       return sl;
    }
