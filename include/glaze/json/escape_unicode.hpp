@@ -205,7 +205,7 @@ namespace glz
 {
    template <string_literal Str>
    inline constexpr auto escape_unicode = []() constexpr -> std::string_view {
-      static constexpr auto escaped = []() constexpr {
+      constexpr auto escaped = []() constexpr {
          constexpr auto output_length = detail::escaped_length(Str.sv());
          std::array<char, output_length + 1> result{}; // + 1 for null character
          const auto escaped = detail::escape_json_string(Str.sv(), output_length);
@@ -215,6 +215,8 @@ namespace glz
          return result;
       }();
       
-      return {escaped.data(), escaped.size() - 1};
+      // make_static here required for GCC 12, in the future just make escaped static
+      auto& arr = detail::make_static<escaped>::value;
+      return {arr.data(), arr.size() - 1};
    }();
 }
