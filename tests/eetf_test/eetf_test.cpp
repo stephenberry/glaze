@@ -55,6 +55,9 @@ static_assert(glz::read_eetf_supported<my_struct>);
 struct my_struct_meta
 {
    my_struct_meta() : val_i{287}, val_d{3.14}, val_str{"Hello World"}, val_arr{1, 2, 3} {}
+   my_struct_meta(int i, double d, std::string s, std::vector<uint64_t> v)
+      : val_i{i}, val_d{d}, val_str{s}, val_arr{std::move(v)}
+   {}
 
    int val_i;
    double val_d;
@@ -165,6 +168,25 @@ suite etf_tests = [] {
       expect(s.hello == "Hello write");
    };
 
+   "write_term_meta"_test = [] {
+      trace.begin("write_term");
+      my_struct_meta sw(123, 2.71827, "Hello write meta", {45, 67, 89});
+      std::vector<std::uint8_t> buff;
+      auto ec = glz::write_term(sw, buff);
+      trace.end("write_term");
+
+      expect(not ec) << glz::format_error(ec, "can't write");
+
+      my_struct s{};
+      ec = glz::read_term(s, buff);
+      expect(not ec) << glz::format_error(ec, "can't read");
+
+      expect(s.d == 2.71827);
+      expect(s.i == 123);
+      expect(s.arr == decltype(s.arr){45, 67, 89});
+      expect(s.hello == "Hello write meta");
+   };
+
    "read_write_string_as_atom"_test = [] {
       trace.begin("read_write_string_as_atom");
       atom_rw s{}, r{};
@@ -174,7 +196,7 @@ suite etf_tests = [] {
 
       std::vector<std::uint8_t> out{};
       expect(not glz::write_term(s, out)) << "can't write";
-      expect(not glz::read_term(r, out)) << "can't read agan";
+      expect(not glz::read_term(r, out)) << "can't read again";
       expect(r.a == "qwe");
 
       trace.end("read_write_string_as_atom");
