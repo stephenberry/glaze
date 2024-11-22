@@ -3,6 +3,8 @@
 #include <array>
 #include <utility>
 
+#include <glaze/concepts/container_concepts.hpp>
+
 namespace glz::eetf
 {
 
@@ -19,7 +21,7 @@ struct in_impl<std::integer_sequence<int, N, Vs...>>
 {
 	bool value{false};
 
-	template <glz::detail::int_t T>
+	template <int_t T>
 	constexpr in_impl(const T & val)
 		: value{(val == N) || in_impl<std::integer_sequence<int, Vs...>>(val).value}
 	{
@@ -31,7 +33,7 @@ struct in_impl<std::integer_sequence<int, N>>
 {
 	bool value{false};
 
-	template <glz::detail::int_t T>
+	template <int_t T>
 	constexpr in_impl(const T & val)
 		: value{val == N}
 	{

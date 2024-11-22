@@ -66,22 +66,17 @@ namespace glz
    } // namespace detail
 
    template <class It>
-   GLZ_ALWAYS_INLINE void decode_version(is_context auto&& ctx, It&& it)
+   [[nodiscard]] GLZ_ALWAYS_INLINE int decode_version(is_context auto&& ctx, It&& it)
    {
       int index{};
       int version{};
       if (ei_decode_version(it, &index, &version) < 0) [[unlikely]] {
          ctx.error = error_code::syntax_error;
-         return;
-      }
-
-      // TODO find out where is 131 located in .h files
-      if (version != 131) [[unlikely]] {
-         ctx.error = error_code::version_mismatch;
-         return;
+         return -1;
       }
 
       std::advance(it, index);
+      return version;
    }
 
    template <class It>
@@ -111,7 +106,7 @@ namespace glz
       std::advance(it, index);
    }
 
-   template <detail::num_t T, class... Args>
+   template <num_t T, class... Args>
    GLZ_ALWAYS_INLINE void decode_number(T&& value, Args&&... args)
    {
       using namespace std::placeholders;
@@ -194,7 +189,7 @@ namespace glz
 
       if constexpr (resizable<T>) {
          value.resize(sz);
-         if constexpr (Opts.shrink_to_fit) {
+         if constexpr (check_shrink_to_fit(Opts)) {
             value.shrink_to_fit();
          }
       }
@@ -241,7 +236,7 @@ namespace glz
 
       if constexpr (resizable<T>) {
          value.resize(arity);
-         if constexpr (Opts.shrink_to_fit) {
+         if constexpr (check_shrink_to_fit(Opts)) {
             value.shrink_to_fit();
          }
       }
@@ -257,7 +252,7 @@ namespace glz
 
       for (std::size_t idx = 0; idx < arity; idx++) {
          V v;
-         detail::from<ERLANG, V>::template op<Opts>(v, ctx, it, end);
+         from<ERLANG, V>::template op<Opts>(v, ctx, it, end);
          if (bool(ctx.error)) [[unlikely]] {
             return;
          }
@@ -289,7 +284,7 @@ namespace glz
             decode_token(buff, std::forward<Ctx>(ctx), std::forward<It0>(it), std::forward<It1>(end));
             if constexpr (resizable<T>) {
                value.resize(sz);
-               if constexpr (Opts.shrink_to_fit) {
+               if constexpr (check_shrink_to_fit(Opts)) {
                   value.shrink_to_fit();
                }
             }

@@ -26,6 +26,10 @@ namespace glz
    inline constexpr uint8_t rowwise = 0;
    inline constexpr uint8_t colwise = 1;
 
+   // layout erlang term
+   inline constexpr uint8_t map = 0;
+   inline constexpr uint8_t proplist = 1;
+
    enum struct float_precision : uint8_t { //
       full, //
       float32 = 4, //
@@ -418,6 +422,12 @@ namespace glz
       auto ret = Opts;
       ret.format = TOML;
       return ret;
+   }
+
+   template <auto Opts, uint32_t Format>
+   consteval bool has_format()
+   {
+      return Opts.format == Format;
    }
 }
 
