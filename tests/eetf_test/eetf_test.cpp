@@ -9,10 +9,10 @@
 
 #include "glaze/eetf/read.hpp"
 #include "glaze/eetf/write.hpp"
+#include "glaze/eetf/wrappers.hpp"
+
 #include "glaze/trace/trace.hpp"
 #include "ut/ut.hpp"
-
-#include "glaze/eetf/wrappers.hpp"
 
 using namespace glz::eetf;
 
@@ -85,7 +85,7 @@ template <>
 struct glz::meta<atom_rw>
 {
    using T = atom_rw;
-   static constexpr auto value = object("a", glz::detail::string_as_atom<&T::a>());
+   static constexpr auto value = object("a", glz::atom_as_string<&T::a>);
 };
 
 static_assert(glz::write_eetf_supported<my_struct_meta>);

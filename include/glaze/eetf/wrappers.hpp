@@ -1,40 +1,32 @@
 #pragma once
 
-namespace glz::detail
+#include "glaze/core/wrappers.hpp"
+
+namespace glz
 {
-   template <class T>
-   struct string_as_atom_t
+   namespace detail
    {
-      T& val;
-   };
-
-   // Read and write string as atoms
-
-   template <class T>
-   struct from<ERLANG, string_as_atom_t<T>>
-   {
-      template <auto Opts>
-      static void op(auto&& value, auto&&... args)
+      template <is_opts_wrapper T>
+      struct from<ERLANG, T>
       {
-         eetf::atom a;
-         read<ERLANG>::op<Opts>(a, args...);
-         value.val = a;
-      }
-   };
+         template <auto Opts>
+         GLZ_ALWAYS_INLINE static void op(auto&& value, auto&&... args)
+         {
+            read<ERLANG>::op<opt_true<Opts, T::opts_bit>>(value.val, args...);
+         }
+      };
 
-   template <class T>
-   struct to<ERLANG, string_as_atom_t<T>>
-   {
-      template <auto Opts>
-      static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept
+      template <is_opts_wrapper T>
+      struct to<ERLANG, T>
       {
-         write<ERLANG>::op<Opts>(eetf::atom{value.val}, ctx, args...);
-      }
-   };
+         template <auto Opts>
+         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&&... args)
+         {
+            write<ERLANG>::op<opt_true<Opts, T::opts_bit>>(value.val, ctx, args...);
+         }
+      };
+   } // namespace detail
 
    template <auto MemPtr>
-   constexpr decltype(auto) string_as_atom()
-   {
-      return [](auto&& val) { return string_as_atom_t<std::decay_t<decltype(val.*MemPtr)>>{val.*MemPtr}; };
-   }
+   constexpr auto atom_as_string = detail::opts_wrapper<MemPtr, option::atom_as_string>();
 }
