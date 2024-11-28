@@ -93,6 +93,8 @@ namespace glz
                                                    // precision floats will be cast down to this precision
       layout = float_max_write_precision + fw_float_max_write_precision, // CSV row wise output/input
 
+      atom_as_string,
+
       last_option_terminator
    };
 
@@ -188,7 +190,7 @@ namespace glz
    template <>
    consteval bool get<1, bool>(const opts& o, option b)
    {
-      return o.bits & (uint64_t(1) << uint8_t(b));
+      return o.bits & (decltype(o.bits)(1) << uint8_t(b));
    }
 
    consteval bool has(const opts& o, option b) { return get<1, bool>(o, b); }
@@ -376,7 +378,7 @@ namespace glz
    constexpr auto opt_on()
    {
       opts ret = Opts;
-      ret.bits |= decltype(ret.bits)(1 << uint8_t(bit));
+      ret.bits |= decltype(ret.bits)(1) << uint8_t(bit);
       return ret;
    }
 
