@@ -46,7 +46,7 @@ namespace glz
       {
          auto it = std::lower_bound(items.begin(), items.end(), key,
                                     [](const std::pair<K, V>& item, const K& key) { return item.first < key; });
-         if (it != items.cend() && !(key < it->first)) { // Equivalent to key == it->first
+         if (it != items.end() && !(key < it->first)) { // Equivalent to key == it->first
             return std::make_pair(it, true);
          }
          return std::make_pair(it, false);
@@ -55,8 +55,8 @@ namespace glz
      public:
       using key_type = K;
       using mapped_type = V;
-      using value_type = std::pair<const K&, V&>;
-      using const_value_type = std::pair<const K&, const V&>;
+      using value_type = std::pair<K, V>;
+      using const_value_type = const std::pair<K, V>;
 
       // Forward declaration of iterator classes
       class iterator;
@@ -77,13 +77,6 @@ namespace glz
          async_map* map;
          std::shared_ptr<std::shared_lock<std::shared_mutex>> shared_lock_ptr;
          std::shared_ptr<std::unique_lock<std::shared_mutex>> unique_lock_ptr;
-
-         struct proxy
-         {
-            std::pair<const K&, V&> p;
-
-            std::pair<const K&, V&>* operator->() { return &p; }
-         };
 
         public:
          iterator(typename std::vector<std::pair<K, V>>::iterator item_it, async_map* map,
@@ -143,9 +136,9 @@ namespace glz
             return tmp;
          }
 
-         value_type operator*() const { return {item_it->first, item_it->second}; }
+         reference operator*() const { return *item_it; }
 
-         proxy operator->() const { return proxy{item_it->first, item_it->second}; }
+         pointer operator->() const { return &(*item_it); }
 
          // Equality Comparison
          bool operator==(const iterator& other) const { return item_it == other.item_it; }
@@ -167,13 +160,6 @@ namespace glz
          typename std::vector<std::pair<K, V>>::const_iterator item_it;
          const async_map* map;
          std::shared_ptr<std::shared_lock<std::shared_mutex>> shared_lock_ptr;
-
-         struct proxy
-         {
-            std::pair<const K&, const V&> p;
-
-            const std::pair<const K&, const V&>* operator->() const { return &p; }
-         };
 
         public:
          const_iterator(typename std::vector<std::pair<K, V>>::const_iterator item_it, const async_map* map,
@@ -224,9 +210,9 @@ namespace glz
             return tmp;
          }
 
-         value_type operator*() const { return {item_it->first, item_it->second}; }
+         reference operator*() const { return *item_it; }
 
-         proxy operator->() const { return proxy{item_it->first, item_it->second}; }
+         pointer operator->() const { return &(*item_it); }
 
          // Equality Comparison
          bool operator==(const const_iterator& other) const { return item_it == other.item_it; }
@@ -239,12 +225,12 @@ namespace glz
       class value_proxy
       {
         private:
-         V& value_ref;
+         value_type& value_ref;
          std::shared_ptr<std::shared_lock<std::shared_mutex>> shared_lock_ptr;
          std::shared_ptr<std::unique_lock<std::shared_mutex>> unique_lock_ptr;
 
         public:
-         value_proxy(V& value_ref, std::shared_ptr<std::shared_lock<std::shared_mutex>> existing_shared_lock,
+         value_proxy(value_type& value_ref, std::shared_ptr<std::shared_lock<std::shared_mutex>> existing_shared_lock,
                      std::shared_ptr<std::unique_lock<std::shared_mutex>> existing_unique_lock = nullptr)
             : value_ref(value_ref), shared_lock_ptr(existing_shared_lock), unique_lock_ptr(existing_unique_lock)
          {
@@ -259,15 +245,15 @@ namespace glz
          value_proxy& operator=(value_proxy&&) = delete;
 
          // Access the value
-         V& value() { return value_ref; }
+         V& value() { return value_ref.second; }
 
-         const V& value() const { return value_ref; }
+         const V& value() const { return value_ref.second; }
 
          // Arrow Operator
-         V* operator->() { return &value_ref; }
+         value_type* operator->() { return &value_ref; }
 
          // Implicit Conversion to V&
-         operator V&() { return value_ref; }
+         operator V&() { return value_ref.second; }
 
          bool operator==(const V& other) const { return value() == other; }
       };
@@ -276,11 +262,11 @@ namespace glz
       class const_value_proxy
       {
         private:
-         const V& value_ref;
+         const_value_type& value_ref;
          std::shared_ptr<std::shared_lock<std::shared_mutex>> shared_lock_ptr;
 
         public:
-         const_value_proxy(const V& value_ref,
+         const_value_proxy(const_value_type& value_ref,
                            std::shared_ptr<std::shared_lock<std::shared_mutex>> existing_shared_lock)
             : value_ref(value_ref), shared_lock_ptr(existing_shared_lock)
          {
@@ -295,13 +281,13 @@ namespace glz
          const_value_proxy& operator=(const_value_proxy&&) = delete;
 
          // Access the value
-         const V& value() const { return value_ref; }
+         const V& value() const { return value_ref.second; }
 
          // Arrow Operator
-         const V* operator->() const { return &value_ref; }
+         const_value_type* operator->() const { return &value_ref; }
 
          // Implicit Conversion to const V&
-         operator const V&() const { return value_ref; }
+         operator const V&() const { return value_ref.second; }
 
          bool operator==(const V& other) const { return value() == other; }
       };
@@ -430,7 +416,7 @@ namespace glz
          auto [it, found] = binary_search_key(key);
 
          if (found) {
-            return value_proxy(it->second, shared_lock_ptr);
+            return value_proxy(*it, shared_lock_ptr);
          }
          else {
             throw std::out_of_range("Key not found");
@@ -446,7 +432,7 @@ namespace glz
          auto [it, found] = binary_search_key(key);
 
          if (found) {
-            return const_value_proxy(it->second, shared_lock_ptr);
+            return const_value_proxy(*it, shared_lock_ptr);
          }
          else {
             throw std::out_of_range("Key not found");
