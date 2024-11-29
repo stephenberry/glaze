@@ -141,6 +141,18 @@ namespace glz
 
          // Inequality Comparison
          bool operator!=(const iterator& other) const { return !(*this == other); }
+
+         // Comparison operators with iterator
+         bool operator<(const iterator& other) const { return item_it < other.item_it; }
+         bool operator>(const iterator& other) const { return item_it > other.item_it; }
+         bool operator<=(const iterator& other) const { return item_it <= other.item_it; }
+         bool operator>=(const iterator& other) const { return item_it >= other.item_it; }
+
+         // Comparison operators with const_iterator
+         bool operator<(const const_iterator& other) const { return item_it < other.item_it; }
+         bool operator>(const const_iterator& other) const { return item_it > other.item_it; }
+         bool operator<=(const const_iterator& other) const { return item_it <= other.item_it; }
+         bool operator>=(const const_iterator& other) const { return item_it >= other.item_it; }
       };
 
       class const_iterator
@@ -214,6 +226,18 @@ namespace glz
 
          // Inequality Comparison
          bool operator!=(const const_iterator& other) const { return !(*this == other); }
+
+         // Comparison operators with const_iterator
+         bool operator<(const const_iterator& other) const { return item_it < other.item_it; }
+         bool operator>(const const_iterator& other) const { return item_it > other.item_it; }
+         bool operator<=(const const_iterator& other) const { return item_it <= other.item_it; }
+         bool operator>=(const const_iterator& other) const { return item_it >= other.item_it; }
+
+         // Comparison operators with iterator
+         bool operator<(const iterator& other) const { return item_it < other.item_it; }
+         bool operator>(const iterator& other) const { return item_it > other.item_it; }
+         bool operator<=(const iterator& other) const { return item_it <= other.item_it; }
+         bool operator>=(const iterator& other) const { return item_it >= other.item_it; }
       };
 
       // Value Proxy Class Definition
