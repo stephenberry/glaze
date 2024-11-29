@@ -201,6 +201,7 @@ suite thread_pool = [] {
 
 suite async_map_tests = [] {
    "async_map"_test = [] {
+      // Don't do this. This is merely a unit test, async_map allocates a unique_ptr underneath
       glz::async_map<std::string, std::unique_ptr<std::atomic<int>>> map;
       map.emplace("one", std::make_unique<std::atomic<int>>(1));
       map.emplace("two", std::make_unique<std::atomic<int>>(2));
@@ -220,6 +221,34 @@ suite async_map_tests = [] {
 
       expect(*map.at("one").value() == 3);
       expect(*map.at("two").value() == 3);
+   };
+   
+   "async_map atomic"_test = [] {
+      glz::async_map<std::string, std::atomic<int>> map;
+      map.emplace("one", 1);
+      map.emplace("two", 2);
+      expect(map.at("one").value() == 1);
+      expect(map.at("two").value() == 2);
+      expect(map.size() == 2);
+
+      for (const auto& [key, value] : map) {
+         expect(key.size() == 3);
+         expect(value < 3);
+      }
+
+      for (auto&& [key, value] : map) {
+         expect(key.size() == 3);
+         value = 3;
+      }
+
+      expect(map.at("one").value() == 3);
+      expect(map.at("two").value() == 3);
+      
+      map.at("one").value() = 1;
+      
+      for (auto it = map.begin(); it < map.end(); ++it) {
+         std::cout << it->second << '\n';
+      }
    };
 };
 

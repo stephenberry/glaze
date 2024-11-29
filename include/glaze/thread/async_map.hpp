@@ -1,6 +1,3 @@
-// Glaze Library
-// For the license information refer to glaze.hpp
-
 #pragma once
 
 // Provides a semi-safe flat map
@@ -18,6 +15,7 @@
 #include <vector>
 
 #include "glaze/core/common.hpp"
+#include "glaze/util/type_traits.hpp"
 
 // This async_map is intended to hold thread safe value types (V)
 
@@ -27,26 +25,38 @@ namespace glz
    struct async_map
    {
      private:
-      std::vector<K> keys;
-      std::vector<V> values;
+      std::vector<std::unique_ptr<std::pair<K, V>>> items;
       mutable std::shared_mutex mutex;
 
       // Helper function to perform binary search.
       // Returns a pair of iterator and a boolean indicating if the key was found.
-      std::pair<typename std::vector<K>::const_iterator, bool> binary_search_key(const K& key) const
+      auto binary_search_key(const K& key) const
       {
-         auto it = std::lower_bound(keys.cbegin(), keys.cend(), key);
-         if (it != keys.cend() && !(key < *it)) { // Equivalent to key == *it
-            return {it, true};
+         auto it = std::lower_bound(
+            items.cbegin(), items.cend(), key,
+            [](const std::unique_ptr<std::pair<K, V>>& item_ptr, const K& key) { return item_ptr->first < key; });
+         if (it != items.cend() && !(key < (*it)->first)) { // Equivalent to key == (*it)->first
+            return std::make_pair(it, true);
          }
-         return {it, false};
+         return std::make_pair(it, false);
+      }
+
+      auto binary_search_key(const K& key)
+      {
+         auto it = std::lower_bound(
+            items.begin(), items.end(), key,
+            [](const std::unique_ptr<std::pair<K, V>>& item_ptr, const K& key) { return item_ptr->first < key; });
+         if (it != items.end() && !(key < (*it)->first)) { // Equivalent to key == (*it)->first
+            return std::make_pair(it, true);
+         }
+         return std::make_pair(it, false);
       }
 
      public:
       using key_type = K;
       using mapped_type = V;
-      using value_type = std::pair<const K&, V&>;
-      using const_value_type = std::pair<const K&, const V&>;
+      using value_type = std::pair<K, V>;
+      using const_value_type = const std::pair<K, V>;
 
       // Forward declaration of iterator classes
       class iterator;
@@ -63,28 +73,16 @@ namespace glz
          using reference = value_type&;
 
         private:
-         typename std::vector<K>::const_iterator key_it;
-         typename std::vector<V>::iterator value_it;
+         typename std::vector<std::unique_ptr<std::pair<K, V>>>::iterator item_it;
          async_map* map;
          std::shared_ptr<std::shared_lock<std::shared_mutex>> shared_lock_ptr;
          std::shared_ptr<std::unique_lock<std::shared_mutex>> unique_lock_ptr;
 
-         struct proxy
-         {
-            std::pair<const K&, V&> p;
-
-            std::pair<const K&, V&>* operator->() { return &p; }
-         };
-
         public:
-         iterator(typename std::vector<K>::const_iterator key_it, typename std::vector<V>::iterator value_it,
-                  async_map* map, std::shared_ptr<std::shared_lock<std::shared_mutex>> existing_shared_lock = nullptr,
+         iterator(typename std::vector<std::unique_ptr<std::pair<K, V>>>::iterator item_it, async_map* map,
+                  std::shared_ptr<std::shared_lock<std::shared_mutex>> existing_shared_lock = nullptr,
                   std::shared_ptr<std::unique_lock<std::shared_mutex>> existing_unique_lock = nullptr)
-            : key_it(key_it),
-              value_it(value_it),
-              map(map),
-              shared_lock_ptr(existing_shared_lock),
-              unique_lock_ptr(existing_unique_lock)
+            : item_it(item_it), map(map), shared_lock_ptr(existing_shared_lock), unique_lock_ptr(existing_unique_lock)
          {
             // Acquire a shared lock only if no lock is provided
             if (!shared_lock_ptr && !unique_lock_ptr) {
@@ -94,8 +92,7 @@ namespace glz
 
          // Copy Constructor
          iterator(const iterator& other)
-            : key_it(other.key_it),
-              value_it(other.value_it),
+            : item_it(other.item_it),
               map(other.map),
               shared_lock_ptr(other.shared_lock_ptr),
               unique_lock_ptr(other.unique_lock_ptr)
@@ -103,8 +100,7 @@ namespace glz
 
          // Move Constructor
          iterator(iterator&& other) noexcept
-            : key_it(std::move(other.key_it)),
-              value_it(std::move(other.value_it)),
+            : item_it(std::move(other.item_it)),
               map(other.map),
               shared_lock_ptr(std::move(other.shared_lock_ptr)),
               unique_lock_ptr(std::move(other.unique_lock_ptr))
@@ -114,8 +110,7 @@ namespace glz
          iterator& operator=(const iterator& other)
          {
             if (this != &other) {
-               key_it = other.key_it;
-               value_it = other.value_it;
+               item_it = other.item_it;
                map = other.map;
                shared_lock_ptr = other.shared_lock_ptr;
                unique_lock_ptr = other.unique_lock_ptr;
@@ -126,8 +121,7 @@ namespace glz
          // Pre-increment
          iterator& operator++()
          {
-            ++key_it;
-            ++value_it;
+            ++item_it;
             return *this;
          }
 
@@ -139,15 +133,27 @@ namespace glz
             return tmp;
          }
 
-         value_type operator*() const { return {*key_it, *value_it}; }
+         reference operator*() const { return *(*item_it); }
 
-         proxy operator->() const { return proxy(*key_it, *value_it); }
+         pointer operator->() const { return (*item_it).get(); }
 
          // Equality Comparison
-         bool operator==(const iterator& other) const { return key_it == other.key_it; }
+         bool operator==(const iterator& other) const { return item_it == other.item_it; }
 
          // Inequality Comparison
          bool operator!=(const iterator& other) const { return !(*this == other); }
+
+         // Comparison operators with iterator
+         bool operator<(const iterator& other) const { return item_it < other.item_it; }
+         bool operator>(const iterator& other) const { return item_it > other.item_it; }
+         bool operator<=(const iterator& other) const { return item_it <= other.item_it; }
+         bool operator>=(const iterator& other) const { return item_it >= other.item_it; }
+
+         // Comparison operators with const_iterator
+         bool operator<(const const_iterator& other) const { return item_it < other.item_it; }
+         bool operator>(const const_iterator& other) const { return item_it > other.item_it; }
+         bool operator<=(const const_iterator& other) const { return item_it <= other.item_it; }
+         bool operator>=(const const_iterator& other) const { return item_it >= other.item_it; }
       };
 
       class const_iterator
@@ -160,23 +166,15 @@ namespace glz
          using reference = const value_type&;
 
         private:
-         typename std::vector<K>::const_iterator key_it;
-         typename std::vector<V>::const_iterator value_it;
+         typename std::vector<std::unique_ptr<std::pair<K, V>>>::const_iterator item_it;
          const async_map* map;
          std::shared_ptr<std::shared_lock<std::shared_mutex>> shared_lock_ptr;
 
-         struct proxy
-         {
-            std::pair<const K&, const V&> p;
-
-            const std::pair<const K&, const V&>* operator->() const { return &p; }
-         };
-
         public:
-         const_iterator(typename std::vector<K>::const_iterator key_it,
-                        typename std::vector<V>::const_iterator value_it, const async_map* map,
+         const_iterator(typename std::vector<std::unique_ptr<std::pair<K, V>>>::const_iterator item_it,
+                        const async_map* map,
                         std::shared_ptr<std::shared_lock<std::shared_mutex>> existing_shared_lock = nullptr)
-            : key_it(key_it), value_it(value_it), map(map), shared_lock_ptr(existing_shared_lock)
+            : item_it(item_it), map(map), shared_lock_ptr(existing_shared_lock)
          {
             // Acquire a shared lock only if no lock is provided
             if (!shared_lock_ptr) {
@@ -186,23 +184,19 @@ namespace glz
 
          // Copy Constructor
          const_iterator(const const_iterator& other)
-            : key_it(other.key_it), value_it(other.value_it), map(other.map), shared_lock_ptr(other.shared_lock_ptr)
+            : item_it(other.item_it), map(other.map), shared_lock_ptr(other.shared_lock_ptr)
          {}
 
          // Move Constructor
          const_iterator(const_iterator&& other) noexcept
-            : key_it(std::move(other.key_it)),
-              value_it(std::move(other.value_it)),
-              map(other.map),
-              shared_lock_ptr(std::move(other.shared_lock_ptr))
+            : item_it(std::move(other.item_it)), map(other.map), shared_lock_ptr(std::move(other.shared_lock_ptr))
          {}
 
          // Copy Assignment
          const_iterator& operator=(const const_iterator& other)
          {
             if (this != &other) {
-               key_it = other.key_it;
-               value_it = other.value_it;
+               item_it = other.item_it;
                map = other.map;
                shared_lock_ptr = other.shared_lock_ptr;
             }
@@ -212,8 +206,7 @@ namespace glz
          // Pre-increment
          const_iterator& operator++()
          {
-            ++key_it;
-            ++value_it;
+            ++item_it;
             return *this;
          }
 
@@ -225,27 +218,40 @@ namespace glz
             return tmp;
          }
 
-         value_type operator*() const { return {*key_it, *value_it}; }
+         reference operator*() const { return *(*item_it); }
 
-         proxy operator->() const { return proxy(*key_it, *value_it); }
+         pointer operator->() const { return (*item_it).get(); }
 
          // Equality Comparison
-         bool operator==(const const_iterator& other) const { return key_it == other.key_it; }
+         bool operator==(const const_iterator& other) const { return item_it == other.item_it; }
 
          // Inequality Comparison
          bool operator!=(const const_iterator& other) const { return !(*this == other); }
+
+         // Comparison operators with const_iterator
+         bool operator<(const const_iterator& other) const { return item_it < other.item_it; }
+         bool operator>(const const_iterator& other) const { return item_it > other.item_it; }
+         bool operator<=(const const_iterator& other) const { return item_it <= other.item_it; }
+         bool operator>=(const const_iterator& other) const { return item_it >= other.item_it; }
+
+         // Comparison operators with iterator
+         bool operator<(const iterator& other) const { return item_it < other.item_it; }
+         bool operator>(const iterator& other) const { return item_it > other.item_it; }
+         bool operator<=(const iterator& other) const { return item_it <= other.item_it; }
+         bool operator>=(const iterator& other) const { return item_it >= other.item_it; }
       };
 
       // Value Proxy Class Definition
       class value_proxy
       {
         private:
-         V& value_ref;
+         value_type& value_ref;
          std::shared_ptr<std::shared_lock<std::shared_mutex>> shared_lock_ptr;
          std::shared_ptr<std::unique_lock<std::shared_mutex>> unique_lock_ptr;
 
         public:
-         value_proxy(V& value_ref, std::shared_ptr<std::shared_lock<std::shared_mutex>> existing_shared_lock,
+         value_proxy(value_type& value_ref,
+                     std::shared_ptr<std::shared_lock<std::shared_mutex>> existing_shared_lock = nullptr,
                      std::shared_ptr<std::unique_lock<std::shared_mutex>> existing_unique_lock = nullptr)
             : value_ref(value_ref), shared_lock_ptr(existing_shared_lock), unique_lock_ptr(existing_unique_lock)
          {
@@ -260,15 +266,15 @@ namespace glz
          value_proxy& operator=(value_proxy&&) = delete;
 
          // Access the value
-         V& value() { return value_ref; }
+         V& value() { return value_ref.second; }
 
-         const V& value() const { return value_ref; }
+         const V& value() const { return value_ref.second; }
 
          // Arrow Operator
-         V* operator->() { return &value_ref; }
+         value_type* operator->() { return &value_ref; }
 
          // Implicit Conversion to V&
-         operator V&() { return value_ref; }
+         operator V&() { return value_ref.second; }
 
          bool operator==(const V& other) const { return value() == other; }
       };
@@ -277,11 +283,11 @@ namespace glz
       class const_value_proxy
       {
         private:
-         const V& value_ref;
+         const_value_type& value_ref;
          std::shared_ptr<std::shared_lock<std::shared_mutex>> shared_lock_ptr;
 
         public:
-         const_value_proxy(const V& value_ref,
+         const_value_proxy(const_value_type& value_ref,
                            std::shared_ptr<std::shared_lock<std::shared_mutex>> existing_shared_lock)
             : value_ref(value_ref), shared_lock_ptr(existing_shared_lock)
          {
@@ -296,15 +302,21 @@ namespace glz
          const_value_proxy& operator=(const_value_proxy&&) = delete;
 
          // Access the value
-         const V& value() const { return value_ref; }
+         const V& value() const { return value_ref.second; }
 
          // Arrow Operator
-         const V* operator->() const { return &value_ref; }
+         const_value_type* operator->() const { return &value_ref; }
 
          // Implicit Conversion to const V&
-         operator const V&() const { return value_ref; }
+         operator const V&() const { return value_ref.second; }
 
          bool operator==(const V& other) const { return value() == other; }
+      };
+
+      
+      template <class KeyType>
+      [[deprecated("operator[] is not allowed with async_map because it would require expensive unique locks")]] value_proxy operator[](const KeyType&) {
+         static_assert(false_v<KeyType>);
       };
 
       // Insert method behaves like std::map::insert
@@ -316,15 +328,12 @@ namespace glz
          auto [it, found] = binary_search_key(pair.first);
 
          if (found) {
-            auto index = std::distance(keys.cbegin(), it);
-            return {iterator(keys.cbegin() + index, values.begin() + index, this, nullptr, unique_lock_ptr), false};
+            return {iterator(it, this, nullptr, unique_lock_ptr), false};
          }
          else {
             // Insert while maintaining sorted order
-            auto index = std::distance(keys.cbegin(), it);
-            keys.insert(it, pair.first);
-            values.insert(values.begin() + index, pair.second);
-            return {iterator(keys.cbegin() + index, values.begin() + index, this, nullptr, unique_lock_ptr), true};
+            it = items.insert(it, std::make_unique<std::pair<K, V>>(pair));
+            return {iterator(it, this, nullptr, unique_lock_ptr), true};
          }
       }
 
@@ -337,15 +346,13 @@ namespace glz
          auto [it, found] = binary_search_key(key);
 
          if (found) {
-            auto index = std::distance(keys.cbegin(), it);
-            return {iterator(keys.cbegin() + index, values.begin() + index, this, nullptr, unique_lock_ptr), false};
+            return {iterator(it, this, nullptr, unique_lock_ptr), false};
          }
          else {
             // Insert while maintaining sorted order
-            auto index = std::distance(keys.cbegin(), it);
-            keys.insert(it, key);
-            values.insert(values.begin() + index, std::forward<Value>(value));
-            return {iterator(keys.cbegin() + index, values.begin() + index, this, nullptr, unique_lock_ptr), true};
+            it =
+               items.insert(it, std::make_unique<std::pair<K, V>>(std::forward<Key>(key), std::forward<Value>(value)));
+            return {iterator(it, this, nullptr, unique_lock_ptr), true};
          }
       }
 
@@ -359,15 +366,14 @@ namespace glz
          auto [it, found] = binary_search_key(key);
 
          if (found) {
-            auto index = std::distance(keys.cbegin(), it);
-            return {iterator(keys.cbegin() + index, values.begin() + index, this, nullptr, unique_lock_ptr), false};
+            return {iterator(it, this, nullptr, unique_lock_ptr), false};
          }
          else {
-            // Insert while maintaining sorted order
-            auto index = std::distance(keys.cbegin(), it);
-            keys.insert(it, key);
-            values.emplace(values.begin() + index, std::forward<Args>(args)...);
-            return {iterator(keys.cbegin() + index, values.begin() + index, this, nullptr, unique_lock_ptr), true};
+            // Construct value in place while maintaining sorted order
+            it =
+               items.insert(it, std::make_unique<std::pair<K, V>>(std::piecewise_construct, std::forward_as_tuple(key),
+                                                                  std::forward_as_tuple(std::forward<Args>(args)...)));
+            return {iterator(it, this, nullptr, unique_lock_ptr), true};
          }
       }
 
@@ -382,8 +388,7 @@ namespace glz
       void clear()
       {
          std::unique_lock lock(mutex);
-         keys.clear();
-         values.clear();
+         items.clear();
       }
 
       // Erase a key
@@ -395,9 +400,7 @@ namespace glz
          auto [it, found] = binary_search_key(key);
 
          if (found) {
-            auto index = std::distance(keys.cbegin(), it);
-            keys.erase(it);
-            values.erase(values.begin() + index);
+            items.erase(it);
          }
       }
 
@@ -410,8 +413,7 @@ namespace glz
          auto [it, found] = binary_search_key(key);
 
          if (found) {
-            auto index = std::distance(keys.cbegin(), it);
-            return iterator(keys.cbegin() + index, values.begin() + index, this, shared_lock_ptr);
+            return iterator(it, this, shared_lock_ptr);
          }
          else {
             return end();
@@ -427,8 +429,7 @@ namespace glz
          auto [it, found] = binary_search_key(key);
 
          if (found) {
-            auto index = std::distance(keys.cbegin(), it);
-            return const_iterator(keys.cbegin() + index, values.cbegin() + index, this, shared_lock_ptr);
+            return const_iterator(it, this, shared_lock_ptr);
          }
          else {
             return end();
@@ -444,8 +445,7 @@ namespace glz
          auto [it, found] = binary_search_key(key);
 
          if (found) {
-            auto index = std::distance(keys.cbegin(), it);
-            return value_proxy(values[index], shared_lock_ptr);
+            return value_proxy(*(*it), shared_lock_ptr);
          }
          else {
             throw std::out_of_range("Key not found");
@@ -461,8 +461,7 @@ namespace glz
          auto [it, found] = binary_search_key(key);
 
          if (found) {
-            auto index = std::distance(keys.cbegin(), it);
-            return const_value_proxy(values[index], shared_lock_ptr);
+            return const_value_proxy(*(*it), shared_lock_ptr);
          }
          else {
             throw std::out_of_range("Key not found");
@@ -473,28 +472,28 @@ namespace glz
       iterator begin()
       {
          auto shared_lock_ptr = std::make_shared<std::shared_lock<std::shared_mutex>>(mutex);
-         return iterator(keys.cbegin(), values.begin(), this, shared_lock_ptr);
+         return iterator(items.begin(), this, shared_lock_ptr);
       }
 
       // End iterator (non-const)
       iterator end()
       {
          auto shared_lock_ptr = std::make_shared<std::shared_lock<std::shared_mutex>>(mutex);
-         return iterator(keys.cend(), values.end(), this, shared_lock_ptr);
+         return iterator(items.end(), this, shared_lock_ptr);
       }
 
       // Begin iterator (const)
       const_iterator begin() const
       {
          auto shared_lock_ptr = std::make_shared<std::shared_lock<std::shared_mutex>>(mutex);
-         return const_iterator(keys.cbegin(), values.cbegin(), this, shared_lock_ptr);
+         return const_iterator(items.cbegin(), this, shared_lock_ptr);
       }
 
       // End iterator (const)
       const_iterator end() const
       {
          auto shared_lock_ptr = std::make_shared<std::shared_lock<std::shared_mutex>>(mutex);
-         return const_iterator(keys.cend(), values.cend(), this, shared_lock_ptr);
+         return const_iterator(items.cend(), this, shared_lock_ptr);
       }
 
       // Count the number of elements with the given key (0 or 1)
@@ -508,7 +507,7 @@ namespace glz
       size_t size() const
       {
          std::shared_lock lock(mutex);
-         return keys.size();
+         return items.size();
       }
 
       // Check if the map contains the key
