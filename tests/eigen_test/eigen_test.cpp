@@ -131,15 +131,15 @@ int main()
       expect(!glz::read_beve(e, b));
       expect(bool(m == e));
    };
-   
+
    "Eigen::Ref"_test = [] {
       Eigen::VectorXcd source(10);
       for (int i = 0; i < source.size(); ++i) {
          source[i] = {double(i), 2 * double(i)};
       }
-      
+
       Eigen::Ref<Eigen::VectorXcd> m = source;
-      
+
       std::string b;
       expect(not glz::write_beve(m, b));
       Eigen::VectorXcd e{};
