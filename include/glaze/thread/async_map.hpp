@@ -1,6 +1,3 @@
-// Glaze Library
-// For the license information refer to glaze.hpp
-
 #pragma once
 
 // Provides a semi-safe flat map
@@ -27,7 +24,7 @@ namespace glz
    struct async_map
    {
      private:
-      std::vector<std::pair<K, V>> items;
+      std::vector<std::unique_ptr<std::pair<K, V>>> items;
       mutable std::shared_mutex mutex;
 
       // Helper function to perform binary search.
@@ -35,8 +32,10 @@ namespace glz
       auto binary_search_key(const K& key) const
       {
          auto it = std::lower_bound(items.cbegin(), items.cend(), key,
-                                    [](const std::pair<K, V>& item, const K& key) { return item.first < key; });
-         if (it != items.cend() && !(key < it->first)) { // Equivalent to key == it->first
+                                    [](const std::unique_ptr<std::pair<K, V>>& item_ptr, const K& key) {
+                                       return item_ptr->first < key;
+                                    });
+         if (it != items.cend() && !(key < (*it)->first)) { // Equivalent to key == (*it)->first
             return std::make_pair(it, true);
          }
          return std::make_pair(it, false);
@@ -45,8 +44,10 @@ namespace glz
       auto binary_search_key(const K& key)
       {
          auto it = std::lower_bound(items.begin(), items.end(), key,
-                                    [](const std::pair<K, V>& item, const K& key) { return item.first < key; });
-         if (it != items.end() && !(key < it->first)) { // Equivalent to key == it->first
+                                    [](const std::unique_ptr<std::pair<K, V>>& item_ptr, const K& key) {
+                                       return item_ptr->first < key;
+                                    });
+         if (it != items.end() && !(key < (*it)->first)) { // Equivalent to key == (*it)->first
             return std::make_pair(it, true);
          }
          return std::make_pair(it, false);
@@ -73,13 +74,13 @@ namespace glz
          using reference = value_type&;
 
         private:
-         typename std::vector<std::pair<K, V>>::iterator item_it;
+         typename std::vector<std::unique_ptr<std::pair<K, V>>>::iterator item_it;
          async_map* map;
          std::shared_ptr<std::shared_lock<std::shared_mutex>> shared_lock_ptr;
          std::shared_ptr<std::unique_lock<std::shared_mutex>> unique_lock_ptr;
 
         public:
-         iterator(typename std::vector<std::pair<K, V>>::iterator item_it, async_map* map,
+         iterator(typename std::vector<std::unique_ptr<std::pair<K, V>>>::iterator item_it, async_map* map,
                   std::shared_ptr<std::shared_lock<std::shared_mutex>> existing_shared_lock = nullptr,
                   std::shared_ptr<std::unique_lock<std::shared_mutex>> existing_unique_lock = nullptr)
             : item_it(item_it),
@@ -136,9 +137,9 @@ namespace glz
             return tmp;
          }
 
-         reference operator*() const { return *item_it; }
+         reference operator*() const { return *(*item_it); }
 
-         pointer operator->() const { return &(*item_it); }
+         pointer operator->() const { return (*item_it).get(); }
 
          // Equality Comparison
          bool operator==(const iterator& other) const { return item_it == other.item_it; }
@@ -157,12 +158,12 @@ namespace glz
          using reference = const value_type&;
 
         private:
-         typename std::vector<std::pair<K, V>>::const_iterator item_it;
+         typename std::vector<std::unique_ptr<std::pair<K, V>>>::const_iterator item_it;
          const async_map* map;
          std::shared_ptr<std::shared_lock<std::shared_mutex>> shared_lock_ptr;
 
         public:
-         const_iterator(typename std::vector<std::pair<K, V>>::const_iterator item_it, const async_map* map,
+         const_iterator(typename std::vector<std::unique_ptr<std::pair<K, V>>>::const_iterator item_it, const async_map* map,
                         std::shared_ptr<std::shared_lock<std::shared_mutex>> existing_shared_lock = nullptr)
             : item_it(item_it), map(map), shared_lock_ptr(existing_shared_lock)
          {
@@ -210,9 +211,9 @@ namespace glz
             return tmp;
          }
 
-         reference operator*() const { return *item_it; }
+         reference operator*() const { return *(*item_it); }
 
-         pointer operator->() const { return &(*item_it); }
+         pointer operator->() const { return (*item_it).get(); }
 
          // Equality Comparison
          bool operator==(const const_iterator& other) const { return item_it == other.item_it; }
@@ -301,12 +302,12 @@ namespace glz
          auto [it, found] = binary_search_key(pair.first);
 
          if (found) {
-            return {iterator(items.begin() + std::distance(items.cbegin(), it), this, nullptr, unique_lock_ptr), false};
+            return {iterator(it, this, nullptr, unique_lock_ptr), false};
          }
          else {
             // Insert while maintaining sorted order
-            it = items.insert(it, pair);
-            return {iterator(items.begin() + std::distance(items.cbegin(), it), this, nullptr, unique_lock_ptr), true};
+            it = items.insert(it, std::make_unique<std::pair<K, V>>(pair));
+            return {iterator(it, this, nullptr, unique_lock_ptr), true};
          }
       }
 
@@ -319,12 +320,12 @@ namespace glz
          auto [it, found] = binary_search_key(key);
 
          if (found) {
-            return {iterator(items.begin() + std::distance(items.begin(), it), this, nullptr, unique_lock_ptr), false};
+            return {iterator(it, this, nullptr, unique_lock_ptr), false};
          }
          else {
             // Insert while maintaining sorted order
-            it = items.insert(it, std::make_pair(std::forward<Key>(key), std::forward<Value>(value)));
-            return {iterator(items.begin() + std::distance(items.begin(), it), this, nullptr, unique_lock_ptr), true};
+            it = items.insert(it, std::make_unique<std::pair<K, V>>(std::forward<Key>(key), std::forward<Value>(value)));
+            return {iterator(it, this, nullptr, unique_lock_ptr), true};
          }
       }
 
@@ -338,13 +339,15 @@ namespace glz
          auto [it, found] = binary_search_key(key);
 
          if (found) {
-            return {iterator(items.begin() + std::distance(items.cbegin(), it), this, nullptr, unique_lock_ptr), false};
+            return {iterator(it, this, nullptr, unique_lock_ptr), false};
          }
          else {
             // Construct value in place while maintaining sorted order
-            it = items.emplace(it, std::piecewise_construct, std::forward_as_tuple(key),
-                               std::forward_as_tuple(std::forward<Args>(args)...));
-            return {iterator(items.begin() + std::distance(items.cbegin(), it), this, nullptr, unique_lock_ptr), true};
+            it = items.insert(it, std::make_unique<std::pair<K, V>>(
+                                     std::piecewise_construct,
+                                     std::forward_as_tuple(key),
+                                     std::forward_as_tuple(std::forward<Args>(args)...)));
+            return {iterator(it, this, nullptr, unique_lock_ptr), true};
          }
       }
 
@@ -384,7 +387,7 @@ namespace glz
          auto [it, found] = binary_search_key(key);
 
          if (found) {
-            return iterator(items.begin() + std::distance(items.cbegin(), it), this, shared_lock_ptr);
+            return iterator(it, this, shared_lock_ptr);
          }
          else {
             return end();
@@ -400,7 +403,7 @@ namespace glz
          auto [it, found] = binary_search_key(key);
 
          if (found) {
-            return const_iterator(items.cbegin() + std::distance(items.cbegin(), it), this, shared_lock_ptr);
+            return const_iterator(it, this, shared_lock_ptr);
          }
          else {
             return end();
@@ -416,7 +419,7 @@ namespace glz
          auto [it, found] = binary_search_key(key);
 
          if (found) {
-            return value_proxy(*it, shared_lock_ptr);
+            return value_proxy(*(*it), shared_lock_ptr);
          }
          else {
             throw std::out_of_range("Key not found");
@@ -432,7 +435,7 @@ namespace glz
          auto [it, found] = binary_search_key(key);
 
          if (found) {
-            return const_value_proxy(*it, shared_lock_ptr);
+            return const_value_proxy(*(*it), shared_lock_ptr);
          }
          else {
             throw std::out_of_range("Key not found");
