@@ -15,6 +15,7 @@
 #include <vector>
 
 #include "glaze/core/common.hpp"
+#include "glaze/util/type_traits.hpp"
 
 // This async_map is intended to hold thread safe value types (V)
 
@@ -249,7 +250,8 @@ namespace glz
          std::shared_ptr<std::unique_lock<std::shared_mutex>> unique_lock_ptr;
 
         public:
-         value_proxy(value_type& value_ref, std::shared_ptr<std::shared_lock<std::shared_mutex>> existing_shared_lock,
+         value_proxy(value_type& value_ref,
+                     std::shared_ptr<std::shared_lock<std::shared_mutex>> existing_shared_lock = nullptr,
                      std::shared_ptr<std::unique_lock<std::shared_mutex>> existing_unique_lock = nullptr)
             : value_ref(value_ref), shared_lock_ptr(existing_shared_lock), unique_lock_ptr(existing_unique_lock)
          {
@@ -309,6 +311,12 @@ namespace glz
          operator const V&() const { return value_ref.second; }
 
          bool operator==(const V& other) const { return value() == other; }
+      };
+
+      
+      template <class KeyType>
+      [[deprecated("operator[] is not allowed with async_map because it would require expensive unique locks")]] value_proxy operator[](const KeyType&) {
+         static_assert(false_v<KeyType>);
       };
 
       // Insert method behaves like std::map::insert
