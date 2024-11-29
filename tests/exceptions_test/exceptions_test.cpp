@@ -246,9 +246,9 @@ suite async_map_tests = [] {
       
       map.at("one").value() = 1;
       
-      //for (auto it = map.begin(); it < map.end(); ++it) {
-      //   std::cout << it->second << '\n';
-      //}
+      /*for (auto it = map.begin(); it < map.end(); ++it) {
+         std::cout << it->second << '\n';
+      }*/
    };
 };
 

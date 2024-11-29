@@ -31,22 +31,20 @@ namespace glz
       // Returns a pair of iterator and a boolean indicating if the key was found.
       auto binary_search_key(const K& key) const
       {
-         auto it = std::lower_bound(items.cbegin(), items.cend(), key,
-                                    [](const std::unique_ptr<std::pair<K, V>>& item_ptr, const K& key) {
-                                       return item_ptr->first < key;
-                                    });
+         auto it = std::lower_bound(
+            items.cbegin(), items.cend(), key,
+            [](const std::unique_ptr<std::pair<K, V>>& item_ptr, const K& key) { return item_ptr->first < key; });
          if (it != items.cend() && !(key < (*it)->first)) { // Equivalent to key == (*it)->first
             return std::make_pair(it, true);
          }
          return std::make_pair(it, false);
       }
-      
+
       auto binary_search_key(const K& key)
       {
-         auto it = std::lower_bound(items.begin(), items.end(), key,
-                                    [](const std::unique_ptr<std::pair<K, V>>& item_ptr, const K& key) {
-                                       return item_ptr->first < key;
-                                    });
+         auto it = std::lower_bound(
+            items.begin(), items.end(), key,
+            [](const std::unique_ptr<std::pair<K, V>>& item_ptr, const K& key) { return item_ptr->first < key; });
          if (it != items.end() && !(key < (*it)->first)) { // Equivalent to key == (*it)->first
             return std::make_pair(it, true);
          }
@@ -83,10 +81,7 @@ namespace glz
          iterator(typename std::vector<std::unique_ptr<std::pair<K, V>>>::iterator item_it, async_map* map,
                   std::shared_ptr<std::shared_lock<std::shared_mutex>> existing_shared_lock = nullptr,
                   std::shared_ptr<std::unique_lock<std::shared_mutex>> existing_unique_lock = nullptr)
-            : item_it(item_it),
-              map(map),
-              shared_lock_ptr(existing_shared_lock),
-              unique_lock_ptr(existing_unique_lock)
+            : item_it(item_it), map(map), shared_lock_ptr(existing_shared_lock), unique_lock_ptr(existing_unique_lock)
          {
             // Acquire a shared lock only if no lock is provided
             if (!shared_lock_ptr && !unique_lock_ptr) {
@@ -163,7 +158,8 @@ namespace glz
          std::shared_ptr<std::shared_lock<std::shared_mutex>> shared_lock_ptr;
 
         public:
-         const_iterator(typename std::vector<std::unique_ptr<std::pair<K, V>>>::const_iterator item_it, const async_map* map,
+         const_iterator(typename std::vector<std::unique_ptr<std::pair<K, V>>>::const_iterator item_it,
+                        const async_map* map,
                         std::shared_ptr<std::shared_lock<std::shared_mutex>> existing_shared_lock = nullptr)
             : item_it(item_it), map(map), shared_lock_ptr(existing_shared_lock)
          {
@@ -180,9 +176,7 @@ namespace glz
 
          // Move Constructor
          const_iterator(const_iterator&& other) noexcept
-            : item_it(std::move(other.item_it)),
-              map(other.map),
-              shared_lock_ptr(std::move(other.shared_lock_ptr))
+            : item_it(std::move(other.item_it)), map(other.map), shared_lock_ptr(std::move(other.shared_lock_ptr))
          {}
 
          // Copy Assignment
@@ -324,7 +318,8 @@ namespace glz
          }
          else {
             // Insert while maintaining sorted order
-            it = items.insert(it, std::make_unique<std::pair<K, V>>(std::forward<Key>(key), std::forward<Value>(value)));
+            it =
+               items.insert(it, std::make_unique<std::pair<K, V>>(std::forward<Key>(key), std::forward<Value>(value)));
             return {iterator(it, this, nullptr, unique_lock_ptr), true};
          }
       }
@@ -343,10 +338,9 @@ namespace glz
          }
          else {
             // Construct value in place while maintaining sorted order
-            it = items.insert(it, std::make_unique<std::pair<K, V>>(
-                                     std::piecewise_construct,
-                                     std::forward_as_tuple(key),
-                                     std::forward_as_tuple(std::forward<Args>(args)...)));
+            it =
+               items.insert(it, std::make_unique<std::pair<K, V>>(std::piecewise_construct, std::forward_as_tuple(key),
+                                                                  std::forward_as_tuple(std::forward<Args>(args)...)));
             return {iterator(it, this, nullptr, unique_lock_ptr), true};
          }
       }
