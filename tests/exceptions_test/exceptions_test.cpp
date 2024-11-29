@@ -222,7 +222,7 @@ suite async_map_tests = [] {
       expect(*map.at("one").value() == 3);
       expect(*map.at("two").value() == 3);
    };
-   
+
    "async_map atomic"_test = [] {
       glz::async_map<std::string, std::atomic<int>> map;
       map.emplace("one", 1);
@@ -243,9 +243,9 @@ suite async_map_tests = [] {
 
       expect(map.at("one").value() == 3);
       expect(map.at("two").value() == 3);
-      
+
       map.at("one").value() = 1;
-      
+
       for (auto it = map.begin(); it < map.end(); ++it) {
          std::cout << it->second << '\n';
       }

@@ -313,9 +313,11 @@ namespace glz
          bool operator==(const V& other) const { return value() == other; }
       };
 
-      
       template <class KeyType>
-      [[deprecated("operator[] is not allowed with async_map because it would require expensive unique locks")]] value_proxy operator[](const KeyType&) {
+      [[deprecated(
+         "operator[] is not allowed with async_map because it would require expensive unique locks")]] value_proxy
+      operator[](const KeyType&)
+      {
          static_assert(false_v<KeyType>);
       };
 
