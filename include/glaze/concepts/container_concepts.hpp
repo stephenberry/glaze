@@ -220,7 +220,7 @@ namespace glz
       requires !std::same_as<void, decltype(t.end())>;
       requires std::input_iterator<decltype(t.begin())>;
    };
-   
+
    template <class T>
    concept matrix_t = requires(T matrix) {
       matrix.resize(2, 4);
