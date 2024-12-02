@@ -339,12 +339,12 @@ namespace glz
          std::same_as<T, std::nullptr_t> || std::convertible_to<T, std::monostate> || std::same_as<T, std::nullopt_t>;
 
       template <class T>
-      concept nullable_t = (!meta_value_t<T> && !str_t<T> && requires(T t) {
+      concept nullable_t = !meta_value_t<T> && !str_t<T> && requires(T t) {
          bool(t);
          {
             *t
          };
-      });
+      };
       
       // For optional like types that cannot overload `operator bool()`
       template <class T>
