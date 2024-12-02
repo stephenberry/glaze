@@ -9911,16 +9911,6 @@ namespace glz::detail
          read<JSON>::op<Opts>(value.val, args...);
       }
    };
-
-   template <class T>
-   struct to<JSON, custom_nullable_t<T>>
-   {
-      template <auto Opts>
-      static void op(auto& value, auto&&... args)
-      {
-         write<JSON>::op<Opts>(value.val, args...);
-      }
-   };
 }
 
 struct custom_nullable_container_t

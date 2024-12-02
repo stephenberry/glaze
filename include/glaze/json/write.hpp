@@ -984,6 +984,22 @@ namespace glz
             }
          }
       };
+      
+      template <class T>
+         requires (nullable_value_t<T> && not optional_like<T> && not is_expected<T>)
+      struct to<JSON, T>
+      {
+         template <auto Opts>
+         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix)
+         {
+            if (value.has_value()) {
+               write<JSON>::op<Opts>(value.value(), ctx, b, ix);
+            }
+            else {
+               dump<"null">(b, ix);
+            }
+         }
+      };
 
       template <always_null_t T>
       struct to<JSON, T>
