@@ -200,14 +200,30 @@ namespace glz
             GLZ_SKIP_WS();
             GLZ_MATCH_COLON();
             GLZ_SKIP_WS();
+                        
+            using V = refl_t<T, I>;
 
-            // invoke on the value
-            if constexpr (glaze_object_t<T>) {
-               std::forward<Func>(func)(get<I>(reflect<T>::values), I);
+            if constexpr (const_value_v<V>) {
+               if constexpr (Opts.error_on_const_read) {
+                  ctx.error = error_code::attempt_const_read;
+               }
+               else {
+                  // do not read anything into the const value
+                  skip_value<JSON>::op<Opts>(ctx, it, end);
+               }
             }
             else {
-               std::forward<Func>(func)(get<I>(std::forward<Tuple>(tuple)), I);
+               if constexpr (glaze_object_t<T>) {
+                  from<JSON, std::remove_cvref_t<V>>::template op<ws_handled<Opts>()>(
+                     get_member(value, get<I>(reflect<T>::values)), ctx, it, end);
+               }
+               else {
+                  from<JSON, std::remove_cvref_t<V>>::template op<ws_handled<Opts>()>(
+                     get_member(value, get<I>(std::forward<Tuple>(tuple))), ctx, it, end);
+               }
             }
+            
+            std::forward<Func>(func)(I);
          }
          else [[unlikely]] {
             if constexpr (Opts.error_on_unknown_keys) {
@@ -1968,28 +1984,12 @@ namespace glz
                      }
 
                      parse_and_invoke<Opts, T, hash_info<T>>(
-                        [&](auto&& element, const size_t index) {
+                        [&](const size_t index) {
                            if constexpr (Opts.error_on_missing_keys || is_partial_read<T> || Opts.partial_read) {
                               fields[index] = true;
                            }
                            else {
                               (void)index;
-                           }
-
-                           using V = decltype(get_member(value, element));
-
-                           if constexpr (const_value_v<V>) {
-                              if constexpr (Opts.error_on_const_read) {
-                                 ctx.error = error_code::attempt_const_read;
-                              }
-                              else {
-                                 // do not read anything into the const value
-                                 skip_value<JSON>::op<Opts>(ctx, it, end);
-                              }
-                           }
-                           else {
-                              from<JSON, std::remove_cvref_t<V>>::template op<ws_handled<Opts>()>(
-                                 get_member(value, element), ctx, it, end);
                            }
                         },
                         value, ctx, it, end);
