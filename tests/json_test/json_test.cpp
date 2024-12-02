@@ -9890,6 +9890,72 @@ suite const_pointer_tests = [] {
    };
 };
 
+template <class T>
+struct custom_nullable_t
+{
+   std::optional<T> val{};
+
+   bool has_value() const { return val.has_value(); }
+
+   const T& value() const { return *val; }
+};
+
+namespace glz::detail
+{
+   template <class T>
+   struct from<JSON, custom_nullable_t<T>>
+   {
+      template <auto Opts>
+      static void op(auto& value, auto&&... args)
+      {
+         read<JSON>::op<Opts>(value.val, args...);
+      }
+   };
+
+   template <class T>
+   struct to<JSON, custom_nullable_t<T>>
+   {
+      template <auto Opts>
+      static void op(auto& value, auto&&... args)
+      {
+         write<JSON>::op<Opts>(value.val, args...);
+      }
+   };
+}
+
+struct custom_nullable_container_t
+{
+   custom_nullable_t<double> x{};
+};
+
+suite custom_nullable_with_specialization = [] {
+   "custom_nullable_with_specialization"_test = [] {
+      custom_nullable_t<double> obj{};
+      obj.val = 3.14;
+      std::string buffer{};
+      expect(not glz::write_json(obj, buffer));
+      obj.val = {};
+      expect(not glz::read_json(obj, buffer));
+      expect(obj.val == 3.14);
+      obj.val = {};
+      expect(not glz::write_json(obj, buffer));
+      expect(buffer == "null");
+   };
+
+   "custom_nullable_with_specialization_container"_test = [] {
+      custom_nullable_container_t obj{};
+      obj.x.val = 3.14;
+      std::string buffer{};
+      expect(not glz::write_json(obj, buffer));
+      obj.x.val = {};
+      expect(not glz::read_json(obj, buffer));
+      expect(obj.x.val == 3.14);
+      obj.x.val = {};
+      expect(not glz::write_json(obj, buffer));
+      expect(buffer == "{}");
+   };
+};
+
 int main()
 {
    trace.end("json_test");

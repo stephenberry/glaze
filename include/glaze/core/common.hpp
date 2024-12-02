@@ -339,18 +339,27 @@ namespace glz
          std::same_as<T, std::nullptr_t> || std::convertible_to<T, std::monostate> || std::same_as<T, std::nullopt_t>;
 
       template <class T>
-      concept nullable_t = !meta_value_t<T> && !str_t<T> && requires(T t) {
+      concept nullable_t = (!meta_value_t<T> && !str_t<T> && requires(T t) {
          bool(t);
          {
             *t
          };
+      });
+      
+      // For optional like types that cannot overload `operator bool()`
+      template <class T>
+      concept nullable_value_t = !meta_value_t<T> && requires(T t) {
+         t.value();
+         {
+            t.has_value()
+         } -> std::convertible_to<bool>;
       };
 
       template <class T>
       concept nullable_wrapper = glaze_wrapper<T> && nullable_t<typename T::value_type>;
 
       template <class T>
-      concept null_t = nullable_t<T> || always_null_t<T> || nullable_wrapper<T>;
+      concept null_t = nullable_t<T> || nullable_value_t<T> || always_null_t<T> || nullable_wrapper<T>;
 
       template <class T>
       concept func_t = requires(T t) {

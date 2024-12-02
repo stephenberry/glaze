@@ -1450,6 +1450,9 @@ namespace glz
                                  if constexpr (nullable_wrapper<val_t>) {
                                     return !bool(element()(value).val);
                                  }
+                                 else if constexpr (nullable_value_t<val_t>) {
+                                    return !get_member(value, element()).has_value();
+                                 }
                                  else {
                                     return !bool(get_member(value, element()));
                                  }
