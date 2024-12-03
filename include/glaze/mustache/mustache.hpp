@@ -75,7 +75,7 @@ namespace glz
                         [&]<size_t I>() {
                            static constexpr auto TargetKey = get<I>(reflect<T>::keys);
                            static constexpr auto Length = TargetKey.size();
-                           if ((Length == key.size()) && compare<Length>(TargetKey.data(), start)) [[likely]] {
+                           if ((Length == key.size()) && detail::comparitor<TargetKey>(start)) [[likely]] {
                               if constexpr (detail::reflectable<T> && N > 0) {
                                  std::ignore = write<opt_true<Opts, &opts::raw>>(
                                     detail::get_member(value, get<I>(detail::to_tuple(value))), temp, ctx);

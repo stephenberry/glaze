@@ -168,7 +168,7 @@ namespace glz
             }
          }
 
-         if (compare<Length>(TargetKey.data(), it)) [[likely]] {
+         if (comparitor<TargetKey>(it)) [[likely]] {
             it += Length;
             if (*it != '"') [[unlikely]] {
                if constexpr (Opts.error_on_unknown_keys) {
