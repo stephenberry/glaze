@@ -263,9 +263,9 @@ suite async_map_tests = [] {
       expect(buffer == R"({"one":1,"two":2})") << buffer;
       
       map.clear();
-      /*expect(not glz::read_json(map, buffer));
+      expect(not glz::read_json(map, buffer));
       expect(map.at("one").value() == 1);
-      expect(map.at("two").value() == 2);*/
+      expect(map.at("two").value() == 2);
    };
 };
 

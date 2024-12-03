@@ -255,6 +255,8 @@ namespace glz
             // Ensure that a lock is provided
             assert(shared_lock_ptr || unique_lock_ptr);
          }
+         
+         static constexpr bool glaze_value_proxy = true;
 
          // Disable Copy and Move
          value_proxy(const value_proxy&) = delete;
@@ -565,6 +567,22 @@ namespace glz
          std::shared_lock lock(mutex);
          auto [it, found] = binary_search_key(key);
          return found;
+      }
+   };
+}
+
+namespace glz::detail
+{
+   template <class T>
+   concept is_value_proxy = requires { T::glaze_value_proxy; };
+   
+   template <is_value_proxy T>
+   struct from<JSON, T>
+   {
+      template <auto Opts>
+      static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
+      {
+         read<JSON>::op<Opts>(value.value(), ctx, it, end);
       }
    };
 }
