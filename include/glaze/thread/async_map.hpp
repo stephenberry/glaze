@@ -566,6 +566,11 @@ namespace glz
          auto [it, found] = binary_search_key(key);
          return found;
       }
+      
+      bool empty() const {
+         std::shared_lock lock(mutex);
+         return items.size() == 0;
+      }
    };
 }
 
