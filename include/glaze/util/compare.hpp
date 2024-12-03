@@ -158,7 +158,7 @@ namespace glz::detail
          return true;
       }
    }
-   
+
    template <size_t N>
    consteval auto bytes_to_unsigned_type() noexcept
    {
@@ -178,12 +178,12 @@ namespace glz::detail
          return;
       }
    }
-   
+
    template <size_t N>
    using unsigned_bytes_t = std::decay_t<decltype(bytes_to_unsigned_type<N>())>;
-   
+
    template <const std::string_view& Str, size_t N>
-      requires (N <= 8)
+      requires(N <= 8)
    consteval auto pack()
    {
       using T = unsigned_bytes_t<N>;
@@ -193,10 +193,11 @@ namespace glz::detail
       }
       return v;
    }
-   
+
    template <const std::string_view& Str, size_t N>
       requires(N > 8)
-   consteval auto pack() {
+   consteval auto pack()
+   {
       constexpr auto chunks = N / 8;
       std::array<uint64_t, ((chunks > 0) ? chunks + 1 : 1)> v{};
       for (size_t i = 0; i < N; ++i) {
@@ -205,9 +206,9 @@ namespace glz::detail
       }
       return v;
    }
-   
+
    template <const std::string_view& Str, size_t N>
-      requires (N <= 8)
+      requires(N <= 8)
    consteval auto pack_buffered()
    {
       using T = unsigned_bytes_t<N>;
@@ -217,7 +218,7 @@ namespace glz::detail
       }
       return v;
    }
-   
+
    template <const std::string_view& Str, size_t N = Str.size()>
    GLZ_ALWAYS_INLINE bool comparitor(const auto* other) noexcept
    {
