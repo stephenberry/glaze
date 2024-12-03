@@ -1,9 +1,5 @@
 #pragma once
 
-// Provides a semi-safe flat map
-// This async_map only provides thread safety when inserting/deletion
-// It is intended to store thread safe types for more efficient access
-
 #include <algorithm>
 #include <cassert>
 #include <iterator>
@@ -15,7 +11,16 @@
 
 #include "glaze/util/expected.hpp"
 
+// Provides a semi-safe flat map
+// This async_map only provides thread safety when inserting/deletion
+// It is intended to store thread safe types for more efficient access
+
 // This async_map is intended to hold thread safe value types (V)
+// The async_map is copyable, but it only performs shallow copies
+// This is to allow values like `std::atomic<int>` (and other thread safe types) to be held
+// So, copying an async_map will result in a shared reference to the data
+// In a multi-threading context this is often the desired behavior as thread safe logic
+// is typically attempting to shared state across threads
 
 namespace glz
 {
@@ -23,7 +28,7 @@ namespace glz
    struct async_map
    {
      private:
-      std::vector<std::unique_ptr<std::pair<K, V>>> items;
+      std::vector<std::shared_ptr<std::pair<K, V>>> items;
       mutable std::shared_mutex mutex;
 
       // Helper function to perform binary search.
@@ -32,7 +37,7 @@ namespace glz
       {
          auto it = std::lower_bound(
             items.cbegin(), items.cend(), key,
-            [](const std::unique_ptr<std::pair<K, V>>& item_ptr, const K& key) { return item_ptr->first < key; });
+            [](const std::shared_ptr<std::pair<K, V>>& item_ptr, const K& key) { return item_ptr->first < key; });
          if (it != items.cend() && !(key < (*it)->first)) { // Equivalent to key == (*it)->first
             return std::make_pair(it, true);
          }
@@ -43,7 +48,7 @@ namespace glz
       {
          auto it = std::lower_bound(
             items.begin(), items.end(), key,
-            [](const std::unique_ptr<std::pair<K, V>>& item_ptr, const K& key) { return item_ptr->first < key; });
+            [](const std::shared_ptr<std::pair<K, V>>& item_ptr, const K& key) { return item_ptr->first < key; });
          if (it != items.end() && !(key < (*it)->first)) { // Equivalent to key == (*it)->first
             return std::make_pair(it, true);
          }
@@ -60,6 +65,56 @@ namespace glz
       class iterator;
       class const_iterator;
 
+      // Default Constructor
+      async_map() = default;
+
+      // Copy Constructor (Performs shallow copy)
+      async_map(const async_map& other)
+      {
+         std::shared_lock<std::shared_mutex> lock(other.mutex);
+         items = other.items; // Shallow copy of the shared_ptrs
+         // mutex is default constructed
+      }
+
+      // Copy Assignment Operator (Performs shallow copy)
+      async_map& operator=(const async_map& other)
+      {
+         if (this != &other)
+         {
+            std::unique_lock<std::shared_mutex> lock1(mutex, std::defer_lock);
+            std::shared_lock<std::shared_mutex> lock2(other.mutex, std::defer_lock);
+            std::lock(lock1, lock2);
+
+            items = other.items; // Shallow copy of the shared_ptrs
+            // mutex remains as is
+         }
+         return *this;
+      }
+
+      // Move Constructor
+      async_map(async_map&& other) noexcept
+      {
+         std::unique_lock<std::shared_mutex> lock(other.mutex);
+
+         items = std::move(other.items);
+         // mutex is default constructed
+      }
+
+      // Move Assignment Operator
+      async_map& operator=(async_map&& other) noexcept
+      {
+         if (this != &other)
+         {
+            std::unique_lock<std::shared_mutex> lock1(mutex, std::defer_lock);
+            std::unique_lock<std::shared_mutex> lock2(other.mutex, std::defer_lock);
+            std::lock(lock1, lock2);
+
+            items = std::move(other.items);
+            // mutex remains as is
+         }
+         return *this;
+      }
+
       // Iterator Class Definition
       class iterator
       {
@@ -71,13 +126,13 @@ namespace glz
          using reference = value_type&;
 
         private:
-         typename std::vector<std::unique_ptr<std::pair<K, V>>>::iterator item_it;
+         typename std::vector<std::shared_ptr<std::pair<K, V>>>::iterator item_it;
          async_map* map;
          std::shared_ptr<std::shared_lock<std::shared_mutex>> shared_lock_ptr;
          std::shared_ptr<std::unique_lock<std::shared_mutex>> unique_lock_ptr;
 
         public:
-         iterator(typename std::vector<std::unique_ptr<std::pair<K, V>>>::iterator item_it, async_map* map,
+         iterator(typename std::vector<std::shared_ptr<std::pair<K, V>>>::iterator item_it, async_map* map,
                   std::shared_ptr<std::shared_lock<std::shared_mutex>> existing_shared_lock = nullptr,
                   std::shared_ptr<std::unique_lock<std::shared_mutex>> existing_unique_lock = nullptr)
             : item_it(item_it), map(map), shared_lock_ptr(existing_shared_lock), unique_lock_ptr(existing_unique_lock)
@@ -164,12 +219,12 @@ namespace glz
          using reference = const value_type&;
 
         private:
-         typename std::vector<std::unique_ptr<std::pair<K, V>>>::const_iterator item_it;
+         typename std::vector<std::shared_ptr<std::pair<K, V>>>::const_iterator item_it;
          const async_map* map;
          std::shared_ptr<std::shared_lock<std::shared_mutex>> shared_lock_ptr;
 
         public:
-         const_iterator(typename std::vector<std::unique_ptr<std::pair<K, V>>>::const_iterator item_it,
+         const_iterator(typename std::vector<std::shared_ptr<std::pair<K, V>>>::const_iterator item_it,
                         const async_map* map,
                         std::shared_ptr<std::shared_lock<std::shared_mutex>> existing_shared_lock = nullptr)
             : item_it(item_it), map(map), shared_lock_ptr(existing_shared_lock)
@@ -350,7 +405,7 @@ namespace glz
 
             if (!found) {
                // Insert a new element with default-constructed value
-               it = items.insert(it, std::make_unique<std::pair<K, V>>(
+               it = items.insert(it, std::make_shared<std::pair<K, V>>(
                                         std::piecewise_construct, std::forward_as_tuple(key), std::forward_as_tuple()));
             }
 
@@ -382,7 +437,7 @@ namespace glz
          }
          else {
             // Insert while maintaining sorted order
-            it = items.insert(it, std::make_unique<std::pair<K, V>>(pair));
+            it = items.insert(it, std::make_shared<std::pair<K, V>>(pair));
             return {iterator(it, this, nullptr, unique_lock_ptr), true};
          }
       }
@@ -401,7 +456,7 @@ namespace glz
          else {
             // Insert while maintaining sorted order
             it =
-               items.insert(it, std::make_unique<std::pair<K, V>>(std::forward<Key>(key), std::forward<Value>(value)));
+               items.insert(it, std::make_shared<std::pair<K, V>>(std::forward<Key>(key), std::forward<Value>(value)));
             return {iterator(it, this, nullptr, unique_lock_ptr), true};
          }
       }
@@ -421,7 +476,7 @@ namespace glz
          else {
             // Construct value in place while maintaining sorted order
             it =
-               items.insert(it, std::make_unique<std::pair<K, V>>(std::piecewise_construct, std::forward_as_tuple(key),
+               items.insert(it, std::make_shared<std::pair<K, V>>(std::piecewise_construct, std::forward_as_tuple(key),
                                                                   std::forward_as_tuple(std::forward<Args>(args)...)));
             return {iterator(it, this, nullptr, unique_lock_ptr), true};
          }
@@ -583,7 +638,7 @@ namespace glz
       bool empty() const
       {
          std::shared_lock lock(mutex);
-         return items.size() == 0;
+         return items.empty();
       }
    };
 }
