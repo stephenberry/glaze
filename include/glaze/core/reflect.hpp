@@ -1780,7 +1780,7 @@ namespace glz::detail
             const auto* c = quote_memchr<HashInfo.min_length>(it, end);
             if (c) [[likely]] {
                const auto n = size_t(static_cast<std::decay_t<decltype(it)>>(c) - it);
-               if (n == 0 || n > HashInfo.max_length) {
+               if (n == 0 || n > HashInfo.max_length) [[unlikely]] {
                   return N; // error
                }
 
