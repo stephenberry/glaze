@@ -87,7 +87,7 @@ namespace glz::detail
 
 #define GLZ_CASE(I)                                           \
    case I: {                                                  \
-      static_cast<Lambda&&>(lambda).template operator()<I>(); \
+      lambda.template operator()<I>(); \
       break;                                                  \
    }
 
@@ -116,7 +116,7 @@ namespace glz::detail
          return;
       }
       else if constexpr (N == 1) {
-         static_cast<Lambda&&>(lambda).template operator()<0>();
+         lambda.template operator()<0>();
       }
       GLZ_SWITCH(2, 0, 1)
       GLZ_SWITCH(3, 0, 1, 2)

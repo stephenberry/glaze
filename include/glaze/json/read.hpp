@@ -140,9 +140,9 @@ namespace glz
    GLZ_MATCH_COLON();      \
    GLZ_SKIP_WS();
 
-      template <opts Opts, class T, size_t I, class Tuple, class Value>
+      template <opts Opts, class T, size_t I, class Value>
          requires(glaze_object_t<T> || reflectable<T>)
-      void decode_index(Tuple&& tuple, Value&& value, is_context auto&& ctx, auto&& it, auto&& end, size_t& selected_index)
+      void decode_index(Value&& value, is_context auto&& ctx, auto&& it, auto&& end, size_t& selected_index)
       {
          static constexpr auto TargetKey = glz::get<I>(reflect<T>::keys);
          static constexpr auto Length = TargetKey.size();
@@ -219,7 +219,7 @@ namespace glz
                }
                else {
                   from<JSON, std::remove_cvref_t<V>>::template op<ws_handled<Opts>()>(
-                     get_member(value, get<I>(std::forward<Tuple>(tuple))), ctx, it, end);
+                     get_member(value, get<I>(to_tuple(value))), ctx, it, end);
                }
             }
             
@@ -289,12 +289,7 @@ namespace glz
          }
 
          if constexpr (N == 1) {
-            if constexpr (glaze_object_t<T>) {
-               decode_index<Opts, T, 0>(nullptr, value, ctx, it, end, selected_index);
-            }
-            else {
-               decode_index<Opts, T, 0>(to_tuple(value), value, ctx, it, end, selected_index);
-            }
+            decode_index<Opts, T, 0>(value, ctx, it, end, selected_index);
          }
          else {
             const auto index = decode_hash<JSON, T, HashInfo, HashInfo.type>::op(it, end);
@@ -321,23 +316,10 @@ namespace glz
                }
             }
 
-            // We see better performance with an array of function pointers than a glz::jump_table here.
-            if constexpr (glaze_object_t<T>) {
-               static constexpr auto decoders = [&]<size_t... I>(std::index_sequence<I...>) constexpr {
-                  return std::array{&decode_index<Opts, T, I, decltype(nullptr), decltype(value),
-                                                  decltype(ctx), decltype(it), decltype(end)>...};
-               }(std::make_index_sequence<N>{});
-
-               decoders[index](nullptr, value, ctx, it, end, selected_index);
-            }
-            else {
-               static constexpr auto decoders = [&]<size_t... I>(std::index_sequence<I...>) constexpr {
-                  return std::array{&decode_index<Opts, T, I, decltype(to_tuple(value)),
-                                                  decltype(value), decltype(ctx), decltype(it), decltype(end)>...};
-               }(std::make_index_sequence<N>{});
-
-               decoders[index](to_tuple(value), value, ctx, it, end, selected_index);
-            }
+            // We see better performance function pointers than a glz::jump_table here.
+            visit<N>([&]<size_t I>() {
+               decode_index<Opts, T, I>(value, ctx, it, end, selected_index);
+            }, index);
          }
       }
 
