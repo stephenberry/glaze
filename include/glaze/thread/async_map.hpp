@@ -545,6 +545,18 @@ namespace glz
          auto shared_lock_ptr = std::make_shared<std::shared_lock<std::shared_mutex>>(mutex);
          return const_iterator(items.cend(), this, shared_lock_ptr);
       }
+      
+      const_iterator cbegin() const
+      {
+         auto shared_lock_ptr = std::make_shared<std::shared_lock<std::shared_mutex>>(mutex);
+         return const_iterator(items.cbegin(), this, shared_lock_ptr);
+      }
+
+      const_iterator cend() const
+      {
+         auto shared_lock_ptr = std::make_shared<std::shared_lock<std::shared_mutex>>(mutex);
+         return const_iterator(items.cend(), this, shared_lock_ptr);
+      }
 
       // Count the number of elements with the given key (0 or 1)
       size_t count(const K& key) const
