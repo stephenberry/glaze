@@ -1997,6 +1997,8 @@ namespace glz
                      else {
                         size_t index;
                         parse_and_invoke<Opts, T, hash_info<T>>(value, ctx, it, end, index);
+                        if (bool(ctx.error)) [[unlikely]]
+                           return;
                      }
                   }
                   else {
