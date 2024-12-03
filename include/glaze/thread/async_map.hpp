@@ -247,15 +247,14 @@ namespace glz
          std::shared_ptr<std::unique_lock<std::shared_mutex>> unique_lock_ptr;
 
         public:
-         value_proxy(V& value_ref,
-                     std::shared_ptr<std::shared_lock<std::shared_mutex>> existing_shared_lock = nullptr,
+         value_proxy(V& value_ref, std::shared_ptr<std::shared_lock<std::shared_mutex>> existing_shared_lock = nullptr,
                      std::shared_ptr<std::unique_lock<std::shared_mutex>> existing_unique_lock = nullptr)
             : value_ref(value_ref), shared_lock_ptr(existing_shared_lock), unique_lock_ptr(existing_unique_lock)
          {
             // Ensure that a lock is provided
             assert(shared_lock_ptr || unique_lock_ptr);
          }
-         
+
          static constexpr bool glaze_value_proxy = true;
 
          // Disable Copy and Move
@@ -271,20 +270,21 @@ namespace glz
 
          // Arrow Operator
          V* operator->() { return &value_ref; }
-         
+
          const V* operator->() const { return &value_ref; }
-         
+
          V& operator*() { return value_ref; }
-         
+
          const V& operator*() const { return value_ref; }
 
          // Implicit Conversion to V&
          operator V&() { return value_ref; }
-         
+
          operator const V&() const { return value_ref; }
-         
+
          template <class T>
-         value_proxy& operator=(const T& other) {
+         value_proxy& operator=(const T& other)
+         {
             value_ref = other;
             return *this;
          }
@@ -319,7 +319,7 @@ namespace glz
 
          // Arrow Operator
          const V* operator->() const { return &value_ref; }
-         
+
          const V& operator*() const { return value_ref; }
 
          // Implicit Conversion to const V&
@@ -327,7 +327,7 @@ namespace glz
 
          bool operator==(const V& other) const { return value() == other; }
       };
-      
+
       value_proxy operator[](const K& key)
       {
          // Acquire a shared lock to search for the key
@@ -350,17 +350,15 @@ namespace glz
             if (!found) {
                // Insert a new element with default-constructed value
                it = items.insert(it, std::make_unique<std::pair<K, V>>(
-                                               std::piecewise_construct,
-                                               std::forward_as_tuple(key),
-                                               std::forward_as_tuple()));
+                                        std::piecewise_construct, std::forward_as_tuple(key), std::forward_as_tuple()));
             }
 
             unique_lock.unlock();
             shared_lock.lock();
-            
+
             // Find the value once again in case a modification occurred
             std::tie(it, found) = binary_search_key(key);
-            
+
             if (!found) {
                throw std::out_of_range("Key was removed by another thread");
             }
@@ -575,7 +573,7 @@ namespace glz::detail
 {
    template <class T>
    concept is_value_proxy = requires { T::glaze_value_proxy; };
-   
+
    template <is_value_proxy T>
    struct from<JSON, T>
    {

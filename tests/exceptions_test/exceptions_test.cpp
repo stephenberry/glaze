@@ -250,18 +250,18 @@ suite async_map_tests = [] {
          std::cout << it->second << '\n';
       }
    };
-   
+
    "async_map write_json"_test = [] {
       static_assert(glz::detail::readable_map_t<glz::async_map<std::string, std::atomic<int>>>);
-      
+
       glz::async_map<std::string, std::atomic<int>> map;
       map["one"] = 1;
       map["two"] = 2;
-      
+
       std::string buffer{};
       expect(not glz::write_json(map, buffer));
       expect(buffer == R"({"one":1,"two":2})") << buffer;
-      
+
       map.clear();
       expect(not glz::read_json(map, buffer));
       expect(map.at("one").value() == 1);
