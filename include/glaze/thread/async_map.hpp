@@ -14,9 +14,6 @@
 #include <utility>
 #include <vector>
 
-#include "glaze/core/common.hpp"
-#include "glaze/util/type_traits.hpp"
-
 // This async_map is intended to hold thread safe value types (V)
 
 namespace glz
@@ -245,12 +242,12 @@ namespace glz
       class value_proxy
       {
         private:
-         value_type& value_ref;
+         V& value_ref;
          std::shared_ptr<std::shared_lock<std::shared_mutex>> shared_lock_ptr;
          std::shared_ptr<std::unique_lock<std::shared_mutex>> unique_lock_ptr;
 
         public:
-         value_proxy(value_type& value_ref,
+         value_proxy(V& value_ref,
                      std::shared_ptr<std::shared_lock<std::shared_mutex>> existing_shared_lock = nullptr,
                      std::shared_ptr<std::unique_lock<std::shared_mutex>> existing_unique_lock = nullptr)
             : value_ref(value_ref), shared_lock_ptr(existing_shared_lock), unique_lock_ptr(existing_unique_lock)
@@ -266,25 +263,27 @@ namespace glz
          value_proxy& operator=(value_proxy&&) = delete;
 
          // Access the value
-         V& value() { return value_ref.second; }
+         V& value() { return value_ref; }
 
-         const V& value() const { return value_ref.second; }
+         const V& value() const { return value_ref; }
 
          // Arrow Operator
-         V* operator->() { return &value_ref.second; }
+         V* operator->() { return &value_ref; }
          
-         const V* operator->() const { return &value_ref.second; }
+         const V* operator->() const { return &value_ref; }
          
-         V& operator*() { return value_ref.second; }
+         V& operator*() { return value_ref; }
          
-         const V& operator*() const { return value_ref.second; }
+         const V& operator*() const { return value_ref; }
 
          // Implicit Conversion to V&
-         operator V&() { return value_ref.second; }
+         operator V&() { return value_ref; }
+         
+         operator const V&() const { return value_ref; }
          
          template <class T>
          value_proxy& operator=(const T& other) {
-            value_ref.second = other;
+            value_ref = other;
             return *this;
          }
 
@@ -295,11 +294,11 @@ namespace glz
       class const_value_proxy
       {
         private:
-         const_value_type& value_ref;
+         const V& value_ref;
          std::shared_ptr<std::shared_lock<std::shared_mutex>> shared_lock_ptr;
 
         public:
-         const_value_proxy(const_value_type& value_ref,
+         const_value_proxy(const V& value_ref,
                            std::shared_ptr<std::shared_lock<std::shared_mutex>> existing_shared_lock)
             : value_ref(value_ref), shared_lock_ptr(existing_shared_lock)
          {
@@ -314,15 +313,15 @@ namespace glz
          const_value_proxy& operator=(const_value_proxy&&) = delete;
 
          // Access the value
-         const V& value() const { return value_ref.second; }
+         const V& value() const { return value_ref; }
 
          // Arrow Operator
-         const V* operator->() const { return &value_ref.second; }
+         const V* operator->() const { return &value_ref; }
          
-         const V& operator*() const { return value_ref.second; }
+         const V& operator*() const { return value_ref; }
 
          // Implicit Conversion to const V&
-         operator const V&() const { return value_ref.second; }
+         operator const V&() const { return value_ref; }
 
          bool operator==(const V& other) const { return value() == other; }
       };
@@ -335,7 +334,7 @@ namespace glz
 
          if (found) {
             auto shared_lock_ptr = std::make_shared<std::shared_lock<std::shared_mutex>>(std::move(shared_lock));
-            return value_proxy(*(*it), shared_lock_ptr);
+            return value_proxy((*it)->second, shared_lock_ptr);
          }
          else {
             // Key doesn't exist; release the shared_lock
@@ -365,7 +364,7 @@ namespace glz
             }
 
             auto shared_lock_ptr = std::make_shared<std::shared_lock<std::shared_mutex>>(std::move(shared_lock));
-            return value_proxy(*(*it), shared_lock_ptr);
+            return value_proxy((*it)->second, shared_lock_ptr);
          }
       }
 
@@ -495,7 +494,7 @@ namespace glz
          auto [it, found] = binary_search_key(key);
 
          if (found) {
-            return value_proxy(*(*it), shared_lock_ptr);
+            return value_proxy((*it)->second, shared_lock_ptr);
          }
          else {
             throw std::out_of_range("Key not found");
@@ -511,7 +510,7 @@ namespace glz
          auto [it, found] = binary_search_key(key);
 
          if (found) {
-            return const_value_proxy(*(*it), shared_lock_ptr);
+            return const_value_proxy((*it)->second, shared_lock_ptr);
          }
          else {
             throw std::out_of_range("Key not found");
