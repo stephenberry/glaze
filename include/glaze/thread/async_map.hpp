@@ -10,9 +10,10 @@
 #include <memory>
 #include <mutex>
 #include <shared_mutex>
-#include <stdexcept>
 #include <utility>
 #include <vector>
+
+#include "glaze/util/expected.hpp"
 
 // This async_map is intended to hold thread safe value types (V)
 
@@ -360,7 +361,7 @@ namespace glz
             std::tie(it, found) = binary_search_key(key);
 
             if (!found) {
-               throw std::out_of_range("Key was removed by another thread");
+               GLZ_THROW_OR_ABORT(std::out_of_range("Key was removed by another thread"));
             }
 
             auto shared_lock_ptr = std::make_shared<std::shared_lock<std::shared_mutex>>(std::move(shared_lock));
@@ -497,7 +498,7 @@ namespace glz
             return value_proxy((*it)->second, shared_lock_ptr);
          }
          else {
-            throw std::out_of_range("Key not found");
+            GLZ_THROW_OR_ABORT(std::out_of_range("Key not found"));
          }
       }
 
@@ -513,7 +514,7 @@ namespace glz
             return const_value_proxy((*it)->second, shared_lock_ptr);
          }
          else {
-            throw std::out_of_range("Key not found");
+            GLZ_THROW_OR_ABORT(std::out_of_range("Key not found"));
          }
       }
 
