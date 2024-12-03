@@ -274,6 +274,10 @@ namespace glz
          V* operator->() { return &value_ref.second; }
          
          const V* operator->() const { return &value_ref.second; }
+         
+         V& operator*() { return value_ref.second; }
+         
+         const V& operator*() const { return value_ref.second; }
 
          // Implicit Conversion to V&
          operator V&() { return value_ref.second; }
@@ -314,6 +318,8 @@ namespace glz
 
          // Arrow Operator
          const V* operator->() const { return &value_ref.second; }
+         
+         const V& operator*() const { return value_ref.second; }
 
          // Implicit Conversion to const V&
          operator const V&() const { return value_ref.second; }
