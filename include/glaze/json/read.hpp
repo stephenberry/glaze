@@ -140,9 +140,9 @@ namespace glz
    GLZ_MATCH_COLON();      \
    GLZ_SKIP_WS();
 
-      template <opts Opts, class T, size_t I, class Func, class Tuple, class Value>
+      template <opts Opts, class T, size_t I, class Value, class... SelectedIndex>
          requires(glaze_object_t<T> || reflectable<T>)
-      void decode_index(Func&& func, Tuple&& tuple, Value&& value, is_context auto&& ctx, auto&& it, auto&& end)
+      void decode_index(Value&& value, is_context auto&& ctx, auto&& it, auto&& end, SelectedIndex&&... selected_index)
       {
          static constexpr auto TargetKey = glz::get<I>(reflect<T>::keys);
          static constexpr auto Length = TargetKey.size();
@@ -200,13 +200,31 @@ namespace glz
             GLZ_SKIP_WS();
             GLZ_MATCH_COLON();
             GLZ_SKIP_WS();
+                        
+            using V = refl_t<T, I>;
 
-            // invoke on the value
-            if constexpr (glaze_object_t<T>) {
-               std::forward<Func>(func)(get<I>(reflect<T>::values), I);
+            if constexpr (const_value_v<V>) {
+               if constexpr (Opts.error_on_const_read) {
+                  ctx.error = error_code::attempt_const_read;
+               }
+               else {
+                  // do not read anything into the const value
+                  skip_value<JSON>::op<Opts>(ctx, it, end);
+               }
             }
             else {
-               std::forward<Func>(func)(get<I>(std::forward<Tuple>(tuple)), I);
+               if constexpr (glaze_object_t<T>) {
+                  from<JSON, std::remove_cvref_t<V>>::template op<ws_handled<Opts>()>(
+                     get_member(value, get<I>(reflect<T>::values)), ctx, it, end);
+               }
+               else {
+                  from<JSON, std::remove_cvref_t<V>>::template op<ws_handled<Opts>()>(
+                     get_member(value, get<I>(to_tuple(value))), ctx, it, end);
+               }
+            }
+            
+            if constexpr (Opts.error_on_missing_keys || is_partial_read<T> || Opts.partial_read) {
+               ((selected_index = I), ...);
             }
          }
          else [[unlikely]] {
@@ -258,10 +276,10 @@ namespace glz
          }
       }
 
-      template <opts Opts, class T, auto& HashInfo, class Func, class Value>
+      template <opts Opts, class T, auto& HashInfo, class Value, class... SelectedIndex>
          requires(glaze_object_t<T> || reflectable<T>)
-      GLZ_ALWAYS_INLINE constexpr void parse_and_invoke(Func&& func, Value&& value, is_context auto&& ctx, auto&& it,
-                                                        auto&& end)
+      GLZ_ALWAYS_INLINE constexpr void parse_and_invoke(Value&& value, is_context auto&& ctx, auto&& it,
+                                                        auto&& end, SelectedIndex&&... selected_index)
       {
          constexpr auto type = HashInfo.type;
          constexpr auto N = reflect<T>::size;
@@ -271,12 +289,7 @@ namespace glz
          }
 
          if constexpr (N == 1) {
-            if constexpr (glaze_object_t<T>) {
-               decode_index<Opts, T, 0>(func, nullptr, value, ctx, it, end);
-            }
-            else {
-               decode_index<Opts, T, 0>(func, to_tuple(value), value, ctx, it, end);
-            }
+            decode_index<Opts, T, 0>(value, ctx, it, end, selected_index...);
          }
          else {
             const auto index = decode_hash<JSON, T, HashInfo, HashInfo.type>::op(it, end);
@@ -303,23 +316,10 @@ namespace glz
                }
             }
 
-            // We see better performance with an array of function pointers than a glz::jump_table here.
-            if constexpr (glaze_object_t<T>) {
-               static constexpr auto decoders = [&]<size_t... I>(std::index_sequence<I...>) constexpr {
-                  return std::array{&decode_index<Opts, T, I, decltype(func), decltype(nullptr), decltype(value),
-                                                  decltype(ctx), decltype(it), decltype(end)>...};
-               }(std::make_index_sequence<N>{});
-
-               decoders[index](std::forward<Func>(func), nullptr, value, ctx, it, end);
-            }
-            else {
-               static constexpr auto decoders = [&]<size_t... I>(std::index_sequence<I...>) constexpr {
-                  return std::array{&decode_index<Opts, T, I, decltype(func), decltype(to_tuple(value)),
-                                                  decltype(value), decltype(ctx), decltype(it), decltype(end)>...};
-               }(std::make_index_sequence<N>{});
-
-               decoders[index](std::forward<Func>(func), to_tuple(value), value, ctx, it, end);
-            }
+            // We see better performance function pointers than a glz::jump_table here.
+            visit<N>([&]<size_t I>() {
+               decode_index<Opts, T, I>(value, ctx, it, end, selected_index...);
+            }, index);
          }
       }
 
@@ -1966,35 +1966,21 @@ namespace glz
                            it = start; // reset the iterator
                         }
                      }
-
-                     parse_and_invoke<Opts, T, hash_info<T>>(
-                        [&](auto&& element, const size_t index) {
-                           if constexpr (Opts.error_on_missing_keys || is_partial_read<T> || Opts.partial_read) {
-                              fields[index] = true;
-                           }
-                           else {
-                              (void)index;
-                           }
-
-                           using V = decltype(get_member(value, element));
-
-                           if constexpr (const_value_v<V>) {
-                              if constexpr (Opts.error_on_const_read) {
-                                 ctx.error = error_code::attempt_const_read;
-                              }
-                              else {
-                                 // do not read anything into the const value
-                                 skip_value<JSON>::op<Opts>(ctx, it, end);
-                              }
-                           }
-                           else {
-                              from<JSON, std::remove_cvref_t<V>>::template op<ws_handled<Opts>()>(
-                                 get_member(value, element), ctx, it, end);
-                           }
-                        },
-                        value, ctx, it, end);
-                     if (bool(ctx.error)) [[unlikely]]
-                        return;
+                     
+                     if constexpr (Opts.error_on_missing_keys || is_partial_read<T> || Opts.partial_read) {
+                        size_t index = num_members;
+                        parse_and_invoke<Opts, T, hash_info<T>>(value, ctx, it, end, index);
+                        if (bool(ctx.error)) [[unlikely]]
+                           return;
+                        if (index < num_members) {
+                           fields[index] = true;
+                        }
+                     }
+                     else {
+                        parse_and_invoke<Opts, T, hash_info<T>>(value, ctx, it, end);
+                        if (bool(ctx.error)) [[unlikely]]
+                           return;
+                     }
                   }
                   else {
                      // For types like std::map, std::unordered_map
