@@ -1433,29 +1433,38 @@ namespace glz
                         return;
                      }
                      else {
-                        if constexpr (null_t<val_t>) {
-                           if constexpr (always_null_t<T>)
-                              return;
-                           else {
-                              const auto is_null = [&]() {
-                                 decltype(auto) element = [&]() -> decltype(auto) {
-                                    if constexpr (reflectable<T>) {
-                                       return get<I>(t);
-                                    }
-                                    else {
-                                       return get<I>(reflect<T>::values);
-                                    }
-                                 };
+                        if constexpr (null_t<val_t> && always_null_t<T>) {
+                           return;
+                        }
+                        else if constexpr (skip_write_mask<val_t>() & Opts.skip_null_members) {
+                           const auto to_skip = [&]() {
+                              decltype(auto) element = [&]() -> decltype(auto) {
+                                 if constexpr (reflectable<T>) {
+                                    return get<I>(t);
+                                 }
+                                 else {
+                                    return get<I>(reflect<T>::values);
+                                 }
+                              };
 
-                                 if constexpr (nullable_wrapper<val_t>) {
+                              if constexpr (null_t<val_t>) {
+                                 if constexpr (glaze_wrapper<val_t>) {
                                     return !bool(element()(value).val);
                                  }
                                  else {
                                     return !bool(get_member(value, element()));
                                  }
-                              }();
-                              if (is_null) return;
-                           }
+                              }
+                              else {
+                                 if constexpr (glaze_wrapper<val_t>) {
+                                    return element()(value).write_skippable();
+                                 }
+                                 else {
+                                    return get_member(value, element()).write_skippable();
+                                 }
+                              }
+                           }();
+                           if (to_skip) return;
                         }
 
                         maybe_pad<padding>(b, ix);

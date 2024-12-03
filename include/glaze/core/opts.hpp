@@ -49,6 +49,8 @@ namespace glz
 #define GLZ_NULL_TERMINATED true
 #endif
 
+   inline constexpr uint8_t skip_null_flag = 1;
+   inline constexpr uint8_t skip_default_flag = 2;
    struct opts
    {
       // USER CONFIGURABLE
@@ -56,7 +58,8 @@ namespace glz
       bool_t null_terminated = GLZ_NULL_TERMINATED; // Whether the input buffer is null terminated
       bool_t comments = false; // Support reading in JSONC style comments
       bool_t error_on_unknown_keys = true; // Error when an unknown key is encountered
-      bool_t skip_null_members = true; // Skip writing out params in an object if the value is null
+      // this might be better to be named skip_write_members, just keep for backward compatibility
+      uint8_t skip_null_members = skip_null_flag | skip_default_flag; // Skip writing out params in an object if the value is null or default
       bool_t use_hash_comparison = true; // Will replace some string equality checks with hash checks
       bool_t prettify = false; // Write out prettified JSON
       bool_t minified = false; // Require minified input for JSON, which results in faster read performance

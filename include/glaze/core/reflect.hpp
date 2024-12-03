@@ -283,6 +283,17 @@ namespace glz
       static constexpr bool maybe_skipped = false;
    };
 
+   template <typename T>
+   constexpr uint8_t skip_write_mask() {
+      if constexpr (detail::null_t<T>) {
+         return skip_null_flag;
+      } else if constexpr (requires { T::glaze_skip_write_mask; }) {
+         return T::glaze_skip_write_mask;
+      } else {
+         return 0;
+      }
+   }
+
    template <opts Opts, class T>
       requires(reflect<T>::size > 0)
    struct object_info<Opts, T>
@@ -294,7 +305,7 @@ namespace glz
          if constexpr (N > 0) {
             using V = std::remove_cvref_t<refl_t<T, 0>>;
 
-            if constexpr (detail::null_t<V> && Opts.skip_null_members) {
+            if constexpr (skip_write_mask<V>() & Opts.skip_null_members ) {
                return false;
             }
 
@@ -316,7 +327,7 @@ namespace glz
             for_each_short_circuit<N>([&](auto I) {
                using V = std::remove_cvref_t<refl_t<T, I>>;
 
-               if constexpr (Opts.skip_null_members && detail::null_t<V>) {
+               if constexpr (skip_write_mask<V>() & Opts.skip_null_members) {
                   found_maybe_skipped = true;
                   return true; // early exit
                }

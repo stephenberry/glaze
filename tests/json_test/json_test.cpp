@@ -9890,6 +9890,76 @@ suite const_pointer_tests = [] {
    };
 };
 
+struct custom_skip_struct
+{
+   int i = 287;
+   double j = 3.14;
+   std::optional<int> k;
+};
+
+template <>
+struct glz::meta<custom_skip_struct>
+{
+   using T = custom_skip_struct;
+   static constexpr auto skip_default_i = [](const T& t) { return t.i == 287; };
+   static constexpr auto value =
+      object("i", glz::custom<&T::i, &T::i, skip_default_i, skip_default_flag>, "j", &T::j, "k", &T::k);
+};
+
+struct skip_write_default_struct
+{
+   int i = 287;
+   double j = 3.14;
+   std::optional<int> k;
+};
+
+template <>
+struct glz::meta<skip_write_default_struct>
+{
+   using T = skip_write_default_struct;
+   static constexpr auto value = object("i", glz::skip_write_default<&T::i>, "j", &T::j, "k", &T::k);
+};
+
+struct skip_write_default_heap_allocated_struct
+{
+   std::string str = "Here is a decently long string to avoid short string optimization";
+};
+
+template <>
+struct glz::meta<skip_write_default_heap_allocated_struct>
+{
+   using T = skip_write_default_heap_allocated_struct;
+   static constexpr auto value = object("str", glz::skip_write_default<&T::str>);
+};
+
+
+suite skip_struct_test = [] {
+   auto skip_test = [](auto obj) {
+      std::string buffer{};
+      expect(not glz::write_json(obj, buffer));
+      // We expect both the default "i" and the null "k" to be skipped
+      expect(buffer == R"({"j":3.14})") << buffer;
+
+      expect(not glz::write<glz::opts{.skip_null_members = glz::skip_null_flag}>(obj, buffer));
+      // We expect only the null "k" to be skipped
+      expect(buffer == R"({"i":287,"j":3.14})") << buffer;
+
+      expect(not glz::write<glz::opts{.skip_null_members = glz::skip_default_flag}>(obj, buffer));
+      // We expect only the default "i" to be skipped
+      expect(buffer == R"({"j":3.14,"k":null})") << buffer;
+   };
+
+   "custom_skip_struct"_test = [&] { skip_test(custom_skip_struct{}); };
+   "skip_write_default_struct"_test = [&] { skip_test(skip_write_default_struct{}); };
+   
+   "skip_write_default_heap_allocated_struct"_test = [] {
+      skip_write_default_heap_allocated_struct obj{};
+      std::string buffer{};
+      expect(not glz::write<glz::opts{.skip_null_members = glz::skip_default_flag}>(obj, buffer));
+      expect(buffer == R"({})") << buffer;
+   };
+};
+
 int main()
 {
    trace.end("json_test");
