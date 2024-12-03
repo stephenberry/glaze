@@ -1985,17 +1985,18 @@ namespace glz
                         }
                      }
                      
-                     size_t index = num_members;
-                     parse_and_invoke<Opts, T, hash_info<T>>(value, ctx, it, end, index);
-                     if (bool(ctx.error)) [[unlikely]]
-                        return;
                      if constexpr (Opts.error_on_missing_keys || is_partial_read<T> || Opts.partial_read) {
+                        size_t index = num_members;
+                        parse_and_invoke<Opts, T, hash_info<T>>(value, ctx, it, end, index);
+                        if (bool(ctx.error)) [[unlikely]]
+                           return;
                         if (index < num_members) {
                            fields[index] = true;
                         }
                      }
                      else {
-                        (void)index;
+                        size_t index;
+                        parse_and_invoke<Opts, T, hash_info<T>>(value, ctx, it, end, index);
                      }
                   }
                   else {
