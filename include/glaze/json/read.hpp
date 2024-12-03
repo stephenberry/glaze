@@ -140,9 +140,9 @@ namespace glz
    GLZ_MATCH_COLON();      \
    GLZ_SKIP_WS();
 
-      template <opts Opts, class T, size_t I, class Value>
+      template <opts Opts, class T, size_t I, class Value, class... SelectedIndex>
          requires(glaze_object_t<T> || reflectable<T>)
-      void decode_index(Value&& value, is_context auto&& ctx, auto&& it, auto&& end, size_t& selected_index)
+      void decode_index(Value&& value, is_context auto&& ctx, auto&& it, auto&& end, SelectedIndex&&... selected_index)
       {
          static constexpr auto TargetKey = glz::get<I>(reflect<T>::keys);
          static constexpr auto Length = TargetKey.size();
@@ -224,7 +224,7 @@ namespace glz
             }
             
             if constexpr (Opts.error_on_missing_keys || is_partial_read<T> || Opts.partial_read) {
-               selected_index = I;
+               ((selected_index = I), ...);
             }
          }
          else [[unlikely]] {
@@ -276,10 +276,10 @@ namespace glz
          }
       }
 
-      template <opts Opts, class T, auto& HashInfo, class Value>
+      template <opts Opts, class T, auto& HashInfo, class Value, class... SelectedIndex>
          requires(glaze_object_t<T> || reflectable<T>)
       GLZ_ALWAYS_INLINE constexpr void parse_and_invoke(Value&& value, is_context auto&& ctx, auto&& it,
-                                                        auto&& end, size_t& selected_index)
+                                                        auto&& end, SelectedIndex&&... selected_index)
       {
          constexpr auto type = HashInfo.type;
          constexpr auto N = reflect<T>::size;
@@ -289,7 +289,7 @@ namespace glz
          }
 
          if constexpr (N == 1) {
-            decode_index<Opts, T, 0>(value, ctx, it, end, selected_index);
+            decode_index<Opts, T, 0>(value, ctx, it, end, selected_index...);
          }
          else {
             const auto index = decode_hash<JSON, T, HashInfo, HashInfo.type>::op(it, end);
@@ -318,7 +318,7 @@ namespace glz
 
             // We see better performance function pointers than a glz::jump_table here.
             visit<N>([&]<size_t I>() {
-               decode_index<Opts, T, I>(value, ctx, it, end, selected_index);
+               decode_index<Opts, T, I>(value, ctx, it, end, selected_index...);
             }, index);
          }
       }
@@ -1977,8 +1977,7 @@ namespace glz
                         }
                      }
                      else {
-                        size_t index;
-                        parse_and_invoke<Opts, T, hash_info<T>>(value, ctx, it, end, index);
+                        parse_and_invoke<Opts, T, hash_info<T>>(value, ctx, it, end);
                         if (bool(ctx.error)) [[unlikely]]
                            return;
                      }
