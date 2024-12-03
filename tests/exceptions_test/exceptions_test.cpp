@@ -416,6 +416,11 @@ suite async_map_tests = [] {
       expect(map.size() == 2);
       expect(map.at("first").value() == 100);
       expect(map.at("third").value() == 300);
+      
+      auto other = map; // copy
+      expect(other.size() == 2);
+      expect(other.at("first").value() == 100);
+      expect(other.at("third").value() == 300);
    };
 };
 

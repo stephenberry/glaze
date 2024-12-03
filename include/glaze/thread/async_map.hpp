@@ -1,9 +1,5 @@
 #pragma once
 
-// Provides a semi-safe flat map
-// This async_map only provides thread safety when inserting/deletion
-// It is intended to store thread safe types for more efficient access
-
 #include <algorithm>
 #include <cassert>
 #include <iterator>
@@ -15,7 +11,16 @@
 
 #include "glaze/util/expected.hpp"
 
+// Provides a semi-safe flat map
+// This async_map only provides thread safety when inserting/deletion
+// It is intended to store thread safe types for more efficient access
+
 // This async_map is intended to hold thread safe value types (V)
+// The async_map is copyable, but it only performs shallow copies
+// This is to allow values like `std::atomic<int>` (and other thread safe types) to be held
+// So, copying an async_map will result in a shared reference to the data
+// In a multi-threading context this is often the desired behavior as thread safe logic
+// is typically attempting to shared state across threads
 
 namespace glz
 {
@@ -59,6 +64,56 @@ namespace glz
       // Forward declaration of iterator classes
       class iterator;
       class const_iterator;
+
+      // Default Constructor
+      async_map() = default;
+
+      // Copy Constructor (Performs shallow copy)
+      async_map(const async_map& other)
+      {
+         std::shared_lock<std::shared_mutex> lock(other.mutex);
+         items = other.items; // Shallow copy of the shared_ptrs
+         // mutex is default constructed
+      }
+
+      // Copy Assignment Operator (Performs shallow copy)
+      async_map& operator=(const async_map& other)
+      {
+         if (this != &other)
+         {
+            std::unique_lock<std::shared_mutex> lock1(mutex, std::defer_lock);
+            std::shared_lock<std::shared_mutex> lock2(other.mutex, std::defer_lock);
+            std::lock(lock1, lock2);
+
+            items = other.items; // Shallow copy of the shared_ptrs
+            // mutex remains as is
+         }
+         return *this;
+      }
+
+      // Move Constructor
+      async_map(async_map&& other) noexcept
+      {
+         std::unique_lock<std::shared_mutex> lock(other.mutex);
+
+         items = std::move(other.items);
+         // mutex is default constructed
+      }
+
+      // Move Assignment Operator
+      async_map& operator=(async_map&& other) noexcept
+      {
+         if (this != &other)
+         {
+            std::unique_lock<std::shared_mutex> lock1(mutex, std::defer_lock);
+            std::unique_lock<std::shared_mutex> lock2(other.mutex, std::defer_lock);
+            std::lock(lock1, lock2);
+
+            items = std::move(other.items);
+            // mutex remains as is
+         }
+         return *this;
+      }
 
       // Iterator Class Definition
       class iterator
@@ -545,7 +600,7 @@ namespace glz
          auto shared_lock_ptr = std::make_shared<std::shared_lock<std::shared_mutex>>(mutex);
          return const_iterator(items.cend(), this, shared_lock_ptr);
       }
-      
+
       const_iterator cbegin() const
       {
          auto shared_lock_ptr = std::make_shared<std::shared_lock<std::shared_mutex>>(mutex);
@@ -583,7 +638,7 @@ namespace glz
       bool empty() const
       {
          std::shared_lock lock(mutex);
-         return items.size() == 0;
+         return items.empty();
       }
    };
 }
