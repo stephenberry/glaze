@@ -269,6 +269,17 @@ namespace glz
       }
 #endif
    }
+   
+   template <class T>
+   concept has_resize_and_overwrite = requires(T t, typename T::size_type n) {
+       {
+           t.resize_and_overwrite(n,
+               [](char*, std::size_t) -> size_t {
+                   return 0;
+               }
+           )
+       };
+   };
 }
 
 namespace glz
