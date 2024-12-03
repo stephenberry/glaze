@@ -200,7 +200,7 @@ namespace glz
             GLZ_SKIP_WS();
             GLZ_MATCH_COLON();
             GLZ_SKIP_WS();
-                        
+
             using V = refl_t<T, I>;
 
             if constexpr (const_value_v<V>) {
@@ -222,7 +222,7 @@ namespace glz
                      get_member(value, get<I>(to_tuple(value))), ctx, it, end);
                }
             }
-            
+
             if constexpr (Opts.error_on_missing_keys || is_partial_read<T> || Opts.partial_read) {
                ((selected_index = I), ...);
             }
@@ -278,8 +278,8 @@ namespace glz
 
       template <opts Opts, class T, auto& HashInfo, class Value, class... SelectedIndex>
          requires(glaze_object_t<T> || reflectable<T>)
-      GLZ_ALWAYS_INLINE constexpr void parse_and_invoke(Value&& value, is_context auto&& ctx, auto&& it,
-                                                        auto&& end, SelectedIndex&&... selected_index)
+      GLZ_ALWAYS_INLINE constexpr void parse_and_invoke(Value&& value, is_context auto&& ctx, auto&& it, auto&& end,
+                                                        SelectedIndex&&... selected_index)
       {
          constexpr auto type = HashInfo.type;
          constexpr auto N = reflect<T>::size;
@@ -317,9 +317,7 @@ namespace glz
             }
 
             // We see better performance function pointers than a glz::jump_table here.
-            visit<N>([&]<size_t I>() {
-               decode_index<Opts, T, I>(value, ctx, it, end, selected_index...);
-            }, index);
+            visit<N>([&]<size_t I>() { decode_index<Opts, T, I>(value, ctx, it, end, selected_index...); }, index);
          }
       }
 
@@ -1966,7 +1964,7 @@ namespace glz
                            it = start; // reset the iterator
                         }
                      }
-                     
+
                      if constexpr (Opts.error_on_missing_keys || is_partial_read<T> || Opts.partial_read) {
                         size_t index = num_members;
                         parse_and_invoke<Opts, T, hash_info<T>>(value, ctx, it, end, index);

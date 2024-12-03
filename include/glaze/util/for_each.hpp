@@ -85,10 +85,10 @@ namespace glz::detail
 #define GLZ_EVERY_HELPER(macro, a, ...) macro(a) __VA_OPT__(GLZ_EVERY_AGAIN GLZ_PARENS(macro, __VA_ARGS__))
 #define GLZ_EVERY_AGAIN() GLZ_EVERY_HELPER
 
-#define GLZ_CASE(I)                                           \
-   case I: {                                                  \
+#define GLZ_CASE(I)                    \
+   case I: {                           \
       lambda.template operator()<I>(); \
-      break;                                                  \
+      break;                           \
    }
 
 #define GLZ_SWITCH(X, ...)                 \
