@@ -195,6 +195,18 @@ namespace glz::detail
    }
    
    template <const std::string_view& Str, size_t N>
+      requires(N > 8)
+   consteval auto pack() {
+      constexpr auto chunks = N / 8;
+      std::array<uint64_t, ((chunks > 0) ? chunks + 1 : 1)> v{};
+      for (size_t i = 0; i < N; ++i) {
+         const auto chunk = i / 8;
+         v[chunk] |= (static_cast<uint64_t>(uint8_t(Str[i])) << ((i % 8) * 8));
+      }
+      return v;
+   }
+   
+   template <const std::string_view& Str, size_t N>
       requires (N <= 8)
    consteval auto pack_buffered()
    {
@@ -258,6 +270,9 @@ namespace glz::detail
          return true;
       }
       else {
+         // Clang and GCC optimize this extremely well for constexpr std::string_view
+         // Packing data can create more binary on GCC
+         // The other cases probably aren't needed as compiler explorer shows them optimized equally well as memcmp
          return 0 == std::memcmp(Str.data(), other, N);
       }
    }
