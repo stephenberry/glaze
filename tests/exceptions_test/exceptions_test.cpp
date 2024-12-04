@@ -4,7 +4,7 @@
 #define UT_RUN_TIME_ONLY
 
 #include "glaze/glaze_exceptions.hpp"
-#include "glaze/thread/async_map.hpp"
+#include "glaze/thread/shared_async_map.hpp"
 #include "glaze/thread/threadpool.hpp"
 #include "ut/ut.hpp"
 
@@ -199,10 +199,10 @@ suite thread_pool = [] {
    };
 };
 
-suite async_map_tests = [] {
-   "async_map"_test = [] {
-      // Don't do this. This is merely a unit test, async_map allocates a unique_ptr underneath
-      glz::async_map<std::string, std::unique_ptr<std::atomic<int>>> map;
+suite shared_async_map_tests = [] {
+   "shared_async_map"_test = [] {
+      // Don't do this. This is merely a unit test, shared_async_map allocates a unique_ptr underneath
+      glz::shared_async_map<std::string, std::unique_ptr<std::atomic<int>>> map;
       map.emplace("one", std::make_unique<std::atomic<int>>(1));
       map.emplace("two", std::make_unique<std::atomic<int>>(2));
       expect(*map.at("one").value() == 1);
@@ -223,8 +223,8 @@ suite async_map_tests = [] {
       expect(*map.at("two").value() == 3);
    };
 
-   "async_map atomic"_test = [] {
-      glz::async_map<std::string, std::atomic<int>> map;
+   "shared_async_map atomic"_test = [] {
+      glz::shared_async_map<std::string, std::atomic<int>> map;
       map.emplace("one", 1);
       map.emplace("two", 2);
       expect(map.at("one").value() == 1);
@@ -251,10 +251,10 @@ suite async_map_tests = [] {
       }
    };
 
-   static_assert(glz::detail::readable_map_t<glz::async_map<std::string, std::atomic<int>>>);
+   static_assert(glz::detail::readable_map_t<glz::shared_async_map<std::string, std::atomic<int>>>);
 
-   "async_map write_json"_test = [] {
-      glz::async_map<std::string, std::atomic<int>> map;
+   "shared_async_map write_json"_test = [] {
+      glz::shared_async_map<std::string, std::atomic<int>> map;
       map["one"] = 1;
       map["two"] = 2;
 
@@ -268,9 +268,9 @@ suite async_map_tests = [] {
       expect(map.at("two").value() == 2);
    };
 
-   // Test serialization and deserialization of an empty async_map
-   "async_map empty"_test = [] {
-      glz::async_map<std::string, std::atomic<int>> map;
+   // Test serialization and deserialization of an empty shared_async_map
+   "shared_async_map empty"_test = [] {
+      glz::shared_async_map<std::string, std::atomic<int>> map;
 
       // Serialize the empty map
       std::string buffer{};
@@ -284,8 +284,8 @@ suite async_map_tests = [] {
    };
 
    // Test handling of keys and values with special characters
-   "async_map special_characters"_test = [] {
-      glz::async_map<std::string, std::atomic<int>> map;
+   "shared_async_map special_characters"_test = [] {
+      glz::shared_async_map<std::string, std::atomic<int>> map;
       map["key with spaces"] = 42;
       map["key_with_\"quotes\""] = 84;
       map["ключ"] = 168; // "key" in Russian
@@ -305,9 +305,9 @@ suite async_map_tests = [] {
       expect(map.at("ключ").value() == 168);
    };
 
-   // Test serialization and deserialization of a large async_map
-   "async_map large_map"_test = [] {
-      glz::async_map<int, std::atomic<int>> map;
+   // Test serialization and deserialization of a large shared_async_map
+   "shared_async_map large_map"_test = [] {
+      glz::shared_async_map<int, std::atomic<int>> map;
 
       // Populate the map with 1000 entries
       for (int i = 0; i < 1000; ++i) {
@@ -329,16 +329,16 @@ suite async_map_tests = [] {
    };
 
    // Test deserialization with invalid JSON
-   "async_map invalid_json"_test = [] {
-      glz::async_map<std::string, std::atomic<int>> map;
+   "shared_async_map invalid_json"_test = [] {
+      glz::shared_async_map<std::string, std::atomic<int>> map;
       std::string invalid_buffer = R"({"one":1, "two": "invalid_value"})"; // "two" should be an integer
 
       expect(glz::read_json(map, invalid_buffer)); // Expecting an error (assuming 'read_json' returns true on failure)
    };
 
    // Test updating existing keys and adding new keys
-   "async_map update_and_add"_test = [] {
-      glz::async_map<std::string, std::atomic<int>> map;
+   "shared_async_map update_and_add"_test = [] {
+      glz::shared_async_map<std::string, std::atomic<int>> map;
       map["alpha"] = 10;
       map["beta"] = 20;
 
@@ -361,9 +361,9 @@ suite async_map_tests = [] {
       expect(map.at("gamma").value() == 40);
    };
 
-   // Test concurrent access to the async_map
-   "async_map concurrent_access"_test = [] {
-      glz::async_map<int, std::atomic<int>> map;
+   // Test concurrent access to the shared_async_map
+   "shared_async_map concurrent_access"_test = [] {
+      glz::shared_async_map<int, std::atomic<int>> map;
       const int num_threads = 10;
       const int increments_per_thread = 1000;
 
@@ -393,9 +393,9 @@ suite async_map_tests = [] {
       }
    };
 
-   // Test removal of keys from the async_map
-   "async_map remove_keys"_test = [] {
-      glz::async_map<std::string, std::atomic<int>> map;
+   // Test removal of keys from the shared_async_map
+   "shared_async_map remove_keys"_test = [] {
+      glz::shared_async_map<std::string, std::atomic<int>> map;
       map["first"] = 100;
       map["second"] = 200;
       map["third"] = 300;

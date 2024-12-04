@@ -1,9 +1,5 @@
 #pragma once
 
-// Provides a semi-safe flat map
-// This async_map only provides thread safety when inserting/deletion
-// It is intended to store thread safe types for more efficient access
-
 #include <algorithm>
 #include <cassert>
 #include <iterator>
@@ -15,25 +11,34 @@
 
 #include "glaze/util/expected.hpp"
 
-// This async_map is intended to hold thread safe value types (V)
+// Provides a semi-safe flat map
+// This shared_async_map only provides thread safety when inserting/deletion
+// It is intended to store thread safe types for more efficient access
+
+// This shared_async_map is intended to hold thread safe value types (V)
 
 namespace glz
 {
    template <class K, class V>
-   struct async_map
+   struct shared_async_map
    {
      private:
-      std::vector<std::unique_ptr<std::pair<K, V>>> items;
-      mutable std::shared_mutex mutex;
+      struct shared_state
+      {
+         std::vector<std::unique_ptr<std::pair<K, V>>> items;
+         mutable std::shared_mutex mutex;
+      };
+      
+      std::shared_ptr<shared_state> state = std::make_shared<shared_state>();
 
       // Helper function to perform binary search.
       // Returns a pair of iterator and a boolean indicating if the key was found.
       auto binary_search_key(const K& key) const
       {
          auto it = std::lower_bound(
-            items.cbegin(), items.cend(), key,
+            state->items.cbegin(), state->items.cend(), key,
             [](const std::unique_ptr<std::pair<K, V>>& item_ptr, const K& key) { return item_ptr->first < key; });
-         if (it != items.cend() && !(key < (*it)->first)) { // Equivalent to key == (*it)->first
+         if (it != state->items.cend() && !(key < (*it)->first)) { // Equivalent to key == (*it)->first
             return std::make_pair(it, true);
          }
          return std::make_pair(it, false);
@@ -42,9 +47,9 @@ namespace glz
       auto binary_search_key(const K& key)
       {
          auto it = std::lower_bound(
-            items.begin(), items.end(), key,
+            state->items.begin(), state->items.end(), key,
             [](const std::unique_ptr<std::pair<K, V>>& item_ptr, const K& key) { return item_ptr->first < key; });
-         if (it != items.end() && !(key < (*it)->first)) { // Equivalent to key == (*it)->first
+         if (it != state->items.end() && !(key < (*it)->first)) { // Equivalent to key == (*it)->first
             return std::make_pair(it, true);
          }
          return std::make_pair(it, false);
@@ -65,33 +70,34 @@ namespace glz
       {
         public:
          using iterator_category = std::forward_iterator_tag;
-         using value_type = async_map::value_type;
+         using value_type = shared_async_map::value_type;
          using difference_type = std::ptrdiff_t;
          using pointer = value_type*;
          using reference = value_type&;
 
         private:
          typename std::vector<std::unique_ptr<std::pair<K, V>>>::iterator item_it;
-         async_map* map;
+         std::shared_ptr<shared_state> state;
          std::shared_ptr<std::shared_lock<std::shared_mutex>> shared_lock_ptr;
          std::shared_ptr<std::unique_lock<std::shared_mutex>> unique_lock_ptr;
 
         public:
-         iterator(typename std::vector<std::unique_ptr<std::pair<K, V>>>::iterator item_it, async_map* map,
+         iterator(typename std::vector<std::unique_ptr<std::pair<K, V>>>::iterator item_it,
+                  std::shared_ptr<shared_state> state,
                   std::shared_ptr<std::shared_lock<std::shared_mutex>> existing_shared_lock = nullptr,
                   std::shared_ptr<std::unique_lock<std::shared_mutex>> existing_unique_lock = nullptr)
-            : item_it(item_it), map(map), shared_lock_ptr(existing_shared_lock), unique_lock_ptr(existing_unique_lock)
+            : item_it(item_it), state(state), shared_lock_ptr(existing_shared_lock), unique_lock_ptr(existing_unique_lock)
          {
             // Acquire a shared lock only if no lock is provided
             if (!shared_lock_ptr && !unique_lock_ptr) {
-               shared_lock_ptr = std::make_shared<std::shared_lock<std::shared_mutex>>(map->mutex);
+               shared_lock_ptr = std::make_shared<std::shared_lock<std::shared_mutex>>(state->mutex);
             }
          }
 
          // Copy Constructor
          iterator(const iterator& other)
             : item_it(other.item_it),
-              map(other.map),
+              state(other.state),
               shared_lock_ptr(other.shared_lock_ptr),
               unique_lock_ptr(other.unique_lock_ptr)
          {}
@@ -99,7 +105,7 @@ namespace glz
          // Move Constructor
          iterator(iterator&& other) noexcept
             : item_it(std::move(other.item_it)),
-              map(other.map),
+              state(std::move(other.state)),
               shared_lock_ptr(std::move(other.shared_lock_ptr)),
               unique_lock_ptr(std::move(other.unique_lock_ptr))
          {}
@@ -109,7 +115,7 @@ namespace glz
          {
             if (this != &other) {
                item_it = other.item_it;
-               map = other.map;
+               state = other.state;
                shared_lock_ptr = other.shared_lock_ptr;
                unique_lock_ptr = other.unique_lock_ptr;
             }
@@ -158,36 +164,38 @@ namespace glz
       {
         public:
          using iterator_category = std::forward_iterator_tag;
-         using value_type = async_map::const_value_type;
+         using value_type = shared_async_map::const_value_type;
          using difference_type = std::ptrdiff_t;
          using pointer = const value_type*;
          using reference = const value_type&;
 
         private:
          typename std::vector<std::unique_ptr<std::pair<K, V>>>::const_iterator item_it;
-         const async_map* map;
+         std::shared_ptr<shared_state> state;
          std::shared_ptr<std::shared_lock<std::shared_mutex>> shared_lock_ptr;
 
         public:
          const_iterator(typename std::vector<std::unique_ptr<std::pair<K, V>>>::const_iterator item_it,
-                        const async_map* map,
+                        std::shared_ptr<shared_state> state,
                         std::shared_ptr<std::shared_lock<std::shared_mutex>> existing_shared_lock = nullptr)
-            : item_it(item_it), map(map), shared_lock_ptr(existing_shared_lock)
+            : item_it(item_it), state(state), shared_lock_ptr(existing_shared_lock)
          {
             // Acquire a shared lock only if no lock is provided
             if (!shared_lock_ptr) {
-               shared_lock_ptr = std::make_shared<std::shared_lock<std::shared_mutex>>(map->mutex);
+               shared_lock_ptr = std::make_shared<std::shared_lock<std::shared_mutex>>(state->mutex);
             }
          }
 
          // Copy Constructor
          const_iterator(const const_iterator& other)
-            : item_it(other.item_it), map(other.map), shared_lock_ptr(other.shared_lock_ptr)
+            : item_it(other.item_it), state(other.state), shared_lock_ptr(other.shared_lock_ptr)
          {}
 
          // Move Constructor
          const_iterator(const_iterator&& other) noexcept
-            : item_it(std::move(other.item_it)), map(other.map), shared_lock_ptr(std::move(other.shared_lock_ptr))
+            : item_it(std::move(other.item_it)),
+              state(std::move(other.state)),
+              shared_lock_ptr(std::move(other.shared_lock_ptr))
          {}
 
          // Copy Assignment
@@ -195,7 +203,7 @@ namespace glz
          {
             if (this != &other) {
                item_it = other.item_it;
-               map = other.map;
+               state = other.state;
                shared_lock_ptr = other.shared_lock_ptr;
             }
             return *this;
@@ -248,7 +256,8 @@ namespace glz
          std::shared_ptr<std::unique_lock<std::shared_mutex>> unique_lock_ptr;
 
         public:
-         value_proxy(V& value_ref, std::shared_ptr<std::shared_lock<std::shared_mutex>> existing_shared_lock = nullptr,
+         value_proxy(V& value_ref,
+                     std::shared_ptr<std::shared_lock<std::shared_mutex>> existing_shared_lock = nullptr,
                      std::shared_ptr<std::unique_lock<std::shared_mutex>> existing_unique_lock = nullptr)
             : value_ref(value_ref), shared_lock_ptr(existing_shared_lock), unique_lock_ptr(existing_unique_lock)
          {
@@ -312,8 +321,8 @@ namespace glz
          // Disable Copy and Move
          const_value_proxy(const const_value_proxy&) = delete;
          const_value_proxy& operator=(const const_value_proxy&) = delete;
-         const_value_proxy(const_value_proxy&&) = delete;
-         const_value_proxy& operator=(const_value_proxy&&) = delete;
+         const_value_proxy(const const_value_proxy&&) = delete;
+         const_value_proxy& operator=(const const_value_proxy&&) = delete;
 
          // Access the value
          const V& value() const { return value_ref; }
@@ -332,7 +341,7 @@ namespace glz
       value_proxy operator[](const K& key)
       {
          // Acquire a shared lock to search for the key
-         std::shared_lock<std::shared_mutex> shared_lock(mutex);
+         std::shared_lock<std::shared_mutex> shared_lock(state->mutex);
          auto [it, found] = binary_search_key(key);
 
          if (found) {
@@ -343,15 +352,16 @@ namespace glz
             // Key doesn't exist; release the shared_lock
             shared_lock.unlock();
             // Acquire a unique lock to modify the map
-            std::unique_lock<std::shared_mutex> unique_lock(mutex);
+            std::unique_lock<std::shared_mutex> unique_lock(state->mutex);
 
             // Double-check if the key was inserted by another thread
             std::tie(it, found) = binary_search_key(key);
 
             if (!found) {
                // Insert a new element with default-constructed value
-               it = items.insert(it, std::make_unique<std::pair<K, V>>(
-                                        std::piecewise_construct, std::forward_as_tuple(key), std::forward_as_tuple()));
+               it = state->items.insert(it, std::make_unique<std::pair<K, V>>(
+                                                std::piecewise_construct, std::forward_as_tuple(key),
+                                                std::forward_as_tuple()));
             }
 
             unique_lock.unlock();
@@ -372,37 +382,37 @@ namespace glz
       // Insert method behaves like std::map::insert
       std::pair<iterator, bool> insert(const std::pair<K, V>& pair)
       {
-         auto unique_lock_ptr = std::make_shared<std::unique_lock<std::shared_mutex>>(mutex);
+         auto unique_lock_ptr = std::make_shared<std::unique_lock<std::shared_mutex>>(state->mutex);
 
          // Perform binary search to find the key
          auto [it, found] = binary_search_key(pair.first);
 
          if (found) {
-            return {iterator(it, this, nullptr, unique_lock_ptr), false};
+            return {iterator(it, state, nullptr, unique_lock_ptr), false};
          }
          else {
             // Insert while maintaining sorted order
-            it = items.insert(it, std::make_unique<std::pair<K, V>>(pair));
-            return {iterator(it, this, nullptr, unique_lock_ptr), true};
+            it = state->items.insert(it, std::make_unique<std::pair<K, V>>(pair));
+            return {iterator(it, state, nullptr, unique_lock_ptr), true};
          }
       }
 
       template <class Key, class Value>
       std::pair<iterator, bool> emplace(Key&& key, Value&& value)
       {
-         auto unique_lock_ptr = std::make_shared<std::unique_lock<std::shared_mutex>>(mutex);
+         auto unique_lock_ptr = std::make_shared<std::unique_lock<std::shared_mutex>>(state->mutex);
 
          // Perform binary search to find the key
          auto [it, found] = binary_search_key(key);
 
          if (found) {
-            return {iterator(it, this, nullptr, unique_lock_ptr), false};
+            return {iterator(it, state, nullptr, unique_lock_ptr), false};
          }
          else {
             // Insert while maintaining sorted order
-            it =
-               items.insert(it, std::make_unique<std::pair<K, V>>(std::forward<Key>(key), std::forward<Value>(value)));
-            return {iterator(it, this, nullptr, unique_lock_ptr), true};
+            it = state->items.insert(
+               it, std::make_unique<std::pair<K, V>>(std::forward<Key>(key), std::forward<Value>(value)));
+            return {iterator(it, state, nullptr, unique_lock_ptr), true};
          }
       }
 
@@ -410,20 +420,20 @@ namespace glz
       template <typename... Args>
       std::pair<iterator, bool> emplace(const K& key, Args&&... args)
       {
-         auto unique_lock_ptr = std::make_shared<std::unique_lock<std::shared_mutex>>(mutex);
+         auto unique_lock_ptr = std::make_shared<std::unique_lock<std::shared_mutex>>(state->mutex);
 
          // Perform binary search to find the key
          auto [it, found] = binary_search_key(key);
 
          if (found) {
-            return {iterator(it, this, nullptr, unique_lock_ptr), false};
+            return {iterator(it, state, nullptr, unique_lock_ptr), false};
          }
          else {
             // Construct value in place while maintaining sorted order
-            it =
-               items.insert(it, std::make_unique<std::pair<K, V>>(std::piecewise_construct, std::forward_as_tuple(key),
-                                                                  std::forward_as_tuple(std::forward<Args>(args)...)));
-            return {iterator(it, this, nullptr, unique_lock_ptr), true};
+            it = state->items.insert(it, std::make_unique<std::pair<K, V>>(
+                                           std::piecewise_construct, std::forward_as_tuple(key),
+                                           std::forward_as_tuple(std::forward<Args>(args)...)));
+            return {iterator(it, state, nullptr, unique_lock_ptr), true};
          }
       }
 
@@ -437,33 +447,33 @@ namespace glz
       // Clear all elements
       void clear()
       {
-         std::unique_lock lock(mutex);
-         items.clear();
+         std::unique_lock lock(state->mutex);
+         state->items.clear();
       }
 
       // Erase a key
       void erase(const K& key)
       {
-         std::unique_lock lock(mutex);
+         std::unique_lock lock(state->mutex);
 
          // Perform binary search to find the key
          auto [it, found] = binary_search_key(key);
 
          if (found) {
-            items.erase(it);
+            state->items.erase(it);
          }
       }
 
       // Find an iterator to the key
       iterator find(const K& key)
       {
-         auto shared_lock_ptr = std::make_shared<std::shared_lock<std::shared_mutex>>(mutex);
+         auto shared_lock_ptr = std::make_shared<std::shared_lock<std::shared_mutex>>(state->mutex);
 
          // Perform binary search to find the key
          auto [it, found] = binary_search_key(key);
 
          if (found) {
-            return iterator(it, this, shared_lock_ptr);
+            return iterator(it, state, shared_lock_ptr);
          }
          else {
             return end();
@@ -473,13 +483,13 @@ namespace glz
       // Const version of find
       const_iterator find(const K& key) const
       {
-         auto shared_lock_ptr = std::make_shared<std::shared_lock<std::shared_mutex>>(mutex);
+         auto shared_lock_ptr = std::make_shared<std::shared_lock<std::shared_mutex>>(state->mutex);
 
          // Perform binary search to find the key
          auto [it, found] = binary_search_key(key);
 
          if (found) {
-            return const_iterator(it, this, shared_lock_ptr);
+            return const_iterator(it, state, shared_lock_ptr);
          }
          else {
             return end();
@@ -489,7 +499,7 @@ namespace glz
       // Access element with bounds checking (non-const)
       value_proxy at(const K& key)
       {
-         auto shared_lock_ptr = std::make_shared<std::shared_lock<std::shared_mutex>>(mutex);
+         auto shared_lock_ptr = std::make_shared<std::shared_lock<std::shared_mutex>>(state->mutex);
 
          // Perform binary search to find the key
          auto [it, found] = binary_search_key(key);
@@ -505,7 +515,7 @@ namespace glz
       // Access element with bounds checking (const)
       const_value_proxy at(const K& key) const
       {
-         auto shared_lock_ptr = std::make_shared<std::shared_lock<std::shared_mutex>>(mutex);
+         auto shared_lock_ptr = std::make_shared<std::shared_lock<std::shared_mutex>>(state->mutex);
 
          // Perform binary search to find the key
          auto [it, found] = binary_search_key(key);
@@ -521,69 +531,69 @@ namespace glz
       // Begin iterator (non-const)
       iterator begin()
       {
-         auto shared_lock_ptr = std::make_shared<std::shared_lock<std::shared_mutex>>(mutex);
-         return iterator(items.begin(), this, shared_lock_ptr);
+         auto shared_lock_ptr = std::make_shared<std::shared_lock<std::shared_mutex>>(state->mutex);
+         return iterator(state->items.begin(), state, shared_lock_ptr);
       }
 
       // End iterator (non-const)
       iterator end()
       {
-         auto shared_lock_ptr = std::make_shared<std::shared_lock<std::shared_mutex>>(mutex);
-         return iterator(items.end(), this, shared_lock_ptr);
+         auto shared_lock_ptr = std::make_shared<std::shared_lock<std::shared_mutex>>(state->mutex);
+         return iterator(state->items.end(), state, shared_lock_ptr);
       }
 
       // Begin iterator (const)
       const_iterator begin() const
       {
-         auto shared_lock_ptr = std::make_shared<std::shared_lock<std::shared_mutex>>(mutex);
-         return const_iterator(items.cbegin(), this, shared_lock_ptr);
+         auto shared_lock_ptr = std::make_shared<std::shared_lock<std::shared_mutex>>(state->mutex);
+         return const_iterator(state->items.cbegin(), state, shared_lock_ptr);
       }
 
       // End iterator (const)
       const_iterator end() const
       {
-         auto shared_lock_ptr = std::make_shared<std::shared_lock<std::shared_mutex>>(mutex);
-         return const_iterator(items.cend(), this, shared_lock_ptr);
+         auto shared_lock_ptr = std::make_shared<std::shared_lock<std::shared_mutex>>(state->mutex);
+         return const_iterator(state->items.cend(), state, shared_lock_ptr);
       }
 
       const_iterator cbegin() const
       {
-         auto shared_lock_ptr = std::make_shared<std::shared_lock<std::shared_mutex>>(mutex);
-         return const_iterator(items.cbegin(), this, shared_lock_ptr);
+         auto shared_lock_ptr = std::make_shared<std::shared_lock<std::shared_mutex>>(state->mutex);
+         return const_iterator(state->items.cbegin(), state, shared_lock_ptr);
       }
 
       const_iterator cend() const
       {
-         auto shared_lock_ptr = std::make_shared<std::shared_lock<std::shared_mutex>>(mutex);
-         return const_iterator(items.cend(), this, shared_lock_ptr);
+         auto shared_lock_ptr = std::make_shared<std::shared_lock<std::shared_mutex>>(state->mutex);
+         return const_iterator(state->items.cend(), state, shared_lock_ptr);
       }
 
       // Count the number of elements with the given key (0 or 1)
       size_t count(const K& key) const
       {
-         std::shared_lock lock(mutex);
+         std::shared_lock lock(state->mutex);
          auto [it, found] = binary_search_key(key);
          return found ? 1 : 0;
       }
 
       size_t size() const
       {
-         std::shared_lock lock(mutex);
-         return items.size();
+         std::shared_lock lock(state->mutex);
+         return state->items.size();
       }
 
       // Check if the map contains the key
       bool contains(const K& key) const
       {
-         std::shared_lock lock(mutex);
+         std::shared_lock lock(state->mutex);
          auto [it, found] = binary_search_key(key);
          return found;
       }
 
       bool empty() const
       {
-         std::shared_lock lock(mutex);
-         return items.size() == 0;
+         std::shared_lock lock(state->mutex);
+         return state->items.size() == 0;
       }
    };
 }
