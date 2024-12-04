@@ -9896,22 +9896,16 @@ struct custom_nullable_t
    std::optional<T> val{};
 
    bool has_value() const { return val.has_value(); }
+   
+   T& value() { return *val; }
 
    const T& value() const { return *val; }
+   
+   template <class... Args>
+   void emplace(Args&&... args) {
+      val.emplace(std::forward<Args>(args)...);
+   }
 };
-
-namespace glz::detail
-{
-   template <class T>
-   struct from<JSON, custom_nullable_t<T>>
-   {
-      template <auto Opts>
-      static void op(auto& value, auto&&... args)
-      {
-         read<JSON>::op<Opts>(value.val, args...);
-      }
-   };
-}
 
 struct custom_nullable_container_t
 {

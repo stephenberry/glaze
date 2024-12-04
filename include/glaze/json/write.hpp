@@ -53,10 +53,10 @@ namespace glz
       };
 
       template <class T>
-      concept optional_like = nullable_t<T> && (!is_expected<T> && !std::is_array_v<T>);
+      concept nullable_like = nullable_t<T> && (!is_expected<T> && !std::is_array_v<T>);
 
       template <class T>
-      concept supports_unchecked_write = boolean_like<T> || num_t<T> || optional_like<T> || always_null_t<T>;
+      concept supports_unchecked_write = boolean_like<T> || num_t<T> || nullable_like<T> || always_null_t<T>;
 
       template <class T>
       inline constexpr std::optional<size_t> required_padding()
@@ -67,7 +67,7 @@ namespace glz
          else if constexpr (num_t<T>) {
             return 64;
          }
-         else if constexpr (optional_like<T> &&
+         else if constexpr (nullable_like<T> &&
                             (
                                requires { requires supports_unchecked_write<typename T::value_type>; } ||
                                requires { requires supports_unchecked_write<typename T::element_type>; })) {
@@ -963,7 +963,7 @@ namespace glz
          }
       };
 
-      template <optional_like T>
+      template <nullable_like T>
       struct to<JSON, T>
       {
          template <auto Opts>
@@ -986,7 +986,7 @@ namespace glz
       };
       
       template <class T>
-         requires (nullable_value_t<T> && not optional_like<T> && not is_expected<T>)
+         requires (nullable_value_t<T> && not nullable_like<T> && not is_expected<T>)
       struct to<JSON, T>
       {
          template <auto Opts>

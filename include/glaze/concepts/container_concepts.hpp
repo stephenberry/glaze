@@ -9,6 +9,12 @@
 #include <utility>
 #include <vector>
 
+// Over time we want most concepts to use the nomenclature:
+// is_
+// has_
+// _like
+// Avoid the use of _t as that makes it seem like a type and not a concept
+
 namespace glz
 {
    template <class T, class... U>
@@ -99,6 +105,17 @@ namespace glz::detail
       {
          a / b
       } -> std::same_as<T>;
+   };
+   
+   template <class T>
+   concept optional_like = requires(T t, typename T::value_type v) {
+       { T() } -> std::same_as<T>;
+       { T(v) } -> std::same_as<T>;
+       { t.has_value() } -> std::convertible_to<bool>;
+      { t.value() };
+      { t = v };
+      { t.reset() };
+      { t.emplace() };
    };
 
    template <class T>

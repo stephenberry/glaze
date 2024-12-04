@@ -2647,8 +2647,8 @@ namespace glz
          }
       };
 
-      template <nullable_t T>
-         requires(!is_expected<T> && !std::is_array_v<T>)
+      template <class T>
+         requires((nullable_t<T> || nullable_value_t<T>) && not is_expected<T> && not std::is_array_v<T>)
       struct from<JSON, T>
       {
          template <auto Options>
@@ -2665,35 +2665,50 @@ namespace glz
                match<"ull", Opts>(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
                   return;
-               if constexpr (!std::is_pointer_v<T>) {
+               if constexpr (requires { value.reset(); }) {
                   value.reset();
                }
             }
             else {
-               if (!value) {
-                  if constexpr (is_specialization_v<T, std::optional>) {
-                     if constexpr (requires { value.emplace(); }) {
+               if constexpr (nullable_value_t<T>) {
+                  if (not value.has_value()) {
+                     if constexpr (constructible<T>) {
+                        value = meta_construct_v<T>();
+                     }
+                     else if constexpr (requires { value.emplace(); }) {
                         value.emplace();
                      }
                      else {
-                        value = typename T::value_type{};
+                        static_assert(false_v<T>, "Your nullable type must have `emplace()` or be glz::meta constructible, or create a custom glz::detail::from specialization");
                      }
                   }
-                  else if constexpr (is_specialization_v<T, std::unique_ptr>)
-                     value = std::make_unique<typename T::element_type>();
-                  else if constexpr (is_specialization_v<T, std::shared_ptr>)
-                     value = std::make_shared<typename T::element_type>();
-                  else if constexpr (constructible<T>) {
-                     value = meta_construct_v<T>();
-                  }
-                  else {
-                     ctx.error = error_code::invalid_nullable_read;
-                     return;
-                     // Cannot read into unset nullable that is not std::optional, std::unique_ptr, or
-                     // std::shared_ptr
-                  }
+                  read<JSON>::op<Opts>(value.value(), ctx, it, end);
                }
-               read<JSON>::op<Opts>(*value, ctx, it, end);
+               else {
+                  if (!value) {
+                     if constexpr (optional_like<T>) {
+                        if constexpr (requires { value.emplace(); }) {
+                           value.emplace();
+                        }
+                        else {
+                           value = typename T::value_type{};
+                        }
+                     }
+                     else if constexpr (is_specialization_v<T, std::unique_ptr>)
+                        value = std::make_unique<typename T::element_type>();
+                     else if constexpr (is_specialization_v<T, std::shared_ptr>)
+                        value = std::make_shared<typename T::element_type>();
+                     else if constexpr (constructible<T>) {
+                        value = meta_construct_v<T>();
+                     }
+                     else {
+                        // Cannot read into a null raw pointer
+                        ctx.error = error_code::invalid_nullable_read;
+                        return;
+                     }
+                  }
+                  read<JSON>::op<Opts>(*value, ctx, it, end);
+               }
             }
          }
       };
