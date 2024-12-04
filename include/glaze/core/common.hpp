@@ -345,7 +345,7 @@ namespace glz
             *t
          };
       };
-      
+
       // For optional like types that cannot overload `operator bool()`
       template <class T>
       concept nullable_value_t = !meta_value_t<T> && requires(T t) {

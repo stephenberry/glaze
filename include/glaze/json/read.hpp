@@ -2648,7 +2648,8 @@ namespace glz
       };
 
       template <class T>
-         requires((nullable_t<T> || nullable_value_t<T>) && not is_expected<T> && not std::is_array_v<T> && not custom_read<T>)
+         requires((nullable_t<T> || nullable_value_t<T>) && not is_expected<T> && not std::is_array_v<T> &&
+                  not custom_read<T>)
       struct from<JSON, T>
       {
          template <auto Options>
@@ -2679,7 +2680,9 @@ namespace glz
                         value.emplace();
                      }
                      else {
-                        static_assert(false_v<T>, "Your nullable type must have `emplace()` or be glz::meta constructible, or create a custom glz::detail::from specialization");
+                        static_assert(false_v<T>,
+                                      "Your nullable type must have `emplace()` or be glz::meta constructible, or "
+                                      "create a custom glz::detail::from specialization");
                      }
                   }
                   read<JSON>::op<Opts>(value.value(), ctx, it, end);

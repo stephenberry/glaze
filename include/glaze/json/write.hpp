@@ -984,9 +984,9 @@ namespace glz
             }
          }
       };
-      
+
       template <class T>
-         requires (nullable_value_t<T> && not nullable_like<T> && not is_expected<T>)
+         requires(nullable_value_t<T> && not nullable_like<T> && not is_expected<T>)
       struct to<JSON, T>
       {
          template <auto Opts>
