@@ -578,16 +578,6 @@ namespace glz::detail
       }(std::make_index_sequence<reflect<T>::size>{});
    }
 
-   template <class T>
-   constexpr auto make_string_to_enum_map() noexcept
-   {
-      constexpr auto N = reflect<T>::size;
-      return [&]<size_t... I>(std::index_sequence<I...>) {
-         return normal_map<sv, T, N>(
-            std::array<pair<sv, T>, N>{pair<sv, T>{reflect<T>::keys[I], T(glz::get<I>(reflect<T>::values))}...});
-      }(std::make_index_sequence<N>{});
-   }
-
    // get a std::string_view from an enum value
    template <class T>
       requires(detail::glaze_t<T> && std::is_enum_v<std::decay_t<T>>)
@@ -1780,7 +1770,7 @@ namespace glz::detail
             const auto* c = quote_memchr<HashInfo.min_length>(it, end);
             if (c) [[likely]] {
                const auto n = size_t(static_cast<std::decay_t<decltype(it)>>(c) - it);
-               if (n == 0 || n > HashInfo.max_length) {
+               if (n == 0 || n > HashInfo.max_length) [[unlikely]] {
                   return N; // error
                }
 

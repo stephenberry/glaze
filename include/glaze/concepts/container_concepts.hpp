@@ -155,7 +155,7 @@ namespace glz::detail
    concept map_subscriptable = requires(T container) {
       {
          container[std::declval<typename T::key_type>()]
-      } -> std::same_as<typename T::mapped_type&>;
+      };
    };
 
    template <typename T>

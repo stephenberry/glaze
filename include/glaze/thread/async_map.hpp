@@ -10,12 +10,10 @@
 #include <memory>
 #include <mutex>
 #include <shared_mutex>
-#include <stdexcept>
 #include <utility>
 #include <vector>
 
-#include "glaze/core/common.hpp"
-#include "glaze/util/type_traits.hpp"
+#include "glaze/util/expected.hpp"
 
 // This async_map is intended to hold thread safe value types (V)
 
@@ -138,22 +136,22 @@ namespace glz
          pointer operator->() const { return (*item_it).get(); }
 
          // Equality Comparison
-         bool operator==(const iterator& other) const { return item_it == other.item_it; }
+         bool operator==(const iterator& other) const noexcept { return item_it == other.item_it; }
 
          // Inequality Comparison
-         bool operator!=(const iterator& other) const { return !(*this == other); }
+         bool operator!=(const iterator& other) const noexcept { return !(*this == other); }
 
          // Comparison operators with iterator
-         bool operator<(const iterator& other) const { return item_it < other.item_it; }
-         bool operator>(const iterator& other) const { return item_it > other.item_it; }
-         bool operator<=(const iterator& other) const { return item_it <= other.item_it; }
+         bool operator<(const iterator& other) const noexcept { return item_it < other.item_it; }
+         bool operator>(const iterator& other) const noexcept { return item_it > other.item_it; }
+         bool operator<=(const iterator& other) const noexcept { return item_it <= other.item_it; }
          bool operator>=(const iterator& other) const { return item_it >= other.item_it; }
 
          // Comparison operators with const_iterator
-         bool operator<(const const_iterator& other) const { return item_it < other.item_it; }
-         bool operator>(const const_iterator& other) const { return item_it > other.item_it; }
-         bool operator<=(const const_iterator& other) const { return item_it <= other.item_it; }
-         bool operator>=(const const_iterator& other) const { return item_it >= other.item_it; }
+         bool operator<(const const_iterator& other) const noexcept { return item_it < other.item_it; }
+         bool operator>(const const_iterator& other) const noexcept { return item_it > other.item_it; }
+         bool operator<=(const const_iterator& other) const noexcept { return item_it <= other.item_it; }
+         bool operator>=(const const_iterator& other) const noexcept { return item_it >= other.item_it; }
       };
 
       class const_iterator
@@ -223,41 +221,42 @@ namespace glz
          pointer operator->() const { return (*item_it).get(); }
 
          // Equality Comparison
-         bool operator==(const const_iterator& other) const { return item_it == other.item_it; }
+         bool operator==(const const_iterator& other) const noexcept { return item_it == other.item_it; }
 
          // Inequality Comparison
-         bool operator!=(const const_iterator& other) const { return !(*this == other); }
+         bool operator!=(const const_iterator& other) const noexcept { return !(*this == other); }
 
          // Comparison operators with const_iterator
-         bool operator<(const const_iterator& other) const { return item_it < other.item_it; }
-         bool operator>(const const_iterator& other) const { return item_it > other.item_it; }
-         bool operator<=(const const_iterator& other) const { return item_it <= other.item_it; }
-         bool operator>=(const const_iterator& other) const { return item_it >= other.item_it; }
+         bool operator<(const const_iterator& other) const noexcept { return item_it < other.item_it; }
+         bool operator>(const const_iterator& other) const noexcept { return item_it > other.item_it; }
+         bool operator<=(const const_iterator& other) const noexcept { return item_it <= other.item_it; }
+         bool operator>=(const const_iterator& other) const noexcept { return item_it >= other.item_it; }
 
          // Comparison operators with iterator
-         bool operator<(const iterator& other) const { return item_it < other.item_it; }
-         bool operator>(const iterator& other) const { return item_it > other.item_it; }
-         bool operator<=(const iterator& other) const { return item_it <= other.item_it; }
-         bool operator>=(const iterator& other) const { return item_it >= other.item_it; }
+         bool operator<(const iterator& other) const noexcept { return item_it < other.item_it; }
+         bool operator>(const iterator& other) const noexcept { return item_it > other.item_it; }
+         bool operator<=(const iterator& other) const noexcept { return item_it <= other.item_it; }
+         bool operator>=(const iterator& other) const noexcept { return item_it >= other.item_it; }
       };
 
       // Value Proxy Class Definition
       class value_proxy
       {
         private:
-         value_type& value_ref;
+         V& value_ref;
          std::shared_ptr<std::shared_lock<std::shared_mutex>> shared_lock_ptr;
          std::shared_ptr<std::unique_lock<std::shared_mutex>> unique_lock_ptr;
 
         public:
-         value_proxy(value_type& value_ref,
-                     std::shared_ptr<std::shared_lock<std::shared_mutex>> existing_shared_lock = nullptr,
+         value_proxy(V& value_ref, std::shared_ptr<std::shared_lock<std::shared_mutex>> existing_shared_lock = nullptr,
                      std::shared_ptr<std::unique_lock<std::shared_mutex>> existing_unique_lock = nullptr)
             : value_ref(value_ref), shared_lock_ptr(existing_shared_lock), unique_lock_ptr(existing_unique_lock)
          {
             // Ensure that a lock is provided
             assert(shared_lock_ptr || unique_lock_ptr);
          }
+
+         static constexpr bool glaze_value_proxy = true;
 
          // Disable Copy and Move
          value_proxy(const value_proxy&) = delete;
@@ -266,15 +265,30 @@ namespace glz
          value_proxy& operator=(value_proxy&&) = delete;
 
          // Access the value
-         V& value() { return value_ref.second; }
+         V& value() { return value_ref; }
 
-         const V& value() const { return value_ref.second; }
+         const V& value() const { return value_ref; }
 
          // Arrow Operator
-         value_type* operator->() { return &value_ref; }
+         V* operator->() { return &value_ref; }
+
+         const V* operator->() const { return &value_ref; }
+
+         V& operator*() { return value_ref; }
+
+         const V& operator*() const { return value_ref; }
 
          // Implicit Conversion to V&
-         operator V&() { return value_ref.second; }
+         operator V&() { return value_ref; }
+
+         operator const V&() const { return value_ref; }
+
+         template <class T>
+         value_proxy& operator=(const T& other)
+         {
+            value_ref = other;
+            return *this;
+         }
 
          bool operator==(const V& other) const { return value() == other; }
       };
@@ -283,11 +297,11 @@ namespace glz
       class const_value_proxy
       {
         private:
-         const_value_type& value_ref;
+         const V& value_ref;
          std::shared_ptr<std::shared_lock<std::shared_mutex>> shared_lock_ptr;
 
         public:
-         const_value_proxy(const_value_type& value_ref,
+         const_value_proxy(const V& value_ref,
                            std::shared_ptr<std::shared_lock<std::shared_mutex>> existing_shared_lock)
             : value_ref(value_ref), shared_lock_ptr(existing_shared_lock)
          {
@@ -302,24 +316,58 @@ namespace glz
          const_value_proxy& operator=(const_value_proxy&&) = delete;
 
          // Access the value
-         const V& value() const { return value_ref.second; }
+         const V& value() const { return value_ref; }
 
          // Arrow Operator
-         const_value_type* operator->() const { return &value_ref; }
+         const V* operator->() const { return &value_ref; }
+
+         const V& operator*() const { return value_ref; }
 
          // Implicit Conversion to const V&
-         operator const V&() const { return value_ref.second; }
+         operator const V&() const { return value_ref; }
 
          bool operator==(const V& other) const { return value() == other; }
       };
 
-      template <class KeyType>
-      [[deprecated(
-         "operator[] is not allowed with async_map because it would require expensive unique locks")]] value_proxy
-      operator[](const KeyType&)
+      value_proxy operator[](const K& key)
       {
-         static_assert(false_v<KeyType>);
-      };
+         // Acquire a shared lock to search for the key
+         std::shared_lock<std::shared_mutex> shared_lock(mutex);
+         auto [it, found] = binary_search_key(key);
+
+         if (found) {
+            auto shared_lock_ptr = std::make_shared<std::shared_lock<std::shared_mutex>>(std::move(shared_lock));
+            return value_proxy((*it)->second, shared_lock_ptr);
+         }
+         else {
+            // Key doesn't exist; release the shared_lock
+            shared_lock.unlock();
+            // Acquire a unique lock to modify the map
+            std::unique_lock<std::shared_mutex> unique_lock(mutex);
+
+            // Double-check if the key was inserted by another thread
+            std::tie(it, found) = binary_search_key(key);
+
+            if (!found) {
+               // Insert a new element with default-constructed value
+               it = items.insert(it, std::make_unique<std::pair<K, V>>(
+                                        std::piecewise_construct, std::forward_as_tuple(key), std::forward_as_tuple()));
+            }
+
+            unique_lock.unlock();
+            shared_lock.lock();
+
+            // Find the value once again in case a modification occurred
+            std::tie(it, found) = binary_search_key(key);
+
+            if (!found) {
+               GLZ_THROW_OR_ABORT(std::out_of_range("Key was removed by another thread"));
+            }
+
+            auto shared_lock_ptr = std::make_shared<std::shared_lock<std::shared_mutex>>(std::move(shared_lock));
+            return value_proxy((*it)->second, shared_lock_ptr);
+         }
+      }
 
       // Insert method behaves like std::map::insert
       std::pair<iterator, bool> insert(const std::pair<K, V>& pair)
@@ -447,10 +495,10 @@ namespace glz
          auto [it, found] = binary_search_key(key);
 
          if (found) {
-            return value_proxy(*(*it), shared_lock_ptr);
+            return value_proxy((*it)->second, shared_lock_ptr);
          }
          else {
-            throw std::out_of_range("Key not found");
+            GLZ_THROW_OR_ABORT(std::out_of_range("Key not found"));
          }
       }
 
@@ -463,10 +511,10 @@ namespace glz
          auto [it, found] = binary_search_key(key);
 
          if (found) {
-            return const_value_proxy(*(*it), shared_lock_ptr);
+            return const_value_proxy((*it)->second, shared_lock_ptr);
          }
          else {
-            throw std::out_of_range("Key not found");
+            GLZ_THROW_OR_ABORT(std::out_of_range("Key not found"));
          }
       }
 
@@ -498,6 +546,18 @@ namespace glz
          return const_iterator(items.cend(), this, shared_lock_ptr);
       }
 
+      const_iterator cbegin() const
+      {
+         auto shared_lock_ptr = std::make_shared<std::shared_lock<std::shared_mutex>>(mutex);
+         return const_iterator(items.cbegin(), this, shared_lock_ptr);
+      }
+
+      const_iterator cend() const
+      {
+         auto shared_lock_ptr = std::make_shared<std::shared_lock<std::shared_mutex>>(mutex);
+         return const_iterator(items.cend(), this, shared_lock_ptr);
+      }
+
       // Count the number of elements with the given key (0 or 1)
       size_t count(const K& key) const
       {
@@ -518,6 +578,28 @@ namespace glz
          std::shared_lock lock(mutex);
          auto [it, found] = binary_search_key(key);
          return found;
+      }
+
+      bool empty() const
+      {
+         std::shared_lock lock(mutex);
+         return items.size() == 0;
+      }
+   };
+}
+
+namespace glz::detail
+{
+   template <class T>
+   concept is_value_proxy = requires { T::glaze_value_proxy; };
+
+   template <is_value_proxy T>
+   struct from<JSON, T>
+   {
+      template <auto Opts>
+      static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
+      {
+         read<JSON>::op<Opts>(value.value(), ctx, it, end);
       }
    };
 }

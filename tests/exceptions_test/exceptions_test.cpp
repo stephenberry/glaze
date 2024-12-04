@@ -250,6 +250,173 @@ suite async_map_tests = [] {
          std::cout << it->second << '\n';
       }
    };
+
+   static_assert(glz::detail::readable_map_t<glz::async_map<std::string, std::atomic<int>>>);
+
+   "async_map write_json"_test = [] {
+      glz::async_map<std::string, std::atomic<int>> map;
+      map["one"] = 1;
+      map["two"] = 2;
+
+      std::string buffer{};
+      expect(not glz::write_json(map, buffer));
+      expect(buffer == R"({"one":1,"two":2})") << buffer;
+
+      map.clear();
+      expect(not glz::read_json(map, buffer));
+      expect(map.at("one").value() == 1);
+      expect(map.at("two").value() == 2);
+   };
+
+   // Test serialization and deserialization of an empty async_map
+   "async_map empty"_test = [] {
+      glz::async_map<std::string, std::atomic<int>> map;
+
+      // Serialize the empty map
+      std::string buffer{};
+      expect(not glz::write_json(map, buffer));
+      expect(buffer == R"({})") << buffer;
+
+      // Clear and deserialize back
+      map.clear();
+      expect(not glz::read_json(map, buffer));
+      expect(map.empty());
+   };
+
+   // Test handling of keys and values with special characters
+   "async_map special_characters"_test = [] {
+      glz::async_map<std::string, std::atomic<int>> map;
+      map["key with spaces"] = 42;
+      map["key_with_\"quotes\""] = 84;
+      map["ключ"] = 168; // "key" in Russian
+
+      std::string buffer{};
+      expect(not glz::write_json(map, buffer));
+
+      // Expected JSON with properly escaped characters
+      std::string expected = R"({"key with spaces":42,"key_with_\"quotes\"":84,"ключ":168})";
+      expect(buffer == expected) << buffer;
+
+      // Deserialize and verify
+      map.clear();
+      expect(not glz::read_json(map, buffer));
+      expect(map.at("key with spaces").value() == 42);
+      expect(map.at("key_with_\"quotes\"").value() == 84);
+      expect(map.at("ключ").value() == 168);
+   };
+
+   // Test serialization and deserialization of a large async_map
+   "async_map large_map"_test = [] {
+      glz::async_map<int, std::atomic<int>> map;
+
+      // Populate the map with 1000 entries
+      for (int i = 0; i < 1000; ++i) {
+         map[i] = i * i;
+      }
+
+      std::string buffer{};
+      expect(not glz::write_json(map, buffer));
+
+      // Simple check to ensure buffer is not empty
+      expect(!buffer.empty());
+
+      // Deserialize and verify a few entries
+      map.clear();
+      expect(not glz::read_json(map, buffer));
+      expect(map.size() == 1000);
+      expect(map.at(0).value() == 0);
+      expect(map.at(999).value() == 999 * 999);
+   };
+
+   // Test deserialization with invalid JSON
+   "async_map invalid_json"_test = [] {
+      glz::async_map<std::string, std::atomic<int>> map;
+      std::string invalid_buffer = R"({"one":1, "two": "invalid_value"})"; // "two" should be an integer
+
+      expect(glz::read_json(map, invalid_buffer)); // Expecting an error (assuming 'read_json' returns true on failure)
+   };
+
+   // Test updating existing keys and adding new keys
+   "async_map update_and_add"_test = [] {
+      glz::async_map<std::string, std::atomic<int>> map;
+      map["alpha"] = 10;
+      map["beta"] = 20;
+
+      std::string buffer{};
+      expect(not glz::write_json(map, buffer));
+      expect(buffer == R"({"alpha":10,"beta":20})") << buffer;
+
+      // Update existing key and add a new key
+      map["alpha"] = 30;
+      map["gamma"] = 40;
+
+      expect(not glz::write_json(map, buffer));
+      expect(buffer == R"({"alpha":30,"beta":20,"gamma":40})") << buffer;
+
+      // Deserialize and verify
+      map.clear();
+      expect(not glz::read_json(map, buffer));
+      expect(map.at("alpha").value() == 30);
+      expect(map.at("beta").value() == 20);
+      expect(map.at("gamma").value() == 40);
+   };
+
+   // Test concurrent access to the async_map
+   "async_map concurrent_access"_test = [] {
+      glz::async_map<int, std::atomic<int>> map;
+      const int num_threads = 10;
+      const int increments_per_thread = 1000;
+
+      // Initialize map with keys
+      for (int i = 0; i < num_threads; ++i) {
+         map[i] = 0;
+      }
+
+      // Launch multiple threads to increment values concurrently
+      std::vector<std::thread> threads;
+      for (int i = 0; i < num_threads; ++i) {
+         threads.emplace_back([&, i]() {
+            for (int j = 0; j < increments_per_thread; ++j) {
+               ++map[i].value();
+            }
+         });
+      }
+
+      // Wait for all threads to finish
+      for (auto& th : threads) {
+         th.join();
+      }
+
+      // Verify the results
+      for (int i = 0; i < num_threads; ++i) {
+         expect(map.at(i).value() == increments_per_thread) << "Key " << i;
+      }
+   };
+
+   // Test removal of keys from the async_map
+   "async_map remove_keys"_test = [] {
+      glz::async_map<std::string, std::atomic<int>> map;
+      map["first"] = 100;
+      map["second"] = 200;
+      map["third"] = 300;
+
+      // Remove a key
+      map.erase("second");
+      expect(map.size() == 2);
+      expect(map.find("second") == map.end());
+
+      // Serialize and verify
+      std::string buffer{};
+      expect(not glz::write_json(map, buffer));
+      expect(buffer == R"({"first":100,"third":300})") << buffer;
+
+      // Deserialize and verify
+      map.clear();
+      expect(not glz::read_json(map, buffer));
+      expect(map.size() == 2);
+      expect(map.at("first").value() == 100);
+      expect(map.at("third").value() == 300);
+   };
 };
 
 int main() { return 0; }
