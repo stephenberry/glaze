@@ -59,6 +59,31 @@ suite mustache_tests = [] {
       auto result = glz::mustache(p).value_or("error");
       expect(result == "Henry | Foster | 34") << result;
    };
+   
+   /*"unescaped variable"_test = [] {
+      std::string_view layout = R"({{first_name}} {{{last_name}}} {{& age}})";
+      
+      person p{"Henry", "Foster & Sons", 34};
+      auto result = glz::mustache(p, layout).value_or("error");
+      expect(result == "Henry Foster & Sons 34") << result;
+   };*/
+
+   "comment"_test = [] {
+      std::string_view layout = R"({{first_name}} {{! This is a comment }}{{last_name}})";
+      
+      person p{"Henry", "Foster", 34};
+      auto result = glz::mustache(p, layout).value_or("error");
+      expect(result == "Henry Foster") << result;
+   };
+
+   "unsupported section"_test = [] {
+      std::string_view layout = R"({{#hungry}}I am hungry{{/hungry}})";
+      
+      person p{"Henry", "Foster", 34, true};
+      auto result = glz::mustache(p, layout);
+      expect(not result.has_value());
+      expect(result.error() == glz::error_code::feature_not_supported);
+   };
 };
 
 suite stencilcount_tests = [] {

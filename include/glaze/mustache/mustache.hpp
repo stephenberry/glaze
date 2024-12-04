@@ -25,9 +25,7 @@ namespace glz
       auto it = p.first;
       auto end = p.second;
       auto outer_start = it;
-      if (tmp.empty()) [[unlikely]] {
-         ctx.error = error_code::no_read_input;
-      }
+
       if (not bool(ctx.error)) [[likely]] {
          auto skip_whitespace = [&] {
             while (detail::whitespace_table[uint8_t(*it)]) {
@@ -39,8 +37,37 @@ namespace glz
             switch (*it) {
             case '{': {
                ++it;
-               if (*it == '{') {
+               if (it != end && *it == '{') {
                   ++it;
+                  bool unescaped = false;
+                  bool is_section = false;
+                  bool is_inverted_section = false;
+                  bool is_comment = false;
+                  [[maybe_unused]] bool is_partial = false;
+
+                  if (it != end) {
+                     if (*it == '{') {
+                        ++it;
+                        unescaped = true;
+                     }
+                     else if (*it == '&') {
+                        ++it;
+                        unescaped = true;
+                     }
+                     else if (*it == '!') {
+                        ++it;
+                        is_comment = true;
+                     }
+                     else if (*it == '#') {
+                        ++it;
+                        is_section = true;
+                     }
+                     else if (*it == '^') {
+                        ++it;
+                        is_inverted_section = true;
+                     }
+                  }
+
                   skip_whitespace();
 
                   auto start = it;
@@ -58,6 +85,22 @@ namespace glz
 
                   skip_whitespace();
 
+                  if (is_comment) {
+                     while (it != end && !(*it == '}' && (it + 1 != end && *(it + 1) == '}'))) {
+                        ++it;
+                     }
+                     if (it != end) {
+                        it += 2; // Skip '}}'
+                     }
+                     break;
+                  }
+
+                  if (is_section || is_inverted_section) {
+                     ctx.error = error_code::feature_not_supported;
+                     return unexpected(
+                        error_ctx{ctx.error, "Sections are not yet supported", size_t(it - start), ctx.includer_error});
+                  }
+
                   static constexpr auto N = reflect<T>::size;
                   static constexpr auto HashInfo = detail::hash_info<T>;
 
@@ -71,7 +114,8 @@ namespace glz
                   }
                   else [[likely]] {
                      static thread_local std::string temp{};
-                     detail::jump_table<N>(
+
+                     visit<N>(
                         [&]<size_t I>() {
                            static constexpr auto TargetKey = get<I>(reflect<T>::keys);
                            static constexpr auto Length = TargetKey.size();
@@ -101,22 +145,40 @@ namespace glz
 
                   skip_whitespace();
 
-                  if (*it == '}') {
-                     ++it;
+                  // Handle closing braces
+                  if (unescaped) {
                      if (*it == '}') {
                         ++it;
+                        if (it != end && *it == '}') {
+                           ++it;
+                           if (it != end && *it == '}') {
+                              ++it;
+                              break;
+                           }
+                        }
+                     }
+                     ctx.error = error_code::syntax_error;
+                     return unexpected(
+                        error_ctx{ctx.error, ctx.custom_error_message, size_t(it - start), ctx.includer_error});
+                  }
+                  else {
+                     if (*it == '}') {
+                        ++it;
+                        if (it != end && *it == '}') {
+                           ++it;
+                           break;
+                        }
+                        else {
+                           result.append("}");
+                        }
                         break;
                      }
-                     else {
-                        result.append("}");
-                     }
-                     break;
                   }
                }
                else {
-                  result.push_back('{');
+                  result.append("{");
+                  ++it;
                }
-
                break;
             }
             default: {
