@@ -2648,7 +2648,7 @@ namespace glz
       };
 
       template <class T>
-         requires((nullable_t<T> || nullable_value_t<T>) && not is_expected<T> && not std::is_array_v<T>)
+         requires((nullable_t<T> || nullable_value_t<T>) && not is_expected<T> && not std::is_array_v<T> && not custom_read<T>)
       struct from<JSON, T>
       {
          template <auto Options>
