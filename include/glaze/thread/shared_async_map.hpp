@@ -28,7 +28,7 @@ namespace glz
          std::vector<std::unique_ptr<std::pair<K, V>>> items;
          mutable std::shared_mutex mutex;
       };
-      
+
       std::shared_ptr<shared_state> state = std::make_shared<shared_state>();
 
       // Helper function to perform binary search.
@@ -86,7 +86,10 @@ namespace glz
                   std::shared_ptr<shared_state> state,
                   std::shared_ptr<std::shared_lock<std::shared_mutex>> existing_shared_lock = nullptr,
                   std::shared_ptr<std::unique_lock<std::shared_mutex>> existing_unique_lock = nullptr)
-            : item_it(item_it), state(state), shared_lock_ptr(existing_shared_lock), unique_lock_ptr(existing_unique_lock)
+            : item_it(item_it),
+              state(state),
+              shared_lock_ptr(existing_shared_lock),
+              unique_lock_ptr(existing_unique_lock)
          {
             // Acquire a shared lock only if no lock is provided
             if (!shared_lock_ptr && !unique_lock_ptr) {
@@ -256,8 +259,7 @@ namespace glz
          std::shared_ptr<std::unique_lock<std::shared_mutex>> unique_lock_ptr;
 
         public:
-         value_proxy(V& value_ref,
-                     std::shared_ptr<std::shared_lock<std::shared_mutex>> existing_shared_lock = nullptr,
+         value_proxy(V& value_ref, std::shared_ptr<std::shared_lock<std::shared_mutex>> existing_shared_lock = nullptr,
                      std::shared_ptr<std::unique_lock<std::shared_mutex>> existing_unique_lock = nullptr)
             : value_ref(value_ref), shared_lock_ptr(existing_shared_lock), unique_lock_ptr(existing_unique_lock)
          {
@@ -359,9 +361,9 @@ namespace glz
 
             if (!found) {
                // Insert a new element with default-constructed value
-               it = state->items.insert(it, std::make_unique<std::pair<K, V>>(
-                                                std::piecewise_construct, std::forward_as_tuple(key),
-                                                std::forward_as_tuple()));
+               it = state->items.insert(
+                  it, std::make_unique<std::pair<K, V>>(std::piecewise_construct, std::forward_as_tuple(key),
+                                                        std::forward_as_tuple()));
             }
 
             unique_lock.unlock();
@@ -430,9 +432,9 @@ namespace glz
          }
          else {
             // Construct value in place while maintaining sorted order
-            it = state->items.insert(it, std::make_unique<std::pair<K, V>>(
-                                           std::piecewise_construct, std::forward_as_tuple(key),
-                                           std::forward_as_tuple(std::forward<Args>(args)...)));
+            it = state->items.insert(
+               it, std::make_unique<std::pair<K, V>>(std::piecewise_construct, std::forward_as_tuple(key),
+                                                     std::forward_as_tuple(std::forward<Args>(args)...)));
             return {iterator(it, state, nullptr, unique_lock_ptr), true};
          }
       }
