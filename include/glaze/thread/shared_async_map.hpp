@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "glaze/util/expected.hpp"
+#include "glaze/thread/value_proxy.hpp"
 
 // Provides a semi-safe flat map
 // This shared_async_map only provides thread safety when inserting/deletion
@@ -596,22 +597,6 @@ namespace glz
       {
          std::shared_lock lock(state->mutex);
          return state->items.size() == 0;
-      }
-   };
-}
-
-namespace glz::detail
-{
-   template <class T>
-   concept is_value_proxy = requires { T::glaze_value_proxy; };
-
-   template <is_value_proxy T>
-   struct from<JSON, T>
-   {
-      template <auto Opts>
-      static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
-      {
-         read<JSON>::op<Opts>(value.value(), ctx, it, end);
       }
    };
 }
