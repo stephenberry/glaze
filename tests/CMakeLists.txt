@@ -6,7 +6,7 @@ set(BOOST_UT_DISABLE_MODULE ON CACHE INTERNAL "")
 FetchContent_Declare(
   ut
   GIT_REPOSITORY https://github.com/openalgz/ut
-  GIT_TAG v0.0.3
+  GIT_TAG v0.0.4
   GIT_SHALLOW TRUE
 )
 
@@ -63,13 +63,14 @@ add_subdirectory(exceptions_test)
 add_subdirectory(int_parsing)
 add_subdirectory(json_conformance)
 add_subdirectory(json_performance)
+add_subdirectory(json_reflection_test)
 add_subdirectory(json_test)
 add_subdirectory(jsonrpc_test)
 add_subdirectory(lib_test)
 add_subdirectory(mock_json_test)
 add_subdirectory(mustache_test)
-add_subdirectory(reflection_test)
 add_subdirectory(repe_test)
+add_subdirectory(reflection)
 add_subdirectory(roundtrip)
 add_subdirectory(utility_formats)
 
