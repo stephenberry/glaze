@@ -35,7 +35,7 @@ namespace glz
            l = r.value();
          }
          else {
-            static_assert(false_v<pair<In, Out>>, "Types are not convertible");
+            static_assert(false_v<In>, "Types are not convertible");
          }
       });
    }
