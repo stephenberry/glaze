@@ -17,14 +17,14 @@ namespace glz
    {
       auto in_tuple = detail::to_tuple(std::forward<In>(in));
       auto out_tuple = detail::to_tuple(std::forward<Out>(out));
-      
+
       constexpr auto N = tuple_size_v<std::decay_t<decltype(in_tuple)>>;
       static_assert(N == tuple_size_v<std::decay_t<decltype(out_tuple)>>);
-      
+
       constexpr auto in_keys = reflect<In>::keys;
       constexpr auto out_keys = reflect<Out>::keys;
-      
-      for_each<N>([&](auto I){
+
+      for_each<N>([&](auto I) {
          static_assert(in_keys[I] == out_keys[I]);
          decltype(auto) l = get<I>(out_tuple);
          decltype(auto) r = get<I>(in_tuple);
@@ -32,7 +32,7 @@ namespace glz
             l = r;
          }
          else if constexpr (requires { l = r.value(); }) {
-           l = r.value();
+            l = r.value();
          }
          else {
             static_assert(false_v<pair<In, Out>>, "Types are not convertible");
