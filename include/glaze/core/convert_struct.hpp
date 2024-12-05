@@ -13,7 +13,7 @@
 namespace glz
 {
    template <class In, class Out>
-   void convert(In&& in, Out&& out)
+   void convert_struct(In&& in, Out&& out)
    {
       auto in_tuple = detail::to_tuple(std::forward<In>(in));
       auto out_tuple = detail::to_tuple(std::forward<Out>(out));

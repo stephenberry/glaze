@@ -3,7 +3,7 @@
 
 #include <ut/ut.hpp>
 
-#include "glaze/core/convert.hpp"
+#include "glaze/core/convert_struct.hpp"
 
 using namespace ut;
 
@@ -33,7 +33,7 @@ suite convert_tests = [] {
       a_type in{};
       b_type out{};
       
-      glz::convert(in, out);
+      glz::convert_struct(in, out);
       
       expect(out.fluff == 1.1f);
       expect(out.goo == 1);
@@ -44,7 +44,7 @@ suite convert_tests = [] {
       a_type in{};
       c_type out{};
       
-      glz::convert(in, out);
+      glz::convert_struct(in, out);
       
       expect(out.fluff.value() == 1.1f);
       expect(out.goo.value() == 1);
@@ -55,7 +55,7 @@ suite convert_tests = [] {
       c_type in{};
       a_type out{};
       
-      glz::convert(in, out);
+      glz::convert_struct(in, out);
       
       expect(out.fluff == 3.3f);
       expect(out.goo == 3);
