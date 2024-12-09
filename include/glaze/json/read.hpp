@@ -266,7 +266,7 @@ namespace glz
                }
             }
 
-            // We see better performance function pointers than a glz::jump_table here.
+            // We see better performance with function pointers than a glz::jump_table here.
             visit<N>([&]<size_t I>() { decode_index<Opts, T, I>(value, ctx, it, end, selected_index...); }, index);
          }
       }
