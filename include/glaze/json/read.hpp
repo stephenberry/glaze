@@ -144,36 +144,12 @@ namespace glz
          requires(glaze_object_t<T> || reflectable<T>)
       void decode_index(Value&& value, is_context auto&& ctx, auto&& it, auto&& end, SelectedIndex&&... selected_index)
       {
-         static constexpr auto TargetKey = glz::get<I>(reflect<T>::keys);
-         static constexpr auto Length = TargetKey.size();
+         static constexpr auto Key = get<I>(reflect<T>::keys);
+         static constexpr auto KeyWithEndQuote = join_v<Key, chars<"\"">>;
+         static constexpr auto Length = KeyWithEndQuote.size();
 
-         if (((it + Length) < end) && comparitor<TargetKey>(it)) [[likely]] {
+         if (((it + Length) < end) && comparitor<KeyWithEndQuote>(it)) [[likely]] {
             it += Length;
-            if (*it != '"') [[unlikely]] {
-               if constexpr (Opts.error_on_unknown_keys) {
-                  ctx.error = error_code::unknown_key;
-                  return;
-               }
-               else {
-                  // This code should not error on valid unknown keys
-                  // We arrived here because the key was perhaps found, but if the quote does not exist
-                  // then this does not necessarily mean we have a syntax error.
-                  // We may have just found the prefix of a longer, unknown key.
-                  auto* start = it - Length;
-                  skip_string_view<Opts>(ctx, it, end);
-                  if (bool(ctx.error)) [[unlikely]]
-                     return;
-                  const sv key = {start, size_t(it - start)};
-                  ++it;
-                  GLZ_INVALID_END();
-
-                  GLZ_PARSE_WS_COLON;
-
-                  read<JSON>::handle_unknown<Opts>(key, value, ctx, it, end);
-                  return;
-               }
-            }
-            ++it;
             GLZ_INVALID_END();
 
             GLZ_SKIP_WS();
