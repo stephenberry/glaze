@@ -211,7 +211,7 @@ namespace glz
                ctx.error = error_code::unknown_key;
             }
             else {
-               auto* start = it - Length;
+               auto* start = it;
                skip_string_view<Opts>(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
                   return;
