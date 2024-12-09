@@ -1338,7 +1338,7 @@ namespace glz
                            static constexpr auto Length = TargetKey.size();
                            if ((Length == n) && compare<Length>(TargetKey.data(), key.data())) [[likely]] {
                               if constexpr (detail::reflectable<T>) {
-                                 read<BEVE>::op<Opts>(get_member(value, get<I>(detail::to_tuple(value))), ctx, it, end);
+                                 read<BEVE>::op<Opts>(get_member(value, get<I>(to_tuple(value))), ctx, it, end);
                               }
                               else {
                                  read<BEVE>::op<Opts>(get_member(value, get<I>(reflect<T>::values)), ctx, it, end);

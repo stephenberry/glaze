@@ -422,7 +422,7 @@ namespace glz
       // TODO: Should noexcept be removed and will this have performance implications?
       // The invocations could potentially throw, though unlikely
       template <class Value, class Element>
-      inline decltype(auto) get_member(Value&& value, Element&& element) noexcept
+      GLZ_ALWAYS_INLINE decltype(auto) get_member(Value&& value, Element&& element) noexcept
       {
          using V = std::decay_t<decltype(element)>;
          if constexpr (std::is_member_object_pointer_v<V>) {
