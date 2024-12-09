@@ -47,30 +47,30 @@ namespace glz {
       template <bool NullTerminated>
       GLZ_ALWAYS_INLINE void validate_json_string(context& ctx, const auto*& it, const auto* end) noexcept {
          if constexpr (NullTerminated) {
-            if (*it != '"') { ctx.error = error_code::expected_quote; return; }
+            if (*it != '"') [[unlikely]] { ctx.error = error_code::expected_quote; return; }
          } else {
-            if (it == end || *it != '"') { ctx.error = error_code::expected_quote; return; }
+            if (it == end || *it != '"') [[unlikely]] { ctx.error = error_code::expected_quote; return; }
          }
          ++it;
 
          while (true) {
             if constexpr (NullTerminated) {
-               if (*it == '\0') { ctx.error = error_code::unexpected_end; return; }
+               if (*it == '\0') [[unlikely]] { ctx.error = error_code::unexpected_end; return; }
             } else {
-               if (it >= end) { ctx.error = error_code::unexpected_end; return; }
+               if (it >= end) [[unlikely]] { ctx.error = error_code::unexpected_end; return; }
             }
             if (*it == '"') break;
             const auto c = uint8_t(*it);
-            if (c < 0x20) {
+            if (c < 0x20) [[unlikely]] {
                ctx.error = error_code::syntax_error;
                return;
             }
             if (c == '\\') {
                ++it;
                if constexpr (NullTerminated) {
-                  if (*it == '\0') { ctx.error = error_code::unexpected_end; return; }
+                  if (*it == '\0') [[unlikely]] { ctx.error = error_code::unexpected_end; return; }
                } else {
-                  if (it >= end) { ctx.error = error_code::unexpected_end; return; }
+                  if (it >= end) [[unlikely]] { ctx.error = error_code::unexpected_end; return; }
                }
                const auto esc = *it;
                switch (esc) {
@@ -150,19 +150,19 @@ namespace glz {
          if constexpr (NullTerminated) {
             if (*it == '-' || *it == '+') ++it;
             // must have digit
-            if (*it == '\0' || !is_digit(*it)) { ctx.error = error_code::parse_number_failure; return; }
+            if (*it == '\0' || !is_digit(*it)) [[unlikely]] { ctx.error = error_code::parse_number_failure; return; }
          } else {
             if (it < end && (*it == '-' || *it == '+')) ++it;
-            if (it == end || !is_digit(*it)) { ctx.error = error_code::parse_number_failure; return; }
+            if (it == end || !is_digit(*it)) [[unlikely]] { ctx.error = error_code::parse_number_failure; return; }
          }
 
          // leading zero check
          if (*it == '0') {
             ++it;
             if constexpr (NullTerminated) {
-               if (is_digit(*it)) { ctx.error = error_code::parse_number_failure; return; }
+               if (is_digit(*it)) [[unlikely]] { ctx.error = error_code::parse_number_failure; return; }
             } else {
-               if (it < end && is_digit(*it)) { ctx.error = error_code::parse_number_failure; return; }
+               if (it < end && is_digit(*it)) [[unlikely]] { ctx.error = error_code::parse_number_failure; return; }
             }
          } else {
             // consume digits
@@ -408,7 +408,7 @@ namespace glz {
          const auto* end = start + in.size();
          const auto* it = start;
 
-         if (bool(ctx.error)) {
+         if (bool(ctx.error)) [[unlikely]] {
             return {ctx.error, ctx.custom_error_message, 0, ctx.includer_error};
          }
 
@@ -419,17 +419,17 @@ namespace glz {
          }
          
          if (bool(ctx.error)) {
-            return {ctx.error, ctx.custom_error_message, 0, ctx.includer_error};
+            return {ctx.error, ctx.custom_error_message, size_t(it - start), ctx.includer_error};
          }
 
          if constexpr (resizable<In>) {
             while (*it && whitespace_table[uint8_t(*it)]) ++it;
-            if (*it != '\0') {
+            if (*it != '\0') [[unlikely]] {
                ctx.error = error_code::syntax_error;
             }
          } else {
             while (it < end && whitespace_table[uint8_t(*it)]) ++it;
-            if (it < end) {
+            if (it < end) [[unlikely]] {
                ctx.error = error_code::syntax_error;
             }
          }
