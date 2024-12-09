@@ -81,7 +81,9 @@ namespace glz
       unknown_distribution, //
       invalid_distribution_elements, //
       hostname_failure, //
-      includer_error //
+      includer_error, //
+      // Feature support
+      feature_not_supported //
    };
 
    struct error_ctx final
