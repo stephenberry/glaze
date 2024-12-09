@@ -177,13 +177,13 @@ namespace glz {
          if constexpr (NullTerminated) {
             if (*it == '.') {
                ++it;
-               if (!is_digit(*it)) { ctx.error = error_code::parse_number_failure; return; }
+               if (!is_digit(*it)) [[unlikely]] { ctx.error = error_code::parse_number_failure; return; }
                while (is_digit(*it)) ++it;
             }
          } else {
             if (it < end && *it == '.') {
                ++it;
-               if (it == end || !is_digit(*it)) { ctx.error = error_code::parse_number_failure; return; }
+               if (it == end || !is_digit(*it)) [[unlikely]] { ctx.error = error_code::parse_number_failure; return; }
                while (it < end && is_digit(*it)) ++it;
             }
          }
@@ -193,14 +193,14 @@ namespace glz {
             if (*it == 'e' || *it == 'E') {
                ++it;
                if (*it == '-' || *it == '+') ++it;
-               if (!is_digit(*it)) { ctx.error = error_code::parse_number_failure; return; }
+               if (!is_digit(*it)) [[unlikely]] { ctx.error = error_code::parse_number_failure; return; }
                while (is_digit(*it)) ++it;
             }
          } else {
             if (it < end && (*it == 'e' || *it == 'E')) {
                ++it;
                if (it < end && (*it == '-' || *it == '+')) ++it;
-               if (it == end || !is_digit(*it)) { ctx.error = error_code::parse_number_failure; return; }
+               if (it == end || !is_digit(*it)) [[unlikely]] { ctx.error = error_code::parse_number_failure; return; }
                while (it < end && is_digit(*it)) ++it;
             }
          }
