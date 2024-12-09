@@ -3,11 +3,6 @@
 
 #pragma once
 
-#include <cstdint>
-#include <cstddef>
-#include <cstring>
-#include <string_view>
-
 #include "glaze/util/atoi.hpp"
 #include "glaze/json/read.hpp"
 
@@ -41,7 +36,7 @@ namespace glz {
       }();
 
       template <bool NullTerminated>
-      GLZ_ALWAYS_INLINE void skip_whitespace_json(const char*& it, const char* end) noexcept {
+      GLZ_ALWAYS_INLINE void skip_whitespace_json(const auto*& it, const auto* end) noexcept {
          if constexpr (NullTerminated) {
             while (*it && whitespace_table[uint8_t(*it)]) ++it;
          } else {
@@ -50,7 +45,7 @@ namespace glz {
       }
 
       template <bool NullTerminated>
-      GLZ_ALWAYS_INLINE void validate_json_string(context& ctx, const char*& it, const char* end) noexcept {
+      GLZ_ALWAYS_INLINE void validate_json_string(context& ctx, const auto*& it, const auto* end) noexcept {
          if constexpr (NullTerminated) {
             if (*it != '"') { ctx.error = error_code::expected_quote; return; }
          } else {
@@ -65,7 +60,7 @@ namespace glz {
                if (it >= end) { ctx.error = error_code::unexpected_end; return; }
             }
             if (*it == '"') break;
-            unsigned char c = uint8_t(*it);
+            const auto c = uint8_t(*it);
             if (c < 0x20) {
                ctx.error = error_code::syntax_error;
                return;
@@ -77,7 +72,7 @@ namespace glz {
                } else {
                   if (it >= end) { ctx.error = error_code::unexpected_end; return; }
                }
-               char esc = *it;
+               const auto esc = *it;
                switch (esc) {
                case '"': case '\\': case '/': case 'b': case 'f': case 'n': case 'r': case 't':
                   ++it;
@@ -110,7 +105,7 @@ namespace glz {
 
       // Validate bool ("true" or "false")
       template <bool NullTerminated>
-      GLZ_ALWAYS_INLINE void validate_json_bool(context& ctx, const char*& it, const char* end) noexcept {
+      GLZ_ALWAYS_INLINE void validate_json_bool(context& ctx, const auto*& it, const auto* end) noexcept {
          if constexpr (NullTerminated) {
             if (std::memcmp(it, "true", 4) == 0) {
                it += 4;
@@ -133,7 +128,7 @@ namespace glz {
       }
 
       template <bool NullTerminated>
-      GLZ_ALWAYS_INLINE void validate_json_null(context& ctx, const char*& it, const char* end) noexcept {
+      GLZ_ALWAYS_INLINE void validate_json_null(context& ctx, const auto*& it, const auto* end) noexcept {
          if constexpr (NullTerminated) {
             if (std::memcmp(it, "null", 4) == 0) {
                it += 4;
@@ -150,7 +145,7 @@ namespace glz {
       }
 
       template <bool NullTerminated>
-      GLZ_ALWAYS_INLINE void validate_number(context& ctx, const char*& it, const char* end) noexcept {
+      GLZ_ALWAYS_INLINE void validate_number(context& ctx, const auto*& it, const auto* end) noexcept {
          // optional sign
          if constexpr (NullTerminated) {
             if (*it == '-' || *it == '+') ++it;
@@ -216,10 +211,10 @@ namespace glz {
 
       // Forward declarations
       template <bool NullTerminated>
-      inline bool validate_json_value(context& ctx, const char*& it, const char* end);
+      inline void validate_json_value(context& ctx, const auto*& it, const auto* end);
 
       template <bool NullTerminated>
-      inline void validate_json_object(context& ctx, const char*& it, const char* end, uint64_t& depth) noexcept {
+      inline void validate_json_object(context& ctx, const auto*& it, const auto* end, uint64_t& depth) noexcept {
          if constexpr (NullTerminated) {
             if (*it != '{') { ctx.error = error_code::syntax_error; return; }
          } else {
@@ -255,7 +250,10 @@ namespace glz {
             }
             ++it;
             skip_whitespace_json<NullTerminated>(it, end);
-            if (!validate_json_value<NullTerminated>(ctx, it, end)) return;
+            validate_json_value<NullTerminated>(ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
             skip_whitespace_json<NullTerminated>(it, end);
             if constexpr (NullTerminated) {
                if (*it == ',') {
@@ -298,7 +296,7 @@ namespace glz {
       }
 
       template <bool NullTerminated>
-      inline void validate_json_array(context& ctx, const char*& it, const char* end, uint64_t& depth) noexcept {
+      inline void validate_json_array(context& ctx, const auto*& it, const auto* end, uint64_t& depth) noexcept {
          if constexpr (NullTerminated) {
             if (*it != '[') { ctx.error = error_code::syntax_error; return; }
          } else {
@@ -321,7 +319,10 @@ namespace glz {
 
          while (true) {
             skip_whitespace_json<NullTerminated>(it, end);
-            if (!validate_json_value<NullTerminated>(ctx, it, end)) return;
+            validate_json_value<NullTerminated>(ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
             skip_whitespace_json<NullTerminated>(it, end);
             if constexpr (NullTerminated) {
                if (*it == ',') {
@@ -365,15 +366,15 @@ namespace glz {
 
       // Validate a generic value
       template <bool NullTerminated>
-      inline bool validate_json_value(context& ctx, const char*& it, const char* end) {
+      inline void validate_json_value(context& ctx, const auto*& it, const auto* end) {
          skip_whitespace_json<NullTerminated>(it, end);
          if constexpr (NullTerminated) {
-            if (*it == '\0') { ctx.error = error_code::syntax_error; return false; }
+            if (*it == '\0') { ctx.error = error_code::syntax_error; return; }
          } else {
-            if (it == end) { ctx.error = error_code::syntax_error; return false; }
+            if (it == end) { ctx.error = error_code::syntax_error; return; }
          }
 
-         char c = *it;
+         const auto c = *it;
          uint64_t depth = 0;
          if (c == '{') {
             validate_json_object<NullTerminated>(ctx, it, end, depth);
@@ -392,14 +393,9 @@ namespace glz {
             }
             else {
                ctx.error = error_code::syntax_error;
-               return false;
+               return;
             }
          }
-         
-         if (bool(ctx.error)) [[unlikely]] {
-            return false;
-         }
-         return true;
       }
 
       template <auto Opts, class In>
@@ -408,34 +404,22 @@ namespace glz {
             in.resize(in.size() + padding_bytes);
          }
 
-         const char* start = in.data();
-         const char* end = start + in.size();
-         const char* it = start;
+         const auto* start = in.data();
+         const auto* end = start + in.size();
+         const auto* it = start;
 
          if (bool(ctx.error)) {
             return {ctx.error, ctx.custom_error_message, 0, ctx.includer_error};
          }
 
-         if constexpr (resizable<In>) {
-            if constexpr (string_t<In>) {
-               if (!validate_json_value<true>(ctx, it, end)) {
-                  return {ctx.error, ctx.custom_error_message, size_t(it - start), ctx.includer_error};
-               }
-            } else {
-               if (!validate_json_value<false>(ctx, it, end)) {
-                  return {ctx.error, ctx.custom_error_message, size_t(it - start), ctx.includer_error};
-               }
-            }
+         if constexpr (string_t<In>) {
+            validate_json_value<true>(ctx, it, end);
          } else {
-            if constexpr (string_t<In>) {
-               if (!validate_json_value<true>(ctx, it, end)) {
-                  return {ctx.error, ctx.custom_error_message, size_t(it - start), ctx.includer_error};
-               }
-            } else {
-               if (!validate_json_value<false>(ctx, it, end)) {
-                  return {ctx.error, ctx.custom_error_message, size_t(it - start), ctx.includer_error};
-               }
-            }
+            validate_json_value<false>(ctx, it, end);
+         }
+         
+         if (bool(ctx.error)) {
+            return {ctx.error, ctx.custom_error_message, 0, ctx.includer_error};
          }
 
          if constexpr (resizable<In>) {
