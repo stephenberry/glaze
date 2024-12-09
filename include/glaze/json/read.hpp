@@ -146,29 +146,8 @@ namespace glz
       {
          static constexpr auto TargetKey = glz::get<I>(reflect<T>::keys);
          static constexpr auto Length = TargetKey.size();
-         // The == end check is validating that we have space for a quote
-         if ((it + Length) >= end) [[unlikely]] {
-            if constexpr (Opts.error_on_unknown_keys) {
-               ctx.error = error_code::unknown_key;
-               return;
-            }
-            else {
-               auto start = it;
-               skip_string_view<Opts>(ctx, it, end);
-               if (bool(ctx.error)) [[unlikely]]
-                  return;
-               const sv key = {start, size_t(it - start)};
-               ++it; // skip the quote
-               GLZ_INVALID_END();
 
-               GLZ_PARSE_WS_COLON;
-
-               read<JSON>::handle_unknown<Opts>(key, value, ctx, it, end);
-               return;
-            }
-         }
-
-         if (comparitor<TargetKey>(it)) [[likely]] {
+         if (((it + Length) < end) && comparitor<TargetKey>(it)) [[likely]] {
             it += Length;
             if (*it != '"') [[unlikely]] {
                if constexpr (Opts.error_on_unknown_keys) {
@@ -253,13 +232,8 @@ namespace glz
       {
          static constexpr auto TargetKey = glz::get<I>(reflect<T>::keys);
          static constexpr auto Length = TargetKey.size();
-         // The == end check is validating that we have space for a quote
-         if ((it + Length) >= end) [[unlikely]] {
-            ctx.error = error_code::unexpected_enum;
-            return;
-         }
 
-         if (compare<Length>(TargetKey.data(), it)) [[likely]] {
+         if (((it + Length) < end) && comparitor<TargetKey>(it)) [[likely]] {
             it += Length;
             if (*it != '"') [[unlikely]] {
                ctx.error = error_code::unexpected_enum;
@@ -456,7 +430,19 @@ namespace glz
             if constexpr (!has_ws_handled(Opts)) {
                GLZ_SKIP_WS();
             }
-            match<"null", Opts>(ctx, it, end);
+            static constexpr sv null_string = "null";
+            if constexpr (not has_is_padded(Opts)) {
+               const auto n = size_t(end - it);
+               if ((n < 4) || not comparitor<null_string>(it)) [[unlikely]] {
+                  ctx.error = error_code::syntax_error;
+               }
+            }
+            else {
+               if (not comparitor<null_string>(it)) [[unlikely]] {
+                  ctx.error = error_code::syntax_error;
+               }
+            }
+            it += 4; // always advance for performance
          }
       };
 
@@ -559,7 +545,7 @@ namespace glz
       struct from<JSON, T>
       {
          template <auto Opts, class It>
-         static void op(auto&& value, is_context auto&& ctx, It&& it, auto&& end) noexcept
+         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, It&& it, auto&& end) noexcept
          {
             if constexpr (Opts.quoted_num) {
                GLZ_SKIP_WS();
