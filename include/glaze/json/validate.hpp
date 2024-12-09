@@ -100,7 +100,6 @@ namespace glz {
 
          // now *it == '"'
          ++it;
-         return;
       }
 
       // Validate bool ("true" or "false")
@@ -124,7 +123,6 @@ namespace glz {
             }
          }
          ctx.error = error_code::syntax_error;
-         return;
       }
 
       template <bool NullTerminated>
@@ -141,7 +139,6 @@ namespace glz {
             }
          }
          ctx.error = error_code::syntax_error;
-         return;
       }
 
       template <bool NullTerminated>
@@ -376,24 +373,40 @@ namespace glz {
 
          const auto c = *it;
          uint64_t depth = 0;
-         if (c == '{') {
-            validate_json_object<NullTerminated>(ctx, it, end, depth);
-         } else if (c == '[') {
-            validate_json_array<NullTerminated>(ctx, it, end, depth);
-         } else if (c == '"') {
-            validate_json_string<NullTerminated>(ctx, it, end);
-         } else if ((c == 't' || c == 'f')) {
-            validate_json_bool<NullTerminated>(ctx, it, end);
-         } else if (c == 'n') {
-            validate_json_null<NullTerminated>(ctx, it, end);
-         } else {
-            // number possibility
-            if (c == '-' || c == '+' || is_digit(c)) {
-               validate_number<NullTerminated>(ctx, it, end);
+         switch (c)
+         {
+            case '{': {
+               validate_json_object<NullTerminated>(ctx, it, end, depth);
+               break;
             }
-            else {
-               ctx.error = error_code::syntax_error;
-               return;
+            case '[': {
+               validate_json_array<NullTerminated>(ctx, it, end, depth);
+               break;
+            }
+            case '"': {
+               validate_json_string<NullTerminated>(ctx, it, end);
+               break;
+            }
+            case 't': {
+               [[fallthrough]];
+            }
+            case 'f': {
+               validate_json_bool<NullTerminated>(ctx, it, end);
+               break;
+            }
+            case 'n': {
+               validate_json_null<NullTerminated>(ctx, it, end);
+               break;
+            }
+            default: {
+               // number possibility
+               if (c == '-' || c == '+' || is_digit(c)) {
+                  validate_number<NullTerminated>(ctx, it, end);
+               }
+               else {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
             }
          }
       }
