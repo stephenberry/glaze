@@ -8,7 +8,7 @@
 
 namespace glz {
    namespace detail {
-      inline constexpr std::array<uint8_t, 256> hexDigits = [] {
+      inline constexpr std::array<uint8_t, 256> hex_digits = [] {
          std::array<uint8_t, 256> t{};
          t['0'] = 1;
          t['1'] = 1;
@@ -81,9 +81,9 @@ namespace glz {
                   ++it;
                   for (int i = 0; i < 4; ++i) {
                      if constexpr (NullTerminated) {
-                        if (*it == '\0' || !hexDigits[uint8_t(*it)]) { ctx.error = error_code::unexpected_end; return; }
+                        if (*it == '\0' || not hex_digits[uint8_t(*it)]) { ctx.error = error_code::unexpected_end; return; }
                      } else {
-                        if (it >= end || !hexDigits[uint8_t(*it)]) { ctx.error = error_code::unexpected_end; return; }
+                        if (it >= end || not hex_digits[uint8_t(*it)]) { ctx.error = error_code::unexpected_end; return; }
                      }
                      ++it;
                   }
@@ -130,12 +130,12 @@ namespace glz {
       template <bool NullTerminated>
       GLZ_ALWAYS_INLINE void validate_json_null(context& ctx, const auto*& it, const auto* end) noexcept {
          if constexpr (NullTerminated) {
-            if (std::memcmp(it, "null", 4) == 0) {
+            if (std::memcmp(it, "null", 4) == 0) [[likely]] {
                it += 4;
                return;
             }
          } else {
-            if ((end - it) >= 4 && std::memcmp(it, "null", 4) == 0) {
+            if ((end - it) >= 4 && std::memcmp(it, "null", 4) == 0) [[likely]] {
                it += 4;
                return;
             }
@@ -216,18 +216,18 @@ namespace glz {
       template <bool NullTerminated>
       inline void validate_json_object(context& ctx, const auto*& it, const auto* end, uint64_t& depth) noexcept {
          if constexpr (NullTerminated) {
-            if (*it != '{') { ctx.error = error_code::syntax_error; return; }
+            if (*it != '{') [[unlikely]] { ctx.error = error_code::expected_brace; return; }
          } else {
-            if (it == end || *it != '{') { ctx.error = error_code::syntax_error; return; }
+            if (it == end || *it != '{') [[unlikely]] { ctx.error = error_code::expected_brace; return; }
          }
 
          ++depth;
          ++it;
          skip_whitespace_json<NullTerminated>(it, end);
          if constexpr (NullTerminated) {
-            if (*it == '\0') { ctx.error = error_code::syntax_error; return; }
+            if (*it == '\0') [[unlikely]] { ctx.error = error_code::unexpected_end; return; }
          } else {
-            if (it == end) { ctx.error = error_code::syntax_error; return; }
+            if (it == end) [[unlikely]] { ctx.error = error_code::unexpected_end; return; }
          }
 
          if (*it == '}') {
@@ -298,17 +298,17 @@ namespace glz {
       template <bool NullTerminated>
       inline void validate_json_array(context& ctx, const auto*& it, const auto* end, uint64_t& depth) noexcept {
          if constexpr (NullTerminated) {
-            if (*it != '[') { ctx.error = error_code::syntax_error; return; }
+            if (*it != '[') [[unlikely]] { ctx.error = error_code::expected_bracket; return; }
          } else {
-            if (it == end || *it != '[') { ctx.error = error_code::syntax_error; return; }
+            if (it == end || *it != '[') [[unlikely]] { ctx.error = error_code::expected_bracket; return; }
          }
          ++depth;
          ++it;
          skip_whitespace_json<NullTerminated>(it, end);
          if constexpr (NullTerminated) {
-            if (*it == '\0') { ctx.error = error_code::syntax_error; return; }
+            if (*it == '\0') [[unlikely]] { ctx.error = error_code::unexpected_end; return; }
          } else {
-            if (it == end) { ctx.error = error_code::syntax_error; return; }
+            if (it == end) [[unlikely]] { ctx.error = error_code::unexpected_end; return; }
          }
 
          if (*it == ']') {
