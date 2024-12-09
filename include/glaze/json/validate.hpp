@@ -41,7 +41,7 @@ namespace glz {
       }();
 
       template <bool NullTerminated>
-      GLZ_ALWAYS_INLINE void skip_whitespace(const char*& it, const char* end) noexcept {
+      GLZ_ALWAYS_INLINE void skip_whitespace_json(const char*& it, const char* end) noexcept {
          if constexpr (NullTerminated) {
             while (*it && whitespace_table[uint8_t(*it)]) ++it;
          } else {
@@ -50,7 +50,7 @@ namespace glz {
       }
 
       template <bool NullTerminated>
-      GLZ_ALWAYS_INLINE bool validate_string(context& ctx, const char*& it, const char* end) noexcept {
+      GLZ_ALWAYS_INLINE bool validate_json_string(context& ctx, const char*& it, const char* end) noexcept {
          if constexpr (NullTerminated) {
             if (*it != '"') { ctx.error = error_code::expected_quote; return false; }
          } else {
@@ -133,7 +133,7 @@ namespace glz {
       }
 
       template <bool NullTerminated>
-      GLZ_ALWAYS_INLINE bool validate_null(context& ctx, const char*& it, const char* end) noexcept {
+      GLZ_ALWAYS_INLINE bool validate_json_null(context& ctx, const char*& it, const char* end) noexcept {
          if constexpr (NullTerminated) {
             if (std::memcmp(it, "null", 4) == 0) {
                it += 4;
@@ -155,19 +155,19 @@ namespace glz {
          if constexpr (NullTerminated) {
             if (*it == '-' || *it == '+') ++it;
             // must have digit
-            if (*it == '\0' || !is_digit(*it)) { ctx.error = error_code::syntax_error; return false; }
+            if (*it == '\0' || !is_digit(*it)) { ctx.error = error_code::parse_number_failure; return false; }
          } else {
             if (it < end && (*it == '-' || *it == '+')) ++it;
-            if (it == end || !is_digit(*it)) { ctx.error = error_code::syntax_error; return false; }
+            if (it == end || !is_digit(*it)) { ctx.error = error_code::parse_number_failure; return false; }
          }
 
          // leading zero check
          if (*it == '0') {
             ++it;
             if constexpr (NullTerminated) {
-               if (is_digit(*it)) { ctx.error = error_code::syntax_error; return false; }
+               if (is_digit(*it)) { ctx.error = error_code::parse_number_failure; return false; }
             } else {
-               if (it < end && is_digit(*it)) { ctx.error = error_code::syntax_error; return false; }
+               if (it < end && is_digit(*it)) { ctx.error = error_code::parse_number_failure; return false; }
             }
          } else {
             // consume digits
@@ -185,13 +185,13 @@ namespace glz {
          if constexpr (NullTerminated) {
             if (*it == '.') {
                ++it;
-               if (!is_digit(*it)) { ctx.error = error_code::syntax_error; return false; }
+               if (!is_digit(*it)) { ctx.error = error_code::parse_number_failure; return false; }
                while (is_digit(*it)) ++it;
             }
          } else {
             if (it < end && *it == '.') {
                ++it;
-               if (it == end || !is_digit(*it)) { ctx.error = error_code::syntax_error; return false; }
+               if (it == end || !is_digit(*it)) { ctx.error = error_code::parse_number_failure; return false; }
                while (it < end && is_digit(*it)) ++it;
             }
          }
@@ -201,14 +201,14 @@ namespace glz {
             if (*it == 'e' || *it == 'E') {
                ++it;
                if (*it == '-' || *it == '+') ++it;
-               if (!is_digit(*it)) { ctx.error = error_code::syntax_error; return false; }
+               if (!is_digit(*it)) { ctx.error = error_code::parse_number_failure; return false; }
                while (is_digit(*it)) ++it;
             }
          } else {
             if (it < end && (*it == 'e' || *it == 'E')) {
                ++it;
                if (it < end && (*it == '-' || *it == '+')) ++it;
-               if (it == end || !is_digit(*it)) { ctx.error = error_code::syntax_error; return false; }
+               if (it == end || !is_digit(*it)) { ctx.error = error_code::parse_number_failure; return false; }
                while (it < end && is_digit(*it)) ++it;
             }
          }
@@ -218,10 +218,10 @@ namespace glz {
 
       // Forward declarations
       template <bool NullTerminated>
-      inline bool validate_value(context& ctx, const char*& it, const char* end);
+      inline bool validate_json_value(context& ctx, const char*& it, const char* end);
 
       template <bool NullTerminated>
-      inline bool validate_object(context& ctx, const char*& it, const char* end, uint64_t& depth) noexcept {
+      inline bool validate_json_object(context& ctx, const char*& it, const char* end, uint64_t& depth) noexcept {
          if constexpr (NullTerminated) {
             if (*it != '{') { ctx.error = error_code::syntax_error; return false; }
          } else {
@@ -230,7 +230,7 @@ namespace glz {
 
          ++depth;
          ++it;
-         skip_whitespace<NullTerminated>(it, end);
+         skip_whitespace_json<NullTerminated>(it, end);
          if constexpr (NullTerminated) {
             if (*it == '\0') { ctx.error = error_code::syntax_error; return false; }
          } else {
@@ -244,25 +244,25 @@ namespace glz {
          }
 
          while (true) {
-            skip_whitespace<NullTerminated>(it, end);
-            if (!validate_string<NullTerminated>(ctx, it, end)) return false;
-            skip_whitespace<NullTerminated>(it, end);
+            skip_whitespace_json<NullTerminated>(it, end);
+            if (!validate_json_string<NullTerminated>(ctx, it, end)) return false;
+            skip_whitespace_json<NullTerminated>(it, end);
             if constexpr (NullTerminated) {
-               if (*it != ':') { ctx.error = error_code::syntax_error; return false; }
+               if (*it != ':') { ctx.error = error_code::expected_colon; return false; }
             } else {
-               if (it == end || *it != ':') { ctx.error = error_code::syntax_error; return false; }
+               if (it == end || *it != ':') { ctx.error = error_code::expected_colon; return false; }
             }
             ++it;
-            skip_whitespace<NullTerminated>(it, end);
-            if (!validate_value<NullTerminated>(ctx, it, end)) return false;
-            skip_whitespace<NullTerminated>(it, end);
+            skip_whitespace_json<NullTerminated>(it, end);
+            if (!validate_json_value<NullTerminated>(ctx, it, end)) return false;
+            skip_whitespace_json<NullTerminated>(it, end);
             if constexpr (NullTerminated) {
                if (*it == ',') {
                   ++it;
                   continue;
                } else if (*it == '}') {
                   ++it;
-                  skip_whitespace<NullTerminated>(it, end);
+                  skip_whitespace_json<NullTerminated>(it, end);
                   if (*it && *it != ',' && *it != ']' && *it != '}') {
                      ctx.error = error_code::syntax_error;
                      return false;
@@ -279,7 +279,7 @@ namespace glz {
                   continue;
                } else if (it < end && *it == '}') {
                   ++it;
-                  skip_whitespace<NullTerminated>(it, end);
+                  skip_whitespace_json<NullTerminated>(it, end);
                   if (it < end && *it != ',' && *it != ']' && *it != '}') {
                      ctx.error = error_code::syntax_error;
                      return false;
@@ -297,7 +297,7 @@ namespace glz {
       }
 
       template <bool NullTerminated>
-      inline bool validate_array(context& ctx, const char*& it, const char* end, uint64_t& depth) noexcept {
+      inline bool validate_json_array(context& ctx, const char*& it, const char* end, uint64_t& depth) noexcept {
          if constexpr (NullTerminated) {
             if (*it != '[') { ctx.error = error_code::syntax_error; return false; }
          } else {
@@ -305,7 +305,7 @@ namespace glz {
          }
          ++depth;
          ++it;
-         skip_whitespace<NullTerminated>(it, end);
+         skip_whitespace_json<NullTerminated>(it, end);
          if constexpr (NullTerminated) {
             if (*it == '\0') { ctx.error = error_code::syntax_error; return false; }
          } else {
@@ -319,16 +319,16 @@ namespace glz {
          }
 
          while (true) {
-            skip_whitespace<NullTerminated>(it, end);
-            if (!validate_value<NullTerminated>(ctx, it, end)) return false;
-            skip_whitespace<NullTerminated>(it, end);
+            skip_whitespace_json<NullTerminated>(it, end);
+            if (!validate_json_value<NullTerminated>(ctx, it, end)) return false;
+            skip_whitespace_json<NullTerminated>(it, end);
             if constexpr (NullTerminated) {
                if (*it == ',') {
                   ++it;
                   continue;
                } else if (*it == ']') {
                   ++it;
-                  skip_whitespace<NullTerminated>(it, end);
+                  skip_whitespace_json<NullTerminated>(it, end);
                   if (*it && *it != ',' && *it != ']' && *it != '}') {
                      ctx.error = error_code::syntax_error;
                      return false;
@@ -345,7 +345,7 @@ namespace glz {
                   continue;
                } else if (it < end && *it == ']') {
                   ++it;
-                  skip_whitespace<NullTerminated>(it, end);
+                  skip_whitespace_json<NullTerminated>(it, end);
                   if (it < end && *it != ',' && *it != ']' && *it != '}') {
                      ctx.error = error_code::syntax_error;
                      return false;
@@ -364,8 +364,8 @@ namespace glz {
 
       // Validate a generic value
       template <bool NullTerminated>
-      inline bool validate_value(context& ctx, const char*& it, const char* end) {
-         skip_whitespace<NullTerminated>(it, end);
+      inline bool validate_json_value(context& ctx, const char*& it, const char* end) {
+         skip_whitespace_json<NullTerminated>(it, end);
          if constexpr (NullTerminated) {
             if (*it == '\0') { ctx.error = error_code::syntax_error; return false; }
          } else {
@@ -375,15 +375,15 @@ namespace glz {
          char c = *it;
          uint64_t depth = 0;
          if (c == '{') {
-            return validate_object<NullTerminated>(ctx, it, end, depth);
+            return validate_json_object<NullTerminated>(ctx, it, end, depth);
          } else if (c == '[') {
-            return validate_array<NullTerminated>(ctx, it, end, depth);
+            return validate_json_array<NullTerminated>(ctx, it, end, depth);
          } else if (c == '"') {
-            return validate_string<NullTerminated>(ctx, it, end);
+            return validate_json_string<NullTerminated>(ctx, it, end);
          } else if ((c == 't' || c == 'f')) {
             return validate_bool<NullTerminated>(ctx, it, end);
          } else if (c == 'n') {
-            return validate_null<NullTerminated>(ctx, it, end);
+            return validate_json_null<NullTerminated>(ctx, it, end);
          } else {
             // number possibility
             if (c == '-' || c == '+' || is_digit(c)) {
@@ -404,29 +404,27 @@ namespace glz {
          const char* end = start + in.size();
          const char* it = start;
 
-         if (ctx.error != error_code::none) {
-            return {ctx.error, ctx.custom_error_message, 0};
+         if (bool(ctx.error)) {
+            return {ctx.error, ctx.custom_error_message, 0, ctx.includer_error};
          }
 
-         // choose NullTerminated based on opts and input type
          if constexpr (resizable<In>) {
-            //static constexpr bool O_null_terminated = opt_true<Opts, &opts::null_terminated>;
             if constexpr (string_t<In>) {
-               if (!validate_value<true>(ctx, it, end)) {
+               if (!validate_json_value<true>(ctx, it, end)) {
                   return {ctx.error, ctx.custom_error_message, size_t(it - start), ctx.includer_error};
                }
             } else {
-               if (!validate_value<false>(ctx, it, end)) {
+               if (!validate_json_value<false>(ctx, it, end)) {
                   return {ctx.error, ctx.custom_error_message, size_t(it - start), ctx.includer_error};
                }
             }
          } else {
             if constexpr (string_t<In>) {
-               if (!validate_value<true>(ctx, it, end)) {
+               if (!validate_json_value<true>(ctx, it, end)) {
                   return {ctx.error, ctx.custom_error_message, size_t(it - start), ctx.includer_error};
                }
             } else {
-               if (!validate_value<false>(ctx, it, end)) {
+               if (!validate_json_value<false>(ctx, it, end)) {
                   return {ctx.error, ctx.custom_error_message, size_t(it - start), ctx.includer_error};
                }
             }
