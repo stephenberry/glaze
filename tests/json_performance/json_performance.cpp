@@ -9,7 +9,7 @@
 #include "glaze/glaze.hpp"
 #include "ut/ut.hpp"
 
-static constexpr bool skip = true;
+static constexpr bool skip = false;
 
 #define SKIP             \
    if constexpr (skip) { \
@@ -1334,7 +1334,7 @@ auto generic_tester()
 
 suite discord_test = [] {
    "discord"_test = [] {
-      //SKIP;
+      SKIP;
       generic_tester<discord_message, glz::opts{}>();
    };
 };
