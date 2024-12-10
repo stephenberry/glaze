@@ -9,7 +9,7 @@
 #include "glaze/glaze.hpp"
 #include "ut/ut.hpp"
 
-static constexpr bool skip = false;
+static constexpr bool skip = true;
 
 #define SKIP             \
    if constexpr (skip) { \
@@ -1261,6 +1261,21 @@ auto generic_tester()
    t1 = std::chrono::steady_clock::now();
 
    r.json_read = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-6;
+   
+   // validate performance
+   
+   t0 = std::chrono::steady_clock::now();
+
+   for (size_t i = 0; i < iterations; ++i) {
+      if (glz::validate_json(buffer)) {
+         std::cout << "glaze error!\n";
+         break;
+      }
+   }
+
+   t1 = std::chrono::steady_clock::now();
+   
+   std::cout << "validation time: " << std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-6 << '\n';
 
    // beve write performance
 
@@ -1319,7 +1334,7 @@ auto generic_tester()
 
 suite discord_test = [] {
    "discord"_test = [] {
-      SKIP;
+      //SKIP;
       generic_tester<discord_message, glz::opts{}>();
    };
 };
