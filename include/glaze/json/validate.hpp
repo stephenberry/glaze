@@ -43,6 +43,25 @@ namespace glz {
             while (it < end && whitespace_table[uint8_t(*it)]) ++it;
          }
       }
+      
+      // Helper function to parse four hex digits into a uint16_t code unit
+      inline uint16_t parse_hex_4_digits(const char hex[4]) noexcept {
+         uint16_t val = 0;
+         for (int i = 0; i < 4; ++i) {
+            char c = hex[i];
+            val <<= 4;
+            if (c >= '0' && c <= '9') {
+               val |= (c - '0');
+            }
+            else if (c >= 'a' && c <= 'f') {
+               val |= (c - 'a' + 10);
+            }
+            else {
+               val |= (c - 'A' + 10);
+            }
+         }
+         return val;
+      }
 
       template <bool NullTerminated>
       GLZ_ALWAYS_INLINE void validate_json_string(context& ctx, const auto*& it, const auto* end) noexcept {
@@ -74,24 +93,66 @@ namespace glz {
                }
                const auto esc = *it;
                switch (esc) {
-               case '"': case '\\': case '/': case 'b': case 'f': case 'n': case 'r': case 't':
-                  ++it;
-                  break;
-               case 'u': {
-                  ++it;
-                  for (int i = 0; i < 4; ++i) {
-                     if constexpr (NullTerminated) {
-                        if (*it == '\0' || not hex_digits[uint8_t(*it)]) { ctx.error = error_code::unexpected_end; return; }
-                     } else {
-                        if (it >= end || not hex_digits[uint8_t(*it)]) { ctx.error = error_code::unexpected_end; return; }
-                     }
+                  case '"': case '\\': case '/': case 'b': case 'f': case 'n': case 'r': case 't':
                      ++it;
+                     break;
+                  case 'u': {
+                     ++it;
+                     char hex[4];
+                     for (int i = 0; i < 4; ++i) {
+                        if constexpr (NullTerminated) {
+                           if (*it == '\0' || !hex_digits[uint8_t(*it)]) { ctx.error = error_code::unexpected_end; return; }
+                        } else {
+                           if (it >= end || !hex_digits[uint8_t(*it)]) { ctx.error = error_code::unexpected_end; return; }
+                        }
+                        hex[i] = *it++;
+                     }
+
+                     uint16_t code_unit = parse_hex_4_digits(hex);
+
+                     // Check if this code unit is a high surrogate
+                     if (code_unit >= 0xD800 && code_unit <= 0xDBFF) {
+                        // Expect another \u
+                        if constexpr (NullTerminated) {
+                           if (*it == '\0' || *it != '\\') [[unlikely]] { ctx.error = error_code::syntax_error; return; }
+                           ++it;
+                           if (*it == '\0' || *it != 'u') [[unlikely]] { ctx.error = error_code::syntax_error; return; }
+                           ++it;
+                        } else {
+                           if (it >= end || *it != '\\') [[unlikely]] { ctx.error = error_code::syntax_error; return; }
+                           ++it;
+                           if (it >= end || *it != 'u') [[unlikely]] { ctx.error = error_code::syntax_error; return; }
+                           ++it;
+                        }
+
+                        char hex2[4];
+                        for (int i = 0; i < 4; ++i) {
+                           if constexpr (NullTerminated) {
+                              if (*it == '\0' || !hex_digits[uint8_t(*it)]) [[unlikely]] { ctx.error = error_code::unexpected_end; return; }
+                           } else {
+                              if (it >= end || !hex_digits[uint8_t(*it)]) [[unlikely]] { ctx.error = error_code::unexpected_end; return; }
+                           }
+                           hex2[i] = *it++;
+                        }
+
+                        uint16_t code_unit2 = parse_hex_4_digits(hex2);
+                        // Check if the second code unit is a low surrogate
+                        if (code_unit2 < 0xDC00 || code_unit2 > 0xDFFF) {
+                           ctx.error = error_code::syntax_error;
+                           return;
+                        }
+                     }
+                     else if (code_unit >= 0xDC00 && code_unit <= 0xDFFF) {
+                        // Low surrogate without a preceding high surrogate is invalid
+                        ctx.error = error_code::syntax_error;
+                        return;
+                     }
+                     // Otherwise, a single non-surrogate code unit is fine.
+                     break;
                   }
-                  break;
-               }
-               default:
-                  ctx.error = error_code::syntax_error;
-                  return;
+                  default:
+                     ctx.error = error_code::syntax_error;
+                     return;
                }
             } else {
                ++it;
