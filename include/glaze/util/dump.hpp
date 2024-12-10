@@ -23,7 +23,7 @@ namespace glz::detail
    {
       if constexpr (vector_like<B>) {
          if (const auto k = ix + N; k > b.size()) [[unlikely]] {
-            b.resize((std::max)(b.size() * 2, k));
+            b.resize(2 * k);
          }
       }
    }
@@ -33,7 +33,7 @@ namespace glz::detail
    {
       if constexpr (vector_like<B>) {
          if (const auto k = ix + n; k > b.size()) [[unlikely]] {
-            b.resize((std::max)(b.size() * 2, k));
+            b.resize(2 * k);
          }
       }
    }
@@ -95,8 +95,9 @@ namespace glz::detail
 
       if constexpr (vector_like<B>) {
          if constexpr (Checked) {
-            if (ix + n > b.size()) [[unlikely]] {
-               b.resize((std::max)(b.size() * 2, ix + n));
+            const auto k = ix + n;
+            if (k > b.size()) [[unlikely]] {
+               b.resize(2 * k);
             }
          }
       }
@@ -110,8 +111,9 @@ namespace glz::detail
       const auto n = str.size();
       if constexpr (vector_like<B>) {
          if constexpr (Checked) {
+            const auto k = ix + n;
             if (ix + n > b.size()) [[unlikely]] {
-               b.resize((std::max)(b.size() * 2, ix + n));
+               b.resize(2 * k);
             }
          }
       }
@@ -123,8 +125,9 @@ namespace glz::detail
    GLZ_ALWAYS_INLINE void dumpn(size_t n, B& b, size_t& ix) noexcept(not vector_like<B>)
    {
       if constexpr (vector_like<B>) {
-         if (ix + n > b.size()) [[unlikely]] {
-            b.resize((std::max)(b.size() * 2, ix + n));
+         const auto k = ix + n;
+         if (k > b.size()) [[unlikely]] {
+            b.resize(2 * k);
          }
       }
       std::memset(&b[ix], c, n);
@@ -143,7 +146,7 @@ namespace glz::detail
    {
       if constexpr (vector_like<B>) {
          if (const auto k = ix + n + write_padding_bytes; k > b.size()) [[unlikely]] {
-            b.resize((std::max)(b.size() * 2, k));
+            b.resize(2 * k);
          }
       }
 
@@ -161,8 +164,9 @@ namespace glz::detail
 
       if constexpr (vector_like<B>) {
          if constexpr (Checked) {
-            if (ix + n > b.size()) [[unlikely]] {
-               b.resize((std::max)(b.size() * 2, ix + n));
+            const auto k = ix + n;
+            if (k > b.size()) [[unlikely]] {
+               b.resize(2 * k);
             }
          }
       }
@@ -176,8 +180,9 @@ namespace glz::detail
       const auto n = str.size();
       if constexpr (vector_like<B>) {
          if constexpr (Checked) {
-            if (ix + n > b.size()) [[unlikely]] {
-               b.resize((std::max)(b.size() * 2, ix + n));
+            const auto k = ix + n;
+            if (k > b.size()) [[unlikely]] {
+               b.resize(2 * k);
             }
          }
       }
@@ -192,8 +197,9 @@ namespace glz::detail
       if (n) {
          if constexpr (vector_like<B>) {
             if constexpr (Checked) {
-               if (ix + n > b.size()) [[unlikely]] {
-                  b.resize((std::max)(b.size() * 2, ix + n));
+               const auto k = ix + n;
+               if (k > b.size()) [[unlikely]] {
+                  b.resize(2 * k);
                }
             }
          }
@@ -207,8 +213,9 @@ namespace glz::detail
    {
       const auto n = bytes.size();
       if constexpr (vector_like<B>) {
-         if (ix + n > b.size()) [[unlikely]] {
-            b.resize((std::max)(b.size() * 2, ix + n));
+         const auto k = ix + n;
+         if (k > b.size()) [[unlikely]] {
+            b.resize(2 * k);
          }
       }
       std::memcpy(&b[ix], bytes.data(), n);
@@ -219,8 +226,9 @@ namespace glz::detail
    GLZ_ALWAYS_INLINE void dump(const std::array<uint8_t, N>& bytes, B& b, size_t& ix) noexcept(not vector_like<B>)
    {
       if constexpr (vector_like<B>) {
-         if (ix + N > b.size()) [[unlikely]] {
-            b.resize((std::max)(b.size() * 2, ix + N));
+         const auto k = ix + N;
+         if (k > b.size()) [[unlikely]] {
+            b.resize(2 * k);
          }
       }
       std::memcpy(&b[ix], bytes.data(), N);
