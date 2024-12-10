@@ -1261,9 +1261,9 @@ auto generic_tester()
    t1 = std::chrono::steady_clock::now();
 
    r.json_read = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-6;
-   
+
    // validate performance
-   
+
    t0 = std::chrono::steady_clock::now();
 
    for (size_t i = 0; i < iterations; ++i) {
@@ -1274,8 +1274,9 @@ auto generic_tester()
    }
 
    t1 = std::chrono::steady_clock::now();
-   
-   std::cout << "validation time: " << std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-6 << '\n';
+
+   std::cout << "validation time: " << std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-6
+             << '\n';
 
    // beve write performance
 
