@@ -58,8 +58,9 @@ namespace glz
       template <class T>
       concept supports_unchecked_write = boolean_like<T> || num_t<T> || nullable_like<T> || always_null_t<T>;
 
+      // MSVC has a compiler bug if this function is consteval (seems to be with larger structures)
       template <class T>
-      consteval std::optional<size_t> required_padding()
+      constexpr std::optional<size_t> required_padding()
       {
          if constexpr (boolean_like<T>) {
             return 8;
