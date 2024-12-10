@@ -448,7 +448,8 @@ namespace glz::detail
       requires(has_is_padded(Opts) && str.size() <= padding_bytes)
    GLZ_ALWAYS_INLINE void match(is_context auto&& ctx, auto&& it, auto&&) noexcept
    {
-      if (!compare<str.size()>(it, str.value)) [[unlikely]] {
+      static constexpr auto S = str.sv();
+      if (not comparitor<S>(it)) [[unlikely]] {
          ctx.error = error_code::syntax_error;
       }
       else [[likely]] {
@@ -461,7 +462,8 @@ namespace glz::detail
    GLZ_ALWAYS_INLINE void match(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       const auto n = size_t(end - it);
-      if ((n < str.size()) || !compare<str.size()>(it, str.value)) [[unlikely]] {
+      static constexpr auto S = str.sv();
+      if ((n < str.size()) || not comparitor<S>(it)) [[unlikely]] {
          ctx.error = error_code::syntax_error;
       }
       else [[likely]] {
