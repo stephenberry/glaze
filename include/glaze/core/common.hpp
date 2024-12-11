@@ -229,7 +229,7 @@ namespace glz
          requires { std::tuple_size<T>::value; } && std::same_as<T, std::array<char, std::tuple_size_v<T>>>;
 
       template <class T>
-      concept str_t = (!std::same_as<std::nullptr_t, T> && std::convertible_to<std::decay_t<T>, std::string_view>) ||
+      concept str_t = (!std::same_as<std::nullptr_t, T> && std::constructible_from<std::string_view, std::decay_t<T>>) ||
                       array_char_t<T>;
 
       // this concept requires that T is a writeable string. It can be resized, appended to, or assigned to
