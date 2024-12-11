@@ -2201,7 +2201,8 @@ namespace glz
                      ctx.error = error_code::no_matching_variant_type;
                      return;
                   }
-                  else if constexpr ((type_counts::n_object + type_counts::n_nullable_object) == 1 && tag_v<T>.empty()) {
+                  else if constexpr ((type_counts::n_object + type_counts::n_nullable_object) == 1 &&
+                                     tag_v<T>.empty()) {
                      using V = glz::tuple_element_t<0, object_types>;
                      if (!std::holds_alternative<V>(value)) value = V{};
                      read<JSON>::op<opening_handled<Opts>()>(std::get<V>(value), ctx, it, end);
