@@ -9986,7 +9986,7 @@ suite variant_tag_tests = [] {
       expect(xString.has_value());
 
       auto x = glz::read_json<X1>(*xString);
-      expect(x);
+      expect(bool(x));
       if (not x.has_value()) {
          std::cerr << glz::format_error(x.error(), *xString);
       }
