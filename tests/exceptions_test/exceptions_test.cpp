@@ -1,8 +1,6 @@
 // Glaze Library
 // For the license information refer to glaze.hpp
 
-#define UT_RUN_TIME_ONLY
-
 #include "glaze/glaze_exceptions.hpp"
 #include "glaze/thread/shared_async_map.hpp"
 #include "glaze/thread/shared_async_vector.hpp"

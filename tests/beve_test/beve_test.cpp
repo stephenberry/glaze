@@ -1,8 +1,6 @@
 // Glaze Library
 // For the license information refer to glaze.hpp
 
-#define UT_RUN_TIME_ONLY
-
 #include <bit>
 #include <bitset>
 #include <chrono>
