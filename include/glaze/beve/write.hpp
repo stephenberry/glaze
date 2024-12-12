@@ -22,8 +22,8 @@ namespace glz
       {
          using V = std::decay_t<decltype(value)>;
          constexpr auto n = sizeof(V);
-         if (ix + n > b.size()) [[unlikely]] {
-            b.resize((std::max)(b.size() * 2, ix + n));
+         if (const auto k = ix + n; k > b.size()) [[unlikely]] {
+            b.resize(2 * k);
          }
 
          constexpr auto is_volatile = std::is_volatile_v<std::remove_reference_t<decltype(value)>>;
@@ -361,8 +361,8 @@ namespace glz
             const auto n = str.size();
             dump_compressed_int<Opts>(n, b, ix);
 
-            if (ix + n > b.size()) [[unlikely]] {
-               b.resize((std::max)(b.size() * 2, ix + n));
+            if (const auto k = ix + n; k > b.size()) [[unlikely]] {
+               b.resize(2 * k);
             }
 
             std::memcpy(&b[ix], str.data(), n);
@@ -375,8 +375,8 @@ namespace glz
             dump_compressed_int<Opts>(value.size(), b, ix);
 
             const auto n = value.size();
-            if (ix + n > b.size()) [[unlikely]] {
-               b.resize((std::max)(b.size() * 2, ix + n));
+            if (const auto k = ix + n; k > b.size()) [[unlikely]] {
+               b.resize(2 * k);
             }
 
             std::memcpy(&b[ix], value.data(), n);
@@ -439,8 +439,8 @@ namespace glz
 
                   auto dump_array = [&](auto&& b, auto&& ix) {
                      const auto n = value.size() * sizeof(V);
-                     if (ix + n > b.size()) [[unlikely]] {
-                        b.resize((std::max)(b.size() * 2, ix + n));
+                     if (const auto k = ix + n; k > b.size()) [[unlikely]] {
+                        b.resize(2 * k);
                      }
 
                      if constexpr (is_volatile) {
@@ -478,8 +478,8 @@ namespace glz
 
                   auto dump_array = [&](auto&& b, auto&& ix) {
                      const auto n = x.size();
-                     if (ix + n > b.size()) [[unlikely]] {
-                        b.resize((std::max)(b.size() * 2, ix + n));
+                     if (const auto k = ix + n; k > b.size()) [[unlikely]] {
+                        b.resize(2 * k);
                      }
 
                      std::memcpy(&b[ix], x.data(), n);

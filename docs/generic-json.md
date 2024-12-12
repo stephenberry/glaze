@@ -11,6 +11,7 @@ glz::read_json(json, buffer);
 assert(json[0].get<double>() == 5.0);
 assert(json[1].get<std::string>() == "Hello World");
 assert(json[2]["pi"].get<double>() == 3.14);
+assert(json[2]["pi"].as<int>() == 3);
 ```
 
 ```c++
@@ -30,6 +31,10 @@ std::string buffer{};
 glz::write_json(json, buffer);
 expect(buffer == R"({"answer":{"everything":42},"happy":true,"list":[1,0,2],"name":"Stephen","object":{"currency":"USD","value":42.99},"pi":3.141})");
 ```
+
+## get() vs as()
+
+`glz::json_t` is a variant underneath that stores all numbers in `double`. The `get()` method mimics a `std::get` call for a variant, which rejects conversions. If you want to access a number as an `int`, then call `json.as<int>()`, which will cast the `double` to an `int`.
 
 ## Type Checking json_t
 

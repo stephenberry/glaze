@@ -244,7 +244,7 @@ namespace glz
    struct reflect<T>
    {
       using V = std::remove_cvref_t<T>;
-      using tuple = decay_keep_volatile_t<decltype(detail::to_tuple(std::declval<T>()))>;
+      using tuple = decay_keep_volatile_t<decltype(to_tuple(std::declval<T>()))>;
 
       // static constexpr auto values = typename detail::tuple_ptr<tuple>::type{};
 

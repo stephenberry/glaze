@@ -5,6 +5,7 @@
 
 #include "glaze/glaze_exceptions.hpp"
 #include "glaze/thread/shared_async_map.hpp"
+#include "glaze/thread/shared_async_vector.hpp"
 #include "glaze/thread/threadpool.hpp"
 #include "ut/ut.hpp"
 
@@ -417,6 +418,200 @@ suite shared_async_map_tests = [] {
       expect(map.at("first").value() == 100);
       expect(map.at("third").value() == 300);
    };
+};
+
+suite shared_async_vector_tests = [] {
+   "shared_async_vector atomic"_test = [] {
+      glz::shared_async_vector<std::atomic<int>> vec;
+      vec.emplace_back(1);
+      vec.emplace_back(2);
+      expect(vec.at(0).value() == 1);
+      expect(vec.at(1).value() == 2);
+      expect(vec.size() == 2);
+
+      // Iterate over the vector with const_iterator
+      for (const auto& value : vec) {
+         expect(value < 3);
+      }
+
+      // Iterate over the vector with non-const iterator and modify values
+      for (auto&& value : vec) {
+         value = 3;
+      }
+
+      expect(vec.at(0).value() == 3);
+      expect(vec.at(1).value() == 3);
+
+      vec.at(0).value() = 1;
+
+      for (auto it = vec.begin(); it != vec.end(); ++it) {
+         std::cout << *it << '\n';
+      }
+   };
+
+   "shared_async_vector write_json"_test = [] {
+      glz::shared_async_vector<std::atomic<int>> vec;
+      vec.emplace_back(1);
+      vec.emplace_back(2);
+
+      std::string buffer{};
+      expect(not glz::write_json(vec, buffer));
+      expect(buffer == R"([1,2])") << buffer;
+
+      vec.clear();
+      expect(not glz::read_json(vec, buffer));
+      expect(vec.at(0).value() == 1);
+      expect(vec.at(1).value() == 2);
+   };
+
+   // Test serialization and deserialization of an empty shared_async_vector
+   "shared_async_vector empty"_test = [] {
+      glz::shared_async_vector<std::atomic<int>> vec;
+
+      // Serialize the empty vector
+      std::string buffer{};
+      expect(not glz::write_json(vec, buffer));
+      expect(buffer == R"([])") << buffer;
+
+      // Clear and deserialize back
+      vec.clear();
+      expect(not glz::read_json(vec, buffer));
+      expect(vec.empty());
+   };
+
+   // Test handling of values with special characters (using strings)
+   "shared_async_vector special_characters"_test = [] {
+      glz::shared_async_vector<std::string> vec;
+      vec.emplace_back("string with spaces");
+      vec.emplace_back("string_with_\"quotes\"");
+      vec.emplace_back("строка"); // "string" in Russian
+
+      std::string buffer{};
+      expect(not glz::write_json(vec, buffer));
+
+      // Expected JSON with properly escaped characters
+      std::string expected = R"(["string with spaces","string_with_\"quotes\"","строка"])";
+      expect(buffer == expected) << buffer;
+
+      // Deserialize and verify
+      vec.clear();
+      expect(not glz::read_json(vec, buffer));
+      expect(vec.at(0).value() == "string with spaces");
+      expect(vec.at(1).value() == "string_with_\"quotes\"");
+      expect(vec.at(2).value() == "строка");
+   };
+
+   // Test serialization and deserialization of a large shared_async_vector
+   "shared_async_vector large_vector"_test = [] {
+      glz::shared_async_vector<std::atomic<int>> vec;
+
+      // Populate the vector with 1000 entries
+      for (int i = 0; i < 1000; ++i) {
+         vec.emplace_back(i * i);
+      }
+
+      std::string buffer{};
+      expect(not glz::write_json(vec, buffer));
+
+      // Simple check to ensure buffer is not empty
+      expect(!buffer.empty());
+
+      // Deserialize and verify a few entries
+      vec.clear();
+      expect(not glz::read_json(vec, buffer));
+      expect(vec.size() == 1000);
+      expect(vec.at(0).value() == 0);
+      expect(vec.at(999).value() == 999 * 999);
+   };
+
+   // Test deserialization with invalid JSON
+   "shared_async_vector invalid_json"_test = [] {
+      glz::shared_async_vector<std::atomic<int>> vec;
+      std::string invalid_buffer = R"([1, "invalid_value", 3])"; // Second element should be an integer
+
+      expect(glz::read_json(vec, invalid_buffer));
+   };
+
+   // Test updating existing elements and adding new elements
+   "shared_async_vector update_and_add"_test = [] {
+      glz::shared_async_vector<std::atomic<int>> vec;
+      vec.emplace_back(10);
+      vec.emplace_back(20);
+
+      std::string buffer{};
+      expect(not glz::write_json(vec, buffer));
+      expect(buffer == R"([10,20])") << buffer;
+
+      // Update existing element and add a new element
+      vec.at(0).value() = 30;
+      vec.emplace_back(40);
+
+      expect(not glz::write_json(vec, buffer));
+      expect(buffer == R"([30,20,40])") << buffer;
+
+      // Deserialize and verify
+      vec.clear();
+      expect(not glz::read_json(vec, buffer));
+      expect(vec.at(0).value() == 30);
+      expect(vec.at(1).value() == 20);
+      expect(vec.at(2).value() == 40);
+   };
+
+   // Test concurrent access to the shared_async_vector
+   "shared_async_vector concurrent_access"_test = [] {
+      glz::shared_async_vector<std::atomic<int>> vec;
+      const int num_threads = 10;
+      const int increments_per_thread = 1000;
+
+      // Initialize vector with zeros
+      for (int i = 0; i < num_threads; ++i) {
+         vec.emplace_back(0);
+      }
+
+      // Launch multiple threads to increment values concurrently
+      std::vector<std::thread> threads;
+      for (int i = 0; i < num_threads; ++i) {
+         threads.emplace_back([&, i]() {
+            for (int j = 0; j < increments_per_thread; ++j) {
+               ++vec.at(i).value();
+            }
+         });
+      }
+
+      // Wait for all threads to finish
+      for (auto& th : threads) {
+         th.join();
+      }
+
+      // Verify the results
+      for (int i = 0; i < num_threads; ++i) {
+         expect(vec.at(i).value() == increments_per_thread) << "Index " << i;
+      }
+   };
+
+   // Test removal of elements from the shared_async_vector
+   /*"shared_async_vector remove_elements"_test = [] {
+      glz::shared_async_vector<std::atomic<int>> vec;
+      vec.emplace_back(100); // Index 0
+      vec.emplace_back(200); // Index 1
+      vec.emplace_back(300); // Index 2
+
+      // Remove the element at index 1
+      vec.erase(vec.begin() + 1);
+      expect(vec.size() == 2);
+
+      // Serialize and verify
+      std::string buffer{};
+      expect(not glz::write_json(vec, buffer));
+      expect(buffer == R"([100,300])") << buffer;
+
+      // Deserialize and verify
+      vec.clear();
+      expect(not glz::read_json(vec, buffer));
+      expect(vec.size() == 2);
+      expect(vec.at(0).value() == 100);
+      expect(vec.at(1).value() == 300);
+   };*/
 };
 
 int main() { return 0; }

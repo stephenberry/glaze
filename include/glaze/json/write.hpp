@@ -58,8 +58,9 @@ namespace glz
       template <class T>
       concept supports_unchecked_write = boolean_like<T> || num_t<T> || nullable_like<T> || always_null_t<T>;
 
+      // MSVC has a compiler bug if this function is consteval (seems to be with larger structures)
       template <class T>
-      inline constexpr std::optional<size_t> required_padding()
+      constexpr std::optional<size_t> required_padding()
       {
          if constexpr (boolean_like<T>) {
             return 8;
@@ -188,8 +189,8 @@ namespace glz
          {
             static constexpr auto checked = not has_write_unchecked(Opts);
             if constexpr (checked && vector_like<B>) {
-               if ((ix + 8) > b.size()) [[unlikely]] {
-                  b.resize((std::max)(b.size() * 2, ix + 8));
+               if (b.size() <= (ix + 8)) [[unlikely]] {
+                  b.resize(2 * (ix + 8));
                }
             }
 
@@ -223,10 +224,11 @@ namespace glz
             constexpr auto checked = not has_write_unchecked(Opts);
             if constexpr (Opts.quoted_num) {
                dump<'"', checked>(b, ix);
-            }
-            write_chars::op<Opts>(value, ctx, b, ix);
-            if constexpr (Opts.quoted_num) {
+               write_chars::op<Opts>(value, ctx, b, ix);
                dump<'"', checked>(b, ix);
+            }
+            else {
+               write_chars::op<Opts>(value, ctx, b, ix);
             }
          }
       };
@@ -263,7 +265,7 @@ namespace glz
                   if constexpr (resizable<B>) {
                      const auto k = ix + 4; // 4 characters is enough for quotes and escaped character
                      if (k >= b.size()) [[unlikely]] {
-                        b.resize((std::max)(b.size() * 2, k));
+                        b.resize(2 * k);
                      }
                   }
 
@@ -297,7 +299,7 @@ namespace glz
                      const auto n = str.size();
                      const auto k = ix + 2 + n;
                      if (k >= b.size()) [[unlikely]] {
-                        b.resize((std::max)(b.size() * 2, k));
+                        b.resize(2 * k);
                      }
                   }
                   // now we don't have to check writing
@@ -329,7 +331,7 @@ namespace glz
                   if constexpr (resizable<B>) {
                      const auto k = ix + 10 + 2 * n;
                      if (k >= b.size()) [[unlikely]] {
-                        b.resize((std::max)(b.size() * 2, k));
+                        b.resize(2 * k);
                      }
                   }
                   // now we don't have to check writing
@@ -621,7 +623,7 @@ namespace glz
          if constexpr (Opts.prettify) {
             if constexpr (vector_like<B>) {
                if (const auto k = ix + ctx.indentation_level + write_padding_bytes; k > b.size()) [[unlikely]] {
-                  b.resize((std::max)(b.size() * 2, k));
+                  b.resize(2 * k);
                }
             }
             if constexpr (Opts.new_lines_in_arrays) {
@@ -635,8 +637,8 @@ namespace glz
          else {
             if constexpr (vector_like<B>) {
                if constexpr (minified_check) {
-                  if (ix == b.size()) [[unlikely]] {
-                     b.resize((std::max)(b.size() * 2, size_t(128)));
+                  if (ix >= b.size()) [[unlikely]] {
+                     b.resize(2 * ix);
                   }
                }
             }
@@ -651,7 +653,7 @@ namespace glz
          if constexpr (Opts.prettify) {
             if constexpr (vector_like<B>) {
                if (const auto k = ix + ctx.indentation_level + write_padding_bytes; k > b.size()) [[unlikely]] {
-                  b.resize((std::max)(b.size() * 2, k));
+                  b.resize(2 * k);
                }
             }
             dump<",\n", false>(b, ix);
@@ -660,8 +662,8 @@ namespace glz
          else {
             if constexpr (vector_like<B>) {
                if constexpr (minified_check) {
-                  if (ix == b.size()) [[unlikely]] {
-                     b.resize((std::max)(b.size() * 2, size_t(128)));
+                  if (ix >= b.size()) [[unlikely]] {
+                     b.resize(2 * ix);
                   }
                }
             }
@@ -710,7 +712,7 @@ namespace glz
 
                   if constexpr (vector_like<B>) {
                      if (const auto k = ix + ctx.indentation_level + write_padding_bytes; k > b.size()) [[unlikely]] {
-                        b.resize((std::max)(b.size() * 2, k));
+                        b.resize(2 * k);
                      }
                   }
 
@@ -728,7 +730,7 @@ namespace glz
                else {
                   if constexpr (vector_like<B>) {
                      if (const auto k = ix + write_padding_bytes; k > b.size()) [[unlikely]] {
-                        b.resize((std::max)(b.size() * 2, k));
+                        b.resize(2 * k);
                      }
                   }
                   std::memcpy(&b[ix], "[", 1);
@@ -751,12 +753,12 @@ namespace glz
                         if constexpr (Opts.prettify) {
                            if (const auto k = ix + ctx.indentation_level + write_padding_bytes; k > b.size())
                               [[unlikely]] {
-                              b.resize((std::max)(b.size() * 2, k));
+                              b.resize(2 * k);
                            }
                         }
                         else {
                            if (const auto k = ix + write_padding_bytes; k > b.size()) [[unlikely]] {
-                              b.resize((std::max)(b.size() * 2, k));
+                              b.resize(2 * k);
                            }
                         }
                      }
@@ -913,7 +915,7 @@ namespace glz
                ctx.indentation_level += Opts.indentation_width;
                if constexpr (vector_like<B>) {
                   if (const auto k = ix + ctx.indentation_level + 2; k > b.size()) [[unlikely]] {
-                     b.resize((std::max)(b.size() * 2, k));
+                     b.resize(2 * k);
                   }
                }
                dump<"{\n", false>(b, ix);
@@ -1409,13 +1411,13 @@ namespace glz
                static constexpr auto Opts =
                   disable_write_unknown_off<opening_and_closing_handled_off<ws_handled_off<Options>()>()>();
 
-               if constexpr (!has_opening_handled(Options)) {
+               if constexpr (not has_opening_handled(Options)) {
                   if constexpr (Options.prettify) {
                      ctx.indentation_level += Options.indentation_width;
                      if constexpr (vector_like<B>) {
                         if (const auto k = ix + ctx.indentation_level + write_padding_bytes; k > b.size())
                            [[unlikely]] {
-                           b.resize((std::max)(b.size() * 2, k));
+                           b.resize(2 * k);
                         }
                      }
                      std::memcpy(&b[ix], "{\n", 2);
@@ -1485,7 +1487,7 @@ namespace glz
                               if constexpr (vector_like<B>) {
                                  if (const auto k = ix + ctx.indentation_level + write_padding_bytes; k > b.size())
                                     [[unlikely]] {
-                                    b.resize((std::max)(b.size() * 2, k));
+                                    b.resize(2 * k);
                                  }
                               }
                               std::memcpy(&b[ix], ",\n", 2);
@@ -1516,7 +1518,7 @@ namespace glz
                                  if constexpr (vector_like<B>) {
                                     if (const auto k = ix + ctx.indentation_level + write_padding_bytes; k > b.size())
                                        [[unlikely]] {
-                                       b.resize((std::max)(b.size() * 2, k));
+                                       b.resize(2 * k);
                                     }
                                  }
                                  std::memcpy(&b[ix], ",\n", 2);
@@ -1598,7 +1600,7 @@ namespace glz
                            if constexpr (vector_like<B>) {
                               if (const auto k = ix + ctx.indentation_level + write_padding_bytes; k > b.size())
                                  [[unlikely]] {
-                                 b.resize((std::max)(b.size() * 2, k));
+                                 b.resize(2 * k);
                               }
                            }
                            std::memcpy(&b[ix], ",\n", 2);
@@ -1628,7 +1630,7 @@ namespace glz
                      if constexpr (vector_like<B>) {
                         if (const auto k = ix + ctx.indentation_level + write_padding_bytes; k > b.size())
                            [[unlikely]] {
-                           b.resize((std::max)(b.size() * 2, k));
+                           b.resize(2 * k);
                         }
                      }
                      std::memcpy(&b[ix], "\n", 1);
@@ -1655,7 +1657,7 @@ namespace glz
       struct write_partial<JSON>
       {
          template <auto& Partial, auto Opts, class T, is_context Ctx, class B, class IX>
-         static void op(T&& value, Ctx&& ctx, B&& b, IX&& ix)
+         GLZ_ALWAYS_INLINE static void op(T&& value, Ctx&& ctx, B&& b, IX&& ix)
          {
             if constexpr (std::count(Partial.begin(), Partial.end(), "") > 0) {
                detail::write<JSON>::op<Opts>(value, ctx, b, ix);

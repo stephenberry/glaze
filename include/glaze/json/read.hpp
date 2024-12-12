@@ -144,57 +144,12 @@ namespace glz
          requires(glaze_object_t<T> || reflectable<T>)
       void decode_index(Value&& value, is_context auto&& ctx, auto&& it, auto&& end, SelectedIndex&&... selected_index)
       {
-         static constexpr auto TargetKey = glz::get<I>(reflect<T>::keys);
-         static constexpr auto Length = TargetKey.size();
-         // The == end check is validating that we have space for a quote
-         if ((it + Length) >= end) [[unlikely]] {
-            if constexpr (Opts.error_on_unknown_keys) {
-               ctx.error = error_code::unknown_key;
-               return;
-            }
-            else {
-               auto start = it;
-               skip_string_view<Opts>(ctx, it, end);
-               if (bool(ctx.error)) [[unlikely]]
-                  return;
-               const sv key = {start, size_t(it - start)};
-               ++it; // skip the quote
-               GLZ_INVALID_END();
+         static constexpr auto Key = get<I>(reflect<T>::keys);
+         static constexpr auto KeyWithEndQuote = join_v<Key, chars<"\"">>;
+         static constexpr auto Length = KeyWithEndQuote.size();
 
-               GLZ_PARSE_WS_COLON;
-
-               read<JSON>::handle_unknown<Opts>(key, value, ctx, it, end);
-               return;
-            }
-         }
-
-         if (comparitor<TargetKey>(it)) [[likely]] {
+         if (((it + Length) < end) && comparitor<KeyWithEndQuote>(it)) [[likely]] {
             it += Length;
-            if (*it != '"') [[unlikely]] {
-               if constexpr (Opts.error_on_unknown_keys) {
-                  ctx.error = error_code::unknown_key;
-                  return;
-               }
-               else {
-                  // This code should not error on valid unknown keys
-                  // We arrived here because the key was perhaps found, but if the quote does not exist
-                  // then this does not necessarily mean we have a syntax error.
-                  // We may have just found the prefix of a longer, unknown key.
-                  auto* start = it - Length;
-                  skip_string_view<Opts>(ctx, it, end);
-                  if (bool(ctx.error)) [[unlikely]]
-                     return;
-                  const sv key = {start, size_t(it - start)};
-                  ++it;
-                  GLZ_INVALID_END();
-
-                  GLZ_PARSE_WS_COLON;
-
-                  read<JSON>::handle_unknown<Opts>(key, value, ctx, it, end);
-                  return;
-               }
-            }
-            ++it;
             GLZ_INVALID_END();
 
             GLZ_SKIP_WS();
@@ -232,7 +187,7 @@ namespace glz
                ctx.error = error_code::unknown_key;
             }
             else {
-               auto* start = it - Length;
+               auto* start = it;
                skip_string_view<Opts>(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
                   return;
@@ -253,13 +208,8 @@ namespace glz
       {
          static constexpr auto TargetKey = glz::get<I>(reflect<T>::keys);
          static constexpr auto Length = TargetKey.size();
-         // The == end check is validating that we have space for a quote
-         if ((it + Length) >= end) [[unlikely]] {
-            ctx.error = error_code::unexpected_enum;
-            return;
-         }
 
-         if (compare<Length>(TargetKey.data(), it)) [[likely]] {
+         if (((it + Length) < end) && comparitor<TargetKey>(it)) [[likely]] {
             it += Length;
             if (*it != '"') [[unlikely]] {
                ctx.error = error_code::unexpected_enum;
@@ -316,7 +266,7 @@ namespace glz
                }
             }
 
-            // We see better performance function pointers than a glz::jump_table here.
+            // We see better performance with function pointers than a glz::jump_table here.
             visit<N>([&]<size_t I>() { decode_index<Opts, T, I>(value, ctx, it, end, selected_index...); }, index);
          }
       }
@@ -456,7 +406,19 @@ namespace glz
             if constexpr (!has_ws_handled(Opts)) {
                GLZ_SKIP_WS();
             }
-            match<"null", Opts>(ctx, it, end);
+            static constexpr sv null_string = "null";
+            if constexpr (not has_is_padded(Opts)) {
+               const auto n = size_t(end - it);
+               if ((n < 4) || not comparitor<null_string>(it)) [[unlikely]] {
+                  ctx.error = error_code::syntax_error;
+               }
+            }
+            else {
+               if (not comparitor<null_string>(it)) [[unlikely]] {
+                  ctx.error = error_code::syntax_error;
+               }
+            }
+            it += 4; // always advance for performance
          }
       };
 
@@ -559,7 +521,7 @@ namespace glz
       struct from<JSON, T>
       {
          template <auto Opts, class It>
-         static void op(auto&& value, is_context auto&& ctx, It&& it, auto&& end) noexcept
+         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, It&& it, auto&& end) noexcept
          {
             if constexpr (Opts.quoted_num) {
                GLZ_SKIP_WS();
@@ -2239,7 +2201,8 @@ namespace glz
                      ctx.error = error_code::no_matching_variant_type;
                      return;
                   }
-                  else if constexpr ((type_counts::n_object + type_counts::n_nullable_object) == 1) {
+                  else if constexpr ((type_counts::n_object + type_counts::n_nullable_object) == 1 &&
+                                     tag_v<T>.empty()) {
                      using V = glz::tuple_element_t<0, object_types>;
                      if (!std::holds_alternative<V>(value)) value = V{};
                      read<JSON>::op<opening_handled<Opts>()>(std::get<V>(value), ctx, it, end);
@@ -2752,7 +2715,8 @@ namespace glz
    {
       context ctx{};
       glz::skip skip_value{};
-      return read<opts{.validate_trailing_whitespace = true}>(skip_value, std::forward<Buffer>(buffer), ctx);
+      return read<opts{.comments = true, .validate_skipped = true, .validate_trailing_whitespace = true}>(
+         skip_value, std::forward<Buffer>(buffer), ctx);
    }
 
    template <read_json_supported T, is_buffer Buffer>

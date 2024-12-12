@@ -9941,6 +9941,56 @@ suite custom_nullable_with_specialization = [] {
    };
 };
 
+struct A1
+{
+   int p{};
+};
+
+struct B1
+{
+   float p{};
+};
+
+using X1 = std::variant<A1>;
+using Y1 = std::variant<A1, B1>;
+
+template <>
+struct glz::meta<A1>
+{
+   static constexpr auto value = object("p", &A1::p);
+};
+
+template <>
+struct glz::meta<B1>
+{
+   static constexpr auto value = object("p", &B1::p);
+};
+
+template <>
+struct glz::meta<X1>
+{
+   static constexpr std::string_view tag = "tag";
+};
+
+template <>
+struct glz::meta<Y1>
+{
+   static constexpr std::string_view tag = "tag";
+};
+
+suite variant_tag_tests = [] {
+   "variant tag"_test = [] {
+      auto xString = glz::write_json(X1(A1()));
+      expect(xString.has_value());
+
+      auto x = glz::read_json<X1>(*xString);
+      expect(bool(x));
+      if (not x.has_value()) {
+         std::cerr << glz::format_error(x.error(), *xString);
+      }
+   };
+};
+
 int main()
 {
    trace.end("json_test");
