@@ -21,7 +21,7 @@ static_assert(glz::detail::reflectable<BasicStruct>);
 // Demonstration of reading and writing a basic reflectable struct without `glz::meta`.
 suite basic_reflection = [] {
    "basic_struct_reflection"_test = [] {
-      BasicStruct obj{42, 3.14, "Hello", {1,2,3}};
+      BasicStruct obj{42, 3.14, "Hello", {1, 2, 3}};
       std::string json;
       expect(not glz::write_json(obj, json));
       expect(json == R"({"i":42,"d":3.14,"str":"Hello","arr":[1,2,3]})");
@@ -31,7 +31,7 @@ suite basic_reflection = [] {
       expect(obj2.i == 42);
       expect(obj2.d == 3.14);
       expect(obj2.str == "Hello");
-      expect(obj2.arr == std::array<uint32_t,3>{1,2,3});
+      expect(obj2.arr == std::array<uint32_t, 3>{1, 2, 3});
    };
 };
 
@@ -135,11 +135,11 @@ suite enum_test = [] {
 //------------------------------------
 struct ContainerStruct
 {
-   std::vector<int> vec{1,2,3};
-   std::array<std::string, 2> arr{"Hello","World"};
-   std::tuple<int,double,std::string> tup{42, 2.718, "pi?"};
+   std::vector<int> vec{1, 2, 3};
+   std::array<std::string, 2> arr{"Hello", "World"};
+   std::tuple<int, double, std::string> tup{42, 2.718, "pi?"};
    std::deque<float> dq{3.14f, 2.71f};
-   std::list<int> lis{10,11,12};
+   std::list<int> lis{10, 11, 12};
 };
 static_assert(glz::detail::reflectable<ContainerStruct>);
 
@@ -149,12 +149,13 @@ suite container_test = [] {
       std::string json;
       expect(not glz::write_json(c, json));
       // Check output structure includes all
-      expect(json == R"({"vec":[1,2,3],"arr":["Hello","World"],"tup":[42,2.718,"pi?"],"dq":[3.14,2.71],"lis":[10,11,12]})");
+      expect(json ==
+             R"({"vec":[1,2,3],"arr":["Hello","World"],"tup":[42,2.718,"pi?"],"dq":[3.14,2.71],"lis":[10,11,12]})");
 
       ContainerStruct c2{};
       expect(!glz::read_json(c2, json));
-      expect(c2.vec == std::vector<int>{1,2,3});
-      expect(c2.lis == std::list<int>{10,11,12});
+      expect(c2.vec == std::vector<int>{1, 2, 3});
+      expect(c2.lis == std::list<int>{10, 11, 12});
       expect(std::get<2>(c2.tup) == "pi?");
    };
 };
@@ -164,8 +165,8 @@ suite container_test = [] {
 //------------------------------------
 struct MapStruct
 {
-   std::map<std::string,int> str_map{{"one",1},{"two",2}};
-   std::unordered_map<int,std::string> umap{{5,"five"},{7,"seven"}};
+   std::map<std::string, int> str_map{{"one", 1}, {"two", 2}};
+   std::unordered_map<int, std::string> umap{{5, "five"}, {7, "seven"}};
 };
 static_assert(glz::detail::reflectable<MapStruct>);
 
@@ -189,8 +190,14 @@ suite map_test = [] {
 //------------------------------------
 // Variants
 //------------------------------------
-struct VarA { int x{}; };
-struct VarB { double y{}; };
+struct VarA
+{
+   int x{};
+};
+struct VarB
+{
+   double y{};
+};
 
 template <>
 struct glz::meta<VarA>
@@ -248,7 +255,7 @@ struct PartialStruct
 suite partial_test = [] {
    "partial_write"_test = [] {
       PartialStruct p{};
-      static constexpr auto selected = glz::json_ptrs("/a","/c");
+      static constexpr auto selected = glz::json_ptrs("/a", "/c");
       std::string json;
       expect(not glz::write_json<selected>(p, json));
       expect(json == R"({"a":1,"c":3})");
@@ -296,7 +303,7 @@ struct RawExample
 
 suite formatting_and_raw = [] {
    "prettify_minify"_test = [] {
-      PrettifyStruct pd{123,"Hello"};
+      PrettifyStruct pd{123, "Hello"};
       std::string json;
       expect(!glz::write_json(pd, json));
       // Minify is default, let's prettify
@@ -321,25 +328,25 @@ suite formatting_and_raw = [] {
 //------------------------------------
 struct PointerStruct
 {
-   std::array<int,3> arr{10,20,30};
-   std::map<std::string,std::string> m{{"key","value"}};
+   std::array<int, 3> arr{10, 20, 30};
+   std::map<std::string, std::string> m{{"key", "value"}};
 };
 
 suite pointer_access = [] {
    "json_pointer_get_set"_test = [] {
       PointerStruct ps{};
-      auto val = glz::get<int>(ps,"/arr/1");
+      auto val = glz::get<int>(ps, "/arr/1");
       expect(val.has_value());
       if (val) expect(val.value().get() == 20);
 
-      glz::set(ps,"/arr/1",42);
+      glz::set(ps, "/arr/1", 42);
       expect(ps.arr[1] == 42);
 
-      auto map_val = glz::get<std::string>(ps,"/m/key");
+      auto map_val = glz::get<std::string>(ps, "/m/key");
       expect(map_val.has_value());
       if (map_val) expect(map_val.value().get() == "value");
 
-      glz::set(ps,"/m/key","new_value");
+      glz::set(ps, "/m/key", "new_value");
       expect(ps.m["key"] == "new_value");
    };
 };
@@ -357,17 +364,17 @@ struct NDJItem
 
 suite ndjson_test = [] {
    "ndjson_io"_test = [] {
-      std::vector<NDJItem> items{{1,"A"},{2,"B"}};
+      std::vector<NDJItem> items{{1, "A"}, {2, "B"}};
 
       std::string ndjson;
       // NDJSON = each object on a newline
-      expect(not glz::write<glz::opts{.format=glz::NDJSON}>(items, ndjson));
+      expect(not glz::write<glz::opts{.format = glz::NDJSON}>(items, ndjson));
       // Should look like:
       // {"x":1,"y":"A"}
       // {"x":2,"y":"B"}
 
       std::vector<NDJItem> read_back;
-      expect(!glz::read<glz::opts{.format=glz::NDJSON}>(read_back, ndjson));
+      expect(!glz::read<glz::opts{.format = glz::NDJSON}>(read_back, ndjson));
       expect(read_back.size() == 2);
       expect(read_back[0].x == 1 && read_back[0].y == "A");
    };
@@ -405,7 +412,7 @@ suite float_precision_test = [] {
       FloatPrecision fp{};
       std::string json;
       // limit float precision to float32
-      expect(not glz::write<glz::opts{.float_max_write_precision=glz::float_precision::float32}>(fp, json));
+      expect(not glz::write<glz::opts{.float_max_write_precision = glz::float_precision::float32}>(fp, json));
       // This should produce fewer decimal places.
       expect(json.find("3.1415927") != std::string::npos); // approximate float32 rounding
    };
@@ -424,15 +431,18 @@ struct SchemaDemo
 template <>
 struct glz::json_schema<SchemaDemo>
 {
-   schema x{.description="An integer x"};
-   schema name{.description="A name for something"};
-   schema flag{.description="A boolean flag"};
+   schema x{.description = "An integer x"};
+   schema name{.description = "A name for something"};
+   schema flag{.description = "A boolean flag"};
 };
 
 suite schema_generation = [] {
    "schema_demo"_test = [] {
       auto schema = glz::write_json_schema<SchemaDemo>().value_or("error");
-      expect(schema == R"({"type":["object"],"properties":{"flag":{"$ref":"#/$defs/bool","description":"A boolean flag"},"name":{"$ref":"#/$defs/std::string","description":"A name for something"},"x":{"$ref":"#/$defs/int32_t","description":"An integer x"}},"additionalProperties":false,"$defs":{"bool":{"type":["boolean"]},"int32_t":{"type":["integer"],"minimum":-2147483648,"maximum":2147483647},"std::string":{"type":["string"]}}})") << schema;
+      expect(
+         schema ==
+         R"({"type":["object"],"properties":{"flag":{"$ref":"#/$defs/bool","description":"A boolean flag"},"name":{"$ref":"#/$defs/std::string","description":"A name for something"},"x":{"$ref":"#/$defs/int32_t","description":"An integer x"}},"additionalProperties":false,"$defs":{"bool":{"type":["boolean"]},"int32_t":{"type":["integer"],"minimum":-2147483648,"maximum":2147483647},"std::string":{"type":["string"]}}})")
+         << schema;
    };
 };
 
@@ -449,16 +459,19 @@ struct LocalSchema
 
    struct glaze_json_schema
    {
-      glz::schema count{.description="A count"};
-      glz::schema file{.description="A file path"};
-      glz::schema valid{.description="Validity flag"};
+      glz::schema count{.description = "A count"};
+      glz::schema file{.description = "A file path"};
+      glz::schema valid{.description = "Validity flag"};
    };
 };
 
 suite local_schema_test = [] {
    "local_schema"_test = [] {
       auto schema = glz::write_json_schema<LocalSchema>().value_or("error");
-      expect(schema == R"({"type":["object"],"properties":{"count":{"$ref":"#/$defs/int32_t","description":"A count"},"file":{"$ref":"#/$defs/std::string","description":"A file path"},"valid":{"$ref":"#/$defs/bool","description":"Validity flag"}},"additionalProperties":false,"$defs":{"bool":{"type":["boolean"]},"int32_t":{"type":["integer"],"minimum":-2147483648,"maximum":2147483647},"std::string":{"type":["string"]}}})") << schema;
+      expect(
+         schema ==
+         R"({"type":["object"],"properties":{"count":{"$ref":"#/$defs/int32_t","description":"A count"},"file":{"$ref":"#/$defs/std::string","description":"A file path"},"valid":{"$ref":"#/$defs/bool","description":"Validity flag"}},"additionalProperties":false,"$defs":{"bool":{"type":["boolean"]},"int32_t":{"type":["integer"],"minimum":-2147483648,"maximum":2147483647},"std::string":{"type":["string"]}}})")
+         << schema;
    };
 };
 
