@@ -1,5 +1,3 @@
-#define UT_RUN_TIME_ONLY
-
 #include <cstdint>
 #include <glaze/json.hpp>
 #include <glaze/json/schema.hpp>

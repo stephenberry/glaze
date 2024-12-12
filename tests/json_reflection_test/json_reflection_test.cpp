@@ -1,5 +1,3 @@
-#define UT_RUN_TIME_ONLY
-
 #include <deque>
 #include <map>
 #include <unordered_map>
