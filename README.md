@@ -80,7 +80,11 @@ BEVE size: 611 bytes
 
 *BEVE packs more efficiently than JSON, so transporting the same data is even faster.
 
-## Example
+## Examples
+
+> [!TIP]
+>
+> See the [example_json](https://github.com/stephenberry/glaze/blob/main/tests/example_json/example_json.cpp) unit test for basic examples of how to use Glaze. See [json_test](https://github.com/stephenberry/glaze/blob/main/tests/json_test/json_test.cpp) for an extensive test of features.
 
 Your struct will automatically get reflected! No metadata is required by the user.
 
