@@ -412,7 +412,7 @@ suite custom_lambdas_test = [] {
       expect(!glz::read_json(obj, s));
       expect(obj.str == "Hello!");
       s.clear();
-      glz::write_json(obj, s);
+      expect(!glz::write_json(obj, s));
       expect(s == R"({"str":"Hello!"})");
       expect(obj.str == "Hello!");
    };
