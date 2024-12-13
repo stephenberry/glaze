@@ -183,7 +183,7 @@ namespace glz
       using elem = decltype(get<I>(values));
 
       template <size_t I>
-      using type = detail::member_t<V, decltype(get<I>(values))>;
+      using type = member_t<V, decltype(get<I>(values))>;
    };
 
    namespace detail
@@ -214,7 +214,7 @@ namespace glz
       using elem = decltype(get<I>(values));
 
       template <size_t I>
-      using type = detail::member_t<V, decltype(get<I>(values))>;
+      using type = member_t<V, decltype(get<I>(values))>;
    };
 
    template <class T>
@@ -236,7 +236,7 @@ namespace glz
       using elem = decltype(get<I>(values));
 
       template <size_t I>
-      using type = detail::member_t<V, decltype(get<I>(values))>;
+      using type = member_t<V, decltype(get<I>(values))>;
    };
 
    template <class T>
@@ -255,7 +255,7 @@ namespace glz
       using elem = decltype(get<I>(std::declval<tuple>()));
 
       template <size_t I>
-      using type = detail::member_t<V, decltype(get<I>(std::declval<tuple>()))>;
+      using type = member_t<V, decltype(get<I>(std::declval<tuple>()))>;
    };
 
    template <class T>

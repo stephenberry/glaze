@@ -63,7 +63,7 @@ auto expect_property(const test_case& test, std::string_view key, Value value)
    expect[schematic.has_value()];
    expect[schematic->properties->contains(key)];
    glz::schema prop = schematic->properties->at(key);
-   auto prop_value = glz::detail::get_member(prop, Member);
+   auto prop_value = glz::get_member(prop, Member);
    expect[prop_value.has_value()];
    using prop_value_t = std::decay_t<decltype(prop_value)>;
    if constexpr (is_optional<prop_value_t> && glz::is_variant<typename prop_value_t::value_type>) {

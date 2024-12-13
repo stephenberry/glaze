@@ -561,7 +561,7 @@ namespace glz
                constexpr auto& member_ptr = get<I>(element);
 
                using mptr_t = std::decay_t<decltype(member_ptr)>;
-               using T = detail::member_t<V, mptr_t>;
+               using T = member_t<V, mptr_t>;
                if constexpr (is_specialization_v<T, includer>) {
                   return valid<file_include, rem_ptr, Expected_t>();
                }
@@ -584,7 +584,7 @@ namespace glz
                if constexpr (index >= 0 && index < member_array.size()) {
                   constexpr auto member = member_array[index];
                   constexpr auto member_ptr = std::get<member.index()>(member);
-                  using sub_t = decltype(glz::detail::get_member(std::declval<V>(), member_ptr));
+                  using sub_t = decltype(glz::get_member(std::declval<V>(), member_ptr));
                   return valid<sub_t, rem_ptr, Expected_t>();
                }
                else {

@@ -121,10 +121,10 @@ namespace glz
                            static constexpr auto Length = TargetKey.size();
                            if ((Length == key.size()) && detail::comparitor<TargetKey>(start)) [[likely]] {
                               if constexpr (detail::reflectable<T> && N > 0) {
-                                 detail::write<Opts.format>::template op<RawOpts>(detail::get_member(value, get<I>(to_tuple(value))), ctx, buffer, ix);
+                                 detail::write<Opts.format>::template op<RawOpts>(get_member(value, get<I>(to_tuple(value))), ctx, buffer, ix);
                               }
                               else if constexpr (detail::glaze_object_t<T> && N > 0) {
-                                 detail::write<Opts.format>::template op<RawOpts>(detail::get_member(value, get<I>(reflect<T>::values)), ctx, buffer, ix);
+                                 detail::write<Opts.format>::template op<RawOpts>(get_member(value, get<I>(reflect<T>::values)), ctx, buffer, ix);
                               }
                            }
                            else {

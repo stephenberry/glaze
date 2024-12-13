@@ -23,8 +23,8 @@ namespace glz
 
             bool equal = true;
             for_each_short_circuit<N>([&](auto I) {
-               auto& l = detail::get_member(lhs, get<I>(reflect<T>::values));
-               auto& r = detail::get_member(rhs, get<I>(reflect<T>::values));
+               auto& l = get_member(lhs, get<I>(reflect<T>::values));
+               auto& r = get_member(rhs, get<I>(reflect<T>::values));
                if (!std::equal_to{}(l, r)) {
                   equal = false;
                   return true; // exit
@@ -46,8 +46,8 @@ namespace glz
 
          bool less_than = true;
          for_each_short_circuit<N>([&](auto I) {
-            auto& l = detail::get_member(lhs, get<I>(reflect<T>::values));
-            auto& r = detail::get_member(rhs, get<I>(reflect<T>::values));
+            auto& l = get_member(lhs, get<I>(reflect<T>::values));
+            auto& r = get_member(rhs, get<I>(reflect<T>::values));
             if (!std::less{}(l, r)) {
                less_than = false;
                return true; // exit
@@ -68,8 +68,8 @@ namespace glz
 
          bool less_than = true;
          for_each_short_circuit<N>([&](auto I) {
-            auto& l = detail::get_member(lhs, get<I>(reflect<T>::values));
-            auto& r = detail::get_member(rhs, get<I>(reflect<T>::values));
+            auto& l = get_member(lhs, get<I>(reflect<T>::values));
+            auto& r = get_member(rhs, get<I>(reflect<T>::values));
             if (!std::less_equal{}(l, r)) {
                less_than = false;
                return true; // exit
@@ -90,8 +90,8 @@ namespace glz
 
          bool greater_than = true;
          for_each_short_circuit<N>([&](auto I) {
-            auto& l = detail::get_member(lhs, get<I>(reflect<T>::values));
-            auto& r = detail::get_member(rhs, get<I>(reflect<T>::values));
+            auto& l = get_member(lhs, get<I>(reflect<T>::values));
+            auto& r = get_member(rhs, get<I>(reflect<T>::values));
             if (!std::greater{}(l, r)) {
                greater_than = false;
                return true; // exit
@@ -112,8 +112,8 @@ namespace glz
 
          bool greater_than = true;
          for_each_short_circuit<N>([&](auto I) {
-            auto& l = detail::get_member(lhs, get<I>(reflect<T>::values));
-            auto& r = detail::get_member(rhs, get<I>(reflect<T>::values));
+            auto& l = get_member(lhs, get<I>(reflect<T>::values));
+            auto& r = get_member(rhs, get<I>(reflect<T>::values));
             if (!std::greater_equal{}(l, r)) {
                greater_than = false;
                return true; // exit
