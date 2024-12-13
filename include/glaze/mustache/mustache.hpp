@@ -112,7 +112,7 @@ namespace glz
                      if (buffer.empty()) {
                         buffer.resize(2 * write_padding_bytes);
                      }
-                     
+
                      static constexpr auto RawOpts = opt_true<Opts, &opts::raw>;
 
                      visit<N>(
@@ -120,10 +120,12 @@ namespace glz
                            static constexpr auto TargetKey = get<I>(reflect<T>::keys);
                            if ((TargetKey.size() == key.size()) && detail::comparitor<TargetKey>(start)) [[likely]] {
                               if constexpr (detail::reflectable<T>) {
-                                 detail::write<Opts.format>::template op<RawOpts>(get_member(value, get<I>(to_tuple(value))), ctx, buffer, ix);
+                                 detail::write<Opts.format>::template op<RawOpts>(
+                                    get_member(value, get<I>(to_tuple(value))), ctx, buffer, ix);
                               }
                               else if constexpr (detail::glaze_object_t<T>) {
-                                 detail::write<Opts.format>::template op<RawOpts>(get_member(value, get<I>(reflect<T>::values)), ctx, buffer, ix);
+                                 detail::write<Opts.format>::template op<RawOpts>(
+                                    get_member(value, get<I>(reflect<T>::values)), ctx, buffer, ix);
                               }
                            }
                            else {
@@ -135,7 +137,7 @@ namespace glz
                      if (bool(ctx.error)) [[unlikely]] {
                         return {ctx.error, ctx.custom_error_message, size_t(it - start)};
                      }
-                     
+
                      buffer.resize(ix);
                   }
 
@@ -190,14 +192,14 @@ namespace glz
 
       return {};
    }
-   
+
    template <opts Opts = opts{}, class T, class Buffer>
       requires(requires { std::decay_t<T>::glaze_mustache; })
    [[nodiscard]] error_ctx mustache(T&& value, Buffer& buffer)
    {
       return mustache(std::forward<T>(value), sv{std::decay_t<T>::glaze_mustache}, buffer);
    }
-   
+
    template <opts Opts = opts{}, class T, class Template>
    [[nodiscard]] expected<std::string, error_ctx> mustache(T&& value, Template&& tmp)
    {
