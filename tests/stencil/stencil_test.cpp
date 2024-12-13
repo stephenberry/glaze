@@ -156,21 +156,20 @@ suite mustache_tests = [] {
    };
 
    "nested_inverted_section"_test = [] {
-      // Note: Nested sections are not supported in the current implementation.
-      // This test ensures that nested inverted sections are either handled correctly or produce an error.
+       std::string_view layout = R"({{first_name}} {{last_name}} {{^hungry}}I'm not hungry {{^employed}}and not employed{{/employed}}{{/hungry}})";
 
-      std::string_view layout = R"({{first_name}} {{last_name}} {{^hungry}}I'm not hungry {{^age}}and not of age{{/age}}{{/hungry}})";
+       person p1{"Henry", "Foster", 34, false, false};
+       auto result1 = glz::stencil(layout, p1).value_or("error");
+       expect(result1 == "Henry Foster I'm not hungry and not employed") << result1;
 
-      person p1{"Henry", "Foster", 34, false}; // hungry is false
-      auto result1 = glz::stencil(layout, p1);
-      // Since nested sections are not supported, expect a feature_not_supported error
-      expect(not result1.has_value());
+       person p2{"Henry", "Foster", 34, false, true};
+       auto result2 = glz::stencil(layout, p2).value_or("error");
+       expect(result2 == "Henry Foster I'm not hungry ") << result2;
 
-      person p2{"Henry", "Foster", 0, false}; // hungry is false, age is 0 (falsey)
-      auto result2 = glz::stencil(layout, p2);
-      // Depending on implementation, it might fail or ignore the nested section
-      // Here, we expect it to fail due to nested section not being supported
-      expect(not result2.has_value());
+       person p3{"Henry", "Foster", 34, true, false};
+       std::string_view layout_skip = R"({{first_name}} {{last_name}} {{^hungry}}I'm not hungry {{^employed}}and not employed{{/employed}}{{/hungry}})";
+       auto result3 = glz::stencil(layout_skip, p3).value_or("error");
+       expect(result3 == "Henry Foster ") << result3;
    };
 
    "inverted_section_unknown_key"_test = [] {
