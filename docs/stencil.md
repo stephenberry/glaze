@@ -26,3 +26,11 @@ struct person
 };
 ```
 
+## Specification
+
+- `{{field}}` 
+  - Represents an interpolated field, to be replaced
+- `{{#boolean}} section {{/boolean}}`
+  - Activates the section if the boolean field is true
+- `{{^boolean}} section {{/boolean}}`
+  - Activates the section if the boolean field is false
