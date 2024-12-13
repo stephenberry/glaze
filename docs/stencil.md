@@ -4,9 +4,7 @@
 >
 > glz::stencil is still somewhat experimental. The API may not be as stable as other parts of Glaze.
 
-Glaze supports string interpolation support for serializing structs.
-
-Example:
+Glaze supports string interpolation for serializing structs using `glz::stencil`.
 
 ```c++
 struct person
