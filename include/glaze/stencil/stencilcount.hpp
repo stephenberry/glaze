@@ -10,21 +10,19 @@
 
 namespace glz
 {
-   template <opts Opts = opts{}, class T, class Template>
-   expected<std::string, error_ctx> stencilcount(T&& value, Template&& tmp)
+   template <opts Opts = opts{}, class Template, class T, resizable Buffer>
+   [[nodiscard]] error_ctx stencilcount(Template&& layout, T&& value, Buffer& buffer)
    {
-      std::string result{};
-
       context ctx{};
 
-      if (tmp.empty()) [[unlikely]] {
+      if (layout.empty()) [[unlikely]] {
          ctx.error = error_code::no_read_input;
-         return unexpected(error_ctx{ctx.error, ctx.custom_error_message, 0, ctx.includer_error});
+         return {ctx.error, ctx.custom_error_message, 0};
       }
 
-      auto [it, end] = read_iterators<Opts, false>(tmp);
+      auto [it, end] = read_iterators<Opts, false>(layout);
       auto outer_start = it;
-      if (tmp.empty()) [[unlikely]] {
+      if (layout.empty()) [[unlikely]] {
          ctx.error = error_code::no_read_input;
       }
       if (not bool(ctx.error)) [[likely]] {
@@ -58,19 +56,19 @@ namespace glz
 
                   if (count == 1) {
                      ++major_count;
-                     format_to(result, major_count);
-                     result.append(".");
+                     format_to(buffer, major_count);
+                     buffer.append(".");
                   }
                   else if (count > 1) {
-                     format_to(result, major_count);
+                     format_to(buffer, major_count);
 
                      for (size_t i = 1; i < count; ++i) {
-                        result.append(".");
+                        buffer.append(".");
                         auto& x = numbering[i];
                         if (i == (count - 1)) {
                            ++x;
                         }
-                        format_to(result, x);
+                        format_to(buffer, x);
                      }
                   }
 
@@ -85,7 +83,7 @@ namespace glz
                         break;
                      }
                      else {
-                        result.append("}");
+                        buffer.append("}");
                      }
                      break;
                   }
@@ -103,7 +101,7 @@ namespace glz
                   static constexpr auto HashInfo = detail::hash_info<T>;
 
                   const auto index =
-                     detail::decode_hash_with_size<MUSTACHE, T, HashInfo, HashInfo.type>::op(start, end, key.size());
+                     detail::decode_hash_with_size<STENCIL, T, HashInfo, HashInfo.type>::op(start, end, key.size());
 
                   if (index < N) [[likely]] {
                      static thread_local std::string temp{};
@@ -128,11 +126,10 @@ namespace glz
                         index);
 
                      if (bool(ctx.error)) [[unlikely]] {
-                        return unexpected(
-                           error_ctx{ctx.error, ctx.custom_error_message, size_t(it - start), ctx.includer_error});
+                        return {ctx.error, ctx.custom_error_message, size_t(it - start)};
                      }
 
-                     result.append(temp);
+                     buffer.append(temp);
                   }
                   else {
                      // TODO: Is this an error?
@@ -147,19 +144,19 @@ namespace glz
                         break;
                      }
                      else {
-                        result.append("}");
+                        buffer.append("}");
                      }
                      break;
                   }
                }
                else {
-                  result.push_back('{');
+                  buffer.push_back('{');
                }
 
                break;
             }
             default: {
-               result.push_back(*it);
+               buffer.push_back(*it);
                ++it;
             }
             }
@@ -167,10 +164,20 @@ namespace glz
       }
 
       if (bool(ctx.error)) [[unlikely]] {
-         return unexpected(
-            error_ctx{ctx.error, ctx.custom_error_message, size_t(it - outer_start), ctx.includer_error});
+         return {ctx.error, ctx.custom_error_message, size_t(it - outer_start)};
       }
-
-      return {result};
+      
+      return {};
+   }
+   
+   template <opts Opts = opts{}, class Template, class T>
+   [[nodiscard]] expected<std::string, error_ctx> stencilcount(Template&& layout, T&& value)
+   {
+      std::string buffer{};
+      auto ec = stencilcount(std::forward<Template>(layout), std::forward<T>(value), buffer);
+      if (ec) {
+         return unexpected<error_ctx>(ec);
+      }
+      return {buffer};
    }
 }

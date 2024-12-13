@@ -69,10 +69,10 @@ add_subdirectory(json_test)
 add_subdirectory(jsonrpc_test)
 add_subdirectory(lib_test)
 add_subdirectory(mock_json_test)
-add_subdirectory(mustache_test)
 add_subdirectory(repe_test)
 add_subdirectory(reflection)
 add_subdirectory(roundtrip)
+add_subdirectory(stencil)
 add_subdirectory(utility_formats)
 
 # We don't run find_package_test or glaze-install_test with MSVC/Windows, because the Github action runner often chokes

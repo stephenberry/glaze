@@ -15,7 +15,7 @@ namespace glz
    inline constexpr uint32_t JSON = 10;
    inline constexpr uint32_t JSON_PTR = 20;
    inline constexpr uint32_t NDJSON = 100; // new line delimited JSON
-   inline constexpr uint32_t MUSTACHE = 500;
+   inline constexpr uint32_t STENCIL = 500;
    inline constexpr uint32_t CSV = 10000;
 
    // layout

@@ -1,10 +1,10 @@
 // Glaze Library
 // For the license information refer to glaze.hpp
 
-#include "glaze/mustache/mustache.hpp"
+#include "glaze/stencil/stencil.hpp"
 
 #include "glaze/glaze.hpp"
-#include "glaze/mustache/stencilcount.hpp"
+#include "glaze/stencil/stencilcount.hpp"
 #include "ut/ut.hpp"
 
 using namespace ut;
@@ -17,21 +17,12 @@ struct person
    bool hungry{};
 };
 
-struct person_template
-{
-   static constexpr auto glaze_mustache = R"({{first_name}} | {{last_name}} | {{age}})";
-   std::string first_name{};
-   std::string last_name{};
-   uint32_t age{};
-   bool hungry{};
-};
-
 suite mustache_tests = [] {
    "person"_test = [] {
       std::string_view layout = R"({{first_name}} {{last_name}} {{age}})";
 
       person p{"Henry", "Foster", 34};
-      auto result = glz::mustache(p, layout).value_or("error");
+      auto result = glz::stencil(layout, p).value_or("error");
       expect(result == "Henry Foster 34") << result;
    };
 
@@ -39,7 +30,7 @@ suite mustache_tests = [] {
       std::string_view layout = R"({{first_name}} {{last_name}}, age: {{age}})";
 
       person p{"Henry", "Foster", 34};
-      auto result = glz::mustache(p, layout).value_or("error");
+      auto result = glz::stencil(layout, p).value_or("error");
       expect(result == "Henry Foster, age: 34") << result;
    };
 
@@ -47,30 +38,16 @@ suite mustache_tests = [] {
       std::string_view layout = R"({{first_name}} {{last}}, age: {{age}})";
 
       person p{"Henry", "Foster", 34};
-      auto result = glz::mustache(p, layout);
+      auto result = glz::stencil(layout, p);
       expect(not result.has_value());
       expect(result.error() == glz::error_code::unknown_key);
    };
-
-   "person_template"_test = [] {
-      person_template p{"Henry", "Foster", 34};
-      auto result = glz::mustache(p).value_or("error");
-      expect(result == "Henry | Foster | 34") << result;
-   };
-
-   /*"unescaped variable"_test = [] {
-      std::string_view layout = R"({{first_name}} {{{last_name}}} {{& age}})";
-
-      person p{"Henry", "Foster & Sons", 34};
-      auto result = glz::mustache(p, layout).value_or("error");
-      expect(result == "Henry Foster & Sons 34") << result;
-   };*/
 
    "comment"_test = [] {
       std::string_view layout = R"({{first_name}} {{! This is a comment }}{{last_name}})";
 
       person p{"Henry", "Foster", 34};
-      auto result = glz::mustache(p, layout).value_or("error");
+      auto result = glz::stencil(layout, p).value_or("error");
       expect(result == "Henry Foster") << result;
    };
 
@@ -78,7 +55,7 @@ suite mustache_tests = [] {
       std::string_view layout = R"({{#hungry}}I am hungry{{/hungry}})";
 
       person p{"Henry", "Foster", 34, true};
-      auto result = glz::mustache(p, layout);
+      auto result = glz::stencil(layout, p);
       expect(not result.has_value());
       expect(result.error() == glz::error_code::feature_not_supported);
    };
@@ -106,7 +83,7 @@ suite stencilcount_tests = [] {
 )";
 
       person p{"Henry", "Foster", 34};
-      auto result = glz::stencilcount(p, layout).value_or("error");
+      auto result = glz::stencilcount(layout, p).value_or("error");
       expect(result == R"(# About
 ## 1. Henry Foster
 1.1 Henry is 34 years old.

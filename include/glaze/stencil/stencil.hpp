@@ -9,17 +9,17 @@
 
 namespace glz
 {
-   template <opts Opts = opts{}, class T, class Template, class Buffer>
-   [[nodiscard]] error_ctx mustache(T&& value, Template&& tmp, Buffer& buffer)
+   template <opts Opts = opts{}, class Template, class T, resizable Buffer>
+   [[nodiscard]] error_ctx stencil(Template&& layout, T&& value, Buffer& buffer)
    {
       context ctx{};
 
-      if (tmp.empty()) [[unlikely]] {
+      if (layout.empty()) [[unlikely]] {
          ctx.error = error_code::no_read_input;
          return {ctx.error, ctx.custom_error_message, 0};
       }
 
-      auto p = read_iterators<Opts, false>(tmp);
+      auto p = read_iterators<Opts, false>(layout);
       auto it = p.first;
       auto end = p.second;
       auto outer_start = it;
@@ -101,7 +101,7 @@ namespace glz
                   static constexpr auto HashInfo = detail::hash_info<T>;
 
                   const auto index =
-                     detail::decode_hash_with_size<MUSTACHE, T, HashInfo, HashInfo.type>::op(start, end, key.size());
+                     detail::decode_hash_with_size<STENCIL, T, HashInfo, HashInfo.type>::op(start, end, key.size());
 
                   if (index >= N) [[unlikely]] {
                      ctx.error = error_code::unknown_key;
@@ -187,36 +187,17 @@ namespace glz
       }
 
       if (bool(ctx.error)) [[unlikely]] {
-         return {ctx.error, ctx.custom_error_message, size_t(it - outer_start), ctx.includer_error};
+         return {ctx.error, ctx.custom_error_message, size_t(it - outer_start)};
       }
 
       return {};
    }
 
-   template <opts Opts = opts{}, class T, class Buffer>
-      requires(requires { std::decay_t<T>::glaze_mustache; })
-   [[nodiscard]] error_ctx mustache(T&& value, Buffer& buffer)
-   {
-      return mustache(std::forward<T>(value), sv{std::decay_t<T>::glaze_mustache}, buffer);
-   }
-
-   template <opts Opts = opts{}, class T, class Template>
-   [[nodiscard]] expected<std::string, error_ctx> mustache(T&& value, Template&& tmp)
+   template <opts Opts = opts{}, class Template, class T>
+   [[nodiscard]] expected<std::string, error_ctx> stencil(Template&& layout, T&& value)
    {
       std::string buffer{};
-      auto ec = mustache(std::forward<T>(value), std::forward<Template>(tmp), buffer);
-      if (ec) {
-         return unexpected<error_ctx>(ec);
-      }
-      return {buffer};
-   }
-
-   template <opts Opts = opts{}, class T>
-      requires(requires { std::decay_t<T>::glaze_mustache; })
-   [[nodiscard]] expected<std::string, error_ctx> mustache(T&& value)
-   {
-      std::string buffer{};
-      auto ec = mustache(std::forward<T>(value), sv{std::decay_t<T>::glaze_mustache}, buffer);
+      auto ec = stencil(std::forward<Template>(layout), std::forward<T>(value), buffer);
       if (ec) {
          return unexpected<error_ctx>(ec);
       }
