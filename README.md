@@ -328,7 +328,7 @@ static_assert(glz::reflect<my_struct>::keys[0] == "i"); // Access keys
 
 Custom reading and writing can be achieved through the powerful `to`/`from` specialization approach, which is described here: [custom-serialization.md](https://github.com/stephenberry/glaze/blob/main/docs/custom-serialization.md). However, this only works for user defined types.
 
-For common use cases or cases where a specific member variable should have special reading and writing, you can use `glz::custom` to register read/write member functions, std::functions, or lambda functions.
+For common use cases or cases where a specific member variable should have special reading and writing, you can use [glz::custom](https://github.com/stephenberry/glaze/blob/main/docs/wrappers.md#custom) to register read/write member functions, std::functions, or lambda functions.
 
 <details><summary>See example:</summary>
 
@@ -383,6 +383,38 @@ suite custom_encoding_test = [] {
       std::string out{};
       expect(not glz::write_json(obj, out));
       expect(out == R"({"x":3,"y":"helloworld","z":[5,2,3]})");
+   };
+};
+```
+
+</details>
+
+<details><summary>Another example with constexpr lambdas:</summary>
+
+```c++
+struct custom_buffer_input
+{
+   std::string str{};
+};
+
+template <>
+struct glz::meta<custom_buffer_input>
+{
+   static constexpr auto read_x = [](custom_buffer_input& s, const std::string& input) { s.str = input; };
+   static constexpr auto write_x = [](auto& s) -> auto& { return s.str; };
+   static constexpr auto value = glz::object("str", glz::custom<read_x, write_x>);
+};
+
+suite custom_lambdas_test = [] {
+   "custom_buffer_input"_test = [] {
+      std::string s = R"({"str":"Hello!"})";
+      custom_buffer_input obj{};
+      expect(!glz::read_json(obj, s));
+      expect(obj.str == "Hello!");
+      s.clear();
+      glz::write_json(obj, s);
+      expect(s == R"({"str":"Hello!"})");
+      expect(obj.str == "Hello!");
    };
 };
 ```
