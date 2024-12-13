@@ -166,10 +166,10 @@ namespace glz
       if (bool(ctx.error)) [[unlikely]] {
          return {ctx.error, ctx.custom_error_message, size_t(it - outer_start)};
       }
-      
+
       return {};
    }
-   
+
    template <opts Opts = opts{}, class Template, class T>
    [[nodiscard]] expected<std::string, error_ctx> stencilcount(Template&& layout, T&& value)
    {
