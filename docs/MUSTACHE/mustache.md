@@ -2,7 +2,9 @@
 
 > [!WARNING]
 >
-> Glaze Mustache support is still limited and somewhat experimental. The API may not be as stable as other formats in Glaze.
+> Glaze Mustache support is still limited and experimental. The API may not be as stable as other formats in Glaze.
+>
+> Also, html characters are currently not escaped to avoid injection attacks.
 
 Glaze supports basic mustache support for serializing structs.
 
