@@ -1,8 +1,6 @@
 // Glaze Library
 // For the license information refer to glaze.hpp
 
-#define UT_RUN_TIME_ONLY
-
 #include "glaze/ext/eigen.hpp"
 
 #include <Eigen/Core>
@@ -12,16 +10,35 @@
 #include <iterator>
 #include <random>
 
-#include "glaze/binary/beve_to_json.hpp"
+#include "glaze/beve/beve_to_json.hpp"
 #include "glaze/json/json_ptr.hpp"
 #include "glaze/json/ptr.hpp"
 #include "glaze/json/read.hpp"
 #include "glaze/json/write.hpp"
 #include "ut/ut.hpp"
 
+using namespace ut;
+
+struct test_struct
+{
+   Eigen::Matrix3d d = Eigen::Matrix3d::Identity();
+} test_value;
+
+suite matrix3d = [] {
+   "eigen Matrix3d"_test = [] {
+      auto result = glz::write_json(test_value.d).value();
+      expect(result == "[1,0,0,0,1,0,0,0,1]") << result;
+
+      static_assert(glz::reflect<test_struct>::size == 1);
+      static_assert(glz::reflect<test_struct>::keys[0] == "d");
+
+      result = glz::write_json(test_value).value();
+      expect(result == R"({"d":[1,0,0,0,1,0,0,0,1]})") << result;
+   };
+};
+
 int main()
 {
-   using namespace ut;
    "write_json"_test = [] {
       Eigen::Matrix<double, 2, 2> m{};
       m << 5, 1, 1, 7;
@@ -39,24 +56,24 @@ int main()
       expect(m(1, 1) == 4);
    };
 
-   "binary"_test = [] {
+   "beve"_test = [] {
       Eigen::Matrix<double, 2, 2> m{};
       m << 1, 2, 3, 4;
       std::string b;
-      expect(not glz::write_binary(m, b));
+      expect(not glz::write_beve(m, b));
       Eigen::Matrix<double, 2, 2> e{};
-      expect(!glz::read_binary(e, b));
+      expect(!glz::read_beve(e, b));
       const bool boolean = m == e;
       expect(boolean);
    };
 
-   "binary"_test = [] {
+   "beve"_test = [] {
       Eigen::MatrixXd m(2, 2);
       m << 1, 2, 3, 4;
       std::string b;
-      expect(not glz::write_binary(m, b));
+      expect(not glz::write_beve(m, b));
       Eigen::MatrixXd e(2, 2);
-      expect(!glz::read_binary(e, b));
+      expect(!glz::read_beve(e, b));
       const bool boolean = m == e;
       expect(boolean);
    };
@@ -65,7 +82,7 @@ int main()
       Eigen::MatrixXd m(2, 2);
       m << 1, 2, 3, 4;
       std::string b;
-      expect(not glz::write_binary(m, b));
+      expect(not glz::write_beve(m, b));
       std::string json{};
       expect(!glz::beve_to_json(b, json));
       expect(json == R"({"layout":"layout_right","extents":[2,2],"value":[1,3,2,4]})") << json;
@@ -74,9 +91,9 @@ int main()
    "array"_test = [] {
       Eigen::Vector3d m{1, 2, 3};
       std::string b;
-      expect(not glz::write_binary(m, b));
+      expect(not glz::write_beve(m, b));
       Eigen::Vector3d e{};
-      expect(!glz::read_binary(e, b));
+      expect(!glz::read_beve(e, b));
       const bool boolean = m == e;
       expect(boolean);
    };
@@ -94,15 +111,15 @@ int main()
       expect(boolean);
    };
 
-   "dynamic array binary"_test = [] {
+   "dynamic array beve"_test = [] {
       Eigen::VectorXd m(10);
       for (int i = 0; i < m.size(); ++i) {
          m[i] = i;
       }
       std::string b;
-      expect(not glz::write_binary(m, b));
+      expect(not glz::write_beve(m, b));
       Eigen::VectorXd e{};
-      expect(!glz::read_binary(e, b));
+      expect(!glz::read_beve(e, b));
       const bool boolean = m == e;
       expect(boolean);
    };
@@ -113,9 +130,9 @@ int main()
          m[i] = {double(i), 2 * double(i)};
       }
       std::string b;
-      expect(not glz::write_binary(m, b));
+      expect(not glz::write_beve(m, b));
       Eigen::VectorXcd e{};
-      expect(!glz::read_binary(e, b));
+      expect(!glz::read_beve(e, b));
       const bool boolean = m == e;
       expect(boolean);
    };
@@ -126,10 +143,24 @@ int main()
          m.array()(i) = {double(i), 2 * double(i)};
       }
       std::string b;
-      expect(not glz::write_binary(m, b));
+      expect(not glz::write_beve(m, b));
       Eigen::MatrixXcd e(3, 3);
-      expect(!glz::read_binary(e, b));
-      const bool boolean = m == e;
-      expect(boolean);
+      expect(!glz::read_beve(e, b));
+      expect(bool(m == e));
+   };
+
+   "Eigen::Ref"_test = [] {
+      Eigen::VectorXcd source(10);
+      for (int i = 0; i < source.size(); ++i) {
+         source[i] = {double(i), 2 * double(i)};
+      }
+
+      Eigen::Ref<Eigen::VectorXcd> m = source;
+
+      std::string b;
+      expect(not glz::write_beve(m, b));
+      Eigen::VectorXcd e{};
+      expect(!glz::read_beve(e, b));
+      expect(bool(m == e));
    };
 }

@@ -4,7 +4,7 @@
 #pragma once
 
 #include "glaze/core/common.hpp"
-#include "glaze/core/refl.hpp"
+#include "glaze/core/reflect.hpp"
 
 namespace glz
 {
@@ -14,12 +14,12 @@ namespace glz
       template <detail::glaze_object_t T>
       constexpr bool operator()(T&& lhs, T&& rhs) noexcept
       {
-         constexpr auto N = refl<T>.N;
+         constexpr auto N = reflect<T>::size;
 
          bool equal = true;
          for_each_short_circuit<N>([&](auto I) {
-            auto& l = detail::get_member(lhs, get<I>(refl<T>.values));
-            auto& r = detail::get_member(rhs, get<I>(refl<T>.values));
+            auto& l = get_member(lhs, get<I>(reflect<T>::values));
+            auto& r = get_member(rhs, get<I>(reflect<T>::values));
             using V = std::decay_t<decltype(l)>;
             if constexpr (std::floating_point<V> && requires { meta<std::decay_t<T>>::compare_epsilon; }) {
                if (std::abs(l - r) >= meta<std::decay_t<T>>::compare_epsilon) {

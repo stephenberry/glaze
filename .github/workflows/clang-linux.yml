@@ -3,14 +3,17 @@ name: clang-linux
 on:
   push:
     branches:
-    - main
-    - feature/*
+      - main
+      - feature/*
     paths-ignore:
-    - '**.md'
+      - '**/*.md'
+      - 'docs/**'
   pull_request:
-    branches: [main]
+    branches:
+      - main
     paths-ignore:
-    - '**.md'
+      - '**/*.md'
+      - 'docs/**'
   workflow_dispatch:
 
 jobs:
@@ -20,7 +23,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        clang: [16, 17, 18]
+        clang: [17, 18]
         build_type: [Debug]
         std: [23]
 

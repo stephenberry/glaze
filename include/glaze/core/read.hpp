@@ -12,17 +12,12 @@
 namespace glz
 {
    template <opts Opts, bool Padded = false>
-   auto read_iterators(is_context auto&& ctx, contiguous auto&& buffer) noexcept
+   auto read_iterators(contiguous auto&& buffer) noexcept
    {
       static_assert(sizeof(decltype(*buffer.data())) == 1);
 
       auto it = reinterpret_cast<const char*>(buffer.data());
       auto end = reinterpret_cast<const char*>(buffer.data()); // to be incremented
-
-      if (buffer.empty()) [[unlikely]] {
-         ctx.error = error_code::no_read_input;
-         return std::pair{it, end};
-      }
 
       if constexpr (Padded) {
          end += buffer.size() - padding_bytes;
@@ -36,14 +31,16 @@ namespace glz
 
    template <opts Opts, class T>
       requires read_supported<Opts.format, T>
-   [[nodiscard]] error_ctx read(T& value, contiguous auto&& buffer, is_context auto&& ctx) noexcept
+   [[nodiscard]] error_ctx read(T& value, contiguous auto&& buffer, is_context auto&& ctx)
    {
       static_assert(sizeof(decltype(*buffer.data())) == 1);
       using Buffer = std::remove_reference_t<decltype(buffer)>;
 
-      if (buffer.empty()) [[unlikely]] {
-         ctx.error = error_code::no_read_input;
-         return {ctx.error, ctx.custom_error_message, 0, ctx.includer_error};
+      if constexpr (Opts.format != NDJSON) {
+         if (buffer.empty()) [[unlikely]] {
+            ctx.error = error_code::no_read_input;
+            return {ctx.error, ctx.custom_error_message, 0, ctx.includer_error};
+         }
       }
 
       constexpr bool use_padded = resizable<Buffer> && non_const_buffer<Buffer> && !has_disable_padding(Opts);
@@ -53,7 +50,7 @@ namespace glz
          buffer.resize(buffer.size() + padding_bytes);
       }
 
-      auto [it, end] = read_iterators<Opts, use_padded>(ctx, buffer);
+      auto [it, end] = read_iterators<Opts, use_padded>(buffer);
       auto start = it;
       if (bool(ctx.error)) [[unlikely]] {
          goto finish;
@@ -109,7 +106,7 @@ namespace glz
 
    template <opts Opts, class T>
       requires read_supported<Opts.format, T>
-   [[nodiscard]] error_ctx read(T& value, contiguous auto&& buffer) noexcept
+   [[nodiscard]] error_ctx read(T& value, contiguous auto&& buffer)
    {
       context ctx{};
       return read<Opts>(value, buffer, ctx);
@@ -118,10 +115,13 @@ namespace glz
    template <class T>
    concept c_style_char_buffer = std::convertible_to<std::remove_cvref_t<T>, std::string_view> && !has_data<T>;
 
+   template <class T>
+   concept is_buffer = c_style_char_buffer<T> || contiguous<T>;
+
    // for char array input
    template <opts Opts, class T, c_style_char_buffer Buffer>
       requires read_supported<Opts.format, T>
-   [[nodiscard]] error_ctx read(T& value, Buffer&& buffer, auto&& ctx) noexcept
+   [[nodiscard]] error_ctx read(T& value, Buffer&& buffer, auto&& ctx)
    {
       const auto str = std::string_view{std::forward<Buffer>(buffer)};
       if (str.empty()) {
@@ -132,7 +132,7 @@ namespace glz
 
    template <opts Opts, class T, c_style_char_buffer Buffer>
       requires read_supported<Opts.format, T>
-   [[nodiscard]] error_ctx read(T& value, Buffer&& buffer) noexcept
+   [[nodiscard]] error_ctx read(T& value, Buffer&& buffer)
    {
       context ctx{};
       return read<Opts>(value, std::forward<Buffer>(buffer), ctx);

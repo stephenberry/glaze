@@ -1,5 +1,3 @@
-#define UT_RUN_TIME_ONLY
-
 #include <deque>
 #include <map>
 #include <unordered_map>
@@ -73,7 +71,7 @@ suite csv_tests = [] {
 
       std::string out{};
 
-      expect(not glz::write<glz::opts{.format = glz::csv, .layout = glz::colwise}>(obj, out));
+      expect(not glz::write<glz::opts{.format = glz::CSV, .layout = glz::colwise}>(obj, out));
       expect(out ==
              R"(num1,num2,maybe,v3s[0],v3s[1],v3s[2]
 11,22,1,1,1,1
@@ -103,7 +101,7 @@ suite csv_tests = [] {
 
       std::string out{};
 
-      expect(not glz::write<glz::opts{.format = glz::csv, .layout = glz::colwise}>(obj, out));
+      expect(not glz::write<glz::opts{.format = glz::CSV, .layout = glz::colwise}>(obj, out));
       expect(out ==
              R"(num1,num2,maybe,v3s[0],v3s[1],v3s[2]
 11,22,1,1,1,1
@@ -138,7 +136,7 @@ suite csv_tests = [] {
 
       std::string out{};
 
-      expect(not glz::write<glz::opts{.format = glz::csv, .layout = glz::colwise}>(obj, out));
+      expect(not glz::write<glz::opts{.format = glz::CSV, .layout = glz::colwise}>(obj, out));
       expect(out ==
              R"(id,udl
 1,BRN
@@ -169,7 +167,7 @@ v3s[2],1,2,3,4)";
 
       std::string out{};
 
-      expect(not glz::write<glz::opts{.format = glz::csv}>(obj, out));
+      expect(not glz::write<glz::opts{.format = glz::CSV}>(obj, out));
       expect(out ==
              R"(num1,11,33,55,77
 num2,22,44,66,88
@@ -195,7 +193,7 @@ v3s[2],1,2,3,4)");
 
       std::string out{};
 
-      expect(not glz::write<glz::opts{.format = glz::csv}>(obj, out));
+      expect(not glz::write<glz::opts{.format = glz::CSV}>(obj, out));
       expect(out ==
              R"(num1,11,33,55,77
 num2,22,44,66,88
@@ -218,16 +216,16 @@ v3s[2],1,2,3,4)");
       }
 
       std::string out{};
-      expect(not glz::write<glz::opts{.format = glz::csv}>(m, out));
+      expect(not glz::write<glz::opts{.format = glz::CSV}>(m, out));
       expect(out == R"(x,0,1,2,3,4,5,6,7,8,9
 y,1,2,3,4,5,6,7,8,9,10
 )");
 
       out.clear();
-      expect(not glz::write<glz::opts{.format = glz::csv}>(m, out));
+      expect(not glz::write<glz::opts{.format = glz::CSV}>(m, out));
 
       m.clear();
-      expect(!glz::read<glz::opts{.format = glz::csv}>(m, out));
+      expect(!glz::read<glz::opts{.format = glz::CSV}>(m, out));
 
       expect(m["x"] == std::vector<uint64_t>{0, 1, 2, 3, 4, 5, 6, 7, 8, 9});
       expect(m["y"] == std::vector<uint64_t>{1, 2, 3, 4, 5, 6, 7, 8, 9, 10});
@@ -244,7 +242,7 @@ y,1,2,3,4,5,6,7,8,9,10
       }
 
       std::string out{};
-      expect(not glz::write<glz::opts{.format = glz::csv, .layout = glz::colwise}>(m, out));
+      expect(not glz::write<glz::opts{.format = glz::CSV, .layout = glz::colwise}>(m, out));
       expect(out == R"(x,y
 0,1
 1,2
@@ -259,10 +257,10 @@ y,1,2,3,4,5,6,7,8,9,10
 )");
 
       out.clear();
-      expect(not glz::write<glz::opts{.format = glz::csv, .layout = glz::colwise}>(m, out));
+      expect(not glz::write<glz::opts{.format = glz::CSV, .layout = glz::colwise}>(m, out));
 
       m.clear();
-      expect(!glz::read<glz::opts{.format = glz::csv, .layout = glz::colwise}>(m, out));
+      expect(!glz::read<glz::opts{.format = glz::CSV, .layout = glz::colwise}>(m, out));
 
       expect(m["x"] == std::vector<uint64_t>{0, 1, 2, 3, 4, 5, 6, 7, 8, 9});
       expect(m["y"] == std::vector<uint64_t>{1, 2, 3, 4, 5, 6, 7, 8, 9, 10});
@@ -279,7 +277,7 @@ y,1,2,3,4,5,6,7,8,9,10
       }
 
       std::string out{};
-      expect(not glz::write<glz::opts{.format = glz::csv}>(m, out));
+      expect(not glz::write<glz::opts{.format = glz::CSV}>(m, out));
       expect(out == R"(y,1,2,3,4,5,6,7,8,9,10
 x,0,1,2,3,4,5,6,7,8,9
 )" || out == R"(x,0,1,2,3,4,5,6,7,8,9
@@ -287,10 +285,10 @@ y,1,2,3,4,5,6,7,8,9,10
 )");
 
       out.clear();
-      expect(not glz::write<glz::opts{.format = glz::csv}>(m, out));
+      expect(not glz::write<glz::opts{.format = glz::CSV}>(m, out));
 
       m.clear();
-      expect(!glz::read<glz::opts{.format = glz::csv}>(m, out));
+      expect(!glz::read<glz::opts{.format = glz::CSV}>(m, out));
 
       expect(m["x"] == std::vector<uint64_t>{0, 1, 2, 3, 4, 5, 6, 7, 8, 9});
       expect(m["y"] == std::vector<uint64_t>{1, 2, 3, 4, 5, 6, 7, 8, 9, 10});
@@ -330,7 +328,7 @@ x,1,2,3,4,5)");
       }
 
       std::string s;
-      expect(not write<glz::opts{.format = glz::csv, .layout = glz::colwise}>(recorder, s));
+      expect(not write<glz::opts{.format = glz::CSV, .layout = glz::colwise}>(recorder, s));
       expect(s ==
              R"(t,x
 0,1
@@ -349,7 +347,7 @@ x,1,2,3,4,5)");
       glz::context ctx{};
       issue_768_test_struct value;
       glz::error_ctx glaze_err{
-         glz::read<glz::opts{.format = glz::csv, .layout = glz::colwise}>(value, std::string{valid_record}, ctx)};
+         glz::read<glz::opts{.format = glz::CSV, .layout = glz::colwise}>(value, std::string{valid_record}, ctx)};
       expect(!bool(glaze_err));
    };
    "issue 768 invalid_record 1"_test = [] {
@@ -362,7 +360,7 @@ x,1,2,3,4,5)");
       glz::context ctx{};
       issue_768_test_struct value;
       glz::error_ctx glaze_err{
-         glz::read<glz::opts{.format = glz::csv, .layout = glz::colwise}>(value, std::string{invalid_record_1}, ctx)};
+         glz::read<glz::opts{.format = glz::CSV, .layout = glz::colwise}>(value, std::string{invalid_record_1}, ctx)};
       expect(bool(glaze_err));
    };
 
@@ -376,7 +374,7 @@ x,1,2,3,4,5)");
       glz::context ctx{};
       issue_768_test_struct value;
       glz::error_ctx glaze_err{
-         glz::read<glz::opts{.format = glz::csv, .layout = glz::colwise}>(value, std::string{invalid_record_2}, ctx)};
+         glz::read<glz::opts{.format = glz::CSV, .layout = glz::colwise}>(value, std::string{invalid_record_2}, ctx)};
       expect(bool(glaze_err));
    };
 };
@@ -412,7 +410,7 @@ suite reflect_my_struct_test = [] {
 
       std::string out{};
 
-      expect(not glz::write<glz::opts{.format = glz::csv, .layout = glz::colwise}>(obj, out));
+      expect(not glz::write<glz::opts{.format = glz::CSV, .layout = glz::colwise}>(obj, out));
       expect(out ==
              R"(num1,num2,maybe,v3s[0],v3s[1],v3s[2]
 11,22,1,1,1,1
@@ -443,7 +441,7 @@ v3s[2],1,2,3,4)";
 
       std::string out{};
 
-      expect(not glz::write<glz::opts{.format = glz::csv}>(obj, out));
+      expect(not glz::write<glz::opts{.format = glz::CSV}>(obj, out));
       expect(out ==
              R"(num1,11,33,55,77
 num2,22,44,66,88
@@ -586,6 +584,64 @@ suite fish_record = [] {
       expect(not glz::write_csv<glz::colwise>(obj, buffer));
 
       expect(!glz::read_csv<glz::colwise>(obj, buffer));
+   };
+};
+
+struct CurrencyCSV
+{
+   std::vector<std::string> Entity;
+   std::vector<std::string> Currency;
+   std::vector<std::string> AlphabeticCode;
+   std::vector<std::string> NumericCode;
+   std::vector<std::string> MinorUnit;
+   std::vector<std::string> WithdrawalDate;
+};
+
+suite currency_csv_test = [] {
+   "currency_col"_test = [] {
+      CurrencyCSV obj{};
+      std::string buffer{};
+      auto ec = glz::read_file_csv<glz::colwise>(obj, GLZ_TEST_DIRECTORY "/currency.csv", buffer);
+      expect(not ec) << glz::format_error(ec, buffer) << '\n';
+
+      constexpr auto kExpectedSize = 445;
+
+      expect(obj.Entity.size() == kExpectedSize);
+      expect(obj.Currency.size() == kExpectedSize);
+      expect(obj.AlphabeticCode.size() == kExpectedSize);
+      expect(obj.NumericCode.size() == kExpectedSize);
+      expect(obj.MinorUnit.size() == kExpectedSize);
+      expect(obj.WithdrawalDate.size() == kExpectedSize);
+
+      expect(obj.Entity[0] == "AFGHANISTAN");
+      expect(obj.Currency[0] == "Afghani");
+      expect(obj.AlphabeticCode[0] == "AFN");
+      expect(obj.NumericCode[0] == "971");
+      expect(obj.MinorUnit[0] == "2");
+      expect(obj.WithdrawalDate[0] == "");
+
+      expect(obj.Entity[29] == "BONAIRE, SINT EUSTATIUS AND SABA");
+      expect(obj.Currency[29] == "US Dollar");
+      expect(obj.AlphabeticCode[29] == "USD");
+      expect(obj.NumericCode[29] == "840");
+      expect(obj.MinorUnit[29] == "2");
+      expect(obj.WithdrawalDate[29] == "");
+
+      expect(obj.Entity[324] == "EUROPEAN MONETARY CO-OPERATION FUND (EMCF)");
+      expect(obj.Currency[324] == "European Currency Unit (E.C.U)");
+      expect(obj.AlphabeticCode[324] == "XEU");
+      expect(obj.NumericCode[324] == "954");
+      expect(obj.MinorUnit[324] == "");
+      expect(obj.WithdrawalDate[324] == "1999-01");
+   };
+   "currency_row"_test = [] {
+      /*CurrencyCSV obj{};
+      std::string buffer{};
+      auto ec = glz::read_file_csv<glz::colwise>(obj, GLZ_TEST_DIRECTORY "/currency.csv", buffer);
+      ec = glz::write_file_csv(obj, "currency_rowwise.csv", std::string{});
+      expect(not ec);
+      ec = glz::read_file_csv(obj, "currency_rowwise.csv", buffer);
+      expect(not ec) << glz::format_error(ec, buffer) << '\n';*/
    };
 };
 

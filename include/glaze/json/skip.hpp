@@ -7,6 +7,18 @@
 
 namespace glz::detail
 {
+   template <>
+   struct skip_value<JSON>
+   {
+      template <opts Opts>
+         requires(not Opts.comments)
+      GLZ_ALWAYS_INLINE static void op(is_context auto&& ctx, auto&& it, auto&& end) noexcept;
+
+      template <opts Opts>
+         requires(bool(Opts.comments))
+      GLZ_ALWAYS_INLINE static void op(is_context auto&& ctx, auto&& it, auto&& end) noexcept;
+   };
+
    template <opts Opts>
    void skip_object(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
@@ -37,7 +49,7 @@ namespace glz::detail
             GLZ_SKIP_WS();
             GLZ_MATCH_COLON();
             GLZ_SKIP_WS();
-            skip_value<Opts>(ctx, it, end);
+            skip_value<JSON>::op<Opts>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
                return;
             GLZ_SKIP_WS();
@@ -53,6 +65,7 @@ namespace glz::detail
    }
 
    template <opts Opts>
+      requires(Opts.format == JSON || Opts.format == NDJSON)
    void skip_array(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       if constexpr (!Opts.validate_skipped) {
@@ -72,7 +85,7 @@ namespace glz::detail
             return;
          }
          while (true) {
-            skip_value<Opts>(ctx, it, end);
+            skip_value<JSON>::op<Opts>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
                return;
             GLZ_SKIP_WS();
@@ -88,10 +101,11 @@ namespace glz::detail
    }
 
    template <opts Opts>
-   void skip_value(is_context auto&& ctx, auto&& it, auto&& end) noexcept
+      requires(not Opts.comments)
+   GLZ_ALWAYS_INLINE void skip_value<JSON>::op(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
-      if constexpr (!Opts.validate_skipped) {
-         if constexpr (!has_ws_handled(Opts)) {
+      if constexpr (not Opts.validate_skipped) {
+         if constexpr (not has_ws_handled(Opts)) {
             GLZ_SKIP_WS();
          }
          while (true) {
@@ -115,11 +129,6 @@ namespace glz::detail
                if (bool(ctx.error)) [[unlikely]]
                   return;
                break;
-            case '/':
-               skip_comment(ctx, it, end);
-               if (bool(ctx.error)) [[unlikely]]
-                  return;
-               continue;
             case ',':
             case '}':
             case ']':
@@ -138,7 +147,7 @@ namespace glz::detail
          }
       }
       else {
-         if constexpr (!has_ws_handled(Opts)) {
+         if constexpr (not has_ws_handled(Opts)) {
             GLZ_SKIP_WS();
          }
          switch (*it) {
@@ -180,6 +189,56 @@ namespace glz::detail
       }
    }
 
+   template <opts Opts>
+      requires(bool(Opts.comments))
+   GLZ_ALWAYS_INLINE void skip_value<JSON>::op(is_context auto&& ctx, auto&& it, auto&& end) noexcept
+   {
+      if constexpr (not has_ws_handled(Opts)) {
+         GLZ_SKIP_WS();
+      }
+      switch (*it) {
+      case '{': {
+         skip_object<Opts>(ctx, it, end);
+         break;
+      }
+      case '[': {
+         skip_array<Opts>(ctx, it, end);
+         break;
+      }
+      case '"': {
+         skip_string<Opts>(ctx, it, end);
+         break;
+      }
+      case '/': {
+         skip_comment(ctx, it, end);
+         if (bool(ctx.error)) [[unlikely]]
+            return;
+      }
+      case 'n': {
+         ++it;
+         match<"ull", Opts>(ctx, it, end);
+         break;
+      }
+      case 'f': {
+         ++it;
+         match<"alse", Opts>(ctx, it, end);
+         break;
+      }
+      case 't': {
+         ++it;
+         match<"rue", Opts>(ctx, it, end);
+         break;
+      }
+      case '\0': {
+         ctx.error = error_code::unexpected_end;
+         break;
+      }
+      default: {
+         skip_number<Opts>(ctx, it, end);
+      }
+      }
+   }
+
    // parse_value is used for JSON pointer reading
    // we want the JSON pointer access to not care about trailing whitespace
    // so we use validate_skipped for precise validation and value skipping
@@ -188,7 +247,7 @@ namespace glz::detail
    GLZ_ALWAYS_INLINE auto parse_value(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       auto start = it;
-      skip_value<opt_true<Opts, &opts::validate_skipped>>(ctx, it, end);
+      skip_value<JSON>::op<opt_true<Opts, &opts::validate_skipped>>(ctx, it, end);
       return std::span{start, size_t(it - start)};
    }
 }

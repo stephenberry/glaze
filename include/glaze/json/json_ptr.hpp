@@ -29,7 +29,7 @@ namespace glz
       static constexpr auto N = tokens.size();
 
       context ctx{};
-      auto p = read_iterators<Opts>(ctx, buffer);
+      auto p = read_iterators<Opts>(buffer);
 
       auto it = p.first;
       auto end = p.second;
@@ -40,6 +40,10 @@ namespace glz
       using result_t = expected<span_t, error_ctx>;
 
       auto start = it;
+
+      if (buffer.empty()) [[unlikely]] {
+         ctx.error = error_code::no_read_input;
+      }
 
       if (bool(ctx.error)) [[unlikely]] {
          return result_t{unexpected(error_ctx{ctx.error})};
@@ -82,7 +86,7 @@ namespace glz
                         return;
                      }
                      else {
-                        skip_value<Opts>(ctx, it, end);
+                        skip_value<JSON>::op<Opts>(ctx, it, end);
                         if (bool(ctx.error)) [[unlikely]] {
                            return;
                         }
@@ -100,7 +104,7 @@ namespace glz
                   static constexpr auto n = stoui(key);
                   if constexpr (n) {
                      for_each<n.value()>([&](auto) {
-                        skip_value<Opts>(ctx, it, end);
+                        skip_value<JSON>::op<Opts>(ctx, it, end);
                         if (bool(ctx.error)) [[unlikely]] {
                            return;
                         }
@@ -146,7 +150,7 @@ namespace glz
                      return;
                   }
                   else {
-                     skip_value<Opts>(ctx, it, end);
+                     skip_value<JSON>::op<Opts>(ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]] {
                         return;
                      }

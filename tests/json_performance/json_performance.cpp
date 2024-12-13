@@ -1,5 +1,3 @@
-#define UT_RUN_TIME_ONLY
-
 #include <deque>
 #include <iostream>
 #include <map>
@@ -36,6 +34,22 @@ inline std::string generate_string()
    return result;
 }
 
+static constexpr std::string_view basic_charset{
+   "!#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[]^_`abcdefghijklmnopqrstuvwxyz{|}~"};
+
+inline std::string generate_basic_string()
+{
+   auto length = std::uniform_int_distribution<uint32_t>{0, 512}(gen);
+   const auto charsetSize = basic_charset.size();
+   std::uniform_int_distribution<uint32_t> distribution(0, charsetSize - 1);
+   std::string result{};
+   result.reserve(length);
+   for (uint32_t x = 0; x < length; ++x) {
+      result += basic_charset[distribution(gen)];
+   }
+   return result;
+}
+
 suite string_performance = [] {
    "string_performance"_test = [] {
       SKIP;
@@ -51,6 +65,49 @@ suite string_performance = [] {
 
       for (size_t i = 0; i < n; ++i) {
          vec.emplace_back(generate_string());
+      }
+
+      std::string buffer;
+      auto t0 = std::chrono::steady_clock::now();
+      for (auto i = 0; i < 100; ++i) {
+         std::ignore = glz::write_json(vec, buffer);
+      }
+      auto t1 = std::chrono::steady_clock::now();
+      auto duration = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-6;
+      std::cout << "write: " << duration << '\n';
+
+      vec.clear();
+      t0 = std::chrono::steady_clock::now();
+      glz::error_ctx e;
+      for (auto i = 0; i < 100; ++i) {
+         vec.clear();
+         e = glz::read_json(vec, buffer);
+      }
+      t1 = std::chrono::steady_clock::now();
+
+      expect(!e) << glz::format_error(e, buffer);
+
+      duration = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-6;
+      std::cout << "read: " << duration << '\n';
+      std::cout << '\n';
+   };
+};
+
+suite basic_string_performance = [] {
+   "basic_string_performance"_test = [] {
+      SKIP;
+
+#ifdef NDEBUG
+      constexpr size_t n = 10000;
+#else
+      constexpr size_t n = 100;
+#endif
+
+      std::vector<std::string> vec;
+      vec.reserve(n);
+
+      for (size_t i = 0; i < n; ++i) {
+         vec.emplace_back(generate_basic_string());
       }
 
       std::string buffer;
@@ -120,6 +177,63 @@ struct integers
       std::cout << '\n';
    };
 };*/
+
+suite integers_test = [] {
+   "integers"_test = [] {
+      SKIP;
+
+#ifdef NDEBUG
+      constexpr size_t n = 10000000;
+#else
+      constexpr size_t n = 100000;
+#endif
+
+      integers v{};
+
+      std::string buffer;
+      auto t0 = std::chrono::steady_clock::now();
+      glz::error_ctx e;
+      for (size_t i = 0; i < n; ++i) {
+         v.a = int32_t(i);
+         v.b = uint32_t(i);
+         v.c = int64_t(i);
+         v.d = uint64_t(i);
+         std::ignore = glz::write_json(v, buffer);
+         e = glz::read_json(v, buffer);
+      }
+      auto t1 = std::chrono::steady_clock::now();
+      auto duration = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-6;
+      std::cout << "integers read/write: " << duration << '\n';
+   };
+};
+
+suite uint64_t_test = [] {
+   "uint64_t"_test = [] {
+      SKIP;
+
+#ifdef NDEBUG
+      constexpr size_t n = 100000000;
+#else
+      constexpr size_t n = 100000;
+#endif
+
+      std::string buffer;
+      auto t0 = std::chrono::steady_clock::now();
+      glz::error_ctx e;
+      for (size_t i = 0; i < n; ++i) {
+         auto v = uint64_t(i);
+         std::ignore = glz::write_json(v, buffer);
+         e = glz::read_json(v, buffer);
+         if (bool(e)) {
+            break;
+         }
+      }
+      expect(not e);
+      auto t1 = std::chrono::steady_clock::now();
+      auto duration = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-6;
+      std::cout << "integers read/write: " << duration << '\n';
+   };
+};
 
 suite float_tests = [] {
    "float"_test = [] {
@@ -263,9 +377,9 @@ struct results
    std::optional<double> json_roundtrip{};
 
    std::optional<size_t> binary_byte_length{};
-   std::optional<double> binary_write{};
-   std::optional<double> binary_read{};
-   std::optional<double> binary_roundtrip{};
+   std::optional<double> beve_write{};
+   std::optional<double> beve_read{};
+   std::optional<double> beve_roundtrip{};
 
    void print(bool use_minified = true)
    {
@@ -299,32 +413,32 @@ struct results
          }
       }
 
-      if (binary_roundtrip) {
+      if (beve_roundtrip) {
          std::cout << '\n';
-         std::cout << name << " binary roundtrip: " << *binary_roundtrip << " s\n";
+         std::cout << name << " beve roundtrip: " << *beve_roundtrip << " s\n";
       }
 
       if (binary_byte_length) {
-         std::cout << name << " binary byte length: " << *binary_byte_length << '\n';
+         std::cout << name << " beve byte length: " << *binary_byte_length << '\n';
       }
 
-      if (binary_write) {
+      if (beve_write) {
          if (binary_byte_length) {
-            const auto MBs = iterations * *binary_byte_length / (*binary_write * 1048576);
-            std::cout << name << " binary write: " << *binary_write << " s, " << MBs << " MB/s\n";
+            const auto MBs = iterations * *binary_byte_length / (*beve_write * 1048576);
+            std::cout << name << " beve write: " << *beve_write << " s, " << MBs << " MB/s\n";
          }
          else {
-            std::cout << name << " binary write: " << *binary_write << " s\n";
+            std::cout << name << " beve write: " << *beve_write << " s\n";
          }
       }
 
-      if (binary_read) {
+      if (beve_read) {
          if (binary_byte_length) {
-            const auto MBs = iterations * *binary_byte_length / (*binary_read * 1048576);
-            std::cout << name << " binary read: " << *binary_read << " s, " << MBs << " MB/s\n";
+            const auto MBs = iterations * *binary_byte_length / (*beve_read * 1048576);
+            std::cout << name << " beve read: " << *beve_read << " s, " << MBs << " MB/s\n";
          }
          else {
-            std::cout << name << " binary read: " << *binary_read << " s\n";
+            std::cout << name << " beve read: " << *beve_read << " s\n";
          }
       }
 
@@ -388,12 +502,12 @@ auto glaze_test()
 
    r.json_read = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-6;
 
-   // binary write performance
+   // beve write performance
 
    t0 = std::chrono::steady_clock::now();
 
    for (size_t i = 0; i < iterations; ++i) {
-      if (glz::write_binary(obj, buffer)) {
+      if (glz::write_beve(obj, buffer)) {
          std::cout << "glaze error!\n";
          break;
       }
@@ -402,14 +516,14 @@ auto glaze_test()
    t1 = std::chrono::steady_clock::now();
 
    r.binary_byte_length = buffer.size();
-   r.binary_write = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-6;
+   r.beve_write = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-6;
 
-   // binary read performance
+   // beve read performance
 
    t0 = std::chrono::steady_clock::now();
 
    for (size_t i = 0; i < iterations; ++i) {
-      if (glz::read_binary(obj, buffer)) {
+      if (glz::read_beve(obj, buffer)) {
          std::cout << "glaze error!\n";
          break;
       }
@@ -417,18 +531,18 @@ auto glaze_test()
 
    t1 = std::chrono::steady_clock::now();
 
-   r.binary_read = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-6;
+   r.beve_read = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-6;
 
-   // binary round trip
+   // beve round trip
 
    t0 = std::chrono::steady_clock::now();
 
    for (size_t i = 0; i < iterations; ++i) {
-      if (glz::read_binary(obj, buffer)) {
+      if (glz::read_beve(obj, buffer)) {
          std::cout << "glaze error!\n";
          break;
       }
-      if (glz::write_binary(obj, buffer)) {
+      if (glz::write_beve(obj, buffer)) {
          std::cout << "glaze error!\n";
          break;
       }
@@ -436,7 +550,7 @@ auto glaze_test()
 
    t1 = std::chrono::steady_clock::now();
 
-   r.binary_roundtrip = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-6;
+   r.beve_roundtrip = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-6;
 
    r.print();
 
@@ -579,26 +693,26 @@ struct test_generator
          auto arraySize03 = randomizeNumberNormal(5ull, 1ull);
          v.resize(arraySize01);
          for (uint64_t x = 0; x < arraySize01; ++x) {
-            auto arraySize01 = randomizeNumberNormal(arraySize02, arraySize03);
-            for (uint64_t y = 0; y < arraySize01; ++y) {
+            auto arr = randomizeNumberNormal(arraySize02, arraySize03);
+            for (uint64_t y = 0; y < arr; ++y) {
                auto newString = generateString();
                v[x].testStrings.emplace_back(newString);
             }
-            arraySize01 = randomizeNumberNormal(arraySize02, arraySize03);
-            for (uint64_t y = 0; y < arraySize01; ++y) {
+            arr = randomizeNumberNormal(arraySize02, arraySize03);
+            for (uint64_t y = 0; y < arr; ++y) {
                v[x].testUints.emplace_back(generateUint());
             }
-            arraySize01 = randomizeNumberNormal(arraySize02, arraySize03);
-            for (uint64_t y = 0; y < arraySize01; ++y) {
+            arr = randomizeNumberNormal(arraySize02, arraySize03);
+            for (uint64_t y = 0; y < arr; ++y) {
                v[x].testInts.emplace_back(generateInt());
             }
-            arraySize01 = randomizeNumberNormal(arraySize02, arraySize03);
-            for (uint64_t y = 0; y < arraySize01; ++y) {
+            arr = randomizeNumberNormal(arraySize02, arraySize03);
+            for (uint64_t y = 0; y < arr; ++y) {
                auto newBool = generateBool();
                v[x].testBools.emplace_back(newBool);
             }
-            arraySize01 = randomizeNumberNormal(arraySize02, arraySize03);
-            for (uint64_t y = 0; y < arraySize01; ++y) {
+            arr = randomizeNumberNormal(arraySize02, arraySize03);
+            for (uint64_t y = 0; y < arr; ++y) {
                v[x].testDoubles.emplace_back(generateDouble());
             }
          }
@@ -741,12 +855,12 @@ auto benchmark_tester()
 
    r.json_read = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-6;
 
-   // binary write performance
+   // beve write performance
 
    t0 = std::chrono::steady_clock::now();
 
    for (size_t i = 0; i < N; ++i) {
-      if (glz::write_binary(obj, buffer)) {
+      if (glz::write_beve(obj, buffer)) {
          std::cout << "glaze error!\n";
          break;
       }
@@ -755,14 +869,14 @@ auto benchmark_tester()
    t1 = std::chrono::steady_clock::now();
 
    r.binary_byte_length = buffer.size();
-   r.binary_write = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-6;
+   r.beve_write = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-6;
 
-   // binary read performance
+   // beve read performance
 
    t0 = std::chrono::steady_clock::now();
 
    for (size_t i = 0; i < N; ++i) {
-      if (glz::read_binary(obj, buffer)) {
+      if (glz::read_beve(obj, buffer)) {
          std::cout << "glaze error!\n";
          break;
       }
@@ -770,18 +884,18 @@ auto benchmark_tester()
 
    t1 = std::chrono::steady_clock::now();
 
-   r.binary_read = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-6;
+   r.beve_read = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-6;
 
-   // binary round trip
+   // beve round trip
 
    t0 = std::chrono::steady_clock::now();
 
    for (size_t i = 0; i < N; ++i) {
-      if (glz::read_binary(obj, buffer)) {
+      if (glz::read_beve(obj, buffer)) {
          std::cout << "glaze error!\n";
          break;
       }
-      if (glz::write_binary(obj, buffer)) {
+      if (glz::write_beve(obj, buffer)) {
          std::cout << "glaze error!\n";
          break;
       }
@@ -789,7 +903,7 @@ auto benchmark_tester()
 
    t1 = std::chrono::steady_clock::now();
 
-   r.binary_roundtrip = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-6;
+   r.beve_roundtrip = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-6;
 
    r.print();
 
@@ -1146,12 +1260,28 @@ auto generic_tester()
 
    r.json_read = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-6;
 
-   // binary write performance
+   // validate performance
 
    t0 = std::chrono::steady_clock::now();
 
    for (size_t i = 0; i < iterations; ++i) {
-      if (glz::write_binary(obj, buffer)) {
+      if (glz::validate_json(buffer)) {
+         std::cout << "glaze error!\n";
+         break;
+      }
+   }
+
+   t1 = std::chrono::steady_clock::now();
+
+   std::cout << "validation time: " << std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-6
+             << '\n';
+
+   // beve write performance
+
+   t0 = std::chrono::steady_clock::now();
+
+   for (size_t i = 0; i < iterations; ++i) {
+      if (glz::write_beve(obj, buffer)) {
          std::cout << "glaze error!\n";
          break;
       }
@@ -1160,14 +1290,14 @@ auto generic_tester()
    t1 = std::chrono::steady_clock::now();
 
    r.binary_byte_length = buffer.size();
-   r.binary_write = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-6;
+   r.beve_write = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-6;
 
-   // binary read performance
+   // beve read performance
 
    t0 = std::chrono::steady_clock::now();
 
    for (size_t i = 0; i < iterations; ++i) {
-      if (glz::read_binary(obj, buffer)) {
+      if (glz::read_beve(obj, buffer)) {
          std::cout << "glaze error!\n";
          break;
       }
@@ -1175,18 +1305,18 @@ auto generic_tester()
 
    t1 = std::chrono::steady_clock::now();
 
-   r.binary_read = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-6;
+   r.beve_read = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-6;
 
-   // binary round trip
+   // beve round trip
 
    t0 = std::chrono::steady_clock::now();
 
    for (size_t i = 0; i < iterations; ++i) {
-      if (glz::read_binary(obj, buffer)) {
+      if (glz::read_beve(obj, buffer)) {
          std::cout << "glaze error!\n";
          break;
       }
-      if (glz::write_binary(obj, buffer)) {
+      if (glz::write_beve(obj, buffer)) {
          std::cout << "glaze error!\n";
          break;
       }
@@ -1194,7 +1324,7 @@ auto generic_tester()
 
    t1 = std::chrono::steady_clock::now();
 
-   r.binary_roundtrip = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-6;
+   r.beve_roundtrip = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-6;
 
    r.print();
 

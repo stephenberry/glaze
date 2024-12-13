@@ -4,28 +4,28 @@ Glaze provides a binary format to send and receive messages like JSON, but with 
 
 The binary specification is known as [BEVE](https://github.com/beve-org/beve).
 
-**Write Binary**
+**Write BEVE**
 
 ```c++
 my_struct s{};
 std::vector<std::byte> buffer{};
-glz::write_binary(s, buffer);
+glz::write_beve(s, buffer);
 ```
 
-**Read Binary**
+**Read BEVE**
 
 ```c++
 my_struct s{};
-glz::read_binary(s, buffer);
+glz::read_beve(s, buffer);
 ```
 
 > [!NOTE]
 >
-> As of v3.3.0 reading binary is now completely safe for invalid input and doesn't require null terminated buffers.
+> As of v3.3.0 reading binary is safe for invalid input and doesn't require null terminated buffers.
 
 ## Untagged Binary
 
-By default Glaze will handle structs as tagged objects, meaning that keys will be written/read. However, structs can be written/read without tags by using the option `structs_as_arrays` or the functions `glz::write_binary_untagged` and `glz::read_binary_untagged`.
+By default Glaze will handle structs as tagged objects, meaning that keys will be written/read. However, structs can be written/read without tags by using the option `structs_as_arrays` or the functions `glz::write_beve_untagged` and `glz::read_beve_untagged`.
 
 ## BEVE to JSON Conversion
 
@@ -41,5 +41,5 @@ static constexpr auto partial = glz::json_ptrs("/i",
                                                "/sub/x",
                                                "/sub/y");
 std::vector<std::byte> out;
-glz::write_binary<partial>(s, out);
+glz::write_beve<partial>(s, out);
 ```

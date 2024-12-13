@@ -30,7 +30,10 @@ namespace glz
 #include <variant>
 #include <vector>
 
-#include "glaze/core/meta.hpp"
+#include "glaze/api/std/string.hpp"
+#include "glaze/api/std/variant.hpp"
+#include "glaze/json/read.hpp"
+#include "glaze/json/write.hpp"
 #include "glaze/util/expected.hpp"
 
 #ifdef _MSC_VER
@@ -49,6 +52,9 @@ namespace glz
       using null_t = std::nullptr_t;
       using val_t = std::variant<null_t, double, std::string, bool, array_t, object_t>;
       val_t data{};
+
+      // Dump the value to JSON, returns an expected that will contain a std::string if valid
+      expected<std::string, error_ctx> dump() const { return write_json(data); }
 
       template <class T>
       [[nodiscard]] T& get()
@@ -107,6 +113,56 @@ namespace glz
          return iter->second;
       }
 
+      json_t& operator=(const std::nullptr_t value)
+      {
+         data = value;
+         return *this;
+      }
+
+      json_t& operator=(const double value)
+      {
+         data = value;
+         return *this;
+      }
+
+      // for integers
+      template <detail::int_t T>
+      json_t& operator=(const T value)
+      {
+         data = static_cast<double>(value);
+         return *this;
+      }
+
+      json_t& operator=(const std::string& value)
+      {
+         data = value;
+         return *this;
+      }
+
+      json_t& operator=(const std::string_view value)
+      {
+         data = std::string(value);
+         return *this;
+      }
+
+      json_t& operator=(const bool value)
+      {
+         data = value;
+         return *this;
+      }
+
+      json_t& operator=(const array_t& value)
+      {
+         data = value;
+         return *this;
+      }
+
+      json_t& operator=(const object_t& value)
+      {
+         data = value;
+         return *this;
+      }
+
       [[nodiscard]] json_t& at(std::convertible_to<std::string_view> auto&& key) { return operator[](key); }
 
       [[nodiscard]] const json_t& at(std::convertible_to<std::string_view> auto&& key) const { return operator[](key); }
@@ -149,6 +205,8 @@ namespace glz
       {
          data = static_cast<double>(val);
       }
+
+      json_t(const std::string_view value) { data = std::string(value); }
 
       json_t(std::initializer_list<std::pair<const char*, json_t>>&& obj)
       {
@@ -209,20 +267,20 @@ namespace glz
 
       [[nodiscard]] bool is_null() const noexcept { return holds<std::nullptr_t>(); }
 
-      [[nodiscard]] array_t& get_array() noexcept { return get<array_t>(); }
-      [[nodiscard]] const array_t& get_array() const noexcept { return get<array_t>(); }
+      [[nodiscard]] array_t& get_array() { return get<array_t>(); }
+      [[nodiscard]] const array_t& get_array() const { return get<array_t>(); }
 
-      [[nodiscard]] object_t& get_object() noexcept { return get<object_t>(); }
-      [[nodiscard]] const object_t& get_object() const noexcept { return get<object_t>(); }
+      [[nodiscard]] object_t& get_object() { return get<object_t>(); }
+      [[nodiscard]] const object_t& get_object() const { return get<object_t>(); }
 
-      [[nodiscard]] double& get_number() noexcept { return get<double>(); }
-      [[nodiscard]] const double& get_number() const noexcept { return get<double>(); }
+      [[nodiscard]] double& get_number() { return get<double>(); }
+      [[nodiscard]] const double& get_number() const { return get<double>(); }
 
-      [[nodiscard]] std::string& get_string() noexcept { return get<std::string>(); }
-      [[nodiscard]] const std::string& get_string() const noexcept { return get<std::string>(); }
+      [[nodiscard]] std::string& get_string() { return get<std::string>(); }
+      [[nodiscard]] const std::string& get_string() const { return get<std::string>(); }
 
-      [[nodiscard]] bool& get_boolean() noexcept { return get<bool>(); }
-      [[nodiscard]] const bool& get_boolean() const noexcept { return get<bool>(); }
+      [[nodiscard]] bool& get_boolean() { return get<bool>(); }
+      [[nodiscard]] const bool& get_boolean() const { return get<bool>(); }
 
       // empty() returns true if the value is an empty JSON object, array, or string, or a null value
       // otherwise returns false
@@ -263,17 +321,17 @@ namespace glz
       }
    };
 
-   [[nodiscard]] inline bool is_array(const json_t& value) { return value.is_array(); }
+   [[nodiscard]] inline bool is_array(const json_t& value) noexcept { return value.is_array(); }
 
-   [[nodiscard]] inline bool is_object(const json_t& value) { return value.is_object(); }
+   [[nodiscard]] inline bool is_object(const json_t& value) noexcept { return value.is_object(); }
 
-   [[nodiscard]] inline bool is_number(const json_t& value) { return value.is_number(); }
+   [[nodiscard]] inline bool is_number(const json_t& value) noexcept { return value.is_number(); }
 
-   [[nodiscard]] inline bool is_string(const json_t& value) { return value.is_string(); }
+   [[nodiscard]] inline bool is_string(const json_t& value) noexcept { return value.is_string(); }
 
-   [[nodiscard]] inline bool is_boolean(const json_t& value) { return value.is_boolean(); }
+   [[nodiscard]] inline bool is_boolean(const json_t& value) noexcept { return value.is_boolean(); }
 
-   [[nodiscard]] inline bool is_null(const json_t& value) { return value.is_null(); }
+   [[nodiscard]] inline bool is_null(const json_t& value) noexcept { return value.is_null(); }
 }
 
 template <>
@@ -283,6 +341,49 @@ struct glz::meta<glz::json_t>
    using T = glz::json_t;
    static constexpr auto value = &T::data;
 };
+
+namespace glz
+{
+   // These functions allow a json_t value to be read/written to a C++ struct
+
+   template <opts Opts, class T>
+      requires read_supported<Opts.format, T>
+   [[nodiscard]] error_ctx read(T& value, const json_t& source)
+   {
+      auto buffer = source.dump();
+      if (buffer) {
+         context ctx{};
+         return read<Opts>(value, *buffer, ctx);
+      }
+      else {
+         return buffer.error();
+      }
+   }
+
+   template <read_json_supported T>
+   [[nodiscard]] error_ctx read_json(T& value, const json_t& source)
+   {
+      auto buffer = source.dump();
+      if (buffer) {
+         return read_json(value, *buffer);
+      }
+      else {
+         return buffer.error();
+      }
+   }
+
+   template <read_json_supported T>
+   [[nodiscard]] expected<T, error_ctx> read_json(const json_t& source)
+   {
+      auto buffer = source.dump();
+      if (buffer) {
+         return read_json<T>(*buffer);
+      }
+      else {
+         return unexpected(buffer.error());
+      }
+   }
+}
 
 #ifdef _MSC_VER
 // restore disabled warning

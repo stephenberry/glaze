@@ -22,7 +22,7 @@ namespace glz::ex
    template <uint32_t layout = rowwise, class T, class Buffer>
    inline auto read_csv(Buffer&& buffer)
    {
-      auto ex = glz::read<T, opts{.format = csv, .layout = layout}>(std::forward<Buffer>(buffer));
+      auto ex = glz::read<T, opts{.format = CSV, .layout = layout}>(std::forward<Buffer>(buffer));
       if (ex) {
          throw std::runtime_error("read_csv error");
       }
@@ -44,7 +44,7 @@ namespace glz::ex
    template <class T, class Buffer>
    inline auto write_csv(T&& value, Buffer&& buffer)
    {
-      const auto ec = write<opts{.format = csv}>(std::forward<T>(value), std::forward<Buffer>(buffer));
+      const auto ec = write<opts{.format = CSV}>(std::forward<T>(value), std::forward<Buffer>(buffer));
       if (ec) {
          throw std::runtime_error("write_csv error");
       }

@@ -11,6 +11,7 @@ glz::read_json(json, buffer);
 assert(json[0].get<double>() == 5.0);
 assert(json[1].get<std::string>() == "Hello World");
 assert(json[2]["pi"].get<double>() == 3.14);
+assert(json[2]["pi"].as<int>() == 3);
 ```
 
 ```c++
@@ -30,6 +31,10 @@ std::string buffer{};
 glz::write_json(json, buffer);
 expect(buffer == R"({"answer":{"everything":42},"happy":true,"list":[1,0,2],"name":"Stephen","object":{"currency":"USD","value":42.99},"pi":3.141})");
 ```
+
+## get() vs as()
+
+`glz::json_t` is a variant underneath that stores all numbers in `double`. The `get()` method mimics a `std::get` call for a variant, which rejects conversions. If you want to access a number as an `int`, then call `json.as<int>()`, which will cast the `double` to an `int`.
 
 ## Type Checking json_t
 
@@ -51,6 +56,10 @@ Calling `.empty()` on a `json_t` value will return true if it contains an empty 
 
 Calling `.size()` on a `json_t` value will return the number of items in an object or array, or the size of a string. Otherwise, returns zero.
 
+## .dump()
+
+Calling `.dump()` on a `json_t` value is equivalent to calling `glz::write_json(value)`, which returns an `expected<std::string, glz::error_ctx>`.
+
 ## glz::raw_json
 
 There are times when you want to parse JSON into a C++ string, to inspect or decode at a later point. `glz::raw_json` is a simple wrapper around a `std::string` that will decode and encode JSON without needing a concrete structure.
@@ -60,5 +69,26 @@ std::vector<glz::raw_json> v{"0", "1", "2"};
 std::string s;
 glz::write_json(v, s);
 expect(s == R"([0,1,2])");
+```
+
+## Using `json_t` As The Source
+
+After parsing into a `json_t` it is sometimes desirable to parse into a concrete struct or a portion of the `json_t` into a struct. Glaze allows a `json_t` value to be used as the source where a buffer would normally be passed.
+
+```c++
+auto json = glz::read_json<glz::json_t>(R"({"foo":"bar"})");
+expect(json->contains("foo"));
+auto obj = glz::read_json<std::map<std::string, std::string>>(json.value());
+// This reads the json_t into a std::map
+```
+
+Another example:
+
+```c++
+glz::json_t json{};
+expect(not glz::read_json(json, R"("Beautiful beginning")"));
+std::string v{};
+expect(not glz::read<glz::opts{}>(v, json));
+expect(v == "Beautiful beginning");
 ```
 

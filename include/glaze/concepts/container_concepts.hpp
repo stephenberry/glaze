@@ -9,6 +9,12 @@
 #include <utility>
 #include <vector>
 
+// Over time we want most concepts to use the nomenclature:
+// is_
+// has_
+// _like
+// Avoid the use of _t as that makes it seem like a type and not a concept
+
 namespace glz
 {
    template <class T, class... U>
@@ -102,6 +108,31 @@ namespace glz::detail
    };
 
    template <class T>
+   concept optional_like = requires(T t, typename T::value_type v) {
+      {
+         T()
+      } -> std::same_as<T>;
+      {
+         T(v)
+      } -> std::same_as<T>;
+      {
+         t.has_value()
+      } -> std::convertible_to<bool>;
+      {
+         t.value()
+      };
+      {
+         t = v
+      };
+      {
+         t.reset()
+      };
+      {
+         t.emplace()
+      };
+   };
+
+   template <class T>
    concept pair_t = requires(T pair) {
       typename std::decay_t<T>::first_type;
       typename std::decay_t<T>::second_type;
@@ -135,7 +166,10 @@ namespace glz::detail
    };
 
    template <class T>
-   concept has_push_back = requires(T t, typename T::value_type v) { t.push_back(v); };
+   concept has_append = requires(T t, typename T::const_iterator it) { t.append(it, it); };
+
+   template <class T>
+   concept has_assign = requires(T t, const typename T::value_type* v, typename T::size_type sz) { t.assign(v, sz); };
 
    template <class T>
    concept accessible = requires(T container) {
@@ -152,7 +186,7 @@ namespace glz::detail
    concept map_subscriptable = requires(T container) {
       {
          container[std::declval<typename T::key_type>()]
-      } -> std::same_as<typename T::mapped_type&>;
+      };
    };
 
    template <typename T>
@@ -218,6 +252,21 @@ namespace glz
       requires std::input_iterator<decltype(t.begin())>;
    };
 
+   template <class T>
+   concept matrix_t = requires(T matrix) {
+      matrix.resize(2, 4);
+      matrix.data();
+      {
+         matrix.rows()
+      } -> std::convertible_to<size_t>;
+      {
+         matrix.cols()
+      } -> std::convertible_to<size_t>;
+      {
+         matrix.size()
+      } -> std::convertible_to<size_t>;
+   } && !range<T>;
+
    // range like
    template <class T>
    using iterator_t = decltype(std::begin(std::declval<T&>()));
@@ -260,4 +309,7 @@ namespace glz
 
    template <class Buffer>
    concept output_buffer = range<Buffer> && (sizeof(range_value_t<Buffer>) == sizeof(char)) && non_const_buffer<Buffer>;
+
+   template <class T>
+   constexpr bool const_value_v = std::is_const_v<std::remove_pointer_t<std::remove_reference_t<T>>>;
 }

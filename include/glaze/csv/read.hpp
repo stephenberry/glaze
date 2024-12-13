@@ -7,7 +7,7 @@
 
 #include "glaze/core/opts.hpp"
 #include "glaze/core/read.hpp"
-#include "glaze/core/refl.hpp"
+#include "glaze/core/reflect.hpp"
 #include "glaze/file/file_ops.hpp"
 #include "glaze/util/glaze_fast_float.hpp"
 #include "glaze/util/parse.hpp"
@@ -36,30 +36,30 @@ namespace glz
    }
 
       template <>
-      struct read<csv>
+      struct read<CSV>
       {
          template <auto Opts, class T, is_context Ctx, class It0, class It1>
-         static void op(T&& value, Ctx&& ctx, It0&& it, It1 end) noexcept
+         static void op(T&& value, Ctx&& ctx, It0&& it, It1 end)
          {
-            from_csv<std::decay_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
-                                                         std::forward<It0>(it), std::forward<It1>(end));
+            from<CSV, std::decay_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
+                                                          std::forward<It0>(it), std::forward<It1>(end));
          }
       };
 
       template <glaze_value_t T>
-      struct from_csv<T>
+      struct from<CSV, T>
       {
          template <auto Opts, is_context Ctx, class It0, class It1>
-         static void op(auto&& value, Ctx&& ctx, It0&& it, It1&& end) noexcept
+         static void op(auto&& value, Ctx&& ctx, It0&& it, It1&& end)
          {
             using V = decltype(get_member(std::declval<T>(), meta_wrapper_v<T>));
-            from_csv<V>::template op<Opts>(get_member(value, meta_wrapper_v<T>), std::forward<Ctx>(ctx),
-                                           std::forward<It0>(it), std::forward<It1>(end));
+            from<CSV, V>::template op<Opts>(get_member(value, meta_wrapper_v<T>), std::forward<Ctx>(ctx),
+                                            std::forward<It0>(it), std::forward<It1>(end));
          }
       };
 
       template <num_t T>
-      struct from_csv<T>
+      struct from<CSV, T>
       {
          template <auto Opts, class It>
          static void op(auto&& value, is_context auto&& ctx, It&& it, auto&& end) noexcept
@@ -76,8 +76,8 @@ namespace glz
                      ctx.error = error_code::parse_number_failure;
                      return;
                   }
-                  auto e = stoui64<V>(i, it);
-                  if (!e) [[unlikely]] {
+
+                  if (not glz::detail::atoi(i, it)) [[unlikely]] {
                      ctx.error = error_code::parse_number_failure;
                      return;
                   }
@@ -95,8 +95,7 @@ namespace glz
                      sign = -1;
                      ++it;
                   }
-                  auto e = stoui64<V>(i, it);
-                  if (!e) [[unlikely]] {
+                  if (not glz::detail::atoi(i, it)) [[unlikely]] {
                      ctx.error = error_code::parse_number_failure;
                      return;
                   }
@@ -119,48 +118,69 @@ namespace glz
          }
       };
 
+      // CSV spec: https://www.ietf.org/rfc/rfc4180.txt
+      // Quotes are escaped via double quotes
+
       template <string_t T>
-      struct from_csv<T>
+      struct from<CSV, T>
       {
          template <auto Opts, class It>
-         static void op(auto&& value, is_context auto&& ctx, It&& it, auto&& end) noexcept
+         static void op(auto&& value, is_context auto&& ctx, It&& it, auto&& end)
          {
             if (bool(ctx.error)) [[unlikely]] {
                return;
             }
 
             value.clear();
-            auto start = it;
-            while (it < end) {
-               switch (*it) {
-               case ',':
-               case '\n': {
-                  value.append(start, static_cast<size_t>(it - start));
-                  return;
+
+            if (it == end) {
+               return;
+            }
+
+            if (*it == '"') {
+               // Quoted field
+               ++it; // Skip the opening quote
+               while (it != end) {
+                  if (*it == '"') {
+                     ++it; // Skip the quote
+                     if (it == end) {
+                        // End of input after closing quote
+                        break;
+                     }
+                     if (*it == '"') {
+                        // Escaped quote
+                        value.push_back('"');
+                        ++it;
+                     }
+                     else {
+                        // Closing quote
+                        break;
+                     }
+                  }
+                  else {
+                     value.push_back(*it);
+                     ++it;
+                  }
                }
-               case '\\':
-               case '\b':
-               case '\f':
-               case '\r':
-               case '\t': {
+               // After closing quote, expect comma, newline, or end of input
+               if (it != end && *it != ',' && *it == '\n') {
+                  // Invalid character after closing quote
                   ctx.error = error_code::syntax_error;
                   return;
                }
-               case '\0': {
-                  ctx.error = error_code::unexpected_end;
-                  return;
-               }
-               default:
+            }
+            else {
+               // Unquoted field
+               while (it != end && *it != ',' && *it != '\n') {
+                  value.push_back(*it);
                   ++it;
                }
             }
-
-            value.append(start, static_cast<size_t>(it - start));
          }
       };
 
       template <bool_t T>
-      struct from_csv<T>
+      struct from<CSV, T>
       {
          template <auto Opts, class It>
          static void op(auto&& value, is_context auto&& ctx, It&& it, auto&&) noexcept
@@ -170,8 +190,7 @@ namespace glz
             }
 
             uint64_t temp;
-            auto s = stoui64(temp, it);
-            if (!s) [[unlikely]] {
+            if (not glz::detail::atoi(temp, it)) [[unlikely]] {
                ctx.error = error_code::expected_true_or_false;
                return;
             }
@@ -180,12 +199,12 @@ namespace glz
       };
 
       template <readable_array_t T>
-      struct from_csv<T>
+      struct from<CSV, T>
       {
          template <auto Opts, class It>
-         static void op(auto&& value, is_context auto&& ctx, It&& it, auto&& end) noexcept
+         static void op(auto&& value, is_context auto&& ctx, It&& it, auto&& end)
          {
-            read<csv>::op<Opts>(value.emplace_back(), ctx, it, end);
+            read<CSV>::op<Opts>(value.emplace_back(), ctx, it, end);
          }
       };
 
@@ -250,7 +269,7 @@ namespace glz
       }
 
       template <readable_map_t T>
-      struct from_csv<T>
+      struct from<CSV, T>
       {
          template <auto Opts, class It>
          static void op(auto&& value, is_context auto&& ctx, It&& it, auto&& end)
@@ -284,10 +303,10 @@ namespace glz
                      size_t col = 0;
                      while (it != end) {
                         if (col < member.size()) [[likely]] {
-                           read<csv>::op<Opts>(member[col][csv_index], ctx, it, end);
+                           read<CSV>::op<Opts>(member[col][csv_index], ctx, it, end);
                         }
                         else [[unlikely]] {
-                           read<csv>::op<Opts>(member.emplace_back()[csv_index], ctx, it, end);
+                           read<CSV>::op<Opts>(member.emplace_back()[csv_index], ctx, it, end);
                         }
 
                         if (*it == '\r') {
@@ -319,7 +338,7 @@ namespace glz
                   }
                   else {
                      while (it != end) {
-                        read<csv>::op<Opts>(member, ctx, it, end);
+                        read<CSV>::op<Opts>(member, ctx, it, end);
 
                         if (*it == '\r') {
                            ++it;
@@ -370,14 +389,14 @@ namespace glz
                      if constexpr (fixed_array_value_t<M> && emplace_backable<M>) {
                         const auto index = keys[i].second;
                         if (row < member.size()) [[likely]] {
-                           read<csv>::op<Opts>(member[row][index], ctx, it, end);
+                           read<CSV>::op<Opts>(member[row][index], ctx, it, end);
                         }
                         else [[unlikely]] {
-                           read<csv>::op<Opts>(member.emplace_back()[index], ctx, it, end);
+                           read<CSV>::op<Opts>(member.emplace_back()[index], ctx, it, end);
                         }
                      }
                      else {
-                        read<csv>::op<Opts>(member, ctx, it, end);
+                        read<CSV>::op<Opts>(member, ctx, it, end);
                      }
 
                      if (*it == ',') {
@@ -407,12 +426,12 @@ namespace glz
 
       template <class T>
          requires(glaze_object_t<T> || reflectable<T>)
-      struct from_csv<T>
+      struct from<CSV, T>
       {
          template <auto Opts, class It>
          static void op(auto&& value, is_context auto&& ctx, It&& it, auto&& end)
          {
-            static constexpr auto N = refl<T>.N;
+            static constexpr auto N = reflect<T>::size;
             static constexpr auto HashInfo = detail::hash_info<T>;
 
             if constexpr (Opts.layout == rowwise) {
@@ -438,17 +457,17 @@ namespace glz
                   GLZ_MATCH_COMMA;
 
                   const auto index =
-                     decode_hash_with_size<csv, T, HashInfo, HashInfo.type>::op(key.data(), end, key.size());
+                     decode_hash_with_size<CSV, T, HashInfo, HashInfo.type>::op(key.data(), end, key.size());
 
                   if (index < N) [[likely]] {
-                     jump_table<N>(
+                     visit<N>(
                         [&]<size_t I>() {
                            decltype(auto) member = [&]() -> decltype(auto) {
                               if constexpr (reflectable<T>) {
                                  return get_member(value, get<I>(to_tuple(value)));
                               }
                               else {
-                                 return get_member(value, get<I>(refl<T>.values));
+                                 return get_member(value, get<I>(reflect<T>::values));
                               }
                            }();
 
@@ -457,10 +476,10 @@ namespace glz
                               size_t col = 0;
                               while (it != end) {
                                  if (col < member.size()) [[likely]] {
-                                    read<csv>::op<Opts>(member[col][csv_index], ctx, it, end);
+                                    read<CSV>::op<Opts>(member[col][csv_index], ctx, it, end);
                                  }
                                  else [[unlikely]] {
-                                    read<csv>::op<Opts>(member.emplace_back()[csv_index], ctx, it, end);
+                                    read<CSV>::op<Opts>(member.emplace_back()[csv_index], ctx, it, end);
                                  }
 
                                  if (*it == '\r') {
@@ -495,7 +514,7 @@ namespace glz
                            }
                            else {
                               while (it != end) {
-                                 read<csv>::op<Opts>(member, ctx, it, end);
+                                 read<CSV>::op<Opts>(member, ctx, it, end);
 
                                  if (*it == '\r') {
                                     ++it;
@@ -554,18 +573,18 @@ namespace glz
                   while (true) {
                      for (size_t i = 0; i < n_keys; ++i) {
                         const auto key = keys[i].first;
-                        const auto index = decode_hash_with_size<csv, T, HashInfo, HashInfo.type>::op(
+                        const auto index = decode_hash_with_size<CSV, T, HashInfo, HashInfo.type>::op(
                            key.data(), key.data() + key.size(), key.size());
 
                         if (index < N) [[likely]] {
-                           jump_table<N>(
+                           visit<N>(
                               [&]<size_t I>() {
                                  decltype(auto) member = [&]() -> decltype(auto) {
                                     if constexpr (reflectable<T>) {
                                        return get_member(value, get<I>(to_tuple(value)));
                                     }
                                     else {
-                                       return get_member(value, get<I>(refl<T>.values));
+                                       return get_member(value, get<I>(reflect<T>::values));
                                     }
                                  }();
 
@@ -573,14 +592,14 @@ namespace glz
                                  if constexpr (fixed_array_value_t<M> && emplace_backable<M>) {
                                     const auto index = keys[i].second;
                                     if (row < member.size()) [[likely]] {
-                                       read<csv>::op<Opts>(member[row][index], ctx, it, end);
+                                       read<CSV>::op<Opts>(member[row][index], ctx, it, end);
                                     }
                                     else [[unlikely]] {
-                                       read<csv>::op<Opts>(member.emplace_back()[index], ctx, it, end);
+                                       read<CSV>::op<Opts>(member.emplace_back()[index], ctx, it, end);
                                     }
                                  }
                                  else {
-                                    read<csv>::op<Opts>(member, ctx, it, end);
+                                    read<CSV>::op<Opts>(member, ctx, it, end);
                                  }
                               },
                               index);
@@ -618,32 +637,31 @@ namespace glz
    }
 
    template <uint32_t layout = rowwise, read_csv_supported T, class Buffer>
-   [[nodiscard]] inline auto read_csv(T&& value, Buffer&& buffer) noexcept
+   [[nodiscard]] inline auto read_csv(T&& value, Buffer&& buffer)
    {
-      return read<opts{.format = csv, .layout = layout}>(value, std::forward<Buffer>(buffer));
+      return read<opts{.format = CSV, .layout = layout}>(value, std::forward<Buffer>(buffer));
    }
 
    template <uint32_t layout = rowwise, read_csv_supported T, class Buffer>
-   [[nodiscard]] inline auto read_csv(Buffer&& buffer) noexcept
+   [[nodiscard]] inline auto read_csv(Buffer&& buffer)
    {
       T value{};
-      read<opts{.format = csv, .layout = layout}>(value, std::forward<Buffer>(buffer));
+      read<opts{.format = CSV, .layout = layout}>(value, std::forward<Buffer>(buffer));
       return value;
    }
 
-   template <uint32_t layout = rowwise, read_csv_supported T>
-   [[nodiscard]] inline error_ctx read_file_csv(T& value, const sv file_name)
+   template <uint32_t layout = rowwise, read_csv_supported T, is_buffer Buffer>
+   [[nodiscard]] inline error_ctx read_file_csv(T& value, const sv file_name, Buffer&& buffer)
    {
       context ctx{};
       ctx.current_file = file_name;
 
-      std::string buffer;
       const auto ec = file_to_buffer(buffer, ctx.current_file);
 
       if (bool(ec)) {
          return {ec};
       }
 
-      return read<opts{.format = csv, .layout = layout}>(value, buffer, ctx);
+      return read<opts{.format = CSV, .layout = layout}>(value, buffer, ctx);
    }
 }

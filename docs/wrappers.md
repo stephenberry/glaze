@@ -470,6 +470,10 @@ expect(s == R"({"str":"Hello!"})");
 expect(obj.str == "Hello!");
 ```
 
+> [!NOTE]
+>
+> With read lambdas like `[](custom_buffer_input& s, const std::string& input)`, both types must be concrete (cannot use `auto`), otherwise you'll get a compilation error noting this. The reason is that Glaze must be able to determine what type to decode into before passing the decoded value to `input`.
+
 ## manage
 
 Calls a read function after reading and calls a write function before writing.

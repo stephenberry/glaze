@@ -13,7 +13,7 @@ namespace glz
    // For writing to a std::string, std::vector<char>, std::deque<char> and the like
    template <opts Opts, class T, output_buffer Buffer>
       requires write_supported<Opts.format, T>
-   [[nodiscard]] error_ctx write(T&& value, Buffer& buffer, is_context auto&& ctx) noexcept
+   [[nodiscard]] error_ctx write(T&& value, Buffer& buffer, is_context auto&& ctx)
    {
       if constexpr (resizable<Buffer>) {
          if (buffer.empty()) {
@@ -31,7 +31,7 @@ namespace glz
 
    template <auto& Partial, opts Opts, class T, output_buffer Buffer>
       requires write_supported<Opts.format, T>
-   [[nodiscard]] error_ctx write(T&& value, Buffer& buffer) noexcept
+   [[nodiscard]] error_ctx write(T&& value, Buffer& buffer)
    {
       if constexpr (resizable<Buffer>) {
          if (buffer.empty()) {
@@ -49,7 +49,7 @@ namespace glz
 
    template <auto& Partial, opts Opts, class T, raw_buffer Buffer>
       requires write_supported<Opts.format, T>
-   [[nodiscard]] glz::expected<size_t, error_ctx> write(T&& value, Buffer& buffer) noexcept
+   [[nodiscard]] glz::expected<size_t, error_ctx> write(T&& value, Buffer& buffer)
    {
       context ctx{};
       size_t ix = 0;
@@ -62,7 +62,7 @@ namespace glz
 
    template <opts Opts, class T, output_buffer Buffer>
       requires write_supported<Opts.format, T>
-   [[nodiscard]] error_ctx write(T&& value, Buffer& buffer) noexcept
+   [[nodiscard]] error_ctx write(T&& value, Buffer& buffer)
    {
       context ctx{};
       return write<Opts>(std::forward<T>(value), buffer, ctx);
@@ -70,7 +70,7 @@ namespace glz
 
    template <opts Opts, class T>
       requires write_supported<Opts.format, T>
-   [[nodiscard]] glz::expected<std::string, error_ctx> write(T&& value) noexcept
+   [[nodiscard]] glz::expected<std::string, error_ctx> write(T&& value)
    {
       std::string buffer{};
       context ctx{};
@@ -83,7 +83,7 @@ namespace glz
 
    template <opts Opts, class T, raw_buffer Buffer>
       requires write_supported<Opts.format, T>
-   [[nodiscard]] glz::expected<size_t, error_ctx> write(T&& value, Buffer&& buffer, is_context auto&& ctx) noexcept
+   [[nodiscard]] glz::expected<size_t, error_ctx> write(T&& value, Buffer&& buffer, is_context auto&& ctx)
    {
       size_t ix = 0;
       detail::write<Opts.format>::template op<Opts>(std::forward<T>(value), ctx, buffer, ix);
@@ -95,14 +95,14 @@ namespace glz
 
    template <opts Opts, class T, raw_buffer Buffer>
       requires write_supported<Opts.format, T>
-   [[nodiscard]] glz::expected<size_t, error_ctx> write(T&& value, Buffer&& buffer) noexcept
+   [[nodiscard]] glz::expected<size_t, error_ctx> write(T&& value, Buffer&& buffer)
    {
       context ctx{};
       return write<Opts>(std::forward<T>(value), std::forward<Buffer>(buffer), ctx);
    }
 
    // requires file_name to be null terminated
-   [[nodiscard]] inline error_code buffer_to_file(auto&& buffer, const sv file_name) noexcept
+   [[nodiscard]] inline error_code buffer_to_file(auto&& buffer, const sv file_name)
    {
       auto file = std::ofstream(file_name.data(), std::ios::out);
       if (!file) {

@@ -13,7 +13,18 @@ namespace glz
    constexpr size_t max_recursive_depth_limit = 256;
 
    enum struct error_code : uint32_t {
+      // REPE compliant error codes
       none, //
+      version_mismatch,
+      invalid_header,
+      invalid_query,
+      invalid_body,
+      parse_error,
+      method_not_found,
+      timeout,
+      send_error,
+      connection_failure,
+      // Other errors
       end_reached, // A non-error code for non-null terminated input buffers
       no_read_input, //
       data_must_be_null_terminated, //
@@ -70,7 +81,9 @@ namespace glz
       unknown_distribution, //
       invalid_distribution_elements, //
       hostname_failure, //
-      includer_error //
+      includer_error, //
+      // Feature support
+      feature_not_supported //
    };
 
    struct error_ctx final

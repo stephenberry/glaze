@@ -60,34 +60,34 @@ namespace glz
    namespace detail
    {
       template <class T>
-      struct to_json<write_float32_t<T>>
+      struct to<JSON, write_float32_t<T>>
       {
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept
          {
-            write<json>::op<set_opt<Opts, &opts::float_max_write_precision>(float_precision::float32)>(value.val, ctx,
+            write<JSON>::op<set_opt<Opts, &opts::float_max_write_precision>(float_precision::float32)>(value.val, ctx,
                                                                                                        args...);
          }
       };
 
       template <class T>
-      struct to_json<write_float64_t<T>>
+      struct to<JSON, write_float64_t<T>>
       {
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept
          {
-            write<json>::op<set_opt<Opts, &opts::float_max_write_precision>(float_precision::float64)>(value.val, ctx,
+            write<JSON>::op<set_opt<Opts, &opts::float_max_write_precision>(float_precision::float64)>(value.val, ctx,
                                                                                                        args...);
          }
       };
 
       template <class T>
-      struct to_json<write_float_full_t<T>>
+      struct to<JSON, write_float_full_t<T>>
       {
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept
          {
-            write<json>::op<set_opt<Opts, &opts::float_max_write_precision>(float_precision::full)>(value.val, ctx,
+            write<JSON>::op<set_opt<Opts, &opts::float_max_write_precision>(float_precision::full)>(value.val, ctx,
                                                                                                     args...);
          }
       };

@@ -4,7 +4,7 @@
 #pragma once
 
 #include "glaze/core/read.hpp"
-#include "glaze/core/refl.hpp"
+#include "glaze/core/reflect.hpp"
 #include "glaze/core/write.hpp"
 #include "glaze/util/glaze_fast_float.hpp"
 
@@ -15,22 +15,22 @@ namespace glz::detail
 {
    template <class F, class T>
       requires glaze_value_t<T>
-   bool seek_impl(F&& func, T&& value, sv json_ptr) noexcept;
+   bool seek_impl(F&& func, T&& value, sv json_ptr);
 
    template <class F, class T>
       requires glaze_array_t<T> || tuple_t<std::decay_t<T>> || array_t<std::decay_t<T>> || is_std_tuple<std::decay_t<T>>
-   bool seek_impl(F&& func, T&& value, sv json_ptr) noexcept;
+   bool seek_impl(F&& func, T&& value, sv json_ptr);
 
    template <class F, class T>
       requires nullable_t<std::decay_t<T>>
-   bool seek_impl(F&& func, T&& value, sv json_ptr) noexcept;
+   bool seek_impl(F&& func, T&& value, sv json_ptr);
 
    template <class F, class T>
       requires readable_map_t<T> || glaze_object_t<T> || reflectable<T>
-   bool seek_impl(F&& func, T&& value, sv json_ptr) noexcept;
+   bool seek_impl(F&& func, T&& value, sv json_ptr);
 
    template <class F, class T>
-   bool seek_impl(F&& func, T&& value, sv json_ptr) noexcept
+   bool seek_impl(F&& func, T&& value, sv json_ptr)
    {
       if (json_ptr.empty()) {
          func(value);
@@ -42,7 +42,7 @@ namespace glz::detail
    // TODO: compile time search for `~` and optimize if escape does not exist
    template <class F, class T>
       requires readable_map_t<T> || glaze_object_t<T> || reflectable<T>
-   bool seek_impl(F&& func, T&& value, sv json_ptr) noexcept
+   bool seek_impl(F&& func, T&& value, sv json_ptr)
    {
       if (json_ptr.empty()) {
          func(value);
@@ -96,7 +96,7 @@ namespace glz::detail
       }
 
       if constexpr (glaze_object_t<T> || reflectable<T>) {
-         static constexpr auto N = refl<T>.N;
+         static constexpr auto N = reflect<T>::size;
          static constexpr auto HashInfo = detail::hash_info<T>;
 
          const auto index = decode_hash_with_size<JSON_PTR, T, HashInfo, HashInfo.type>::op(
@@ -110,7 +110,7 @@ namespace glz::detail
                      ret = seek_impl(std::forward<F>(func), get_member(value, get<I>(to_tuple(value))), json_ptr);
                   }
                   else {
-                     ret = seek_impl(std::forward<F>(func), get_member(value, get<I>(refl<T>.values)), json_ptr);
+                     ret = seek_impl(std::forward<F>(func), get_member(value, get<I>(reflect<T>::values)), json_ptr);
                   }
                },
                index);
@@ -127,7 +127,7 @@ namespace glz::detail
 
    template <class F, class T>
       requires glaze_array_t<T> || tuple_t<std::decay_t<T>> || array_t<std::decay_t<T>> || is_std_tuple<std::decay_t<T>>
-   bool seek_impl(F&& func, T&& value, sv json_ptr) noexcept
+   bool seek_impl(F&& func, T&& value, sv json_ptr)
    {
       if (json_ptr.empty()) {
          func(value);
@@ -160,7 +160,7 @@ namespace glz::detail
 
    template <class F, class T>
       requires nullable_t<std::decay_t<T>>
-   bool seek_impl(F&& func, T&& value, sv json_ptr) noexcept
+   bool seek_impl(F&& func, T&& value, sv json_ptr)
    {
       if (json_ptr.empty()) {
          func(value);
@@ -172,7 +172,7 @@ namespace glz::detail
 
    template <class F, class T>
       requires glaze_value_t<T>
-   bool seek_impl(F&& func, T&& value, sv json_ptr) noexcept
+   bool seek_impl(F&& func, T&& value, sv json_ptr)
    {
       decltype(auto) member = get_member(value, meta_wrapper_v<std::remove_cvref_t<T>>);
       if (json_ptr.empty()) {
@@ -187,7 +187,7 @@ namespace glz
 {
    // Call a function on an value at the location of a json_ptr
    template <class F, class T>
-   bool seek(F&& func, T&& value, sv json_ptr) noexcept
+   bool seek(F&& func, T&& value, sv json_ptr)
    {
       return detail::seek_impl(std::forward<F>(func), std::forward<T>(value), json_ptr);
    }
@@ -195,7 +195,7 @@ namespace glz
    // Get a refrence to a value at the location of a json_ptr. Will error if
    // value doesnt exist or is wrong type
    template <class V, class T>
-   expected<std::reference_wrapper<V>, error_ctx> get(T&& root_value, sv json_ptr) noexcept
+   expected<std::reference_wrapper<V>, error_ctx> get(T&& root_value, sv json_ptr)
    {
       V* result{};
       error_code ec{};
@@ -303,7 +303,7 @@ namespace glz
 
    // call a member function
    template <class R, class T, class... Args>
-   call_return_t<R> call(T&& root_value, sv json_ptr, Args&&... args) noexcept
+   call_return_t<R> call(T&& root_value, sv json_ptr, Args&&... args)
    {
       call_result_t<R> result{};
 
@@ -561,7 +561,7 @@ namespace glz
                constexpr auto& member_ptr = get<I>(element);
 
                using mptr_t = std::decay_t<decltype(member_ptr)>;
-               using T = detail::member_t<V, mptr_t>;
+               using T = member_t<V, mptr_t>;
                if constexpr (is_specialization_v<T, includer>) {
                   return valid<file_include, rem_ptr, Expected_t>();
                }
@@ -584,7 +584,7 @@ namespace glz
                if constexpr (index >= 0 && index < member_array.size()) {
                   constexpr auto member = member_array[index];
                   constexpr auto member_ptr = std::get<member.index()>(member);
-                  using sub_t = decltype(glz::detail::get_member(std::declval<V>(), member_ptr));
+                  using sub_t = decltype(glz::get_member(std::declval<V>(), member_ptr));
                   return valid<sub_t, rem_ptr, Expected_t>();
                }
                else {
