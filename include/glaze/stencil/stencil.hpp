@@ -37,22 +37,12 @@ namespace glz
                ++it;
                if (it != end && *it == '{') {
                   ++it;
-                  bool unescaped = false;
                   bool is_section = false;
                   bool is_inverted_section = false;
                   bool is_comment = false;
-                  [[maybe_unused]] bool is_partial = false;
 
                   if (it != end) {
-                     if (*it == '{') {
-                        ++it;
-                        unescaped = true;
-                     }
-                     else if (*it == '&') {
-                        ++it;
-                        unescaped = true;
-                     }
-                     else if (*it == '!') {
+                     if (*it == '!') {
                         ++it;
                         is_comment = true;
                      }
@@ -143,33 +133,20 @@ namespace glz
 
                   skip_whitespace();
 
-                  // Handle closing braces
-                  if (unescaped) {
-                     if (*it == '}') {
+                  // Handle closing braces assuming unescaped
+                  if (*it == '}') {
+                     ++it;
+                     if (it != end && *it == '}') {
                         ++it;
-                        if (it != end && *it == '}') {
-                           ++it;
-                           if (it != end && *it == '}') {
-                              ++it;
-                              break;
-                           }
-                        }
-                     }
-                     ctx.error = error_code::syntax_error;
-                     return {ctx.error, ctx.custom_error_message, size_t(it - start)};
-                  }
-                  else {
-                     if (*it == '}') {
-                        ++it;
-                        if (it != end && *it == '}') {
-                           ++it;
-                           break;
-                        }
-                        else {
-                           buffer.append("}");
-                        }
                         break;
                      }
+                     else {
+                        buffer.append("}");
+                     }
+                  }
+                  else {
+                     ctx.error = error_code::syntax_error;
+                     return {ctx.error, ctx.custom_error_message, size_t(it - start)};
                   }
                }
                else {
