@@ -40,3 +40,4 @@
 #include "glaze/file/write_directory.hpp"
 #include "glaze/json.hpp"
 #include "glaze/record/recorder.hpp"
+#include "glaze/stencil/stencil.hpp"

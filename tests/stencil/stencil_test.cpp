@@ -1,10 +1,7 @@
 // Glaze Library
 // For the license information refer to glaze.hpp
 
-#include "glaze/stencil/stencil.hpp"
-
 #include "glaze/glaze.hpp"
-#include "glaze/stencil/stencilcount.hpp"
 #include "ut/ut.hpp"
 
 using namespace ut;
@@ -50,16 +47,79 @@ suite mustache_tests = [] {
       auto result = glz::stencil(layout, p).value_or("error");
       expect(result == "Henry Foster") << result;
    };
+   
+   // **Inverted Section Tests**
 
-   "unsupported section"_test = [] {
-      std::string_view layout = R"({{#hungry}}I am hungry{{/hungry}})";
+   "inverted_section_true"_test = [] {
+      std::string_view layout = R"({{first_name}} {{last_name}} {{^hungry}}I'm not hungry{{/hungry}})";
 
-      person p{"Henry", "Foster", 34, true};
+      person p{"Henry", "Foster", 34, false}; // hungry is false
+      auto result = glz::stencil(layout, p).value_or("error");
+      expect(result == "Henry Foster I'm not hungry") << result;
+   };
+
+   "inverted_section_false"_test = [] {
+      std::string_view layout = R"({{first_name}} {{last_name}} {{^hungry}}I'm not hungry{{/hungry}})";
+
+      person p{"Henry", "Foster", 34, true}; // hungry is true
+      auto result = glz::stencil(layout, p).value_or("error");
+      expect(result == "Henry Foster ") << result; // The inverted section should be skipped
+   };
+
+   "inverted_section_with_extra_text_true"_test = [] {
+      std::string_view layout = R"({{first_name}} {{last_name}} {{^hungry}}I'm not hungry{{/hungry}}. Have a nice day!)";
+
+      person p{"Henry", "Foster", 34, false}; // hungry is false
+      auto result = glz::stencil(layout, p).value_or("error");
+      expect(result == "Henry Foster I'm not hungry. Have a nice day!") << result;
+   };
+
+   "inverted_section_with_extra_text_false"_test = [] {
+      std::string_view layout = R"({{first_name}} {{last_name}} {{^hungry}}I'm not hungry{{/hungry}}. Have a nice day!)";
+
+      person p{"Henry", "Foster", 34, true}; // hungry is true
+      auto result = glz::stencil(layout, p).value_or("error");
+      expect(result == "Henry Foster . Have a nice day!") << result;
+   };
+
+   "nested_inverted_section"_test = [] {
+      // Note: Nested sections are not supported in the current implementation.
+      // This test ensures that nested inverted sections are either handled correctly or produce an error.
+
+      std::string_view layout = R"({{first_name}} {{last_name}} {{^hungry}}I'm not hungry {{^age}}and not of age{{/age}}{{/hungry}})";
+
+      person p1{"Henry", "Foster", 34, false}; // hungry is false
+      auto result1 = glz::stencil(layout, p1);
+      // Since nested sections are not supported, expect a feature_not_supported error
+      expect(not result1.has_value());
+
+      person p2{"Henry", "Foster", 0, false}; // hungry is false, age is 0 (falsey)
+      auto result2 = glz::stencil(layout, p2);
+      // Depending on implementation, it might fail or ignore the nested section
+      // Here, we expect it to fail due to nested section not being supported
+      expect(not result2.has_value());
+   };
+
+   "inverted_section_unknown_key"_test = [] {
+      std::string_view layout = R"({{first_name}} {{last_name}} {{^unknown}}Should not appear{{/unknown}})";
+
+      person p{"Henry", "Foster", 34, false};
       auto result = glz::stencil(layout, p);
       expect(not result.has_value());
-      expect(result.error() == glz::error_code::feature_not_supported);
+      expect(result.error() == glz::error_code::unknown_key);
+   };
+
+   "inverted_section_mismatched_closing_tag"_test = [] {
+      std::string_view layout = R"({{first_name}} {{last_name}} {{^hungry}}I'm not hungry{{/hunger}})"; // Mismatched closing tag
+
+      person p{"Henry", "Foster", 34, false};
+      auto result = glz::stencil(layout, p);
+      expect(not result.has_value());
+      expect(result.error() == glz::error_code::unexpected_end);
    };
 };
+
+#include "glaze/stencil/stencilcount.hpp"
 
 suite stencilcount_tests = [] {
    "basic docstencil"_test = [] {
