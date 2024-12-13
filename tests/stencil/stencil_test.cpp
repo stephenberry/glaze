@@ -20,8 +20,8 @@ suite mustache_tests = [] {
       std::string_view layout = R"({{first_name}} {{last_name}} {{age}})";
 
       person p{"Henry", "Foster", 34};
-      auto result = glz::stencil(layout, p).value_or("error");
-      expect(result == "Henry Foster 34") << result;
+      auto result = glz::stencil(layout, p);
+      expect(result == "Henry Foster 34");
    };
 
    "person"_test = [] {
@@ -48,7 +48,7 @@ suite mustache_tests = [] {
       auto result = glz::stencil(layout, p).value_or("error");
       expect(result == "Henry Foster") << result;
    };
-
+   
    // **Regular Section Tests (#)**
 
    "section_true"_test = [] {
@@ -68,8 +68,7 @@ suite mustache_tests = [] {
    };
 
    "section_with_inner_placeholders"_test = [] {
-      std::string_view layout =
-         R"({{first_name}} {{last_name}} {{#employed}}Status: Employed, Age: {{age}}{{/employed}})";
+      std::string_view layout = R"({{first_name}} {{last_name}} {{#employed}}Status: Employed, Age: {{age}}{{/employed}})";
 
       person p{"Carol", "Davis", 30, true, true};
       auto result = glz::stencil(layout, p).value_or("error");
@@ -93,8 +92,7 @@ suite mustache_tests = [] {
    };
 
    "nested_sections"_test = [] {
-      std::string_view layout =
-         R"({{first_name}} {{last_name}} {{#employed}}Status: Employed {{#hungry}}and Hungry{{/hungry}}{{/employed}})";
+      std::string_view layout = R"({{first_name}} {{last_name}} {{#employed}}Status: Employed {{#hungry}}and Hungry{{/hungry}}{{/employed}})";
 
       person p1{"Frank", "Taylor", 50, true, true}; // employed is true, hungry is true
       auto result1 = glz::stencil(layout, p1);
@@ -115,15 +113,14 @@ suite mustache_tests = [] {
    };
 
    "section_mismatched_closing_tag"_test = [] {
-      std::string_view layout =
-         R"({{first_name}} {{last_name}} {{#employed}}Employed{{/employment}})"; // Mismatched closing tag
+      std::string_view layout = R"({{first_name}} {{last_name}} {{#employed}}Employed{{/employment}})"; // Mismatched closing tag
 
       person p{"Ivy", "Thomas", 29, false, true};
       auto result = glz::stencil(layout, p);
       expect(not result.has_value());
       expect(result.error() == glz::error_code::unexpected_end);
    };
-
+   
    // **Inverted Section Tests**
 
    "inverted_section_true"_test = [] {
@@ -143,8 +140,7 @@ suite mustache_tests = [] {
    };
 
    "inverted_section_with_extra_text_true"_test = [] {
-      std::string_view layout =
-         R"({{first_name}} {{last_name}} {{^hungry}}I'm not hungry{{/hungry}}. Have a nice day!)";
+      std::string_view layout = R"({{first_name}} {{last_name}} {{^hungry}}I'm not hungry{{/hungry}}. Have a nice day!)";
 
       person p{"Henry", "Foster", 34, false}; // hungry is false
       auto result = glz::stencil(layout, p).value_or("error");
@@ -152,8 +148,7 @@ suite mustache_tests = [] {
    };
 
    "inverted_section_with_extra_text_false"_test = [] {
-      std::string_view layout =
-         R"({{first_name}} {{last_name}} {{^hungry}}I'm not hungry{{/hungry}}. Have a nice day!)";
+      std::string_view layout = R"({{first_name}} {{last_name}} {{^hungry}}I'm not hungry{{/hungry}}. Have a nice day!)";
 
       person p{"Henry", "Foster", 34, true}; // hungry is true
       auto result = glz::stencil(layout, p).value_or("error");
@@ -161,22 +156,20 @@ suite mustache_tests = [] {
    };
 
    "nested_inverted_section"_test = [] {
-      std::string_view layout =
-         R"({{first_name}} {{last_name}} {{^hungry}}I'm not hungry {{^employed}}and not employed{{/employed}}{{/hungry}})";
+       std::string_view layout = R"({{first_name}} {{last_name}} {{^hungry}}I'm not hungry {{^employed}}and not employed{{/employed}}{{/hungry}})";
 
-      person p1{"Henry", "Foster", 34, false, false};
-      auto result1 = glz::stencil(layout, p1).value_or("error");
-      expect(result1 == "Henry Foster I'm not hungry and not employed") << result1;
+       person p1{"Henry", "Foster", 34, false, false};
+       auto result1 = glz::stencil(layout, p1).value_or("error");
+       expect(result1 == "Henry Foster I'm not hungry and not employed") << result1;
 
-      person p2{"Henry", "Foster", 34, false, true};
-      auto result2 = glz::stencil(layout, p2).value_or("error");
-      expect(result2 == "Henry Foster I'm not hungry ") << result2;
+       person p2{"Henry", "Foster", 34, false, true};
+       auto result2 = glz::stencil(layout, p2).value_or("error");
+       expect(result2 == "Henry Foster I'm not hungry ") << result2;
 
-      person p3{"Henry", "Foster", 34, true, false};
-      std::string_view layout_skip =
-         R"({{first_name}} {{last_name}} {{^hungry}}I'm not hungry {{^employed}}and not employed{{/employed}}{{/hungry}})";
-      auto result3 = glz::stencil(layout_skip, p3).value_or("error");
-      expect(result3 == "Henry Foster ") << result3;
+       person p3{"Henry", "Foster", 34, true, false};
+       std::string_view layout_skip = R"({{first_name}} {{last_name}} {{^hungry}}I'm not hungry {{^employed}}and not employed{{/employed}}{{/hungry}})";
+       auto result3 = glz::stencil(layout_skip, p3).value_or("error");
+       expect(result3 == "Henry Foster ") << result3;
    };
 
    "inverted_section_unknown_key"_test = [] {
@@ -189,8 +182,7 @@ suite mustache_tests = [] {
    };
 
    "inverted_section_mismatched_closing_tag"_test = [] {
-      std::string_view layout =
-         R"({{first_name}} {{last_name}} {{^hungry}}I'm not hungry{{/hunger}})"; // Mismatched closing tag
+      std::string_view layout = R"({{first_name}} {{last_name}} {{^hungry}}I'm not hungry{{/hunger}})"; // Mismatched closing tag
 
       person p{"Henry", "Foster", 34, false};
       auto result = glz::stencil(layout, p);
