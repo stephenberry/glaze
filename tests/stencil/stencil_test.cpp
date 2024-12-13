@@ -13,7 +13,6 @@ struct person
    uint32_t age{};
    bool hungry{};
    bool employed{};
-   bool employed{};
 };
 
 suite mustache_tests = [] {
@@ -189,11 +188,8 @@ suite mustache_tests = [] {
       auto result = glz::stencil(layout, p);
       expect(not result.has_value());
       expect(result.error() == glz::error_code::unexpected_end);
-      expect(result.error() == glz::error_code::unexpected_end);
    };
 };
-
-#include "glaze/stencil/stencilcount.hpp"
 
 #include "glaze/stencil/stencilcount.hpp"
 

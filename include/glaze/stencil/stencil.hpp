@@ -27,13 +27,11 @@ namespace glz
       if (not bool(ctx.error)) [[likely]] {
          auto skip_whitespace = [&] {
             while (it < end && detail::whitespace_table[uint8_t(*it)]) {
-            while (it < end && detail::whitespace_table[uint8_t(*it)]) {
                ++it;
             }
          };
 
          while (it < end) {
-            if (*it == '{') {
             if (*it == '{') {
                ++it;
                if (it != end && *it == '{') {
@@ -43,7 +41,6 @@ namespace glz
                   bool is_comment = false;
 
                   if (it != end) {
-                     if (*it == '!') {
                      if (*it == '!') {
                         ++it;
                         is_comment = true;
@@ -76,14 +73,11 @@ namespace glz
 
                   if (is_comment) {
                      while (it < end && !(it + 1 < end && *it == '}' && *(it + 1) == '}')) {
-                     while (it < end && !(it + 1 < end && *it == '}' && *(it + 1) == '}')) {
                         ++it;
                      }
                      if (it + 1 < end) {
-                     if (it + 1 < end) {
                         it += 2; // Skip '}}'
                      }
-                     continue;
                      continue;
                   }
 
@@ -222,17 +216,7 @@ namespace glz
                      }
                      else {
                         buffer.append("}");
-                  if (*it == '}') {
-                     ++it;
-                     if (it != end && *it == '}') {
-                        ++it;
-                        continue;
                      }
-                     else {
-                        buffer.append("}");
-                     }
-                  }
-                  else {
                   }
                   else {
                      ctx.error = error_code::syntax_error;
@@ -242,10 +226,8 @@ namespace glz
                else {
                   buffer.append("{");
                   // 'it' is already incremented past the first '{'
-                  // 'it' is already incremented past the first '{'
                }
             }
-            else {
             else {
                buffer.push_back(*it);
                ++it;
