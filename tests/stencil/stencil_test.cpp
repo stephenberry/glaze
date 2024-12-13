@@ -20,8 +20,8 @@ suite mustache_tests = [] {
       std::string_view layout = R"({{first_name}} {{last_name}} {{age}})";
 
       person p{"Henry", "Foster", 34};
-      auto result = glz::stencil(layout, p).value_or("error");
-      expect(result == "Henry Foster 34") << result;
+      auto result = glz::stencil(layout, p);
+      expect(result == "Henry Foster 34");
    };
 
    "person"_test = [] {
