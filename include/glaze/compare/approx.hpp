@@ -18,8 +18,8 @@ namespace glz
 
          bool equal = true;
          for_each_short_circuit<N>([&](auto I) {
-            auto& l = detail::get_member(lhs, get<I>(reflect<T>::values));
-            auto& r = detail::get_member(rhs, get<I>(reflect<T>::values));
+            auto& l = get_member(lhs, get<I>(reflect<T>::values));
+            auto& r = get_member(rhs, get<I>(reflect<T>::values));
             using V = std::decay_t<decltype(l)>;
             if constexpr (std::floating_point<V> && requires { meta<std::decay_t<T>>::compare_epsilon; }) {
                if (std::abs(l - r) >= meta<std::decay_t<T>>::compare_epsilon) {

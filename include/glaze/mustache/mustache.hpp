@@ -9,16 +9,14 @@
 
 namespace glz
 {
-   template <opts Opts = opts{}, class T, class Template>
-   expected<std::string, error_ctx> mustache(T&& value, Template&& tmp)
+   template <opts Opts = opts{}, class T, class Template, class Buffer>
+   [[nodiscard]] error_ctx mustache(T&& value, Template&& tmp, Buffer& buffer)
    {
-      std::string result{};
-
       context ctx{};
 
       if (tmp.empty()) [[unlikely]] {
          ctx.error = error_code::no_read_input;
-         return unexpected(error_ctx{ctx.error, ctx.custom_error_message, 0, ctx.includer_error});
+         return {ctx.error, ctx.custom_error_message, 0};
       }
 
       auto p = read_iterators<Opts, false>(tmp);
@@ -77,8 +75,7 @@ namespace glz
 
                   if (it == end) {
                      ctx.error = error_code::unexpected_end;
-                     return unexpected(
-                        error_ctx{ctx.error, ctx.custom_error_message, size_t(it - start), ctx.includer_error});
+                     return {ctx.error, ctx.custom_error_message, size_t(it - start)};
                   }
 
                   const sv key{start, size_t(it - start)};
@@ -97,8 +94,7 @@ namespace glz
 
                   if (is_section || is_inverted_section) {
                      ctx.error = error_code::feature_not_supported;
-                     return unexpected(
-                        error_ctx{ctx.error, "Sections are not yet supported", size_t(it - start), ctx.includer_error});
+                     return {ctx.error, "Sections are not yet supported", size_t(it - start)};
                   }
 
                   static constexpr auto N = reflect<T>::size;
@@ -109,24 +105,25 @@ namespace glz
 
                   if (index >= N) [[unlikely]] {
                      ctx.error = error_code::unknown_key;
-                     return unexpected(
-                        error_ctx{ctx.error, ctx.custom_error_message, size_t(it - start), ctx.includer_error});
+                     return {ctx.error, ctx.custom_error_message, size_t(it - start)};
                   }
                   else [[likely]] {
-                     static thread_local std::string temp{};
+                     size_t ix = buffer.size(); // overwrite index
+                     if (buffer.empty()) {
+                        buffer.resize(2 * write_padding_bytes);
+                     }
+                     
+                     static constexpr auto RawOpts = opt_true<Opts, &opts::raw>;
 
                      visit<N>(
                         [&]<size_t I>() {
                            static constexpr auto TargetKey = get<I>(reflect<T>::keys);
-                           static constexpr auto Length = TargetKey.size();
-                           if ((Length == key.size()) && detail::comparitor<TargetKey>(start)) [[likely]] {
-                              if constexpr (detail::reflectable<T> && N > 0) {
-                                 std::ignore = write<opt_true<Opts, &opts::raw>>(
-                                    detail::get_member(value, get<I>(to_tuple(value))), temp, ctx);
+                           if ((TargetKey.size() == key.size()) && detail::comparitor<TargetKey>(start)) [[likely]] {
+                              if constexpr (detail::reflectable<T>) {
+                                 detail::write<Opts.format>::template op<RawOpts>(get_member(value, get<I>(to_tuple(value))), ctx, buffer, ix);
                               }
-                              else if constexpr (detail::glaze_object_t<T> && N > 0) {
-                                 std::ignore = write<opt_true<Opts, &opts::raw>>(
-                                    detail::get_member(value, get<I>(reflect<T>::values)), temp, ctx);
+                              else if constexpr (detail::glaze_object_t<T>) {
+                                 detail::write<Opts.format>::template op<RawOpts>(get_member(value, get<I>(reflect<T>::values)), ctx, buffer, ix);
                               }
                            }
                            else {
@@ -136,11 +133,10 @@ namespace glz
                         index);
 
                      if (bool(ctx.error)) [[unlikely]] {
-                        return unexpected(
-                           error_ctx{ctx.error, ctx.custom_error_message, size_t(it - start), ctx.includer_error});
+                        return {ctx.error, ctx.custom_error_message, size_t(it - start)};
                      }
-
-                     result.append(temp);
+                     
+                     buffer.resize(ix);
                   }
 
                   skip_whitespace();
@@ -158,8 +154,7 @@ namespace glz
                         }
                      }
                      ctx.error = error_code::syntax_error;
-                     return unexpected(
-                        error_ctx{ctx.error, ctx.custom_error_message, size_t(it - start), ctx.includer_error});
+                     return {ctx.error, ctx.custom_error_message, size_t(it - start)};
                   }
                   else {
                      if (*it == '}') {
@@ -169,20 +164,20 @@ namespace glz
                            break;
                         }
                         else {
-                           result.append("}");
+                           buffer.append("}");
                         }
                         break;
                      }
                   }
                }
                else {
-                  result.append("{");
+                  buffer.append("{");
                   ++it;
                }
                break;
             }
             default: {
-               result.push_back(*it);
+               buffer.push_back(*it);
                ++it;
             }
             }
@@ -190,17 +185,39 @@ namespace glz
       }
 
       if (bool(ctx.error)) [[unlikely]] {
-         return unexpected(
-            error_ctx{ctx.error, ctx.custom_error_message, size_t(it - outer_start), ctx.includer_error});
+         return {ctx.error, ctx.custom_error_message, size_t(it - outer_start), ctx.includer_error};
       }
 
-      return {result};
+      return {};
+   }
+   
+   template <opts Opts = opts{}, class T, class Buffer>
+      requires(requires { std::decay_t<T>::glaze_mustache; })
+   [[nodiscard]] error_ctx mustache(T&& value, Buffer& buffer)
+   {
+      return mustache(std::forward<T>(value), sv{std::decay_t<T>::glaze_mustache}, buffer);
+   }
+   
+   template <opts Opts = opts{}, class T, class Template>
+   [[nodiscard]] expected<std::string, error_ctx> mustache(T&& value, Template&& tmp)
+   {
+      std::string buffer{};
+      auto ec = mustache(std::forward<T>(value), std::forward<Template>(tmp), buffer);
+      if (ec) {
+         return unexpected<error_ctx>(ec);
+      }
+      return {buffer};
    }
 
    template <opts Opts = opts{}, class T>
       requires(requires { std::decay_t<T>::glaze_mustache; })
-   expected<std::string, error_ctx> mustache(T&& value)
+   [[nodiscard]] expected<std::string, error_ctx> mustache(T&& value)
    {
-      return mustache(std::forward<T>(value), sv{std::decay_t<T>::glaze_mustache});
+      std::string buffer{};
+      auto ec = mustache(std::forward<T>(value), sv{std::decay_t<T>::glaze_mustache}, buffer);
+      if (ec) {
+         return unexpected<error_ctx>(ec);
+      }
+      return {buffer};
    }
 }

@@ -5864,7 +5864,7 @@ struct non_cx_values
    std::string value{};
 };
 
-static_assert(std::is_same_v<glz::detail::member_t<non_cx_values, decltype(&non_cx_values::info)>, std::string_view&>);
+static_assert(std::is_same_v<glz::member_t<non_cx_values, decltype(&non_cx_values::info)>, std::string_view&>);
 
 struct cx_values
 {
@@ -5873,7 +5873,7 @@ struct cx_values
    std::string value{};
 };
 
-static_assert(std::is_same_v<glz::detail::member_t<cx_values, decltype(&cx_values::info)>, const std::string_view&>);
+static_assert(std::is_same_v<glz::member_t<cx_values, decltype(&cx_values::info)>, const std::string_view&>);
 
 template <>
 struct glz::meta<cx_values>

@@ -881,7 +881,7 @@ namespace glz
                   static constexpr decltype(auto) element = get<index>(member_it->second);
 
                   detail::write<BEVE>::no_header<Opts>(key, ctx, b, ix);
-                  write_partial<BEVE>::op<sub_partial, Opts>(glz::detail::get_member(value, element), ctx, b, ix);
+                  write_partial<BEVE>::op<sub_partial, Opts>(glz::get_member(value, element), ctx, b, ix);
                });
             }
             else if constexpr (writable_map_t<T>) {
