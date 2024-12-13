@@ -16,7 +16,7 @@ namespace glz
 
       if (tmp.empty()) [[unlikely]] {
          ctx.error = error_code::no_read_input;
-         return {ctx.error, ctx.custom_error_message, 0, ctx.includer_error};
+         return {ctx.error, ctx.custom_error_message, 0};
       }
 
       auto p = read_iterators<Opts, false>(tmp);
@@ -75,7 +75,7 @@ namespace glz
 
                   if (it == end) {
                      ctx.error = error_code::unexpected_end;
-                     return {ctx.error, ctx.custom_error_message, size_t(it - start), ctx.includer_error};
+                     return {ctx.error, ctx.custom_error_message, size_t(it - start)};
                   }
 
                   const sv key{start, size_t(it - start)};
@@ -94,7 +94,7 @@ namespace glz
 
                   if (is_section || is_inverted_section) {
                      ctx.error = error_code::feature_not_supported;
-                     return {ctx.error, "Sections are not yet supported", size_t(it - start), ctx.includer_error};
+                     return {ctx.error, "Sections are not yet supported", size_t(it - start)};
                   }
 
                   static constexpr auto N = reflect<T>::size;
@@ -105,7 +105,7 @@ namespace glz
 
                   if (index >= N) [[unlikely]] {
                      ctx.error = error_code::unknown_key;
-                     return {ctx.error, ctx.custom_error_message, size_t(it - start), ctx.includer_error};
+                     return {ctx.error, ctx.custom_error_message, size_t(it - start)};
                   }
                   else [[likely]] {
                      size_t ix = buffer.size(); // overwrite index
@@ -118,12 +118,11 @@ namespace glz
                      visit<N>(
                         [&]<size_t I>() {
                            static constexpr auto TargetKey = get<I>(reflect<T>::keys);
-                           static constexpr auto Length = TargetKey.size();
-                           if ((Length == key.size()) && detail::comparitor<TargetKey>(start)) [[likely]] {
-                              if constexpr (detail::reflectable<T> && N > 0) {
+                           if ((TargetKey.size() == key.size()) && detail::comparitor<TargetKey>(start)) [[likely]] {
+                              if constexpr (detail::reflectable<T>) {
                                  detail::write<Opts.format>::template op<RawOpts>(get_member(value, get<I>(to_tuple(value))), ctx, buffer, ix);
                               }
-                              else if constexpr (detail::glaze_object_t<T> && N > 0) {
+                              else if constexpr (detail::glaze_object_t<T>) {
                                  detail::write<Opts.format>::template op<RawOpts>(get_member(value, get<I>(reflect<T>::values)), ctx, buffer, ix);
                               }
                            }
@@ -134,7 +133,7 @@ namespace glz
                         index);
 
                      if (bool(ctx.error)) [[unlikely]] {
-                        return {ctx.error, ctx.custom_error_message, size_t(it - start), ctx.includer_error};
+                        return {ctx.error, ctx.custom_error_message, size_t(it - start)};
                      }
                      
                      buffer.resize(ix);
@@ -155,7 +154,7 @@ namespace glz
                         }
                      }
                      ctx.error = error_code::syntax_error;
-                     return {ctx.error, ctx.custom_error_message, size_t(it - start), ctx.includer_error};
+                     return {ctx.error, ctx.custom_error_message, size_t(it - start)};
                   }
                   else {
                      if (*it == '}') {
