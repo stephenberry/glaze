@@ -90,7 +90,7 @@ namespace glz
                         ctx.error = error_code::unexpected_end;
                         return {ctx.error, "Closing tag not found for section", size_t(it - start)};
                      }
-                     
+
                      if (it + 1 < end) {
                         it += 2; // Skip '}}'
                      }
@@ -105,8 +105,8 @@ namespace glz
                         static constexpr auto N = reflect<T>::size;
                         static constexpr auto HashInfo = detail::hash_info<T>;
 
-                        const auto index =
-                           detail::decode_hash_with_size<STENCIL, T, HashInfo, HashInfo.type>::op(start, end, key.size());
+                        const auto index = detail::decode_hash_with_size<STENCIL, T, HashInfo, HashInfo.type>::op(
+                           start, end, key.size());
 
                         if (index >= N) {
                            ctx.error = error_code::unknown_key;
@@ -137,8 +137,7 @@ namespace glz
                               index);
                         }
                      }
-                     
-                     
+
                      if (bool(ctx.error)) [[unlikely]] {
                         return {ctx.error, ctx.custom_error_message, size_t(it - start)};
                      }
