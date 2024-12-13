@@ -755,16 +755,12 @@ namespace glz::detail
    }
 
    template <opts Opts>
-      requires(has_is_padded(Opts))
    GLZ_ALWAYS_INLINE void skip_string_view(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       while (it < end) [[likely]] {
-         uint64_t chunk;
-         std::memcpy(&chunk, it, 8);
-         const uint64_t test_chars = has_quote(chunk);
-         if (test_chars) {
-            it += (countr_zero(test_chars) >> 3);
-
+         const auto* pc = std::memchr(it, '"', size_t(end - it));
+         if (pc) [[likely]] {
+            it = reinterpret_cast<std::decay_t<decltype(it)>>(pc);
             auto* prev = it - 1;
             while (*prev == '\\') {
                --prev;
@@ -774,65 +770,8 @@ namespace glz::detail
             }
             ++it; // skip the escaped quote
          }
-         else {
-            it += 8;
-         }
-      }
-
-      ctx.error = error_code::expected_quote;
-   }
-
-   template <opts Opts>
-      requires(!has_is_padded(Opts))
-   GLZ_ALWAYS_INLINE void skip_string_view(is_context auto&& ctx, auto&& it, auto&& end) noexcept
-   {
-      for (const auto fin = end - 7; it < fin;) {
-         uint64_t chunk;
-         std::memcpy(&chunk, it, 8);
-         const uint64_t test_chars = has_quote(chunk);
-         if (test_chars) {
-            it += (countr_zero(test_chars) >> 3);
-
-            auto* prev = it - 1;
-            while (*prev == '\\') {
-               --prev;
-            }
-            if (size_t(it - prev) % 2) {
-               return;
-            }
-            ++it; // skip the escaped quote
-         }
-         else {
-            it += 8;
-         }
-      }
-
-      // Tail end of buffer. Should be rare we even get here
-      while (it < end) {
-         switch (*it) {
-         case '\\': {
-            ++it;
-            if (it == end) [[unlikely]] {
-               ctx.error = error_code::expected_quote;
-               return;
-            }
-            ++it;
+         else [[unlikely]] {
             break;
-         }
-         case '"': {
-            auto* prev = it - 1;
-            while (*prev == '\\') {
-               --prev;
-            }
-            if (size_t(it - prev) % 2) {
-               return;
-            }
-            ++it; // skip the escaped quote
-            break;
-         }
-         default: {
-            ++it;
-         }
          }
       }
 
@@ -891,7 +830,55 @@ namespace glz::detail
    }
 
    template <opts Opts, char open, char close, size_t Depth = 1>
-      requires(has_is_padded(Opts))
+      requires(has_is_padded(Opts) && not bool(Opts.comments))
+   GLZ_ALWAYS_INLINE void skip_until_closed(is_context auto&& ctx, auto&& it, auto&& end) noexcept
+   {
+      size_t depth = Depth;
+
+      while (it < end) [[likely]] {
+         uint64_t chunk;
+         std::memcpy(&chunk, it, 8);
+         const uint64_t test = has_quote(chunk) | has_char<open>(chunk) | has_char<close>(chunk);
+         if (test) {
+            it += (countr_zero(test) >> 3);
+
+            switch (*it) {
+            case '"': {
+               skip_string<opts{}>(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
+               break;
+            }
+            case open: {
+               ++it;
+               ++depth;
+               break;
+            }
+            case close: {
+               ++it;
+               --depth;
+               if (depth == 0) {
+                  return;
+               }
+               break;
+            }
+            default: {
+               ctx.error = error_code::unexpected_end;
+               return;
+            }
+            }
+         }
+         else {
+            it += 8;
+         }
+      }
+
+      ctx.error = error_code::unexpected_end;
+   }
+   
+   template <opts Opts, char open, char close, size_t Depth = 1>
+      requires(has_is_padded(Opts) && bool(Opts.comments))
    GLZ_ALWAYS_INLINE void skip_until_closed(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       size_t depth = Depth;
@@ -946,7 +933,91 @@ namespace glz::detail
    }
 
    template <opts Opts, char open, char close, size_t Depth = 1>
-      requires(!has_is_padded(Opts))
+   requires(!has_is_padded(Opts) && not bool(Opts.comments))
+   GLZ_ALWAYS_INLINE void skip_until_closed(is_context auto&& ctx, auto&& it, auto&& end) noexcept
+   {
+      size_t depth = Depth;
+
+      for (const auto fin = end - 7; it < fin;) {
+         uint64_t chunk;
+         std::memcpy(&chunk, it, 8);
+         const uint64_t test = has_quote(chunk) | has_char<open>(chunk) | has_char<close>(chunk);
+         if (test) {
+            it += (countr_zero(test) >> 3);
+
+            switch (*it) {
+            case '"': {
+               skip_string<opts{}>(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
+               break;
+            }
+            case open: {
+               ++it;
+               ++depth;
+               break;
+            }
+            case close: {
+               ++it;
+               --depth;
+               if (depth == 0) {
+                  return;
+               }
+               break;
+            }
+            default: {
+               ctx.error = error_code::unexpected_end;
+               return;
+            }
+            }
+         }
+         else {
+            it += 8;
+         }
+      }
+
+      // Tail end of buffer. Should be rare we even get here
+      while (it < end) {
+         switch (*it) {
+         case '"': {
+            skip_string<opts{}>(ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
+            break;
+         }
+         case '/': {
+            skip_comment(ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
+            break;
+         }
+         case open: {
+            ++it;
+            ++depth;
+            break;
+         }
+         case close: {
+            ++it;
+            --depth;
+            if (depth == 0) {
+               return;
+            }
+            break;
+         }
+         default: {
+            ++it;
+         }
+         }
+      }
+
+      ctx.error = error_code::unexpected_end;
+   }
+   
+   template <opts Opts, char open, char close, size_t Depth = 1>
+      requires(!has_is_padded(Opts) && bool(Opts.comments))
    GLZ_ALWAYS_INLINE void skip_until_closed(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       size_t depth = Depth;
