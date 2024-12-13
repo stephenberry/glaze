@@ -6,12 +6,19 @@
 #include "glaze/core/common.hpp"
 #include "glaze/core/reflect.hpp"
 
-// For generic struct to struct conversion based on reflected fields
-// This will convert a struct with optionals to non-optionals
-// More conversion can be added in the future
-
 namespace glz
 {
+   /**
+    * @brief Provides generic struct to struct conversion based on reflected fields.
+    *
+    * Uses reflected fields to perform a generic conversion from `In` to `Out`.
+    * Additional conversion rules can be added in the future, but optional like types are supported.
+    *
+    * @tparam In  Type of the input struct with optional fields.
+    * @tparam Out Type of the output struct with non-optional fields.
+    * @param[in] in   The input struct instance.
+    * @param[out] out The output struct instance to be populated.
+    */
    template <class In, class Out>
    void convert_struct(In&& in, Out&& out)
    {

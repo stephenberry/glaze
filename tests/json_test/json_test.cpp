@@ -2265,9 +2265,19 @@ suite read_tests = [] {
          for (size_t i = 0; i < 1000; ++i) {
             const auto f = dist(gen);
             expect(not glz::write_json(f, buffer));
+            
+            // Check if 'f' is exactly an integer
+            const bool is_integer = (std::floor(f) == f);
+
             int64_t integer{};
-            auto ec = glz::read_json(integer, buffer);
-            expect(ec);
+            if (is_integer) {
+              auto ec = glz::read_json(integer, buffer);
+              expect(!ec); // Expect no error when reading as integer
+              expect(integer == int64_t(f));
+            } else {
+              auto ec = glz::read_json(integer, buffer);
+              expect(ec); // Expect an error when reading a non-integer as integer
+            }
          }
       }
    };
