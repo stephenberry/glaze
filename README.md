@@ -237,7 +237,7 @@ import libs = libglaze%lib{glaze}
 
 # Explicit Metadata
 
-If you want to specialize your reflection then you can optionally write the code below:
+If you want to specialize your reflection then you can **optionally** write the code below:
 
 > This metadata is also necessary for non-aggregate initializable structs.
 
