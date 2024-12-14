@@ -779,6 +779,97 @@ namespace glz::detail
    }
 
    template <opts Opts>
+      requires(has_is_padded(Opts))
+   GLZ_ALWAYS_INLINE void skip_string(is_context auto&& ctx, auto&& it, auto&& end) noexcept
+   {
+      if constexpr (!has_opening_handled(Opts)) {
+         ++it;
+      }
+
+      if constexpr (Opts.validate_skipped) {
+         while (true) {
+            uint64_t swar{};
+            std::memcpy(&swar, it, 8);
+
+            constexpr uint64_t lo7_mask = repeat_byte8(0b01111111);
+            const uint64_t lo7 = swar & lo7_mask;
+            const uint64_t backslash = (lo7 ^ repeat_byte8('\\')) + lo7_mask;
+            const uint64_t quote = (lo7 ^ repeat_byte8('"')) + lo7_mask;
+            const uint64_t less_32 = (swar & repeat_byte8(0b01100000)) + lo7_mask;
+            uint64_t next = ~((backslash & quote & less_32) | swar);
+            next &= repeat_byte8(0b10000000);
+
+            if (next == 0) {
+               // No special characters in this chunk
+               it += 8;
+               continue;
+            }
+
+            // Find the first occurrence
+            size_t offset = (countr_zero(next) >> 3);
+            it += offset;
+
+            const auto c = *it;
+            if ((c & 0b11100000) == 0) [[unlikely]] {
+               // Invalid control character (<0x20)
+               ctx.error = error_code::syntax_error;
+               return;
+            }
+            else if (c == '"') {
+               // Check if this quote is escaped
+               const auto* p = it - 1;
+               int backslash_count{};
+               // We don't have to worry about rewinding too far because we started with a quote
+               while (*p == '\\') {
+                  ++backslash_count;
+                  --p;
+               }
+               if ((backslash_count & 1) == 0) {
+                  // Even number of backslashes => not escaped => closing quote found
+                  ++it;
+                  return;
+               }
+               else {
+                  // Odd number of backslashes => escaped quote
+                  ++it;
+                  continue;
+               }
+            }
+            else if (c == '\\') {
+               // Handle escape sequence
+               ++it;
+
+               if (*it == 'u') {
+                  ++it;
+                  if (not skip_unicode_code_point(it, end)) [[unlikely]] {
+                     ctx.error = error_code::unicode_escape_conversion_failure;
+                     return;
+                  }
+               }
+               else {
+                  if (not char_unescape_table[uint8_t(*it)]) [[unlikely]] {
+                     ctx.error = error_code::invalid_escape;
+                     return;
+                  }
+                  ++it;
+               }
+            }
+         }
+
+         // If we exit here, we never found a closing quote
+         ctx.error = error_code::unexpected_end;
+      }
+      else {
+         skip_string_view<Opts>(ctx, it, end);
+         if (bool(ctx.error)) [[unlikely]] {
+            return;
+         }
+         ++it; // skip the quote
+      }
+   }
+
+   template <opts Opts>
+      requires(not has_is_padded(Opts))
    GLZ_ALWAYS_INLINE void skip_string(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       if constexpr (!has_opening_handled(Opts)) {
