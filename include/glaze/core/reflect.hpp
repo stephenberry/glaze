@@ -2201,6 +2201,33 @@ namespace glz
    }
 }
 
+namespace glz
+{
+   // The Callable comes second as ranges::for_each puts the callable at the end
+   
+   template <class Callable, detail::reflectable T>
+   void for_each_field(T&& value, Callable&& callable)
+   {
+      constexpr auto N = reflect<T>::size;
+      if constexpr (N > 0) {
+         [&]<size_t... I>(std::index_sequence<I...>) constexpr {
+            (callable(get_member(value, get<I>(to_tuple(value)))), ...);
+         }(std::make_index_sequence<N>{});
+      }
+   }
+   
+   template <class Callable, detail::glaze_object_t T>
+   void for_each_field(T&& value, Callable&& callable)
+   {
+      constexpr auto N = reflect<T>::size;
+      if constexpr (N > 0) {
+         [&]<size_t... I>(std::index_sequence<I...>) constexpr {
+            (callable(get_member(value, get<I>(reflect<T>::values))), ...);
+         }(std::make_index_sequence<N>{});
+      }
+   }
+}
+
 #ifdef _MSC_VER
 // restore disabled warnings
 #pragma warning(pop)

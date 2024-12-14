@@ -237,7 +237,7 @@ import libs = libglaze%lib{glaze}
 
 # Explicit Metadata
 
-If you want to specialize your reflection then you can optionally write the code below:
+If you want to specialize your reflection then you can **optionally** write the code below:
 
 > This metadata is also necessary for non-aggregate initializable structs.
 
@@ -322,7 +322,25 @@ static_assert(glz::reflect<my_struct>::keys[0] == "i"); // Access keys
 
 > [!WARNING]
 >
-> The `glz::reflect` fields described above have been formalized and are unlikely to change. Other fields within the `glz::reflect` struct may evolve as we continue to formalize the spec. Therefore, breaking changes may occur for undocumented fields in the future.
+> The `glz::reflect` fields described above have been formalized and are unlikely to change. Other fields may evolve as we continue to formalize the spec.
+
+## glz::for_each_field
+
+```c++
+struct test_type {
+   int32_t int1{};
+   int64_t int2{};
+};
+
+test_type var{42, 43};
+
+glz::for_each_field(var, [](auto& field) {
+    field += 1;
+});
+
+expect(var.int1 == 43);
+expect(var.int2 == 44);
+```
 
 # Custom Read/Write
 
