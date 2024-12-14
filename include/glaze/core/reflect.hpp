@@ -2204,7 +2204,7 @@ namespace glz
 namespace glz
 {
    // The Callable comes second as ranges::for_each puts the callable at the end
-   
+
    template <class Callable, detail::reflectable T>
    void for_each_field(T&& value, Callable&& callable)
    {
@@ -2215,7 +2215,7 @@ namespace glz
          }(std::make_index_sequence<N>{});
       }
    }
-   
+
    template <class Callable, detail::glaze_object_t T>
    void for_each_field(T&& value, Callable&& callable)
    {

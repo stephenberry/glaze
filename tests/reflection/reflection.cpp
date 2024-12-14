@@ -7,7 +7,8 @@
 
 using namespace ut;
 
-struct test_type {
+struct test_type
+{
    int32_t int1{};
    int64_t int2{};
 };
@@ -15,20 +16,19 @@ struct test_type {
 suite reflect_test_type = [] {
    static_assert(glz::reflect<test_type>::size == 2);
    static_assert(glz::reflect<test_type>::keys[0] == "int1");
-   
+
    "for_each_field"_test = [] {
       test_type var{42, 43};
-      
-      glz::for_each_field(var, [](auto& field) {
-          field += 1;
-      });
-      
+
+      glz::for_each_field(var, [](auto& field) { field += 1; });
+
       expect(var.int1 == 43);
       expect(var.int2 == 44);
    };
 };
 
-struct test_type_meta {
+struct test_type_meta
+{
    int32_t int1{};
    int64_t int2{};
 };
@@ -43,14 +43,12 @@ struct glz::meta<test_type_meta>
 suite meta_reflect_test_type = [] {
    static_assert(glz::reflect<test_type_meta>::size == 2);
    static_assert(glz::reflect<test_type_meta>::keys[0] == "int1");
-   
+
    "for_each_field"_test = [] {
       test_type_meta var{42, 43};
-      
-      glz::for_each_field(var, [](auto& field) {
-          field += 1;
-      });
-      
+
+      glz::for_each_field(var, [](auto& field) { field += 1; });
+
       expect(var.int1 == 43);
       expect(var.int2 == 44);
    };
