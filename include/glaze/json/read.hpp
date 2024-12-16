@@ -1784,6 +1784,9 @@ namespace glz
                   GLZ_SUB_LEVEL;
                   ++it;
                   GLZ_VALID_END();
+                  if constexpr (Opts.partial_read) {
+                     ctx.error = error_code::partial_read_complete;
+                  }
                   return;
                }
                ctx.error = error_code::unknown_key;
