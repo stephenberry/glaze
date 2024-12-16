@@ -1807,7 +1807,7 @@ namespace glz
 
                bool first = true;
                while (true) {
-                  if constexpr ((glaze_object_t<T> || reflectable<T>) && Opts.partial_read) {
+                  if constexpr ((glaze_object_t<T> || reflectable<T>)&&Opts.partial_read) {
                      static constexpr bit_array<num_members> all_fields = [] {
                         bit_array<num_members> arr{};
                         for (size_t i = 0; i < num_members; ++i) {
@@ -1824,8 +1824,8 @@ namespace glz
 
                   if (*it == '}') {
                      GLZ_SUB_LEVEL;
-                     if constexpr ((glaze_object_t<T> || reflectable<T>)&&(Opts.partial_read &&
-                                                                           Opts.error_on_missing_keys)) {
+                     if constexpr ((glaze_object_t<T> ||
+                                    reflectable<T>)&&(Opts.partial_read && Opts.error_on_missing_keys)) {
                         ctx.error = error_code::missing_key;
                         return;
                      }

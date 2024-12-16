@@ -7893,7 +7893,7 @@ struct NestedPartialRead
 
 suite partial_read_tests = [] {
    using namespace ut;
-   
+
    static constexpr glz::opts partial_read{.partial_read = true};
 
    "partial read"_test = [] {
@@ -7946,7 +7946,8 @@ suite partial_read_tests = [] {
       Header h{};
       std::string buf = R"({"id":"51e2affb","unknown key":"value"})";
 
-      expect(glz::read<glz::opts{.error_on_unknown_keys = false, .partial_read = true}>(h, buf) != glz::error_code::missing_key);
+      expect(glz::read<glz::opts{.error_on_unknown_keys = false, .partial_read = true}>(h, buf) !=
+             glz::error_code::missing_key);
       expect(h.id == "51e2affb");
       expect(h.type.empty());
    };
@@ -7982,7 +7983,8 @@ suite partial_read_tests = [] {
       HeaderFlipped h{};
       std::string buf = R"({"id":"51e2affb","unknown key":"value","type":"message_type","another_field":409845})";
 
-      expect(glz::read<glz::opts{.error_on_unknown_keys = false, .partial_read = true}>(h, buf) == glz::error_code::none);
+      expect(glz::read<glz::opts{.error_on_unknown_keys = false, .partial_read = true}>(h, buf) ==
+             glz::error_code::none);
       expect(h.id == "51e2affb");
       expect(h.type == "message_type");
    };
@@ -7990,7 +7992,7 @@ suite partial_read_tests = [] {
 
 suite nested_partial_read_tests = [] {
    using namespace ut;
-   
+
    static constexpr glz::opts partial_read{.partial_read = true};
 
    "nested object partial read"_test = [] {
@@ -8020,11 +8022,11 @@ suite nested_partial_read_tests = [] {
 
 suite nested_array_partial_read_tests = [] {
    using namespace ut;
-   
+
    static constexpr glz::opts partial_read{.partial_read = true};
 
    "nested array partial read"_test = [] {
-      std::vector<std::vector<int>> v{{0,0}};
+      std::vector<std::vector<int>> v{{0, 0}};
       std::string buf = "[[1,2],[3,4],[5,6]]";
 
       expect(not glz::read<partial_read>(v, buf));
@@ -8061,8 +8063,7 @@ struct AccountUpdate
 
 inline void AccountUpdate::fromJson(AccountUpdate& accountUpdate, const std::string& jSon)
 {
-   auto ec = glz::read<glz::opts{.error_on_unknown_keys = false, .raw_string = true}>(
-      accountUpdate, jSon);
+   auto ec = glz::read<glz::opts{.error_on_unknown_keys = false, .raw_string = true}>(accountUpdate, jSon);
    expect(not ec) << glz::format_error(ec, jSon);
 }
 
@@ -8093,7 +8094,7 @@ suite account_update_partial_read_tests = [] {
 
       AccountUpdate obj{};
       AccountUpdate::fromJson(obj, json);
-      
+
       expect(std::string_view{obj.a.B.at(0).a} == "USDT");
       expect(std::string_view{obj.a.B.at(1).a} == "BUSD");
    };
@@ -9051,9 +9052,9 @@ suite read_allocated_tests = [] {
       expect(obj.string == "ha!");
       expect(obj.integer == 400);
    };
-   
+
    "nested partial_struct"_test = [] {
-      std::map<std::string, partial_struct> obj{{"one", {"ONE",1}}, {"two", {"TWO",2}}};
+      std::map<std::string, partial_struct> obj{{"one", {"ONE", 1}}, {"two", {"TWO", 2}}};
       std::string s = R"({"zero":{}, "one":{"skip":null,"integer":400,"string":"ha!","skip again":[1,2,3]}})";
       auto ec = glz::read<glz::opts{.error_on_unknown_keys = false, .partial_read = true}>(obj, s);
       expect(!ec) << glz::format_error(ec, s);
