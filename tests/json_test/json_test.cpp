@@ -8020,6 +8020,12 @@ suite nested_partial_read_tests = [] {
    };
 };
 
+struct array_holder_t
+{
+   std::vector<int> x{0, 0, 0, 0, 0};
+   std::vector<int> y{0};
+};
+
 suite nested_array_partial_read_tests = [] {
    using namespace ut;
 
@@ -8034,6 +8040,20 @@ suite nested_array_partial_read_tests = [] {
       expect(v[0].size() == 2);
       expect(v[0][0] == 1);
       expect(v[0][1] == 2);
+   };
+   
+   "array_holder_t"_test = [] {
+      array_holder_t obj{};
+      std::string buf = R"({"x":[1,2,3],"y":[1,2,3,4]})";
+      
+      auto ec = glz::read<partial_read>(obj, buf);
+      expect(not ec) << glz::format_error(ec, buf);
+      expect(obj.x.size() == 3);
+      expect(obj.x[0] == 1);
+      expect(obj.x[1] == 2);
+      expect(obj.x[2] == 3);
+      expect(obj.y.size() == 1);
+      expect(obj.y[0] == 1);
    };
 };
 
