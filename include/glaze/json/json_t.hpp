@@ -170,14 +170,14 @@ namespace glz
       json_t& operator=(json_t&&) = default;
 
       template <class T>
-         requires std::convertible_to<T, val_t> && (!std::same_as<json_t, std::decay_t<T>>)
+         requires std::convertible_to<T, val_t> && (!std::derived_from<std::decay_t<T>, json_t>)
       json_t(T&& val)
       {
          data = val;
       }
 
       template <class T>
-         requires std::convertible_to<T, double> && (!std::same_as<json_t, std::decay_t<T>>) &&
+         requires std::convertible_to<T, double> && (!std::derived_from<std::decay_t<T>, json_t>) &&
                   (!std::convertible_to<T, val_t>)
       json_t(T&& val)
       {
