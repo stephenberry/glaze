@@ -46,7 +46,7 @@ expect(obj.size() == 1);
 expect(obj.at("2") = 2);
 ```
 
-Example: read only the fields present in a struct
+Example: read only the fields present in a struct and then short circuit the parse
 
 ```c++
 struct partial_struct
