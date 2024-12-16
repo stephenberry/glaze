@@ -587,6 +587,7 @@ struct glz::meta<glz::error_code>
                                     "send_error",
                                     "connection_failure",
                                     "end_reached",
+                                    "partial_read_complete",
                                     "no_read_input",
                                     "data_must_be_null_terminated",
                                     "parse_number_failure",
@@ -650,6 +651,7 @@ struct glz::meta<glz::error_code>
                                      send_error, //
                                      connection_failure, //
                                      end_reached, // A non-error code for non-null terminated input buffers
+                                     partial_read_complete,
                                      no_read_input, //
                                      data_must_be_null_terminated, //
                                      parse_number_failure, //

@@ -178,7 +178,7 @@ namespace glz
                }
             }
 
-            if constexpr (Opts.error_on_missing_keys || is_partial_read<T> || Opts.partial_read) {
+            if constexpr (Opts.error_on_missing_keys || Opts.partial_read) {
                ((selected_index = I), ...);
             }
          }
@@ -1765,9 +1765,6 @@ namespace glz
          static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
             static constexpr auto num_members = reflect<T>::size;
-            if constexpr (num_members == 0 && is_partial_read<T>) {
-               static_assert(false_v<T>, "No members to read for partial read");
-            }
 
             static constexpr auto Opts = opening_handled_off<ws_handled_off<Options>()>();
             if constexpr (!has_opening_handled(Options)) {
@@ -1795,7 +1792,7 @@ namespace glz
             else {
                decltype(auto) fields = [&]() -> decltype(auto) {
                   if constexpr ((glaze_object_t<T> || reflectable<T>)&&(Opts.error_on_missing_keys ||
-                                                                        is_partial_read<T> || Opts.partial_read)) {
+                                                                        Opts.partial_read)) {
                      return bit_array<num_members>{};
                   }
                   else {
@@ -1807,7 +1804,7 @@ namespace glz
 
                bool first = true;
                while (true) {
-                  if constexpr ((glaze_object_t<T> || reflectable<T>)&&(is_partial_read<T> || Opts.partial_read)) {
+                  if constexpr ((glaze_object_t<T> || reflectable<T>) && Opts.partial_read) {
                      static constexpr bit_array<num_members> all_fields = [] {
                         bit_array<num_members> arr{};
                         for (size_t i = 0; i < num_members; ++i) {
@@ -1817,16 +1814,14 @@ namespace glz
                      }();
 
                      if ((all_fields & fields) == all_fields) {
-                        if constexpr (Opts.partial_read_nested) {
-                           skip_until_closed<Opts, '{', '}'>(ctx, it, end);
-                        }
+                        ctx.error = error_code::partial_read_complete;
                         return;
                      }
                   }
 
                   if (*it == '}') {
                      GLZ_SUB_LEVEL;
-                     if constexpr ((glaze_object_t<T> || reflectable<T>)&&((is_partial_read<T> || Opts.partial_read) &&
+                     if constexpr ((glaze_object_t<T> || reflectable<T>)&&(Opts.partial_read &&
                                                                            Opts.error_on_missing_keys)) {
                         ctx.error = error_code::missing_key;
                         return;
@@ -1851,7 +1846,7 @@ namespace glz
                      GLZ_MATCH_COMMA;
                      GLZ_INVALID_END();
 
-                     if constexpr ((not Opts.minified) && (num_members > 1 || !Opts.error_on_unknown_keys)) {
+                     if constexpr ((not Opts.minified) && (num_members > 1 || not Opts.error_on_unknown_keys)) {
                         if (ws_size && ws_size < size_t(end - it)) {
                            skip_matching_ws(ws_start, it, ws_size);
                         }
@@ -1927,7 +1922,7 @@ namespace glz
                         }
                      }
 
-                     if constexpr (Opts.error_on_missing_keys || is_partial_read<T> || Opts.partial_read) {
+                     if constexpr (Opts.error_on_missing_keys || Opts.partial_read) {
                         size_t index = num_members;
                         parse_and_invoke<Opts, T, hash_info<T>>(value, ctx, it, end, index);
                         if (bool(ctx.error)) [[unlikely]]

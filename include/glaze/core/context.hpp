@@ -26,6 +26,7 @@ namespace glz
       connection_failure,
       // Other errors
       end_reached, // A non-error code for non-null terminated input buffers
+      partial_read_complete, // A non-error code for short circuiting partial reads
       no_read_input, //
       data_must_be_null_terminated, //
       parse_number_failure, //
