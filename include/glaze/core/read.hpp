@@ -88,6 +88,9 @@ namespace glz
          if (ctx.error == error_code::partial_read_complete) [[likely]] {
             ctx.error = error_code::none;
          }
+         else if (ctx.error == error_code::end_reached && ctx.indentation_level == 0) {
+            ctx.error = error_code::none;
+         }
       }
       else {
          if (ctx.error == error_code::end_reached && ctx.indentation_level == 0) {
