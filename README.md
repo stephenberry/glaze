@@ -821,7 +821,6 @@ struct opts {
      false; // Reads into only existing fields and elements and then exits without parsing the rest of the input
 
   // glaze_object_t concepts
-  bool partial_read_nested = false; // Advance the partially read struct to the end of the struct
   bool concatenate = true; // Concatenates ranges of std::pair into single objects when writing
 
   bool hide_non_invocable =
