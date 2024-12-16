@@ -8018,6 +8018,23 @@ suite nested_partial_read_tests = [] {
    };
 };
 
+suite nested_array_partial_read_tests = [] {
+   using namespace ut;
+   
+   static constexpr glz::opts partial_read{.partial_read = true};
+
+   "nested array partial read"_test = [] {
+      std::vector<std::vector<int>> v{{0,0}};
+      std::string buf = "[[1,2],[3,4],[5,6]]";
+
+      expect(not glz::read<partial_read>(v, buf));
+      expect(v.size() == 1);
+      expect(v[0].size() == 2);
+      expect(v[0][0] == 1);
+      expect(v[0][1] == 2);
+   };
+};
+
 struct AccountUpdateInner
 {
    char a[16];
