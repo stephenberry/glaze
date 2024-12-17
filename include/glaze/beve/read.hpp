@@ -1290,7 +1290,7 @@ namespace glz
             }();
 
             decltype(auto) fields = [&]() -> decltype(auto) {
-               if constexpr (is_partial_read<T> || Opts.partial_read) {
+               if constexpr (Opts.partial_read) {
                   return bit_array<N>{};
                }
                else {
@@ -1304,7 +1304,7 @@ namespace glz
             }
 
             for (size_t i = 0; i < n_keys; ++i) {
-               if constexpr (is_partial_read<T> || Opts.partial_read) {
+               if constexpr (Opts.partial_read) {
                   if ((all_fields & fields) == all_fields) {
                      return;
                   }
@@ -1325,7 +1325,7 @@ namespace glz
                   const auto index = decode_hash_with_size<BEVE, T, HashInfo, HashInfo.type>::op(it, end, n);
 
                   if (index < N) [[likely]] {
-                     if constexpr (is_partial_read<T> || Opts.partial_read) {
+                     if constexpr (Opts.partial_read) {
                         fields[index] = true;
                      }
 
