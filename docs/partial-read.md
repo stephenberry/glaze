@@ -2,6 +2,10 @@
 
 At times it is not necessary to read the entire JSON document, but rather just a header or some of the initial fields.
 
+This document describes a limited approach using the `partial_read` option, to quickly exit after parsing fields of interest.
+
+For more advanced (and still performant) partial reading, Glaze provides compile-time and run-time [JMESPath support]().
+
 # Partial reading with glz::opts
 
 `partial_read` is a compile time flag in `glz::opts` that indicates only existing array and object elements should be read into, and once the memory has been read, parsing returns without iterating through the rest of the document.
