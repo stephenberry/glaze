@@ -25,6 +25,8 @@ namespace glz
    // Generic json type.
    struct json_t
    {
+      virtual ~json_t() {}
+      
       using array_t = std::vector<json_t>;
       using object_t = std::map<std::string, json_t, std::less<>>;
       using null_t = std::nullptr_t;
@@ -170,14 +172,14 @@ namespace glz
       json_t& operator=(json_t&&) = default;
 
       template <class T>
-         requires std::convertible_to<T, val_t> && (!std::same_as<json_t, std::decay_t<T>>)
+         requires std::convertible_to<T, val_t> && (!std::derived_from<std::decay_t<T>, json_t>)
       json_t(T&& val)
       {
          data = val;
       }
 
       template <class T>
-         requires std::convertible_to<T, double> && (!std::same_as<json_t, std::decay_t<T>>) &&
+         requires std::convertible_to<T, double> && (!std::derived_from<std::decay_t<T>, json_t>) &&
                   (!std::convertible_to<T, val_t>)
       json_t(T&& val)
       {
