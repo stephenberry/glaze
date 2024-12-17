@@ -1,9 +1,6 @@
 # Partial Read
 
-At times it is not necessary to read the entire JSON document, but rather just a header or some of the initial fields. Glaze provides multiple solutions:
-
--  `partial_read` in `glz::meta`
--  Partial reading via [JSON Pointer syntax](./json-pointer-syntax.md)
+At times it is not necessary to read the entire JSON document, but rather just a header or some of the initial fields.
 
 # Partial reading with glz::opts
 
