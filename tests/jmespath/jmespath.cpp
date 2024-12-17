@@ -26,7 +26,7 @@ struct Home
    std::string address{};
 };
 
-suite jmespath_read_at_tests = [] {
+suite jmespath_read_tests = [] {
    "compile-time read_jmespath"_test = [] {
       Home home{.family = {.father = {"Gilbert", "Fox", 28},
             .mother = {"Anne", "Fox", 30},
@@ -145,6 +145,23 @@ suite jmespath_read_at_tests = [] {
       std::string invalid_query_result{};
       ec = glz::read_jmespath("family..father", invalid_query_result, buffer); // Invalid due to double dot
       expect(ec) << "Expected error for invalid JMESPath expression";
+   };
+};
+
+suite jmespath_slice_tests = [] {
+   "slice"_test = [] {
+      std::vector<int> data{0,1,2,3,4,5,6,7,8,9};
+      std::string buffer{};
+      expect(not glz::write_json(data, buffer));
+      
+      std::vector<int> slice{};
+      expect(not glz::read_jmespath<"[0:5]">(slice, buffer));
+      expect(slice.size() == 5);
+      expect(slice[0] == 0);
+      expect(slice[1] == 1);
+      expect(slice[2] == 2);
+      expect(slice[3] == 3);
+      expect(slice[4] == 4);
    };
 };
 
