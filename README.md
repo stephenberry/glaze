@@ -818,7 +818,7 @@ struct opts {
   // allowed in binary, e.g. double -> float
 
   bool partial_read =
-     false; // Reads into only existing fields and elements and then exits without parsing the rest of the input
+     false; // Reads into the deepest structural object and then exits without parsing the rest of the input
 
   // glaze_object_t concepts
   bool concatenate = true; // Concatenates ranges of std::pair into single objects when writing
