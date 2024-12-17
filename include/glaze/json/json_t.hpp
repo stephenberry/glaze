@@ -25,6 +25,8 @@ namespace glz
    // Generic json type.
    struct json_t
    {
+      virtual ~json_t() {}
+      
       using array_t = std::vector<json_t>;
       using object_t = std::map<std::string, json_t, std::less<>>;
       using null_t = std::nullptr_t;
