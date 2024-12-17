@@ -20,12 +20,11 @@ namespace glz
       return key.find_first_not_of("0123456789") == std::string_view::npos;
    }
 
-   template <string_literal Str, auto Opts = opts{}>
+   template <string_literal JsonPointer, auto Opts = opts{}>
    [[nodiscard]] inline auto get_view_json(contiguous auto&& buffer)
    {
-      static constexpr auto s = chars<Str>;
-
-      static constexpr auto tokens = split_json_ptr<s>();
+      static constexpr auto S = chars<JsonPointer>;
+      static constexpr auto tokens = split_json_ptr<S>();
       static constexpr auto N = tokens.size();
 
       context ctx{};
@@ -34,7 +33,8 @@ namespace glz
       auto it = p.first;
       auto end = p.second;
 
-      // Don't const qualify the buffer so we can write to the view, which allows us to write to a JSON Pointer location
+      // Don't automatically const qualify the buffer so we can write to the view,
+      // which allows us to write to a JSON Pointer location
       using span_t =
          std::span<std::conditional_t<std::is_const_v<std::remove_pointer_t<decltype(it)>>, const char, char>>;
       using result_t = expected<span_t, error_ctx>;
@@ -64,18 +64,23 @@ namespace glz
                return;
             }
 
-            static constexpr auto key = std::get<I>(tokens);
+            static constexpr auto key = tokens[I];
             if constexpr (maybe_numeric_key(key)) {
                switch (*it) {
                case '{': {
                   ++it;
                   while (true) {
                      GLZ_SKIP_WS();
-                     const auto k = parse_key(ctx, it, end);
-                     if (bool(ctx.error)) [[unlikely]] {
+                     GLZ_MATCH_QUOTE;
+                     
+                     auto* start = it;
+                     skip_string_view<Opts>(ctx, it, end);
+                     if (bool(ctx.error)) [[unlikely]]
                         return;
-                     }
-                     if (cx_string_cmp<key>(k)) {
+                     const sv k = {start, size_t(it - start)};
+                     ++it;
+                     
+                     if (key.size() == k.size() && comparitor<key>(k.data())) {
                         GLZ_SKIP_WS();
                         GLZ_MATCH_COLON();
                         GLZ_SKIP_WS();
@@ -134,12 +139,16 @@ namespace glz
 
                while (it < end) {
                   GLZ_SKIP_WS();
-                  const auto k = parse_key(ctx, it, end);
-                  if (bool(ctx.error)) [[unlikely]] {
+                  GLZ_MATCH_QUOTE;
+                  
+                  auto* start = it;
+                  skip_string_view<Opts>(ctx, it, end);
+                  if (bool(ctx.error)) [[unlikely]]
                      return;
-                  }
+                  const sv k = {start, size_t(it - start)};
+                  ++it;
 
-                  if (cx_string_cmp<key>(k)) {
+                  if (key.size() == k.size() && comparitor<key>(k.data())) {
                      GLZ_SKIP_WS();
                      GLZ_MATCH_COLON();
                      GLZ_SKIP_WS();

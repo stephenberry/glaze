@@ -5,6 +5,7 @@
 
 #include "glaze/json/escape_unicode.hpp"
 #include "glaze/json/invoke.hpp"
+#include "glaze/json/jmespath.hpp"
 #include "glaze/json/json_concepts.hpp"
 #include "glaze/json/json_ptr.hpp"
 #include "glaze/json/json_t.hpp"
