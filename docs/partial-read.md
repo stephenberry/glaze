@@ -4,7 +4,7 @@ At times it is not necessary to read the entire JSON document, but rather just a
 
 This document describes a limited approach using the `partial_read` option, to quickly exit after parsing fields of interest.
 
-For more advanced (and still performant) partial reading, Glaze provides compile-time and run-time [JMESPath support]().
+For more advanced (and still performant) partial reading, Glaze provides compile-time and run-time [JMESPath support](./JMESPath.md).
 
 # Partial reading with glz::opts
 
