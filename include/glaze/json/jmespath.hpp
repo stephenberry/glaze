@@ -668,7 +668,7 @@ namespace glz
    {
       std::vector<std::string_view> tokens{};
       if (auto ec = jmespath::tokenize_full_jmespath(path, tokens); bool(ec)) {
-         return {error_code::syntax_error};
+         return {error_code::syntax_error, "JMESPath invalid expression"};
       }
       const auto N = tokens.size();
 
