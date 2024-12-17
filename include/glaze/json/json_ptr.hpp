@@ -72,14 +72,14 @@ namespace glz
                   while (true) {
                      GLZ_SKIP_WS();
                      GLZ_MATCH_QUOTE;
-                     
+
                      auto* start = it;
                      skip_string_view<Opts>(ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
                      const sv k = {start, size_t(it - start)};
                      ++it;
-                     
+
                      if (key.size() == k.size() && comparitor<key>(k.data())) {
                         GLZ_SKIP_WS();
                         GLZ_MATCH_COLON();
@@ -140,7 +140,7 @@ namespace glz
                while (it < end) {
                   GLZ_SKIP_WS();
                   GLZ_MATCH_QUOTE;
-                  
+
                   auto* start = it;
                   skip_string_view<Opts>(ctx, it, end);
                   if (bool(ctx.error)) [[unlikely]]
