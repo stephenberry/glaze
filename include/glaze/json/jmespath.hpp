@@ -423,8 +423,8 @@ namespace glz
                return std::clamp(idx, 0, size);
             };
 
-            int32_t start_idx = wrap_index(decomposed_key.start.value_or(0));
-            int32_t end_idx   = wrap_index(decomposed_key.end.value_or(size));
+            const int32_t start_idx = wrap_index(decomposed_key.start.value_or(0));
+            const int32_t end_idx   = wrap_index(decomposed_key.end.value_or(size));
 
             if (step_idx == 1) {
                if (start_idx < end_idx) {
@@ -480,8 +480,7 @@ namespace glz
                   return;
             } else if (current_index >= start_idx && current_index < end_idx) {
                // Read this element into value
-               value.emplace_back();
-               detail::read<Opts.format>::template op<Opts>(value.back(), ctx, it, end);
+               detail::read<Opts.format>::template op<Opts>(value.emplace_back(), ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
                   return;
             } else {
@@ -503,10 +502,8 @@ namespace glz
             ++it; // consume ','
             GLZ_SKIP_WS();
 
-            current_index++;
+            ++current_index;
          }
-
-         return;
       }
    }
 
@@ -550,76 +547,121 @@ namespace glz
             }
 
             static constexpr auto decomposed_key = jmespath::parse_jmespath_token(tokens[I]);
-
             static constexpr auto key = decomposed_key.key;
+
             if constexpr (decomposed_key.is_array_access) {
-               GLZ_MATCH_OPEN_BRACE;
-
-               while (true) {
+               // If we have a key, that means we're looking into an object like: key[0:5]
+               if constexpr (key.empty()) {
                   GLZ_SKIP_WS();
-                  GLZ_MATCH_QUOTE;
+                  GLZ_MATCH_OPEN_BRACKET; // We expect the JSON at this level to be an array
 
-                  auto* start = it;
-                  skip_string_view<Opts>(ctx, it, end);
-                  if (bool(ctx.error)) [[unlikely]]
-                     return;
-                  const sv k = {start, size_t(it - start)};
-                  ++it;
-
-                  if (key.size() == k.size() && comparitor<key>(k.data())) {
-                     GLZ_SKIP_WS();
-                     GLZ_MATCH_COLON();
-                     GLZ_SKIP_WS();
-                     GLZ_MATCH_OPEN_BRACKET;
-
-                     // Distinguish single index vs slice using colon_count
-                     if constexpr (decomposed_key.colon_count > 0) {
-                        detail::handle_slice<Opts>(decomposed_key, value, ctx, it, end);
-                     }
-                     else {
-                        // SINGLE INDEX SCENARIO (colon_count == 0)
-                        if constexpr (decomposed_key.start.has_value()) {
-                           // Skip until we reach the target element
-                           constexpr auto n = decomposed_key.start.value();
-                           for (int32_t i = 0; i < n; ++i) {
-                              skip_value<JSON>::op<Opts>(ctx, it, end);
-                              if (bool(ctx.error)) [[unlikely]]
-                                 return;
-
-                              if (*it != ',') {
-                                 ctx.error = error_code::array_element_not_found;
-                                 return;
-                              }
-                              ++it;
-                           }
-                           
-                           GLZ_SKIP_WS();
-
-                           if constexpr (I == (N - 1)) {
-                              detail::read<Opts.format>::template op<Opts>(value, ctx, it, end);
-                           }
-                           return;
-                        } else {
-                           // If no start index is provided in a single index scenario, it's an error
-                           ctx.error = error_code::array_element_not_found;
-                           return;
-                        }
-                     }
+                  // If this is a slice (colon_count > 0)
+                  if constexpr (decomposed_key.colon_count > 0) {
+                     detail::handle_slice<Opts>(decomposed_key, value, ctx, it, end);
                   }
                   else {
-                     skip_value<JSON>::op<Opts>(ctx, it, end);
-                     if (bool(ctx.error)) [[unlikely]] {
+                     // SINGLE INDEX SCENARIO (no slice, just an index)
+                     if constexpr (decomposed_key.start.has_value()) {
+                        constexpr auto n = decomposed_key.start.value();
+
+                        // Skip until we reach the target element n
+                        for (int32_t i = 0; i < n; ++i) {
+                           skip_value<JSON>::op<Opts>(ctx, it, end);
+                           if (bool(ctx.error)) [[unlikely]]
+                              return;
+
+                           if (*it != ',') {
+                              ctx.error = error_code::array_element_not_found;
+                              return;
+                           }
+                           ++it;
+                           GLZ_SKIP_WS();
+                        }
+
+                        // Now read the element at index n
+                        if constexpr (I == (N - 1)) {
+                           detail::read<Opts.format>::template op<Opts>(value, ctx, it, end);
+                        }
+                     } else {
+                        ctx.error = error_code::array_element_not_found;
                         return;
                      }
-                     if (*it != ',') {
-                        ctx.error = error_code::key_not_found;
+                  }
+
+                  // After handling the array access, we're done for this token
+                  return;
+               }
+               else {
+                  // Object scenario with a key, like: key[0:5]
+                  GLZ_MATCH_OPEN_BRACE;
+
+                  while (true) {
+                     GLZ_SKIP_WS();
+                     GLZ_MATCH_QUOTE;
+
+                     auto* start = it;
+                     skip_string_view<Opts>(ctx, it, end);
+                     if (bool(ctx.error)) [[unlikely]]
                         return;
-                     }
+                     const sv k = {start, size_t(it - start)};
                      ++it;
+
+                     if (key.size() == k.size() && comparitor<key>(k.data())) {
+                        GLZ_SKIP_WS();
+                        GLZ_MATCH_COLON();
+                        GLZ_SKIP_WS();
+                        GLZ_MATCH_OPEN_BRACKET;
+
+                        // Distinguish single index vs slice using colon_count
+                        if constexpr (decomposed_key.colon_count > 0) {
+                           detail::handle_slice<Opts, decomposed_key>(value, ctx, it, end);
+                        }
+                        else {
+                           // SINGLE INDEX SCENARIO (colon_count == 0)
+                           if constexpr (decomposed_key.start.has_value()) {
+                              // Skip until we reach the target element
+                              constexpr auto n = decomposed_key.start.value();
+                              for (int32_t i = 0; i < n; ++i) {
+                                 skip_value<JSON>::op<Opts>(ctx, it, end);
+                                 if (bool(ctx.error)) [[unlikely]]
+                                    return;
+
+                                 if (*it != ',') {
+                                    ctx.error = error_code::array_element_not_found;
+                                    return;
+                                 }
+                                 ++it;
+                                 GLZ_SKIP_WS();
+                              }
+
+                              GLZ_SKIP_WS();
+
+                              if constexpr (I == (N - 1)) {
+                                 detail::read<Opts.format>::template op<Opts>(value, ctx, it, end);
+                              }
+                              return;
+                           } else {
+                              ctx.error = error_code::array_element_not_found;
+                              return;
+                           }
+                        }
+                     }
+                     else {
+                        skip_value<JSON>::op<Opts>(ctx, it, end);
+                        if (bool(ctx.error)) [[unlikely]] {
+                           return;
+                        }
+                        if (*it != ',') {
+                           ctx.error = error_code::key_not_found;
+                           return;
+                        }
+                        ++it;
+                     }
                   }
                }
             }
             else {
+               // If it's not array access, we are dealing with an object key
                GLZ_MATCH_OPEN_BRACE;
 
                while (it < end) {
