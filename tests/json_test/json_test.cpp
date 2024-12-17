@@ -8041,11 +8041,11 @@ suite nested_array_partial_read_tests = [] {
       expect(v[0][0] == 1);
       expect(v[0][1] == 2);
    };
-   
+
    "array_holder_t"_test = [] {
       array_holder_t obj{};
       std::string buf = R"({"x":[1,2,3],"y":[1,2,3,4]})";
-      
+
       auto ec = glz::read<partial_read>(obj, buf);
       expect(not ec) << glz::format_error(ec, buf);
       expect(obj.x.size() == 3);
