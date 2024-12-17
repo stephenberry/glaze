@@ -379,7 +379,14 @@ namespace glz
    namespace detail
    {
       template <opts Opts = opts{}, class T>
-         requires(Opts.format == JSON)
+         requires(Opts.format == JSON && not readable_array_t<T>)
+      inline void handle_slice(const jmespath::ArrayParseResult&, T&&, context& ctx, auto&&, auto&&)
+      {
+         ctx.error = error_code::syntax_error;
+      }
+      
+      template <opts Opts = opts{}, class T>
+       requires(Opts.format == JSON && readable_array_t<T>)
       inline void handle_slice(const jmespath::ArrayParseResult& decomposed_key, T&& value, context& ctx, auto&& it, auto&& end)
       {
          GLZ_SKIP_WS();
@@ -722,18 +729,16 @@ namespace glz
       const auto N = tokens.size();
 
       constexpr bool use_padded = resizable<Buffer> && non_const_buffer<Buffer> && !has_disable_padding(Options);
-      
       static constexpr auto Opts = use_padded ? is_padded_on<Options>() : is_padded_off<Options>();
 
       if constexpr (use_padded) {
          // Pad the buffer for SWAR
          buffer.resize(buffer.size() + padding_bytes);
       }
-      auto p = read_iterators<Opts>(buffer);
 
+      auto p = read_iterators<Opts>(buffer);
       auto it = p.first;
       auto end = p.second;
-
       auto start = it;
 
       context ctx{};
@@ -753,50 +758,44 @@ namespace glz
 
             [&] {
                const auto decomposed_key = jmespath::parse_jmespath_token(tokens[I]);
+               const auto& key = decomposed_key.key;
 
-               const auto key = decomposed_key.key;
                if (decomposed_key.is_array_access) {
-                  GLZ_MATCH_OPEN_BRACE;
-
-                  while (true) {
+                  if (key.empty()) {
+                     // Top-level array scenario
                      GLZ_SKIP_WS();
-                     GLZ_MATCH_QUOTE;
+                     GLZ_MATCH_OPEN_BRACKET;
 
-                     auto* start = it;
-                     skip_string_view<Opts>(ctx, it, end);
-                     if (bool(ctx.error)) [[unlikely]]
+                     if (decomposed_key.colon_count > 0) {
+                        // Slice scenario
+                        detail::handle_slice(decomposed_key, value, ctx, it, end);
                         return;
-                     const sv k = {start, size_t(it - start)};
-                     ++it;
+                     }
+                     else {
+                        // Single index scenario
+                        if (decomposed_key.start.has_value()) {
+                           int32_t n = decomposed_key.start.value();
+                           for (int32_t i = 0; i < n; ++i) {
+                              skip_value<JSON>::op<Opts>(ctx, it, end);
+                              if (bool(ctx.error)) [[unlikely]] return;
 
-                     if (key == k) {
-                        GLZ_SKIP_WS();
-                        GLZ_MATCH_COLON();
-                        GLZ_SKIP_WS();
-                        GLZ_MATCH_OPEN_BRACKET;
-
-                        const auto n = decomposed_key.start;
-                        if (n) {
-                           for (int32_t i = 0; i < n.value(); ++i) {
-                              [&] {
-                                 skip_value<JSON>::op<Opts>(ctx, it, end);
-                                 if (bool(ctx.error)) [[unlikely]] {
-                                    return;
-                                 }
-                                 if (*it != ',') {
-                                    ctx.error = error_code::array_element_not_found;
-                                    return;
-                                 }
-                                 ++it;
-                              }();
+                              if (*it != ',') {
+                                 ctx.error = error_code::array_element_not_found;
+                                 return;
+                              }
+                              ++it;
+                              GLZ_SKIP_WS();
                            }
 
                            GLZ_SKIP_WS();
-
                            if (I == (N - 1)) {
                               detail::read<Opts.format>::template op<Opts>(value, ctx, it, end);
                            }
-                           return;
+                           else {
+                              // If not the last token, we should continue traversing
+                              // But since this scenario typically implies the last token,
+                              // we'll assume it's final. If needed, further code could be implemented.
+                           }
                         }
                         else {
                            ctx.error = error_code::array_element_not_found;
@@ -804,34 +803,92 @@ namespace glz
                         }
                         return;
                      }
-                     else {
-                        skip_value<JSON>::op<Opts>(ctx, it, end);
-                        if (bool(ctx.error)) [[unlikely]] {
+                  }
+                  else {
+                     // Object scenario: key[...]
+                     GLZ_MATCH_OPEN_BRACE;
+
+                     while (true) {
+                        GLZ_SKIP_WS();
+                        GLZ_MATCH_QUOTE;
+
+                        auto* start_pos = it;
+                        skip_string_view<Opts>(ctx, it, end);
+                        if (bool(ctx.error)) [[unlikely]]
                            return;
-                        }
-                        if (*it != ',') {
-                           ctx.error = error_code::key_not_found;
-                           return;
-                        }
+                        const sv k = {start_pos, size_t(it - start_pos)};
                         ++it;
+
+                        if (key.size() == k.size() && memcmp(key.data(), k.data(), key.size()) == 0) {
+                           GLZ_SKIP_WS();
+                           GLZ_MATCH_COLON();
+                           GLZ_SKIP_WS();
+                           GLZ_MATCH_OPEN_BRACKET;
+
+                           if (decomposed_key.colon_count > 0) {
+                              // Slice scenario
+                              detail::handle_slice(decomposed_key, value, ctx, it, end);
+                              return;
+                           }
+                           else {
+                              // Single index scenario
+                              if (decomposed_key.start.has_value()) {
+                                 int32_t n = decomposed_key.start.value();
+                                 for (int32_t i = 0; i < n; ++i) {
+                                    skip_value<JSON>::op<Opts>(ctx, it, end);
+                                    if (bool(ctx.error)) [[unlikely]]
+                                       return;
+
+                                    if (*it != ',') {
+                                       ctx.error = error_code::array_element_not_found;
+                                       return;
+                                    }
+                                    ++it;
+                                    GLZ_SKIP_WS();
+                                 }
+
+                                 GLZ_SKIP_WS();
+
+                                 if (I == (N - 1)) {
+                                    detail::read<Opts.format>::template op<Opts>(value, ctx, it, end);
+                                 }
+                                 return;
+                              } else {
+                                 ctx.error = error_code::array_element_not_found;
+                                 return;
+                              }
+                           }
+                        }
+                        else {
+                           skip_value<JSON>::op<Opts>(ctx, it, end);
+                           if (bool(ctx.error)) [[unlikely]] {
+                              return;
+                           }
+                           if (*it != ',') {
+                              ctx.error = error_code::key_not_found;
+                              return;
+                           }
+                           ++it;
+                        }
                      }
                   }
                }
                else {
+                  // Non-array access: key-only navigation
                   GLZ_MATCH_OPEN_BRACE;
 
                   while (it < end) {
                      GLZ_SKIP_WS();
                      GLZ_MATCH_QUOTE;
 
-                     auto* start = it;
+                     auto* start_pos = it;
                      skip_string_view<Opts>(ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
-                     const sv k = {start, size_t(it - start)};
+                     const sv k = {start_pos, size_t(it - start_pos)};
                      ++it;
 
-                     if (key == k) {
+                     if (key.size() == k.size() && memcmp(key.data(), k.data(), key.size()) == 0) {
                         GLZ_SKIP_WS();
                         GLZ_MATCH_COLON();
                         GLZ_SKIP_WS();
@@ -865,4 +922,5 @@ namespace glz
 
       return {ctx.error, ctx.custom_error_message, size_t(it - start), ctx.includer_error};
    }
+
 }

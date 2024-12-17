@@ -149,13 +149,28 @@ suite jmespath_read_tests = [] {
 };
 
 suite jmespath_slice_tests = [] {
-   "slice"_test = [] {
+   "slice compile-time"_test = [] {
       std::vector<int> data{0,1,2,3,4,5,6,7,8,9};
       std::string buffer{};
       expect(not glz::write_json(data, buffer));
       
       std::vector<int> slice{};
       expect(not glz::read_jmespath<"[0:5]">(slice, buffer));
+      expect(slice.size() == 5);
+      expect(slice[0] == 0);
+      expect(slice[1] == 1);
+      expect(slice[2] == 2);
+      expect(slice[3] == 3);
+      expect(slice[4] == 4);
+   };
+   
+   "slice run-time"_test = [] {
+      std::vector<int> data{0,1,2,3,4,5,6,7,8,9};
+      std::string buffer{};
+      expect(not glz::write_json(data, buffer));
+      
+      std::vector<int> slice{};
+      expect(not glz::read_jmespath("[0:5]", slice, buffer));
       expect(slice.size() == 5);
       expect(slice[0] == 0);
       expect(slice[1] == 1);
