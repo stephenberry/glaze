@@ -25,6 +25,7 @@ Glaze also supports:
 - Use your own custom read/write functions ([Custom Read/Write](#custom-readwrite))
 - [Handle unknown keys](./docs/unknown-keys.md) in a fast and flexible manner
 - Direct memory access through [JSON pointer syntax](./docs/json-pointer-syntax.md)
+- [JMESPath](./docs/JMESPath.md) querying
 - [Binary data](./docs/binary.md) through the same API for maximum performance
 - No exceptions (compiles with `-fno-exceptions`)
   - If you desire helpers that throw for cleaner syntax see [Glaze Exceptions](./docs/exceptions.md)
@@ -942,6 +943,10 @@ auto ec = glz::read_ndjson(x, s);
 ### [Data Recorder](./docs/recorder.md)
 
 ### [Command Line Interface Menu](./docs/cli-menu.md)
+
+### [JMESPath](./docs/JMESPath.md)
+
+- Querying JSON
 
 ### [JSON Include System](./docs/json-include.md)
 
