@@ -182,8 +182,8 @@ namespace glz::repe
          static constexpr auto N = reflect<T>::size;
 
          [[maybe_unused]] decltype(auto) t = [&]() -> decltype(auto) {
-            if constexpr (reflectable<T> && requires { to_tuple(value); }) {
-               return to_tuple(value);
+            if constexpr (reflectable<T> && requires { to_tie(value); }) {
+               return to_tie(value);
             }
             else {
                return nullptr;

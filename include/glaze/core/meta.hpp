@@ -110,7 +110,7 @@ namespace glz
 
    struct empty
    {
-      static constexpr glz::tuplet::tuple<> value{};
+      static constexpr glz::tuple<> value{};
    };
 
    template <class T>

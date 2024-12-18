@@ -464,7 +464,7 @@ namespace glz
                         [&]<size_t I>() {
                            decltype(auto) member = [&]() -> decltype(auto) {
                               if constexpr (reflectable<T>) {
-                                 return get_member(value, get<I>(to_tuple(value)));
+                                 return get_member(value, get<I>(to_tie(value)));
                               }
                               else {
                                  return get_member(value, get<I>(reflect<T>::values));
@@ -581,7 +581,7 @@ namespace glz
                               [&]<size_t I>() {
                                  decltype(auto) member = [&]() -> decltype(auto) {
                                     if constexpr (reflectable<T>) {
-                                       return get_member(value, get<I>(to_tuple(value)));
+                                       return get_member(value, get<I>(to_tie(value)));
                                     }
                                     else {
                                        return get_member(value, get<I>(reflect<T>::values));

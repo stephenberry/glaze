@@ -232,7 +232,7 @@ struct glz::meta<glz::detail::schematic>
                                     "ExtUnits", //
                                     "ExtAdvanced"};
 
-   static constexpr glz::tuplet::tuple value{&T::type, //
+   static constexpr glz::tuple value{&T::type, //
                                              &T::properties, //
                                              &T::items, //
                                              &T::additionalProperties, //
@@ -279,7 +279,7 @@ namespace glz
       consteval auto make_reflection_schema_map()
       {
          auto schema_instance = json_schema_v<T>;
-         auto tuple = to_tuple(schema_instance);
+         auto tuple = to_tie(schema_instance);
          using V = std::decay_t<decltype(tuple)>;
          constexpr auto N = glz::tuple_size_v<V>;
          if constexpr (N > 0) {

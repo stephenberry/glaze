@@ -1236,7 +1236,7 @@ namespace glz
          static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
             if constexpr (reflectable<T>) {
-               auto t = to_tuple(value);
+               auto t = to_tie(value);
                read<BEVE>::op<Opts>(t, ctx, it, end);
             }
             else {
@@ -1338,7 +1338,7 @@ namespace glz
                            static constexpr auto Length = TargetKey.size();
                            if ((Length == n) && compare<Length>(TargetKey.data(), key.data())) [[likely]] {
                               if constexpr (detail::reflectable<T>) {
-                                 read<BEVE>::op<Opts>(get_member(value, get<I>(to_tuple(value))), ctx, it, end);
+                                 read<BEVE>::op<Opts>(get_member(value, get<I>(to_tie(value))), ctx, it, end);
                               }
                               else {
                                  read<BEVE>::op<Opts>(get_member(value, get<I>(reflect<T>::values)), ctx, it, end);
