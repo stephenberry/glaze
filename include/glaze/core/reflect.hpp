@@ -789,22 +789,18 @@ namespace glz::detail
       std::array<uint8_t, 256> unique_index{};
    };
 
-   template <size_t N>
    inline constexpr unique_per_length_t unique_per_length_info(const auto& input_strings)
    {
       // TODO: MSVC fixed the related compiler bug, but GitHub Actions has not caught up yet
 #if !defined(_MSC_VER)
-      if constexpr (N == 0) {
-         return {};
-      }
-      
-      if (input_strings.size() != N) {
+      const auto N = input_strings.size();
+      if (N == 0) {
          return {};
       }
 
-      std::array<std::string_view, N> strings{};
+      std::vector<std::string_view> strings{};
       for (size_t i = 0; i < N; ++i) {
-         strings[i] = input_strings[i];
+         strings.emplace_back(input_strings[i]);
       }
 
       std::ranges::sort(strings, [](const auto& a, const auto& b) { return a.size() < b.size(); });
@@ -864,7 +860,7 @@ namespace glz::detail
    }
 
    template <class T>
-   inline constexpr auto per_length_info = unique_per_length_info<reflect<T>::size>(reflect<T>::keys);
+   inline constexpr auto per_length_info = unique_per_length_info(reflect<T>::keys);
 
    consteval size_t bucket_size(hash_type type, size_t N)
    {
@@ -1401,7 +1397,7 @@ namespace glz::detail
       // TODO: MSVC fixed the related compiler bug, but GitHub Actions has not caught up yet
 #if !defined(_MSC_VER)
       // TODO: Use meta-programming to cache this value
-      const auto per_length_data = unique_per_length_info<N>(keys);
+      const auto per_length_data = unique_per_length_info(keys);
       if (per_length_data.valid) {
          auto sized_unique_hash = [&] {
             std::array<size_t, N> bucket_index{};
