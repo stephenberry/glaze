@@ -1,6 +1,6 @@
 project(gcc_json_t_issue)
 
-add_executable(${PROJECT_NAME} ${PROJECT_NAME}.cpp unused.cpp)
+add_executable(${PROJECT_NAME} unused.cpp ${PROJECT_NAME}.cpp)
 
 target_link_libraries(${PROJECT_NAME} PRIVATE glz_test_common)
 
