@@ -25,6 +25,7 @@ Glaze also supports:
 - Use your own custom read/write functions ([Custom Read/Write](#custom-readwrite))
 - [Handle unknown keys](./docs/unknown-keys.md) in a fast and flexible manner
 - Direct memory access through [JSON pointer syntax](./docs/json-pointer-syntax.md)
+- [JMESPath](./docs/JMESPath.md) querying
 - [Binary data](./docs/binary.md) through the same API for maximum performance
 - No exceptions (compiles with `-fno-exceptions`)
   - If you desire helpers that throw for cleaner syntax see [Glaze Exceptions](./docs/exceptions.md)
@@ -179,7 +180,7 @@ auto ec = glz::write_file_json(obj, "./obj.json", std::string{});
 
 ![clang build](https://github.com/stephenberry/glaze/actions/workflows/clang.yml/badge.svg) ![gcc build](https://github.com/stephenberry/glaze/actions/workflows/gcc.yml/badge.svg) ![msvc build](https://github.com/stephenberry/glaze/actions/workflows/msvc.yml/badge.svg) 
 
-> Glaze seeks to maintain compatibility with the latest three versions of GCC and Clang, as well as the latest version of MSVC and Apple Clang.
+> Glaze seeks to maintain compatibility with the latest three versions of GCC and Clang, as well as the latest version of MSVC and Apple Clang (Xcode). And, we aim to only drop old versions with major releases.
 
 ### MSVC Compiler Flags
 
@@ -237,7 +238,7 @@ import libs = libglaze%lib{glaze}
 
 # Explicit Metadata
 
-If you want to specialize your reflection then you can optionally write the code below:
+If you want to specialize your reflection then you can **optionally** write the code below:
 
 > This metadata is also necessary for non-aggregate initializable structs.
 
@@ -322,7 +323,25 @@ static_assert(glz::reflect<my_struct>::keys[0] == "i"); // Access keys
 
 > [!WARNING]
 >
-> The `glz::reflect` fields described above have been formalized and are unlikely to change. Other fields within the `glz::reflect` struct may evolve as we continue to formalize the spec. Therefore, breaking changes may occur for undocumented fields in the future.
+> The `glz::reflect` fields described above have been formalized and are unlikely to change. Other fields may evolve as we continue to formalize the spec.
+
+## glz::for_each_field
+
+```c++
+struct test_type {
+   int32_t int1{};
+   int64_t int2{};
+};
+
+test_type var{42, 43};
+
+glz::for_each_field(var, [](auto& field) {
+    field += 1;
+});
+
+expect(var.int1 == 43);
+expect(var.int2 == 44);
+```
 
 # Custom Read/Write
 
@@ -800,10 +819,9 @@ struct opts {
   // allowed in binary, e.g. double -> float
 
   bool partial_read =
-     false; // Reads into only existing fields and elements and then exits without parsing the rest of the input
+     false; // Reads into the deepest structural object and then exits without parsing the rest of the input
 
   // glaze_object_t concepts
-  bool partial_read_nested = false; // Advance the partially read struct to the end of the struct
   bool concatenate = true; // Concatenates ranges of std::pair into single objects when writing
 
   bool hide_non_invocable =
@@ -925,6 +943,10 @@ auto ec = glz::read_ndjson(x, s);
 ### [Data Recorder](./docs/recorder.md)
 
 ### [Command Line Interface Menu](./docs/cli-menu.md)
+
+### [JMESPath](./docs/JMESPath.md)
+
+- Querying JSON
 
 ### [JSON Include System](./docs/json-include.md)
 

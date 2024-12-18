@@ -6,6 +6,7 @@
 #include <concepts>
 #include <expected>
 #include <utility>
+#include <version>
 
 namespace glz
 {

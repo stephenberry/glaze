@@ -1,18 +1,18 @@
 # Partial Read
 
-At times it is not necessary to read the entire JSON document, but rather just a header or some of the initial fields. Glaze provides multiple solutions:
+At times it is not necessary to read the entire JSON document, but rather just a header or some of the initial fields.
 
--  `partial_read` in `glz::opts`
--  `partial_read` in `glz::meta`
-- Partial reading via [JSON Pointer syntax](./json-pointer-syntax.md)
+This document describes a limited approach using the `partial_read` option, to quickly exit after parsing fields of interest.
 
-> [!NOTE]
->
-> If you wish partial reading to work on nested objects, you must also turn on `.partial_read_nested = true` in `glz::opts`.
+For more advanced (and still performant) partial reading, Glaze provides compile-time and run-time [JMESPath support](./JMESPath.md).
 
 # Partial reading with glz::opts
 
 `partial_read` is a compile time flag in `glz::opts` that indicates only existing array and object elements should be read into, and once the memory has been read, parsing returns without iterating through the rest of the document.
+
+> [!NOTE]
+>
+> Once any sub-object is read, the parsing will finish. This ensures high performance with short circuiting.
 
 > A [wrapper](./wrappers.md) by the same name also exists.
 
@@ -47,7 +47,7 @@ expect(obj.size() == 1);
 expect(obj.at("2") = 2);
 ```
 
-Example: read only the fields present in a struct
+Example: read only the fields present in a struct and then short circuit the parse
 
 ```c++
 struct partial_struct
@@ -65,51 +65,6 @@ expect(obj.string == "ha!");
 expect(obj.integer == 400);
 ```
 
-# Partial reading with glz::meta
-
-Glaze allows a `partial_read` flag that can be set to `true` within the glaze metadata.
-
-```json
-{
-  "id": "187d3cb2-942d-484c-8271-4e2141bbadb1",
-  "type": "message_type"
-            .....
-  // the rest of the large JSON
-}
-```
-
-When `partial_read` is `true`, parsing will end once all the keys defined in the struct have been parsed.
-
-## partial_read_nested
-
-If your object that you wish to only read part of is nested within other objects, set `partial_read_nested = true` so that Glaze will properly parse the parent objects by skipping to the end of the partially read object.
-
-## Example
-
-```c++
-struct Header
-{
-   std::string id{};
-   std::string type{};
-};
-
-template <>
-struct glz::meta<Header>
-{
-   static constexpr auto partial_read = true;
-};
-```
-
-```c++
-Header h{};
-std::string buf = R"({"id":"51e2affb","type":"message_type","unknown key":"value"})";
-
-expect(glz::read_json(h, buf) == glz::error_code::none);
-// Glaze will stop reading after "type" is parsed
-expect(h.id == "51e2affb");
-expect(h.type == "message_type");
-```
-
 ## Unit Test Examples
 
 ```c++
@@ -119,10 +74,10 @@ struct Header
    std::string type{};
 };
 
-template <>
-struct glz::meta<Header>
+struct HeaderFlipped
 {
-   static constexpr auto partial_read = true;
+   std::string type{};
+   std::string id{};
 };
 
 struct NestedPartialRead
@@ -133,13 +88,15 @@ struct NestedPartialRead
 };
 
 suite partial_read_tests = [] {
-   using namespace boost::ut;
+   using namespace ut;
+   
+   static constexpr glz::opts partial_read{.partial_read = true};
 
    "partial read"_test = [] {
       Header h{};
       std::string buf = R"({"id":"51e2affb","type":"message_type","unknown key":"value"})";
 
-      expect(glz::read_json(h, buf) == glz::error_code::none);
+      expect(!glz::read<partial_read>(h, buf));
       expect(h.id == "51e2affb");
       expect(h.type == "message_type");
    };
@@ -147,9 +104,9 @@ suite partial_read_tests = [] {
    "partial read 2"_test = [] {
       Header h{};
       // closing curly bracket is missing
-      std::string buf = R"({"id":"51e2affb","type":"message_type","unknown key":"value"})";
+      std::string buf = R"({"id":"51e2affb","type":"message_type","unknown key":"value")";
 
-      expect(glz::read_json(h, buf) == glz::error_code::none);
+      expect(!glz::read<partial_read>(h, buf));
       expect(h.id == "51e2affb");
       expect(h.type == "message_type");
    };
@@ -158,7 +115,7 @@ suite partial_read_tests = [] {
       Header h{};
       std::string buf = R"({"id":"51e2affb","unknown key":"value","type":"message_type"})";
 
-      expect(glz::read_json(h, buf) == glz::error_code::unknown_key);
+      expect(glz::read<partial_read>(h, buf) == glz::error_code::unknown_key);
       expect(h.id == "51e2affb");
       expect(h.type.empty());
    };
@@ -167,7 +124,16 @@ suite partial_read_tests = [] {
       Header h{};
       std::string buf = R"({"id":"51e2affb","unknown key":"value","type":"message_type"})";
 
-      expect(glz::read<glz::opts{.error_on_unknown_keys = false}>(h, buf) == glz::error_code::none);
+      expect(!glz::read<glz::opts{.error_on_unknown_keys = false, .partial_read = true}>(h, buf));
+      expect(h.id == "51e2affb");
+      expect(h.type == "message_type");
+   };
+
+   "partial read don't read garbage"_test = [] {
+      Header h{};
+      std::string buf = R"({"id":"51e2affb","unknown key":"value","type":"message_type"garbage})";
+
+      expect(!glz::read<glz::opts{.error_on_unknown_keys = false, .partial_read = true}>(h, buf));
       expect(h.id == "51e2affb");
       expect(h.type == "message_type");
    };
@@ -176,46 +142,75 @@ suite partial_read_tests = [] {
       Header h{};
       std::string buf = R"({"id":"51e2affb","unknown key":"value"})";
 
-      expect(glz::read<glz::opts{.error_on_unknown_keys = false}>(h, buf) != glz::error_code::missing_key);
+      expect(glz::read<glz::opts{.error_on_unknown_keys = false, .partial_read = true}>(h, buf) != glz::error_code::missing_key);
       expect(h.id == "51e2affb");
       expect(h.type.empty());
    };
 
    "partial read missing key 2"_test = [] {
       Header h{};
-      std::string buf = R"({"id":"51e2affb",""unknown key":"value"})";
+      std::string buf = R"({"id":"51e2affb","unknown key":"value"})";
 
-      expect(glz::read<glz::opts{.error_on_unknown_keys = false, .error_on_missing_keys = false}>(h, buf) !=
-             glz::error_code::none);
+      expect(!glz::read<glz::opts{.error_on_unknown_keys = false, .partial_read = true}>(h, buf));
       expect(h.id == "51e2affb");
       expect(h.type.empty());
+   };
+
+   "partial read HeaderFlipped"_test = [] {
+      HeaderFlipped h{};
+      std::string buf = R"({"id":"51e2affb","type":"message_type","unknown key":"value"})";
+
+      expect(not glz::read<partial_read>(h, buf));
+      expect(h.id == "51e2affb");
+      expect(h.type == "message_type");
+   };
+
+   "partial read HeaderFlipped unknown key"_test = [] {
+      HeaderFlipped h{};
+      std::string buf = R"({"id":"51e2affb","unknown key":"value","type":"message_type"})";
+
+      expect(glz::read<partial_read>(h, buf) == glz::error_code::unknown_key);
+      expect(h.id == "51e2affb");
+      expect(h.type.empty());
+   };
+
+   "partial read unknown key 2 HeaderFlipped"_test = [] {
+      HeaderFlipped h{};
+      std::string buf = R"({"id":"51e2affb","unknown key":"value","type":"message_type","another_field":409845})";
+
+      expect(glz::read<glz::opts{.error_on_unknown_keys = false, .partial_read = true}>(h, buf) == glz::error_code::none);
+      expect(h.id == "51e2affb");
+      expect(h.type == "message_type");
    };
 };
 
 suite nested_partial_read_tests = [] {
-   using namespace boost::ut;
+   using namespace ut;
+   
+   static constexpr glz::opts partial_read{.partial_read = true};
 
    "nested object partial read"_test = [] {
       NestedPartialRead n{};
       std::string buf =
          R"({"method":"m1","header":{"id":"51e2affb","type":"message_type","unknown key":"value"},"number":51})";
 
-      expect(glz::read_json(n, buf) == glz::error_code::unknown_key);
+      expect(not glz::read<partial_read>(n, buf));
       expect(n.method == "m1");
       expect(n.header.id == "51e2affb");
       expect(n.header.type == "message_type");
       expect(n.number == 0);
    };
 
-   "nested object partial read 2"_test = [] {
+   "nested object partial read, don't read garbage"_test = [] {
       NestedPartialRead n{};
       std::string buf =
-         R"({"method":"m1","header":{"id":"51e2affb","type":"message_type","unknown key":"value"},"number":51})";
+         R"({"method":"m1","header":{"id":"51e2affb","type":"message_type","unknown key":"value",garbage},"number":51})";
 
-      expect(glz::read<glz::opts{.partial_read_nested = true}>(n, buf) == glz::error_code::none);
+      expect(not glz::read<partial_read>(n, buf));
       expect(n.method == "m1");
       expect(n.header.id == "51e2affb");
       expect(n.header.type == "message_type");
+      expect(n.number == 0);
    };
 };
 ```

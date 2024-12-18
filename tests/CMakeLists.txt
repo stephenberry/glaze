@@ -62,6 +62,7 @@ add_subdirectory(eigen_test)
 add_subdirectory(example_json)
 add_subdirectory(exceptions_test)
 add_subdirectory(int_parsing)
+add_subdirectory(jmespath)
 add_subdirectory(json_conformance)
 add_subdirectory(json_performance)
 add_subdirectory(json_reflection_test)
@@ -74,6 +75,7 @@ add_subdirectory(reflection)
 add_subdirectory(roundtrip)
 add_subdirectory(stencil)
 add_subdirectory(utility_formats)
+add_subdirectory(gcc_json_t_issue)
 
 # We don't run find_package_test or glaze-install_test with MSVC/Windows, because the Github action runner often chokes
 # Don't run find_package on Clang, because Linux runs with Clang try to use GCC standard library and have errors before Clang 18
