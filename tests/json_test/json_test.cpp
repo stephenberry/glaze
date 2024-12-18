@@ -1619,20 +1619,19 @@ suite json_pointer = [] {
    };
 
    "valid"_test = [] {
-      [[maybe_unused]] constexpr bool is_valid = glz::valid<Thing, "/thing/a", double>(); // Verify constexpr
+      // Compile time JSON Pointer syntax validation
+      static_assert(glz::valid<Thing, "/thing_ptr/a", double>());
+      static_assert(glz::valid<Thing, "/thing_ptr/a", int>() == false);
+      static_assert(glz::valid<Thing, "/thing_ptr/b">());
+      static_assert(glz::valid<Thing, "/thing_ptr/z">() == false);
 
-      expect(glz::valid<Thing, "/thing_ptr/a", double>() == true);
-      expect(glz::valid<Thing, "/thing_ptr/a", int>() == false);
-      expect(glz::valid<Thing, "/thing_ptr/b">() == true);
-      expect(glz::valid<Thing, "/thing_ptr/z">() == false);
+      static_assert(glz::valid<Thing, "/vec3/2", double>());
+      static_assert(glz::valid<Thing, "/vec3/3", double>() == false);
 
-      expect(glz::valid<Thing, "/vec3/2", double>() == true);
-      expect(glz::valid<Thing, "/vec3/3", double>() == false);
-
-      expect(glz::valid<Thing, "/map/f", int>() == true);
-      expect(glz::valid<Thing, "/vector", std::vector<V3>>() == true);
-      expect(glz::valid<Thing, "/vector/1", V3>() == true);
-      expect(glz::valid<Thing, "/vector/1/0", double>() == true);
+      static_assert(glz::valid<Thing, "/map/f", int>());
+      static_assert(glz::valid<Thing, "/vector", std::vector<V3>>());
+      static_assert(glz::valid<Thing, "/vector/1", V3>());
+      static_assert(glz::valid<Thing, "/vector/1/0", double>());
    };
 
    "id bug"_test = [] {
