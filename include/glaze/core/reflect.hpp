@@ -785,7 +785,12 @@ namespace glz::detail
          using V = decay_keep_volatile_t<std::variant_alternative_t<I, T>>;
          if constexpr (glaze_object_t<V> || reflectable<V> || is_memory_object<V>) {
             using X = std::conditional_t<is_memory_object<V>, memory_type<V>, V>;
-            for_each<reflect<X>::size>([&](auto J) { deduction_map.find(reflect<X>::keys[J])->second[I] = true; });
+            constexpr auto Size = reflect<X>::size;
+            if constexpr (Size > 0) {
+               for (size_t J = 0; J < Size; ++J) {
+                  deduction_map.find(reflect<X>::keys[J])->second[I] = true;
+               }
+            }
          }
       });
 
