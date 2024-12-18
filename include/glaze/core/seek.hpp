@@ -494,7 +494,7 @@ namespace glz
          n_items_per_group[i] = std::count(first_keys.begin(), first_keys.end(), unique_keys[i]);
       }
 
-      return glz::tuplet::tuple{n_items_per_group, n_unique, unique_keys};
+      return glz::tuple{n_items_per_group, n_unique, unique_keys};
    }
 
    template <auto Arr, std::size_t... Is>

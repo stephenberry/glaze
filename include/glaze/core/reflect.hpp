@@ -91,7 +91,7 @@ namespace glz
    struct reflect<T>
    {
       static constexpr auto size = 0;
-      static constexpr auto values = tuplet::tuple{};
+      static constexpr auto values = tuple{};
       static constexpr std::array<sv, 0> keys{};
 
       template <size_t I>
@@ -109,7 +109,7 @@ namespace glz
 
       static constexpr auto values = [] {
          return [&]<size_t... I>(std::index_sequence<I...>) { //
-            return tuplet::tuple{get<value_indices[I]>(meta_v<T>)...}; //
+            return tuple{get<value_indices[I]>(meta_v<T>)...}; //
          }(std::make_index_sequence<value_indices.size()>{}); //
       }();
 
@@ -328,7 +328,7 @@ namespace glz::detail
    struct tuple_ptr_variant;
 
    template <class... Ts>
-   struct tuple_ptr_variant<glz::tuplet::tuple<Ts...>> : unique<std::variant<>, std::add_pointer_t<Ts>...>
+   struct tuple_ptr_variant<glz::tuple<Ts...>> : unique<std::variant<>, std::add_pointer_t<Ts>...>
    {};
 
    template <class... Ts>
@@ -345,8 +345,8 @@ namespace glz::detail
    template <class T, size_t... I>
    struct member_tuple_type<T, std::index_sequence<I...>>
    {
-      using type = std::conditional_t<sizeof...(I) == 0, tuplet::tuple<>,
-                                      tuplet::tuple<std::remove_cvref_t<member_t<T, refl_t<T, I>>>...>>;
+      using type = std::conditional_t<sizeof...(I) == 0, tuple<>,
+                                      tuple<std::remove_cvref_t<member_t<T, refl_t<T, I>>>...>>;
    };
 
    template <class T>
