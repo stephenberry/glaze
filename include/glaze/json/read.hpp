@@ -1612,14 +1612,13 @@ namespace glz
                read<JSON>::op<ws_handled_off<Opts>()>(s, ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
                   return;
-               
-               const auto index = decode_hash_with_size<JSON, T, HashInfo, HashInfo.type>::op(s.data(), s.data() + s.size(), s.size());
-               
+
+               const auto index =
+                  decode_hash_with_size<JSON, T, HashInfo, HashInfo.type>::op(s.data(), s.data() + s.size(), s.size());
+
                constexpr auto N = reflect<T>::size;
                if (index < N) [[likely]] {
-                  visit<N>([&]<size_t I>(){
-                     get_member(value, get<I>(reflect<T>::values)) = true;
-                  }, index);
+                  visit<N>([&]<size_t I>() { get_member(value, get<I>(reflect<T>::values)) = true; }, index);
                }
                else [[unlikely]] {
                   ctx.error = error_code::invalid_flag_input;

@@ -270,7 +270,7 @@ namespace glz::detail
          }
       }
    };
-   
+
    // Check if a size_t value exists inside of a container like std::array<size_t, N>
    // Using a pointer and size rather than std::span for faster compile times
    constexpr bool contains(const size_t* data, const size_t size, const size_t val) noexcept

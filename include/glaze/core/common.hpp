@@ -372,7 +372,8 @@ namespace glz
       concept glaze_array_t = glaze_t<T> && is_specialization_v<meta_wrapper_t<T>, Array>;
 
       template <class T>
-      concept glaze_object_t = glaze_t<T> && (is_specialization_v<meta_wrapper_t<T>, Object> || (not std::is_enum_v<std::decay_t<T>> && meta_keys<T>));
+      concept glaze_object_t = glaze_t<T> && (is_specialization_v<meta_wrapper_t<T>, Object> ||
+                                              (not std::is_enum_v<std::decay_t<T>> && meta_keys<T>));
 
       template <class T>
       concept glaze_enum_t = glaze_t<T> && is_specialization_v<meta_wrapper_t<T>, Enum>;

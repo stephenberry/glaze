@@ -876,7 +876,7 @@ namespace glz
                   static constexpr auto sub_partial = get<1>(group);
                   static constexpr auto index = key_index<T>(key);
                   static_assert(index < reflect<T>::size, "Invalid key passed to partial write");
-                  
+
                   if constexpr (glaze_object_t<T>) {
                      static constexpr auto member = get<index>(reflect<T>::values);
                      detail::write<BEVE>::no_header<Opts>(key, ctx, b, ix);
@@ -884,7 +884,8 @@ namespace glz
                   }
                   else {
                      detail::write<BEVE>::no_header<Opts>(key, ctx, b, ix);
-                     write_partial<BEVE>::op<sub_partial, Opts>(get_member(value, get<index>(to_tuple(value))), ctx, b, ix);
+                     write_partial<BEVE>::op<sub_partial, Opts>(get_member(value, get<index>(to_tuple(value))), ctx, b,
+                                                                ix);
                   }
                });
             }

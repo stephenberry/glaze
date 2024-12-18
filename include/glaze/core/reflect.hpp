@@ -732,7 +732,7 @@ namespace glz::detail
       }
       return n;
    }
-   
+
    GLZ_ALWAYS_INLINE constexpr uint64_t bitmix(uint64_t h, const uint64_t seed) noexcept
    {
       h *= seed;

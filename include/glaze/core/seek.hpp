@@ -547,8 +547,9 @@ namespace glz
          constexpr auto rem_ptr = glz::string_literal_from_view<tokens.second.size()>(tokens.second);
          if constexpr (glz::detail::glaze_object_t<V>) {
             constexpr auto& HashInfo = detail::hash_info<V>;
-            constexpr auto I = detail::decode_hash_with_size<JSON, V, HashInfo, HashInfo.type>::op(key_str.data(), key_str.data() + key_str.size(), key_str.size());
-            
+            constexpr auto I = detail::decode_hash_with_size<JSON, V, HashInfo, HashInfo.type>::op(
+               key_str.data(), key_str.data() + key_str.size(), key_str.size());
+
             if constexpr (I < reflect<V>::size) {
                if constexpr (key_str != reflect<V>::keys[I]) {
                   return false;

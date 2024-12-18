@@ -10047,12 +10047,12 @@ struct glz::meta<birds>
 
 suite meta_keys_for_struct = [] {
    "meta_keys birds"_test = [] {
-      birds obj{"caw","chirp","screech"};
-      
+      birds obj{"caw", "chirp", "screech"};
+
       std::string buffer{};
       expect(not glz::write_json(obj, buffer));
       expect(buffer == R"({"crow":"caw","sparrow":"chirp","hawk":"screech"})") << buffer;
-      
+
       obj = {};
       expect(not glz::read_json(obj, buffer));
       expect(obj.crow == "caw");
