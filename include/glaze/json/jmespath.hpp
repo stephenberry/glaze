@@ -15,129 +15,6 @@
 
 namespace glz
 {
-   // TODO: GCC 12 lacks constexpr std::from_chars
-   // Remove this code when dropping GCC 12 support
-   namespace detail
-   {
-      struct from_chars_result
-      {
-         const char* ptr;
-         std::errc ec;
-      };
-
-      inline constexpr int char_to_digit(char c) noexcept
-      {
-         if (c >= '0' && c <= '9') return c - '0';
-         if (c >= 'a' && c <= 'z') return c - 'a' + 10;
-         if (c >= 'A' && c <= 'Z') return c - 'A' + 10;
-         return -1;
-      }
-
-      template <class I>
-      constexpr from_chars_result from_chars(const char* first, const char* last, I& value, int base = 10)
-      {
-         from_chars_result result{first, std::errc{}};
-
-         // Basic validation of base
-         if (base < 2 || base > 36) {
-            // Not standard behavior to check base validity here, but let's return invalid_argument
-            result.ec = std::errc::invalid_argument;
-            return result;
-         }
-
-         using U = std::make_unsigned_t<I>;
-         constexpr bool is_signed = std::is_signed<I>::value;
-         constexpr U umax = (std::numeric_limits<U>::max)();
-
-         if (first == last) {
-            // Empty range
-            result.ec = std::errc::invalid_argument;
-            return result;
-         }
-
-         bool negative = false;
-         // Check for sign only if signed type
-         if constexpr (is_signed) {
-            if (*first == '-') {
-               negative = true;
-               ++first;
-            }
-            else if (*first == '+') {
-               ++first;
-            }
-         }
-
-         if (first == last) {
-            // After sign there's nothing
-            result.ec = std::errc::invalid_argument;
-            return result;
-         }
-
-         U acc = 0;
-         bool any = false;
-
-         // We'll do overflow checking as we parse
-         // For accumulation: acc * base + digit
-         // Overflow if acc > (umax - digit)/base
-
-         while (first != last) {
-            int d = char_to_digit(*first);
-            if (d < 0 || d >= base) break;
-
-            // Check overflow before multiplying/adding
-            if (acc > (umax - static_cast<U>(d)) / static_cast<U>(base)) {
-               // Overflow
-               result.ec = std::errc::result_out_of_range;
-               // We still move ptr to the last valid digit parsed
-               result.ptr = first;
-               // No need to parse further; we know it's out of range.
-               return result;
-            }
-
-            acc = acc * base + static_cast<U>(d);
-            any = true;
-            ++first;
-         }
-
-         if (!any) {
-            // No digits parsed
-            result.ec = std::errc::invalid_argument;
-            return result;
-         }
-
-         // If signed and negative, check if result fits
-         if constexpr (is_signed) {
-            using S = std::make_signed_t<U>;
-            // The largest magnitude we can represent in a negative value is (max + 1)
-            // since -(min()) = max() + 1.
-            U limit = static_cast<U>(std::numeric_limits<I>::max()) + 1U;
-            if (negative) {
-               if (acc > limit) {
-                  result.ec = std::errc::result_out_of_range;
-                  result.ptr = first;
-                  return result;
-               }
-               value = static_cast<I>(0 - static_cast<S>(acc));
-            }
-            else {
-               if (acc > static_cast<U>(std::numeric_limits<I>::max())) {
-                  result.ec = std::errc::result_out_of_range;
-                  result.ptr = first;
-                  return result;
-               }
-               value = static_cast<I>(acc);
-            }
-         }
-         else {
-            // Unsigned type
-            value = acc;
-         }
-
-         result.ptr = first;
-         return result;
-      }
-   }
-
    namespace jmespath
    {
       enum struct tokenization_error {
@@ -288,6 +165,46 @@ namespace glz
          return {s, "", tokenization_error::none};
       }
 
+      inline constexpr tokenization_error finalize_tokens(std::vector<std::string_view>& tokens)
+      {
+         std::vector<std::string_view> final_tokens;
+         final_tokens.reserve(tokens.size()); // at least
+
+         for (auto token : tokens) {
+            size_t start = 0;
+            while (start < token.size()) {
+               // Find the next '['
+               auto open = token.find('[', start);
+               if (open == std::string_view::npos) {
+                  // No more bracketed segments
+                  if (start < token.size()) {
+                     // Add remaining part (if not empty)
+                     final_tokens.push_back(token.substr(start));
+                  }
+                  break; // move to next token
+               }
+               else {
+                  // If there's a key part before the bracket, add it
+                  if (open > start) {
+                     final_tokens.push_back(token.substr(start, open - start));
+                  }
+                  // Now find the closing bracket ']'
+                  auto close = token.find(']', open + 1);
+                  if (close == std::string_view::npos) {
+                     // Mismatched bracket
+                     return tokenization_error::unbalanced_brackets;
+                  }
+                  // Extract the bracketed token: e.g. [0]
+                  final_tokens.push_back(token.substr(open, close - open + 1));
+                  start = close + 1; // continue after the ']'
+               }
+            }
+         }
+
+         tokens = std::move(final_tokens);
+         return tokenization_error::none;
+      }
+
       /**
        * @brief Recursively tokenizes a full JMESPath expression into all its tokens with error handling.
        *
@@ -296,8 +213,8 @@ namespace glz
        * @param error An output parameter to capture any tokenization errors.
        * @return true if tokenization succeeded without errors, false otherwise.
        */
-      inline constexpr tokenization_error tokenize_full_jmespath(std::string_view expression,
-                                                                 std::vector<std::string_view>& tokens)
+      inline constexpr jmespath::tokenization_error tokenize_full_jmespath(std::string_view expression,
+                                                                           std::vector<std::string_view>& tokens)
       {
          tokens.clear();
          auto remaining = expression;
@@ -308,33 +225,34 @@ namespace glz
                return result.error;
             }
 
-            // Detect empty tokens which indicate consecutive delimiters
             if (result.first.empty()) {
                return tokenization_error::unexpected_delimiter;
             }
 
             tokens.emplace_back(result.first);
 
-            // Remove the delimiter (either '.' or '|') from the rest
             if (!result.second.empty()) {
                char delimiter = result.second.front();
                if (delimiter == '.' || delimiter == '|') {
                   remaining = result.second.substr(1);
-                  // Trim leading whitespace after the delimiter
                   remaining = trim_left(remaining);
-                  // Check if the next character is another delimiter, indicating an empty token
                   if (!remaining.empty() && (remaining.front() == '.' || remaining.front() == '|')) {
                      return tokenization_error::unexpected_delimiter;
                   }
                }
                else {
-                  // Unexpected character, set error and stop tokenization
                   return tokenization_error::unexpected_delimiter;
                }
             }
             else {
                break;
             }
+         }
+
+         // New step: finalize the tokens by splitting multiple bracket accesses
+         auto err = finalize_tokens(tokens);
+         if (err != jmespath::tokenization_error::none) {
+            return err;
          }
 
          return tokenization_error::none;
@@ -370,10 +288,10 @@ namespace glz
          bool is_array_access = false; // True if "key[...]"
          bool error = false; // True if parsing encountered an error
          std::string_view key; // The part before the first '['
-         std::optional<int32_t>
-            start; // For a single index, this holds the index. For slices, this is the first number.
-         std::optional<int32_t> end;
-         std::optional<int32_t> step;
+         std::optional<int32_t> start; // For a single index or slice start
+         std::optional<int32_t> end; // For slice end
+         std::optional<int32_t> step; // For slice step
+         size_t colon_count = 0; // Number of ':' characters found inside the brackets
       };
 
       inline constexpr std::optional<int> parse_int(std::string_view s)
@@ -394,13 +312,11 @@ namespace glz
       {
          ArrayParseResult result;
 
-         // Find the first '[' and the corresponding ']'
+         // Find the first '['
          auto open_pos = token.find('[');
          if (open_pos == std::string_view::npos) {
             // No array access, just a key.
             result.key = token;
-            result.is_array_access = false;
-            result.error = false;
             return result;
          }
 
@@ -408,16 +324,16 @@ namespace glz
          if (close_pos == std::string_view::npos || close_pos < open_pos) {
             // Mismatched brackets -> error
             result.key = token.substr(0, open_pos);
-            result.is_array_access = true; // We found a '[', so it looks like array access was intended
+            result.is_array_access = true;
             result.error = true;
             return result;
          }
 
+         result.is_array_access = true;
          result.key = token.substr(0, open_pos);
          auto inside = token.substr(open_pos + 1, close_pos - (open_pos + 1));
          if (inside.empty()) {
-            // "children[]" not valid
-            result.is_array_access = true;
+            // Empty inside "[]" is invalid
             result.error = true;
             return result;
          }
@@ -429,10 +345,10 @@ namespace glz
                colon_count++;
             }
          }
+         result.colon_count = colon_count;
 
-         // Helper lambda to parse slices:
+         // Helper lambda to parse slice parts
          auto parse_slice = [&](std::string_view inside) {
-            // We'll have up to 3 parts: start:end:step depending on colon_count (1 or 2)
             std::string_view parts[3];
             {
                size_t start_idx = 0;
@@ -448,11 +364,7 @@ namespace glz
                }
             }
 
-            // parts are now filled. If colon_count == 1, we have parts[0] and parts[1], parts[2] empty
-            // If colon_count == 2, we have parts[0], parts[1], and parts[2].
-            // Empty parts are allowed.
-
-            // Parse each non-empty part
+            // Parse start
             if (!parts[0].empty()) {
                auto val = parse_int(parts[0]);
                if (!val.has_value()) {
@@ -463,6 +375,7 @@ namespace glz
                }
             }
 
+            // Parse end
             if (!parts[1].empty()) {
                auto val = parse_int(parts[1]);
                if (!val.has_value()) {
@@ -473,6 +386,7 @@ namespace glz
                }
             }
 
+            // Parse step
             if (colon_count == 2 && !parts[2].empty()) {
                auto val = parse_int(parts[2]);
                if (!val.has_value()) {
@@ -484,21 +398,18 @@ namespace glz
             }
          };
 
-         result.is_array_access = true; // If we found brackets, it's array access attempt
-
          if (colon_count == 0) {
-            // single integer index
+            // single index
             auto val = parse_int(inside);
             if (!val.has_value()) {
-               // Not a valid integer
                result.error = true;
             }
             else {
-               result.start = val; // store single index in start
+               result.start = val;
             }
          }
          else if (colon_count == 1 || colon_count == 2) {
-            // slice syntax
+            // slice
             parse_slice(inside);
          }
          else {
@@ -510,34 +421,177 @@ namespace glz
       }
    }
 
+   namespace detail
+   {
+      template <opts Opts = opts{}, class T>
+         requires(Opts.format == JSON && not readable_array_t<T>)
+      inline void handle_slice(const jmespath::ArrayParseResult&, T&&, context& ctx, auto&&, auto&&)
+      {
+         ctx.error = error_code::syntax_error;
+      }
+
+      template <opts Opts = opts{}, class T>
+         requires(Opts.format == JSON && readable_array_t<T>)
+      inline void handle_slice(const jmespath::ArrayParseResult& decomposed_key, T&& value, context& ctx, auto&& it,
+                               auto&& end)
+      {
+         GLZ_SKIP_WS();
+
+         // Determine slice parameters
+         int32_t step_idx = decomposed_key.step.value_or(1);
+         bool has_negative_index = (decomposed_key.start.value_or(0) < 0) || (decomposed_key.end.value_or(0) < 0);
+
+         // If we have negative indices or step != 1, fall back to the original method (read all then slice)
+         if (step_idx != 1 || has_negative_index) {
+            // Original fallback behavior:
+            // Read entire array into value first
+            value.clear();
+            if (*it == ']') {
+               // empty array
+               ++it; // consume ']'
+            }
+            else {
+               while (true) {
+                  detail::read<Opts.format>::template op<Opts>(value.emplace_back(), ctx, it, end);
+                  if (bool(ctx.error)) [[unlikely]]
+                     return;
+
+                  GLZ_SKIP_WS();
+                  if (*it == ']') {
+                     ++it;
+                     break;
+                  }
+                  if (*it != ',') {
+                     ctx.error = error_code::parse_error;
+                     return;
+                  }
+                  ++it;
+                  GLZ_SKIP_WS();
+               }
+            }
+
+            // Now do the slicing
+            const int32_t size = static_cast<int32_t>(value.size());
+            auto wrap_index = [&](int32_t idx) {
+               if (idx < 0) idx += size;
+               return std::clamp(idx, 0, size);
+            };
+
+            const int32_t start_idx = wrap_index(decomposed_key.start.value_or(0));
+            const int32_t end_idx = wrap_index(decomposed_key.end.value_or(size));
+
+            if (step_idx == 1) {
+               if (start_idx < end_idx) {
+                  if (start_idx > 0) {
+                     value.erase(value.begin(), value.begin() + start_idx);
+                  }
+                  if (static_cast<size_t>(end_idx - start_idx) < value.size()) {
+                     value.erase(value.begin() + (end_idx - start_idx), value.end());
+                  }
+               }
+               else {
+                  value.clear();
+               }
+            }
+            else {
+               // For steps != 1 (or negative steps), the fallback path was already chosen.
+               // Just apply the same logic as before.
+               std::size_t dest = 0;
+               if (step_idx > 0) {
+                  for (int32_t i = start_idx; i < end_idx; i += step_idx) {
+                     value[dest++] = std::move(value[i]);
+                  }
+               }
+               else {
+                  for (int32_t i = start_idx; i > end_idx; i += step_idx) {
+                     value[dest++] = std::move(value[i]);
+                  }
+               }
+               value.resize(dest);
+            }
+
+            return;
+         }
+
+         // If we reach here, step == 1 and no negative indices, so we can do partial reading.
+         value.clear();
+         const int32_t start_idx = decomposed_key.start.value_or(0);
+         const int32_t end_idx = decomposed_key.end.value_or(std::numeric_limits<int32_t>::max());
+
+         // If empty array
+         if (*it == ']') {
+            ++it; // consume ']'
+            return;
+         }
+
+         // We'll read elements and track their index
+         int32_t current_index = 0;
+         while (true) {
+            GLZ_SKIP_WS();
+
+            // Decide whether we read or skip this element
+            if (current_index < start_idx) {
+               // Skip this element
+               skip_value<JSON>::op<Opts>(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
+            }
+            else if (current_index >= start_idx && current_index < end_idx) {
+               // Read this element into value
+               detail::read<Opts.format>::template op<Opts>(value.emplace_back(), ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
+            }
+            else {
+               // current_index >= end_idx, we can skip reading into value
+               skip_value<JSON>::op<Opts>(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
+            }
+
+            GLZ_SKIP_WS();
+            if (*it == ']') {
+               ++it; // finished reading array
+               break;
+            }
+            if (*it != ',') {
+               ctx.error = error_code::parse_error;
+               return;
+            }
+            ++it; // consume ','
+            GLZ_SKIP_WS();
+
+            ++current_index;
+         }
+      }
+   }
+
    // Read into a C++ type given a path denoted by a JMESPath query
-   template <string_literal Path, opts Opts = opts{}, class T, contiguous Buffer>
-      requires(Opts.format == JSON)
+   template <string_literal Path, opts Options = opts{}, class T, contiguous Buffer>
+      requires(Options.format == JSON)
    [[nodiscard]] inline error_ctx read_jmespath(T&& value, Buffer&& buffer)
    {
       static constexpr auto S = chars<Path>;
       static constexpr auto tokens = jmespath::tokenize_as_array<S>();
       static constexpr auto N = tokens.size();
 
-      constexpr bool use_padded = resizable<Buffer> && non_const_buffer<Buffer> && !has_disable_padding(Opts);
+      constexpr bool use_padded = resizable<Buffer> && non_const_buffer<Buffer> && !has_disable_padding(Options);
+
+      static constexpr auto Opts = use_padded ? is_padded_on<Options>() : is_padded_off<Options>();
 
       if constexpr (use_padded) {
          // Pad the buffer for SWAR
          buffer.resize(buffer.size() + padding_bytes);
       }
       auto p = read_iterators<Opts>(buffer);
-
       auto it = p.first;
       auto end = p.second;
-
       auto start = it;
 
       context ctx{};
 
-      static constexpr auto FinalOpts = use_padded ? is_padded_on<Opts>() : is_padded_off<Opts>();
-
       if constexpr (N == 0) {
-         detail::read<Opts.format>::template op<FinalOpts>(value, ctx, it, end);
+         detail::read<Opts.format>::template op<Opts>(value, ctx, it, end);
       }
       else {
          using namespace glz::detail;
@@ -550,69 +604,139 @@ namespace glz
             }
 
             static constexpr auto decomposed_key = jmespath::parse_jmespath_token(tokens[I]);
-
             static constexpr auto key = decomposed_key.key;
+
             if constexpr (decomposed_key.is_array_access) {
-               GLZ_MATCH_OPEN_BRACE;
-
-               while (true) {
+               // If we have a key, that means we're looking into an object like: key[0:5]
+               if constexpr (key.empty()) {
                   GLZ_SKIP_WS();
-                  GLZ_MATCH_QUOTE;
+                  GLZ_MATCH_OPEN_BRACKET; // We expect the JSON at this level to be an array
 
-                  auto* start = it;
-                  skip_string_view<Opts>(ctx, it, end);
-                  if (bool(ctx.error)) [[unlikely]]
-                     return;
-                  const sv k = {start, size_t(it - start)};
-                  ++it;
-
-                  if (key.size() == k.size() && comparitor<key>(k.data())) {
-                     GLZ_SKIP_WS();
-                     GLZ_MATCH_COLON();
-                     GLZ_SKIP_WS();
-                     GLZ_MATCH_OPEN_BRACKET;
-
-                     static constexpr auto n = decomposed_key.start;
-                     if constexpr (n) {
-                        for_each<n.value()>([&](auto) {
-                           skip_value<JSON>::op<Opts>(ctx, it, end);
-                           if (bool(ctx.error)) [[unlikely]] {
-                              return;
-                           }
-                           if (*it != ',') {
-                              ctx.error = error_code::array_element_not_found;
-                              return;
-                           }
-                           ++it;
-                        });
-
-                        GLZ_SKIP_WS();
+                  // If this is a slice (colon_count > 0)
+                  if constexpr (decomposed_key.colon_count > 0) {
+                     detail::handle_slice<Opts>(decomposed_key, value, ctx, it, end);
+                  }
+                  else {
+                     // SINGLE INDEX SCENARIO (no slice, just an index)
+                     if constexpr (decomposed_key.start.has_value()) {
+                        constexpr auto n = decomposed_key.start.value();
 
                         if constexpr (I == (N - 1)) {
-                           detail::read<Opts.format>::template op<FinalOpts>(value, ctx, it, end);
+                           // Skip until we reach the target element n
+                           for (int32_t i = 0; i < n; ++i) {
+                              skip_value<JSON>::op<Opts>(ctx, it, end);
+                              if (bool(ctx.error)) [[unlikely]]
+                                 return;
+
+                              if (*it != ',') {
+                                 ctx.error = error_code::array_element_not_found;
+                                 return;
+                              }
+                              ++it;
+                              GLZ_SKIP_WS();
+                           }
+
+                           // Now read the element at index n
+                           detail::read<Opts.format>::template op<Opts>(value, ctx, it, end);
                         }
-                        return;
+                        else {
+                           // Not the last token. We must still parse the element at index n so the next indexing can
+                           // proceed.
+                           for (int32_t i = 0; i < n; ++i) {
+                              skip_value<JSON>::op<Opts>(ctx, it, end);
+                              if (bool(ctx.error)) [[unlikely]]
+                                 return;
+
+                              if (*it != ',') {
+                                 ctx.error = error_code::array_element_not_found;
+                                 return;
+                              }
+                              ++it;
+                              GLZ_SKIP_WS();
+                           }
+                        }
                      }
                      else {
                         ctx.error = error_code::array_element_not_found;
                         return;
                      }
-                     return;
                   }
-                  else {
-                     skip_value<JSON>::op<Opts>(ctx, it, end);
-                     if (bool(ctx.error)) [[unlikely]] {
+
+                  // After handling the array access, we're done for this token
+                  return;
+               }
+               else {
+                  // Object scenario with a key, like: key[0:5]
+                  GLZ_MATCH_OPEN_BRACE;
+
+                  while (true) {
+                     GLZ_SKIP_WS();
+                     GLZ_MATCH_QUOTE;
+
+                     auto* start = it;
+                     skip_string_view<Opts>(ctx, it, end);
+                     if (bool(ctx.error)) [[unlikely]]
                         return;
-                     }
-                     if (*it != ',') {
-                        ctx.error = error_code::key_not_found;
-                        return;
-                     }
+                     const sv k = {start, size_t(it - start)};
                      ++it;
+
+                     if (key.size() == k.size() && comparitor<key>(k.data())) {
+                        GLZ_SKIP_WS();
+                        GLZ_MATCH_COLON();
+                        GLZ_SKIP_WS();
+                        GLZ_MATCH_OPEN_BRACKET;
+
+                        // Distinguish single index vs slice using colon_count
+                        if constexpr (decomposed_key.colon_count > 0) {
+                           detail::handle_slice<Opts, decomposed_key>(value, ctx, it, end);
+                        }
+                        else {
+                           // SINGLE INDEX SCENARIO (colon_count == 0)
+                           if constexpr (decomposed_key.start.has_value()) {
+                              // Skip until we reach the target element
+                              constexpr auto n = decomposed_key.start.value();
+                              for (int32_t i = 0; i < n; ++i) {
+                                 skip_value<JSON>::op<Opts>(ctx, it, end);
+                                 if (bool(ctx.error)) [[unlikely]]
+                                    return;
+
+                                 if (*it != ',') {
+                                    ctx.error = error_code::array_element_not_found;
+                                    return;
+                                 }
+                                 ++it;
+                                 GLZ_SKIP_WS();
+                              }
+
+                              GLZ_SKIP_WS();
+
+                              if constexpr (I == (N - 1)) {
+                                 detail::read<Opts.format>::template op<Opts>(value, ctx, it, end);
+                              }
+                              return;
+                           }
+                           else {
+                              ctx.error = error_code::array_element_not_found;
+                              return;
+                           }
+                        }
+                     }
+                     else {
+                        skip_value<JSON>::op<Opts>(ctx, it, end);
+                        if (bool(ctx.error)) [[unlikely]] {
+                           return;
+                        }
+                        if (*it != ',') {
+                           ctx.error = error_code::key_not_found;
+                           return;
+                        }
+                        ++it;
+                     }
                   }
                }
             }
             else {
+               // If it's not array access, we are dealing with an object key
                GLZ_MATCH_OPEN_BRACE;
 
                while (it < end) {
@@ -632,7 +756,7 @@ namespace glz
                      GLZ_SKIP_WS();
 
                      if constexpr (I == (N - 1)) {
-                        detail::read<Opts.format>::template op<FinalOpts>(value, ctx, it, end);
+                        detail::read<Opts.format>::template op<Opts>(value, ctx, it, end);
                      }
                      return;
                   }
@@ -660,37 +784,58 @@ namespace glz
       return {ctx.error, ctx.custom_error_message, size_t(it - start), ctx.includer_error};
    }
 
+   // A "compiled" jmespath expression, which can be pre-computed for efficient traversal
+   struct jmespath_expression
+   {
+      std::string_view path{};
+      jmespath::tokenization_error error{};
+      std::vector<std::string_view> tokens{}; // evaluated tokens
+
+      jmespath_expression(const std::string_view input_path) noexcept : path(input_path)
+      {
+         error = jmespath::tokenize_full_jmespath(path, tokens);
+      }
+
+      template <size_t N>
+      jmespath_expression(const char (&input_path)[N]) noexcept : path(input_path)
+      {
+         error = jmespath::tokenize_full_jmespath(path, tokens);
+      }
+      jmespath_expression(const jmespath_expression&) noexcept = default;
+      jmespath_expression(jmespath_expression&&) noexcept = default;
+      jmespath_expression& operator=(const jmespath_expression&) noexcept = default;
+      jmespath_expression& operator=(jmespath_expression&&) noexcept = default;
+   };
+
    // Read into a C++ type given a path denoted by a JMESPath query
    // This version supports a runtime path
-   template <opts Opts = opts{}, class T, contiguous Buffer>
-      requires(Opts.format == JSON)
-   [[nodiscard]] inline error_ctx read_jmespath(const std::string_view path, T&& value, Buffer&& buffer)
+   template <opts Options = opts{}, class T, contiguous Buffer>
+      requires(Options.format == JSON)
+   [[nodiscard]] inline error_ctx read_jmespath(const jmespath_expression& expression, T&& value, Buffer&& buffer)
    {
-      std::vector<std::string_view> tokens{};
-      if (auto ec = jmespath::tokenize_full_jmespath(path, tokens); bool(ec)) {
-         return {error_code::syntax_error};
+      if (bool(expression.error)) {
+         return {error_code::syntax_error, "JMESPath invalid expression"};
       }
+
+      const auto& tokens = expression.tokens;
       const auto N = tokens.size();
 
-      constexpr bool use_padded = resizable<Buffer> && non_const_buffer<Buffer> && !has_disable_padding(Opts);
+      constexpr bool use_padded = resizable<Buffer> && non_const_buffer<Buffer> && !has_disable_padding(Options);
+      static constexpr auto Opts = use_padded ? is_padded_on<Options>() : is_padded_off<Options>();
 
       if constexpr (use_padded) {
          // Pad the buffer for SWAR
          buffer.resize(buffer.size() + padding_bytes);
       }
       auto p = read_iterators<Opts>(buffer);
-
       auto it = p.first;
       auto end = p.second;
-
       auto start = it;
 
       context ctx{};
 
-      static constexpr auto FinalOpts = use_padded ? is_padded_on<Opts>() : is_padded_off<Opts>();
-
       if (N == 0) {
-         detail::read<Opts.format>::template op<FinalOpts>(value, ctx, it, end);
+         detail::read<Opts.format>::template op<Opts>(value, ctx, it, end);
       }
       else {
          using namespace glz::detail;
@@ -704,50 +849,58 @@ namespace glz
 
             [&] {
                const auto decomposed_key = jmespath::parse_jmespath_token(tokens[I]);
+               const auto& key = decomposed_key.key;
 
-               const auto key = decomposed_key.key;
                if (decomposed_key.is_array_access) {
-                  GLZ_MATCH_OPEN_BRACE;
-
-                  while (true) {
+                  if (key.empty()) {
+                     // Top-level array scenario
                      GLZ_SKIP_WS();
-                     GLZ_MATCH_QUOTE;
+                     GLZ_MATCH_OPEN_BRACKET;
 
-                     auto* start = it;
-                     skip_string_view<Opts>(ctx, it, end);
-                     if (bool(ctx.error)) [[unlikely]]
+                     if (decomposed_key.colon_count > 0) {
+                        // Slice scenario
+                        detail::handle_slice(decomposed_key, value, ctx, it, end);
                         return;
-                     const sv k = {start, size_t(it - start)};
-                     ++it;
+                     }
+                     else {
+                        // Single index scenario
+                        if (decomposed_key.start.has_value()) {
+                           const int32_t n = decomposed_key.start.value();
 
-                     if (key == k) {
-                        GLZ_SKIP_WS();
-                        GLZ_MATCH_COLON();
-                        GLZ_SKIP_WS();
-                        GLZ_MATCH_OPEN_BRACKET;
-
-                        const auto n = decomposed_key.start;
-                        if (n) {
-                           for (int32_t i = 0; i < n.value(); ++i) {
-                              [&] {
+                           if (I == (N - 1)) {
+                              // Skip until we reach the target element n
+                              for (int32_t i = 0; i < n; ++i) {
                                  skip_value<JSON>::op<Opts>(ctx, it, end);
-                                 if (bool(ctx.error)) [[unlikely]] {
+                                 if (bool(ctx.error)) [[unlikely]]
                                     return;
-                                 }
+
                                  if (*it != ',') {
                                     ctx.error = error_code::array_element_not_found;
                                     return;
                                  }
                                  ++it;
-                              }();
-                           }
+                                 GLZ_SKIP_WS();
+                              }
 
-                           GLZ_SKIP_WS();
-
-                           if (I == (N - 1)) {
-                              detail::read<Opts.format>::template op<FinalOpts>(value, ctx, it, end);
+                              // Now read the element at index n
+                              detail::read<Opts.format>::template op<Opts>(value, ctx, it, end);
                            }
-                           return;
+                           else {
+                              // Not the last token. We must still parse the element at index n so the next indexing can
+                              // proceed.
+                              for (int32_t i = 0; i < n; ++i) {
+                                 skip_value<JSON>::op<Opts>(ctx, it, end);
+                                 if (bool(ctx.error)) [[unlikely]]
+                                    return;
+
+                                 if (*it != ',') {
+                                    ctx.error = error_code::array_element_not_found;
+                                    return;
+                                 }
+                                 ++it;
+                                 GLZ_SKIP_WS();
+                              }
+                           }
                         }
                         else {
                            ctx.error = error_code::array_element_not_found;
@@ -755,40 +908,99 @@ namespace glz
                         }
                         return;
                      }
-                     else {
-                        skip_value<JSON>::op<Opts>(ctx, it, end);
-                        if (bool(ctx.error)) [[unlikely]] {
+                  }
+                  else {
+                     // Object scenario: key[...]
+                     GLZ_MATCH_OPEN_BRACE;
+
+                     while (true) {
+                        GLZ_SKIP_WS();
+                        GLZ_MATCH_QUOTE;
+
+                        auto* start_pos = it;
+                        skip_string_view<Opts>(ctx, it, end);
+                        if (bool(ctx.error)) [[unlikely]]
                            return;
-                        }
-                        if (*it != ',') {
-                           ctx.error = error_code::key_not_found;
-                           return;
-                        }
+                        const sv k = {start_pos, size_t(it - start_pos)};
                         ++it;
+
+                        if (key.size() == k.size() && memcmp(key.data(), k.data(), key.size()) == 0) {
+                           GLZ_SKIP_WS();
+                           GLZ_MATCH_COLON();
+                           GLZ_SKIP_WS();
+                           GLZ_MATCH_OPEN_BRACKET;
+
+                           if (decomposed_key.colon_count > 0) {
+                              // Slice scenario
+                              detail::handle_slice(decomposed_key, value, ctx, it, end);
+                              return;
+                           }
+                           else {
+                              // Single index scenario
+                              if (decomposed_key.start.has_value()) {
+                                 int32_t n = decomposed_key.start.value();
+                                 for (int32_t i = 0; i < n; ++i) {
+                                    skip_value<JSON>::op<Opts>(ctx, it, end);
+                                    if (bool(ctx.error)) [[unlikely]]
+                                       return;
+
+                                    if (*it != ',') {
+                                       ctx.error = error_code::array_element_not_found;
+                                       return;
+                                    }
+                                    ++it;
+                                    GLZ_SKIP_WS();
+                                 }
+
+                                 GLZ_SKIP_WS();
+
+                                 if (I == (N - 1)) {
+                                    detail::read<Opts.format>::template op<Opts>(value, ctx, it, end);
+                                 }
+                                 return;
+                              }
+                              else {
+                                 ctx.error = error_code::array_element_not_found;
+                                 return;
+                              }
+                           }
+                        }
+                        else {
+                           skip_value<JSON>::op<Opts>(ctx, it, end);
+                           if (bool(ctx.error)) [[unlikely]] {
+                              return;
+                           }
+                           if (*it != ',') {
+                              ctx.error = error_code::key_not_found;
+                              return;
+                           }
+                           ++it;
+                        }
                      }
                   }
                }
                else {
+                  // Non-array access: key-only navigation
                   GLZ_MATCH_OPEN_BRACE;
 
                   while (it < end) {
                      GLZ_SKIP_WS();
                      GLZ_MATCH_QUOTE;
 
-                     auto* start = it;
+                     auto* start_pos = it;
                      skip_string_view<Opts>(ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
-                     const sv k = {start, size_t(it - start)};
+                     const sv k = {start_pos, size_t(it - start_pos)};
                      ++it;
 
-                     if (key == k) {
+                     if (key.size() == k.size() && memcmp(key.data(), k.data(), key.size()) == 0) {
                         GLZ_SKIP_WS();
                         GLZ_MATCH_COLON();
                         GLZ_SKIP_WS();
 
                         if (I == (N - 1)) {
-                           detail::read<Opts.format>::template op<FinalOpts>(value, ctx, it, end);
+                           detail::read<Opts.format>::template op<Opts>(value, ctx, it, end);
                         }
                         return;
                      }
@@ -816,4 +1028,5 @@ namespace glz
 
       return {ctx.error, ctx.custom_error_message, size_t(it - start), ctx.includer_error};
    }
+
 }
