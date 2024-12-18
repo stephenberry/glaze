@@ -1483,7 +1483,7 @@ namespace glz::detail
 
    template <class T>
    constexpr auto hash_info = [] {
-      if constexpr ((glaze_object_t<T> || reflectable<T> ||
+      if constexpr ((glaze_object_t<T> || reflectable<T> || glaze_flags_t<T> ||
                      ((std::is_enum_v<std::remove_cvref_t<T>> && meta_keys<T>) || glaze_enum_t<T>)) &&
                     (reflect<T>::size > 0)) {
          constexpr auto& k_info = keys_info<T>;

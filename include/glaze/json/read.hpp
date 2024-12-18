@@ -1605,18 +1605,23 @@ namespace glz
 
             std::string& s = string_buffer();
 
-            static constexpr auto flag_map = make_map<T>();
+            constexpr auto& HashInfo = detail::hash_info<T>;
+            static_assert(bool(HashInfo.type));
 
             while (true) {
                read<JSON>::op<ws_handled_off<Opts>()>(s, ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
                   return;
-
-               auto itr = flag_map.find(s);
-               if (itr != flag_map.end()) {
-                  std::visit([&](auto&& x) { get_member(value, x) = true; }, itr->second);
+               
+               const auto index = decode_hash_with_size<JSON, T, HashInfo, HashInfo.type>::op(s.data(), s.data() + s.size(), s.size());
+               
+               constexpr auto N = reflect<T>::size;
+               if (index < N) [[likely]] {
+                  visit<N>([&]<size_t I>(){
+                     get_member(value, get<I>(reflect<T>::values)) = true;
+                  }, index);
                }
-               else {
+               else [[unlikely]] {
                   ctx.error = error_code::invalid_flag_input;
                   return;
                }
