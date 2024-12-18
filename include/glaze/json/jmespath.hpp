@@ -767,17 +767,39 @@ namespace glz
 
       return {ctx.error, ctx.custom_error_message, size_t(it - start), ctx.includer_error};
    }
+   
+   // A "compiled" jmespath expression, which can be pre-computed for efficient traversal
+   struct jmespath_expression
+   {
+      std::string_view path{};
+      jmespath::tokenization_error error{};
+      std::vector<std::string_view> tokens{}; // evaluated tokens
+      
+      jmespath_expression(const std::string_view input_path) noexcept : path(input_path) {
+         error = jmespath::tokenize_full_jmespath(path, tokens);
+      }
+      
+      template <size_t N>
+      jmespath_expression(const char (&input_path)[N]) noexcept : path(input_path) {
+         error = jmespath::tokenize_full_jmespath(path, tokens);
+      }
+      jmespath_expression(const jmespath_expression&) noexcept = default;
+      jmespath_expression(jmespath_expression&&) noexcept = default;
+      jmespath_expression& operator=(const jmespath_expression&) noexcept = default;
+      jmespath_expression& operator=(jmespath_expression&&) noexcept = default;
+   };
 
    // Read into a C++ type given a path denoted by a JMESPath query
    // This version supports a runtime path
    template <opts Options = opts{}, class T, contiguous Buffer>
       requires(Options.format == JSON)
-   [[nodiscard]] inline error_ctx read_jmespath(const std::string_view path, T&& value, Buffer&& buffer)
+   [[nodiscard]] inline error_ctx read_jmespath(const jmespath_expression& expression, T&& value, Buffer&& buffer)
    {
-      std::vector<std::string_view> tokens{};
-      if (auto ec = jmespath::tokenize_full_jmespath(path, tokens); bool(ec)) {
+      if (bool(expression.error)) {
          return {error_code::syntax_error, "JMESPath invalid expression"};
       }
+      
+      const auto& tokens = expression.tokens;
       const auto N = tokens.size();
 
       constexpr bool use_padded = resizable<Buffer> && non_const_buffer<Buffer> && !has_disable_padding(Options);

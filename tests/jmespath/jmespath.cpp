@@ -27,15 +27,15 @@ struct Home
 };
 
 suite jmespath_read_tests = [] {
-   "compile-time read_jmespath"_test = [] {
-      Home home{.family = {.father = {"Gilbert", "Fox", 28},
-            .mother = {"Anne", "Fox", 30},
-         .children = {{"Lilly", "Fox", 7}, {"Vincent", "Fox", 3}}},
-         .address = "123 Maple Street"};
+   Home home{.family = {.father = {"Gilbert", "Fox", 28},
+         .mother = {"Anne", "Fox", 30},
+      .children = {{"Lilly", "Fox", 7}, {"Vincent", "Fox", 3}}},
+      .address = "123 Maple Street"};
 
-      std::string buffer{};
-      expect(not glz::write_json(home, buffer));
-
+   std::string buffer{};
+   expect(not glz::write_json(home, buffer));
+   
+   "compile-time read_jmespath"_test = [&] {
       std::string first_name{};
       auto ec = glz::read_jmespath<"family.father.first_name">(first_name, buffer);
       expect(not ec) << glz::format_error(ec, buffer);
@@ -67,15 +67,7 @@ suite jmespath_read_tests = [] {
       expect(ec) << "Expected error for out-of-bounds index";
    };
 
-   "run-time read_jmespath"_test = [] {
-      Home home{.family = {.father = {"Gilbert", "Fox", 28},
-            .mother = {"Anne", "Fox", 30},
-         .children = {{"Lilly", "Fox", 7}, {"Vincent", "Fox", 3}}},
-         .address = "123 Maple Street"};
-
-      std::string buffer{};
-      expect(not glz::write_json(home, buffer));
-
+   "run-time read_jmespath"_test = [&] {
       std::string first_name{};
       auto ec = glz::read_jmespath("family.father.first_name", first_name, buffer);
       expect(not ec) << glz::format_error(ec, buffer);
@@ -107,15 +99,15 @@ suite jmespath_read_tests = [] {
       expect(ec) << "Expected error for out-of-bounds index";
    };
    
-   "compile-time error_handling"_test = [] {
-      Home home{.family = {.father = {"Gilbert", "Fox", 28},
-                           .mother = {"Anne", "Fox", 30},
-                           .children = {{"Lilly"}, {"Vincent"}}},
-                .address = "123 Maple Street"};
-
-      std::string buffer{};
-      expect(not glz::write_json(home, buffer));
-
+   "pre-compiled run-time"_test = [&] {
+      Person child{};
+      // A runtime expression can be pre-computed and saved for more efficient lookups
+      glz::jmespath_expression expression{"family.children[0]"};
+      expect(not glz::read_jmespath(expression, child, buffer));
+      expect(child.first_name == "Lilly");
+   };
+   
+   "compile-time error_handling"_test = [&] {
       std::string middle_name{};
       auto ec = glz::read_jmespath<"family.father.middle_name">(middle_name, buffer);
       //std::cout << glz::format_error(ec, buffer) << '\n';
@@ -127,15 +119,7 @@ suite jmespath_read_tests = [] {
       // Therefore, runtime tests should cover invalid expressions.
    };
    
-   "run-time error_handling"_test = [] {
-      Home home{.family = {.father = {"Gilbert", "Fox", 28},
-                           .mother = {"Anne", "Fox", 30},
-                           .children = {{"Lilly"}, {"Vincent"}}},
-                .address = "123 Maple Street"};
-
-      std::string buffer{};
-      expect(not glz::write_json(home, buffer));
-
+   "run-time error_handling"_test = [&] {
       // Access non-existent field
       std::string middle_name{};
       auto ec = glz::read_jmespath("family.father.middle_name", middle_name, buffer);
