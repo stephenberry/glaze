@@ -798,6 +798,8 @@ namespace glz::detail
          return {};
       }
 
+      // This could be a std::array, but each length N for std::array causes unique template instaniations
+      // This propagates to std::ranges::sort, so using std::vector means less template instaniations
       std::vector<std::string_view> strings{};
       strings.reserve(N);
       for (size_t i = 0; i < N; ++i) {
