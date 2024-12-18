@@ -16,23 +16,23 @@ namespace glz
 {
    template <class T>
    struct meta;
-
+   
    template <>
    struct meta<std::string_view>
    {
       static constexpr std::string_view name = "std::string_view";
    };
-
+   
    template <>
    struct meta<const std::string_view>
    {
       static constexpr std::string_view name = "const std::string_view";
    };
-
+   
    template <class T>
    struct json_schema
    {};
-
+   
    namespace detail
    {
       template <class T>
@@ -40,79 +40,79 @@ namespace glz
       {
          T value;
       };
-
+      
       template <class T>
       Array(T) -> Array<T>;
-
+      
       template <class T>
       struct Object
       {
          T value;
       };
-
+      
       template <class T>
       Object(T) -> Object<T>;
-
+      
       template <class T>
       struct Enum
       {
          T value;
       };
-
+      
       template <class T>
       Enum(T) -> Enum<T>;
-
+      
       template <class T>
       struct Flags
       {
          T value;
       };
-
+      
       template <class T>
       Flags(T) -> Flags<T>;
-
+      
       template <class T>
       concept local_construct_t = requires { T::glaze::construct; };
-
+      
       template <class T>
       concept global_construct_t = requires { meta<T>::construct; };
-
+      
       template <class T>
       concept local_meta_t = requires { T::glaze::value; };
-
+      
       template <class T>
       concept local_keys_t = requires { T::glaze::keys; };
-
+      
       template <class T>
       concept global_meta_t = requires { meta<T>::value; };
-
+      
       template <class T>
       concept glaze_t = requires { meta<std::decay_t<T>>::value; } || local_meta_t<std::decay_t<T>>;
-
+      
       template <class T>
       concept meta_keys = requires { meta<std::decay_t<T>>::keys; } || local_keys_t<std::decay_t<T>>;
-
+      
       template <class T>
       concept has_unknown_writer = requires { meta<T>::unknown_write; } || requires { T::glaze::unknown_write; };
-
+      
       template <class T>
       concept has_unknown_reader = requires { meta<T>::unknown_read; } || requires { T::glaze::unknown_read; };
-
+      
       template <class T>
       concept local_json_schema_t = requires { typename std::decay_t<T>::glaze_json_schema; };
-
+      
       template <class T>
       concept global_json_schema_t = requires { is_specialization_v<std::decay_t<T>, json_schema>; };
-
+      
       template <class T>
       concept json_schema_t = local_json_schema_t<T> || global_json_schema_t<T>;
    }
-
+   
    struct empty
    {
       static constexpr glz::tuplet::tuple<> value{};
    };
-
+   
    template <class T>
    inline constexpr decltype(auto) meta_wrapper_v = [] {
       if constexpr (detail::local_meta_t<T>) {
@@ -125,7 +125,7 @@ namespace glz
          return empty{};
       }
    }();
-
+   
    template <class T>
    inline constexpr auto meta_construct_v = [] {
       if constexpr (detail::local_construct_t<T>) {
@@ -138,9 +138,16 @@ namespace glz
          return empty{};
       }
    }();
-
+   
    template <class T>
-   inline constexpr auto meta_v = meta_wrapper_v<decay_keep_volatile_t<T>>.value;
+   inline constexpr auto meta_v = []() -> decltype(auto) {
+      if constexpr (detail::meta_keys<T>) {
+         return meta_wrapper_v<decay_keep_volatile_t<T>>;
+      }
+      else {
+         return meta_wrapper_v<decay_keep_volatile_t<T>>.value;
+      }
+   }();
 
    template <class T>
    using meta_t = decay_keep_volatile_t<decltype(meta_v<T>)>;

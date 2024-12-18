@@ -10031,6 +10031,37 @@ suite variant_tag_tests = [] {
    };
 };
 
+struct birds
+{
+   std::string crow{};
+   std::string sparrow{};
+   std::string hawk{};
+};
+
+template <>
+struct glz::meta<birds>
+{
+   using T = birds;
+   static constexpr std::array keys{"crow", "sparrow", "hawk"};
+   static constexpr glz::tuplet::tuple value{&T::crow, &T::sparrow, &T::hawk};
+};
+
+suite meta_keys_for_struct = [] {
+   "meta_keys birds"_test = [] {
+      birds obj{"caw","chirp","screech"};
+      
+      std::string buffer{};
+      expect(not glz::write_json(obj, buffer));
+      expect(buffer == R"({"crow":"caw","sparrow":"chirp","hawk":"screech"})") << buffer;
+      
+      obj = {};
+      expect(not glz::read_json(obj, buffer));
+      expect(obj.crow == "caw");
+      expect(obj.sparrow == "chirp");
+      expect(obj.hawk == "screech");
+   };
+};
+
 int main()
 {
    trace.end("json_test");
