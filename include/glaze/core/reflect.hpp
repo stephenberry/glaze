@@ -470,15 +470,6 @@ namespace glz::detail
       constexpr auto indices = std::make_index_sequence<reflect<T>::size>{};
       return make_map_impl<decay_keep_volatile_t<T>, use_hash_comparison>(indices);
    }
-
-   template <class T>
-   constexpr auto make_key_int_map()
-   {
-      constexpr auto N = reflect<T>::size;
-      return [&]<size_t... I>(std::index_sequence<I...>) {
-         return normal_map<sv, size_t, reflect<T>::size>(pair<sv, size_t>{reflect<T>::keys[I], I}...);
-      }(std::make_index_sequence<N>{});
-   }
 }
 
 namespace glz
@@ -646,18 +637,6 @@ namespace glz
       {
          constexpr auto indices = std::make_index_sequence<count_members<T>>{};
          return make_reflection_map_impl<decay_keep_volatile_t<T>, use_hash_comparison>(indices);
-      }
-
-      template <reflectable T>
-      GLZ_ALWAYS_INLINE constexpr void populate_map(T&& value, auto& cmap) noexcept
-      {
-         // we have to populate the pointers in the reflection map from the structured binding
-         auto t = to_tuple(std::forward<T>(value));
-         [&]<size_t... I>(std::index_sequence<I...>) {
-            ((get<std::add_pointer_t<decay_keep_volatile_t<decltype(get<I>(t))>>>(get<I>(cmap.items).second) =
-                 &get<I>(t)),
-             ...);
-         }(std::make_index_sequence<count_members<T>>{});
       }
    }
 }
