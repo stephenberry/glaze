@@ -1307,6 +1307,8 @@ namespace glz::detail
          }
       }
 
+      // TODO: MSVC fixed the related compiler bug, but GitHub Actions has not caught up yet
+#if !defined(_MSC_VER)
       // TODO: Use meta-programming to cache this value
       const auto per_length_data = unique_per_length_info(keys);
       if (per_length_data.valid) {
@@ -1349,6 +1351,7 @@ namespace glz::detail
             return info;
          }
       }
+#endif
 
       // full_flat
       {
@@ -1507,6 +1510,8 @@ namespace glz::detail
             }
             return info;
          }
+         // TODO: MSVC fixed the related compiler bug, but GitHub Actions has not caught up yet
+#if !defined(_MSC_VER)
          else if constexpr (type == unique_per_length) {
             hash_info_t<T, bucket_size(unique_per_length, N)> info{.type = unique_per_length, .seed = k_info.seed};
             info.min_length = k_info.min_length;
@@ -1523,6 +1528,7 @@ namespace glz::detail
             }
             return info;
          }
+#endif
          else if constexpr (type == full_flat) {
             hash_info_t<T, bucket_size(full_flat, N)> info{.type = full_flat, .seed = k_info.seed};
             info.min_length = k_info.min_length;
