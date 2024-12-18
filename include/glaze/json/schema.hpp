@@ -279,7 +279,7 @@ namespace glz
       consteval auto make_reflection_schema_map()
       {
          auto schema_instance = json_schema_v<T>;
-         auto tuple = to_tuple(schema_instance);
+         auto tuple = to_tie(schema_instance);
          using V = std::decay_t<decltype(tuple)>;
          constexpr auto N = glz::tuple_size_v<V>;
          if constexpr (N > 0) {

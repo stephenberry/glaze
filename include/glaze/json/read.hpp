@@ -174,7 +174,7 @@ namespace glz
                }
                else {
                   from<JSON, std::remove_cvref_t<V>>::template op<ws_handled<Opts>()>(
-                     get_member(value, get<I>(to_tuple(value))), ctx, it, end);
+                     get_member(value, get<I>(to_tie(value))), ctx, it, end);
                }
             }
 

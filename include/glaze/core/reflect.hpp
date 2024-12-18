@@ -188,7 +188,7 @@ namespace glz
    struct reflect<T>
    {
       using V = std::remove_cvref_t<T>;
-      using tuple = decay_keep_volatile_t<decltype(to_tuple(std::declval<T>()))>;
+      using tuple = decay_keep_volatile_t<decltype(to_tie(std::declval<T>()))>;
 
       static constexpr auto keys = member_names<V>;
       static constexpr auto size = keys.size();
@@ -1992,7 +1992,7 @@ namespace glz
       constexpr auto N = reflect<T>::size;
       if constexpr (N > 0) {
          [&]<size_t... I>(std::index_sequence<I...>) constexpr {
-            (callable(get_member(value, get<I>(to_tuple(value)))), ...);
+            (callable(get_member(value, get<I>(to_tie(value)))), ...);
          }(std::make_index_sequence<N>{});
       }
    }

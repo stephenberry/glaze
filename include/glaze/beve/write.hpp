@@ -699,7 +699,7 @@ namespace glz
 
             [[maybe_unused]] decltype(auto) t = [&]() -> decltype(auto) {
                if constexpr (reflectable<T>) {
-                  return to_tuple(value);
+                  return to_tie(value);
                }
                else {
                   return nullptr;
@@ -737,7 +737,7 @@ namespace glz
 
             [[maybe_unused]] decltype(auto) t = [&]() -> decltype(auto) {
                if constexpr (reflectable<T>) {
-                  return to_tuple(value);
+                  return to_tie(value);
                }
                else {
                   return nullptr;
@@ -884,7 +884,7 @@ namespace glz
                   }
                   else {
                      detail::write<BEVE>::no_header<Opts>(key, ctx, b, ix);
-                     write_partial<BEVE>::op<sub_partial, Opts>(get_member(value, get<index>(to_tuple(value))), ctx, b,
+                     write_partial<BEVE>::op<sub_partial, Opts>(get_member(value, get<index>(to_tie(value))), ctx, b,
                                                                 ix);
                   }
                });
