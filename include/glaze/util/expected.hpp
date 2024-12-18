@@ -25,6 +25,7 @@
 #pragma once
 
 #include <utility>
+#include <version>
 
 #ifndef GLZ_THROW_OR_ABORT
 #if __cpp_exceptions
