@@ -1262,7 +1262,7 @@ namespace glz::detail
                   break;
                }
                const auto bucket = hash % bsize;
-               if (contains(std::span{bucket_index.data(), index}, bucket)) {
+               if (contains(bucket_index.data(), index, bucket)) {
                   break;
                }
                bucket_index[index] = bucket;
@@ -1272,7 +1272,7 @@ namespace glz::detail
             if (index == N) {
                // make sure the seed does not collide with any hashes
                const auto bucket = seed % bsize;
-               if (not contains(std::span{bucket_index.data(), N}, bucket)) {
+               if (not contains(bucket_index.data(), N, bucket)) {
                   return; // found working seed
                }
             }
@@ -1421,7 +1421,7 @@ namespace glz::detail
                      break;
                   }
                   const auto bucket = hash % bsize;
-                  if (contains(std::span{bucket_index.data(), index}, bucket)) {
+                  if (contains(bucket_index.data(), index, bucket)) {
                      break;
                   }
                   bucket_index[index] = bucket;
@@ -1431,7 +1431,7 @@ namespace glz::detail
                if (index == N) {
                   // make sure the seed does not collide with any hashes
                   const auto bucket = seed % bsize;
-                  if (not contains(std::span{bucket_index.data(), N}, bucket)) {
+                  if (not contains(bucket_index.data(), N, bucket)) {
                      return; // found working seed
                   }
                }
@@ -1466,7 +1466,7 @@ namespace glz::detail
                      break;
                   }
                   const auto bucket = hash % bsize;
-                  if (contains(std::span{bucket_index.data(), index}, bucket)) {
+                  if (contains(bucket_index.data(), index, bucket)) {
                      break;
                   }
                   bucket_index[index] = bucket;
@@ -1476,7 +1476,7 @@ namespace glz::detail
                if (index == N) {
                   // make sure the seed does not collide with any hashes
                   const auto bucket = seed % bsize;
-                  if (not contains(std::span{bucket_index.data(), N}, bucket)) {
+                  if (not contains(bucket_index.data(), N, bucket)) {
                      return; // found working seed
                   }
                }
@@ -1508,7 +1508,7 @@ namespace glz::detail
                      break;
                   }
                   const auto bucket = hash % bsize;
-                  if (contains(std::span{bucket_index.data(), index}, bucket)) {
+                  if (contains(bucket_index.data(), index, bucket)) {
                      break;
                   }
                   bucket_index[index] = bucket;
@@ -1518,7 +1518,7 @@ namespace glz::detail
                if (index == N) {
                   // make sure the seed does not collide with any hashes
                   const auto bucket = seed % bsize;
-                  if (not contains(std::span{bucket_index.data(), N}, bucket)) {
+                  if (not contains(bucket_index.data(), N, bucket)) {
                      return; // found working seed
                   }
                }
