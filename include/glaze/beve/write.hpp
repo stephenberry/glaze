@@ -874,14 +874,18 @@ namespace glz
 
                   static constexpr auto key = get<0>(group);
                   static constexpr auto sub_partial = get<1>(group);
-                  static constexpr auto frozen_map = detail::make_map<T>();
-                  static constexpr auto member_it = frozen_map.find(key);
-                  static_assert(member_it != frozen_map.end(), "Invalid key passed to partial write");
-                  static constexpr auto index = member_it->second.index();
-                  static constexpr decltype(auto) element = get<index>(member_it->second);
-
-                  detail::write<BEVE>::no_header<Opts>(key, ctx, b, ix);
-                  write_partial<BEVE>::op<sub_partial, Opts>(glz::get_member(value, element), ctx, b, ix);
+                  static constexpr auto index = key_index<T>(key);
+                  static_assert(index < reflect<T>::size, "Invalid key passed to partial write");
+                  
+                  if constexpr (glaze_object_t<T>) {
+                     static constexpr auto member = get<index>(reflect<T>::values);
+                     detail::write<BEVE>::no_header<Opts>(key, ctx, b, ix);
+                     write_partial<BEVE>::op<sub_partial, Opts>(get_member(value, member), ctx, b, ix);
+                  }
+                  else {
+                     detail::write<BEVE>::no_header<Opts>(key, ctx, b, ix);
+                     write_partial<BEVE>::op<sub_partial, Opts>(get_member(value, get<index>(to_tuple(value))), ctx, b, ix);
+                  }
                });
             }
             else if constexpr (writable_map_t<T>) {

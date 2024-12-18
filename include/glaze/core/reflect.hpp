@@ -721,6 +721,18 @@ namespace glz::detail
 
 namespace glz::detail
 {
+   template <class T>
+   consteval size_t key_index(const std::string_view key)
+   {
+      const auto n = reflect<T>::keys.size();
+      for (size_t i = 0; i < n; ++i) {
+         if (key == reflect<T>::keys[i]) {
+            return i;
+         }
+      }
+      return n;
+   }
+   
    GLZ_ALWAYS_INLINE constexpr uint64_t bitmix(uint64_t h, const uint64_t seed) noexcept
    {
       h *= seed;
