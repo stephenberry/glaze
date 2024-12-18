@@ -216,7 +216,7 @@ namespace glz
             eq_impl(static_cast<U&&>(tup), base_list(), typename tuple2::base_list());
          }
          else {
-            eq_impl(static_cast<U&&>(tup), tag_range<N>());
+            eq_impl(static_cast<U&&>(tup), tuplet::tag_range<N>());
          }
          return *this;
       }
