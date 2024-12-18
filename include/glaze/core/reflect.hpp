@@ -13,62 +13,6 @@
 #pragma warning(disable : 4100 4189)
 #endif
 
-namespace glz::detail
-{
-   // We create const and not-const versions for when our reflected struct is const or non-const qualified
-   template <class Tuple>
-   struct tuple_ptr;
-
-   template <class... Ts>
-   struct tuple_ptr<tuplet::tuple<Ts...>>
-   {
-      using type = tuplet::tuple<std::add_pointer_t<std::remove_reference_t<Ts>>...>;
-   };
-
-   template <class Tuple>
-   struct tuple_ptr_const;
-
-   template <class... Ts>
-   struct tuple_ptr_const<tuplet::tuple<Ts...>>
-   {
-      using type = tuplet::tuple<std::add_pointer_t<std::add_const_t<std::remove_reference_t<Ts>>>...>;
-   };
-
-   // This is needed to hack a fix for MSVC evaluating wrong `if constexpr` branches
-   template <class T>
-      requires(!reflectable<T>)
-   constexpr auto make_tuple_from_struct() noexcept
-   {
-      return glz::tuplet::tuple{};
-   }
-
-   // This needs to produce const qualified pointers so that we can write out const structs
-   template <reflectable T>
-   constexpr auto make_tuple_from_struct() noexcept
-   {
-      using V = decay_keep_volatile_t<decltype(to_tuple(std::declval<T>()))>;
-      return typename tuple_ptr<V>::type{};
-   }
-
-   template <reflectable T>
-   constexpr auto make_const_tuple_from_struct() noexcept
-   {
-      using V = decay_keep_volatile_t<decltype(to_tuple(std::declval<T>()))>;
-      return typename tuple_ptr_const<V>::type{};
-   }
-
-   template <reflectable T, class TuplePtrs>
-      requires(!std::is_const_v<TuplePtrs>)
-   constexpr void populate_tuple_ptr(T&& value, TuplePtrs& tuple_of_ptrs) noexcept
-   {
-      // we have to populate the pointers in the reflection tuple from the structured binding
-      auto t = to_tuple(std::forward<T>(value));
-      [&]<size_t... I>(std::index_sequence<I...>) {
-         ((get<I>(tuple_of_ptrs) = &get<I>(t)), ...);
-      }(std::make_index_sequence<count_members<T>>{});
-   }
-}
-
 namespace glz
 {
    // Get indices of elements satisfying a predicate
@@ -245,8 +189,6 @@ namespace glz
    {
       using V = std::remove_cvref_t<T>;
       using tuple = decay_keep_volatile_t<decltype(to_tuple(std::declval<T>()))>;
-
-      // static constexpr auto values = typename detail::tuple_ptr<tuple>::type{};
 
       static constexpr auto keys = member_names<V>;
       static constexpr auto size = keys.size();
