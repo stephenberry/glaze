@@ -13,62 +13,6 @@
 #pragma warning(disable : 4100 4189)
 #endif
 
-namespace glz::detail
-{
-   // We create const and not-const versions for when our reflected struct is const or non-const qualified
-   template <class Tuple>
-   struct tuple_ptr;
-
-   template <class... Ts>
-   struct tuple_ptr<tuplet::tuple<Ts...>>
-   {
-      using type = tuplet::tuple<std::add_pointer_t<std::remove_reference_t<Ts>>...>;
-   };
-
-   template <class Tuple>
-   struct tuple_ptr_const;
-
-   template <class... Ts>
-   struct tuple_ptr_const<tuplet::tuple<Ts...>>
-   {
-      using type = tuplet::tuple<std::add_pointer_t<std::add_const_t<std::remove_reference_t<Ts>>>...>;
-   };
-
-   // This is needed to hack a fix for MSVC evaluating wrong `if constexpr` branches
-   template <class T>
-      requires(!reflectable<T>)
-   constexpr auto make_tuple_from_struct() noexcept
-   {
-      return glz::tuplet::tuple{};
-   }
-
-   // This needs to produce const qualified pointers so that we can write out const structs
-   template <reflectable T>
-   constexpr auto make_tuple_from_struct() noexcept
-   {
-      using V = decay_keep_volatile_t<decltype(to_tuple(std::declval<T>()))>;
-      return typename tuple_ptr<V>::type{};
-   }
-
-   template <reflectable T>
-   constexpr auto make_const_tuple_from_struct() noexcept
-   {
-      using V = decay_keep_volatile_t<decltype(to_tuple(std::declval<T>()))>;
-      return typename tuple_ptr_const<V>::type{};
-   }
-
-   template <reflectable T, class TuplePtrs>
-      requires(!std::is_const_v<TuplePtrs>)
-   constexpr void populate_tuple_ptr(T&& value, TuplePtrs& tuple_of_ptrs) noexcept
-   {
-      // we have to populate the pointers in the reflection tuple from the structured binding
-      auto t = to_tuple(std::forward<T>(value));
-      [&]<size_t... I>(std::index_sequence<I...>) {
-         ((get<I>(tuple_of_ptrs) = &get<I>(t)), ...);
-      }(std::make_index_sequence<count_members<T>>{});
-   }
-}
-
 namespace glz
 {
    // Get indices of elements satisfying a predicate
@@ -245,8 +189,6 @@ namespace glz
    {
       using V = std::remove_cvref_t<T>;
       using tuple = decay_keep_volatile_t<decltype(to_tuple(std::declval<T>()))>;
-
-      // static constexpr auto values = typename detail::tuple_ptr<tuple>::type{};
 
       static constexpr auto keys = member_names<V>;
       static constexpr auto size = keys.size();
@@ -528,15 +470,6 @@ namespace glz::detail
       constexpr auto indices = std::make_index_sequence<reflect<T>::size>{};
       return make_map_impl<decay_keep_volatile_t<T>, use_hash_comparison>(indices);
    }
-
-   template <class T>
-   constexpr auto make_key_int_map()
-   {
-      constexpr auto N = reflect<T>::size;
-      return [&]<size_t... I>(std::index_sequence<I...>) {
-         return normal_map<sv, size_t, reflect<T>::size>(pair<sv, size_t>{reflect<T>::keys[I], I}...);
-      }(std::make_index_sequence<N>{});
-   }
 }
 
 namespace glz
@@ -705,18 +638,6 @@ namespace glz
          constexpr auto indices = std::make_index_sequence<count_members<T>>{};
          return make_reflection_map_impl<decay_keep_volatile_t<T>, use_hash_comparison>(indices);
       }
-
-      template <reflectable T>
-      GLZ_ALWAYS_INLINE constexpr void populate_map(T&& value, auto& cmap) noexcept
-      {
-         // we have to populate the pointers in the reflection map from the structured binding
-         auto t = to_tuple(std::forward<T>(value));
-         [&]<size_t... I>(std::index_sequence<I...>) {
-            ((get<std::add_pointer_t<decay_keep_volatile_t<decltype(get<I>(t))>>>(get<I>(cmap.items).second) =
-                 &get<I>(t)),
-             ...);
-         }(std::make_index_sequence<count_members<T>>{});
-      }
    }
 }
 
@@ -785,7 +706,12 @@ namespace glz::detail
          using V = decay_keep_volatile_t<std::variant_alternative_t<I, T>>;
          if constexpr (glaze_object_t<V> || reflectable<V> || is_memory_object<V>) {
             using X = std::conditional_t<is_memory_object<V>, memory_type<V>, V>;
-            for_each<reflect<X>::size>([&](auto J) { deduction_map.find(reflect<X>::keys[J])->second[I] = true; });
+            constexpr auto Size = reflect<X>::size;
+            if constexpr (Size > 0) {
+               for (size_t J = 0; J < Size; ++J) {
+                  deduction_map.find(reflect<X>::keys[J])->second[I] = true;
+               }
+            }
          }
       });
 
@@ -795,6 +721,18 @@ namespace glz::detail
 
 namespace glz::detail
 {
+   template <class T>
+   consteval size_t key_index(const std::string_view key)
+   {
+      const auto n = reflect<T>::keys.size();
+      for (size_t i = 0; i < n; ++i) {
+         if (key == reflect<T>::keys[i]) {
+            return i;
+         }
+      }
+      return n;
+   }
+   
    GLZ_ALWAYS_INLINE constexpr uint64_t bitmix(uint64_t h, const uint64_t seed) noexcept
    {
       h *= seed;
@@ -851,7 +789,10 @@ namespace glz::detail
          return {};
       }
 
+      // This could be a std::array, but each length N for std::array causes unique template instaniations
+      // This propagates to std::ranges::sort, so using std::vector means less template instaniations
       std::vector<std::string_view> strings{};
+      strings.reserve(N);
       for (size_t i = 0; i < N; ++i) {
          strings.emplace_back(input_strings[i]);
       }
@@ -1262,7 +1203,7 @@ namespace glz::detail
                   break;
                }
                const auto bucket = hash % bsize;
-               if (contains(std::span{bucket_index.data(), index}, bucket)) {
+               if (contains(bucket_index.data(), index, bucket)) {
                   break;
                }
                bucket_index[index] = bucket;
@@ -1272,7 +1213,7 @@ namespace glz::detail
             if (index == N) {
                // make sure the seed does not collide with any hashes
                const auto bucket = seed % bsize;
-               if (not contains(std::span{bucket_index.data(), N}, bucket)) {
+               if (not contains(bucket_index.data(), N, bucket)) {
                   return; // found working seed
                }
             }
@@ -1421,7 +1362,7 @@ namespace glz::detail
                      break;
                   }
                   const auto bucket = hash % bsize;
-                  if (contains(std::span{bucket_index.data(), index}, bucket)) {
+                  if (contains(bucket_index.data(), index, bucket)) {
                      break;
                   }
                   bucket_index[index] = bucket;
@@ -1431,7 +1372,7 @@ namespace glz::detail
                if (index == N) {
                   // make sure the seed does not collide with any hashes
                   const auto bucket = seed % bsize;
-                  if (not contains(std::span{bucket_index.data(), N}, bucket)) {
+                  if (not contains(bucket_index.data(), N, bucket)) {
                      return; // found working seed
                   }
                }
@@ -1466,7 +1407,7 @@ namespace glz::detail
                      break;
                   }
                   const auto bucket = hash % bsize;
-                  if (contains(std::span{bucket_index.data(), index}, bucket)) {
+                  if (contains(bucket_index.data(), index, bucket)) {
                      break;
                   }
                   bucket_index[index] = bucket;
@@ -1476,7 +1417,7 @@ namespace glz::detail
                if (index == N) {
                   // make sure the seed does not collide with any hashes
                   const auto bucket = seed % bsize;
-                  if (not contains(std::span{bucket_index.data(), N}, bucket)) {
+                  if (not contains(bucket_index.data(), N, bucket)) {
                      return; // found working seed
                   }
                }
@@ -1508,7 +1449,7 @@ namespace glz::detail
                      break;
                   }
                   const auto bucket = hash % bsize;
-                  if (contains(std::span{bucket_index.data(), index}, bucket)) {
+                  if (contains(bucket_index.data(), index, bucket)) {
                      break;
                   }
                   bucket_index[index] = bucket;
@@ -1518,7 +1459,7 @@ namespace glz::detail
                if (index == N) {
                   // make sure the seed does not collide with any hashes
                   const auto bucket = seed % bsize;
-                  if (not contains(std::span{bucket_index.data(), N}, bucket)) {
+                  if (not contains(bucket_index.data(), N, bucket)) {
                      return; // found working seed
                   }
                }
@@ -1542,7 +1483,7 @@ namespace glz::detail
 
    template <class T>
    constexpr auto hash_info = [] {
-      if constexpr ((glaze_object_t<T> || reflectable<T> ||
+      if constexpr ((glaze_object_t<T> || reflectable<T> || glaze_flags_t<T> ||
                      ((std::is_enum_v<std::remove_cvref_t<T>> && meta_keys<T>) || glaze_enum_t<T>)) &&
                     (reflect<T>::size > 0)) {
          constexpr auto& k_info = keys_info<T>;

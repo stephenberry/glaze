@@ -1672,18 +1672,6 @@ namespace glz
          }
       };
 
-      template <class T>
-      consteval size_t key_index(const std::string_view key)
-      {
-         const auto n = reflect<T>::keys.size();
-         for (size_t i = 0; i < n; ++i) {
-            if (key == reflect<T>::keys[i]) {
-               return i;
-            }
-         }
-         return n;
-      }
-
       // Only object types are supported for partial
       template <class T>
          requires(glaze_object_t<T> || writable_map_t<T> || reflectable<T>)

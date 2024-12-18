@@ -124,8 +124,8 @@ struct glz::meta<sub_thing2>
 {
    using T = sub_thing2;
    static constexpr std::string_view name = "sub_thing2";
-   static constexpr auto value = object("a", &T::a, "Test comment 1", //
-                                        "b", &T::b, "Test comment 2", //
+   static constexpr auto value = object("a", &T::a, //
+                                        "b", &T::b, //
                                         "c", &T::c, //
                                         "d", &T::d, //
                                         "e", &T::e, //
@@ -1619,20 +1619,19 @@ suite json_pointer = [] {
    };
 
    "valid"_test = [] {
-      [[maybe_unused]] constexpr bool is_valid = glz::valid<Thing, "/thing/a", double>(); // Verify constexpr
+      // Compile time JSON Pointer syntax validation
+      static_assert(glz::valid<Thing, "/thing_ptr/a", double>());
+      static_assert(glz::valid<Thing, "/thing_ptr/a", int>() == false);
+      static_assert(glz::valid<Thing, "/thing_ptr/b">());
+      static_assert(glz::valid<Thing, "/thing_ptr/z">() == false);
 
-      expect(glz::valid<Thing, "/thing_ptr/a", double>() == true);
-      expect(glz::valid<Thing, "/thing_ptr/a", int>() == false);
-      expect(glz::valid<Thing, "/thing_ptr/b">() == true);
-      expect(glz::valid<Thing, "/thing_ptr/z">() == false);
+      static_assert(glz::valid<Thing, "/vec3/2", double>());
+      static_assert(glz::valid<Thing, "/vec3/3", double>() == false);
 
-      expect(glz::valid<Thing, "/vec3/2", double>() == true);
-      expect(glz::valid<Thing, "/vec3/3", double>() == false);
-
-      expect(glz::valid<Thing, "/map/f", int>() == true);
-      expect(glz::valid<Thing, "/vector", std::vector<V3>>() == true);
-      expect(glz::valid<Thing, "/vector/1", V3>() == true);
-      expect(glz::valid<Thing, "/vector/1/0", double>() == true);
+      static_assert(glz::valid<Thing, "/map/f", int>());
+      static_assert(glz::valid<Thing, "/vector", std::vector<V3>>());
+      static_assert(glz::valid<Thing, "/vector/1", V3>());
+      static_assert(glz::valid<Thing, "/vector/1/0", double>());
    };
 
    "id bug"_test = [] {
@@ -10028,6 +10027,37 @@ suite variant_tag_tests = [] {
       if (not x.has_value()) {
          std::cerr << glz::format_error(x.error(), *xString);
       }
+   };
+};
+
+struct birds
+{
+   std::string crow{};
+   std::string sparrow{};
+   std::string hawk{};
+};
+
+template <>
+struct glz::meta<birds>
+{
+   using T = birds;
+   static constexpr std::array keys{"crow", "sparrow", "hawk"};
+   static constexpr glz::tuplet::tuple value{&T::crow, &T::sparrow, &T::hawk};
+};
+
+suite meta_keys_for_struct = [] {
+   "meta_keys birds"_test = [] {
+      birds obj{"caw","chirp","screech"};
+      
+      std::string buffer{};
+      expect(not glz::write_json(obj, buffer));
+      expect(buffer == R"({"crow":"caw","sparrow":"chirp","hawk":"screech"})") << buffer;
+      
+      obj = {};
+      expect(not glz::read_json(obj, buffer));
+      expect(obj.crow == "caw");
+      expect(obj.sparrow == "chirp");
+      expect(obj.hawk == "screech");
    };
 };
 

@@ -140,7 +140,14 @@ namespace glz
    }();
 
    template <class T>
-   inline constexpr auto meta_v = meta_wrapper_v<decay_keep_volatile_t<T>>.value;
+   inline constexpr auto meta_v = []() -> decltype(auto) {
+      if constexpr (detail::meta_keys<T>) {
+         return meta_wrapper_v<decay_keep_volatile_t<T>>;
+      }
+      else {
+         return meta_wrapper_v<decay_keep_volatile_t<T>>.value;
+      }
+   }();
 
    template <class T>
    using meta_t = decay_keep_volatile_t<decltype(meta_v<T>)>;
