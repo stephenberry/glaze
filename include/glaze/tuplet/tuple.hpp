@@ -289,24 +289,6 @@ namespace glz
          return static_cast<tuple&&>(*this).all_impl(base_list(), static_cast<F&&>(func));
       }
 
-      // Map a function over every element in the tuple, using the values to
-      // construct a new tuple
-      template <class F>
-      constexpr auto map(F&& func) &
-      {
-         return map_impl(base_list(), static_cast<F&&>(func));
-      }
-      template <class F>
-      constexpr auto map(F&& func) const&
-      {
-         return map_impl(base_list(), static_cast<F&&>(func));
-      }
-      template <class F>
-      constexpr auto map(F&& func) &&
-      {
-         return static_cast<tuple&&>(*this).map_impl(base_list(), static_cast<F&&>(func));
-      }
-
      private:
       template <class U, class... B1, class... B2>
       constexpr void eq_impl(U&& u, tuplet::type_list<B1...>, tuplet::type_list<B2...>)
@@ -373,24 +355,6 @@ namespace glz
       {
          return (bool(func(static_cast<T&&>(B::value))) && ...);
       }
-
-      template <class F, class... B>
-      constexpr auto map_impl(tuplet::type_list<B...>, F&& func) & -> tuple<unwrap_ref_decay_t<decltype(func(B::value))>...>
-      {
-         return {func(B::value)...};
-      }
-      template <class F, class... B>
-      constexpr auto map_impl(tuplet::type_list<B...>,
-                              F&& func) const& -> tuple<unwrap_ref_decay_t<decltype(func(B::value))>...>
-      {
-         return {func(B::value)...};
-      }
-      template <class F, class... B>
-      constexpr auto map_impl(
-                              tuplet::type_list<B...>, F&& func) && -> tuple<unwrap_ref_decay_t<decltype(func(static_cast<T&&>(B::value)))>...>
-      {
-         return {func(static_cast<T&&>(B::value))...};
-      }
    };
    template <>
    struct tuple<> : tuplet::tuple_base_t<>
@@ -441,16 +405,6 @@ namespace glz
       constexpr bool all(F&&) const noexcept
       {
          return true;
-      }
-
-      // Map a function over every element in the tuple, using the values to
-      // construct a new tuple
-      //
-      // (Returns empty tuple when invoked on empty tuple)
-      template <class F>
-      constexpr auto map(F&&) const noexcept
-      {
-         return tuple{};
       }
    };
    template <class... Ts>
