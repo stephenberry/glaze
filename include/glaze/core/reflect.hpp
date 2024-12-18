@@ -799,6 +799,7 @@ namespace glz::detail
       }
 
       std::vector<std::string_view> strings{};
+      strings.reserve(N);
       for (size_t i = 0; i < N; ++i) {
          strings.emplace_back(input_strings[i]);
       }
