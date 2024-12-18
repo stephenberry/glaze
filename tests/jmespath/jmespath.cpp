@@ -178,6 +178,26 @@ suite jmespath_slice_tests = [] {
       expect(slice[3] == 3);
       expect(slice[4] == 4);
    };
+   
+   "slice compile-time multi-bracket"_test = [] {
+      std::vector<std::vector<int>> data{{1,2},{3,4,5},{6,7}};
+      std::string buffer{};
+      expect(not glz::write_json(data, buffer));
+      
+      int v{};
+      expect(not glz::read_jmespath<"[1][2]">(v, buffer));
+      expect(v == 5);
+   };
+   
+   "slice run-time multi-bracket"_test = [] {
+      std::vector<std::vector<int>> data{{1,2},{3,4,5},{6,7}};
+      std::string buffer{};
+      expect(not glz::write_json(data, buffer));
+      
+      int v{};
+      expect(not glz::read_jmespath("[1][2]", v, buffer));
+      expect(v == 5);
+   };
 };
 
 int main() { return 0; }

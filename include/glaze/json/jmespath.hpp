@@ -164,6 +164,46 @@ namespace glz
          // If no delimiter found, return the whole string as first token
          return {s, "", tokenization_error::none};
       }
+      
+      inline constexpr tokenization_error finalize_tokens(std::vector<std::string_view>& tokens)
+      {
+         std::vector<std::string_view> final_tokens;
+         final_tokens.reserve(tokens.size()); // at least
+
+         for (auto token : tokens) {
+            size_t start = 0;
+            while (start < token.size()) {
+               // Find the next '['
+               auto open = token.find('[', start);
+               if (open == std::string_view::npos) {
+                  // No more bracketed segments
+                  if (start < token.size()) {
+                     // Add remaining part (if not empty)
+                     final_tokens.push_back(token.substr(start));
+                  }
+                  break; // move to next token
+               }
+               else {
+                  // If there's a key part before the bracket, add it
+                  if (open > start) {
+                     final_tokens.push_back(token.substr(start, open - start));
+                  }
+                  // Now find the closing bracket ']'
+                  auto close = token.find(']', open + 1);
+                  if (close == std::string_view::npos) {
+                     // Mismatched bracket
+                     return tokenization_error::unbalanced_brackets;
+                  }
+                  // Extract the bracketed token: e.g. [0]
+                  final_tokens.push_back(token.substr(open, close - open + 1));
+                  start = close + 1; // continue after the ']'
+               }
+            }
+         }
+
+         tokens = std::move(final_tokens);
+         return tokenization_error::none;
+      }
 
       /**
        * @brief Recursively tokenizes a full JMESPath expression into all its tokens with error handling.
@@ -173,8 +213,8 @@ namespace glz
        * @param error An output parameter to capture any tokenization errors.
        * @return true if tokenization succeeded without errors, false otherwise.
        */
-      inline constexpr tokenization_error tokenize_full_jmespath(std::string_view expression,
-                                                                 std::vector<std::string_view>& tokens)
+      inline constexpr jmespath::tokenization_error tokenize_full_jmespath(std::string_view expression,
+                                                                           std::vector<std::string_view>& tokens)
       {
          tokens.clear();
          auto remaining = expression;
@@ -185,33 +225,32 @@ namespace glz
                return result.error;
             }
 
-            // Detect empty tokens which indicate consecutive delimiters
             if (result.first.empty()) {
                return tokenization_error::unexpected_delimiter;
             }
 
             tokens.emplace_back(result.first);
 
-            // Remove the delimiter (either '.' or '|') from the rest
             if (!result.second.empty()) {
                char delimiter = result.second.front();
                if (delimiter == '.' || delimiter == '|') {
                   remaining = result.second.substr(1);
-                  // Trim leading whitespace after the delimiter
                   remaining = trim_left(remaining);
-                  // Check if the next character is another delimiter, indicating an empty token
                   if (!remaining.empty() && (remaining.front() == '.' || remaining.front() == '|')) {
                      return tokenization_error::unexpected_delimiter;
                   }
-               }
-               else {
-                  // Unexpected character, set error and stop tokenization
+               } else {
                   return tokenization_error::unexpected_delimiter;
                }
-            }
-            else {
+            } else {
                break;
             }
+         }
+
+         // New step: finalize the tokens by splitting multiple bracket accesses
+         auto err = finalize_tokens(tokens);
+         if (err != jmespath::tokenization_error::none) {
+            return err;
          }
 
          return tokenization_error::none;
@@ -532,10 +571,8 @@ namespace glz
          buffer.resize(buffer.size() + padding_bytes);
       }
       auto p = read_iterators<Opts>(buffer);
-
       auto it = p.first;
       auto end = p.second;
-
       auto start = it;
 
       context ctx{};
@@ -570,24 +607,39 @@ namespace glz
                      // SINGLE INDEX SCENARIO (no slice, just an index)
                      if constexpr (decomposed_key.start.has_value()) {
                         constexpr auto n = decomposed_key.start.value();
-
-                        // Skip until we reach the target element n
-                        for (int32_t i = 0; i < n; ++i) {
-                           skip_value<JSON>::op<Opts>(ctx, it, end);
-                           if (bool(ctx.error)) [[unlikely]]
-                              return;
-
-                           if (*it != ',') {
-                              ctx.error = error_code::array_element_not_found;
-                              return;
-                           }
-                           ++it;
-                           GLZ_SKIP_WS();
-                        }
-
-                        // Now read the element at index n
+                        
                         if constexpr (I == (N - 1)) {
+                           // Skip until we reach the target element n
+                           for (int32_t i = 0; i < n; ++i) {
+                              skip_value<JSON>::op<Opts>(ctx, it, end);
+                              if (bool(ctx.error)) [[unlikely]]
+                                 return;
+
+                              if (*it != ',') {
+                                 ctx.error = error_code::array_element_not_found;
+                                 return;
+                              }
+                              ++it;
+                              GLZ_SKIP_WS();
+                           }
+
+                           // Now read the element at index n
                            detail::read<Opts.format>::template op<Opts>(value, ctx, it, end);
+                        }
+                        else {
+                           // Not the last token. We must still parse the element at index n so the next indexing can proceed.
+                           for (int32_t i = 0; i < n; ++i) {
+                              skip_value<JSON>::op<Opts>(ctx, it, end);
+                              if (bool(ctx.error)) [[unlikely]]
+                                 return;
+
+                              if (*it != ',') {
+                                 ctx.error = error_code::array_element_not_found;
+                                 return;
+                              }
+                              ++it;
+                              GLZ_SKIP_WS();
+                           }
                         }
                      } else {
                         ctx.error = error_code::array_element_not_found;
@@ -735,7 +787,6 @@ namespace glz
          // Pad the buffer for SWAR
          buffer.resize(buffer.size() + padding_bytes);
       }
-
       auto p = read_iterators<Opts>(buffer);
       auto it = p.first;
       auto end = p.second;
@@ -774,27 +825,40 @@ namespace glz
                      else {
                         // Single index scenario
                         if (decomposed_key.start.has_value()) {
-                           int32_t n = decomposed_key.start.value();
-                           for (int32_t i = 0; i < n; ++i) {
-                              skip_value<JSON>::op<Opts>(ctx, it, end);
-                              if (bool(ctx.error)) [[unlikely]] return;
-
-                              if (*it != ',') {
-                                 ctx.error = error_code::array_element_not_found;
-                                 return;
-                              }
-                              ++it;
-                              GLZ_SKIP_WS();
-                           }
-
-                           GLZ_SKIP_WS();
+                           const int32_t n = decomposed_key.start.value();
+                           
                            if (I == (N - 1)) {
+                              // Skip until we reach the target element n
+                              for (int32_t i = 0; i < n; ++i) {
+                                 skip_value<JSON>::op<Opts>(ctx, it, end);
+                                 if (bool(ctx.error)) [[unlikely]]
+                                    return;
+
+                                 if (*it != ',') {
+                                    ctx.error = error_code::array_element_not_found;
+                                    return;
+                                 }
+                                 ++it;
+                                 GLZ_SKIP_WS();
+                              }
+
+                              // Now read the element at index n
                               detail::read<Opts.format>::template op<Opts>(value, ctx, it, end);
                            }
                            else {
-                              // If not the last token, we should continue traversing
-                              // But since this scenario typically implies the last token,
-                              // we'll assume it's final. If needed, further code could be implemented.
+                              // Not the last token. We must still parse the element at index n so the next indexing can proceed.
+                              for (int32_t i = 0; i < n; ++i) {
+                                 skip_value<JSON>::op<Opts>(ctx, it, end);
+                                 if (bool(ctx.error)) [[unlikely]]
+                                    return;
+
+                                 if (*it != ',') {
+                                    ctx.error = error_code::array_element_not_found;
+                                    return;
+                                 }
+                                 ++it;
+                                 GLZ_SKIP_WS();
+                              }
                            }
                         }
                         else {
