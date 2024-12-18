@@ -108,7 +108,7 @@ namespace glz
                                                    "multipleOf", &T::multipleOf, //
                                                    "minProperties", &T::minProperties, //
                                                    "maxProperties", &T::maxProperties, //
-                                                   //               "dependentRequired", &T::dependent_required, //
+                                                   // "dependentRequired", &T::dependent_required, //
                                                    "required", &T::required, //
                                                    "minItems", &T::minItems, //
                                                    "maxItems", &T::maxItems, //
@@ -196,42 +196,79 @@ struct glz::meta<glz::detail::schematic>
 {
    static constexpr std::string_view name = "glz::detail::schema";
    using T = detail::schematic;
-   static constexpr auto value = glz::object(
-      "type", &T::type, //
-      "properties", &T::properties, //
-      "items", &T::items, //
-      "additionalProperties", &T::additionalProperties, //
-      "$defs", &T::defs, //
-      "oneOf", &T::oneOf, //
-      "examples", raw<&T::examples>, //
-      "required", &T::required, //
-      "title", [](auto&& self) -> auto& { return self.attributes.title; }, //
-      "description", [](auto&& self) -> auto& { return self.attributes.description; }, //
-      "default", [](auto&& self) -> auto& { return self.attributes.defaultValue; }, //
-      "deprecated", [](auto&& self) -> auto& { return self.attributes.deprecated; }, //
-      "readOnly", [](auto&& self) -> auto& { return self.attributes.readOnly; }, //
-      "writeOnly", [](auto&& self) -> auto& { return self.attributes.writeOnly; }, //
-      "const", [](auto&& self) -> auto& { return self.attributes.constant; }, //
-      "minLength", [](auto&& self) -> auto& { return self.attributes.minLength; }, //
-      "maxLength", [](auto&& self) -> auto& { return self.attributes.maxLength; }, //
-      "pattern", [](auto&& self) -> auto& { return self.attributes.pattern; }, //
-      "format", [](auto&& self) -> auto& { return self.attributes.format; }, //
-      "minimum", [](auto&& self) -> auto& { return self.attributes.minimum; }, //
-      "maximum", [](auto&& self) -> auto& { return self.attributes.maximum; }, //
-      "exclusiveMinimum", [](auto&& self) -> auto& { return self.attributes.exclusiveMinimum; }, //
-      "exclusiveMaximum", [](auto&& self) -> auto& { return self.attributes.exclusiveMaximum; }, //
-      "multipleOf", [](auto&& self) -> auto& { return self.attributes.multipleOf; }, //
-      "minProperties", [](auto&& self) -> auto& { return self.attributes.minProperties; }, //
-      "maxProperties", [](auto&& self) -> auto& { return self.attributes.maxProperties; }, //
-      //               "dependentRequired", [](auto&& self) -> auto& { return self.attributes.dependent_required; }, //
-      "minItems", [](auto&& self) -> auto& { return self.attributes.minItems; }, //
-      "maxItems", [](auto&& self) -> auto& { return self.attributes.maxItems; }, //
-      "minContains", [](auto&& self) -> auto& { return self.attributes.minContains; }, //
-      "maxContains", [](auto&& self) -> auto& { return self.attributes.maxContains; }, //
-      "uniqueItems", [](auto&& self) -> auto& { return self.attributes.uniqueItems; }, //
-      "enum", [](auto&& self) -> auto& { return self.attributes.enumeration; }, //
-      "ExtUnits", [](auto&& self) -> auto& { return self.attributes.ExtUnits; }, //
-      "ExtAdvanced", [](auto&& self) -> auto& { return self.attributes.ExtAdvanced; });
+   static constexpr std::array keys{
+      "type", //
+      "properties", //
+      "items", //
+      "additionalProperties", //
+      "$defs", //
+      "oneOf", //
+      "examples", //
+      "required", //
+      "title", //
+      "description", //
+      "default", //
+      "deprecated", //
+      "readOnly", //
+      "writeOnly", //
+      "const", //
+      "minLength", //
+      "maxLength", //
+      "pattern", //
+      "format", //
+      "minimum", //
+      "maximum", //
+      "exclusiveMinimum", //
+      "exclusiveMaximum", //
+      "multipleOf", //
+      "minProperties", //
+      "maxProperties", //
+      // "dependentRequired", //
+      "minItems", //
+      "maxItems", //
+      "minContains", //
+      "maxContains", //
+      "uniqueItems", //
+      "enum", //
+      "ExtUnits", //
+      "ExtAdvanced"};
+   
+   static constexpr glz::tuplet::tuple value{
+      &T::type, //
+      &T::properties, //
+      &T::items, //
+      &T::additionalProperties, //
+      &T::defs, //
+      &T::oneOf, //
+      raw<&T::examples>, //
+      &T::required, //
+      [](auto&& s) -> auto& { return s.attributes.title; }, //
+      [](auto&& s) -> auto& { return s.attributes.description; }, //
+      [](auto&& s) -> auto& { return s.attributes.defaultValue; }, //
+      [](auto&& s) -> auto& { return s.attributes.deprecated; }, //
+      [](auto&& s) -> auto& { return s.attributes.readOnly; }, //
+      [](auto&& s) -> auto& { return s.attributes.writeOnly; }, //
+      [](auto&& s) -> auto& { return s.attributes.constant; }, //
+      [](auto&& s) -> auto& { return s.attributes.minLength; }, //
+      [](auto&& s) -> auto& { return s.attributes.maxLength; }, //
+      [](auto&& s) -> auto& { return s.attributes.pattern; }, //
+      [](auto&& s) -> auto& { return s.attributes.format; }, //
+      [](auto&& s) -> auto& { return s.attributes.minimum; }, //
+      [](auto&& s) -> auto& { return s.attributes.maximum; }, //
+      [](auto&& s) -> auto& { return s.attributes.exclusiveMinimum; }, //
+      [](auto&& s) -> auto& { return s.attributes.exclusiveMaximum; }, //
+      [](auto&& s) -> auto& { return s.attributes.multipleOf; }, //
+      [](auto&& s) -> auto& { return s.attributes.minProperties; }, //
+      [](auto&& s) -> auto& { return s.attributes.maxProperties; }, //
+      // [](auto&& s) -> auto& { return s.attributes.dependent_required; }, //
+      [](auto&& s) -> auto& { return s.attributes.minItems; }, //
+      [](auto&& s) -> auto& { return s.attributes.maxItems; }, //
+      [](auto&& s) -> auto& { return s.attributes.minContains; }, //
+      [](auto&& s) -> auto& { return s.attributes.maxContains; }, //
+      [](auto&& s) -> auto& { return s.attributes.uniqueItems; }, //
+      [](auto&& s) -> auto& { return s.attributes.enumeration; }, //
+      [](auto&& s) -> auto& { return s.attributes.ExtUnits; }, //
+      [](auto&& s) -> auto& { return s.attributes.ExtAdvanced; }};
 };
 
 namespace glz
