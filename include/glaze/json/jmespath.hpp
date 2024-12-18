@@ -164,7 +164,7 @@ namespace glz
          // If no delimiter found, return the whole string as first token
          return {s, "", tokenization_error::none};
       }
-      
+
       inline constexpr tokenization_error finalize_tokens(std::vector<std::string_view>& tokens)
       {
          std::vector<std::string_view> final_tokens;
@@ -239,10 +239,12 @@ namespace glz
                   if (!remaining.empty() && (remaining.front() == '.' || remaining.front() == '|')) {
                      return tokenization_error::unexpected_delimiter;
                   }
-               } else {
+               }
+               else {
                   return tokenization_error::unexpected_delimiter;
                }
-            } else {
+            }
+            else {
                break;
             }
          }
@@ -284,12 +286,12 @@ namespace glz
       struct ArrayParseResult
       {
          bool is_array_access = false; // True if "key[...]"
-         bool error = false;           // True if parsing encountered an error
-         std::string_view key;         // The part before the first '['
+         bool error = false; // True if parsing encountered an error
+         std::string_view key; // The part before the first '['
          std::optional<int32_t> start; // For a single index or slice start
-         std::optional<int32_t> end;   // For slice end
-         std::optional<int32_t> step;  // For slice step
-         size_t colon_count = 0;       // Number of ':' characters found inside the brackets
+         std::optional<int32_t> end; // For slice end
+         std::optional<int32_t> step; // For slice step
+         size_t colon_count = 0; // Number of ':' characters found inside the brackets
       };
 
       inline constexpr std::optional<int> parse_int(std::string_view s)
@@ -367,7 +369,8 @@ namespace glz
                auto val = parse_int(parts[0]);
                if (!val.has_value()) {
                   result.error = true;
-               } else {
+               }
+               else {
                   result.start = val;
                }
             }
@@ -377,7 +380,8 @@ namespace glz
                auto val = parse_int(parts[1]);
                if (!val.has_value()) {
                   result.error = true;
-               } else {
+               }
+               else {
                   result.end = val;
                }
             }
@@ -387,7 +391,8 @@ namespace glz
                auto val = parse_int(parts[2]);
                if (!val.has_value()) {
                   result.error = true;
-               } else {
+               }
+               else {
                   result.step = val;
                }
             }
@@ -398,7 +403,8 @@ namespace glz
             auto val = parse_int(inside);
             if (!val.has_value()) {
                result.error = true;
-            } else {
+            }
+            else {
                result.start = val;
             }
          }
@@ -414,7 +420,7 @@ namespace glz
          return result;
       }
    }
-   
+
    namespace detail
    {
       template <opts Opts = opts{}, class T>
@@ -423,15 +429,16 @@ namespace glz
       {
          ctx.error = error_code::syntax_error;
       }
-      
+
       template <opts Opts = opts{}, class T>
-       requires(Opts.format == JSON && readable_array_t<T>)
-      inline void handle_slice(const jmespath::ArrayParseResult& decomposed_key, T&& value, context& ctx, auto&& it, auto&& end)
+         requires(Opts.format == JSON && readable_array_t<T>)
+      inline void handle_slice(const jmespath::ArrayParseResult& decomposed_key, T&& value, context& ctx, auto&& it,
+                               auto&& end)
       {
          GLZ_SKIP_WS();
 
          // Determine slice parameters
-         int32_t step_idx  = decomposed_key.step.value_or(1);
+         int32_t step_idx = decomposed_key.step.value_or(1);
          bool has_negative_index = (decomposed_key.start.value_or(0) < 0) || (decomposed_key.end.value_or(0) < 0);
 
          // If we have negative indices or step != 1, fall back to the original method (read all then slice)
@@ -442,7 +449,8 @@ namespace glz
             if (*it == ']') {
                // empty array
                ++it; // consume ']'
-            } else {
+            }
+            else {
                while (true) {
                   detail::read<Opts.format>::template op<Opts>(value.emplace_back(), ctx, it, end);
                   if (bool(ctx.error)) [[unlikely]]
@@ -470,7 +478,7 @@ namespace glz
             };
 
             const int32_t start_idx = wrap_index(decomposed_key.start.value_or(0));
-            const int32_t end_idx   = wrap_index(decomposed_key.end.value_or(size));
+            const int32_t end_idx = wrap_index(decomposed_key.end.value_or(size));
 
             if (step_idx == 1) {
                if (start_idx < end_idx) {
@@ -480,10 +488,12 @@ namespace glz
                   if (static_cast<size_t>(end_idx - start_idx) < value.size()) {
                      value.erase(value.begin() + (end_idx - start_idx), value.end());
                   }
-               } else {
+               }
+               else {
                   value.clear();
                }
-            } else {
+            }
+            else {
                // For steps != 1 (or negative steps), the fallback path was already chosen.
                // Just apply the same logic as before.
                std::size_t dest = 0;
@@ -491,7 +501,8 @@ namespace glz
                   for (int32_t i = start_idx; i < end_idx; i += step_idx) {
                      value[dest++] = std::move(value[i]);
                   }
-               } else {
+               }
+               else {
                   for (int32_t i = start_idx; i > end_idx; i += step_idx) {
                      value[dest++] = std::move(value[i]);
                   }
@@ -524,12 +535,14 @@ namespace glz
                skip_value<JSON>::op<Opts>(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
                   return;
-            } else if (current_index >= start_idx && current_index < end_idx) {
+            }
+            else if (current_index >= start_idx && current_index < end_idx) {
                // Read this element into value
                detail::read<Opts.format>::template op<Opts>(value.emplace_back(), ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
                   return;
-            } else {
+            }
+            else {
                // current_index >= end_idx, we can skip reading into value
                skip_value<JSON>::op<Opts>(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
@@ -563,7 +576,7 @@ namespace glz
       static constexpr auto N = tokens.size();
 
       constexpr bool use_padded = resizable<Buffer> && non_const_buffer<Buffer> && !has_disable_padding(Options);
-      
+
       static constexpr auto Opts = use_padded ? is_padded_on<Options>() : is_padded_off<Options>();
 
       if constexpr (use_padded) {
@@ -607,7 +620,7 @@ namespace glz
                      // SINGLE INDEX SCENARIO (no slice, just an index)
                      if constexpr (decomposed_key.start.has_value()) {
                         constexpr auto n = decomposed_key.start.value();
-                        
+
                         if constexpr (I == (N - 1)) {
                            // Skip until we reach the target element n
                            for (int32_t i = 0; i < n; ++i) {
@@ -627,7 +640,8 @@ namespace glz
                            detail::read<Opts.format>::template op<Opts>(value, ctx, it, end);
                         }
                         else {
-                           // Not the last token. We must still parse the element at index n so the next indexing can proceed.
+                           // Not the last token. We must still parse the element at index n so the next indexing can
+                           // proceed.
                            for (int32_t i = 0; i < n; ++i) {
                               skip_value<JSON>::op<Opts>(ctx, it, end);
                               if (bool(ctx.error)) [[unlikely]]
@@ -641,7 +655,8 @@ namespace glz
                               GLZ_SKIP_WS();
                            }
                         }
-                     } else {
+                     }
+                     else {
                         ctx.error = error_code::array_element_not_found;
                         return;
                      }
@@ -699,7 +714,8 @@ namespace glz
                                  detail::read<Opts.format>::template op<Opts>(value, ctx, it, end);
                               }
                               return;
-                           } else {
+                           }
+                           else {
                               ctx.error = error_code::array_element_not_found;
                               return;
                            }
@@ -767,20 +783,22 @@ namespace glz
 
       return {ctx.error, ctx.custom_error_message, size_t(it - start), ctx.includer_error};
    }
-   
+
    // A "compiled" jmespath expression, which can be pre-computed for efficient traversal
    struct jmespath_expression
    {
       std::string_view path{};
       jmespath::tokenization_error error{};
       std::vector<std::string_view> tokens{}; // evaluated tokens
-      
-      jmespath_expression(const std::string_view input_path) noexcept : path(input_path) {
+
+      jmespath_expression(const std::string_view input_path) noexcept : path(input_path)
+      {
          error = jmespath::tokenize_full_jmespath(path, tokens);
       }
-      
+
       template <size_t N>
-      jmespath_expression(const char (&input_path)[N]) noexcept : path(input_path) {
+      jmespath_expression(const char (&input_path)[N]) noexcept : path(input_path)
+      {
          error = jmespath::tokenize_full_jmespath(path, tokens);
       }
       jmespath_expression(const jmespath_expression&) noexcept = default;
@@ -798,7 +816,7 @@ namespace glz
       if (bool(expression.error)) {
          return {error_code::syntax_error, "JMESPath invalid expression"};
       }
-      
+
       const auto& tokens = expression.tokens;
       const auto N = tokens.size();
 
@@ -848,7 +866,7 @@ namespace glz
                         // Single index scenario
                         if (decomposed_key.start.has_value()) {
                            const int32_t n = decomposed_key.start.value();
-                           
+
                            if (I == (N - 1)) {
                               // Skip until we reach the target element n
                               for (int32_t i = 0; i < n; ++i) {
@@ -868,7 +886,8 @@ namespace glz
                               detail::read<Opts.format>::template op<Opts>(value, ctx, it, end);
                            }
                            else {
-                              // Not the last token. We must still parse the element at index n so the next indexing can proceed.
+                              // Not the last token. We must still parse the element at index n so the next indexing can
+                              // proceed.
                               for (int32_t i = 0; i < n; ++i) {
                                  skip_value<JSON>::op<Opts>(ctx, it, end);
                                  if (bool(ctx.error)) [[unlikely]]
@@ -939,7 +958,8 @@ namespace glz
                                     detail::read<Opts.format>::template op<Opts>(value, ctx, it, end);
                                  }
                                  return;
-                              } else {
+                              }
+                              else {
                                  ctx.error = error_code::array_element_not_found;
                                  return;
                               }

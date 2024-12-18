@@ -28,19 +28,19 @@ struct Home
 
 suite jmespath_read_tests = [] {
    Home home{.family = {.father = {"Gilbert", "Fox", 28},
-         .mother = {"Anne", "Fox", 30},
-      .children = {{"Lilly", "Fox", 7}, {"Vincent", "Fox", 3}}},
-      .address = "123 Maple Street"};
+                        .mother = {"Anne", "Fox", 30},
+                        .children = {{"Lilly", "Fox", 7}, {"Vincent", "Fox", 3}}},
+             .address = "123 Maple Street"};
 
    std::string buffer{};
    expect(not glz::write_json(home, buffer));
-   
+
    "compile-time read_jmespath"_test = [&] {
       std::string first_name{};
       auto ec = glz::read_jmespath<"family.father.first_name">(first_name, buffer);
       expect(not ec) << glz::format_error(ec, buffer);
       expect(first_name == "Gilbert");
-      
+
       std::string mother_last_name{};
       ec = glz::read_jmespath<"family.mother.last_name">(mother_last_name, buffer);
       expect(not ec) << glz::format_error(ec, buffer);
@@ -61,7 +61,7 @@ suite jmespath_read_tests = [] {
       expect(child.first_name == "Lilly");
       expect(not glz::read_jmespath<"family.children[1]">(child, buffer));
       expect(child.first_name == "Vincent");
-      
+
       Person non_existent_child{};
       ec = glz::read_jmespath<"family.children[3]">(non_existent_child, buffer);
       expect(ec) << "Expected error for out-of-bounds index";
@@ -72,7 +72,7 @@ suite jmespath_read_tests = [] {
       auto ec = glz::read_jmespath("family.father.first_name", first_name, buffer);
       expect(not ec) << glz::format_error(ec, buffer);
       expect(first_name == "Gilbert");
-      
+
       std::string mother_last_name{};
       ec = glz::read_jmespath("family.mother.last_name", mother_last_name, buffer);
       expect(not ec) << glz::format_error(ec, buffer);
@@ -93,12 +93,12 @@ suite jmespath_read_tests = [] {
       expect(child.first_name == "Lilly");
       expect(not glz::read_jmespath("family.children[1]", child, buffer));
       expect(child.first_name == "Vincent");
-      
+
       Person non_existent_child{};
       ec = glz::read_jmespath("family.children[3]", non_existent_child, buffer);
       expect(ec) << "Expected error for out-of-bounds index";
    };
-   
+
    "pre-compiled run-time"_test = [&] {
       Person child{};
       // A runtime expression can be pre-computed and saved for more efficient lookups
@@ -106,11 +106,11 @@ suite jmespath_read_tests = [] {
       expect(not glz::read_jmespath(expression, child, buffer));
       expect(child.first_name == "Lilly");
    };
-   
+
    "compile-time error_handling"_test = [&] {
       std::string middle_name{};
       auto ec = glz::read_jmespath<"family.father.middle_name">(middle_name, buffer);
-      //std::cout << glz::format_error(ec, buffer) << '\n';
+      // std::cout << glz::format_error(ec, buffer) << '\n';
       expect(ec) << "Expected error for non-existent field";
 
       // Invalid JMESPath expression
@@ -118,7 +118,7 @@ suite jmespath_read_tests = [] {
       // so invalid expressions would cause a compile-time error.
       // Therefore, runtime tests should cover invalid expressions.
    };
-   
+
    "run-time error_handling"_test = [&] {
       // Access non-existent field
       std::string middle_name{};
@@ -134,10 +134,10 @@ suite jmespath_read_tests = [] {
 
 suite jmespath_slice_tests = [] {
    "slice compile-time"_test = [] {
-      std::vector<int> data{0,1,2,3,4,5,6,7,8,9};
+      std::vector<int> data{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
       std::string buffer{};
       expect(not glz::write_json(data, buffer));
-      
+
       std::vector<int> slice{};
       expect(not glz::read_jmespath<"[0:5]">(slice, buffer));
       expect(slice.size() == 5);
@@ -147,12 +147,12 @@ suite jmespath_slice_tests = [] {
       expect(slice[3] == 3);
       expect(slice[4] == 4);
    };
-   
+
    "slice run-time"_test = [] {
-      std::vector<int> data{0,1,2,3,4,5,6,7,8,9};
+      std::vector<int> data{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
       std::string buffer{};
       expect(not glz::write_json(data, buffer));
-      
+
       std::vector<int> slice{};
       expect(not glz::read_jmespath("[0:5]", slice, buffer));
       expect(slice.size() == 5);
@@ -162,22 +162,22 @@ suite jmespath_slice_tests = [] {
       expect(slice[3] == 3);
       expect(slice[4] == 4);
    };
-   
+
    "slice compile-time multi-bracket"_test = [] {
-      std::vector<std::vector<int>> data{{1,2},{3,4,5},{6,7}};
+      std::vector<std::vector<int>> data{{1, 2}, {3, 4, 5}, {6, 7}};
       std::string buffer{};
       expect(not glz::write_json(data, buffer));
-      
+
       int v{};
       expect(not glz::read_jmespath<"[1][2]">(v, buffer));
       expect(v == 5);
    };
-   
+
    "slice run-time multi-bracket"_test = [] {
-      std::vector<std::vector<int>> data{{1,2},{3,4,5},{6,7}};
+      std::vector<std::vector<int>> data{{1, 2}, {3, 4, 5}, {6, 7}};
       std::string buffer{};
       expect(not glz::write_json(data, buffer));
-      
+
       int v{};
       expect(not glz::read_jmespath("[1][2]", v, buffer));
       expect(v == 5);
