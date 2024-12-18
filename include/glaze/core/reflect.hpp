@@ -399,79 +399,6 @@ namespace glz::detail
    }
 }
 
-namespace glz::detail
-{
-   template <class T, size_t I>
-   constexpr auto key_value = pair<sv, value_variant_t<T>>{reflect<T>::keys[I], get<I>(reflect<T>::values)};
-
-   template <class T, size_t I>
-   constexpr sv key_v = reflect<T>::keys[I];
-
-   template <class T, bool use_hash_comparison, size_t... I>
-   constexpr auto make_map_impl(std::index_sequence<I...>)
-   {
-      using value_t = value_variant_t<T>;
-      constexpr auto n = reflect<T>::size;
-
-      if constexpr (n == 0) {
-         return nullptr; // Hack to fix MSVC
-         // static_assert(false_v<T>, "Empty object map is illogical. Handle empty upstream.");
-      }
-      else if constexpr (n == 1) {
-         return micro_map1<value_t, key_v<T, I>...>{key_value<T, I>...};
-      }
-      else if constexpr (n == 2) {
-         return micro_map2<value_t, key_v<T, I>...>{key_value<T, I>...};
-      }
-      else if constexpr (n < 64) // don't even attempt a first character hash if we have too many keys
-      {
-         constexpr auto& keys = reflect<T>::keys;
-         constexpr auto front_desc = single_char_hash<n>(keys);
-
-         if constexpr (front_desc.valid) {
-            return make_single_char_map<value_t, front_desc>({key_value<T, I>...});
-         }
-         else {
-            constexpr single_char_hash_opts rear_hash{.is_front_hash = false};
-            constexpr auto back_desc = single_char_hash<n, rear_hash>(keys);
-
-            if constexpr (back_desc.valid) {
-               return make_single_char_map<value_t, back_desc>({key_value<T, I>...});
-            }
-            else {
-               constexpr single_char_hash_opts sum_hash{.is_front_hash = true, .is_sum_hash = true};
-               constexpr auto sum_desc = single_char_hash<n, sum_hash>(keys);
-
-               if constexpr (sum_desc.valid) {
-                  return make_single_char_map<value_t, sum_desc>({key_value<T, I>...});
-               }
-               else {
-                  if constexpr (n <= naive_map_max_size) {
-                     constexpr auto naive_desc = naive_map_hash<use_hash_comparison, n>(keys);
-                     return glz::detail::make_naive_map<value_t, naive_desc>(std::array{key_value<T, I>...});
-                  }
-                  else {
-                     return glz::detail::normal_map<sv, value_t, n, use_hash_comparison>(
-                        std::array{key_value<T, I>...});
-                  }
-               }
-            }
-         }
-      }
-      else {
-         return glz::detail::normal_map<sv, value_t, n, use_hash_comparison>(std::array{key_value<T, I>...});
-      }
-   }
-
-   template <class T, bool use_hash_comparison = false>
-      requires(!reflectable<T>)
-   constexpr auto make_map()
-   {
-      constexpr auto indices = std::make_index_sequence<reflect<T>::size>{};
-      return make_map_impl<decay_keep_volatile_t<T>, use_hash_comparison>(indices);
-   }
-}
-
 namespace glz
 {
    template <auto Enum>
@@ -629,14 +556,6 @@ namespace glz
             return glz::detail::normal_map<sv, value_t, n, use_hash_comparison>(
                std::array{pair<sv, value_t>{get<I>(members), std::add_pointer_t<glz::tuple_element_t<I, V>>{}}...});
          }
-      }
-
-      template <reflectable T, bool use_hash_comparison = false>
-      constexpr auto make_map()
-         requires(!glaze_t<T> && !array_t<T> && std::is_aggregate_v<std::remove_cvref_t<T>>)
-      {
-         constexpr auto indices = std::make_index_sequence<count_members<T>>{};
-         return make_reflection_map_impl<decay_keep_volatile_t<T>, use_hash_comparison>(indices);
       }
    }
 }
