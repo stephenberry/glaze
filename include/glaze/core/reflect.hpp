@@ -91,7 +91,7 @@ namespace glz
    struct reflect<T>
    {
       static constexpr auto size = 0;
-      static constexpr auto values = tuplet::tuple{};
+      static constexpr auto values = tuple{};
       static constexpr std::array<sv, 0> keys{};
 
       template <size_t I>
@@ -109,7 +109,7 @@ namespace glz
 
       static constexpr auto values = [] {
          return [&]<size_t... I>(std::index_sequence<I...>) { //
-            return tuplet::tuple{get<value_indices[I]>(meta_v<T>)...}; //
+            return tuple{get<value_indices[I]>(meta_v<T>)...}; //
          }(std::make_index_sequence<value_indices.size()>{}); //
       }();
 
@@ -188,16 +188,16 @@ namespace glz
    struct reflect<T>
    {
       using V = std::remove_cvref_t<T>;
-      using tuple = decay_keep_volatile_t<decltype(to_tuple(std::declval<T>()))>;
+      using tie_type = decltype(to_tie(std::declval<T&>()));
 
       static constexpr auto keys = member_names<V>;
       static constexpr auto size = keys.size();
 
       template <size_t I>
-      using elem = decltype(get<I>(std::declval<tuple>()));
+      using elem = decltype(get<I>(std::declval<tie_type>()));
 
       template <size_t I>
-      using type = member_t<V, decltype(get<I>(std::declval<tuple>()))>;
+      using type = member_t<V, decltype(get<I>(std::declval<tie_type>()))>;
    };
 
    template <class T>
@@ -328,7 +328,7 @@ namespace glz::detail
    struct tuple_ptr_variant;
 
    template <class... Ts>
-   struct tuple_ptr_variant<glz::tuplet::tuple<Ts...>> : unique<std::variant<>, std::add_pointer_t<Ts>...>
+   struct tuple_ptr_variant<glz::tuple<Ts...>> : unique<std::variant<>, std::add_pointer_t<Ts>...>
    {};
 
    template <class... Ts>
@@ -345,8 +345,8 @@ namespace glz::detail
    template <class T, size_t... I>
    struct member_tuple_type<T, std::index_sequence<I...>>
    {
-      using type = std::conditional_t<sizeof...(I) == 0, tuplet::tuple<>,
-                                      tuplet::tuple<std::remove_cvref_t<member_t<T, refl_t<T, I>>>...>>;
+      using type = std::conditional_t<sizeof...(I) == 0, tuple<>,
+                                      tuple<std::remove_cvref_t<member_t<T, refl_t<T, I>>>...>>;
    };
 
    template <class T>
@@ -1992,7 +1992,7 @@ namespace glz
       constexpr auto N = reflect<T>::size;
       if constexpr (N > 0) {
          [&]<size_t... I>(std::index_sequence<I...>) constexpr {
-            (callable(get_member(value, get<I>(to_tuple(value)))), ...);
+            (callable(get_member(value, get<I>(to_tie(value)))), ...);
          }(std::make_index_sequence<N>{});
       }
    }

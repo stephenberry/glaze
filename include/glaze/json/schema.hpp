@@ -65,7 +65,7 @@ namespace glz
       // object only keywords
       std::optional<std::uint64_t> minProperties{};
       std::optional<std::uint64_t> maxProperties{};
-      //      std::optional<std::map<std::string_view, std::vector<std::string_view>>> dependent_required{};
+      // std::optional<std::map<std::string_view, std::vector<std::string_view>>> dependent_required{};
       std::optional<std::span<const std::string_view>> required{};
       // array only keywords
       std::optional<std::uint64_t> minItems{};
@@ -88,36 +88,67 @@ namespace glz
       struct glaze
       {
          using T = schema;
-         static constexpr auto value = glz::object("$ref", &T::ref, //
-                                                   "title", &T::title, //
-                                                   "description", &T::description, //
-                                                   "default", &T::defaultValue, //
-                                                   "deprecated", &T::deprecated, //
-                                                   "examples", raw<&T::examples>, //
-                                                   "readOnly", &T::readOnly, //
-                                                   "writeOnly", &T::writeOnly, //
-                                                   "const", &T::constant, //
-                                                   "minLength", &T::minLength, //
-                                                   "maxLength", &T::maxLength, //
-                                                   "pattern", &T::pattern, //
-                                                   "format", &T::format, //
-                                                   "minimum", &T::minimum, //
-                                                   "maximum", &T::maximum, //
-                                                   "exclusiveMinimum", &T::exclusiveMinimum, //
-                                                   "exclusiveMaximum", &T::exclusiveMaximum, //
-                                                   "multipleOf", &T::multipleOf, //
-                                                   "minProperties", &T::minProperties, //
-                                                   "maxProperties", &T::maxProperties, //
-                                                   // "dependentRequired", &T::dependent_required, //
-                                                   "required", &T::required, //
-                                                   "minItems", &T::minItems, //
-                                                   "maxItems", &T::maxItems, //
-                                                   "minContains", &T::minContains, //
-                                                   "maxContains", &T::maxContains, //
-                                                   "uniqueItems", &T::uniqueItems, //
-                                                   "enum", &T::enumeration, //
-                                                   "ExtUnits", &T::ExtUnits, //
-                                                   "ExtAdvanced", &T::ExtAdvanced);
+         static constexpr std::array keys{"$ref", //
+                                          "title", //
+                                          "description", //
+                                          "default", //
+                                          "deprecated", //
+                                          "examples", //
+                                          "readOnly", //
+                                          "writeOnly", //
+                                          "const", //
+                                          "minLength", //
+                                          "maxLength", //
+                                          "pattern", //
+                                          "format", //
+                                          "minimum", //
+                                          "maximum", //
+                                          "exclusiveMinimum", //
+                                          "exclusiveMaximum", //
+                                          "multipleOf", //
+                                          "minProperties", //
+                                          "maxProperties", //
+                                          //"dependentRequired", //
+                                          "required", //
+                                          "minItems", //
+                                          "maxItems", //
+                                          "minContains", //
+                                          "maxContains", //
+                                          "uniqueItems", //
+                                          "enum", //
+                                          "ExtUnits", //
+                                          "ExtAdvanced"};
+
+         static constexpr glz::tuple value = {&T::ref, //
+                                              &T::title, //
+                                              &T::description, //
+                                              &T::defaultValue, //
+                                              &T::deprecated, //
+                                              raw<&T::examples>, //
+                                              &T::readOnly, //
+                                              &T::writeOnly, //
+                                              &T::constant, //
+                                              &T::minLength, //
+                                              &T::maxLength, //
+                                              &T::pattern, //
+                                              &T::format, //
+                                              &T::minimum, //
+                                              &T::maximum, //
+                                              &T::exclusiveMinimum, //
+                                              &T::exclusiveMaximum, //
+                                              &T::multipleOf, //
+                                              &T::minProperties, //
+                                              &T::maxProperties, //
+                                              // &T::dependent_required, //
+                                              &T::required, //
+                                              &T::minItems, //
+                                              &T::maxItems, //
+                                              &T::minContains, //
+                                              &T::maxContains, //
+                                              &T::uniqueItems, //
+                                              &T::enumeration, //
+                                              &T::ExtUnits, //
+                                              &T::ExtAdvanced};
       };
    };
 
@@ -232,41 +263,41 @@ struct glz::meta<glz::detail::schematic>
                                     "ExtUnits", //
                                     "ExtAdvanced"};
 
-   static constexpr glz::tuplet::tuple value{&T::type, //
-                                             &T::properties, //
-                                             &T::items, //
-                                             &T::additionalProperties, //
-                                             &T::defs, //
-                                             &T::oneOf, //
-                                             raw<&T::examples>, //
-                                             &T::required, //
-                                             [](auto&& s) -> auto& { return s.attributes.title; }, //
-                                             [](auto&& s) -> auto& { return s.attributes.description; }, //
-                                             [](auto&& s) -> auto& { return s.attributes.defaultValue; }, //
-                                             [](auto&& s) -> auto& { return s.attributes.deprecated; }, //
-                                             [](auto&& s) -> auto& { return s.attributes.readOnly; }, //
-                                             [](auto&& s) -> auto& { return s.attributes.writeOnly; }, //
-                                             [](auto&& s) -> auto& { return s.attributes.constant; }, //
-                                             [](auto&& s) -> auto& { return s.attributes.minLength; }, //
-                                             [](auto&& s) -> auto& { return s.attributes.maxLength; }, //
-                                             [](auto&& s) -> auto& { return s.attributes.pattern; }, //
-                                             [](auto&& s) -> auto& { return s.attributes.format; }, //
-                                             [](auto&& s) -> auto& { return s.attributes.minimum; }, //
-                                             [](auto&& s) -> auto& { return s.attributes.maximum; }, //
-                                             [](auto&& s) -> auto& { return s.attributes.exclusiveMinimum; }, //
-                                             [](auto&& s) -> auto& { return s.attributes.exclusiveMaximum; }, //
-                                             [](auto&& s) -> auto& { return s.attributes.multipleOf; }, //
-                                             [](auto&& s) -> auto& { return s.attributes.minProperties; }, //
-                                             [](auto&& s) -> auto& { return s.attributes.maxProperties; }, //
-                                             // [](auto&& s) -> auto& { return s.attributes.dependent_required; }, //
-                                             [](auto&& s) -> auto& { return s.attributes.minItems; }, //
-                                             [](auto&& s) -> auto& { return s.attributes.maxItems; }, //
-                                             [](auto&& s) -> auto& { return s.attributes.minContains; }, //
-                                             [](auto&& s) -> auto& { return s.attributes.maxContains; }, //
-                                             [](auto&& s) -> auto& { return s.attributes.uniqueItems; }, //
-                                             [](auto&& s) -> auto& { return s.attributes.enumeration; }, //
-                                             [](auto&& s) -> auto& { return s.attributes.ExtUnits; }, //
-                                             [](auto&& s) -> auto& { return s.attributes.ExtAdvanced; }};
+   static constexpr glz::tuple value{&T::type, //
+                                     &T::properties, //
+                                     &T::items, //
+                                     &T::additionalProperties, //
+                                     &T::defs, //
+                                     &T::oneOf, //
+                                     raw<&T::examples>, //
+                                     &T::required, //
+                                     [](auto&& s) -> auto& { return s.attributes.title; }, //
+                                     [](auto&& s) -> auto& { return s.attributes.description; }, //
+                                     [](auto&& s) -> auto& { return s.attributes.defaultValue; }, //
+                                     [](auto&& s) -> auto& { return s.attributes.deprecated; }, //
+                                     [](auto&& s) -> auto& { return s.attributes.readOnly; }, //
+                                     [](auto&& s) -> auto& { return s.attributes.writeOnly; }, //
+                                     [](auto&& s) -> auto& { return s.attributes.constant; }, //
+                                     [](auto&& s) -> auto& { return s.attributes.minLength; }, //
+                                     [](auto&& s) -> auto& { return s.attributes.maxLength; }, //
+                                     [](auto&& s) -> auto& { return s.attributes.pattern; }, //
+                                     [](auto&& s) -> auto& { return s.attributes.format; }, //
+                                     [](auto&& s) -> auto& { return s.attributes.minimum; }, //
+                                     [](auto&& s) -> auto& { return s.attributes.maximum; }, //
+                                     [](auto&& s) -> auto& { return s.attributes.exclusiveMinimum; }, //
+                                     [](auto&& s) -> auto& { return s.attributes.exclusiveMaximum; }, //
+                                     [](auto&& s) -> auto& { return s.attributes.multipleOf; }, //
+                                     [](auto&& s) -> auto& { return s.attributes.minProperties; }, //
+                                     [](auto&& s) -> auto& { return s.attributes.maxProperties; }, //
+                                     // [](auto&& s) -> auto& { return s.attributes.dependent_required; }, //
+                                     [](auto&& s) -> auto& { return s.attributes.minItems; }, //
+                                     [](auto&& s) -> auto& { return s.attributes.maxItems; }, //
+                                     [](auto&& s) -> auto& { return s.attributes.minContains; }, //
+                                     [](auto&& s) -> auto& { return s.attributes.maxContains; }, //
+                                     [](auto&& s) -> auto& { return s.attributes.uniqueItems; }, //
+                                     [](auto&& s) -> auto& { return s.attributes.enumeration; }, //
+                                     [](auto&& s) -> auto& { return s.attributes.ExtUnits; }, //
+                                     [](auto&& s) -> auto& { return s.attributes.ExtAdvanced; }};
 };
 
 namespace glz
@@ -279,7 +310,7 @@ namespace glz
       consteval auto make_reflection_schema_map()
       {
          auto schema_instance = json_schema_v<T>;
-         auto tuple = to_tuple(schema_instance);
+         auto tuple = to_tie(schema_instance);
          using V = std::decay_t<decltype(tuple)>;
          constexpr auto N = glz::tuple_size_v<V>;
          if constexpr (N > 0) {
@@ -535,19 +566,11 @@ namespace glz
       };
 
       template <class T>
-      inline constexpr auto glaze_names = []() {
-         constexpr auto N = reflect<T>::size;
-         std::array<sv, N> names{};
-         for_each<N>([&](auto I) { names[I] = reflect<T>::keys[I]; });
-         return names;
-      }();
-
-      template <class T>
       consteval bool json_schema_matches_object_keys()
       {
          if constexpr (json_schema_t<T> && (count_members<json_schema_type<T>> > 0)) {
             constexpr auto& json_schema_names = member_names<json_schema_type<T>>;
-            auto fields = glaze_names<T>;
+            auto fields = reflect<T>::keys;
             std::sort(fields.begin(), fields.end());
 
             for (const auto& key : json_schema_names) {

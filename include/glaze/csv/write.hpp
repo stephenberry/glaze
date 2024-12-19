@@ -180,7 +180,7 @@ namespace glz
 
             [[maybe_unused]] decltype(auto) t = [&] {
                if constexpr (reflectable<T>) {
-                  return to_tuple(value);
+                  return to_tie(value);
                }
                else {
                   return nullptr;
