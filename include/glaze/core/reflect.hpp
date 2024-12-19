@@ -188,16 +188,16 @@ namespace glz
    struct reflect<T>
    {
       using V = std::remove_cvref_t<T>;
-      using tuple = decay_keep_volatile_t<decltype(to_tie(std::declval<T>()))>;
+      using tie_type = decltype(to_tie(std::declval<T&>()));
 
       static constexpr auto keys = member_names<V>;
       static constexpr auto size = keys.size();
 
       template <size_t I>
-      using elem = decltype(get<I>(std::declval<tuple>()));
+      using elem = decltype(get<I>(std::declval<tie_type>()));
 
       template <size_t I>
-      using type = member_t<V, decltype(get<I>(std::declval<tuple>()))>;
+      using type = member_t<V, decltype(get<I>(std::declval<tie_type>()))>;
    };
 
    template <class T>
