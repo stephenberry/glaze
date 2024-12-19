@@ -535,19 +535,11 @@ namespace glz
       };
 
       template <class T>
-      inline constexpr auto glaze_names = []() {
-         constexpr auto N = reflect<T>::size;
-         std::array<sv, N> names{};
-         for_each<N>([&](auto I) { names[I] = reflect<T>::keys[I]; });
-         return names;
-      }();
-
-      template <class T>
       consteval bool json_schema_matches_object_keys()
       {
          if constexpr (json_schema_t<T> && (count_members<json_schema_type<T>> > 0)) {
             constexpr auto& json_schema_names = member_names<json_schema_type<T>>;
-            auto fields = glaze_names<T>;
+            auto fields = reflect<T>::keys;
             std::sort(fields.begin(), fields.end());
 
             for (const auto& key : json_schema_names) {
