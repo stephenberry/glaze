@@ -20,8 +20,9 @@
 // For struct fields
 namespace glz::detail
 {
+   // Do not const qualify this value to avoid duplicate `to_tie` template instantiations with rest of Glaze
    template <class T>
-   extern const T external;
+   extern T external;
 
    // using const char* simplifies the complier's output and should improve compile times
    template <auto Ptr>

@@ -107,7 +107,7 @@ namespace glz::detail
             jump_table<N>(
                [&]<size_t I>() {
                   if constexpr (reflectable<T>) {
-                     ret = seek_impl(std::forward<F>(func), get_member(value, get<I>(to_tuple(value))), json_ptr);
+                     ret = seek_impl(std::forward<F>(func), get_member(value, get<I>(to_tie(value))), json_ptr);
                   }
                   else {
                      ret = seek_impl(std::forward<F>(func), get_member(value, get<I>(reflect<T>::values)), json_ptr);
@@ -494,7 +494,7 @@ namespace glz
          n_items_per_group[i] = std::count(first_keys.begin(), first_keys.end(), unique_keys[i]);
       }
 
-      return glz::tuplet::tuple{n_items_per_group, n_unique, unique_keys};
+      return glz::tuple{n_items_per_group, n_unique, unique_keys};
    }
 
    template <auto Arr, std::size_t... Is>

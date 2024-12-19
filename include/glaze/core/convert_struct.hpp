@@ -22,8 +22,8 @@ namespace glz
    template <class In, class Out>
    void convert_struct(In&& in, Out&& out)
    {
-      auto in_tuple = to_tuple(std::forward<In>(in));
-      auto out_tuple = to_tuple(std::forward<Out>(out));
+      auto in_tuple = to_tie(std::forward<In>(in));
+      auto out_tuple = to_tie(std::forward<Out>(out));
 
       constexpr auto N = tuple_size_v<std::decay_t<decltype(in_tuple)>>;
       static_assert(N == tuple_size_v<std::decay_t<decltype(out_tuple)>>);

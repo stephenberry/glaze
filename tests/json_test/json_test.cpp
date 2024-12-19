@@ -1517,7 +1517,7 @@ suite user_types = [] {
 
    "complex user obect member names"_test = [] {
       expect(glz::name_v<glz::detail::member_tuple_t<Thing>> ==
-             "glz::tuplet::tuple<sub_thing,std::array<sub_thing2,1>,V3,std::list<int32_t>,std::deque<double>,std::"
+             "glz::tuple<sub_thing,std::array<sub_thing2,1>,V3,std::list<int32_t>,std::deque<double>,std::"
              "vector<V3>,int32_t,double,bool,char,std::variant<var1_t,var2_t>,Color,std::vector<bool>,std::shared_ptr<"
              "sub_thing>,std::optional<V3>,std::array<std::string,4>,std::map<std::string,int32_t>,std::map<int32_t,"
              "double>,sub_thing>");
@@ -10042,7 +10042,7 @@ struct glz::meta<birds>
 {
    using T = birds;
    static constexpr std::array keys{"crow", "sparrow", "hawk"};
-   static constexpr glz::tuplet::tuple value{&T::crow, &T::sparrow, &T::hawk};
+   static constexpr glz::tuple value{&T::crow, &T::sparrow, &T::hawk};
 };
 
 suite meta_keys_for_struct = [] {

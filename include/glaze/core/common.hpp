@@ -41,7 +41,7 @@ namespace glz
    template <class... T>
    struct obj final
    {
-      glz::tuplet::tuple<std::conditional_t<std::is_convertible_v<std::decay_t<T>, sv>, sv, T>...> value;
+      glz::tuple<std::conditional_t<std::is_convertible_v<std::decay_t<T>, sv>, sv, T>...> value;
       static constexpr auto glaze_reflect = false;
    };
 
@@ -51,7 +51,7 @@ namespace glz
    template <class... T>
    struct obj_copy final
    {
-      glz::tuplet::tuple<T...> value;
+      glz::tuple<T...> value;
       static constexpr auto glaze_reflect = false;
    };
 
@@ -61,7 +61,7 @@ namespace glz
    template <class... T>
    struct arr final
    {
-      glz::tuplet::tuple<std::conditional_t<std::is_convertible_v<std::decay_t<T>, sv>, sv, T>...> value;
+      glz::tuple<std::conditional_t<std::is_convertible_v<std::decay_t<T>, sv>, sv, T>...> value;
       static constexpr auto glaze_reflect = false;
    };
 
@@ -71,7 +71,7 @@ namespace glz
    template <class... T>
    struct arr_copy final
    {
-      glz::tuplet::tuple<T...> value;
+      glz::tuple<T...> value;
    };
 
    template <class... T>
@@ -81,7 +81,7 @@ namespace glz
    template <class... T>
    struct merge final
    {
-      glz::tuplet::tuple<std::conditional_t<std::is_convertible_v<std::decay_t<T>, sv>, sv, T>...> value;
+      glz::tuple<std::conditional_t<std::is_convertible_v<std::decay_t<T>, sv>, sv, T>...> value;
       static constexpr auto glaze_reflect = false;
    };
 
@@ -521,17 +521,17 @@ namespace glz
       }
    }
 
-   constexpr auto array(auto&&... args) noexcept { return detail::Array{glz::tuplet::tuple{conv_sv(args)...}}; }
+   constexpr auto array(auto&&... args) noexcept { return detail::Array{glz::tuple{conv_sv(args)...}}; }
 
    template <class... Args>
    constexpr auto object(Args&&... args) noexcept
    {
-      return detail::Object{tuplet::tuple{std::forward<Args>(args)...}};
+      return detail::Object{tuple{std::forward<Args>(args)...}};
    }
 
-   constexpr auto enumerate(auto&&... args) noexcept { return detail::Enum{tuplet::tuple{args...}}; }
+   constexpr auto enumerate(auto&&... args) noexcept { return detail::Enum{tuple{args...}}; }
 
-   constexpr auto flags(auto&&... args) noexcept { return detail::Flags{tuplet::tuple{args...}}; }
+   constexpr auto flags(auto&&... args) noexcept { return detail::Flags{tuple{args...}}; }
 }
 
 namespace glz

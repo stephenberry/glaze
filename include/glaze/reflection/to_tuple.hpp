@@ -59,10 +59,10 @@ namespace glz
 
    template <class T, size_t N = detail::count_members<T>>
       requires(N <= detail::max_pure_reflection_count)
-   GLZ_ALWAYS_INLINE constexpr decltype(auto) to_tuple(T&& t)
+   GLZ_ALWAYS_INLINE constexpr decltype(auto) to_tie(T&& t)
    {
       if constexpr (N == 0) {
-         return tuplet::tuple{};
+         return tuple{};
       }
       else if constexpr (N == 1) {
          auto& [p] = t;
@@ -1277,7 +1277,7 @@ namespace glz
       template <size_t N, class T>
       constexpr auto get_ptr(T&& t) noexcept
       {
-         auto& p = get<N>(to_tuple(t));
+         auto& p = get<N>(to_tie(t));
          return ptr_t<std::remove_cvref_t<decltype(p)>>{&p};
       }
    }

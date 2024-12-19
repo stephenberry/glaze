@@ -1433,7 +1433,7 @@ namespace glz
 
                decltype(auto) t = [&]() -> decltype(auto) {
                   if constexpr (reflectable<T>) {
-                     return to_tuple(value);
+                     return to_tie(value);
                   }
                   else {
                      return nullptr;
@@ -1721,7 +1721,7 @@ namespace glz
                      }
                   }
                   else {
-                     write_partial<JSON>::op<sub_partial, Opts>(get_member(value, get<index>(to_tuple(value))), ctx, b,
+                     write_partial<JSON>::op<sub_partial, Opts>(get_member(value, get<index>(to_tie(value))), ctx, b,
                                                                 ix);
                      if constexpr (I != N - 1) {
                         write_object_entry_separator<Opts>(ctx, b, ix);

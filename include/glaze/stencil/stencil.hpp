@@ -119,7 +119,7 @@ namespace glz
                                  if (TargetKey == key) [[likely]] {
                                     if constexpr (detail::bool_t<refl_t<T, I>>) {
                                        if constexpr (detail::reflectable<T>) {
-                                          condition = bool(get_member(value, get<I>(to_tuple(value))));
+                                          condition = bool(get_member(value, get<I>(to_tie(value))));
                                        }
                                        else if constexpr (detail::glaze_object_t<T>) {
                                           condition = bool(get_member(value, get<I>(reflect<T>::values)));
@@ -185,7 +185,7 @@ namespace glz
                            if ((TargetKey.size() == key.size()) && detail::comparitor<TargetKey>(start)) [[likely]] {
                               if constexpr (detail::reflectable<T>) {
                                  detail::write<Opts.format>::template op<RawOpts>(
-                                    get_member(value, get<I>(to_tuple(value))), ctx, buffer, ix);
+                                    get_member(value, get<I>(to_tie(value))), ctx, buffer, ix);
                               }
                               else if constexpr (detail::glaze_object_t<T>) {
                                  detail::write<Opts.format>::template op<RawOpts>(
