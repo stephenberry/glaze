@@ -513,9 +513,8 @@ struct glz::meta<some_struct>
 
 void test_partial()
 {
-   expect(
-      glz::name_v<glz::detail::member_tuple_t<some_struct>> ==
-      R"(glz::tuple<int32_t,double,Color,std::string,std::array<uint64_t,3>,sub,std::map<std::string,int32_t>>)");
+   expect(glz::name_v<glz::detail::member_tuple_t<some_struct>> ==
+          R"(glz::tuple<int32_t,double,Color,std::string,std::array<uint64_t,3>,sub,std::map<std::string,int32_t>>)");
 
    some_struct s{};
    some_struct s2{};

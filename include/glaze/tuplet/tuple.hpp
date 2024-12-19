@@ -81,7 +81,7 @@ namespace glz
          } -> same_as<bool>;
       };
    } // namespace tuplet
-   
+
    template <class... T>
    struct tuple;
 
@@ -138,7 +138,7 @@ namespace glz
          }
       };
    } // namespace tuplet
-   
+
    template <class T>
    using unwrap_ref_decay_t = typename std::unwrap_ref_decay<T>::type;
 
@@ -196,7 +196,7 @@ namespace glz
       template <class... T>
       using tuple_base_t = typename detail::get_tuple_base<tag_range<sizeof...(T)>, T...>::type;
    } // namespace tuplet
-   
+
    template <class... T>
    struct tuple : tuplet::tuple_base_t<T...>
    {

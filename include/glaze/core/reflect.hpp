@@ -345,8 +345,8 @@ namespace glz::detail
    template <class T, size_t... I>
    struct member_tuple_type<T, std::index_sequence<I...>>
    {
-      using type = std::conditional_t<sizeof...(I) == 0, tuple<>,
-                                      tuple<std::remove_cvref_t<member_t<T, refl_t<T, I>>>...>>;
+      using type =
+         std::conditional_t<sizeof...(I) == 0, tuple<>, tuple<std::remove_cvref_t<member_t<T, refl_t<T, I>>>...>>;
    };
 
    template <class T>
