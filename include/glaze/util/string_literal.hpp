@@ -70,18 +70,13 @@ namespace glz
 
    namespace detail
    {
-      template <std::array V>
-      struct make_static
-      {
-         static constexpr auto value = V;
-      };
-
       template <const std::string_view&... Strs>
       inline constexpr std::string_view join()
       {
-         constexpr auto joined_arr = []() {
+         // make a null terminated string_view
+         static constexpr auto joined_arr = []() {
             constexpr size_t len = (Strs.size() + ... + 0);
-            std::array<char, len + 1> arr{};
+            std::array<char, len + 1> arr;
             auto append = [i = 0, &arr](const auto& s) mutable {
                for (auto c : s) arr[i++] = c;
             };
@@ -89,8 +84,7 @@ namespace glz
             arr[len] = 0;
             return arr;
          }();
-         auto& static_arr = make_static<joined_arr>::value;
-         return {static_arr.data(), static_arr.size() - 1};
+         return {joined_arr.data(), joined_arr.size() - 1};
       }
    }
 
