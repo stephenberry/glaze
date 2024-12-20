@@ -241,8 +241,8 @@ namespace glz
    inline constexpr auto escape_unicode = []() constexpr -> std::string_view {
       constexpr auto escaped = []() constexpr {
          constexpr auto len = detail::escaped_length(Str.sv());
-         std::array<char, output_length + 1> result; // + 1 for null character
-         const auto escaped = detail::escape_json_string(Str.sv(), output_length);
+         std::array<char, len + 1> result; // + 1 for null character
+         const auto escaped = detail::escape_json_string(Str.sv(), len);
          for (size_t i = 0; i < len; ++i) {
             result[i] = escaped[i];
          }
