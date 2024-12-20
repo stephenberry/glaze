@@ -97,4 +97,27 @@ namespace glz
    // Helper to get the value out
    template <const std::string_view&... Strs>
    inline constexpr auto join_v = detail::join<Strs...>();
+   
+   template <const std::string_view& Key, bool Prettify>
+   inline constexpr auto quoted_key_v = []() -> std::string_view {
+      static constexpr auto quoted = [] {
+         constexpr auto N = Key.size();
+         std::array<char, N + 4 + Prettify> result; // [quote, key, quote, colon, (prettify? space), null]
+         result[0] = '"';
+         for (size_t i = 0; i < N; ++i) {
+             result[i + 1] = Key[i];
+         }
+         result[N + 1] = '"';
+         result[N + 2] = ':';
+        if constexpr (Prettify) {
+           result[N + 3] = ' ';
+           result[N + 4] = '\0';
+        }
+        else {
+           result[N + 3] = '\0';
+        }
+         return result;
+      }();
+      return {quoted.data(), quoted.size() - 1};
+   }();
 }
