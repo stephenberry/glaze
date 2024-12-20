@@ -51,8 +51,8 @@ namespace glz
       // hereafter validation keywords, ref: https://www.learnjsonschema.com/2020-12/validation/
       std::optional<schema_any> constant{};
       // string only keywords
-      std::optional<std::uint64_t> minLength{};
-      std::optional<std::uint64_t> maxLength{};
+      std::optional<uint64_t> minLength{};
+      std::optional<uint64_t> maxLength{};
       std::optional<std::string_view> pattern{};
       // https://www.learnjsonschema.com/2020-12/format-annotation/format/
       std::optional<detail::defined_formats> format{};

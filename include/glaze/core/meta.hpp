@@ -304,8 +304,9 @@ namespace glz
       }
    }();
 
+   // We don't make this constexpr so that we can have heap allocated values like std::string
    template <detail::json_schema_t T>
-   inline constexpr auto json_schema_v = [] {
+   inline const auto json_schema_v = [] {
       if constexpr (detail::local_json_schema_t<T>) {
          return typename std::decay_t<T>::glaze_json_schema{};
       }
