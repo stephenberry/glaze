@@ -100,7 +100,7 @@ namespace glz
    
    template <const std::string_view& Key, bool Prettify>
    inline constexpr auto quoted_key_v = []() -> std::string_view {
-      static constexpr auto quoted = [] {
+      constexpr auto quoted = [] {
          constexpr auto N = Key.size();
          std::array<char, N + 4 + Prettify> result; // [quote, key, quote, colon, (prettify? space), null]
          result[0] = '"';
@@ -118,6 +118,8 @@ namespace glz
         }
          return result;
       }();
-      return {quoted.data(), quoted.size() - 1};
+      // TODO: make_static required by GCC 12
+      auto& static_arr = detail::make_static<quoted>::value;
+      return {static_arr.data(), static_arr.size() - 1};
    }();
 }
