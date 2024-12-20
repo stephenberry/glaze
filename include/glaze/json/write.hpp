@@ -1527,7 +1527,6 @@ namespace glz
                               }
                               else {
                                  if constexpr (vector_like<B>) {
-                                    static_assert(vector_like<B>);
                                     if constexpr (not supports_unchecked_write<val_t>) {
                                        if (ix == b.size()) [[unlikely]] {
                                           b.resize(b.size() * 2);
@@ -1542,10 +1541,7 @@ namespace glz
 
                         // MSVC requires get<I> rather than keys[I]
                         static constexpr auto key = glz::get<I>(reflect<T>::keys); // GCC 14 requires auto here
-                        static constexpr auto quoted_key = join_v < chars<"\"">, key,
-                                              Opts.prettify ? chars<"\": "> : chars < "\":" >>
-                           ;
-
+                        static constexpr auto quoted_key = quoted_key_v<key, Opts.prettify>;
                         static constexpr auto n = quoted_key.size();
                         std::memcpy(&b[ix], quoted_key.data(), n);
                         ix += n;
@@ -1575,10 +1571,7 @@ namespace glz
 
                      // MSVC requires get<I> rather than keys[I]
                      static constexpr auto key = glz::get<I>(reflect<T>::keys); // GCC 14 requires auto here
-                     static constexpr auto quoted_key = join_v < chars<"\"">, key,
-                                           Opts.prettify ? chars<"\": "> : chars < "\":" >>
-                        ;
-
+                     static constexpr auto quoted_key = quoted_key_v<key, Opts.prettify>;
                      static constexpr auto n = quoted_key.size();
                      std::memcpy(&b[ix], quoted_key.data(), n);
                      ix += n;
@@ -1609,7 +1602,6 @@ namespace glz
                         }
                         else {
                            if constexpr (vector_like<B>) {
-                              static_assert(vector_like<B>);
                               if constexpr (not supports_unchecked_write<val_t>) {
                                  if (ix == b.size()) [[unlikely]] {
                                     b.resize(b.size() * 2);
@@ -1704,9 +1696,7 @@ namespace glz
                   static constexpr auto group = glz::get<I>(groups);
 
                   static constexpr auto key = get<0>(group);
-                  static constexpr auto quoted_key = join_v < chars<"\"">, key,
-                                        Opts.prettify ? chars<"\": "> : chars < "\":" >>
-                     ;
+                  static constexpr auto quoted_key = quoted_key_v<key, Opts.prettify>;
                   dump<quoted_key>(b, ix);
 
                   static constexpr auto sub_partial = get<1>(group);
@@ -1738,9 +1728,7 @@ namespace glz
                   static constexpr auto group = glz::get<I>(groups);
 
                   static constexpr auto key = std::get<0>(group);
-                  static constexpr auto quoted_key = join_v < chars<"\"">, key,
-                                        Opts.prettify ? chars<"\": "> : chars < "\":" >>
-                     ;
+                  static constexpr auto quoted_key = quoted_key_v<key, Opts.prettify>;
                   dump<key>(b, ix);
 
                   static constexpr auto sub_partial = std::get<1>(group);
