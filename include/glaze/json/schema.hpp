@@ -45,7 +45,7 @@ namespace glz
       std::optional<std::string_view> description{};
       std::optional<schema_any> defaultValue{};
       std::optional<bool> deprecated{};
-      std::optional<std::span<const std::string_view>> examples{};
+      std::optional<std::vector<std::string_view>> examples{};
       std::optional<bool> readOnly{};
       std::optional<bool> writeOnly{};
       // hereafter validation keywords, ref: https://www.learnjsonschema.com/2020-12/validation/
@@ -63,10 +63,10 @@ namespace glz
       schema_number exclusiveMaximum{};
       schema_number multipleOf{};
       // object only keywords
-      std::optional<std::uint64_t> minProperties{};
-      std::optional<std::uint64_t> maxProperties{};
+      std::optional<uint64_t> minProperties{};
+      std::optional<uint64_t> maxProperties{};
       // std::optional<std::map<std::string_view, std::vector<std::string_view>>> dependent_required{};
-      std::optional<std::span<const std::string_view>> required{};
+      std::optional<std::vector<std::string_view>> required{};
       // array only keywords
       std::optional<uint64_t> minItems{};
       std::optional<uint64_t> maxItems{};
@@ -74,7 +74,7 @@ namespace glz
       std::optional<uint64_t> maxContains{};
       std::optional<bool> uniqueItems{};
       // properties
-      std::optional<std::span<const std::string_view>> enumeration{}; // enum
+      std::optional<std::vector<std::string_view>> enumeration{}; // enum
 
       // out of json schema specification
       std::optional<detail::ExtUnits> ExtUnits{};
