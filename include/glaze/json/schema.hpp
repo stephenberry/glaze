@@ -38,8 +38,8 @@ namespace glz
    {
       bool reflection_helper{}; // needed to support automatic reflection, because ref is a std::optional
       std::optional<std::string_view> ref{};
-      using schema_number = std::optional<std::variant<std::int64_t, std::uint64_t, double>>;
-      using schema_any = std::variant<std::monostate, bool, std::int64_t, std::uint64_t, double, std::string_view>;
+      using schema_number = std::optional<std::variant<int64_t, uint64_t, double>>;
+      using schema_any = std::variant<std::monostate, bool, int64_t, uint64_t, double, std::string_view>;
       // meta data keywords, ref: https://www.learnjsonschema.com/2020-12/meta-data/
       std::optional<std::string_view> title{};
       std::optional<std::string_view> description{};
