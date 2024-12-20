@@ -628,8 +628,8 @@ namespace glz
                      key.data(), key.data() + key.size(), key.size());
                   
                   if constexpr (I < N && key == reflect<json_schema_type<T>>::keys[I]) {
-                     // TODO: If we can convert the json_schema_v to an array then we can use a runtime access
-                     // for faster compilation
+                     // Experimenting using a to_array approach, but the compilation times were significantly higher
+                     // even when converting this access to a run-time access
                      ref_val = get<I>(to_tie(json_schema_v<T>));
                   }
                }
