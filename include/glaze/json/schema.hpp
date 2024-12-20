@@ -628,7 +628,7 @@ namespace glz
                      key.data(), key.data() + key.size(), key.size());
                   
                   if constexpr (I < N && key == reflect<json_schema_type<T>>::keys[I]) {
-                     // Experimenting using a to_array approach, but the compilation times were significantly higher
+                     // Experimented with a to_array approach, but the compilation times were significantly higher
                      // even when converting this access to a run-time access
                      // Tested with both creating a std::array and a heap allocated C-style array and storing in a unique_ptr
                      ref_val = get<I>(to_tie(json_schema_v<T>));
