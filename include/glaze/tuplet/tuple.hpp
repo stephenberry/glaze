@@ -413,7 +413,7 @@ namespace glz
    {
       // Converts from one tuple type to any other tuple or U
       template <class Tuple>
-      struct convert
+      struct convert final
       {
          using base_list = typename std::decay_t<Tuple>::base_list;
          Tuple tuple;
@@ -442,7 +442,7 @@ namespace glz
    // glz::tie implementation
    // glz::apply implementation
    template <size_t I, tuplet::indexable Tup>
-   GLZ_ALWAYS_INLINE constexpr decltype(auto) get(Tup&& tup)
+   GLZ_ALWAYS_INLINE constexpr decltype(auto) get(Tup&& tup) noexcept
    {
       return static_cast<Tup&&>(tup)[tuplet::tag<I>()];
    }
