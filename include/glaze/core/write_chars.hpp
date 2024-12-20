@@ -46,7 +46,7 @@ namespace glz::detail
    struct write_chars
    {
       template <auto Opts, class B>
-      inline static void op(num_t auto&& value, is_context auto&&, B&& b, auto&& ix) noexcept
+      inline static void op(num_t auto&& value, is_context auto&& ctx, B&& b, auto&& ix) noexcept
       {
          /*if constexpr (std::same_as<std::decay_t<B>, std::string>) {
             // more efficient strings in C++23:
@@ -92,7 +92,8 @@ namespace glz::detail
                const auto start = reinterpret_cast<char*>(&b[ix]);
                const auto [ptr, ec] = std::to_chars(start, &b[0] + b.size(), value, std::chars_format::general);
                if (ec != std::errc()) {
-                  // TODO: Do we need to handle this error state?
+                  ctx.error = error_code::unexpected_end;
+                  return;
                }
                ix += size_t(ptr - start);
             }

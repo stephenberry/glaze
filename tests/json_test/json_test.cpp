@@ -2979,7 +2979,6 @@ struct glz::meta<study_obj>
    static constexpr auto value = object("x", &T::x, "y", &T::y);
 };
 
-// TODO: Figure out why the thread pool can randomly hang, especially on Windows GitHub actions
 suite study_tests = [] {
    "study"_test = [] {
       glz::study::design design;
