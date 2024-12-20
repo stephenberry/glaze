@@ -246,6 +246,7 @@ namespace glz
          for (size_t i = 0; i < output_length; ++i) {
             result[i] = escaped[i];
          }
+         result[output_length] = '\0';
          return result;
       }();
       return {escaped.data(), escaped.size() - 1};
