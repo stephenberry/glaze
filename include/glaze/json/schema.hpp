@@ -68,10 +68,10 @@ namespace glz
       // std::optional<std::map<std::string_view, std::vector<std::string_view>>> dependent_required{};
       std::optional<std::span<const std::string_view>> required{};
       // array only keywords
-      std::optional<std::uint64_t> minItems{};
-      std::optional<std::uint64_t> maxItems{};
-      std::optional<std::uint64_t> minContains{};
-      std::optional<std::uint64_t> maxContains{};
+      std::optional<uint64_t> minItems{};
+      std::optional<uint64_t> maxItems{};
+      std::optional<uint64_t> minContains{};
+      std::optional<uint64_t> maxContains{};
       std::optional<bool> uniqueItems{};
       // properties
       std::optional<std::span<const std::string_view>> enumeration{}; // enum
@@ -304,27 +304,6 @@ namespace glz
 {
    namespace detail
    {
-      // The reflection schema map makes a map of all schema types within a glz::json_schema
-      // and returns a map of these schemas with their reflected names.
-      template <class T>
-      consteval auto make_reflection_schema_map()
-      {
-         auto schema_instance = json_schema_v<T>;
-         auto tuple = to_tie(schema_instance);
-         using V = std::decay_t<decltype(tuple)>;
-         constexpr auto N = glz::tuple_size_v<V>;
-         if constexpr (N > 0) {
-            constexpr auto& names = member_names<json_schema_type<T>>;
-            return [&]<size_t... I>(std::index_sequence<I...>) {
-               return detail::normal_map<sv, schema, N>(
-                  std::array<pair<sv, schema>, N>{pair{names[I], get<I>(tuple)}...});
-            }(std::make_index_sequence<N>{});
-         }
-         else {
-            return detail::normal_map<sv, schema, 0>(std::array<pair<sv, schema>, 0>{});
-         }
-      }
-
       template <class T = void>
       struct to_json_schema
       {
@@ -632,8 +611,7 @@ namespace glz
             }
 
             static constexpr auto N = reflect<T>::size;
-
-            static constexpr auto schema_map = make_reflection_schema_map<T>();
+            static constexpr auto json_schema_size = reflect<json_schema_type<T>>::size;
 
             s.properties = std::map<sv, schema, std::less<>>();
             for_each<N>([&](auto I) {
@@ -644,10 +622,15 @@ namespace glz
                constexpr sv key = reflect<T>::keys[I];
 
                schema ref_val{};
-               if constexpr (schema_map.size()) {
-                  static constexpr auto it = schema_map.find(key);
-                  if constexpr (it != schema_map.end()) {
-                     ref_val = it->second;
+               if constexpr (N > 0 && json_schema_size > 0) {
+                  static constexpr auto HashInfo = detail::hash_info<json_schema_type<T>>;
+                  constexpr auto I = decode_hash_with_size<JSON, json_schema_type<T>, HashInfo, HashInfo.type>::op(
+                     key.data(), key.data() + key.size(), key.size());
+                  
+                  if constexpr (I < N && key == reflect<json_schema_type<T>>::keys[I]) {
+                     // TODO: If we can convert the json_schema_v to an array then we can use a runtime access
+                     // for faster compilation
+                     ref_val = get<I>(to_tie(json_schema_v<T>));
                   }
                }
                if (!ref_val.ref) {
