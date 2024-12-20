@@ -528,6 +528,7 @@ struct glz::json_schema<meta_schema_t>
    schema is_valid{.description = "for validation"};
 };
 
+static_assert(glz::detail::json_schema_t<glz::json_schema<meta_schema_t>>);
 static_assert(glz::detail::reflectable<glz::json_schema<meta_schema_t>>);
 static_assert(glz::detail::count_members<glz::json_schema<meta_schema_t>> == 3);
 
@@ -546,6 +547,7 @@ struct local_schema_t
 };
 
 static_assert(glz::detail::local_json_schema_t<local_schema_t>);
+static_assert(glz::detail::json_schema_t<local_schema_t>);
 
 suite meta_schema_reflection_tests = [] {
    "meta_schema_reflection"_test = [] {
