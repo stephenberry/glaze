@@ -1527,7 +1527,6 @@ namespace glz
                               }
                               else {
                                  if constexpr (vector_like<B>) {
-                                    static_assert(vector_like<B>);
                                     if constexpr (not supports_unchecked_write<val_t>) {
                                        if (ix == b.size()) [[unlikely]] {
                                           b.resize(b.size() * 2);
@@ -1603,7 +1602,6 @@ namespace glz
                         }
                         else {
                            if constexpr (vector_like<B>) {
-                              static_assert(vector_like<B>);
                               if constexpr (not supports_unchecked_write<val_t>) {
                                  if (ix == b.size()) [[unlikely]] {
                                     b.resize(b.size() * 2);
