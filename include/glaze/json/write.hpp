@@ -133,8 +133,7 @@ namespace glz
             }() + 4 + 4 * N; // add extra characters
             
             if constexpr (vector_like<B>) {
-               const auto n = ix + max_length;
-               if (n >= b.size()) {
+               if (const auto n = ix + max_length; n > b.size()) {
                   b.resize(2 * n);
                }
             }
@@ -211,11 +210,26 @@ namespace glz
          template <auto Opts, class B>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, B&& b, auto&& ix)
          {
-            dump<'['>(b, ix);
-            write<JSON>::op<Opts>(value.real(), ctx, b, ix);
-            dump<','>(b, ix);
-            write<JSON>::op<Opts>(value.imag(), ctx, b, ix);
-            dump<']'>(b, ix);
+            static_assert(num_t<typename T::value_type>);
+            // we need to know it is a number type to allocate buffer space
+            
+            if constexpr (vector_like<B>) {
+               static constexpr size_t max_length = 256;
+               if (const auto n = ix + max_length; n > b.size()) {
+                  b.resize(2 * n);
+               }
+            }
+            
+            static constexpr auto O = write_unchecked_on<Opts>();
+            
+            std::memcpy(&b[ix], "[", 1);
+            ++ix;
+            write<JSON>::op<O>(value.real(), ctx, b, ix);
+            std::memcpy(&b[ix], ",", 1);
+            ++ix;
+            write<JSON>::op<O>(value.imag(), ctx, b, ix);
+            std::memcpy(&b[ix], "]", 1);
+            ++ix;
          }
       };
 
@@ -227,8 +241,8 @@ namespace glz
          {
             static constexpr auto checked = not has_write_unchecked(Opts);
             if constexpr (checked && vector_like<B>) {
-               if (b.size() <= (ix + 8)) [[unlikely]] {
-                  b.resize(2 * (ix + 8));
+               if (const auto n = ix + 8; n > b.size()) {
+                  b.resize(2 * n);
                }
             }
 
@@ -259,14 +273,23 @@ namespace glz
          template <auto Opts, class B>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, B&& b, auto&& ix)
          {
-            constexpr auto checked = not has_write_unchecked(Opts);
+            if constexpr (not has_write_unchecked(Opts) && vector_like<B>) {
+               if (const auto n = ix + 64; n > b.size()) {
+                  b.resize(2 * n);
+               }
+            }
+            
+            static constexpr auto O = write_unchecked_on<Opts>();
+            
             if constexpr (Opts.quoted_num) {
-               dump<'"', checked>(b, ix);
-               write_chars::op<Opts>(value, ctx, b, ix);
-               dump<'"', checked>(b, ix);
+               std::memcpy(&b[ix], "\"", 1);
+               ++ix;
+               write_chars::op<O>(value, ctx, b, ix);
+               std::memcpy(&b[ix], "\"", 1);
+               ++ix;
             }
             else {
-               write_chars::op<Opts>(value, ctx, b, ix);
+               write_chars::op<O>(value, ctx, b, ix);
             }
          }
       };
@@ -302,12 +325,13 @@ namespace glz
                else {
                   if constexpr (resizable<B>) {
                      const auto k = ix + 4; // 4 characters is enough for quotes and escaped character
-                     if (k >= b.size()) [[unlikely]] {
+                     if (k > b.size()) {
                         b.resize(2 * k);
                      }
                   }
 
-                  dump<'"', false>(b, ix);
+                  std::memcpy(&b[ix], "\"", 1);
+                  ++ix;
                   if (const auto escaped = char_escape_table[uint8_t(value)]; escaped) {
                      std::memcpy(&b[ix], &escaped, 2);
                      ix += 2;
@@ -316,9 +340,11 @@ namespace glz
                      // null character treated as empty string
                   }
                   else {
-                     dump<false>(value, b, ix);
+                     std::memcpy(&b[ix], &value, 1);
+                     ++ix;
                   }
-                  dump<'"', false>(b, ix);
+                  std::memcpy(&b[ix], "\"", 1);
+                  ++ix;
                }
             }
             else {
@@ -336,17 +362,21 @@ namespace glz
                   if constexpr (resizable<B>) {
                      const auto n = str.size();
                      const auto k = ix + 2 + n;
-                     if (k >= b.size()) [[unlikely]] {
+                     if (k > b.size()) {
                         b.resize(2 * k);
                      }
                   }
                   // now we don't have to check writing
 
-                  dump<'"', false>(b, ix);
+                  std::memcpy(&b[ix], "\"", 1);
+                  ++ix;
                   if (str.size()) [[likely]] {
-                     dump<false>(str, b, ix);
+                     const auto n = str.size();
+                     std::memcpy(&b[ix], str.data(), n);
+                     ix += n;
                   }
-                  dump<'"', false>(b, ix);
+                  std::memcpy(&b[ix], "\"", 1);
+                  ++ix;
                }
                else {
                   const sv str = [&]() -> const sv {
