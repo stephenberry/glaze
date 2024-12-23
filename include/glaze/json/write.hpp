@@ -90,14 +90,29 @@ namespace glz
       template <is_bitset T>
       struct to<JSON, T>
       {
-         template <auto Opts>
-         static void op(auto&& value, auto&&, auto&& b, auto&& ix)
+         template <auto Opts, class B>
+         static void op(auto&& value, auto&&, B&& b, auto&& ix)
          {
-            dump<'"'>(b, ix);
-            for (size_t i = value.size(); i > 0; --i) {
-               value[i - 1] ? dump<'1'>(b, ix) : dump<'0'>(b, ix);
+            if constexpr (vector_like<B>) {
+               const auto n = ix + 2 + value.size(); // 2 quotes + spaces for character
+               if (n >= b.size()) {
+                  b.resize(2 * n);
+               }
             }
-            dump<'"'>(b, ix);
+            
+            std::memcpy(&b[ix], "\"", 1);
+            ++ix;
+            for (size_t i = value.size(); i > 0; --i) {
+               if (value[i - 1]) {
+                  std::memcpy(&b[ix], "1", 1);
+               }
+               else {
+                  std::memcpy(&b[ix], "0", 1);
+               }
+               ++ix;
+            }
+            std::memcpy(&b[ix], "\"", 1);
+            ++ix;
          }
       };
 
