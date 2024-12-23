@@ -305,6 +305,8 @@ namespace glz
    }();
 
    // We don't make this constexpr so that we can have heap allocated values like std::string
+   // IMPORTANT: GCC has a bug that doesn't default instantiate this object when it isn't constexpr
+   // The solution is to use the json_schema_type defined below to instantiate where used.
    template <detail::json_schema_t T>
    inline const auto json_schema_v = [] {
       if constexpr (detail::local_json_schema_t<T>) {
