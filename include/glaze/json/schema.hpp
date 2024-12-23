@@ -626,7 +626,7 @@ namespace glz
                   static constexpr auto HashInfo = detail::hash_info<json_schema_type<T>>;
                   constexpr auto I = decode_hash_with_size<JSON, json_schema_type<T>, HashInfo, HashInfo.type>::op(
                      key.data(), key.data() + key.size(), key.size());
-                  
+
                   if constexpr (I < N && key == reflect<json_schema_type<T>>::keys[I]) {
                      // Experimented with a to_array approach, but the compilation times were significantly higher
                      // even when converting this access to a run-time access
