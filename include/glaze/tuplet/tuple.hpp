@@ -6,6 +6,7 @@
 #pragma once
 
 #include <compare>
+#include <concepts>
 #include <cstddef>
 #include <type_traits>
 #include <utility>
@@ -46,9 +47,6 @@ namespace glz
       using tag_range = std::make_index_sequence<N>;
 
       template <class T, class U>
-      concept same_as = std::is_same_v<T, U> && std::is_same_v<U, T>;
-
-      template <class T, class U>
       concept other_than = !std::is_same_v<std::decay_t<T>, U>;
 
       template <class Tup>
@@ -78,7 +76,7 @@ namespace glz
       concept equality_comparable = requires(const T& t) {
          {
             t == t
-         } -> same_as<bool>;
+         } -> std::same_as<bool>;
       };
    } // namespace tuplet
 
@@ -212,7 +210,7 @@ namespace glz
       constexpr auto& operator=(U&& tup)
       {
          using tuple2 = std::decay_t<U>;
-         if (tuplet::base_list_tuple<tuple2>) {
+         if constexpr (tuplet::base_list_tuple<tuple2>) {
             eq_impl(static_cast<U&&>(tup), base_list(), typename tuple2::base_list());
          }
          else {
@@ -415,7 +413,7 @@ namespace glz
    {
       // Converts from one tuple type to any other tuple or U
       template <class Tuple>
-      struct convert
+      struct convert final
       {
          using base_list = typename std::decay_t<Tuple>::base_list;
          Tuple tuple;
@@ -444,7 +442,7 @@ namespace glz
    // glz::tie implementation
    // glz::apply implementation
    template <size_t I, tuplet::indexable Tup>
-   GLZ_ALWAYS_INLINE constexpr decltype(auto) get(Tup&& tup)
+   GLZ_ALWAYS_INLINE constexpr decltype(auto) get(Tup&& tup) noexcept
    {
       return static_cast<Tup&&>(tup)[tuplet::tag<I>()];
    }

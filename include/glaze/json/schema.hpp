@@ -38,21 +38,21 @@ namespace glz
    {
       bool reflection_helper{}; // needed to support automatic reflection, because ref is a std::optional
       std::optional<std::string_view> ref{};
-      using schema_number = std::optional<std::variant<std::int64_t, std::uint64_t, double>>;
-      using schema_any = std::variant<std::monostate, bool, std::int64_t, std::uint64_t, double, std::string_view>;
+      using schema_number = std::optional<std::variant<int64_t, uint64_t, double>>;
+      using schema_any = std::variant<std::monostate, bool, int64_t, uint64_t, double, std::string_view>;
       // meta data keywords, ref: https://www.learnjsonschema.com/2020-12/meta-data/
       std::optional<std::string_view> title{};
       std::optional<std::string_view> description{};
       std::optional<schema_any> defaultValue{};
       std::optional<bool> deprecated{};
-      std::optional<std::span<const std::string_view>> examples{};
+      std::optional<std::vector<std::string_view>> examples{};
       std::optional<bool> readOnly{};
       std::optional<bool> writeOnly{};
       // hereafter validation keywords, ref: https://www.learnjsonschema.com/2020-12/validation/
       std::optional<schema_any> constant{};
       // string only keywords
-      std::optional<std::uint64_t> minLength{};
-      std::optional<std::uint64_t> maxLength{};
+      std::optional<uint64_t> minLength{};
+      std::optional<uint64_t> maxLength{};
       std::optional<std::string_view> pattern{};
       // https://www.learnjsonschema.com/2020-12/format-annotation/format/
       std::optional<detail::defined_formats> format{};
@@ -63,18 +63,18 @@ namespace glz
       schema_number exclusiveMaximum{};
       schema_number multipleOf{};
       // object only keywords
-      std::optional<std::uint64_t> minProperties{};
-      std::optional<std::uint64_t> maxProperties{};
+      std::optional<uint64_t> minProperties{};
+      std::optional<uint64_t> maxProperties{};
       // std::optional<std::map<std::string_view, std::vector<std::string_view>>> dependent_required{};
-      std::optional<std::span<const std::string_view>> required{};
+      std::optional<std::vector<std::string_view>> required{};
       // array only keywords
-      std::optional<std::uint64_t> minItems{};
-      std::optional<std::uint64_t> maxItems{};
-      std::optional<std::uint64_t> minContains{};
-      std::optional<std::uint64_t> maxContains{};
+      std::optional<uint64_t> minItems{};
+      std::optional<uint64_t> maxItems{};
+      std::optional<uint64_t> minContains{};
+      std::optional<uint64_t> maxContains{};
       std::optional<bool> uniqueItems{};
       // properties
-      std::optional<std::span<const std::string_view>> enumeration{}; // enum
+      std::optional<std::vector<std::string_view>> enumeration{}; // enum
 
       // out of json schema specification
       std::optional<detail::ExtUnits> ExtUnits{};
@@ -304,27 +304,6 @@ namespace glz
 {
    namespace detail
    {
-      // The reflection schema map makes a map of all schema types within a glz::json_schema
-      // and returns a map of these schemas with their reflected names.
-      template <class T>
-      consteval auto make_reflection_schema_map()
-      {
-         auto schema_instance = json_schema_v<T>;
-         auto tuple = to_tie(schema_instance);
-         using V = std::decay_t<decltype(tuple)>;
-         constexpr auto N = glz::tuple_size_v<V>;
-         if constexpr (N > 0) {
-            constexpr auto& names = member_names<json_schema_type<T>>;
-            return [&]<size_t... I>(std::index_sequence<I...>) {
-               return detail::normal_map<sv, schema, N>(
-                  std::array<pair<sv, schema>, N>{pair{names[I], get<I>(tuple)}...});
-            }(std::make_index_sequence<N>{});
-         }
-         else {
-            return detail::normal_map<sv, schema, 0>(std::array<pair<sv, schema>, 0>{});
-         }
-      }
-
       template <class T = void>
       struct to_json_schema
       {
@@ -632,8 +611,7 @@ namespace glz
             }
 
             static constexpr auto N = reflect<T>::size;
-
-            static constexpr auto schema_map = make_reflection_schema_map<T>();
+            static constexpr auto json_schema_size = reflect<json_schema_type<T>>::size;
 
             s.properties = std::map<sv, schema, std::less<>>();
             for_each<N>([&](auto I) {
@@ -644,10 +622,18 @@ namespace glz
                constexpr sv key = reflect<T>::keys[I];
 
                schema ref_val{};
-               if constexpr (schema_map.size()) {
-                  static constexpr auto it = schema_map.find(key);
-                  if constexpr (it != schema_map.end()) {
-                     ref_val = it->second;
+               if constexpr (N > 0 && json_schema_size > 0) {
+                  static constexpr auto HashInfo = detail::hash_info<json_schema_type<T>>;
+                  constexpr auto I = decode_hash_with_size<JSON, json_schema_type<T>, HashInfo, HashInfo.type>::op(
+                     key.data(), key.data() + key.size(), key.size());
+                  
+                  if constexpr (I < N && key == reflect<json_schema_type<T>>::keys[I]) {
+                     // Experimented with a to_array approach, but the compilation times were significantly higher
+                     // even when converting this access to a run-time access
+                     // Tested with both creating a std::array and a heap allocated C-style array and storing in a
+                     // unique_ptr
+                     static const auto schema_v = json_schema_type<T>{};
+                     ref_val = get<I>(to_tie(schema_v));
                   }
                }
                if (!ref_val.ref) {

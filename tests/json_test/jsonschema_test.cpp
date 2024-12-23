@@ -19,7 +19,7 @@ struct glz::json_schema<schema_obj>
       // .defaultValue = 42L, // todo it is not currently supported to read glz::schema::schema_any, for reference see
       // function variant_is_auto_deducible
       .deprecated = true,
-      // .examples = {"foo", "bar"}, // read of std::span is not supported
+      .examples = std::vector<std::string_view>{R"("foo")", R"("bar")"},
       .readOnly = true,
       .writeOnly = true,
       // .constant = "some constant value", // todo it is not currently supported to read glz::schema::schema_any, for
