@@ -398,19 +398,22 @@ namespace glz
                   // We add another 8 characters to support SWAR
                   if constexpr (resizable<B>) {
                      const auto k = ix + 10 + 2 * n;
-                     if (k >= b.size()) [[unlikely]] {
+                     if (k > b.size()) [[unlikely]] {
                         b.resize(2 * k);
                      }
                   }
                   // now we don't have to check writing
 
                   if constexpr (Opts.raw) {
-                     if (str.size()) [[likely]] {
-                        dump<false>(str, b, ix);
+                     const auto n = str.size();
+                     if (n) {
+                        std::memcpy(&b[ix], str.data(), n);
+                        ix += n;
                      }
                   }
                   else {
-                     dump<'"', false>(b, ix);
+                     std::memcpy(&b[ix], "\"", 1);
+                     ++ix;
 
                      const auto* c = str.data();
                      const auto* const e = c + n;
@@ -592,7 +595,8 @@ namespace glz
 
                      ix += size_t(data - start);
 
-                     dump<'"', false>(b, ix);
+                     std::memcpy(&b[ix], "\"", 1);
+                     ++ix;
                   }
                }
             }
@@ -603,9 +607,9 @@ namespace glz
       struct to<JSON, T>
       {
          template <auto Opts, class... Args>
-         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args)
+         static void op(auto&& value, is_context auto&& ctx, Args&&... args)
          {
-            to<JSON, decltype(value.string())>::template op<Opts>(value.string(), ctx, args...);
+            to<JSON, decltype(value.string())>::template op<Opts>(value.string(), ctx, std::forward<Args>(args)...);
          }
       };
 
