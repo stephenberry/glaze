@@ -119,18 +119,40 @@ namespace glz
       template <glaze_flags_t T>
       struct to<JSON, T>
       {
-         template <auto Opts>
-         static void op(auto&& value, is_context auto&&, auto&& b, auto&& ix)
+         template <auto Opts, class B>
+         static void op(auto&& value, is_context auto&&, B&& b, auto&& ix)
          {
             static constexpr auto N = reflect<T>::size;
+            
+            static constexpr auto max_length = []{
+               size_t length{};
+               [&]<size_t... I>(std::index_sequence<I...>) {
+                  ((length += reflect<T>::keys[I].size()), ...);
+               }(std::make_index_sequence<N>{});
+               return length;
+            }() + 4 + 4 * N; // add extra characters
+            
+            if constexpr (vector_like<B>) {
+               const auto n = ix + max_length;
+               if (n >= b.size()) {
+                  b.resize(2 * n);
+               }
+            }
 
-            dump<'['>(b, ix);
+            std::memcpy(&b[ix], "[", 1);
+            ++ix;
 
             invoke_table<N>([&]<size_t I>() {
                if (get_member(value, get<I>(reflect<T>::values))) {
-                  dump<'"'>(b, ix);
-                  dump_maybe_empty(reflect<T>::keys[I], b, ix);
-                  dump<"\",">(b, ix);
+                  std::memcpy(&b[ix], "\"", 1);
+                  ++ix;
+                  if constexpr (not reflect<T>::keys[I].empty()) {
+                     constexpr auto n = reflect<T>::keys[I].size();
+                     std::memcpy(&b[ix], reflect<T>::keys[I].data(), n);
+                     ix += n;
+                  }
+                  std::memcpy(&b[ix], "\",", 2);
+                  ix += 2;
                }
             });
 
@@ -138,7 +160,8 @@ namespace glz
                b[ix - 1] = ']';
             }
             else {
-               dump<']'>(b, ix);
+               std::memcpy(&b[ix], "]", 1);
+               ++ix;
             }
          }
       };
