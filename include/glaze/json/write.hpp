@@ -170,9 +170,9 @@ namespace glz
       struct to<JSON, hidden>
       {
          template <auto Opts>
-         GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&&, auto&&... args)
+         static void op(auto&& value, auto&&...) noexcept
          {
-            dump(R"("hidden type should not have been written")", args...);
+            static_assert(false_v<decltype(value)>, "hidden type should not be written");
          }
       };
 
