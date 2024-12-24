@@ -819,7 +819,7 @@ namespace glz
       GLZ_ALWAYS_INLINE void write_pair_content(const Key& key, Value&& value, Ctx& ctx, auto&& b, auto&& ix)
       {
          if constexpr (str_t<Key> || char_t<Key> || glaze_enum_t<Key> || Opts.quoted_num) {
-            write<JSON>::op<Opts>(key, ctx, b, ix);
+            to<JSON, core_t<Key>>::template op<Opts>(key, ctx, b, ix);
          }
          else {
             write<JSON>::op<opt_false<Opts, &opts::raw_string>>(quoted_t<const Key>{key}, ctx, b, ix);
@@ -831,7 +831,8 @@ namespace glz
             dump<':'>(b, ix);
          }
 
-         write<JSON>::op<opening_and_closing_handled_off<Opts>()>(std::forward<Value>(value), ctx, b, ix);
+         using V = core_t<decltype(value)>;
+         to<JSON, V>::template op<opening_and_closing_handled_off<Opts>()>(value, ctx, b, ix);
       }
       
       template <class T>
@@ -1814,7 +1815,7 @@ namespace glz
                }
 
                // Options is required here, because it must be the top level
-               if constexpr (!has_closing_handled(Options)) {
+               if constexpr (not has_closing_handled(Options)) {
                   if constexpr (Options.prettify) {
                      ctx.indentation_level -= Options.indentation_width;
                      if constexpr (vector_like<B>) {
