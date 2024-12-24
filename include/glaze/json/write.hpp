@@ -1530,29 +1530,25 @@ namespace glz
             static constexpr auto N = glz::tuple_size_v<V>;
             
             static constexpr auto Opts = opening_and_closing_handled<Options>();
+            
+            // When merging it is possible that objects are completed empty
+            // and therefore behave like skipped members even when skip_null_members is off
 
             invoke_table<N>([&]<size_t I>() {
-               if constexpr (Options.skip_null_members) {
-                  // It is possible that all fields were skipped if skip_null_members is true
-                  // In this case we don't want to dump a comma
-                  const auto ix_start = ix;
-                  using Value = core_t<decltype(get<I>(value.value))>;
-                  to<JSON, Value>::template op<Opts>(get<I>(value.value), ctx, b, ix);
-                  if constexpr (I < N - 1) {
-                     if (ix > ix_start) // we wrote something
-                     {
-                        dump<','>(b, ix);
-                     }
-                  }
-               }
-               else {
-                  using Value = core_t<decltype(get<I>(value.value))>;
-                  to<JSON, Value>::template op<Opts>(get<I>(value.value), ctx, b, ix);
-                  if constexpr (I < N - 1) {
-                     dump<','>(b, ix);
-                  }
+               // We don't want to dump a comma when nothing is written
+               const auto ix_start = ix;
+               using Value = core_t<decltype(get<I>(value.value))>;
+               to<JSON, Value>::template op<Opts>(get<I>(value.value), ctx, b, ix);
+               if (ix > ix_start) // we wrote something
+               {
+                  dump<','>(b, ix);
                }
             });
+            
+            // we may have a trailing comma, which needs to be removed
+            if (b[ix - 1] == ',') {
+               --ix;
+            }
 
             if constexpr (Options.prettify) {
                ctx.indentation_level -= Options.indentation_width;

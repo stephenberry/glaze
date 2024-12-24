@@ -5797,6 +5797,10 @@ suite numeric_enums_suite = [] {
    };
 };
 
+struct data_type {
+  std::string hello;
+};
+
 suite json_logging = [] {
    "json_logging"_test = [] {
       glz::arr vec = {1, 2, 3};
@@ -5852,6 +5856,24 @@ suite json_logging = [] {
       expect(not glz::write_json(merged, s));
 
       expect(s == R"({"pi":3.141,"a":0,"b":2,"c":3,"i":287,"d":3.14,"hello":"Hello World","arr":[1,2,3]})") << s;
+   };
+   
+   "merged potentiallyContainsUnknownJSON"_test = [] {
+      data_type data{};
+      std::vector<int> my_arr;
+      std::map<std::string_view, glz::raw_json_view> potentiallyContainsUnknownJSON;
+
+      data.hello = "goodbye";
+      std::string buffer{};
+      expect(not glz::write_json(glz::merge{
+        glz::obj{
+            "my_arr", my_arr,
+            "data", data
+        },
+        potentiallyContainsUnknownJSON
+      }, buffer));
+      
+      expect(buffer == R"({"my_arr":[],"data":{"hello":"goodbye"}})") << buffer;
    };
 };
 
