@@ -993,7 +993,8 @@ namespace glz
                            if constexpr (Opts.new_lines_in_arrays) {
                               std::memcpy(&b[ix], ",\n", 2);
                               ix += 2;
-                              dumpn_unchecked<Opts.indentation_char>(ctx.indentation_level, b, ix);
+                              std::memset(&b[ix], Opts.indentation_char, ctx.indentation_level);
+                              ix += ctx.indentation_level;
                            }
                            else {
                               std::memcpy(&b[ix], ", ", 2);
@@ -1146,7 +1147,8 @@ namespace glz
                   }
                }
                dump<"{\n", false>(b, ix);
-               dumpn_unchecked<Opts.indentation_char>(ctx.indentation_level, b, ix);
+               std::memset(&b[ix], Opts.indentation_char, ctx.indentation_level);
+               ix += ctx.indentation_level;
             }
             else {
                dump<'{'>(b, ix);
@@ -1646,7 +1648,8 @@ namespace glz
                      }
                      std::memcpy(&b[ix], "{\n", 2);
                      ix += 2;
-                     dumpn_unchecked<Options.indentation_char>(ctx.indentation_level, b, ix);
+                     std::memset(&b[ix], Opts.indentation_char, ctx.indentation_level);
+                     ix += ctx.indentation_level;
                   }
                   else {
                      dump<'{'>(b, ix);
@@ -1718,7 +1721,8 @@ namespace glz
                               }
                               std::memcpy(&b[ix], ",\n", 2);
                               ix += 2;
-                              dumpn_unchecked<Opts.indentation_char>(ctx.indentation_level, b, ix);
+                              std::memset(&b[ix], Opts.indentation_char, ctx.indentation_level);
+                              ix += ctx.indentation_level;
                            }
                            else {
                               if constexpr (vector_like<B>) {
@@ -1791,7 +1795,8 @@ namespace glz
                            }
                            std::memcpy(&b[ix], ",\n", 2);
                            ix += 2;
-                           dumpn_unchecked<Opts.indentation_char>(ctx.indentation_level, b, ix);
+                           std::memset(&b[ix], Opts.indentation_char, ctx.indentation_level);
+                           ix += ctx.indentation_level;
                         }
                         else {
                            if constexpr (vector_like<B>) {
@@ -1819,7 +1824,8 @@ namespace glz
                      }
                      std::memcpy(&b[ix], "\n", 1);
                      ++ix;
-                     dumpn_unchecked<Options.indentation_char>(ctx.indentation_level, b, ix);
+                     std::memset(&b[ix], Opts.indentation_char, ctx.indentation_level);
+                     ix += ctx.indentation_level;
                      std::memcpy(&b[ix], "}", 1);
                      ++ix;
                   }
