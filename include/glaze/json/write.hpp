@@ -109,7 +109,7 @@ namespace glz
                return 0;
             }
          }();
-         
+
          if (value >= (write_padding_bytes - 16)) {
             // we always require 16 bytes available for opening and closing characters
             return 0;
@@ -129,7 +129,7 @@ namespace glz
                   b.resize(2 * n);
                }
             }
-            
+
             std::memcpy(&b[ix], "\"", 1);
             ++ix;
             for (size_t i = value.size(); i > 0; --i) {
@@ -153,15 +153,15 @@ namespace glz
          static void op(auto&& value, is_context auto&&, B&& b, auto&& ix)
          {
             static constexpr auto N = reflect<T>::size;
-            
-            static constexpr auto max_length = []{
+
+            static constexpr auto max_length = [] {
                size_t length{};
                [&]<size_t... I>(std::index_sequence<I...>) {
                   ((length += reflect<T>::keys[I].size()), ...);
                }(std::make_index_sequence<N>{});
                return length;
             }() + 4 + 4 * N; // add extra characters
-            
+
             if constexpr (vector_like<B>) {
                if (const auto n = ix + max_length; n > b.size()) [[unlikely]] {
                   b.resize(2 * n);
@@ -243,16 +243,16 @@ namespace glz
          {
             static_assert(num_t<typename T::value_type>);
             // we need to know it is a number type to allocate buffer space
-            
+
             if constexpr (vector_like<B>) {
                static constexpr size_t max_length = 256;
                if (const auto n = ix + max_length; n > b.size()) [[unlikely]] {
                   b.resize(2 * n);
                }
             }
-            
+
             static constexpr auto O = write_unchecked_on<Opts>();
-            
+
             std::memcpy(&b[ix], "[", 1);
             ++ix;
             using Value = core_t<typename T::value_type>;
@@ -311,9 +311,9 @@ namespace glz
                   b.resize(2 * n);
                }
             }
-            
+
             static constexpr auto O = write_unchecked_on<Opts>();
-            
+
             if constexpr (Opts.quoted_num) {
                std::memcpy(&b[ix], "\"", 1);
                ++ix;
@@ -698,13 +698,13 @@ namespace glz
          {
             static constexpr auto name = name_v<std::decay_t<decltype(value)>>;
             constexpr auto n = name.size();
-            
+
             if constexpr (vector_like<B>) {
                if (const auto k = ix + 2 + n; k > b.size()) [[unlikely]] {
                   b.resize(2 * k);
                }
             }
-            
+
             std::memcpy(&b[ix], "\"", 1);
             ++ix;
             if constexpr (not name.empty()) {
@@ -729,7 +729,7 @@ namespace glz
                      b.resize(2 * k);
                   }
                }
-               
+
                std::memcpy(&b[ix], value.str.data(), n);
                ix += n;
             }
@@ -749,7 +749,7 @@ namespace glz
                      b.resize(2 * k);
                   }
                }
-               
+
                std::memcpy(&b[ix], value.str.data(), n);
                ix += n;
             }
@@ -835,11 +835,10 @@ namespace glz
          using V = core_t<decltype(value)>;
          to<JSON, V>::template op<opening_and_closing_handled_off<Opts>()>(value, ctx, b, ix);
       }
-      
+
       template <class T>
       concept array_padding_known =
-          requires { typename T::value_type; } &&
-          (required_padding<typename T::value_type>() > 0);
+         requires { typename T::value_type; } && (required_padding<typename T::value_type>() > 0);
 
       template <class T>
          requires(writable_array_t<T> || writable_map_t<T>)
@@ -857,9 +856,9 @@ namespace glz
             else {
                if constexpr (has_size<T> && array_padding_known<T>) {
                   const auto n = value.size();
-                  
+
                   static constexpr auto value_padding = required_padding<typename T::value_type>();
-                  
+
                   if constexpr (Opts.prettify) {
                      if constexpr (Opts.new_lines_in_arrays) {
                         ctx.indentation_level += Opts.indentation_width;
@@ -868,7 +867,9 @@ namespace glz
                      if constexpr (vector_like<B>) {
                         // add space for '\n' and ',' characters for each element, hence `+ 2`
                         // use n + 1 because we put the end array character after the last element with whitespace
-                        if (const auto k = ix + (n + 1) * (value_padding + ctx.indentation_level + 2) + write_padding_bytes; k > b.size()) {
+                        if (const auto k =
+                               ix + (n + 1) * (value_padding + ctx.indentation_level + 2) + write_padding_bytes;
+                            k > b.size()) {
                            b.resize(2 * k);
                         }
                      }
@@ -887,7 +888,8 @@ namespace glz
                   else {
                      if constexpr (vector_like<B>) {
                         static constexpr auto comma_padding = 1;
-                        if (const auto k = ix + n * (value_padding + comma_padding) + write_padding_bytes; k > b.size()) [[unlikely]] {
+                        if (const auto k = ix + n * (value_padding + comma_padding) + write_padding_bytes; k > b.size())
+                           [[unlikely]] {
                            b.resize(2 * k);
                         }
                      }
@@ -927,20 +929,21 @@ namespace glz
                      std::memset(&b[ix], Opts.indentation_char, ctx.indentation_level);
                      ix += ctx.indentation_level;
                   }
-                  
+
                   std::memcpy(&b[ix], "]", 1);
                   ++ix;
                }
                else {
                   // we either can't get the size (std::forward_list) or we cannot compute the allocation size
-                  
+
                   if constexpr (Opts.prettify) {
                      if constexpr (Opts.new_lines_in_arrays) {
                         ctx.indentation_level += Opts.indentation_width;
                      }
 
                      if constexpr (vector_like<B>) {
-                        if (const auto k = ix + ctx.indentation_level + write_padding_bytes; k > b.size()) [[unlikely]] {
+                        if (const auto k = ix + ctx.indentation_level + write_padding_bytes; k > b.size())
+                           [[unlikely]] {
                            b.resize(2 * k);
                         }
                      }
@@ -1020,7 +1023,7 @@ namespace glz
                      ctx.indentation_level -= Opts.indentation_width;
                      dump_newline_indent<Opts.indentation_char>(ctx.indentation_level, b, ix);
                   }
-                  
+
                   dump<']'>(b, ix);
                }
             }
@@ -1528,9 +1531,9 @@ namespace glz
 
             using V = std::decay_t<decltype(value.value)>;
             static constexpr auto N = glz::tuple_size_v<V>;
-            
+
             static constexpr auto Opts = opening_and_closing_handled<Options>();
-            
+
             // When merging it is possible that objects are completed empty
             // and therefore behave like skipped members even when skip_null_members is off
 
@@ -1544,7 +1547,7 @@ namespace glz
                   dump<','>(b, ix);
                }
             });
-            
+
             // we may have a trailing comma, which needs to be removed
             if (b[ix - 1] == ',') {
                --ix;
@@ -1781,8 +1784,7 @@ namespace glz
 
                      using val_t = std::remove_cvref_t<refl_t<T, I>>;
 
-                     static constexpr auto check_opts =
-                        required_padding<val_t>() ? write_unchecked_on<Opts>() : Opts;
+                     static constexpr auto check_opts = required_padding<val_t>() ? write_unchecked_on<Opts>() : Opts;
                      if constexpr (reflectable<T>) {
                         to<JSON, val_t>::template op<check_opts>(get_member(value, get<I>(t)), ctx, b, ix);
                      }
