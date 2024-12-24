@@ -430,7 +430,7 @@ namespace glz
                   // We add another 8 characters to support SWAR
                   if constexpr (resizable<B>) {
                      const auto k = ix + 10 + 2 * n;
-                     if (k > b.size()) [[unlikely]] {
+                     if (k > b.size()) {
                         b.resize(2 * k);
                      }
                   }
@@ -669,7 +669,7 @@ namespace glz
                   dump<'"'>(args...);
                }
             }
-            else [[unlikely]] {
+            else {
                // What do we want to happen if the value doesnt have a mapped string
                write<JSON>::op<Opts>(static_cast<std::underlying_type_t<T>>(value), ctx, std::forward<Args>(args)...);
             }
@@ -760,7 +760,7 @@ namespace glz
       {
          if constexpr (Opts.prettify) {
             if constexpr (vector_like<B>) {
-               if (const auto k = ix + ctx.indentation_level + write_padding_bytes; k > b.size()) [[unlikely]] {
+               if (const auto k = ix + ctx.indentation_level + write_padding_bytes; k > b.size()) {
                   b.resize(2 * k);
                }
             }
@@ -778,7 +778,7 @@ namespace glz
          else {
             if constexpr (vector_like<B>) {
                if constexpr (minified_check) {
-                  if (ix >= b.size()) [[unlikely]] {
+                  if (ix >= b.size()) {
                      b.resize(2 * ix);
                   }
                }
@@ -793,7 +793,7 @@ namespace glz
       {
          if constexpr (Opts.prettify) {
             if constexpr (vector_like<B>) {
-               if (const auto k = ix + ctx.indentation_level + write_padding_bytes; k > b.size()) [[unlikely]] {
+               if (const auto k = ix + ctx.indentation_level + write_padding_bytes; k > b.size()) {
                   b.resize(2 * k);
                }
             }
@@ -805,7 +805,7 @@ namespace glz
          else {
             if constexpr (vector_like<B>) {
                if constexpr (minified_check) {
-                  if (ix >= b.size()) [[unlikely]] {
+                  if (ix >= b.size()) {
                      b.resize(2 * ix);
                   }
                }
@@ -938,7 +938,7 @@ namespace glz
                      }
 
                      if constexpr (vector_like<B>) {
-                        if (const auto k = ix + ctx.indentation_level + write_padding_bytes; k > b.size()) [[unlikely]] {
+                        if (const auto k = ix + ctx.indentation_level + write_padding_bytes; k > b.size()) {
                            b.resize(2 * k);
                         }
                      }
@@ -956,7 +956,7 @@ namespace glz
                   }
                   else {
                      if constexpr (vector_like<B>) {
-                        if (const auto k = ix + write_padding_bytes; k > b.size()) [[unlikely]] {
+                        if (const auto k = ix + write_padding_bytes; k > b.size()) {
                            b.resize(2 * k);
                         }
                      }
@@ -978,13 +978,12 @@ namespace glz
                      if constexpr (required_padding<val_t>()) {
                         if constexpr (vector_like<B>) {
                            if constexpr (Opts.prettify) {
-                              if (const auto k = ix + ctx.indentation_level + write_padding_bytes; k > b.size())
-                                 [[unlikely]] {
+                              if (const auto k = ix + ctx.indentation_level + write_padding_bytes; k > b.size()) {
                                  b.resize(2 * k);
                               }
                            }
                            else {
-                              if (const auto k = ix + write_padding_bytes; k > b.size()) [[unlikely]] {
+                              if (const auto k = ix + write_padding_bytes; k > b.size()) {
                                  b.resize(2 * k);
                               }
                            }
@@ -1142,7 +1141,7 @@ namespace glz
             if constexpr (Opts.prettify) {
                ctx.indentation_level += Opts.indentation_width;
                if constexpr (vector_like<B>) {
-                  if (const auto k = ix + ctx.indentation_level + 2; k > b.size()) [[unlikely]] {
+                  if (const auto k = ix + ctx.indentation_level + 2; k > b.size()) {
                      b.resize(2 * k);
                   }
                }
@@ -1236,7 +1235,7 @@ namespace glz
          GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&&, B&& b, auto&& ix)
          {
             if constexpr (not has_write_unchecked(Opts)) {
-               if (const auto k = ix + 4; k > b.size()) [[unlikely]] {
+               if (const auto k = ix + 4; k > b.size()) {
                   b.resize(2 * k);
                }
             }
@@ -1641,8 +1640,7 @@ namespace glz
                   if constexpr (Options.prettify) {
                      ctx.indentation_level += Options.indentation_width;
                      if constexpr (vector_like<B>) {
-                        if (const auto k = ix + ctx.indentation_level + write_padding_bytes; k > b.size())
-                           [[unlikely]] {
+                        if (const auto k = ix + ctx.indentation_level + write_padding_bytes; k > b.size()) {
                            b.resize(2 * k);
                         }
                      }
@@ -1714,8 +1712,7 @@ namespace glz
                            // write_object_entry_separator<Opts, not supports_unchecked_write<val_t>>(ctx, b, ix);
                            if constexpr (Opts.prettify) {
                               if constexpr (vector_like<B>) {
-                                 if (const auto k = ix + ctx.indentation_level + write_padding_bytes; k > b.size())
-                                    [[unlikely]] {
+                                 if (const auto k = ix + ctx.indentation_level + write_padding_bytes; k > b.size()) {
                                     b.resize(2 * k);
                                  }
                               }
@@ -1726,7 +1723,7 @@ namespace glz
                            else {
                               if constexpr (vector_like<B>) {
                                  if constexpr (not required_padding<val_t>()) {
-                                    if (ix == b.size()) [[unlikely]] {
+                                    if (ix == b.size()) {
                                        b.resize(b.size() * 2);
                                     }
                                  }
@@ -1788,8 +1785,7 @@ namespace glz
                      if constexpr (I != (N - 1)) {
                         if constexpr (Opts.prettify) {
                            if constexpr (vector_like<B>) {
-                              if (const auto k = ix + ctx.indentation_level + write_padding_bytes; k > b.size())
-                                 [[unlikely]] {
+                              if (const auto k = ix + ctx.indentation_level + write_padding_bytes; k > b.size()) {
                                  b.resize(2 * k);
                               }
                            }
@@ -1800,7 +1796,7 @@ namespace glz
                         else {
                            if constexpr (vector_like<B>) {
                               if constexpr (not required_padding<val_t>()) {
-                                 if (ix == b.size()) [[unlikely]] {
+                                 if (ix == b.size()) {
                                     b.resize(b.size() * 2);
                                  }
                               }
@@ -1817,8 +1813,7 @@ namespace glz
                   if constexpr (Options.prettify) {
                      ctx.indentation_level -= Options.indentation_width;
                      if constexpr (vector_like<B>) {
-                        if (const auto k = ix + ctx.indentation_level + write_padding_bytes; k > b.size())
-                           [[unlikely]] {
+                        if (const auto k = ix + ctx.indentation_level + write_padding_bytes; k > b.size()) {
                            b.resize(2 * k);
                         }
                      }
