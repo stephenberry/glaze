@@ -1203,7 +1203,7 @@ suite user_types = [] {
       "b": "stuff"
    }
 })";
-      expect(thing_pretty == buffer);
+      expect(thing_pretty == buffer) << buffer;
    };
 
    "complex user obect opts prettify, new_lines_in_arrays = false"_test = [] {

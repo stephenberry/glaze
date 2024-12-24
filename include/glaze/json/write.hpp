@@ -1669,7 +1669,6 @@ namespace glz
                static constexpr auto padding = round_up_to_nearest_16(maximum_key_size<T> + write_padding_bytes);
                if constexpr (object_info<Opts, T>::maybe_skipped) {
                   bool first = true;
-                  static constexpr auto first_is_written = object_info<Opts, T>::first_will_be_written;
                   invoke_table<N>([&]<size_t I>() {
                      using val_t = std::remove_cvref_t<refl_t<T, I>>;
 
@@ -1707,7 +1706,12 @@ namespace glz
 
                         maybe_pad<padding>(b, ix);
 
-                        if constexpr (first_is_written && I > 0) {
+                        if (first) {
+                           first = false;
+                        }
+                        else {
+                           // Null members may be skipped so we cant just write it out for all but the last member
+                           // write_object_entry_separator<Opts, not supports_unchecked_write<val_t>>(ctx, b, ix);
                            if constexpr (Opts.prettify) {
                               if constexpr (vector_like<B>) {
                                  if (const auto k = ix + ctx.indentation_level + write_padding_bytes; k > b.size())
@@ -1721,7 +1725,6 @@ namespace glz
                            }
                            else {
                               if constexpr (vector_like<B>) {
-                                 static_assert(vector_like<B>);
                                  if constexpr (not required_padding<val_t>()) {
                                     if (ix == b.size()) [[unlikely]] {
                                        b.resize(b.size() * 2);
@@ -1730,37 +1733,6 @@ namespace glz
                               }
                               std::memcpy(&b[ix], ",", 1);
                               ++ix;
-                           }
-                        }
-                        else {
-                           if (first) {
-                              first = false;
-                           }
-                           else {
-                              // Null members may be skipped so we cant just write it out for all but the last member
-                              // write_object_entry_separator<Opts, not supports_unchecked_write<val_t>>(ctx, b, ix);
-                              if constexpr (Opts.prettify) {
-                                 if constexpr (vector_like<B>) {
-                                    if (const auto k = ix + ctx.indentation_level + write_padding_bytes; k > b.size())
-                                       [[unlikely]] {
-                                       b.resize(2 * k);
-                                    }
-                                 }
-                                 std::memcpy(&b[ix], ",\n", 2);
-                                 ix += 2;
-                                 dumpn_unchecked<Opts.indentation_char>(ctx.indentation_level, b, ix);
-                              }
-                              else {
-                                 if constexpr (vector_like<B>) {
-                                    if constexpr (not required_padding<val_t>()) {
-                                       if (ix == b.size()) [[unlikely]] {
-                                          b.resize(b.size() * 2);
-                                       }
-                                    }
-                                 }
-                                 std::memcpy(&b[ix], ",", 1);
-                                 ++ix;
-                              }
                            }
                         }
 
