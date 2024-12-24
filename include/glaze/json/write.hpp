@@ -125,7 +125,7 @@ namespace glz
          {
             if constexpr (vector_like<B>) {
                const auto n = ix + 2 + value.size(); // 2 quotes + spaces for character
-               if (n >= b.size()) {
+               if (n >= b.size()) [[unlikely]] {
                   b.resize(2 * n);
                }
             }
@@ -163,7 +163,7 @@ namespace glz
             }() + 4 + 4 * N; // add extra characters
             
             if constexpr (vector_like<B>) {
-               if (const auto n = ix + max_length; n > b.size()) {
+               if (const auto n = ix + max_length; n > b.size()) [[unlikely]] {
                   b.resize(2 * n);
                }
             }
@@ -246,7 +246,7 @@ namespace glz
             
             if constexpr (vector_like<B>) {
                static constexpr size_t max_length = 256;
-               if (const auto n = ix + max_length; n > b.size()) {
+               if (const auto n = ix + max_length; n > b.size()) [[unlikely]] {
                   b.resize(2 * n);
                }
             }
@@ -272,7 +272,7 @@ namespace glz
          {
             static constexpr auto checked = not has_write_unchecked(Opts);
             if constexpr (checked && vector_like<B>) {
-               if (const auto n = ix + 8; n > b.size()) {
+               if (const auto n = ix + 8; n > b.size()) [[unlikely]] {
                   b.resize(2 * n);
                }
             }
@@ -306,7 +306,7 @@ namespace glz
          {
             if constexpr (not has_write_unchecked(Opts) && vector_like<B>) {
                static_assert(required_padding<T>());
-               if (const auto n = ix + required_padding<T>(); n > b.size()) {
+               if (const auto n = ix + required_padding<T>(); n > b.size()) [[unlikely]] {
                   b.resize(2 * n);
                }
             }
@@ -357,7 +357,7 @@ namespace glz
                else {
                   if constexpr (resizable<B>) {
                      const auto k = ix + 4; // 4 characters is enough for quotes and escaped character
-                     if (k > b.size()) {
+                     if (k > b.size()) [[unlikely]] {
                         b.resize(2 * k);
                      }
                   }
@@ -394,7 +394,7 @@ namespace glz
                   if constexpr (resizable<B>) {
                      const auto n = str.size();
                      const auto k = ix + 2 + n;
-                     if (k > b.size()) {
+                     if (k > b.size()) [[unlikely]] {
                         b.resize(2 * k);
                      }
                   }
@@ -699,7 +699,7 @@ namespace glz
             constexpr auto n = name.size();
             
             if constexpr (vector_like<B>) {
-               if (const auto k = ix + 2 + n; k > b.size()) {
+               if (const auto k = ix + 2 + n; k > b.size()) [[unlikely]] {
                   b.resize(2 * k);
                }
             }
@@ -724,7 +724,7 @@ namespace glz
             const auto n = value.str.size();
             if (n) {
                if constexpr (vector_like<B>) {
-                  if (const auto k = ix + n; k > b.size()) {
+                  if (const auto k = ix + n; k > b.size()) [[unlikely]] {
                      b.resize(2 * k);
                   }
                }
@@ -744,7 +744,7 @@ namespace glz
             const auto n = value.str.size();
             if (n) {
                if constexpr (vector_like<B>) {
-                  if (const auto k = ix + n; k > b.size()) {
+                  if (const auto k = ix + n; k > b.size()) [[unlikely]] {
                      b.resize(2 * k);
                   }
                }
@@ -886,7 +886,7 @@ namespace glz
                   else {
                      if constexpr (vector_like<B>) {
                         static constexpr auto comma_padding = 1;
-                        if (const auto k = ix + n * (value_padding + comma_padding) + write_padding_bytes; k > b.size()) {
+                        if (const auto k = ix + n * (value_padding + comma_padding) + write_padding_bytes; k > b.size()) [[unlikely]] {
                            b.resize(2 * k);
                         }
                      }
