@@ -1,6 +1,6 @@
 # Custom Serialization/Deserialization
 
-See [Custom Read/Write](https://github.com/stephenberry/glaze/tree/main#custom-readwrite) in the main README.md for using member functions for custom handling.
+See [Custom Read/Write](https://github.com/stephenberry/glaze/tree/main#custom-readwrite) in the main README.md for using `glz::custom`.
 
 Advanced custom serialization/deserialization is achievable by implementing your own `from` and `to` specializations within the glz::detail namespace.
 
@@ -124,4 +124,3 @@ struct glz::meta<T>
    static constexpr auto custom_read = true;
 };
 ```
-

@@ -109,7 +109,8 @@ namespace glz
                if constexpr (std::is_void_v<Ret>) {
                   using Tuple = typename function_traits<V>::arguments;
                   Tuple inputs{};
-                  write<JSON>::op<Opts>(inputs, ctx, args...);
+                  using Inputs = std::remove_cvref_t<decltype(inputs)>;
+                  to<JSON, Inputs>::template op<Opts>(inputs, ctx, args...);
                }
                else {
                   static_assert(false_v<T>, "std::function must have void return");
@@ -227,7 +228,8 @@ namespace glz
             dump<'['>(args...);
             using Tuple = typename function_traits<V>::arguments;
             Tuple inputs{};
-            write<JSON>::op<Opts>(inputs, ctx, args...);
+            using Inputs = std::remove_cvref_t<decltype(inputs)>;
+            to<JSON, Inputs>::template op<Opts>(inputs, ctx, args...);
             dump<']'>(args...);
          }
       };

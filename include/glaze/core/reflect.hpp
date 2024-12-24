@@ -221,7 +221,6 @@ namespace glz
       requires(reflect<T>::size == 0)
    struct object_info<Opts, T>
    {
-      static constexpr bool first_will_be_written = false;
       static constexpr bool maybe_skipped = false;
    };
 
@@ -230,27 +229,6 @@ namespace glz
    struct object_info<Opts, T>
    {
       static constexpr auto N = reflect<T>::size;
-
-      // Allows us to remove a branch if the first item will always be written
-      static constexpr bool first_will_be_written = [] {
-         if constexpr (N > 0) {
-            using V = std::remove_cvref_t<refl_t<T, 0>>;
-
-            if constexpr (detail::null_t<V> && Opts.skip_null_members) {
-               return false;
-            }
-
-            if constexpr (is_includer<V> || std::same_as<V, hidden> || std::same_as<V, skip>) {
-               return false;
-            }
-            else {
-               return true;
-            }
-         }
-         else {
-            return false;
-         }
-      }();
 
       static constexpr bool maybe_skipped = [] {
          if constexpr (N > 0 && Opts.skip_null_members) {

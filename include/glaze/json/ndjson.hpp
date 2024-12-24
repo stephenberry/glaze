@@ -167,7 +167,7 @@ namespace glz
       struct to<NDJSON, T>
       {
          template <auto Opts, class... Args>
-         static void op(auto&& value, is_context auto&& ctx, Args&&... args)
+         static void op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix)
          {
             const auto is_empty = [&]() -> bool {
                if constexpr (has_size<T>) {
@@ -180,12 +180,13 @@ namespace glz
 
             if (!is_empty) {
                auto it = value.begin();
-               write<JSON>::op<Opts>(*it, ctx, std::forward<Args>(args)...);
+               using Value = core_t<decltype(*it)>;
+               to<JSON, Value>::template op<Opts>(*it, ctx, b, ix);
                ++it;
                const auto end = value.end();
                for (; it != end; ++it) {
-                  dump<'\n'>(std::forward<Args>(args)...);
-                  write<JSON>::op<Opts>(*it, ctx, std::forward<Args>(args)...);
+                  dump<'\n'>(b, ix);
+                  to<JSON, Value>::template op<Opts>(*it, ctx, b, ix);
                }
             }
          }
@@ -210,14 +211,14 @@ namespace glz
             using V = std::decay_t<T>;
             for_each<N>([&](auto I) {
                if constexpr (glaze_array_t<V>) {
-                  write<JSON>::op<Opts>(get_member(value, glz::get<I>(meta_v<T>)), ctx, std::forward<Args>(args)...);
+                  write<JSON>::op<Opts>(get_member(value, glz::get<I>(meta_v<T>)), ctx, args...);
                }
                else {
-                  write<JSON>::op<Opts>(glz::get<I>(value), ctx, std::forward<Args>(args)...);
+                  write<JSON>::op<Opts>(glz::get<I>(value), ctx, args...);
                }
                constexpr bool needs_new_line = I < N - 1;
                if constexpr (needs_new_line) {
-                  dump<'\n'>(std::forward<Args>(args)...);
+                  dump<'\n'>(args...);
                }
             });
          }

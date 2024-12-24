@@ -145,9 +145,15 @@ namespace glz
 
    template <class T>
    concept is_member_function_pointer = std::is_member_function_pointer_v<T>;
+   
+   template <class T>
+   using core_t = std::remove_cvref_t<T>;
 
    namespace detail
    {
+      // These templates save typing by determining the core type used to select the proper to/from specialization
+      // Long term I would like to remove these detail indirections.
+      
       template <uint32_t Format>
       struct read
       {};
@@ -159,7 +165,7 @@ namespace glz
       template <uint32_t Format>
       struct write_partial
       {};
-   } // namespace detail
+   }
 
    // Use std::stringview if you know the buffer is going to outlive this
    template <class string_type = std::string>
@@ -338,6 +344,9 @@ namespace glz
       template <class T>
       concept always_null_t =
          std::same_as<T, std::nullptr_t> || std::convertible_to<T, std::monostate> || std::same_as<T, std::nullopt_t>;
+      
+      template <class T>
+      concept always_skipped = is_includer<T> || std::same_as<T, hidden> || std::same_as<T, skip>;
 
       template <class T>
       concept nullable_t = !meta_value_t<T> && !str_t<T> && requires(T t) {

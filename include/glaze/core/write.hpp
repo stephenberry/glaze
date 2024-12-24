@@ -16,12 +16,13 @@ namespace glz
    [[nodiscard]] error_ctx write(T&& value, Buffer& buffer, is_context auto&& ctx)
    {
       if constexpr (resizable<Buffer>) {
-         if (buffer.empty()) {
+         // A buffer could be size 1, to ensure we have sufficient memory we can't just check `empty()`
+         if (buffer.size() < 2 * write_padding_bytes) {
             buffer.resize(2 * write_padding_bytes);
          }
       }
       size_t ix = 0; // overwrite index
-      detail::write<Opts.format>::template op<Opts>(std::forward<T>(value), ctx, buffer, ix);
+      detail::to<Opts.format, std::remove_cvref_t<T>>::template op<Opts>(std::forward<T>(value), ctx, buffer, ix);
       if constexpr (resizable<Buffer>) {
          buffer.resize(ix);
       }
@@ -34,7 +35,8 @@ namespace glz
    [[nodiscard]] error_ctx write(T&& value, Buffer& buffer)
    {
       if constexpr (resizable<Buffer>) {
-         if (buffer.empty()) {
+         // A buffer could be size 1, to ensure we have sufficient memory we can't just check `empty()`
+         if (buffer.size() < 2 * write_padding_bytes) {
             buffer.resize(2 * write_padding_bytes);
          }
       }
@@ -86,7 +88,7 @@ namespace glz
    [[nodiscard]] glz::expected<size_t, error_ctx> write(T&& value, Buffer&& buffer, is_context auto&& ctx)
    {
       size_t ix = 0;
-      detail::write<Opts.format>::template op<Opts>(std::forward<T>(value), ctx, buffer, ix);
+      detail::to<Opts.format, std::remove_cvref_t<T>>::template op<Opts>(std::forward<T>(value), ctx, buffer, ix);
       if (bool(ctx.error)) [[unlikely]] {
          return glz::unexpected(error_ctx{ctx.error});
       }
