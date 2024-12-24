@@ -627,8 +627,8 @@ namespace glz
                   // but this struct may have fewer keys that don't match the full set of keys in the struct T
                   // we therefore can't use `decode_hash_with_size` for either structure.
                   // Instead we just loop over the keys, looking for a match:
-                  
-                  constexpr auto schema_index = []{
+
+                  constexpr auto schema_index = [] {
                      size_t i{};
                      const auto& schema_keys = reflect<json_schema_type<T>>::keys;
                      for (; i < json_schema_size; ++i) {
@@ -638,7 +638,7 @@ namespace glz
                      }
                      return json_schema_size;
                   }();
-                  
+
                   if constexpr (schema_index < json_schema_size) {
                      // Experimented with a to_array approach, but the compilation times were significantly higher
                      // even when converting this access to a run-time access
