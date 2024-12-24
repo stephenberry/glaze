@@ -16,7 +16,8 @@ namespace glz
    [[nodiscard]] error_ctx write(T&& value, Buffer& buffer, is_context auto&& ctx)
    {
       if constexpr (resizable<Buffer>) {
-         if (buffer.empty()) {
+         // A buffer could be size 1, to ensure we have sufficient memory we can't just check `empty()`
+         if (buffer.size() < 2 * write_padding_bytes) {
             buffer.resize(2 * write_padding_bytes);
          }
       }
@@ -34,7 +35,8 @@ namespace glz
    [[nodiscard]] error_ctx write(T&& value, Buffer& buffer)
    {
       if constexpr (resizable<Buffer>) {
-         if (buffer.empty()) {
+         // A buffer could be size 1, to ensure we have sufficient memory we can't just check `empty()`
+         if (buffer.size() < 2 * write_padding_bytes) {
             buffer.resize(2 * write_padding_bytes);
          }
       }

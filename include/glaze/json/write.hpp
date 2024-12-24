@@ -302,7 +302,7 @@ namespace glz
             if constexpr (not has_write_unchecked(Opts) && vector_like<B>) {
                static_assert(required_padding<T>());
                if (const auto n = ix + required_padding<T>(); n > b.size()) {
-                  b.resize(2 * b.size());
+                  b.resize(2 * n);
                }
             }
             
@@ -1231,9 +1231,8 @@ namespace glz
          GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&&, B&& b, auto&& ix)
          {
             if constexpr (not has_write_unchecked(Opts)) {
-               if (ix + 4 > b.size()) [[unlikely]] {
-                  // less assembly than resizing to 2 * (ix + 4)
-                  b.resize(b.size() * 2);
+               if (const auto k = ix + 4; k > b.size()) [[unlikely]] {
+                  b.resize(2 * k);
                }
             }
             static constexpr uint32_t null_v = 1819047278;
