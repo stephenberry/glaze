@@ -1677,7 +1677,7 @@ namespace glz
                         return;
                      }
                      else {
-                        if constexpr (null_t<val_t>) {
+                        if constexpr (null_t<val_t> && Opts.skip_null_members) {
                            if constexpr (always_null_t<T>)
                               return;
                            else {
