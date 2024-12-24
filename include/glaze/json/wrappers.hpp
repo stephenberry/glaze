@@ -71,7 +71,8 @@ namespace glz
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&&... args)
          {
-            write<JSON>::op<opt_true<Opts, T::opts_member>>(value.val, ctx, args...);
+            using Value = core_t<decltype(value.val)>;
+            to<JSON, Value>::template op<opt_true<Opts, T::opts_member>>(value.val, ctx, args...);
          }
       };
 

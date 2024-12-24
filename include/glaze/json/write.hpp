@@ -255,10 +255,11 @@ namespace glz
             
             std::memcpy(&b[ix], "[", 1);
             ++ix;
-            write<JSON>::op<O>(value.real(), ctx, b, ix);
+            using Value = core_t<typename T::value_type>;
+            to<JSON, Value>::template op<O>(value.real(), ctx, b, ix);
             std::memcpy(&b[ix], ",", 1);
             ++ix;
-            write<JSON>::op<O>(value.imag(), ctx, b, ix);
+            to<JSON, Value>::template op<O>(value.imag(), ctx, b, ix);
             std::memcpy(&b[ix], "]", 1);
             ++ix;
          }
@@ -1527,13 +1528,16 @@ namespace glz
 
             using V = std::decay_t<decltype(value.value)>;
             static constexpr auto N = glz::tuple_size_v<V>;
+            
+            static constexpr auto Opts = opening_and_closing_handled<Options>();
 
             invoke_table<N>([&]<size_t I>() {
                if constexpr (Options.skip_null_members) {
                   // It is possible that all fields were skipped if skip_null_members is true
                   // In this case we don't want to dump a comma
                   const auto ix_start = ix;
-                  write<JSON>::op<opening_and_closing_handled<Options>()>(glz::get<I>(value.value), ctx, b, ix);
+                  using Value = core_t<decltype(get<I>(value.value))>;
+                  to<JSON, Value>::template op<Opts>(get<I>(value.value), ctx, b, ix);
                   if constexpr (I < N - 1) {
                      if (ix > ix_start) // we wrote something
                      {
@@ -1542,7 +1546,8 @@ namespace glz
                   }
                }
                else {
-                  write<JSON>::op<opening_and_closing_handled<Options>()>(glz::get<I>(value.value), ctx, b, ix);
+                  using Value = core_t<decltype(get<I>(value.value))>;
+                  to<JSON, Value>::template op<Opts>(get<I>(value.value), ctx, b, ix);
                   if constexpr (I < N - 1) {
                      dump<','>(b, ix);
                   }

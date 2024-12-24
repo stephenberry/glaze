@@ -84,14 +84,14 @@ namespace glz
             const size_t n = value.data.size();
             for (size_t i = 0; i < n; ++i) {
                auto& [name, v] = value.data[i];
-               write<JSON>::op<Opts>(name, ctx, std::forward<Args>(args)...); // write name as key
+               write<JSON>::op<Opts>(name, ctx, args...); // write name as key
 
-               dump<':'>(std::forward<Args>(args)...);
+               dump<':'>(args...);
                if constexpr (Opts.prettify) {
                   dump<' '>(args...);
                }
 
-               write<JSON>::op<Opts>(v.first, ctx, std::forward<Args>(args)...); // write deque
+               write<JSON>::op<Opts>(v.first, ctx, args...); // write deque
                if (i < n - 1) {
                   dump<','>(std::forward<Args>(args)...);
                }
@@ -107,7 +107,7 @@ namespace glz
                dump<'\n'>(args...);
                dumpn<Opts.indentation_char>(ctx.indentation_level, args...);
             }
-            dump<'}'>(std::forward<Args>(args)...);
+            dump<'}'>(args...);
          }
       };
 
