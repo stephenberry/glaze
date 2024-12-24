@@ -624,7 +624,8 @@ namespace glz
                schema ref_val{};
                if constexpr (N > 0 && json_schema_size > 0) {
                   // You have to make sure you are hashing on the T structure and not the json_schema_type<T>
-                  // Often the json_schema_type<T> will have less fields than T and therefore have different hash requirements
+                  // Often the json_schema_type<T> will have less fields than T and therefore have different hash
+                  // requirements
                   static constexpr auto HashInfo = detail::hash_info<T>;
                   constexpr auto I = decode_hash_with_size<JSON, T, HashInfo, HashInfo.type>::op(
                      key.data(), key.data() + key.size(), key.size());
