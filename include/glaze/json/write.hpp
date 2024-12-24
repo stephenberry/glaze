@@ -28,6 +28,11 @@ namespace glz
 {
    namespace detail
    {
+      // This write<JSON> indirection only exists to call std::remove_cvref_t on the type
+      // so that type matching doesn't depend on qualifiers.
+      // It is recommended to directly call to<JSON, std::remove_cvref_t<T>> to reduce compilation overhead.
+      // TODO: Long term this can probably be [[deprecated]]
+      // but it is useful for when getting the value type would be verbose
       template <>
       struct write<JSON>
       {

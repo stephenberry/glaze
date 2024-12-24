@@ -43,13 +43,15 @@ namespace glz
       struct to<JSON, quoted_t<T>>
       {
          template <auto Opts>
-         static void op(auto&& value, is_context auto&& ctx, auto&&... args)
+         static void op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix)
          {
             static thread_local std::string s(128, ' ');
-            size_t ix = 0; // overwrite index
-            write<JSON>::op<Opts>(value.val, ctx, s, ix);
-            s.resize(ix);
-            write<JSON>::op<Opts>(s, ctx, args...);
+            size_t oix = 0; // overwrite index
+            using Value = core_t<decltype(value.val)>;
+            to<JSON, Value>::template op<Opts>(value.val, ctx, s, oix);
+            s.resize(oix);
+            using S = core_t<decltype(s)>;
+            to<JSON, S>::template op<Opts>(s, ctx, b, ix);
          }
       };
 

@@ -130,7 +130,8 @@ namespace glz
          static void op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix)
          {
             std::span<typename T::Scalar, T::RowsAtCompileTime * T::ColsAtCompileTime> view(value.data(), value.size());
-            detail::write<JSON>::op<Opts>(view, ctx, b, ix);
+            using Value = std::remove_cvref_t<decltype(value)>;
+            detail::to<JSON, Value>::template op<Opts>(view, ctx, b, ix);
          }
       };
    } // namespace detail

@@ -113,7 +113,8 @@ namespace glz
                }
             }
 
-            write<JSON>::op<Opts>(get_member(value.val, value.member), ctx, args...);
+            using Value = core_t<decltype(get_member(value.val, value.member))>;
+            to<JSON, Value>::template op<Opts>(get_member(value.val, value.member), ctx, args...);
          }
       };
 
