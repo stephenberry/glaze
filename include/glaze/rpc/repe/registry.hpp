@@ -20,7 +20,6 @@ namespace glz::repe
    {
       repe::message& in;
       repe::message& out;
-      error_t& error;
 
       bool notify() const { return in.header.notify(); }
 
@@ -49,8 +48,7 @@ namespace glz::repe
       auto& in = state.in;
       auto& out = state.out;
       out.header.id = in.header.id;
-      if (state.error) {
-         out.header.error = true;
+      if (out.header.error) {
          out.header.query_length = out.query.size();
          out.header.body_length = out.body.size();
          out.header.length = sizeof(repe::header) + out.query.size() + out.body.size();
@@ -72,8 +70,7 @@ namespace glz::repe
       auto& in = state.in;
       auto& out = state.out;
       out.header.id = in.header.id;
-      if (state.error) {
-         out.header.error = true;
+      if (out.header.error) {
          out.header.query_length = out.query.size();
          out.header.body_length = out.body.size();
          out.header.length = sizeof(repe::header) + out.query.size() + out.body.size();
@@ -468,8 +465,12 @@ namespace glz::repe
       void call(message& in, message& out)
       {
          if (auto it = methods.find(in.query); it != methods.end()) {
-            static thread_local error_t error{};
-            it->second(state{in, out, error}); // handle the body
+            if (in.header.error) {
+               out = in;
+            }
+            else {
+               it->second(state{in, out}); // handle the body
+            }
          }
          else {
             static constexpr error_code code = error_code::method_not_found;
