@@ -346,7 +346,7 @@ struct Thing
    std::map<int, double> mapi{{5, 3.14}, {7, 7.42}, {2, 9.63}};
    sub_thing* thing_ptr{};
 
-   Thing() : thing_ptr(&thing){};
+   Thing() : thing_ptr(&thing) {};
 };
 
 template <>
@@ -4197,7 +4197,7 @@ struct glz::meta<cat>
 
 struct person
 {
-   void eat(const std::string&){};
+   void eat(const std::string&) {};
 };
 
 template <>
@@ -6155,11 +6155,8 @@ suite char_buffer = [] {
 static_assert(!glz::detail::char_array_t<char*>);
 
 suite enum_map = [] {
-   "enum map"_test = [] {
-      std::map<Color, std::string> color_map;
-      color_map[Color::Red] = "red";
-      color_map[Color::Green] = "green";
-      color_map[Color::Blue] = "blue";
+   "enum map key"_test = [] {
+      std::map<Color, std::string> color_map{{Color::Red, "red"}, {Color::Green, "green"}, {Color::Blue, "blue"}};
 
       std::string s{};
       expect(not glz::write_json(color_map, s));
@@ -6171,6 +6168,48 @@ suite enum_map = [] {
       expect(color_map.at(Color::Red) == "red");
       expect(color_map.at(Color::Green) == "green");
       expect(color_map.at(Color::Blue) == "blue");
+   };
+
+   "enum map key vector pair concatenate"_test = [] {
+      std::vector<std::pair<Color, std::string>> colors{
+         {Color::Red, "red"}, {Color::Green, "green"}, {Color::Blue, "blue"}};
+
+      std::string s{};
+      expect(not glz::write_json(colors, s));
+
+      expect(s == R"({"Red":"red","Green":"green","Blue":"blue"})");
+
+      auto expected = colors;
+      colors.clear();
+      expect(!glz::read_json(colors, s));
+      expect(colors == expected);
+   };
+
+   "enum map value"_test = [] {
+      std::map<int, Color> color_map{{0, Color::Red}, {1, Color::Green}, {2, Color::Blue}};
+
+      std::string s{};
+      expect(not glz::write_json(color_map, s));
+
+      expect(s == R"({"0":"Red","1":"Green","2":"Blue"})");
+
+      auto expectedMap = color_map;
+      color_map.clear();
+      expect(!glz::read_json(color_map, s));
+      expect(expectedMap == color_map);
+   };
+
+   "enum map value vector pair concatenate"_test = [] {
+      std::vector<std::pair<int, Color>> colors{{0, Color::Red}, {1, Color::Green}, {2, Color::Blue}};
+
+      std::string s{};
+      expect(not glz::write_json(colors, s));
+      expect(s == R"({"0":"Red","1":"Green","2":"Blue"})");
+
+      auto expected = colors;
+      colors.clear();
+      expect(!glz::read_json(colors, s));
+      expect(colors == expected);
    };
 };
 
@@ -6419,9 +6458,8 @@ template <>
 struct glz::meta<test_mapping_t>
 {
    using T = test_mapping_t;
-   static constexpr auto value = object("id", &T::id, "coordinates", [](auto& self) {
-      return coordinates_t{&self.latitude, &self.longitude};
-   });
+   static constexpr auto value =
+      object("id", &T::id, "coordinates", [](auto& self) { return coordinates_t{&self.latitude, &self.longitude}; });
 };
 
 suite mapping_struct = [] {
@@ -9699,8 +9737,8 @@ template <class V>
 struct glz::meta<response_t<V>>
 {
    using T = response_t<V>;
-   static constexpr auto value = object(
-      "result", [](auto& s) -> auto& { return s.result; }, "id", &T::id, "error", &T::error);
+   static constexpr auto value =
+      object("result", [](auto& s) -> auto& { return s.result; }, "id", &T::id, "error", &T::error);
 };
 
 template <>
@@ -9919,7 +9957,7 @@ namespace trr
 
    struct Person
    {
-      Person(Address* const p_add) : p_add(p_add){};
+      Person(Address* const p_add) : p_add(p_add) {};
       std::string name;
       Address* const p_add; // pointer is const, Address object is mutable
    };
