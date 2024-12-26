@@ -118,7 +118,18 @@ struct EnumHolder
 static_assert(glz::detail::reflectable<EnumHolder>);
 
 suite enum_test = [] {
-   "enum_as_string"_test = [] {
+   "enum_as_string_key"_test = [] {
+      std::map<Color, bool> obj{{Color::Red, true}};
+      std::string json;
+      expect(not glz::write_json(obj, json));
+      expect(json == R"({"Red":true})");
+
+      std::string input = R"({"Green":true})";
+      expect(!glz::read_json(obj, input));
+      expect(obj[Color::Green]);
+   };
+
+   "enum_as_string_value"_test = [] {
       EnumHolder obj{};
       std::string json;
       expect(not glz::write_json(obj, json));
@@ -127,6 +138,20 @@ suite enum_test = [] {
       std::string input = R"({"c":"Blue"})";
       expect(!glz::read_json(obj, input));
       expect(obj.c == Color::Blue);
+   };
+
+   "enum_as_key_vector_pair_concatenate"_test = [] {
+      std::vector<std::pair<Color, int>> obj{{Color::Red, 1}, {Color::Green, 2}};
+      std::string json;
+      expect(not glz::write_json(obj, json));
+      expect(json == R"({"Red":1,"Green":2})");
+
+      std::vector<std::pair<Color, int>> obj2{};
+      std::string input = R"({"Blue":3})";
+      expect(!glz::read_json(obj2, input));
+      expect(obj2.size() == 1);
+      expect(obj2[0].first == Color::Blue);
+      expect(obj2[0].second == 3);
    };
 };
 

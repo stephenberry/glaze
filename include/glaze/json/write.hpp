@@ -671,7 +671,7 @@ namespace glz
                }
             }
             else [[unlikely]] {
-               // What do we want to happen if the value doesnt have a mapped string
+               // What do we want to happen if the value doesn't have a mapped string
                write<JSON>::op<Opts>(static_cast<std::underlying_type_t<T>>(value), ctx, std::forward<Args>(args)...);
             }
          }
