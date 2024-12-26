@@ -109,7 +109,19 @@ namespace glz::repe
       if (bool(ctx.error)) {
          state.out.header.error = true;
          error_ctx ec{ctx.error, ctx.custom_error_message, size_t(b - start), ctx.includer_error};
-         write_response<Opts>(error_t{error_code::parse_error, format_error(ec, state.in.body)}, state);
+         
+         auto& in = state.in;
+         auto& out = state.out;
+         
+         std::string error_message = format_error(ec, in.body);
+         const uint32_t n = uint32_t(error_message.size());
+         out.header.body_length = 8 + n;
+         out.body.resize(out.header.body_length);
+         std::memcpy(out.body.data(), &ctx.error, 4);
+         std::memcpy(out.body.data() + 4, &n, 4);
+         std::memcpy(out.body.data() + 8, error_message.data(), n);
+         
+         write_response<Opts>(state);
          return 0;
       }
 
@@ -463,14 +475,15 @@ namespace glz::repe
             static constexpr error_code code = error_code::method_not_found;
             static constexpr sv body{"method not found"};
 
-            const auto body_length = 8 + body.size(); // 4 bytes for code, 4 bytes for size, + message
+            const uint32_t n = uint32_t(body.size());
+            const auto body_length = 8 + n; // 4 bytes for code, 4 bytes for size, + message
 
-            out.body.resize(sizeof(header) + body_length);
-            header h{.error = true, .body_length = body_length};
-            std::memcpy(out.body.data(), &h, sizeof(header));
-            std::memcpy(out.body.data() + sizeof(header), &code, 4);
-            std::memcpy(out.body.data() + sizeof(header) + 4, &body_length, 4);
-            std::memcpy(out.body.data() + sizeof(header) + 8, body.data(), body.size());
+            out.body.resize(body_length);
+            out.header.error = true;
+            out.header.body_length = body_length;
+            std::memcpy(out.body.data(), &code, 4);
+            std::memcpy(out.body.data() + 4, &n, 4);
+            std::memcpy(out.body.data() + 8, body.data(), n);
          }
       }
    };
