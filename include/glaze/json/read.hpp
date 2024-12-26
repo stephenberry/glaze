@@ -263,7 +263,7 @@ namespace glz
                   return;
                }
             }
-            
+
             if constexpr (N == 2) {
                if (index == 0) {
                   decode_index<Opts, T, 0>(value, ctx, it, end, selected_index...);
