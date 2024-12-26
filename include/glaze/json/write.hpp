@@ -1400,10 +1400,12 @@ namespace glz
                   write<JSON>::op<Opts>(get_member(value, glz::get<I>(meta_v<T>)), ctx, args...);
                }
                else if constexpr (is_std_tuple<T>) {
-                  write<JSON>::op<Opts>(std::get<I>(value), ctx, args...);
+                  using Value = core_t<decltype(std::get<I>(value))>;
+                  to<JSON, Value>::template op<Opts>(std::get<I>(value), ctx, args...);
                }
                else {
-                  write<JSON>::op<Opts>(glz::get<I>(value), ctx, args...);
+                  using Value = core_t<decltype(glz::get<I>(value))>;
+                  to<JSON, Value>::template op<Opts>(glz::get<I>(value), ctx, args...);
                }
                constexpr bool needs_comma = I < N - 1;
                if constexpr (needs_comma) {
