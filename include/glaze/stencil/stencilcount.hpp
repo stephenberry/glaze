@@ -105,7 +105,7 @@ namespace glz
 
                   if (index < N) [[likely]] {
                      static thread_local std::string temp{};
-                     detail::jump_table<N>(
+                     visit<N>(
                         [&]<size_t I>() {
                            static constexpr auto TargetKey = get<I>(reflect<T>::keys);
                            static constexpr auto Length = TargetKey.size();
