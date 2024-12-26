@@ -234,9 +234,7 @@ namespace glz
          constexpr auto type = HashInfo.type;
          constexpr auto N = reflect<T>::size;
 
-         if constexpr (not bool(type)) {
-            static_assert(false_v<T>, "invalid hash algorithm");
-         }
+         static_assert(bool(type), "invalid hash algorithm");
 
          if constexpr (N == 1) {
             decode_index<Opts, T, 0>(value, ctx, it, end, selected_index...);
@@ -265,9 +263,19 @@ namespace glz
                   return;
                }
             }
-
-            // We see better performance with function pointers than a glz::jump_table here.
-            visit<N>([&]<size_t I>() { decode_index<Opts, T, I>(value, ctx, it, end, selected_index...); }, index);
+            
+            if constexpr (N == 2) {
+               if (index == 0) {
+                  decode_index<Opts, T, 0>(value, ctx, it, end, selected_index...);
+               }
+               else {
+                  decode_index<Opts, T, 1>(value, ctx, it, end, selected_index...);
+               }
+            }
+            else {
+               // We see better performance with function pointers than a glz::jump_table here.
+               visit<N>([&]<size_t I>() { decode_index<Opts, T, I>(value, ctx, it, end, selected_index...); }, index);
+            }
          }
       }
 
