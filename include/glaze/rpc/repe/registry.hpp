@@ -109,10 +109,10 @@ namespace glz::repe
       if (bool(ctx.error)) {
          state.out.header.error = true;
          error_ctx ec{ctx.error, ctx.custom_error_message, size_t(b - start), ctx.includer_error};
-         
+
          auto& in = state.in;
          auto& out = state.out;
-         
+
          std::string error_message = format_error(ec, in.body);
          const uint32_t n = uint32_t(error_message.size());
          out.header.body_length = 8 + n;
@@ -120,7 +120,7 @@ namespace glz::repe
          std::memcpy(out.body.data(), &ctx.error, 4);
          std::memcpy(out.body.data() + 4, &n, 4);
          std::memcpy(out.body.data() + 8, error_message.data(), n);
-         
+
          write_response<Opts>(state);
          return 0;
       }
