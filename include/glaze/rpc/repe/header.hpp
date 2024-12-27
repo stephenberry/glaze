@@ -142,10 +142,10 @@ namespace glz::repe
    inline repe::header encode(const user_header& h) noexcept
    {
       repe::header ret{
-         .ec = h.ec, //
          .action = h.action, //
          .id = h.id, //
-         .query_length = h.query.size() //
+         .query_length = h.query.size(), //
+         .ec = h.ec //
       };
       return ret;
    }
