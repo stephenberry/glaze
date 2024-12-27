@@ -36,15 +36,15 @@ void notify_test()
    try {
       glz::asio_client<> client{"localhost", std::to_string(port)};
 
-      if (auto ec = client.init()) {
+      if (auto ec = client.init(); bool(ec)) {
          throw std::runtime_error(glz::write_json(ec).value_or("error"));
       }
 
-      if (auto ec = client.notify({"/hello"})) {
+      if (auto ec = client.notify({"/hello"}); bool(ec)) {
          throw std::runtime_error(glz::write_json(ec).value_or("error"));
       }
 
-      if (auto ec = client.call({"/hello"})) {
+      if (auto ec = client.call({"/hello"}); bool(ec)) {
          throw std::runtime_error(glz::write_json(ec).value_or("error"));
       }
 
@@ -83,16 +83,16 @@ void async_clients_test()
    try {
       glz::asio_client<> client{"localhost", std::to_string(port)};
 
-      if (auto ec = client.init()) {
+      if (auto ec = client.init(); bool(ec)) {
          throw std::runtime_error(glz::write_json(ec).value_or("error"));
       }
 
-      if (auto ec = client.set({"/age"}, 29)) {
+      if (auto ec = client.set({"/age"}, 29); bool(ec)) {
          std::cerr << glz::write_json(ec).value_or("error") << '\n';
       }
 
       int age{};
-      if (auto ec = client.get({"/age"}, age)) {
+      if (auto ec = client.get({"/age"}, age); bool(ec)) {
          std::cerr << glz::write_json(ec).value_or("error") << '\n';
       }
 
@@ -154,7 +154,7 @@ void asio_client_test()
       for (size_t i = 0; i < N; ++i) {
          threads.emplace_back(std::async([&, i] {
             auto& client = clients[i];
-            if (auto ec = client.init()) {
+            if (auto ec = client.init(); bool(ec)) {
                std::cerr << "Error: " << glz::write_json(ec).value_or("error") << std::endl;
             }
 
@@ -164,7 +164,7 @@ void asio_client_test()
             }
 
             int sum{};
-            if (auto ec = client.call({"/sum"}, data, sum)) {
+            if (auto ec = client.call({"/sum"}, data, sum); bool(ec)) {
                std::cerr << glz::write_json(ec).value_or("error") << '\n';
             }
             else {
@@ -283,9 +283,9 @@ void raw_json_tests()
    (void)client.init();
 
    auto ec = client.get({"/do_nothing"}, results);
-   expect(not ec);
-   if (ec) {
-      std::cerr << ec.message << '\n';
+   expect(not bool(ec));
+   if (bool(ec)) {
+      std::cerr << glz::format_error(ec) << '\n';
    }
 
    server.stop();
@@ -312,7 +312,7 @@ void async_server_test()
 
    int result{};
    auto ec = client.call({"/times_two"}, 100, result);
-   expect(not ec);
+   expect(not bool(ec));
 
    expect(result == 200);
 }

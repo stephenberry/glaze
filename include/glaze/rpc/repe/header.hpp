@@ -25,7 +25,7 @@ namespace glz::repe
       //
       uint16_t spec{0x1507}; // (5383) Magic two bytes to denote the REPE specification
       uint8_t version = 1; // REPE version
-      bool error{}; // Whether an error has occurred
+      uint8_t reserved{}; // Must be zero
       repe::action action{}; // Action to take, multiple actions may be bit-packed together
       //
       uint64_t id{}; // Identifier
@@ -36,7 +36,7 @@ namespace glz::repe
       //
       uint16_t query_format{};
       uint16_t body_format{};
-      uint32_t reserved{}; // Must be set to zero
+      error_code ec{};
 
       bool notify() const { return bool(uint32_t(action) & uint32_t(repe::action::notify)); }
 
@@ -83,6 +83,14 @@ namespace glz::repe
       repe::header header{};
       std::string query{};
       std::string body{};
+      
+      operator bool() const {
+         return bool(header.ec);
+      }
+      
+      error_code error() const {
+         return header.ec;
+      }
    };
 
    // User interface that will be encoded into a REPE header
@@ -90,7 +98,7 @@ namespace glz::repe
    {
       std::string_view query = ""; // The JSON pointer path to call or member to access/assign
       uint64_t id{}; // Identifier
-      bool error{}; // Whether an error has occurred
+      error_code ec{};
 
       repe::action action{}; // Action to take, multiple actions may be bit-packed together
 
@@ -134,7 +142,7 @@ namespace glz::repe
    inline repe::header encode(const user_header& h) noexcept
    {
       repe::header ret{
-         .error = h.error, //
+         .ec = h.ec, //
          .action = h.action, //
          .id = h.id, //
          .query_length = h.query.size() //
