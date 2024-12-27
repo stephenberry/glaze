@@ -130,27 +130,50 @@ namespace glz::repe
       template <opts Opts>
       struct request_impl
       {
-         error_t operator()(message& msg, const user_header& h) const
+         message operator()(const user_header& h) const
+         {
+            message msg{};
+            msg.header = encode(h);
+            msg.header.read(true); // because no value provided
+            msg.query = std::string{h.query};
+            msg.header.body_length = msg.body.size();
+            msg.header.length = sizeof(repe::header) + msg.query.size() + msg.body.size();
+            return msg;
+         }
+         
+         template <class Value>
+         message operator()(const user_header& h, Value&& value) const
+         {
+            message msg{};
+            msg.header = encode(h);
+            msg.query = std::string{h.query};
+            msg.header.write(true);
+            // TODO: Handle potential write errors and put in msg
+            std::ignore = glz::write<Opts>(std::forward<Value>(value), msg.body);
+            msg.header.body_length = msg.body.size();
+            msg.header.length = sizeof(repe::header) + msg.query.size() + msg.body.size();
+            return msg;
+         }
+         
+         void operator()(const user_header& h, message& msg) const
          {
             msg.header = encode(h);
             msg.header.read(true); // because no value provided
             msg.query = std::string{h.query};
-            std::ignore = glz::write<Opts>(nullptr, msg.body);
             msg.header.body_length = msg.body.size();
             msg.header.length = sizeof(repe::header) + msg.query.size() + msg.body.size();
-            return {};
          }
 
          template <class Value>
-         error_t operator()(message& msg, const user_header& h, Value&& value) const
+         void operator()(const user_header& h, Value&& value, message& msg) const
          {
             msg.header = encode(h);
             msg.query = std::string{h.query};
             msg.header.write(true);
+            // TODO: Handle potential write errors and put in msg
             std::ignore = glz::write<Opts>(std::forward<Value>(value), msg.body);
             msg.header.body_length = msg.body.size();
             msg.header.length = sizeof(repe::header) + msg.query.size() + msg.body.size();
-            return {};
          }
       };
    }
@@ -462,7 +485,8 @@ namespace glz::repe
          });
       }
 
-      void call(message& in, message& out)
+      template <class In = message, class Out = message>
+      void call(In&& in, Out&& out)
       {
          if (auto it = methods.find(in.query); it != methods.end()) {
             if (in.header.error) {
