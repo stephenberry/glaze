@@ -630,7 +630,7 @@ namespace glz
       {
          auto request = message_pool->borrow();
          header.notify(true);
-         repe::request<Opts>(std::move(header), repe::request<Opts>(std::forward<Params>(params)...), *request);
+         repe::request<Opts>(std::move(header), std::forward<Params>(params)..., *request);
          if (bool(request->error())) {
             encode_error(request->error(), "", response);
             return;
@@ -685,7 +685,7 @@ namespace glz
       void set(repe::user_header&& header, repe::message& response, Params&&... params)
       {
          auto request = message_pool->borrow();
-         repe::request<Opts>(std::move(header), repe::request<Opts>(std::forward<Params>(params)...), *request);
+         repe::request<Opts>(std::move(header), std::forward<Params>(params)..., *request);
          if (bool(request->error())) {
             encode_error(request->error(), "", response);
             return;
