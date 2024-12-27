@@ -566,8 +566,6 @@ namespace glz
    };
 }
 
-#include <format>
-
 // IMPORTANT: The code below is an alternative version of asio_client that uses repe::message in its API
 // This is probably a better approach and may replace glz::asio_client in the future
 namespace glz
@@ -600,10 +598,14 @@ namespace glz
                uint32_t error_length{};
                std::memcpy(&error_length, msg.body.data(), 4);
                const std::string_view error_message{msg.body.data() + 4, error_length};
-               return {std::format("REPE error: {} | {}", format_error(ec), error_message)};
+               std::string ret = "REPE error: ";
+               ret.append(format_error(ec));
+               ret.append(" | ");
+               ret.append(error_message);
+               return {ret};
             }
             else {
-               return {std::format("REPE error: {}", format_error(ec))};
+               return std::string{"REPE error: "} + format_error(ec);
             }
          }
 
