@@ -534,6 +534,8 @@ namespace glz
    };
 }
 
+#include <format>
+
 // IMPORTANT: The code below is an alternative version of asio_client that uses repe::message in its API
 // This is probably a better approach and may replace glz::asio_client in the future
 namespace glz
