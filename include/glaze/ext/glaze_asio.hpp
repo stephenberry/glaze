@@ -158,7 +158,10 @@ namespace glz
          else {
             socket = std::make_shared<asio::ip::tcp::socket>(*ctx);
             asio::ip::tcp::resolver resolver{*ctx};
-            const auto endpoint = resolver.resolve(host, service);
+            const auto endpoint = resolver.resolve(host, service, ec);
+            if (ec) {
+               return {nullptr, index, ec};
+            }
             asio::connect(*socket, endpoint, ec);
             if (ec) {
                return {nullptr, index, ec};
@@ -189,6 +192,10 @@ namespace glz
       std::shared_ptr<asio::ip::tcp::socket> value() { return ptr; }
 
       const std::shared_ptr<asio::ip::tcp::socket> value() const { return ptr; }
+      
+      operator bool() const {
+         return bool(ptr) && bool(pool);
+      }
 
       asio::ip::tcp::socket& operator*() { return *ptr; }
 
@@ -235,7 +242,7 @@ namespace glz
          is_connected = socket_pool->is_connected;
 
          unique_socket socket{socket_pool.get()};
-         if (socket.value()) {
+         if (socket) {
             return {}; // connection success
          }
          else {
@@ -254,6 +261,11 @@ namespace glz
          }
 
          unique_socket socket{socket_pool.get()};
+         if (not socket) {
+            socket.ptr.reset();
+            (*is_connected) = false;
+            return error_code::send_error;
+         }
 
          error_code ec{};
          send_buffer(*socket, *request, ec);
@@ -278,6 +290,11 @@ namespace glz
          }
 
          unique_socket socket{socket_pool.get()};
+         if (not socket) {
+            socket.ptr.reset();
+            (*is_connected) = false;
+            return error_code::send_error;
+         }
 
          error_code ec{};
          send_buffer(*socket, *request, ec);
@@ -317,6 +334,11 @@ namespace glz
          }
 
          unique_socket socket{socket_pool.get()};
+         if (not socket) {
+            socket.ptr.reset();
+            (*is_connected) = false;
+            return error_code::send_error;
+         }
 
          error_code ec{};
          send_buffer(*socket, *request, ec);
@@ -351,6 +373,11 @@ namespace glz
          }
 
          unique_socket socket{socket_pool.get()};
+         if (not socket) {
+            socket.ptr.reset();
+            (*is_connected) = false;
+            return error_code::send_error;
+         }
 
          error_code ec{};
          send_buffer(*socket, *request, ec);
@@ -389,6 +416,11 @@ namespace glz
          }
 
          unique_socket socket{socket_pool.get()};
+         if (not socket) {
+            socket.ptr.reset();
+            (*is_connected) = false;
+            return error_code::send_error;
+         }
 
          error_code ec{};
          send_buffer(*socket, *request, ec);
@@ -617,7 +649,7 @@ namespace glz
          is_connected = socket_pool->is_connected;
 
          unique_socket socket{socket_pool.get()};
-         if (socket.value()) {
+         if (socket) {
             return {}; // connection success
          }
          else {
@@ -637,6 +669,12 @@ namespace glz
          }
 
          unique_socket socket{socket_pool.get()};
+         if (not socket) {
+            socket.ptr.reset();
+            (*is_connected) = false;
+            encode_error(error_code::send_error, "", response);
+            return;
+         }
 
          error_code ec{};
          send_buffer(*socket, *request, ec);
@@ -661,6 +699,12 @@ namespace glz
          }
 
          unique_socket socket{socket_pool.get()};
+         if (not socket) {
+            socket.ptr.reset();
+            (*is_connected) = false;
+            encode_error(error_code::send_error, "", response);
+            return;
+         }
 
          error_code ec{};
          send_buffer(*socket, *request, ec);
@@ -692,6 +736,12 @@ namespace glz
          }
 
          unique_socket socket{socket_pool.get()};
+         if (not socket) {
+            socket.ptr.reset();
+            (*is_connected) = false;
+            encode_error(error_code::send_error, "", response);
+            return;
+         }
 
          error_code ec{};
          send_buffer(*socket, *request, ec);
