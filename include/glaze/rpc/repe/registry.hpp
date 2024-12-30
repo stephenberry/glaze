@@ -488,7 +488,7 @@ namespace glz::repe
             }
          }
          else {
-            static constexpr sv body{"method not found"};
+            std::string body = "invalid_query: " + in.query;
 
             const uint32_t n = uint32_t(body.size());
             const auto body_length = 4 + n; // 4 bytes for size, + message
