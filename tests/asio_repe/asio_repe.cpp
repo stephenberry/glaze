@@ -35,17 +35,20 @@ void notify_test()
 
    try {
       glz::asio_client<> client{"localhost", std::to_string(port)};
-
+      
       if (auto ec = client.init(); bool(ec)) {
          throw std::runtime_error(glz::write_json(ec).value_or("error"));
       }
 
-      if (auto ec = client.notify({"/hello"}); bool(ec)) {
-         throw std::runtime_error(glz::write_json(ec).value_or("error"));
+      glz::repe::message msg{};
+      client.notify({"/hello"}, msg);
+      if (bool(msg.error())) {
+         throw std::runtime_error(glz::repe::decode_error(msg));
       }
 
-      if (auto ec = client.call({"/hello"}); bool(ec)) {
-         throw std::runtime_error(glz::write_json(ec).value_or("error"));
+      client.call({"/hello"}, msg);
+      if (bool(msg.error())) {
+         throw std::runtime_error(glz::repe::decode_error(msg));
       }
 
       server.stop();
@@ -87,13 +90,17 @@ void async_clients_test()
          throw std::runtime_error(glz::write_json(ec).value_or("error"));
       }
 
-      if (auto ec = client.set({"/age"}, 29); bool(ec)) {
-         std::cerr << glz::write_json(ec).value_or("error") << '\n';
+      glz::repe::message msg{};
+      client.set({"/age"}, msg, 29);
+      if (bool(msg.error())) {
+         std::cerr << glz::repe::decode_error(msg) << '\n';
       }
 
       int age{};
-      if (auto ec = client.get({"/age"}, age); bool(ec)) {
-         std::cerr << glz::write_json(ec).value_or("error") << '\n';
+      client.call({"/age"}, msg);
+      auto err = glz::repe::decode_message(age, msg);
+      if (err) {
+         std::cerr << err.value() << '\n';
       }
 
       expect(age == 29);
@@ -164,8 +171,11 @@ void asio_client_test()
             }
 
             int sum{};
-            if (auto ec = client.call({"/sum"}, data, sum); bool(ec)) {
-               std::cerr << glz::write_json(ec).value_or("error") << '\n';
+            glz::repe::message msg{};
+            client.call({"/sum"}, msg, data);
+            auto err = glz::repe::decode_message(sum, msg);
+            if (err) {
+               std::cerr << err.value() << '\n';
             }
             else {
                std::cout << "i: " << i << ", " << sum << '\n';
@@ -236,12 +246,16 @@ void async_calls()
 
       threads.emplace_back(std::async([&] {
          int ret{};
-         (void)client.call({"/first/sum"}, 25, ret);
+         glz::repe::message msg{};
+         client.call({"/first/sum"}, msg, 25);
+         glz::repe::decode_message(ret, msg);
       }));
 
       threads.emplace_back(std::async([&] {
          int ret{};
-         (void)client.call({"/second/sum"}, 5, ret);
+         glz::repe::message msg{};
+         client.call({"/second/sum"}, msg, 5);
+         glz::repe::decode_message(ret, msg);
       }));
 
       for (auto& t : threads) {
@@ -282,10 +296,10 @@ void raw_json_tests()
    glz::asio_client<> client{"localhost", std::to_string(port)};
    (void)client.init();
 
-   auto ec = client.get({"/do_nothing"}, results);
-   expect(not bool(ec));
-   if (bool(ec)) {
-      std::cerr << glz::format_error(ec) << '\n';
+   glz::repe::message msg{};
+   client.get({"/do_nothing"}, msg);
+   if (bool(msg.error())) {
+      std::cerr << glz::repe::decode_error(msg) << '\n';
    }
 
    server.stop();
@@ -311,8 +325,9 @@ void async_server_test()
    (void)client.init();
 
    int result{};
-   auto ec = client.call({"/times_two"}, 100, result);
-   expect(not bool(ec));
+   glz::repe::message msg{};
+   client.call({"/times_two"}, msg, 100);
+   expect(not glz::repe::decode_message(result, msg));
 
    expect(result == 200);
 }

@@ -209,367 +209,7 @@ namespace glz
 
       ~unique_socket() { pool->free(index); }
    };
-
-   template <opts Opts = opts{}>
-   struct asio_client
-   {
-      std::string host{"localhost"}; // host name
-      std::string service{""}; // often the port
-      uint32_t concurrency{1}; // how many threads to use
-
-      struct glaze
-      {
-         using T = asio_client;
-         static constexpr auto value = glz::object(&T::host, &T::service, &T::concurrency);
-      };
-
-      std::shared_ptr<asio::io_context> ctx{};
-      std::shared_ptr<glz::socket_pool> socket_pool = std::make_shared<glz::socket_pool>();
-      std::shared_ptr<glz::memory_pool<repe::message>> message_pool =
-         std::make_shared<glz::memory_pool<repe::message>>();
-
-      std::shared_ptr<std::atomic<bool>> is_connected =
-         std::make_shared<std::atomic<bool>>(false); // will be set to pool's boolean
-
-      bool connected() const { return *is_connected; }
-
-      [[nodiscard]] error_code init()
-      {
-         ctx = std::make_shared<asio::io_context>(concurrency);
-         socket_pool->ctx = ctx;
-         socket_pool->host = host;
-         socket_pool->service = service;
-         is_connected = socket_pool->is_connected;
-
-         unique_socket socket{socket_pool.get()};
-         if (socket) {
-            return {}; // connection success
-         }
-         else {
-            return error_code::connection_failure;
-         }
-      }
-
-      template <class... Params>
-      [[nodiscard]] error_code notify(repe::user_header&& header, Params&&... params)
-      {
-         auto request = message_pool->borrow();
-         header.notify(true);
-         repe::request<Opts>(std::move(header), *request, std::forward<Params>(params)...);
-         if (bool(request->error())) {
-            return request->error();
-         }
-
-         unique_socket socket{socket_pool.get()};
-         if (not socket) {
-            socket.ptr.reset();
-            (*is_connected) = false;
-            return error_code::send_error;
-         }
-
-         error_code ec{};
-         send_buffer(*socket, *request, ec);
-
-         if (bool(ec)) {
-            socket.ptr.reset();
-            (*is_connected) = false;
-         }
-
-         return ec;
-      }
-
-      template <class Result>
-      [[nodiscard]] error_code get(repe::user_header&& header, Result&& result)
-      {
-         auto request = message_pool->borrow();
-         header.notify(false);
-         header.read(true);
-         repe::request<Opts>(std::move(header), *request);
-         if (bool(request->error())) {
-            return request->error();
-         }
-
-         unique_socket socket{socket_pool.get()};
-         if (not socket) {
-            socket.ptr.reset();
-            (*is_connected) = false;
-            return error_code::send_error;
-         }
-
-         error_code ec{};
-         send_buffer(*socket, *request, ec);
-
-         if (bool(ec)) {
-            socket.ptr.reset();
-            (*is_connected) = false;
-            return ec;
-         }
-
-         auto response = message_pool->borrow();
-         receive_buffer(*socket, *response, ec);
-         if (bool(ec)) {
-            socket.ptr.reset();
-            (*is_connected) = false;
-            return ec;
-         }
-
-         if (bool(response->error())) {
-            return error_code::send_error;
-         }
-
-         auto e = glz::read<Opts>(std::forward<Result>(result), response->body);
-         if (e) {
-            return e.ec;
-         }
-         return {};
-      }
-
-      template <class Params>
-      [[nodiscard]] error_code set(repe::user_header&& header, Params&& params)
-      {
-         auto request = message_pool->borrow();
-         repe::request<Opts>(std::move(header), *request, std::forward<Params>(params));
-         if (bool(request->error())) {
-            return request->error();
-         }
-
-         unique_socket socket{socket_pool.get()};
-         if (not socket) {
-            socket.ptr.reset();
-            (*is_connected) = false;
-            return error_code::send_error;
-         }
-
-         error_code ec{};
-         send_buffer(*socket, *request, ec);
-
-         if (bool(ec)) {
-            socket.ptr.reset();
-            (*is_connected) = false;
-            return ec;
-         }
-
-         auto response = message_pool->borrow();
-         receive_buffer(*socket, *response, ec);
-         if (bool(ec)) {
-            socket.ptr.reset();
-            (*is_connected) = false;
-            return ec;
-         }
-
-         if (bool(response->error())) {
-            return error_code::send_error;
-         }
-         return {};
-      }
-
-      template <class Params, class Result>
-      [[nodiscard]] error_code call(repe::user_header&& header, Params&& params, Result&& result)
-      {
-         auto request = message_pool->borrow();
-         repe::request<Opts>(std::move(header), *request, std::forward<Params>(params));
-         if (bool(request->error())) {
-            return request->error();
-         }
-
-         unique_socket socket{socket_pool.get()};
-         if (not socket) {
-            socket.ptr.reset();
-            (*is_connected) = false;
-            return error_code::send_error;
-         }
-
-         error_code ec{};
-         send_buffer(*socket, *request, ec);
-
-         if (bool(ec)) {
-            socket.ptr.reset();
-            (*is_connected) = false;
-            return ec;
-         }
-
-         auto response = message_pool->borrow();
-         receive_buffer(*socket, *response, ec);
-         if (bool(ec)) {
-            socket.ptr.reset();
-            (*is_connected) = false;
-            return ec;
-         }
-
-         if (bool(response->error())) {
-            return error_code::send_error;
-         }
-
-         auto e = glz::read<Opts>(std::forward<Result>(result), response->body);
-         if (e) {
-            return e.ec;
-         }
-         return {};
-      }
-
-      [[nodiscard]] error_code call(repe::user_header&& header)
-      {
-         auto request = message_pool->borrow();
-         repe::request<Opts>(std::move(header), *request);
-         if (bool(request->error())) {
-            return request->error();
-         }
-
-         unique_socket socket{socket_pool.get()};
-         if (not socket) {
-            socket.ptr.reset();
-            (*is_connected) = false;
-            return error_code::send_error;
-         }
-
-         error_code ec{};
-         send_buffer(*socket, *request, ec);
-
-         if (bool(ec)) {
-            socket.ptr.reset();
-            (*is_connected) = false;
-            return ec;
-         }
-
-         auto response = message_pool->borrow();
-         receive_buffer(*socket, *response, ec);
-         if (bool(ec)) {
-            socket.ptr.reset();
-            (*is_connected) = false;
-            return ec;
-         }
-
-         if (bool(response->error())) {
-            return error_code::send_error;
-         }
-         return {};
-      }
-   };
-
-   template <opts Opts = opts{}>
-   struct asio_server
-   {
-      uint16_t port{};
-      uint32_t concurrency{1}; // How many threads to use (a call to .run() is inclusive on the main thread)
-
-      ~asio_server() { stop(); }
-
-      struct glaze
-      {
-         using T = asio_server;
-         static constexpr auto value = glz::object(&T::port, &T::concurrency);
-      };
-
-      std::shared_ptr<asio::io_context> ctx{};
-      std::shared_ptr<asio::signal_set> signals{};
-      std::shared_ptr<std::vector<std::thread>> threads{};
-
-      repe::registry<Opts> registry{};
-
-      void clear_registry() { registry.clear(); }
-
-      template <const std::string_view& Root = repe::detail::empty_path, class T>
-         requires(glz::detail::glaze_object_t<T> || glz::detail::reflectable<T>)
-      void on(T& value)
-      {
-         registry.template on<Root>(value);
-      }
-
-      bool initialized = false;
-
-      void init()
-      {
-         if (!initialized) {
-            if (concurrency == 0) {
-               throw std::runtime_error("concurrency == 0");
-            }
-            ctx = std::make_shared<asio::io_context>(concurrency);
-            signals = std::make_shared<asio::signal_set>(*ctx, SIGINT, SIGTERM);
-         }
-         initialized = true;
-      }
-
-      void run(bool run_on_main_thread = true)
-      {
-         if (!initialized) {
-            init();
-         }
-
-         // Setup signal handling to stop the server
-         signals->async_wait([&](auto, auto) { ctx->stop(); });
-
-         // Start the listener coroutine
-         asio::co_spawn(*ctx, listener(), asio::detached);
-
-         // Run the io_context in multiple threads for concurrency
-         threads = std::shared_ptr<std::vector<std::thread>>(new std::vector<std::thread>{}, [](auto* ptr) {
-            // Join all threads before exiting
-            for (auto& thread : *ptr) {
-               if (thread.joinable()) {
-                  thread.join();
-               }
-            }
-         });
-
-         threads->reserve(concurrency - uint32_t(run_on_main_thread));
-         for (uint32_t i = uint32_t(run_on_main_thread); i < concurrency; ++i) {
-            threads->emplace_back([this]() { ctx->run(); });
-         }
-
-         if (run_on_main_thread) {
-            // Run in the main thread as well, which will block
-            ctx->run();
-
-            threads.reset(); // join all threads
-         }
-      }
-
-      void run_async() { run(false); }
-
-      // stop the server
-      void stop()
-      {
-         if (ctx) {
-            ctx->stop(); // Stop the server's io_context
-         }
-      }
-
-      asio::awaitable<void> run_instance(asio::ip::tcp::socket socket)
-      {
-         socket.set_option(asio::ip::tcp::no_delay(true));
-         repe::message request{};
-         repe::message response{};
-
-         try {
-            while (true) {
-               co_await co_receive_buffer(socket, request);
-               registry.call(request, response);
-               if (not request.header.notify()) {
-                  co_await co_send_buffer(socket, response);
-               }
-            }
-         }
-         catch (const std::exception& e) {
-            std::fprintf(stderr, "%s\n", e.what());
-         }
-      }
-
-      asio::awaitable<void> listener()
-      {
-         auto executor = co_await asio::this_coro::executor;
-         asio::ip::tcp::acceptor acceptor(executor, {asio::ip::tcp::v6(), port});
-         while (true) {
-            auto socket = co_await acceptor.async_accept(asio::use_awaitable);
-            asio::co_spawn(executor, run_instance(std::move(socket)), asio::detached);
-         }
-      }
-   };
-}
-
-// IMPORTANT: The code below is an alternative version of asio_client that uses repe::message in its API
-// This is probably a better approach and may replace glz::asio_client in the future
-namespace glz
-{
+   
    namespace repe
    {
       inline void encode_error(const error_code& ec, message& msg, const std::string_view error_message = "")
@@ -587,6 +227,28 @@ namespace glz
          const uint32_t n = uint32_t(error_message.size());
          std::memcpy(msg.body.data(), &n, 4);
          std::memcpy(msg.body.data() + 4, error_message.data(), n);
+      }
+      
+      // Decodes a repe::message when an error has been encountered
+      inline std::string decode_error(message& msg)
+      {
+         if (bool(msg.error())) {
+            const auto ec = msg.header.ec;
+            if (msg.header.body_length >= 4) {
+               uint32_t error_length{};
+               std::memcpy(&error_length, msg.body.data(), 4);
+               const std::string_view error_message{msg.body.data() + 4, error_length};
+               std::string ret = "REPE error: ";
+               ret.append(format_error(ec));
+               ret.append(" | ");
+               ret.append(error_message);
+               return {ret};
+            }
+            else {
+               return std::string{"REPE error: "} + format_error(ec);
+            }
+         }
+         return {"no error"};
       }
 
       // Decodes a repe::message into a structure
@@ -622,7 +284,7 @@ namespace glz
    }
 
    template <opts Opts = opts{}>
-   struct asio_repe_client
+   struct asio_client
    {
       std::string host{"localhost"}; // host name
       std::string service{""}; // often the port
@@ -630,7 +292,7 @@ namespace glz
 
       struct glaze
       {
-         using T = asio_repe_client;
+         using T = asio_client;
          static constexpr auto value = glz::object(&T::host, &T::service, &T::concurrency);
       };
 
@@ -770,6 +432,125 @@ namespace glz
       void call(repe::user_header&& header, repe::message& response, Params&&... params)
       {
          set(std::move(header), response, std::forward<Params>(params)...);
+      }
+   };
+
+   template <opts Opts = opts{}>
+   struct asio_server
+   {
+      uint16_t port{};
+      uint32_t concurrency{1}; // How many threads to use (a call to .run() is inclusive on the main thread)
+
+      ~asio_server() { stop(); }
+
+      struct glaze
+      {
+         using T = asio_server;
+         static constexpr auto value = glz::object(&T::port, &T::concurrency);
+      };
+
+      std::shared_ptr<asio::io_context> ctx{};
+      std::shared_ptr<asio::signal_set> signals{};
+      std::shared_ptr<std::vector<std::thread>> threads{};
+
+      repe::registry<Opts> registry{};
+
+      void clear_registry() { registry.clear(); }
+
+      template <const std::string_view& Root = repe::detail::empty_path, class T>
+         requires(glz::detail::glaze_object_t<T> || glz::detail::reflectable<T>)
+      void on(T& value)
+      {
+         registry.template on<Root>(value);
+      }
+
+      bool initialized = false;
+
+      void init()
+      {
+         if (!initialized) {
+            if (concurrency == 0) {
+               throw std::runtime_error("concurrency == 0");
+            }
+            ctx = std::make_shared<asio::io_context>(concurrency);
+            signals = std::make_shared<asio::signal_set>(*ctx, SIGINT, SIGTERM);
+         }
+         initialized = true;
+      }
+
+      void run(bool run_on_main_thread = true)
+      {
+         if (!initialized) {
+            init();
+         }
+
+         // Setup signal handling to stop the server
+         signals->async_wait([&](auto, auto) { ctx->stop(); });
+
+         // Start the listener coroutine
+         asio::co_spawn(*ctx, listener(), asio::detached);
+
+         // Run the io_context in multiple threads for concurrency
+         threads = std::shared_ptr<std::vector<std::thread>>(new std::vector<std::thread>{}, [](auto* ptr) {
+            // Join all threads before exiting
+            for (auto& thread : *ptr) {
+               if (thread.joinable()) {
+                  thread.join();
+               }
+            }
+         });
+
+         threads->reserve(concurrency - uint32_t(run_on_main_thread));
+         for (uint32_t i = uint32_t(run_on_main_thread); i < concurrency; ++i) {
+            threads->emplace_back([this]() { ctx->run(); });
+         }
+
+         if (run_on_main_thread) {
+            // Run in the main thread as well, which will block
+            ctx->run();
+
+            threads.reset(); // join all threads
+         }
+      }
+
+      void run_async() { run(false); }
+
+      // stop the server
+      void stop()
+      {
+         if (ctx) {
+            ctx->stop(); // Stop the server's io_context
+         }
+      }
+
+      asio::awaitable<void> run_instance(asio::ip::tcp::socket socket)
+      {
+         socket.set_option(asio::ip::tcp::no_delay(true));
+         repe::message request{};
+         repe::message response{};
+
+         try {
+            while (true) {
+               co_await co_receive_buffer(socket, request);
+               registry.call(request, response);
+               if (not request.header.notify()) {
+                  co_await co_send_buffer(socket, response);
+               }
+            }
+         }
+         catch (const std::exception& e) {
+            std::fprintf(stderr, "%s\n", e.what());
+         }
+      }
+
+      asio::awaitable<void> listener()
+      {
+         auto executor = co_await asio::this_coro::executor;
+         asio::ip::tcp::acceptor acceptor(executor, {asio::ip::tcp::v6(), port});
+         while (true) {
+            auto socket = co_await acceptor.async_accept(asio::use_awaitable);
+            asio::co_spawn(executor, run_instance(std::move(socket)), asio::detached);
+         }
       }
    };
 }
