@@ -2,6 +2,7 @@
 // For the license information refer to glaze.hpp
 
 #include "glaze/glaze_exceptions.hpp"
+#include "glaze/thread/async_string.hpp"
 #include "glaze/thread/shared_async_map.hpp"
 #include "glaze/thread/shared_async_vector.hpp"
 #include "glaze/thread/threadpool.hpp"
@@ -427,7 +428,7 @@ suite shared_async_vector_tests = [] {
       expect(vec.at(1).value() == 2);
       expect(vec.size() == 2);
 
-      // Iterate over the vector with const_iterator
+      // Iterate over the vector with constterator
       for (const auto& value : vec) {
          expect(value < 3);
       }
@@ -610,6 +611,196 @@ suite shared_async_vector_tests = [] {
       expect(vec.at(0).value() == 100);
       expect(vec.at(1).value() == 300);
    };*/
+};
+
+suite async_string_tests = [] {
+   "async_string default constructor"_test = [] {
+      glz::async_string s;
+      expect(s.empty());
+      expect(s.size() == 0);
+      expect(s.length() == 0);
+   };
+
+   "async_string param constructors"_test = [] {
+      glz::async_string s1("Hello");
+      expect(s1.size() == 5) << "s1.size()";
+      expect(s1.string() == "Hello");
+
+      std::string st = "World";
+      glz::async_string s2(st);
+      expect(s2.string() == "World");
+
+      std::string_view sv("View me");
+      glz::async_string s3(sv);
+      expect(s3.string() == "View me");
+
+      // Move construct
+      glz::async_string s4(std::move(s2));
+      expect(s4.string() == "World");
+      expect(s2.empty()); // Moved-from string should be empty
+   };
+
+   "async_string copy constructor"_test = [] {
+      glz::async_string original("Copy me");
+      glz::async_string copy(original);
+      expect(copy.string() == "Copy me");
+      expect(copy == original);
+   };
+
+   "async_string move constructor"_test = [] {
+      glz::async_string original("Move me");
+      glz::async_string moved(std::move(original));
+      expect(moved.string() == "Move me");
+      expect(original.empty());
+   };
+
+   "async_string copy assignment"_test = [] {
+      glz::async_string s1("First");
+      glz::async_string s2("Second");
+      s1 = s2;
+      expect(s1 == s2);
+      expect(s1.string() == "Second");
+   };
+
+   "async_string move assignment"_test = [] {
+      glz::async_string s1("First");
+      glz::async_string s2("Second");
+      s1 = std::move(s2);
+      expect(s1.string() == "Second");
+      expect(s2.empty());
+   };
+
+   "async_string assignment from various types"_test = [] {
+      glz::async_string s;
+      s = "Hello again";
+      expect(s.string() == "Hello again");
+      expect(s.size() == 11);
+
+      std::string st = "Another test";
+      s = st;
+      expect(s.string() == "Another test");
+      expect(s.size() == 12);
+
+      std::string_view sv("Testing 123");
+      s = sv;
+      expect(s.string() == "Testing 123");
+      expect(s.size() == 11);
+   };
+
+   "async_string read/write proxy"_test = [] {
+      glz::async_string s("initial");
+      {
+         auto writer = s.write();
+         writer->append(" data");
+      }
+      expect(s.string() == "initial data");
+
+      {
+         auto reader = s.read();
+         expect(*reader == "initial data");
+         expect(reader->size() == 12);
+      }
+   };
+
+   "async_string modifiers"_test = [] {
+      glz::async_string s("Hello");
+      s.push_back('!');
+      expect(s.string() == "Hello!");
+      expect(s.size() == 6);
+
+      s.pop_back();
+      expect(s.string() == "Hello");
+      expect(s.size() == 5);
+
+      s.clear();
+      expect(s.empty());
+      expect(s.size() == 0);
+   };
+
+   "async_string append and operator+="_test = [] {
+      glz::async_string s("Hello");
+      s.append(", ").append("World");
+      expect(s.string() == "Hello, World");
+      expect(s.size() == 12);
+
+      s += "!!!";
+      expect(s.string() == "Hello, World!!!");
+      expect(s.size() == 15);
+
+      s += '?';
+      expect(s.string() == "Hello, World!!!?");
+      expect(s.size() == 16);
+   };
+
+   "async_string element access"_test = [] {
+      glz::async_string s("Test");
+      expect(s.at(0) == 'T');
+      expect(s[1] == 'e');
+      expect(s.front() == 'T');
+      expect(s.back() == 't');
+
+      // Check out_of_range
+      expect(throws([&] {
+         (void)s.at(10); // out_of_range
+      }));
+   };
+
+   "async_string compare"_test = [] {
+      glz::async_string s1("abc");
+      glz::async_string s2("abcd");
+      expect(s1.compare(s2) < 0);
+      expect(s2.compare(s1) > 0);
+
+      expect(s1 < s2);
+      expect(s1 != s2);
+      expect(not(s1 == s2));
+   };
+
+   "async_string relational ops"_test = [] {
+      glz::async_string s1("abc");
+      glz::async_string s2("abc");
+      expect(s1 == s2);
+      expect(not(s1 < s2));
+      expect(s1 >= s2);
+      expect(s1 <= s2);
+   };
+
+   "async_string swap"_test = [] {
+      glz::async_string s1("Hello");
+      glz::async_string s2("World");
+      swap(s1, s2);
+      expect(s1.string() == "World");
+      expect(s2.string() == "Hello");
+   };
+
+   // Demonstrate Glaze JSON serialization/deserialization
+   "async_string write_json / read_json"_test = [] {
+      glz::async_string s("Serialize me!");
+      std::string buffer{};
+
+      // write_json returns a status code: false means success, true means error
+      expect(not glz::write_json(s, buffer)) << "Failed to serialize async_string.";
+      // The JSON for a single string is just a quoted string
+      expect(buffer == R"("Serialize me!")") << buffer;
+
+      glz::async_string t;
+      expect(not glz::read_json(t, buffer)) << "Failed to deserialize async_string.";
+      expect(*t.read() == "Serialize me!");
+   };
+
+   // Test an empty string's serialization
+   "async_string empty serialization"_test = [] {
+      glz::async_string s;
+      std::string buffer{};
+
+      expect(not glz::write_json(s, buffer));
+      // An empty string in JSON
+      expect(buffer == R"("")") << buffer;
+
+      glz::async_string t("placeholder");
+      expect(not glz::read_json(t, buffer));
+      expect(t.empty());
+   };
 };
 
 int main() { return 0; }
