@@ -41,9 +41,7 @@ void notify_test()
       }
 
       glz::repe::message msg{};
-      glz::repe::user_header header{"/hello"};
-      header.notify(true);
-      client.call(header, msg);
+      client.call({.query = "/hello", .notify = true}, msg);
       if (bool(msg.error())) {
          throw std::runtime_error(glz::repe::decode_error(msg));
       }

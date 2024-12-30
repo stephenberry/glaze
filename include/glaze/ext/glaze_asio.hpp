@@ -351,7 +351,7 @@ namespace glz
             return;
          }
 
-         if (not header.notify()) {
+         if (not header.notify) {
             receive_buffer(*socket, response, ec);
             if (bool(ec)) {
                socket.ptr.reset();

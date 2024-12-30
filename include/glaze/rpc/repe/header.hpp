@@ -16,6 +16,14 @@ namespace glz::repe
       read = 1 << 1, // Read a value or return the result of invoking a function
       write = 1 << 2 // Write a value or invoke a function
    };
+   
+   inline action pack_action(bool notify, bool read, bool write) noexcept {
+       return static_cast<action>(
+           (notify ? uint32_t(action::notify) : 0) |
+           (read ? uint32_t(action::read) : 0) |
+           (write ? uint32_t(action::write) : 0)
+       );
+   }
 
    inline constexpr auto no_length_provided = (std::numeric_limits<uint64_t>::max)();
 
@@ -100,49 +108,15 @@ namespace glz::repe
       uint64_t id{}; // Identifier
       error_code ec{};
 
-      repe::action action{}; // Action to take, multiple actions may be bit-packed together
-
-      bool notify() const { return bool(uint32_t(action) & uint32_t(repe::action::notify)); }
-
-      bool read() const { return bool(uint32_t(action) & uint32_t(repe::action::read)); }
-
-      bool write() const { return bool(uint32_t(action) & uint32_t(repe::action::write)); }
-
-      void notify(bool enable)
-      {
-         if (enable) {
-            action = static_cast<repe::action>(uint32_t(action) | uint32_t(action::notify));
-         }
-         else {
-            action = static_cast<repe::action>(uint32_t(action) & ~uint32_t(action::notify));
-         }
-      }
-
-      void read(bool enable)
-      {
-         if (enable) {
-            action = static_cast<repe::action>(uint32_t(action) | uint32_t(action::read));
-         }
-         else {
-            action = static_cast<repe::action>(uint32_t(action) & ~uint32_t(action::read));
-         }
-      }
-
-      void write(bool enable)
-      {
-         if (enable) {
-            action = static_cast<repe::action>(uint32_t(action) | uint32_t(action::write));
-         }
-         else {
-            action = static_cast<repe::action>(uint32_t(action) & ~uint32_t(action::write));
-         }
-      }
+      bool notify{};
+      bool read{};
+      bool write{};
    };
 
    inline repe::header encode(const user_header& h) noexcept
    {
       repe::header ret{
-         .action = h.action, //
+         .action = pack_action(h.notify, h.read, h.write), //
          .id = h.id, //
          .query_length = h.query.size(), //
          .ec = h.ec //
