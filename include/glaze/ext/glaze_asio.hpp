@@ -572,7 +572,7 @@ namespace glz
 {
    namespace repe
    {
-      inline void encode_error(const error_code& ec, const std::string_view error_message, message& msg)
+      inline void encode_error(const error_code& ec, message& msg, const std::string_view error_message = "")
       {
          msg.header.ec = ec;
          if (error_message.size() > (std::numeric_limits<uint32_t>::max)()) {
@@ -666,7 +666,7 @@ namespace glz
          header.notify(true);
          repe::request<Opts>(std::move(header), *request, std::forward<Params>(params)...);
          if (bool(request->error())) {
-            encode_error(request->error(), "", response);
+            encode_error(request->error(), response);
             return;
          }
 
@@ -674,7 +674,7 @@ namespace glz
          if (not socket) {
             socket.ptr.reset();
             (*is_connected) = false;
-            encode_error(error_code::send_error, "", response);
+            encode_error(error_code::send_error, response);
             return;
          }
 
@@ -684,7 +684,7 @@ namespace glz
          if (bool(ec)) {
             socket.ptr.reset();
             (*is_connected) = false;
-            encode_error(ec, "", response);
+            encode_error(ec, response);
             return;
          }
       }
@@ -696,7 +696,7 @@ namespace glz
          header.read(true);
          repe::request<Opts>(std::move(header), *request);
          if (bool(request->error())) {
-            encode_error(request->error(), "", response);
+            encode_error(request->error(), response);
             return;
          }
 
@@ -704,7 +704,7 @@ namespace glz
          if (not socket) {
             socket.ptr.reset();
             (*is_connected) = false;
-            encode_error(error_code::send_error, "", response);
+            encode_error(error_code::send_error, response);
             return;
          }
 
@@ -714,7 +714,7 @@ namespace glz
          if (bool(ec)) {
             socket.ptr.reset();
             (*is_connected) = false;
-            encode_error(ec, "", response);
+            encode_error(ec, response);
             return;
          }
 
@@ -722,7 +722,7 @@ namespace glz
          if (bool(ec)) {
             socket.ptr.reset();
             (*is_connected) = false;
-            encode_error(ec, "", response);
+            encode_error(ec, response);
             return;
          }
       }
@@ -733,7 +733,7 @@ namespace glz
          auto request = message_pool->borrow();
          repe::request<Opts>(std::move(header), *request, std::forward<Params>(params)...);
          if (bool(request->error())) {
-            encode_error(request->error(), "", response);
+            encode_error(request->error(), response);
             return;
          }
 
@@ -741,7 +741,7 @@ namespace glz
          if (not socket) {
             socket.ptr.reset();
             (*is_connected) = false;
-            encode_error(error_code::send_error, "", response);
+            encode_error(error_code::send_error, response);
             return;
          }
 
@@ -751,7 +751,7 @@ namespace glz
          if (bool(ec)) {
             socket.ptr.reset();
             (*is_connected) = false;
-            encode_error(ec, "", response);
+            encode_error(ec, response);
             return;
          }
 
@@ -759,7 +759,7 @@ namespace glz
          if (bool(ec)) {
             socket.ptr.reset();
             (*is_connected) = false;
-            encode_error(ec, "", response);
+            encode_error(ec, response);
             return;
          }
       }
