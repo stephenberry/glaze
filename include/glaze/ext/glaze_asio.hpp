@@ -323,76 +323,8 @@ namespace glz
          }
       }
 
-      template <class... Params>
-      void notify(repe::user_header&& header, repe::message& response, Params&&... params)
-      {
-         auto request = message_pool->borrow();
-         header.notify(true);
-         repe::request<Opts>(std::move(header), *request, std::forward<Params>(params)...);
-         if (bool(request->error())) {
-            encode_error(request->error(), response, "bad request");
-            return;
-         }
-
-         unique_socket socket{socket_pool.get()};
-         if (not socket) {
-            socket.ptr.reset();
-            (*is_connected) = false;
-            encode_error(error_code::send_error, response, "socket failure");
-            return;
-         }
-
-         error_code ec{};
-         send_buffer(*socket, *request, ec);
-
-         if (bool(ec)) {
-            socket.ptr.reset();
-            (*is_connected) = false;
-            encode_error(ec, response, "send failure");
-            return;
-         }
-      }
-
-      void get(repe::user_header&& header, repe::message& response)
-      {
-         auto request = message_pool->borrow();
-         header.notify(false);
-         header.read(true);
-         repe::request<Opts>(std::move(header), *request);
-         if (bool(request->error())) {
-            encode_error(request->error(), response, "bad request");
-            return;
-         }
-
-         unique_socket socket{socket_pool.get()};
-         if (not socket) {
-            socket.ptr.reset();
-            (*is_connected) = false;
-            encode_error(error_code::send_error, response, "socket failure");
-            return;
-         }
-
-         error_code ec{};
-         send_buffer(*socket, *request, ec);
-
-         if (bool(ec)) {
-            socket.ptr.reset();
-            (*is_connected) = false;
-            encode_error(ec, response, "send failure");
-            return;
-         }
-
-         receive_buffer(*socket, response, ec);
-         if (bool(ec)) {
-            socket.ptr.reset();
-            (*is_connected) = false;
-            encode_error(ec, response, "receive failure");
-            return;
-         }
-      }
-
-      template <class... Params>
-      void set(repe::user_header&& header, repe::message& response, Params&&... params)
+      template <class Header = repe::user_header, class... Params>
+      void call(Header&& header, repe::message& response, Params&&... params)
       {
          auto request = message_pool->borrow();
          repe::request<Opts>(std::move(header), *request, std::forward<Params>(params)...);
@@ -419,19 +351,15 @@ namespace glz
             return;
          }
 
-         receive_buffer(*socket, response, ec);
-         if (bool(ec)) {
-            socket.ptr.reset();
-            (*is_connected) = false;
-            encode_error(ec, response, "receive failure");
-            return;
+         if (not header.notify()) {
+            receive_buffer(*socket, response, ec);
+            if (bool(ec)) {
+               socket.ptr.reset();
+               (*is_connected) = false;
+               encode_error(ec, response, "receive failure");
+               return;
+            }
          }
-      }
-
-      template <class... Params>
-      void call(repe::user_header&& header, repe::message& response, Params&&... params)
-      {
-         set(std::move(header), response, std::forward<Params>(params)...);
       }
    };
 

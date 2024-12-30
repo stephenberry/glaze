@@ -41,7 +41,9 @@ void notify_test()
       }
 
       glz::repe::message msg{};
-      client.notify({"/hello"}, msg);
+      glz::repe::user_header header{"/hello"};
+      header.notify(true);
+      client.call(header, msg);
       if (bool(msg.error())) {
          throw std::runtime_error(glz::repe::decode_error(msg));
       }
@@ -91,7 +93,7 @@ void async_clients_test()
       }
 
       glz::repe::message msg{};
-      client.set({"/age"}, msg, 29);
+      client.call({"/age"}, msg, 29);
       if (bool(msg.error())) {
          std::cerr << glz::repe::decode_error(msg) << '\n';
       }
@@ -297,7 +299,7 @@ void raw_json_tests()
    (void)client.init();
 
    glz::repe::message msg{};
-   client.get({"/do_nothing"}, msg);
+   client.call({"/do_nothing"}, msg);
    if (bool(msg.error())) {
       std::cerr << glz::repe::decode_error(msg) << '\n';
    }
