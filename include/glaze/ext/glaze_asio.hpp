@@ -279,7 +279,11 @@ namespace glz
       socket_pool* pool{};
       std::shared_ptr<asio::ip::tcp::socket> ptr{};
       size_t index{};
-      std::error_code ec{};
+#if !defined(GLZ_USING_BOOST_ASIO)
+         std::error_code ec{};
+#else
+         boost::system::error_code ec{};
+#endif
 
       std::shared_ptr<asio::ip::tcp::socket> value() { return ptr; }
 
