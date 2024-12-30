@@ -286,7 +286,7 @@ namespace glz
       const std::shared_ptr<asio::ip::tcp::socket> value() const { return ptr; }
       
       operator bool() const {
-         return bool(ptr) && bool(pool);
+         return bool(ptr) && bool(pool) && not bool(ec);
       }
 
       asio::ip::tcp::socket& operator*() { return *ptr; }
