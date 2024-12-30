@@ -589,6 +589,8 @@ namespace glz
          std::memcpy(msg.body.data() + 4, error_message.data(), n);
       }
 
+      // Decodes a repe::message into a structure
+      // Returns a std::string with a formatted error on error
       template <opts Opts = opts{}, class T>
       inline std::optional<std::string> decode_message(T&& value, message& msg)
       {
