@@ -255,7 +255,7 @@ namespace glz
       {
          auto request = message_pool->borrow();
          header.notify(true);
-         repe::request<Opts>(std::move(header), std::forward<Params>(params)..., *request);
+         repe::request<Opts>(std::move(header), *request, std::forward<Params>(params)...);
          if (bool(request->error())) {
             return request->error();
          }
@@ -328,7 +328,7 @@ namespace glz
       [[nodiscard]] error_code set(repe::user_header&& header, Params&& params)
       {
          auto request = message_pool->borrow();
-         repe::request<Opts>(std::move(header), std::forward<Params>(params), *request);
+         repe::request<Opts>(std::move(header), *request, std::forward<Params>(params));
          if (bool(request->error())) {
             return request->error();
          }
@@ -367,7 +367,7 @@ namespace glz
       [[nodiscard]] error_code call(repe::user_header&& header, Params&& params, Result&& result)
       {
          auto request = message_pool->borrow();
-         repe::request<Opts>(std::move(header), std::forward<Params>(params), *request);
+         repe::request<Opts>(std::move(header), *request, std::forward<Params>(params));
          if (bool(request->error())) {
             return request->error();
          }
@@ -664,7 +664,7 @@ namespace glz
       {
          auto request = message_pool->borrow();
          header.notify(true);
-         repe::request<Opts>(std::move(header), std::forward<Params>(params)..., *request);
+         repe::request<Opts>(std::move(header), *request, std::forward<Params>(params)...);
          if (bool(request->error())) {
             encode_error(request->error(), "", response);
             return;
@@ -731,7 +731,7 @@ namespace glz
       void set(repe::user_header&& header, repe::message& response, Params&&... params)
       {
          auto request = message_pool->borrow();
-         repe::request<Opts>(std::move(header), std::forward<Params>(params)..., *request);
+         repe::request<Opts>(std::move(header), *request, std::forward<Params>(params)...);
          if (bool(request->error())) {
             encode_error(request->error(), "", response);
             return;

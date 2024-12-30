@@ -156,7 +156,7 @@ namespace glz::repe
          }
 
          template <class Value>
-         void operator()(const user_header& h, Value&& value, message& msg) const
+         void operator()(const user_header& h, message& msg, Value&& value) const
          {
             msg.header = encode(h);
             msg.query = std::string{h.query};

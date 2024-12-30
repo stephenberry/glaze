@@ -94,7 +94,7 @@ suite structs_of_functions = [] {
       expect(response.body == R"(42)");
    };
 
-   /*"nested_structs_of_functions"_test = [] {
+   "nested_structs_of_functions"_test = [] {
       repe::registry server{};
 
       my_nested_functions_t obj{};
@@ -104,49 +104,49 @@ suite structs_of_functions = [] {
       repe::message request{};
       repe::message response{};
 
-      repe::request_json(request, {"/my_functions/void_func"});
+      repe::request_json({"/my_functions/void_func"}, request);
       server.call(request, response);
       expect(response.body == "null") << response.body;
 
-      repe::request_json(request, {"/my_functions/hello"});
+      repe::request_json({"/my_functions/hello"}, request);
       server.call(request, response);
       expect(response.body == R"("Hello")");
 
-      repe::request_json(request, {"/meta_functions/hello"});
+      repe::request_json({"/meta_functions/hello"}, request);
       server.call(request, response);
       expect(response.body == R"("Hello")");
 
-      repe::request_json(request, {"/append_awesome"}, "you are");
+      repe::request_json({"/append_awesome"}, request, "you are");
       server.call(request, response);
       expect(response.body == R"("you are awesome!")");
 
-      repe::request_json(request, {"/my_string"}, "Howdy!");
+      repe::request_json({"/my_string"}, request, "Howdy!");
       server.call(request, response);
       expect(response.body == "null");
 
-      repe::request_json(request, {"/my_string"});
+      repe::request_json({"/my_string"}, request);
       server.call(request, response);
       expect(response.body == R"("Howdy!")") << response.body;
 
       obj.my_string.clear();
 
-      repe::request_json(request, {"/my_string"});
+      repe::request_json({"/my_string"}, request);
       server.call(request, response);
       // we expect an empty string returned because we cleared it
       expect(response.body == R"("")");
 
-      repe::request_json(request, {"/my_functions/max"}, std::vector<double>{1.1, 3.3, 2.25});
+      repe::request_json({"/my_functions/max"}, request, std::vector<double>{1.1, 3.3, 2.25});
       server.call(request, response);
       expect(response.body == R"(3.3)") << response.body;
 
-      repe::request_json(request, {"/my_functions"});
+      repe::request_json({"/my_functions"}, request);
       server.call(request, response);
       expect(
          response.body ==
          R"({"i":0,"hello":"std::function<std::string_view()>","world":"std::function<std::string_view()>","get_number":"std::function<int32_t()>","void_func":"std::function<void()>","max":"std::function<double(std::vector<double>&)>"})")
          << response.body;
 
-      repe::request_json(request, {""});
+      repe::request_json({""}, request);
       server.call(request, response);
       expect(
          response.body ==
@@ -164,29 +164,29 @@ suite structs_of_functions = [] {
       repe::message request{};
       repe::message response{};
 
-      repe::request_json(request, {"/name"}, "Susan");
+      repe::request_json({"/name"}, request, "Susan");
       server.call(request, response);
       expect(response.body == "null") << response.body;
 
-      repe::request_json(request, {"/get_name"});
+      repe::request_json({"/get_name"}, request);
       server.call(request, response);
       expect(response.body == R"("Susan")") << response.body;
 
-      repe::request_json(request, {"/get_name"}, "Bob");
+      repe::request_json({"/get_name"}, request, "Bob");
       server.call(request, response);
       expect(obj.name == "Susan"); // we expect the name to not have changed because this function take no inputs
       expect(response.body == R"("Susan")") << response.body;
 
-      repe::request_json(request, {"/set_name"}, "Bob");
+      repe::request_json({"/set_name"}, request, "Bob");
       server.call(request, response);
       expect(obj.name == "Bob");
       expect(response.body == "null") << response.body;
 
-      repe::request_json(request, {"/custom_name"}, "Alice");
+      repe::request_json({"/custom_name"}, request, "Alice");
       server.call(request, response);
       expect(obj.name == "Alice");
       expect(response.body == "null") << response.body;
-   };*/
+   };
 };
 
 /*suite structs_of_functions_beve = [] {
