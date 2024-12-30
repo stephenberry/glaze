@@ -23,13 +23,100 @@ static_assert(false, "standalone or boost asio must be included to use glaze/ext
 
 namespace glz
 {
+   namespace repe
+   {
+      inline void encode_error(const error_code& ec, message& msg)
+      {
+         msg.header.ec = ec;
+         msg.body.clear();
+      }
+      
+      template <has_size ErrorMessage>
+      inline void encode_error(const error_code& ec, message& msg, ErrorMessage&& error_message)
+      {
+         msg.header.ec = ec;
+         if (error_message.size() > (std::numeric_limits<uint32_t>::max)()) {
+            return;
+         }
+         if (error_message.empty()) {
+            return;
+         }
+         const auto error_size = 4 + error_message.size(); // 4 bytes for message length
+         msg.header.body_length = error_size;
+         msg.body.resize(error_size);
+         const uint32_t n = uint32_t(error_message.size());
+         std::memcpy(msg.body.data(), &n, 4);
+         std::memcpy(msg.body.data() + 4, error_message.data(), n);
+      }
+      
+      template <class ErrorMessage>
+         requires (not has_size<ErrorMessage>)
+      inline void encode_error(const error_code& ec, message& msg, ErrorMessage&& error_message)
+      {
+         encode_error(ec, msg, std::string_view{error_message});
+      }
+      
+      // Decodes a repe::message when an error has been encountered
+      inline std::string decode_error(message& msg)
+      {
+         if (bool(msg.error())) {
+            const auto ec = msg.header.ec;
+            if (msg.header.body_length >= 4) {
+               uint32_t error_length{};
+               std::memcpy(&error_length, msg.body.data(), 4);
+               const std::string_view error_message{msg.body.data() + 4, error_length};
+               std::string ret = "REPE error: ";
+               ret.append(format_error(ec));
+               ret.append(" | ");
+               ret.append(error_message);
+               return {ret};
+            }
+            else {
+               return std::string{"REPE error: "} + format_error(ec);
+            }
+         }
+         return {"no error"};
+      }
+
+      // Decodes a repe::message into a structure
+      // Returns a std::string with a formatted error on error
+      template <opts Opts = opts{}, class T>
+      inline std::optional<std::string> decode_message(T&& value, message& msg)
+      {
+         if (bool(msg.header.ec)) {
+            const auto ec = msg.header.ec;
+            if (msg.header.body_length >= 4) {
+               uint32_t error_length{};
+               std::memcpy(&error_length, msg.body.data(), 4);
+               const std::string_view error_message{msg.body.data() + 4, error_length};
+               std::string ret = "REPE error: ";
+               ret.append(format_error(ec));
+               ret.append(" | ");
+               ret.append(error_message);
+               return {ret};
+            }
+            else {
+               return std::string{"REPE error: "} + format_error(ec);
+            }
+         }
+
+         // we don't const qualify `msg` for performance
+         auto ec = glz::read<Opts>(std::forward<T>(value), msg.body);
+         if (ec) {
+            return {glz::format_error(ec, msg.body)};
+         }
+
+         return {};
+      }
+   }
+   
 #if defined(GLZ_USING_BOOST_ASIO)
    namespace asio = boost::asio;
 #endif
-   inline void send_buffer(asio::ip::tcp::socket& socket, const repe::message& msg, error_code& ec)
+   inline void send_buffer(asio::ip::tcp::socket& socket, repe::message& msg)
    {
       if (msg.header.length == repe::no_length_provided) {
-         ec = error_code::invalid_header;
+         encode_error(error_code::invalid_header, msg);
          return;
       }
 
@@ -39,28 +126,33 @@ namespace glz
       asio::error_code e{};
       asio::write(socket, buffers, asio::transfer_exactly(msg.header.length), e);
       if (e) {
-         ec = error_code::send_error;
+         encode_error(error_code::connection_failure, msg, e.message());
+         return;
       }
    }
 
-   inline void receive_buffer(asio::ip::tcp::socket& socket, repe::message& msg, error_code& ec)
+   inline void receive_buffer(asio::ip::tcp::socket& socket, repe::message& msg)
    {
-      asio::read(socket, asio::buffer(&msg.header, sizeof(msg.header)), asio::transfer_exactly(sizeof(msg.header)));
+      asio::error_code e{};
+      asio::read(socket, asio::buffer(&msg.header, sizeof(msg.header)), asio::transfer_exactly(sizeof(msg.header)), e);
+      if (e) {
+         encode_error(error_code::connection_failure, msg, e.message());
+         return;
+      }
       if (msg.header.query_length == repe::no_length_provided) {
-         ec = error_code::invalid_query;
+         encode_error(error_code::invalid_query, msg);
          return;
       }
       msg.query.resize(msg.header.query_length);
       asio::read(socket, asio::buffer(msg.query), asio::transfer_exactly(msg.header.query_length));
       if (msg.header.body_length == repe::no_length_provided) {
-         ec = error_code::invalid_body;
+         encode_error(error_code::invalid_body, msg);
          return;
       }
       msg.body.resize(msg.header.body_length);
-      asio::error_code e{};
       asio::read(socket, asio::buffer(msg.body), asio::transfer_exactly(msg.header.body_length), e);
       if (e) {
-         ec = error_code::send_error;
+         encode_error(error_code::connection_failure, msg, e.message());
          return;
       }
    }
@@ -209,79 +301,6 @@ namespace glz
 
       ~unique_socket() { pool->free(index); }
    };
-   
-   namespace repe
-   {
-      inline void encode_error(const error_code& ec, message& msg, const std::string_view error_message = "")
-      {
-         msg.header.ec = ec;
-         if (error_message.size() > (std::numeric_limits<uint32_t>::max)()) {
-            return;
-         }
-         if (error_message.empty()) {
-            return;
-         }
-         const auto error_size = 4 + error_message.size(); // 4 bytes for message length
-         msg.header.body_length = error_size;
-         msg.body.resize(error_size);
-         const uint32_t n = uint32_t(error_message.size());
-         std::memcpy(msg.body.data(), &n, 4);
-         std::memcpy(msg.body.data() + 4, error_message.data(), n);
-      }
-      
-      // Decodes a repe::message when an error has been encountered
-      inline std::string decode_error(message& msg)
-      {
-         if (bool(msg.error())) {
-            const auto ec = msg.header.ec;
-            if (msg.header.body_length >= 4) {
-               uint32_t error_length{};
-               std::memcpy(&error_length, msg.body.data(), 4);
-               const std::string_view error_message{msg.body.data() + 4, error_length};
-               std::string ret = "REPE error: ";
-               ret.append(format_error(ec));
-               ret.append(" | ");
-               ret.append(error_message);
-               return {ret};
-            }
-            else {
-               return std::string{"REPE error: "} + format_error(ec);
-            }
-         }
-         return {"no error"};
-      }
-
-      // Decodes a repe::message into a structure
-      // Returns a std::string with a formatted error on error
-      template <opts Opts = opts{}, class T>
-      inline std::optional<std::string> decode_message(T&& value, message& msg)
-      {
-         if (bool(msg.header.ec)) {
-            const auto ec = msg.header.ec;
-            if (msg.header.body_length >= 4) {
-               uint32_t error_length{};
-               std::memcpy(&error_length, msg.body.data(), 4);
-               const std::string_view error_message{msg.body.data() + 4, error_length};
-               std::string ret = "REPE error: ";
-               ret.append(format_error(ec));
-               ret.append(" | ");
-               ret.append(error_message);
-               return {ret};
-            }
-            else {
-               return std::string{"REPE error: "} + format_error(ec);
-            }
-         }
-
-         // we don't const qualify `msg` for performance
-         auto ec = glz::read<Opts>(std::forward<T>(value), msg.body);
-         if (ec) {
-            return {glz::format_error(ec, msg.body)};
-         }
-
-         return {};
-      }
-   }
 
    template <opts Opts = opts{}>
    struct asio_client
@@ -341,22 +360,19 @@ namespace glz
             return;
          }
 
-         error_code ec{};
-         send_buffer(*socket, *request, ec);
+         send_buffer(*socket, *request);
 
-         if (bool(ec)) {
+         if (bool(request->error())) {
             socket.ptr.reset();
             (*is_connected) = false;
-            encode_error(ec, response, "send failure");
             return;
          }
 
          if (not header.notify) {
-            receive_buffer(*socket, response, ec);
-            if (bool(ec)) {
+            receive_buffer(*socket, response);
+            if (bool(response.error())) {
                socket.ptr.reset();
                (*is_connected) = false;
-               encode_error(ec, response, "receive failure");
                return;
             }
          }
