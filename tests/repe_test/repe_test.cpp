@@ -4,7 +4,6 @@
 #include <latch>
 #include <thread>
 
-#include "glaze/ext/cli_menu.hpp"
 #include "glaze/glaze.hpp"
 #include "glaze/rpc/repe/registry.hpp"
 #include "glaze/thread/async_string.hpp"
