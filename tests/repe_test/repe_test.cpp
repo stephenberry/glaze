@@ -342,7 +342,7 @@ suite structs_of_functions_beve = [] {
    };
 };
 
-/*template <class T>
+template <class T>
 struct wrapper_t
 {
    T* sub{};
@@ -365,11 +365,11 @@ suite wrapper_tests = [] {
       repe::message request{};
       repe::message response{};
 
-      repe::request_json(request, {"/sub/my_functions/void_func"});
+      repe::request_json({"/sub/my_functions/void_func"}, request);
       server.call(request, response);
       expect(response.body == "null") << response.body;
 
-      repe::request_json(request, {"/sub/my_functions/hello"});
+      repe::request_json({"/sub/my_functions/hello"}, request);
       server.call(request, response);
       expect(response.body == R"("Hello")");
    };
@@ -386,11 +386,11 @@ suite root_tests = [] {
       repe::message request{};
       repe::message response{};
 
-      repe::request_json(request, {"/sub/my_functions/void_func"});
+      repe::request_json({"/sub/my_functions/void_func"}, request);
       server.call(request, response);
       expect(response.body == "null") << response.body;
 
-      repe::request_json(request, {"/sub/my_functions/hello"});
+      repe::request_json({"/sub/my_functions/hello"}, request);
       server.call(request, response);
       expect(response.body == R"("Hello")");
    };
@@ -408,20 +408,20 @@ suite wrapper_tests_beve = [] {
       repe::message request{};
       repe::message response{};
 
-      repe::request_beve(request, {"/sub/my_functions/void_func"});
+      repe::request_beve({"/sub/my_functions/void_func"}, request);
       server.call(request, response);
 
       std::string res{};
       expect(!glz::beve_to_json(response.body, res));
       expect(res == "null") << res;
 
-      repe::request_beve(request, {"/sub/my_functions/hello"});
+      repe::request_beve({"/sub/my_functions/hello"}, request);
       server.call(request, response);
 
       expect(!glz::beve_to_json(response.body, res));
       expect(res == R"("Hello")");
    };
-};*/
+};
 
 struct tester
 {
