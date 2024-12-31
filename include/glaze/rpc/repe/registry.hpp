@@ -131,7 +131,7 @@ namespace glz::repe
             msg.header.length = sizeof(repe::header) + msg.query.size() + msg.body.size();
             return msg;
          }
-         
+
          template <class Value>
          message operator()(const user_header& h, Value&& value) const
          {
@@ -145,7 +145,7 @@ namespace glz::repe
             msg.header.length = sizeof(repe::header) + msg.query.size() + msg.body.size();
             return msg;
          }
-         
+
          void operator()(const user_header& h, message& msg) const
          {
             msg.header = encode(h);

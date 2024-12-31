@@ -16,13 +16,11 @@ namespace glz::repe
       read = 1 << 1, // Read a value or return the result of invoking a function
       write = 1 << 2 // Write a value or invoke a function
    };
-   
-   inline action pack_action(bool notify, bool read, bool write) noexcept {
-       return static_cast<action>(
-           (notify ? uint32_t(action::notify) : 0) |
-           (read ? uint32_t(action::read) : 0) |
-           (write ? uint32_t(action::write) : 0)
-       );
+
+   inline action pack_action(bool notify, bool read, bool write) noexcept
+   {
+      return static_cast<action>((notify ? uint32_t(action::notify) : 0) | (read ? uint32_t(action::read) : 0) |
+                                 (write ? uint32_t(action::write) : 0));
    }
 
    inline constexpr auto no_length_provided = (std::numeric_limits<uint64_t>::max)();
@@ -91,14 +89,10 @@ namespace glz::repe
       repe::header header{};
       std::string query{};
       std::string body{};
-      
-      operator bool() const {
-         return bool(header.ec);
-      }
-      
-      error_code error() const {
-         return header.ec;
-      }
+
+      operator bool() const { return bool(header.ec); }
+
+      error_code error() const { return header.ec; }
    };
 
    // User interface that will be encoded into a REPE header

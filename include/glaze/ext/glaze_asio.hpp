@@ -30,7 +30,7 @@ namespace glz
          msg.header.ec = ec;
          msg.body.clear();
       }
-      
+
       template <has_size ErrorMessage>
       inline void encode_error(const error_code& ec, message& msg, ErrorMessage&& error_message)
       {
@@ -48,14 +48,14 @@ namespace glz
          std::memcpy(msg.body.data(), &n, 4);
          std::memcpy(msg.body.data() + 4, error_message.data(), n);
       }
-      
+
       template <class ErrorMessage>
-         requires (not has_size<ErrorMessage>)
+         requires(not has_size<ErrorMessage>)
       inline void encode_error(const error_code& ec, message& msg, ErrorMessage&& error_message)
       {
          encode_error(ec, msg, std::string_view{error_message});
       }
-      
+
       // Decodes a repe::message when an error has been encountered
       inline std::string decode_error(message& msg)
       {
@@ -109,7 +109,7 @@ namespace glz
          return {};
       }
    }
-   
+
 #if defined(GLZ_USING_BOOST_ASIO)
    namespace asio = boost::asio;
 #endif
@@ -280,18 +280,16 @@ namespace glz
       std::shared_ptr<asio::ip::tcp::socket> ptr{};
       size_t index{};
 #if !defined(GLZ_USING_BOOST_ASIO)
-         std::error_code ec{};
+      std::error_code ec{};
 #else
-         boost::system::error_code ec{};
+      boost::system::error_code ec{};
 #endif
 
       std::shared_ptr<asio::ip::tcp::socket> value() { return ptr; }
 
       const std::shared_ptr<asio::ip::tcp::socket> value() const { return ptr; }
-      
-      operator bool() const {
-         return bool(ptr) && bool(pool) && not bool(ec);
-      }
+
+      operator bool() const { return bool(ptr) && bool(pool) && not bool(ec); }
 
       asio::ip::tcp::socket& operator*() { return *ptr; }
 

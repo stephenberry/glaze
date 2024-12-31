@@ -35,7 +35,7 @@ void notify_test()
 
    try {
       glz::asio_client<> client{"localhost", std::to_string(port)};
-      
+
       if (auto ec = client.init(); bool(ec)) {
          throw std::runtime_error(glz::write_json(ec).value_or("error"));
       }
