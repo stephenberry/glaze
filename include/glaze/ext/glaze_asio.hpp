@@ -23,13 +23,100 @@ static_assert(false, "standalone or boost asio must be included to use glaze/ext
 
 namespace glz
 {
+   namespace repe
+   {
+      inline void encode_error(const error_code& ec, message& msg)
+      {
+         msg.header.ec = ec;
+         msg.body.clear();
+      }
+      
+      template <has_size ErrorMessage>
+      inline void encode_error(const error_code& ec, message& msg, ErrorMessage&& error_message)
+      {
+         msg.header.ec = ec;
+         if (error_message.size() > (std::numeric_limits<uint32_t>::max)()) {
+            return;
+         }
+         if (error_message.empty()) {
+            return;
+         }
+         const auto error_size = 4 + error_message.size(); // 4 bytes for message length
+         msg.header.body_length = error_size;
+         msg.body.resize(error_size);
+         const uint32_t n = uint32_t(error_message.size());
+         std::memcpy(msg.body.data(), &n, 4);
+         std::memcpy(msg.body.data() + 4, error_message.data(), n);
+      }
+      
+      template <class ErrorMessage>
+         requires (not has_size<ErrorMessage>)
+      inline void encode_error(const error_code& ec, message& msg, ErrorMessage&& error_message)
+      {
+         encode_error(ec, msg, std::string_view{error_message});
+      }
+      
+      // Decodes a repe::message when an error has been encountered
+      inline std::string decode_error(message& msg)
+      {
+         if (bool(msg.error())) {
+            const auto ec = msg.header.ec;
+            if (msg.header.body_length >= 4) {
+               uint32_t error_length{};
+               std::memcpy(&error_length, msg.body.data(), 4);
+               const std::string_view error_message{msg.body.data() + 4, error_length};
+               std::string ret = "REPE error: ";
+               ret.append(format_error(ec));
+               ret.append(" | ");
+               ret.append(error_message);
+               return {ret};
+            }
+            else {
+               return std::string{"REPE error: "} + format_error(ec);
+            }
+         }
+         return {"no error"};
+      }
+
+      // Decodes a repe::message into a structure
+      // Returns a std::string with a formatted error on error
+      template <opts Opts = opts{}, class T>
+      inline std::optional<std::string> decode_message(T&& value, message& msg)
+      {
+         if (bool(msg.header.ec)) {
+            const auto ec = msg.header.ec;
+            if (msg.header.body_length >= 4) {
+               uint32_t error_length{};
+               std::memcpy(&error_length, msg.body.data(), 4);
+               const std::string_view error_message{msg.body.data() + 4, error_length};
+               std::string ret = "REPE error: ";
+               ret.append(format_error(ec));
+               ret.append(" | ");
+               ret.append(error_message);
+               return {ret};
+            }
+            else {
+               return std::string{"REPE error: "} + format_error(ec);
+            }
+         }
+
+         // we don't const qualify `msg` for performance
+         auto ec = glz::read<Opts>(std::forward<T>(value), msg.body);
+         if (ec) {
+            return {glz::format_error(ec, msg.body)};
+         }
+
+         return {};
+      }
+   }
+   
 #if defined(GLZ_USING_BOOST_ASIO)
    namespace asio = boost::asio;
 #endif
-   inline void send_buffer(asio::ip::tcp::socket& socket, const repe::message& msg, repe::error_t& ec)
+   inline void send_buffer(asio::ip::tcp::socket& socket, repe::message& msg)
    {
       if (msg.header.length == repe::no_length_provided) {
-         ec = {error_code::invalid_header, "No length provided in REPE header"};
+         encode_error(error_code::invalid_header, msg);
          return;
       }
 
@@ -39,28 +126,34 @@ namespace glz
       asio::error_code e{};
       asio::write(socket, buffers, asio::transfer_exactly(msg.header.length), e);
       if (e) {
-         ec = {error_code::send_error, e.message()};
+         encode_error(error_code::connection_failure, msg, e.message());
+         return;
       }
    }
 
-   inline void receive_buffer(asio::ip::tcp::socket& socket, repe::message& msg, repe::error_t& ec)
+   inline void receive_buffer(asio::ip::tcp::socket& socket, repe::message& msg)
    {
-      asio::read(socket, asio::buffer(&msg.header, sizeof(msg.header)), asio::transfer_exactly(sizeof(msg.header)));
+      asio::error_code e{};
+      asio::read(socket, asio::buffer(&msg.header, sizeof(msg.header)), asio::transfer_exactly(sizeof(msg.header)), e);
+      if (e) {
+         encode_error(error_code::connection_failure, msg, e.message());
+         return;
+      }
       if (msg.header.query_length == repe::no_length_provided) {
-         ec = {error_code::invalid_query, "No query_length provided in REPE header"};
+         encode_error(error_code::invalid_query, msg);
          return;
       }
       msg.query.resize(msg.header.query_length);
       asio::read(socket, asio::buffer(msg.query), asio::transfer_exactly(msg.header.query_length));
       if (msg.header.body_length == repe::no_length_provided) {
-         ec = {error_code::invalid_body, "No body_length provided in REPE header"};
+         encode_error(error_code::invalid_body, msg);
          return;
       }
       msg.body.resize(msg.header.body_length);
-      asio::error_code e{};
       asio::read(socket, asio::buffer(msg.body), asio::transfer_exactly(msg.header.body_length), e);
       if (e) {
-         ec = {error_code::send_error, e.message()};
+         encode_error(error_code::connection_failure, msg, e.message());
+         return;
       }
    }
 
@@ -157,7 +250,10 @@ namespace glz
          else {
             socket = std::make_shared<asio::ip::tcp::socket>(*ctx);
             asio::ip::tcp::resolver resolver{*ctx};
-            const auto endpoint = resolver.resolve(host, service);
+            const auto endpoint = resolver.resolve(host, service, ec);
+            if (ec) {
+               return {nullptr, index, ec};
+            }
             asio::connect(*socket, endpoint, ec);
             if (ec) {
                return {nullptr, index, ec};
@@ -183,11 +279,19 @@ namespace glz
       socket_pool* pool{};
       std::shared_ptr<asio::ip::tcp::socket> ptr{};
       size_t index{};
-      std::error_code ec{};
+#if !defined(GLZ_USING_BOOST_ASIO)
+         std::error_code ec{};
+#else
+         boost::system::error_code ec{};
+#endif
 
       std::shared_ptr<asio::ip::tcp::socket> value() { return ptr; }
 
       const std::shared_ptr<asio::ip::tcp::socket> value() const { return ptr; }
+      
+      operator bool() const {
+         return bool(ptr) && bool(pool) && not bool(ec);
+      }
 
       asio::ip::tcp::socket& operator*() { return *ptr; }
 
@@ -225,7 +329,7 @@ namespace glz
 
       bool connected() const { return *is_connected; }
 
-      [[nodiscard]] repe::error_t init()
+      [[nodiscard]] error_code init()
       {
          ctx = std::make_shared<asio::io_context>(concurrency);
          socket_pool->ctx = ctx;
@@ -234,177 +338,48 @@ namespace glz
          is_connected = socket_pool->is_connected;
 
          unique_socket socket{socket_pool.get()};
-         if (socket.value()) {
+         if (socket) {
             return {}; // connection success
          }
          else {
-            return {error_code::connection_failure};
+            return error_code::connection_failure;
          }
       }
 
-      template <class... Params>
-      [[nodiscard]] repe::error_t notify(repe::user_header&& header, Params&&... params)
+      template <class Header = repe::user_header, class... Params>
+      void call(Header&& header, repe::message& response, Params&&... params)
       {
          auto request = message_pool->borrow();
-         header.notify(true);
-         auto ec = repe::request<Opts>(*request, std::move(header), std::forward<Params>(params)...);
-         if (ec) {
-            return ec;
+         repe::request<Opts>(std::move(header), *request, std::forward<Params>(params)...);
+         if (bool(request->error())) {
+            encode_error(request->error(), response, "bad request");
+            return;
          }
 
          unique_socket socket{socket_pool.get()};
-
-         send_buffer(*socket, *request, ec);
-
-         if (ec) {
+         if (not socket) {
             socket.ptr.reset();
             (*is_connected) = false;
+            encode_error(error_code::send_error, response, "socket failure");
+            return;
          }
 
-         return ec;
-      }
+         send_buffer(*socket, *request);
 
-      template <class Result>
-      [[nodiscard]] repe::error_t get(repe::user_header&& header, Result&& result)
-      {
-         auto request = message_pool->borrow();
-         header.notify(false);
-         header.read(true);
-         auto ec = repe::request<Opts>(*request, std::move(header));
-         if (ec) {
-            return ec;
-         }
-
-         unique_socket socket{socket_pool.get()};
-
-         send_buffer(*socket, *request, ec);
-
-         if (ec) {
+         if (bool(request->error())) {
             socket.ptr.reset();
             (*is_connected) = false;
-            return ec;
+            return;
          }
 
-         auto response = message_pool->borrow();
-         receive_buffer(*socket, *response, ec);
-         if (ec) {
-            socket.ptr.reset();
-            (*is_connected) = false;
-            return ec;
+         if (not header.notify) {
+            receive_buffer(*socket, response);
+            if (bool(response.error())) {
+               socket.ptr.reset();
+               (*is_connected) = false;
+               return;
+            }
          }
-
-         if (response->header.error) {
-            return {error_code::send_error, "asio receive failure"};
-         }
-
-         auto e = glz::read<Opts>(std::forward<Result>(result), response->body);
-         if (e) {
-            return {e.ec, glz::format_error(e, response->body)};
-         }
-         return {};
-      }
-
-      template <class Params>
-      [[nodiscard]] repe::error_t set(repe::user_header&& header, Params&& params)
-      {
-         auto request = message_pool->borrow();
-         auto ec = repe::request<Opts>(*request, std::move(header), std::forward<Params>(params));
-         if (ec) {
-            return ec;
-         }
-
-         unique_socket socket{socket_pool.get()};
-
-         send_buffer(*socket, *request, ec);
-
-         if (ec) {
-            socket.ptr.reset();
-            (*is_connected) = false;
-            return ec;
-         }
-
-         auto response = message_pool->borrow();
-         receive_buffer(*socket, *response, ec);
-         if (ec) {
-            socket.ptr.reset();
-            (*is_connected) = false;
-            return ec;
-         }
-
-         if (response->header.error) {
-            return {error_code::send_error, "asio receive failure"};
-         }
-         return {};
-      }
-
-      template <class Params, class Result>
-      [[nodiscard]] repe::error_t call(repe::user_header&& header, Params&& params, Result&& result)
-      {
-         auto request = message_pool->borrow();
-         auto ec = repe::request<Opts>(*request, std::move(header), std::forward<Params>(params));
-         if (ec) {
-            return ec;
-         }
-
-         unique_socket socket{socket_pool.get()};
-
-         send_buffer(*socket, *request, ec);
-
-         if (ec) {
-            socket.ptr.reset();
-            (*is_connected) = false;
-            return ec;
-         }
-
-         auto response = message_pool->borrow();
-         receive_buffer(*socket, *response, ec);
-         if (ec) {
-            socket.ptr.reset();
-            (*is_connected) = false;
-            return ec;
-         }
-
-         if (response->header.error) {
-            return {error_code::send_error, "asio receive failure"};
-         }
-
-         auto e = glz::read<Opts>(std::forward<Result>(result), response->body);
-         if (e) {
-            return {e.ec, glz::format_error(e, response->body)};
-         }
-         return {};
-      }
-
-      [[nodiscard]] repe::error_t call(repe::user_header&& header)
-      {
-         auto request = message_pool->borrow();
-         auto ec = repe::request<Opts>(*request, std::move(header));
-         if (ec) {
-            return ec;
-         }
-
-         unique_socket socket{socket_pool.get()};
-
-         send_buffer(*socket, *request, ec);
-
-         if (ec) {
-            socket.ptr.reset();
-            (*is_connected) = false;
-            return ec;
-         }
-
-         auto response = message_pool->borrow();
-         receive_buffer(*socket, *response, ec);
-         if (ec) {
-            socket.ptr.reset();
-            (*is_connected) = false;
-            return ec;
-         }
-
-         if (response->header.error) {
-            return {error_code::send_error, "asio receive failure"};
-         }
-         return {};
       }
    };
 

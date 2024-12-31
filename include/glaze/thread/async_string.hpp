@@ -89,6 +89,36 @@ namespace glz
          return *this;
       }
 
+      struct proxy
+      {
+         std::string* ptr{};
+         std::unique_lock<std::shared_mutex> lock{};
+
+        public:
+         proxy(std::string& p, std::unique_lock<std::shared_mutex>&& lock) noexcept : ptr{&p}, lock(std::move(lock)) {}
+
+         std::string* operator->() noexcept { return ptr; }
+
+         std::string& operator*() noexcept { return *ptr; }
+      };
+      
+      proxy write() { return {str, std::unique_lock{mutex}}; }
+      
+      struct const_proxy
+      {
+         const std::string* ptr{};
+         std::shared_lock<std::shared_mutex> lock{};
+
+        public:
+         const_proxy(const std::string& p, std::shared_lock<std::shared_mutex>&& lock) noexcept : ptr{&p}, lock(std::move(lock)) {}
+
+         const std::string* operator->() const noexcept { return ptr; }
+
+         const std::string& operator*() const noexcept { return *ptr; }
+      };
+
+      const_proxy read() const { return {str, std::shared_lock{mutex}}; }
+
       // Capacity
       size_t size() const noexcept
       {

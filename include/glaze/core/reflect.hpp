@@ -1920,6 +1920,16 @@ namespace glz::detail
 
 namespace glz
 {
+   [[nodiscard]] inline std::string format_error(const error_code& ec)
+   {
+      return std::string{meta<error_code>::keys[uint32_t(ec)]};
+   }
+   
+   [[nodiscard]] inline std::string format_error(const error_ctx& pe)
+   {
+      return std::string{meta<error_code>::keys[uint32_t(pe.ec)]};
+   }
+   
    [[nodiscard]] inline std::string format_error(const error_ctx& pe, const auto& buffer)
    {
       const auto error_type_str = meta<error_code>::keys[uint32_t(pe.ec)];
@@ -1941,11 +1951,6 @@ namespace glz
       else {
          return "";
       }
-   }
-
-   [[nodiscard]] inline std::string format_error(const error_ctx& pe)
-   {
-      return std::string{meta<error_code>::keys[uint32_t(pe.ec)]};
    }
 
    template <class T>
