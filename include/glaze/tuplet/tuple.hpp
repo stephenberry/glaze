@@ -51,8 +51,6 @@ namespace glz
 
       template <class Tup>
       using base_list_t = typename std::decay_t<Tup>::base_list;
-      template <class Tup>
-      using element_list_t = typename std::decay_t<Tup>::element_list;
 
       template <class Tuple>
       concept base_list_tuple = requires() { typename std::decay_t<Tuple>::base_list; };
@@ -140,9 +138,9 @@ namespace glz
    template <class T>
    using unwrap_ref_decay_t = typename std::unwrap_ref_decay<T>::type;
 
-   // tuplet::detail::get_tuple_base implementation
-   // tuplet::detail::apply_impl
-   namespace tuplet::detail
+   // tuplet::get_tuple_base implementation
+   // tuplet::apply_impl
+   namespace tuplet
    {
       template <class A, class... T>
       struct get_tuple_base;
@@ -186,13 +184,13 @@ namespace glz
       {
          return {{{static_cast<type_t<Outer>&&>(tup.identity_t<Outer>::value).identity_t<Inner>::value}...}};
       }
-   } // namespace tuplet::detail
+   }
 
    // tuple implementation
    namespace tuplet
    {
       template <class... T>
-      using tuple_base_t = typename detail::get_tuple_base<tag_range<sizeof...(T)>, T...>::type;
+      using tuple_base_t = typename get_tuple_base<tag_range<sizeof...(T)>, T...>::type;
    } // namespace tuplet
 
    template <class... T>
@@ -203,7 +201,6 @@ namespace glz
       using super = tuplet::tuple_base_t<T...>;
       using super::operator[];
       using base_list = typename super::base_list;
-      using element_list = tuplet::type_list<T...>;
       using super::decl_elem;
 
       template <tuplet::other_than<tuple> U> // Preserves default assignments
@@ -360,7 +357,6 @@ namespace glz
       constexpr static size_t N = 0;
       using super = tuplet::tuple_base_t<>;
       using base_list = tuplet::type_list<>;
-      using element_list = tuplet::type_list<>;
 
       template <tuplet::other_than<tuple> U> // Preserves default assignments
          requires tuplet::stateless<U> // Check that U is similarly stateless
@@ -456,7 +452,7 @@ namespace glz
    template <class F, tuplet::base_list_tuple Tup>
    constexpr decltype(auto) apply(F&& func, Tup&& tup)
    {
-      return tuplet::detail::apply_impl(static_cast<F&&>(func), static_cast<Tup&&>(tup),
+      return tuplet::apply_impl(static_cast<F&&>(func), static_cast<Tup&&>(tup),
                                         typename std::decay_t<Tup>::base_list());
    }
 
@@ -494,9 +490,9 @@ namespace glz
             using big_tuple = tuple<std::decay_t<T>...>;
 #endif
             using outer_bases = base_list_t<big_tuple>;
-            constexpr auto outer = detail::get_outer_bases(outer_bases{});
-            constexpr auto inner = detail::get_inner_bases(outer_bases{});
-            return detail::cat_impl(big_tuple{{{std::forward<T>(ts)}...}}, outer, inner);
+            constexpr auto outer = get_outer_bases(outer_bases{});
+            constexpr auto inner = get_inner_bases(outer_bases{});
+            return cat_impl(big_tuple{{{std::forward<T>(ts)}...}}, outer, inner);
          }
       }
 
