@@ -237,23 +237,19 @@ namespace glz
       static constexpr auto N = reflect<T>::size;
 
       static constexpr bool maybe_skipped = [] {
-         if constexpr (N > 0 && Opts.skip_null_members) {
-            bool found_maybe_skipped{};
-            for_each_short_circuit<N>([&](auto I) {
-               using V = field_t<T, I>;
-
-               if constexpr (Opts.skip_null_members && detail::null_t<V>) {
-                  found_maybe_skipped = true;
-                  return true; // early exit
-               }
-
-               if constexpr (is_includer<V> || std::same_as<V, hidden> || std::same_as<V, skip>) {
-                  found_maybe_skipped = true;
-                  return true; // early exit
-               }
-               return false; // continue
-            });
-            return found_maybe_skipped;
+         if constexpr (N > 0) {
+            if constexpr (Opts.skip_null_members) {
+               // if any type could be null then we might skip
+               return []<size_t... I>(std::index_sequence<I...>) {
+                  return ((detail::always_skipped<field_t<T, I>> || detail::null_t<field_t<T, I>>) || ...);
+               }(std::make_index_sequence<N>{});
+            }
+            else {
+               // if we have an always_skipped type then we return true
+               return []<size_t... I>(std::index_sequence<I...>) {
+                  return ((detail::always_skipped<field_t<T, I>>) || ...);
+               }(std::make_index_sequence<N>{});
+            }
          }
          else {
             return false;
