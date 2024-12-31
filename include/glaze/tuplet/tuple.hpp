@@ -189,7 +189,7 @@ namespace glz
    struct tuple : tuplet::tuple_base_t<T...>
    {
       static constexpr auto glaze_reflect = false;
-      constexpr static size_t N = sizeof...(T);
+      static constexpr size_t N = sizeof...(T);
       using super = tuplet::tuple_base_t<T...>;
       using super::operator[];
       using base_list = typename super::base_list;
