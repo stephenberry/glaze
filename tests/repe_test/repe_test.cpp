@@ -430,9 +430,8 @@ struct tester
 };
 
 suite multi_threading_tests = [] {
-   // TODO: There is a test case that is randomly failing with this code only on Linux with Clang, need to investigate
-   // this further
-   /*"multi-threading"_test = [] {
+   // TODO: Is this still randomly failing with Linux with Clang???
+   "multi-threading"_test = [] {
       repe::registry registry{};
       tester obj{};
 
@@ -441,7 +440,7 @@ suite multi_threading_tests = [] {
       static constexpr size_t N = 10'000;
 
       repe::message read_msg{};
-      repe::request_json(read_msg, {"/str"});
+      repe::request_json({"/str"}, read_msg);
 
       std::thread reader_str([&] {
          size_t response_counter{};
@@ -454,7 +453,7 @@ suite multi_threading_tests = [] {
       });
 
       repe::message read_integer{};
-      repe::request_json(read_integer, {"/integer"});
+      repe::request_json({"/integer"}, read_integer);
 
       std::thread reader_integer([&] {
          size_t response_counter{};
@@ -467,7 +466,7 @@ suite multi_threading_tests = [] {
       });
 
       repe::message read_full{};
-      repe::request_json(read_full, {""});
+      repe::request_json({""}, read_full);
 
       std::thread reader_full([&] {
          size_t response_counter{};
@@ -487,7 +486,7 @@ suite multi_threading_tests = [] {
          for (size_t i = 0; i < N; ++i) {
             message.append("x");
             repe::message write_msg{};
-            repe::request_json(write_msg, {"/str"}, message);
+            repe::request_json({"/str"}, write_msg, message);
             repe::message response{};
             registry.call(write_msg, response);
             response_counter += response.body.size();
@@ -503,7 +502,7 @@ suite multi_threading_tests = [] {
          size_t response_counter{};
          for (size_t i = 0; i < N; ++i) {
             repe::message write_msg{};
-            repe::request_json(write_msg, {"/integer"}, i);
+            repe::request_json({"/integer"}, write_msg, i);
             repe::message response{};
             registry.call(write_msg, response);
             response_counter += response.body.size();
@@ -514,7 +513,8 @@ suite multi_threading_tests = [] {
       {
          latch.wait();
          bool valid = true;
-         for (char c : obj.str.string()) {
+         auto read_proxy = obj.str.read();
+         for (char c : *read_proxy) {
             if (c != 'x') {
                valid = false;
                break;
@@ -528,7 +528,7 @@ suite multi_threading_tests = [] {
       reader_full.join();
       writer_str.join();
       writer_integer.join();
-   };*/
+   };
 };
 
 struct glaze_types
