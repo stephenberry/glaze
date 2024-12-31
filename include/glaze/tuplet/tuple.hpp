@@ -180,7 +180,7 @@ namespace glz
       {
          return {{{static_cast<type_t<Outer>&&>(tup.identity_t<Outer>::value).identity_t<Inner>::value}...}};
       }
-      
+
       template <class... T>
       using tuple_base_t = typename get_tuple_base<tag_range<sizeof...(T)>, T...>::type;
    }
@@ -445,7 +445,7 @@ namespace glz
    constexpr decltype(auto) apply(F&& func, Tup&& tup)
    {
       return tuplet::apply_impl(static_cast<F&&>(func), static_cast<Tup&&>(tup),
-                                        typename std::decay_t<Tup>::base_list());
+                                typename std::decay_t<Tup>::base_list());
    }
 
    // tuplet::tuple_cat implementation
