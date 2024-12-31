@@ -207,53 +207,40 @@ namespace glz
       static constexpr auto size = 0;
    };
 
+   // The type of the field before get_member is applied
    template <class T, size_t I>
    using elem_t = reflect<T>::template elem<I>;
 
+   // The type of the field after get_member is applied
    template <class T, size_t I>
    using refl_t = reflect<T>::template type<I>;
-
-   // MSVC requires this specialization, otherwise it will try to instatiate dead `if constexpr` branches for N == 0
+   
+   // The decayed type after get_member is called
+   template <class T, size_t I>
+   using field_t = std::remove_cvref_t<refl_t<T, I>>;
+   
    template <opts Opts, class T>
-   struct object_info;
-
-   template <opts Opts, class T>
-      requires(reflect<T>::size == 0)
-   struct object_info<Opts, T>
-   {
-      static constexpr bool maybe_skipped = false;
-   };
-
-   template <opts Opts, class T>
-      requires(reflect<T>::size > 0)
-   struct object_info<Opts, T>
-   {
-      static constexpr auto N = reflect<T>::size;
-
-      static constexpr bool maybe_skipped = [] {
-         if constexpr (N > 0 && Opts.skip_null_members) {
-            bool found_maybe_skipped{};
-            for_each_short_circuit<N>([&](auto I) {
-               using V = std::remove_cvref_t<refl_t<T, I>>;
-
-               if constexpr (Opts.skip_null_members && detail::null_t<V>) {
-                  found_maybe_skipped = true;
-                  return true; // early exit
-               }
-
-               if constexpr (is_includer<V> || std::same_as<V, hidden> || std::same_as<V, skip>) {
-                  found_maybe_skipped = true;
-                  return true; // early exit
-               }
-               return false; // continue
-            });
-            return found_maybe_skipped;
+   inline constexpr bool maybe_skipped = [] {
+      if constexpr (reflect<T>::size > 0)
+      {
+         constexpr auto N = reflect<T>::size;
+         if constexpr (Opts.skip_null_members) {
+            // if any type could be null then we might skip
+            return []<size_t... I>(std::index_sequence<I...>) {
+               return ((detail::always_skipped<field_t<T, I>> || detail::null_t<field_t<T, I>>) || ...);
+            }(std::make_index_sequence<N>{});
          }
          else {
-            return false;
+            // if we have an always_skipped type then we return true
+            return []<size_t... I>(std::index_sequence<I...>) {
+               return ((detail::always_skipped<field_t<T, I>>) || ...);
+            }(std::make_index_sequence<N>{});
          }
-      }();
-   };
+      }
+      else {
+         return false;
+      }
+   }();
 }
 
 namespace glz::detail

@@ -677,7 +677,7 @@ namespace glz
          static constexpr size_t count_to_write = [] {
             size_t count{};
             invoke_table<N>([&]<size_t I>() {
-               using V = std::remove_cvref_t<refl_t<T, I>>;
+               using V = field_t<T, I>;
 
                if constexpr (std::same_as<V, hidden> || std::same_as<V, skip>) {
                   // do not serialize
@@ -707,7 +707,7 @@ namespace glz
             }();
 
             invoke_table<N>([&]<size_t I>() {
-               using val_t = std::remove_cvref_t<refl_t<T, I>>;
+               using val_t = field_t<T, I>;
 
                if constexpr (std::same_as<val_t, hidden> || std::same_as<val_t, skip>) {
                   return;
@@ -745,7 +745,7 @@ namespace glz
             }();
 
             invoke_table<N>([&]<size_t I>() {
-               using val_t = std::remove_cvref_t<refl_t<T, I>>;
+               using val_t = field_t<T, I>;
 
                if constexpr (std::same_as<val_t, hidden> || std::same_as<val_t, skip>) {
                   return;
