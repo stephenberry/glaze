@@ -454,7 +454,7 @@ struct empty_t
 {};
 
 static_assert(glz::reflect<empty_t>::size == 0);
-static_assert(not glz::object_info<glz::opts{}, empty_t>::maybe_skipped);
+static_assert(not glz::maybe_skipped<glz::opts{}, empty_t>);
 
 suite empty_test = [] {
    "empty_t"_test = [] {

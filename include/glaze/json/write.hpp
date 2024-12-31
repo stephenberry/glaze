@@ -1677,7 +1677,7 @@ namespace glz
                }();
 
                static constexpr auto padding = round_up_to_nearest_16(maximum_key_size<T> + write_padding_bytes);
-               if constexpr (object_info<Opts, T>::maybe_skipped) {
+               if constexpr (maybe_skipped<Opts, T>) {
                   bool first = true;
                   invoke_table<N>([&]<size_t I>() {
                      using val_t = field_t<T, I>;
