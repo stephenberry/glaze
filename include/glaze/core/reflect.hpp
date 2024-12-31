@@ -207,11 +207,17 @@ namespace glz
       static constexpr auto size = 0;
    };
 
+   // The type of the field before get_member is applied
    template <class T, size_t I>
    using elem_t = reflect<T>::template elem<I>;
 
+   // The type of the field after get_member is applied
    template <class T, size_t I>
    using refl_t = reflect<T>::template type<I>;
+   
+   // The decayed type after get_member is called
+   template <class T, size_t I>
+   using field_t = std::remove_cvref_t<refl_t<T, I>>;
 
    // MSVC requires this specialization, otherwise it will try to instatiate dead `if constexpr` branches for N == 0
    template <opts Opts, class T>
@@ -234,7 +240,7 @@ namespace glz
          if constexpr (N > 0 && Opts.skip_null_members) {
             bool found_maybe_skipped{};
             for_each_short_circuit<N>([&](auto I) {
-               using V = std::remove_cvref_t<refl_t<T, I>>;
+               using V = field_t<T, I>;
 
                if constexpr (Opts.skip_null_members && detail::null_t<V>) {
                   found_maybe_skipped = true;

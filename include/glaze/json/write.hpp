@@ -1584,7 +1584,7 @@ namespace glz
          constexpr auto N = reflect<T>::size;
          std::optional<size_t> fixed = 2 + 16; // {} + extra padding
          for_each_short_circuit<N>([&](auto I) -> bool {
-            using val_t = std::remove_cvref_t<refl_t<T, I>>;
+            using val_t = field_t<T, I>;
             if constexpr (required_padding<val_t>()) {
                fixed.value() += required_padding<val_t>();
                fixed.value() += reflect<T>::keys[I].size() + 2; // key length
@@ -1680,7 +1680,7 @@ namespace glz
                if constexpr (object_info<Opts, T>::maybe_skipped) {
                   bool first = true;
                   invoke_table<N>([&]<size_t I>() {
-                     using val_t = std::remove_cvref_t<refl_t<T, I>>;
+                     using val_t = field_t<T, I>;
 
                      if constexpr (always_skipped<val_t>) {
                         return;
@@ -1784,7 +1784,7 @@ namespace glz
                      std::memcpy(&b[ix], quoted_key.data(), n);
                      ix += n;
 
-                     using val_t = std::remove_cvref_t<refl_t<T, I>>;
+                     using val_t = field_t<T, I>;
 
                      static constexpr auto check_opts = required_padding<val_t>() ? write_unchecked_on<Opts>() : Opts;
                      if constexpr (reflectable<T>) {
