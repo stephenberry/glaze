@@ -33,15 +33,11 @@ namespace glz
       template <class T>
       using identity_t = T;
 
-      // Obtains T::type
       template <class T>
       using type_t = typename T::type;
 
       template <size_t I>
       using tag = std::integral_constant<size_t, I>;
-
-      template <size_t I>
-      constexpr tag<I> tag_v{};
 
       template <size_t N>
       using tag_range = std::make_index_sequence<N>;
@@ -184,14 +180,10 @@ namespace glz
       {
          return {{{static_cast<type_t<Outer>&&>(tup.identity_t<Outer>::value).identity_t<Inner>::value}...}};
       }
-   }
-
-   // tuple implementation
-   namespace tuplet
-   {
+      
       template <class... T>
       using tuple_base_t = typename get_tuple_base<tag_range<sizeof...(T)>, T...>::type;
-   } // namespace tuplet
+   }
 
    template <class... T>
    struct tuple : tuplet::tuple_base_t<T...>
