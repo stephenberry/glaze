@@ -206,6 +206,33 @@ namespace glz
          str.append(other.str);
          return *this;
       }
+      
+      template <class RHS>
+         requires(std::same_as<std::remove_cvref_t<RHS>, std::string>)
+      async_string& insert(size_t pos, RHS&& s)
+      {
+         std::unique_lock lock(mutex);
+         str.insert(pos, std::forward<RHS>(s));
+         return *this;
+      }
+
+      async_string& insert(size_t pos, const std::string_view& sv)
+      {
+         std::unique_lock lock(mutex);
+         str.insert(pos, sv);
+         return *this;
+      }
+
+      template <class RHS>
+         requires(std::same_as<std::remove_cvref_t<RHS>, async_string>)
+      async_string& insert(size_t pos, RHS&& other)
+      {
+         std::unique_lock lock(mutex, std::defer_lock);
+         std::shared_lock lock2(other.mutex, std::defer_lock);
+         std::lock(lock, lock2);
+         str.insert(pos, other.str);
+         return *this;
+      }
 
       template <class RHS>
          requires(std::same_as<std::remove_cvref_t<RHS>, std::string>)
