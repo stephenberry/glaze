@@ -91,6 +91,10 @@ namespace glz
          str = sv;
          return *this;
       }
+      
+      explicit operator std::string() const {
+         return str;
+      }
 
       struct proxy
       {
