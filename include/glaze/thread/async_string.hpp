@@ -206,7 +206,7 @@ namespace glz
          str.append(other.str);
          return *this;
       }
-      
+
       template <class RHS>
          requires(std::same_as<std::remove_cvref_t<RHS>, std::string>)
       async_string& insert(size_t pos, RHS&& s)
