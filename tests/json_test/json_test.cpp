@@ -5795,7 +5795,7 @@ suite numbers_as_strings_suite = [] {
       expect(not glz::write_json(obj, output));
       expect(input == output);
    };
-   
+
    "numbers_as_strings2"_test = [] {
       std::string const buffer = R"({"i":287,"d":3.14,"hello":"Hello World"})";
 
