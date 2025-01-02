@@ -70,7 +70,7 @@ namespace glz
    template <auto MemPtr>
    constexpr auto quoted_num = detail::opts_wrapper<MemPtr, &opts::quoted_num>();
 
-   // Read numbers as strings and write these string as numbers
+   // Treat types like std::string as numbers: read and write them quoted
    template <auto MemPtr>
    constexpr auto number = detail::opts_wrapper<MemPtr, &opts::number>();
 
