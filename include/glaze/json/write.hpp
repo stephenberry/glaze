@@ -1778,14 +1778,14 @@ namespace glz
                            maybe_pad<padding>(b, ix);
                         }
                      }
-                     
+
                      if constexpr (I != 0 && Opts.prettify) {
                         std::memcpy(&b[ix], ",\n", 2);
                         ix += 2;
                         std::memset(&b[ix], Opts.indentation_char, ctx.indentation_level);
                         ix += ctx.indentation_level;
                      }
-                     
+
                      // MSVC requires get<I> rather than keys[I]
                      static constexpr auto key = glz::get<I>(reflect<T>::keys); // GCC 14 requires auto here
                      if constexpr (Opts.prettify) {
