@@ -9,6 +9,7 @@
 #include <string>
 #include <string_view>
 #include <utility>
+#include <version>
 
 #include "glaze/core/common.hpp"
 
@@ -18,9 +19,11 @@ namespace glz
 {
    struct async_string
    {
+     private:
       std::string str;
       mutable std::shared_mutex mutex;
 
+     public:
       async_string() = default;
       async_string(const char* s) : str(s) {}
       async_string(const std::string& s) : str(s) {}
@@ -98,8 +101,13 @@ namespace glz
          proxy(std::string& p, std::unique_lock<std::shared_mutex>&& lock) noexcept : ptr{&p}, lock(std::move(lock)) {}
 
          std::string* operator->() noexcept { return ptr; }
+         const std::string* operator->() const noexcept { return ptr; }
 
          std::string& operator*() noexcept { return *ptr; }
+         const std::string& operator*() const noexcept { return *ptr; }
+
+         std::string& value() noexcept { return *ptr; }
+         const std::string& value() const noexcept { return *ptr; }
       };
 
       proxy write() { return {str, std::unique_lock{mutex}}; }
@@ -117,6 +125,8 @@ namespace glz
          const std::string* operator->() const noexcept { return ptr; }
 
          const std::string& operator*() const noexcept { return *ptr; }
+
+         const std::string& value() const noexcept { return *ptr; }
       };
 
       const_proxy read() const { return {str, std::shared_lock{mutex}}; }
@@ -220,24 +230,40 @@ namespace glz
 
       int compare(const async_string& other) const
       {
-         std::shared_lock lock1(mutex, std::defer_lock);
-         std::shared_lock lock2(other.mutex, std::defer_lock);
-         std::lock(lock1, lock2);
+         std::scoped_lock lock{mutex, other.mutex};
          return str.compare(other.str);
       }
 
-      // Obtain a copy
-      std::string string() const
+      bool starts_with(const std::string_view other) const
       {
-         std::shared_lock lock(mutex);
-         return str;
+         std::shared_lock lock{mutex};
+         return str.starts_with(other);
       }
 
-      friend bool operator==(const async_string& lhs, const async_string& rhs)
+      bool ends_with(const std::string_view other) const
       {
-         std::shared_lock lock1(lhs.mutex, std::defer_lock);
-         std::shared_lock lock2(rhs.mutex, std::defer_lock);
-         std::lock(lock1, lock2);
+         std::shared_lock lock{mutex};
+         return str.ends_with(other);
+      }
+
+      std::string substr(size_t pos = 0, size_t len = std::string::npos) const
+      {
+         std::shared_lock lock{mutex};
+         return str.substr(pos, len);
+      }
+
+      // Obtain a copy
+      friend bool operator==(const async_string& lhs, const std::string_view rhs)
+      {
+         std::scoped_lock lock{lhs.mutex};
+         return lhs.str == rhs;
+      }
+
+      template <class RHS>
+         requires(std::same_as<std::remove_cvref_t<RHS>, async_string>)
+      friend bool operator==(const async_string& lhs, RHS&& rhs)
+      {
+         std::scoped_lock lock{lhs.mutex, rhs.mutex};
          return lhs.str == rhs.str;
       }
 
@@ -245,9 +271,7 @@ namespace glz
 
       friend bool operator<(const async_string& lhs, const async_string& rhs)
       {
-         std::shared_lock lock1(lhs.mutex, std::defer_lock);
-         std::shared_lock lock2(rhs.mutex, std::defer_lock);
-         std::lock(lock1, lock2);
+         std::scoped_lock lock{lhs.mutex, rhs.mutex};
          return lhs.str < rhs.str;
       }
 
@@ -260,9 +284,7 @@ namespace glz
       void swap(async_string& other)
       {
          if (this == &other) return;
-         std::unique_lock lock1(mutex, std::defer_lock);
-         std::unique_lock lock2(other.mutex, std::defer_lock);
-         std::lock(lock1, lock2);
+         std::scoped_lock lock{mutex, other.mutex};
          str.swap(other.str);
       }
 
@@ -279,8 +301,8 @@ namespace glz::detail
       template <auto Opts>
       static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
       {
-         std::shared_lock lock{value.mutex};
-         read<Format>::template op<Opts>(value.str, ctx, it, end);
+         auto proxy = value.write();
+         read<Format>::template op<Opts>(*proxy, ctx, it, end);
       }
    };
 
@@ -290,8 +312,29 @@ namespace glz::detail
       template <auto Opts>
       static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept
       {
-         std::unique_lock lock{value.mutex};
-         write<Format>::template op<Opts>(value.str, ctx, args...);
+         auto proxy = value.read();
+         write<Format>::template op<Opts>(*proxy, ctx, args...);
       }
    };
 }
+
+// Allow formatting via std::format
+#ifdef __cpp_lib_format
+#include <format>
+namespace std
+{
+   template <>
+   struct formatter<glz::async_string>
+   {
+      std::formatter<std::string> formatter;
+
+      constexpr auto parse(format_parse_context& ctx) -> decltype(ctx.begin()) { return formatter.parse(ctx); }
+
+      template <class FormatContext>
+      auto format(const glz::async_string& s, FormatContext& ctx) const -> decltype(ctx.out())
+      {
+         return formatter.format(*s.read(), ctx);
+      }
+   };
+}
+#endif

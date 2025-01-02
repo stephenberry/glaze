@@ -624,33 +624,33 @@ suite async_string_tests = [] {
    "async_string param constructors"_test = [] {
       glz::async_string s1("Hello");
       expect(s1.size() == 5) << "s1.size()";
-      expect(s1.string() == "Hello");
+      expect(s1 == "Hello");
 
       std::string st = "World";
       glz::async_string s2(st);
-      expect(s2.string() == "World");
+      expect(s2 == "World");
 
       std::string_view sv("View me");
       glz::async_string s3(sv);
-      expect(s3.string() == "View me");
+      expect(s3 == "View me");
 
       // Move construct
       glz::async_string s4(std::move(s2));
-      expect(s4.string() == "World");
+      expect(s4 == "World");
       expect(s2.empty()); // Moved-from string should be empty
    };
 
    "async_string copy constructor"_test = [] {
       glz::async_string original("Copy me");
       glz::async_string copy(original);
-      expect(copy.string() == "Copy me");
+      expect(copy == "Copy me");
       expect(copy == original);
    };
 
    "async_string move constructor"_test = [] {
       glz::async_string original("Move me");
       glz::async_string moved(std::move(original));
-      expect(moved.string() == "Move me");
+      expect(moved == "Move me");
       expect(original.empty());
    };
 
@@ -659,31 +659,31 @@ suite async_string_tests = [] {
       glz::async_string s2("Second");
       s1 = s2;
       expect(s1 == s2);
-      expect(s1.string() == "Second");
+      expect(s1 == "Second");
    };
 
    "async_string move assignment"_test = [] {
       glz::async_string s1("First");
       glz::async_string s2("Second");
       s1 = std::move(s2);
-      expect(s1.string() == "Second");
+      expect(s1 == "Second");
       expect(s2.empty());
    };
 
    "async_string assignment from various types"_test = [] {
       glz::async_string s;
       s = "Hello again";
-      expect(s.string() == "Hello again");
+      expect(s == "Hello again");
       expect(s.size() == 11);
 
       std::string st = "Another test";
       s = st;
-      expect(s.string() == "Another test");
+      expect(s == "Another test");
       expect(s.size() == 12);
 
       std::string_view sv("Testing 123");
       s = sv;
-      expect(s.string() == "Testing 123");
+      expect(s == "Testing 123");
       expect(s.size() == 11);
    };
 
@@ -693,7 +693,7 @@ suite async_string_tests = [] {
          auto writer = s.write();
          writer->append(" data");
       }
-      expect(s.string() == "initial data");
+      expect(s == "initial data");
 
       {
          auto reader = s.read();
@@ -705,11 +705,11 @@ suite async_string_tests = [] {
    "async_string modifiers"_test = [] {
       glz::async_string s("Hello");
       s.push_back('!');
-      expect(s.string() == "Hello!");
+      expect(s == "Hello!");
       expect(s.size() == 6);
 
       s.pop_back();
-      expect(s.string() == "Hello");
+      expect(s == "Hello");
       expect(s.size() == 5);
 
       s.clear();
@@ -720,15 +720,15 @@ suite async_string_tests = [] {
    "async_string append and operator+="_test = [] {
       glz::async_string s("Hello");
       s.append(", ").append("World");
-      expect(s.string() == "Hello, World");
+      expect(s == "Hello, World");
       expect(s.size() == 12);
 
       s += "!!!";
-      expect(s.string() == "Hello, World!!!");
+      expect(s == "Hello, World!!!");
       expect(s.size() == 15);
 
       s += '?';
-      expect(s.string() == "Hello, World!!!?");
+      expect(s == "Hello, World!!!?");
       expect(s.size() == 16);
    };
 
@@ -769,8 +769,8 @@ suite async_string_tests = [] {
       glz::async_string s1("Hello");
       glz::async_string s2("World");
       swap(s1, s2);
-      expect(s1.string() == "World");
-      expect(s2.string() == "Hello");
+      expect(s1 == "World");
+      expect(s2 == "Hello");
    };
 
    // Demonstrate Glaze JSON serialization/deserialization
@@ -801,6 +801,128 @@ suite async_string_tests = [] {
       expect(not glz::read_json(t, buffer));
       expect(t.empty());
    };
+
+   "async_string starts_with"_test = [] {
+      glz::async_string s("Hello, World!");
+
+      // Positive cases
+      expect(s.starts_with("Hello"));
+      expect(s.starts_with(std::string("Hello")));
+      expect(s.starts_with(std::string_view("Hello")));
+
+      // Negative cases
+      expect(not s.starts_with("World"));
+      expect(not s.starts_with("hello")); // Case-sensitive
+      expect(not s.starts_with("Hello, World! And more"));
+
+      // Edge cases
+      glz::async_string empty;
+      expect(empty.starts_with("")); // An empty string starts with an empty string
+      expect(not empty.starts_with("Non-empty"));
+
+      expect(s.starts_with("")); // Any string starts with an empty string
+   };
+
+   "async_string ends_with"_test = [] {
+      glz::async_string s("Hello, World!");
+
+      // Positive cases
+      expect(s.ends_with("World!"));
+      expect(s.ends_with(std::string("World!")));
+      expect(s.ends_with(std::string_view("World!")));
+
+      // Negative cases
+      expect(not s.ends_with("Hello"));
+      expect(not s.ends_with("world!")); // Case-sensitive
+      expect(not s.ends_with("...World!"));
+
+      // Edge cases
+      glz::async_string empty;
+      expect(empty.ends_with("")); // An empty string ends with an empty string
+      expect(not empty.ends_with("Non-empty"));
+
+      expect(s.ends_with("")); // Any string ends with an empty string
+   };
+
+   "async_string substr"_test = [] {
+      glz::async_string s("Hello, World!");
+
+      // Basic substrings
+      auto sub1 = s.substr(0, 5);
+      expect(sub1 == "Hello");
+      expect(sub1.size() == 5);
+
+      auto sub2 = s.substr(7, 5);
+      expect(sub2 == "World");
+      expect(sub2.size() == 5);
+
+      // Substring to the end
+      auto sub3 = s.substr(7);
+      expect(sub3 == "World!");
+      expect(sub3.size() == 6);
+
+      // Full string
+      auto sub4 = s.substr(0, s.size());
+      expect(sub4 == s);
+
+      // Empty substring
+      auto sub5 = s.substr(5, 0);
+      expect(sub5.empty());
+      expect(sub5.size() == 0);
+
+      // Edge cases
+      glz::async_string empty;
+      auto sub_empty = empty.substr(0, 1);
+      expect(sub_empty.empty());
+
+      // Out of range positions
+      expect(throws([&] {
+         s.substr(100, 5); // Start position out of range
+      }));
+
+      expect(not throws([&] { s.substr(5, 100); }));
+
+      // Start position at the end of the string
+      auto sub_end = s.substr(s.size(), 0);
+      expect(sub_end.empty());
+
+      // Start position just before the end
+      auto sub_last = s.substr(s.size() - 1, 1);
+      expect(sub_last == "!");
+      expect(sub_last.size() == 1);
+   };
+
+#ifdef __cpp_lib_format
+   "async_string std::format single argument"_test = [] {
+      glz::async_string name("Alice");
+      std::string formatted = std::format("Hello, {}!", name);
+      expect(formatted == "Hello, Alice!");
+   };
+
+   "async_string std::format multiple arguments"_test = [] {
+      glz::async_string name("Bob");
+      glz::async_string city("New York");
+      std::string formatted = std::format("{} is from {}.", name, city);
+      expect(formatted == "Bob is from New York.");
+   };
+
+   "async_string std::format with empty strings"_test = [] {
+      glz::async_string empty{};
+
+      // Formatting with an empty glz::async_string as an argument
+      std::string formatted_empty_arg = std::format("Hello, {}!", empty);
+      expect(formatted_empty_arg == "Hello, !");
+   };
+
+   "async_string std::format numeric and other types"_test = [] {
+      glz::async_string name("Diana");
+      int age = 30;
+      double height = 5.6;
+
+      std::string formatted = std::format("{} is {} years old and {} feet tall.", name, age, height);
+      expect(formatted == "Diana is 30 years old and 5.6 feet tall.");
+   };
+#endif
 };
 
 int main() { return 0; }
