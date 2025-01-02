@@ -91,8 +91,9 @@ namespace glz
          str = sv;
          return *this;
       }
-      
-      explicit operator std::string() const {
+
+      explicit operator std::string() const
+      {
          std::shared_lock lock{mutex};
          return str;
       }
