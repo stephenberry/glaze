@@ -215,6 +215,23 @@ namespace glz
          str += c;
          return *this;
       }
+      
+      void reserve(size_t count) {
+         std::unique_lock lock(mutex);
+         str.reserve(count);
+      }
+      
+      void resize(size_t count)
+      {
+         std::unique_lock lock(mutex);
+         str.resize(count);
+      }
+      
+      void resize(size_t count, const char ch)
+      {
+         std::unique_lock lock(mutex);
+         str.resize(count, ch);
+      }
 
       // Element access
       char at(size_t pos) const
