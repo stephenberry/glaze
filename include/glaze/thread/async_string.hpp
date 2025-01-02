@@ -169,17 +169,19 @@ namespace glz
          str.pop_back();
       }
 
-      async_string& append(const std::string& s)
+      template <class RHS>
+         requires(std::same_as<std::remove_cvref_t<RHS>, std::string>)
+      async_string& append(RHS&& s)
       {
          std::unique_lock lock(mutex);
-         str.append(s);
+         str.append(std::forward<RHS>(s));
          return *this;
       }
 
-      async_string& append(const char* s)
+      async_string& append(const char* s, size_t count)
       {
          std::unique_lock lock(mutex);
-         str.append(s);
+         str.append(s, count);
          return *this;
       }
 
@@ -189,10 +191,21 @@ namespace glz
          str.append(sv);
          return *this;
       }
+      
+      template <class RHS>
+         requires(std::same_as<std::remove_cvref_t<RHS>, async_string>)
+      async_string& append(RHS&& other)
+      {
+         std::unique_lock lock(mutex, std::defer_lock);
+         std::shared_lock lock2(other.mutex, std::defer_lock);
+         std::lock(lock, lock2);
+         str.append(other.str);
+         return *this;
+      }
 
-      async_string& operator+=(const std::string& s) { return append(s); }
-
-      async_string& operator+=(const char* s) { return append(s); }
+      template <class RHS>
+         requires(std::same_as<std::remove_cvref_t<RHS>, std::string>)
+      async_string& operator+=(RHS&& s) { return append(std::forward<RHS>(s)); }
 
       async_string& operator+=(const std::string_view& sv) { return append(sv); }
 
@@ -266,8 +279,12 @@ namespace glz
          std::scoped_lock lock{lhs.mutex, rhs.mutex};
          return lhs.str == rhs.str;
       }
+      
+      friend bool operator!=(const async_string& lhs, const std::string_view rhs) { return !(lhs == rhs); }
 
-      friend bool operator!=(const async_string& lhs, const async_string& rhs) { return !(lhs == rhs); }
+      template <class RHS>
+         requires(std::same_as<std::remove_cvref_t<RHS>, async_string>)
+      friend bool operator!=(const async_string& lhs, RHS&& rhs) { return !(lhs == rhs); }
 
       friend bool operator<(const async_string& lhs, const async_string& rhs)
       {
