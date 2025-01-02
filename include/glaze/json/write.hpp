@@ -62,6 +62,8 @@ namespace glz
 
       // Returns 0 if we cannot determine the required padding,
       // in which case the `to` specialization must allocate buffer space
+      // Some types like numbers must have space to be quoted
+      // All types must have space for a trailing comma
       template <class T>
       constexpr size_t required_padding()
       {
@@ -111,7 +113,8 @@ namespace glz
          }();
 
          if (value >= (write_padding_bytes - 16)) {
-            // we always require 16 bytes available for opening and closing characters
+            // we always require 16 bytes available from write_padding_bytes
+            // for opening and closing characters
             return 0;
          }
          return value;
@@ -357,7 +360,7 @@ namespace glz
                }
                else {
                   if constexpr (resizable<B>) {
-                     const auto k = ix + 4; // 4 characters is enough for quotes and escaped character
+                     const auto k = ix + 8; // 4 characters is enough for quotes and escaped character
                      if (k > b.size()) [[unlikely]] {
                         b.resize(2 * k);
                      }
@@ -392,9 +395,10 @@ namespace glz
                   }();
 
                   // We need space for quotes and the string length: 2 + n.
+                  // Use +8 for extra buffer
                   if constexpr (resizable<B>) {
                      const auto n = str.size();
-                     const auto k = ix + 2 + n;
+                     const auto k = ix + 8 + n;
                      if (k > b.size()) [[unlikely]] {
                         b.resize(2 * k);
                      }
@@ -700,7 +704,7 @@ namespace glz
             constexpr auto n = name.size();
 
             if constexpr (vector_like<B>) {
-               if (const auto k = ix + 2 + n; k > b.size()) [[unlikely]] {
+               if (const auto k = ix + 8 + n; k > b.size()) [[unlikely]] {
                   b.resize(2 * k);
                }
             }
@@ -725,7 +729,7 @@ namespace glz
             const auto n = value.str.size();
             if (n) {
                if constexpr (vector_like<B>) {
-                  if (const auto k = ix + n; k > b.size()) [[unlikely]] {
+                  if (const auto k = ix + n + write_padding_bytes; k > b.size()) [[unlikely]] {
                      b.resize(2 * k);
                   }
                }
@@ -745,7 +749,7 @@ namespace glz
             const auto n = value.str.size();
             if (n) {
                if constexpr (vector_like<B>) {
-                  if (const auto k = ix + n; k > b.size()) [[unlikely]] {
+                  if (const auto k = ix + n + write_padding_bytes; k > b.size()) [[unlikely]] {
                      b.resize(2 * k);
                   }
                }
@@ -1579,25 +1583,26 @@ namespace glz
       inline constexpr uint64_t round_up_to_nearest_16(const uint64_t value) noexcept { return (value + 15) & ~15ull; }
 
       // Only use this if you are not prettifying
+      // Returns zero if the fixed size cannot be determined
       template <class T>
-      inline constexpr std::optional<size_t> fixed_padding = [] {
+      inline constexpr size_t fixed_padding = [] {
          constexpr auto N = reflect<T>::size;
-         std::optional<size_t> fixed = 2 + 16; // {} + extra padding
+         size_t fixed = 2 + 16; // {} + extra padding
          for_each_short_circuit<N>([&](auto I) -> bool {
             using val_t = field_t<T, I>;
             if constexpr (required_padding<val_t>()) {
-               fixed.value() += required_padding<val_t>();
-               fixed.value() += reflect<T>::keys[I].size() + 2; // key length
-               fixed.value() += 2; // colon and comma
+               fixed += required_padding<val_t>();
+               fixed += reflect<T>::keys[I].size() + 2; // quoted key length
+               fixed += 2; // colon and comma
                return false; // continue
             }
             else {
-               fixed = {};
+               fixed = 0;
                return true; // break
             }
          });
          if (fixed) {
-            fixed = round_up_to_nearest_16(fixed.value());
+            fixed = round_up_to_nearest_16(fixed);
          }
          return fixed;
       }();
@@ -1714,7 +1719,12 @@ namespace glz
                            }
                         }
 
-                        maybe_pad<padding>(b, ix);
+                        if constexpr (Opts.prettify) {
+                           maybe_pad(padding + ctx.indentation_level, b, ix);
+                        }
+                        else {
+                           maybe_pad<padding>(b, ix);
+                        }
 
                         if (first) {
                            first = false;
@@ -1723,25 +1733,12 @@ namespace glz
                            // Null members may be skipped so we cant just write it out for all but the last member
                            // write_object_entry_separator<Opts, not supports_unchecked_write<val_t>>(ctx, b, ix);
                            if constexpr (Opts.prettify) {
-                              if constexpr (vector_like<B>) {
-                                 if (const auto k = ix + ctx.indentation_level + write_padding_bytes; k > b.size())
-                                    [[unlikely]] {
-                                    b.resize(2 * k);
-                                 }
-                              }
                               std::memcpy(&b[ix], ",\n", 2);
                               ix += 2;
                               std::memset(&b[ix], Opts.indentation_char, ctx.indentation_level);
                               ix += ctx.indentation_level;
                            }
                            else {
-                              if constexpr (vector_like<B>) {
-                                 if constexpr (not required_padding<val_t>()) {
-                                    if (ix == b.size()) [[unlikely]] {
-                                       b.resize(b.size() * 2);
-                                    }
-                                 }
-                              }
                               std::memcpy(&b[ix], ",", 1);
                               ++ix;
                            }
@@ -1767,22 +1764,50 @@ namespace glz
                   });
                }
                else {
-                  static constexpr std::optional<size_t> fixed_max_size = fixed_padding<T>;
+                  static constexpr size_t fixed_max_size = fixed_padding<T>;
                   if constexpr (fixed_max_size) {
-                     maybe_pad<fixed_max_size.value()>(b, ix);
+                     maybe_pad<fixed_max_size>(b, ix);
                   }
 
                   invoke_table<N>([&]<size_t I>() {
                      if constexpr (not fixed_max_size) {
-                        maybe_pad<padding>(b, ix);
+                        if constexpr (Opts.prettify) {
+                           maybe_pad(padding + ctx.indentation_level, b, ix);
+                        }
+                        else {
+                           maybe_pad<padding>(b, ix);
+                        }
                      }
-
+                     
+                     if constexpr (I != 0 && Opts.prettify) {
+                        std::memcpy(&b[ix], ",\n", 2);
+                        ix += 2;
+                        std::memset(&b[ix], Opts.indentation_char, ctx.indentation_level);
+                        ix += ctx.indentation_level;
+                     }
+                     
                      // MSVC requires get<I> rather than keys[I]
                      static constexpr auto key = glz::get<I>(reflect<T>::keys); // GCC 14 requires auto here
-                     static constexpr auto quoted_key = quoted_key_v<key, Opts.prettify>;
-                     static constexpr auto n = quoted_key.size();
-                     std::memcpy(&b[ix], quoted_key.data(), n);
-                     ix += n;
+                     if constexpr (Opts.prettify) {
+                        static constexpr auto quoted_key = quoted_key_v<key, Opts.prettify>;
+                        static constexpr auto n = quoted_key.size();
+                        std::memcpy(&b[ix], quoted_key.data(), n);
+                        ix += n;
+                     }
+                     else {
+                        if constexpr (I == 0) {
+                           static constexpr auto quoted_key = quoted_key_v<key, Opts.prettify>;
+                           static constexpr auto n = quoted_key.size();
+                           std::memcpy(&b[ix], quoted_key.data(), n);
+                           ix += n;
+                        }
+                        else {
+                           static constexpr auto quoted_key = join_v<chars<",">, quoted_key_v<key, Opts.prettify>>;
+                           static constexpr auto n = quoted_key.size();
+                           std::memcpy(&b[ix], quoted_key.data(), n);
+                           ix += n;
+                        }
+                     }
 
                      using val_t = field_t<T, I>;
 
@@ -1793,32 +1818,6 @@ namespace glz
                      else {
                         to<JSON, val_t>::template op<check_opts>(get_member(value, get<I>(reflect<T>::values)), ctx, b,
                                                                  ix);
-                     }
-
-                     if constexpr (I != (N - 1)) {
-                        if constexpr (Opts.prettify) {
-                           if constexpr (vector_like<B>) {
-                              if (const auto k = ix + ctx.indentation_level + write_padding_bytes; k > b.size())
-                                 [[unlikely]] {
-                                 b.resize(2 * k);
-                              }
-                           }
-                           std::memcpy(&b[ix], ",\n", 2);
-                           ix += 2;
-                           std::memset(&b[ix], Opts.indentation_char, ctx.indentation_level);
-                           ix += ctx.indentation_level;
-                        }
-                        else {
-                           if constexpr (vector_like<B>) {
-                              if constexpr (not required_padding<val_t>()) {
-                                 if (ix == b.size()) [[unlikely]] {
-                                    b.resize(b.size() * 2);
-                                 }
-                              }
-                           }
-                           std::memcpy(&b[ix], ",", 1);
-                           ++ix;
-                        }
                      }
                   });
                }
