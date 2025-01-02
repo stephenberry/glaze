@@ -5768,6 +5768,20 @@ struct glz::meta<numbers_as_strings>
    static constexpr auto value = object("x", glz::number<&T::x>, "y", glz::number<&T::y>);
 };
 
+struct numbers_as_strings2
+{
+   std::string i{};
+   std::string d{};
+   std::string hello{};
+};
+
+template <>
+struct glz::meta<numbers_as_strings2>
+{
+   using T = numbers_as_strings2;
+   static constexpr auto value = object("i", number<&T::i>, "d", number<&T::d>, &T::hello);
+};
+
 suite numbers_as_strings_suite = [] {
    "numbers_as_strings"_test = [] {
       numbers_as_strings obj{};
@@ -5780,6 +5794,16 @@ suite numbers_as_strings_suite = [] {
       std::string output;
       expect(not glz::write_json(obj, output));
       expect(input == output);
+   };
+   
+   "numbers_as_strings2"_test = [] {
+      std::string const buffer = R"({"i":287,"d":3.14,"hello":"Hello World"})";
+
+      numbers_as_strings2 value{};
+      const auto error_ctx = glz::read_json(value, buffer);
+      expect(not error_ctx) << glz::format_error(error_ctx, buffer);
+      expect(value.i == "287");
+      expect(value.d == "3.14");
    };
 };
 

@@ -747,6 +747,10 @@ namespace glz
                if (bool(ctx.error)) [[unlikely]] {
                   return;
                }
+               if (start == it) [[unlikely]] {
+                  ctx.error = error_code::parse_number_failure;
+                  return;
+               }
                value.append(start, size_t(it - start));
             }
             else {
