@@ -91,8 +91,9 @@ namespace glz
          str = sv;
          return *this;
       }
-      
-      explicit operator std::string() const {
+
+      explicit operator std::string() const
+      {
          std::shared_lock lock{mutex};
          return str;
       }
@@ -322,29 +323,77 @@ namespace glz
          return str.substr(pos, len);
       }
 
-      // Obtain a copy
-      friend bool operator==(const async_string& lhs, const std::string_view rhs)
+      friend bool operator==(const async_string& lhs, const async_string& rhs)
       {
-         std::scoped_lock lock{lhs.mutex};
-         return lhs.str == rhs;
-      }
-
-      template <class RHS>
-         requires(std::same_as<std::remove_cvref_t<RHS>, async_string>)
-      friend bool operator==(const async_string& lhs, RHS&& rhs)
-      {
-         std::scoped_lock lock{lhs.mutex, rhs.mutex};
+         if (&lhs == &rhs) return true;
+         std::shared_lock lock(lhs.mutex, std::defer_lock);
+         std::shared_lock lock2(rhs.mutex, std::defer_lock);
+         std::lock(lock, lock2);
          return lhs.str == rhs.str;
       }
 
-      friend bool operator!=(const async_string& lhs, const std::string_view rhs) { return !(lhs == rhs); }
+      // async_string != async_string
+      friend bool operator!=(const async_string& lhs, const async_string& rhs) { return !(lhs == rhs); }
 
-      template <class RHS>
-         requires(std::same_as<std::remove_cvref_t<RHS>, async_string>)
-      friend bool operator!=(const async_string& lhs, RHS&& rhs)
+      // async_string == std::string_view
+      friend bool operator==(const async_string& lhs, std::string_view rhs)
       {
-         return !(lhs == rhs);
+         std::shared_lock lock(lhs.mutex);
+         return lhs.str == rhs;
       }
+
+      // std::string_view == async_string
+      friend bool operator==(std::string_view lhs, const async_string& rhs)
+      {
+         std::shared_lock lock(rhs.mutex);
+         return lhs == rhs.str;
+      }
+
+      // async_string != std::string_view
+      friend bool operator!=(const async_string& lhs, std::string_view rhs) { return !(lhs == rhs); }
+
+      // std::string_view != async_string
+      friend bool operator!=(std::string_view lhs, const async_string& rhs) { return !(lhs == rhs); }
+
+      // async_string == std::string
+      friend bool operator==(const async_string& lhs, const std::string& rhs)
+      {
+         std::shared_lock lock(lhs.mutex);
+         return lhs.str == rhs;
+      }
+
+      // std::string == async_string
+      friend bool operator==(const std::string& lhs, const async_string& rhs)
+      {
+         std::shared_lock lock(rhs.mutex);
+         return lhs == rhs.str;
+      }
+
+      // async_string != std::string
+      friend bool operator!=(const async_string& lhs, const std::string& rhs) { return !(lhs == rhs); }
+
+      // std::string != async_string
+      friend bool operator!=(const std::string& lhs, const async_string& rhs) { return !(lhs == rhs); }
+
+      // async_string == const char*
+      friend bool operator==(const async_string& lhs, const char* rhs)
+      {
+         std::shared_lock lock(lhs.mutex);
+         return lhs.str == rhs;
+      }
+
+      // const char* == async_string
+      friend bool operator==(const char* lhs, const async_string& rhs)
+      {
+         std::shared_lock lock(rhs.mutex);
+         return lhs == rhs.str;
+      }
+
+      // async_string != const char*
+      friend bool operator!=(const async_string& lhs, const char* rhs) { return !(lhs == rhs); }
+
+      // const char* != async_string
+      friend bool operator!=(const char* lhs, const async_string& rhs) { return !(lhs == rhs); }
 
       friend bool operator<(const async_string& lhs, const async_string& rhs)
       {
