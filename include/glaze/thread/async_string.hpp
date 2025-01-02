@@ -99,6 +99,10 @@ namespace glz
 
         public:
          proxy(std::string& p, std::unique_lock<std::shared_mutex>&& lock) noexcept : ptr{&p}, lock(std::move(lock)) {}
+         
+         operator std::string_view() {
+            return *ptr;
+         }
 
          std::string* operator->() noexcept { return ptr; }
          const std::string* operator->() const noexcept { return ptr; }
@@ -121,6 +125,10 @@ namespace glz
          const_proxy(const std::string& p, std::shared_lock<std::shared_mutex>&& lock) noexcept
             : ptr{&p}, lock(std::move(lock))
          {}
+         
+         operator const std::string_view() const {
+            return *ptr;
+         }
 
          const std::string* operator->() const noexcept { return ptr; }
 
