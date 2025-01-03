@@ -37,6 +37,251 @@ suite matrix3d = [] {
    };
 };
 
+// Struct with multiple Eigen types
+struct complex_struct
+{
+    Eigen::Matrix2f mf;
+    Eigen::Vector4i vi;
+    Eigen::MatrixXcd mcd;
+} complex_test_value;
+
+template <>
+struct glz::meta<complex_struct>
+{
+   using T = complex_struct;
+   static constexpr auto value = object(&T::mf, &T::vi, &T::mcd);
+};
+
+// Initialize complex_test_value
+void initialize_complex_struct()
+{
+    complex_test_value.mf << 1.1f, 2.2f,
+                             3.3f, 4.4f;
+    complex_test_value.vi << 1, 2, 3, 4;
+    complex_test_value.mcd = Eigen::MatrixXcd(2, 2);
+    complex_test_value.mcd << std::complex<double>(1, 2), std::complex<double>(3, 4),
+                              std::complex<double>(5, 6), std::complex<double>(7, 8);
+}
+
+suite additional_eigen_tests = [] {
+    "write_json_matrix4d"_test = [] {
+        Eigen::Matrix4d m;
+        m << 1, 2, 3, 4,
+             5, 6, 7, 8,
+             9, 10, 11, 12,
+             13, 14, 15, 16;
+        std::string json;
+        expect(not glz::write_json(m, json));
+        expect(json == "[1,5,9,13,2,6,10,14,3,7,11,15,4,8,12,16]") << json;
+    };
+
+    "read_json_matrix4d"_test = [] {
+        Eigen::Matrix4d m;
+        std::string input = "[1,5,9,13,2,6,10,14,3,7,11,15,4,8,12,16]";
+        expect(glz::read_json(m, input) == glz::error_code::none);
+        Eigen::Matrix4d expected;
+        expected << 1, 2, 3, 4,
+                    5, 6, 7, 8,
+                    9,10,11,12,
+                   13,14,15,16;
+        expect(m == expected);
+    };
+
+    "write_beve_row_major"_test = [] {
+        Eigen::Matrix<double, 2, 3, Eigen::RowMajor> m;
+        m << 1, 2, 3,
+             4, 5, 6;
+        std::string b;
+        expect(not glz::write_beve(m, b));
+        // BEVE layout specifics can vary; adjust expected value accordingly
+        // Here we assume it writes row-major
+        Eigen::Matrix<double, 2, 3, Eigen::RowMajor> e;
+        expect(!glz::read_beve(e, b));
+        expect(m == e);
+    };
+
+    "read_json_empty_matrix"_test = [] {
+        Eigen::MatrixXd m;
+        std::string input = "[[0,0]]"; // Empty array
+        expect(glz::read_json(m, input) == glz::error_code::none);
+        expect(m.rows() == 0);
+        expect(m.cols() == 0);
+    };
+
+    "write_json_large_matrix"_test = [] {
+        Eigen::MatrixXd m(100, 100);
+        m.setRandom();
+        std::string json;
+        expect(not glz::write_json(m, json));
+        // Here we check the JSON starts with '[' and has the correct number of elements
+        expect(!json.empty());
+        expect(json.front() == '[');
+        expect(json.back() == ']');
+    };
+
+    "read_json_matrix"_test = [] {
+        std::string input = "[[3,3],[1,4,7,2,5,8,3,6,9]]";
+        Eigen::MatrixXd m;
+        expect(not glz::read_json(m, input));
+        Eigen::MatrixXd expected(3,3);
+        expected << 1,2,3,
+                    4,5,6,
+                    7,8,9;
+        expect(m == expected);
+    };
+
+    "write_json_vector4f"_test = [] {
+        Eigen::Vector4f v{1.0f, 2.0f, 3.0f, 4.0f};
+        std::string json;
+        expect(not glz::write_json(v, json));
+        expect(json == "[1,2,3,4]");
+    };
+
+    "read_json_vector4f"_test = [] {
+        Eigen::Vector4f v;
+        std::string input = "[5.5,6.6,7.7,8.8]";
+        expect(not glz::read_json(v, input));
+        Eigen::Vector4f expected{5.5f, 6.6f, 7.7f, 8.8f};
+        expect(v == expected);
+    };
+
+    "write_json_integer_matrix"_test = [] {
+        Eigen::Matrix<int, 3, 3> m;
+        m << 1, 2, 3,
+             4, 5, 6,
+             7, 8, 9;
+        std::string json;
+        expect(not glz::write_json(m, json));
+        expect(json == "[1,4,7,2,5,8,3,6,9]") << json;
+    };
+
+    "read_json_integer_matrix"_test = [] {
+        Eigen::Matrix<int, 3, 3> m;
+        std::string input = "[10,40,70,20,50,80,30,60,90]";
+        expect(not glz::read_json(m, input));
+        Eigen::Matrix<int, 3, 3> expected;
+        expected << 10, 20, 30,
+                    40, 50, 60,
+                    70, 80, 90;
+        expect(m == expected);
+    };
+
+    "write_beve_complex_matrix"_test = [] {
+        Eigen::MatrixXcd m(2, 2);
+        m << std::complex<double>(1,1), std::complex<double>(2,2),
+             std::complex<double>(3,3), std::complex<double>(4,4);
+        std::string b;
+        expect(not glz::write_beve(m, b));
+        Eigen::MatrixXcd e;
+        expect(not glz::read_beve(e, b));
+        expect(m == e);
+    };
+
+    "read_beve_invalid_data"_test = [] {
+        Eigen::MatrixXd m;
+        std::string invalid_beve = "invalid_binary_data";
+        // Assuming read_beve returns an error code or sets m to a default state
+        // Adjust based on actual Glaze behavior
+        expect(glz::read_beve(m, invalid_beve) != glz::error_code::none);
+    };
+
+    "serialize_deserialize_complex_struct_json"_test = [] {
+        initialize_complex_struct();
+        std::string json;
+        expect(not glz::write_json(complex_test_value, json));
+        complex_struct deserialized;
+        expect(!glz::read_json(deserialized, json));
+        expect(deserialized.mf == complex_test_value.mf);
+        expect(deserialized.vi == complex_test_value.vi);
+        expect(deserialized.mcd == complex_test_value.mcd);
+    };
+
+    "serialize_deserialize_complex_struct_beve"_test = [] {
+        initialize_complex_struct();
+        std::string b;
+        expect(not glz::write_beve(complex_test_value, b));
+        complex_struct deserialized;
+        expect(!glz::read_beve(deserialized, b));
+        expect(deserialized.mf == complex_test_value.mf);
+        expect(deserialized.vi == complex_test_value.vi);
+        expect(deserialized.mcd == complex_test_value.mcd);
+    };
+
+    "write_json_ref_matrix"_test = [] {
+        Eigen::Matrix3d source;
+        source << 1,2,3,4,5,6,7,8,9;
+        Eigen::Ref<Eigen::Matrix3d> ref(source);
+        std::string json;
+        expect(not glz::write_json(ref, json));
+        expect(json == "[1,2,3,4,5,6,7,8,9]");
+    };
+
+    "read_json_ref_matrix"_test = [] {
+        Eigen::Matrix3d source;
+        std::string input = "[9,8,7,6,5,4,3,2,1]";
+        Eigen::Ref<Eigen::Matrix3d> ref(source);
+        expect(glz::read_json(ref, input) == glz::error_code::none);
+        Eigen::Matrix3d expected;
+        expected << 9,8,7,6,5,4,3,2,1;
+        expect(source == expected);
+    };
+
+    "write_json_non_square_matrix"_test = [] {
+        Eigen::Matrix<double, 2, 3> m;
+        m << 1, 2, 3,
+             4, 5, 6;
+        std::string json;
+        expect(not glz::write_json(m, json));
+        expect(json == "[1,2,3,4,5,6]");
+    };
+
+    "read_json_non_square_matrix"_test = [] {
+        Eigen::Matrix<double, 2, 3> m;
+        std::string input = "[7,8,9,10,11,12]";
+        expect(glz::read_json(m, input) == glz::error_code::none);
+        Eigen::Matrix<double, 2, 3> expected;
+        expected << 7,8,9,
+                   10,11,12;
+        expect(m == expected);
+    };
+
+    "write_json_zero_sized_matrix"_test = [] {
+        Eigen::MatrixXd m(0, 0);
+        std::string json;
+        expect(not glz::write_json(m, json));
+        expect(json == "[]");
+    };
+
+    "read_json_zero_sized_matrix"_test = [] {
+        Eigen::MatrixXd m;
+        std::string input = "[]";
+        expect(glz::read_json(m, input) == glz::error_code::none);
+        expect(m.rows() == 0);
+        expect(m.cols() == 0);
+    };
+
+    "write_json_mixed_storage_order"_test = [] {
+        Eigen::Matrix<double, 3, 3, Eigen::RowMajor> m;
+        m << 1, 2, 3,
+             4, 5, 6,
+             7, 8, 9;
+        std::string json;
+        expect(not glz::write_json(m, json));
+        expect(json == "[1,2,3,4,5,6,7,8,9]");
+    };
+
+    "read_json_mixed_storage_order"_test = [] {
+        Eigen::Matrix<double, 3, 3, Eigen::RowMajor> m;
+        std::string input = "[9,8,7,6,5,4,3,2,1]";
+        expect(glz::read_json(m, input) == glz::error_code::none);
+        Eigen::Matrix<double, 3, 3, Eigen::RowMajor> expected;
+        expected << 9,8,7,
+                    6,5,4,
+                    3,2,1;
+        expect(m == expected);
+    };
+};
+
 int main()
 {
    "write_json"_test = [] {

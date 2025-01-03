@@ -65,6 +65,7 @@ namespace glz
             constexpr uint8_t layout = uint8_t(!T::IsRowMajor);
             if (uint8_t(*it) != layout) {
                ctx.error = error_code::syntax_error;
+               return;
             }
             ++it;
             std::array<Eigen::Index, 2> extents;
@@ -178,10 +179,19 @@ namespace glz
             std::array<Eigen::Index, 2> extents; //NOLINT
             detail::read<JSON>::op<Opts>(extents, ctx, it, end);
             value.resize(extents[0], extents[1]);
-            GLZ_MATCH_COMMA;
-
-            std::span<typename T::Scalar> view(value.data(), extents[0] * extents[1]);
-            detail::read<JSON>::op<Opts>(view, ctx, it, end);
+            if (*it == ',') {
+               // we have data
+               ++it;
+               if constexpr (not Opts.null_terminated) {
+                  if (it == end) [[unlikely]] {
+                     ctx.error = error_code::unexpected_end;
+                     return;
+                  }
+               }
+               std::span<typename T::Scalar> view(value.data(), extents[0] * extents[1]);
+               detail::read<JSON>::op<Opts>(view, ctx, it, end);
+               return;
+            }
             GLZ_MATCH_CLOSE_BRACKET;
          }
       };
