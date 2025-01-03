@@ -157,18 +157,20 @@ namespace glz
             std::ignore = glz::write_json(std::forward<Args>(args)..., event->args.str);
          }
       }
-      
+
       // Automatically adds the end event when it leave scope
       struct duration_scoper final
       {
          trace& tr;
-         
-         duration_scoper(trace& tr, const std::string_view name) noexcept : tr(tr), name(name) {
+
+         duration_scoper(trace& tr, const std::string_view name) noexcept : tr(tr), name(name)
+         {
             if (not tr.disabled) {
                tr.begin(name);
             }
          }
-         ~duration_scoper() noexcept {
+         ~duration_scoper() noexcept
+         {
             if (not tr.disabled) {
                tr.end(name);
             }
@@ -176,17 +178,19 @@ namespace glz
 
          const std::string_view name{};
       };
-      
+
       struct async_scoper final
       {
          trace& tr;
-         
-         async_scoper(trace& tr, const std::string_view name) noexcept : tr(tr), name(name) {
+
+         async_scoper(trace& tr, const std::string_view name) noexcept : tr(tr), name(name)
+         {
             if (not tr.disabled) {
                tr.begin(name);
             }
          }
-         ~async_scoper() noexcept {
+         ~async_scoper() noexcept
+         {
             if (not tr.disabled) {
                tr.end(name);
             }
@@ -194,14 +198,10 @@ namespace glz
 
          const std::string_view name{};
       };
-      
-      duration_scoper scope(const std::string_view name) {
-         return {*this, name};
-      }
-      
-      async_scoper async_scope(const std::string_view name) {
-         return {*this, name};
-      }
+
+      duration_scoper scope(const std::string_view name) { return {*this, name}; }
+
+      async_scoper async_scope(const std::string_view name) { return {*this, name}; }
    };
 
    template <>
