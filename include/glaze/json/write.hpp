@@ -1110,52 +1110,24 @@ namespace glz
                      [[maybe_unused]] bool starting = write_first_entry(it);
                      ++it;
                      for (const auto end = std::end(value); it != end; ++it) {
-                        // I couldn't find an easy way around this code duplication
-                        // Ranges need to be decomposed with const auto& [...],
-                        // but we don't want to const qualify our maps for the sake of reflection writing
-                        // we need to be able to populate the tuple of pointers when writing with reflection
-                        if constexpr (requires {
-                                         it->first;
-                                         it->second;
-                                      }) {
-                           if (skip_member<Opts>(it->second)) {
-                              continue;
-                           }
+                        auto&& [key, entry_val] = *it;
+                        if (skip_member<Opts>(entry_val)) {
+                           continue;
+                        }
 
-                           // When Opts.skip_null_members, *any* entry may be skipped, meaning separator dumping must be
-                           // conditional for every entry. Avoid this branch when not skipping null members.
-                           // Alternatively, write separator after each entry except last but then branch is permanent
-                           if constexpr (Opts.skip_null_members) {
-                              if (!starting) {
-                                 write_object_entry_separator<Opts>(ctx, b, ix);
-                              }
-                           }
-                           else {
+                        // When Opts.skip_null_members, *any* entry may be skipped, meaning separator dumping must be
+                        // conditional for every entry. Avoid this branch when not skipping null members.
+                        // Alternatively, write separator after each entry except last but then branch is permanent
+                        if constexpr (Opts.skip_null_members) {
+                           if (!starting) {
                               write_object_entry_separator<Opts>(ctx, b, ix);
                            }
-
-                           write_pair_content<Opts>(it->first, it->second, ctx, b, ix);
                         }
                         else {
-                           const auto& [key, entry_val] = *it;
-                           if (skip_member<Opts>(entry_val)) {
-                              continue;
-                           }
-
-                           // When Opts.skip_null_members, *any* entry may be skipped, meaning separator dumping must be
-                           // conditional for every entry. Avoid this branch when not skipping null members.
-                           // Alternatively, write separator after each entry except last but then branch is permanent
-                           if constexpr (Opts.skip_null_members) {
-                              if (!starting) {
-                                 write_object_entry_separator<Opts>(ctx, b, ix);
-                              }
-                           }
-                           else {
-                              write_object_entry_separator<Opts>(ctx, b, ix);
-                           }
-
-                           write_pair_content<Opts>(key, entry_val, ctx, b, ix);
+                           write_object_entry_separator<Opts>(ctx, b, ix);
                         }
+
+                        write_pair_content<Opts>(key, entry_val, ctx, b, ix);
 
                         starting = false;
                      }
@@ -1178,18 +1150,9 @@ namespace glz
                      write_first_entry(it);
                      ++it;
                      for (const auto end = std::end(value); it != end; ++it) {
-                        if constexpr (requires {
-                                         it->first;
-                                         it->second;
-                                      }) {
-                           write_object_entry_separator<Opts>(ctx, b, ix);
-                           write_pair_content<Opts>(it->first, it->second, ctx, b, ix);
-                        }
-                        else {
-                           const auto& [key, entry_val] = *it;
-                           write_object_entry_separator<Opts>(ctx, b, ix);
-                           write_pair_content<Opts>(key, entry_val, ctx, b, ix);
-                        }
+                        auto&& [key, entry_val] = *it;
+                        write_object_entry_separator<Opts>(ctx, b, ix);
+                        write_pair_content<Opts>(key, entry_val, ctx, b, ix);
                      }
                   }
                }
