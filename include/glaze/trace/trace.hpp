@@ -163,8 +163,16 @@ namespace glz
       {
          trace& tr;
          
-         duration_scoper(trace& tr, const std::string_view name) noexcept : tr(tr), name(name) { tr.begin(name); }
-         ~duration_scoper() noexcept { tr.end(name); }
+         duration_scoper(trace& tr, const std::string_view name) noexcept : tr(tr), name(name) {
+            if (not tr.disabled) {
+               tr.begin(name);
+            }
+         }
+         ~duration_scoper() noexcept {
+            if (not tr.disabled) {
+               tr.end(name);
+            }
+         }
 
          const std::string_view name{};
       };
@@ -173,8 +181,16 @@ namespace glz
       {
          trace& tr;
          
-         async_scoper(trace& tr, const std::string_view name) noexcept : tr(tr), name(name) { tr.begin(name); }
-         ~async_scoper() noexcept { tr.end(name); }
+         async_scoper(trace& tr, const std::string_view name) noexcept : tr(tr), name(name) {
+            if (not tr.disabled) {
+               tr.begin(name);
+            }
+         }
+         ~async_scoper() noexcept {
+            if (not tr.disabled) {
+               tr.end(name);
+            }
+         }
 
          const std::string_view name{};
       };
