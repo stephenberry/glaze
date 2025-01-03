@@ -194,14 +194,4 @@ namespace glz
       using T = trace;
       static constexpr auto value = object(&T::traceEvents, &T::displayTimeUnit);
    };
-   
-   template <opts Opts = opts{}>
-   [[nodiscard]] error_ctx write_file_trace(const trace& result, const std::string& file_name, auto&& buffer) noexcept
-   {
-      const auto ec = write<set_json<Opts>()>(result, buffer);
-      if (bool(ec)) [[unlikely]] {
-         return ec;
-      }
-      return {buffer_to_file(buffer, file_name)};
-   }
 }

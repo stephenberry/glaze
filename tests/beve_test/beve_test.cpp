@@ -2412,7 +2412,7 @@ int main()
    container_types();
 
    trace.end("binary_test");
-   const auto ec = glz::write_file_trace(trace, "binary_test.trace.json", std::string{});
+   const auto ec = glz::write_file_json(trace, "binary_test.trace.json", std::string{});
    if (ec) {
       std::cerr << "trace output failed\n";
    }
