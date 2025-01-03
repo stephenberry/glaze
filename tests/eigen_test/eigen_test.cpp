@@ -137,7 +137,21 @@ int main()
       expect(boolean);
    };
 
-   "Eigen::MatrixXcd"_test = [] {
+   "Eigen::MatrixXd"_test = [] {
+      Eigen::MatrixXd mat1(2, 3);
+      mat1 << 9, 7, 0, 1, 2, 3;
+
+      std::string json;
+      expect(not glz::write_json(mat1, json));
+      expect(json == "[[2,3],[9,1,7,2,0,3]]"); // [2,3] are rows and cols
+
+      Eigen::MatrixXd mat2{};
+      expect(glz::read_json(mat2, json) == glz::error_code::none);
+      const bool boolean = mat1 == mat2;
+      expect(boolean);
+   };
+
+   "Eigen::MatrixXcd beve"_test = [] {
       Eigen::MatrixXcd m(3, 3);
       for (int i = 0; i < m.size(); ++i) {
          m.array()(i) = {double(i), 2 * double(i)};

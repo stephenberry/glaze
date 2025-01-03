@@ -154,14 +154,17 @@ namespace glz
          static void op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix)
          {
             dump<'['>(b, ix);
+            dump<'['>(b, ix);
             using RowColT = std::array<Eigen::Index, 2>;
             RowColT extents{value.rows(), value.cols()};
             detail::to<JSON, RowColT>::template op<Opts>(extents, ctx, b, ix);
+            dump<','>(b, ix);
             dump<','>(b, ix);
 
             std::span<typename T::Scalar> view(value.data(), value.size());
             using Value = std::remove_cvref_t<decltype(view)>;
             detail::to<JSON, Value>::template op<Opts>(view, ctx, b, ix);
+            dump<']'>(b, ix);
             dump<']'>(b, ix);
          }
       };
