@@ -1033,23 +1033,31 @@ namespace glz
             }
          }
 
-         template <auto Opts>
+         template <auto Opts, class B>
             requires(writable_map_t<T> || (map_like_array && Opts.concatenate == true))
-         static void op(auto&& value, is_context auto&& ctx, auto&&... args)
+         static void op(auto&& value, is_context auto&& ctx, B&& b, auto&& ix)
          {
             if constexpr (not has_opening_handled(Opts)) {
-               dump<'{'>(args...);
+               dump<'{'>(b, ix);
             }
 
             if (!empty_range(value)) {
                if constexpr (!has_opening_handled(Opts)) {
                   if constexpr (Opts.prettify) {
                      ctx.indentation_level += Opts.indentation_width;
-                     dump_newline_indent<Opts.indentation_char>(ctx.indentation_level, args...);
+                     if constexpr (vector_like<B>) {
+                        if (const auto k = ix + ctx.indentation_level + write_padding_bytes; k > b.size()) [[unlikely]] {
+                           b.resize(2 * k);
+                        }
+                     }
+                     std::memcpy(&b[ix], "\n", 1);
+                     ++ix;
+                     std::memset(&b[ix], Opts.indentation_char, ctx.indentation_level);
+                     ix += ctx.indentation_level;
                   }
                }
 
-               auto write_first_entry = [&ctx, &args...](auto&& it) {
+               auto write_first_entry = [&ctx, &b, &ix](auto&& it) {
                   if constexpr (requires {
                                    it->first;
                                    it->second;
@@ -1058,7 +1066,7 @@ namespace glz
                      if (skip_member<Opts>(it->second)) {
                         return true;
                      }
-                     write_pair_content<Opts>(it->first, it->second, ctx, args...);
+                     write_pair_content<Opts>(it->first, it->second, ctx, b, ix);
                      return false;
                   }
                   else {
@@ -1066,7 +1074,7 @@ namespace glz
                      if (skip_member<Opts>(entry_val)) {
                         return true;
                      }
-                     write_pair_content<Opts>(key, entry_val, ctx, args...);
+                     write_pair_content<Opts>(key, entry_val, ctx, b, ix);
                      return false;
                   }
                };
@@ -1091,14 +1099,14 @@ namespace glz
                      // Alternatively, write separator after each entry except last but then branch is permanent
                      if constexpr (Opts.skip_null_members) {
                         if (!starting) {
-                           write_object_entry_separator<Opts>(ctx, args...);
+                           write_object_entry_separator<Opts>(ctx, b, ix);
                         }
                      }
                      else {
-                        write_object_entry_separator<Opts>(ctx, args...);
+                        write_object_entry_separator<Opts>(ctx, b, ix);
                      }
 
-                     write_pair_content<Opts>(it->first, it->second, ctx, args...);
+                     write_pair_content<Opts>(it->first, it->second, ctx, b, ix);
                   }
                   else {
                      const auto& [key, entry_val] = *it;
@@ -1111,14 +1119,14 @@ namespace glz
                      // Alternatively, write separator after each entry except last but then branch is permanent
                      if constexpr (Opts.skip_null_members) {
                         if (!starting) {
-                           write_object_entry_separator<Opts>(ctx, args...);
+                           write_object_entry_separator<Opts>(ctx, b, ix);
                         }
                      }
                      else {
-                        write_object_entry_separator<Opts>(ctx, args...);
+                        write_object_entry_separator<Opts>(ctx, b, ix);
                      }
 
-                     write_pair_content<Opts>(key, entry_val, ctx, args...);
+                     write_pair_content<Opts>(key, entry_val, ctx, b, ix);
                   }
 
                   starting = false;
@@ -1127,13 +1135,13 @@ namespace glz
                if constexpr (!has_closing_handled(Opts)) {
                   if constexpr (Opts.prettify) {
                      ctx.indentation_level -= Opts.indentation_width;
-                     dump_newline_indent<Opts.indentation_char>(ctx.indentation_level, args...);
+                     dump_newline_indent<Opts.indentation_char>(ctx.indentation_level, b, ix);
                   }
                }
             }
 
             if constexpr (!has_closing_handled(Opts)) {
-               dump<'}'>(args...);
+               dump<'}'>(b, ix);
             }
          }
       };
