@@ -1084,26 +1084,13 @@ namespace glz
                {
                   if constexpr (null_t<val_t>)
                   {
-                     auto write_first_entry = [&ctx, &b, &ix](auto&& it) {
-                        if constexpr (requires {
-                                         it->first;
-                                         it->second;
-                                      }) {
-                           // Allow non-const access, unlike ranges
-                           if (skip_member<Opts>(it->second)) {
-                              return true;
-                           }
-                           write_pair_content<Opts>(it->first, it->second, ctx, b, ix);
-                           return false;
+                     auto write_first_entry = [&](auto&& it) {
+                        auto&& [key, entry_val] = *it;
+                        if (skip_member<Opts>(entry_val)) {
+                           return true;
                         }
-                        else {
-                           const auto& [key, entry_val] = *it;
-                           if (skip_member<Opts>(entry_val)) {
-                              return true;
-                           }
-                           write_pair_content<Opts>(key, entry_val, ctx, b, ix);
-                           return false;
-                        }
+                        write_pair_content<Opts>(key, entry_val, ctx, b, ix);
+                        return false;
                      };
 
                      auto it = std::begin(value);
@@ -1133,17 +1120,9 @@ namespace glz
                      }
                   }
                   else {
-                     auto write_first_entry = [&ctx, &b, &ix](auto&& it) {
-                        if constexpr (requires {
-                                         it->first;
-                                         it->second;
-                                      }) {
-                           write_pair_content<Opts>(it->first, it->second, ctx, b, ix);
-                        }
-                        else {
-                           const auto& [key, entry_val] = *it;
-                           write_pair_content<Opts>(key, entry_val, ctx, b, ix);
-                        }
+                     auto write_first_entry = [&](auto&& it) {
+                        auto&& [key, entry_val] = *it;
+                        write_pair_content<Opts>(key, entry_val, ctx, b, ix);
                      };
 
                      auto it = std::begin(value);
