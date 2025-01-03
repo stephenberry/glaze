@@ -78,7 +78,7 @@ suite additional_eigen_tests = [] {
     "read_json_matrix4d"_test = [] {
         Eigen::Matrix4d m;
         std::string input = "[1,5,9,13,2,6,10,14,3,7,11,15,4,8,12,16]";
-        expect(glz::read_json(m, input) == glz::error_code::none);
+        expect(not glz::read_json(m, input));
         Eigen::Matrix4d expected;
         expected << 1, 2, 3, 4,
                     5, 6, 7, 8,
@@ -103,7 +103,7 @@ suite additional_eigen_tests = [] {
     "read_json_empty_matrix"_test = [] {
         Eigen::MatrixXd m;
         std::string input = "[[0,0]]"; // Empty array
-        expect(glz::read_json(m, input) == glz::error_code::none);
+        expect(not glz::read_json(m, input));
         expect(m.rows() == 0);
         expect(m.cols() == 0);
     };
@@ -220,7 +220,7 @@ suite additional_eigen_tests = [] {
         Eigen::Matrix3d source;
         std::string input = "[9,8,7,6,5,4,3,2,1]";
         Eigen::Ref<Eigen::Matrix3d> ref(source);
-        expect(glz::read_json(ref, input) == glz::error_code::none);
+        expect(not glz::read_json(ref, input));
         Eigen::Matrix3d expected;
         expected << 9,8,7,6,5,4,3,2,1;
         expect(source == expected);
@@ -238,7 +238,7 @@ suite additional_eigen_tests = [] {
     "read_json_non_square_matrix"_test = [] {
         Eigen::Matrix<double, 2, 3> m;
         std::string input = "[7,8,9,10,11,12]";
-        expect(glz::read_json(m, input) == glz::error_code::none);
+        expect(not glz::read_json(m, input));
         Eigen::Matrix<double, 2, 3> expected;
         expected << 7,8,9,
                    10,11,12;
@@ -255,7 +255,7 @@ suite additional_eigen_tests = [] {
     "read_json_zero_sized_matrix"_test = [] {
         Eigen::MatrixXd m;
         std::string input = "[]";
-        expect(glz::read_json(m, input) == glz::error_code::none);
+        expect(not glz::read_json(m, input));
         expect(m.rows() == 0);
         expect(m.cols() == 0);
     };
@@ -273,7 +273,7 @@ suite additional_eigen_tests = [] {
     "read_json_mixed_storage_order"_test = [] {
         Eigen::Matrix<double, 3, 3, Eigen::RowMajor> m;
         std::string input = "[9,8,7,6,5,4,3,2,1]";
-        expect(glz::read_json(m, input) == glz::error_code::none);
+        expect(not glz::read_json(m, input));
         Eigen::Matrix<double, 3, 3, Eigen::RowMajor> expected;
         expected << 9,8,7,
                     6,5,4,
@@ -294,7 +294,7 @@ int main()
 
    "read_json"_test = [] {
       Eigen::Matrix<double, 2, 2> m{};
-      expect(glz::read_json(m, "[2,1,7,4]") == glz::error_code::none);
+      expect(not glz::read_json(m, "[2,1,7,4]"));
       expect(m.rows() == 2);
       expect(m.cols() == 2);
       expect(m(0, 1) == 7);
@@ -351,7 +351,7 @@ int main()
       std::string b;
       expect(not glz::write_json(m, b));
       Eigen::VectorXd e{};
-      expect(glz::read_json(e, b) == glz::error_code::none);
+      expect(not glz::read_json(e, b));
       const bool boolean = m == e;
       expect(boolean);
    };
@@ -391,7 +391,7 @@ int main()
       expect(json == "[[2,3],[9,1,7,2,0,3]]"); // [2,3] are rows and cols
 
       Eigen::MatrixXd mat2{};
-      expect(glz::read_json(mat2, json) == glz::error_code::none);
+      expect(not glz::read_json(mat2, json));
       const bool boolean = mat1 == mat2;
       expect(boolean);
    };
