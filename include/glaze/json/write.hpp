@@ -1135,7 +1135,15 @@ namespace glz
                if constexpr (!has_closing_handled(Opts)) {
                   if constexpr (Opts.prettify) {
                      ctx.indentation_level -= Opts.indentation_width;
-                     dump_newline_indent<Opts.indentation_char>(ctx.indentation_level, b, ix);
+                     if constexpr (vector_like<B>) {
+                        if (const auto k = ix + ctx.indentation_level + write_padding_bytes; k > b.size()) [[unlikely]] {
+                           b.resize(2 * k);
+                        }
+                     }
+                     std::memcpy(&b[ix], "\n", 1);
+                     ++ix;
+                     std::memset(&b[ix], Opts.indentation_char, ctx.indentation_level);
+                     ix += ctx.indentation_level;
                   }
                }
             }
