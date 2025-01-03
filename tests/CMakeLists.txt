@@ -1,8 +1,5 @@
 include(FetchContent)
 
-set(BOOST_UT_ENABLE_RUN_AFTER_BUILD OFF CACHE INTERNAL "")
-set(BOOST_UT_DISABLE_MODULE ON CACHE INTERNAL "")
-
 FetchContent_Declare(
   ut
   GIT_REPOSITORY https://github.com/openalgz/ut
