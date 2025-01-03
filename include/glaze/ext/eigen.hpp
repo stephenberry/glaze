@@ -191,7 +191,6 @@ namespace glz
                }
                std::span<typename T::Scalar> view(value.data(), extents[0] * extents[1]);
                detail::read<JSON>::op<Opts>(view, ctx, it, end);
-               return;
             }
             GLZ_MATCH_CLOSE_BRACKET;
          }

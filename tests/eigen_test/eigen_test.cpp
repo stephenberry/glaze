@@ -57,7 +57,7 @@ void initialize_complex_struct()
 {
    complex_test_value.mf << 1.1f, 2.2f, 3.3f, 4.4f;
    complex_test_value.vi << 1, 2, 3, 4;
-   complex_test_value.mcd = Eigen::MatrixXcd(2, 2);
+   complex_test_value.mcd = Eigen::MatrixXcd(2,2);
    complex_test_value.mcd << std::complex<double>(1, 2), std::complex<double>(3, 4), std::complex<double>(5, 6),
       std::complex<double>(7, 8);
 }
