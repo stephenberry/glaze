@@ -843,6 +843,45 @@ namespace glz
       template <class T>
       concept array_padding_known =
          requires { typename T::value_type; } && (required_padding<typename T::value_type>() > 0);
+      
+      template <class Container>
+      using iterator_pair_type = typename std::iterator_traits<decltype(std::begin(std::declval<Container&>()))>::value_type;
+      
+      template <class Container, typename Iterator = iterator_pair_type<Container>>
+      struct iterator_second_impl;
+
+      template <class Container, typename Iterator>
+          requires has_value_type<Iterator>
+      struct iterator_second_impl<Container, Iterator> {
+          using type = typename Iterator::value_type;
+      };
+
+      template <class Container, typename Iterator>
+      requires (!has_value_type<Iterator> && has_second_type<Iterator>)
+      struct iterator_second_impl<Container, Iterator> {
+          using type = typename Iterator::second_type;
+      };
+      
+      template <class Container>
+      using iterator_second_type = typename iterator_second_impl<Container>::type;
+      
+      template <class Container, typename Iterator = iterator_pair_type<Container>>
+      struct iterator_first_impl;
+
+      template <class Container, typename Iterator>
+          requires has_value_type<Iterator>
+      struct iterator_first_impl<Container, Iterator> {
+          using type = typename Iterator::value_type;
+      };
+
+      template <class Container, typename Iterator>
+      requires (!has_value_type<Iterator> && has_first_type<Iterator>)
+      struct iterator_first_impl<Container, Iterator> {
+          using type = typename Iterator::first_type;
+      };
+      
+      template <class Container>
+      using iterator_first_type = typename iterator_first_impl<Container>::type;
 
       template <class T>
          requires(writable_array_t<T> || writable_map_t<T>)
@@ -1033,107 +1072,101 @@ namespace glz
             }
          }
 
-         template <auto Opts>
+         template <auto Opts, class B>
             requires(writable_map_t<T> || (map_like_array && Opts.concatenate == true))
-         static void op(auto&& value, is_context auto&& ctx, auto&&... args)
+         static void op(auto&& value, is_context auto&& ctx, B&& b, auto&& ix)
          {
             if constexpr (not has_opening_handled(Opts)) {
-               dump<'{'>(args...);
+               dump<'{'>(b, ix);
             }
 
             if (!empty_range(value)) {
                if constexpr (!has_opening_handled(Opts)) {
                   if constexpr (Opts.prettify) {
                      ctx.indentation_level += Opts.indentation_width;
-                     dump_newline_indent<Opts.indentation_char>(ctx.indentation_level, args...);
+                     if constexpr (vector_like<B>) {
+                        if (const auto k = ix + ctx.indentation_level + write_padding_bytes; k > b.size()) [[unlikely]] {
+                           b.resize(2 * k);
+                        }
+                     }
+                     std::memcpy(&b[ix], "\n", 1);
+                     ++ix;
+                     std::memset(&b[ix], Opts.indentation_char, ctx.indentation_level);
+                     ix += ctx.indentation_level;
                   }
                }
+               
+               using val_t = iterator_second_type<T>; // the type of value in each [key, value] pair
+               
+               if constexpr (not always_skipped<val_t>)
+               {
+                  if constexpr (null_t<val_t> && Opts.skip_null_members)
+                  {
+                     auto write_first_entry = [&](auto&& it) {
+                        auto&& [key, entry_val] = *it;
+                        if (skip_member<Opts>(entry_val)) {
+                           return true;
+                        }
+                        write_pair_content<Opts>(key, entry_val, ctx, b, ix);
+                        return false;
+                     };
 
-               auto write_first_entry = [&ctx, &args...](auto&& it) {
-                  if constexpr (requires {
-                                   it->first;
-                                   it->second;
-                                }) {
-                     // Allow non-const access, unlike ranges
-                     if (skip_member<Opts>(it->second)) {
-                        return true;
+                     auto it = std::begin(value);
+                     bool first = write_first_entry(it);
+                     ++it;
+                     for (const auto end = std::end(value); it != end; ++it) {
+                        auto&& [key, entry_val] = *it;
+                        if (skip_member<Opts>(entry_val)) {
+                           continue;
+                        }
+
+                        // When Opts.skip_null_members, *any* entry may be skipped, meaning separator dumping must be
+                        // conditional for every entry.
+                        // Alternatively, write separator after each entry except last but then branch is permanent
+                        if (not first) {
+                           write_object_entry_separator<Opts>(ctx, b, ix);
+                        }
+
+                        write_pair_content<Opts>(key, entry_val, ctx, b, ix);
+
+                        first = false;
                      }
-                     write_pair_content<Opts>(it->first, it->second, ctx, args...);
-                     return false;
                   }
                   else {
-                     const auto& [key, entry_val] = *it;
-                     if (skip_member<Opts>(entry_val)) {
-                        return true;
+                     auto write_first_entry = [&](auto&& it) {
+                        auto&& [key, entry_val] = *it;
+                        write_pair_content<Opts>(key, entry_val, ctx, b, ix);
+                     };
+
+                     auto it = std::begin(value);
+                     write_first_entry(it);
+                     ++it;
+                     for (const auto end = std::end(value); it != end; ++it) {
+                        auto&& [key, entry_val] = *it;
+                        write_object_entry_separator<Opts>(ctx, b, ix);
+                        write_pair_content<Opts>(key, entry_val, ctx, b, ix);
                      }
-                     write_pair_content<Opts>(key, entry_val, ctx, args...);
-                     return false;
                   }
-               };
-
-               auto it = std::begin(value);
-               [[maybe_unused]] bool starting = write_first_entry(it);
-               for (++it; it != std::end(value); ++it) {
-                  // I couldn't find an easy way around this code duplication
-                  // Ranges need to be decomposed with const auto& [...],
-                  // but we don't want to const qualify our maps for the sake of reflection writing
-                  // we need to be able to populate the tuple of pointers when writing with reflection
-                  if constexpr (requires {
-                                   it->first;
-                                   it->second;
-                                }) {
-                     if (skip_member<Opts>(it->second)) {
-                        continue;
-                     }
-
-                     // When Opts.skip_null_members, *any* entry may be skipped, meaning separator dumping must be
-                     // conditional for every entry. Avoid this branch when not skipping null members.
-                     // Alternatively, write separator after each entry except last but then branch is permanent
-                     if constexpr (Opts.skip_null_members) {
-                        if (!starting) {
-                           write_object_entry_separator<Opts>(ctx, args...);
-                        }
-                     }
-                     else {
-                        write_object_entry_separator<Opts>(ctx, args...);
-                     }
-
-                     write_pair_content<Opts>(it->first, it->second, ctx, args...);
-                  }
-                  else {
-                     const auto& [key, entry_val] = *it;
-                     if (skip_member<Opts>(entry_val)) {
-                        continue;
-                     }
-
-                     // When Opts.skip_null_members, *any* entry may be skipped, meaning separator dumping must be
-                     // conditional for every entry. Avoid this branch when not skipping null members.
-                     // Alternatively, write separator after each entry except last but then branch is permanent
-                     if constexpr (Opts.skip_null_members) {
-                        if (!starting) {
-                           write_object_entry_separator<Opts>(ctx, args...);
-                        }
-                     }
-                     else {
-                        write_object_entry_separator<Opts>(ctx, args...);
-                     }
-
-                     write_pair_content<Opts>(key, entry_val, ctx, args...);
-                  }
-
-                  starting = false;
                }
 
                if constexpr (!has_closing_handled(Opts)) {
                   if constexpr (Opts.prettify) {
                      ctx.indentation_level -= Opts.indentation_width;
-                     dump_newline_indent<Opts.indentation_char>(ctx.indentation_level, args...);
+                     if constexpr (vector_like<B>) {
+                        if (const auto k = ix + ctx.indentation_level + write_padding_bytes; k > b.size()) [[unlikely]] {
+                           b.resize(2 * k);
+                        }
+                     }
+                     std::memcpy(&b[ix], "\n", 1);
+                     ++ix;
+                     std::memset(&b[ix], Opts.indentation_char, ctx.indentation_level);
+                     ix += ctx.indentation_level;
                   }
                }
             }
 
             if constexpr (!has_closing_handled(Opts)) {
-               dump<'}'>(args...);
+               dump<'}'>(b, ix);
             }
          }
       };

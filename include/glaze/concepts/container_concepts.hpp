@@ -21,11 +21,17 @@ namespace glz
    template <class T, class... U>
    concept is_any_of = (std::same_as<T, U> || ...);
 
-   template <typename T>
+   template <class T>
    concept has_value_type = requires { typename T::value_type; };
 
-   template <typename T>
-   concept has_element_type = requires { typename T::has_element_type; };
+   template <class T>
+   concept has_element_type = requires { typename T::element_type; };
+   
+   template <class T>
+   concept has_first_type = requires { typename T::first_type; };
+   
+   template <class T>
+   concept has_second_type = requires { typename T::second_type; };
 
    template <class T>
    concept resizable = requires(T v) { v.resize(0); };
