@@ -194,53 +194,37 @@ suite additional_eigen_tests = [] {
       expect(deserialized.mcd == complex_test_value.mcd);
    };
 
-   "write_json_ref_matrix"_test = [] {
+   "json_ref_matrix"_test = [] {
       Eigen::Matrix3d source;
       source << 1, 2, 3, 4, 5, 6, 7, 8, 9;
       Eigen::Ref<Eigen::Matrix3d> ref(source);
       std::string json;
       expect(not glz::write_json(ref, json));
-      expect(json == "[1,2,3,4,5,6,7,8,9]");
+      expect(json == "[1,4,7,2,5,8,3,6,9]") << json;
+      
+      Eigen::Matrix3d parsed;
+      expect(not glz::read_json(parsed, json));
+      expect(source == parsed);
    };
 
-   "read_json_ref_matrix"_test = [] {
-      Eigen::Matrix3d source;
-      std::string input = "[9,8,7,6,5,4,3,2,1]";
-      Eigen::Ref<Eigen::Matrix3d> ref(source);
-      expect(not glz::read_json(ref, input));
-      Eigen::Matrix3d expected;
-      expected << 9, 8, 7, 6, 5, 4, 3, 2, 1;
-      expect(source == expected);
-   };
-
-   "write_json_non_square_matrix"_test = [] {
+   "json_non_square_matrix"_test = [] {
       Eigen::Matrix<double, 2, 3> m;
       m << 1, 2, 3, 4, 5, 6;
       std::string json;
       expect(not glz::write_json(m, json));
-      expect(json == "[1,2,3,4,5,6]");
-   };
-
-   "read_json_non_square_matrix"_test = [] {
-      Eigen::Matrix<double, 2, 3> m;
-      std::string input = "[7,8,9,10,11,12]";
-      expect(not glz::read_json(m, input));
-      Eigen::Matrix<double, 2, 3> expected;
-      expected << 7, 8, 9, 10, 11, 12;
-      expect(m == expected);
+      expect(json == "[1,4,2,5,3,6]") << json;
+      
+      Eigen::Matrix<double, 2, 3> parsed;
+      expect(not glz::read_json(parsed, json));
+      expect(m == parsed);
    };
 
    "write_json_zero_sized_matrix"_test = [] {
       Eigen::MatrixXd m(0, 0);
       std::string json;
       expect(not glz::write_json(m, json));
-      expect(json == "[]");
-   };
-
-   "read_json_zero_sized_matrix"_test = [] {
-      Eigen::MatrixXd m;
-      std::string input = "[]";
-      expect(not glz::read_json(m, input));
+      expect(json == "[[0,0],[]]");
+      expect(not glz::read_json(m, json));
       expect(m.rows() == 0);
       expect(m.cols() == 0);
    };
