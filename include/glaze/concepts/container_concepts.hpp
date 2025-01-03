@@ -26,10 +26,10 @@ namespace glz
 
    template <class T>
    concept has_element_type = requires { typename T::element_type; };
-   
+
    template <class T>
    concept has_first_type = requires { typename T::first_type; };
-   
+
    template <class T>
    concept has_second_type = requires { typename T::second_type; };
 

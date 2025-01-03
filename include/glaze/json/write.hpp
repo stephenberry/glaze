@@ -843,43 +843,48 @@ namespace glz
       template <class T>
       concept array_padding_known =
          requires { typename T::value_type; } && (required_padding<typename T::value_type>() > 0);
-      
+
       template <class Container>
-      using iterator_pair_type = typename std::iterator_traits<decltype(std::begin(std::declval<Container&>()))>::value_type;
-      
+      using iterator_pair_type =
+         typename std::iterator_traits<decltype(std::begin(std::declval<Container&>()))>::value_type;
+
       template <class Container, typename Iterator = iterator_pair_type<Container>>
       struct iterator_second_impl;
 
       template <class Container, typename Iterator>
-          requires has_value_type<Iterator>
-      struct iterator_second_impl<Container, Iterator> {
-          using type = typename Iterator::value_type;
+         requires has_value_type<Iterator>
+      struct iterator_second_impl<Container, Iterator>
+      {
+         using type = typename Iterator::value_type;
       };
 
       template <class Container, typename Iterator>
-      requires (!has_value_type<Iterator> && has_second_type<Iterator>)
-      struct iterator_second_impl<Container, Iterator> {
-          using type = typename Iterator::second_type;
+         requires(!has_value_type<Iterator> && has_second_type<Iterator>)
+      struct iterator_second_impl<Container, Iterator>
+      {
+         using type = typename Iterator::second_type;
       };
-      
+
       template <class Container>
       using iterator_second_type = typename iterator_second_impl<Container>::type;
-      
+
       template <class Container, typename Iterator = iterator_pair_type<Container>>
       struct iterator_first_impl;
 
       template <class Container, typename Iterator>
-          requires has_value_type<Iterator>
-      struct iterator_first_impl<Container, Iterator> {
-          using type = typename Iterator::value_type;
+         requires has_value_type<Iterator>
+      struct iterator_first_impl<Container, Iterator>
+      {
+         using type = typename Iterator::value_type;
       };
 
       template <class Container, typename Iterator>
-      requires (!has_value_type<Iterator> && has_first_type<Iterator>)
-      struct iterator_first_impl<Container, Iterator> {
-          using type = typename Iterator::first_type;
+         requires(!has_value_type<Iterator> && has_first_type<Iterator>)
+      struct iterator_first_impl<Container, Iterator>
+      {
+         using type = typename Iterator::first_type;
       };
-      
+
       template <class Container>
       using iterator_first_type = typename iterator_first_impl<Container>::type;
 
@@ -1085,7 +1090,8 @@ namespace glz
                   if constexpr (Opts.prettify) {
                      ctx.indentation_level += Opts.indentation_width;
                      if constexpr (vector_like<B>) {
-                        if (const auto k = ix + ctx.indentation_level + write_padding_bytes; k > b.size()) [[unlikely]] {
+                        if (const auto k = ix + ctx.indentation_level + write_padding_bytes; k > b.size())
+                           [[unlikely]] {
                            b.resize(2 * k);
                         }
                      }
@@ -1095,13 +1101,11 @@ namespace glz
                      ix += ctx.indentation_level;
                   }
                }
-               
+
                using val_t = iterator_second_type<T>; // the type of value in each [key, value] pair
-               
-               if constexpr (not always_skipped<val_t>)
-               {
-                  if constexpr (null_t<val_t> && Opts.skip_null_members)
-                  {
+
+               if constexpr (not always_skipped<val_t>) {
+                  if constexpr (null_t<val_t> && Opts.skip_null_members) {
                      auto write_first_entry = [&](auto&& it) {
                         auto&& [key, entry_val] = *it;
                         if (skip_member<Opts>(entry_val)) {
@@ -1153,7 +1157,8 @@ namespace glz
                   if constexpr (Opts.prettify) {
                      ctx.indentation_level -= Opts.indentation_width;
                      if constexpr (vector_like<B>) {
-                        if (const auto k = ix + ctx.indentation_level + write_padding_bytes; k > b.size()) [[unlikely]] {
+                        if (const auto k = ix + ctx.indentation_level + write_padding_bytes; k > b.size())
+                           [[unlikely]] {
                            b.resize(2 * k);
                         }
                      }
