@@ -57,7 +57,7 @@ void initialize_complex_struct()
 {
    complex_test_value.mf << 1.1f, 2.2f, 3.3f, 4.4f;
    complex_test_value.vi << 1, 2, 3, 4;
-   complex_test_value.mcd = Eigen::MatrixXcd(2,2);
+   complex_test_value.mcd = Eigen::MatrixXcd(2, 2);
    complex_test_value.mcd << std::complex<double>(1, 2), std::complex<double>(3, 4), std::complex<double>(5, 6),
       std::complex<double>(7, 8);
 }
@@ -201,7 +201,7 @@ suite additional_eigen_tests = [] {
       std::string json;
       expect(not glz::write_json(ref, json));
       expect(json == "[1,4,7,2,5,8,3,6,9]") << json;
-      
+
       Eigen::Matrix3d parsed;
       expect(not glz::read_json(parsed, json));
       expect(source == parsed);
@@ -213,7 +213,7 @@ suite additional_eigen_tests = [] {
       std::string json;
       expect(not glz::write_json(m, json));
       expect(json == "[1,4,2,5,3,6]") << json;
-      
+
       Eigen::Matrix<double, 2, 3> parsed;
       expect(not glz::read_json(parsed, json));
       expect(m == parsed);
