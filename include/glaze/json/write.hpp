@@ -864,6 +864,24 @@ namespace glz
       
       template <class Container>
       using iterator_second_type = typename iterator_second_impl<Container>::type;
+      
+      template <class Container, typename Iterator = iterator_pair_type<Container>>
+      struct iterator_first_impl;
+
+      template <class Container, typename Iterator>
+          requires has_value_type<Iterator>
+      struct iterator_first_impl<Container, Iterator> {
+          using type = typename Iterator::value_type;
+      };
+
+      template <class Container, typename Iterator>
+      requires (!has_value_type<Iterator> && has_first_type<Iterator>)
+      struct iterator_first_impl<Container, Iterator> {
+          using type = typename Iterator::first_type;
+      };
+      
+      template <class Container>
+      using iterator_first_type = typename iterator_first_impl<Container>::type;
 
       template <class T>
          requires(writable_array_t<T> || writable_map_t<T>)
