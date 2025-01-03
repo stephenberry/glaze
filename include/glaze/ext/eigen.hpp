@@ -71,6 +71,7 @@ namespace glz
             std::array<Eigen::Index, 2> extents;
             detail::read<BEVE>::op<Opts>(extents, ctx, it, end);
 
+            value.resize(extents[0], extents[1]);
             std::span<typename T::Scalar> view(value.data(), extents[0] * extents[1]);
             detail::read<BEVE>::op<Opts>(view, ctx, it, end);
          }

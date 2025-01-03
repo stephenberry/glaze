@@ -190,7 +190,8 @@ suite additional_eigen_tests = [] {
         std::string json;
         expect(not glz::write_json(complex_test_value, json));
         complex_struct deserialized;
-        expect(!glz::read_json(deserialized, json));
+       auto ec = glz::read_json(deserialized, json);
+        expect(!ec) << glz::format_error(ec, json);
         expect(deserialized.mf == complex_test_value.mf);
         expect(deserialized.vi == complex_test_value.vi);
         expect(deserialized.mcd == complex_test_value.mcd);
@@ -356,7 +357,7 @@ int main()
       expect(boolean);
    };
 
-   "dynamic array beve"_test = [] {
+   "dynamic array"_test = [] {
       Eigen::VectorXd m(10);
       for (int i = 0; i < m.size(); ++i) {
          m[i] = i;
@@ -365,8 +366,11 @@ int main()
       expect(not glz::write_beve(m, b));
       Eigen::VectorXd e{};
       expect(!glz::read_beve(e, b));
-      const bool boolean = m == e;
-      expect(boolean);
+      expect(m == e);
+      
+      expect(not glz::write_json(m, b));
+      expect(!glz::read_json(e, b));
+      expect(m == e);
    };
 
    "Eigen::VectorXcd"_test = [] {
@@ -396,7 +400,7 @@ int main()
       expect(boolean);
    };
 
-   "Eigen::MatrixXcd beve"_test = [] {
+   "Eigen::MatrixXcd"_test = [] {
       Eigen::MatrixXcd m(3, 3);
       for (int i = 0; i < m.size(); ++i) {
          m.array()(i) = {double(i), 2 * double(i)};
