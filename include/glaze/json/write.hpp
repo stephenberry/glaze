@@ -847,23 +847,23 @@ namespace glz
       template <class Container>
       using iterator_pair_type = typename std::iterator_traits<decltype(std::begin(std::declval<Container&>()))>::value_type;
       
-      template <class Container, typename IteratorValue = iterator_pair_type<Container>>
-      struct iterator_value_impl;
+      template <class Container, typename Iterator = iterator_pair_type<Container>>
+      struct iterator_second_impl;
 
-      template <class Container, typename IteratorValue>
-          requires has_value_type<IteratorValue>
-      struct iterator_value_impl<Container, IteratorValue> {
-          using type = typename IteratorValue::value_type;
+      template <class Container, typename Iterator>
+          requires has_value_type<Iterator>
+      struct iterator_second_impl<Container, Iterator> {
+          using type = typename Iterator::value_type;
       };
 
-      template <class Container, typename IteratorValue>
-      requires (!has_value_type<IteratorValue> && has_second_type<IteratorValue>)
-      struct iterator_value_impl<Container, IteratorValue> {
-          using type = typename IteratorValue::second_type;
+      template <class Container, typename Iterator>
+      requires (!has_value_type<Iterator> && has_second_type<Iterator>)
+      struct iterator_second_impl<Container, Iterator> {
+          using type = typename Iterator::second_type;
       };
       
       template <class Container>
-      using iterator_value_type = typename iterator_value_impl<Container>::type;
+      using iterator_second_type = typename iterator_second_impl<Container>::type;
 
       template <class T>
          requires(writable_array_t<T> || writable_map_t<T>)
@@ -1078,7 +1078,7 @@ namespace glz
                   }
                }
                
-               using val_t = iterator_value_type<T>; // the type of value in each [key, value] pair
+               using val_t = iterator_second_type<T>; // the type of value in each [key, value] pair
                
                if constexpr (not always_skipped<val_t>)
                {
@@ -1103,9 +1103,9 @@ namespace glz
                         }
 
                         // When Opts.skip_null_members, *any* entry may be skipped, meaning separator dumping must be
-                        // conditional for every entry. Avoid this branch when not skipping null members.
+                        // conditional for every entry.
                         // Alternatively, write separator after each entry except last but then branch is permanent
-                        if (!first) {
+                        if (not first) {
                            write_object_entry_separator<Opts>(ctx, b, ix);
                         }
 
