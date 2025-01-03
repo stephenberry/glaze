@@ -147,6 +147,10 @@ int main()
       Eigen::MatrixXcd e(3, 3);
       expect(!glz::read_beve(e, b));
       expect(bool(m == e));
+      
+      expect(not glz::write_json(m, b));
+      expect(!glz::write_json(e, b));
+      expect(bool(m == e));
    };
 
    "Eigen::Ref"_test = [] {
@@ -161,6 +165,10 @@ int main()
       expect(not glz::write_beve(m, b));
       Eigen::VectorXcd e{};
       expect(!glz::read_beve(e, b));
+      expect(bool(m == e));
+      
+      expect(not glz::write_json(m, b));
+      expect(!glz::read_json(e, b));
       expect(bool(m == e));
    };
 }

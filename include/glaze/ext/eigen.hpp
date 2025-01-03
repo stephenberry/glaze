@@ -32,6 +32,10 @@ namespace glz
          static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
             ++it;
+            if (it >= end) [[unlikely]] {
+               ctx.error = error_code::unexpected_end;
+               return;
+            }
             constexpr uint8_t layout = uint8_t(!T::IsRowMajor);
             if (uint8_t(*it) != layout) {
                ctx.error = error_code::syntax_error;
@@ -45,14 +49,19 @@ namespace glz
          }
       };
 
+      // A dynamic matrix in both rows and columns
       template <matrix_t T>
-         requires(T::RowsAtCompileTime < 0 || T::ColsAtCompileTime < 0)
+         requires(T::RowsAtCompileTime < 0 && T::ColsAtCompileTime < 0)
       struct from<BEVE, T>
       {
          template <auto Opts>
          static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
             ++it;
+            if (it >= end) [[unlikely]] {
+               ctx.error = error_code::unexpected_end;
+               return;
+            }
             constexpr uint8_t layout = uint8_t(!T::IsRowMajor);
             if (uint8_t(*it) != layout) {
                ctx.error = error_code::syntax_error;
@@ -88,8 +97,9 @@ namespace glz
          }
       };
 
+      // A dynamic matrix in both rows and columns
       template <matrix_t T>
-         requires(T::RowsAtCompileTime < 0 || T::ColsAtCompileTime < 0)
+         requires(T::RowsAtCompileTime < 0 && T::ColsAtCompileTime < 0)
       struct to<BEVE, T>
       {
          template <auto Opts>
@@ -135,42 +145,44 @@ namespace glz
          }
       };
 
+      // A dynamic matrix in both rows and columns
       template <matrix_t T>
-         requires(T::RowsAtCompileTime < 0 || T::ColsAtCompileTime < 0)
+         requires(T::RowsAtCompileTime < 0 && T::ColsAtCompileTime < 0)
       struct to<JSON, T>
       {
          template <auto Opts>
          static void op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix)
          {
-            b[ix++] = '[';
+            dump<'['>(b, ix);
             using RowColT = std::array<Eigen::Index, 2>;
             RowColT extents{value.rows(), value.cols()};
             detail::to<JSON, RowColT>::template op<Opts>(extents, ctx, b, ix);
-            b[ix++] = ',';
+            dump<','>(b, ix);
 
             std::span<typename T::Scalar> view(value.data(), value.size());
             using Value = std::remove_cvref_t<decltype(view)>;
             detail::to<JSON, Value>::template op<Opts>(view, ctx, b, ix);
-            b[ix++] = ']';
+            dump<']'>(b, ix);
          }
       };
 
+      // A dynamic matrix in both rows and columns
       template <matrix_t T>
-         requires(T::RowsAtCompileTime < 0 || T::ColsAtCompileTime < 0)
+         requires(T::RowsAtCompileTime < 0 && T::ColsAtCompileTime < 0)
       struct from<JSON, T>
       {
          template <auto Opts>
          static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
-            ++it;
+            GLZ_MATCH_OPEN_BRACKET;
             std::array<Eigen::Index, 2> extents; //NOLINT
             detail::read<JSON>::op<Opts>(extents, ctx, it, end);
             value.resize(extents[0], extents[1]);
-            ++it;
+            GLZ_MATCH_COMMA;
 
             std::span<typename T::Scalar> view(value.data(), extents[0] * extents[1]);
             detail::read<JSON>::op<Opts>(view, ctx, it, end);
-            ++it;
+            GLZ_MATCH_CLOSE_BRACKET;
          }
       };
    } // namespace detail
