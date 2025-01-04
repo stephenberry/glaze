@@ -1823,7 +1823,7 @@ namespace glz
                         std::memset(&b[ix], Opts.indentation_char, ctx.indentation_level);
                         ix += ctx.indentation_level;
                      }
-                     
+
                      using val_t = field_t<T, I>;
 
                      // MSVC requires get<I> rather than keys[I]
@@ -1836,7 +1836,8 @@ namespace glz
                            ix += n;
                         }
                         else {
-                           static constexpr auto quoted_key = join_v<chars<",">, quoted_key_v<key, Opts.prettify>, chars<"null">>;
+                           static constexpr auto quoted_key =
+                              join_v<chars<",">, quoted_key_v<key, Opts.prettify>, chars<"null">>;
                            static constexpr auto n = quoted_key.size();
                            std::memcpy(&b[ix], quoted_key.data(), n);
                            ix += n;
@@ -1856,13 +1857,14 @@ namespace glz
                            ix += n;
                         }
 
-                        static constexpr auto check_opts = required_padding<val_t>() ? write_unchecked_on<Opts>() : Opts;
+                        static constexpr auto check_opts =
+                           required_padding<val_t>() ? write_unchecked_on<Opts>() : Opts;
                         if constexpr (reflectable<T>) {
                            to<JSON, val_t>::template op<check_opts>(get_member(value, get<I>(t)), ctx, b, ix);
                         }
                         else {
-                           to<JSON, val_t>::template op<check_opts>(get_member(value, get<I>(reflect<T>::values)), ctx, b,
-                                                                    ix);
+                           to<JSON, val_t>::template op<check_opts>(get_member(value, get<I>(reflect<T>::values)), ctx,
+                                                                    b, ix);
                         }
                      }
                   });
