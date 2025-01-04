@@ -826,6 +826,9 @@ namespace glz
          if constexpr (str_t<Key> || char_t<Key> || glaze_enum_t<Key> || Opts.quoted_num) {
             to<JSON, core_t<Key>>::template op<Opts>(key, ctx, b, ix);
          }
+         else if constexpr (num_t<Key>) {
+            write<JSON>::op<opt_true<Opts, &opts::quoted_num>>(key, ctx, b, ix);
+         }
          else {
             write<JSON>::op<opt_false<Opts, &opts::raw_string>>(quoted_t<const Key>{key}, ctx, b, ix);
          }
