@@ -1730,7 +1730,7 @@ namespace glz
                      }
                      else {
                         if constexpr (null_t<val_t> && Opts.skip_null_members) {
-                           if constexpr (always_null_t<T>)
+                           if constexpr (always_null_t<val_t>)
                               return;
                            else {
                               const auto is_null = [&]() {
@@ -1823,17 +1823,27 @@ namespace glz
                         std::memset(&b[ix], Opts.indentation_char, ctx.indentation_level);
                         ix += ctx.indentation_level;
                      }
+                     
+                     using val_t = field_t<T, I>;
 
                      // MSVC requires get<I> rather than keys[I]
                      static constexpr auto key = glz::get<I>(reflect<T>::keys); // GCC 14 requires auto here
-                     if constexpr (Opts.prettify) {
-                        static constexpr auto quoted_key = quoted_key_v<key, Opts.prettify>;
-                        static constexpr auto n = quoted_key.size();
-                        std::memcpy(&b[ix], quoted_key.data(), n);
-                        ix += n;
+                     if constexpr (always_null_t<val_t>) {
+                        if constexpr (I == 0 || Opts.prettify) {
+                           static constexpr auto quoted_key = join_v<quoted_key_v<key, Opts.prettify>, chars<"null">>;
+                           static constexpr auto n = quoted_key.size();
+                           std::memcpy(&b[ix], quoted_key.data(), n);
+                           ix += n;
+                        }
+                        else {
+                           static constexpr auto quoted_key = join_v<chars<",">, quoted_key_v<key, Opts.prettify>, chars<"null">>;
+                           static constexpr auto n = quoted_key.size();
+                           std::memcpy(&b[ix], quoted_key.data(), n);
+                           ix += n;
+                        }
                      }
                      else {
-                        if constexpr (I == 0) {
+                        if constexpr (I == 0 || Opts.prettify) {
                            static constexpr auto quoted_key = quoted_key_v<key, Opts.prettify>;
                            static constexpr auto n = quoted_key.size();
                            std::memcpy(&b[ix], quoted_key.data(), n);
@@ -1845,17 +1855,15 @@ namespace glz
                            std::memcpy(&b[ix], quoted_key.data(), n);
                            ix += n;
                         }
-                     }
 
-                     using val_t = field_t<T, I>;
-
-                     static constexpr auto check_opts = required_padding<val_t>() ? write_unchecked_on<Opts>() : Opts;
-                     if constexpr (reflectable<T>) {
-                        to<JSON, val_t>::template op<check_opts>(get_member(value, get<I>(t)), ctx, b, ix);
-                     }
-                     else {
-                        to<JSON, val_t>::template op<check_opts>(get_member(value, get<I>(reflect<T>::values)), ctx, b,
-                                                                 ix);
+                        static constexpr auto check_opts = required_padding<val_t>() ? write_unchecked_on<Opts>() : Opts;
+                        if constexpr (reflectable<T>) {
+                           to<JSON, val_t>::template op<check_opts>(get_member(value, get<I>(t)), ctx, b, ix);
+                        }
+                        else {
+                           to<JSON, val_t>::template op<check_opts>(get_member(value, get<I>(reflect<T>::values)), ctx, b,
+                                                                    ix);
+                        }
                      }
                   });
                }
