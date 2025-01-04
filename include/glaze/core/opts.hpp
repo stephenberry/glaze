@@ -63,6 +63,7 @@ namespace glz
       char indentation_char = ' '; // Prettified JSON indentation char
       uint8_t indentation_width = 3; // Prettified JSON indentation size
       bool_t new_lines_in_arrays = true; // Whether prettified arrays should have new lines for each element
+      bool_t append_arrays = false; // When reading into an array the data will be appended if the type supports it
       bool_t shrink_to_fit = false; // Shrinks dynamic containers to new size to save memory
       bool_t write_type_info = true; // Write type info for meta objects in variants
       bool_t error_on_missing_keys = false; // Require all non nullable keys to be present in the object. Use

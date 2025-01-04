@@ -5,6 +5,7 @@ Glaze provides a number of wrappers that indicate at compile time how a value sh
 ## Available Wrappers
 
 ```c++
+glz::append_arrays<&T::x> // When reading into an array that is appendable, the new data will be appended rather than overwrite
 glz::bools_as_numbers<&T::x> // Read and write booleans as numbers
 glz::quoted_num<&T::x> // Read and write numbers as strings
 glz::quoted<&T::x> // Read a value as a string and unescape, to avoid the user having to parse twice
@@ -28,6 +29,40 @@ glz::manage<&T::x, &T::read_x, &T::write_x> // Calls read_x() after reading x an
 ## Associated glz::opts
 
 `glz::opts` is the compile time options struct passed to most of Glaze functions to configure read/write behavior. Often wrappers are associated with compile time options and can also be set via `glz::opts`. For example, the `glz::quoted_num` wrapper is associated with the `quoted_num` boolean in `glz::opts`.
+
+## append_arrays
+
+When reading into an array that is appendable, the new data will be appended rather than overwrite
+
+Associated option: `glz::opts{.append_arrays = true};`
+
+```c++
+struct append_obj
+{
+   std::vector<std::string> names{};
+   std::vector<std::array<int, 2>> arrays{};
+};
+
+template <>
+struct glz::meta<append_obj>
+{
+   using T = append_obj;
+   static constexpr auto value = object("names", append_arrays<&T::names>, "arrays", append_arrays<&T::arrays>);
+};
+```
+
+In use:
+
+```c++
+append_obj obj{};
+expect(not glz::read_json(obj, R"({"names":["Bob"],"arrays":[[0,0]]})"));
+expect(obj.names == std::vector<std::string>{"Bob"});
+expect(obj.arrays == std::vector<std::array<int, 2>>{{0,0}});
+
+expect(not glz::read_json(obj, R"({"names":["Liz"],"arrays":[[1,1]]})"));
+expect(obj.names == std::vector<std::string>{"Bob", "Liz"});
+expect(obj.arrays == std::vector<std::array<int, 2>>{{0,0},{1,1}});
+```
 
 ## bools_as_numbers
 
