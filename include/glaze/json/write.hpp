@@ -1840,7 +1840,7 @@ namespace glz
                         }
                         else {
                            static constexpr auto quoted_key =
-                              join_v<chars<",">, quoted_key_v<key, Opts.prettify>, chars<"null">>;
+                              join_v<chars<",">, quoted_key_v<key>, chars<"null">>;
                            static constexpr auto n = quoted_key.size();
                            std::memcpy(&b[ix], quoted_key.data(), n);
                            ix += n;
@@ -1854,7 +1854,7 @@ namespace glz
                            ix += n;
                         }
                         else {
-                           static constexpr auto quoted_key = join_v<chars<",">, quoted_key_v<key, Opts.prettify>>;
+                           static constexpr auto quoted_key = join_v<chars<",">, quoted_key_v<key>>;
                            static constexpr auto n = quoted_key.size();
                            std::memcpy(&b[ix], quoted_key.data(), n);
                            ix += n;

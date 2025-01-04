@@ -98,7 +98,7 @@ namespace glz
    template <const std::string_view&... Strs>
    inline constexpr auto join_v = detail::join<Strs...>();
 
-   template <const std::string_view& Key, bool Prettify>
+   template <const std::string_view& Key, bool Prettify = false>
    inline constexpr auto quoted_key_v = []() -> std::string_view {
       constexpr auto quoted = [] {
          constexpr auto N = Key.size();
