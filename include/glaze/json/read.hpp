@@ -1285,8 +1285,7 @@ namespace glz
             const size_t ws_size = size_t(it - ws_start);
 
             static constexpr bool should_append = resizable<T> && Opts.append_arrays;
-            if constexpr (not should_append)
-            {
+            if constexpr (not should_append) {
                const auto n = value.size();
 
                auto value_it = value.begin();

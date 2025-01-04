@@ -10159,29 +10159,29 @@ suite append_arrays_tests = [] {
       std::vector<int> v{};
       constexpr glz::opts append_opts{.append_arrays = true};
       expect(not glz::read<append_opts>(v, "[1,2,3]"));
-      expect(v == std::vector<int>{1,2,3});
+      expect(v == std::vector<int>{1, 2, 3});
       expect(not glz::read<append_opts>(v, "[4,5,6]"));
-      expect(v == std::vector<int>{1,2,3,4,5,6});
+      expect(v == std::vector<int>{1, 2, 3, 4, 5, 6});
    };
-   
+
    "append_arrays deque"_test = [] {
       std::deque<int> v{};
       constexpr glz::opts append_opts{.append_arrays = true};
       expect(not glz::read<append_opts>(v, "[1,2,3]"));
-      expect(v == std::deque<int>{1,2,3});
+      expect(v == std::deque<int>{1, 2, 3});
       expect(not glz::read<append_opts>(v, "[4,5,6]"));
-      expect(v == std::deque<int>{1,2,3,4,5,6});
+      expect(v == std::deque<int>{1, 2, 3, 4, 5, 6});
    };
-   
+
    "append_arrays append_obj"_test = [] {
       append_obj obj{};
       expect(not glz::read_json(obj, R"({"names":["Bob"],"arrays":[[0,0]]})"));
       expect(obj.names == std::vector<std::string>{"Bob"});
-      expect(obj.arrays == std::vector<std::array<int, 2>>{{0,0}});
-      
+      expect(obj.arrays == std::vector<std::array<int, 2>>{{0, 0}});
+
       expect(not glz::read_json(obj, R"({"names":["Liz"],"arrays":[[1,1]]})"));
       expect(obj.names == std::vector<std::string>{"Bob", "Liz"});
-      expect(obj.arrays == std::vector<std::array<int, 2>>{{0,0},{1,1}});
+      expect(obj.arrays == std::vector<std::array<int, 2>>{{0, 0}, {1, 1}});
    };
 };
 
