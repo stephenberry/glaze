@@ -820,8 +820,9 @@ namespace glz
          }
       }
 
-      template <opts Opts, class Key, class Value, is_context Ctx>
-      GLZ_ALWAYS_INLINE void write_pair_content(const Key& key, Value&& value, Ctx& ctx, auto&& b, auto&& ix)
+      // "key":value pair output
+      template <opts Opts, class Key, class Value, is_context Ctx, class B>
+      GLZ_ALWAYS_INLINE void write_pair_content(const Key& key, Value&& value, Ctx& ctx, B&& b, auto&& ix)
       {
          if constexpr (str_t<Key> || char_t<Key> || glaze_enum_t<Key> || Opts.quoted_num) {
             to<JSON, core_t<Key>>::template op<Opts>(key, ctx, b, ix);
@@ -1772,7 +1773,6 @@ namespace glz
                         }
                         else {
                            // Null members may be skipped so we cant just write it out for all but the last member
-                           // write_object_entry_separator<Opts, not supports_unchecked_write<val_t>>(ctx, b, ix);
                            if constexpr (Opts.prettify) {
                               std::memcpy(&b[ix], ",\n", 2);
                               ix += 2;
@@ -1840,7 +1840,7 @@ namespace glz
                         }
                         else {
                            static constexpr auto quoted_key =
-                              join_v<chars<",">, quoted_key_v<key, Opts.prettify>, chars<"null">>;
+                              join_v<chars<",">, quoted_key_v<key>, chars<"null">>;
                            static constexpr auto n = quoted_key.size();
                            std::memcpy(&b[ix], quoted_key.data(), n);
                            ix += n;
@@ -1854,7 +1854,7 @@ namespace glz
                            ix += n;
                         }
                         else {
-                           static constexpr auto quoted_key = join_v<chars<",">, quoted_key_v<key, Opts.prettify>>;
+                           static constexpr auto quoted_key = join_v<chars<",">, quoted_key_v<key>>;
                            static constexpr auto n = quoted_key.size();
                            std::memcpy(&b[ix], quoted_key.data(), n);
                            ix += n;
