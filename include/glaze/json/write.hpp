@@ -820,8 +820,9 @@ namespace glz
          }
       }
 
-      template <opts Opts, class Key, class Value, is_context Ctx>
-      GLZ_ALWAYS_INLINE void write_pair_content(const Key& key, Value&& value, Ctx& ctx, auto&& b, auto&& ix)
+      // "key":value pair output
+      template <opts Opts, class Key, class Value, is_context Ctx, class B>
+      GLZ_ALWAYS_INLINE void write_pair_content(const Key& key, Value&& value, Ctx& ctx, B&& b, auto&& ix)
       {
          if constexpr (str_t<Key> || char_t<Key> || glaze_enum_t<Key> || Opts.quoted_num) {
             to<JSON, core_t<Key>>::template op<Opts>(key, ctx, b, ix);
@@ -1772,7 +1773,6 @@ namespace glz
                         }
                         else {
                            // Null members may be skipped so we cant just write it out for all but the last member
-                           // write_object_entry_separator<Opts, not supports_unchecked_write<val_t>>(ctx, b, ix);
                            if constexpr (Opts.prettify) {
                               std::memcpy(&b[ix], ",\n", 2);
                               ix += 2;
