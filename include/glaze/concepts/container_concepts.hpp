@@ -280,7 +280,7 @@ namespace glz
          matrix.size()
       } -> std::convertible_to<int>;
    } && !range<T>;
-   
+
    // concept for the Eigen library: matrices and vectors
    template <class T>
    concept eigen_t = requires(T matrix) {
