@@ -45,12 +45,8 @@ struct complex_struct
    Eigen::MatrixXcd mcd;
 } complex_test_value;
 
-template <>
-struct glz::meta<complex_struct>
-{
-   using T = complex_struct;
-   static constexpr auto value = object(&T::mf, &T::vi, &T::mcd);
-};
+static_assert(glz::eigen_t<Eigen::Matrix2f>);
+static_assert(glz::eigen_t<Eigen::Vector4i>);
 
 // Initialize complex_test_value
 void initialize_complex_struct()

@@ -454,7 +454,7 @@ namespace glz
       else if constexpr (std::is_member_function_pointer_v<V>) {
          return element;
       }
-      else if constexpr (std::invocable<Element, Value> && not matrix_t<Element>) {
+      else if constexpr (std::invocable<Element, Value> && not eigen_t<Element>) {
          // Eigen places a static_assert inside of the operator()(), so we must target
          // matrix types and reject them from the invocable check
          // Eigen ought to put the check in the `enable_if` for operator()()
