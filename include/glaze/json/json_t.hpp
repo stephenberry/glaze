@@ -33,9 +33,17 @@ namespace glz
       using val_t = std::variant<null_t, double, std::string, bool, array_t, object_t>;
       val_t data{};
 
-      // Dump the value to JSON, returns an expected that will contain a std::string if valid
+      /**
+       * @brief Converts the JSON data to a string representation.
+       * @return An `expected` containing a JSON string if successful, or an error context.
+       */
       expected<std::string, error_ctx> dump() const { return write_json(data); }
 
+      /**
+       * @brief Gets the value as the specified type.
+       * @tparam T The type to get the value as.
+       * @return Reference to the value of the specified type.
+       */
       template <class T>
       [[nodiscard]] T& get()
       {
@@ -58,6 +66,29 @@ namespace glz
       [[nodiscard]] const T* get_if() const noexcept
       {
          return std::get_if<T>(&data);
+      }
+      
+      template <class T>
+      [[nodiscard]] T as() const
+      {
+         // Prefer get becuase it returns a reference
+         return get<T>();
+      }
+
+      template <class T>
+         requires std::convertible_to<double, T>
+      [[nodiscard]] T as() const
+      {
+         // Can be used for int and the like
+         return static_cast<T>(get<double>());
+      }
+
+      template <class T>
+         requires std::convertible_to<std::string, T>
+      [[nodiscard]] T as() const
+      {
+         // Can be used for string_view and the like
+         return get<std::string>();
       }
 
       template <class T>
@@ -210,29 +241,6 @@ namespace glz
       json_t(std::initializer_list<json_t>&& arr)
       {
          data.emplace<array_t>(std::move(arr));
-      }
-
-      template <class T>
-      [[nodiscard]] T as() const
-      {
-         // Prefer get becuase it returns a reference
-         return get<T>();
-      }
-
-      template <class T>
-         requires std::convertible_to<double, T>
-      [[nodiscard]] T as() const
-      {
-         // Can be used for int and the like
-         return static_cast<T>(get<double>());
-      }
-
-      template <class T>
-         requires std::convertible_to<std::string, T>
-      [[nodiscard]] T as() const
-      {
-         // Can be used for string_view and the like
-         return get<std::string>();
       }
 
       [[nodiscard]] bool is_array() const noexcept { return holds<json_t::array_t>(); }
