@@ -67,7 +67,7 @@ namespace glz
       {
          return std::get_if<T>(&data);
       }
-      
+
       template <class T>
       [[nodiscard]] T as() const
       {
