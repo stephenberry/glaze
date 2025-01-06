@@ -265,20 +265,36 @@ namespace glz
       requires std::input_iterator<decltype(t.begin())>;
    };
 
+   // Concept for a matrix type (not a vector, which is a range)
    template <class T>
    concept matrix_t = requires(T matrix) {
       matrix.resize(2, 4);
       matrix.data();
       {
          matrix.rows()
-      } -> std::convertible_to<size_t>;
+      } -> std::convertible_to<int>;
       {
          matrix.cols()
-      } -> std::convertible_to<size_t>;
+      } -> std::convertible_to<int>;
       {
          matrix.size()
-      } -> std::convertible_to<size_t>;
+      } -> std::convertible_to<int>;
    } && !range<T>;
+   
+   // concept for the Eigen library: matrices and vectors
+   template <class T>
+   concept eigen_t = requires(T matrix) {
+      matrix.data();
+      {
+         matrix.rows()
+      } -> std::convertible_to<int>;
+      {
+         matrix.cols()
+      } -> std::convertible_to<int>;
+      {
+         matrix.size()
+      } -> std::convertible_to<int>;
+   };
 
    // range like
    template <class T>
