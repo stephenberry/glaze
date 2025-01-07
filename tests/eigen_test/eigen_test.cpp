@@ -410,7 +410,6 @@ int main()
 
       Eigen::AffineCompact2d c1, c2;
       c1.setIdentity();
-      c2.setIdentity();
       buffer = glz::write_json(c1).value();
       expect(buffer == "[1,0,0,1,0,0]");
       expect(not glz::read_json(c2, buffer));
