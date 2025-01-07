@@ -1272,7 +1272,7 @@ namespace glz
             if (*it == ']') {
                GLZ_SUB_LEVEL;
                ++it;
-               if constexpr (resizable<T>) {
+               if constexpr (resizable<T> && not Opts.append_arrays) {
                   value.clear();
 
                   if constexpr (Opts.shrink_to_fit) {
@@ -1284,42 +1284,45 @@ namespace glz
 
             const size_t ws_size = size_t(it - ws_start);
 
-            const auto n = value.size();
+            static constexpr bool should_append = resizable<T> && Opts.append_arrays;
+            if constexpr (not should_append) {
+               const auto n = value.size();
 
-            auto value_it = value.begin();
+               auto value_it = value.begin();
 
-            for (size_t i = 0; i < n; ++i) {
-               read<JSON>::op<ws_handled<Opts>()>(*value_it++, ctx, it, end);
-               if (bool(ctx.error)) [[unlikely]]
-                  return;
-               GLZ_SKIP_WS();
-               if (*it == ',') {
-                  ++it;
-
-                  if constexpr (!Opts.minified) {
-                     if (ws_size && ws_size < size_t(end - it)) {
-                        skip_matching_ws(ws_start, it, ws_size);
-                     }
-                  }
-
+               for (size_t i = 0; i < n; ++i) {
+                  read<JSON>::op<ws_handled<Opts>()>(*value_it++, ctx, it, end);
+                  if (bool(ctx.error)) [[unlikely]]
+                     return;
                   GLZ_SKIP_WS();
-               }
-               else if (*it == ']') {
-                  GLZ_SUB_LEVEL;
-                  ++it;
-                  if constexpr (erasable<T>) {
-                     value.erase(value_it,
-                                 value.end()); // use erase rather than resize for non-default constructible elements
+                  if (*it == ',') {
+                     ++it;
 
-                     if constexpr (Opts.shrink_to_fit) {
-                        value.shrink_to_fit();
+                     if constexpr (!Opts.minified) {
+                        if (ws_size && ws_size < size_t(end - it)) {
+                           skip_matching_ws(ws_start, it, ws_size);
+                        }
                      }
+
+                     GLZ_SKIP_WS();
                   }
-                  return;
-               }
-               else [[unlikely]] {
-                  ctx.error = error_code::expected_bracket;
-                  return;
+                  else if (*it == ']') {
+                     GLZ_SUB_LEVEL;
+                     ++it;
+                     if constexpr (erasable<T>) {
+                        value.erase(value_it,
+                                    value.end()); // use erase rather than resize for non-default constructible elements
+
+                        if constexpr (Opts.shrink_to_fit) {
+                           value.shrink_to_fit();
+                        }
+                     }
+                     return;
+                  }
+                  else [[unlikely]] {
+                     ctx.error = error_code::expected_bracket;
+                     return;
+                  }
                }
             }
 

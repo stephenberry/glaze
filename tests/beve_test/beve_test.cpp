@@ -24,6 +24,8 @@
 #include "glaze/trace/trace.hpp"
 #include "ut/ut.hpp"
 
+inline glz::trace trace{};
+
 struct my_struct
 {
    int i = 287;
@@ -413,7 +415,7 @@ void bench()
 {
    using namespace ut;
    "bench"_test = [] {
-      glz::trace_begin("bench");
+      trace.begin("bench");
       std::cout << "\nPerformance regresion test: \n";
 #ifdef NDEBUG
       size_t repeat = 100000;
@@ -446,7 +448,7 @@ void bench()
       mbytes_per_sec = repeat * buffer.size() / (duration * 1048576);
       std::cout << "from_beve: " << duration << " s, " << mbytes_per_sec << " MB/s"
                 << "\n";
-      glz::trace_end("bench");
+      trace.end("bench");
    };
 }
 
@@ -1166,7 +1168,7 @@ suite signal_tests = [] {
 
 suite vector_tests = [] {
    "std::vector<uint8_t>"_test = [] {
-      glz::duration_trace trace{"test std::vector<uint8_t>"};
+      auto scoped = trace.scope("test std::vector<uint8_t>");
       std::string s;
       static constexpr auto n = 10000;
       std::vector<uint8_t> v(n);
@@ -1189,7 +1191,7 @@ suite vector_tests = [] {
    };
 
    "std::vector<uint16_t>"_test = [] {
-      glz::duration_trace trace{"test std::vector<uint16_t>"};
+      auto scoped = trace.scope("test std::vector<uint16_t>");
       std::string s;
       static constexpr auto n = 10000;
       std::vector<uint16_t> v(n);
@@ -1213,7 +1215,7 @@ suite vector_tests = [] {
    };
 
    "std::vector<float>"_test = [] {
-      glz::async_trace trace{"test std::vector<float>"};
+      auto scoped = trace.async_scope("test std::vector<float>");
       std::string s;
       static constexpr auto n = 10000;
       std::vector<float> v(n);
@@ -1237,7 +1239,7 @@ suite vector_tests = [] {
    };
 
    "std::vector<double>"_test = [] {
-      glz::async_trace trace{"test std::vector<double>"};
+      auto scoped = trace.async_scope("test std::vector<double>");
       std::string s;
       static constexpr auto n = 10000;
       std::vector<double> v(n);
@@ -2402,15 +2404,15 @@ suite pair_ranges_tests = [] {
 
 int main()
 {
-   glz::trace_begin("binary_test");
+   trace.begin("binary_test");
    write_tests();
    bench();
    test_partial();
    file_include_test();
    container_types();
 
-   glz::trace_end("binary_test");
-   const auto ec = glz::write_file_trace("binary_test.trace.json", std::string{});
+   trace.end("binary_test");
+   const auto ec = glz::write_file_json(trace, "binary_test.trace.json", std::string{});
    if (ec) {
       std::cerr << "trace output failed\n";
    }

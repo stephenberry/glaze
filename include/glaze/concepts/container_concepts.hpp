@@ -21,11 +21,17 @@ namespace glz
    template <class T, class... U>
    concept is_any_of = (std::same_as<T, U> || ...);
 
-   template <typename T>
+   template <class T>
    concept has_value_type = requires { typename T::value_type; };
 
-   template <typename T>
-   concept has_element_type = requires { typename T::has_element_type; };
+   template <class T>
+   concept has_element_type = requires { typename T::element_type; };
+
+   template <class T>
+   concept has_first_type = requires { typename T::first_type; };
+
+   template <class T>
+   concept has_second_type = requires { typename T::second_type; };
 
    template <class T>
    concept resizable = requires(T v) { v.resize(0); };
@@ -259,20 +265,36 @@ namespace glz
       requires std::input_iterator<decltype(t.begin())>;
    };
 
+   // Concept for a matrix type (not a vector, which is a range)
    template <class T>
    concept matrix_t = requires(T matrix) {
       matrix.resize(2, 4);
       matrix.data();
       {
          matrix.rows()
-      } -> std::convertible_to<size_t>;
+      } -> std::convertible_to<int>;
       {
          matrix.cols()
-      } -> std::convertible_to<size_t>;
+      } -> std::convertible_to<int>;
       {
          matrix.size()
-      } -> std::convertible_to<size_t>;
+      } -> std::convertible_to<int>;
    } && !range<T>;
+
+   // concept for the Eigen library: matrices and vectors
+   template <class T>
+   concept eigen_t = requires(T matrix) {
+      matrix.data();
+      {
+         matrix.rows()
+      } -> std::convertible_to<int>;
+      {
+         matrix.cols()
+      } -> std::convertible_to<int>;
+      {
+         matrix.size()
+      } -> std::convertible_to<int>;
+   };
 
    // range like
    template <class T>
