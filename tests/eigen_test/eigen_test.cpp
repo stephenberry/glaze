@@ -412,7 +412,6 @@ int main()
       c1.setIdentity();
       c2.setIdentity();
       buffer = glz::write_json(c1).value();
-      std::cout << buffer << std::endl;
       expect(buffer == "[1,0,0,1,0,0]");
       expect(not glz::read_json(c2, buffer));
       expect(c1.matrix() == c2.matrix());
