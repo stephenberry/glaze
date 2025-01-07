@@ -4,6 +4,7 @@
 #include "glaze/ext/eigen.hpp"
 
 #include <Eigen/Core>
+#include <Eigen/Geometry>
 #include <any>
 #include <chrono>
 #include <iostream>
@@ -393,5 +394,22 @@ int main()
       expect(not glz::write_json(m, b));
       expect(!glz::read_json(e, b));
       expect(bool(m == e));
+   };
+
+   "Eigen::Transform"_test = [] {
+      Eigen::Isometry3d pose1, pose2;
+      pose1.setIdentity();
+      pose1.translation() << 1.111, 2.222, 3.333;
+      std::string buffer = glz::write_json(pose1).value();
+      expect(buffer == "[1,0,0,0,0,1,0,0,0,0,1,0,1.111,2.222,3.333,1]");
+      expect(not glz::read_json(pose2, buffer));
+      expect(pose1.matrix() == pose2.matrix());
+
+      Eigen::AffineCompact2d c1, c2;
+      c1.setIdentity();
+      buffer = glz::write_json(c1).value();
+      expect(buffer == "[1,0,0,1,0,0]");
+      expect(not glz::read_json(c2, buffer));
+      expect(c1.matrix() == c2.matrix());
    };
 }

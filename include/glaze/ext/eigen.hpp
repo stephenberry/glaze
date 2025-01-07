@@ -195,6 +195,33 @@ namespace glz
             GLZ_MATCH_CLOSE_BRACKET;
          }
       };
+
+      template <typename Scalar, int Dim, int Mode>
+      struct from<JSON, Eigen::Transform<Scalar, Dim, Mode>>
+      {
+         template <auto Opts>
+         static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end)
+         {
+            constexpr auto size =
+               Mode == Eigen::TransformTraits::AffineCompact ? (Dim + 1) * Dim : (Dim + 1) * (Dim + 1);
+            std::span<Scalar, size> view(value.data(), size);
+            detail::read<JSON>::op<Opts>(view, ctx, it, end);
+         }
+      };
+
+      template <typename Scalar, int Dim, int Mode>
+      struct to<JSON, Eigen::Transform<Scalar, Dim, Mode>>
+      {
+         template <auto Opts>
+         static void op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix)
+         {
+            constexpr auto size =
+               Mode == Eigen::TransformTraits::AffineCompact ? (Dim + 1) * Dim : (Dim + 1) * (Dim + 1);
+            std::span<Scalar, size> view(value.data(), size);
+            using Value = std::remove_cvref_t<decltype(value)>;
+            detail::to<JSON, Value>::template op<Opts>(view, ctx, b, ix);
+         }
+      };
    } // namespace detail
 } // namespace glaze
 
