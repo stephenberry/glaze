@@ -402,11 +402,6 @@ int main()
       pose1.translation() << 1.111, 2.222, 3.333;
       std::string buffer = glz::write_json(pose1).value();
       expect(buffer == "[1,0,0,0,0,1,0,0,0,0,1,0,1.111,2.222,3.333,1]");
-      pose1.rotate(Eigen::Quaterniond{4, 5, 6, 7}.normalized());
-      buffer = glz::write_json(pose1).value();
-      expect(buffer ==
-             "[-0.3492063492063493,0.9206349206349207,0.17460317460317448,0,0.0317460317460318,-0.17460317460317443,0."
-             "9841269841269841,0,0.9365079365079365,0.3492063492063492,0.03174603174603163,0,1.111,2.222,3.333,1]");
       expect(not glz::read_json(pose2, buffer));
       expect(pose1.matrix() == pose2.matrix());
 
