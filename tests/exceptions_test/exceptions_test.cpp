@@ -923,6 +923,206 @@ suite async_string_tests = [] {
       expect(formatted == "Diana is 30 years old and 5.6 feet tall.");
    };
 #endif
+   
+   "async_string concurrent reads"_test = [] {
+      std::string long_string(1024, 'A');
+      glz::async_string s(long_string);
+      std::vector<std::thread> threads;
+      std::mutex mutex;
+      std::vector<std::string> results(10);
+
+      for (int i = 0; i < 10; ++i) {
+         threads.emplace_back([&, i]() {
+            auto reader = s.read();
+            std::lock_guard<std::mutex> lock(mutex);
+            results[i] = *reader;
+         });
+      }
+
+      for (auto& t : threads) {
+         t.join();
+      }
+
+      for (const auto& result : results) {
+         expect(result == long_string);
+      }
+   };
+
+   "async_string concurrent writes with single char"_test = [] {
+      glz::async_string s;
+      std::vector<std::thread> threads;
+      int num_threads = 10;
+      std::string expected_result;
+      for (int i = 0; i < num_threads; ++i) {
+          expected_result += std::string(256, char('a' + i));
+      }
+      std::string sorted_expected_result = expected_result;
+      std::sort(sorted_expected_result.begin(), sorted_expected_result.end());
+
+      for (int i = 0; i < num_threads; ++i) {
+         threads.emplace_back([&, char_to_append = char('a' + i)]() {
+            for (int j = 0; j < 256; ++j) {
+                s.push_back(char_to_append);
+            }
+         });
+      }
+
+      for (auto& t : threads) {
+         t.join();
+      }
+
+      std::string actual_result = *s.read();
+      std::string sorted_actual_result = actual_result;
+      std::sort(sorted_actual_result.begin(), sorted_actual_result.end());
+      expect(sorted_actual_result == sorted_expected_result);
+   };
+
+   "async_string concurrent writes with append"_test = [] {
+      glz::async_string s;
+      std::vector<std::thread> threads;
+      int num_threads = 10;
+      std::vector<std::string> to_append;
+      std::string expected_result;
+      for (int i = 0; i < num_threads; ++i) {
+          std::string append_str(512, '0' + i);
+          to_append.push_back(append_str);
+          expected_result += append_str;
+      }
+      std::sort(expected_result.begin(), expected_result.end());
+
+      for (int i = 0; i < num_threads; ++i) {
+         threads.emplace_back([&, str_to_append = to_append[i]]() {
+            s.append(str_to_append);
+         });
+      }
+
+      for (auto& t : threads) {
+         t.join();
+      }
+
+      std::string actual_result = *s.read();
+      std::sort(actual_result.begin(), actual_result.end());
+      expect(actual_result == expected_result);
+   };
+
+   "async_string concurrent reads and writes"_test = [] {
+      std::string initial_string(512, 'I');
+      glz::async_string s(initial_string);
+      std::vector<std::thread> threads;
+      int num_threads = 10;
+      std::string expected_final_string = initial_string;
+      std::vector<std::string> appends;
+      for (int i = 0; i < num_threads; ++i) {
+          std::string append_str(256, '0' + i);
+          appends.push_back(append_str);
+          expected_final_string += append_str;
+      }
+      std::string sorted_appends_expected;
+      for(size_t i = initial_string.length(); i < expected_final_string.length(); ++i) {
+          sorted_appends_expected += expected_final_string[i];
+      }
+      std::sort(sorted_appends_expected.begin(), sorted_appends_expected.end());
+      expected_final_string = initial_string + sorted_appends_expected;
+
+      for (int i = 0; i < num_threads; ++i) {
+         threads.emplace_back([&, id = i]() {
+            // Writer thread
+            if (id == 0) {
+               s.append(appends[id]);
+            } else {
+               // Reader threads
+               // Just access the data, the important part is no crashes
+               (void)s.size();
+            }
+         });
+      }
+      for (int i = 1; i < num_threads; ++i) {
+         threads.emplace_back([&, id = i]() {
+            // Writer threads (after the initial writer)
+             s.append(appends[id]);
+         });
+      }
+
+      for (auto& t : threads) {
+         t.join();
+      }
+
+      std::string actual_result = *s.read();
+      std::string sorted_appends_actual = actual_result.substr(initial_string.length());
+      std::sort(sorted_appends_actual.begin(), sorted_appends_actual.end());
+      expect(initial_string + sorted_appends_actual == expected_final_string);
+   };
+
+   "async_string multiple concurrent write proxies"_test = [] {
+      glz::async_string s;
+      std::vector<std::thread> threads;
+      int num_threads = 5;
+      std::string expected_append;
+      std::vector<std::string> to_append;
+      for(int i = 0; i < num_threads; ++i) {
+          std::string append_str(512, '0' + i);
+          to_append.push_back(append_str);
+          expected_append += append_str;
+      }
+      std::sort(expected_append.begin(), expected_append.end());
+
+      for (int i = 0; i < num_threads; ++i) {
+         threads.emplace_back([&, str_to_append = to_append[i]]() {
+            auto writer = s.write();
+            writer->append(str_to_append);
+         });
+      }
+
+      for (auto& t : threads) {
+         t.join();
+      }
+
+      std::string actual_result = *s.read();
+      std::sort(actual_result.begin(), actual_result.end());
+      expect(actual_result == expected_append);
+   };
+
+    "async_string concurrent read and modify"_test = [] {
+        std::string initial_value(1024, 'X');
+        glz::async_string s(initial_value);
+        std::vector<std::thread> threads;
+        int num_threads = 10;
+        std::mutex m;
+        std::vector<std::string> observed_values;
+
+        for (int i = 0; i < num_threads; ++i) {
+            threads.emplace_back([&, id = i]() {
+                if (id % 2 == 0) {
+                    // Reader thread
+                    auto reader = s.read();
+                    {
+                        std::lock_guard<std::mutex> lock(m);
+                        observed_values.push_back(*reader);
+                    }
+                } else {
+                    // Modifier thread
+                    auto writer = s.write();
+                    for (int j = 0; j < 128; ++j) {
+                        *writer += "a";
+                    }
+                }
+            });
+        }
+
+        for (auto& t : threads) {
+            t.join();
+        }
+
+        // It's hard to predict the exact sequence of observed values, but we can check for consistency.
+        // All observed values should at least start with the initial value.
+        for (const auto& val : observed_values) {
+            expect(val.rfind(initial_value, 0) == 0);
+        }
+
+        // The final string should have been modified by the modifier threads.
+        expect(*s.read().operator->() != initial_value);
+        expect(s.read()->length() > initial_value.length());
+    };
 };
 
 int main() { return 0; }
