@@ -474,7 +474,7 @@ namespace glz
             const int32_t size = static_cast<int32_t>(value.size());
             auto wrap_index = [&](int32_t idx) {
                if (idx < 0) idx += size;
-               return std::clamp(idx, 0, size);
+               return std::clamp(idx, int32_t{0}, size);
             };
 
             const int32_t start_idx = wrap_index(decomposed_key.start.value_or(0));
