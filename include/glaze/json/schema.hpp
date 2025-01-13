@@ -263,41 +263,42 @@ struct glz::meta<glz::detail::schematic>
                                     "ExtUnits", //
                                     "ExtAdvanced"};
 
-   [[maybe_unused]] static constexpr glz::tuple value{&T::type, //
-                                     &T::properties, //
-                                     &T::items, //
-                                     &T::additionalProperties, //
-                                     &T::defs, //
-                                     &T::oneOf, //
-                                     raw<&T::examples>, //
-                                     &T::required, //
-                                     [](auto&& s) -> auto& { return s.attributes.title; }, //
-                                     [](auto&& s) -> auto& { return s.attributes.description; }, //
-                                     [](auto&& s) -> auto& { return s.attributes.defaultValue; }, //
-                                     [](auto&& s) -> auto& { return s.attributes.deprecated; }, //
-                                     [](auto&& s) -> auto& { return s.attributes.readOnly; }, //
-                                     [](auto&& s) -> auto& { return s.attributes.writeOnly; }, //
-                                     [](auto&& s) -> auto& { return s.attributes.constant; }, //
-                                     [](auto&& s) -> auto& { return s.attributes.minLength; }, //
-                                     [](auto&& s) -> auto& { return s.attributes.maxLength; }, //
-                                     [](auto&& s) -> auto& { return s.attributes.pattern; }, //
-                                     [](auto&& s) -> auto& { return s.attributes.format; }, //
-                                     [](auto&& s) -> auto& { return s.attributes.minimum; }, //
-                                     [](auto&& s) -> auto& { return s.attributes.maximum; }, //
-                                     [](auto&& s) -> auto& { return s.attributes.exclusiveMinimum; }, //
-                                     [](auto&& s) -> auto& { return s.attributes.exclusiveMaximum; }, //
-                                     [](auto&& s) -> auto& { return s.attributes.multipleOf; }, //
-                                     [](auto&& s) -> auto& { return s.attributes.minProperties; }, //
-                                     [](auto&& s) -> auto& { return s.attributes.maxProperties; }, //
-                                     // [](auto&& s) -> auto& { return s.attributes.dependent_required; }, //
-                                     [](auto&& s) -> auto& { return s.attributes.minItems; }, //
-                                     [](auto&& s) -> auto& { return s.attributes.maxItems; }, //
-                                     [](auto&& s) -> auto& { return s.attributes.minContains; }, //
-                                     [](auto&& s) -> auto& { return s.attributes.maxContains; }, //
-                                     [](auto&& s) -> auto& { return s.attributes.uniqueItems; }, //
-                                     [](auto&& s) -> auto& { return s.attributes.enumeration; }, //
-                                     [](auto&& s) -> auto& { return s.attributes.ExtUnits; }, //
-                                     [](auto&& s) -> auto& { return s.attributes.ExtAdvanced; }};
+   [[maybe_unused]] static constexpr glz::tuple value{
+      &T::type, //
+      &T::properties, //
+      &T::items, //
+      &T::additionalProperties, //
+      &T::defs, //
+      &T::oneOf, //
+      raw<&T::examples>, //
+      &T::required, //
+      [](auto&& s) -> auto& { return s.attributes.title; }, //
+      [](auto&& s) -> auto& { return s.attributes.description; }, //
+      [](auto&& s) -> auto& { return s.attributes.defaultValue; }, //
+      [](auto&& s) -> auto& { return s.attributes.deprecated; }, //
+      [](auto&& s) -> auto& { return s.attributes.readOnly; }, //
+      [](auto&& s) -> auto& { return s.attributes.writeOnly; }, //
+      [](auto&& s) -> auto& { return s.attributes.constant; }, //
+      [](auto&& s) -> auto& { return s.attributes.minLength; }, //
+      [](auto&& s) -> auto& { return s.attributes.maxLength; }, //
+      [](auto&& s) -> auto& { return s.attributes.pattern; }, //
+      [](auto&& s) -> auto& { return s.attributes.format; }, //
+      [](auto&& s) -> auto& { return s.attributes.minimum; }, //
+      [](auto&& s) -> auto& { return s.attributes.maximum; }, //
+      [](auto&& s) -> auto& { return s.attributes.exclusiveMinimum; }, //
+      [](auto&& s) -> auto& { return s.attributes.exclusiveMaximum; }, //
+      [](auto&& s) -> auto& { return s.attributes.multipleOf; }, //
+      [](auto&& s) -> auto& { return s.attributes.minProperties; }, //
+      [](auto&& s) -> auto& { return s.attributes.maxProperties; }, //
+      // [](auto&& s) -> auto& { return s.attributes.dependent_required; }, //
+      [](auto&& s) -> auto& { return s.attributes.minItems; }, //
+      [](auto&& s) -> auto& { return s.attributes.maxItems; }, //
+      [](auto&& s) -> auto& { return s.attributes.minContains; }, //
+      [](auto&& s) -> auto& { return s.attributes.maxContains; }, //
+      [](auto&& s) -> auto& { return s.attributes.uniqueItems; }, //
+      [](auto&& s) -> auto& { return s.attributes.enumeration; }, //
+      [](auto&& s) -> auto& { return s.attributes.ExtUnits; }, //
+      [](auto&& s) -> auto& { return s.attributes.ExtAdvanced; }};
 };
 
 namespace glz
