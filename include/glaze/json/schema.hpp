@@ -263,7 +263,7 @@ struct glz::meta<glz::detail::schematic>
                                     "ExtUnits", //
                                     "ExtAdvanced"};
 
-   static constexpr glz::tuple value{&T::type, //
+   [[maybe_unused]] static constexpr glz::tuple value{&T::type, //
                                      &T::properties, //
                                      &T::items, //
                                      &T::additionalProperties, //

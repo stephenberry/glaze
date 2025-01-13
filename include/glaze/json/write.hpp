@@ -1580,7 +1580,7 @@ namespace glz
             using V = std::decay_t<decltype(value.value)>;
             static constexpr auto N = glz::tuple_size_v<V>;
 
-            static constexpr auto Opts = opening_and_closing_handled<Options>();
+            [[maybe_unused]] static constexpr auto Opts = opening_and_closing_handled<Options>();
 
             // When merging it is possible that objects are completed empty
             // and therefore behave like skipped members even when skip_null_members is off
