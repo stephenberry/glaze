@@ -32,7 +32,6 @@ namespace glz
          [[maybe_unused]] constexpr operator T() const;
 #else
 #pragma GCC diagnostic push
-#pragma clang diagnostic ignored "-Weverything"
 #pragma GCC diagnostic ignored "-Wmissing-declarations"
          template <class T>
             requires(!std::same_as<T, const char*> && !std::same_as<T, std::nullptr_t>)
