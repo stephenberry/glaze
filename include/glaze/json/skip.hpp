@@ -213,6 +213,7 @@ namespace glz::detail
          skip_comment(ctx, it, end);
          if (bool(ctx.error)) [[unlikely]]
             return;
+         break;
       }
       case 'n': {
          ++it;
