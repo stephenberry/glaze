@@ -192,11 +192,6 @@ struct gcc_maybe_uninitialized_t
    int cqqq{};
 };
 
-struct test_wrapper_t
-{
-   gcc_maybe_uninitialized_t test{};
-};
-
 suite gcc_maybe_uninitialized_tests = [] {
    "gcc_maybe_uninitialized"_test = [] {
       using namespace std::string_view_literals;
