@@ -819,7 +819,7 @@ namespace glz::detail
          const auto& s = strings[i];
          // for each character in the string
          for (size_t c = 0; c < min_length; ++c) {
-            const auto k = uint16_t(s[c]) | (uint16_t(s.size()) << 8);
+            const auto k = uint16_t(uint16_t(s[c]) | (uint16_t(s.size()) << 8));
             cols[c].emplace_back(k);
          }
       }
