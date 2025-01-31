@@ -1906,6 +1906,7 @@ namespace glz
                         read<JSON>::handle_unknown<Opts>(key, value, ctx, it, end);
                         if (bool(ctx.error)) [[unlikely]]
                            return;
+                        GLZ_INVALID_END();
                      }
                   }
                   else if constexpr (reflection_type) {
