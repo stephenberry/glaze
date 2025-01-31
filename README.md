@@ -228,7 +228,8 @@ import libs = libglaze%lib{glaze}
 
 ### Arch Linux
 
-- AUR packages: [glaze](https://aur.archlinux.org/packages/glaze) and [glaze-git](https://aur.archlinux.org/packages/glaze-git)
+- [Official Arch repository](https://archlinux.org/packages/extra/any/glaze/)
+- AUR git package: [glaze-git](https://aur.archlinux.org/packages/glaze-git)
 
 ### See this [Example Repository](https://github.com/stephenberry/glaze_example) for how to use Glaze in a new project
 
