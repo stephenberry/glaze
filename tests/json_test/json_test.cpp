@@ -10185,8 +10185,7 @@ suite append_arrays_tests = [] {
    };
 };
 
-suite asan_test = []
-{
+suite asan_test = [] {
    "asan_non_null_terminated"_test = [] {
       const std::string_view data = R"({"x":"")";
       const auto heap_buf = std::make_unique_for_overwrite<char[]>(data.size());
@@ -10194,12 +10193,14 @@ suite asan_test = []
       const std::string_view buf{heap_buf.get(), data.size()};
 
       constexpr glz::opts OPTS{
-        .null_terminated = false,
-        .error_on_unknown_keys = false,
-        .minified = true,
+         .null_terminated = false,
+         .error_on_unknown_keys = false,
+         .minified = true,
       };
 
-      struct {} t;
+      struct
+      {
+      } t;
       expect(glz::read<OPTS>(t, buf));
    };
 };
