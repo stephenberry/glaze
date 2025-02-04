@@ -9,17 +9,16 @@
 #include <variant>
 
 #if !defined(GLZ_DISABLE_SIMD) && (defined(__x86_64__) || defined(_M_X64))
-    #if defined(_MSC_VER)
-        #include <intrin.h>
-    #else
-        #include <immintrin.h>
-    #endif
-
-    #if defined(__AVX2__)
-        #define GLZ_USE_AVX2
-    #endif
+#if defined(_MSC_VER)
+#include <intrin.h>
+#else
+#include <immintrin.h>
 #endif
 
+#if defined(__AVX2__)
+#define GLZ_USE_AVX2
+#endif
+#endif
 
 #include "glaze/core/opts.hpp"
 #include "glaze/core/reflect.hpp"
