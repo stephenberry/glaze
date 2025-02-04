@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include <immintrin.h>
+
 #include <algorithm>
 #include <bit>
 #include <charconv>
@@ -116,10 +118,37 @@ namespace glz::detail
       return t;
    }();
 
-   consteval uint32_t repeat_byte4(const auto repeat) { return uint32_t(0x01010101u) * uint8_t(repeat); }
+   [[nodiscard, gnu::always_inline, gnu::const]]
+   consteval uint32_t repeat_byte4(const auto repeat)
+   {
+      return uint32_t(0x01010101u) * uint8_t(repeat);
+   }
 
-   consteval uint64_t repeat_byte8(const uint8_t repeat) { return 0x0101010101010101ull * repeat; }
+   [[nodiscard, gnu::always_inline, gnu::const]]
+   consteval uint64_t repeat_byte8(const uint8_t repeat)
+   {
+      return 0x0101010101010101ull * repeat;
+   }
+   using uint64x4_t = uint64_t __attribute__((__vector_size__(32)));
+   using uint64x8_t = uint64_t __attribute__((__vector_size__(64)));
 
+   [[nodiscard, gnu::always_inline, gnu::const]]
+   consteval uint64x4_t repeat_byte32(const uint8_t repeat)
+   {
+      return uint64x4_t{repeat_byte8(repeat), repeat_byte8(repeat), repeat_byte8(repeat), repeat_byte8(repeat)};
+   }
+   [[nodiscard, gnu::always_inline, gnu::const]]
+   consteval uint64x8_t repeat_byte64(const uint8_t repeat)
+   {
+      return uint64x8_t{repeat_byte8(repeat), repeat_byte8(repeat), repeat_byte8(repeat), repeat_byte8(repeat),
+                        repeat_byte8(repeat), repeat_byte8(repeat), repeat_byte8(repeat), repeat_byte8(repeat)};
+   }
+
+   [[nodiscard, gnu::always_inline, gnu::const]]
+   auto movemask_64(const uint64x8_t v) noexcept -> uint64_t
+   {
+      return _mm512_movepi8_mask(v);
+   }
 #if defined(__SIZEOF_INT128__)
    consteval __uint128_t repeat_byte16(const uint8_t repeat)
    {
@@ -479,8 +508,7 @@ namespace glz::detail
          ctx.error = error_code::unexpected_end;
       }
       else if (*it == '/') {
-         while (++it != end && *it != '\n')
-            ;
+         while (++it != end && *it != '\n');
       }
       else if (*it == '*') {
          while (++it != end) {
