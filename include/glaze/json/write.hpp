@@ -8,7 +8,7 @@
 #include <ostream>
 #include <variant>
 
-#if !defined(GLZ_DISBALE_VECTOR_CODE) && (defined(__x86_64__) || defined(_M_X64))
+#if !defined(GLZ_DISABLE_AVX2) && (defined(__x86_64__) || defined(_M_X64))
     #if defined(_MSC_VER)
         #include <intrin.h>
     #else

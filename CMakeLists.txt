@@ -50,10 +50,10 @@ if (glaze_DEVELOPER_MODE)
   include(cmake/dev-mode.cmake)
 endif()
 
-option(GLAZE_DISABLE_VECTOR_CODE_WHEN_SUPPORTED
-       "disable vector optimised code even when targets supports it" OFF)
-if(GLAZE_DISABLE_VECTOR_CODE_WHEN_SUPPORTED)
-  target_compile_definitions(glaze_glaze INTERFACE GLZ_DISBALE_VECTOR_CODE)
+option(glaze_DISABLE_AVX2_WHEN_SUPPORTED
+       "disable AVX2 optimized code even when targets supports it" OFF)
+if(glaze_DISABLE_AVX2_WHEN_SUPPORTED)
+  target_compile_definitions(glaze_glaze INTERFACE GLZ_DISABLE_AVX2)
 endif()
 
 option(glaze_BUILD_EXAMPLES "Build GLAZE examples" OFF)
