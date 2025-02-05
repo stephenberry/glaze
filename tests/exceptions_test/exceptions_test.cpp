@@ -1127,90 +1127,65 @@ suite async_string_tests = [] {
 };
 
 suite sync_tests = [] {
-   "non-void read and write operations"_test = []
-   {
+   "non-void read and write operations"_test = [] {
       // Initialize with 10.
       glz::sync<int> s{10};
 
       // Read with a lambda that returns a value.
-      auto doubled = s.read([](const int &x) -> int {
-         return x * 2;
-      });
+      auto doubled = s.read([](const int& x) -> int { return x * 2; });
       expect(doubled == 20);
 
       // Write with a lambda that returns a value.
-      auto new_value = s.write([](int &x) -> int {
+      auto new_value = s.write([](int& x) -> int {
          x += 5;
          return x;
       });
       expect(new_value == 15);
 
       // Confirm the new value via a read lambda (void-returning).
-      s.read([](const int &x) {
-         expect(x == 15);
-      });
+      s.read([](const int& x) { expect(x == 15); });
    };
 
-   "void read operation"_test = []
-   {
+   "void read operation"_test = [] {
       glz::sync<int> s{20};
       bool flag = false;
-      s.read([&flag](const int &x) {
-         if (x == 20)
-            flag = true;
+      s.read([&flag](const int& x) {
+         if (x == 20) flag = true;
       });
       expect(flag);
    };
 
-   "void write operation"_test = []
-   {
+   "void write operation"_test = [] {
       glz::sync<int> s{100};
-      s.write([](int &x) {
-         x = 200;
-      });
-      s.read([](const int &x) {
-         expect(x == 200);
-      });
+      s.write([](int& x) { x = 200; });
+      s.read([](const int& x) { expect(x == 200); });
    };
 
-   "copy constructor"_test = []
-   {
+   "copy constructor"_test = [] {
       glz::sync<int> original{123};
       glz::sync<int> copy = original;
-      copy.read([](const int &x) {
-         expect(x == 123);
-      });
+      copy.read([](const int& x) { expect(x == 123); });
    };
 
-   "move constructor"_test = []
-   {
+   "move constructor"_test = [] {
       glz::sync<std::string> original{"hello"};
       glz::sync<std::string> moved = std::move(original);
-      moved.read([](const std::string &s) {
-         expect(s == "hello");
-      });
+      moved.read([](const std::string& s) { expect(s == "hello"); });
    };
 
-   "copy assignment."_test = []
-   {
+   "copy assignment."_test = [] {
       glz::sync<int> a{10}, b{20};
       a = b; // requires T to be copy-assignable
-      a.read([](const int &x) {
-         expect(x == 20);
-      });
+      a.read([](const int& x) { expect(x == 20); });
    };
 
-   "move assignment."_test = []
-   {
+   "move assignment."_test = [] {
       glz::sync<std::string> a{"foo"}, b{"bar"};
       a = std::move(b); // requires T to be move-assignable
-      a.read([](const std::string &s) {
-         expect(s == "bar");
-      });
+      a.read([](const std::string& s) { expect(s == "bar"); });
    };
 
-   "concurrent access."_test = []
-   {
+   "concurrent access."_test = [] {
       glz::sync<int> s{0};
       const int num_threads = 10;
       const int increments = 1000;
@@ -1219,21 +1194,17 @@ suite sync_tests = [] {
       for (int i = 0; i < num_threads; ++i) {
          threads.emplace_back([&] {
             for (int j = 0; j < increments; ++j) {
-               s.write([](int &value) {
-                  ++value;
-               });
+               s.write([](int& value) { ++value; });
             }
          });
       }
 
-      for (auto &th : threads) {
+      for (auto& th : threads) {
          th.join();
       }
 
       // Verify that the value is the expected total.
-      s.read([&](const int &value) {
-         expect(value == num_threads * increments);
-      });
+      s.read([&](const int& value) { expect(value == num_threads * increments); });
    };
 };
 

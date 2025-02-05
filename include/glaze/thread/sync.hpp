@@ -28,94 +28,99 @@ namespace glz
    concept const_callable = std::invocable<Callable, const T&>;
 
    template <class T, class Callable>
-   concept non_const_callable =
-       std::invocable<Callable, T&&> || std::invocable<Callable, T&>;
+   concept non_const_callable = std::invocable<Callable, T&&> || std::invocable<Callable, T&>;
 
    template <class Arg, class Callable>
    concept void_return = std::same_as<std::invoke_result_t<Callable, Arg>, void>;
 
    template <class T>
-   class sync {
-       T data{};
-       mutable std::shared_mutex mtx{};
+   class sync
+   {
+      T data{};
+      mutable std::shared_mutex mtx{};
 
-      public:
-       sync() = default;
+     public:
+      sync() = default;
 
-       template <class U>
-      requires (!is_specialization_v<std::decay_t<U>, sync>)
-       sync(U&& initial_value) : data(std::forward<U>(initial_value)) {}
+      template <class U>
+         requires(!is_specialization_v<std::decay_t<U>, sync>)
+      sync(U&& initial_value) : data(std::forward<U>(initial_value))
+      {}
 
-       sync(const sync& other)
-           requires(std::copy_constructible<T>)
-       {
-           std::shared_lock lock(other.mtx);
-           data = other.data;
-       }
+      sync(const sync& other)
+         requires(std::copy_constructible<T>)
+      {
+         std::shared_lock lock(other.mtx);
+         data = other.data;
+      }
 
-       sync(sync&& other) noexcept(std::is_nothrow_move_constructible_v<T>)
-           requires(std::move_constructible<T>)
-       {
-           std::unique_lock lock(other.mtx);
-           data = std::move(other.data);
-       }
+      sync(sync&& other) noexcept(std::is_nothrow_move_constructible_v<T>)
+         requires(std::move_constructible<T>)
+      {
+         std::unique_lock lock(other.mtx);
+         data = std::move(other.data);
+      }
 
-       sync& operator=(const sync& other)
-           requires(std::is_copy_assignable_v<T>)
-       {
-           if (this != &other) {
-               std::scoped_lock lock(mtx, other.mtx);
-               data = other.data;
-           }
-           return *this;
-       }
+      sync& operator=(const sync& other)
+         requires(std::is_copy_assignable_v<T>)
+      {
+         if (this != &other) {
+            std::scoped_lock lock(mtx, other.mtx);
+            data = other.data;
+         }
+         return *this;
+      }
 
-       sync& operator=(sync&& other) noexcept(std::is_nothrow_move_assignable_v<T>)
-           requires(std::is_move_assignable_v<T>)
-       {
-           if (this != &other) {
-               std::scoped_lock lock(mtx, other.mtx);
-               data = std::move(other.data);
-           }
-           return *this;
-       }
+      sync& operator=(sync&& other) noexcept(std::is_nothrow_move_assignable_v<T>)
+         requires(std::is_move_assignable_v<T>)
+      {
+         if (this != &other) {
+            std::scoped_lock lock(mtx, other.mtx);
+            data = std::move(other.data);
+         }
+         return *this;
+      }
 
-       T copy() const {
-           std::shared_lock lock(mtx);
-           return data;
-       }
+      T copy() const
+      {
+         std::shared_lock lock(mtx);
+         return data;
+      }
 
-       // Read with non-void return value.
-       template <class Callable>
-           requires(const_callable<T, Callable> &&
-                    !void_return<const T&, Callable>)
-       auto read(Callable&& f) const -> std::invoke_result_t<Callable, const T&> {
-           std::shared_lock lock(mtx);
-           return std::forward<Callable>(f)(data);
-       }
+      // Read with non-void return value.
+      template <class Callable>
+         requires(const_callable<T, Callable> && !void_return<const T&, Callable>)
+      auto read(Callable&& f) const -> std::invoke_result_t<Callable, const T&>
+      {
+         std::shared_lock lock(mtx);
+         return std::forward<Callable>(f)(data);
+      }
 
-       // Read with void return.
-       template <class Callable>
-           requires(const_callable<T, Callable> && void_return<const T&, Callable>)
-       void read(Callable&& f) const {
-           std::shared_lock lock(mtx);
-           std::forward<Callable>(f)(data);
-       }
+      // Read with void return.
+      template <class Callable>
+         requires(const_callable<T, Callable> && void_return<const T&, Callable>)
+      void read(Callable&& f) const
+      {
+         std::shared_lock lock(mtx);
+         std::forward<Callable>(f)(data);
+      }
 
-       // Write with non-void return value.
-       template <class Callable>
-           requires(non_const_callable<T, Callable> && !void_return<T&, Callable>)
-       auto write(Callable&& f) -> std::invoke_result_t<Callable, T&> {
-           std::unique_lock lock(mtx);
-           return std::forward<Callable>(f)(data);
-       }
+      // Write with non-void return value.
+      template <class Callable>
+         requires(non_const_callable<T, Callable> && !void_return<T&, Callable>)
+      auto write(Callable&& f) -> std::invoke_result_t<Callable, T&>
+      {
+         std::unique_lock lock(mtx);
+         return std::forward<Callable>(f)(data);
+      }
 
-       // Write with void return.
-       template <class Callable>
-           requires(non_const_callable<T, Callable> && void_return<T&, Callable>)
-       void write(Callable&& f) {
-           std::unique_lock lock(mtx);
-           std::forward<Callable>(f)(data);
-       }
+      // Write with void return.
+      template <class Callable>
+         requires(non_const_callable<T, Callable> && void_return<T&, Callable>)
+      void write(Callable&& f)
+      {
+         std::unique_lock lock(mtx);
+         std::forward<Callable>(f)(data);
+      }
    };
 }
