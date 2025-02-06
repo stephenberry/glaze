@@ -296,13 +296,14 @@ namespace glz
                ++ix;
             }
             else {
-               // branchless dumping of `true` or `false`
-               static constexpr uint64_t false_v = 435728179558;
-               static constexpr uint64_t if_true_v = 434025983730;
-
-               const uint64_t state = false_v - (value * if_true_v);
-               std::memcpy(&b[ix], &state, 8);
-               ix += 5 - value;
+               if (value) {
+                 std::memcpy(&b[ix], "true", 4);
+                 ix += 4;
+               }
+               else {
+                 std::memcpy(&b[ix], "false", 5);
+                 ix += 5;
+               }
             }
          }
       };
