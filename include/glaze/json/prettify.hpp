@@ -153,7 +153,7 @@ namespace glz
                break;
             }
             case Comment: {
-               if constexpr (Opts.comments) {
+               if constexpr (has_comments(Opts)) {
                   const auto value = read_jsonc_comment(it, end);
                   dump_not_empty(value, b, ix);
                   break;

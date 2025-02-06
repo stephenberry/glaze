@@ -538,7 +538,7 @@ namespace glz::detail
 #define GLZ_SKIP_WS(RETURN)                                              \
    if constexpr (!Opts.minified) {                                       \
       if constexpr (Opts.null_terminated) {                              \
-         if constexpr (Opts.comments) {                                  \
+         if constexpr (has_comments(Opts)) {                                  \
             while (whitespace_comment_table[uint8_t(*it)]) {             \
                if (*it == '/') [[unlikely]] {                            \
                   skip_comment(ctx, it, end);                            \
@@ -558,7 +558,7 @@ namespace glz::detail
          }                                                               \
       }                                                                  \
       else {                                                             \
-         if constexpr (Opts.comments) {                                  \
+         if constexpr (has_comments(Opts)) {                                  \
             while (it < end && whitespace_comment_table[uint8_t(*it)]) { \
                if (*it == '/') [[unlikely]] {                            \
                   skip_comment(ctx, it, end);                            \
@@ -593,7 +593,7 @@ namespace glz::detail
    {
       if constexpr (!Opts.minified) {
          if constexpr (Opts.null_terminated) {
-            if constexpr (Opts.comments) {
+            if constexpr (has_comments(Opts)) {
                while (whitespace_comment_table[uint8_t(*it)]) {
                   if (*it == '/') [[unlikely]] {
                      skip_comment(ctx, it, end);
@@ -613,7 +613,7 @@ namespace glz::detail
             }
          }
          else {
-            if constexpr (Opts.comments) {
+            if constexpr (has_comments(Opts)) {
                while (it < end && whitespace_comment_table[uint8_t(*it)]) {
                   if (*it == '/') [[unlikely]] {
                      skip_comment(ctx, it, end);
@@ -922,7 +922,7 @@ namespace glz::detail
    }
 
    template <opts Opts, char open, char close, size_t Depth = 1>
-      requires(has_is_padded(Opts) && not bool(Opts.comments))
+      requires(has_is_padded(Opts) && not has_comments(Opts))
    GLZ_ALWAYS_INLINE void skip_until_closed(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       size_t depth = Depth;
@@ -970,7 +970,7 @@ namespace glz::detail
    }
 
    template <opts Opts, char open, char close, size_t Depth = 1>
-      requires(has_is_padded(Opts) && bool(Opts.comments))
+      requires(has_is_padded(Opts) && has_comments(Opts))
    GLZ_ALWAYS_INLINE void skip_until_closed(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       size_t depth = Depth;
@@ -1025,7 +1025,7 @@ namespace glz::detail
    }
 
    template <opts Opts, char open, char close, size_t Depth = 1>
-      requires(!has_is_padded(Opts) && not bool(Opts.comments))
+      requires(!has_is_padded(Opts) && not has_comments(Opts))
    GLZ_ALWAYS_INLINE void skip_until_closed(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       size_t depth = Depth;
@@ -1109,7 +1109,7 @@ namespace glz::detail
    }
 
    template <opts Opts, char open, char close, size_t Depth = 1>
-      requires(!has_is_padded(Opts) && bool(Opts.comments))
+      requires(!has_is_padded(Opts) && has_comments(Opts))
    GLZ_ALWAYS_INLINE void skip_until_closed(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       size_t depth = Depth;
