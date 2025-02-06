@@ -297,12 +297,12 @@ namespace glz
             }
             else {
                if (value) {
-                 std::memcpy(&b[ix], "true", 4);
-                 ix += 4;
+                  std::memcpy(&b[ix], "true", 4);
+                  ix += 4;
                }
                else {
-                 std::memcpy(&b[ix], "false", 5);
-                 ix += 5;
+                  std::memcpy(&b[ix], "false", 5);
+                  ix += 5;
                }
             }
          }
