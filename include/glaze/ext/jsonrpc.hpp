@@ -49,7 +49,7 @@ namespace glz::rpc
 namespace glz::rpc
 {
    using id_t = std::variant<glz::json_t::null_t, std::string_view, std::int64_t>;
-   static constexpr std::string_view supported_version{"2.0"};
+   inline constexpr std::string_view supported_version{"2.0"};
 
    struct error final
    {

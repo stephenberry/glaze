@@ -48,7 +48,7 @@
 
 namespace glz::detail
 {
-   constexpr std::array<uint64_t, 20> powers_of_ten_int{1ull,
+   inline constexpr std::array<uint64_t, 20> powers_of_ten_int{1ull,
                                                         10ull,
                                                         100ull,
                                                         1000ull,
