@@ -345,9 +345,7 @@ void server_error_test()
    static constexpr int16_t port = 8765;
 
    glz::asio_server<> server{.port = port, .concurrency = 1};
-   server.error_handler = [](const std::string& error) {
-      expect(error == "func error");
-   };
+   server.error_handler = [](const std::string& error) { expect(error == "func error"); };
 
    error_api api{};
    server.on(api);
