@@ -13,15 +13,6 @@
 
 namespace glz
 {
-   // treat a value as quoted to avoid double parsing into a value
-   template <class T>
-   struct quoted_t
-   {
-      static constexpr bool glaze_wrapper = true;
-      using value_type = T;
-      T& val;
-   };
-
    namespace detail
    {
       template <class T>
