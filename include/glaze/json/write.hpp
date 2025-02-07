@@ -1572,20 +1572,6 @@ namespace glz
          }
       };
 
-      template <class T>
-      inline constexpr size_t maximum_key_size = [] {
-         constexpr auto N = reflect<T>::size;
-         size_t maximum{};
-         for (size_t i = 0; i < N; ++i) {
-            if (reflect<T>::keys[i].size() > maximum) {
-               maximum = reflect<T>::keys[i].size();
-            }
-         }
-         return maximum + 2; // add quotes
-      }();
-
-      inline constexpr uint64_t round_up_to_nearest_16(const uint64_t value) noexcept { return (value + 15) & ~15ull; }
-
       // Only use this if you are not prettifying
       // Returns zero if the fixed size cannot be determined
       template <class T>
