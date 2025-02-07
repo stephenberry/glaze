@@ -22,7 +22,7 @@
 
 namespace glz::detail
 {
-   constexpr std::array<bool, 256> numeric_table = [] {
+   inline constexpr std::array<bool, 256> numeric_table = [] {
       std::array<bool, 256> t{};
       t['0'] = true;
       t['1'] = true;
@@ -42,7 +42,7 @@ namespace glz::detail
       return t;
    }();
 
-   constexpr std::array<char, 256> char_unescape_table = [] {
+   inline constexpr std::array<char, 256> char_unescape_table = [] {
       std::array<char, 256> t{};
       t['"'] = '"';
       t['/'] = '/';
@@ -55,7 +55,7 @@ namespace glz::detail
       return t;
    }();
 
-   constexpr std::array<bool, 256> valid_escape_table = [] {
+   inline constexpr std::array<bool, 256> valid_escape_table = [] {
       std::array<bool, 256> t{};
       t['"'] = true;
       t['/'] = true;
@@ -69,7 +69,7 @@ namespace glz::detail
       return t;
    }();
 
-   constexpr std::array<bool, 256> whitespace_table = [] {
+   inline constexpr std::array<bool, 256> whitespace_table = [] {
       std::array<bool, 256> t{};
       t['\n'] = true;
       t['\t'] = true;
@@ -78,7 +78,7 @@ namespace glz::detail
       return t;
    }();
 
-   constexpr std::array<bool, 256> whitespace_comment_table = [] {
+   inline constexpr std::array<bool, 256> whitespace_comment_table = [] {
       std::array<bool, 256> t{};
       t['\n'] = true;
       t['\t'] = true;
@@ -88,7 +88,7 @@ namespace glz::detail
       return t;
    }();
 
-   constexpr std::array<uint8_t, 256> digit_hex_table = [] {
+   inline constexpr std::array<uint8_t, 256> digit_hex_table = [] {
       std::array<uint8_t, 256> t;
       std::fill(t.begin(), t.end(), uint8_t(255));
       t['0'] = 0;
