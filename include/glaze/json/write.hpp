@@ -627,16 +627,6 @@ namespace glz
          }
       };
 
-      template <filesystem_path T>
-      struct to<JSON, T>
-      {
-         template <auto Opts, class... Args>
-         static void op(auto&& value, is_context auto&& ctx, Args&&... args)
-         {
-            to<JSON, decltype(value.string())>::template op<Opts>(value.string(), ctx, std::forward<Args>(args)...);
-         }
-      };
-
       template <class T>
          requires((glaze_enum_t<T> || (meta_keys<T> && std::is_enum_v<std::decay_t<T>>)) && not custom_write<T>)
       struct to<JSON, T>

@@ -802,16 +802,6 @@ namespace glz
          }
       };
 
-      template <filesystem_path T>
-      struct to<BEVE, T>
-      {
-         template <auto Opts, class... Args>
-         GLZ_ALWAYS_INLINE static void op(auto&& value, Args&&... args)
-         {
-            to<BEVE, decltype(value.string())>::template op<Opts>(value.string(), std::forward<Args>(args)...);
-         }
-      };
-
       template <auto& Partial, auto Opts, class T, class Ctx, class B, class IX>
       concept write_beve_partial_invocable = requires(T&& value, Ctx&& ctx, B&& b, IX&& ix) {
          to_partial<BEVE, std::remove_cvref_t<T>>::template op<Partial, Opts>(

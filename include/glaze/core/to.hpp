@@ -29,4 +29,14 @@ namespace glz::detail
          static_assert(false_v<decltype(value)>, "skip type should not be written");
       }
    };
+   
+   template <uint32_t Format, filesystem_path T>
+   struct to<Format, T>
+   {
+      template <auto Opts, class... Args>
+      static void op(auto&& value, is_context auto&& ctx, Args&&... args)
+      {
+         to<Format, decltype(value.string())>::template op<Opts>(value.string(), ctx, std::forward<Args>(args)...);
+      }
+   };
 }

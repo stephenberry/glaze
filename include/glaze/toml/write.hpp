@@ -263,16 +263,6 @@ namespace glz
          }
       };
 
-      template <filesystem_path T>
-      struct to<TOML, T>
-      {
-         template <auto Opts, class... Args>
-         static void op(auto&& value, is_context auto&& ctx, Args&&... args)
-         {
-            to<TOML, decltype(value.string())>::template op<Opts>(value.string(), ctx, std::forward<Args>(args)...);
-         }
-      };
-
       template <opts Opts, bool minified_check = true, class B>
          requires (Opts.format == TOML)
       GLZ_ALWAYS_INLINE void write_array_entry_separator(is_context auto&&, B&& b, auto&& ix)
