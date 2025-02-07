@@ -23,6 +23,7 @@
 #include "glaze/core/opts.hpp"
 #include "glaze/core/reflect.hpp"
 #include "glaze/core/write.hpp"
+#include "glaze/core/to.hpp"
 #include "glaze/core/write_chars.hpp"
 #include "glaze/json/ptr.hpp"
 #include "glaze/util/dump.hpp"
@@ -201,26 +202,6 @@ namespace glz
                std::memcpy(&b[ix], "]", 1);
                ++ix;
             }
-         }
-      };
-
-      template <>
-      struct to<JSON, hidden>
-      {
-         template <auto Opts>
-         static void op(auto&& value, auto&&...) noexcept
-         {
-            static_assert(false_v<decltype(value)>, "hidden type should not be written");
-         }
-      };
-
-      template <>
-      struct to<JSON, skip>
-      {
-         template <auto Opts>
-         static void op(auto&& value, auto&&...) noexcept
-         {
-            static_assert(false_v<decltype(value)>, "skip type should not be written");
          }
       };
 

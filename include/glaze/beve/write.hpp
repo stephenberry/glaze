@@ -8,6 +8,7 @@
 #include "glaze/beve/header.hpp"
 #include "glaze/core/opts.hpp"
 #include "glaze/core/reflect.hpp"
+#include "glaze/core/to.hpp"
 #include "glaze/core/seek.hpp"
 #include "glaze/core/write.hpp"
 #include "glaze/util/dump.hpp"
@@ -124,16 +125,6 @@ namespace glz
          GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&&, auto&&... args)
          {
             dump_type(uint8_t{0}, args...);
-         }
-      };
-
-      template <>
-      struct to<BEVE, hidden>
-      {
-         template <auto Opts>
-         GLZ_ALWAYS_INLINE static void op(auto&& value, auto&&, auto&&...)
-         {
-            static_assert(false_v<decltype(value)>, "hidden type should not be written");
          }
       };
 

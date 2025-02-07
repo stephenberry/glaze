@@ -6,6 +6,7 @@
 #include "glaze/core/opts.hpp"
 #include "glaze/core/reflect.hpp"
 #include "glaze/core/write.hpp"
+#include "glaze/core/to.hpp"
 #include "glaze/core/write_chars.hpp"
 #include "glaze/core/wrappers.hpp"
 #include "glaze/util/dump.hpp"
@@ -37,26 +38,6 @@ namespace glz
             using V = std::remove_cvref_t<decltype(get_member(std::declval<Value>(), meta_wrapper_v<T>))>;
             to<TOML, V>::template op<Opts>(get_member(std::forward<Value>(value), meta_wrapper_v<T>),
                                            std::forward<Ctx>(ctx), std::forward<B>(b), std::forward<IX>(ix));
-         }
-      };
-
-      template <>
-      struct to<TOML, hidden>
-      {
-         template <auto Opts>
-         static void op(auto&& value, auto&&...) noexcept
-         {
-            static_assert(false_v<decltype(value)>, "hidden type should not be written");
-         }
-      };
-
-      template <>
-      struct to<TOML, skip>
-      {
-         template <auto Opts>
-         static void op(auto&& value, auto&&...) noexcept
-         {
-            static_assert(false_v<decltype(value)>, "skip type should not be written");
          }
       };
 
