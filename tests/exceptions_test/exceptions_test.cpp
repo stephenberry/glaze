@@ -5,7 +5,7 @@
 #include "glaze/thread/async_string.hpp"
 #include "glaze/thread/shared_async_map.hpp"
 #include "glaze/thread/shared_async_vector.hpp"
-#include "glaze/thread/sync.hpp"
+#include "glaze/thread/async.hpp"
 #include "glaze/thread/threadpool.hpp"
 #include "ut/ut.hpp"
 
@@ -1129,7 +1129,7 @@ suite async_string_tests = [] {
 suite sync_tests = [] {
    "non-void read and write operations"_test = [] {
       // Initialize with 10.
-      glz::sync<int> s{10};
+      glz::async<int> s{10};
 
       // Read with a lambda that returns a value.
       auto doubled = s.read([](const int& x) -> int { return x * 2; });
@@ -1147,7 +1147,7 @@ suite sync_tests = [] {
    };
 
    "void read operation"_test = [] {
-      glz::sync<int> s{20};
+      glz::async<int> s{20};
       bool flag = false;
       s.read([&flag](const int& x) {
          if (x == 20) flag = true;
@@ -1156,37 +1156,37 @@ suite sync_tests = [] {
    };
 
    "void write operation"_test = [] {
-      glz::sync<int> s{100};
+      glz::async<int> s{100};
       s.write([](int& x) { x = 200; });
       s.read([](const int& x) { expect(x == 200); });
    };
 
    "copy constructor"_test = [] {
-      glz::sync<int> original{123};
-      glz::sync<int> copy = original;
+      glz::async<int> original{123};
+      glz::async<int> copy = original;
       copy.read([](const int& x) { expect(x == 123); });
    };
 
    "move constructor"_test = [] {
-      glz::sync<std::string> original{"hello"};
-      glz::sync<std::string> moved = std::move(original);
+      glz::async<std::string> original{"hello"};
+      glz::async<std::string> moved = std::move(original);
       moved.read([](const std::string& s) { expect(s == "hello"); });
    };
 
    "copy assignment."_test = [] {
-      glz::sync<int> a{10}, b{20};
+      glz::async<int> a{10}, b{20};
       a = b; // requires T to be copy-assignable
       a.read([](const int& x) { expect(x == 20); });
    };
 
    "move assignment."_test = [] {
-      glz::sync<std::string> a{"foo"}, b{"bar"};
+      glz::async<std::string> a{"foo"}, b{"bar"};
       a = std::move(b); // requires T to be move-assignable
       a.read([](const std::string& s) { expect(s == "bar"); });
    };
 
    "concurrent access."_test = [] {
-      glz::sync<int> s{0};
+      glz::async<int> s{0};
       const int num_threads = 10;
       const int increments = 1000;
       std::vector<std::thread> threads;

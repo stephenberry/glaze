@@ -34,34 +34,34 @@ namespace glz
    concept void_return = std::same_as<std::invoke_result_t<Callable, Arg>, void>;
 
    template <class T>
-   class sync
+   class async
    {
       T data{};
       mutable std::shared_mutex mtx{};
 
      public:
-      sync() = default;
+      async() = default;
 
       template <class U>
-         requires(!is_specialization_v<std::decay_t<U>, sync>)
-      sync(U&& initial_value) : data(std::forward<U>(initial_value))
+         requires(!is_specialization_v<std::decay_t<U>, async>)
+      async(U&& initial_value) : data(std::forward<U>(initial_value))
       {}
 
-      sync(const sync& other)
+      async(const async& other)
          requires(std::copy_constructible<T>)
       {
          std::shared_lock lock(other.mtx);
          data = other.data;
       }
 
-      sync(sync&& other) noexcept(std::is_nothrow_move_constructible_v<T>)
+      async(async&& other) noexcept(std::is_nothrow_move_constructible_v<T>)
          requires(std::move_constructible<T>)
       {
          std::unique_lock lock(other.mtx);
          data = std::move(other.data);
       }
 
-      sync& operator=(const sync& other)
+      async& operator=(const async& other)
          requires(std::is_copy_assignable_v<T>)
       {
          if (this != &other) {
@@ -71,7 +71,7 @@ namespace glz
          return *this;
       }
 
-      sync& operator=(sync&& other) noexcept(std::is_nothrow_move_assignable_v<T>)
+      async& operator=(async&& other) noexcept(std::is_nothrow_move_assignable_v<T>)
          requires(std::is_move_assignable_v<T>)
       {
          if (this != &other) {
