@@ -25,7 +25,7 @@ namespace glz::detail
       Comment = '/'
    };
 
-   constexpr std::array<json_type, 256> json_types = [] {
+   inline constexpr std::array<json_type, 256> json_types = [] {
       std::array<json_type, 256> t{};
       using enum json_type;
       t['"'] = String;

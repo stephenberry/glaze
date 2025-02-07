@@ -336,7 +336,7 @@ namespace glz
          }
       };
 
-      constexpr std::array<uint16_t, 256> char_escape_table = [] {
+      inline constexpr std::array<uint16_t, 256> char_escape_table = [] {
          auto combine = [](const char chars[2]) -> uint16_t { return uint16_t(chars[0]) | (uint16_t(chars[1]) << 8); };
 
          std::array<uint16_t, 256> t{};
