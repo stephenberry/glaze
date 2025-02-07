@@ -386,6 +386,10 @@ namespace glz
    {
       uint16_t port{};
       uint32_t concurrency{1}; // How many threads to use (a call to .run() is inclusive on the main thread)
+      
+      // Register a callback that takes a string error message on server/registry errors.
+      // Note that we use a std::string to support a wide source of errors and use e.what()
+      std::function<void(const std::string&)> error_handler{};
 
       ~asio_server() { stop(); }
 
@@ -485,7 +489,12 @@ namespace glz
             }
          }
          catch (const std::exception& e) {
-            std::fprintf(stderr, "%s\n", e.what());
+            if (error_handler) {
+               error_handler(e.what());
+            }
+            else {
+               std::fprintf(stderr, "glz::asio_server error: %s\n", e.what());
+            }
          }
       }
 
