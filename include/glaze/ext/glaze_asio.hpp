@@ -389,6 +389,7 @@ namespace glz
       
       // Register a callback that takes a string error message on server/registry errors.
       // Note that we use a std::string to support a wide source of errors and use e.what()
+      // IMPORTANT: The code within the callback must be thread safe, as multiple threads could call this simultaneously.
       std::function<void(const std::string&)> error_handler{};
 
       ~asio_server() { stop(); }
