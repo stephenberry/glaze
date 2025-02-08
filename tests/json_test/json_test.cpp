@@ -9740,6 +9740,54 @@ suite array_char_tests = [] {
    };
 };
 
+template <size_t N>
+struct naive_static_str_t
+{
+   using value_type = char;
+   using size_type = size_t;
+
+   size_t size{};
+   char data[N + 1]{};
+
+   size_t max_size() const { return N; }
+
+   naive_static_str_t() = default;
+   naive_static_str_t(std::string_view sv) { assign(sv.data(), sv.size()); }
+
+   naive_static_str_t& assign(const char* v, size_t sz)
+   {
+      const auto bytes_to_copy = std::min(N, sz);
+      size = bytes_to_copy;
+      memcpy(data, v, bytes_to_copy);
+      return *this;
+   }
+
+   void resize(size_t sz)
+   {
+      const auto bytes_to_copy = std::min(N, sz);
+      size = bytes_to_copy;
+   }
+
+   operator std::string_view() const { return std::string_view(data, size); }
+
+};
+   static_assert(std::constructible_from<std::string_view, std::decay_t<naive_static_str_t<3>>>);
+   static_assert(glz::detail::has_assign<naive_static_str_t<3>>);
+   static_assert(glz::has_max_size<naive_static_str_t<3>>);
+   static_assert(glz::detail::static_str_t<naive_static_str_t<3>>);
+
+suite static_string_tests = [] {
+   "static_string<N> value"_test = [] {
+      naive_static_str_t<6> value{};
+      expect(not glz::read_json(value, R"("hello")"));
+      expect(std::string_view{value} == "hello");
+      expect(glz::write_json(value).value_or("error") == R"("hello")");
+      expect(glz::read_json(value, R"("hello---too long")"));
+      expect(not glz::read_json(value, R"("bye")"));
+      expect(std::string_view{value} == "bye");
+   };
+};
+
 template <class T>
 struct response_t
 {

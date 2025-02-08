@@ -43,6 +43,9 @@ namespace glz
    concept has_size = requires(T v) { v.size(); };
 
    template <class T>
+   concept has_max_size = requires(T v) { v.max_size(); };
+
+   template <class T>
    concept has_empty = requires(T v) {
       {
          v.empty()
