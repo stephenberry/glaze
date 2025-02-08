@@ -239,7 +239,7 @@ namespace glz
          (!std::same_as<std::nullptr_t, T> && std::constructible_from<std::string_view, std::decay_t<T>>) ||
          array_char_t<T>;
 
-      // static string; not resizable
+      // static string
       template <class T>
       concept static_str_t =
        str_t<T> && !string_view_t<T> && has_assign<T> && has_max_capacity<T>;
