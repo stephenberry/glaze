@@ -242,13 +242,13 @@ namespace glz
       // static string
       template <class T>
       concept static_str_t =
-       str_t<T> && !string_view_t<T> && has_assign<T> && has_max_capacity<T>;
+       str_t<T> && !string_view_t<T> && has_assign<T> && is_static<T>;
 
       // this concept requires that T is a writeable string. It can be resized, appended to, or assigned to
       template <class T>
       concept string_t =
        str_t<T> && !string_view_t<T> &&
-                         (has_assign<T> || (resizable<T> && has_data<T>) || has_append<T>) && !has_max_capacity<T>;
+                         (has_assign<T> || (resizable<T> && has_data<T>) || has_append<T>) && !is_static<T>;
 
       template <class T>
       concept char_array_t = str_t<T> && std::is_array_v<std::remove_pointer_t<std::remove_reference_t<T>>>;

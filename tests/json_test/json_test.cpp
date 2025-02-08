@@ -24,6 +24,7 @@
 #include <variant>
 
 #include "glaze/api/impl.hpp"
+#include "glaze/concepts/container_concepts.hpp"
 #include "glaze/containers/flat_map.hpp"
 #include "glaze/file/hostname_include.hpp"
 #include "glaze/file/raw_or_file.hpp"
@@ -9746,10 +9747,11 @@ struct naive_static_str_t
    using value_type = char;
    using size_type = size_t;
 
-   size_t size{};
+   size_t length{};
    char data[N]{};
 
-   size_t max_capacity() const { return N; }
+   size_t size() const { return N; }
+   size_t capacity() const { return N; }
 
    naive_static_str_t() = default;
    naive_static_str_t(std::string_view sv) { assign(sv.data(), sv.size()); }
@@ -9757,7 +9759,7 @@ struct naive_static_str_t
    naive_static_str_t& assign(const char* v, size_t sz)
    {
       const auto bytes_to_copy = std::min(N, sz);
-      size = bytes_to_copy;
+      length = bytes_to_copy;
       memcpy(data, v, bytes_to_copy);
       return *this;
    }
@@ -9765,16 +9767,19 @@ struct naive_static_str_t
    void resize(size_t sz)
    {
       const auto bytes_to_copy = std::min(N, sz);
-      size = bytes_to_copy;
+      length = bytes_to_copy;
    }
 
-   operator std::string_view() const { return std::string_view(data, size); }
-
+   operator std::string_view() const { return std::string_view(data, length); }
 };
-   static_assert(std::constructible_from<std::string_view, std::decay_t<naive_static_str_t<3>>>);
-   static_assert(glz::detail::has_assign<naive_static_str_t<3>>);
-   static_assert(glz::has_max_capacity<naive_static_str_t<3>>);
-   static_assert(glz::detail::static_str_t<naive_static_str_t<3>>);
+
+template <size_t N>
+struct glz::is_static_helper<naive_static_str_t<N>>: std::true_type{};
+
+static_assert(std::constructible_from<std::string_view, std::decay_t<naive_static_str_t<3>>>);
+static_assert(glz::detail::has_assign<naive_static_str_t<3>>);
+static_assert(glz::is_static<naive_static_str_t<3>>);
+static_assert(glz::detail::static_str_t<naive_static_str_t<3>>);
 
 suite static_str_tests = [] {
    "static_str<N> value"_test = [] {

@@ -63,14 +63,16 @@ namespace glz
    };
 
    template <class T>
-   concept has_max_capacity = requires(T v) { v.max_capacity(); };
-
-
-   template <class T>
    concept contiguous = has_size<T> && has_data<T>;
 
    template <class Buffer>
    concept non_const_buffer = !std::is_const_v<Buffer>;
+
+   template <class T>
+   struct is_static_helper: std::false_type {};
+
+   template <class T>
+   concept is_static = is_static_helper<T>::value;
 }
 
 namespace glz::detail

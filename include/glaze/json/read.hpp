@@ -1029,7 +1029,7 @@ namespace glz
                value[n] = '\0';
             } else if constexpr (static_str_t<T>) {
                const size_t n = it - start;
-               if (n > value.max_capacity()) {
+               if (n > value.size()) {
                   ctx.error = error_code::unexpected_end;
                   return;
                }
