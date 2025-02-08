@@ -24,7 +24,6 @@
 #include <variant>
 
 #include "glaze/api/impl.hpp"
-#include "glaze/concepts/container_concepts.hpp"
 #include "glaze/containers/flat_map.hpp"
 #include "glaze/file/hostname_include.hpp"
 #include "glaze/file/raw_or_file.hpp"
@@ -9747,14 +9746,13 @@ struct naive_static_str_t
    using value_type = char;
    using size_type = size_t;
 
-   size_t length{};
-   char data[N]{};
-
-   size_t size() const { return N; }
-   size_t capacity() const { return N; }
 
    naive_static_str_t() = default;
    naive_static_str_t(std::string_view sv) { assign(sv.data(), sv.size()); }
+   operator std::string_view() const { return std::string_view(data, length); }
+
+   size_t size() const { return N; }
+   size_t capacity() const { return N; }
 
    naive_static_str_t& assign(const char* v, size_t sz)
    {
@@ -9766,15 +9764,16 @@ struct naive_static_str_t
 
    void resize(size_t sz)
    {
-      const auto bytes_to_copy = std::min(N, sz);
-      length = bytes_to_copy;
+      const auto bytes_to_keep = std::min(N, sz);
+      length = bytes_to_keep;
    }
 
-   operator std::string_view() const { return std::string_view(data, length); }
+   size_t length{};
+   char data[N]{};
 };
 
 template <size_t N>
-struct glz::is_static_helper<naive_static_str_t<N>>: std::true_type{};
+struct glz::detail::is_static_helper<naive_static_str_t<N>>: std::true_type{};
 
 static_assert(std::constructible_from<std::string_view, std::decay_t<naive_static_str_t<3>>>);
 static_assert(glz::detail::has_assign<naive_static_str_t<3>>);

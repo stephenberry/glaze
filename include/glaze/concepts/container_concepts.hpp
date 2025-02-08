@@ -68,11 +68,14 @@ namespace glz
    template <class Buffer>
    concept non_const_buffer = !std::is_const_v<Buffer>;
 
-   template <class T>
-   struct is_static_helper: std::false_type {};
+   namespace detail
+   {
+      template <class T>
+      struct is_static_helper: std::false_type {};
+   }
 
    template <class T>
-   concept is_static = is_static_helper<T>::value;
+   concept is_static = detail::is_static_helper<T>::value;
 }
 
 namespace glz::detail
