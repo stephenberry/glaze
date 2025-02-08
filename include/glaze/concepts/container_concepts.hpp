@@ -43,9 +43,6 @@ namespace glz
    concept has_size = requires(T v) { v.size(); };
 
    template <class T>
-   concept has_max_size = requires(T v) { v.max_size(); };
-
-   template <class T>
    concept has_empty = requires(T v) {
       {
          v.empty()
@@ -64,6 +61,10 @@ namespace glz
          t.capacity()
       } -> std::integral;
    };
+
+   template <class T>
+   concept has_max_capacity = requires(T v) { v.max_capacity(); };
+
 
    template <class T>
    concept contiguous = has_size<T> && has_data<T>;
