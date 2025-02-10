@@ -9749,16 +9749,17 @@ struct naive_static_str_t
 
    naive_static_str_t() = default;
    naive_static_str_t(std::string_view sv) { assign(sv.data(), sv.size()); }
-   operator std::string_view() const { return std::string_view(data, length); }
+   operator std::string_view() const { return std::string_view(buffer, length); }
 
    size_t size() const { return N; }
    size_t capacity() const { return N; }
+   const char* data() const { return buffer; }
 
    naive_static_str_t& assign(const char* v, size_t sz)
    {
       const auto bytes_to_copy = std::min(N, sz);
       length = bytes_to_copy;
-      memcpy(data, v, bytes_to_copy);
+      memcpy(buffer, v, bytes_to_copy);
       return *this;
    }
 
@@ -9769,7 +9770,7 @@ struct naive_static_str_t
    }
 
    size_t length{};
-   char data[N]{};
+   char buffer[N]{};
 };
 
 template <size_t N>
