@@ -27,7 +27,6 @@ struct optional_struct {
 
 suite starter = [] {
    
-   // Original test for a reflectable object.
    "example"_test = [] {
       my_struct s{};
       std::string buffer{};
@@ -39,7 +38,6 @@ hello = "Hello World"
 arr = [1, 2, 3])");
    };
    
-   // Test writing a simple scalar value.
    "scalar_int"_test = [] {
       int i = 42;
       std::string buffer{};
@@ -59,7 +57,8 @@ arr = [1, 2, 3])");
       std::string buffer{};
       expect(not glz::write_toml(m, buffer));
       // std::map orders keys lexicographically, so we expect:
-      expect(buffer == "a = 1\nb = 2");
+      expect(buffer == R"(a = 1
+b = 2)");
    };
    
    "tuple_test"_test = [] {
