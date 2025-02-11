@@ -987,7 +987,7 @@ namespace glz
       };
 
       template <class T>
-         requires(string_view_t<T> || char_array_t<T> || array_char_t<T> || static_str_t<T>)
+         requires(string_view_t<T> || char_array_t<T> || array_char_t<T> || static_string_t<T>)
       struct from<JSON, T>
       {
          template <auto Opts, class It, class End>
@@ -1027,7 +1027,7 @@ namespace glz
                }
                std::memcpy(value.data(), start, n);
                value[n] = '\0';
-            } else if constexpr (static_str_t<T>) {
+            } else if constexpr (static_string_t<T>) {
                const size_t n = it - start;
                if (n > value.size()) {
                   ctx.error = error_code::unexpected_end;
