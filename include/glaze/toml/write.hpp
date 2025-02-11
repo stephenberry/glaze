@@ -279,15 +279,15 @@ namespace glz
       }
 
       template <opts Opts, bool minified_check = true, class B>
-         requires (Opts.format == TOML)
+      requires (Opts.format == TOML)
       GLZ_ALWAYS_INLINE void write_object_entry_separator(is_context auto&&, B&& b, auto&& ix)
       {
          std::memcpy(&b[ix], "\n", 1);
          ++ix;
       }
-
+      
       template <class T>
-         requires(glaze_object_t<T> || reflectable<T>)
+      requires(glaze_object_t<T> || reflectable<T>)
       struct to<TOML, T>
       {
          template <auto Options, class V, class B>
@@ -340,35 +340,64 @@ namespace glz
                   }
 
                   maybe_pad<padding>(b, ix);
-
-                  if (!first) {
-                     // Separate each key–value pair with a newline.
+                  
+                  // --- Check if this field is a nested object ---
+                  if constexpr (glaze_object_t<val_t> || reflectable<val_t>) {
+                     // Print the table header (e.g. "[inner]") for the nested object.
+                     if (!first) {
+                        std::memcpy(&b[ix], "\n", 1);
+                        ++ix;
+                     }
+                     else {
+                        first = false;
+                     }
+                     static constexpr auto key = glz::get<I>(reflect<T>::keys);
+                     std::memcpy(&b[ix], "[", 1);
+                     ++ix;
+                     std::memcpy(&b[ix], key.data(), key.size());
+                     ix += key.size();
+                     std::memcpy(&b[ix], "]\n", 2);
+                     ix += 2;
+                     
+                     // Serialize the nested object.
+                     if constexpr (reflectable<T>) {
+                        to<TOML, val_t>::template op<Options>(get_member(value, get<I>(t)), ctx, b, ix);
+                     }
+                     else {
+                        to<TOML, val_t>::template op<Options>(get_member(value, get<I>(reflect<T>::values)), ctx, b, ix);
+                     }
+                     // Add an extra newline to separate this table section from following keys.
                      std::memcpy(&b[ix], "\n", 1);
                      ++ix;
                   }
                   else {
-                     first = false;
-                  }
-
-                  // Write the key as a bare key (without quotes)
-                  static constexpr auto key = glz::get<I>(reflect<T>::keys);
-                  std::memcpy(&b[ix], key.data(), key.size());
-                  ix += key.size();
-
-                  // Write " = " between the key and value
-                  std::memcpy(&b[ix], " = ", 3);
-                  ix += 3;
-
-                  if constexpr (reflectable<T>) {
-                     to<TOML, val_t>::template op<Options>(get_member(value, get<I>(t)), ctx, b, ix);
-                  }
-                  else {
-                     to<TOML, val_t>::template op<Options>(get_member(value, get<I>(reflect<T>::values)), ctx, b, ix);
+                     // --- Field is not an object, so output a key/value pair ---
+                     if (!first) {
+                        std::memcpy(&b[ix], "\n", 1);
+                        ++ix;
+                     }
+                     else {
+                        first = false;
+                     }
+                     static constexpr auto key = glz::get<I>(reflect<T>::keys);
+                     std::memcpy(&b[ix], key.data(), key.size());
+                     ix += key.size();
+                     
+                     std::memcpy(&b[ix], " = ", 3);
+                     ix += 3;
+                     
+                     if constexpr (reflectable<T>) {
+                        to<TOML, val_t>::template op<Options>(get_member(value, get<I>(t)), ctx, b, ix);
+                     }
+                     else {
+                        to<TOML, val_t>::template op<Options>(get_member(value, get<I>(reflect<T>::values)), ctx, b, ix);
+                     }
                   }
                }
             });
          }
       };
+
    
       template <class T>
          requires(writable_array_t<T> || writable_map_t<T>)
