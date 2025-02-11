@@ -9746,7 +9746,6 @@ struct naive_static_string_t
    using value_type = char;
    using size_type = size_t;
 
-
    naive_static_string_t() = default;
    naive_static_string_t(std::string_view sv) { assign(sv.data(), sv.size()); }
    operator std::string_view() const { return std::string_view(buffer, length); }
@@ -9774,8 +9773,9 @@ struct naive_static_string_t
 };
 
 template <size_t N>
-struct glz::meta<naive_static_string_t<N>> {
- static constexpr auto glaze_static_string = true;
+struct glz::meta<naive_static_string_t<N>>
+{
+   static constexpr auto glaze_static_string = true;
 };
 
 static_assert(std::constructible_from<std::string_view, std::decay_t<naive_static_string_t<3>>>);

@@ -1027,7 +1027,8 @@ namespace glz
                }
                std::memcpy(value.data(), start, n);
                value[n] = '\0';
-            } else if constexpr (static_string_t<T>) {
+            }
+            else if constexpr (static_string_t<T>) {
                const size_t n = it - start;
                if (n > value.size()) {
                   ctx.error = error_code::unexpected_end;
