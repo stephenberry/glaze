@@ -1812,7 +1812,7 @@ namespace glz
                   if (*it == '"') {
                      ++it;
                      GLZ_INVALID_END();
-                     
+
                      const auto start = it;
                      skip_string_view<Opts>(ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
@@ -1820,14 +1820,14 @@ namespace glz
                      const sv key{start, size_t(it - start)};
                      ++it;
                      GLZ_INVALID_END();
-                     
+
                      if (key == tag.sv()) {
                         GLZ_PARSE_WS_COLON;
-                        
+
                         read<JSON>::handle_unknown<Opts>(key, value, ctx, it, end);
                         if (bool(ctx.error)) [[unlikely]]
                            return;
-                        
+
                         GLZ_SKIP_WS();
                      }
                      else {
@@ -1836,7 +1836,7 @@ namespace glz
                      }
                   }
                }
-               
+
                if (*it == '}') [[likely]] {
                   GLZ_SUB_LEVEL;
                   ++it;

@@ -10279,11 +10279,12 @@ struct glz::meta<Number>
    static constexpr auto value = glz::object(&Number::minimum, &Number::maximum);
 };
 
-struct Boolean {
-};
+struct Boolean
+{};
 
 template <>
-struct glz::meta<Boolean> {
+struct glz::meta<Boolean>
+{
    static constexpr auto value = glz::object();
 };
 
@@ -10322,7 +10323,8 @@ struct glz::meta<Array>
 using Data2 = std::variant<Number, Boolean>;
 
 template <>
-struct glz::meta<Data2> {
+struct glz::meta<Data2>
+{
    static constexpr std::string_view tag = "type";
    static constexpr auto ids = std::array{"number", "boolean"};
 };
@@ -10346,11 +10348,11 @@ suite tagged_variant_null_members = [] {
       expect(not glz::write_json(var, s));
       expect(s == R"({"items":{"type":"number"}})") << s;
    };
-   
+
    "variant deduction"_test = [] {
       Array2 var;
       std::string str = R"({"items": { "type" : "boolean"}})";
-      
+
       auto pe = glz::read_json(var, str);
       expect(not pe) << glz::format_error(pe, str);
    };
