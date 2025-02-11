@@ -332,6 +332,35 @@ void async_server_test()
    expect(result == 200);
 }
 
+struct error_api
+{
+   std::function<int()> func = []() {
+      throw std::runtime_error("func error");
+      return 0;
+   };
+};
+
+void server_error_test()
+{
+   static constexpr int16_t port = 8765;
+
+   glz::asio_server<> server{.port = port, .concurrency = 1};
+   server.error_handler = [](const std::string& error) { expect(error == "func error"); };
+
+   error_api api{};
+   server.on(api);
+
+   server.run_async();
+
+   glz::asio_client<> client{"localhost", std::to_string(port)};
+   (void)client.init();
+
+   int result{};
+   glz::repe::message msg{};
+   client.call({"/func"}, msg, 100);
+   expect(bool(glz::repe::decode_message(result, msg)));
+}
+
 int main()
 {
    notify_test();
@@ -340,6 +369,7 @@ int main()
    async_calls();
    raw_json_tests();
    async_server_test();
+   server_error_test();
 
    return 0;
 }
