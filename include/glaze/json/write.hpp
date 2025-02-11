@@ -1232,8 +1232,8 @@ namespace glz
       template <is_variant T>
       struct to<JSON, T>
       {
-         template <auto Opts, class... Args>
-         static void op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix)
+         template <auto Opts, class B>
+         static void op(auto&& value, is_context auto&& ctx, B&& b, auto&& ix)
          {
             std::visit(
                [&](auto&& val) {
@@ -1271,7 +1271,32 @@ namespace glz
                            dump<R"(",)">(b, ix);
                         }
                      }
-                     to<JSON, V>::template op<opening_handled<Opts>()>(val, ctx, b, ix);
+                     to<JSON, V>::template op<opening_and_closing_handled<Opts>()>(val, ctx, b, ix);
+                     // If we skip everything then we may have an extra comma, which we want to revert
+                     if constexpr (Opts.skip_null_members) {
+                        if (b[ix - 1] == ',') {
+                           --ix;
+                        }
+                     }
+                     
+                     if constexpr (Opts.prettify) {
+                        ctx.indentation_level -= Opts.indentation_width;
+                        if constexpr (vector_like<B>) {
+                           if (const auto k = ix + ctx.indentation_level + write_padding_bytes; k > b.size())
+                              [[unlikely]] {
+                                 b.resize(2 * k);
+                              }
+                        }
+                        std::memcpy(&b[ix], "\n", 1);
+                        ++ix;
+                        std::memset(&b[ix], Opts.indentation_char, ctx.indentation_level);
+                        ix += ctx.indentation_level;
+                        std::memcpy(&b[ix], "}", 1);
+                        ++ix;
+                     }
+                     else {
+                        dump<'}'>(b, ix);
+                     }
                   }
                   else {
                      to<JSON, V>::template op<Opts>(val, ctx, b, ix);
