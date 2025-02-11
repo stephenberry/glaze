@@ -364,7 +364,7 @@ namespace glz
             *t
          };
       };
-      
+
       template <class T>
       concept nullable_like = nullable_t<T> && (!is_expected<T> && !std::is_array_v<T>);
 

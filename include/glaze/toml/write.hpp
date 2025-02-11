@@ -5,10 +5,10 @@
 
 #include "glaze/core/opts.hpp"
 #include "glaze/core/reflect.hpp"
-#include "glaze/core/write.hpp"
 #include "glaze/core/to.hpp"
-#include "glaze/core/write_chars.hpp"
 #include "glaze/core/wrappers.hpp"
+#include "glaze/core/write.hpp"
+#include "glaze/core/write_chars.hpp"
 #include "glaze/util/dump.hpp"
 #include "glaze/util/for_each.hpp"
 #include "glaze/util/itoa.hpp"
@@ -40,7 +40,7 @@ namespace glz
                                            std::forward<Ctx>(ctx), std::forward<B>(b), std::forward<IX>(ix));
          }
       };
-      
+
       template <nullable_like T>
       struct to<TOML, T>
       {
@@ -276,7 +276,7 @@ namespace glz
       };
 
       template <opts Opts, bool minified_check = true, class B>
-         requires (Opts.format == TOML)
+         requires(Opts.format == TOML)
       GLZ_ALWAYS_INLINE void write_array_entry_separator(is_context auto&&, B&& b, auto&& ix)
       {
          if constexpr (vector_like<B>) {
@@ -291,15 +291,15 @@ namespace glz
       }
 
       template <opts Opts, bool minified_check = true, class B>
-      requires (Opts.format == TOML)
+         requires(Opts.format == TOML)
       GLZ_ALWAYS_INLINE void write_object_entry_separator(is_context auto&&, B&& b, auto&& ix)
       {
          std::memcpy(&b[ix], "\n", 1);
          ++ix;
       }
-      
+
       template <class T>
-      requires(glaze_object_t<T> || reflectable<T>)
+         requires(glaze_object_t<T> || reflectable<T>)
       struct to<TOML, T>
       {
          template <auto Options, class V, class B>
@@ -352,7 +352,7 @@ namespace glz
                   }
 
                   maybe_pad<padding>(b, ix);
-                  
+
                   // --- Check if this field is a nested object ---
                   if constexpr (glaze_object_t<val_t> || reflectable<val_t>) {
                      // Print the table header (e.g. "[inner]") for the nested object.
@@ -370,13 +370,14 @@ namespace glz
                      ix += key.size();
                      std::memcpy(&b[ix], "]\n", 2);
                      ix += 2;
-                     
+
                      // Serialize the nested object.
                      if constexpr (reflectable<T>) {
                         to<TOML, val_t>::template op<Options>(get_member(value, get<I>(t)), ctx, b, ix);
                      }
                      else {
-                        to<TOML, val_t>::template op<Options>(get_member(value, get<I>(reflect<T>::values)), ctx, b, ix);
+                        to<TOML, val_t>::template op<Options>(get_member(value, get<I>(reflect<T>::values)), ctx, b,
+                                                              ix);
                      }
                      // Add an extra newline to separate this table section from following keys.
                      std::memcpy(&b[ix], "\n", 1);
@@ -394,15 +395,16 @@ namespace glz
                      static constexpr auto key = glz::get<I>(reflect<T>::keys);
                      std::memcpy(&b[ix], key.data(), key.size());
                      ix += key.size();
-                     
+
                      std::memcpy(&b[ix], " = ", 3);
                      ix += 3;
-                     
+
                      if constexpr (reflectable<T>) {
                         to<TOML, val_t>::template op<Options>(get_member(value, get<I>(t)), ctx, b, ix);
                      }
                      else {
-                        to<TOML, val_t>::template op<Options>(get_member(value, get<I>(reflect<T>::values)), ctx, b, ix);
+                        to<TOML, val_t>::template op<Options>(get_member(value, get<I>(reflect<T>::values)), ctx, b,
+                                                              ix);
                      }
                   }
                }
@@ -410,7 +412,6 @@ namespace glz
          }
       };
 
-   
       template <class T>
          requires(writable_array_t<T> || writable_map_t<T>)
       struct to<TOML, T>
@@ -431,8 +432,9 @@ namespace glz
                   if constexpr (vector_like<B>) {
                      // Use 2 bytes per separator (", ")
                      static constexpr auto comma_padding = 2;
-                     if (const auto k = ix + n * comma_padding + write_padding_bytes; k > b.size())
-                        [[unlikely]] { b.resize(2 * k); }
+                     if (const auto k = ix + n * comma_padding + write_padding_bytes; k > b.size()) [[unlikely]] {
+                        b.resize(2 * k);
+                     }
                   }
                   std::memcpy(&b[ix], "[", 1);
                   ++ix;
@@ -449,8 +451,9 @@ namespace glz
                }
                else {
                   if constexpr (vector_like<B>) {
-                     if (const auto k = ix + write_padding_bytes; k > b.size())
-                        [[unlikely]] { b.resize(2 * k); }
+                     if (const auto k = ix + write_padding_bytes; k > b.size()) [[unlikely]] {
+                        b.resize(2 * k);
+                     }
                   }
                   std::memcpy(&b[ix], "[", 1);
                   ++ix;

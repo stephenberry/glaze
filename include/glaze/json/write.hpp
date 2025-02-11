@@ -22,8 +22,8 @@
 
 #include "glaze/core/opts.hpp"
 #include "glaze/core/reflect.hpp"
-#include "glaze/core/write.hpp"
 #include "glaze/core/to.hpp"
+#include "glaze/core/write.hpp"
 #include "glaze/core/write_chars.hpp"
 #include "glaze/json/ptr.hpp"
 #include "glaze/util/dump.hpp"

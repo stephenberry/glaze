@@ -347,45 +347,45 @@ namespace glz::detail
 {
    template <class Container>
    using iterator_pair_type =
-   typename std::iterator_traits<decltype(std::begin(std::declval<Container&>()))>::value_type;
-   
+      typename std::iterator_traits<decltype(std::begin(std::declval<Container&>()))>::value_type;
+
    template <class Container, typename Iterator = iterator_pair_type<Container>>
    struct iterator_second_impl;
-   
+
    template <class Container, typename Iterator>
-   requires has_value_type<Iterator>
+      requires has_value_type<Iterator>
    struct iterator_second_impl<Container, Iterator>
    {
       using type = typename Iterator::value_type;
    };
-   
+
    template <class Container, typename Iterator>
-   requires(!has_value_type<Iterator> && has_second_type<Iterator>)
+      requires(!has_value_type<Iterator> && has_second_type<Iterator>)
    struct iterator_second_impl<Container, Iterator>
    {
       using type = typename Iterator::second_type;
    };
-   
+
    template <class Container>
    using iterator_second_type = typename iterator_second_impl<Container>::type;
-   
+
    template <class Container, typename Iterator = iterator_pair_type<Container>>
    struct iterator_first_impl;
-   
+
    template <class Container, typename Iterator>
-   requires has_value_type<Iterator>
+      requires has_value_type<Iterator>
    struct iterator_first_impl<Container, Iterator>
    {
       using type = typename Iterator::value_type;
    };
-   
+
    template <class Container, typename Iterator>
-   requires(!has_value_type<Iterator> && has_first_type<Iterator>)
+      requires(!has_value_type<Iterator> && has_first_type<Iterator>)
    struct iterator_first_impl<Container, Iterator>
    {
       using type = typename Iterator::first_type;
    };
-   
+
    template <class Container>
    using iterator_first_type = typename iterator_first_impl<Container>::type;
 }

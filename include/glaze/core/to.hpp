@@ -19,7 +19,7 @@ namespace glz::detail
          static_assert(false_v<decltype(value)>, "hidden type should not be written");
       }
    };
-   
+
    template <uint32_t Format>
    struct to<Format, skip>
    {
@@ -29,7 +29,7 @@ namespace glz::detail
          static_assert(false_v<decltype(value)>, "skip type should not be written");
       }
    };
-   
+
    template <uint32_t Format, filesystem_path T>
    struct to<Format, T>
    {
