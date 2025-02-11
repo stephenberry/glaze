@@ -23,6 +23,7 @@
 #include "glaze/core/opts.hpp"
 #include "glaze/core/reflect.hpp"
 #include "glaze/core/write.hpp"
+#include "glaze/core/to.hpp"
 #include "glaze/core/write_chars.hpp"
 #include "glaze/json/ptr.hpp"
 #include "glaze/util/dump.hpp"
@@ -61,9 +62,6 @@ namespace glz
                                            std::forward<Ctx>(ctx), std::forward<B>(b), std::forward<IX>(ix));
          }
       };
-
-      template <class T>
-      concept nullable_like = nullable_t<T> && (!is_expected<T> && !std::is_array_v<T>);
 
       // Returns 0 if we cannot determine the required padding,
       // in which case the `to` specialization must allocate buffer space
@@ -201,26 +199,6 @@ namespace glz
                std::memcpy(&b[ix], "]", 1);
                ++ix;
             }
-         }
-      };
-
-      template <>
-      struct to<JSON, hidden>
-      {
-         template <auto Opts>
-         static void op(auto&& value, auto&&...) noexcept
-         {
-            static_assert(false_v<decltype(value)>, "hidden type should not be written");
-         }
-      };
-
-      template <>
-      struct to<JSON, skip>
-      {
-         template <auto Opts>
-         static void op(auto&& value, auto&&...) noexcept
-         {
-            static_assert(false_v<decltype(value)>, "skip type should not be written");
          }
       };
 
@@ -646,16 +624,6 @@ namespace glz
          }
       };
 
-      template <filesystem_path T>
-      struct to<JSON, T>
-      {
-         template <auto Opts, class... Args>
-         static void op(auto&& value, is_context auto&& ctx, Args&&... args)
-         {
-            to<JSON, decltype(value.string())>::template op<Opts>(value.string(), ctx, std::forward<Args>(args)...);
-         }
-      };
-
       template <class T>
          requires((glaze_enum_t<T> || (meta_keys<T> && std::is_enum_v<std::decay_t<T>>)) && not custom_write<T>)
       struct to<JSON, T>
@@ -853,50 +821,6 @@ namespace glz
       template <class T>
       concept array_padding_known =
          requires { typename T::value_type; } && (required_padding<typename T::value_type>() > 0);
-
-      template <class Container>
-      using iterator_pair_type =
-         typename std::iterator_traits<decltype(std::begin(std::declval<Container&>()))>::value_type;
-
-      template <class Container, typename Iterator = iterator_pair_type<Container>>
-      struct iterator_second_impl;
-
-      template <class Container, typename Iterator>
-         requires has_value_type<Iterator>
-      struct iterator_second_impl<Container, Iterator>
-      {
-         using type = typename Iterator::value_type;
-      };
-
-      template <class Container, typename Iterator>
-         requires(!has_value_type<Iterator> && has_second_type<Iterator>)
-      struct iterator_second_impl<Container, Iterator>
-      {
-         using type = typename Iterator::second_type;
-      };
-
-      template <class Container>
-      using iterator_second_type = typename iterator_second_impl<Container>::type;
-
-      template <class Container, typename Iterator = iterator_pair_type<Container>>
-      struct iterator_first_impl;
-
-      template <class Container, typename Iterator>
-         requires has_value_type<Iterator>
-      struct iterator_first_impl<Container, Iterator>
-      {
-         using type = typename Iterator::value_type;
-      };
-
-      template <class Container, typename Iterator>
-         requires(!has_value_type<Iterator> && has_first_type<Iterator>)
-      struct iterator_first_impl<Container, Iterator>
-      {
-         using type = typename Iterator::first_type;
-      };
-
-      template <class Container>
-      using iterator_first_type = typename iterator_first_impl<Container>::type;
 
       template <class T>
          requires(writable_array_t<T> || writable_map_t<T>)
@@ -1615,20 +1539,6 @@ namespace glz
             dump<'}'>(b, ix);
          }
       };
-
-      template <class T>
-      inline constexpr size_t maximum_key_size = [] {
-         constexpr auto N = reflect<T>::size;
-         size_t maximum{};
-         for (size_t i = 0; i < N; ++i) {
-            if (reflect<T>::keys[i].size() > maximum) {
-               maximum = reflect<T>::keys[i].size();
-            }
-         }
-         return maximum + 2; // add quotes
-      }();
-
-      inline constexpr uint64_t round_up_to_nearest_16(const uint64_t value) noexcept { return (value + 15) & ~15ull; }
 
       // Only use this if you are not prettifying
       // Returns zero if the fixed size cannot be determined

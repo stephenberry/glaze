@@ -1951,6 +1951,23 @@ namespace glz
    }
 }
 
+namespace glz::detail
+{
+   template <class T>
+   inline constexpr size_t maximum_key_size = [] {
+      constexpr auto N = reflect<T>::size;
+      size_t maximum{};
+      for (size_t i = 0; i < N; ++i) {
+         if (reflect<T>::keys[i].size() > maximum) {
+            maximum = reflect<T>::keys[i].size();
+         }
+      }
+      return maximum + 2; // add quotes for JSON
+   }();
+
+   inline constexpr uint64_t round_up_to_nearest_16(const uint64_t value) noexcept { return (value + 15) & ~15ull; }
+}
+
 namespace glz
 {
    // The Callable comes second as ranges::for_each puts the callable at the end

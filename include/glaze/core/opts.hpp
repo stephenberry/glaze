@@ -15,6 +15,7 @@ namespace glz
    inline constexpr uint32_t JSON = 10;
    inline constexpr uint32_t JSON_PTR = 20;
    inline constexpr uint32_t NDJSON = 100; // new line delimited JSON
+   inline constexpr uint32_t TOML = 400;
    inline constexpr uint32_t STENCIL = 500;
    inline constexpr uint32_t CSV = 10000;
 
@@ -313,6 +314,14 @@ namespace glz
       ret.format = JSON;
       return ret;
    }
+
+   template <opts Opts>
+   constexpr auto set_toml()
+   {
+      opts ret = Opts;
+      ret.format = TOML;
+      return ret;
+   }
 }
 
 namespace glz
@@ -351,6 +360,12 @@ namespace glz
    concept read_ndjson_supported = requires { detail::from<NDJSON, std::remove_cvref_t<T>>{}; };
 
    template <class T>
+   concept write_toml_supported = requires { detail::to<TOML, std::remove_cvref_t<T>>{}; };
+
+   template <class T>
+   concept read_toml_supported = requires { detail::from<TOML, std::remove_cvref_t<T>>{}; };
+
+   template <class T>
    concept write_csv_supported = requires { detail::to<CSV, std::remove_cvref_t<T>>{}; };
 
    template <class T>
@@ -367,6 +382,9 @@ namespace glz
       }
       else if constexpr (Format == NDJSON) {
          return write_ndjson_supported<T>;
+      }
+      else if constexpr (Format == TOML) {
+         return write_toml_supported<T>;
       }
       else if constexpr (Format == CSV) {
          return write_csv_supported<T>;
@@ -387,6 +405,9 @@ namespace glz
       }
       else if constexpr (Format == NDJSON) {
          return read_ndjson_supported<T>;
+      }
+      else if constexpr (Format == TOML) {
+         return read_toml_supported<T>;
       }
       else if constexpr (Format == CSV) {
          return read_csv_supported<T>;
