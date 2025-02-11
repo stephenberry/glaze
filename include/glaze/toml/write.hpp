@@ -40,6 +40,18 @@ namespace glz
                                            std::forward<Ctx>(ctx), std::forward<B>(b), std::forward<IX>(ix));
          }
       };
+      
+      template <nullable_like T>
+      struct to<TOML, T>
+      {
+         template <auto Opts>
+         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix)
+         {
+            if (value) {
+               write<TOML>::op<Opts>(*value, ctx, b, ix);
+            }
+         }
+      };
 
       template <boolean_like T>
       struct to<TOML, T>

@@ -63,9 +63,6 @@ namespace glz
          }
       };
 
-      template <class T>
-      concept nullable_like = nullable_t<T> && (!is_expected<T> && !std::is_array_v<T>);
-
       // Returns 0 if we cannot determine the required padding,
       // in which case the `to` specialization must allocate buffer space
       // Some types like numbers must have space to be quoted

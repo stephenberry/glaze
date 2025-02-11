@@ -364,6 +364,9 @@ namespace glz
             *t
          };
       };
+      
+      template <class T>
+      concept nullable_like = nullable_t<T> && (!is_expected<T> && !std::is_array_v<T>);
 
       // For optional like types that cannot overload `operator bool()`
       template <class T>
