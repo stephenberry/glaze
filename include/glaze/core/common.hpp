@@ -239,10 +239,20 @@ namespace glz
          (!std::same_as<std::nullptr_t, T> && std::constructible_from<std::string_view, std::decay_t<T>>) ||
          array_char_t<T>;
 
+      template <class T>
+      concept is_static_string = requires { meta<std::decay_t<T>>::glaze_static_string == true; } || std::decay_t<T>::glaze_static_string == true ;
+
       // this concept requires that T is a writeable string. It can be resized, appended to, or assigned to
       template <class T>
       concept string_t =
-         str_t<T> && !string_view_t<T> && (has_assign<T> || (resizable<T> && has_data<T>) || has_append<T>);
+       str_t<T> && !string_view_t<T> &&
+                         (has_assign<T> || (resizable<T> && has_data<T>) || has_append<T>) && !is_static_string<T>;
+
+      // static string; very like `string_t`, but with a fixed max capacity
+      template <class T>
+      concept static_string_t =
+       str_t<T> && !string_view_t<T> &&
+                         (has_assign<T> || (resizable<T> && has_data<T>) || has_append<T>) && is_static_string<T>;
 
       template <class T>
       concept char_array_t = str_t<T> && std::is_array_v<std::remove_pointer_t<std::remove_reference_t<T>>>;

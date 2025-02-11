@@ -9740,6 +9740,68 @@ suite array_char_tests = [] {
    };
 };
 
+template <size_t N>
+struct naive_static_string_t
+{
+   using value_type = char;
+   using size_type = size_t;
+
+
+   naive_static_string_t() = default;
+   naive_static_string_t(std::string_view sv) { assign(sv.data(), sv.size()); }
+   operator std::string_view() const { return std::string_view(buffer, length); }
+
+   size_t size() const { return N; }
+   size_t capacity() const { return N; }
+   const char* data() const { return buffer; }
+
+   naive_static_string_t& assign(const char* v, size_t sz)
+   {
+      const auto bytes_to_copy = std::min(N, sz);
+      length = bytes_to_copy;
+      memcpy(buffer, v, bytes_to_copy);
+      return *this;
+   }
+
+   void resize(size_t sz)
+   {
+      const auto bytes_to_keep = std::min(N, sz);
+      length = bytes_to_keep;
+   }
+
+   size_t length{};
+   char buffer[N]{};
+};
+
+template <size_t N>
+struct glz::meta<naive_static_string_t<N>> {
+ static constexpr auto glaze_static_string = true;
+};
+
+static_assert(std::constructible_from<std::string_view, std::decay_t<naive_static_string_t<3>>>);
+static_assert(glz::detail::has_assign<naive_static_string_t<3>>);
+static_assert(glz::detail::is_static_string<naive_static_string_t<3>>);
+static_assert(glz::detail::static_string_t<naive_static_string_t<3>>);
+
+suite static_string_tests = [] {
+   "static_str<N> value"_test = [] {
+      naive_static_string_t<6> value{};
+      expect(not glz::read_json(value, R"("hello")"));
+      expect(std::string_view{value} == "hello");
+      expect(glz::write_json(value).value_or("error") == R"("hello")");
+
+      expect(not glz::read_json(value, R"("hello!")"));
+      expect(std::string_view{value} == "hello!");
+      expect(glz::write_json(value).value_or("error") == R"("hello!")");
+
+      // too long!!
+      expect(glz::read_json(value, R"("hello!!")"));
+
+      expect(not glz::read_json(value, R"("bye")"));
+      expect(std::string_view{value} == "bye");
+   };
+};
+
 template <class T>
 struct response_t
 {
