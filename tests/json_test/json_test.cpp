@@ -10267,12 +10267,14 @@ suite asan_test = [] {
    };
 };
 
-struct Number {
+struct Number
+{
    std::optional<double> minimum;
    std::optional<double> maximum;
 };
 
-struct Integer {
+struct Integer
+{
    std::optional<int> minimum;
    std::optional<int> maximum;
 };
@@ -10281,36 +10283,40 @@ struct Array;
 
 using Data = std::variant<Number, Integer>;
 
-struct Array {
+struct Array
+{
    Data items;
 };
 
 template <>
-struct glz::meta<Number> {
+struct glz::meta<Number>
+{
    static constexpr auto value = glz::object(&Number::minimum, &Number::maximum);
 };
 
 template <>
-struct glz::meta<Integer> {
+struct glz::meta<Integer>
+{
    static constexpr auto value = glz::object(&Integer::minimum, &Integer::maximum);
 };
 
 template <>
-struct glz::meta<Array> {
+struct glz::meta<Array>
+{
    static constexpr auto value = glz::object(&Array::items);
 };
 
 template <>
-struct glz::meta<Data> {
+struct glz::meta<Data>
+{
    static constexpr std::string_view tag = "type";
-   static constexpr auto ids =
-   std::array{"number", "integer"};
+   static constexpr auto ids = std::array{"number", "integer"};
 };
 
 suite tagged_variant_null_members = [] {
    "tagged_variant_null_members"_test = [] {
-      Array var = Array{ Number{} };
-      
+      Array var = Array{Number{}};
+
       std::string s{};
       expect(not glz::write_json(var, s));
       expect(s == R"({"items":{"type":"number"}})") << s;

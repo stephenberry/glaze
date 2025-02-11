@@ -1278,14 +1278,14 @@ namespace glz
                            --ix;
                         }
                      }
-                     
+
                      if constexpr (Opts.prettify) {
                         ctx.indentation_level -= Opts.indentation_width;
                         if constexpr (vector_like<B>) {
                            if (const auto k = ix + ctx.indentation_level + write_padding_bytes; k > b.size())
                               [[unlikely]] {
-                                 b.resize(2 * k);
-                              }
+                              b.resize(2 * k);
+                           }
                         }
                         std::memcpy(&b[ix], "\n", 1);
                         ++ix;
