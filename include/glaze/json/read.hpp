@@ -1808,6 +1808,35 @@ namespace glz
             const size_t ws_size = size_t(it - ws_start);
 
             if constexpr ((glaze_object_t<T> || reflectable<T>)&&num_members == 0 && Opts.error_on_unknown_keys) {
+               if constexpr (not tag.sv().empty()) {
+                  if (*it == '"') {
+                     ++it;
+                     GLZ_INVALID_END();
+                     
+                     const auto start = it;
+                     skip_string_view<Opts>(ctx, it, end);
+                     if (bool(ctx.error)) [[unlikely]]
+                        return;
+                     const sv key{start, size_t(it - start)};
+                     ++it;
+                     GLZ_INVALID_END();
+                     
+                     if (key == tag.sv()) {
+                        GLZ_PARSE_WS_COLON;
+                        
+                        read<JSON>::handle_unknown<Opts>(key, value, ctx, it, end);
+                        if (bool(ctx.error)) [[unlikely]]
+                           return;
+                        
+                        GLZ_SKIP_WS();
+                     }
+                     else {
+                        ctx.error = error_code::unknown_key;
+                        return;
+                     }
+                  }
+               }
+               
                if (*it == '}') [[likely]] {
                   GLZ_SUB_LEVEL;
                   ++it;

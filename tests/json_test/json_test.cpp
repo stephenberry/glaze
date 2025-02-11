@@ -10273,25 +10273,24 @@ struct Number
    std::optional<double> maximum;
 };
 
-struct Integer
-{
-   std::optional<int> minimum;
-   std::optional<int> maximum;
-};
-
-struct Array;
-
-using Data = std::variant<Number, Integer>;
-
-struct Array
-{
-   Data items;
-};
-
 template <>
 struct glz::meta<Number>
 {
    static constexpr auto value = glz::object(&Number::minimum, &Number::maximum);
+};
+
+struct Boolean {
+};
+
+template <>
+struct glz::meta<Boolean> {
+   static constexpr auto value = glz::object();
+};
+
+struct Integer
+{
+   std::optional<int> minimum;
+   std::optional<int> maximum;
 };
 
 template <>
@@ -10300,17 +10299,43 @@ struct glz::meta<Integer>
    static constexpr auto value = glz::object(&Integer::minimum, &Integer::maximum);
 };
 
-template <>
-struct glz::meta<Array>
-{
-   static constexpr auto value = glz::object(&Array::items);
-};
+using Data = std::variant<Number, Integer>;
 
 template <>
 struct glz::meta<Data>
 {
    static constexpr std::string_view tag = "type";
    static constexpr auto ids = std::array{"number", "integer"};
+};
+
+struct Array
+{
+   Data items;
+};
+
+template <>
+struct glz::meta<Array>
+{
+   static constexpr auto value = glz::object(&Array::items);
+};
+
+using Data2 = std::variant<Number, Boolean>;
+
+template <>
+struct glz::meta<Data2> {
+   static constexpr std::string_view tag = "type";
+   static constexpr auto ids = std::array{"number", "boolean"};
+};
+
+struct Array2
+{
+   Data2 items;
+};
+
+template <>
+struct glz::meta<Array2>
+{
+   static constexpr auto value = glz::object(&Array2::items);
 };
 
 suite tagged_variant_null_members = [] {
@@ -10320,6 +10345,14 @@ suite tagged_variant_null_members = [] {
       std::string s{};
       expect(not glz::write_json(var, s));
       expect(s == R"({"items":{"type":"number"}})") << s;
+   };
+   
+   "variant deduction"_test = [] {
+      Array2 var;
+      std::string str = R"({"items": { "type" : "boolean"}})";
+      
+      auto pe = glz::read_json(var, str);
+      expect(not pe) << glz::format_error(pe, str);
    };
 };
 
