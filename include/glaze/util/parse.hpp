@@ -319,7 +319,7 @@ namespace glz::detail
    }
 
    // Returns true on error
-   inline bool match_quote(is_context auto& ctx, auto&& it) noexcept
+   GLZ_ALWAYS_INLINE bool match_quote(is_context auto& ctx, auto&& it) noexcept
    {
       if (*it != '"') [[unlikely]] {
          ctx.error = error_code::expected_quote;
@@ -332,18 +332,21 @@ namespace glz::detail
    }
 
    // Checks for a character and validates that we are not at the end (considered an error)
-   template <char Character, auto Opts>
-   inline bool match_invalid_end(is_context auto& ctx, auto&& it, auto&& end) noexcept
+   template <char C, auto Opts>
+   GLZ_ALWAYS_INLINE bool match_invalid_end(is_context auto& ctx, auto&& it, auto&& end) noexcept
    {
-      if (*it != Character) [[unlikely]] {
-         if constexpr (Character == '"') {
+      if (*it != C) [[unlikely]] {
+         if constexpr (C == '"') {
             ctx.error = error_code::expected_quote;
          }
-         else if constexpr (Character == ',') {
+         else if constexpr (C == ',') {
             ctx.error = error_code::expected_comma;
          }
-         else if constexpr (Character == ':') {
+         else if constexpr (C == ':') {
             ctx.error = error_code::expected_colon;
+         }
+         else if constexpr (C == '[' || C == ']') {
+            ctx.error = error_code::expected_bracket;
          }
          else {
             ctx.error = error_code::syntax_error;
@@ -360,21 +363,6 @@ namespace glz::detail
          }
       }
       return false;
-   }
-
-#define GLZ_MATCH_OPEN_BRACKET                   \
-   if (*it != '[') [[unlikely]] {                \
-      ctx.error = error_code::expected_bracket;  \
-      return;                                    \
-   }                                             \
-   else [[likely]] {                             \
-      ++it;                                      \
-   }                                             \
-   if constexpr (not Opts.null_terminated) {     \
-      if (it == end) [[unlikely]] {              \
-         ctx.error = error_code::unexpected_end; \
-         return;                                 \
-      }                                          \
    }
 
 #define GLZ_MATCH_CLOSE_BRACKET                 \

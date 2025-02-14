@@ -176,7 +176,9 @@ namespace glz
          template <auto Opts>
          static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
-            GLZ_MATCH_OPEN_BRACKET;
+            if (match_invalid_end<'[', Opts>(ctx, it, end)) {
+               return;
+            }
             std::array<Eigen::Index, 2> extents; // NOLINT
             detail::read<JSON>::op<Opts>(extents, ctx, it, end);
             value.resize(extents[0], extents[1]);

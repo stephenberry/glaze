@@ -610,7 +610,10 @@ namespace glz
                // If we have a key, that means we're looking into an object like: key[0:5]
                if constexpr (key.empty()) {
                   GLZ_SKIP_WS();
-                  GLZ_MATCH_OPEN_BRACKET; // We expect the JSON at this level to be an array
+                  // We expect the JSON at this level to be an array
+                  if (match_invalid_end<'[', Opts>(ctx, it, end)) {
+                     return;
+                  }
 
                   // If this is a slice (colon_count > 0)
                   if constexpr (decomposed_key.colon_count > 0) {
@@ -688,7 +691,9 @@ namespace glz
                            return;
                         }
                         GLZ_SKIP_WS();
-                        GLZ_MATCH_OPEN_BRACKET;
+                        if (match_invalid_end<'[', Opts>(ctx, it, end)) {
+                           return;
+                        }
 
                         // Distinguish single index vs slice using colon_count
                         if constexpr (decomposed_key.colon_count > 0) {
@@ -863,7 +868,9 @@ namespace glz
                   if (key.empty()) {
                      // Top-level array scenario
                      GLZ_SKIP_WS();
-                     GLZ_MATCH_OPEN_BRACKET;
+                     if (match_invalid_end<'[', Opts>(ctx, it, end)) {
+                        return;
+                     }
 
                      if (decomposed_key.colon_count > 0) {
                         // Slice scenario
@@ -940,7 +947,9 @@ namespace glz
                               return;
                            }
                            GLZ_SKIP_WS();
-                           GLZ_MATCH_OPEN_BRACKET;
+                           if (match_invalid_end<'[', Opts>(ctx, it, end)) {
+                              return;
+                           }
 
                            if (decomposed_key.colon_count > 0) {
                               // Slice scenario
