@@ -324,14 +324,8 @@ namespace glz
          template <auto Opts>
          static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
-            if (match_quote(ctx, it)) {
+            if (match_quote_invalid_end<Opts>(ctx, it, end)) {
                return;
-            }
-            if constexpr (not Opts.null_terminated) {
-               if (it == end) [[unlikely]] {
-                  ctx.error = error_code::unexpected_end;
-                  return;
-               }
             }
 
             const auto n = value.size();
@@ -464,14 +458,8 @@ namespace glz
          {
             if constexpr (Opts.quoted_num) {
                GLZ_SKIP_WS();
-               if (match_quote(ctx, it)) {
+               if (match_quote_invalid_end<Opts>(ctx, it, end)) {
                   return;
-               }
-               if constexpr (not Opts.null_terminated) {
-                  if (it == end) [[unlikely]] {
-                     ctx.error = error_code::unexpected_end;
-                     return;
-                  }
                }
             }
 
@@ -573,14 +561,8 @@ namespace glz
          {
             if constexpr (Opts.quoted_num) {
                GLZ_SKIP_WS();
-               if (match_quote(ctx, it)) {
+               if (match_quote_invalid_end<Opts>(ctx, it, end)) {
                   return;
-               }
-               if constexpr (not Opts.null_terminated) {
-                  if (it == end) [[unlikely]] {
-                     ctx.error = error_code::unexpected_end;
-                     return;
-                  }
                }
             }
 
@@ -677,14 +659,8 @@ namespace glz
                      GLZ_SKIP_WS();
                   }
 
-                  if (match_quote(ctx, it)) {
+                  if (match_quote_invalid_end<Opts>(ctx, it, end)) {
                      return;
-                  }
-                  if constexpr (not Opts.null_terminated) {
-                     if (it == end) [[unlikely]] {
-                        ctx.error = error_code::unexpected_end;
-                        return;
-                     }
                   }
                }
 
@@ -820,14 +796,8 @@ namespace glz
                      GLZ_SKIP_WS();
                   }
 
-                  if (match_quote(ctx, it)) {
+                  if (match_quote_invalid_end<Opts>(ctx, it, end)) {
                      return;
-                  }
-                  if constexpr (not Opts.null_terminated) {
-                     if (it == end) [[unlikely]] {
-                        ctx.error = error_code::unexpected_end;
-                        return;
-                     }
                   }
                }
 
@@ -1076,14 +1046,8 @@ namespace glz
                   GLZ_SKIP_WS();
                }
 
-               if (match_quote(ctx, it)) {
+               if (match_quote_invalid_end<Opts>(ctx, it, end)) {
                   return;
-               }
-               if constexpr (not Opts.null_terminated) {
-                  if (it == end) [[unlikely]] {
-                     ctx.error = error_code::unexpected_end;
-                     return;
-                  }
                }
             }
 
@@ -1137,14 +1101,8 @@ namespace glz
                   GLZ_SKIP_WS();
                }
 
-               if (match_quote(ctx, it)) {
+               if (match_quote_invalid_end<Opts>(ctx, it, end)) {
                   return;
-               }
-               if constexpr (not Opts.null_terminated) {
-                  if (it == end) [[unlikely]] {
-                     ctx.error = error_code::unexpected_end;
-                     return;
-                  }
                }
             }
 
@@ -1276,14 +1234,8 @@ namespace glz
             if constexpr (!has_ws_handled(Opts)) {
                GLZ_SKIP_WS();
             }
-            if (match_quote(ctx, it)) {
+            if (match_quote_invalid_end<Opts>(ctx, it, end)) {
                return;
-            }
-            if constexpr (not Opts.null_terminated) {
-               if (it == end) [[unlikely]] {
-                  ctx.error = error_code::unexpected_end;
-                  return;
-               }
             }
             skip_string_view<Opts>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
@@ -2109,14 +2061,8 @@ namespace glz
                         static_assert(false_v<T>, "This should be unreachable");
                      }
                      else {
-                        if (match_quote(ctx, it)) {
+                        if (match_quote_invalid_end<Opts>(ctx, it, end)) {
                            return;
-                        }
-                        if constexpr (not Opts.null_terminated) {
-                           if (it == end) [[unlikely]] {
-                              ctx.error = error_code::unexpected_end;
-                              return;
-                           }
                         }
 
                         // parsing to an empty object, but at this point the JSON presents keys
@@ -2497,14 +2443,8 @@ namespace glz
                         }
 
                         GLZ_SKIP_WS();
-                        if (match_quote(ctx, it)) {
+                        if (match_quote_invalid_end<Opts>(ctx, it, end)) {
                            return;
-                        }
-                        if constexpr (not Opts.null_terminated) {
-                           if (it == end) [[unlikely]] {
-                              ctx.error = error_code::unexpected_end;
-                              return;
-                           }
                         }
 
                         auto* key_start = it;
@@ -2513,14 +2453,8 @@ namespace glz
                            return;
                         const sv key = {key_start, size_t(it - key_start)};
 
-                        if (match_quote(ctx, it)) {
+                        if (match_quote_invalid_end<Opts>(ctx, it, end)) {
                            return;
-                        }
-                        if constexpr (not Opts.null_terminated) {
-                           if (it == end) [[unlikely]] {
-                              ctx.error = error_code::unexpected_end;
-                              return;
-                           }
                         }
 
                         if constexpr (deduction_map.size()) {
@@ -2775,14 +2709,8 @@ namespace glz
             GLZ_SKIP_WS();
 
             // TODO Use key parsing for compiletime known keys
-            if (match_quote(ctx, it)) {
+            if (match_quote_invalid_end<Opts>(ctx, it, end)) {
                return;
-            }
-            if constexpr (not Opts.null_terminated) {
-               if (it == end) [[unlikely]] {
-                  ctx.error = error_code::unexpected_end;
-                  return;
-               }
             }
             auto start = it;
             skip_string_view<Opts>(ctx, it, end);

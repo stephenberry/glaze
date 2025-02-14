@@ -330,6 +330,26 @@ namespace glz::detail
          return false;
       }
    }
+   
+   // Checks for a quote and that we are not at the end (considered an error)
+   template <auto Opts>
+   inline bool match_quote_invalid_end(is_context auto& ctx, auto&& it, auto&& end) noexcept
+   {
+      if (*it != '"') [[unlikely]] {
+         ctx.error = error_code::expected_quote;
+         return true;
+      }
+      else [[likely]] {
+         ++it;
+      }
+      if constexpr (not Opts.null_terminated) {
+         if (it == end) [[unlikely]] {
+            ctx.error = error_code::unexpected_end;
+            return true;
+         }
+      }
+      return false;
+   }
 
 #define GLZ_MATCH_COMMA                          \
    if (*it != ',') [[unlikely]] {                \
