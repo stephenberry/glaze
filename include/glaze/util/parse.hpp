@@ -370,15 +370,6 @@ namespace glz::detail
       }                                          \
    }
 
-#define GLZ_MATCH_CLOSE_BRACE                 \
-   if (*it != '}') [[unlikely]] {             \
-      ctx.error = error_code::expected_brace; \
-      return;                                 \
-   }                                          \
-   else [[likely]] {                          \
-      ++it;                                   \
-   }
-
 #define GLZ_VALID_END(RETURN)                 \
    if constexpr (not Opts.null_terminated) {  \
       if (it == end) {                        \
