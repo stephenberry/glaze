@@ -16,24 +16,27 @@ namespace glz
 {
    namespace detail
    {
-#define GLZ_CSV_NL                             \
-   if (*it == '\n') {                          \
-      ++it;                                    \
-   }                                           \
-   else if (*it == '\r') {                     \
-      ++it;                                    \
-      if (*it == '\n') [[likely]] {            \
-         ++it;                                 \
-      }                                        \
-      else [[unlikely]] {                      \
-         ctx.error = error_code::syntax_error; \
-         return;                               \
-      }                                        \
-   }                                           \
-   else [[unlikely]] {                         \
-      ctx.error = error_code::syntax_error;    \
-      return;                                  \
-   }
+      GLZ_ALWAYS_INLINE bool csv_new_line(is_context auto& ctx, auto&& it) noexcept
+      {
+         if (*it == '\n') {
+            ++it;
+         }
+         else if (*it == '\r') {
+            ++it;
+            if (*it == '\n') [[likely]] {
+               ++it;
+            }
+            else [[unlikely]] {
+               ctx.error = error_code::syntax_error;
+               return true;
+            }
+         }
+         else [[unlikely]] {
+            ctx.error = error_code::syntax_error;
+            return true;
+         }
+         return false;
+      }
 
       template <>
       struct read<CSV>
@@ -294,7 +297,9 @@ namespace glz
                      }
                   }
 
-                  GLZ_MATCH_COMMA;
+                  if (match_invalid_end<',', Opts>(ctx, it, end)) {
+                     return;
+                  }
 
                   using key_type = typename std::decay_t<decltype(value)>::key_type;
                   auto& member = value[key_type(key)];
@@ -375,7 +380,9 @@ namespace glz
                   return;
                }
 
-               GLZ_CSV_NL;
+               if (csv_new_line(ctx, it)) {
+                  return;
+               }
 
                const auto n_keys = keys.size();
 
@@ -454,7 +461,9 @@ namespace glz
                      }
                   }
 
-                  GLZ_MATCH_COMMA;
+                  if (match_invalid_end<',', Opts>(ctx, it, end)) {
+                     return;
+                  }
 
                   const auto index =
                      decode_hash_with_size<CSV, T, HashInfo, HashInfo.type>::op(key.data(), end, key.size());
@@ -562,7 +571,9 @@ namespace glz
                   return;
                }
 
-               GLZ_CSV_NL;
+               if (csv_new_line(ctx, it)) {
+                  return;
+               }
 
                const auto n_keys = keys.size();
 
@@ -620,7 +631,9 @@ namespace glz
                         }
                      }
                      if (!at_end) [[likely]] {
-                        GLZ_CSV_NL;
+                        if (csv_new_line(ctx, it)) {
+                           return;
+                        }
 
                         ++row;
                         at_end = it == end;

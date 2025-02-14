@@ -2634,7 +2634,7 @@ suite write_tests = [] {
       EmptyArray e;
       expect(glz::read_json(e, "[]") == glz::error_code::none);
       expect(glz::read_json(e, " [   ] ") == glz::error_code::none);
-      expect(glz::read_json(e, "[1,2,3]") == glz::error_code::syntax_error);
+      expect(glz::read_json(e, "[1,2,3]") == glz::error_code::expected_bracket);
    };
 
    //* Empty object not allowed
