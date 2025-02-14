@@ -414,14 +414,6 @@ namespace glz::detail
       }                                       \
    }
 
-#define GLZ_INVALID_END(RETURN)                  \
-   if constexpr (not Opts.null_terminated) {     \
-      if (it == end) [[unlikely]] {              \
-         ctx.error = error_code::unexpected_end; \
-         return RETURN;                          \
-      }                                          \
-   }
-
    template <char c>
    GLZ_ALWAYS_INLINE void match(is_context auto&& ctx, auto&& it) noexcept
    {
@@ -479,8 +471,7 @@ namespace glz::detail
          ctx.error = error_code::unexpected_end;
       }
       else if (*it == '/') {
-         while (++it != end && *it != '\n')
-            ;
+         while (++it != end && *it != '\n');
       }
       else if (*it == '*') {
          while (++it != end) {

@@ -150,7 +150,12 @@ namespace glz
 
          if (((it + Length) < end) && comparitor<KeyWithEndQuote>(it)) [[likely]] {
             it += Length;
-            GLZ_INVALID_END();
+            if constexpr (not Opts.null_terminated) {
+               if (it == end) [[unlikely]] {
+                  ctx.error = error_code::unexpected_end;
+                  return;
+               }
+            }
 
             GLZ_SKIP_WS();
             GLZ_MATCH_COLON();
@@ -193,7 +198,12 @@ namespace glz
                   return;
                const sv key = {start, size_t(it - start)};
                ++it;
-               GLZ_INVALID_END();
+               if constexpr (not Opts.null_terminated) {
+                  if (it == end) [[unlikely]] {
+                     ctx.error = error_code::unexpected_end;
+                     return;
+                  }
+               }
 
                GLZ_PARSE_WS_COLON;
 
@@ -255,7 +265,12 @@ namespace glz
                      return;
                   const sv key = {start, size_t(it - start)};
                   ++it; // skip the quote
-                  GLZ_INVALID_END();
+                  if constexpr (not Opts.null_terminated) {
+                     if (it == end) [[unlikely]] {
+                        ctx.error = error_code::unexpected_end;
+                        return;
+                     }
+                  }
 
                   GLZ_PARSE_WS_COLON;
 
@@ -310,7 +325,12 @@ namespace glz
          static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
             GLZ_MATCH_QUOTE;
-            GLZ_INVALID_END();
+            if constexpr (not Opts.null_terminated) {
+               if (it == end) [[unlikely]] {
+                  ctx.error = error_code::unexpected_end;
+                  return;
+               }
+            }
 
             const auto n = value.size();
             for (size_t i = 1; it < end; ++i, ++it) {
@@ -439,7 +459,12 @@ namespace glz
             if constexpr (Opts.quoted_num) {
                GLZ_SKIP_WS();
                GLZ_MATCH_QUOTE;
-               GLZ_INVALID_END();
+               if constexpr (not Opts.null_terminated) {
+                  if (it == end) [[unlikely]] {
+                     ctx.error = error_code::unexpected_end;
+                     return;
+                  }
+               }
             }
 
             if constexpr (!has_ws_handled(Opts)) {
@@ -515,7 +540,12 @@ namespace glz
             }
 
             if constexpr (Opts.quoted_num) {
-               GLZ_INVALID_END();
+               if constexpr (not Opts.null_terminated) {
+                  if (it == end) [[unlikely]] {
+                     ctx.error = error_code::unexpected_end;
+                     return;
+                  }
+               }
                GLZ_MATCH_QUOTE;
                GLZ_VALID_END();
             }
@@ -534,7 +564,12 @@ namespace glz
             if constexpr (Opts.quoted_num) {
                GLZ_SKIP_WS();
                GLZ_MATCH_QUOTE;
-               GLZ_INVALID_END();
+               if constexpr (not Opts.null_terminated) {
+                  if (it == end) [[unlikely]] {
+                     ctx.error = error_code::unexpected_end;
+                     return;
+                  }
+               }
             }
 
             if constexpr (!has_ws_handled(Opts)) {
@@ -592,7 +627,12 @@ namespace glz
             }
 
             if constexpr (Opts.quoted_num) {
-               GLZ_INVALID_END();
+               if constexpr (not Opts.null_terminated) {
+                  if (it == end) [[unlikely]] {
+                     ctx.error = error_code::unexpected_end;
+                     return;
+                  }
+               }
                GLZ_MATCH_QUOTE;
                GLZ_VALID_END();
             }
@@ -624,7 +664,12 @@ namespace glz
                   }
 
                   GLZ_MATCH_QUOTE;
-                  GLZ_INVALID_END();
+                  if constexpr (not Opts.null_terminated) {
+                     if (it == end) [[unlikely]] {
+                        ctx.error = error_code::unexpected_end;
+                        return;
+                     }
+                  }
                }
 
                if constexpr (not Opts.raw_string) {
@@ -760,7 +805,12 @@ namespace glz
                   }
 
                   GLZ_MATCH_QUOTE;
-                  GLZ_INVALID_END();
+                  if constexpr (not Opts.null_terminated) {
+                     if (it == end) [[unlikely]] {
+                        ctx.error = error_code::unexpected_end;
+                        return;
+                     }
+                  }
                }
 
                if constexpr (not Opts.raw_string) {
@@ -944,10 +994,20 @@ namespace glz
                         }
                         else if (*it == '\\') {
                            ++it; // skip the escape
-                           GLZ_INVALID_END();
+                           if constexpr (not Opts.null_terminated) {
+                              if (it == end) [[unlikely]] {
+                                 ctx.error = error_code::unexpected_end;
+                                 return;
+                              }
+                           }
                            if (*it == 'u') {
                               ++it;
-                              GLZ_INVALID_END();
+                              if constexpr (not Opts.null_terminated) {
+                                 if (it == end) [[unlikely]] {
+                                    ctx.error = error_code::unexpected_end;
+                                    return;
+                                 }
+                              }
                               if (!handle_unicode_code_point(it, p, end)) [[unlikely]] {
                                  ctx.error = error_code::unicode_escape_conversion_failure;
                                  return;
@@ -999,7 +1059,12 @@ namespace glz
                }
 
                GLZ_MATCH_QUOTE;
-               GLZ_INVALID_END();
+               if constexpr (not Opts.null_terminated) {
+                  if (it == end) [[unlikely]] {
+                     ctx.error = error_code::unexpected_end;
+                     return;
+                  }
+               }
             }
 
             auto start = it;
@@ -1053,7 +1118,12 @@ namespace glz
                }
 
                GLZ_MATCH_QUOTE;
-               GLZ_INVALID_END();
+               if constexpr (not Opts.null_terminated) {
+                  if (it == end) [[unlikely]] {
+                     ctx.error = error_code::unexpected_end;
+                     return;
+                  }
+               }
             }
 
             if (*it == '\\') [[unlikely]] {
@@ -1105,7 +1175,12 @@ namespace glz
                }
                value = *it++;
             }
-            GLZ_INVALID_END();
+            if constexpr (not Opts.null_terminated) {
+               if (it == end) [[unlikely]] {
+                  ctx.error = error_code::unexpected_end;
+                  return;
+               }
+            }
             GLZ_MATCH_QUOTE;
             GLZ_VALID_END();
          }
@@ -1129,7 +1204,12 @@ namespace glz
                return;
             }
             ++it;
-            GLZ_INVALID_END();
+            if constexpr (not Opts.null_terminated) {
+               if (it == end) [[unlikely]] {
+                  ctx.error = error_code::unexpected_end;
+                  return;
+               }
+            }
 
             if constexpr (N == 1) {
                decode_index<Opts, T, 0>(value, ctx, it, end);
@@ -1173,7 +1253,12 @@ namespace glz
                GLZ_SKIP_WS();
             }
             GLZ_MATCH_QUOTE;
-            GLZ_INVALID_END();
+            if constexpr (not Opts.null_terminated) {
+               if (it == end) [[unlikely]] {
+                  ctx.error = error_code::unexpected_end;
+                  return;
+               }
+            }
             skip_string_view<Opts>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
                return;
@@ -1385,7 +1470,12 @@ namespace glz
                   GLZ_SKIP_WS();
                }
                GLZ_MATCH_OPEN_BRACE;
-               GLZ_INVALID_END();
+               if constexpr (not Opts.null_terminated) {
+                  if (it == end) [[unlikely]] {
+                     ctx.error = error_code::unexpected_end;
+                     return;
+                  }
+               }
                GLZ_ADD_LEVEL;
             }
 
@@ -1443,7 +1533,12 @@ namespace glz
 
                if (*it == ',') {
                   ++it;
-                  GLZ_INVALID_END();
+                  if constexpr (not Opts.null_terminated) {
+                     if (it == end) [[unlikely]] {
+                        ctx.error = error_code::unexpected_end;
+                        return;
+                     }
+                  }
                }
             }
 
@@ -1800,18 +1895,28 @@ namespace glz
                   GLZ_SKIP_WS();
                }
                GLZ_MATCH_OPEN_BRACE;
-               GLZ_INVALID_END();
+               if constexpr (not Opts.null_terminated) {
+                  if (it == end) [[unlikely]] {
+                     ctx.error = error_code::unexpected_end;
+                     return;
+                  }
+               }
                GLZ_ADD_LEVEL;
             }
             const auto ws_start = it;
             GLZ_SKIP_WS();
             const size_t ws_size = size_t(it - ws_start);
 
-            if constexpr ((glaze_object_t<T> || reflectable<T>)&&num_members == 0 && Opts.error_on_unknown_keys) {
+            if constexpr ((glaze_object_t<T> || reflectable<T>) && num_members == 0 && Opts.error_on_unknown_keys) {
                if constexpr (not tag.sv().empty()) {
                   if (*it == '"') {
                      ++it;
-                     GLZ_INVALID_END();
+                     if constexpr (not Opts.null_terminated) {
+                        if (it == end) [[unlikely]] {
+                           ctx.error = error_code::unexpected_end;
+                           return;
+                        }
+                     }
 
                      const auto start = it;
                      skip_string_view<Opts>(ctx, it, end);
@@ -1819,7 +1924,12 @@ namespace glz
                         return;
                      const sv key{start, size_t(it - start)};
                      ++it;
-                     GLZ_INVALID_END();
+                     if constexpr (not Opts.null_terminated) {
+                        if (it == end) [[unlikely]] {
+                           ctx.error = error_code::unexpected_end;
+                           return;
+                        }
+                     }
 
                      if (key == tag.sv()) {
                         GLZ_PARSE_WS_COLON;
@@ -1851,8 +1961,8 @@ namespace glz
             }
             else {
                decltype(auto) fields = [&]() -> decltype(auto) {
-                  if constexpr ((glaze_object_t<T> || reflectable<T>)&&(Opts.error_on_missing_keys ||
-                                                                        Opts.partial_read)) {
+                  if constexpr ((glaze_object_t<T> || reflectable<T>) &&
+                                (Opts.error_on_missing_keys || Opts.partial_read)) {
                      return bit_array<num_members>{};
                   }
                   else {
@@ -1864,7 +1974,7 @@ namespace glz
 
                bool first = true;
                while (true) {
-                  if constexpr ((glaze_object_t<T> || reflectable<T>)&&Opts.partial_read) {
+                  if constexpr ((glaze_object_t<T> || reflectable<T>) && Opts.partial_read) {
                      static constexpr bit_array<num_members> all_fields = [] {
                         bit_array<num_members> arr{};
                         for (size_t i = 0; i < num_members; ++i) {
@@ -1881,14 +1991,14 @@ namespace glz
 
                   if (*it == '}') {
                      GLZ_SUB_LEVEL;
-                     if constexpr ((glaze_object_t<T> ||
-                                    reflectable<T>)&&(Opts.partial_read && Opts.error_on_missing_keys)) {
+                     if constexpr ((glaze_object_t<T> || reflectable<T>) &&
+                                   (Opts.partial_read && Opts.error_on_missing_keys)) {
                         ctx.error = error_code::missing_key;
                         return;
                      }
                      else {
                         ++it;
-                        if constexpr ((glaze_object_t<T> || reflectable<T>)&&Opts.error_on_missing_keys) {
+                        if constexpr ((glaze_object_t<T> || reflectable<T>) && Opts.error_on_missing_keys) {
                            constexpr auto req_fields = required_fields<T, Opts>();
                            if ((req_fields & fields) != req_fields) {
                               ctx.error = error_code::missing_key;
@@ -1904,7 +2014,12 @@ namespace glz
                   }
                   else {
                      GLZ_MATCH_COMMA;
-                     GLZ_INVALID_END();
+                     if constexpr (not Opts.null_terminated) {
+                        if (it == end) [[unlikely]] {
+                           ctx.error = error_code::unexpected_end;
+                           return;
+                        }
+                     }
 
                      if constexpr ((not Opts.minified) && (num_members > 1 || not Opts.error_on_unknown_keys)) {
                         if (ws_size && ws_size < size_t(end - it)) {
@@ -1923,7 +2038,12 @@ namespace glz
                      }
                      else {
                         GLZ_MATCH_QUOTE;
-                        GLZ_INVALID_END();
+                        if constexpr (not Opts.null_terminated) {
+                           if (it == end) [[unlikely]] {
+                              ctx.error = error_code::unexpected_end;
+                              return;
+                           }
+                        }
 
                         // parsing to an empty object, but at this point the JSON presents keys
 
@@ -1936,14 +2056,24 @@ namespace glz
                            return;
                         const sv key{start, size_t(it - start)};
                         ++it;
-                        GLZ_INVALID_END();
+                        if constexpr (not Opts.null_terminated) {
+                           if (it == end) [[unlikely]] {
+                              ctx.error = error_code::unexpected_end;
+                              return;
+                           }
+                        }
 
                         GLZ_PARSE_WS_COLON;
 
                         read<JSON>::handle_unknown<Opts>(key, value, ctx, it, end);
                         if (bool(ctx.error)) [[unlikely]]
                            return;
-                        GLZ_INVALID_END();
+                        if constexpr (not Opts.null_terminated) {
+                           if (it == end) [[unlikely]] {
+                              ctx.error = error_code::unexpected_end;
+                              return;
+                           }
+                        }
                      }
                   }
                   else if constexpr (reflection_type) {
@@ -1954,7 +2084,12 @@ namespace glz
                         return;
                      }
                      ++it;
-                     GLZ_INVALID_END();
+                     if constexpr (not Opts.null_terminated) {
+                        if (it == end) [[unlikely]] {
+                           ctx.error = error_code::unexpected_end;
+                           return;
+                        }
+                     }
 
                      if constexpr (not tag.sv().empty() && not contains_tag<T, tag>()) {
                         // For tagged variants we first check to see if the key matches the tag
@@ -1966,7 +2101,12 @@ namespace glz
                            return;
                         const sv key{start, size_t(it - start)};
                         ++it;
-                        GLZ_INVALID_END();
+                        if constexpr (not Opts.null_terminated) {
+                           if (it == end) [[unlikely]] {
+                              ctx.error = error_code::unexpected_end;
+                              return;
+                           }
+                        }
 
                         if (key == tag.sv()) {
                            GLZ_PARSE_WS_COLON;
@@ -2246,7 +2386,12 @@ namespace glz
                   ++ctx.indentation_level;
 
                   ++it;
-                  GLZ_INVALID_END();
+                  if constexpr (not Opts.null_terminated) {
+                     if (it == end) [[unlikely]] {
+                        ctx.error = error_code::unexpected_end;
+                        return;
+                     }
+                  }
                   using type_counts = variant_type_count<T>;
                   using object_types = typename variant_types<T>::object_types;
                   if constexpr ((type_counts::n_object < 1) //
@@ -2279,7 +2424,12 @@ namespace glz
 
                         GLZ_SKIP_WS();
                         GLZ_MATCH_QUOTE;
-                        GLZ_INVALID_END();
+                        if constexpr (not Opts.null_terminated) {
+                           if (it == end) [[unlikely]] {
+                              ctx.error = error_code::unexpected_end;
+                              return;
+                           }
+                        }
 
                         auto* key_start = it;
                         skip_string_view<Opts>(ctx, it, end);
@@ -2288,7 +2438,12 @@ namespace glz
                         const sv key = {key_start, size_t(it - key_start)};
 
                         GLZ_MATCH_QUOTE;
-                        GLZ_INVALID_END();
+                        if constexpr (not Opts.null_terminated) {
+                           if (it == end) [[unlikely]] {
+                              ctx.error = error_code::unexpected_end;
+                              return;
+                           }
+                        }
 
                         if constexpr (deduction_map.size()) {
                            // We first check if a tag is defined and see if the key matches the tag
@@ -2541,7 +2696,12 @@ namespace glz
 
             // TODO Use key parsing for compiletime known keys
             GLZ_MATCH_QUOTE;
-            GLZ_INVALID_END();
+            if constexpr (not Opts.null_terminated) {
+               if (it == end) [[unlikely]] {
+                  ctx.error = error_code::unexpected_end;
+                  return;
+               }
+            }
             auto start = it;
             skip_string_view<Opts>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
@@ -2586,7 +2746,12 @@ namespace glz
                GLZ_ADD_LEVEL;
                auto start = it;
                ++it;
-               GLZ_INVALID_END();
+               if constexpr (not Opts.null_terminated) {
+                  if (it == end) [[unlikely]] {
+                     ctx.error = error_code::unexpected_end;
+                     return;
+                  }
+               }
                GLZ_SKIP_WS();
                if (*it == '}') {
                   it = start;
@@ -2678,7 +2843,12 @@ namespace glz
 
             if (*it == 'n') {
                ++it;
-               GLZ_INVALID_END();
+               if constexpr (not Opts.null_terminated) {
+                  if (it == end) [[unlikely]] {
+                     ctx.error = error_code::unexpected_end;
+                     return;
+                  }
+               }
                match<"ull", Opts>(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
                   return;
