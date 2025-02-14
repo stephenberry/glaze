@@ -47,7 +47,9 @@ namespace glz::detail
    template <opts Opts>
    inline void skip_object_beve(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
-      GLZ_END_CHECK();
+      if (invalid_end(ctx, it, end)) {
+         return;
+      }
       const auto tag = uint8_t(*it);
       ++it;
 
@@ -198,7 +200,9 @@ namespace glz::detail
    template <opts Opts>
    inline void skip_value<BEVE>::op(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
-      GLZ_END_CHECK();
+      if (invalid_end(ctx, it, end)) {
+         return;
+      }
       switch (uint8_t(*it) & 0b00000'111) {
       case tag::null: {
          ++it;

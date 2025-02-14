@@ -83,7 +83,9 @@ namespace glz
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
-            GLZ_END_CHECK();
+            if (invalid_end(ctx, it, end)) {
+               return;
+            }
             if (uint8_t(*it)) [[unlikely]] {
                ctx.error = error_code::syntax_error;
                return;
@@ -108,7 +110,9 @@ namespace glz
          template <auto Opts>
          static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
-            GLZ_END_CHECK();
+            if (invalid_end(ctx, it, end)) {
+               return;
+            }
             const auto tag = uint8_t(*it);
 
             constexpr uint8_t type = uint8_t(3) << 3;
@@ -127,7 +131,9 @@ namespace glz
 
             const auto num_bytes = (value.size() + 7) / 8;
             for (size_t byte_i{}, i{}; byte_i < num_bytes; ++byte_i, ++it) {
-               GLZ_END_CHECK();
+               if (invalid_end(ctx, it, end)) {
+                  return;
+               }
                uint8_t byte;
                std::memcpy(&byte, it, 1);
                for (size_t bit_i = 0; bit_i < 8 && i < n; ++bit_i, ++i) {
@@ -184,7 +190,9 @@ namespace glz
          GLZ_ALWAYS_INLINE static void op(auto&& value, const uint8_t tag, is_context auto&& ctx, auto&& it,
                                           auto&& end) noexcept
          {
-            GLZ_END_CHECK();
+            if (invalid_end(ctx, it, end)) {
+               return;
+            }
 
             using V = std::decay_t<decltype(value)>;
 
@@ -298,7 +306,9 @@ namespace glz
             requires(not has_no_header(Opts))
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
-            GLZ_END_CHECK();
+            if (invalid_end(ctx, it, end)) {
+               return;
+            }
             const auto tag = uint8_t(*it);
             ++it;
             op<no_header_on<Opts>()>(value, tag, ctx, it, end);
@@ -328,7 +338,9 @@ namespace glz
                   std::floating_point<V> ? 0 : (std::is_signed_v<V> ? 0b000'01'000 : 0b000'10'000);
                constexpr uint8_t header = tag::number | type | (byte_count<V> << 5);
 
-               GLZ_END_CHECK();
+               if (invalid_end(ctx, it, end)) {
+                  return;
+               }
                const auto tag = uint8_t(*it);
                if (tag != header) {
                   ctx.error = error_code::syntax_error;
@@ -367,7 +379,9 @@ namespace glz
             else {
                constexpr uint8_t header = tag::extensions | 0b00011'000;
 
-               GLZ_END_CHECK();
+               if (invalid_end(ctx, it, end)) {
+                  return;
+               }
                const auto tag = uint8_t(*it);
                if (tag != header) {
                   ctx.error = error_code::syntax_error;
@@ -381,7 +395,9 @@ namespace glz
                constexpr uint8_t complex_number = 0;
                constexpr uint8_t complex_header = complex_number | type | (byte_count<V> << 5);
 
-               GLZ_END_CHECK();
+               if (invalid_end(ctx, it, end)) {
+                  return;
+               }
                const auto complex_tag = uint8_t(*it);
                if (complex_tag != complex_header) {
                   ctx.error = error_code::syntax_error;
@@ -406,7 +422,9 @@ namespace glz
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
-            GLZ_END_CHECK();
+            if (invalid_end(ctx, it, end)) {
+               return;
+            }
             const auto tag = uint8_t(*it);
             if ((tag & 0b0000'1111) != tag::boolean) {
                ctx.error = error_code::syntax_error;
@@ -464,7 +482,9 @@ namespace glz
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
             constexpr uint8_t header = tag::extensions | 0b00001'000;
-            GLZ_END_CHECK();
+            if (invalid_end(ctx, it, end)) {
+               return;
+            }
             const auto tag = uint8_t(*it);
             if (tag != header) [[unlikely]] {
                ctx.error = error_code::syntax_error;
@@ -513,7 +533,9 @@ namespace glz
          {
             constexpr uint8_t header = tag::string;
 
-            GLZ_END_CHECK();
+            if (invalid_end(ctx, it, end)) {
+               return;
+            }
             const auto tag = uint8_t(*it);
             if (tag != header) [[unlikely]] {
                ctx.error = error_code::syntax_error;
@@ -551,7 +573,9 @@ namespace glz
          {
             using V = range_value_t<std::decay_t<T>>;
 
-            GLZ_END_CHECK();
+            if (invalid_end(ctx, it, end)) {
+               return;
+            }
             const auto tag = uint8_t(*it);
 
             if constexpr (boolean_like<V>) {
@@ -573,7 +597,9 @@ namespace glz
 
                const auto num_bytes = (value.size() + 7) / 8;
                for (size_t byte_i{}, i{}; byte_i < num_bytes; ++byte_i, ++it) {
-                  GLZ_END_CHECK();
+                  if (invalid_end(ctx, it, end)) {
+                     return;
+                  }
                   uint8_t byte;
                   std::memcpy(&byte, it, 1);
                   for (size_t bit_i = 7; bit_i < 8 && i < n; --bit_i, ++i) {
@@ -685,7 +711,9 @@ namespace glz
          {
             using V = range_value_t<std::decay_t<T>>;
 
-            GLZ_END_CHECK();
+            if (invalid_end(ctx, it, end)) {
+               return;
+            }
             const auto tag = uint8_t(*it);
 
             if constexpr (boolean_like<V>) {
@@ -713,7 +741,9 @@ namespace glz
 
                const auto num_bytes = (value.size() + 7) / 8;
                for (size_t byte_i{}, i{}; byte_i < num_bytes; ++byte_i, ++it) {
-                  GLZ_END_CHECK();
+                  if (invalid_end(ctx, it, end)) {
+                     return;
+                  }
                   uint8_t byte;
                   std::memcpy(&byte, it, 1);
                   for (size_t bit_i = 7; bit_i < 8 && i < n; --bit_i, ++i) {
@@ -728,7 +758,9 @@ namespace glz
 
                auto prepare = [&](const size_t element_size) -> size_t {
                   ++it;
-                  GLZ_END_CHECK(0);
+                  if (invalid_end(ctx, it, end)) {
+                     return 0;
+                  }
 
                   std::conditional_t<Opts.partial_read, size_t, const size_t> n = int_from_compressed(ctx, it, end);
                   if (bool(ctx.error)) [[unlikely]] {
@@ -892,7 +924,9 @@ namespace glz
                   return;
                }
                ++it;
-               GLZ_END_CHECK();
+               if (invalid_end(ctx, it, end)) {
+                  return;
+               }
 
                using X = typename V::value_type;
                constexpr uint8_t complex_array = 1;
@@ -980,7 +1014,9 @@ namespace glz
             constexpr uint8_t byte_cnt = str_t<Key> ? 0 : byte_count<Key>;
             constexpr uint8_t header = tag::object | type | (byte_cnt << 5);
 
-            GLZ_END_CHECK();
+            if (invalid_end(ctx, it, end)) {
+               return;
+            }
             const auto tag = uint8_t(*it);
             if (tag != header) [[unlikely]] {
                if constexpr (Opts.allow_conversions) {
@@ -1044,7 +1080,9 @@ namespace glz
             constexpr uint8_t byte_cnt = str_t<Key> ? 0 : byte_count<Key>;
             constexpr uint8_t header = tag::object | type | (byte_cnt << 5);
 
-            GLZ_END_CHECK();
+            if (invalid_end(ctx, it, end)) {
+               return;
+            }
             const auto tag = uint8_t(*it);
             if (tag != header) [[unlikely]] {
                ctx.error = error_code::syntax_error;
@@ -1080,7 +1118,9 @@ namespace glz
             constexpr uint8_t byte_cnt = str_t<Key> ? 0 : byte_count<Key>;
             constexpr uint8_t header = tag::object | type | (byte_cnt << 5);
 
-            GLZ_END_CHECK();
+            if (invalid_end(ctx, it, end)) {
+               return;
+            }
             const auto tag = uint8_t(*it);
             if (tag != header) [[unlikely]] {
                if constexpr (Opts.allow_conversions) {
@@ -1168,7 +1208,9 @@ namespace glz
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
-            GLZ_END_CHECK();
+            if (invalid_end(ctx, it, end)) {
+               return;
+            }
             const auto tag = uint8_t(*it);
 
             if (tag == tag::null) {
@@ -1214,7 +1256,9 @@ namespace glz
             else {
                constexpr uint8_t header = tag::string;
 
-               GLZ_END_CHECK();
+               if (invalid_end(ctx, it, end)) {
+                  return;
+               }
                const auto tag = uint8_t(*it);
                if (tag != header) [[unlikely]] {
                   ctx.error = error_code::syntax_error;
@@ -1270,7 +1314,9 @@ namespace glz
             constexpr uint8_t type = 0; // string key
             constexpr uint8_t header = tag::object | type;
 
-            GLZ_END_CHECK();
+            if (invalid_end(ctx, it, end)) {
+               return;
+            }
             const auto tag = uint8_t(*it);
             if (tag != header) [[unlikely]] {
                ctx.error = error_code::syntax_error;
@@ -1395,7 +1441,9 @@ namespace glz
          template <auto Opts>
          static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
-            GLZ_END_CHECK();
+            if (invalid_end(ctx, it, end)) {
+               return;
+            }
             const auto tag = uint8_t(*it);
             if (tag != tag::generic_array) [[unlikely]] {
                ctx.error = error_code::syntax_error;
@@ -1425,7 +1473,9 @@ namespace glz
          template <auto Opts>
          static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
-            GLZ_END_CHECK();
+            if (invalid_end(ctx, it, end)) {
+               return;
+            }
             const auto tag = uint8_t(*it);
             if (tag != tag::generic_array) [[unlikely]] {
                ctx.error = error_code::syntax_error;
