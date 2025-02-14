@@ -232,7 +232,12 @@ namespace glz
             value = get<I>(reflect<T>::values);
 
             ++it;
-            GLZ_VALID_END();
+            if constexpr (not Opts.null_terminated) {
+               if (it == end) {
+                  ctx.error = error_code::end_reached;
+                  return;
+               }
+            }
          }
          else [[unlikely]] {
             ctx.error = error_code::unexpected_enum;
@@ -336,7 +341,12 @@ namespace glz
             for (size_t i = 1; it < end; ++i, ++it) {
                if (*it == '"') {
                   ++it;
-                  GLZ_VALID_END();
+                  if constexpr (not Opts.null_terminated) {
+                     if (it == end) {
+                        ctx.error = error_code::end_reached;
+                        return;
+                     }
+                  }
                   return;
                }
 
@@ -553,10 +563,20 @@ namespace glz
                if (match<'"'>(ctx, it)) {
                   return;
                }
-               GLZ_VALID_END();
+               if constexpr (not Opts.null_terminated) {
+                  if (it == end) {
+                     ctx.error = error_code::end_reached;
+                     return;
+                  }
+               }
             }
             else {
-               GLZ_VALID_END();
+               if constexpr (not Opts.null_terminated) {
+                  if (it == end) {
+                     ctx.error = error_code::end_reached;
+                     return;
+                  }
+               }
             }
          }
       };
@@ -638,10 +658,20 @@ namespace glz
                if (match<'"'>(ctx, it)) {
                   return;
                }
-               GLZ_VALID_END();
+               if constexpr (not Opts.null_terminated) {
+                  if (it == end) {
+                     ctx.error = error_code::end_reached;
+                     return;
+                  }
+               }
             }
             else {
-               GLZ_VALID_END();
+               if constexpr (not Opts.null_terminated) {
+                  if (it == end) {
+                     ctx.error = error_code::end_reached;
+                     return;
+                  }
+               }
             }
          }
       };
@@ -985,7 +1015,12 @@ namespace glz
                         if (*it == '"') {
                            value.assign(buffer.data(), size_t(p - buffer.data()));
                            ++it;
-                           GLZ_VALID_END();
+                           if constexpr (not Opts.null_terminated) {
+                              if (it == end) {
+                                 ctx.error = error_code::end_reached;
+                                 return;
+                              }
+                           }
                            return;
                         }
                         else if (*it == '\\') {
@@ -1094,7 +1129,12 @@ namespace glz
                value.assign(start, n);
             }
             ++it; // skip closing quote
-            GLZ_VALID_END();
+            if constexpr (not Opts.null_terminated) {
+               if (it == end) {
+                  ctx.error = error_code::end_reached;
+                  return;
+               }
+            }
          }
       };
 
@@ -1172,7 +1212,12 @@ namespace glz
             if (match<'"'>(ctx, it)) {
                return;
             }
-            GLZ_VALID_END();
+            if constexpr (not Opts.null_terminated) {
+               if (it == end) {
+                  ctx.error = error_code::end_reached;
+                  return;
+               }
+            }
          }
       };
 
@@ -1251,7 +1296,12 @@ namespace glz
             if (match<'"'>(ctx, it)) {
                return;
             }
-            GLZ_VALID_END();
+            if constexpr (not Opts.null_terminated) {
+               if (it == end) {
+                  ctx.error = error_code::end_reached;
+                  return;
+               }
+            }
          }
       };
 
@@ -1500,7 +1550,12 @@ namespace glz
                   if constexpr (not Opts.null_terminated) {
                      --ctx.indentation_level;
                   }
-                  GLZ_VALID_END();
+                  if constexpr (not Opts.null_terminated) {
+                     if (it == end) {
+                        ctx.error = error_code::end_reached;
+                        return;
+                     }
+                  }
                   return;
                }
 
@@ -1734,7 +1789,12 @@ namespace glz
                if constexpr (not Opts.null_terminated) {
                   --ctx.indentation_level;
                }
-               GLZ_VALID_END();
+               if constexpr (not Opts.null_terminated) {
+                  if (it == end) {
+                     ctx.error = error_code::end_reached;
+                     return;
+                  }
+               }
             }
          }
       };
@@ -1784,7 +1844,12 @@ namespace glz
                      --ctx.indentation_level;
                   }
                   ++it;
-                  GLZ_VALID_END();
+                  if constexpr (not Opts.null_terminated) {
+                     if (it == end) {
+                        ctx.error = error_code::end_reached;
+                        return;
+                     }
+                  }
                   return;
                }
                if (match_invalid_end<',', Opts>(ctx, it, end)) {
@@ -1908,7 +1973,12 @@ namespace glz
             if constexpr (not Opts.null_terminated) {
                --ctx.indentation_level;
             }
-            GLZ_VALID_END();
+            if constexpr (not Opts.null_terminated) {
+               if (it == end) {
+                  ctx.error = error_code::end_reached;
+                  return;
+               }
+            }
          }
       };
 
@@ -1998,7 +2068,12 @@ namespace glz
                      --ctx.indentation_level;
                   }
                   ++it;
-                  GLZ_VALID_END();
+                  if constexpr (not Opts.null_terminated) {
+                     if (it == end) {
+                        ctx.error = error_code::end_reached;
+                        return;
+                     }
+                  }
                   if constexpr (Opts.partial_read) {
                      ctx.error = error_code::partial_read_complete;
                   }
@@ -2055,7 +2130,12 @@ namespace glz
                               return;
                            }
                         }
-                        GLZ_VALID_END();
+                        if constexpr (not Opts.null_terminated) {
+                           if (it == end) {
+                              ctx.error = error_code::end_reached;
+                              return;
+                           }
+                        }
                      }
                      return;
                   }
@@ -2752,7 +2832,12 @@ namespace glz
             if (match<'"'>(ctx, it)) {
                return;
             }
-            GLZ_VALID_END();
+            if constexpr (not Opts.null_terminated) {
+               if (it == end) {
+                  ctx.error = error_code::end_reached;
+                  return;
+               }
+            }
 
             static constexpr auto id_map = make_variant_id_map<T>();
             auto id_it = id_map.find(type_id);

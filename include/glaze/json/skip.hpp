@@ -49,7 +49,12 @@ namespace glz::detail
                --ctx.indentation_level;
             }
             ++it;
-            GLZ_VALID_END();
+            if constexpr (not Opts.null_terminated) {
+               if (it == end) {
+                  ctx.error = error_code::end_reached;
+                  return;
+               }
+            }
             return;
          }
          while (true) {
@@ -83,7 +88,12 @@ namespace glz::detail
          if constexpr (not Opts.null_terminated) {
             --ctx.indentation_level;
          }
-         GLZ_VALID_END();
+         if constexpr (not Opts.null_terminated) {
+            if (it == end) {
+               ctx.error = error_code::end_reached;
+               return;
+            }
+         }
       }
    }
 
@@ -118,7 +128,12 @@ namespace glz::detail
                --ctx.indentation_level;
             }
             ++it;
-            GLZ_VALID_END();
+            if constexpr (not Opts.null_terminated) {
+               if (it == end) {
+                  ctx.error = error_code::end_reached;
+                  return;
+               }
+            }
             return;
          }
          while (true) {
@@ -140,7 +155,12 @@ namespace glz::detail
          if constexpr (not Opts.null_terminated) {
             --ctx.indentation_level;
          }
-         GLZ_VALID_END();
+         if constexpr (not Opts.null_terminated) {
+            if (it == end) {
+               ctx.error = error_code::end_reached;
+               return;
+            }
+         }
       }
    }
 

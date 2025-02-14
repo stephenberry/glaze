@@ -369,14 +369,6 @@ namespace glz::detail
          return;                                 \
       }                                          \
    }
-
-#define GLZ_VALID_END(RETURN)                 \
-   if constexpr (not Opts.null_terminated) {  \
-      if (it == end) {                        \
-         ctx.error = error_code::end_reached; \
-         return RETURN;                       \
-      }                                       \
-   }
    
    template <char C>
    GLZ_ALWAYS_INLINE bool match(is_context auto& ctx, auto&& it) noexcept
