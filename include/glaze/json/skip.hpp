@@ -33,7 +33,9 @@ namespace glz::detail
          skip_until_closed<Opts, '{', '}'>(ctx, it, end);
       }
       else {
-         GLZ_ADD_LEVEL;
+         if constexpr (not Opts.null_terminated) {
+            ++ctx.indentation_level;
+         }
          ++it;
          if constexpr (not Opts.null_terminated) {
             if (it == end) [[unlikely]] {
@@ -43,7 +45,9 @@ namespace glz::detail
          }
          GLZ_SKIP_WS();
          if (*it == '}') {
-            GLZ_SUB_LEVEL;
+            if constexpr (not Opts.null_terminated) {
+               --ctx.indentation_level;
+            }
             ++it;
             GLZ_VALID_END();
             return;
@@ -74,7 +78,9 @@ namespace glz::detail
             GLZ_SKIP_WS();
          }
          match<'}'>(ctx, it);
-         GLZ_SUB_LEVEL;
+         if constexpr (not Opts.null_terminated) {
+            --ctx.indentation_level;
+         }
          GLZ_VALID_END();
       }
    }
@@ -94,7 +100,9 @@ namespace glz::detail
          skip_until_closed<Opts, '[', ']'>(ctx, it, end);
       }
       else {
-         GLZ_ADD_LEVEL;
+         if constexpr (not Opts.null_terminated) {
+            ++ctx.indentation_level;
+         }
          ++it;
          if constexpr (not Opts.null_terminated) {
             if (it == end) [[unlikely]] {
@@ -104,7 +112,9 @@ namespace glz::detail
          }
          GLZ_SKIP_WS();
          if (*it == ']') {
-            GLZ_SUB_LEVEL;
+            if constexpr (not Opts.null_terminated) {
+               --ctx.indentation_level;
+            }
             ++it;
             GLZ_VALID_END();
             return;
@@ -125,7 +135,9 @@ namespace glz::detail
             GLZ_SKIP_WS();
          }
          match<']'>(ctx, it);
-         GLZ_SUB_LEVEL;
+         if constexpr (not Opts.null_terminated) {
+            --ctx.indentation_level;
+         }
          GLZ_VALID_END();
       }
    }

@@ -403,7 +403,9 @@ namespace glz
                GLZ_SKIP_WS();
             }
             GLZ_MATCH_OPEN_BRACKET;
-            GLZ_ADD_LEVEL;
+            if constexpr (not Opts.null_terminated) {
+               ++ctx.indentation_level;
+            }
 
             auto* ptr = reinterpret_cast<typename T::value_type*>(&v);
             static_assert(sizeof(T) == sizeof(typename T::value_type) * 2);
@@ -421,7 +423,9 @@ namespace glz
 
             GLZ_SKIP_WS();
             GLZ_MATCH_CLOSE_BRACKET;
-            GLZ_SUB_LEVEL;
+            if constexpr (not Opts.null_terminated) {
+               --ctx.indentation_level;
+            }
          }
       };
 
@@ -1314,12 +1318,16 @@ namespace glz
             }
 
             GLZ_MATCH_OPEN_BRACKET;
-            GLZ_ADD_LEVEL;
+            if constexpr (not Opts.null_terminated) {
+               ++ctx.indentation_level;
+            }
             GLZ_SKIP_WS();
 
             value.clear();
             if (*it == ']') [[unlikely]] {
-               GLZ_SUB_LEVEL;
+               if constexpr (not Opts.null_terminated) {
+                  --ctx.indentation_level;
+               }
                ++it;
                return;
             }
@@ -1333,7 +1341,9 @@ namespace glz
                value.emplace(std::move(v));
                GLZ_SKIP_WS();
                if (*it == ']') {
-                  GLZ_SUB_LEVEL;
+                  if constexpr (not Opts.null_terminated) {
+                     --ctx.indentation_level;
+                  }
                   ++it;
                   return;
                }
@@ -1357,13 +1367,17 @@ namespace glz
             }
 
             GLZ_MATCH_OPEN_BRACKET;
-            GLZ_ADD_LEVEL;
+            if constexpr (not Opts.null_terminated) {
+               ++ctx.indentation_level;
+            }
 
             const auto ws_start = it;
             GLZ_SKIP_WS();
 
             if (*it == ']') {
-               GLZ_SUB_LEVEL;
+               if constexpr (not Opts.null_terminated) {
+                  --ctx.indentation_level;
+               }
                ++it;
                if constexpr (resizable<T> && not Opts.append_arrays) {
                   value.clear();
@@ -1400,7 +1414,9 @@ namespace glz
                      GLZ_SKIP_WS();
                   }
                   else if (*it == ']') {
-                     GLZ_SUB_LEVEL;
+                     if constexpr (not Opts.null_terminated) {
+                        --ctx.indentation_level;
+                     }
                      ++it;
                      if constexpr (erasable<T>) {
                         value.erase(value_it,
@@ -1442,7 +1458,9 @@ namespace glz
                         GLZ_SKIP_WS();
                      }
                      else if (*it == ']') {
-                        GLZ_SUB_LEVEL;
+                        if constexpr (not Opts.null_terminated) {
+                           --ctx.indentation_level;
+                        }
                         ++it;
                         return;
                      }
@@ -1476,7 +1494,9 @@ namespace glz
                      return;
                   }
                }
-               GLZ_ADD_LEVEL;
+               if constexpr (not Opts.null_terminated) {
+                  ++ctx.indentation_level;
+               }
             }
 
             // clear all contents and repopulate
@@ -1487,7 +1507,9 @@ namespace glz
 
                if (*it == '}') {
                   ++it;
-                  GLZ_SUB_LEVEL;
+                  if constexpr (not Opts.null_terminated) {
+                     --ctx.indentation_level;
+                  }
                   GLZ_VALID_END();
                   return;
                }
@@ -1620,7 +1642,9 @@ namespace glz
             }
 
             GLZ_MATCH_OPEN_BRACKET;
-            GLZ_ADD_LEVEL;
+            if constexpr (not Opts.null_terminated) {
+               ++ctx.indentation_level;
+            }
             const auto n = number_of_array_elements<Opts>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
                return;
@@ -1638,7 +1662,9 @@ namespace glz
                ++i;
             }
             match<']'>(ctx, it);
-            GLZ_SUB_LEVEL;
+            if constexpr (not Opts.null_terminated) {
+               --ctx.indentation_level;
+            }
          }
       };
 
@@ -1663,7 +1689,9 @@ namespace glz
             }
 
             GLZ_MATCH_OPEN_BRACKET;
-            GLZ_ADD_LEVEL;
+            if constexpr (not Opts.null_terminated) {
+               ++ctx.indentation_level;
+            }
             GLZ_SKIP_WS();
 
             invoke_table<N>([&]<size_t I>() {
@@ -1671,7 +1699,9 @@ namespace glz
                   return;
 
                if (*it == ']') {
-                  GLZ_SUB_LEVEL;
+                  if constexpr (not Opts.null_terminated) {
+                     --ctx.indentation_level;
+                  }
                   return;
                }
                if constexpr (I != 0) {
@@ -1703,7 +1733,9 @@ namespace glz
                if (bool(ctx.error)) [[unlikely]]
                   return;
                match<']'>(ctx, it);
-               GLZ_SUB_LEVEL;
+               if constexpr (not Opts.null_terminated) {
+                  --ctx.indentation_level;
+               }
                GLZ_VALID_END();
             }
          }
@@ -1720,7 +1752,9 @@ namespace glz
             }
 
             GLZ_MATCH_OPEN_BRACKET;
-            GLZ_ADD_LEVEL;
+            if constexpr (not Opts.null_terminated) {
+               ++ctx.indentation_level;
+            }
 
             std::string& s = string_buffer();
 
@@ -1746,7 +1780,9 @@ namespace glz
 
                GLZ_SKIP_WS();
                if (*it == ']') {
-                  GLZ_SUB_LEVEL;
+                  if constexpr (not Opts.null_terminated) {
+                     --ctx.indentation_level;
+                  }
                   ++it;
                   GLZ_VALID_END();
                   return;
@@ -1813,7 +1849,9 @@ namespace glz
                   GLZ_SKIP_WS();
                }
                GLZ_MATCH_OPEN_BRACE;
-               GLZ_ADD_LEVEL;
+               if constexpr (not Opts.null_terminated) {
+                  ++ctx.indentation_level;
+               }
             }
             GLZ_SKIP_WS();
 
@@ -1821,7 +1859,9 @@ namespace glz
             [[maybe_unused]] bit_array<1> fields{};
 
             if (*it == '}') {
-               GLZ_SUB_LEVEL;
+               if constexpr (not Opts.null_terminated) {
+                  --ctx.indentation_level;
+               }
                if constexpr (Opts.error_on_missing_keys) {
                   ctx.error = error_code::missing_key;
                }
@@ -1863,7 +1903,9 @@ namespace glz
             GLZ_SKIP_WS();
 
             match<'}'>(ctx, it);
-            GLZ_SUB_LEVEL;
+            if constexpr (not Opts.null_terminated) {
+               --ctx.indentation_level;
+            }
             GLZ_VALID_END();
          }
       };
@@ -1901,7 +1943,9 @@ namespace glz
                      return;
                   }
                }
-               GLZ_ADD_LEVEL;
+               if constexpr (not Opts.null_terminated) {
+                  ++ctx.indentation_level;
+               }
             }
             const auto ws_start = it;
             GLZ_SKIP_WS();
@@ -1948,7 +1992,9 @@ namespace glz
                }
 
                if (*it == '}') [[likely]] {
-                  GLZ_SUB_LEVEL;
+                  if constexpr (not Opts.null_terminated) {
+                     --ctx.indentation_level;
+                  }
                   ++it;
                   GLZ_VALID_END();
                   if constexpr (Opts.partial_read) {
@@ -1990,7 +2036,9 @@ namespace glz
                   }
 
                   if (*it == '}') {
-                     GLZ_SUB_LEVEL;
+                     if constexpr (not Opts.null_terminated) {
+                        --ctx.indentation_level;
+                     }
                      if constexpr ((glaze_object_t<T> || reflectable<T>) &&
                                    (Opts.partial_read && Opts.error_on_missing_keys)) {
                         ctx.error = error_code::missing_key;
@@ -2691,7 +2739,9 @@ namespace glz
             }
 
             GLZ_MATCH_OPEN_BRACKET;
-            GLZ_ADD_LEVEL;
+            if constexpr (not Opts.null_terminated) {
+               ++ctx.indentation_level;
+            }
             GLZ_SKIP_WS();
 
             // TODO Use key parsing for compiletime known keys
@@ -2728,7 +2778,9 @@ namespace glz
 
             GLZ_SKIP_WS();
             match<']'>(ctx, it);
-            GLZ_SUB_LEVEL;
+            if constexpr (not Opts.null_terminated) {
+               --ctx.indentation_level;
+            }
          }
       };
 
@@ -2743,7 +2795,9 @@ namespace glz
             }
 
             if (*it == '{') {
-               GLZ_ADD_LEVEL;
+               if constexpr (not Opts.null_terminated) {
+                  ++ctx.indentation_level;
+               }
                auto start = it;
                ++it;
                if constexpr (not Opts.null_terminated) {
@@ -2790,7 +2844,9 @@ namespace glz
                      }
                      GLZ_SKIP_WS();
                      GLZ_MATCH_CLOSE_BRACE;
-                     GLZ_SUB_LEVEL;
+                     if constexpr (not Opts.null_terminated) {
+                        --ctx.indentation_level;
+                     }
                   }
                   else {
                      it = start;
