@@ -354,7 +354,7 @@ namespace glz::detail
       }
       return false;
    }
-   
+
    template <char C>
    GLZ_ALWAYS_INLINE bool match(is_context auto& ctx, auto&& it) noexcept
    {
@@ -474,61 +474,9 @@ namespace glz::detail
       return (chunk & repeat_byte8(0b11110000u));
    }
 
-#define GLZ_SKIP_WS(RETURN)                                              \
-   if constexpr (!Opts.minified) {                                       \
-      if constexpr (Opts.null_terminated) {                              \
-         if constexpr (Opts.comments) {                                  \
-            while (whitespace_comment_table[uint8_t(*it)]) {             \
-               if (*it == '/') [[unlikely]] {                            \
-                  skip_comment(ctx, it, end);                            \
-                  if (bool(ctx.error)) [[unlikely]] {                    \
-                     return RETURN;                                      \
-                  }                                                      \
-               }                                                         \
-               else [[likely]] {                                         \
-                  ++it;                                                  \
-               }                                                         \
-            }                                                            \
-         }                                                               \
-         else {                                                          \
-            while (whitespace_table[uint8_t(*it)]) {                     \
-               ++it;                                                     \
-            }                                                            \
-         }                                                               \
-      }                                                                  \
-      else {                                                             \
-         if constexpr (Opts.comments) {                                  \
-            while (it < end && whitespace_comment_table[uint8_t(*it)]) { \
-               if (*it == '/') [[unlikely]] {                            \
-                  skip_comment(ctx, it, end);                            \
-                  if (bool(ctx.error)) [[unlikely]] {                    \
-                     return RETURN;                                      \
-                  }                                                      \
-               }                                                         \
-               else [[likely]] {                                         \
-                  ++it;                                                  \
-               }                                                         \
-            }                                                            \
-            if (it == end) [[unlikely]] {                                \
-               ctx.error = error_code::end_reached;                      \
-               return RETURN;                                            \
-            }                                                            \
-         }                                                               \
-         else {                                                          \
-            while (it < end && whitespace_table[uint8_t(*it)]) {         \
-               ++it;                                                     \
-            }                                                            \
-            if (it == end) [[unlikely]] {                                \
-               ctx.error = error_code::end_reached;                      \
-               return RETURN;                                            \
-            }                                                            \
-         }                                                               \
-      }                                                                  \
-   }
-
    // skip whitespace
    template <opts Opts>
-   GLZ_ALWAYS_INLINE void skip_ws(is_context auto&& ctx, auto&& it, auto&& end) noexcept
+   GLZ_ALWAYS_INLINE bool skip_ws(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       if constexpr (!Opts.minified) {
          if constexpr (Opts.null_terminated) {
@@ -537,7 +485,7 @@ namespace glz::detail
                   if (*it == '/') [[unlikely]] {
                      skip_comment(ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]] {
-                        return;
+                        return true;
                      }
                   }
                   else [[likely]] {
@@ -557,7 +505,7 @@ namespace glz::detail
                   if (*it == '/') [[unlikely]] {
                      skip_comment(ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]] {
-                        return;
+                        return true;
                      }
                   }
                   else [[likely]] {
@@ -566,7 +514,7 @@ namespace glz::detail
                }
                if (it == end) [[unlikely]] {
                   ctx.error = error_code::end_reached;
-                  return;
+                  return true;
                }
             }
             else {
@@ -575,11 +523,13 @@ namespace glz::detail
                }
                if (it == end) [[unlikely]] {
                   ctx.error = error_code::end_reached;
-                  return;
+                  return true;
                }
             }
          }
       }
+
+      return false;
    }
 
    GLZ_ALWAYS_INLINE void skip_matching_ws(const auto* ws, auto&& it, uint64_t length) noexcept

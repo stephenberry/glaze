@@ -136,11 +136,15 @@ namespace glz
       };
 
 #define GLZ_PARSE_WS_COLON                           \
-   GLZ_SKIP_WS();                                    \
+   if (skip_ws<Opts>(ctx, it, end)) {                \
+      return;                                        \
+   }                                                 \
    if (match_invalid_end<':', Opts>(ctx, it, end)) { \
       return;                                        \
    }                                                 \
-   GLZ_SKIP_WS();
+   if (skip_ws<Opts>(ctx, it, end)) {                \
+      return;                                        \
+   }
 
       template <opts Opts, class T, size_t I, class Value, class... SelectedIndex>
          requires(glaze_object_t<T> || reflectable<T>)
@@ -159,11 +163,15 @@ namespace glz
                }
             }
 
-            GLZ_SKIP_WS();
+            if (skip_ws<Opts>(ctx, it, end)) {
+               return;
+            }
             if (match_invalid_end<':', Opts>(ctx, it, end)) {
                return;
             }
-            GLZ_SKIP_WS();
+            if (skip_ws<Opts>(ctx, it, end)) {
+               return;
+            }
 
             using V = refl_t<T, I>;
 
@@ -320,7 +328,9 @@ namespace glz
          static void op(auto&&, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
             if constexpr (!has_ws_handled(Opts)) {
-               GLZ_SKIP_WS();
+               if (skip_ws<Opts>(ctx, it, end)) {
+                  return;
+               }
             }
 
             match<R"("")", Opts>(ctx, it, end);
@@ -410,7 +420,9 @@ namespace glz
          {
             constexpr auto Opts = ws_handled_off<Options>();
             if constexpr (!has_ws_handled(Options)) {
-               GLZ_SKIP_WS();
+               if (skip_ws<Opts>(ctx, it, end)) {
+                  return;
+               }
             }
             if (match_invalid_end<'[', Opts>(ctx, it, end)) {
                return;
@@ -425,7 +437,9 @@ namespace glz
             if (bool(ctx.error)) [[unlikely]]
                return;
 
-            GLZ_SKIP_WS();
+            if (skip_ws<Opts>(ctx, it, end)) {
+               return;
+            }
 
             if (match_invalid_end<',', Opts>(ctx, it, end)) {
                return;
@@ -435,7 +449,9 @@ namespace glz
             if (bool(ctx.error)) [[unlikely]]
                return;
 
-            GLZ_SKIP_WS();
+            if (skip_ws<Opts>(ctx, it, end)) {
+               return;
+            }
             match<']'>(ctx, it);
             if constexpr (not Opts.null_terminated) {
                --ctx.indentation_level;
@@ -450,7 +466,9 @@ namespace glz
          GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
             if constexpr (!has_ws_handled(Opts)) {
-               GLZ_SKIP_WS();
+               if (skip_ws<Opts>(ctx, it, end)) {
+                  return;
+               }
             }
             static constexpr sv null_string = "null";
             if constexpr (not has_is_padded(Opts)) {
@@ -475,14 +493,18 @@ namespace glz
          static void op(bool_t auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
             if constexpr (Opts.quoted_num) {
-               GLZ_SKIP_WS();
+               if (skip_ws<Opts>(ctx, it, end)) {
+                  return;
+               }
                if (match_invalid_end<'"', Opts>(ctx, it, end)) {
                   return;
                }
             }
 
             if constexpr (!has_ws_handled(Opts)) {
-               GLZ_SKIP_WS();
+               if (skip_ws<Opts>(ctx, it, end)) {
+                  return;
+               }
             }
 
             if constexpr (Opts.bools_as_numbers) {
@@ -588,14 +610,18 @@ namespace glz
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, It&& it, auto&& end) noexcept
          {
             if constexpr (Opts.quoted_num) {
-               GLZ_SKIP_WS();
+               if (skip_ws<Opts>(ctx, it, end)) {
+                  return;
+               }
                if (match_invalid_end<'"', Opts>(ctx, it, end)) {
                   return;
                }
             }
 
             if constexpr (!has_ws_handled(Opts)) {
-               GLZ_SKIP_WS();
+               if (skip_ws<Opts>(ctx, it, end)) {
+                  return;
+               }
             }
 
             using V = std::decay_t<decltype(value)>;
@@ -694,7 +720,9 @@ namespace glz
             else {
                if constexpr (!has_opening_handled(Opts)) {
                   if constexpr (!has_ws_handled(Opts)) {
-                     GLZ_SKIP_WS();
+                     if (skip_ws<Opts>(ctx, it, end)) {
+                        return;
+                     }
                   }
 
                   if (match_invalid_end<'"', Opts>(ctx, it, end)) {
@@ -831,7 +859,9 @@ namespace glz
             else {
                if constexpr (!has_opening_handled(Opts)) {
                   if constexpr (!has_ws_handled(Opts)) {
-                     GLZ_SKIP_WS();
+                     if (skip_ws<Opts>(ctx, it, end)) {
+                        return;
+                     }
                   }
 
                   if (match_invalid_end<'"', Opts>(ctx, it, end)) {
@@ -1086,7 +1116,9 @@ namespace glz
          {
             if constexpr (!has_opening_handled(Opts)) {
                if constexpr (!has_ws_handled(Opts)) {
-                  GLZ_SKIP_WS();
+                  if (skip_ws<Opts>(ctx, it, end)) {
+                     return;
+                  }
                }
 
                if (match_invalid_end<'"', Opts>(ctx, it, end)) {
@@ -1146,7 +1178,9 @@ namespace glz
          {
             if constexpr (!has_opening_handled(Opts)) {
                if constexpr (!has_ws_handled(Opts)) {
-                  GLZ_SKIP_WS();
+                  if (skip_ws<Opts>(ctx, it, end)) {
+                     return;
+                  }
                }
 
                if (match_invalid_end<'"', Opts>(ctx, it, end)) {
@@ -1229,7 +1263,9 @@ namespace glz
          static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
             if constexpr (!has_ws_handled(Opts)) {
-               GLZ_SKIP_WS();
+               if (skip_ws<Opts>(ctx, it, end)) {
+                  return;
+               }
             }
 
             constexpr auto N = reflect<T>::size;
@@ -1285,7 +1321,9 @@ namespace glz
          static void op(auto& /*value*/, is_context auto&& ctx, auto&& it, auto&& end)
          {
             if constexpr (!has_ws_handled(Opts)) {
-               GLZ_SKIP_WS();
+               if (skip_ws<Opts>(ctx, it, end)) {
+                  return;
+               }
             }
             if (match_invalid_end<'"', Opts>(ctx, it, end)) {
                return;
@@ -1348,7 +1386,9 @@ namespace glz
          {
             constexpr auto Opts = ws_handled_off<Options>();
             if constexpr (!has_ws_handled(Options)) {
-               GLZ_SKIP_WS();
+               if (skip_ws<Opts>(ctx, it, end)) {
+                  return;
+               }
             }
 
             if (match_invalid_end<'[', Opts>(ctx, it, end)) {
@@ -1357,7 +1397,9 @@ namespace glz
             if constexpr (not Opts.null_terminated) {
                ++ctx.indentation_level;
             }
-            GLZ_SKIP_WS();
+            if (skip_ws<Opts>(ctx, it, end)) {
+               return;
+            }
 
             value.clear();
             if (*it == ']') [[unlikely]] {
@@ -1375,7 +1417,9 @@ namespace glz
                if (bool(ctx.error)) [[unlikely]]
                   return;
                value.emplace(std::move(v));
-               GLZ_SKIP_WS();
+               if (skip_ws<Opts>(ctx, it, end)) {
+                  return;
+               }
                if (*it == ']') {
                   if constexpr (not Opts.null_terminated) {
                      --ctx.indentation_level;
@@ -1386,7 +1430,9 @@ namespace glz
                if (match_invalid_end<',', Opts>(ctx, it, end)) {
                   return;
                }
-               GLZ_SKIP_WS();
+               if (skip_ws<Opts>(ctx, it, end)) {
+                  return;
+               }
             }
          }
       };
@@ -1401,7 +1447,9 @@ namespace glz
          {
             constexpr auto Opts = ws_handled_off<Options>();
             if constexpr (!has_ws_handled(Options)) {
-               GLZ_SKIP_WS();
+               if (skip_ws<Opts>(ctx, it, end)) {
+                  return;
+               }
             }
 
             if (match_invalid_end<'[', Opts>(ctx, it, end)) {
@@ -1412,7 +1460,9 @@ namespace glz
             }
 
             const auto ws_start = it;
-            GLZ_SKIP_WS();
+            if (skip_ws<Opts>(ctx, it, end)) {
+               return;
+            }
 
             if (*it == ']') {
                if constexpr (not Opts.null_terminated) {
@@ -1441,7 +1491,9 @@ namespace glz
                   read<JSON>::op<ws_handled<Opts>()>(*value_it++, ctx, it, end);
                   if (bool(ctx.error)) [[unlikely]]
                      return;
-                  GLZ_SKIP_WS();
+                  if (skip_ws<Opts>(ctx, it, end)) {
+                     return;
+                  }
                   if (*it == ',') {
                      ++it;
 
@@ -1451,7 +1503,9 @@ namespace glz
                         }
                      }
 
-                     GLZ_SKIP_WS();
+                     if (skip_ws<Opts>(ctx, it, end)) {
+                        return;
+                     }
                   }
                   else if (*it == ']') {
                      if constexpr (not Opts.null_terminated) {
@@ -1485,7 +1539,9 @@ namespace glz
                      read<JSON>::op<ws_handled<Opts>()>(value.emplace_back(), ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
-                     GLZ_SKIP_WS();
+                     if (skip_ws<Opts>(ctx, it, end)) {
+                        return;
+                     }
                      if (*it == ',') [[likely]] {
                         ++it;
 
@@ -1495,7 +1551,9 @@ namespace glz
                            }
                         }
 
-                        GLZ_SKIP_WS();
+                        if (skip_ws<Opts>(ctx, it, end)) {
+                           return;
+                        }
                      }
                      else if (*it == ']') {
                         if constexpr (not Opts.null_terminated) {
@@ -1525,7 +1583,9 @@ namespace glz
             static constexpr auto Opts = opening_handled_off<ws_handled_off<Options>()>();
             if constexpr (!has_opening_handled(Options)) {
                if constexpr (!has_ws_handled(Options)) {
-                  GLZ_SKIP_WS();
+                  if (skip_ws<Opts>(ctx, it, end)) {
+                     return;
+                  }
                }
                if (match_invalid_end<'{', Opts>(ctx, it, end)) {
                   return;
@@ -1545,7 +1605,9 @@ namespace glz
             value.clear();
 
             while (it < end) {
-               GLZ_SKIP_WS();
+               if (skip_ws<Opts>(ctx, it, end)) {
+                  return;
+               }
 
                if (*it == '}') {
                   ++it;
@@ -1598,7 +1660,9 @@ namespace glz
                if (bool(ctx.error)) [[unlikely]]
                   return;
 
-               GLZ_SKIP_WS();
+               if (skip_ws<Opts>(ctx, it, end)) {
+                  return;
+               }
 
                if (*it == ',') {
                   ++it;
@@ -1685,7 +1749,9 @@ namespace glz
          {
             constexpr auto Opts = ws_handled_off<Options>();
             if constexpr (!has_ws_handled(Options)) {
-               GLZ_SKIP_WS();
+               if (skip_ws<Opts>(ctx, it, end)) {
+                  return;
+               }
             }
 
             if (match_invalid_end<'[', Opts>(ctx, it, end)) {
@@ -1704,7 +1770,9 @@ namespace glz
                if (bool(ctx.error)) [[unlikely]]
                   return;
 
-               GLZ_SKIP_WS();
+               if (skip_ws<Opts>(ctx, it, end)) {
+                  return;
+               }
                if (i < n - 1) {
                   if (match_invalid_end<',', Opts>(ctx, it, end)) {
                      return;
@@ -1736,7 +1804,9 @@ namespace glz
             }();
 
             if constexpr (!has_ws_handled(Opts)) {
-               GLZ_SKIP_WS();
+               if (skip_ws<Opts>(ctx, it, end)) {
+                  return;
+               }
             }
 
             if (match_invalid_end<'[', Opts>(ctx, it, end)) {
@@ -1745,7 +1815,9 @@ namespace glz
             if constexpr (not Opts.null_terminated) {
                ++ctx.indentation_level;
             }
-            GLZ_SKIP_WS();
+            if (skip_ws<Opts>(ctx, it, end)) {
+               return;
+            }
 
             invoke_table<N>([&]<size_t I>() {
                if (bool(ctx.error)) [[unlikely]]
@@ -1761,7 +1833,9 @@ namespace glz
                   if (match_invalid_end<',', Opts>(ctx, it, end)) {
                      return;
                   }
-                  GLZ_SKIP_WS();
+                  if (skip_ws<Opts>(ctx, it, end)) {
+                     return;
+                  }
                }
                if constexpr (is_std_tuple<T>) {
                   read<JSON>::op<ws_handled<Opts>()>(std::get<I>(value), ctx, it, end);
@@ -1778,7 +1852,9 @@ namespace glz
                   if (bool(ctx.error)) [[unlikely]]
                      return;
                }
-               GLZ_SKIP_WS();
+               if (skip_ws<Opts>(ctx, it, end)) {
+                  return;
+               }
             });
 
             if constexpr (Opts.partial_read) {
@@ -1808,7 +1884,9 @@ namespace glz
          static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
             if constexpr (!has_ws_handled(Opts)) {
-               GLZ_SKIP_WS();
+               if (skip_ws<Opts>(ctx, it, end)) {
+                  return;
+               }
             }
 
             if (match_invalid_end<'[', Opts>(ctx, it, end)) {
@@ -1840,7 +1918,9 @@ namespace glz
                   return;
                }
 
-               GLZ_SKIP_WS();
+               if (skip_ws<Opts>(ctx, it, end)) {
+                  return;
+               }
                if (*it == ']') {
                   if constexpr (not Opts.null_terminated) {
                      --ctx.indentation_level;
@@ -1915,7 +1995,9 @@ namespace glz
             constexpr auto Opts = opening_handled_off<ws_handled_off<Options>()>();
             if constexpr (!has_opening_handled(Options)) {
                if constexpr (!has_ws_handled(Options)) {
-                  GLZ_SKIP_WS();
+                  if (skip_ws<Opts>(ctx, it, end)) {
+                     return;
+                  }
                }
                if (match_invalid_end<'{', Opts>(ctx, it, end)) {
                   return;
@@ -1924,7 +2006,9 @@ namespace glz
                   ++ctx.indentation_level;
                }
             }
-            GLZ_SKIP_WS();
+            if (skip_ws<Opts>(ctx, it, end)) {
+               return;
+            }
 
             // Only used if error_on_missing_keys = true
             [[maybe_unused]] bit_array<1> fields{};
@@ -1971,7 +2055,9 @@ namespace glz
             if (bool(ctx.error)) [[unlikely]]
                return;
 
-            GLZ_SKIP_WS();
+            if (skip_ws<Opts>(ctx, it, end)) {
+               return;
+            }
 
             match<'}'>(ctx, it);
             if constexpr (not Opts.null_terminated) {
@@ -2010,7 +2096,9 @@ namespace glz
             static constexpr auto Opts = opening_handled_off<ws_handled_off<Options>()>();
             if constexpr (!has_opening_handled(Options)) {
                if constexpr (!has_ws_handled(Options)) {
-                  GLZ_SKIP_WS();
+                  if (skip_ws<Opts>(ctx, it, end)) {
+                     return;
+                  }
                }
                if (match_invalid_end<'{', Opts>(ctx, it, end)) {
                   return;
@@ -2026,7 +2114,9 @@ namespace glz
                }
             }
             const auto ws_start = it;
-            GLZ_SKIP_WS();
+            if (skip_ws<Opts>(ctx, it, end)) {
+               return;
+            }
             const size_t ws_size = size_t(it - ws_start);
 
             if constexpr ((glaze_object_t<T> || reflectable<T>) && num_members == 0 && Opts.error_on_unknown_keys) {
@@ -2060,7 +2150,9 @@ namespace glz
                         if (bool(ctx.error)) [[unlikely]]
                            return;
 
-                        GLZ_SKIP_WS();
+                        if (skip_ws<Opts>(ctx, it, end)) {
+                           return;
+                        }
                      }
                      else {
                         ctx.error = error_code::unknown_key;
@@ -2165,7 +2257,9 @@ namespace glz
                         }
                      }
 
-                     GLZ_SKIP_WS();
+                     if (skip_ws<Opts>(ctx, it, end)) {
+                        return;
+                     }
                   }
 
                   constexpr auto reflection_type = glaze_object_t<T> || reflectable<T>;
@@ -2249,7 +2343,9 @@ namespace glz
                            if (bool(ctx.error)) [[unlikely]]
                               return;
 
-                           GLZ_SKIP_WS();
+                           if (skip_ws<Opts>(ctx, it, end)) {
+                              return;
+                           }
                            continue;
                         }
                         else {
@@ -2353,7 +2449,9 @@ namespace glz
                            return;
                      }
                   }
-                  GLZ_SKIP_WS();
+                  if (skip_ws<Opts>(ctx, it, end)) {
+                     return;
+                  }
                }
             }
          }
@@ -2503,7 +2601,9 @@ namespace glz
             constexpr auto Opts = ws_handled_off<Options>();
             if constexpr (variant_is_auto_deducible<T>()) {
                if constexpr (not has_ws_handled(Options)) {
-                  GLZ_SKIP_WS();
+                  if (skip_ws<Opts>(ctx, it, end)) {
+                     return;
+                  }
                }
 
                switch (*it) {
@@ -2549,7 +2649,9 @@ namespace glz
                      auto possible_types = bit_array<std::variant_size_v<T>>{}.flip();
                      static constexpr auto deduction_map = detail::make_variant_deduction_map<T>();
                      static constexpr auto tag_literal = string_literal_from_view<tag_v<T>.size()>(tag_v<T>);
-                     GLZ_SKIP_WS();
+                     if (skip_ws<Opts>(ctx, it, end)) {
+                        return;
+                     }
                      auto start = it;
                      while (*it != '}') {
                         if (it != start) {
@@ -2558,7 +2660,9 @@ namespace glz
                            }
                         }
 
-                        GLZ_SKIP_WS();
+                        if (skip_ws<Opts>(ctx, it, end)) {
+                           return;
+                        }
                         if (match_invalid_end<'"', Opts>(ctx, it, end)) {
                            return;
                         }
@@ -2582,7 +2686,9 @@ namespace glz
                                  from<JSON, sv>::template op<ws_handled<Opts>()>(type_id, ctx, it, end);
                                  if (bool(ctx.error)) [[unlikely]]
                                     return;
-                                 GLZ_SKIP_WS();
+                                 if (skip_ws<Opts>(ctx, it, end)) {
+                                    return;
+                                 }
                                  if (!(*it == ',' || *it == '}')) [[unlikely]] {
                                     ctx.error = error_code::syntax_error;
                                     return;
@@ -2664,7 +2770,9 @@ namespace glz
                               read<JSON>::op<ws_handled<Opts>()>(type_id, ctx, it, end);
                               if (bool(ctx.error)) [[unlikely]]
                                  return;
-                              GLZ_SKIP_WS();
+                              if (skip_ws<Opts>(ctx, it, end)) {
+                                 return;
+                              }
 
                               static constexpr auto id_map = make_variant_id_map<T>();
                               auto id_it = id_map.find(type_id);
@@ -2748,7 +2856,9 @@ namespace glz
                         skip_value<JSON>::op<Opts>(ctx, it, end);
                         if (bool(ctx.error)) [[unlikely]]
                            return;
-                        GLZ_SKIP_WS();
+                        if (skip_ws<Opts>(ctx, it, end)) {
+                           return;
+                        }
                      }
                      ctx.error = error_code::no_matching_variant_type;
                   }
@@ -2815,7 +2925,9 @@ namespace glz
 
             constexpr auto Opts = ws_handled_off<Options>();
             if constexpr (!has_ws_handled(Options)) {
-               GLZ_SKIP_WS();
+               if (skip_ws<Opts>(ctx, it, end)) {
+                  return;
+               }
             }
 
             if (match_invalid_end<'[', Opts>(ctx, it, end)) {
@@ -2824,7 +2936,9 @@ namespace glz
             if constexpr (not Opts.null_terminated) {
                ++ctx.indentation_level;
             }
-            GLZ_SKIP_WS();
+            if (skip_ws<Opts>(ctx, it, end)) {
+               return;
+            }
 
             // TODO Use key parsing for compiletime known keys
             if (match_invalid_end<'"', Opts>(ctx, it, end)) {
@@ -2848,7 +2962,9 @@ namespace glz
             static constexpr auto id_map = make_variant_id_map<T>();
             auto id_it = id_map.find(type_id);
             if (id_it != id_map.end()) [[likely]] {
-               GLZ_SKIP_WS();
+               if (skip_ws<Opts>(ctx, it, end)) {
+                  return;
+               }
                if (match_invalid_end<',', Opts>(ctx, it, end)) {
                   return;
                }
@@ -2863,7 +2979,9 @@ namespace glz
                return;
             }
 
-            GLZ_SKIP_WS();
+            if (skip_ws<Opts>(ctx, it, end)) {
+               return;
+            }
             match<']'>(ctx, it);
             if constexpr (not Opts.null_terminated) {
                --ctx.indentation_level;
@@ -2878,7 +2996,9 @@ namespace glz
          static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
             if constexpr (!has_ws_handled(Opts)) {
-               GLZ_SKIP_WS();
+               if (skip_ws<Opts>(ctx, it, end)) {
+                  return;
+               }
             }
 
             if (*it == '{') {
@@ -2893,7 +3013,9 @@ namespace glz
                      return;
                   }
                }
-               GLZ_SKIP_WS();
+               if (skip_ws<Opts>(ctx, it, end)) {
+                  return;
+               }
                if (*it == '}') {
                   it = start;
                   // empty object
@@ -2912,7 +3034,9 @@ namespace glz
                   if (bool(ctx.error)) [[unlikely]]
                      return;
                   if (key == "unexpected") {
-                     GLZ_SKIP_WS();
+                     if (skip_ws<Opts>(ctx, it, end)) {
+                        return;
+                     }
                      if (match_invalid_end<':', Opts>(ctx, it, end)) {
                         return;
                      }
@@ -2931,7 +3055,9 @@ namespace glz
                            return;
                         value = glz::unexpected(error);
                      }
-                     GLZ_SKIP_WS();
+                     if (skip_ws<Opts>(ctx, it, end)) {
+                        return;
+                     }
                      match<'}'>(ctx, it);
                      if constexpr (not Opts.null_terminated) {
                         --ctx.indentation_level;
@@ -2983,7 +3109,9 @@ namespace glz
          {
             constexpr auto Opts = ws_handled_off<Options>();
             if constexpr (!has_ws_handled(Options)) {
-               GLZ_SKIP_WS();
+               if (skip_ws<Opts>(ctx, it, end)) {
+                  return;
+               }
             }
 
             if (*it == 'n') {

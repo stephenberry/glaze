@@ -124,13 +124,17 @@ namespace glz
             constexpr auto Opts = opening_handled_off<ws_handled_off<Options>()>();
 
             if constexpr (!has_opening_handled(Options)) {
-               GLZ_SKIP_WS();
+               if (skip_ws<Opts>(ctx, it, end)) {
+                  return;
+               }
                if (match_invalid_end<'{', Opts>(ctx, it, end)) {
                   return;
                }
             }
 
-            GLZ_SKIP_WS();
+            if (skip_ws<Opts>(ctx, it, end)) {
+               return;
+            }
 
             // we read into available containers, we do not intialize here
             const size_t n = value.data.size();
@@ -140,7 +144,9 @@ namespace glz
                }
 
                // find the string, escape characters are not supported for recorders
-               GLZ_SKIP_WS();
+               if (skip_ws<Opts>(ctx, it, end)) {
+                  return;
+               }
                const auto name = parse_key(ctx, it, end);
 
                auto& [str, v] = value.data[i];
@@ -149,24 +155,34 @@ namespace glz
                   return;
                }
 
-               GLZ_SKIP_WS();
+               if (skip_ws<Opts>(ctx, it, end)) {
+                  return;
+               }
                if (match_invalid_end<':', Opts>(ctx, it, end)) {
                   return;
                }
-               GLZ_SKIP_WS();
+               if (skip_ws<Opts>(ctx, it, end)) {
+                  return;
+               }
 
                std::visit([&](auto&& deq) { read<JSON>::op<Opts>(deq, ctx, it, end); }, v.first);
 
                if (i < n - 1) {
-                  GLZ_SKIP_WS();
+                  if (skip_ws<Opts>(ctx, it, end)) {
+                     return;
+                  }
                   if (match_invalid_end<',', Opts>(ctx, it, end)) {
                      return;
                   }
-                  GLZ_SKIP_WS();
+                  if (skip_ws<Opts>(ctx, it, end)) {
+                     return;
+                  }
                }
             }
 
-            GLZ_SKIP_WS();
+            if (skip_ws<Opts>(ctx, it, end)) {
+               return;
+            }
             match<'}'>(ctx, it);
          }
       };

@@ -70,7 +70,9 @@ namespace glz
                case '{': {
                   ++it;
                   while (true) {
-                     GLZ_SKIP_WS();
+                     if (skip_ws<Opts>(ctx, it, end)) {
+                        return;
+                     }
                      if (match<'"'>(ctx, it)) {
                         return;
                      }
@@ -83,11 +85,15 @@ namespace glz
                      ++it;
 
                      if (key.size() == k.size() && comparitor<key>(k.data())) {
-                        GLZ_SKIP_WS();
+                        if (skip_ws<Opts>(ctx, it, end)) {
+                           return;
+                        }
                         if (match_invalid_end<':', Opts>(ctx, it, end)) {
                            return;
                         }
-                        GLZ_SKIP_WS();
+                        if (skip_ws<Opts>(ctx, it, end)) {
+                           return;
+                        }
 
                         if constexpr (I == (N - 1)) {
                            ret = parse_value<Opts>(ctx, it, end);
@@ -124,7 +130,9 @@ namespace glz
                         ++it;
                      });
 
-                     GLZ_SKIP_WS();
+                     if (skip_ws<Opts>(ctx, it, end)) {
+                        return;
+                     }
 
                      if constexpr (I == (N - 1)) {
                         ret = parse_value<Opts>(ctx, it, end);
@@ -144,7 +152,9 @@ namespace glz
                }
 
                while (it < end) {
-                  GLZ_SKIP_WS();
+                  if (skip_ws<Opts>(ctx, it, end)) {
+                     return;
+                  }
                   if (match<'"'>(ctx, it)) {
                      return;
                   }
@@ -157,11 +167,15 @@ namespace glz
                   ++it;
 
                   if (key.size() == k.size() && comparitor<key>(k.data())) {
-                     GLZ_SKIP_WS();
+                     if (skip_ws<Opts>(ctx, it, end)) {
+                        return;
+                     }
                      if (match_invalid_end<':', Opts>(ctx, it, end)) {
                         return;
                      }
-                     GLZ_SKIP_WS();
+                     if (skip_ws<Opts>(ctx, it, end)) {
+                        return;
+                     }
 
                      if constexpr (I == (N - 1)) {
                         ret = parse_value<Opts>(ctx, it, end);
