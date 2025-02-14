@@ -135,16 +135,20 @@ namespace glz
          }
       };
 
-#define GLZ_PARSE_WS_COLON                           \
-   if (skip_ws<Opts>(ctx, it, end)) {                \
-      return;                                        \
-   }                                                 \
-   if (match_invalid_end<':', Opts>(ctx, it, end)) { \
-      return;                                        \
-   }                                                 \
-   if (skip_ws<Opts>(ctx, it, end)) {                \
-      return;                                        \
-   }
+      template <auto Opts>
+      GLZ_ALWAYS_INLINE bool parse_ws_colon(is_context auto& ctx, auto&& it, auto&& end) noexcept
+      {
+         if (skip_ws<Opts>(ctx, it, end)) {
+            return true;
+         }
+         if (match_invalid_end<':', Opts>(ctx, it, end)) {
+            return true;
+         }
+         if (skip_ws<Opts>(ctx, it, end)) {
+            return true;
+         }
+         return false;
+      }
 
       template <opts Opts, class T, size_t I, class Value, class... SelectedIndex>
          requires(glaze_object_t<T> || reflectable<T>)
@@ -217,7 +221,9 @@ namespace glz
                   }
                }
 
-               GLZ_PARSE_WS_COLON;
+               if (parse_ws_colon<Opts>(ctx, it, end)) {
+                  return;
+               }
 
                read<JSON>::handle_unknown<Opts>(key, value, ctx, it, end);
             }
@@ -289,7 +295,9 @@ namespace glz
                      }
                   }
 
-                  GLZ_PARSE_WS_COLON;
+                  if (parse_ws_colon<Opts>(ctx, it, end)) {
+                     return;
+                  }
 
                   read<JSON>::handle_unknown<Opts>(key, value, ctx, it, end);
                   return;
@@ -1654,7 +1662,9 @@ namespace glz
                      return;
                }
 
-               GLZ_PARSE_WS_COLON;
+               if (parse_ws_colon<Opts>(ctx, it, end)) {
+                  return;
+               }
 
                read<JSON>::op<Opts>(item.second, ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
@@ -2049,7 +2059,9 @@ namespace glz
                   return;
             }
 
-            GLZ_PARSE_WS_COLON;
+            if (parse_ws_colon<Opts>(ctx, it, end)) {
+               return;
+            }
 
             read<JSON>::op<Opts>(value.second, ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
@@ -2144,7 +2156,9 @@ namespace glz
                      }
 
                      if (key == tag.sv()) {
-                        GLZ_PARSE_WS_COLON;
+                        if (parse_ws_colon<Opts>(ctx, it, end)) {
+                           return;
+                        }
 
                         read<JSON>::handle_unknown<Opts>(key, value, ctx, it, end);
                         if (bool(ctx.error)) [[unlikely]]
@@ -2291,7 +2305,9 @@ namespace glz
                            }
                         }
 
-                        GLZ_PARSE_WS_COLON;
+                        if (parse_ws_colon<Opts>(ctx, it, end)) {
+                           return;
+                        }
 
                         read<JSON>::handle_unknown<Opts>(key, value, ctx, it, end);
                         if (bool(ctx.error)) [[unlikely]]
@@ -2337,7 +2353,9 @@ namespace glz
                         }
 
                         if (key == tag.sv()) {
-                           GLZ_PARSE_WS_COLON;
+                           if (parse_ws_colon<Opts>(ctx, it, end)) {
+                              return;
+                           }
 
                            read<JSON>::handle_unknown<Opts>(key, value, ctx, it, end);
                            if (bool(ctx.error)) [[unlikely]]
@@ -2394,7 +2412,9 @@ namespace glz
                         if (bool(ctx.error)) [[unlikely]]
                            return;
 
-                        GLZ_PARSE_WS_COLON;
+                        if (parse_ws_colon<Opts>(ctx, it, end)) {
+                           return;
+                        }
 
                         reading(key);
                         if constexpr (Opts.partial_read) {
@@ -2411,7 +2431,9 @@ namespace glz
                         if (bool(ctx.error)) [[unlikely]]
                            return;
 
-                        GLZ_PARSE_WS_COLON;
+                        if (parse_ws_colon<Opts>(ctx, it, end)) {
+                           return;
+                        }
 
                         reading(key);
                         if constexpr (Opts.partial_read) {
@@ -2437,7 +2459,9 @@ namespace glz
                         if (bool(ctx.error)) [[unlikely]]
                            return;
 
-                        GLZ_PARSE_WS_COLON;
+                        if (parse_ws_colon<Opts>(ctx, it, end)) {
+                           return;
+                        }
 
                         reading(key_value);
                         if constexpr (Opts.partial_read) {
@@ -2681,7 +2705,9 @@ namespace glz
                            // We first check if a tag is defined and see if the key matches the tag
                            if constexpr (not tag_v<T>.empty()) {
                               if (key == tag_v<T>) {
-                                 GLZ_PARSE_WS_COLON;
+                                 if (parse_ws_colon<Opts>(ctx, it, end)) {
+                                    return;
+                                 }
                                  sv type_id{};
                                  from<JSON, sv>::template op<ws_handled<Opts>()>(type_id, ctx, it, end);
                                  if (bool(ctx.error)) [[unlikely]]
@@ -2764,7 +2790,9 @@ namespace glz
                         else if constexpr (not tag_v<T>.empty()) {
                            // empty object case for variant, if there are no normal elements
                            if (key == tag_v<T>) {
-                              GLZ_PARSE_WS_COLON;
+                              if (parse_ws_colon<Opts>(ctx, it, end)) {
+                                 return;
+                              }
 
                               std::string_view type_id{};
                               read<JSON>::op<ws_handled<Opts>()>(type_id, ctx, it, end);
@@ -2851,7 +2879,9 @@ namespace glz
                            }
                            return; // we've decoded our target type
                         }
-                        GLZ_PARSE_WS_COLON;
+                        if (parse_ws_colon<Opts>(ctx, it, end)) {
+                           return;
+                        }
 
                         skip_value<JSON>::op<Opts>(ctx, it, end);
                         if (bool(ctx.error)) [[unlikely]]
