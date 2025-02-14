@@ -84,7 +84,9 @@ namespace glz
 
                      if (key.size() == k.size() && comparitor<key>(k.data())) {
                         GLZ_SKIP_WS();
-                        GLZ_MATCH_COLON();
+                        if (match_invalid_end<':', Opts>(ctx, it, end)) {
+                           return;
+                        }
                         GLZ_SKIP_WS();
 
                         if constexpr (I == (N - 1)) {
@@ -154,7 +156,9 @@ namespace glz
 
                   if (key.size() == k.size() && comparitor<key>(k.data())) {
                      GLZ_SKIP_WS();
-                     GLZ_MATCH_COLON();
+                     if (match_invalid_end<':', Opts>(ctx, it, end)) {
+                        return;
+                     }
                      GLZ_SKIP_WS();
 
                      if constexpr (I == (N - 1)) {

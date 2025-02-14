@@ -148,7 +148,9 @@ namespace glz
                }
 
                GLZ_SKIP_WS();
-               GLZ_MATCH_COLON();
+               if (match_invalid_end<':', Opts>(ctx, it, end)) {
+                  return;
+               }
                GLZ_SKIP_WS();
 
                std::visit([&](auto&& deq) { read<JSON>::op<Opts>(deq, ctx, it, end); }, v.first);

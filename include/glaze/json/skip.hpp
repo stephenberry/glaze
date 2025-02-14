@@ -61,7 +61,9 @@ namespace glz::detail
             if (bool(ctx.error)) [[unlikely]]
                return;
             GLZ_SKIP_WS();
-            GLZ_MATCH_COLON();
+            if (match_invalid_end<':', Opts>(ctx, it, end)) {
+               return;
+            }
             GLZ_SKIP_WS();
             skip_value<JSON>::op<Opts>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
