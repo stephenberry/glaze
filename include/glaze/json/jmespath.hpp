@@ -516,7 +516,7 @@ namespace glz
          // If we reach here, step == 1 and no negative indices, so we can do partial reading.
          value.clear();
          const int32_t start_idx = decomposed_key.start.value_or(0);
-         const int32_t end_idx = decomposed_key.end.value_or(std::numeric_limits<int32_t>::max());
+         const int32_t end_idx = decomposed_key.end.value_or((std::numeric_limits<int32_t>::max)());
 
          // If empty array
          if (*it == ']') {
