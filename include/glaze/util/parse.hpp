@@ -355,15 +355,6 @@ namespace glz::detail
       return false;
    }
 
-#define GLZ_MATCH_CLOSE_BRACKET                 \
-   if (*it != ']') [[unlikely]] {               \
-      ctx.error = error_code::expected_bracket; \
-      return;                                   \
-   }                                            \
-   else [[likely]] {                            \
-      ++it;                                     \
-   }
-
 #define GLZ_MATCH_OPEN_BRACE                     \
    if (*it != '{') [[unlikely]] {                \
       ctx.error = error_code::expected_brace;    \

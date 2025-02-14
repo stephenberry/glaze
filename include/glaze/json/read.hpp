@@ -426,7 +426,7 @@ namespace glz
                return;
 
             GLZ_SKIP_WS();
-            GLZ_MATCH_CLOSE_BRACKET;
+            match<']'>(ctx, it);
             if constexpr (not Opts.null_terminated) {
                --ctx.indentation_level;
             }
