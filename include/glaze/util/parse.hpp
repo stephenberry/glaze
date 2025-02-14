@@ -331,11 +331,11 @@ namespace glz::detail
       }
    }
    
-   // Checks for a quote and that we are not at the end (considered an error)
-   template <auto Opts>
-   inline bool match_quote_invalid_end(is_context auto& ctx, auto&& it, auto&& end) noexcept
+   // Checks for a character and validates that we are not at the end (considered an error)
+   template <char Character, auto Opts>
+   inline bool match_invalid_end(is_context auto& ctx, auto&& it, auto&& end) noexcept
    {
-      if (*it != '"') [[unlikely]] {
+      if (*it != Character) [[unlikely]] {
          ctx.error = error_code::expected_quote;
          return true;
       }

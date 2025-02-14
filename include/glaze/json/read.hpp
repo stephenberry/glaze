@@ -324,7 +324,7 @@ namespace glz
          template <auto Opts>
          static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
-            if (match_quote_invalid_end<Opts>(ctx, it, end)) {
+            if (match_invalid_end<'"', Opts>(ctx, it, end)) {
                return;
             }
 
@@ -458,7 +458,7 @@ namespace glz
          {
             if constexpr (Opts.quoted_num) {
                GLZ_SKIP_WS();
-               if (match_quote_invalid_end<Opts>(ctx, it, end)) {
+               if (match_invalid_end<'"', Opts>(ctx, it, end)) {
                   return;
                }
             }
@@ -561,7 +561,7 @@ namespace glz
          {
             if constexpr (Opts.quoted_num) {
                GLZ_SKIP_WS();
-               if (match_quote_invalid_end<Opts>(ctx, it, end)) {
+               if (match_invalid_end<'"', Opts>(ctx, it, end)) {
                   return;
                }
             }
@@ -659,7 +659,7 @@ namespace glz
                      GLZ_SKIP_WS();
                   }
 
-                  if (match_quote_invalid_end<Opts>(ctx, it, end)) {
+                  if (match_invalid_end<'"', Opts>(ctx, it, end)) {
                      return;
                   }
                }
@@ -796,7 +796,7 @@ namespace glz
                      GLZ_SKIP_WS();
                   }
 
-                  if (match_quote_invalid_end<Opts>(ctx, it, end)) {
+                  if (match_invalid_end<'"', Opts>(ctx, it, end)) {
                      return;
                   }
                }
@@ -1046,7 +1046,7 @@ namespace glz
                   GLZ_SKIP_WS();
                }
 
-               if (match_quote_invalid_end<Opts>(ctx, it, end)) {
+               if (match_invalid_end<'"', Opts>(ctx, it, end)) {
                   return;
                }
             }
@@ -1101,7 +1101,7 @@ namespace glz
                   GLZ_SKIP_WS();
                }
 
-               if (match_quote_invalid_end<Opts>(ctx, it, end)) {
+               if (match_invalid_end<'"', Opts>(ctx, it, end)) {
                   return;
                }
             }
@@ -1234,7 +1234,7 @@ namespace glz
             if constexpr (!has_ws_handled(Opts)) {
                GLZ_SKIP_WS();
             }
-            if (match_quote_invalid_end<Opts>(ctx, it, end)) {
+            if (match_invalid_end<'"', Opts>(ctx, it, end)) {
                return;
             }
             skip_string_view<Opts>(ctx, it, end);
@@ -2061,7 +2061,7 @@ namespace glz
                         static_assert(false_v<T>, "This should be unreachable");
                      }
                      else {
-                        if (match_quote_invalid_end<Opts>(ctx, it, end)) {
+                        if (match_invalid_end<'"', Opts>(ctx, it, end)) {
                            return;
                         }
 
@@ -2443,7 +2443,7 @@ namespace glz
                         }
 
                         GLZ_SKIP_WS();
-                        if (match_quote_invalid_end<Opts>(ctx, it, end)) {
+                        if (match_invalid_end<'"', Opts>(ctx, it, end)) {
                            return;
                         }
 
@@ -2453,7 +2453,7 @@ namespace glz
                            return;
                         const sv key = {key_start, size_t(it - key_start)};
 
-                        if (match_quote_invalid_end<Opts>(ctx, it, end)) {
+                        if (match_invalid_end<'"', Opts>(ctx, it, end)) {
                            return;
                         }
 
@@ -2709,7 +2709,7 @@ namespace glz
             GLZ_SKIP_WS();
 
             // TODO Use key parsing for compiletime known keys
-            if (match_quote_invalid_end<Opts>(ctx, it, end)) {
+            if (match_invalid_end<'"', Opts>(ctx, it, end)) {
                return;
             }
             auto start = it;
