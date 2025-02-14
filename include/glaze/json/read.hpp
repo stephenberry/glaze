@@ -550,7 +550,7 @@ namespace glz
                      return;
                   }
                }
-               if (match_quote(ctx, it)) {
+               if (match<'"'>(ctx, it)) {
                   return;
                }
                GLZ_VALID_END();
@@ -635,7 +635,7 @@ namespace glz
                      return;
                   }
                }
-               if (match_quote(ctx, it)) {
+               if (match<'"'>(ctx, it)) {
                   return;
                }
                GLZ_VALID_END();
@@ -1169,7 +1169,7 @@ namespace glz
                   return;
                }
             }
-            if (match_quote(ctx, it)) {
+            if (match<'"'>(ctx, it)) {
                return;
             }
             GLZ_VALID_END();
@@ -1248,7 +1248,7 @@ namespace glz
             skip_string_view<Opts>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
                return;
-            if (match_quote(ctx, it)) {
+            if (match<'"'>(ctx, it)) {
                return;
             }
             GLZ_VALID_END();
@@ -2749,7 +2749,7 @@ namespace glz
             if (bool(ctx.error)) [[unlikely]]
                return;
             sv type_id = {start, size_t(it - start)};
-            if (match_quote(ctx, it)) {
+            if (match<'"'>(ctx, it)) {
                return;
             }
             GLZ_VALID_END();

@@ -318,19 +318,6 @@ namespace glz::detail
       return skip_code_point(code_point) > 0;
    }
 
-   // Returns true on error
-   GLZ_ALWAYS_INLINE bool match_quote(is_context auto& ctx, auto&& it) noexcept
-   {
-      if (*it != '"') [[unlikely]] {
-         ctx.error = error_code::expected_quote;
-         return true;
-      }
-      else [[likely]] {
-         ++it;
-         return false;
-      }
-   }
-
    // Checks for a character and validates that we are not at the end (considered an error)
    template <char C, auto Opts>
    GLZ_ALWAYS_INLINE bool match_invalid_end(is_context auto& ctx, auto&& it, auto&& end) noexcept
@@ -347,6 +334,9 @@ namespace glz::detail
          }
          else if constexpr (C == '[' || C == ']') {
             ctx.error = error_code::expected_bracket;
+         }
+         else if constexpr (C == '{' || C == '}') {
+            ctx.error = error_code::expected_brace;
          }
          else {
             ctx.error = error_code::syntax_error;
@@ -405,27 +395,34 @@ namespace glz::detail
          return RETURN;                       \
       }                                       \
    }
-
-   template <char c>
-   GLZ_ALWAYS_INLINE void match(is_context auto&& ctx, auto&& it) noexcept
+   
+   template <char C>
+   GLZ_ALWAYS_INLINE bool match(is_context auto& ctx, auto&& it) noexcept
    {
-      if (*it != c) [[unlikely]] {
-         ctx.error = error_code::syntax_error;
+      if (*it != C) [[unlikely]] {
+         if constexpr (C == '"') {
+            ctx.error = error_code::expected_quote;
+         }
+         else if constexpr (C == ',') {
+            ctx.error = error_code::expected_comma;
+         }
+         else if constexpr (C == ':') {
+            ctx.error = error_code::expected_colon;
+         }
+         else if constexpr (C == '[' || C == ']') {
+            ctx.error = error_code::expected_bracket;
+         }
+         else if constexpr (C == '{' || C == '}') {
+            ctx.error = error_code::expected_brace;
+         }
+         else {
+            ctx.error = error_code::syntax_error;
+         }
+         return true;
       }
       else [[likely]] {
          ++it;
-      }
-   }
-
-   // assumes null terminated
-   template <char c>
-   GLZ_ALWAYS_INLINE void match(is_context auto&& ctx, auto&& it, auto&&) noexcept
-   {
-      if (*it != c) [[unlikely]] {
-         ctx.error = error_code::syntax_error;
-      }
-      else [[likely]] {
-         ++it;
+         return false;
       }
    }
 
@@ -1260,9 +1257,9 @@ namespace glz::detail
       if (bool(ctx.error)) [[unlikely]]
          return {};
 
-      match<'"'>(ctx, it);
-      if (bool(ctx.error)) [[unlikely]]
+      if (match<'"'>(ctx, it)) {
          return {};
+      }
       auto start = it;
       skip_till_quote(ctx, it, end);
       if (bool(ctx.error)) [[unlikely]]

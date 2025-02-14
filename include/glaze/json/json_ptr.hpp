@@ -71,7 +71,7 @@ namespace glz
                   ++it;
                   while (true) {
                      GLZ_SKIP_WS();
-                     if (match_quote(ctx, it)) {
+                     if (match<'"'>(ctx, it)) {
                         return;
                      }
 
@@ -143,7 +143,7 @@ namespace glz
 
                while (it < end) {
                   GLZ_SKIP_WS();
-                  if (match_quote(ctx, it)) {
+                  if (match<'"'>(ctx, it)) {
                      return;
                   }
 
