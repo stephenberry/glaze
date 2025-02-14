@@ -336,7 +336,15 @@ namespace glz::detail
    inline bool match_invalid_end(is_context auto& ctx, auto&& it, auto&& end) noexcept
    {
       if (*it != Character) [[unlikely]] {
-         ctx.error = error_code::expected_quote;
+         if constexpr (Character == '"') {
+            ctx.error = error_code::expected_quote;
+         }
+         else if constexpr (Character == ',') {
+            ctx.error = error_code::expected_comma;
+         }
+         else {
+            ctx.error = error_code::syntax_error;
+         }
          return true;
       }
       else [[likely]] {
@@ -349,21 +357,6 @@ namespace glz::detail
          }
       }
       return false;
-   }
-
-#define GLZ_MATCH_COMMA                          \
-   if (*it != ',') [[unlikely]] {                \
-      ctx.error = error_code::expected_comma;    \
-      return;                                    \
-   }                                             \
-   else [[likely]] {                             \
-      ++it;                                      \
-   }                                             \
-   if constexpr (not Opts.null_terminated) {     \
-      if (it == end) [[unlikely]] {              \
-         ctx.error = error_code::unexpected_end; \
-         return;                                 \
-      }                                          \
    }
 
 #define GLZ_MATCH_COLON(RETURN)                  \

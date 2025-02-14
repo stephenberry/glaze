@@ -294,7 +294,9 @@ namespace glz
                      }
                   }
 
-                  GLZ_MATCH_COMMA;
+                  if (match_invalid_end<',', Opts>(ctx, it, end)) {
+                     return;
+                  }
 
                   using key_type = typename std::decay_t<decltype(value)>::key_type;
                   auto& member = value[key_type(key)];
@@ -454,7 +456,9 @@ namespace glz
                      }
                   }
 
-                  GLZ_MATCH_COMMA;
+                  if (match_invalid_end<',', Opts>(ctx, it, end)) {
+                     return;
+                  }
 
                   const auto index =
                      decode_hash_with_size<CSV, T, HashInfo, HashInfo.type>::op(key.data(), end, key.size());

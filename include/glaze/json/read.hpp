@@ -411,7 +411,9 @@ namespace glz
 
             GLZ_SKIP_WS();
 
-            GLZ_MATCH_COMMA;
+            if (match_invalid_end<',', Opts>(ctx, it, end)) {
+               return;
+            }
 
             read<JSON>::op<Opts>(ptr[1], ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
@@ -1323,7 +1325,9 @@ namespace glz
                   ++it;
                   return;
                }
-               GLZ_MATCH_COMMA;
+               if (match_invalid_end<',', Opts>(ctx, it, end)) {
+                  return;
+               }
                GLZ_SKIP_WS();
             }
          }
@@ -1633,7 +1637,9 @@ namespace glz
 
                GLZ_SKIP_WS();
                if (i < n - 1) {
-                  GLZ_MATCH_COMMA;
+                  if (match_invalid_end<',', Opts>(ctx, it, end)) {
+                     return;
+                  }
                }
                ++i;
             }
@@ -1681,7 +1687,9 @@ namespace glz
                   return;
                }
                if constexpr (I != 0) {
-                  GLZ_MATCH_COMMA;
+                  if (match_invalid_end<',', Opts>(ctx, it, end)) {
+                     return;
+                  }
                   GLZ_SKIP_WS();
                }
                if constexpr (is_std_tuple<T>) {
@@ -1763,7 +1771,9 @@ namespace glz
                   GLZ_VALID_END();
                   return;
                }
-               GLZ_MATCH_COMMA;
+               if (match_invalid_end<',', Opts>(ctx, it, end)) {
+                  return;
+               }
             }
          }
       };
@@ -2037,7 +2047,9 @@ namespace glz
                      first = false;
                   }
                   else {
-                     GLZ_MATCH_COMMA;
+                     if (match_invalid_end<',', Opts>(ctx, it, end)) {
+                        return;
+                     }
                      if constexpr (not Opts.null_terminated) {
                         if (it == end) [[unlikely]] {
                            ctx.error = error_code::unexpected_end;
@@ -2439,7 +2451,9 @@ namespace glz
                      auto start = it;
                      while (*it != '}') {
                         if (it != start) {
-                           GLZ_MATCH_COMMA;
+                           if (match_invalid_end<',', Opts>(ctx, it, end)) {
+                              return;
+                           }
                         }
 
                         GLZ_SKIP_WS();
@@ -2726,7 +2740,9 @@ namespace glz
             auto id_it = id_map.find(type_id);
             if (id_it != id_map.end()) [[likely]] {
                GLZ_SKIP_WS();
-               GLZ_MATCH_COMMA;
+               if (match_invalid_end<',', Opts>(ctx, it, end)) {
+                  return;
+               }
                const auto type_index = id_it->second;
                if (value.index() != type_index) value = runtime_variant_map<T>()[type_index];
                std::visit([&](auto&& v) { read<JSON>::op<Opts>(v, ctx, it, end); }, value);
