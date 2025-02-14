@@ -671,7 +671,9 @@ namespace glz
 
                   while (true) {
                      GLZ_SKIP_WS();
-                     GLZ_MATCH_QUOTE;
+                     if (match_quote(ctx, it)) {
+                        return;
+                     }
 
                      auto* start = it;
                      skip_string_view<Opts>(ctx, it, end);
@@ -741,7 +743,9 @@ namespace glz
 
                while (it < end) {
                   GLZ_SKIP_WS();
-                  GLZ_MATCH_QUOTE;
+                  if (match_quote(ctx, it)) {
+                     return;
+                  }
 
                   auto* start = it;
                   skip_string_view<Opts>(ctx, it, end);
@@ -915,7 +919,9 @@ namespace glz
 
                      while (true) {
                         GLZ_SKIP_WS();
-                        GLZ_MATCH_QUOTE;
+                        if (match_quote(ctx, it)) {
+                           return;
+                        }
 
                         auto* start_pos = it;
                         skip_string_view<Opts>(ctx, it, end);
@@ -985,7 +991,9 @@ namespace glz
 
                   while (it < end) {
                      GLZ_SKIP_WS();
-                     GLZ_MATCH_QUOTE;
+                     if (match_quote(ctx, it)) {
+                        return;
+                     }
 
                      auto* start_pos = it;
                      skip_string_view<Opts>(ctx, it, end);

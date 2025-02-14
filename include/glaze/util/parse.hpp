@@ -318,14 +318,17 @@ namespace glz::detail
       return skip_code_point(code_point) > 0;
    }
 
-   // assumes null terminated
-#define GLZ_MATCH_QUOTE                       \
-   if (*it != '"') [[unlikely]] {             \
-      ctx.error = error_code::expected_quote; \
-      return;                                 \
-   }                                          \
-   else [[likely]] {                          \
-      ++it;                                   \
+   // Returns true on error
+   inline bool match_quote(is_context auto& ctx, auto&& it) noexcept
+   {
+      if (*it != '"') [[unlikely]] {
+         ctx.error = error_code::expected_quote;
+         return true;
+      }
+      else [[likely]] {
+         ++it;
+         return false;
+      }
    }
 
 #define GLZ_MATCH_COMMA                          \
