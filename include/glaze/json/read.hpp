@@ -1527,7 +1527,9 @@ namespace glz
                if constexpr (!has_ws_handled(Options)) {
                   GLZ_SKIP_WS();
                }
-               GLZ_MATCH_OPEN_BRACE;
+               if (match_invalid_end<'{', Opts>(ctx, it, end)) {
+                  return;
+               }
                if constexpr (not Opts.null_terminated) {
                   if (it == end) [[unlikely]] {
                      ctx.error = error_code::unexpected_end;
@@ -1915,7 +1917,9 @@ namespace glz
                if constexpr (!has_ws_handled(Options)) {
                   GLZ_SKIP_WS();
                }
-               GLZ_MATCH_OPEN_BRACE;
+               if (match_invalid_end<'{', Opts>(ctx, it, end)) {
+                  return;
+               }
                if constexpr (not Opts.null_terminated) {
                   ++ctx.indentation_level;
                }
@@ -2008,7 +2012,9 @@ namespace glz
                if constexpr (!has_ws_handled(Options)) {
                   GLZ_SKIP_WS();
                }
-               GLZ_MATCH_OPEN_BRACE;
+               if (match_invalid_end<'{', Opts>(ctx, it, end)) {
+                  return;
+               }
                if constexpr (not Opts.null_terminated) {
                   if (it == end) [[unlikely]] {
                      ctx.error = error_code::unexpected_end;

@@ -670,7 +670,9 @@ namespace glz
                }
                else {
                   // Object scenario with a key, like: key[0:5]
-                  GLZ_MATCH_OPEN_BRACE;
+                  if (match_invalid_end<'{', Opts>(ctx, it, end)) {
+                     return;
+                  }
 
                   while (true) {
                      GLZ_SKIP_WS();
@@ -746,7 +748,9 @@ namespace glz
             }
             else {
                // If it's not array access, we are dealing with an object key
-               GLZ_MATCH_OPEN_BRACE;
+               if (match_invalid_end<'{', Opts>(ctx, it, end)) {
+                  return;
+               }
 
                while (it < end) {
                   GLZ_SKIP_WS();
@@ -926,7 +930,9 @@ namespace glz
                   }
                   else {
                      // Object scenario: key[...]
-                     GLZ_MATCH_OPEN_BRACE;
+                     if (match_invalid_end<'{', Opts>(ctx, it, end)) {
+                        return;
+                     }
 
                      while (true) {
                         GLZ_SKIP_WS();
@@ -1002,7 +1008,9 @@ namespace glz
                }
                else {
                   // Non-array access: key-only navigation
-                  GLZ_MATCH_OPEN_BRACE;
+                  if (match_invalid_end<'{', Opts>(ctx, it, end)) {
+                     return;
+                  }
 
                   while (it < end) {
                      GLZ_SKIP_WS();

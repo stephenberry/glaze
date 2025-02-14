@@ -125,7 +125,9 @@ namespace glz
 
             if constexpr (!has_opening_handled(Options)) {
                GLZ_SKIP_WS();
-               GLZ_MATCH_OPEN_BRACE;
+               if (match_invalid_end<'{', Opts>(ctx, it, end)) {
+                  return;
+               }
             }
 
             GLZ_SKIP_WS();

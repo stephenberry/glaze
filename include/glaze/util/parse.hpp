@@ -354,21 +354,6 @@ namespace glz::detail
       }
       return false;
    }
-
-#define GLZ_MATCH_OPEN_BRACE                     \
-   if (*it != '{') [[unlikely]] {                \
-      ctx.error = error_code::expected_brace;    \
-      return;                                    \
-   }                                             \
-   else [[likely]] {                             \
-      ++it;                                      \
-   }                                             \
-   if constexpr (not Opts.null_terminated) {     \
-      if (it == end) [[unlikely]] {              \
-         ctx.error = error_code::unexpected_end; \
-         return;                                 \
-      }                                          \
-   }
    
    template <char C>
    GLZ_ALWAYS_INLINE bool match(is_context auto& ctx, auto&& it) noexcept

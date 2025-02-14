@@ -139,7 +139,9 @@ namespace glz
                }
             }
             else {
-               GLZ_MATCH_OPEN_BRACE;
+               if (match_invalid_end<'{', Opts>(ctx, it, end)) {
+                  return;
+               }
 
                while (it < end) {
                   GLZ_SKIP_WS();
