@@ -474,8 +474,39 @@ namespace glz
                         data += 2;
                         ++c;
                      }*/
+#define ENABLE_GENERIC_VECTOR 1
 
-#if defined(__APPLE__)
+#ifdef ENABLE_GENERIC_VECTOR
+                     if (n > 63) {
+                        for (const auto end_m7 = e - 63; c < end_m7;) {
+                           std::memcpy(data, c, 64);
+                           uint64x8_t swar;
+                           std::memcpy(&swar, c, 64);
+
+                           static constexpr uint64x8_t lo7_mask = repeat_byte64(0b01111111);
+                           const uint64x8_t lo7 = swar & lo7_mask;
+                           const uint64x8_t quote = (lo7 ^ repeat_byte64('"')) + lo7_mask;
+                           const uint64x8_t backslash = (lo7 ^ repeat_byte64('\\')) + lo7_mask;
+                           const uint64x8_t less_32 = (swar & repeat_byte64(0b01100000)) + lo7_mask;
+                           uint64x8_t next = ~((quote & backslash & less_32) | swar);
+
+                           uint64_t mask = movemask_64(next);
+                           if (mask == 0) {
+                              data += 64;
+                              c += 64;
+                              continue;
+                           }
+
+                           uint32_t length = countr_zero(mask);
+                           c += length;
+                           data += length;
+
+                           std::memcpy(data, &char_escape_table[uint8_t(*c)], 2);
+                           data += 2;
+                           ++c;
+                        }
+                     }
+#elif defined(__APPLE__)
                      // This approach is faster when strings don't contain many escapes
                      // But, this is not faster in the general case
                      /*if (n > 15) {
@@ -2017,3 +2048,4 @@ namespace glz
       return {buffer_to_file(buffer, file_name)};
    }
 }
+
