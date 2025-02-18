@@ -504,6 +504,10 @@ namespace glz
       {
          auto executor = co_await asio::this_coro::executor;
          asio::ip::tcp::acceptor acceptor(executor, {asio::ip::tcp::v6(), port});
+         
+         // Retrieve and use the assigned port (if port was set to 0)
+         port = acceptor.local_endpoint().port();
+         
          while (true) {
             auto socket = co_await acceptor.async_accept(asio::use_awaitable);
             asio::co_spawn(executor, run_instance(std::move(socket)), asio::detached);
