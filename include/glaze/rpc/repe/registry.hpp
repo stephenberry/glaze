@@ -214,7 +214,7 @@ namespace glz::repe
          }();
 
          if constexpr (parent == root && (glaze_object_t<T> ||
-                                          reflectable<T>)&&!std::same_as<std::decay_t<decltype(t)>, std::nullptr_t>) {
+                                          reflectable<T>)) {
             // build read/write calls to the top level object
             methods[root] = [&value](repe::state&& state) mutable {
                if (state.write()) {
