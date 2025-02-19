@@ -3,6 +3,28 @@
 
 #pragma once
 
+#ifndef GLZ_THROW_OR_ABORT
+#if __cpp_exceptions
+#define GLZ_THROW_OR_ABORT(EXC) (throw(EXC))
+#define GLZ_NOEXCEPT noexcept(false)
+#else
+#define GLZ_THROW_OR_ABORT(EXC) (std::abort())
+#define GLZ_NOEXCEPT noexcept(true)
+#endif
+#endif
+
+#if __cpp_exceptions
+#include <stdexcept>
+#endif
+
+namespace glz
+{
+   inline void glaze_error([[maybe_unused]] const char* msg) GLZ_NOEXCEPT
+   {
+      GLZ_THROW_OR_ABORT(std::runtime_error(msg));
+   }
+}
+
 #include <cstddef>
 #include <map>
 #include <variant>
