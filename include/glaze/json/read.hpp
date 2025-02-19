@@ -3246,7 +3246,7 @@ namespace glz
    }
 
    template <class T, is_buffer Buffer>
-   requires (read_supported<JSON, T>)
+      requires(read_supported<JSON, T>)
    [[nodiscard]] error_ctx read_json(T& value, Buffer&& buffer)
    {
       context ctx{};
@@ -3254,7 +3254,7 @@ namespace glz
    }
 
    template <class T, is_buffer Buffer>
-   requires (read_supported<JSON, T>)
+      requires(read_supported<JSON, T>)
    [[nodiscard]] expected<T, error_ctx> read_json(Buffer&& buffer)
    {
       T value{};
@@ -3267,7 +3267,7 @@ namespace glz
    }
 
    template <class T, is_buffer Buffer>
-   requires (read_supported<JSON, T>)
+      requires(read_supported<JSON, T>)
    [[nodiscard]] error_ctx read_jsonc(T& value, Buffer&& buffer)
    {
       context ctx{};
@@ -3275,7 +3275,7 @@ namespace glz
    }
 
    template <class T, is_buffer Buffer>
-   requires (read_supported<JSON, T>)
+      requires(read_supported<JSON, T>)
    [[nodiscard]] expected<T, error_ctx> read_jsonc(Buffer&& buffer)
    {
       T value{};
@@ -3288,7 +3288,7 @@ namespace glz
    }
 
    template <auto Opts = opts{}, class T, is_buffer Buffer>
-   requires (read_supported<JSON, T>)
+      requires(read_supported<JSON, T>)
    [[nodiscard]] error_ctx read_file_json(T& value, const sv file_name, Buffer&& buffer)
    {
       context ctx{};
@@ -3304,7 +3304,7 @@ namespace glz
    }
 
    template <auto Opts = opts{}, class T, is_buffer Buffer>
-   requires (read_supported<JSON, T>)
+      requires(read_supported<JSON, T>)
    [[nodiscard]] error_ctx read_file_jsonc(T& value, const sv file_name, Buffer&& buffer)
    {
       context ctx{};

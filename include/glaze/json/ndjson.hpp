@@ -258,7 +258,7 @@ namespace glz
    } // namespace detail
 
    template <class T, class Buffer>
-   requires (read_supported<NDJSON, T>)
+      requires(read_supported<NDJSON, T>)
    [[nodiscard]] auto read_ndjson(T& value, Buffer&& buffer)
    {
       context ctx{};
@@ -266,7 +266,7 @@ namespace glz
    }
 
    template <class T, class Buffer>
-   requires (read_supported<NDJSON, T>)
+      requires(read_supported<NDJSON, T>)
    [[nodiscard]] expected<T, error_ctx> read_ndjson(Buffer&& buffer)
    {
       T value{};
@@ -279,7 +279,7 @@ namespace glz
    }
 
    template <auto Opts = opts{.format = NDJSON}, class T>
-   requires (read_supported<NDJSON, T>)
+      requires(read_supported<NDJSON, T>)
    [[nodiscard]] error_ctx read_file_ndjson(T& value, const sv file_name)
    {
       context ctx{};
@@ -297,21 +297,21 @@ namespace glz
    }
 
    template <class T, class Buffer>
-   requires (write_supported<NDJSON, T>)
+      requires(write_supported<NDJSON, T>)
    [[nodiscard]] error_ctx write_ndjson(T&& value, Buffer&& buffer)
    {
       return write<opts{.format = NDJSON}>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
 
    template <class T>
-   requires (write_supported<NDJSON, T>)
+      requires(write_supported<NDJSON, T>)
    [[nodiscard]] expected<std::string, error_ctx> write_ndjson(T&& value)
    {
       return write<opts{.format = NDJSON}>(std::forward<T>(value));
    }
 
    template <class T>
-   requires (write_supported<NDJSON, T>)
+      requires(write_supported<NDJSON, T>)
    [[nodiscard]] error_ctx write_file_ndjson(T&& value, const std::string& file_name, auto&& buffer)
    {
       write<opts{.format = NDJSON}>(std::forward<T>(value), buffer);
