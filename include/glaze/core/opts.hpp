@@ -10,6 +10,8 @@
 namespace glz
 {
    // format
+   // Built in formats must be less than 65536
+   // User defined formats can be 65536 to 4294967296
    inline constexpr uint32_t INVALID = 0;
    inline constexpr uint32_t BEVE = 1;
    inline constexpr uint32_t JSON = 10;
