@@ -9,7 +9,7 @@
 
 namespace glz
 {
-   template <detail::num_t T>
+   template <num_t T>
    void format_to(std::string& buffer, T&& value)
    {
       auto ix = buffer.size();
