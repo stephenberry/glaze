@@ -93,7 +93,7 @@ namespace glz::repe
       }
       auto start = b;
 
-      glz::detail::read<Opts.format>::template op<Opts>(std::forward<Value>(value), ctx, b, e);
+      glz::parse<Opts.format>::template op<Opts>(std::forward<Value>(value), ctx, b, e);
 
       if (bool(ctx.error)) {
          state.out.header.ec = ctx.error;

@@ -428,7 +428,7 @@ namespace glz::detail
       static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
       {
          auto proxy = value.write();
-         read<Format>::template op<Opts>(*proxy, ctx, it, end);
+         parse<Format>::template op<Opts>(*proxy, ctx, it, end);
       }
    };
 
@@ -439,7 +439,7 @@ namespace glz::detail
       static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept
       {
          auto proxy = value.read();
-         write<Format>::template op<Opts>(*proxy, ctx, args...);
+         serialize<Format>::template op<Opts>(*proxy, ctx, args...);
       }
    };
 }
