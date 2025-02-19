@@ -86,7 +86,7 @@ namespace glz
    // MSVC requires this template specialization for when the tuple size if zero,
    // otherwise MSVC tries to instantiate calls of get<0> in invalid branches
    template <class T>
-      requires((detail::glaze_object_t<T> || detail::glaze_flags_t<T> || detail::glaze_enum_t<T>) &&
+      requires((glaze_object_t<T> || glaze_flags_t<T> || glaze_enum_t<T>) &&
                (tuple_size_v<meta_t<T>> == 0))
    struct reflect<T>
    {
@@ -99,8 +99,8 @@ namespace glz
    };
 
    template <class T>
-      requires(!detail::meta_keys<T> &&
-               (detail::glaze_object_t<T> || detail::glaze_flags_t<T> || detail::glaze_enum_t<T>) &&
+      requires(!meta_keys<T> &&
+               (glaze_object_t<T> || glaze_flags_t<T> || glaze_enum_t<T>) &&
                (tuple_size_v<meta_t<T>> != 0))
    struct reflect<T>
    {
@@ -144,7 +144,7 @@ namespace glz
    }
 
    template <class T>
-      requires(detail::meta_keys<T> && detail::glaze_t<T>)
+      requires(meta_keys<T> && glaze_t<T>)
    struct reflect<T>
    {
       using V = std::remove_cvref_t<T>;
@@ -162,12 +162,12 @@ namespace glz
    };
 
    template <class T>
-      requires(detail::is_memory_object<T>)
+      requires(is_memory_object<T>)
    struct reflect<T> : reflect<memory_type<T>>
    {};
 
    template <class T>
-      requires(detail::glaze_array_t<T>)
+      requires(glaze_array_t<T>)
    struct reflect<T>
    {
       using V = std::remove_cvref_t<T>;
@@ -184,7 +184,7 @@ namespace glz
    };
 
    template <class T>
-      requires detail::reflectable<T>
+      requires reflectable<T>
    struct reflect<T>
    {
       using V = std::remove_cvref_t<T>;
@@ -201,7 +201,7 @@ namespace glz
    };
 
    template <class T>
-      requires detail::readable_map_t<T>
+      requires readable_map_t<T>
    struct reflect<T>
    {
       static constexpr auto size = 0;
@@ -226,13 +226,13 @@ namespace glz
          if constexpr (Opts.skip_null_members) {
             // if any type could be null then we might skip
             return []<size_t... I>(std::index_sequence<I...>) {
-               return ((detail::always_skipped<field_t<T, I>> || detail::null_t<field_t<T, I>>) || ...);
+               return ((always_skipped<field_t<T, I>> || null_t<field_t<T, I>>) || ...);
             }(std::make_index_sequence<N>{});
          }
          else {
             // if we have an always_skipped type then we return true
             return []<size_t... I>(std::index_sequence<I...>) {
-               return ((detail::always_skipped<field_t<T, I>>) || ...);
+               return ((always_skipped<field_t<T, I>>) || ...);
             }(std::make_index_sequence<N>{});
          }
       }
@@ -370,7 +370,7 @@ namespace glz
    constexpr sv enum_name_v = []() -> std::string_view {
       using T = std::decay_t<decltype(Enum)>;
 
-      if constexpr (detail::glaze_t<T>) {
+      if constexpr (glaze_t<T>) {
          using U = std::underlying_type_t<T>;
          return reflect<T>::keys[static_cast<U>(Enum)];
       }
@@ -404,7 +404,7 @@ namespace glz::detail
 
    // get a std::string_view from an enum value
    template <class T>
-      requires(detail::glaze_t<T> && std::is_enum_v<std::decay_t<T>>)
+      requires(glaze_t<T> && std::is_enum_v<std::decay_t<T>>)
    constexpr auto get_enum_name(T&& enum_value)
    {
       using V = std::decay_t<T>;
@@ -413,7 +413,7 @@ namespace glz::detail
       return arr[static_cast<U>(enum_value)];
    }
 
-   template <detail::glaze_flags_t T>
+   template <glaze_flags_t T>
    consteval auto byte_length() noexcept
    {
       constexpr auto N = reflect<T>::size;
@@ -523,7 +523,7 @@ namespace glz::detail
    }
 }
 
-namespace glz::detail
+namespace glz
 {
    template <class T>
    consteval size_t key_index(const std::string_view key)
@@ -536,7 +536,10 @@ namespace glz::detail
       }
       return n;
    }
+}
 
+namespace glz::detail
+{
    GLZ_ALWAYS_INLINE constexpr uint64_t bitmix(uint64_t h, const uint64_t seed) noexcept
    {
       h *= seed;
@@ -1972,7 +1975,7 @@ namespace glz
 {
    // The Callable comes second as ranges::for_each puts the callable at the end
 
-   template <class Callable, detail::reflectable T>
+   template <class Callable, reflectable T>
    void for_each_field(T&& value, Callable&& callable)
    {
       constexpr auto N = reflect<T>::size;
@@ -1983,7 +1986,7 @@ namespace glz
       }
    }
 
-   template <class Callable, detail::glaze_object_t T>
+   template <class Callable, glaze_object_t T>
    void for_each_field(T&& value, Callable&& callable)
    {
       constexpr auto N = reflect<T>::size;

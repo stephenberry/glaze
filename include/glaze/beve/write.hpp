@@ -35,31 +35,6 @@ namespace glz
       }
    };
    
-   template <auto& Partial, auto Opts, class T, class Ctx, class B, class IX>
-   concept write_beve_partial_invocable = requires(T&& value, Ctx&& ctx, B&& b, IX&& ix) {
-      detail::to_partial<BEVE, std::remove_cvref_t<T>>::template op<Partial, Opts>(
-                                                                           std::forward<T>(value), std::forward<Ctx>(ctx), std::forward<B>(b), std::forward<IX>(ix));
-   };
-   
-   template <>
-   struct serialize_partial<BEVE>
-   {
-      template <auto& Partial, auto Opts, class T, is_context Ctx, class B, class IX>
-      static void op(T&& value, Ctx&& ctx, B&& b, IX&& ix)
-      {
-         if constexpr (std::count(Partial.begin(), Partial.end(), "") > 0) {
-            serialize<BEVE>::op<Opts>(value, ctx, b, ix);
-         }
-         else if constexpr (write_beve_partial_invocable<Partial, Opts, T, Ctx, B, IX>) {
-            detail::to_partial<BEVE, std::remove_cvref_t<T>>::template op<Partial, Opts>(
-                                                                                 std::forward<T>(value), std::forward<Ctx>(ctx), std::forward<B>(b), std::forward<IX>(ix));
-         }
-         else {
-            static_assert(false_v<T>, "Glaze metadata is probably needed for your type");
-         }
-      }
-   };
-   
    namespace detail
    {
       GLZ_ALWAYS_INLINE void dump_type(auto&& value, auto&& b, auto&& ix)
@@ -69,9 +44,9 @@ namespace glz
          if (const auto k = ix + n; k > b.size()) [[unlikely]] {
             b.resize(2 * k);
          }
-
+         
          constexpr auto is_volatile = std::is_volatile_v<std::remove_reference_t<decltype(value)>>;
-
+         
          if constexpr (is_volatile) {
             const V temp = value;
             std::memcpy(&b[ix], &temp, n);
@@ -81,7 +56,7 @@ namespace glz
          }
          ix += n;
       }
-
+      
       template <uint64_t i, class... Args>
       GLZ_ALWAYS_INLINE void dump_compressed_int(Args&&... args)
       {
@@ -105,7 +80,7 @@ namespace glz
             static_assert(i >= 4611686018427387904, "size not supported");
          }
       }
-
+      
       template <auto Opts, class... Args>
       GLZ_ALWAYS_INLINE void dump_compressed_int(uint64_t i, Args&&... args)
       {
@@ -129,7 +104,117 @@ namespace glz
             std::abort(); // this should never happen because we should never allocate containers of this size
          }
       }
-
+   }
+   
+   template <auto& Partial, auto Opts, class T, class Ctx, class B, class IX>
+   concept write_beve_partial_invocable = requires(T&& value, Ctx&& ctx, B&& b, IX&& ix) {
+      to_partial<BEVE, std::remove_cvref_t<T>>::template op<Partial, Opts>(
+                                                                           std::forward<T>(value), std::forward<Ctx>(ctx), std::forward<B>(b), std::forward<IX>(ix));
+   };
+   
+   template <>
+   struct serialize_partial<BEVE>
+   {
+      template <auto& Partial, auto Opts, class T, is_context Ctx, class B, class IX>
+      static void op(T&& value, Ctx&& ctx, B&& b, IX&& ix)
+      {
+         if constexpr (std::count(Partial.begin(), Partial.end(), "") > 0) {
+            serialize<BEVE>::op<Opts>(value, ctx, b, ix);
+         }
+         else if constexpr (write_beve_partial_invocable<Partial, Opts, T, Ctx, B, IX>) {
+            to_partial<BEVE, std::remove_cvref_t<T>>::template op<Partial, Opts>(
+                                                                                 std::forward<T>(value), std::forward<Ctx>(ctx), std::forward<B>(b), std::forward<IX>(ix));
+         }
+         else {
+            static_assert(false_v<T>, "Glaze metadata is probably needed for your type");
+         }
+      }
+   };
+   
+   // Only object types are supported for partial
+   template <class T>
+   requires(glaze_object_t<T> || writable_map_t<T> || reflectable<T>)
+   struct to_partial<BEVE, T> final
+   {
+      template <auto& Partial, auto Opts, class... Args>
+      static void op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix)
+      {
+         static constexpr auto sorted = sort_json_ptrs(Partial);
+         static constexpr auto groups = glz::group_json_ptrs<sorted>();
+         static constexpr auto N = glz::tuple_size_v<std::decay_t<decltype(groups)>>;
+         
+         constexpr uint8_t type = 0; // string
+         constexpr uint8_t tag = tag::object | type;
+         detail::dump_type(tag, b, ix);
+         
+         detail::dump_compressed_int<N>(b, ix);
+         
+         if constexpr (glaze_object_t<T>) {
+            for_each<N>([&](auto I) {
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
+               
+               static constexpr auto group = glz::get<I>(groups);
+               
+               static constexpr auto key = get<0>(group);
+               static constexpr auto sub_partial = get<1>(group);
+               static constexpr auto index = key_index<T>(key);
+               static_assert(index < reflect<T>::size, "Invalid key passed to partial write");
+               
+               if constexpr (glaze_object_t<T>) {
+                  static constexpr auto member = get<index>(reflect<T>::values);
+                  serialize<BEVE>::no_header<Opts>(key, ctx, b, ix);
+                  serialize_partial<BEVE>::op<sub_partial, Opts>(get_member(value, member), ctx, b, ix);
+               }
+               else {
+                  serialize<BEVE>::no_header<Opts>(key, ctx, b, ix);
+                  serialize_partial<BEVE>::op<sub_partial, Opts>(get_member(value, get<index>(to_tie(value))), ctx, b,
+                                                                 ix);
+               }
+            });
+         }
+         else if constexpr (writable_map_t<T>) {
+            for_each<N>([&](auto I) {
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
+               
+               static constexpr auto group = glz::get<I>(groups);
+               
+               static constexpr auto key_value = get<0>(group);
+               static constexpr auto sub_partial = get<1>(group);
+               if constexpr (findable<std::decay_t<T>, decltype(key_value)>) {
+                  serialize<BEVE>::no_header<Opts>(key_value, ctx, b, ix);
+                  auto it = value.find(key_value);
+                  if (it != value.end()) {
+                     serialize_partial<BEVE>::op<sub_partial, Opts>(it->second, ctx, b, ix);
+                  }
+                  else {
+                     ctx.error = error_code::invalid_partial_key;
+                     return;
+                  }
+               }
+               else {
+                  static thread_local auto key =
+                  typename std::decay_t<T>::key_type(key_value); // TODO handle numeric keys
+                  serialize<BEVE>::no_header<Opts>(key, ctx, b, ix);
+                  auto it = value.find(key);
+                  if (it != value.end()) {
+                     serialize_partial<BEVE>::op<sub_partial, Opts>(it->second, ctx, b, ix);
+                  }
+                  else {
+                     ctx.error = error_code::invalid_partial_key;
+                     return;
+                  }
+               }
+            });
+         }
+      }
+   };
+   
+   namespace detail
+   {
       template <class T>
          requires(glaze_value_t<T> && !custom_write<T>)
       struct to<BEVE, T>
@@ -823,88 +908,6 @@ namespace glz
                [&]<size_t... I>(std::index_sequence<I...>) {
                   (serialize<BEVE>::op<Opts>(glz::get<I>(value), ctx, args...), ...);
                }(std::make_index_sequence<N>{});
-            }
-         }
-      };
-
-      // Only object types are supported for partial
-      template <class T>
-         requires(glaze_object_t<T> || writable_map_t<T> || reflectable<T>)
-      struct to_partial<BEVE, T> final
-      {
-         template <auto& Partial, auto Opts, class... Args>
-         static void op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix)
-         {
-            static constexpr auto sorted = sort_json_ptrs(Partial);
-            static constexpr auto groups = glz::group_json_ptrs<sorted>();
-            static constexpr auto N = glz::tuple_size_v<std::decay_t<decltype(groups)>>;
-
-            constexpr uint8_t type = 0; // string
-            constexpr uint8_t tag = tag::object | type;
-            detail::dump_type(tag, b, ix);
-
-            detail::dump_compressed_int<N>(b, ix);
-
-            if constexpr (glaze_object_t<T>) {
-               for_each<N>([&](auto I) {
-                  if (bool(ctx.error)) [[unlikely]] {
-                     return;
-                  }
-
-                  static constexpr auto group = glz::get<I>(groups);
-
-                  static constexpr auto key = get<0>(group);
-                  static constexpr auto sub_partial = get<1>(group);
-                  static constexpr auto index = key_index<T>(key);
-                  static_assert(index < reflect<T>::size, "Invalid key passed to partial write");
-
-                  if constexpr (glaze_object_t<T>) {
-                     static constexpr auto member = get<index>(reflect<T>::values);
-                     serialize<BEVE>::no_header<Opts>(key, ctx, b, ix);
-                     serialize_partial<BEVE>::op<sub_partial, Opts>(get_member(value, member), ctx, b, ix);
-                  }
-                  else {
-                     serialize<BEVE>::no_header<Opts>(key, ctx, b, ix);
-                     serialize_partial<BEVE>::op<sub_partial, Opts>(get_member(value, get<index>(to_tie(value))), ctx, b,
-                                                                ix);
-                  }
-               });
-            }
-            else if constexpr (writable_map_t<T>) {
-               for_each<N>([&](auto I) {
-                  if (bool(ctx.error)) [[unlikely]] {
-                     return;
-                  }
-
-                  static constexpr auto group = glz::get<I>(groups);
-
-                  static constexpr auto key_value = get<0>(group);
-                  static constexpr auto sub_partial = get<1>(group);
-                  if constexpr (findable<std::decay_t<T>, decltype(key_value)>) {
-                     serialize<BEVE>::no_header<Opts>(key_value, ctx, b, ix);
-                     auto it = value.find(key_value);
-                     if (it != value.end()) {
-                        serialize_partial<BEVE>::op<sub_partial, Opts>(it->second, ctx, b, ix);
-                     }
-                     else {
-                        ctx.error = error_code::invalid_partial_key;
-                        return;
-                     }
-                  }
-                  else {
-                     static thread_local auto key =
-                        typename std::decay_t<T>::key_type(key_value); // TODO handle numeric keys
-                     serialize<BEVE>::no_header<Opts>(key, ctx, b, ix);
-                     auto it = value.find(key);
-                     if (it != value.end()) {
-                        serialize_partial<BEVE>::op<sub_partial, Opts>(it->second, ctx, b, ix);
-                     }
-                     else {
-                        ctx.error = error_code::invalid_partial_key;
-                        return;
-                     }
-                  }
-               });
             }
          }
       };

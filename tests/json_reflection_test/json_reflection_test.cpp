@@ -15,7 +15,7 @@ struct my_struct
    std::array<uint64_t, 3> arr{};
 };
 
-static_assert(glz::detail::reflectable<my_struct>);
+static_assert(glz::reflectable<my_struct>);
 
 static_assert(glz::name_v<my_struct> == "my_struct");
 
@@ -68,7 +68,7 @@ struct nested_t
    my_struct thing{};
 };
 
-static_assert(glz::detail::reflectable<nested_t>);
+static_assert(glz::reflectable<nested_t>);
 
 #ifndef _MSC_VER
 suite nested_reflection = [] {
@@ -487,7 +487,7 @@ struct V2Wrapper
    V2 x{};
 };
 
-static_assert(glz::detail::reflectable<V2Wrapper>);
+static_assert(glz::reflectable<V2Wrapper>);
 static_assert(glz::detail::count_members<V2Wrapper> == 1);
 
 suite v2_wrapper_test = [] {
@@ -528,7 +528,7 @@ struct glz::json_schema<meta_schema_t>
 };
 
 static_assert(glz::detail::json_schema_t<glz::json_schema<meta_schema_t>>);
-static_assert(glz::detail::reflectable<glz::json_schema<meta_schema_t>>);
+static_assert(glz::reflectable<glz::json_schema<meta_schema_t>>);
 static_assert(glz::detail::count_members<glz::json_schema<meta_schema_t>> == 3);
 
 struct local_schema_t

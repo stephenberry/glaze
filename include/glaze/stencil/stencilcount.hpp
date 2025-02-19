@@ -110,11 +110,11 @@ namespace glz
                            static constexpr auto TargetKey = get<I>(reflect<T>::keys);
                            static constexpr auto Length = TargetKey.size();
                            if ((Length == key.size()) && detail::comparitor<TargetKey>(start)) [[likely]] {
-                              if constexpr (detail::reflectable<T> && N > 0) {
+                              if constexpr (reflectable<T> && N > 0) {
                                  std::ignore = write<opt_true<Opts, &opts::raw>>(
                                     get_member(value, get<I>(to_tie(value))), temp, ctx);
                               }
-                              else if constexpr (detail::glaze_object_t<T> && N > 0) {
+                              else if constexpr (glaze_object_t<T> && N > 0) {
                                  std::ignore = write<opt_true<Opts, &opts::raw>>(
                                     get_member(value, get<I>(reflect<T>::values)), temp, ctx);
                               }

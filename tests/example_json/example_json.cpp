@@ -16,7 +16,7 @@ struct BasicStruct
    std::string str{};
    std::array<uint32_t, 3> arr{};
 };
-static_assert(glz::detail::reflectable<BasicStruct>);
+static_assert(glz::reflectable<BasicStruct>);
 
 // Demonstration of reading and writing a basic reflectable struct without `glz::meta`.
 suite basic_reflection = [] {
@@ -75,7 +75,7 @@ struct WithOptional
    std::string required = "default";
    std::optional<double> maybe = {};
 };
-static_assert(glz::detail::reflectable<WithOptional>);
+static_assert(glz::reflectable<WithOptional>);
 
 suite optional_fields = [] {
    "optional_fields_test"_test = [] {
@@ -115,7 +115,7 @@ struct EnumHolder
 {
    Color c{Color::Green};
 };
-static_assert(glz::detail::reflectable<EnumHolder>);
+static_assert(glz::reflectable<EnumHolder>);
 
 suite enum_test = [] {
    "enum_as_string_key"_test = [] {
@@ -166,7 +166,7 @@ struct ContainerStruct
    std::deque<float> dq{3.14f, 2.71f};
    std::list<int> lis{10, 11, 12};
 };
-static_assert(glz::detail::reflectable<ContainerStruct>);
+static_assert(glz::reflectable<ContainerStruct>);
 
 suite container_test = [] {
    "containers_read_write"_test = [] {
@@ -193,7 +193,7 @@ struct MapStruct
    std::map<std::string, int> str_map{{"one", 1}, {"two", 2}};
    std::unordered_map<int, std::string> umap{{5, "five"}, {7, "seven"}};
 };
-static_assert(glz::detail::reflectable<MapStruct>);
+static_assert(glz::reflectable<MapStruct>);
 
 suite map_test = [] {
    "map_unordered_map"_test = [] {
@@ -296,7 +296,7 @@ struct CommentStruct
 {
    int val{};
 };
-static_assert(glz::detail::reflectable<CommentStruct>);
+static_assert(glz::reflectable<CommentStruct>);
 
 suite comment_parsing = [] {
    "comment_test"_test = [] {

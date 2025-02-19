@@ -25,7 +25,7 @@ namespace glz
       return {};
    }
 
-   template <opts Opts = opts{}, detail::writable_map_t T>
+   template <opts Opts = opts{}, writable_map_t T>
    [[nodiscard]] error_ctx write_directory(T&& value, const sv directory_path)
    {
       namespace fs = std::filesystem;

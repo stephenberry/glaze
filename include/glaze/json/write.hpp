@@ -50,7 +50,7 @@ namespace glz
    
    template <auto& Partial, auto Opts, class T, class Ctx, class B, class IX>
    concept write_json_partial_invocable = requires(T&& value, Ctx&& ctx, B&& b, IX&& ix) {
-      detail::to_partial<JSON, std::remove_cvref_t<T>>::template op<Partial, Opts>(
+      to_partial<JSON, std::remove_cvref_t<T>>::template op<Partial, Opts>(
                                                                            std::forward<T>(value), std::forward<Ctx>(ctx), std::forward<B>(b), std::forward<IX>(ix));
    };
    
@@ -64,11 +64,140 @@ namespace glz
             serialize<JSON>::op<Opts>(value, ctx, b, ix);
          }
          else if constexpr (write_json_partial_invocable<Partial, Opts, T, Ctx, B, IX>) {
-            detail::to_partial<JSON, std::remove_cvref_t<T>>::template op<Partial, Opts>(
+            to_partial<JSON, std::remove_cvref_t<T>>::template op<Partial, Opts>(
                                                                                  std::forward<T>(value), std::forward<Ctx>(ctx), std::forward<B>(b), std::forward<IX>(ix));
          }
          else {
             static_assert(false_v<T>, "Glaze metadata is probably needed for your type");
+         }
+      }
+   };
+   
+   template <opts Opts, bool minified_check = true, class B>
+   requires (Opts.format == JSON || Opts.format == NDJSON)
+   GLZ_ALWAYS_INLINE void write_object_entry_separator(is_context auto&& ctx, B&& b, auto&& ix)
+   {
+      if constexpr (Opts.prettify) {
+         if constexpr (vector_like<B>) {
+            if (const auto k = ix + ctx.indentation_level + write_padding_bytes; k > b.size()) [[unlikely]] {
+               b.resize(2 * k);
+            }
+         }
+         std::memcpy(&b[ix], ",\n", 2);
+         ix += 2;
+         std::memset(&b[ix], Opts.indentation_char, ctx.indentation_level);
+         ix += ctx.indentation_level;
+      }
+      else {
+         if constexpr (vector_like<B>) {
+            if constexpr (minified_check) {
+               if (ix >= b.size()) [[unlikely]] {
+                  b.resize(2 * ix);
+               }
+            }
+         }
+         std::memcpy(&b[ix], ",", 1);
+         ++ix;
+      }
+   }
+   
+   // Only object types are supported for partial
+   template <class T>
+   requires(glaze_object_t<T> || writable_map_t<T> || reflectable<T>)
+   struct to_partial<JSON, T> final
+   {
+      template <auto& Partial, auto Opts, class... Args>
+      static void op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix)
+      {
+         if constexpr (!has_opening_handled(Opts)) {
+            dump<'{'>(b, ix);
+            if constexpr (Opts.prettify) {
+               ctx.indentation_level += Opts.indentation_width;
+               dump<'\n'>(b, ix);
+               dumpn<Opts.indentation_char>(ctx.indentation_level, b, ix);
+            }
+         }
+         
+         static constexpr auto sorted = sort_json_ptrs(Partial);
+         static constexpr auto groups = glz::group_json_ptrs<sorted>();
+         static constexpr auto N = glz::tuple_size_v<std::decay_t<decltype(groups)>>;
+         
+         static constexpr auto num_members = reflect<T>::size;
+         
+         if constexpr ((num_members > 0) && (glaze_object_t<T> || reflectable<T>)) {
+            detail::invoke_table<N>([&]<size_t I>() {
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
+               
+               static constexpr auto group = glz::get<I>(groups);
+               
+               static constexpr auto key = get<0>(group);
+               static constexpr auto quoted_key = quoted_key_v<key, Opts.prettify>;
+               dump<quoted_key>(b, ix);
+               
+               static constexpr auto sub_partial = get<1>(group);
+               static constexpr auto index = key_index<T>(key);
+               static_assert(index < num_members, "Invalid key passed to partial write");
+               if constexpr (glaze_object_t<T>) {
+                  static constexpr auto member = get<index>(reflect<T>::values);
+                  
+                  serialize_partial<JSON>::op<sub_partial, Opts>(get_member(value, member), ctx, b, ix);
+                  if constexpr (I != N - 1) {
+                     write_object_entry_separator<Opts>(ctx, b, ix);
+                  }
+               }
+               else {
+                  serialize_partial<JSON>::op<sub_partial, Opts>(get_member(value, get<index>(to_tie(value))), ctx, b,
+                                                                 ix);
+                  if constexpr (I != N - 1) {
+                     write_object_entry_separator<Opts>(ctx, b, ix);
+                  }
+               }
+            });
+         }
+         else if constexpr (writable_map_t<T>) {
+            invoke_table<N>([&]<size_t I>() {
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
+               
+               static constexpr auto group = glz::get<I>(groups);
+               
+               static constexpr auto key = std::get<0>(group);
+               static constexpr auto quoted_key = quoted_key_v<key, Opts.prettify>;
+               dump<key>(b, ix);
+               
+               static constexpr auto sub_partial = std::get<1>(group);
+               if constexpr (findable<std::decay_t<T>, decltype(key)>) {
+                  auto it = value.find(key);
+                  if (it != value.end()) {
+                     serialize_partial<JSON>::op<sub_partial, Opts>(it->second, ctx, b, ix);
+                  }
+                  else {
+                     ctx.error = error_code::invalid_partial_key;
+                     return;
+                  }
+               }
+               else {
+                  static thread_local auto k = typename std::decay_t<T>::key_type(key);
+                  auto it = value.find(k);
+                  if (it != value.end()) {
+                     serialize_partial<JSON>::op<sub_partial, Opts>(it->second, ctx, b, ix);
+                  }
+                  else {
+                     ctx.error = error_code::invalid_partial_key;
+                     return;
+                  }
+               }
+               if constexpr (I != N - 1) {
+                  write_object_entry_separator<Opts>(ctx, b, ix);
+               }
+            });
+         }
+         
+         if (not bool(ctx.error)) [[likely]] {
+            dump<'}'>(b, ix);
          }
       }
    };
@@ -778,33 +907,6 @@ namespace glz
                std::memcpy(&b[ix], ", ", 2);
                ix += 2;
             }
-         }
-         else {
-            if constexpr (vector_like<B>) {
-               if constexpr (minified_check) {
-                  if (ix >= b.size()) [[unlikely]] {
-                     b.resize(2 * ix);
-                  }
-               }
-            }
-            std::memcpy(&b[ix], ",", 1);
-            ++ix;
-         }
-      }
-
-      template <opts Opts, bool minified_check = true, class B>
-      GLZ_ALWAYS_INLINE void write_object_entry_separator(is_context auto&& ctx, B&& b, auto&& ix)
-      {
-         if constexpr (Opts.prettify) {
-            if constexpr (vector_like<B>) {
-               if (const auto k = ix + ctx.indentation_level + write_padding_bytes; k > b.size()) [[unlikely]] {
-                  b.resize(2 * k);
-               }
-            }
-            std::memcpy(&b[ix], ",\n", 2);
-            ix += 2;
-            std::memset(&b[ix], Opts.indentation_char, ctx.indentation_level);
-            ix += ctx.indentation_level;
          }
          else {
             if constexpr (vector_like<B>) {
@@ -1624,7 +1726,7 @@ namespace glz
          static void op(V&& value, is_context auto&& ctx, B&& b, auto&& ix)
          {
             using ValueType = std::decay_t<V>;
-            if constexpr (detail::has_unknown_writer<ValueType> && not has_disable_write_unknown(Options)) {
+            if constexpr (has_unknown_writer<ValueType> && not has_disable_write_unknown(Options)) {
                constexpr auto& writer = meta_unknown_write_v<ValueType>;
 
                using WriterType = meta_unknown_write_t<ValueType>;
@@ -1859,107 +1961,6 @@ namespace glz
                      dump<'}'>(b, ix);
                   }
                }
-            }
-         }
-      };
-
-      // Only object types are supported for partial
-      template <class T>
-         requires(glaze_object_t<T> || writable_map_t<T> || reflectable<T>)
-      struct to_partial<JSON, T> final
-      {
-         template <auto& Partial, auto Opts, class... Args>
-         static void op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix)
-         {
-            if constexpr (!has_opening_handled(Opts)) {
-               dump<'{'>(b, ix);
-               if constexpr (Opts.prettify) {
-                  ctx.indentation_level += Opts.indentation_width;
-                  dump<'\n'>(b, ix);
-                  dumpn<Opts.indentation_char>(ctx.indentation_level, b, ix);
-               }
-            }
-
-            static constexpr auto sorted = sort_json_ptrs(Partial);
-            static constexpr auto groups = glz::group_json_ptrs<sorted>();
-            static constexpr auto N = glz::tuple_size_v<std::decay_t<decltype(groups)>>;
-
-            static constexpr auto num_members = reflect<T>::size;
-
-            if constexpr ((num_members > 0) && (glaze_object_t<T> || reflectable<T>)) {
-               invoke_table<N>([&]<size_t I>() {
-                  if (bool(ctx.error)) [[unlikely]] {
-                     return;
-                  }
-
-                  static constexpr auto group = glz::get<I>(groups);
-
-                  static constexpr auto key = get<0>(group);
-                  static constexpr auto quoted_key = quoted_key_v<key, Opts.prettify>;
-                  dump<quoted_key>(b, ix);
-
-                  static constexpr auto sub_partial = get<1>(group);
-                  static constexpr auto index = key_index<T>(key);
-                  static_assert(index < num_members, "Invalid key passed to partial write");
-                  if constexpr (glaze_object_t<T>) {
-                     static constexpr auto member = get<index>(reflect<T>::values);
-
-                     serialize_partial<JSON>::op<sub_partial, Opts>(get_member(value, member), ctx, b, ix);
-                     if constexpr (I != N - 1) {
-                        write_object_entry_separator<Opts>(ctx, b, ix);
-                     }
-                  }
-                  else {
-                     serialize_partial<JSON>::op<sub_partial, Opts>(get_member(value, get<index>(to_tie(value))), ctx, b,
-                                                                ix);
-                     if constexpr (I != N - 1) {
-                        write_object_entry_separator<Opts>(ctx, b, ix);
-                     }
-                  }
-               });
-            }
-            else if constexpr (writable_map_t<T>) {
-               invoke_table<N>([&]<size_t I>() {
-                  if (bool(ctx.error)) [[unlikely]] {
-                     return;
-                  }
-
-                  static constexpr auto group = glz::get<I>(groups);
-
-                  static constexpr auto key = std::get<0>(group);
-                  static constexpr auto quoted_key = quoted_key_v<key, Opts.prettify>;
-                  dump<key>(b, ix);
-
-                  static constexpr auto sub_partial = std::get<1>(group);
-                  if constexpr (findable<std::decay_t<T>, decltype(key)>) {
-                     auto it = value.find(key);
-                     if (it != value.end()) {
-                        serialize_partial<JSON>::op<sub_partial, Opts>(it->second, ctx, b, ix);
-                     }
-                     else {
-                        ctx.error = error_code::invalid_partial_key;
-                        return;
-                     }
-                  }
-                  else {
-                     static thread_local auto k = typename std::decay_t<T>::key_type(key);
-                     auto it = value.find(k);
-                     if (it != value.end()) {
-                        serialize_partial<JSON>::op<sub_partial, Opts>(it->second, ctx, b, ix);
-                     }
-                     else {
-                        ctx.error = error_code::invalid_partial_key;
-                        return;
-                     }
-                  }
-                  if constexpr (I != N - 1) {
-                     write_object_entry_separator<Opts>(ctx, b, ix);
-                  }
-               });
-            }
-
-            if (not bool(ctx.error)) [[likely]] {
-               dump<'}'>(b, ix);
             }
          }
       };

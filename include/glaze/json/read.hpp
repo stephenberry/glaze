@@ -62,12 +62,12 @@ namespace glz
       static void handle_unknown(const sv& key, T&& value, Ctx&& ctx, It0&& it, It1&& end)
       {
          using ValueType = std::decay_t<decltype(value)>;
-         if constexpr (detail::has_unknown_reader<ValueType>) {
+         if constexpr (has_unknown_reader<ValueType>) {
             constexpr auto& reader = meta_unknown_read_v<ValueType>;
             using ReaderType = meta_unknown_read_t<ValueType>;
             if constexpr (std::is_member_object_pointer_v<ReaderType>) {
                using MemberType = typename member_value<ReaderType>::type;
-               if constexpr (detail::map_subscriptable<MemberType>) {
+               if constexpr (map_subscriptable<MemberType>) {
                   parse<JSON>::op<Opts>((value.*reader)[key], ctx, it, end);
                }
                else {
@@ -1635,7 +1635,7 @@ namespace glz
                using V = std::decay_t<decltype(item)>;
 
                if constexpr (str_t<typename V::first_type> ||
-                             (std::is_enum_v<typename V::first_type> && detail::glaze_t<typename V::first_type>)) {
+                             (std::is_enum_v<typename V::first_type> && glaze_t<typename V::first_type>)) {
                   parse<JSON>::op<Opts>(item.first, ctx, it, end);
                   if (bool(ctx.error)) [[unlikely]]
                      return;

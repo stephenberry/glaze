@@ -55,7 +55,7 @@ namespace glz
    }
 
    template <opts Opts = opts{.prettify = true}, class T>
-      requires(detail::glaze_object_t<T> || detail::reflectable<T>)
+      requires(glaze_object_t<T> || reflectable<T>)
    inline void run_cli_menu(T& value, cli_menu_boolean auto& show_menu)
    {
       using namespace detail;
@@ -252,7 +252,7 @@ namespace glz
    }
 
    template <opts Opts = opts{.prettify = true}, class T>
-      requires(detail::glaze_object_t<T> || detail::reflectable<T>)
+      requires(glaze_object_t<T> || reflectable<T>)
    inline void run_cli_menu(T& value)
    {
       std::atomic<bool> menu_boolean = true;

@@ -13,7 +13,7 @@
 #include "glaze/core/opts.hpp"
 #include "glaze/util/convert.hpp"
 
-namespace glz::detail
+namespace glz
 {
    template <class T, class V = std::remove_cvref_t<T>>
    concept byte_sized = sizeof(T) == 1 && (std::same_as<V, char> || std::same_as<V, std::byte>);

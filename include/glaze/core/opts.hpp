@@ -328,13 +328,13 @@ namespace glz
 
 namespace glz
 {
+   template <uint32_t Format = INVALID, class T = void>
+   struct to_partial;
+   
    namespace detail
    {
       template <uint32_t Format = INVALID, class T = void>
       struct to;
-
-      template <uint32_t Format = INVALID, class T = void>
-      struct to_partial;
 
       template <uint32_t Format = INVALID, class T = void>
       struct from;

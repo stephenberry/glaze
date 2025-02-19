@@ -117,11 +117,11 @@ namespace glz
                               [&]<size_t I>() {
                                  static constexpr auto TargetKey = get<I>(reflect<T>::keys);
                                  if (TargetKey == key) [[likely]] {
-                                    if constexpr (detail::bool_t<refl_t<T, I>>) {
-                                       if constexpr (detail::reflectable<T>) {
+                                    if constexpr (bool_t<refl_t<T, I>>) {
+                                       if constexpr (reflectable<T>) {
                                           condition = bool(get_member(value, get<I>(to_tie(value))));
                                        }
-                                       else if constexpr (detail::glaze_object_t<T>) {
+                                       else if constexpr (glaze_object_t<T>) {
                                           condition = bool(get_member(value, get<I>(reflect<T>::values)));
                                        }
                                     }
@@ -183,11 +183,11 @@ namespace glz
                         [&]<size_t I>() {
                            static constexpr auto TargetKey = get<I>(reflect<T>::keys);
                            if ((TargetKey.size() == key.size()) && detail::comparitor<TargetKey>(start)) [[likely]] {
-                              if constexpr (detail::reflectable<T>) {
+                              if constexpr (reflectable<T>) {
                                  serialize<Opts.format>::template op<RawOpts>(
                                     get_member(value, get<I>(to_tie(value))), ctx, buffer, ix);
                               }
-                              else if constexpr (detail::glaze_object_t<T>) {
+                              else if constexpr (glaze_object_t<T>) {
                                  serialize<Opts.format>::template op<RawOpts>(
                                     get_member(value, get<I>(reflect<T>::values)), ctx, buffer, ix);
                               }

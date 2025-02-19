@@ -1319,7 +1319,7 @@ struct reflectable_t
    constexpr bool operator==(const reflectable_t&) const noexcept = default;
 };
 
-static_assert(glz::detail::reflectable<reflectable_t>);
+static_assert(glz::reflectable<reflectable_t>);
 
 suite reflection_test = [] {
    "reflectable_t"_test = [] {
