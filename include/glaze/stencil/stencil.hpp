@@ -184,11 +184,11 @@ namespace glz
                            static constexpr auto TargetKey = get<I>(reflect<T>::keys);
                            if ((TargetKey.size() == key.size()) && detail::comparitor<TargetKey>(start)) [[likely]] {
                               if constexpr (detail::reflectable<T>) {
-                                 detail::write<Opts.format>::template op<RawOpts>(
+                                 serialize<Opts.format>::template op<RawOpts>(
                                     get_member(value, get<I>(to_tie(value))), ctx, buffer, ix);
                               }
                               else if constexpr (detail::glaze_object_t<T>) {
-                                 detail::write<Opts.format>::template op<RawOpts>(
+                                 serialize<Opts.format>::template op<RawOpts>(
                                     get_member(value, get<I>(reflect<T>::values)), ctx, buffer, ix);
                               }
                            }

@@ -31,10 +31,77 @@
 
 namespace glz
 {
-
    // forward declare from json/wrappers.hpp to avoid circular include
    template <class T>
    struct quoted_t;
+   
+   template <>
+   struct parse<JSON>
+   {
+      template <auto Opts, class T, is_context Ctx, class It0, class It1>
+      GLZ_ALWAYS_INLINE static void op(T&& value, Ctx&& ctx, It0&& it, It1&& end)
+      {
+         if constexpr (const_value_v<T>) {
+            if constexpr (Opts.error_on_const_read) {
+               ctx.error = error_code::attempt_const_read;
+            }
+            else {
+               // do not read anything into the const value
+               detail::skip_value<JSON>::op<Opts>(std::forward<Ctx>(ctx), std::forward<It0>(it), std::forward<It1>(end));
+            }
+         }
+         else {
+            using V = std::remove_cvref_t<T>;
+            detail::from<JSON, V>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx), std::forward<It0>(it),
+                                             std::forward<It1>(end));
+         }
+      }
+      
+      // This unknown key handler should not be given unescaped keys, that is for the user to handle.
+      template <auto Opts, class T, is_context Ctx, class It0, class It1>
+      static void handle_unknown(const sv& key, T&& value, Ctx&& ctx, It0&& it, It1&& end)
+      {
+         using ValueType = std::decay_t<decltype(value)>;
+         if constexpr (detail::has_unknown_reader<ValueType>) {
+            constexpr auto& reader = meta_unknown_read_v<ValueType>;
+            using ReaderType = meta_unknown_read_t<ValueType>;
+            if constexpr (std::is_member_object_pointer_v<ReaderType>) {
+               using MemberType = typename member_value<ReaderType>::type;
+               if constexpr (detail::map_subscriptable<MemberType>) {
+                  parse<JSON>::op<Opts>((value.*reader)[key], ctx, it, end);
+               }
+               else {
+                  static_assert(false_v<T>, "target must have subscript operator");
+               }
+            }
+            else if constexpr (std::is_member_function_pointer_v<ReaderType>) {
+               using ReturnType = typename return_type<ReaderType>::type;
+               if constexpr (std::is_void_v<ReturnType>) {
+                  using TupleType = typename inputs_as_tuple<ReaderType>::type;
+                  if constexpr (glz::tuple_size_v<TupleType> == 2) {
+                     std::decay_t<glz::tuple_element_t<1, TupleType>> input{};
+                     parse<JSON>::op<Opts>(input, ctx, it, end);
+                     if (bool(ctx.error)) [[unlikely]]
+                        return;
+                     (value.*reader)(key, input);
+                  }
+                  else {
+                     static_assert(false_v<T>, "method must have 2 args");
+                  }
+               }
+               else {
+                  static_assert(false_v<T>, "method must have void return");
+               }
+            }
+            else {
+               static_assert(false_v<T>, "unknown_read type not handled");
+            }
+         }
+         else {
+            detail::skip_value<JSON>::op<Opts>(ctx, it, end);
+         }
+      }
+   };
 
    namespace detail
    {
@@ -53,74 +120,6 @@ namespace glz
          static thread_local std::string buffer(256, '\0');
          return buffer;
       }
-
-      template <>
-      struct parse<JSON>
-      {
-         template <auto Opts, class T, is_context Ctx, class It0, class It1>
-         GLZ_ALWAYS_INLINE static void op(T&& value, Ctx&& ctx, It0&& it, It1&& end)
-         {
-            if constexpr (const_value_v<T>) {
-               if constexpr (Opts.error_on_const_read) {
-                  ctx.error = error_code::attempt_const_read;
-               }
-               else {
-                  // do not read anything into the const value
-                  skip_value<JSON>::op<Opts>(std::forward<Ctx>(ctx), std::forward<It0>(it), std::forward<It1>(end));
-               }
-            }
-            else {
-               using V = std::remove_cvref_t<T>;
-               from<JSON, V>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx), std::forward<It0>(it),
-                                                std::forward<It1>(end));
-            }
-         }
-
-         // This unknown key handler should not be given unescaped keys, that is for the user to handle.
-         template <auto Opts, class T, is_context Ctx, class It0, class It1>
-         static void handle_unknown(const sv& key, T&& value, Ctx&& ctx, It0&& it, It1&& end)
-         {
-            using ValueType = std::decay_t<decltype(value)>;
-            if constexpr (detail::has_unknown_reader<ValueType>) {
-               constexpr auto& reader = meta_unknown_read_v<ValueType>;
-               using ReaderType = meta_unknown_read_t<ValueType>;
-               if constexpr (std::is_member_object_pointer_v<ReaderType>) {
-                  using MemberType = typename member_value<ReaderType>::type;
-                  if constexpr (detail::map_subscriptable<MemberType>) {
-                     parse<JSON>::op<Opts>((value.*reader)[key], ctx, it, end);
-                  }
-                  else {
-                     static_assert(false_v<T>, "target must have subscript operator");
-                  }
-               }
-               else if constexpr (std::is_member_function_pointer_v<ReaderType>) {
-                  using ReturnType = typename return_type<ReaderType>::type;
-                  if constexpr (std::is_void_v<ReturnType>) {
-                     using TupleType = typename inputs_as_tuple<ReaderType>::type;
-                     if constexpr (glz::tuple_size_v<TupleType> == 2) {
-                        std::decay_t<glz::tuple_element_t<1, TupleType>> input{};
-                        parse<JSON>::op<Opts>(input, ctx, it, end);
-                        if (bool(ctx.error)) [[unlikely]]
-                           return;
-                        (value.*reader)(key, input);
-                     }
-                     else {
-                        static_assert(false_v<T>, "method must have 2 args");
-                     }
-                  }
-                  else {
-                     static_assert(false_v<T>, "method must have void return");
-                  }
-               }
-               else {
-                  static_assert(false_v<T>, "unknown_read type not handled");
-               }
-            }
-            else {
-               skip_value<JSON>::op<Opts>(ctx, it, end);
-            }
-         }
-      };
 
       template <class T>
          requires(glaze_value_t<T> && !custom_read<T>)

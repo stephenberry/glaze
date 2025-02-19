@@ -32,24 +32,49 @@
 
 namespace glz
 {
+   // This serialize<JSON> indirection only exists to call std::remove_cvref_t on the type
+   // so that type matching doesn't depend on qualifiers.
+   // It is recommended to directly call to<JSON, std::remove_cvref_t<T>> to reduce compilation overhead.
+   // TODO: Long term this can probably be [[deprecated]]
+   // but it is useful for when getting the value type would be verbose
+   template <>
+   struct serialize<JSON>
+   {
+      template <auto Opts, class T, is_context Ctx, class B, class IX>
+      GLZ_ALWAYS_INLINE static void op(T&& value, Ctx&& ctx, B&& b, IX&& ix)
+      {
+         detail::to<JSON, std::remove_cvref_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
+                                                             std::forward<B>(b), std::forward<IX>(ix));
+      }
+   };
+   
+   template <auto& Partial, auto Opts, class T, class Ctx, class B, class IX>
+   concept write_json_partial_invocable = requires(T&& value, Ctx&& ctx, B&& b, IX&& ix) {
+      detail::to_partial<JSON, std::remove_cvref_t<T>>::template op<Partial, Opts>(
+                                                                           std::forward<T>(value), std::forward<Ctx>(ctx), std::forward<B>(b), std::forward<IX>(ix));
+   };
+   
+   template <>
+   struct serialize_partial<JSON>
+   {
+      template <auto& Partial, auto Opts, class T, is_context Ctx, class B, class IX>
+      GLZ_ALWAYS_INLINE static void op(T&& value, Ctx&& ctx, B&& b, IX&& ix)
+      {
+         if constexpr (std::count(Partial.begin(), Partial.end(), "") > 0) {
+            serialize<JSON>::op<Opts>(value, ctx, b, ix);
+         }
+         else if constexpr (write_json_partial_invocable<Partial, Opts, T, Ctx, B, IX>) {
+            detail::to_partial<JSON, std::remove_cvref_t<T>>::template op<Partial, Opts>(
+                                                                                 std::forward<T>(value), std::forward<Ctx>(ctx), std::forward<B>(b), std::forward<IX>(ix));
+         }
+         else {
+            static_assert(false_v<T>, "Glaze metadata is probably needed for your type");
+         }
+      }
+   };
+   
    namespace detail
    {
-      // This serialize<JSON> indirection only exists to call std::remove_cvref_t on the type
-      // so that type matching doesn't depend on qualifiers.
-      // It is recommended to directly call to<JSON, std::remove_cvref_t<T>> to reduce compilation overhead.
-      // TODO: Long term this can probably be [[deprecated]]
-      // but it is useful for when getting the value type would be verbose
-      template <>
-      struct serialize<JSON>
-      {
-         template <auto Opts, class T, is_context Ctx, class B, class IX>
-         GLZ_ALWAYS_INLINE static void op(T&& value, Ctx&& ctx, B&& b, IX&& ix)
-         {
-            to<JSON, std::remove_cvref_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
-                                                                std::forward<B>(b), std::forward<IX>(ix));
-         }
-      };
-
       template <class T>
          requires(glaze_value_t<T> && !custom_write<T>)
       struct to<JSON, T>
@@ -1834,31 +1859,6 @@ namespace glz
                      dump<'}'>(b, ix);
                   }
                }
-            }
-         }
-      };
-
-      template <auto& Partial, auto Opts, class T, class Ctx, class B, class IX>
-      concept write_json_partial_invocable = requires(T&& value, Ctx&& ctx, B&& b, IX&& ix) {
-         to_partial<JSON, std::remove_cvref_t<T>>::template op<Partial, Opts>(
-            std::forward<T>(value), std::forward<Ctx>(ctx), std::forward<B>(b), std::forward<IX>(ix));
-      };
-
-      template <>
-      struct serialize_partial<JSON>
-      {
-         template <auto& Partial, auto Opts, class T, is_context Ctx, class B, class IX>
-         GLZ_ALWAYS_INLINE static void op(T&& value, Ctx&& ctx, B&& b, IX&& ix)
-         {
-            if constexpr (std::count(Partial.begin(), Partial.end(), "") > 0) {
-               serialize<JSON>::op<Opts>(value, ctx, b, ix);
-            }
-            else if constexpr (write_json_partial_invocable<Partial, Opts, T, Ctx, B, IX>) {
-               to_partial<JSON, std::remove_cvref_t<T>>::template op<Partial, Opts>(
-                  std::forward<T>(value), std::forward<Ctx>(ctx), std::forward<B>(b), std::forward<IX>(ix));
-            }
-            else {
-               static_assert(false_v<T>, "Glaze metadata is probably needed for your type");
             }
          }
       };

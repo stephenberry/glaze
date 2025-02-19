@@ -8,19 +8,30 @@
 
 namespace glz
 {
+   template <>
+   struct parse<NDJSON>
+   {
+      template <auto Opts, class T, is_context Ctx, class It0, class It1>
+      static void op(T&& value, Ctx&& ctx, It0&& it, It1&& end)
+      {
+         detail::from<NDJSON, std::remove_reference_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
+                                                                     std::forward<It0>(it), std::forward<It1>(end));
+      }
+   };
+   
+   template <>
+   struct serialize<NDJSON>
+   {
+      template <auto Opts, class T, is_context Ctx, class B, class IX>
+      static void op(T&& value, Ctx&& ctx, B&& b, IX&& ix)
+      {
+         detail::to<NDJSON, std::decay_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
+                                                        std::forward<B>(b), std::forward<IX>(ix));
+      }
+   };
+   
    namespace detail
    {
-      template <>
-      struct parse<NDJSON>
-      {
-         template <auto Opts, class T, is_context Ctx, class It0, class It1>
-         static void op(T&& value, Ctx&& ctx, It0&& it, It1&& end)
-         {
-            from<NDJSON, std::remove_reference_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
-                                                                        std::forward<It0>(it), std::forward<It1>(end));
-         }
-      };
-
       template <class T>
          requires readable_array_t<T> && (emplace_backable<T> || !resizable<T>)
       struct from<NDJSON, T>
@@ -149,17 +160,6 @@ namespace glz
                   parse<JSON>::op<Opts>(glz::get<I>(value), ctx, it, end);
                }
             });
-         }
-      };
-
-      template <>
-      struct serialize<NDJSON>
-      {
-         template <auto Opts, class T, is_context Ctx, class B, class IX>
-         static void op(T&& value, Ctx&& ctx, B&& b, IX&& ix)
-         {
-            to<NDJSON, std::decay_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
-                                                           std::forward<B>(b), std::forward<IX>(ix));
          }
       };
 
