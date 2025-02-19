@@ -15,19 +15,19 @@
 
 namespace glz
 {
+   template <>
+   struct serialize<TOML>
+   {
+      template <auto Opts, class T, is_context Ctx, class B, class IX>
+      GLZ_ALWAYS_INLINE static void op(T&& value, Ctx&& ctx, B&& b, IX&& ix)
+      {
+         detail::to<TOML, std::remove_cvref_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
+                                                             std::forward<B>(b), std::forward<IX>(ix));
+      }
+   };
+   
    namespace detail
    {
-      template <>
-      struct serialize<TOML>
-      {
-         template <auto Opts, class T, is_context Ctx, class B, class IX>
-         GLZ_ALWAYS_INLINE static void op(T&& value, Ctx&& ctx, B&& b, IX&& ix)
-         {
-            to<TOML, std::remove_cvref_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
-                                                                std::forward<B>(b), std::forward<IX>(ix));
-         }
-      };
-
       template <class T>
          requires(glaze_value_t<T> && !custom_write<T>)
       struct to<TOML, T>
