@@ -210,6 +210,10 @@ namespace glz
 
    template <detail::non_void_destructible T, std::destructible E>
    class expected;
+   
+   template <typename T>
+   concept is_expected =
+   std::same_as<std::remove_cvref_t<T>, expected<typename T::value_type, typename T::error_type> >;
 
    namespace detail
    {
@@ -259,10 +263,6 @@ namespace glz
 
       template <typename T>
       concept is_unexpected = std::same_as<std::remove_cvref_t<T>, unexpected<typename T::value_type> >;
-
-      template <typename T>
-      concept is_expected =
-         std::same_as<std::remove_cvref_t<T>, expected<typename T::value_type, typename T::error_type> >;
 
       // This function makes sure expected doesn't get into valueless_by_exception
       // state due to any exception while assignment
