@@ -32,11 +32,6 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    - name: Setup MSVC Developer Command Prompt
-      uses: TheMrMilchmann/setup-msvc-dev@v3
-      with:
-        arch: x64
-
     - name: Configure CMake
       run: cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -DCMAKE_CXX_STANDARD=${{matrix.cpp_version}}
 
