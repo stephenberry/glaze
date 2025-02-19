@@ -42,10 +42,10 @@ namespace glz
             }
             ++it;
             std::array<Eigen::Index, 2> extents;
-            detail::parse<BEVE>::op<Opts>(extents, ctx, it, end);
+            parse<BEVE>::op<Opts>(extents, ctx, it, end);
 
             std::span<typename T::Scalar, T::RowsAtCompileTime * T::ColsAtCompileTime> view(value.data(), value.size());
-            detail::parse<BEVE>::op<Opts>(view, ctx, it, end);
+            parse<BEVE>::op<Opts>(view, ctx, it, end);
          }
       };
 
@@ -69,11 +69,11 @@ namespace glz
             }
             ++it;
             std::array<Eigen::Index, 2> extents;
-            detail::parse<BEVE>::op<Opts>(extents, ctx, it, end);
+            parse<BEVE>::op<Opts>(extents, ctx, it, end);
 
             value.resize(extents[0], extents[1]);
             std::span<typename T::Scalar> view(value.data(), extents[0] * extents[1]);
-            detail::parse<BEVE>::op<Opts>(view, ctx, it, end);
+            parse<BEVE>::op<Opts>(view, ctx, it, end);
          }
       };
 
@@ -130,7 +130,7 @@ namespace glz
          static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
             std::span<typename T::Scalar, T::RowsAtCompileTime * T::ColsAtCompileTime> view(value.data(), value.size());
-            detail::parse<JSON>::op<Opts>(view, ctx, it, end);
+            parse<JSON>::op<Opts>(view, ctx, it, end);
          }
       };
 
@@ -180,7 +180,7 @@ namespace glz
                return;
             }
             std::array<Eigen::Index, 2> extents; // NOLINT
-            detail::parse<JSON>::op<Opts>(extents, ctx, it, end);
+            parse<JSON>::op<Opts>(extents, ctx, it, end);
             value.resize(extents[0], extents[1]);
             if (*it == ',') {
                // we have data
@@ -192,7 +192,7 @@ namespace glz
                   }
                }
                std::span<typename T::Scalar> view(value.data(), extents[0] * extents[1]);
-               detail::parse<JSON>::op<Opts>(view, ctx, it, end);
+               parse<JSON>::op<Opts>(view, ctx, it, end);
             }
             match<']'>(ctx, it);
          }
@@ -207,7 +207,7 @@ namespace glz
             constexpr auto size =
                Mode == Eigen::TransformTraits::AffineCompact ? (Dim + 1) * Dim : (Dim + 1) * (Dim + 1);
             std::span<Scalar, size> view(value.data(), size);
-            detail::parse<JSON>::op<Opts>(view, ctx, it, end);
+            parse<JSON>::op<Opts>(view, ctx, it, end);
          }
       };
 
