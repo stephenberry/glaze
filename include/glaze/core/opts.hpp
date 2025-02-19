@@ -10,6 +10,8 @@
 namespace glz
 {
    // format
+   // Built in formats must be less than 65536
+   // User defined formats can be 65536 to 4294967296
    inline constexpr uint32_t INVALID = 0;
    inline constexpr uint32_t BEVE = 1;
    inline constexpr uint32_t JSON = 10;
@@ -341,85 +343,9 @@ namespace glz
       struct skip_value;
    }
 
-   template <class T>
-   concept write_beve_supported = requires { detail::to<BEVE, std::remove_cvref_t<T>>{}; };
-
-   template <class T>
-   concept read_beve_supported = requires { detail::from<BEVE, std::remove_cvref_t<T>>{}; };
-
-   template <class T>
-   concept write_json_supported = requires { detail::to<JSON, std::remove_cvref_t<T>>{}; };
-
-   template <class T>
-   concept read_json_supported = requires { detail::from<JSON, std::remove_cvref_t<T>>{}; };
-
-   template <class T>
-   concept write_ndjson_supported = requires { detail::to<NDJSON, std::remove_cvref_t<T>>{}; };
-
-   template <class T>
-   concept read_ndjson_supported = requires { detail::from<NDJSON, std::remove_cvref_t<T>>{}; };
-
-   template <class T>
-   concept write_toml_supported = requires { detail::to<TOML, std::remove_cvref_t<T>>{}; };
-
-   template <class T>
-   concept read_toml_supported = requires { detail::from<TOML, std::remove_cvref_t<T>>{}; };
-
-   template <class T>
-   concept write_csv_supported = requires { detail::to<CSV, std::remove_cvref_t<T>>{}; };
-
-   template <class T>
-   concept read_csv_supported = requires { detail::from<CSV, std::remove_cvref_t<T>>{}; };
+   template <uint32_t Format, class T>
+   concept write_supported = requires { detail::to<Format, std::remove_cvref_t<T>>{}; };
 
    template <uint32_t Format, class T>
-   consteval bool write_format_supported()
-   {
-      if constexpr (Format == BEVE) {
-         return write_beve_supported<T>;
-      }
-      else if constexpr (Format == JSON) {
-         return write_json_supported<T>;
-      }
-      else if constexpr (Format == NDJSON) {
-         return write_ndjson_supported<T>;
-      }
-      else if constexpr (Format == TOML) {
-         return write_toml_supported<T>;
-      }
-      else if constexpr (Format == CSV) {
-         return write_csv_supported<T>;
-      }
-      else {
-         static_assert(false_v<T>, "Glaze metadata is probably needed for your type");
-      }
-   }
-
-   template <uint32_t Format, class T>
-   consteval bool read_format_supported()
-   {
-      if constexpr (Format == BEVE) {
-         return read_beve_supported<T>;
-      }
-      else if constexpr (Format == JSON) {
-         return read_json_supported<T>;
-      }
-      else if constexpr (Format == NDJSON) {
-         return read_ndjson_supported<T>;
-      }
-      else if constexpr (Format == TOML) {
-         return read_toml_supported<T>;
-      }
-      else if constexpr (Format == CSV) {
-         return read_csv_supported<T>;
-      }
-      else {
-         static_assert(false_v<T>, "Glaze metadata is probably needed for your type");
-      }
-   }
-
-   template <uint32_t Format, class T>
-   concept write_supported = write_format_supported<Format, T>();
-
-   template <uint32_t Format, class T>
-   concept read_supported = read_format_supported<Format, T>();
+   concept read_supported = requires { detail::from<Format, std::remove_cvref_t<T>>{}; };
 }

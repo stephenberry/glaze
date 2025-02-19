@@ -46,8 +46,8 @@ struct glz::meta<my_struct>
    );
 };
 
-static_assert(glz::write_beve_supported<my_struct>);
-static_assert(glz::read_beve_supported<my_struct>);
+static_assert(glz::write_supported<glz::BEVE, my_struct>);
+static_assert(glz::read_supported<glz::BEVE, my_struct>);
 
 struct sub_thing
 {

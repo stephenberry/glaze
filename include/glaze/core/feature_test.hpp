@@ -5,6 +5,10 @@
 
 // Glaze Feature Test Macros
 
+// v5.0.0 moves to more generic read_supported and write_supported concepts
+// removes concepts like `read_json_supported` and uses `read_supported<JSON, T>`
+#define glaze_v5_0_0_generic_supported
+
 // v4.3.0 removed global glz::trace
 #define glaze_v4_3_0_trace
 
