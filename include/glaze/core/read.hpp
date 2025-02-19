@@ -57,10 +57,10 @@ namespace glz
       }
 
       if constexpr (use_padded) {
-         detail::read<Opts.format>::template op<is_padded_on<Opts>()>(value, ctx, it, end);
+         parse<Opts.format>::template op<is_padded_on<Opts>()>(value, ctx, it, end);
       }
       else {
-         detail::read<Opts.format>::template op<is_padded_off<Opts>()>(value, ctx, it, end);
+         parse<Opts.format>::template op<is_padded_off<Opts>()>(value, ctx, it, end);
       }
 
       if (bool(ctx.error)) [[unlikely]] {

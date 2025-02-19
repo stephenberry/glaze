@@ -4421,7 +4421,7 @@ namespace glz::detail
       template <auto Opts>
       static void op(date& value, auto&&... args)
       {
-         read<JSON>::op<Opts>(value.human_readable, args...);
+         parse<JSON>::op<Opts>(value.human_readable, args...);
          value.data = std::stoi(value.human_readable);
       }
    };
@@ -4433,7 +4433,7 @@ namespace glz::detail
       static void op(date& value, auto&&... args) noexcept
       {
          value.human_readable = std::to_string(value.data);
-         write<JSON>::op<Opts>(value.human_readable, args...);
+         serialize<JSON>::op<Opts>(value.human_readable, args...);
       }
    };
 }
@@ -8509,7 +8509,7 @@ namespace glz::detail
       template <auto Opts>
       static void op(custom_struct& value, auto&&... args)
       {
-         read<JSON>::op<Opts>(value.str, args...);
+         parse<JSON>::op<Opts>(value.str, args...);
          value.str += "read";
       }
    };
@@ -8521,14 +8521,14 @@ namespace glz::detail
       static void op(custom_struct& value, auto&&... args) noexcept
       {
          value.str += "write";
-         write<JSON>::op<Opts>(value.str, args...);
+         serialize<JSON>::op<Opts>(value.str, args...);
       }
 
       // For std::set testing, because iterators are const
       template <auto Opts>
       static void op(const custom_struct& value, auto&&... args) noexcept
       {
-         write<JSON>::op<Opts>(value.str, args...);
+         serialize<JSON>::op<Opts>(value.str, args...);
       }
    };
 }

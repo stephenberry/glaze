@@ -11,19 +11,19 @@
 
 namespace glz
 {
+   template <>
+   struct serialize<CSV>
+   {
+      template <auto Opts, class T, is_context Ctx, class B, class IX>
+      static void op(T&& value, Ctx&& ctx, B&& b, IX&& ix)
+      {
+         detail::to<CSV, std::decay_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
+                                                     std::forward<B>(b), std::forward<IX>(ix));
+      }
+   };
+   
    namespace detail
    {
-      template <>
-      struct write<CSV>
-      {
-         template <auto Opts, class T, is_context Ctx, class B, class IX>
-         static void op(T&& value, Ctx&& ctx, B&& b, IX&& ix)
-         {
-            to<CSV, std::decay_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
-                                                        std::forward<B>(b), std::forward<IX>(ix));
-         }
-      };
-
       template <glaze_value_t T>
       struct to<CSV, T>
       {
@@ -71,7 +71,7 @@ namespace glz
                if constexpr (Opts.layout == rowwise) {
                   const auto n = value.size();
                   for (size_t i = 0; i < n; ++i) {
-                     write<CSV>::op<Opts>(value[i], ctx, b, ix);
+                     serialize<CSV>::op<Opts>(value[i], ctx, b, ix);
 
                      if (i != (n - 1)) {
                         dump<','>(b, ix);
@@ -85,7 +85,7 @@ namespace glz
             else {
                const auto n = value.size();
                for (size_t i = 0; i < n; ++i) {
-                  write<CSV>::op<Opts>(value[i], ctx, b, ix);
+                  serialize<CSV>::op<Opts>(value[i], ctx, b, ix);
 
                   if (i != (n - 1)) {
                      dump<','>(b, ix);
@@ -118,7 +118,7 @@ namespace glz
                   dump<','>(b, ix);
                   const auto n = data.size();
                   for (size_t i = 0; i < n; ++i) {
-                     write<CSV>::op<Opts>(data[i], ctx, b, ix);
+                     serialize<CSV>::op<Opts>(data[i], ctx, b, ix);
                      if (i < n - 1) {
                         dump<','>(b, ix);
                      }
@@ -150,7 +150,7 @@ namespace glz
                         break;
                      }
 
-                     write<CSV>::op<Opts>(data[row], ctx, b, ix);
+                     serialize<CSV>::op<Opts>(data[row], ctx, b, ix);
                      ++i;
                      if (i < n) {
                         dump<','>(b, ix);
@@ -214,7 +214,7 @@ namespace glz
                         dump<','>(b, ix);
 
                         for (size_t j = 0; j < count; ++j) {
-                           write<CSV>::op<Opts>(member[j][i], ctx, b, ix);
+                           serialize<CSV>::op<Opts>(member[j][i], ctx, b, ix);
                            if (j != count - 1) {
                               dump<','>(b, ix);
                            }
@@ -228,7 +228,7 @@ namespace glz
                   else {
                      dump<key>(b, ix);
                      dump<','>(b, ix);
-                     write<CSV>::op<Opts>(get_member(value, mem), ctx, b, ix);
+                     serialize<CSV>::op<Opts>(get_member(value, mem), ctx, b, ix);
                      dump<'\n'>(b, ix);
                   }
                });
@@ -262,7 +262,7 @@ namespace glz
                      }
                   }
                   else {
-                     write<CSV>::op<Opts>(key, ctx, b, ix);
+                     serialize<CSV>::op<Opts>(key, ctx, b, ix);
                   }
 
                   if (I != N - 1) {
@@ -297,7 +297,7 @@ namespace glz
 
                         const auto n = member[0].size();
                         for (size_t i = 0; i < n; ++i) {
-                           write<CSV>::op<Opts>(member[row][i], ctx, b, ix);
+                           serialize<CSV>::op<Opts>(member[row][i], ctx, b, ix);
                            if (i != n - 1) {
                               dump<','>(b, ix);
                            }
@@ -310,7 +310,7 @@ namespace glz
                            return;
                         }
 
-                        write<CSV>::op<Opts>(member[row], ctx, b, ix);
+                        serialize<CSV>::op<Opts>(member[row], ctx, b, ix);
 
                         if (I != N - 1) {
                            dump<','>(b, ix);

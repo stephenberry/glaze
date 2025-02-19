@@ -149,24 +149,6 @@ namespace glz
    template <class T>
    using core_t = std::remove_cvref_t<T>;
 
-   namespace detail
-   {
-      // These templates save typing by determining the core type used to select the proper to/from specialization
-      // Long term I would like to remove these detail indirections.
-
-      template <uint32_t Format>
-      struct read
-      {};
-
-      template <uint32_t Format>
-      struct write
-      {};
-
-      template <uint32_t Format>
-      struct write_partial
-      {};
-   }
-
    // Use std::stringview if you know the buffer is going to outlive this
    template <class string_type = std::string>
    struct basic_raw_json

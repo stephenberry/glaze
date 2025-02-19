@@ -348,4 +348,19 @@ namespace glz
 
    template <uint32_t Format, class T>
    concept read_supported = requires { detail::from<Format, std::remove_cvref_t<T>>{}; };
+   
+   // These templates save typing by determining the core type used to select the proper to/from specialization
+   // Long term I would like to remove these detail indirections.
+   
+   template <uint32_t Format>
+   struct parse
+   {};
+   
+   template <uint32_t Format>
+   struct serialize
+   {};
+   
+   template <uint32_t Format>
+   struct serialize_partial
+   {};
 }

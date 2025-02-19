@@ -22,7 +22,7 @@ namespace glz
          static void op(auto&& value, is_context auto&& ctx, auto&&... args)
          {
             static thread_local std::string s{};
-            read<JSON>::op<Opts>(s, ctx, args...);
+            parse<JSON>::op<Opts>(s, ctx, args...);
             auto pe = glz::read<Opts>(value.val, s);
             if (pe) [[unlikely]] {
                ctx.error = pe.ec;
@@ -52,7 +52,7 @@ namespace glz
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&& value, auto&&... args)
          {
-            read<JSON>::op<opt_true<Opts, T::opts_member>>(value.val, args...);
+            parse<JSON>::op<opt_true<Opts, T::opts_member>>(value.val, args...);
          }
       };
 

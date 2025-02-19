@@ -42,7 +42,7 @@ namespace glz
       }
       context ctx{};
       size_t ix = 0;
-      detail::write_partial<Opts.format>::template op<Partial, Opts>(std::forward<T>(value), ctx, buffer, ix);
+      serialize_partial<Opts.format>::template op<Partial, Opts>(std::forward<T>(value), ctx, buffer, ix);
       if constexpr (resizable<Buffer>) {
          buffer.resize(ix);
       }
@@ -55,7 +55,7 @@ namespace glz
    {
       context ctx{};
       size_t ix = 0;
-      detail::write_partial<Opts.format>::template op<Partial, Opts>(std::forward<T>(value), ctx, buffer, ix);
+      serialize_partial<Opts.format>::template op<Partial, Opts>(std::forward<T>(value), ctx, buffer, ix);
       if (bool(ctx.error)) [[unlikely]] {
          return glz::unexpected(error_ctx{.ec = ctx.error, .custom_error_message = ctx.custom_error_message});
       }

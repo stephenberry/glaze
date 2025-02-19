@@ -18,7 +18,7 @@ namespace glz
    namespace detail
    {
       template <>
-      struct write<TOML>
+      struct serialize<TOML>
       {
          template <auto Opts, class T, is_context Ctx, class B, class IX>
          GLZ_ALWAYS_INLINE static void op(T&& value, Ctx&& ctx, B&& b, IX&& ix)
@@ -48,7 +48,7 @@ namespace glz
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix)
          {
             if (value) {
-               write<TOML>::op<Opts>(*value, ctx, b, ix);
+               serialize<TOML>::op<Opts>(*value, ctx, b, ix);
             }
          }
       };
@@ -501,7 +501,7 @@ namespace glz
          template <auto Opts, class V, size_t N, class... Args>
          GLZ_ALWAYS_INLINE static void op(const V (&value)[N], is_context auto&& ctx, Args&&... args)
          {
-            write<TOML>::op<Opts>(std::span{value, N}, ctx, std::forward<Args>(args)...);
+            serialize<TOML>::op<Opts>(std::span{value, N}, ctx, std::forward<Args>(args)...);
          }
       };
 
@@ -525,7 +525,7 @@ namespace glz
             using V = std::decay_t<T>;
             invoke_table<N>([&]<size_t I>() {
                if constexpr (glaze_array_t<V>) {
-                  write<TOML>::op<Opts>(get_member(value, glz::get<I>(meta_v<T>)), ctx, args...);
+                  serialize<TOML>::op<Opts>(get_member(value, glz::get<I>(meta_v<T>)), ctx, args...);
                }
                else if constexpr (is_std_tuple<T>) {
                   using Value = core_t<decltype(std::get<I>(value))>;

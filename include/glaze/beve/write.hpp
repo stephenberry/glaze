@@ -17,6 +17,49 @@
 
 namespace glz
 {
+   template <>
+   struct serialize<BEVE>
+   {
+      template <auto Opts, class T, is_context Ctx, class B, class IX>
+      GLZ_ALWAYS_INLINE static void op(T&& value, Ctx&& ctx, B&& b, IX&& ix)
+      {
+         detail::to<BEVE, std::remove_cvref_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
+                                                             std::forward<B>(b), std::forward<IX>(ix));
+      }
+      
+      template <auto Opts, class T, is_context Ctx, class B, class IX>
+      GLZ_ALWAYS_INLINE static void no_header(T&& value, Ctx&& ctx, B&& b, IX&& ix)
+      {
+         detail::to<BEVE, std::remove_cvref_t<T>>::template no_header<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
+                                                                    std::forward<B>(b), std::forward<IX>(ix));
+      }
+   };
+   
+   template <auto& Partial, auto Opts, class T, class Ctx, class B, class IX>
+   concept write_beve_partial_invocable = requires(T&& value, Ctx&& ctx, B&& b, IX&& ix) {
+      detail::to_partial<BEVE, std::remove_cvref_t<T>>::template op<Partial, Opts>(
+                                                                           std::forward<T>(value), std::forward<Ctx>(ctx), std::forward<B>(b), std::forward<IX>(ix));
+   };
+   
+   template <>
+   struct serialize_partial<BEVE>
+   {
+      template <auto& Partial, auto Opts, class T, is_context Ctx, class B, class IX>
+      static void op(T&& value, Ctx&& ctx, B&& b, IX&& ix)
+      {
+         if constexpr (std::count(Partial.begin(), Partial.end(), "") > 0) {
+            serialize<BEVE>::op<Opts>(value, ctx, b, ix);
+         }
+         else if constexpr (write_beve_partial_invocable<Partial, Opts, T, Ctx, B, IX>) {
+            detail::to_partial<BEVE, std::remove_cvref_t<T>>::template op<Partial, Opts>(
+                                                                                 std::forward<T>(value), std::forward<Ctx>(ctx), std::forward<B>(b), std::forward<IX>(ix));
+         }
+         else {
+            static_assert(false_v<T>, "Glaze metadata is probably needed for your type");
+         }
+      }
+   };
+   
    namespace detail
    {
       GLZ_ALWAYS_INLINE void dump_type(auto&& value, auto&& b, auto&& ix)
@@ -86,24 +129,6 @@ namespace glz
             std::abort(); // this should never happen because we should never allocate containers of this size
          }
       }
-
-      template <>
-      struct write<BEVE>
-      {
-         template <auto Opts, class T, is_context Ctx, class B, class IX>
-         GLZ_ALWAYS_INLINE static void op(T&& value, Ctx&& ctx, B&& b, IX&& ix)
-         {
-            to<BEVE, std::remove_cvref_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
-                                                                std::forward<B>(b), std::forward<IX>(ix));
-         }
-
-         template <auto Opts, class T, is_context Ctx, class B, class IX>
-         GLZ_ALWAYS_INLINE static void no_header(T&& value, Ctx&& ctx, B&& b, IX&& ix)
-         {
-            to<BEVE, std::remove_cvref_t<T>>::template no_header<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
-                                                                       std::forward<B>(b), std::forward<IX>(ix));
-         }
-      };
 
       template <class T>
          requires(glaze_value_t<T> && !custom_write<T>)
@@ -209,7 +234,7 @@ namespace glz
          template <auto Opts, class... Args>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args)
          {
-            write<BEVE>::op<Opts>(name_v<std::decay_t<decltype(value)>>, ctx, args...);
+            serialize<BEVE>::op<Opts>(name_v<std::decay_t<decltype(value)>>, ctx, args...);
          }
       };
 
@@ -219,7 +244,7 @@ namespace glz
          template <auto Opts, class... Args>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args)
          {
-            write<BEVE>::op<Opts>(value.str, ctx, std::forward<Args>(args)...);
+            serialize<BEVE>::op<Opts>(value.str, ctx, std::forward<Args>(args)...);
          }
       };
 
@@ -229,7 +254,7 @@ namespace glz
          template <auto Opts, class... Args>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args)
          {
-            write<BEVE>::op<Opts>(value.str, ctx, std::forward<Args>(args)...);
+            serialize<BEVE>::op<Opts>(value.str, ctx, std::forward<Args>(args)...);
          }
       };
 
@@ -256,7 +281,7 @@ namespace glz
 
                   dump_type(tag, args...);
                   dump_compressed_int<index>(args...);
-                  write<BEVE>::op<Opts>(v, ctx, args...);
+                  serialize<BEVE>::op<Opts>(v, ctx, args...);
                },
                value);
          }
@@ -494,7 +519,7 @@ namespace glz
                dump_compressed_int<Opts>(value.size(), args...);
 
                for (auto&& x : value) {
-                  write<BEVE>::no_header<Opts>(x, ctx, args...);
+                  serialize<BEVE>::no_header<Opts>(x, ctx, args...);
                }
             }
             else {
@@ -503,7 +528,7 @@ namespace glz
                dump_compressed_int<Opts>(value.size(), args...);
 
                for (auto&& x : value) {
-                  write<BEVE>::op<Opts>(x, ctx, args...);
+                  serialize<BEVE>::op<Opts>(x, ctx, args...);
                }
             }
          }
@@ -522,8 +547,8 @@ namespace glz
 
             dump_compressed_int<Opts>(value.size(), args...);
             for (auto&& [k, v] : value) {
-               write<BEVE>::no_header<Opts>(k, ctx, args...);
-               write<BEVE>::op<Opts>(v, ctx, args...);
+               serialize<BEVE>::no_header<Opts>(k, ctx, args...);
+               serialize<BEVE>::op<Opts>(v, ctx, args...);
             }
          }
       };
@@ -543,8 +568,8 @@ namespace glz
 
             dump_compressed_int<Opts>(1, args...);
             const auto& [k, v] = value;
-            write<BEVE>::no_header<Opts>(k, ctx, args...);
-            write<BEVE>::op<Opts>(v, ctx, args...);
+            serialize<BEVE>::no_header<Opts>(k, ctx, args...);
+            serialize<BEVE>::op<Opts>(v, ctx, args...);
          }
       };
 
@@ -563,8 +588,8 @@ namespace glz
 
             dump_compressed_int<Opts>(value.size(), args...);
             for (auto&& [k, v] : value) {
-               write<BEVE>::no_header<Opts>(k, ctx, args...);
-               write<BEVE>::op<Opts>(v, ctx, args...);
+               serialize<BEVE>::no_header<Opts>(k, ctx, args...);
+               serialize<BEVE>::op<Opts>(v, ctx, args...);
             }
          }
       };
@@ -576,7 +601,7 @@ namespace glz
          template <auto Opts, class V, size_t N, class... Args>
          GLZ_ALWAYS_INLINE static void op(const V (&value)[N], is_context auto&& ctx, Args&&... args)
          {
-            write<BEVE>::op<Opts>(std::span{value, N}, ctx, std::forward<Args>(args)...);
+            serialize<BEVE>::op<Opts>(std::span{value, N}, ctx, std::forward<Args>(args)...);
          }
       };
 
@@ -588,7 +613,7 @@ namespace glz
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args)
          {
             if (value) {
-               write<BEVE>::op<Opts>(*value, ctx, args...);
+               serialize<BEVE>::op<Opts>(*value, ctx, args...);
             }
             else {
                dump<tag::null>(args...);
@@ -615,8 +640,8 @@ namespace glz
 
             invoke_table<N>([&]<size_t I>() {
                constexpr auto Opts = opening_handled_off<Options>();
-               write<BEVE>::no_header<Opts>(get<2 * I>(value.value), ctx, args...);
-               write<BEVE>::op<Opts>(get<2 * I + 1>(value.value), ctx, args...);
+               serialize<BEVE>::no_header<Opts>(get<2 * I>(value.value), ctx, args...);
+               serialize<BEVE>::op<Opts>(get<2 * I + 1>(value.value), ctx, args...);
             });
          }
       };
@@ -655,7 +680,7 @@ namespace glz
             dump_compressed_int<merge_element_count<T>()>(b, ix);
 
             [&]<size_t... I>(std::index_sequence<I...>) {
-               (write<BEVE>::op<opening_handled<Opts>()>(glz::get<I>(value.value), ctx, b, ix), ...);
+               (serialize<BEVE>::op<opening_handled<Opts>()>(glz::get<I>(value.value), ctx, b, ix), ...);
             }(std::make_index_sequence<N>{});
          }
       };
@@ -705,10 +730,10 @@ namespace glz
                }
                else {
                   if constexpr (reflectable<T>) {
-                     write<BEVE>::op<Opts>(get_member(value, get<I>(t)), ctx, args...);
+                     serialize<BEVE>::op<Opts>(get_member(value, get<I>(t)), ctx, args...);
                   }
                   else {
-                     write<BEVE>::op<Opts>(get_member(value, get<I>(reflect<T>::values)), ctx, args...);
+                     serialize<BEVE>::op<Opts>(get_member(value, get<I>(reflect<T>::values)), ctx, args...);
                   }
                }
             });
@@ -743,7 +768,7 @@ namespace glz
                }
                else {
                   static constexpr sv key = reflect<T>::keys[I];
-                  write<BEVE>::no_header<Opts>(key, ctx, args...);
+                  serialize<BEVE>::no_header<Opts>(key, ctx, args...);
 
                   decltype(auto) member = [&]() -> decltype(auto) {
                      if constexpr (reflectable<T>) {
@@ -754,7 +779,7 @@ namespace glz
                      }
                   }();
 
-                  write<BEVE>::op<Opts>(get_member(value, member), ctx, args...);
+                  serialize<BEVE>::op<Opts>(get_member(value, member), ctx, args...);
                }
             });
          }
@@ -773,7 +798,7 @@ namespace glz
             dump_compressed_int<N>(args...);
 
             invoke_table<reflect<T>::size>(
-               [&]<size_t I>() { write<BEVE>::op<Opts>(get_member(value, get<I>(reflect<T>::values)), ctx, args...); });
+               [&]<size_t I>() { serialize<BEVE>::op<Opts>(get_member(value, get<I>(reflect<T>::values)), ctx, args...); });
          }
       };
 
@@ -791,38 +816,13 @@ namespace glz
 
             if constexpr (is_std_tuple<T>) {
                [&]<size_t... I>(std::index_sequence<I...>) {
-                  (write<BEVE>::op<Opts>(std::get<I>(value), ctx, args...), ...);
+                  (serialize<BEVE>::op<Opts>(std::get<I>(value), ctx, args...), ...);
                }(std::make_index_sequence<N>{});
             }
             else {
                [&]<size_t... I>(std::index_sequence<I...>) {
-                  (write<BEVE>::op<Opts>(glz::get<I>(value), ctx, args...), ...);
+                  (serialize<BEVE>::op<Opts>(glz::get<I>(value), ctx, args...), ...);
                }(std::make_index_sequence<N>{});
-            }
-         }
-      };
-
-      template <auto& Partial, auto Opts, class T, class Ctx, class B, class IX>
-      concept write_beve_partial_invocable = requires(T&& value, Ctx&& ctx, B&& b, IX&& ix) {
-         to_partial<BEVE, std::remove_cvref_t<T>>::template op<Partial, Opts>(
-            std::forward<T>(value), std::forward<Ctx>(ctx), std::forward<B>(b), std::forward<IX>(ix));
-      };
-
-      template <>
-      struct write_partial<BEVE>
-      {
-         template <auto& Partial, auto Opts, class T, is_context Ctx, class B, class IX>
-         static void op(T&& value, Ctx&& ctx, B&& b, IX&& ix)
-         {
-            if constexpr (std::count(Partial.begin(), Partial.end(), "") > 0) {
-               detail::write<BEVE>::op<Opts>(value, ctx, b, ix);
-            }
-            else if constexpr (write_beve_partial_invocable<Partial, Opts, T, Ctx, B, IX>) {
-               to_partial<BEVE, std::remove_cvref_t<T>>::template op<Partial, Opts>(
-                  std::forward<T>(value), std::forward<Ctx>(ctx), std::forward<B>(b), std::forward<IX>(ix));
-            }
-            else {
-               static_assert(false_v<T>, "Glaze metadata is probably needed for your type");
             }
          }
       };
@@ -860,12 +860,12 @@ namespace glz
 
                   if constexpr (glaze_object_t<T>) {
                      static constexpr auto member = get<index>(reflect<T>::values);
-                     detail::write<BEVE>::no_header<Opts>(key, ctx, b, ix);
-                     write_partial<BEVE>::op<sub_partial, Opts>(get_member(value, member), ctx, b, ix);
+                     serialize<BEVE>::no_header<Opts>(key, ctx, b, ix);
+                     serialize_partial<BEVE>::op<sub_partial, Opts>(get_member(value, member), ctx, b, ix);
                   }
                   else {
-                     detail::write<BEVE>::no_header<Opts>(key, ctx, b, ix);
-                     write_partial<BEVE>::op<sub_partial, Opts>(get_member(value, get<index>(to_tie(value))), ctx, b,
+                     serialize<BEVE>::no_header<Opts>(key, ctx, b, ix);
+                     serialize_partial<BEVE>::op<sub_partial, Opts>(get_member(value, get<index>(to_tie(value))), ctx, b,
                                                                 ix);
                   }
                });
@@ -881,10 +881,10 @@ namespace glz
                   static constexpr auto key_value = get<0>(group);
                   static constexpr auto sub_partial = get<1>(group);
                   if constexpr (findable<std::decay_t<T>, decltype(key_value)>) {
-                     detail::write<BEVE>::no_header<Opts>(key_value, ctx, b, ix);
+                     serialize<BEVE>::no_header<Opts>(key_value, ctx, b, ix);
                      auto it = value.find(key_value);
                      if (it != value.end()) {
-                        write_partial<BEVE>::op<sub_partial, Opts>(it->second, ctx, b, ix);
+                        serialize_partial<BEVE>::op<sub_partial, Opts>(it->second, ctx, b, ix);
                      }
                      else {
                         ctx.error = error_code::invalid_partial_key;
@@ -894,10 +894,10 @@ namespace glz
                   else {
                      static thread_local auto key =
                         typename std::decay_t<T>::key_type(key_value); // TODO handle numeric keys
-                     detail::write<BEVE>::no_header<Opts>(key, ctx, b, ix);
+                     serialize<BEVE>::no_header<Opts>(key, ctx, b, ix);
                      auto it = value.find(key);
                      if (it != value.end()) {
-                        write_partial<BEVE>::op<sub_partial, Opts>(it->second, ctx, b, ix);
+                        serialize_partial<BEVE>::op<sub_partial, Opts>(it->second, ctx, b, ix);
                      }
                      else {
                         ctx.error = error_code::invalid_partial_key;

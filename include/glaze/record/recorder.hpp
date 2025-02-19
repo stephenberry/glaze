@@ -84,14 +84,14 @@ namespace glz
             const size_t n = value.data.size();
             for (size_t i = 0; i < n; ++i) {
                auto& [name, v] = value.data[i];
-               write<JSON>::op<Opts>(name, ctx, args...); // write name as key
+               serialize<JSON>::op<Opts>(name, ctx, args...); // write name as key
 
                dump<':'>(args...);
                if constexpr (Opts.prettify) {
                   dump<' '>(args...);
                }
 
-               write<JSON>::op<Opts>(v.first, ctx, args...); // write deque
+               serialize<JSON>::op<Opts>(v.first, ctx, args...); // write deque
                if (i < n - 1) {
                   dump<','>(std::forward<Args>(args)...);
                }
@@ -165,7 +165,7 @@ namespace glz
                   return;
                }
 
-               std::visit([&](auto&& deq) { read<JSON>::op<Opts>(deq, ctx, it, end); }, v.first);
+               std::visit([&](auto&& deq) { parse<JSON>::op<Opts>(deq, ctx, it, end); }, v.first);
 
                if (i < n - 1) {
                   if (skip_ws<Opts>(ctx, it, end)) {
@@ -203,7 +203,7 @@ namespace glz
 
                   std::visit(
                      [&](auto& x) {
-                        write<CSV>::op<Opts>(x, ctx, args...); // write deque
+                        serialize<CSV>::op<Opts>(x, ctx, args...); // write deque
                      },
                      v.first);
 
@@ -239,7 +239,7 @@ namespace glz
                               breakout = true;
                               return;
                            }
-                           write<CSV>::op<Opts>(v[row], ctx, args...); // write deque
+                           serialize<CSV>::op<Opts>(v[row], ctx, args...); // write deque
                         },
                         data.first);
 

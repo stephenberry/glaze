@@ -16,7 +16,7 @@ namespace glz::detail
       template <auto Opts>
       static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
       {
-         read<JSON>::op<Opts>(value.value(), ctx, it, end);
+         parse<JSON>::op<Opts>(value.value(), ctx, it, end);
       }
    };
 }

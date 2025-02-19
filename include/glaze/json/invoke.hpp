@@ -54,7 +54,7 @@ namespace glz
                   }
                   else {
                      Tuple inputs{};
-                     read<JSON>::op<Opts>(inputs, ctx, it, end);
+                     parse<JSON>::op<Opts>(inputs, ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
                      std::apply(
@@ -79,7 +79,7 @@ namespace glz
                   }
                   else {
                      Tuple inputs{};
-                     read<JSON>::op<Opts>(inputs, ctx, it, end);
+                     parse<JSON>::op<Opts>(inputs, ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
                      std::apply(value.val, inputs);
@@ -204,7 +204,7 @@ namespace glz
                   if (input != value.prev) {
                      Tuple inputs{};
                      it = start;
-                     read<JSON>::op<Opts>(inputs, ctx, it, end);
+                     parse<JSON>::op<Opts>(inputs, ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
                      std::apply(value.func, inputs);

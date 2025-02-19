@@ -695,7 +695,7 @@ namespace glz::detail
       static void op(std::chrono::seconds& value, is_context auto&& ctx, auto&&... args)
       {
          int32_t sec_count{};
-         read<JSON>::op<Opts>(sec_count, ctx, args...);
+         parse<JSON>::op<Opts>(sec_count, ctx, args...);
          if (glz::error_code::none == ctx.error) value = std::chrono::seconds{sec_count};
       }
    };

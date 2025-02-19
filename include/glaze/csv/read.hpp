@@ -14,6 +14,17 @@
 
 namespace glz
 {
+   template <>
+   struct parse<CSV>
+   {
+      template <auto Opts, class T, is_context Ctx, class It0, class It1>
+      static void op(T&& value, Ctx&& ctx, It0&& it, It1 end)
+      {
+         detail::from<CSV, std::decay_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
+                                                       std::forward<It0>(it), std::forward<It1>(end));
+      }
+   };
+   
    namespace detail
    {
       GLZ_ALWAYS_INLINE bool csv_new_line(is_context auto& ctx, auto&& it) noexcept
@@ -37,17 +48,6 @@ namespace glz
          }
          return false;
       }
-
-      template <>
-      struct read<CSV>
-      {
-         template <auto Opts, class T, is_context Ctx, class It0, class It1>
-         static void op(T&& value, Ctx&& ctx, It0&& it, It1 end)
-         {
-            from<CSV, std::decay_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
-                                                          std::forward<It0>(it), std::forward<It1>(end));
-         }
-      };
 
       template <glaze_value_t T>
       struct from<CSV, T>
@@ -207,7 +207,7 @@ namespace glz
          template <auto Opts, class It>
          static void op(auto&& value, is_context auto&& ctx, It&& it, auto&& end)
          {
-            read<CSV>::op<Opts>(value.emplace_back(), ctx, it, end);
+            parse<CSV>::op<Opts>(value.emplace_back(), ctx, it, end);
          }
       };
 
@@ -308,10 +308,10 @@ namespace glz
                      size_t col = 0;
                      while (it != end) {
                         if (col < member.size()) [[likely]] {
-                           read<CSV>::op<Opts>(member[col][csv_index], ctx, it, end);
+                           parse<CSV>::op<Opts>(member[col][csv_index], ctx, it, end);
                         }
                         else [[unlikely]] {
-                           read<CSV>::op<Opts>(member.emplace_back()[csv_index], ctx, it, end);
+                           parse<CSV>::op<Opts>(member.emplace_back()[csv_index], ctx, it, end);
                         }
 
                         if (*it == '\r') {
@@ -343,7 +343,7 @@ namespace glz
                   }
                   else {
                      while (it != end) {
-                        read<CSV>::op<Opts>(member, ctx, it, end);
+                        parse<CSV>::op<Opts>(member, ctx, it, end);
 
                         if (*it == '\r') {
                            ++it;
@@ -396,14 +396,14 @@ namespace glz
                      if constexpr (fixed_array_value_t<M> && emplace_backable<M>) {
                         const auto index = keys[i].second;
                         if (row < member.size()) [[likely]] {
-                           read<CSV>::op<Opts>(member[row][index], ctx, it, end);
+                           parse<CSV>::op<Opts>(member[row][index], ctx, it, end);
                         }
                         else [[unlikely]] {
-                           read<CSV>::op<Opts>(member.emplace_back()[index], ctx, it, end);
+                           parse<CSV>::op<Opts>(member.emplace_back()[index], ctx, it, end);
                         }
                      }
                      else {
-                        read<CSV>::op<Opts>(member, ctx, it, end);
+                        parse<CSV>::op<Opts>(member, ctx, it, end);
                      }
 
                      if (*it == ',') {
@@ -485,10 +485,10 @@ namespace glz
                               size_t col = 0;
                               while (it != end) {
                                  if (col < member.size()) [[likely]] {
-                                    read<CSV>::op<Opts>(member[col][csv_index], ctx, it, end);
+                                    parse<CSV>::op<Opts>(member[col][csv_index], ctx, it, end);
                                  }
                                  else [[unlikely]] {
-                                    read<CSV>::op<Opts>(member.emplace_back()[csv_index], ctx, it, end);
+                                    parse<CSV>::op<Opts>(member.emplace_back()[csv_index], ctx, it, end);
                                  }
 
                                  if (*it == '\r') {
@@ -523,7 +523,7 @@ namespace glz
                            }
                            else {
                               while (it != end) {
-                                 read<CSV>::op<Opts>(member, ctx, it, end);
+                                 parse<CSV>::op<Opts>(member, ctx, it, end);
 
                                  if (*it == '\r') {
                                     ++it;
@@ -603,14 +603,14 @@ namespace glz
                                  if constexpr (fixed_array_value_t<M> && emplace_backable<M>) {
                                     const auto index = keys[i].second;
                                     if (row < member.size()) [[likely]] {
-                                       read<CSV>::op<Opts>(member[row][index], ctx, it, end);
+                                       parse<CSV>::op<Opts>(member[row][index], ctx, it, end);
                                     }
                                     else [[unlikely]] {
-                                       read<CSV>::op<Opts>(member.emplace_back()[index], ctx, it, end);
+                                       parse<CSV>::op<Opts>(member.emplace_back()[index], ctx, it, end);
                                     }
                                  }
                                  else {
-                                    read<CSV>::op<Opts>(member, ctx, it, end);
+                                    parse<CSV>::op<Opts>(member, ctx, it, end);
                                  }
                               },
                               index);

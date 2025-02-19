@@ -18,52 +18,52 @@
 
 namespace glz
 {
+   template <>
+   struct parse<BEVE>
+   {
+      template <auto Opts, class T, class Tag, is_context Ctx, class It0, class It1>
+      requires(has_no_header(Opts))
+      GLZ_ALWAYS_INLINE static void op(T&& value, Tag&& tag, Ctx&& ctx, It0&& it, It1&& end)
+      {
+         if constexpr (const_value_v<T>) {
+            if constexpr (Opts.error_on_const_read) {
+               ctx.error = error_code::attempt_const_read;
+            }
+            else {
+               // do not read anything into the const value
+               detail::skip_value<BEVE>::op<Opts>(std::forward<Ctx>(ctx), std::forward<It0>(it), std::forward<It1>(end));
+            }
+         }
+         else {
+            using V = std::remove_cvref_t<T>;
+            detail::from<BEVE, V>::template op<Opts>(std::forward<T>(value), std::forward<Tag>(tag), std::forward<Ctx>(ctx),
+                                             std::forward<It0>(it), std::forward<It1>(end));
+         }
+      }
+      
+      template <auto Opts, class T, is_context Ctx, class It0, class It1>
+      requires(not has_no_header(Opts))
+      GLZ_ALWAYS_INLINE static void op(T&& value, Ctx&& ctx, It0&& it, It1&& end)
+      {
+         if constexpr (const_value_v<T>) {
+            if constexpr (Opts.error_on_const_read) {
+               ctx.error = error_code::attempt_const_read;
+            }
+            else {
+               // do not read anything into the const value
+               detail::skip_value<BEVE>::op<Opts>(std::forward<Ctx>(ctx), std::forward<It0>(it), std::forward<It1>(end));
+            }
+         }
+         else {
+            using V = std::remove_cvref_t<T>;
+            detail::from<BEVE, V>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx), std::forward<It0>(it),
+                                             std::forward<It1>(end));
+         }
+      }
+   };
+   
    namespace detail
    {
-      template <>
-      struct read<BEVE>
-      {
-         template <auto Opts, class T, class Tag, is_context Ctx, class It0, class It1>
-            requires(has_no_header(Opts))
-         GLZ_ALWAYS_INLINE static void op(T&& value, Tag&& tag, Ctx&& ctx, It0&& it, It1&& end)
-         {
-            if constexpr (const_value_v<T>) {
-               if constexpr (Opts.error_on_const_read) {
-                  ctx.error = error_code::attempt_const_read;
-               }
-               else {
-                  // do not read anything into the const value
-                  skip_value<BEVE>::op<Opts>(std::forward<Ctx>(ctx), std::forward<It0>(it), std::forward<It1>(end));
-               }
-            }
-            else {
-               using V = std::remove_cvref_t<T>;
-               from<BEVE, V>::template op<Opts>(std::forward<T>(value), std::forward<Tag>(tag), std::forward<Ctx>(ctx),
-                                                std::forward<It0>(it), std::forward<It1>(end));
-            }
-         }
-
-         template <auto Opts, class T, is_context Ctx, class It0, class It1>
-            requires(not has_no_header(Opts))
-         GLZ_ALWAYS_INLINE static void op(T&& value, Ctx&& ctx, It0&& it, It1&& end)
-         {
-            if constexpr (const_value_v<T>) {
-               if constexpr (Opts.error_on_const_read) {
-                  ctx.error = error_code::attempt_const_read;
-               }
-               else {
-                  // do not read anything into the const value
-                  skip_value<BEVE>::op<Opts>(std::forward<Ctx>(ctx), std::forward<It0>(it), std::forward<It1>(end));
-               }
-            }
-            else {
-               using V = std::remove_cvref_t<T>;
-               from<BEVE, V>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx), std::forward<It0>(it),
-                                                std::forward<It1>(end));
-            }
-         }
-      };
-
       template <class T>
          requires(glaze_value_t<T> && !custom_read<T>)
       struct from<BEVE, T>
@@ -461,7 +461,7 @@ namespace glz
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
-            read<BEVE>::op<Opts>(value.str, ctx, it, end);
+            parse<BEVE>::op<Opts>(value.str, ctx, it, end);
          }
       };
 
@@ -471,7 +471,7 @@ namespace glz
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
-            read<BEVE>::op<Opts>(value.str, ctx, it, end);
+            parse<BEVE>::op<Opts>(value.str, ctx, it, end);
          }
       };
 
@@ -500,7 +500,7 @@ namespace glz
             if (value.index() != type_index) {
                value = runtime_variant_map<T>()[type_index];
             }
-            std::visit([&](auto&& v) { read<BEVE>::op<Opts>(v, ctx, it, end); }, value);
+            std::visit([&](auto&& v) { parse<BEVE>::op<Opts>(v, ctx, it, end); }, value);
          }
       };
 
@@ -696,7 +696,7 @@ namespace glz
 
                for (size_t i = 0; i < n; ++i) {
                   V v;
-                  read<BEVE>::op<Opts>(v, ctx, it, end);
+                  parse<BEVE>::op<Opts>(v, ctx, it, end);
                   value.emplace(std::move(v));
                }
             }
@@ -810,7 +810,7 @@ namespace glz
 
                            for (auto&& x : value) {
                               const uint8_t number_tag = tag::number | (tag & 0b11111000);
-                              read<BEVE>::op<no_header_on<Opts>()>(x, number_tag, ctx, it, end);
+                              parse<BEVE>::op<no_header_on<Opts>()>(x, number_tag, ctx, it, end);
                            }
                            return;
                         }
@@ -996,7 +996,7 @@ namespace glz
                }
 
                for (auto&& item : value) {
-                  read<BEVE>::op<Opts>(item, ctx, it, end);
+                  parse<BEVE>::op<Opts>(item, ctx, it, end);
                }
             }
          }
@@ -1053,16 +1053,16 @@ namespace glz
                for (size_t i = 0; i < n; ++i) {
                   // convert the object tag to the key type tag
                   auto& item = value.emplace_back();
-                  read<BEVE>::op<no_header_on<Opts>()>(item.first, key_tag, ctx, it, end);
-                  read<BEVE>::op<Opts>(item.second, ctx, it, end);
+                  parse<BEVE>::op<no_header_on<Opts>()>(item.first, key_tag, ctx, it, end);
+                  parse<BEVE>::op<Opts>(item.second, ctx, it, end);
                }
             }
             else {
                constexpr uint8_t key_tag = tag::string;
                for (size_t i = 0; i < n; ++i) {
                   auto& item = value.emplace_back();
-                  read<BEVE>::op<no_header_on<Opts>()>(item.first, key_tag, ctx, it, end);
-                  read<BEVE>::op<Opts>(item.second, ctx, it, end);
+                  parse<BEVE>::op<no_header_on<Opts>()>(item.first, key_tag, ctx, it, end);
+                  parse<BEVE>::op<Opts>(item.second, ctx, it, end);
                }
             }
          }
@@ -1101,8 +1101,8 @@ namespace glz
             }
 
             constexpr uint8_t key_tag = type == 0 ? tag::string : (tag::number | type | (byte_cnt << 5));
-            read<BEVE>::op<no_header_on<Opts>()>(value.first, key_tag, ctx, it, end);
-            read<BEVE>::op<Opts>(value.second, ctx, it, end);
+            parse<BEVE>::op<no_header_on<Opts>()>(value.first, key_tag, ctx, it, end);
+            parse<BEVE>::op<Opts>(value.second, ctx, it, end);
          }
       };
 
@@ -1159,15 +1159,15 @@ namespace glz
                Key key;
                for (size_t i = 0; i < n; ++i) {
                   if constexpr (Opts.partial_read) {
-                     read<BEVE>::op<no_header_on<Opts>()>(key, key_tag, ctx, it, end);
+                     parse<BEVE>::op<no_header_on<Opts>()>(key, key_tag, ctx, it, end);
                      if (auto element = value.find(key); element != value.end()) {
-                        read<BEVE>::op<Opts>(element->second, ctx, it, end);
+                        parse<BEVE>::op<Opts>(element->second, ctx, it, end);
                      }
                   }
                   else {
                      // convert the object tag to the key type tag
-                     read<BEVE>::op<no_header_on<Opts>()>(key, key_tag, ctx, it, end);
-                     read<BEVE>::op<Opts>(value[key], ctx, it, end);
+                     parse<BEVE>::op<no_header_on<Opts>()>(key, key_tag, ctx, it, end);
+                     parse<BEVE>::op<Opts>(value[key], ctx, it, end);
                   }
                }
             }
@@ -1176,14 +1176,14 @@ namespace glz
                static thread_local Key key;
                for (size_t i = 0; i < n; ++i) {
                   if constexpr (Opts.partial_read) {
-                     read<BEVE>::op<no_header_on<Opts>()>(key, key_tag, ctx, it, end);
+                     parse<BEVE>::op<no_header_on<Opts>()>(key, key_tag, ctx, it, end);
                      if (auto element = value.find(key); element != value.end()) {
-                        read<BEVE>::op<Opts>(element->second, ctx, it, end);
+                        parse<BEVE>::op<Opts>(element->second, ctx, it, end);
                      }
                   }
                   else {
-                     read<BEVE>::op<no_header_on<Opts>()>(key, key_tag, ctx, it, end);
-                     read<BEVE>::op<Opts>(value[key], ctx, it, end);
+                     parse<BEVE>::op<no_header_on<Opts>()>(key, key_tag, ctx, it, end);
+                     parse<BEVE>::op<Opts>(value[key], ctx, it, end);
                   }
                }
             }
@@ -1197,7 +1197,7 @@ namespace glz
          template <auto Opts, class V, size_t N>
          GLZ_ALWAYS_INLINE static void op(V (&value)[N], is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
-            read<BEVE>::op<Opts>(std::span{value, N}, ctx, it, end);
+            parse<BEVE>::op<Opts>(std::span{value, N}, ctx, it, end);
          }
       };
 
@@ -1239,7 +1239,7 @@ namespace glz
                      // Cannot read into unset nullable that is not std::optional, std::unique_ptr, or std::shared_ptr
                   }
                }
-               read<BEVE>::op<Opts>(*value, ctx, it, end);
+               parse<BEVE>::op<Opts>(*value, ctx, it, end);
             }
          }
       };
@@ -1281,7 +1281,7 @@ namespace glz
          {
             if constexpr (reflectable<T>) {
                auto t = to_tie(value);
-               read<BEVE>::op<Opts>(t, ctx, it, end);
+               parse<BEVE>::op<Opts>(t, ctx, it, end);
             }
             else {
                const auto tag = uint8_t(*it);
@@ -1302,7 +1302,7 @@ namespace glz
                }
 
                invoke_table<N>([&]<size_t I>() {
-                  read<BEVE>::op<Opts>(get_member(value, get<I>(reflect<V>::values)), ctx, it, end);
+                  parse<BEVE>::op<Opts>(get_member(value, get<I>(reflect<V>::values)), ctx, it, end);
                });
             }
          }
@@ -1384,10 +1384,10 @@ namespace glz
                            static constexpr auto Length = TargetKey.size();
                            if ((Length == n) && compare<Length>(TargetKey.data(), key.data())) [[likely]] {
                               if constexpr (detail::reflectable<T>) {
-                                 read<BEVE>::op<Opts>(get_member(value, get<I>(to_tie(value))), ctx, it, end);
+                                 parse<BEVE>::op<Opts>(get_member(value, get<I>(to_tie(value))), ctx, it, end);
                               }
                               else {
-                                 read<BEVE>::op<Opts>(get_member(value, get<I>(reflect<T>::values)), ctx, it, end);
+                                 parse<BEVE>::op<Opts>(get_member(value, get<I>(reflect<T>::values)), ctx, it, end);
                               }
                            }
                            else {
@@ -1462,7 +1462,7 @@ namespace glz
             }
 
             invoke_table<N>(
-               [&]<size_t I>() { read<BEVE>::op<Opts>(get_member(value, get<I>(reflect<T>::values)), ctx, it, end); });
+               [&]<size_t I>() { parse<BEVE>::op<Opts>(get_member(value, get<I>(reflect<T>::values)), ctx, it, end); });
          }
       };
 
@@ -1494,7 +1494,7 @@ namespace glz
                if constexpr (is_std_tuple<T>) {
                   for_each_short_circuit<N>([&](auto I) {
                      if (I < n) {
-                        read<BEVE>::op<Opts>(std::get<I>(value), ctx, it, end);
+                        parse<BEVE>::op<Opts>(std::get<I>(value), ctx, it, end);
                         return false; // continue
                      }
                      return true; // short circuit
@@ -1503,7 +1503,7 @@ namespace glz
                else {
                   for_each_short_circuit<N>([&](auto I) {
                      if (I < n) {
-                        read<BEVE>::op<Opts>(glz::get<I>(value), ctx, it, end);
+                        parse<BEVE>::op<Opts>(glz::get<I>(value), ctx, it, end);
                         return false; // continue
                      }
                      return true; // short circuit
@@ -1521,10 +1521,10 @@ namespace glz
                }
 
                if constexpr (is_std_tuple<T>) {
-                  invoke_table<N>([&]<size_t I>() { read<BEVE>::op<Opts>(std::get<I>(value), ctx, it, end); });
+                  invoke_table<N>([&]<size_t I>() { parse<BEVE>::op<Opts>(std::get<I>(value), ctx, it, end); });
                }
                else {
-                  invoke_table<N>([&]<size_t I>() { read<BEVE>::op<Opts>(glz::get<I>(value), ctx, it, end); });
+                  invoke_table<N>([&]<size_t I>() { parse<BEVE>::op<Opts>(glz::get<I>(value), ctx, it, end); });
                }
             }
          }
@@ -1537,7 +1537,7 @@ namespace glz
          static void op(auto&& value, is_context auto&& ctx, auto&&... args)
          {
             static thread_local std::string buffer{};
-            read<BEVE>::op<Opts>(buffer, ctx, args...);
+            parse<BEVE>::op<Opts>(buffer, ctx, args...);
             if (bool(ctx.error)) [[unlikely]] {
                return;
             }

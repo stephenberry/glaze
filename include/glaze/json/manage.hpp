@@ -37,7 +37,7 @@ namespace glz
             using V = std::decay_t<decltype(value)>;
             using From = typename V::from_t;
 
-            read<JSON>::op<Opts>(get_member(value.val, value.member), ctx, it, end);
+            parse<JSON>::op<Opts>(get_member(value.val, value.member), ctx, it, end);
 
             if constexpr (std::is_member_pointer_v<From>) {
                if constexpr (std::is_member_function_pointer_v<From>) {

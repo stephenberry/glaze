@@ -34,13 +34,13 @@ namespace glz
 {
    namespace detail
    {
-      // This write<JSON> indirection only exists to call std::remove_cvref_t on the type
+      // This serialize<JSON> indirection only exists to call std::remove_cvref_t on the type
       // so that type matching doesn't depend on qualifiers.
       // It is recommended to directly call to<JSON, std::remove_cvref_t<T>> to reduce compilation overhead.
       // TODO: Long term this can probably be [[deprecated]]
       // but it is useful for when getting the value type would be verbose
       template <>
-      struct write<JSON>
+      struct serialize<JSON>
       {
          template <auto Opts, class T, is_context Ctx, class B, class IX>
          GLZ_ALWAYS_INLINE static void op(T&& value, Ctx&& ctx, B&& b, IX&& ix)
@@ -650,7 +650,7 @@ namespace glz
             }
             else [[unlikely]] {
                // What do we want to happen if the value doesn't have a mapped string
-               write<JSON>::op<Opts>(static_cast<std::underlying_type_t<T>>(value), ctx, std::forward<Args>(args)...);
+               serialize<JSON>::op<Opts>(static_cast<std::underlying_type_t<T>>(value), ctx, std::forward<Args>(args)...);
             }
          }
       };
@@ -663,7 +663,7 @@ namespace glz
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args)
          {
             // serialize as underlying number
-            write<JSON>::op<Opts>(static_cast<std::underlying_type_t<std::decay_t<T>>>(value), ctx,
+            serialize<JSON>::op<Opts>(static_cast<std::underlying_type_t<std::decay_t<T>>>(value), ctx,
                                   std::forward<Args>(args)...);
          }
       };
@@ -802,10 +802,10 @@ namespace glz
             to<JSON, core_t<Key>>::template op<Opts>(key, ctx, b, ix);
          }
          else if constexpr (num_t<Key>) {
-            write<JSON>::op<opt_true<Opts, &opts::quoted_num>>(key, ctx, b, ix);
+            serialize<JSON>::op<opt_true<Opts, &opts::quoted_num>>(key, ctx, b, ix);
          }
          else {
-            write<JSON>::op<opt_false<Opts, &opts::raw_string>>(quoted_t<const Key>{key}, ctx, b, ix);
+            serialize<JSON>::op<opt_false<Opts, &opts::raw_string>>(quoted_t<const Key>{key}, ctx, b, ix);
          }
          if constexpr (Opts.prettify) {
             dump<": ">(b, ix);
@@ -1156,10 +1156,10 @@ namespace glz
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args)
          {
             if (value) {
-               write<JSON>::op<Opts>(*value, ctx, std::forward<Args>(args)...);
+               serialize<JSON>::op<Opts>(*value, ctx, std::forward<Args>(args)...);
             }
             else {
-               write<JSON>::op<Opts>(unexpected_wrapper{&value.error()}, ctx, std::forward<Args>(args)...);
+               serialize<JSON>::op<Opts>(unexpected_wrapper{&value.error()}, ctx, std::forward<Args>(args)...);
             }
          }
       };
@@ -1172,7 +1172,7 @@ namespace glz
          template <auto Opts, class V, size_t N, class... Args>
          GLZ_ALWAYS_INLINE static void op(const V (&value)[N], is_context auto&& ctx, Args&&... args)
          {
-            write<JSON>::op<Opts>(std::span{value, N}, ctx, std::forward<Args>(args)...);
+            serialize<JSON>::op<Opts>(std::span{value, N}, ctx, std::forward<Args>(args)...);
          }
       };
 
@@ -1184,10 +1184,10 @@ namespace glz
          {
             if (value) {
                if constexpr (required_padding<T>()) {
-                  write<JSON>::op<Opts>(*value, ctx, b, ix);
+                  serialize<JSON>::op<Opts>(*value, ctx, b, ix);
                }
                else {
-                  write<JSON>::op<write_unchecked_off<Opts>()>(*value, ctx, b, ix);
+                  serialize<JSON>::op<write_unchecked_off<Opts>()>(*value, ctx, b, ix);
                }
             }
             else {
@@ -1204,7 +1204,7 @@ namespace glz
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix)
          {
             if (value.has_value()) {
-               write<JSON>::op<Opts>(value.value(), ctx, b, ix);
+               serialize<JSON>::op<Opts>(value.value(), ctx, b, ix);
             }
             else {
                dump<"null">(b, ix);
@@ -1324,7 +1324,7 @@ namespace glz
             if constexpr (Opts.prettify) {
                dump_newline_indent<Opts.indentation_char>(ctx.indentation_level, args...);
             }
-            std::visit([&](auto&& v) { write<JSON>::op<Opts>(v, ctx, args...); }, value);
+            std::visit([&](auto&& v) { serialize<JSON>::op<Opts>(v, ctx, args...); }, value);
             if constexpr (Opts.prettify) {
                ctx.indentation_level -= Opts.indentation_width;
                dump_newline_indent<Opts.indentation_char>(ctx.indentation_level, args...);
@@ -1352,10 +1352,10 @@ namespace glz
             }
             invoke_table<N>([&]<size_t I>() {
                if constexpr (glaze_array_t<V>) {
-                  write<JSON>::op<Opts>(get_member(value.value, glz::get<I>(meta_v<T>)), ctx, args...);
+                  serialize<JSON>::op<Opts>(get_member(value.value, glz::get<I>(meta_v<T>)), ctx, args...);
                }
                else {
-                  write<JSON>::op<Opts>(glz::get<I>(value.value), ctx, args...);
+                  serialize<JSON>::op<Opts>(glz::get<I>(value.value), ctx, args...);
                }
                constexpr bool needs_comma = I < N - 1;
                if constexpr (needs_comma) {
@@ -1398,7 +1398,7 @@ namespace glz
             using V = std::decay_t<T>;
             invoke_table<N>([&]<size_t I>() {
                if constexpr (glaze_array_t<V>) {
-                  write<JSON>::op<Opts>(get_member(value, glz::get<I>(meta_v<T>)), ctx, args...);
+                  serialize<JSON>::op<Opts>(get_member(value, glz::get<I>(meta_v<T>)), ctx, args...);
                }
                else if constexpr (is_std_tuple<T>) {
                   using Value = core_t<decltype(std::get<I>(value))>;
@@ -1608,10 +1608,10 @@ namespace glz
                   if (unknown_writer.size() > 0) {
                      // TODO: This intermediate is added to get GCC 14 to build
                      decltype(auto) merged = glz::merge{value, unknown_writer};
-                     write<JSON>::op<disable_write_unknown_on<Options>()>(std::move(merged), ctx, b, ix);
+                     serialize<JSON>::op<disable_write_unknown_on<Options>()>(std::move(merged), ctx, b, ix);
                   }
                   else {
-                     write<JSON>::op<disable_write_unknown_on<Options>()>(value, ctx, b, ix);
+                     serialize<JSON>::op<disable_write_unknown_on<Options>()>(value, ctx, b, ix);
                   }
                }
                else if constexpr (std::is_member_function_pointer_v<WriterType>) {
@@ -1619,10 +1619,10 @@ namespace glz
                   if (unknown_writer.size() > 0) {
                      // TODO: This intermediate is added to get GCC 14 to build
                      decltype(auto) merged = glz::merge{value, unknown_writer};
-                     write<JSON>::op<disable_write_unknown_on<Options>()>(std::move(merged), ctx, b, ix);
+                     serialize<JSON>::op<disable_write_unknown_on<Options>()>(std::move(merged), ctx, b, ix);
                   }
                   else {
-                     write<JSON>::op<disable_write_unknown_on<Options>()>(value, ctx, b, ix);
+                     serialize<JSON>::op<disable_write_unknown_on<Options>()>(value, ctx, b, ix);
                   }
                }
                else {
@@ -1845,13 +1845,13 @@ namespace glz
       };
 
       template <>
-      struct write_partial<JSON>
+      struct serialize_partial<JSON>
       {
          template <auto& Partial, auto Opts, class T, is_context Ctx, class B, class IX>
          GLZ_ALWAYS_INLINE static void op(T&& value, Ctx&& ctx, B&& b, IX&& ix)
          {
             if constexpr (std::count(Partial.begin(), Partial.end(), "") > 0) {
-               detail::write<JSON>::op<Opts>(value, ctx, b, ix);
+               serialize<JSON>::op<Opts>(value, ctx, b, ix);
             }
             else if constexpr (write_json_partial_invocable<Partial, Opts, T, Ctx, B, IX>) {
                to_partial<JSON, std::remove_cvref_t<T>>::template op<Partial, Opts>(
@@ -1904,13 +1904,13 @@ namespace glz
                   if constexpr (glaze_object_t<T>) {
                      static constexpr auto member = get<index>(reflect<T>::values);
 
-                     write_partial<JSON>::op<sub_partial, Opts>(get_member(value, member), ctx, b, ix);
+                     serialize_partial<JSON>::op<sub_partial, Opts>(get_member(value, member), ctx, b, ix);
                      if constexpr (I != N - 1) {
                         write_object_entry_separator<Opts>(ctx, b, ix);
                      }
                   }
                   else {
-                     write_partial<JSON>::op<sub_partial, Opts>(get_member(value, get<index>(to_tie(value))), ctx, b,
+                     serialize_partial<JSON>::op<sub_partial, Opts>(get_member(value, get<index>(to_tie(value))), ctx, b,
                                                                 ix);
                      if constexpr (I != N - 1) {
                         write_object_entry_separator<Opts>(ctx, b, ix);
@@ -1934,7 +1934,7 @@ namespace glz
                   if constexpr (findable<std::decay_t<T>, decltype(key)>) {
                      auto it = value.find(key);
                      if (it != value.end()) {
-                        write_partial<JSON>::op<sub_partial, Opts>(it->second, ctx, b, ix);
+                        serialize_partial<JSON>::op<sub_partial, Opts>(it->second, ctx, b, ix);
                      }
                      else {
                         ctx.error = error_code::invalid_partial_key;
@@ -1945,7 +1945,7 @@ namespace glz
                      static thread_local auto k = typename std::decay_t<T>::key_type(key);
                      auto it = value.find(k);
                      if (it != value.end()) {
-                        write_partial<JSON>::op<sub_partial, Opts>(it->second, ctx, b, ix);
+                        serialize_partial<JSON>::op<sub_partial, Opts>(it->second, ctx, b, ix);
                      }
                      else {
                         ctx.error = error_code::invalid_partial_key;

@@ -11,7 +11,7 @@ namespace glz
    namespace detail
    {
       template <>
-      struct read<NDJSON>
+      struct parse<NDJSON>
       {
          template <auto Opts, class T, is_context Ctx, class It0, class It1>
          static void op(T&& value, Ctx&& ctx, It0&& it, It1&& end)
@@ -63,7 +63,7 @@ namespace glz
             };
 
             for (size_t i = 0; i < n; ++i) {
-               read<JSON>::op<Opts>(*value_it++, ctx, it, end);
+               parse<JSON>::op<Opts>(*value_it++, ctx, it, end);
                if (it == end) {
                   if constexpr (erasable<T>) {
                      value.erase(value_it,
@@ -82,7 +82,7 @@ namespace glz
             // growing
             if constexpr (emplace_backable<T>) {
                while (it < end) {
-                  read<JSON>::op<Opts>(value.emplace_back(), ctx, it, end);
+                  parse<JSON>::op<Opts>(value.emplace_back(), ctx, it, end);
                   if (bool(ctx.error)) {
                      return;
                   }
@@ -140,20 +140,20 @@ namespace glz
                   read_new_lines();
                }
                if constexpr (is_std_tuple<T>) {
-                  read<JSON>::op<Opts>(std::get<I>(value), ctx, it, end);
+                  parse<JSON>::op<Opts>(std::get<I>(value), ctx, it, end);
                }
                else if constexpr (glaze_array_t<T>) {
-                  read<JSON>::op<Opts>(get_member(value, glz::get<I>(meta_v<T>)), ctx, it, end);
+                  parse<JSON>::op<Opts>(get_member(value, glz::get<I>(meta_v<T>)), ctx, it, end);
                }
                else {
-                  read<JSON>::op<Opts>(glz::get<I>(value), ctx, it, end);
+                  parse<JSON>::op<Opts>(glz::get<I>(value), ctx, it, end);
                }
             });
          }
       };
 
       template <>
-      struct write<NDJSON>
+      struct serialize<NDJSON>
       {
          template <auto Opts, class T, is_context Ctx, class B, class IX>
          static void op(T&& value, Ctx&& ctx, B&& b, IX&& ix)
@@ -211,10 +211,10 @@ namespace glz
             using V = std::decay_t<T>;
             for_each<N>([&](auto I) {
                if constexpr (glaze_array_t<V>) {
-                  write<JSON>::op<Opts>(get_member(value, glz::get<I>(meta_v<T>)), ctx, args...);
+                  serialize<JSON>::op<Opts>(get_member(value, glz::get<I>(meta_v<T>)), ctx, args...);
                }
                else {
-                  write<JSON>::op<Opts>(glz::get<I>(value), ctx, args...);
+                  serialize<JSON>::op<Opts>(glz::get<I>(value), ctx, args...);
                }
                constexpr bool needs_new_line = I < N - 1;
                if constexpr (needs_new_line) {
@@ -243,10 +243,10 @@ namespace glz
             using V = std::decay_t<T>;
             for_each<N>([&](auto I) {
                if constexpr (glaze_array_t<V>) {
-                  write<JSON>::op<Opts>(value.*std::get<I>(meta_v<V>), ctx, std::forward<Args>(args)...);
+                  serialize<JSON>::op<Opts>(value.*std::get<I>(meta_v<V>), ctx, std::forward<Args>(args)...);
                }
                else {
-                  write<JSON>::op<Opts>(std::get<I>(value), ctx, std::forward<Args>(args)...);
+                  serialize<JSON>::op<Opts>(std::get<I>(value), ctx, std::forward<Args>(args)...);
                }
                constexpr bool needs_new_line = I < N - 1;
                if constexpr (needs_new_line) {
