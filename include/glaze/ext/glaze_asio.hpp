@@ -384,7 +384,7 @@ namespace glz
    template <opts Opts = opts{}>
    struct asio_server
    {
-      uint16_t port{};
+      uint16_t port{}; // 0 will select a random free port
       uint32_t concurrency{1}; // How many threads to use (a call to .run() is inclusive on the main thread)
 
       // Register a callback that takes a string error message on server/registry errors.
@@ -438,9 +438,14 @@ namespace glz
 
          // Setup signal handling to stop the server
          signals->async_wait([&](auto, auto) { ctx->stop(); });
+         
+         // Create the acceptor synchronously so we know the actual port if set to 0 (select random free)
+         auto executor = ctx->get_executor();
+         asio::ip::tcp::acceptor acceptor(executor, {asio::ip::tcp::v6(), port});
+         port = acceptor.local_endpoint().port();
 
          // Start the listener coroutine
-         asio::co_spawn(*ctx, listener(), asio::detached);
+         asio::co_spawn(*ctx, listener(std::move(acceptor)), asio::detached);
 
          // Run the io_context in multiple threads for concurrency
          threads = std::shared_ptr<std::vector<std::thread>>(new std::vector<std::thread>{}, [](auto* ptr) {
@@ -500,13 +505,9 @@ namespace glz
          }
       }
 
-      asio::awaitable<void> listener()
+      asio::awaitable<void> listener(asio::ip::tcp::acceptor acceptor)
       {
          auto executor = co_await asio::this_coro::executor;
-         asio::ip::tcp::acceptor acceptor(executor, {asio::ip::tcp::v6(), port});
-         
-         // Retrieve and use the assigned port (if port was set to 0)
-         port = acceptor.local_endpoint().port();
          
          while (true) {
             auto socket = co_await acceptor.async_accept(asio::use_awaitable);
