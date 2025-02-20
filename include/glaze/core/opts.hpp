@@ -122,7 +122,7 @@ namespace glz
    // bool hide_non_invocable = true;
    // Hides non-invocable members from the cli_menu (may be applied elsewhere in the future)
    
-   consteval bool check_validate_trailing_whitespace(auto Opts) {
+   consteval bool check_validate_trailing_whitespace(auto&& Opts) {
       if constexpr (requires { Opts.validate_trailing_whitespace; }) {
          return Opts.validate_trailing_whitespace;
       } else {
@@ -130,7 +130,7 @@ namespace glz
       }
    }
    
-   consteval bool check_partial_read(auto Opts) {
+   consteval bool check_partial_read(auto&& Opts) {
       if constexpr (requires { Opts.partial_read; }) {
          return Opts.partial_read;
       } else {
@@ -138,7 +138,7 @@ namespace glz
       }
    }
    
-   consteval bool check_concatenate(auto Opts) {
+   consteval bool check_concatenate(auto&& Opts) {
       if constexpr (requires { Opts.concatenate; }) {
          return Opts.concatenate;
       } else {
@@ -146,7 +146,7 @@ namespace glz
       }
    }
    
-   consteval bool check_hide_non_invocable(auto Opts) {
+   consteval bool check_hide_non_invocable(auto&& Opts) {
       if constexpr (requires { Opts.hide_non_invocable; }) {
          return Opts.hide_non_invocable;
       } else {
@@ -155,24 +155,24 @@ namespace glz
    }
 
    // TODO: These has_ checks should probably be changed to check_
-   consteval bool has_opening_handled(auto o) { return o.internal & uint32_t(opts_internal::opening_handled); }
+   consteval bool has_opening_handled(auto&& o) { return o.internal & uint32_t(opts_internal::opening_handled); }
 
-   consteval bool has_closing_handled(auto o) { return o.internal & uint32_t(opts_internal::closing_handled); }
+   consteval bool has_closing_handled(auto&& o) { return o.internal & uint32_t(opts_internal::closing_handled); }
 
-   consteval bool has_ws_handled(auto o) { return o.internal & uint32_t(opts_internal::ws_handled); }
+   consteval bool has_ws_handled(auto&& o) { return o.internal & uint32_t(opts_internal::ws_handled); }
 
-   consteval bool has_no_header(auto o) { return o.internal & uint32_t(opts_internal::no_header); }
+   consteval bool has_no_header(auto&& o) { return o.internal & uint32_t(opts_internal::no_header); }
 
-   consteval bool has_disable_write_unknown(auto o)
+   consteval bool has_disable_write_unknown(auto&& o)
    {
       return o.internal & uint32_t(opts_internal::disable_write_unknown);
    }
 
-   consteval bool has_is_padded(auto o) { return o.internal & uint32_t(opts_internal::is_padded); }
+   consteval bool has_is_padded(auto&& o) { return o.internal & uint32_t(opts_internal::is_padded); }
 
-   consteval bool has_disable_padding(auto o) { return o.internal & uint32_t(opts_internal::disable_padding); }
+   consteval bool has_disable_padding(auto&& o) { return o.internal & uint32_t(opts_internal::disable_padding); }
 
-   consteval bool has_write_unchecked(auto o) { return o.internal & uint32_t(opts_internal::write_unchecked); }
+   consteval bool has_write_unchecked(auto&& o) { return o.internal & uint32_t(opts_internal::write_unchecked); }
 
    template <auto Opts>
    constexpr auto opening_handled()
