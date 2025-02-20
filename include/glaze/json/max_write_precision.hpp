@@ -68,7 +68,7 @@ namespace glz
          to<JSON, Value>::template op<O>(value.val, ctx, args...);
       }
    };
-   
+
    template <class T>
    struct to<JSON, write_float64_t<T>>
    {
@@ -80,7 +80,7 @@ namespace glz
          to<JSON, Value>::template op<O>(value.val, ctx, args...);
       }
    };
-   
+
    template <class T>
    struct to<JSON, write_float_full_t<T>>
    {
@@ -92,24 +92,23 @@ namespace glz
          to<JSON, Value>::template op<O>(value.val, ctx, args...);
       }
    };
-   
+
    template <auto MemPtr>
    inline constexpr decltype(auto) write_float32_t_impl() noexcept
    {
       return [](auto&& val) { return write_float32_t<std::remove_reference_t<decltype(val.*MemPtr)>>{val.*MemPtr}; };
    }
-   
+
    template <auto MemPtr>
    inline constexpr decltype(auto) write_float64_impl() noexcept
    {
       return [](auto&& val) { return write_float64_t<std::remove_reference_t<decltype(val.*MemPtr)>>{val.*MemPtr}; };
    }
-   
+
    template <auto MemPtr>
    inline constexpr decltype(auto) write_float_full_impl() noexcept
    {
-      return
-      [](auto&& val) { return write_float_full_t<std::remove_reference_t<decltype(val.*MemPtr)>>{val.*MemPtr}; };
+      return [](auto&& val) { return write_float_full_t<std::remove_reference_t<decltype(val.*MemPtr)>>{val.*MemPtr}; };
    }
 
    template <auto MemPtr>

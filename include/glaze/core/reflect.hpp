@@ -86,8 +86,7 @@ namespace glz
    // MSVC requires this template specialization for when the tuple size if zero,
    // otherwise MSVC tries to instantiate calls of get<0> in invalid branches
    template <class T>
-      requires((glaze_object_t<T> || glaze_flags_t<T> || glaze_enum_t<T>) &&
-               (tuple_size_v<meta_t<T>> == 0))
+      requires((glaze_object_t<T> || glaze_flags_t<T> || glaze_enum_t<T>) && (tuple_size_v<meta_t<T>> == 0))
    struct reflect<T>
    {
       static constexpr auto size = 0;
@@ -99,8 +98,7 @@ namespace glz
    };
 
    template <class T>
-      requires(!meta_keys<T> &&
-               (glaze_object_t<T> || glaze_flags_t<T> || glaze_enum_t<T>) &&
+      requires(!meta_keys<T> && (glaze_object_t<T> || glaze_flags_t<T> || glaze_enum_t<T>) &&
                (tuple_size_v<meta_t<T>> != 0))
    struct reflect<T>
    {
@@ -1949,7 +1947,7 @@ namespace glz
          return "";
       }
    }
-   
+
    template <class T>
    inline constexpr size_t maximum_key_size = [] {
       constexpr auto N = reflect<T>::size;
@@ -1961,7 +1959,7 @@ namespace glz
       }
       return maximum + 2; // add quotes for JSON
    }();
-   
+
    inline constexpr uint64_t round_up_to_nearest_16(const uint64_t value) noexcept { return (value + 15) & ~15ull; }
 }
 

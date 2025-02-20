@@ -63,7 +63,7 @@ namespace glz
       bool shrink_to_fit = false; // Shrinks dynamic containers to new size to save memory
       bool write_type_info = true; // Write type info for meta objects in variants
       bool error_on_missing_keys = false; // Require all non nullable keys to be present in the object. Use
-                                            // skip_null_members = false to require nullable members
+                                          // skip_null_members = false to require nullable members
       bool error_on_const_read =
          false; // Error if attempt is made to read into a const value, by default the value is skipped without error
       bool validate_skipped = false; // If full validation should be performed on skipped values
@@ -80,8 +80,7 @@ namespace glz
       bool quoted_num = false; // treat numbers as quoted or array-like types as having quoted numbers
       bool number = false; // treats all types like std::string as numbers: read/write these quoted numbers
       bool raw = false; // write out string like values without quotes
-      bool raw_string =
-         false; // do not decode/encode escaped characters for strings (improves read/write performance)
+      bool raw_string = false; // do not decode/encode escaped characters for strings (improves read/write performance)
       bool structs_as_arrays = false; // Handle structs (reading/writing) without keys, which applies
       bool allow_conversions = true; // Whether conversions between convertible types are
       // allowed in binary, e.g. double -> float
@@ -321,13 +320,13 @@ namespace glz
 {
    template <uint32_t Format = INVALID, class T = void>
    struct to;
-   
+
    template <uint32_t Format = INVALID, class T = void>
    struct from;
-   
+
    template <uint32_t Format = INVALID, class T = void>
    struct to_partial;
-   
+
    template <uint32_t Format = INVALID>
    struct skip_value;
 
@@ -336,18 +335,18 @@ namespace glz
 
    template <uint32_t Format, class T>
    concept read_supported = requires { from<Format, std::remove_cvref_t<T>>{}; };
-   
+
    // These templates save typing by determining the core type used to select the proper to/from specialization
    // Long term I would like to remove these detail indirections.
-   
+
    template <uint32_t Format>
    struct parse
    {};
-   
+
    template <uint32_t Format>
    struct serialize
    {};
-   
+
    template <uint32_t Format>
    struct serialize_partial
    {};

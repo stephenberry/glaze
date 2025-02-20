@@ -276,8 +276,7 @@ namespace glz
       detail::seek_impl(
          [&](auto&& val) {
             if constexpr (std::is_assignable_v<decltype(val), decltype(value)> &&
-                          non_narrowing_convertable<std::decay_t<decltype(value)>,
-                                                            std::decay_t<decltype(val)>>) {
+                          non_narrowing_convertable<std::decay_t<decltype(value)>, std::decay_t<decltype(val)>>) {
                result = true;
 #if defined(__GNUC__) || defined(__GNUG__)
 #pragma GCC diagnostic push

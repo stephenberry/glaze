@@ -18,7 +18,7 @@ namespace glz
                                                                      std::forward<It0>(it), std::forward<It1>(end));
       }
    };
-   
+
    template <>
    struct serialize<NDJSON>
    {
@@ -29,9 +29,9 @@ namespace glz
                                                         std::forward<B>(b), std::forward<IX>(ix));
       }
    };
-   
+
    template <class T>
-   requires readable_array_t<T> && (emplace_backable<T> || !resizable<T>)
+      requires readable_array_t<T> && (emplace_backable<T> || !resizable<T>)
    struct from<NDJSON, T>
    {
       template <auto Opts>
@@ -40,21 +40,21 @@ namespace glz
          if (bool(ctx.error)) [[unlikely]] {
             return;
          }
-         
+
          if (it == end) {
             if constexpr (resizable<T>) {
                value.clear();
-               
+
                if constexpr (Opts.shrink_to_fit) {
                   value.shrink_to_fit();
                }
             }
          }
-         
+
          const auto n = value.size();
-         
+
          auto value_it = value.begin();
-         
+
          auto read_new_lines = [&] {
             while (*it == '\r') {
                ++it;
@@ -70,24 +70,24 @@ namespace glz
                ++it;
             }
          };
-         
+
          for (size_t i = 0; i < n; ++i) {
             parse<JSON>::op<Opts>(*value_it++, ctx, it, end);
             if (it == end) {
                if constexpr (erasable<T>) {
                   value.erase(value_it,
                               value.end()); // use erase rather than resize for non-default constructible elements
-                  
+
                   if constexpr (Opts.shrink_to_fit) {
                      value.shrink_to_fit();
                   }
                }
                return;
             }
-            
+
             read_new_lines();
          }
-         
+
          // growing
          if constexpr (emplace_backable<T>) {
             while (it < end) {
@@ -95,7 +95,7 @@ namespace glz
                if (bool(ctx.error)) {
                   return;
                }
-               
+
                read_new_lines();
             }
          }
@@ -104,9 +104,9 @@ namespace glz
          }
       }
    };
-   
+
    template <class T>
-   requires glaze_array_t<T> || tuple_t<T> || is_std_tuple<T>
+      requires glaze_array_t<T> || tuple_t<T> || is_std_tuple<T>
    struct from<NDJSON, T>
    {
       template <auto Opts>
@@ -115,7 +115,7 @@ namespace glz
          if (bool(ctx.error)) [[unlikely]] {
             return;
          }
-         
+
          static constexpr auto N = []() constexpr {
             if constexpr (glaze_array_t<T>) {
                return reflect<T>::size;
@@ -124,7 +124,7 @@ namespace glz
                return glz::tuple_size_v<T>;
             }
          }();
-         
+
          auto read_new_lines = [&] {
             while (*it == '\r') {
                ++it;
@@ -140,7 +140,7 @@ namespace glz
                ++it;
             }
          };
-         
+
          for_each<N>([&](auto I) {
             if (it == end) {
                return;
@@ -160,7 +160,7 @@ namespace glz
          });
       }
    };
-   
+
    template <writable_array_t T>
    struct to<NDJSON, T>
    {
@@ -175,7 +175,7 @@ namespace glz
                return value.empty();
             }
          }();
-         
+
          if (!is_empty) {
             auto it = value.begin();
             using Value = core_t<decltype(*it)>;
@@ -189,9 +189,9 @@ namespace glz
          }
       }
    };
-   
+
    template <class T>
-   requires glaze_array_t<T> || tuple_t<T>
+      requires glaze_array_t<T> || tuple_t<T>
    struct to<NDJSON, T>
    {
       template <auto Opts, class... Args>
@@ -205,7 +205,7 @@ namespace glz
                return glz::tuple_size_v<std::decay_t<T>>;
             }
          }();
-         
+
          using V = std::decay_t<T>;
          for_each<N>([&](auto I) {
             if constexpr (glaze_array_t<V>) {
@@ -221,9 +221,9 @@ namespace glz
          });
       }
    };
-   
+
    template <class T>
-   requires is_std_tuple<std::decay_t<T>>
+      requires is_std_tuple<std::decay_t<T>>
    struct to<NDJSON, T>
    {
       template <auto Opts, class... Args>
@@ -237,7 +237,7 @@ namespace glz
                return glz::tuple_size_v<std::decay_t<T>>;
             }
          }();
-         
+
          using V = std::decay_t<T>;
          for_each<N>([&](auto I) {
             if constexpr (glaze_array_t<V>) {

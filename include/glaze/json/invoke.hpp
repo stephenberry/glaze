@@ -37,11 +37,11 @@ namespace glz
       static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
       {
          using V = std::decay_t<decltype(value.val)>;
-         
+
          if constexpr (std::is_member_function_pointer_v<T>) {
             using M = typename std::decay_t<decltype(value)>::mem_fun;
             using Ret = typename return_type<M>::type;
-            
+
             if constexpr (std::is_void_v<Ret>) {
                using Tuple = typename inputs_as_tuple<M>::type;
                if constexpr (glz::tuple_size_v<Tuple> == 0) {
@@ -56,8 +56,8 @@ namespace glz
                   if (bool(ctx.error)) [[unlikely]]
                      return;
                   std::apply(
-                             [&](auto&&... args) { return (value.val.*value.ptr)(std::forward<decltype(args)>(args)...); },
-                             inputs);
+                     [&](auto&&... args) { return (value.val.*value.ptr)(std::forward<decltype(args)>(args)...); },
+                     inputs);
                }
             }
             else {
@@ -66,7 +66,7 @@ namespace glz
          }
          else if constexpr (is_specialization_v<V, std::function>) {
             using Ret = typename function_traits<V>::result_type;
-            
+
             if constexpr (std::is_void_v<Ret>) {
                using Tuple = typename function_traits<V>::arguments;
                if constexpr (glz::tuple_size_v<Tuple> == 0) {
@@ -92,7 +92,7 @@ namespace glz
          }
       }
    };
-   
+
    template <class T>
    struct to<JSON, invoke_t<T>>
    {
@@ -103,7 +103,7 @@ namespace glz
          dump<'['>(args...);
          if constexpr (is_specialization_v<V, std::function>) {
             using Ret = typename function_traits<V>::result_type;
-            
+
             if constexpr (std::is_void_v<Ret>) {
                using Tuple = typename function_traits<V>::arguments;
                Tuple inputs{};
@@ -117,7 +117,7 @@ namespace glz
          dump<']'>(args...);
       }
    };
-   
+
    template <auto MemPtr>
    inline constexpr decltype(auto) invoke_impl()
    {
@@ -171,7 +171,7 @@ namespace glz
       static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
       {
          using V = std::decay_t<decltype(value.func)>;
-         
+
          using Tuple = typename function_traits<V>::arguments;
          if constexpr (glz::tuple_size_v<Tuple> == 0) {
             auto start = it;
@@ -212,7 +212,7 @@ namespace glz
          }
       }
    };
-   
+
    template <is_invoke_update T>
    struct to<JSON, T>
    {

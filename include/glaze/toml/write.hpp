@@ -25,9 +25,9 @@ namespace glz
                                                              std::forward<B>(b), std::forward<IX>(ix));
       }
    };
-   
+
    template <class T>
-   requires(glaze_value_t<T> && !custom_write<T>)
+      requires(glaze_value_t<T> && !custom_write<T>)
    struct to<TOML, T>
    {
       template <auto Opts, class Value, is_context Ctx, class B, class IX>
@@ -38,7 +38,7 @@ namespace glz
                                         std::forward<Ctx>(ctx), std::forward<B>(b), std::forward<IX>(ix));
       }
    };
-   
+
    template <nullable_like T>
    struct to<TOML, T>
    {
@@ -50,7 +50,7 @@ namespace glz
          }
       }
    };
-   
+
    template <boolean_like T>
    struct to<TOML, T>
    {
@@ -63,7 +63,7 @@ namespace glz
                b.resize(2 * n);
             }
          }
-         
+
          if constexpr (Opts.bools_as_numbers) {
             if (value) {
                std::memcpy(&b[ix], "1", 1);
@@ -85,7 +85,7 @@ namespace glz
          }
       }
    };
-   
+
    template <num_t T>
    struct to<TOML, T>
    {
@@ -104,10 +104,10 @@ namespace glz
          }
       }
    };
-   
+
    constexpr std::array<uint16_t, 256> char_escape_table = [] {
       auto combine = [](const char chars[2]) -> uint16_t { return uint16_t(chars[0]) | (uint16_t(chars[1]) << 8); };
-      
+
       std::array<uint16_t, 256> t{};
       t['\b'] = combine(R"(\b)");
       t['\t'] = combine(R"(\t)");
@@ -118,9 +118,9 @@ namespace glz
       t['\\'] = combine(R"(\\)");
       return t;
    }();
-   
+
    template <class T>
-   requires str_t<T> || char_t<T>
+      requires str_t<T> || char_t<T>
    struct to<TOML, T>
    {
       template <auto Opts, class B>
@@ -140,7 +140,7 @@ namespace glz
                      b.resize(2 * k);
                   }
                }
-               
+
                std::memcpy(&b[ix], "\"", 1);
                ++ix;
                if (const auto escaped = char_escape_table[uint8_t(value)]; escaped) {
@@ -168,7 +168,7 @@ namespace glz
                      return value;
                   }
                }();
-               
+
                if constexpr (resizable<B>) {
                   const auto n = str.size();
                   const auto k = ix + 8 + n;
@@ -176,7 +176,7 @@ namespace glz
                      b.resize(2 * k);
                   }
                }
-               
+
                std::memcpy(&b[ix], "\"", 1);
                ++ix;
                if (str.size()) [[likely]] {
@@ -206,7 +206,7 @@ namespace glz
                      b.resize(2 * k);
                   }
                }
-               
+
                if constexpr (Opts.raw) {
                   const auto n = str.size();
                   if (n) {
@@ -221,37 +221,37 @@ namespace glz
                   const auto* const e = c + n;
                   const auto start = &b[ix];
                   auto data = start;
-                  
+
                   if (n > 7) {
                      for (const auto end_m7 = e - 7; c < end_m7;) {
                         std::memcpy(data, c, 8);
                         uint64_t swar;
                         std::memcpy(&swar, c, 8);
-                        
+
                         constexpr uint64_t lo7_mask = repeat_byte8(0b01111111);
                         const uint64_t lo7 = swar & lo7_mask;
                         const uint64_t quote = (lo7 ^ repeat_byte8('"')) + lo7_mask;
                         const uint64_t backslash = (lo7 ^ repeat_byte8('\\')) + lo7_mask;
                         const uint64_t less_32 = (swar & repeat_byte8(0b01100000)) + lo7_mask;
                         uint64_t next = ~((quote & backslash & less_32) | swar);
-                        
+
                         next &= repeat_byte8(0b10000000);
                         if (next == 0) {
                            data += 8;
                            c += 8;
                            continue;
                         }
-                        
+
                         const auto length = (countr_zero(next) >> 3);
                         c += length;
                         data += length;
-                        
+
                         std::memcpy(data, &char_escape_table[uint8_t(*c)], 2);
                         data += 2;
                         ++c;
                      }
                   }
-                  
+
                   for (; c < e; ++c) {
                      if (const auto escaped = char_escape_table[uint8_t(*c)]; escaped) {
                         std::memcpy(data, &escaped, 2);
@@ -262,9 +262,9 @@ namespace glz
                         ++data;
                      }
                   }
-                  
+
                   ix += size_t(data - start);
-                  
+
                   std::memcpy(&b[ix], "\"", 1);
                   ++ix;
                }
@@ -272,9 +272,9 @@ namespace glz
          }
       }
    };
-   
+
    template <opts Opts, bool minified_check = true, class B>
-   requires(Opts.format == TOML)
+      requires(Opts.format == TOML)
    GLZ_ALWAYS_INLINE void write_array_entry_separator(is_context auto&&, B&& b, auto&& ix)
    {
       if constexpr (vector_like<B>) {
@@ -287,21 +287,21 @@ namespace glz
       std::memcpy(&b[ix], ", ", 2);
       ix += 2;
    }
-   
+
    template <opts Opts, bool minified_check = true, class B>
-   requires(Opts.format == TOML)
+      requires(Opts.format == TOML)
    GLZ_ALWAYS_INLINE void write_object_entry_separator(is_context auto&&, B&& b, auto&& ix)
    {
       std::memcpy(&b[ix], "\n", 1);
       ++ix;
    }
-   
+
    template <class T>
-   requires(glaze_object_t<T> || reflectable<T>)
+      requires(glaze_object_t<T> || reflectable<T>)
    struct to<TOML, T>
    {
       template <auto Options, class V, class B>
-      requires(not std::is_pointer_v<std::remove_cvref_t<V>>)
+         requires(not std::is_pointer_v<std::remove_cvref_t<V>>)
       static void op(V&& value, is_context auto&& ctx, B&& b, auto&& ix)
       {
          // Do not write opening/closing braces.
@@ -314,13 +314,13 @@ namespace glz
                return nullptr;
             }
          }();
-         
+
          static constexpr auto padding = round_up_to_nearest_16(maximum_key_size<T> + write_padding_bytes);
          bool first = true;
-         
+
          invoke_table<N>([&]<size_t I>() {
             using val_t = field_t<T, I>;
-            
+
             if constexpr (always_skipped<val_t>)
                return;
             else {
@@ -337,7 +337,7 @@ namespace glz
                               return get<I>(reflect<T>::values);
                            }
                         };
-                        
+
                         if constexpr (nullable_wrapper<val_t>)
                            return !bool(element()(value).val);
                         else if constexpr (nullable_value_t<val_t>)
@@ -348,9 +348,9 @@ namespace glz
                      if (is_null) return;
                   }
                }
-               
+
                maybe_pad<padding>(b, ix);
-               
+
                // --- Check if this field is a nested object ---
                if constexpr (glaze_object_t<val_t> || reflectable<val_t>) {
                   // Print the table header (e.g. "[inner]") for the nested object.
@@ -368,14 +368,13 @@ namespace glz
                   ix += key.size();
                   std::memcpy(&b[ix], "]\n", 2);
                   ix += 2;
-                  
+
                   // Serialize the nested object.
                   if constexpr (reflectable<T>) {
                      to<TOML, val_t>::template op<Options>(get_member(value, get<I>(t)), ctx, b, ix);
                   }
                   else {
-                     to<TOML, val_t>::template op<Options>(get_member(value, get<I>(reflect<T>::values)), ctx, b,
-                                                           ix);
+                     to<TOML, val_t>::template op<Options>(get_member(value, get<I>(reflect<T>::values)), ctx, b, ix);
                   }
                   // Add an extra newline to separate this table section from following keys.
                   std::memcpy(&b[ix], "\n", 1);
@@ -393,32 +392,31 @@ namespace glz
                   static constexpr auto key = glz::get<I>(reflect<T>::keys);
                   std::memcpy(&b[ix], key.data(), key.size());
                   ix += key.size();
-                  
+
                   std::memcpy(&b[ix], " = ", 3);
                   ix += 3;
-                  
+
                   if constexpr (reflectable<T>) {
                      to<TOML, val_t>::template op<Options>(get_member(value, get<I>(t)), ctx, b, ix);
                   }
                   else {
-                     to<TOML, val_t>::template op<Options>(get_member(value, get<I>(reflect<T>::values)), ctx, b,
-                                                           ix);
+                     to<TOML, val_t>::template op<Options>(get_member(value, get<I>(reflect<T>::values)), ctx, b, ix);
                   }
                }
             }
          });
       }
    };
-   
+
    template <class T>
-   requires(writable_array_t<T> || writable_map_t<T>)
+      requires(writable_array_t<T> || writable_map_t<T>)
    struct to<TOML, T>
    {
       static constexpr bool map_like_array = writable_array_t<T> && pair_t<range_value_t<T>>;
-      
+
       // --- Array-like container writer ---
       template <auto Opts, class B>
-      requires(writable_array_t<T> && (map_like_array ? Opts.concatenate == false : true))
+         requires(writable_array_t<T> && (map_like_array ? Opts.concatenate == false : true))
       GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, B&& b, auto&& ix)
       {
          if (empty_range(value)) {
@@ -467,10 +465,10 @@ namespace glz
             }
          }
       }
-      
+
       // --- Map-like container writer ---
       template <auto Opts, class B>
-      requires(writable_map_t<T> || (map_like_array && Opts.concatenate == true))
+         requires(writable_map_t<T> || (map_like_array && Opts.concatenate == true))
       static void op(auto&& value, is_context auto&& ctx, B&& b, auto&& ix)
       {
          bool first = true;
@@ -490,10 +488,10 @@ namespace glz
          }
       }
    };
-   
+
    // (The remainder of the code – for C arrays, tuples, includers, etc. – is unchanged.)
    template <nullable_t T>
-   requires(std::is_array_v<T>)
+      requires(std::is_array_v<T>)
    struct to<TOML, T>
    {
       template <auto Opts, class V, size_t N, class... Args>
@@ -502,9 +500,9 @@ namespace glz
          serialize<TOML>::op<Opts>(std::span{value, N}, ctx, std::forward<Args>(args)...);
       }
    };
-   
+
    template <class T>
-   requires glaze_array_t<T> || tuple_t<std::decay_t<T>> || is_std_tuple<T>
+      requires glaze_array_t<T> || tuple_t<std::decay_t<T>> || is_std_tuple<T>
    struct to<TOML, T>
    {
       template <auto Opts, class... Args>
@@ -518,7 +516,7 @@ namespace glz
                return glz::tuple_size_v<std::decay_t<T>>;
             }
          }();
-         
+
          dump<'['>(args...);
          using V = std::decay_t<T>;
          invoke_table<N>([&]<size_t I>() {
@@ -541,7 +539,7 @@ namespace glz
          dump<']'>(args...);
       }
    };
-   
+
    template <is_includer T>
    struct to<TOML, T>
    {

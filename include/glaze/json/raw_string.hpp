@@ -34,7 +34,7 @@ namespace glz
          parse<JSON>::op<opt_true<Opts, &opts::raw_string>>(value.val, args...);
       }
    };
-   
+
    template <class T>
    struct to<JSON, raw_string_t<T>>
    {
@@ -45,7 +45,7 @@ namespace glz
          to<JSON, val_t>::template op<opt_true<Opts, &opts::raw_string>>(value.val, ctx, args...);
       }
    };
-   
+
    template <class T>
    struct from<JSON, escaped_t<T>>
    {
@@ -55,7 +55,7 @@ namespace glz
          parse<JSON>::op<opt_false<Opts, &opts::raw_string>>(value.val, args...);
       }
    };
-   
+
    template <class T>
    struct to<JSON, escaped_t<T>>
    {
@@ -66,13 +66,13 @@ namespace glz
          to<JSON, val_t>::template op<opt_false<Opts, &opts::raw_string>>(value.val, ctx, args...);
       }
    };
-   
+
    template <auto MemPtr>
    GLZ_ALWAYS_INLINE constexpr decltype(auto) raw_string_impl() noexcept
    {
       return [](auto&& val) { return raw_string_t<std::remove_reference_t<decltype(val.*MemPtr)>>{val.*MemPtr}; };
    }
-   
+
    template <auto MemPtr>
    GLZ_ALWAYS_INLINE constexpr decltype(auto) escaped_impl() noexcept
    {

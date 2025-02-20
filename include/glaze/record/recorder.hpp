@@ -64,7 +64,7 @@ namespace glz
 
    template <class T>
    concept is_recorder = is_specialization_v<T, recorder>;
-   
+
    template <is_recorder T>
    struct to<JSON, T>
    {
@@ -72,34 +72,34 @@ namespace glz
       static void op(auto&& value, is_context auto&& ctx, Args&&... args)
       {
          dump<'{'>(std::forward<Args>(args)...);
-         
+
          if constexpr (Opts.prettify) {
             ctx.indentation_level += Opts.indentation_width;
             dump<'\n'>(args...);
             dumpn<Opts.indentation_char>(ctx.indentation_level, args...);
          }
-         
+
          const size_t n = value.data.size();
          for (size_t i = 0; i < n; ++i) {
             auto& [name, v] = value.data[i];
             serialize<JSON>::op<Opts>(name, ctx, args...); // write name as key
-            
+
             dump<':'>(args...);
             if constexpr (Opts.prettify) {
                dump<' '>(args...);
             }
-            
+
             serialize<JSON>::op<Opts>(v.first, ctx, args...); // write deque
             if (i < n - 1) {
                dump<','>(std::forward<Args>(args)...);
             }
-            
+
             if constexpr (Opts.prettify) {
                dump<'\n'>(args...);
                dumpn<Opts.indentation_char>(ctx.indentation_level, args...);
             }
          }
-         
+
          if constexpr (Opts.prettify) {
             ctx.indentation_level -= Opts.indentation_width;
             dump<'\n'>(args...);
@@ -108,7 +108,7 @@ namespace glz
          dump<'}'>(args...);
       }
    };
-   
+
    template <is_recorder T>
    struct from<JSON, T>
    {
@@ -118,9 +118,9 @@ namespace glz
          if (bool(ctx.error)) [[unlikely]] {
             return;
          }
-         
+
          constexpr auto Opts = opening_handled_off<ws_handled_off<Options>()>();
-         
+
          if constexpr (!has_opening_handled(Options)) {
             if (skip_ws<Opts>(ctx, it, end)) {
                return;
@@ -129,30 +129,30 @@ namespace glz
                return;
             }
          }
-         
+
          if (skip_ws<Opts>(ctx, it, end)) {
             return;
          }
-         
+
          // we read into available containers, we do not intialize here
          const size_t n = value.data.size();
          for (size_t i = 0; i < n; ++i) {
             if (*it == '}') [[unlikely]] {
                ctx.error = error_code::expected_brace;
             }
-            
+
             // find the string, escape characters are not supported for recorders
             if (skip_ws<Opts>(ctx, it, end)) {
                return;
             }
             const auto name = parse_key(ctx, it, end);
-            
+
             auto& [str, v] = value.data[i];
             if (name != str) {
                ctx.error = error_code::name_mismatch; // Recorder read of name does not match initialized state
                return;
             }
-            
+
             if (skip_ws<Opts>(ctx, it, end)) {
                return;
             }
@@ -162,9 +162,9 @@ namespace glz
             if (skip_ws<Opts>(ctx, it, end)) {
                return;
             }
-            
+
             std::visit([&](auto&& deq) { parse<JSON>::op<Opts>(deq, ctx, it, end); }, v.first);
-            
+
             if (i < n - 1) {
                if (skip_ws<Opts>(ctx, it, end)) {
                   return;
@@ -177,14 +177,14 @@ namespace glz
                }
             }
          }
-         
+
          if (skip_ws<Opts>(ctx, it, end)) {
             return;
          }
          match<'}'>(ctx, it);
       }
    };
-   
+
    template <is_recorder T>
    struct to<CSV, T>
    {
@@ -196,15 +196,15 @@ namespace glz
             for (size_t i = 0; i < n; ++i) {
                auto& [name, v] = value.data[i];
                dump_maybe_empty(name, args...);
-               
+
                dump<','>(args...);
-               
+
                std::visit(
-                          [&](auto& x) {
-                             serialize<CSV>::op<Opts>(x, ctx, args...); // write deque
-                          },
-                          v.first);
-               
+                  [&](auto& x) {
+                     serialize<CSV>::op<Opts>(x, ctx, args...); // write deque
+                  },
+                  v.first);
+
                if (i < n - 1) {
                   dump<'\n'>(args...);
                }
@@ -221,9 +221,9 @@ namespace glz
                   dump<','>(args...);
                }
             }
-            
+
             dump<'\n'>(args...);
-            
+
             size_t row = 0;
             bool end = false;
             while (true) {
@@ -231,32 +231,32 @@ namespace glz
                for (auto& [name, data] : value.data) {
                   bool breakout = false;
                   std::visit(
-                             [&](auto& v) {
-                                if (row >= v.size()) {
-                                   end = true;
-                                   breakout = true;
-                                   return;
-                                }
-                                serialize<CSV>::op<Opts>(v[row], ctx, args...); // write deque
-                             },
-                             data.first);
-                  
+                     [&](auto& v) {
+                        if (row >= v.size()) {
+                           end = true;
+                           breakout = true;
+                           return;
+                        }
+                        serialize<CSV>::op<Opts>(v[row], ctx, args...); // write deque
+                     },
+                     data.first);
+
                   if (breakout) {
                      break;
                   }
-                  
+
                   ++i;
                   if (i < n) {
                      dump<','>(args...);
                   }
                }
-               
+
                if (end) {
                   break;
                }
-               
+
                dump<'\n'>(args...);
-               
+
                ++row;
             }
          }

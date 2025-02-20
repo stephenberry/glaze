@@ -21,12 +21,12 @@ namespace glz
       From from;
       To to;
    };
-   
+
    template <class T, class Member, class From, class To>
    manage_t(T&, Member, From, To) -> manage_t<T, Member, From, To>;
-   
+
    template <class T>
-   requires(is_specialization_v<T, manage_t>)
+      requires(is_specialization_v<T, manage_t>)
    struct from<JSON, T>
    {
       template <auto Opts>
@@ -34,9 +34,9 @@ namespace glz
       {
          using V = std::decay_t<decltype(value)>;
          using From = typename V::from_t;
-         
+
          parse<JSON>::op<Opts>(get_member(value.val, value.member), ctx, it, end);
-         
+
          if constexpr (std::is_member_pointer_v<From>) {
             if constexpr (std::is_member_function_pointer_v<From>) {
                if (!(value.val.*(value.from))()) {
@@ -69,9 +69,9 @@ namespace glz
          }
       }
    };
-   
+
    template <class T>
-   requires(is_specialization_v<T, manage_t>)
+      requires(is_specialization_v<T, manage_t>)
    struct to<JSON, T>
    {
       template <auto Opts>
@@ -79,7 +79,7 @@ namespace glz
       {
          using V = std::decay_t<decltype(value)>;
          using To = typename V::to_t;
-         
+
          if constexpr (std::is_member_pointer_v<To>) {
             if constexpr (std::is_member_function_pointer_v<To>) {
                if (!(value.val.*(value.to))()) {
@@ -110,12 +110,12 @@ namespace glz
                return;
             }
          }
-         
+
          using Value = core_t<decltype(get_member(value.val, value.member))>;
          to<JSON, Value>::template op<Opts>(get_member(value.val, value.member), ctx, args...);
       }
    };
-   
+
    template <auto Member, auto From, auto To>
    inline constexpr decltype(auto) manage_impl()
    {

@@ -22,7 +22,7 @@ namespace glz
          parse<BEVE>::op<opt_true<Opts, T::opts_member>>(value.val, args...);
       }
    };
-   
+
    template <is_opts_wrapper T>
    struct to<BEVE, T>
    {

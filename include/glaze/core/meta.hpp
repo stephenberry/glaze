@@ -71,40 +71,40 @@ namespace glz
       template <class T>
       Flags(T) -> Flags<T>;
    }
-   
+
    template <class T>
    concept local_construct_t = requires { T::glaze::construct; };
-   
+
    template <class T>
    concept global_construct_t = requires { meta<T>::construct; };
-   
+
    template <class T>
    concept local_meta_t = requires { T::glaze::value; };
-   
+
    template <class T>
    concept local_keys_t = requires { T::glaze::keys; };
-   
+
    template <class T>
    concept global_meta_t = requires { meta<T>::value; };
-   
+
    template <class T>
    concept glaze_t = requires { meta<std::decay_t<T>>::value; } || local_meta_t<std::decay_t<T>>;
-   
+
    template <class T>
    concept meta_keys = requires { meta<std::decay_t<T>>::keys; } || local_keys_t<std::decay_t<T>>;
-   
+
    template <class T>
    concept has_unknown_writer = requires { meta<T>::unknown_write; } || requires { T::glaze::unknown_write; };
-   
+
    template <class T>
    concept has_unknown_reader = requires { meta<T>::unknown_read; } || requires { T::glaze::unknown_read; };
-   
+
    template <class T>
    concept local_json_schema_t = requires { typename std::decay_t<T>::glaze_json_schema; };
-   
+
    template <class T>
    concept global_json_schema_t = requires { typename json_schema<T>; };
-   
+
    template <class T>
    concept json_schema_t = local_json_schema_t<T> || global_json_schema_t<T>;
 

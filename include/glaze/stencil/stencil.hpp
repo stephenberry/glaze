@@ -105,8 +105,8 @@ namespace glz
                         static constexpr auto N = reflect<T>::size;
                         static constexpr auto HashInfo = hash_info<T>;
 
-                        const auto index = decode_hash_with_size<STENCIL, T, HashInfo, HashInfo.type>::op(
-                           start, end, key.size());
+                        const auto index =
+                           decode_hash_with_size<STENCIL, T, HashInfo, HashInfo.type>::op(start, end, key.size());
 
                         if (index >= N) {
                            ctx.error = error_code::unknown_key;
@@ -184,8 +184,8 @@ namespace glz
                            static constexpr auto TargetKey = get<I>(reflect<T>::keys);
                            if ((TargetKey.size() == key.size()) && comparitor<TargetKey>(start)) [[likely]] {
                               if constexpr (reflectable<T>) {
-                                 serialize<Opts.format>::template op<RawOpts>(
-                                    get_member(value, get<I>(to_tie(value))), ctx, buffer, ix);
+                                 serialize<Opts.format>::template op<RawOpts>(get_member(value, get<I>(to_tie(value))),
+                                                                              ctx, buffer, ix);
                               }
                               else if constexpr (glaze_object_t<T>) {
                                  serialize<Opts.format>::template op<RawOpts>(

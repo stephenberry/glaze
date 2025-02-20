@@ -8,8 +8,7 @@
 namespace glz
 {
    template <class T>
-   concept json_object =
-      glaze_object_t<T> || reflectable<T> || writable_map_t<T> || readable_map_t<T>;
+   concept json_object = glaze_object_t<T> || reflectable<T> || writable_map_t<T> || readable_map_t<T>;
 
    template <class T>
    concept json_array = array_t<T>;

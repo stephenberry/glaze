@@ -50,16 +50,16 @@ namespace glz
    inline void replace_first_braces(std::string& original, const std::string& replacement) noexcept
    {
       static constexpr std::string_view braces = "{}";
-      
+
       if (size_t pos = original.find(braces); pos != std::string::npos) {
          original.replace(pos, braces.size(), replacement);
       }
    }
-   
+
    inline std::string get_hostname(context& ctx)
    {
       char hostname[256]{};
-      
+
 #ifdef _WIN32
       WSADATA wsaData;
       if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
@@ -67,19 +67,19 @@ namespace glz
          return {};
       }
 #endif
-      
+
       if (gethostname(hostname, sizeof(hostname))) {
          ctx.error = error_code::hostname_failure;
          return {};
       }
-      
+
 #ifdef _WIN32
       WSACleanup();
 #endif
-      
+
       return {hostname};
    }
-   
+
    template <class T>
    struct from<JSON, detail::hostname_includer<T>>
    {
@@ -91,17 +91,17 @@ namespace glz
          parse<JSON>::op<Opts>(buffer, ctx, it, end);
          if (bool(ctx.error)) [[unlikely]]
             return;
-         
+
          replace_first_braces(buffer, get_hostname(ctx));
          if (bool(ctx.error)) [[unlikely]]
             return;
-         
+
          const auto file_path = relativize_if_not_absolute(std::filesystem::path(ctx.current_file).parent_path(),
                                                            std::filesystem::path{buffer});
-         
+
          const auto string_file_path = file_path.string();
          const auto ec = file_to_buffer(buffer, string_file_path);
-         
+
          if (bool(ec)) [[unlikely]] {
             ctx.error = error_code::includer_error;
             auto& error_msg = error_buffer();
@@ -109,10 +109,10 @@ namespace glz
             ctx.includer_error = error_msg;
             return;
          }
-         
+
          const auto current_file = ctx.current_file;
          ctx.current_file = string_file_path;
-         
+
          std::string nested_buffer = buffer;
          static constexpr auto NestedOpts = opt_true<disable_padding_on<Opts>(), &opts::null_terminated>;
          const auto ecode = glz::read<NestedOpts>(value.value, nested_buffer, ctx);
@@ -123,11 +123,11 @@ namespace glz
             ctx.includer_error = error_msg;
             return;
          }
-         
+
          ctx.current_file = current_file;
       }
    };
-   
+
    template <class T>
    struct to<JSON, detail::hostname_includer<T>>
    {

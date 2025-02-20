@@ -17,11 +17,11 @@ namespace glz
       template <auto Opts, class T, is_context Ctx, class B, class IX>
       static void op(T&& value, Ctx&& ctx, B&& b, IX&& ix)
       {
-         to<CSV, std::decay_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
-                                                     std::forward<B>(b), std::forward<IX>(ix));
+         to<CSV, std::decay_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx), std::forward<B>(b),
+                                                     std::forward<IX>(ix));
       }
    };
-   
+
    template <glaze_value_t T>
    struct to<CSV, T>
    {
@@ -29,11 +29,11 @@ namespace glz
       static void op(auto&& value, Ctx&& ctx, B&& b, IX&& ix)
       {
          using V = decltype(get_member(std::declval<T>(), meta_wrapper_v<T>));
-         to<CSV, V>::template op<Opts>(get_member(value, meta_wrapper_v<T>), std::forward<Ctx>(ctx),
-                                       std::forward<B>(b), std::forward<IX>(ix));
+         to<CSV, V>::template op<Opts>(get_member(value, meta_wrapper_v<T>), std::forward<Ctx>(ctx), std::forward<B>(b),
+                                       std::forward<IX>(ix));
       }
    };
-   
+
    template <num_t T>
    struct to<CSV, T>
    {
@@ -43,7 +43,7 @@ namespace glz
          write_chars::op<Opts>(value, ctx, b, ix);
       }
    };
-   
+
    template <bool_t T>
    struct to<CSV, T>
    {
@@ -58,7 +58,7 @@ namespace glz
          }
       }
    };
-   
+
    template <writable_array_t T>
    struct to<CSV, T>
    {
@@ -70,7 +70,7 @@ namespace glz
                const auto n = value.size();
                for (size_t i = 0; i < n; ++i) {
                   serialize<CSV>::op<Opts>(value[i], ctx, b, ix);
-                  
+
                   if (i != (n - 1)) {
                      dump<','>(b, ix);
                   }
@@ -84,7 +84,7 @@ namespace glz
             const auto n = value.size();
             for (size_t i = 0; i < n; ++i) {
                serialize<CSV>::op<Opts>(value[i], ctx, b, ix);
-               
+
                if (i != (n - 1)) {
                   dump<','>(b, ix);
                }
@@ -92,9 +92,9 @@ namespace glz
          }
       }
    };
-   
+
    template <class T>
-   requires str_t<T> || char_t<T>
+      requires str_t<T> || char_t<T>
    struct to<CSV, T>
    {
       template <auto Opts, class B>
@@ -103,7 +103,7 @@ namespace glz
          dump_maybe_empty(value, b, ix);
       }
    };
-   
+
    template <writable_map_t T>
    struct to<CSV, T>
    {
@@ -135,9 +135,9 @@ namespace glz
                   dump<','>(b, ix);
                }
             }
-            
+
             dump<'\n'>(b, ix);
-            
+
             size_t row = 0;
             bool end = false;
             while (true) {
@@ -147,35 +147,35 @@ namespace glz
                      end = true;
                      break;
                   }
-                  
+
                   serialize<CSV>::op<Opts>(data[row], ctx, b, ix);
                   ++i;
                   if (i < n) {
                      dump<','>(b, ix);
                   }
                }
-               
+
                if (end) {
                   break;
                }
-               
+
                dump<'\n'>(b, ix);
-               
+
                ++row;
             }
          }
       }
    };
-   
+
    template <class T>
-   requires(glaze_object_t<T> || reflectable<T>)
+      requires(glaze_object_t<T> || reflectable<T>)
    struct to<CSV, T>
    {
       template <auto Opts, class B>
       static void op(auto&& value, is_context auto&& ctx, B&& b, auto&& ix)
       {
          static constexpr auto N = reflect<T>::size;
-         
+
          [[maybe_unused]] decltype(auto) t = [&] {
             if constexpr (reflectable<T>) {
                return to_tie(value);
@@ -184,13 +184,13 @@ namespace glz
                return nullptr;
             }
          }();
-         
+
          if constexpr (Opts.layout == rowwise) {
             for_each<N>([&](auto I) {
                using value_type = typename std::decay_t<refl_t<T, I>>::value_type;
-               
+
                static constexpr sv key = reflect<T>::keys[I];
-               
+
                decltype(auto) mem = [&]() -> decltype(auto) {
                   if constexpr (reflectable<T>) {
                      return get<I>(t);
@@ -199,7 +199,7 @@ namespace glz
                      return get<I>(reflect<T>::values);
                   }
                }();
-               
+
                if constexpr (writable_array_t<value_type>) {
                   decltype(auto) member = get_member(value, mem);
                   const auto count = member.size();
@@ -210,14 +210,14 @@ namespace glz
                      write_chars::op<Opts>(i, ctx, b, ix);
                      dump<']'>(b, ix);
                      dump<','>(b, ix);
-                     
+
                      for (size_t j = 0; j < count; ++j) {
                         serialize<CSV>::op<Opts>(member[j][i], ctx, b, ix);
                         if (j != count - 1) {
                            dump<','>(b, ix);
                         }
                      }
-                     
+
                      if (i != size - 1) {
                         dump<'\n'>(b, ix);
                      }
@@ -235,9 +235,9 @@ namespace glz
             // write titles
             for_each<N>([&](auto I) {
                using X = refl_t<T, I>;
-               
+
                static constexpr sv key = reflect<T>::keys[I];
-               
+
                decltype(auto) member = [&]() -> decltype(auto) {
                   if constexpr (reflectable<T>) {
                      return get<I>(t);
@@ -246,7 +246,7 @@ namespace glz
                      return get<I>(reflect<T>::values);
                   }
                }();
-               
+
                if constexpr (fixed_array_value_t<X>) {
                   const auto size = get_member(value, member)[0].size();
                   for (size_t i = 0; i < size; ++i) {
@@ -262,21 +262,21 @@ namespace glz
                else {
                   serialize<CSV>::op<Opts>(key, ctx, b, ix);
                }
-               
+
                if (I != N - 1) {
                   dump<','>(b, ix);
                }
             });
-            
+
             dump<'\n'>(b, ix);
-            
+
             size_t row = 0;
             bool end = false;
-            
+
             while (true) {
                for_each<N>([&](auto I) {
                   using X = std::decay_t<refl_t<T, I>>;
-                  
+
                   decltype(auto) mem = [&]() -> decltype(auto) {
                      if constexpr (reflectable<T>) {
                         return get<I>(t);
@@ -285,14 +285,14 @@ namespace glz
                         return get<I>(reflect<T>::values);
                      }
                   }();
-                  
+
                   if constexpr (fixed_array_value_t<X>) {
                      decltype(auto) member = get_member(value, mem);
                      if (row >= member.size()) {
                         end = true;
                         return;
                      }
-                     
+
                      const auto n = member[0].size();
                      for (size_t i = 0; i < n; ++i) {
                         serialize<CSV>::op<Opts>(member[row][i], ctx, b, ix);
@@ -307,21 +307,21 @@ namespace glz
                         end = true;
                         return;
                      }
-                     
+
                      serialize<CSV>::op<Opts>(member[row], ctx, b, ix);
-                     
+
                      if (I != N - 1) {
                         dump<','>(b, ix);
                      }
                   }
                });
-               
+
                if (end) {
                   break;
                }
-               
+
                ++row;
-               
+
                dump<'\n'>(b, ix);
             }
          }

@@ -27,7 +27,7 @@ namespace glz
          }
       }
    };
-   
+
    template <class T>
    struct to<JSON, quoted_t<T>>
    {
@@ -43,7 +43,7 @@ namespace glz
          to<JSON, S>::template op<Opts>(s, ctx, b, ix);
       }
    };
-   
+
    template <is_opts_wrapper T>
    struct from<JSON, T>
    {
@@ -53,7 +53,7 @@ namespace glz
          parse<JSON>::op<opt_true<Opts, T::opts_member>>(value.val, args...);
       }
    };
-   
+
    template <is_opts_wrapper T>
    struct to<JSON, T>
    {
@@ -64,7 +64,7 @@ namespace glz
          to<JSON, Value>::template op<opt_true<Opts, T::opts_member>>(value.val, ctx, args...);
       }
    };
-   
+
    template <auto MemPtr>
    inline constexpr decltype(auto) quoted_impl() noexcept
    {

@@ -27,7 +27,7 @@ namespace glz
       using value_type = T;
       T& val;
    };
-   
+
    template <class T>
    concept is_opts_wrapper = requires {
       requires T::glaze_wrapper == true;
@@ -36,7 +36,7 @@ namespace glz
       typename T::value_type;
       requires std::is_lvalue_reference_v<decltype(T::val)>;
    };
-   
+
    template <auto MemPtr, auto OptsMemPtr>
    inline constexpr decltype(auto) opts_wrapper() noexcept
    {
@@ -45,7 +45,7 @@ namespace glz
          return opts_wrapper_t<V, OptsMemPtr>{val.*MemPtr};
       };
    }
-   
+
    // custom_t allows a user to register member functions (and std::function members) to implement custom reading and
    // writing
    template <class T, class From, class To>
@@ -58,10 +58,10 @@ namespace glz
       From from;
       To to;
    };
-   
+
    template <class T, class From, class To>
    custom_t(T&, From, To) -> custom_t<T, From, To>;
-   
+
    template <auto From, auto To>
    inline constexpr auto custom_impl() noexcept
    {

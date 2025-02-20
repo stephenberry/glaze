@@ -41,7 +41,7 @@ namespace glz
       t['E'] = true;
       return t;
    }();
-   
+
    inline constexpr std::array<char, 256> char_unescape_table = [] {
       std::array<char, 256> t{};
       t['"'] = '"';
@@ -54,7 +54,7 @@ namespace glz
       t['t'] = '\t';
       return t;
    }();
-   
+
    inline constexpr std::array<bool, 256> valid_escape_table = [] {
       std::array<bool, 256> t{};
       t['"'] = true;
@@ -68,7 +68,7 @@ namespace glz
       t['u'] = true;
       return t;
    }();
-   
+
    inline constexpr std::array<bool, 256> whitespace_table = [] {
       std::array<bool, 256> t{};
       t['\n'] = true;
@@ -77,7 +77,7 @@ namespace glz
       t[' '] = true;
       return t;
    }();
-   
+
    inline constexpr std::array<bool, 256> whitespace_comment_table = [] {
       std::array<bool, 256> t{};
       t['\n'] = true;
@@ -87,7 +87,7 @@ namespace glz
       t['/'] = true;
       return t;
    }();
-   
+
    inline constexpr std::array<uint8_t, 256> digit_hex_table = [] {
       std::array<uint8_t, 256> t;
       std::fill(t.begin(), t.end(), uint8_t(255));
@@ -115,11 +115,11 @@ namespace glz
       t['F'] = 0xF;
       return t;
    }();
-   
+
    consteval uint32_t repeat_byte4(const auto repeat) { return uint32_t(0x01010101u) * uint8_t(repeat); }
-   
+
    consteval uint64_t repeat_byte8(const uint8_t repeat) { return 0x0101010101010101ull * repeat; }
-   
+
 #if defined(__SIZEOF_INT128__)
    consteval __uint128_t repeat_byte16(const uint8_t repeat)
    {
@@ -127,9 +127,9 @@ namespace glz
       return multiplier * repeat;
    }
 #endif
-   
+
    consteval uint64_t not_repeat_byte8(const uint8_t repeat) { return ~(0x0101010101010101ull * repeat); }
-   
+
    [[nodiscard]] GLZ_ALWAYS_INLINE uint32_t hex_to_u32(const char* c) noexcept
    {
       constexpr auto& t = digit_hex_table;
@@ -139,7 +139,7 @@ namespace glz
       if (chunk & repeat_byte4(0b11110000u)) [[unlikely]] {
          return 0xFFFFFFFFu;
       }
-      
+
       // TODO: can you use std::bit_cast here?
       // now pack into first four bytes of uint32_t
       uint32_t packed{};
@@ -149,7 +149,7 @@ namespace glz
       packed |= (chunk & 0x0F000000) >> 12;
       return packed;
    }
-   
+
    template <class Char>
    [[nodiscard]] GLZ_ALWAYS_INLINE uint32_t code_point_to_utf8(const uint32_t code_point, Char* c) noexcept
    {
@@ -177,7 +177,7 @@ namespace glz
       }
       return 0;
    }
-   
+
    [[nodiscard]] GLZ_ALWAYS_INLINE uint32_t skip_code_point(const uint32_t code_point) noexcept
    {
       if (code_point <= 0x7F) {
@@ -194,27 +194,27 @@ namespace glz
       }
       return 0;
    }
-   
+
    namespace unicode
    {
       constexpr uint32_t generic_surrogate_mask = 0xF800;
       constexpr uint32_t generic_surrogate_value = 0xD800;
-      
+
       constexpr uint32_t surrogate_mask = 0xFC00;
       constexpr uint32_t high_surrogate_value = 0xD800;
       constexpr uint32_t low_surrogate_value = 0xDC00;
-      
+
       constexpr uint32_t surrogate_codepoint_offset = 0x10000;
       constexpr uint32_t surrogate_codepoint_mask = 0x03FF;
       constexpr uint32_t surrogate_codepoint_bits = 10;
    }
-   
+
    template <class Char>
    [[nodiscard]] GLZ_ALWAYS_INLINE uint32_t handle_unicode_code_point(const Char*& it, Char*& dst,
                                                                       const Char* end) noexcept
    {
       using namespace unicode;
-      
+
       if (it + 4 >= end) [[unlikely]] {
          return false;
       }
@@ -223,15 +223,15 @@ namespace glz
          return false;
       }
       it += 4; // skip the code point characters
-      
+
       uint32_t code_point;
-      
+
       if ((high & generic_surrogate_mask) == generic_surrogate_value) {
          // surrogate pair code points
          if ((high & surrogate_mask) != high_surrogate_value) {
             return false;
          }
-         
+
          if (it + 6 >= end) [[unlikely]] {
             return false;
          }
@@ -248,11 +248,11 @@ namespace glz
             return false;
          }
          it += 4;
-         
+
          if ((low & surrogate_mask) != low_surrogate_value) [[unlikely]] {
             return false;
          }
-         
+
          code_point = (high & surrogate_codepoint_mask) << surrogate_codepoint_bits;
          code_point |= (low & surrogate_codepoint_mask);
          code_point += surrogate_codepoint_offset;
@@ -264,7 +264,7 @@ namespace glz
       dst += offset;
       return offset;
    }
-   
+
    template <class Char>
    [[nodiscard]] GLZ_ALWAYS_INLINE bool skip_unicode_code_point(const Char*& it, const Char* end) noexcept
    {
@@ -272,21 +272,21 @@ namespace glz
       if (it + 4 >= end) [[unlikely]] {
          return false;
       }
-      
+
       const uint32_t high = hex_to_u32(it);
       if (high == 0xFFFFFFFFu) [[unlikely]] {
          return false;
       }
       it += 4; // skip the code point characters
-      
+
       uint32_t code_point;
-      
+
       if ((high & generic_surrogate_mask) == generic_surrogate_value) {
          // surrogate pair code points
          if ((high & surrogate_mask) != high_surrogate_value) [[unlikely]] {
             return false;
          }
-         
+
          if (it + 6 >= end) [[unlikely]] {
             return false;
          }
@@ -303,11 +303,11 @@ namespace glz
             return false;
          }
          it += 4;
-         
+
          if ((low & surrogate_mask) != low_surrogate_value) [[unlikely]] {
             return false;
          }
-         
+
          code_point = (high & surrogate_codepoint_mask) << surrogate_codepoint_bits;
          code_point |= (low & surrogate_codepoint_mask);
          code_point += surrogate_codepoint_offset;
@@ -317,7 +317,7 @@ namespace glz
       }
       return skip_code_point(code_point) > 0;
    }
-   
+
    // Checks for a character and validates that we are not at the end (considered an error)
    template <char C, auto Opts>
    GLZ_ALWAYS_INLINE bool match_invalid_end(is_context auto& ctx, auto&& it, auto&& end) noexcept
@@ -354,7 +354,7 @@ namespace glz
       }
       return false;
    }
-   
+
    template <char C>
    GLZ_ALWAYS_INLINE bool match(is_context auto& ctx, auto&& it) noexcept
    {
@@ -384,9 +384,9 @@ namespace glz
          return false;
       }
    }
-   
+
    template <string_literal str, opts Opts>
-   requires(has_is_padded(Opts) && str.size() <= padding_bytes)
+      requires(has_is_padded(Opts) && str.size() <= padding_bytes)
    GLZ_ALWAYS_INLINE void match(is_context auto&& ctx, auto&& it, auto&&) noexcept
    {
       static constexpr auto S = str.sv();
@@ -397,9 +397,9 @@ namespace glz
          it += str.size();
       }
    }
-   
+
    template <string_literal str, opts Opts>
-   requires(!has_is_padded(Opts))
+      requires(!has_is_padded(Opts))
    GLZ_ALWAYS_INLINE void match(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       const auto n = size_t(end - it);
@@ -411,7 +411,7 @@ namespace glz
          it += str.size();
       }
    }
-   
+
    GLZ_ALWAYS_INLINE void skip_comment(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       ++it;
@@ -438,44 +438,44 @@ namespace glz
          ctx.error = error_code::expected_end_comment;
       }
    }
-   
+
    GLZ_ALWAYS_INLINE constexpr auto has_zero(const uint64_t chunk) noexcept
    {
       return (((chunk - 0x0101010101010101u) & ~chunk) & 0x8080808080808080u);
    }
-   
+
    GLZ_ALWAYS_INLINE constexpr auto has_quote(const uint64_t chunk) noexcept
    {
       return has_zero(chunk ^ repeat_byte8('"'));
    }
-   
+
    GLZ_ALWAYS_INLINE constexpr auto has_escape(const uint64_t chunk) noexcept
    {
       return has_zero(chunk ^ repeat_byte8('\\'));
    }
-   
+
    GLZ_ALWAYS_INLINE constexpr auto has_space(const uint64_t chunk) noexcept
    {
       return has_zero(chunk ^ repeat_byte8(' '));
    }
-   
+
    template <char Char>
    GLZ_ALWAYS_INLINE constexpr auto has_char(const uint64_t chunk) noexcept
    {
       return has_zero(chunk ^ repeat_byte8(Char));
    }
-   
+
    GLZ_ALWAYS_INLINE constexpr uint64_t is_less_32(const uint64_t chunk) noexcept
    {
       return has_zero(chunk & repeat_byte8(0b11100000u));
    }
-   
+
    GLZ_ALWAYS_INLINE constexpr uint64_t is_greater_15(const uint64_t chunk) noexcept
    {
       return (chunk & repeat_byte8(0b11110000u));
    }
 }
-   
+
 namespace glz
 {
    // skip whitespace
@@ -483,7 +483,7 @@ namespace glz
    GLZ_ALWAYS_INLINE bool skip_ws(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       using namespace glz::detail;
-      
+
       if constexpr (!Opts.minified) {
          if constexpr (Opts.null_terminated) {
             if constexpr (Opts.comments) {
@@ -534,10 +534,10 @@ namespace glz
             }
          }
       }
-      
+
       return false;
    }
-   
+
    GLZ_ALWAYS_INLINE void skip_matching_ws(const auto* ws, auto&& it, uint64_t length) noexcept
    {
       if (length > 7) {

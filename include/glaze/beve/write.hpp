@@ -26,7 +26,7 @@ namespace glz
          to<BEVE, std::remove_cvref_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
                                                              std::forward<B>(b), std::forward<IX>(ix));
       }
-      
+
       template <auto Opts, class T, is_context Ctx, class B, class IX>
       GLZ_ALWAYS_INLINE static void no_header(T&& value, Ctx&& ctx, B&& b, IX&& ix)
       {
@@ -34,7 +34,7 @@ namespace glz
                                                                     std::forward<B>(b), std::forward<IX>(ix));
       }
    };
-   
+
    GLZ_ALWAYS_INLINE void dump_type(auto&& value, auto&& b, auto&& ix)
    {
       using V = std::decay_t<decltype(value)>;
@@ -42,9 +42,9 @@ namespace glz
       if (const auto k = ix + n; k > b.size()) [[unlikely]] {
          b.resize(2 * k);
       }
-      
+
       constexpr auto is_volatile = std::is_volatile_v<std::remove_reference_t<decltype(value)>>;
-      
+
       if constexpr (is_volatile) {
          const V temp = value;
          std::memcpy(&b[ix], &temp, n);
@@ -54,7 +54,7 @@ namespace glz
       }
       ix += n;
    }
-   
+
    template <uint64_t i, class... Args>
    GLZ_ALWAYS_INLINE void dump_compressed_int(Args&&... args)
    {
@@ -78,7 +78,7 @@ namespace glz
          static_assert(i >= 4611686018427387904, "size not supported");
       }
    }
-   
+
    template <auto Opts, class... Args>
    GLZ_ALWAYS_INLINE void dump_compressed_int(uint64_t i, Args&&... args)
    {
@@ -102,13 +102,13 @@ namespace glz
          std::abort(); // this should never happen because we should never allocate containers of this size
       }
    }
-   
+
    template <auto& Partial, auto Opts, class T, class Ctx, class B, class IX>
    concept write_beve_partial_invocable = requires(T&& value, Ctx&& ctx, B&& b, IX&& ix) {
       to_partial<BEVE, std::remove_cvref_t<T>>::template op<Partial, Opts>(
-                                                                           std::forward<T>(value), std::forward<Ctx>(ctx), std::forward<B>(b), std::forward<IX>(ix));
+         std::forward<T>(value), std::forward<Ctx>(ctx), std::forward<B>(b), std::forward<IX>(ix));
    };
-   
+
    template <>
    struct serialize_partial<BEVE>
    {
@@ -120,17 +120,17 @@ namespace glz
          }
          else if constexpr (write_beve_partial_invocable<Partial, Opts, T, Ctx, B, IX>) {
             to_partial<BEVE, std::remove_cvref_t<T>>::template op<Partial, Opts>(
-                                                                                 std::forward<T>(value), std::forward<Ctx>(ctx), std::forward<B>(b), std::forward<IX>(ix));
+               std::forward<T>(value), std::forward<Ctx>(ctx), std::forward<B>(b), std::forward<IX>(ix));
          }
          else {
             static_assert(false_v<T>, "Glaze metadata is probably needed for your type");
          }
       }
    };
-   
+
    // Only object types are supported for partial
    template <class T>
-   requires(glaze_object_t<T> || writable_map_t<T> || reflectable<T>)
+      requires(glaze_object_t<T> || writable_map_t<T> || reflectable<T>)
    struct to_partial<BEVE, T> final
    {
       template <auto& Partial, auto Opts, class... Args>
@@ -139,26 +139,26 @@ namespace glz
          static constexpr auto sorted = sort_json_ptrs(Partial);
          static constexpr auto groups = glz::group_json_ptrs<sorted>();
          static constexpr auto N = glz::tuple_size_v<std::decay_t<decltype(groups)>>;
-         
+
          constexpr uint8_t type = 0; // string
          constexpr uint8_t tag = tag::object | type;
          dump_type(tag, b, ix);
-         
+
          dump_compressed_int<N>(b, ix);
-         
+
          if constexpr (glaze_object_t<T>) {
             for_each<N>([&](auto I) {
                if (bool(ctx.error)) [[unlikely]] {
                   return;
                }
-               
+
                static constexpr auto group = glz::get<I>(groups);
-               
+
                static constexpr auto key = get<0>(group);
                static constexpr auto sub_partial = get<1>(group);
                static constexpr auto index = key_index<T>(key);
                static_assert(index < reflect<T>::size, "Invalid key passed to partial write");
-               
+
                if constexpr (glaze_object_t<T>) {
                   static constexpr auto member = get<index>(reflect<T>::values);
                   serialize<BEVE>::no_header<Opts>(key, ctx, b, ix);
@@ -176,9 +176,9 @@ namespace glz
                if (bool(ctx.error)) [[unlikely]] {
                   return;
                }
-               
+
                static constexpr auto group = glz::get<I>(groups);
-               
+
                static constexpr auto key_value = get<0>(group);
                static constexpr auto sub_partial = get<1>(group);
                if constexpr (findable<std::decay_t<T>, decltype(key_value)>) {
@@ -194,7 +194,7 @@ namespace glz
                }
                else {
                   static thread_local auto key =
-                  typename std::decay_t<T>::key_type(key_value); // TODO handle numeric keys
+                     typename std::decay_t<T>::key_type(key_value); // TODO handle numeric keys
                   serialize<BEVE>::no_header<Opts>(key, ctx, b, ix);
                   auto it = value.find(key);
                   if (it != value.end()) {
@@ -211,7 +211,7 @@ namespace glz
    };
 
    template <class T>
-   requires(glaze_value_t<T> && !custom_write<T>)
+      requires(glaze_value_t<T> && !custom_write<T>)
    struct to<BEVE, T>
    {
       template <auto Opts, class Value, is_context Ctx, class B, class IX>
@@ -222,7 +222,7 @@ namespace glz
                                         std::forward<Ctx>(ctx), std::forward<B>(b), std::forward<IX>(ix));
       }
    };
-   
+
    template <always_null_t T>
    struct to<BEVE, T>
    {
@@ -232,7 +232,7 @@ namespace glz
          dump_type(uint8_t{0}, args...);
       }
    };
-   
+
    template <is_bitset T>
    struct to<BEVE, T>
    {
@@ -243,7 +243,7 @@ namespace glz
          constexpr uint8_t tag = tag::typed_array | type;
          dump_type(tag, args...);
          dump_compressed_int<Opts>(value.size(), args...);
-         
+
          // constexpr auto num_bytes = (value.size() + 7) / 8;
          const auto num_bytes = (value.size() + 7) / 8;
          // .size() should be constexpr, but clang doesn't support this
@@ -257,7 +257,7 @@ namespace glz
          dump(bytes, args...);
       }
    };
-   
+
    template <glaze_flags_t T>
    struct to<BEVE, T>
    {
@@ -265,17 +265,17 @@ namespace glz
       static void op(auto&& value, is_context auto&&, auto&& b, auto&& ix)
       {
          static constexpr auto N = reflect<T>::size;
-         
+
          std::array<uint8_t, byte_length<T>()> data{};
-         
+
          invoke_table<N>([&]<size_t I>() {
             data[I / 8] |= static_cast<uint8_t>(get_member(value, get<I>(reflect<T>::values))) << (7 - (I % 8));
          });
-         
+
          dump(data, b, ix);
       }
    };
-   
+
    template <is_member_function_pointer T>
    struct to<BEVE, T>
    {
@@ -283,7 +283,7 @@ namespace glz
       GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&&, Args&&...) noexcept
       {}
    };
-   
+
    // write includers as empty strings
    template <is_includer T>
    struct to<BEVE, T>
@@ -292,12 +292,12 @@ namespace glz
       GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&&, Args&&... args)
       {
          constexpr uint8_t tag = tag::string;
-         
+
          dump_type(tag, args...);
          dump_compressed_int<Opts>(0, args...);
       }
    };
-   
+
    template <boolean_like T>
    struct to<BEVE, T> final
    {
@@ -307,7 +307,7 @@ namespace glz
          dump_type(value ? tag::bool_true : tag::bool_false, args...);
       }
    };
-   
+
    template <func_t T>
    struct to<BEVE, T> final
    {
@@ -317,7 +317,7 @@ namespace glz
          serialize<BEVE>::op<Opts>(name_v<std::decay_t<decltype(value)>>, ctx, args...);
       }
    };
-   
+
    template <class T>
    struct to<BEVE, basic_raw_json<T>> final
    {
@@ -327,7 +327,7 @@ namespace glz
          serialize<BEVE>::op<Opts>(value.str, ctx, std::forward<Args>(args)...);
       }
    };
-   
+
    template <class T>
    struct to<BEVE, basic_text<T>> final
    {
@@ -337,12 +337,12 @@ namespace glz
          serialize<BEVE>::op<Opts>(value.str, ctx, std::forward<Args>(args)...);
       }
    };
-   
+
    template <class T, class V>
    constexpr size_t variant_index_v = []<size_t... I>(std::index_sequence<I...>) {
       return ((std::is_same_v<T, std::variant_alternative_t<I, V>> * I) + ...);
    }(std::make_index_sequence<std::variant_size_v<V>>{});
-   
+
    template <is_variant T>
    struct to<BEVE, T> final
    {
@@ -350,25 +350,25 @@ namespace glz
       static void op(auto&& value, is_context auto&& ctx, Args&&... args)
       {
          using Variant = std::decay_t<decltype(value)>;
-         
+
          std::visit(
-                    [&](auto&& v) {
-                       using V = std::decay_t<decltype(v)>;
-                       
-                       static constexpr uint64_t index = variant_index_v<V, Variant>;
-                       
-                       constexpr uint8_t tag = tag::extensions | 0b00001'000;
-                       
-                       dump_type(tag, args...);
-                       dump_compressed_int<index>(args...);
-                       serialize<BEVE>::op<Opts>(v, ctx, args...);
-                    },
-                    value);
+            [&](auto&& v) {
+               using V = std::decay_t<decltype(v)>;
+
+               static constexpr uint64_t index = variant_index_v<V, Variant>;
+
+               constexpr uint8_t tag = tag::extensions | 0b00001'000;
+
+               dump_type(tag, args...);
+               dump_compressed_int<index>(args...);
+               serialize<BEVE>::op<Opts>(v, ctx, args...);
+            },
+            value);
       }
    };
-   
+
    template <class T>
-   requires num_t<T> || char_t<T> || glaze_enum_t<T>
+      requires num_t<T> || char_t<T> || glaze_enum_t<T>
    struct to<BEVE, T> final
    {
       template <auto Opts, class... Args>
@@ -379,38 +379,38 @@ namespace glz
          dump_type(tag, args...);
          dump_type(value, args...);
       }
-      
+
       template <auto Opts>
       GLZ_ALWAYS_INLINE static void no_header(auto&& value, is_context auto&&, auto&&... args)
       {
          dump_type(value, args...);
       }
    };
-   
+
    template <class T>
-   requires(std::is_enum_v<T> && !glaze_enum_t<T>)
+      requires(std::is_enum_v<T> && !glaze_enum_t<T>)
    struct to<BEVE, T> final
    {
       template <auto Opts, class... Args>
       GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&&, Args&&... args)
       {
          using V = std::underlying_type_t<std::decay_t<T>>;
-         
+
          constexpr uint8_t type = std::floating_point<V> ? 0 : (std::is_signed_v<V> ? 0b000'01'000 : 0b000'10'000);
          constexpr uint8_t tag = tag::number | type | (byte_count<V> << 5);
          dump_type(tag, args...);
          dump_type(value, args...);
       }
-      
+
       template <auto Opts>
       GLZ_ALWAYS_INLINE static void no_header(auto&& value, is_context auto&&, auto&&... args)
       {
          dump_type(value, args...);
       }
    };
-   
+
    template <class T>
-   requires complex_t<T>
+      requires complex_t<T>
    struct to<BEVE, T> final
    {
       template <auto Opts>
@@ -418,7 +418,7 @@ namespace glz
       {
          constexpr uint8_t tag = tag::extensions | 0b00011'000;
          dump_type(tag, args...);
-         
+
          using V = typename T::value_type;
          constexpr uint8_t complex_number = 0;
          constexpr uint8_t type = std::floating_point<V> ? 0 : (std::is_signed_v<V> ? 0b000'01'000 : 0b000'10'000);
@@ -427,7 +427,7 @@ namespace glz
          dump_type(value.real(), args...);
          dump_type(value.imag(), args...);
       }
-      
+
       template <auto Opts>
       GLZ_ALWAYS_INLINE static void no_header(auto&& value, is_context auto&&, auto&&... args)
       {
@@ -435,7 +435,7 @@ namespace glz
          dump_type(value.imag(), args...);
       }
    };
-   
+
    template <str_t T>
    struct to<BEVE, T> final
    {
@@ -450,53 +450,53 @@ namespace glz
                return value;
             }
          }();
-         
+
          constexpr uint8_t tag = tag::string;
-         
+
          dump_type(tag, b, ix);
          const auto n = str.size();
          dump_compressed_int<Opts>(n, b, ix);
-         
+
          if (const auto k = ix + n; k > b.size()) [[unlikely]] {
             b.resize(2 * k);
          }
-         
+
          std::memcpy(&b[ix], str.data(), n);
          ix += n;
       }
-      
+
       template <auto Opts>
       GLZ_ALWAYS_INLINE static void no_header(auto&& value, is_context auto&&, auto&& b, auto&& ix)
       {
          dump_compressed_int<Opts>(value.size(), b, ix);
-         
+
          const auto n = value.size();
          if (const auto k = ix + n; k > b.size()) [[unlikely]] {
             b.resize(2 * k);
          }
-         
+
          std::memcpy(&b[ix], value.data(), n);
          ix += n;
       }
    };
-   
+
    template <writable_array_t T>
    struct to<BEVE, T> final
    {
       static constexpr bool map_like_array = pair_t<range_value_t<T>>;
-      
+
       template <auto Opts>
-      requires(map_like_array ? Opts.concatenate == false : true)
+         requires(map_like_array ? Opts.concatenate == false : true)
       static void op(auto&& value, is_context auto&& ctx, auto&&... args)
       {
          using V = range_value_t<std::decay_t<T>>;
-         
+
          if constexpr (boolean_like<V>) {
             constexpr uint8_t type = uint8_t(3) << 3;
             constexpr uint8_t tag = tag::typed_array | type;
             dump_type(tag, args...);
             dump_compressed_int<Opts>(value.size(), args...);
-            
+
             // booleans must be dumped using single bits
             if constexpr (has_static_size<T>) {
                constexpr auto num_bytes = (value.size() + 7) / 8;
@@ -523,22 +523,21 @@ namespace glz
             }
          }
          else if constexpr (num_t<V>) {
-            constexpr uint8_t type =
-            std::floating_point<V> ? 0 : (std::is_signed_v<V> ? 0b000'01'000 : 0b000'10'000);
+            constexpr uint8_t type = std::floating_point<V> ? 0 : (std::is_signed_v<V> ? 0b000'01'000 : 0b000'10'000);
             constexpr uint8_t tag = tag::typed_array | type | (byte_count<V> << 5);
             dump_type(tag, args...);
             dump_compressed_int<Opts>(value.size(), args...);
-            
+
             if constexpr (contiguous<T>) {
                constexpr auto is_volatile =
-               std::is_volatile_v<std::remove_reference_t<std::remove_pointer_t<decltype(value.data())>>>;
-               
+                  std::is_volatile_v<std::remove_reference_t<std::remove_pointer_t<decltype(value.data())>>>;
+
                auto dump_array = [&](auto&& b, auto&& ix) {
                   const auto n = value.size() * sizeof(V);
                   if (const auto k = ix + n; k > b.size()) [[unlikely]] {
                      b.resize(2 * k);
                   }
-                  
+
                   if constexpr (is_volatile) {
                      V temp;
                      const auto n_elements = value.size();
@@ -553,7 +552,7 @@ namespace glz
                      ix += n;
                   }
                };
-               
+
                dump_array(args...);
             }
             else {
@@ -568,36 +567,35 @@ namespace glz
             constexpr uint8_t tag = tag::typed_array | type | string_indicator;
             dump_type(tag, args...);
             dump_compressed_int<Opts>(value.size(), args...);
-            
+
             for (auto& x : value) {
                dump_compressed_int<Opts>(x.size(), args...);
-               
+
                auto dump_array = [&](auto&& b, auto&& ix) {
                   const auto n = x.size();
                   if (const auto k = ix + n; k > b.size()) [[unlikely]] {
                      b.resize(2 * k);
                   }
-                  
+
                   std::memcpy(&b[ix], x.data(), n);
                   ix += n;
                };
-               
+
                dump_array(args...);
             }
          }
          else if constexpr (complex_t<V>) {
             constexpr uint8_t tag = tag::extensions | 0b00011'000;
             dump_type(tag, args...);
-            
+
             using X = typename V::value_type;
             constexpr uint8_t complex_array = 1;
-            constexpr uint8_t type =
-            std::floating_point<X> ? 0 : (std::is_signed_v<X> ? 0b000'01'000 : 0b000'10'000);
+            constexpr uint8_t type = std::floating_point<X> ? 0 : (std::is_signed_v<X> ? 0b000'01'000 : 0b000'10'000);
             constexpr uint8_t complex_header = complex_array | type | (byte_count<X> << 5);
             dump_type(complex_header, args...);
-            
+
             dump_compressed_int<Opts>(value.size(), args...);
-            
+
             for (auto&& x : value) {
                serialize<BEVE>::no_header<Opts>(x, ctx, args...);
             }
@@ -606,25 +604,25 @@ namespace glz
             constexpr uint8_t tag = tag::generic_array;
             dump_type(tag, args...);
             dump_compressed_int<Opts>(value.size(), args...);
-            
+
             for (auto&& x : value) {
                serialize<BEVE>::op<Opts>(x, ctx, args...);
             }
          }
       }
-      
+
       template <auto Opts>
-      requires(map_like_array && Opts.concatenate == true)
+         requires(map_like_array && Opts.concatenate == true)
       static auto op(auto&& value, is_context auto&& ctx, auto&&... args)
       {
          using Element = typename T::value_type;
          using Key = typename Element::first_type;
-         
+
          constexpr uint8_t type = str_t<Key> ? 0 : (std::is_signed_v<Key> ? 0b000'01'000 : 0b000'10'000);
          constexpr uint8_t byte_cnt = str_t<Key> ? 0 : byte_count<Key>;
          constexpr uint8_t tag = tag::object | type | (byte_cnt << 5);
          dump_type(tag, args...);
-         
+
          dump_compressed_int<Opts>(value.size(), args...);
          for (auto&& [k, v] : value) {
             serialize<BEVE>::no_header<Opts>(k, ctx, args...);
@@ -632,7 +630,7 @@ namespace glz
          }
       }
    };
-   
+
    template <pair_t T>
    struct to<BEVE, T> final
    {
@@ -640,19 +638,19 @@ namespace glz
       GLZ_ALWAYS_INLINE static auto op(auto&& value, is_context auto&& ctx, Args&&... args)
       {
          using Key = typename T::first_type;
-         
+
          constexpr uint8_t type = str_t<Key> ? 0 : (std::is_signed_v<Key> ? 0b000'01'000 : 0b000'10'000);
          constexpr uint8_t byte_cnt = str_t<Key> ? 0 : byte_count<Key>;
          constexpr uint8_t tag = tag::object | type | (byte_cnt << 5);
          dump_type(tag, args...);
-         
+
          dump_compressed_int<Opts>(1, args...);
          const auto& [k, v] = value;
          serialize<BEVE>::no_header<Opts>(k, ctx, args...);
          serialize<BEVE>::op<Opts>(v, ctx, args...);
       }
    };
-   
+
    template <writable_map_t T>
    struct to<BEVE, T> final
    {
@@ -660,12 +658,12 @@ namespace glz
       static auto op(auto&& value, is_context auto&& ctx, Args&&... args)
       {
          using Key = typename T::key_type;
-         
+
          constexpr uint8_t type = str_t<Key> ? 0 : (std::is_signed_v<Key> ? 0b000'01'000 : 0b000'10'000);
          constexpr uint8_t byte_cnt = str_t<Key> ? 0 : byte_count<Key>;
          constexpr uint8_t tag = tag::object | type | (byte_cnt << 5);
          dump_type(tag, args...);
-         
+
          dump_compressed_int<Opts>(value.size(), args...);
          for (auto&& [k, v] : value) {
             serialize<BEVE>::no_header<Opts>(k, ctx, args...);
@@ -673,9 +671,9 @@ namespace glz
          }
       }
    };
-   
+
    template <nullable_t T>
-   requires(std::is_array_v<T>)
+      requires(std::is_array_v<T>)
    struct to<BEVE, T>
    {
       template <auto Opts, class V, size_t N, class... Args>
@@ -684,9 +682,9 @@ namespace glz
          serialize<BEVE>::op<Opts>(std::span{value, N}, ctx, std::forward<Args>(args)...);
       }
    };
-   
+
    template <nullable_t T>
-   requires(!std::is_array_v<T>)
+      requires(!std::is_array_v<T>)
    struct to<BEVE, T> final
    {
       template <auto Opts, class... Args>
@@ -700,9 +698,9 @@ namespace glz
          }
       }
    };
-   
+
    template <class T>
-   requires is_specialization_v<T, glz::obj> || is_specialization_v<T, glz::obj_copy>
+      requires is_specialization_v<T, glz::obj> || is_specialization_v<T, glz::obj_copy>
    struct to<BEVE, T>
    {
       template <auto Options>
@@ -710,14 +708,14 @@ namespace glz
       {
          using V = std::decay_t<decltype(value.value)>;
          static constexpr auto N = glz::tuple_size_v<V> / 2;
-         
+
          if constexpr (!has_opening_handled(Options)) {
             constexpr uint8_t type = 0; // string key
             constexpr uint8_t tag = tag::object | type;
             dump_type(tag, args...);
             dump_compressed_int<N>(args...);
          }
-         
+
          invoke_table<N>([&]<size_t I>() {
             constexpr auto Opts = opening_handled_off<Options>();
             serialize<BEVE>::no_header<Opts>(get<2 * I>(value.value), ctx, args...);
@@ -725,9 +723,9 @@ namespace glz
          });
       }
    };
-   
+
    template <class T>
-   requires is_specialization_v<T, glz::merge>
+      requires is_specialization_v<T, glz::merge>
    consteval size_t merge_element_count()
    {
       size_t count{};
@@ -743,9 +741,9 @@ namespace glz
       });
       return count;
    }
-   
+
    template <class T>
-   requires is_specialization_v<T, glz::merge>
+      requires is_specialization_v<T, glz::merge>
    struct to<BEVE, T>
    {
       template <auto Opts>
@@ -753,20 +751,20 @@ namespace glz
       {
          using V = std::decay_t<decltype(value.value)>;
          static constexpr auto N = glz::tuple_size_v<V>;
-         
+
          constexpr uint8_t type = 0; // string key
          constexpr uint8_t tag = tag::object | type;
          dump_type(tag, b, ix);
          dump_compressed_int<merge_element_count<T>()>(b, ix);
-         
+
          [&]<size_t... I>(std::index_sequence<I...>) {
             (serialize<BEVE>::op<opening_handled<Opts>()>(glz::get<I>(value.value), ctx, b, ix), ...);
          }(std::make_index_sequence<N>{});
       }
    };
-   
+
    template <class T>
-   requires(glaze_object_t<T> || reflectable<T>)
+      requires(glaze_object_t<T> || reflectable<T>)
    struct to<BEVE, T> final
    {
       static constexpr auto N = reflect<T>::size;
@@ -774,7 +772,7 @@ namespace glz
          size_t count{};
          invoke_table<N>([&]<size_t I>() {
             using V = field_t<T, I>;
-            
+
             if constexpr (std::same_as<V, hidden> || std::same_as<V, skip>) {
                // do not serialize
                // not serializing is_includer<V> would be a breaking change
@@ -785,14 +783,14 @@ namespace glz
          });
          return count;
       }();
-      
+
       template <auto Opts, class... Args>
-      requires(Opts.structs_as_arrays == true)
+         requires(Opts.structs_as_arrays == true)
       static void op(auto&& value, is_context auto&& ctx, Args&&... args)
       {
          dump<tag::generic_array>(args...);
          dump_compressed_int<count_to_write>(args...);
-         
+
          [[maybe_unused]] decltype(auto) t = [&]() -> decltype(auto) {
             if constexpr (reflectable<T>) {
                return to_tie(value);
@@ -801,10 +799,10 @@ namespace glz
                return nullptr;
             }
          }();
-         
+
          invoke_table<N>([&]<size_t I>() {
             using val_t = field_t<T, I>;
-            
+
             if constexpr (std::same_as<val_t, hidden> || std::same_as<val_t, skip>) {
                return;
             }
@@ -818,9 +816,9 @@ namespace glz
             }
          });
       }
-      
+
       template <auto Options, class... Args>
-      requires(Options.structs_as_arrays == false)
+         requires(Options.structs_as_arrays == false)
       static void op(auto&& value, is_context auto&& ctx, Args&&... args)
       {
          if constexpr (!has_opening_handled(Options)) {
@@ -830,7 +828,7 @@ namespace glz
             dump_compressed_int<count_to_write>(args...);
          }
          constexpr auto Opts = opening_handled_off<Options>();
-         
+
          [[maybe_unused]] decltype(auto) t = [&]() -> decltype(auto) {
             if constexpr (reflectable<T>) {
                return to_tie(value);
@@ -839,17 +837,17 @@ namespace glz
                return nullptr;
             }
          }();
-         
+
          invoke_table<N>([&]<size_t I>() {
             using val_t = field_t<T, I>;
-            
+
             if constexpr (std::same_as<val_t, hidden> || std::same_as<val_t, skip>) {
                return;
             }
             else {
                static constexpr sv key = reflect<T>::keys[I];
                serialize<BEVE>::no_header<Opts>(key, ctx, args...);
-               
+
                decltype(auto) member = [&]() -> decltype(auto) {
                   if constexpr (reflectable<T>) {
                      return get<I>(t);
@@ -858,42 +856,43 @@ namespace glz
                      return get<I>(reflect<T>::values);
                   }
                }();
-               
+
                serialize<BEVE>::op<Opts>(get_member(value, member), ctx, args...);
             }
          });
       }
    };
-   
+
    template <class T>
-   requires glaze_array_t<T>
+      requires glaze_array_t<T>
    struct to<BEVE, T> final
    {
       template <auto Opts, class... Args>
       static void op(auto&& value, is_context auto&& ctx, Args&&... args)
       {
          dump<tag::generic_array>(args...);
-         
+
          static constexpr auto N = reflect<T>::size;
          dump_compressed_int<N>(args...);
-         
-         invoke_table<reflect<T>::size>(
-                                        [&]<size_t I>() { serialize<BEVE>::op<Opts>(get_member(value, get<I>(reflect<T>::values)), ctx, args...); });
+
+         invoke_table<reflect<T>::size>([&]<size_t I>() {
+            serialize<BEVE>::op<Opts>(get_member(value, get<I>(reflect<T>::values)), ctx, args...);
+         });
       }
    };
-   
+
    template <class T>
-   requires(tuple_t<T> || is_std_tuple<T>)
+      requires(tuple_t<T> || is_std_tuple<T>)
    struct to<BEVE, T> final
    {
       template <auto Opts, class... Args>
       static void op(auto&& value, is_context auto&& ctx, Args&&... args)
       {
          dump<tag::generic_array>(args...);
-         
+
          static constexpr auto N = glz::tuple_size_v<T>;
          dump_compressed_int<N>(args...);
-         
+
          if constexpr (is_std_tuple<T>) {
             [&]<size_t... I>(std::index_sequence<I...>) {
                (serialize<BEVE>::op<Opts>(std::get<I>(value), ctx, args...), ...);
