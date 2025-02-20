@@ -486,7 +486,7 @@ namespace glz
       static constexpr bool map_like_array = pair_t<range_value_t<T>>;
 
       template <auto Opts>
-         requires(map_like_array ? Opts.concatenate == false : true)
+         requires(map_like_array ? check_concatenate<Opts> == false : true)
       static void op(auto&& value, is_context auto&& ctx, auto&&... args)
       {
          using V = range_value_t<std::decay_t<T>>;
@@ -612,7 +612,7 @@ namespace glz
       }
 
       template <auto Opts>
-         requires(map_like_array && Opts.concatenate == true)
+         requires(map_like_array && check_concatenate<Opts> == true)
       static auto op(auto&& value, is_context auto&& ctx, auto&&... args)
       {
          using Element = typename T::value_type;

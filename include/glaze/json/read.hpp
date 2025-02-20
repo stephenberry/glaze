@@ -1582,7 +1582,7 @@ namespace glz
       // for types like std::vector<std::pair...> that can't look up with operator[]
       // Intead of hashing or linear searching, we just clear the input and overwrite the entire contents
       template <auto Options>
-         requires(pair_t<range_value_t<T>> && Options.concatenate == true)
+         requires(pair_t<range_value_t<T>> && check_concatenate<Options> == true)
       static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
       {
          static constexpr auto Opts = opening_handled_off<ws_handled_off<Options>()>();
@@ -3220,13 +3220,18 @@ namespace glz
          value = buffer;
       }
    };
+   
+   struct opts_validate : opts
+   {
+      bool validate_trailing_whitespace = true;
+   };
 
    template <is_buffer Buffer>
    [[nodiscard]] error_ctx validate_json(Buffer&& buffer) noexcept
    {
       context ctx{};
       glz::skip skip_value{};
-      return read<opts{.validate_skipped = true, .validate_trailing_whitespace = true}>(
+      return read<opts_validate{{.validate_skipped = true}}>(
          skip_value, std::forward<Buffer>(buffer), ctx);
    }
 
@@ -3235,7 +3240,7 @@ namespace glz
    {
       context ctx{};
       glz::skip skip_value{};
-      return read<opts{.comments = true, .validate_skipped = true, .validate_trailing_whitespace = true}>(
+      return read<opts_validate{{.comments = true, .validate_skipped = true}}>(
          skip_value, std::forward<Buffer>(buffer), ctx);
    }
 

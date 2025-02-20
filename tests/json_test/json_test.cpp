@@ -780,6 +780,11 @@ suite basic_types = [] {
    };
 };
 
+struct opts_concatenate : glz::opts
+{
+   bool concatenate = true;
+};
+
 suite container_types = [] {
    using namespace ut;
    "vector int roundtrip"_test = [] {
@@ -832,14 +837,14 @@ suite container_types = [] {
    };
    "vector pair"_test = [] {
       std::vector<std::pair<int, int>> v;
-      expect(!glz::read<glz::opts{.concatenate = false}>(v, R"([{"1":2},{"3":4}])"));
-      const auto s = glz::write<glz::opts{.concatenate = false}>(v).value_or("error");
+      expect(!glz::read<opts_concatenate{.concatenate = false}>(v, R"([{"1":2},{"3":4}])"));
+      const auto s = glz::write<opts_concatenate{.concatenate = false}>(v).value_or("error");
       expect(s == R"([{"1":2},{"3":4}])") << s;
    };
    "vector pair"_test = [] {
       std::vector<std::pair<int, int>> v;
-      expect(!glz::read<glz::opts{.concatenate = false}>(v, R"([{"1":2},{"3":4}])"));
-      const auto s = glz::write<glz::opts{.prettify = true, .concatenate = false}>(v).value_or("error");
+      expect(!glz::read<opts_concatenate{.concatenate = false}>(v, R"([{"1":2},{"3":4}])"));
+      const auto s = glz::write<opts_concatenate{{.prettify = true}, .concatenate = false}>(v).value_or("error");
       expect(s == R"([
    {
       "1": 2
@@ -4997,6 +5002,11 @@ suite no_except_tests = [] {
    };
 };
 
+struct opts_validate : glz::opts
+{
+   bool validate_trailing_whitespace = false;
+};
+
 suite validation_tests = [] {
    "validate_json"_test = [] {
       glz::json_t json{};
@@ -5004,7 +5014,7 @@ suite validation_tests = [] {
       // Tests are taken from the https://www.json.org/JSON_checker/ test suite
 
       std::string fail10 = R"({"Extra value after close": true} "misplaced quoted value")";
-      auto ec_fail10 = glz::read<glz::opts{.validate_trailing_whitespace = true}>(json, fail10);
+      auto ec_fail10 = glz::read<opts_validate{.validate_trailing_whitespace = true}>(json, fail10);
       expect(ec_fail10 != glz::error_code::none);
       expect(glz::validate_json(fail10) != glz::error_code::none);
 
@@ -5146,12 +5156,12 @@ break"])";
       expect(glz::validate_json(fail6) != glz::error_code::none);
 
       std::string fail7 = R"(["Comma after the close"],)";
-      auto ec_fail7 = glz::read<glz::opts{.validate_trailing_whitespace = true}>(json, fail7);
+      auto ec_fail7 = glz::read<opts_validate{.validate_trailing_whitespace = true}>(json, fail7);
       expect(ec_fail7 != glz::error_code::none);
       expect(glz::validate_json(fail7) != glz::error_code::none);
 
       std::string fail8 = R"(["Extra close"]])";
-      auto ec_fail8 = glz::read<glz::opts{.validate_trailing_whitespace = true}>(json, fail8);
+      auto ec_fail8 = glz::read<opts_validate{.validate_trailing_whitespace = true}>(json, fail8);
       expect(ec_fail8 != glz::error_code::none);
       expect(glz::validate_json(fail8) != glz::error_code::none);
 

@@ -2377,8 +2377,13 @@ suite custom_load_test = [] {
    };
 };
 
+struct opts_concatenate : glz::opts
+{
+   bool concatenate = true;
+};
+
 suite pair_ranges_tests = [] {
-   static constexpr glz::opts concatenate_off{.format = glz::BEVE, .concatenate = false};
+   static constexpr opts_concatenate concatenate_off{{.format = glz::BEVE}, .concatenate = false};
 
    "vector pair"_test = [] {
       std::vector<std::pair<int, int>> v{{1, 2}, {3, 4}};

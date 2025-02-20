@@ -57,6 +57,12 @@ namespace glz
       disable_padding = 1 << 6, // to explicitly disable padding for contexts like includers
       write_unchecked = 1 << 7 // the write buffer has sufficient space and does not need to be checked
    };
+   
+   // NOTE TO USER:
+   // glz::opts are the default options for using Glaze
+   // You can create your own options struct with more or less fields as long as your struct has:
+   // - opts_internal internal{};
+   // - uint32_t format
 
    struct opts
    {
@@ -80,8 +86,6 @@ namespace glz
       bool error_on_const_read =
          false; // Error if attempt is made to read into a const value, by default the value is skipped without error
       bool validate_skipped = false; // If full validation should be performed on skipped values
-      bool validate_trailing_whitespace =
-         false; // If, after parsing a value, we want to validate the trailing whitespace
 
       uint8_t layout = rowwise; // CSV row wise output/input
 
@@ -100,18 +104,61 @@ namespace glz
 
       bool partial_read =
          false; // Reads into the deepest structural object and then exits without parsing the rest of the input
-
-      // glaze_object_t concepts
-      bool concatenate = true; // Concatenates ranges of std::pair into single objects when writing
-
-      bool hide_non_invocable =
-         true; // Hides non-invocable members from the cli_menu (may be applied elsewhere in the future)
       
       uint32_t internal{}; // default should be 0
 
       [[nodiscard]] constexpr bool operator==(const opts&) const noexcept = default;
    };
+   
+   // Add these to a custom options struct if you want to use them
+   // OTHER AVAILABLE OPTIONS (and default values):
+   
+   // bool validate_trailing_whitespace = false;
+   // If, after parsing a value, we want to validate the trailing whitespace
+   
+   // bool concatenate = true;
+   // Concatenates ranges of std::pair into single objects when writing
+   
+   // bool hide_non_invocable = true;
+   // Hides non-invocable members from the cli_menu (may be applied elsewhere in the future)
+   
+   template <auto Opts>
+   inline constexpr bool check_validate_trailing_whitespace = [] {
+      if constexpr (requires { Opts.validate_trailing_whitespace; }) {
+         return Opts.validate_trailing_whitespace;
+      } else {
+         return false;
+      }
+   }();
+   
+   template <auto Opts>
+   inline constexpr bool check_partial_read = [] {
+      if constexpr (requires { Opts.partial_read; }) {
+         return Opts.partial_read;
+      } else {
+         return false;
+      }
+   }();
+   
+   template <auto Opts>
+   inline constexpr bool check_concatenate = [] {
+      if constexpr (requires { Opts.concatenate; }) {
+         return Opts.concatenate;
+      } else {
+         return true;
+      }
+   }();
+   
+   template <auto Opts>
+   inline constexpr bool check_hide_non_invocable = [] {
+      if constexpr (requires { Opts.hide_non_invocable; }) {
+         return Opts.hide_non_invocable;
+      } else {
+         return true;
+      }
+   }();
 
+   // TODO: These has_ checks should probably be changed to check_
    consteval bool has_opening_handled(auto o) { return o.internal & uint32_t(opts_internal::opening_handled); }
 
    consteval bool has_closing_handled(auto o) { return o.internal & uint32_t(opts_internal::closing_handled); }

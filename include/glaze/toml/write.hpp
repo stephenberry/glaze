@@ -416,7 +416,7 @@ namespace glz
 
       // --- Array-like container writer ---
       template <auto Opts, class B>
-         requires(writable_array_t<T> && (map_like_array ? Opts.concatenate == false : true))
+         requires(writable_array_t<T> && (map_like_array ? check_concatenate<Opts> == false : true))
       GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, B&& b, auto&& ix)
       {
          if (empty_range(value)) {
@@ -468,7 +468,7 @@ namespace glz
 
       // --- Map-like container writer ---
       template <auto Opts, class B>
-         requires(writable_map_t<T> || (map_like_array && Opts.concatenate == true))
+         requires(writable_map_t<T> || (map_like_array && check_concatenate<Opts> == true))
       static void op(auto&& value, is_context auto&& ctx, B&& b, auto&& ix)
       {
          bool first = true;
