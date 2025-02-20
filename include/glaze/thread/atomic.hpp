@@ -7,7 +7,7 @@
 
 // Supports serialization/deserialization of std::atomic
 
-namespace glz::detail
+namespace glz
 {
    template <typename T>
    concept is_atomic = requires(T a, typename std::remove_reference_t<decltype(a.load())>& expected,

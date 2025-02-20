@@ -12,7 +12,7 @@
 #include "glaze/util/dump.hpp"
 #include "glaze/util/itoa.hpp"
 
-namespace glz::detail
+namespace glz
 {
    template <class T>
    GLZ_ALWAYS_INLINE constexpr auto sized_integer_conversion() noexcept

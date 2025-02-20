@@ -11,7 +11,7 @@
 #include "glaze/json/read.hpp"
 #include "glaze/json/write.hpp"
 
-namespace glz::detail
+namespace glz
 {
    template <is_opts_wrapper T>
    struct from<BEVE, T>
@@ -22,7 +22,7 @@ namespace glz::detail
          parse<BEVE>::op<opt_true<Opts, T::opts_member>>(value.val, args...);
       }
    };
-
+   
    template <is_opts_wrapper T>
    struct to<BEVE, T>
    {

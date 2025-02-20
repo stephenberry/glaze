@@ -130,17 +130,14 @@ namespace glz
       using type = member_t<V, decltype(get<I>(values))>;
    };
 
-   namespace detail
+   template <class T, size_t N>
+   inline constexpr auto c_style_to_sv(const std::array<T, N>& arr)
    {
-      template <class T, size_t N>
-      inline constexpr auto c_style_to_sv(const std::array<T, N>& arr)
-      {
-         std::array<sv, N> ret{};
-         for (size_t i = 0; i < N; ++i) {
-            ret[i] = arr[i];
-         }
-         return ret;
+      std::array<sv, N> ret{};
+      for (size_t i = 0; i < N; ++i) {
+         ret[i] = arr[i];
       }
+      return ret;
    }
 
    template <class T>
@@ -152,7 +149,7 @@ namespace glz
 
       static constexpr auto values = meta_wrapper_v<T>;
 
-      static constexpr auto keys = detail::c_style_to_sv(meta_keys_v<T>);
+      static constexpr auto keys = c_style_to_sv(meta_keys_v<T>);
 
       template <size_t I>
       using elem = decltype(get<I>(values));
@@ -242,7 +239,7 @@ namespace glz
    }();
 }
 
-namespace glz::detail
+namespace glz
 {
    template <size_t I, class T>
    constexpr auto key_name_v = [] {
@@ -380,7 +377,7 @@ namespace glz
    }();
 }
 
-namespace glz::detail
+namespace glz
 {
    template <class T>
    constexpr auto make_enum_to_string_map()
@@ -409,7 +406,7 @@ namespace glz::detail
    {
       using V = std::decay_t<T>;
       using U = std::underlying_type_t<V>;
-      constexpr auto arr = glz::detail::make_enum_to_string_array<V>();
+      constexpr auto arr = make_enum_to_string_array<V>();
       return arr[static_cast<U>(enum_value)];
    }
 
@@ -445,7 +442,7 @@ namespace glz
    using make_reflectable = std::initializer_list<dummy>;
 }
 
-namespace glz::detail
+namespace glz
 {
    // TODO: This is returning the total keys and not the max keys for a particular variant object
    template <class T, size_t N>
@@ -538,7 +535,7 @@ namespace glz
    }
 }
 
-namespace glz::detail
+namespace glz
 {
    GLZ_ALWAYS_INLINE constexpr uint64_t bitmix(uint64_t h, const uint64_t seed) noexcept
    {
@@ -1952,10 +1949,7 @@ namespace glz
          return "";
       }
    }
-}
-
-namespace glz::detail
-{
+   
    template <class T>
    inline constexpr size_t maximum_key_size = [] {
       constexpr auto N = reflect<T>::size;
@@ -1967,7 +1961,7 @@ namespace glz::detail
       }
       return maximum + 2; // add quotes for JSON
    }();
-
+   
    inline constexpr uint64_t round_up_to_nearest_16(const uint64_t value) noexcept { return (value + 15) & ~15ull; }
 }
 

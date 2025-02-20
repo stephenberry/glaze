@@ -67,7 +67,7 @@ namespace glz
    }
 }
 
-namespace glz::detail
+namespace glz
 {
    inline constexpr size_t naive_map_max_size = 128;
 
@@ -520,7 +520,7 @@ namespace glz::detail
          else {
             std::array<std::array<storage_type, max_bucket_size>, N> full_buckets{};
             std::array<size_t, N> bucket_sizes{};
-            detail::naive_prng gen{};
+            naive_prng gen{};
 
             bool failed;
             do {

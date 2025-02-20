@@ -30,111 +30,108 @@ namespace glz
       mem_fun ptr;
    };
 
-   namespace detail
+   template <class T>
+   struct from<JSON, invoke_t<T>>
    {
-      template <class T>
-      struct from<JSON, invoke_t<T>>
+      template <auto Opts>
+      static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
       {
-         template <auto Opts>
-         static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
-         {
-            using V = std::decay_t<decltype(value.val)>;
-
-            if constexpr (std::is_member_function_pointer_v<T>) {
-               using M = typename std::decay_t<decltype(value)>::mem_fun;
-               using Ret = typename return_type<M>::type;
-
-               if constexpr (std::is_void_v<Ret>) {
-                  using Tuple = typename inputs_as_tuple<M>::type;
-                  if constexpr (glz::tuple_size_v<Tuple> == 0) {
-                     skip_array<Opts>(ctx, it, end);
-                     if (bool(ctx.error)) [[unlikely]]
-                        return;
-                     (value.val.*value.ptr)();
-                  }
-                  else {
-                     Tuple inputs{};
-                     parse<JSON>::op<Opts>(inputs, ctx, it, end);
-                     if (bool(ctx.error)) [[unlikely]]
-                        return;
-                     std::apply(
-                        [&](auto&&... args) { return (value.val.*value.ptr)(std::forward<decltype(args)>(args)...); },
-                        inputs);
-                  }
+         using V = std::decay_t<decltype(value.val)>;
+         
+         if constexpr (std::is_member_function_pointer_v<T>) {
+            using M = typename std::decay_t<decltype(value)>::mem_fun;
+            using Ret = typename return_type<M>::type;
+            
+            if constexpr (std::is_void_v<Ret>) {
+               using Tuple = typename inputs_as_tuple<M>::type;
+               if constexpr (glz::tuple_size_v<Tuple> == 0) {
+                  skip_array<Opts>(ctx, it, end);
+                  if (bool(ctx.error)) [[unlikely]]
+                     return;
+                  (value.val.*value.ptr)();
                }
                else {
-                  static_assert(false_v<T>, "function must have void return");
-               }
-            }
-            else if constexpr (is_specialization_v<V, std::function>) {
-               using Ret = typename function_traits<V>::result_type;
-
-               if constexpr (std::is_void_v<Ret>) {
-                  using Tuple = typename function_traits<V>::arguments;
-                  if constexpr (glz::tuple_size_v<Tuple> == 0) {
-                     skip_array<Opts>(ctx, it, end);
-                     if (bool(ctx.error)) [[unlikely]]
-                        return;
-                     value.val();
-                  }
-                  else {
-                     Tuple inputs{};
-                     parse<JSON>::op<Opts>(inputs, ctx, it, end);
-                     if (bool(ctx.error)) [[unlikely]]
-                        return;
-                     std::apply(value.val, inputs);
-                  }
-               }
-               else {
-                  static_assert(false_v<T>, "std::function must have void return");
+                  Tuple inputs{};
+                  parse<JSON>::op<Opts>(inputs, ctx, it, end);
+                  if (bool(ctx.error)) [[unlikely]]
+                     return;
+                  std::apply(
+                             [&](auto&&... args) { return (value.val.*value.ptr)(std::forward<decltype(args)>(args)...); },
+                             inputs);
                }
             }
             else {
-               static_assert(false_v<T>, "type must be invocable");
+               static_assert(false_v<T>, "function must have void return");
             }
          }
-      };
-
-      template <class T>
-      struct to<JSON, invoke_t<T>>
-      {
-         template <auto Opts>
-         static void op(auto&& value, is_context auto&& ctx, auto&&... args)
-         {
-            using V = std::decay_t<decltype(value.val)>;
-            dump<'['>(args...);
-            if constexpr (is_specialization_v<V, std::function>) {
-               using Ret = typename function_traits<V>::result_type;
-
-               if constexpr (std::is_void_v<Ret>) {
-                  using Tuple = typename function_traits<V>::arguments;
-                  Tuple inputs{};
-                  using Inputs = std::remove_cvref_t<decltype(inputs)>;
-                  to<JSON, Inputs>::template op<Opts>(inputs, ctx, args...);
+         else if constexpr (is_specialization_v<V, std::function>) {
+            using Ret = typename function_traits<V>::result_type;
+            
+            if constexpr (std::is_void_v<Ret>) {
+               using Tuple = typename function_traits<V>::arguments;
+               if constexpr (glz::tuple_size_v<Tuple> == 0) {
+                  skip_array<Opts>(ctx, it, end);
+                  if (bool(ctx.error)) [[unlikely]]
+                     return;
+                  value.val();
                }
                else {
-                  static_assert(false_v<T>, "std::function must have void return");
+                  Tuple inputs{};
+                  parse<JSON>::op<Opts>(inputs, ctx, it, end);
+                  if (bool(ctx.error)) [[unlikely]]
+                     return;
+                  std::apply(value.val, inputs);
                }
             }
-            dump<']'>(args...);
-         }
-      };
-
-      template <auto MemPtr>
-      inline constexpr decltype(auto) invoke_impl()
-      {
-         using V = decltype(MemPtr);
-         if constexpr (std::is_member_function_pointer_v<V>) {
-            return [](auto&& val) { return invoke_t<std::decay_t<V>>{val, MemPtr}; };
+            else {
+               static_assert(false_v<T>, "std::function must have void return");
+            }
          }
          else {
-            return [](auto&& val) { return invoke_t<std::decay_t<decltype(val.*MemPtr)>>{val.*MemPtr}; };
+            static_assert(false_v<T>, "type must be invocable");
          }
+      }
+   };
+   
+   template <class T>
+   struct to<JSON, invoke_t<T>>
+   {
+      template <auto Opts>
+      static void op(auto&& value, is_context auto&& ctx, auto&&... args)
+      {
+         using V = std::decay_t<decltype(value.val)>;
+         dump<'['>(args...);
+         if constexpr (is_specialization_v<V, std::function>) {
+            using Ret = typename function_traits<V>::result_type;
+            
+            if constexpr (std::is_void_v<Ret>) {
+               using Tuple = typename function_traits<V>::arguments;
+               Tuple inputs{};
+               using Inputs = std::remove_cvref_t<decltype(inputs)>;
+               to<JSON, Inputs>::template op<Opts>(inputs, ctx, args...);
+            }
+            else {
+               static_assert(false_v<T>, "std::function must have void return");
+            }
+         }
+         dump<']'>(args...);
+      }
+   };
+   
+   template <auto MemPtr>
+   inline constexpr decltype(auto) invoke_impl()
+   {
+      using V = decltype(MemPtr);
+      if constexpr (std::is_member_function_pointer_v<V>) {
+         return [](auto&& val) { return invoke_t<std::decay_t<V>>{val, MemPtr}; };
+      }
+      else {
+         return [](auto&& val) { return invoke_t<std::decay_t<decltype(val.*MemPtr)>>{val.*MemPtr}; };
       }
    }
 
    template <auto MemPtr>
-   constexpr auto invoke = detail::invoke_impl<MemPtr>();
+   constexpr auto invoke = invoke_impl<MemPtr>();
 }
 
 namespace glz
@@ -167,71 +164,68 @@ namespace glz
       T::glaze;
    };
 
-   namespace detail
+   template <is_invoke_update T>
+   struct from<JSON, T>
    {
-      template <is_invoke_update T>
-      struct from<JSON, T>
+      template <auto Opts>
+      static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
       {
-         template <auto Opts>
-         static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
-         {
-            using V = std::decay_t<decltype(value.func)>;
-
-            using Tuple = typename function_traits<V>::arguments;
-            if constexpr (glz::tuple_size_v<Tuple> == 0) {
-               auto start = it;
-               skip_array<Opts>(ctx, it, end);
-               if (bool(ctx.error)) [[unlikely]]
-                  return;
-               const sv input = {start, size_t(it - start)};
-               if (value.initialized) {
-                  if (input != value.prev) {
-                     value.func();
-                  }
+         using V = std::decay_t<decltype(value.func)>;
+         
+         using Tuple = typename function_traits<V>::arguments;
+         if constexpr (glz::tuple_size_v<Tuple> == 0) {
+            auto start = it;
+            skip_array<Opts>(ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]]
+               return;
+            const sv input = {start, size_t(it - start)};
+            if (value.initialized) {
+               if (input != value.prev) {
+                  value.func();
                }
-               else {
-                  value.initialized = true;
-               }
-               value.prev = input;
             }
             else {
-               auto start = it;
-               skip_array<Opts>(ctx, it, end);
-               if (bool(ctx.error)) [[unlikely]]
-                  return;
-               const sv input = {start, size_t(it - start)};
-               if (value.initialized) {
-                  if (input != value.prev) {
-                     Tuple inputs{};
-                     it = start;
-                     parse<JSON>::op<Opts>(inputs, ctx, it, end);
-                     if (bool(ctx.error)) [[unlikely]]
-                        return;
-                     std::apply(value.func, inputs);
-                  }
-               }
-               else {
-                  value.initialized = true;
-               }
-               value.prev = input;
+               value.initialized = true;
             }
+            value.prev = input;
          }
-      };
-
-      template <is_invoke_update T>
-      struct to<JSON, T>
+         else {
+            auto start = it;
+            skip_array<Opts>(ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]]
+               return;
+            const sv input = {start, size_t(it - start)};
+            if (value.initialized) {
+               if (input != value.prev) {
+                  Tuple inputs{};
+                  it = start;
+                  parse<JSON>::op<Opts>(inputs, ctx, it, end);
+                  if (bool(ctx.error)) [[unlikely]]
+                     return;
+                  std::apply(value.func, inputs);
+               }
+            }
+            else {
+               value.initialized = true;
+            }
+            value.prev = input;
+         }
+      }
+   };
+   
+   template <is_invoke_update T>
+   struct to<JSON, T>
+   {
+      template <auto Opts>
+      static void op(auto&& value, is_context auto&& ctx, auto&&... args)
       {
-         template <auto Opts>
-         static void op(auto&& value, is_context auto&& ctx, auto&&... args)
-         {
-            using V = std::decay_t<decltype(value.val)>;
-            dump<'['>(args...);
-            using Tuple = typename function_traits<V>::arguments;
-            Tuple inputs{};
-            using Inputs = std::remove_cvref_t<decltype(inputs)>;
-            to<JSON, Inputs>::template op<Opts>(inputs, ctx, args...);
-            dump<']'>(args...);
-         }
-      };
-   }
+         using V = std::decay_t<decltype(value.val)>;
+         dump<'['>(args...);
+         using Tuple = typename function_traits<V>::arguments;
+         Tuple inputs{};
+         using Inputs = std::remove_cvref_t<decltype(inputs)>;
+         to<JSON, Inputs>::template op<Opts>(inputs, ctx, args...);
+         dump<']'>(args...);
+      }
+   };
 }

@@ -408,21 +408,18 @@ namespace glz
 #endif
    };
    
-   namespace detail
+   template <is_variant T, size_t... I>
+   constexpr auto make_variant_id_map_impl(std::index_sequence<I...>, auto&& variant_ids)
    {
-      template <is_variant T, size_t... I>
-      constexpr auto make_variant_id_map_impl(std::index_sequence<I...>, auto&& variant_ids)
-      {
-         return normal_map<sv, size_t, std::variant_size_v<T>>(std::array{pair<sv, size_t>{sv(variant_ids[I]), I}...});
-      }
+      return normal_map<sv, size_t, std::variant_size_v<T>>(std::array{pair<sv, size_t>{sv(variant_ids[I]), I}...});
+   }
+   
+   template <is_variant T>
+   constexpr auto make_variant_id_map()
+   {
+      constexpr auto indices = std::make_index_sequence<std::variant_size_v<T>>{};
       
-      template <is_variant T>
-      constexpr auto make_variant_id_map()
-      {
-         constexpr auto indices = std::make_index_sequence<std::variant_size_v<T>>{};
-         
-         return make_variant_id_map_impl<T>(indices, ids_v<T>);
-      }
+      return make_variant_id_map_impl<T>(indices, ids_v<T>);
    }
 
    /**
@@ -481,37 +478,34 @@ namespace glz
    template <class Value, class Element>
    using member_t = decltype(get_member(std::declval<std::add_lvalue_reference_t<Value>>(), std::declval<Element>()));
 
-   namespace detail
+   // member_ptr and lambda wrapper helper
+   template <template <class> class Wrapper, class Wrapped>
+   struct wrap
    {
-      // member_ptr and lambda wrapper helper
-      template <template <class> class Wrapper, class Wrapped>
-      struct wrap
+      Wrapped wrapped;
+      constexpr decltype(auto) operator()(auto&& value) const
       {
-         Wrapped wrapped;
-         constexpr decltype(auto) operator()(auto&& value) const
-         {
-            return Wrapper<std::decay_t<decltype(get_member(value, wrapped))>>{get_member(value, wrapped)};
-         }
-
-         constexpr decltype(auto) unwrap(auto&& value) const { return get_member(value, wrapped); }
-      };
-
-      // Output variants in the following format  ["variant_type", variant_json_data] with
-      // glz::detail:array_variant(&T::var);
-      template <is_variant T>
-      struct array_variant_wrapper final
-      {
-         T& value;
-      };
-      // TODO: Could do this if the compiler supports alias template deduction
-      // template <class T>
-      // using array_var = wrap<array_var_wrapper, T>;
-      template <class T>
-      struct array_variant : wrap<array_variant_wrapper, T>
-      {};
-      template <class T>
-      array_variant(T) -> array_variant<T>; // Only needed on older compilers until we move to template alias deduction
-   } // namespace detail
+         return Wrapper<std::decay_t<decltype(get_member(value, wrapped))>>{get_member(value, wrapped)};
+      }
+      
+      constexpr decltype(auto) unwrap(auto&& value) const { return get_member(value, wrapped); }
+   };
+   
+   // Output variants in the following format  ["variant_type", variant_json_data] with
+   // glz::detail:array_variant(&T::var);
+   template <is_variant T>
+   struct array_variant_wrapper final
+   {
+      T& value;
+   };
+   // TODO: Could do this if the compiler supports alias template deduction
+   // template <class T>
+   // using array_var = wrap<array_var_wrapper, T>;
+   template <class T>
+   struct array_variant : wrap<array_variant_wrapper, T>
+   {};
+   template <class T>
+   array_variant(T) -> array_variant<T>; // Only needed on older compilers until we move to template alias deduction
 
    constexpr decltype(auto) conv_sv(auto&& value) noexcept
    {
@@ -555,10 +549,7 @@ namespace glz
 
    template <class T>
    unexpected_wrapper(T*) -> unexpected_wrapper<T>;
-}
-
-namespace glz::detail
-{
+   
    template <opts Opts, class Value>
    [[nodiscard]] GLZ_ALWAYS_INLINE constexpr bool skip_member(const Value& value) noexcept
    {

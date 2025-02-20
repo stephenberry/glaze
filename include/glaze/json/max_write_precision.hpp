@@ -57,70 +57,67 @@ namespace glz
       static constexpr auto value{[](auto& s) -> auto& { return s.val; }}; // reading just uses the value directly
    };
 
-   namespace detail
+   template <class T>
+   struct to<JSON, write_float32_t<T>>
    {
-      template <class T>
-      struct to<JSON, write_float32_t<T>>
+      template <auto Opts>
+      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept
       {
-         template <auto Opts>
-         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept
-         {
-            static constexpr auto O = set_opt<Opts, &opts::float_max_write_precision>(float_precision::float32);
-            using Value = core_t<decltype(value.val)>;
-            to<JSON, Value>::template op<O>(value.val, ctx, args...);
-         }
-      };
-
-      template <class T>
-      struct to<JSON, write_float64_t<T>>
-      {
-         template <auto Opts>
-         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept
-         {
-            static constexpr auto O = set_opt<Opts, &opts::float_max_write_precision>(float_precision::float64);
-            using Value = core_t<decltype(value.val)>;
-            to<JSON, Value>::template op<O>(value.val, ctx, args...);
-         }
-      };
-
-      template <class T>
-      struct to<JSON, write_float_full_t<T>>
-      {
-         template <auto Opts>
-         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept
-         {
-            static constexpr auto O = set_opt<Opts, &opts::float_max_write_precision>(float_precision::full);
-            using Value = core_t<decltype(value.val)>;
-            to<JSON, Value>::template op<O>(value.val, ctx, args...);
-         }
-      };
-
-      template <auto MemPtr>
-      inline constexpr decltype(auto) write_float32_t_impl() noexcept
-      {
-         return [](auto&& val) { return write_float32_t<std::remove_reference_t<decltype(val.*MemPtr)>>{val.*MemPtr}; };
+         static constexpr auto O = set_opt<Opts, &opts::float_max_write_precision>(float_precision::float32);
+         using Value = core_t<decltype(value.val)>;
+         to<JSON, Value>::template op<O>(value.val, ctx, args...);
       }
-
-      template <auto MemPtr>
-      inline constexpr decltype(auto) write_float64_impl() noexcept
+   };
+   
+   template <class T>
+   struct to<JSON, write_float64_t<T>>
+   {
+      template <auto Opts>
+      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept
       {
-         return [](auto&& val) { return write_float64_t<std::remove_reference_t<decltype(val.*MemPtr)>>{val.*MemPtr}; };
+         static constexpr auto O = set_opt<Opts, &opts::float_max_write_precision>(float_precision::float64);
+         using Value = core_t<decltype(value.val)>;
+         to<JSON, Value>::template op<O>(value.val, ctx, args...);
       }
-
-      template <auto MemPtr>
-      inline constexpr decltype(auto) write_float_full_impl() noexcept
+   };
+   
+   template <class T>
+   struct to<JSON, write_float_full_t<T>>
+   {
+      template <auto Opts>
+      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept
       {
-         return
-            [](auto&& val) { return write_float_full_t<std::remove_reference_t<decltype(val.*MemPtr)>>{val.*MemPtr}; };
+         static constexpr auto O = set_opt<Opts, &opts::float_max_write_precision>(float_precision::full);
+         using Value = core_t<decltype(value.val)>;
+         to<JSON, Value>::template op<O>(value.val, ctx, args...);
       }
+   };
+   
+   template <auto MemPtr>
+   inline constexpr decltype(auto) write_float32_t_impl() noexcept
+   {
+      return [](auto&& val) { return write_float32_t<std::remove_reference_t<decltype(val.*MemPtr)>>{val.*MemPtr}; };
+   }
+   
+   template <auto MemPtr>
+   inline constexpr decltype(auto) write_float64_impl() noexcept
+   {
+      return [](auto&& val) { return write_float64_t<std::remove_reference_t<decltype(val.*MemPtr)>>{val.*MemPtr}; };
+   }
+   
+   template <auto MemPtr>
+   inline constexpr decltype(auto) write_float_full_impl() noexcept
+   {
+      return
+      [](auto&& val) { return write_float_full_t<std::remove_reference_t<decltype(val.*MemPtr)>>{val.*MemPtr}; };
    }
 
    template <auto MemPtr>
-   constexpr auto write_float32 = detail::write_float32_t_impl<MemPtr>();
+   constexpr auto write_float32 = write_float32_t_impl<MemPtr>();
 
    template <auto MemPtr>
-   constexpr auto write_float64 = detail::write_float64_impl<MemPtr>();
+   constexpr auto write_float64 = write_float64_impl<MemPtr>();
 
    template <auto MemPtr>
-   constexpr auto write_float_full = detail::write_float_full_impl<MemPtr>();
+   constexpr auto write_float_full = write_float_full_impl<MemPtr>();
 }

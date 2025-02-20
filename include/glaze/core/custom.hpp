@@ -6,7 +6,7 @@
 #include "glaze/core/seek.hpp"
 #include "glaze/core/wrappers.hpp"
 
-namespace glz::detail
+namespace glz
 {
    template <uint32_t Format, class T>
       requires(is_specialization_v<T, custom_t>)

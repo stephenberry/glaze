@@ -165,13 +165,13 @@ struct glz::meta<Color>
 
 static_assert(glz::enum_name_v<Color::Red> == "Red");
 
-static_assert(glz::detail::get_enum_name(Color::Green) == "Green");
+static_assert(glz::get_enum_name(Color::Green) == "Green");
 
 suite get_enum_name_tests = [] {
    "get_enum_name"_test = [] {
       auto color = Color::Green;
 
-      const auto name = glz::detail::get_enum_name(color);
+      const auto name = glz::get_enum_name(color);
       expect(name == "Green");
    };
 };
@@ -3253,7 +3253,7 @@ template <>
 struct glz::meta<holds_some_num>
 {
    using T = holds_some_num;
-   static constexpr auto value = object("num", glz::detail::array_variant{&T::num});
+   static constexpr auto value = object("num", glz::array_variant{&T::num});
 };
 
 struct OptionA
@@ -4413,7 +4413,7 @@ struct glz::meta<date>
    static constexpr auto value = object("date", &T::human_readable);
 };
 
-namespace glz::detail
+namespace glz
 {
    template <>
    struct from<JSON, date>
@@ -7652,10 +7652,10 @@ suite hostname_include_test = [] {
       hostname_include_struct obj{};
 
       glz::context ctx{};
-      const auto hostname = glz::detail::get_hostname(ctx);
+      const auto hostname = glz::get_hostname(ctx);
 
       std::string file_name = "../{}_config.json";
-      glz::detail::replace_first_braces(file_name, hostname);
+      glz::replace_first_braces(file_name, hostname);
 
       const auto config_buffer = R"(
 // testing opening whitespace and comment
@@ -7709,10 +7709,10 @@ suite nested_include_tests = [] {
       expect(glz::error_code::none == glz::buffer_to_file(std::string_view{R"({"number":3.5})"}, "./core.jsonc"));
 
       glz::context ctx{};
-      const auto hostname = glz::detail::get_hostname(ctx);
+      const auto hostname = glz::get_hostname(ctx);
 
       std::string file_name = "./{}_include_test.jsonc";
-      glz::detail::replace_first_braces(file_name, hostname);
+      glz::replace_first_braces(file_name, hostname);
       expect(glz::error_code::none ==
              glz::buffer_to_file(std::string_view{R"({"core":{"include": "./core.jsonc"}})"}, file_name));
 
@@ -8501,7 +8501,7 @@ struct custom_struct
    std::string str{};
 };
 
-namespace glz::detail
+namespace glz
 {
    template <>
    struct from<JSON, custom_struct>
@@ -9400,7 +9400,7 @@ struct front_16_t
    int cb{0};
 };
 
-static_assert(bool(glz::detail::hash_info<front_16_t>.type));
+static_assert(bool(glz::hash_info<front_16_t>.type));
 
 suite front_16_test = [] {
    "front_16"_test = [] {
@@ -9429,7 +9429,7 @@ struct glz::meta<custom_errors_t>
    static constexpr auto value = object(&T::a, &T::alpha);
 };
 
-namespace glz::detail
+namespace glz
 {
    template <>
    struct from<JSON, custom_errors_t>
@@ -9949,8 +9949,8 @@ struct same_length_keys
 
 suite same_length_keys_test = [] {
    "same_length_keys"_test = [] {
-      static constexpr auto info = glz::detail::make_keys_info(glz::reflect<same_length_keys>::keys);
-      static_assert(info.type == glz::detail::hash_type::full_flat);
+      static constexpr auto info = glz::make_keys_info(glz::reflect<same_length_keys>::keys);
+      static_assert(info.type == glz::hash_type::full_flat);
 
       same_length_keys obj{};
       std::string buffer{};
@@ -9974,8 +9974,8 @@ struct offset_one
 
 suite offset_one_test = [] {
    "offset_one"_test = [] {
-      static constexpr auto info = glz::detail::make_keys_info(glz::reflect<same_length_keys>::keys);
-      static_assert(info.type == glz::detail::hash_type::full_flat);
+      static constexpr auto info = glz::make_keys_info(glz::reflect<same_length_keys>::keys);
+      static_assert(info.type == glz::hash_type::full_flat);
 
       offset_one obj{};
       std::string buffer{};
@@ -10018,7 +10018,7 @@ suite ndjson_options = [] {
 suite atomics = [] {
    "atomics"_test = [] {
       std::atomic<int> i{};
-      static_assert(glz::detail::is_atomic<decltype(i)>);
+      static_assert(glz::is_atomic<decltype(i)>);
       expect(not glz::read_json(i, R"(55)"));
       expect(i.load() == 55);
 

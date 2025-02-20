@@ -18,10 +18,7 @@ namespace glz
       requires(bool(Opts.comments))
       GLZ_ALWAYS_INLINE static void op(is_context auto&& ctx, auto&& it, auto&& end) noexcept;
    };
-}
-
-namespace glz::detail
-{
+   
    template <opts Opts>
    void skip_object(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
@@ -109,9 +106,9 @@ namespace glz::detail
          }
       }
    }
-
+   
    template <opts Opts>
-      requires(Opts.format == JSON || Opts.format == NDJSON)
+   requires(Opts.format == JSON || Opts.format == NDJSON)
    void skip_array(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       if constexpr (!Opts.validate_skipped) {
@@ -182,7 +179,7 @@ namespace glz::detail
          }
       }
    }
-
+   
    // parse_value is used for JSON pointer reading
    // we want the JSON pointer access to not care about trailing whitespace
    // so we use validate_skipped for precise validation and value skipping
@@ -194,10 +191,7 @@ namespace glz::detail
       skip_value<JSON>::op<opt_true<Opts, &opts::validate_skipped>>(ctx, it, end);
       return std::span{start, size_t(it - start)};
    }
-}
-
-namespace glz
-{
+   
    template <opts Opts>
    requires(not Opts.comments)
    GLZ_ALWAYS_INLINE void skip_value<JSON>::op(is_context auto&& ctx, auto&& it, auto&& end) noexcept

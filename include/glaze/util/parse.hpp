@@ -20,7 +20,7 @@
 #include "glaze/util/inline.hpp"
 #include "glaze/util/string_literal.hpp"
 
-namespace glz::detail
+namespace glz
 {
    inline constexpr std::array<bool, 256> numeric_table = [] {
       std::array<bool, 256> t{};
@@ -475,7 +475,7 @@ namespace glz::detail
       return (chunk & repeat_byte8(0b11110000u));
    }
 }
-
+   
 namespace glz
 {
    // skip whitespace
@@ -537,10 +537,7 @@ namespace glz
       
       return false;
    }
-}
    
-namespace glz::detail
-{
    GLZ_ALWAYS_INLINE void skip_matching_ws(const auto* ws, auto&& it, uint64_t length) noexcept
    {
       if (length > 7) {

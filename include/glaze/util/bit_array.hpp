@@ -7,7 +7,7 @@
 #include <bit>
 #include <limits>
 
-namespace glz::detail
+namespace glz
 {
    // Basicly std::bitset but exposes things normally not availible like the bitscan functions
    template <size_t N, std::unsigned_integral Chunk = uint64_t>

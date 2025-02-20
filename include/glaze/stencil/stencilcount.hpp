@@ -98,7 +98,7 @@ namespace glz
                   skip_whitespace();
 
                   static constexpr auto N = reflect<T>::size;
-                  static constexpr auto HashInfo = detail::hash_info<T>;
+                  static constexpr auto HashInfo = hash_info<T>;
 
                   const auto index =
                      detail::decode_hash_with_size<STENCIL, T, HashInfo, HashInfo.type>::op(start, end, key.size());

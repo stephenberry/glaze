@@ -8,7 +8,7 @@
 #include <string_view>
 #include <type_traits>
 
-namespace glz::detail
+namespace glz
 {
    template <class Char>
    inline bool compare(const Char* lhs, const Char* rhs, uint64_t count) noexcept

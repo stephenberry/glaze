@@ -329,25 +329,22 @@ namespace glz
 namespace glz
 {
    template <uint32_t Format = INVALID, class T = void>
+   struct to;
+   
+   template <uint32_t Format = INVALID, class T = void>
+   struct from;
+   
+   template <uint32_t Format = INVALID, class T = void>
    struct to_partial;
    
    template <uint32_t Format = INVALID>
    struct skip_value;
-   
-   namespace detail
-   {
-      template <uint32_t Format = INVALID, class T = void>
-      struct to;
-
-      template <uint32_t Format = INVALID, class T = void>
-      struct from;
-   }
 
    template <uint32_t Format, class T>
-   concept write_supported = requires { detail::to<Format, std::remove_cvref_t<T>>{}; };
+   concept write_supported = requires { to<Format, std::remove_cvref_t<T>>{}; };
 
    template <uint32_t Format, class T>
-   concept read_supported = requires { detail::from<Format, std::remove_cvref_t<T>>{}; };
+   concept read_supported = requires { from<Format, std::remove_cvref_t<T>>{}; };
    
    // These templates save typing by determining the core type used to select the proper to/from specialization
    // Long term I would like to remove these detail indirections.
