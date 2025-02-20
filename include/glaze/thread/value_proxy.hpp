@@ -5,7 +5,7 @@
 
 #include "glaze/core/common.hpp"
 
-namespace glz::detail
+namespace glz
 {
    template <class T>
    concept is_value_proxy = requires { T::glaze_value_proxy; };
