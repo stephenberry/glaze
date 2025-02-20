@@ -45,28 +45,20 @@ namespace glz
 #define GLZ_NULL_TERMINATED true
 #endif
    
-   struct opts_internal
-   {
-      enum struct internal : uint32_t {
-         none = 0,
-         opening_handled = 1 << 0, // the opening character has been handled
-         closing_handled = 1 << 1, // the closing character has been handled
-         ws_handled = 1 << 2, // whitespace has already been parsed
-         no_header = 1 << 3, // whether or not a binary header is needed
-         disable_write_unknown =
-         1 << 4, // whether to turn off writing unknown fields for a glz::meta specialized for unknown writing
-         is_padded = 1 << 5, // whether or not the read buffer is padded
-         disable_padding = 1 << 6, // to explicitly disable padding for contexts like includers
-         write_unchecked = 1 << 7 // the write buffer has sufficient space and does not need to be checked
-      };
-      // Sufficient space is only applicable to writing certain types and based on the write_padding_bytes
-
-      uint32_t internal{}; // default should be 0
-      
-      [[nodiscard]] constexpr bool operator==(const opts_internal&) const noexcept = default;
+   enum struct opts_internal : uint32_t {
+      none = 0,
+      opening_handled = 1 << 0, // the opening character has been handled
+      closing_handled = 1 << 1, // the closing character has been handled
+      ws_handled = 1 << 2, // whitespace has already been parsed
+      no_header = 1 << 3, // whether or not a binary header is needed
+      disable_write_unknown =
+      1 << 4, // whether to turn off writing unknown fields for a glz::meta specialized for unknown writing
+      is_padded = 1 << 5, // whether or not the read buffer is padded
+      disable_padding = 1 << 6, // to explicitly disable padding for contexts like includers
+      write_unchecked = 1 << 7 // the write buffer has sufficient space and does not need to be checked
    };
 
-   struct opts : opts_internal
+   struct opts
    {
       // USER CONFIGURABLE
       uint32_t format = JSON;
@@ -114,34 +106,36 @@ namespace glz
 
       bool hide_non_invocable =
          true; // Hides non-invocable members from the cli_menu (may be applied elsewhere in the future)
+      
+      uint32_t internal{}; // default should be 0
 
       [[nodiscard]] constexpr bool operator==(const opts&) const noexcept = default;
    };
 
-   consteval bool has_opening_handled(auto o) { return o.internal & uint32_t(opts::internal::opening_handled); }
+   consteval bool has_opening_handled(auto o) { return o.internal & uint32_t(opts_internal::opening_handled); }
 
-   consteval bool has_closing_handled(auto o) { return o.internal & uint32_t(opts::internal::closing_handled); }
+   consteval bool has_closing_handled(auto o) { return o.internal & uint32_t(opts_internal::closing_handled); }
 
-   consteval bool has_ws_handled(auto o) { return o.internal & uint32_t(opts::internal::ws_handled); }
+   consteval bool has_ws_handled(auto o) { return o.internal & uint32_t(opts_internal::ws_handled); }
 
-   consteval bool has_no_header(auto o) { return o.internal & uint32_t(opts::internal::no_header); }
+   consteval bool has_no_header(auto o) { return o.internal & uint32_t(opts_internal::no_header); }
 
    consteval bool has_disable_write_unknown(auto o)
    {
-      return o.internal & uint32_t(opts::internal::disable_write_unknown);
+      return o.internal & uint32_t(opts_internal::disable_write_unknown);
    }
 
-   consteval bool has_is_padded(auto o) { return o.internal & uint32_t(opts::internal::is_padded); }
+   consteval bool has_is_padded(auto o) { return o.internal & uint32_t(opts_internal::is_padded); }
 
-   consteval bool has_disable_padding(auto o) { return o.internal & uint32_t(opts::internal::disable_padding); }
+   consteval bool has_disable_padding(auto o) { return o.internal & uint32_t(opts_internal::disable_padding); }
 
-   consteval bool has_write_unchecked(auto o) { return o.internal & uint32_t(opts::internal::write_unchecked); }
+   consteval bool has_write_unchecked(auto o) { return o.internal & uint32_t(opts_internal::write_unchecked); }
 
    template <auto Opts>
    constexpr auto opening_handled()
    {
       auto ret = Opts;
-      ret.internal |= uint32_t(opts::internal::opening_handled);
+      ret.internal |= uint32_t(opts_internal::opening_handled);
       return ret;
    }
 
@@ -149,7 +143,7 @@ namespace glz
    constexpr auto opening_and_closing_handled()
    {
       auto ret = Opts;
-      ret.internal |= (uint32_t(opts::internal::opening_handled) | uint32_t(opts::internal::closing_handled));
+      ret.internal |= (uint32_t(opts_internal::opening_handled) | uint32_t(opts_internal::closing_handled));
       return ret;
    }
 
@@ -157,7 +151,7 @@ namespace glz
    constexpr auto opening_handled_off()
    {
       auto ret = Opts;
-      ret.internal &= ~uint32_t(opts::internal::opening_handled);
+      ret.internal &= ~uint32_t(opts_internal::opening_handled);
       return ret;
    }
 
@@ -165,7 +159,7 @@ namespace glz
    constexpr auto opening_and_closing_handled_off()
    {
       auto ret = Opts;
-      ret.internal &= ~(uint32_t(opts::internal::opening_handled) | uint32_t(opts::internal::closing_handled));
+      ret.internal &= ~(uint32_t(opts_internal::opening_handled) | uint32_t(opts_internal::closing_handled));
       return ret;
    }
 
@@ -173,7 +167,7 @@ namespace glz
    constexpr auto ws_handled()
    {
       auto ret = Opts;
-      ret.internal |= uint32_t(opts::internal::ws_handled);
+      ret.internal |= uint32_t(opts_internal::ws_handled);
       return ret;
    }
 
@@ -181,7 +175,7 @@ namespace glz
    constexpr auto ws_handled_off()
    {
       auto ret = Opts;
-      ret.internal &= ~uint32_t(opts::internal::ws_handled);
+      ret.internal &= ~uint32_t(opts_internal::ws_handled);
       return ret;
    }
 
@@ -189,7 +183,7 @@ namespace glz
    constexpr auto no_header_on()
    {
       auto ret = Opts;
-      ret.internal |= uint32_t(opts::internal::no_header);
+      ret.internal |= uint32_t(opts_internal::no_header);
       return ret;
    }
 
@@ -197,7 +191,7 @@ namespace glz
    constexpr auto no_header_off()
    {
       auto ret = Opts;
-      ret.internal &= ~uint32_t(opts::internal::no_header);
+      ret.internal &= ~uint32_t(opts_internal::no_header);
       return ret;
    }
 
@@ -205,7 +199,7 @@ namespace glz
    constexpr auto is_padded_on()
    {
       auto ret = Opts;
-      ret.internal |= uint32_t(opts::internal::is_padded);
+      ret.internal |= uint32_t(opts_internal::is_padded);
       return ret;
    }
 
@@ -213,7 +207,7 @@ namespace glz
    constexpr auto is_padded_off()
    {
       auto ret = Opts;
-      ret.internal &= ~uint32_t(opts::internal::is_padded);
+      ret.internal &= ~uint32_t(opts_internal::is_padded);
       return ret;
    }
 
@@ -221,7 +215,7 @@ namespace glz
    constexpr auto disable_padding_on()
    {
       auto ret = Opts;
-      ret.internal |= uint32_t(opts::internal::disable_padding);
+      ret.internal |= uint32_t(opts_internal::disable_padding);
       return ret;
    }
 
@@ -229,7 +223,7 @@ namespace glz
    constexpr auto disable_padding_off()
    {
       auto ret = Opts;
-      ret.internal &= ~uint32_t(opts::internal::disable_padding);
+      ret.internal &= ~uint32_t(opts_internal::disable_padding);
       return ret;
    }
 
@@ -237,7 +231,7 @@ namespace glz
    constexpr auto write_unchecked_on()
    {
       auto ret = Opts;
-      ret.internal |= uint32_t(opts::internal::write_unchecked);
+      ret.internal |= uint32_t(opts_internal::write_unchecked);
       return ret;
    }
 
@@ -245,7 +239,7 @@ namespace glz
    constexpr auto write_unchecked_off()
    {
       auto ret = Opts;
-      ret.internal &= ~uint32_t(opts::internal::write_unchecked);
+      ret.internal &= ~uint32_t(opts_internal::write_unchecked);
       return ret;
    }
 
@@ -283,7 +277,7 @@ namespace glz
    constexpr auto disable_write_unknown_off()
    {
       auto ret = Opts;
-      ret.internal &= ~uint32_t(opts::internal::disable_write_unknown);
+      ret.internal &= ~uint32_t(opts_internal::disable_write_unknown);
       return ret;
    }
 
@@ -291,7 +285,7 @@ namespace glz
    constexpr auto disable_write_unknown_on()
    {
       auto ret = Opts;
-      ret.internal |= uint32_t(opts::internal::disable_write_unknown);
+      ret.internal |= uint32_t(opts_internal::disable_write_unknown);
       return ret;
    }
 
