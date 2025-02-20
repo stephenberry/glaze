@@ -438,7 +438,7 @@ namespace glz
 
          // Setup signal handling to stop the server
          signals->async_wait([&](auto, auto) { ctx->stop(); });
-         
+
          // Create the acceptor synchronously so we know the actual port if set to 0 (select random free)
          auto executor = ctx->get_executor();
          asio::ip::tcp::acceptor acceptor(executor, {asio::ip::tcp::v6(), port});
@@ -508,7 +508,7 @@ namespace glz
       asio::awaitable<void> listener(asio::ip::tcp::acceptor acceptor)
       {
          auto executor = co_await asio::this_coro::executor;
-         
+
          while (true) {
             auto socket = co_await acceptor.async_accept(asio::use_awaitable);
             asio::co_spawn(executor, run_instance(std::move(socket)), asio::detached);
