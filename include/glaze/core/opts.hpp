@@ -44,8 +44,29 @@ namespace glz
 #ifndef GLZ_NULL_TERMINATED
 #define GLZ_NULL_TERMINATED true
 #endif
+   
+   struct opts_internal
+   {
+      enum struct internal : uint32_t {
+         none = 0,
+         opening_handled = 1 << 0, // the opening character has been handled
+         closing_handled = 1 << 1, // the closing character has been handled
+         ws_handled = 1 << 2, // whitespace has already been parsed
+         no_header = 1 << 3, // whether or not a binary header is needed
+         disable_write_unknown =
+         1 << 4, // whether to turn off writing unknown fields for a glz::meta specialized for unknown writing
+         is_padded = 1 << 5, // whether or not the read buffer is padded
+         disable_padding = 1 << 6, // to explicitly disable padding for contexts like includers
+         write_unchecked = 1 << 7 // the write buffer has sufficient space and does not need to be checked
+      };
+      // Sufficient space is only applicable to writing certain types and based on the write_padding_bytes
 
-   struct opts
+      uint32_t internal{}; // default should be 0
+      
+      [[nodiscard]] constexpr bool operator==(const opts_internal&) const noexcept = default;
+   };
+
+   struct opts : opts_internal
    {
       // USER CONFIGURABLE
       uint32_t format = JSON;
@@ -93,23 +114,6 @@ namespace glz
 
       bool hide_non_invocable =
          true; // Hides non-invocable members from the cli_menu (may be applied elsewhere in the future)
-
-      enum struct internal : uint32_t {
-         none = 0,
-         opening_handled = 1 << 0, // the opening character has been handled
-         closing_handled = 1 << 1, // the closing character has been handled
-         ws_handled = 1 << 2, // whitespace has already been parsed
-         no_header = 1 << 3, // whether or not a binary header is needed
-         disable_write_unknown =
-            1 << 4, // whether to turn off writing unknown fields for a glz::meta specialized for unknown writing
-         is_padded = 1 << 5, // whether or not the read buffer is padded
-         disable_padding = 1 << 6, // to explicitly disable padding for contexts like includers
-         write_unchecked = 1 << 7 // the write buffer has sufficient space and does not need to be checked
-      };
-      // Sufficient space is only applicable to writing certain types and based on the write_padding_bytes
-
-      // INTERNAL USE
-      uint32_t internal{}; // default should be 0
 
       [[nodiscard]] constexpr bool operator==(const opts&) const noexcept = default;
    };
