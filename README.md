@@ -8,7 +8,7 @@ Glaze also supports:
 
 > [!IMPORTANT]
 >
-> Glaze `main` is currently in development for v5.0.0
+> Glaze `main` branch is currently in development for v5.0.0
 >
 > v5.0.0 will remove the `detail` namespace from `to/from` specializations and many more internal functions, which will enable cleaner user customization and shorter compilation error messages.
 
