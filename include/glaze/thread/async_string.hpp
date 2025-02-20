@@ -419,7 +419,7 @@ namespace glz
 
 }
 
-namespace glz::detail
+namespace glz
 {
    template <uint32_t Format>
    struct from<Format, glz::async_string>
