@@ -99,8 +99,6 @@ namespace glz
       bool raw = false; // write out string like values without quotes
       bool raw_string = false; // do not decode/encode escaped characters for strings (improves read/write performance)
       bool structs_as_arrays = false; // Handle structs (reading/writing) without keys, which applies
-      bool allow_conversions = true; // Whether conversions between convertible types are
-      // allowed in binary, e.g. double -> float
 
       bool partial_read =
          false; // Reads into the deepest structural object and then exits without parsing the rest of the input
@@ -118,6 +116,9 @@ namespace glz
    
    // bool concatenate = true;
    // Concatenates ranges of std::pair into single objects when writing
+   
+   // bool allow_conversions = true;
+   // Whether conversions between convertible types are allowed in binary, e.g. double -> float
    
    // bool hide_non_invocable = true;
    // Hides non-invocable members from the cli_menu (may be applied elsewhere in the future)
@@ -141,6 +142,14 @@ namespace glz
    consteval bool check_concatenate(auto&& Opts) {
       if constexpr (requires { Opts.concatenate; }) {
          return Opts.concatenate;
+      } else {
+         return true;
+      }
+   }
+   
+   consteval bool check_allow_conversions(auto&& Opts) {
+      if constexpr (requires { Opts.allow_conversions; }) {
+         return Opts.allow_conversions;
       } else {
          return true;
       }

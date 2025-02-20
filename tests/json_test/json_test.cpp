@@ -9570,6 +9570,11 @@ struct TestSettingsData
    std::string username = "MISSING";
 };
 
+struct opts_allow_conversions : glz::opts
+{
+   bool allow_conversions = true;
+};
+
 suite TestSettingsData_test = [] {
    "TestSettingsData"_test = [] {
       TestSettingsData obj{};
@@ -9579,11 +9584,11 @@ suite TestSettingsData_test = [] {
       expect(not ec) << glz::format_error(ec, buffer);
    };
 
-   static constexpr glz::opts write_options{.comments = 1U, .prettify = 1U, .allow_conversions = 1U};
-   static constexpr glz::opts read_options{.comments = 1U,
-                                           .error_on_unknown_keys = 0U,
-                                           .skip_null_members = 1U,
-                                           .error_on_missing_keys = 0U,
+   static constexpr opts_allow_conversions write_options{{.comments = 1U, .prettify = 1U}, .allow_conversions = 1U};
+   static constexpr opts_allow_conversions read_options{{.comments = 1U,
+         .error_on_unknown_keys = 0U,
+         .skip_null_members = 1U,
+      .error_on_missing_keys = 0U},
                                            .allow_conversions = 1U};
 
    "TestSettingsData options"_test = [] {
