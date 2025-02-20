@@ -206,6 +206,8 @@ namespace glz
    template <opts Opts>
    inline void skip_value<BEVE>::op(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
+      using namespace glz::detail;
+      
       if (invalid_end(ctx, it, end)) {
          return;
       }
