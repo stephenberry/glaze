@@ -913,7 +913,7 @@ namespace glz
       return write<opts{.format = BEVE}>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
 
-   template <opts Opts = opts{}, class T>
+   template <auto Opts = opts{}, class T>
       requires(write_supported<BEVE, T>)
    [[nodiscard]] glz::expected<std::string, error_ctx> write_beve(T&& value)
    {
@@ -928,7 +928,7 @@ namespace glz
    }
 
    // requires file_name to be null terminated
-   template <opts Opts = opts{}, class T>
+   template <auto Opts = opts{}, class T>
       requires(write_supported<BEVE, T>)
    [[nodiscard]] error_ctx write_file_beve(T&& value, const sv file_name, auto&& buffer)
    {
@@ -966,7 +966,7 @@ namespace glz
       return write<opts{.format = BEVE, .structs_as_arrays = true}>(std::forward<T>(value));
    }
 
-   template <opts Opts = opts{}, class T>
+   template <auto Opts = opts{}, class T>
       requires(write_supported<BEVE, T>)
    [[nodiscard]] error_ctx write_file_beve_untagged(T&& value, const std::string& file_name, auto&& buffer)
    {

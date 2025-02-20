@@ -1555,7 +1555,7 @@ namespace glz
       return value;
    }
 
-   template <opts Opts = opts{}, class T>
+   template <auto Opts = opts{}, class T>
       requires(read_supported<BEVE, T>)
    [[nodiscard]] inline error_ctx read_file_beve(T& value, const sv file_name, auto&& buffer)
    {
@@ -1591,7 +1591,7 @@ namespace glz
       return value;
    }
 
-   template <opts Opts = opts{}, class T>
+   template <auto Opts = opts{}, class T>
       requires(read_supported<BEVE, T>)
    [[nodiscard]] inline error_ctx read_file_beve_untagged(T& value, const std::string& file_name, auto&& buffer)
    {

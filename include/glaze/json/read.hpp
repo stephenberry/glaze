@@ -147,7 +147,7 @@ namespace glz
       return false;
    }
 
-   template <opts Opts, class T, size_t I, class Value, class... SelectedIndex>
+   template <auto Opts, class T, size_t I, class Value, class... SelectedIndex>
       requires(glaze_object_t<T> || reflectable<T>)
    void decode_index(Value&& value, is_context auto&& ctx, auto&& it, auto&& end, SelectedIndex&&... selected_index)
    {
@@ -227,7 +227,7 @@ namespace glz
       }
    }
 
-   template <opts Opts, class T, size_t I, class Value>
+   template <auto Opts, class T, size_t I, class Value>
       requires(glaze_enum_t<T> || (meta_keys<T> && std::is_enum_v<T>))
    void decode_index(Value&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
@@ -256,7 +256,7 @@ namespace glz
       }
    }
 
-   template <opts Opts, class T, auto& HashInfo, class Value, class... SelectedIndex>
+   template <auto Opts, class T, auto& HashInfo, class Value, class... SelectedIndex>
       requires(glaze_object_t<T> || reflectable<T>)
    GLZ_ALWAYS_INLINE constexpr void parse_and_invoke(Value&& value, is_context auto&& ctx, auto&& it, auto&& end,
                                                      SelectedIndex&&... selected_index)
@@ -1996,7 +1996,7 @@ namespace glz
    template <pair_t T>
    struct from<JSON, T>
    {
-      template <opts Options, string_literal tag = "">
+      template <auto Options, string_literal tag = "">
       static void op(T& value, is_context auto&& ctx, auto&& it, auto&& end)
       {
          constexpr auto Opts = opening_handled_off<ws_handled_off<Options>()>();

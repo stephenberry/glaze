@@ -446,7 +446,7 @@ struct results
    }
 };
 
-template <glz::opts Opts>
+template <glz::auto Opts>
 auto glaze_test()
 {
    std::string buffer{json_minified};
@@ -789,7 +789,7 @@ struct glz::meta<abc_test<test_struct>>
                   &T::o, &T::p, &T::q, &T::r, &T::s, &T::t, &T::u, &T::v, &T::w, &T::x, &T::y, &T::z);
 };
 
-template <glz::opts Opts>
+template <glz::auto Opts>
 auto benchmark_tester()
 {
    std::string buffer{};
@@ -1203,7 +1203,7 @@ struct glz::meta<discord_message>
       object("t", &value_type::t, "d", &value_type::d, "op", &value_type::op, "s", &value_type::s);
 };
 
-template <class T, glz::opts Opts>
+template <class T, glz::auto Opts>
 auto generic_tester()
 {
    T obj{};

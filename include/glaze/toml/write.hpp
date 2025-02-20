@@ -273,7 +273,7 @@ namespace glz
       }
    };
 
-   template <opts Opts, bool minified_check = true, class B>
+   template <auto Opts, bool minified_check = true, class B>
       requires(Opts.format == TOML)
    GLZ_ALWAYS_INLINE void write_array_entry_separator(is_context auto&&, B&& b, auto&& ix)
    {
@@ -288,7 +288,7 @@ namespace glz
       ix += 2;
    }
 
-   template <opts Opts, bool minified_check = true, class B>
+   template <auto Opts, bool minified_check = true, class B>
       requires(Opts.format == TOML)
    GLZ_ALWAYS_INLINE void write_object_entry_separator(is_context auto&&, B&& b, auto&& ix)
    {
@@ -571,7 +571,7 @@ namespace glz
       return write<opts{.format = TOML}>(std::forward<T>(value));
    }
 
-   template <opts Opts = opts{.format = TOML}, class T>
+   template <auto Opts = opts{.format = TOML}, class T>
       requires(write_supported<TOML, T>)
    [[nodiscard]] error_ctx write_file_toml(T&& value, const sv file_name, auto&& buffer)
    {

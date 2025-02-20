@@ -114,203 +114,203 @@ namespace glz
       [[nodiscard]] constexpr bool operator==(const opts&) const noexcept = default;
    };
 
-   consteval bool has_opening_handled(opts o) { return o.internal & uint32_t(opts::internal::opening_handled); }
+   consteval bool has_opening_handled(auto o) { return o.internal & uint32_t(opts::internal::opening_handled); }
 
-   consteval bool has_closing_handled(opts o) { return o.internal & uint32_t(opts::internal::closing_handled); }
+   consteval bool has_closing_handled(auto o) { return o.internal & uint32_t(opts::internal::closing_handled); }
 
-   consteval bool has_ws_handled(opts o) { return o.internal & uint32_t(opts::internal::ws_handled); }
+   consteval bool has_ws_handled(auto o) { return o.internal & uint32_t(opts::internal::ws_handled); }
 
-   consteval bool has_no_header(opts o) { return o.internal & uint32_t(opts::internal::no_header); }
+   consteval bool has_no_header(auto o) { return o.internal & uint32_t(opts::internal::no_header); }
 
-   consteval bool has_disable_write_unknown(opts o)
+   consteval bool has_disable_write_unknown(auto o)
    {
       return o.internal & uint32_t(opts::internal::disable_write_unknown);
    }
 
-   consteval bool has_is_padded(opts o) { return o.internal & uint32_t(opts::internal::is_padded); }
+   consteval bool has_is_padded(auto o) { return o.internal & uint32_t(opts::internal::is_padded); }
 
-   consteval bool has_disable_padding(opts o) { return o.internal & uint32_t(opts::internal::disable_padding); }
+   consteval bool has_disable_padding(auto o) { return o.internal & uint32_t(opts::internal::disable_padding); }
 
-   consteval bool has_write_unchecked(opts o) { return o.internal & uint32_t(opts::internal::write_unchecked); }
+   consteval bool has_write_unchecked(auto o) { return o.internal & uint32_t(opts::internal::write_unchecked); }
 
-   template <opts Opts>
+   template <auto Opts>
    constexpr auto opening_handled()
    {
-      opts ret = Opts;
+      auto ret = Opts;
       ret.internal |= uint32_t(opts::internal::opening_handled);
       return ret;
    }
 
-   template <opts Opts>
+   template <auto Opts>
    constexpr auto opening_and_closing_handled()
    {
-      opts ret = Opts;
+      auto ret = Opts;
       ret.internal |= (uint32_t(opts::internal::opening_handled) | uint32_t(opts::internal::closing_handled));
       return ret;
    }
 
-   template <opts Opts>
+   template <auto Opts>
    constexpr auto opening_handled_off()
    {
-      opts ret = Opts;
+      auto ret = Opts;
       ret.internal &= ~uint32_t(opts::internal::opening_handled);
       return ret;
    }
 
-   template <opts Opts>
+   template <auto Opts>
    constexpr auto opening_and_closing_handled_off()
    {
-      opts ret = Opts;
+      auto ret = Opts;
       ret.internal &= ~(uint32_t(opts::internal::opening_handled) | uint32_t(opts::internal::closing_handled));
       return ret;
    }
 
-   template <opts Opts>
+   template <auto Opts>
    constexpr auto ws_handled()
    {
-      opts ret = Opts;
+      auto ret = Opts;
       ret.internal |= uint32_t(opts::internal::ws_handled);
       return ret;
    }
 
-   template <opts Opts>
+   template <auto Opts>
    constexpr auto ws_handled_off()
    {
-      opts ret = Opts;
+      auto ret = Opts;
       ret.internal &= ~uint32_t(opts::internal::ws_handled);
       return ret;
    }
 
-   template <opts Opts>
+   template <auto Opts>
    constexpr auto no_header_on()
    {
-      opts ret = Opts;
+      auto ret = Opts;
       ret.internal |= uint32_t(opts::internal::no_header);
       return ret;
    }
 
-   template <opts Opts>
+   template <auto Opts>
    constexpr auto no_header_off()
    {
-      opts ret = Opts;
+      auto ret = Opts;
       ret.internal &= ~uint32_t(opts::internal::no_header);
       return ret;
    }
 
-   template <opts Opts>
+   template <auto Opts>
    constexpr auto is_padded_on()
    {
-      opts ret = Opts;
+      auto ret = Opts;
       ret.internal |= uint32_t(opts::internal::is_padded);
       return ret;
    }
 
-   template <opts Opts>
+   template <auto Opts>
    constexpr auto is_padded_off()
    {
-      opts ret = Opts;
+      auto ret = Opts;
       ret.internal &= ~uint32_t(opts::internal::is_padded);
       return ret;
    }
 
-   template <opts Opts>
+   template <auto Opts>
    constexpr auto disable_padding_on()
    {
-      opts ret = Opts;
+      auto ret = Opts;
       ret.internal |= uint32_t(opts::internal::disable_padding);
       return ret;
    }
 
-   template <opts Opts>
+   template <auto Opts>
    constexpr auto disable_padding_off()
    {
-      opts ret = Opts;
+      auto ret = Opts;
       ret.internal &= ~uint32_t(opts::internal::disable_padding);
       return ret;
    }
 
-   template <opts Opts>
+   template <auto Opts>
    constexpr auto write_unchecked_on()
    {
-      opts ret = Opts;
+      auto ret = Opts;
       ret.internal |= uint32_t(opts::internal::write_unchecked);
       return ret;
    }
 
-   template <opts Opts>
+   template <auto Opts>
    constexpr auto write_unchecked_off()
    {
-      opts ret = Opts;
+      auto ret = Opts;
       ret.internal &= ~uint32_t(opts::internal::write_unchecked);
       return ret;
    }
 
-   template <opts Opts, auto member_ptr>
+   template <auto Opts, auto member_ptr>
    constexpr auto set_opt(auto&& value)
    {
-      opts ret = Opts;
+      auto ret = Opts;
       ret.*member_ptr = value;
       return ret;
    }
 
-   template <opts Opts, auto member_ptr>
+   template <auto Opts, auto member_ptr>
    constexpr auto opt_on()
    {
-      opts ret = Opts;
+      auto ret = Opts;
       ret.*member_ptr = true;
       return ret;
    }
 
-   template <opts Opts, auto member_ptr>
+   template <auto Opts, auto member_ptr>
    inline constexpr auto opt_true = opt_on<Opts, member_ptr>();
 
-   template <opts Opts, auto member_ptr>
+   template <auto Opts, auto member_ptr>
    constexpr auto opt_off()
    {
-      opts ret = Opts;
+      auto ret = Opts;
       ret.*member_ptr = false;
       return ret;
    }
 
-   template <opts Opts, auto member_ptr>
+   template <auto Opts, auto member_ptr>
    inline constexpr auto opt_false = opt_off<Opts, member_ptr>();
 
-   template <opts Opts>
+   template <auto Opts>
    constexpr auto disable_write_unknown_off()
    {
-      opts ret = Opts;
+      auto ret = Opts;
       ret.internal &= ~uint32_t(opts::internal::disable_write_unknown);
       return ret;
    }
 
-   template <opts Opts>
+   template <auto Opts>
    constexpr auto disable_write_unknown_on()
    {
-      opts ret = Opts;
+      auto ret = Opts;
       ret.internal |= uint32_t(opts::internal::disable_write_unknown);
       return ret;
    }
 
-   template <opts Opts>
+   template <auto Opts>
    constexpr auto set_beve()
    {
-      opts ret = Opts;
+      auto ret = Opts;
       ret.format = BEVE;
       return ret;
    }
 
-   template <opts Opts>
+   template <auto Opts>
    constexpr auto set_json()
    {
-      opts ret = Opts;
+      auto ret = Opts;
       ret.format = JSON;
       return ret;
    }
 
-   template <opts Opts>
+   template <auto Opts>
    constexpr auto set_toml()
    {
-      opts ret = Opts;
+      auto ret = Opts;
       ret.format = TOML;
       return ret;
    }

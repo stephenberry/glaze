@@ -11,7 +11,7 @@
 
 namespace glz
 {
-   template <opts Opts, bool Padded = false>
+   template <auto Opts, bool Padded = false>
    auto read_iterators(contiguous auto&& buffer) noexcept
    {
       static_assert(sizeof(decltype(*buffer.data())) == 1);
@@ -29,7 +29,7 @@ namespace glz
       return std::pair{it, end};
    }
 
-   template <opts Opts, class T>
+   template <auto Opts, class T>
       requires read_supported<Opts.format, T>
    [[nodiscard]] error_ctx read(T& value, contiguous auto&& buffer, is_context auto&& ctx)
    {
@@ -106,7 +106,7 @@ namespace glz
       return {ctx.error, ctx.custom_error_message, size_t(it - start), ctx.includer_error};
    }
 
-   template <opts Opts, class T>
+   template <auto Opts, class T>
       requires read_supported<Opts.format, T>
    [[nodiscard]] error_ctx read(T& value, contiguous auto&& buffer)
    {
@@ -121,7 +121,7 @@ namespace glz
    concept is_buffer = c_style_char_buffer<T> || contiguous<T>;
 
    // for char array input
-   template <opts Opts, class T, c_style_char_buffer Buffer>
+   template <auto Opts, class T, c_style_char_buffer Buffer>
       requires read_supported<Opts.format, T>
    [[nodiscard]] error_ctx read(T& value, Buffer&& buffer, auto&& ctx)
    {
@@ -132,7 +132,7 @@ namespace glz
       return read<Opts>(value, str, ctx);
    }
 
-   template <opts Opts, class T, c_style_char_buffer Buffer>
+   template <auto Opts, class T, c_style_char_buffer Buffer>
       requires read_supported<Opts.format, T>
    [[nodiscard]] error_ctx read(T& value, Buffer&& buffer)
    {

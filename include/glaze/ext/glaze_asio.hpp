@@ -80,7 +80,7 @@ namespace glz
 
       // Decodes a repe::message into a structure
       // Returns a std::string with a formatted error on error
-      template <opts Opts = opts{}, class T>
+      template <auto Opts = opts{}, class T>
       inline std::optional<std::string> decode_message(T&& value, message& msg)
       {
          if (bool(msg.header.ec)) {
@@ -304,7 +304,7 @@ namespace glz
       ~unique_socket() { pool->free(index); }
    };
 
-   template <opts Opts = opts{}>
+   template <auto Opts = opts{}>
    struct asio_client
    {
       std::string host{"localhost"}; // host name
@@ -381,7 +381,7 @@ namespace glz
       }
    };
 
-   template <opts Opts = opts{}>
+   template <auto Opts = opts{}>
    struct asio_server
    {
       uint16_t port{}; // 0 will select a random free port

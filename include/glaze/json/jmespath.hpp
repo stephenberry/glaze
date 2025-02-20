@@ -423,14 +423,14 @@ namespace glz
 
    namespace detail
    {
-      template <opts Opts = opts{}, class T>
+      template <auto Opts = opts{}, class T>
          requires(Opts.format == JSON && not readable_array_t<T>)
       inline void handle_slice(const jmespath::ArrayParseResult&, T&&, context& ctx, auto&&, auto&&)
       {
          ctx.error = error_code::syntax_error;
       }
 
-      template <opts Opts = opts{}, class T>
+      template <auto Opts = opts{}, class T>
          requires(Opts.format == JSON && readable_array_t<T>)
       inline void handle_slice(const jmespath::ArrayParseResult& decomposed_key, T&& value, context& ctx, auto&& it,
                                auto&& end)
@@ -579,7 +579,7 @@ namespace glz
    }
 
    // Read into a C++ type given a path denoted by a JMESPath query
-   template <string_literal Path, opts Options = opts{}, class T, contiguous Buffer>
+   template <string_literal Path, auto Options = opts{}, class T, contiguous Buffer>
       requires(Options.format == JSON)
    [[nodiscard]] inline error_ctx read_jmespath(T&& value, Buffer&& buffer)
    {
@@ -860,7 +860,7 @@ namespace glz
 
    // Read into a C++ type given a path denoted by a JMESPath query
    // This version supports a runtime path
-   template <opts Options = opts{}, class T, contiguous Buffer>
+   template <auto Options = opts{}, class T, contiguous Buffer>
       requires(Options.format == JSON)
    [[nodiscard]] inline error_ctx read_jmespath(const jmespath_expression& expression, T&& value, Buffer&& buffer)
    {

@@ -334,7 +334,7 @@ namespace glz
 {
    // These functions allow a json_t value to be read/written to a C++ struct
 
-   template <opts Opts, class T>
+   template <auto Opts, class T>
       requires read_supported<Opts.format, T>
    [[nodiscard]] error_ctx read(T& value, const json_t& source)
    {

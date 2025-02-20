@@ -29,7 +29,7 @@ struct nullable_object
    std::optional<int> i{};
 };
 
-template <glz::opts Opts>
+template <glz::auto Opts>
 inline void should_fail()
 {
    "unclosed_array"_test = [] {
@@ -319,7 +319,7 @@ inline void should_fail()
    };
 }
 
-template <glz::opts Opts>
+template <glz::auto Opts>
 inline void should_pass()
 {
    "bool_object"_test = [] {

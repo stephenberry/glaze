@@ -54,7 +54,7 @@ namespace glz
       }
    }
 
-   template <opts Opts = opts{.prettify = true}, class T>
+   template <auto Opts = opts{.prettify = true}, class T>
       requires(glaze_object_t<T> || reflectable<T>)
    inline void run_cli_menu(T& value, cli_menu_boolean auto& show_menu)
    {
@@ -251,7 +251,7 @@ namespace glz
       }
    }
 
-   template <opts Opts = opts{.prettify = true}, class T>
+   template <auto Opts = opts{.prettify = true}, class T>
       requires(glaze_object_t<T> || reflectable<T>)
    inline void run_cli_menu(T& value)
    {

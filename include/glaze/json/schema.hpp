@@ -666,7 +666,7 @@ namespace glz
 
    }
 
-   template <class T, opts Opts = opts{}, class Buffer>
+   template <class T, auto Opts = opts{}, class Buffer>
    [[nodiscard]] error_ctx write_json_schema(Buffer&& buffer)
    {
       detail::schematic s{};
@@ -675,7 +675,7 @@ namespace glz
       return write<opt_false<Opts, &opts::write_type_info>>(std::move(s), std::forward<Buffer>(buffer));
    }
 
-   template <class T, opts Opts = opts{}>
+   template <class T, auto Opts = opts{}>
    [[nodiscard]] glz::expected<std::string, error_ctx> write_json_schema()
    {
       std::string buffer{};

@@ -73,7 +73,7 @@ namespace glz
       }
    };
 
-   template <opts Opts, bool minified_check = true, class B>
+   template <auto Opts, bool minified_check = true, class B>
       requires(Opts.format == JSON || Opts.format == NDJSON)
    GLZ_ALWAYS_INLINE void write_object_entry_separator(is_context auto&& ctx, B&& b, auto&& ix)
    {
@@ -886,7 +886,7 @@ namespace glz
       }
    };
 
-   template <opts Opts, bool minified_check = true, class B>
+   template <auto Opts, bool minified_check = true, class B>
    GLZ_ALWAYS_INLINE void write_array_entry_separator(is_context auto&& ctx, B&& b, auto&& ix)
    {
       if constexpr (Opts.prettify) {
@@ -920,7 +920,7 @@ namespace glz
    }
 
    // "key":value pair output
-   template <opts Opts, class Key, class Value, is_context Ctx, class B>
+   template <auto Opts, class Key, class Value, is_context Ctx, class B>
    GLZ_ALWAYS_INLINE void write_pair_content(const Key& key, Value&& value, Ctx& ctx, B&& b, auto&& ix)
    {
       if constexpr (str_t<Key> || char_t<Key> || glaze_enum_t<Key> || Opts.quoted_num) {
@@ -1235,7 +1235,7 @@ namespace glz
    template <pair_t T>
    struct to<JSON, T>
    {
-      template <glz::opts Opts, class B, class Ix>
+      template <auto Opts, class B, class Ix>
       static void op(const T& value, is_context auto&& ctx, B&& b, Ix&& ix)
       {
          const auto& [key, val] = value;
@@ -2005,7 +2005,7 @@ namespace glz
       return write<opts{.comments = true}>(std::forward<T>(value));
    }
 
-   template <opts Opts = opts{}, class T>
+   template <auto Opts = opts{}, class T>
       requires(write_supported<JSON, T>)
    [[nodiscard]] error_ctx write_file_json(T&& value, const sv file_name, auto&& buffer)
    {
