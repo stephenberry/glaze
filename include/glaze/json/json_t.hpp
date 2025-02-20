@@ -348,7 +348,8 @@ namespace glz
       }
    }
 
-   template <read_json_supported T>
+   template <class T>
+      requires(read_supported<JSON, T>)
    [[nodiscard]] error_ctx read_json(T& value, const json_t& source)
    {
       auto buffer = source.dump();
@@ -360,7 +361,8 @@ namespace glz
       }
    }
 
-   template <read_json_supported T>
+   template <class T>
+      requires(read_supported<JSON, T>)
    [[nodiscard]] expected<T, error_ctx> read_json(const json_t& source)
    {
       auto buffer = source.dump();

@@ -555,25 +555,29 @@ namespace glz
       };
    } // namespace detail
 
-   template <write_toml_supported T, output_buffer Buffer>
+   template <class T, output_buffer Buffer>
+      requires(write_supported<TOML, T>)
    [[nodiscard]] error_ctx write_toml(T&& value, Buffer&& buffer)
    {
       return write<opts{.format = TOML}>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
 
-   template <write_toml_supported T, raw_buffer Buffer>
+   template <class T, raw_buffer Buffer>
+      requires(write_supported<TOML, T>)
    [[nodiscard]] glz::expected<size_t, error_ctx> write_toml(T&& value, Buffer&& buffer)
    {
       return write<opts{.format = TOML}>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
 
-   template <write_toml_supported T>
+   template <class T>
+      requires(write_supported<TOML, T>)
    [[nodiscard]] glz::expected<std::string, error_ctx> write_toml(T&& value)
    {
       return write<opts{.format = TOML}>(std::forward<T>(value));
    }
 
-   template <opts Opts = opts{.format = TOML}, write_json_supported T>
+   template <opts Opts = opts{.format = TOML}, class T>
+      requires(write_supported<TOML, T>)
    [[nodiscard]] error_ctx write_file_toml(T&& value, const sv file_name, auto&& buffer)
    {
       const auto ec = write<set_toml<Opts>()>(std::forward<T>(value), buffer);

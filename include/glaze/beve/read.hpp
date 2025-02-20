@@ -1546,13 +1546,15 @@ namespace glz
       };
    }
 
-   template <read_beve_supported T, class Buffer>
+   template <class T, class Buffer>
+      requires(read_supported<BEVE, T>)
    [[nodiscard]] inline error_ctx read_beve(T&& value, Buffer&& buffer)
    {
       return read<opts{.format = BEVE}>(value, std::forward<Buffer>(buffer));
    }
 
-   template <read_beve_supported T, class Buffer>
+   template <class T, class Buffer>
+      requires(read_supported<BEVE, T>)
    [[nodiscard]] inline expected<T, error_ctx> read_beve(Buffer&& buffer)
    {
       T value{};
@@ -1563,7 +1565,8 @@ namespace glz
       return value;
    }
 
-   template <opts Opts = opts{}, read_beve_supported T>
+   template <opts Opts = opts{}, class T>
+      requires(read_supported<BEVE, T>)
    [[nodiscard]] inline error_ctx read_file_beve(T& value, const sv file_name, auto&& buffer)
    {
       context ctx{};
@@ -1578,14 +1581,16 @@ namespace glz
       return read<set_beve<Opts>()>(value, buffer, ctx);
    }
 
-   template <read_beve_supported T, class Buffer>
+   template <class T, class Buffer>
+      requires(read_supported<BEVE, T>)
    [[nodiscard]] inline error_ctx read_binary_untagged(T&& value, Buffer&& buffer)
    {
       return read<opts{.format = BEVE, .structs_as_arrays = true}>(std::forward<T>(value),
                                                                    std::forward<Buffer>(buffer));
    }
 
-   template <read_beve_supported T, class Buffer>
+   template <class T, class Buffer>
+      requires(read_supported<BEVE, T>)
    [[nodiscard]] inline expected<T, error_ctx> read_binary_untagged(Buffer&& buffer)
    {
       T value{};
@@ -1596,7 +1601,8 @@ namespace glz
       return value;
    }
 
-   template <opts Opts = opts{}, read_beve_supported T>
+   template <opts Opts = opts{}, class T>
+      requires(read_supported<BEVE, T>)
    [[nodiscard]] inline error_ctx read_file_beve_untagged(T& value, const std::string& file_name, auto&& buffer)
    {
       return read_file_beve<opt_true<Opts, &opts::structs_as_arrays>>(value, file_name, buffer);

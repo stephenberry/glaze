@@ -1965,49 +1965,57 @@ namespace glz
       };
    } // namespace detail
 
-   template <write_json_supported T, output_buffer Buffer>
+   template <class T, output_buffer Buffer>
+      requires(write_supported<JSON, T>)
    [[nodiscard]] error_ctx write_json(T&& value, Buffer&& buffer)
    {
       return write<opts{}>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
 
-   template <write_json_supported T, raw_buffer Buffer>
+   template <class T, raw_buffer Buffer>
+      requires(write_supported<JSON, T>)
    [[nodiscard]] glz::expected<size_t, error_ctx> write_json(T&& value, Buffer&& buffer)
    {
       return write<opts{}>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
 
-   template <write_json_supported T>
+   template <class T>
+      requires(write_supported<JSON, T>)
    [[nodiscard]] glz::expected<std::string, error_ctx> write_json(T&& value)
    {
       return write<opts{}>(std::forward<T>(value));
    }
 
-   template <auto& Partial, write_json_supported T, output_buffer Buffer>
+   template <auto& Partial, class T, output_buffer Buffer>
+      requires(write_supported<JSON, T>)
    [[nodiscard]] error_ctx write_json(T&& value, Buffer&& buffer)
    {
       return write<Partial, opts{}>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
 
-   template <auto& Partial, write_json_supported T, raw_buffer Buffer>
+   template <auto& Partial, class T, raw_buffer Buffer>
+      requires(write_supported<JSON, T>)
    [[nodiscard]] glz::expected<size_t, error_ctx> write_json(T&& value, Buffer&& buffer)
    {
       return write<Partial, opts{}>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
 
-   template <write_json_supported T, class Buffer>
+   template <class T, class Buffer>
+      requires(write_supported<JSON, T>)
    [[nodiscard]] error_ctx write_jsonc(T&& value, Buffer&& buffer)
    {
       return write<opts{.comments = true}>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
 
-   template <write_json_supported T>
+   template <class T>
+      requires(write_supported<JSON, T>)
    [[nodiscard]] glz::expected<std::string, error_ctx> write_jsonc(T&& value)
    {
       return write<opts{.comments = true}>(std::forward<T>(value));
    }
 
-   template <opts Opts = opts{}, write_json_supported T>
+   template <opts Opts = opts{}, class T>
+      requires(write_supported<JSON, T>)
    [[nodiscard]] error_ctx write_file_json(T&& value, const sv file_name, auto&& buffer)
    {
       const auto ec = write<set_json<Opts>()>(std::forward<T>(value), buffer);

@@ -3245,14 +3245,16 @@ namespace glz
          skip_value, std::forward<Buffer>(buffer), ctx);
    }
 
-   template <read_json_supported T, is_buffer Buffer>
+   template <class T, is_buffer Buffer>
+      requires(read_supported<JSON, T>)
    [[nodiscard]] error_ctx read_json(T& value, Buffer&& buffer)
    {
       context ctx{};
       return read<opts{}>(value, std::forward<Buffer>(buffer), ctx);
    }
 
-   template <read_json_supported T, is_buffer Buffer>
+   template <class T, is_buffer Buffer>
+      requires(read_supported<JSON, T>)
    [[nodiscard]] expected<T, error_ctx> read_json(Buffer&& buffer)
    {
       T value{};
@@ -3264,14 +3266,16 @@ namespace glz
       return value;
    }
 
-   template <read_json_supported T, is_buffer Buffer>
+   template <class T, is_buffer Buffer>
+      requires(read_supported<JSON, T>)
    [[nodiscard]] error_ctx read_jsonc(T& value, Buffer&& buffer)
    {
       context ctx{};
       return read<opts{.comments = true}>(value, std::forward<Buffer>(buffer), ctx);
    }
 
-   template <read_json_supported T, is_buffer Buffer>
+   template <class T, is_buffer Buffer>
+      requires(read_supported<JSON, T>)
    [[nodiscard]] expected<T, error_ctx> read_jsonc(Buffer&& buffer)
    {
       T value{};
@@ -3283,7 +3287,8 @@ namespace glz
       return value;
    }
 
-   template <auto Opts = opts{}, read_json_supported T, is_buffer Buffer>
+   template <auto Opts = opts{}, class T, is_buffer Buffer>
+      requires(read_supported<JSON, T>)
    [[nodiscard]] error_ctx read_file_json(T& value, const sv file_name, Buffer&& buffer)
    {
       context ctx{};
@@ -3298,7 +3303,8 @@ namespace glz
       return read<set_json<Opts>()>(value, buffer, ctx);
    }
 
-   template <auto Opts = opts{}, read_json_supported T, is_buffer Buffer>
+   template <auto Opts = opts{}, class T, is_buffer Buffer>
+      requires(read_supported<JSON, T>)
    [[nodiscard]] error_ctx read_file_jsonc(T& value, const sv file_name, Buffer&& buffer)
    {
       context ctx{};
