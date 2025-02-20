@@ -6,6 +6,12 @@ Glaze also supports:
 - [BEVE](https://github.com/beve-org/beve) (binary efficient versatile encoding)
 - [CSV](./docs/csv.md) (comma separated value)
 
+> [!IMPORTANT]
+>
+> Glaze `main` is currently in development for v5.0.0
+>
+> v5.0.0 will remove the `detail` namespace from `to/from` specializations and many more internal functions, which will enable cleaner user customization and shorter compilation error messages.
+
 ## With compile time reflection for MSVC, Clang, and GCC!
 
 - Read/write aggregate initializable structs without writing any metadata or macros!
