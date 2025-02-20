@@ -122,41 +122,37 @@ namespace glz
    // bool hide_non_invocable = true;
    // Hides non-invocable members from the cli_menu (may be applied elsewhere in the future)
    
-   template <auto Opts>
-   inline constexpr bool check_validate_trailing_whitespace = [] {
+   consteval bool check_validate_trailing_whitespace(auto Opts) {
       if constexpr (requires { Opts.validate_trailing_whitespace; }) {
          return Opts.validate_trailing_whitespace;
       } else {
          return false;
       }
-   }();
+   }
    
-   template <auto Opts>
-   inline constexpr bool check_partial_read = [] {
+   consteval bool check_partial_read(auto Opts) {
       if constexpr (requires { Opts.partial_read; }) {
          return Opts.partial_read;
       } else {
          return false;
       }
-   }();
+   }
    
-   template <auto Opts>
-   inline constexpr bool check_concatenate = [] {
+   consteval bool check_concatenate(auto Opts) {
       if constexpr (requires { Opts.concatenate; }) {
          return Opts.concatenate;
       } else {
          return true;
       }
-   }();
+   }
    
-   template <auto Opts>
-   inline constexpr bool check_hide_non_invocable = [] {
+   consteval bool check_hide_non_invocable(auto Opts) {
       if constexpr (requires { Opts.hide_non_invocable; }) {
          return Opts.hide_non_invocable;
       } else {
          return true;
       }
-   }();
+   }
 
    // TODO: These has_ checks should probably be changed to check_
    consteval bool has_opening_handled(auto o) { return o.internal & uint32_t(opts_internal::opening_handled); }

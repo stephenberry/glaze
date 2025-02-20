@@ -970,7 +970,7 @@ namespace glz
                return;
             }
             ++it;
-            std::conditional_t<check_partial_read<Opts>, size_t, const size_t> n = int_from_compressed(ctx, it, end);
+            std::conditional_t<check_partial_read(Opts), size_t, const size_t> n = int_from_compressed(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]] {
                return;
             }
@@ -996,7 +996,7 @@ namespace glz
       // for types like std::vector<std::pair...> that can't look up with operator[]
       // Instead of hashing or linear searching, we just clear the input and overwrite the entire contents
       template <auto Opts>
-         requires(pair_t<range_value_t<T>> && check_concatenate<Opts> == true)
+         requires(pair_t<range_value_t<T>> && check_concatenate(Opts) == true)
       static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
       {
          using Element = typename T::value_type;
