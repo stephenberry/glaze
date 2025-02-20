@@ -31,7 +31,7 @@ namespace glz
             }
             else {
                // do not read anything into the const value
-               detail::skip_value<BEVE>::op<Opts>(std::forward<Ctx>(ctx), std::forward<It0>(it), std::forward<It1>(end));
+               skip_value<BEVE>::op<Opts>(std::forward<Ctx>(ctx), std::forward<It0>(it), std::forward<It1>(end));
             }
          }
          else {
@@ -51,7 +51,7 @@ namespace glz
             }
             else {
                // do not read anything into the const value
-               detail::skip_value<BEVE>::op<Opts>(std::forward<Ctx>(ctx), std::forward<It0>(it), std::forward<It1>(end));
+               skip_value<BEVE>::op<Opts>(std::forward<Ctx>(ctx), std::forward<It0>(it), std::forward<It1>(end));
             }
          }
          else {

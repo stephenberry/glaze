@@ -331,6 +331,9 @@ namespace glz
    template <uint32_t Format = INVALID, class T = void>
    struct to_partial;
    
+   template <uint32_t Format = INVALID>
+   struct skip_value;
+   
    namespace detail
    {
       template <uint32_t Format = INVALID, class T = void>
@@ -338,9 +341,6 @@ namespace glz
 
       template <uint32_t Format = INVALID, class T = void>
       struct from;
-
-      template <uint32_t Format = INVALID>
-      struct skip_value;
    }
 
    template <uint32_t Format, class T>

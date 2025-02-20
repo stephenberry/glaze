@@ -9,7 +9,7 @@
 #include "glaze/file/file_ops.hpp"
 #include "glaze/util/dump.hpp"
 
-namespace glz::detail
+namespace glz
 {
    template <>
    struct skip_value<BEVE>
@@ -17,7 +17,10 @@ namespace glz::detail
       template <opts Opts>
       inline static void op(is_context auto&& ctx, auto&& it, auto&& end) noexcept;
    };
+}
 
+namespace glz::detail
+{
    inline void skip_string_beve(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       ++it;
@@ -196,7 +199,10 @@ namespace glz::detail
       ++it;
       skip_value<BEVE>::op<Opts>(ctx, it, end);
    }
+}
 
+namespace glz
+{
    template <opts Opts>
    inline void skip_value<BEVE>::op(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
@@ -204,36 +210,36 @@ namespace glz::detail
          return;
       }
       switch (uint8_t(*it) & 0b00000'111) {
-      case tag::null: {
-         ++it;
-         break;
-      }
-      case tag::number: {
-         skip_number_beve(ctx, it, end);
-         break;
-      }
-      case tag::string: {
-         skip_string_beve(ctx, it, end);
-         break;
-      }
-      case tag::object: {
-         skip_object_beve<Opts>(ctx, it, end);
-         break;
-      }
-      case tag::typed_array: {
-         skip_typed_array_beve<Opts>(ctx, it, end);
-         break;
-      }
-      case tag::generic_array: {
-         skip_untyped_array_beve<Opts>(ctx, it, end);
-         break;
-      }
-      case tag::extensions: {
-         skip_additional_beve<Opts>(ctx, it, end);
-         break;
-      }
-      default:
-         ctx.error = error_code::syntax_error;
+         case tag::null: {
+            ++it;
+            break;
+         }
+         case tag::number: {
+            skip_number_beve(ctx, it, end);
+            break;
+         }
+         case tag::string: {
+            skip_string_beve(ctx, it, end);
+            break;
+         }
+         case tag::object: {
+            skip_object_beve<Opts>(ctx, it, end);
+            break;
+         }
+         case tag::typed_array: {
+            skip_typed_array_beve<Opts>(ctx, it, end);
+            break;
+         }
+         case tag::generic_array: {
+            skip_untyped_array_beve<Opts>(ctx, it, end);
+            break;
+         }
+         case tag::extensions: {
+            skip_additional_beve<Opts>(ctx, it, end);
+            break;
+         }
+         default:
+            ctx.error = error_code::syntax_error;
       }
    }
 }

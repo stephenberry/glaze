@@ -47,7 +47,7 @@ namespace glz
             }
             else {
                // do not read anything into the const value
-               detail::skip_value<JSON>::op<Opts>(std::forward<Ctx>(ctx), std::forward<It0>(it), std::forward<It1>(end));
+               skip_value<JSON>::op<Opts>(std::forward<Ctx>(ctx), std::forward<It0>(it), std::forward<It1>(end));
             }
          }
          else {
@@ -98,7 +98,7 @@ namespace glz
             }
          }
          else {
-            detail::skip_value<JSON>::op<Opts>(ctx, it, end);
+            skip_value<JSON>::op<Opts>(ctx, it, end);
          }
       }
    };
