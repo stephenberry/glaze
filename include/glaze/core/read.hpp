@@ -57,10 +57,10 @@ namespace glz
       }
 
       if constexpr (use_padded) {
-         detail::read<Opts.format>::template op<is_padded_on<Opts>()>(value, ctx, it, end);
+         parse<Opts.format>::template op<is_padded_on<Opts>()>(value, ctx, it, end);
       }
       else {
-         detail::read<Opts.format>::template op<is_padded_off<Opts>()>(value, ctx, it, end);
+         parse<Opts.format>::template op<is_padded_off<Opts>()>(value, ctx, it, end);
       }
 
       if (bool(ctx.error)) [[unlikely]] {
@@ -72,7 +72,7 @@ namespace glz
       // validate this, even though this memory will not affect Glaze.
       if constexpr (Opts.validate_trailing_whitespace) {
          if (it < end) {
-            detail::skip_ws<Opts>(ctx, it, end);
+            skip_ws<Opts>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]] {
                goto finish;
             }

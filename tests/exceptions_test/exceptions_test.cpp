@@ -252,7 +252,7 @@ suite shared_async_map_tests = [] {
       }
    };
 
-   static_assert(glz::detail::readable_map_t<glz::shared_async_map<std::string, std::atomic<int>>>);
+   static_assert(glz::readable_map_t<glz::shared_async_map<std::string, std::atomic<int>>>);
 
    "shared_async_map write_json"_test = [] {
       glz::shared_async_map<std::string, std::atomic<int>> map;

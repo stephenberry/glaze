@@ -454,7 +454,7 @@ namespace glz
             }
             else {
                while (true) {
-                  detail::read<Opts.format>::template op<Opts>(value.emplace_back(), ctx, it, end);
+                  parse<Opts.format>::template op<Opts>(value.emplace_back(), ctx, it, end);
                   if (bool(ctx.error)) [[unlikely]]
                      return;
 
@@ -546,7 +546,7 @@ namespace glz
             }
             else if (current_index >= start_idx && current_index < end_idx) {
                // Read this element into value
-               detail::read<Opts.format>::template op<Opts>(value.emplace_back(), ctx, it, end);
+               parse<Opts.format>::template op<Opts>(value.emplace_back(), ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
                   return;
             }
@@ -603,7 +603,7 @@ namespace glz
       context ctx{};
 
       if constexpr (N == 0) {
-         detail::read<Opts.format>::template op<Opts>(value, ctx, it, end);
+         parse<Opts.format>::template op<Opts>(value, ctx, it, end);
       }
       else {
          using namespace glz::detail;
@@ -656,7 +656,7 @@ namespace glz
                            }
 
                            // Now read the element at index n
-                           detail::read<Opts.format>::template op<Opts>(value, ctx, it, end);
+                           parse<Opts.format>::template op<Opts>(value, ctx, it, end);
                         }
                         else {
                            // Not the last token. We must still parse the element at index n so the next indexing can
@@ -750,7 +750,7 @@ namespace glz
                               }
 
                               if constexpr (I == (N - 1)) {
-                                 detail::read<Opts.format>::template op<Opts>(value, ctx, it, end);
+                                 parse<Opts.format>::template op<Opts>(value, ctx, it, end);
                               }
                               return;
                            }
@@ -807,7 +807,7 @@ namespace glz
                      }
 
                      if constexpr (I == (N - 1)) {
-                        detail::read<Opts.format>::template op<Opts>(value, ctx, it, end);
+                        parse<Opts.format>::template op<Opts>(value, ctx, it, end);
                      }
                      return;
                   }
@@ -886,7 +886,7 @@ namespace glz
       context ctx{};
 
       if (N == 0) {
-         detail::read<Opts.format>::template op<Opts>(value, ctx, it, end);
+         parse<Opts.format>::template op<Opts>(value, ctx, it, end);
       }
       else {
          using namespace glz::detail;
@@ -940,7 +940,7 @@ namespace glz
                               }
 
                               // Now read the element at index n
-                              detail::read<Opts.format>::template op<Opts>(value, ctx, it, end);
+                              parse<Opts.format>::template op<Opts>(value, ctx, it, end);
                            }
                            else {
                               // Not the last token. We must still parse the element at index n so the next indexing can
@@ -1032,7 +1032,7 @@ namespace glz
                                  }
 
                                  if (I == (N - 1)) {
-                                    detail::read<Opts.format>::template op<Opts>(value, ctx, it, end);
+                                    parse<Opts.format>::template op<Opts>(value, ctx, it, end);
                                  }
                                  return;
                               }
@@ -1089,7 +1089,7 @@ namespace glz
                         }
 
                         if (I == (N - 1)) {
-                           detail::read<Opts.format>::template op<Opts>(value, ctx, it, end);
+                           parse<Opts.format>::template op<Opts>(value, ctx, it, end);
                         }
                         return;
                      }

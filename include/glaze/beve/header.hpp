@@ -13,7 +13,7 @@
 #include "glaze/core/context.hpp"
 #include "glaze/util/inline.hpp"
 
-namespace glz::detail
+namespace glz
 {
    GLZ_ALWAYS_INLINE bool invalid_end(is_context auto& ctx, auto&& it, auto&& end) noexcept
    {
@@ -60,7 +60,7 @@ namespace glz::tag
    constexpr uint8_t f128 = 0b100'00'001;
 }
 
-namespace glz::detail
+namespace glz
 {
    template <class T>
    constexpr uint8_t byte_count = uint8_t(std::bit_width(sizeof(T)) - 1);

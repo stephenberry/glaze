@@ -93,7 +93,7 @@ namespace glz::repe
       }
       auto start = b;
 
-      glz::detail::read<Opts.format>::template op<Opts>(std::forward<Value>(value), ctx, b, e);
+      glz::parse<Opts.format>::template op<Opts>(std::forward<Value>(value), ctx, b, e);
 
       if (bool(ctx.error)) {
          state.out.header.ec = ctx.error;
@@ -198,7 +198,7 @@ namespace glz::repe
 
       // Register a C++ type that stores pointers to the value, so be sure to keep the registered value alive
       template <const std::string_view& root = detail::empty_path, class T, const std::string_view& parent = root>
-         requires(glz::detail::glaze_object_t<T> || glz::detail::reflectable<T>)
+         requires(glz::glaze_object_t<T> || glz::reflectable<T>)
       void on(T& value)
       {
          using namespace glz::detail;

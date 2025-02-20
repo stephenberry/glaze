@@ -165,13 +165,13 @@ struct glz::meta<Color>
 
 static_assert(glz::enum_name_v<Color::Red> == "Red");
 
-static_assert(glz::detail::get_enum_name(Color::Green) == "Green");
+static_assert(glz::get_enum_name(Color::Green) == "Green");
 
 suite get_enum_name_tests = [] {
    "get_enum_name"_test = [] {
       auto color = Color::Green;
 
-      const auto name = glz::detail::get_enum_name(color);
+      const auto name = glz::get_enum_name(color);
       expect(name == "Green");
    };
 };
@@ -901,7 +901,7 @@ suite container_types = [] {
       }
       std::string buffer{};
       std::map<std::string, int> map2{};
-      static_assert(glz::detail::writable_map_t<decltype(map2)>);
+      static_assert(glz::writable_map_t<decltype(map2)>);
       expect(not glz::write_json(map, buffer));
       expect(glz::read_json(map2, buffer) == glz::error_code::none);
       // expect(map == map2);
@@ -2647,7 +2647,7 @@ suite write_tests = [] {
 
    "Read empty object structure"_test = [] {
       EmptyObject e;
-      static_assert(glz::detail::glaze_object_t<EmptyObject>);
+      static_assert(glz::glaze_object_t<EmptyObject>);
       expect(glz::read_json(e, "{}") == glz::error_code::none);
       expect(glz::read_json(e, " {    } ") == glz::error_code::none);
       expect(glz::read_json(e, "{ \"reject\": 44 }") == glz::error_code::unknown_key);
@@ -3107,9 +3107,9 @@ struct local_meta
    };
 };
 
-static_assert(glz::detail::glaze_t<local_meta>);
-static_assert(glz::detail::glaze_object_t<local_meta>);
-static_assert(glz::detail::local_meta_t<local_meta>);
+static_assert(glz::glaze_t<local_meta>);
+static_assert(glz::glaze_object_t<local_meta>);
+static_assert(glz::local_meta_t<local_meta>);
 
 suite local_meta_tests = [] {
    "local_meta"_test = [] {
@@ -3253,7 +3253,7 @@ template <>
 struct glz::meta<holds_some_num>
 {
    using T = holds_some_num;
-   static constexpr auto value = object("num", glz::detail::array_variant{&T::num});
+   static constexpr auto value = object("num", glz::array_variant{&T::num});
 };
 
 struct OptionA
@@ -4243,7 +4243,7 @@ template <>
 struct glz::meta<string_t>
 {
    static constexpr std::string_view name = "string_t";
-   using T = string_t;
+   using T = ::string_t;
    static constexpr auto value = object("string", &T::string);
 };
 
@@ -4413,7 +4413,7 @@ struct glz::meta<date>
    static constexpr auto value = object("date", &T::human_readable);
 };
 
-namespace glz::detail
+namespace glz
 {
    template <>
    struct from<JSON, date>
@@ -4421,7 +4421,7 @@ namespace glz::detail
       template <auto Opts>
       static void op(date& value, auto&&... args)
       {
-         read<JSON>::op<Opts>(value.human_readable, args...);
+         parse<JSON>::op<Opts>(value.human_readable, args...);
          value.data = std::stoi(value.human_readable);
       }
    };
@@ -4433,7 +4433,7 @@ namespace glz::detail
       static void op(date& value, auto&&... args) noexcept
       {
          value.human_readable = std::to_string(value.data);
-         write<JSON>::op<Opts>(value.human_readable, args...);
+         serialize<JSON>::op<Opts>(value.human_readable, args...);
       }
    };
 }
@@ -4727,7 +4727,7 @@ suite custom_unique_tests = [] {
 #include <set>
 #include <unordered_set>
 
-static_assert(glz::detail::emplaceable<std::set<std::string>>);
+static_assert(glz::emplaceable<std::set<std::string>>);
 
 suite sets = [] {
    "std::unordered_set"_test = [] {
@@ -5930,7 +5930,7 @@ struct direct_cx_value_conversion
       static constexpr auto value{&direct_cx_value_conversion::const_v};
    };
 };
-static_assert(glz::detail::glaze_const_value_t<direct_cx_value_conversion>);
+static_assert(glz::glaze_const_value_t<direct_cx_value_conversion>);
 
 struct direct_cx_value_conversion_different_value
 {
@@ -5940,7 +5940,7 @@ struct direct_cx_value_conversion_different_value
       static constexpr auto value{&direct_cx_value_conversion_different_value::const_v};
    };
 };
-static_assert(glz::detail::glaze_const_value_t<direct_cx_value_conversion_different_value>);
+static_assert(glz::glaze_const_value_t<direct_cx_value_conversion_different_value>);
 
 struct string_direct_cx_value_conversion
 {
@@ -5950,7 +5950,7 @@ struct string_direct_cx_value_conversion
       static constexpr auto value{&string_direct_cx_value_conversion::const_v};
    };
 };
-static_assert(glz::detail::glaze_const_value_t<string_direct_cx_value_conversion>);
+static_assert(glz::glaze_const_value_t<string_direct_cx_value_conversion>);
 
 struct string_two_direct_cx_value_conversion
 {
@@ -5960,7 +5960,7 @@ struct string_two_direct_cx_value_conversion
       static constexpr auto value{&string_two_direct_cx_value_conversion::const_v};
    };
 };
-static_assert(glz::detail::glaze_const_value_t<string_two_direct_cx_value_conversion>);
+static_assert(glz::glaze_const_value_t<string_two_direct_cx_value_conversion>);
 
 struct array_direct_cx_value_conversion
 {
@@ -5970,7 +5970,7 @@ struct array_direct_cx_value_conversion
       static constexpr auto value{&array_direct_cx_value_conversion::const_v};
    };
 };
-static_assert(glz::detail::glaze_const_value_t<array_direct_cx_value_conversion>);
+static_assert(glz::glaze_const_value_t<array_direct_cx_value_conversion>);
 
 struct array_two_direct_cx_value_conversion
 {
@@ -5980,7 +5980,7 @@ struct array_two_direct_cx_value_conversion
       static constexpr auto value{&array_two_direct_cx_value_conversion::const_v};
    };
 };
-static_assert(glz::detail::glaze_const_value_t<array_two_direct_cx_value_conversion>);
+static_assert(glz::glaze_const_value_t<array_two_direct_cx_value_conversion>);
 
 struct non_cx_direct_value_conversion
 {
@@ -5990,7 +5990,7 @@ struct non_cx_direct_value_conversion
       static constexpr auto value{&non_cx_direct_value_conversion::some_other};
    };
 };
-static_assert(!glz::detail::glaze_const_value_t<non_cx_direct_value_conversion>);
+static_assert(!glz::glaze_const_value_t<non_cx_direct_value_conversion>);
 
 struct const_red
 {
@@ -6176,7 +6176,7 @@ suite char_buffer = [] {
    };
 };
 
-static_assert(!glz::detail::char_array_t<char*>);
+static_assert(!glz::char_array_t<char*>);
 
 suite enum_map = [] {
    "enum map key"_test = [] {
@@ -7652,10 +7652,10 @@ suite hostname_include_test = [] {
       hostname_include_struct obj{};
 
       glz::context ctx{};
-      const auto hostname = glz::detail::get_hostname(ctx);
+      const auto hostname = glz::get_hostname(ctx);
 
       std::string file_name = "../{}_config.json";
-      glz::detail::replace_first_braces(file_name, hostname);
+      glz::replace_first_braces(file_name, hostname);
 
       const auto config_buffer = R"(
 // testing opening whitespace and comment
@@ -7709,10 +7709,10 @@ suite nested_include_tests = [] {
       expect(glz::error_code::none == glz::buffer_to_file(std::string_view{R"({"number":3.5})"}, "./core.jsonc"));
 
       glz::context ctx{};
-      const auto hostname = glz::detail::get_hostname(ctx);
+      const auto hostname = glz::get_hostname(ctx);
 
       std::string file_name = "./{}_include_test.jsonc";
-      glz::detail::replace_first_braces(file_name, hostname);
+      glz::replace_first_braces(file_name, hostname);
       expect(glz::error_code::none ==
              glz::buffer_to_file(std::string_view{R"({"core":{"include": "./core.jsonc"}})"}, file_name));
 
@@ -8221,7 +8221,7 @@ struct glz::json_schema<meta_schema_t>
    schema is_valid{.description = "for validation"};
 };
 
-static_assert(glz::detail::json_schema_t<meta_schema_t>);
+static_assert(glz::json_schema_t<meta_schema_t>);
 static_assert(glz::detail::count_members<glz::json_schema_type<meta_schema_t>> > 0);
 
 suite meta_schema_tests = [] {
@@ -8501,7 +8501,7 @@ struct custom_struct
    std::string str{};
 };
 
-namespace glz::detail
+namespace glz
 {
    template <>
    struct from<JSON, custom_struct>
@@ -8509,7 +8509,7 @@ namespace glz::detail
       template <auto Opts>
       static void op(custom_struct& value, auto&&... args)
       {
-         read<JSON>::op<Opts>(value.str, args...);
+         parse<JSON>::op<Opts>(value.str, args...);
          value.str += "read";
       }
    };
@@ -8521,14 +8521,14 @@ namespace glz::detail
       static void op(custom_struct& value, auto&&... args) noexcept
       {
          value.str += "write";
-         write<JSON>::op<Opts>(value.str, args...);
+         serialize<JSON>::op<Opts>(value.str, args...);
       }
 
       // For std::set testing, because iterators are const
       template <auto Opts>
       static void op(const custom_struct& value, auto&&... args) noexcept
       {
-         write<JSON>::op<Opts>(value.str, args...);
+         serialize<JSON>::op<Opts>(value.str, args...);
       }
    };
 }
@@ -8679,7 +8679,7 @@ struct glz::meta<path_test_struct>
 };
 
 suite filesystem_tests = [] {
-   static_assert(glz::detail::filesystem_path<std::filesystem::path>);
+   static_assert(glz::filesystem_path<std::filesystem::path>);
 
    "std::filesystem::path"_test = [] {
       std::filesystem::path p{"."};
@@ -8700,7 +8700,7 @@ suite filesystem_tests = [] {
    };
 };
 
-static_assert(glz::detail::readable_array_t<std::span<double, 4>>);
+static_assert(glz::readable_array_t<std::span<double, 4>>);
 
 struct struct_c_arrays
 {
@@ -9400,7 +9400,7 @@ struct front_16_t
    int cb{0};
 };
 
-static_assert(bool(glz::detail::hash_info<front_16_t>.type));
+static_assert(bool(glz::hash_info<front_16_t>.type));
 
 suite front_16_test = [] {
    "front_16"_test = [] {
@@ -9429,7 +9429,7 @@ struct glz::meta<custom_errors_t>
    static constexpr auto value = object(&T::a, &T::alpha);
 };
 
-namespace glz::detail
+namespace glz
 {
    template <>
    struct from<JSON, custom_errors_t>
@@ -9779,9 +9779,9 @@ struct glz::meta<naive_static_string_t<N>>
 };
 
 static_assert(std::constructible_from<std::string_view, std::decay_t<naive_static_string_t<3>>>);
-static_assert(glz::detail::has_assign<naive_static_string_t<3>>);
-static_assert(glz::detail::is_static_string<naive_static_string_t<3>>);
-static_assert(glz::detail::static_string_t<naive_static_string_t<3>>);
+static_assert(glz::has_assign<naive_static_string_t<3>>);
+static_assert(glz::is_static_string<naive_static_string_t<3>>);
+static_assert(glz::static_string_t<naive_static_string_t<3>>);
 
 suite static_string_tests = [] {
    "static_str<N> value"_test = [] {
@@ -9949,8 +9949,8 @@ struct same_length_keys
 
 suite same_length_keys_test = [] {
    "same_length_keys"_test = [] {
-      static constexpr auto info = glz::detail::make_keys_info(glz::reflect<same_length_keys>::keys);
-      static_assert(info.type == glz::detail::hash_type::full_flat);
+      static constexpr auto info = glz::make_keys_info(glz::reflect<same_length_keys>::keys);
+      static_assert(info.type == glz::hash_type::full_flat);
 
       same_length_keys obj{};
       std::string buffer{};
@@ -9974,8 +9974,8 @@ struct offset_one
 
 suite offset_one_test = [] {
    "offset_one"_test = [] {
-      static constexpr auto info = glz::detail::make_keys_info(glz::reflect<same_length_keys>::keys);
-      static_assert(info.type == glz::detail::hash_type::full_flat);
+      static constexpr auto info = glz::make_keys_info(glz::reflect<same_length_keys>::keys);
+      static_assert(info.type == glz::hash_type::full_flat);
 
       offset_one obj{};
       std::string buffer{};
@@ -10018,7 +10018,7 @@ suite ndjson_options = [] {
 suite atomics = [] {
    "atomics"_test = [] {
       std::atomic<int> i{};
-      static_assert(glz::detail::is_atomic<decltype(i)>);
+      static_assert(glz::is_atomic<decltype(i)>);
       expect(not glz::read_json(i, R"(55)"));
       expect(i.load() == 55);
 

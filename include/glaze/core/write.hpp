@@ -22,7 +22,7 @@ namespace glz
          }
       }
       size_t ix = 0; // overwrite index
-      detail::to<Opts.format, std::remove_cvref_t<T>>::template op<Opts>(std::forward<T>(value), ctx, buffer, ix);
+      to<Opts.format, std::remove_cvref_t<T>>::template op<Opts>(std::forward<T>(value), ctx, buffer, ix);
       if constexpr (resizable<Buffer>) {
          buffer.resize(ix);
       }
@@ -42,7 +42,7 @@ namespace glz
       }
       context ctx{};
       size_t ix = 0;
-      detail::write_partial<Opts.format>::template op<Partial, Opts>(std::forward<T>(value), ctx, buffer, ix);
+      serialize_partial<Opts.format>::template op<Partial, Opts>(std::forward<T>(value), ctx, buffer, ix);
       if constexpr (resizable<Buffer>) {
          buffer.resize(ix);
       }
@@ -55,7 +55,7 @@ namespace glz
    {
       context ctx{};
       size_t ix = 0;
-      detail::write_partial<Opts.format>::template op<Partial, Opts>(std::forward<T>(value), ctx, buffer, ix);
+      serialize_partial<Opts.format>::template op<Partial, Opts>(std::forward<T>(value), ctx, buffer, ix);
       if (bool(ctx.error)) [[unlikely]] {
          return glz::unexpected(error_ctx{.ec = ctx.error, .custom_error_message = ctx.custom_error_message});
       }
@@ -88,7 +88,7 @@ namespace glz
    [[nodiscard]] glz::expected<size_t, error_ctx> write(T&& value, Buffer&& buffer, is_context auto&& ctx)
    {
       size_t ix = 0;
-      detail::to<Opts.format, std::remove_cvref_t<T>>::template op<Opts>(std::forward<T>(value), ctx, buffer, ix);
+      to<Opts.format, std::remove_cvref_t<T>>::template op<Opts>(std::forward<T>(value), ctx, buffer, ix);
       if (bool(ctx.error)) [[unlikely]] {
          return glz::unexpected(error_ctx{ctx.error});
       }

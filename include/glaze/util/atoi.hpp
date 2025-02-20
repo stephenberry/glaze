@@ -46,7 +46,7 @@
 #pragma warning(disable : 4244)
 #endif
 
-namespace glz::detail
+namespace glz
 {
    inline constexpr std::array<uint64_t, 20> powers_of_ten_int{1ull,
                                                                10ull,
@@ -792,7 +792,7 @@ namespace glz::detail
 
          const auto start = data.data();
          const auto* c = start;
-         const auto valid = glz::detail::atoi(v, c);
+         const auto valid = glz::atoi(v, c);
          it += size_t(c - start);
          return valid;
       }

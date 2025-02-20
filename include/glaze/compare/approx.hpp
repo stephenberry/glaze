@@ -11,7 +11,7 @@ namespace glz
    // Test that two meta objects are equal, with epsilon support for floating point values
    struct approx_equal_to final
    {
-      template <detail::glaze_object_t T>
+      template <glaze_object_t T>
       constexpr bool operator()(T&& lhs, T&& rhs) noexcept
       {
          constexpr auto N = reflect<T>::size;

@@ -26,7 +26,7 @@ namespace glz
 
       if (not bool(ctx.error)) [[likely]] {
          auto skip_whitespace = [&] {
-            while (it < end && detail::whitespace_table[uint8_t(*it)]) {
+            while (it < end && whitespace_table[uint8_t(*it)]) {
                ++it;
             }
          };
@@ -103,9 +103,9 @@ namespace glz
                      bool condition = false;
                      {
                         static constexpr auto N = reflect<T>::size;
-                        static constexpr auto HashInfo = detail::hash_info<T>;
+                        static constexpr auto HashInfo = hash_info<T>;
 
-                        const auto index = detail::decode_hash_with_size<STENCIL, T, HashInfo, HashInfo.type>::op(
+                        const auto index = decode_hash_with_size<STENCIL, T, HashInfo, HashInfo.type>::op(
                            start, end, key.size());
 
                         if (index >= N) {
@@ -117,11 +117,11 @@ namespace glz
                               [&]<size_t I>() {
                                  static constexpr auto TargetKey = get<I>(reflect<T>::keys);
                                  if (TargetKey == key) [[likely]] {
-                                    if constexpr (detail::bool_t<refl_t<T, I>>) {
-                                       if constexpr (detail::reflectable<T>) {
+                                    if constexpr (bool_t<refl_t<T, I>>) {
+                                       if constexpr (reflectable<T>) {
                                           condition = bool(get_member(value, get<I>(to_tie(value))));
                                        }
-                                       else if constexpr (detail::glaze_object_t<T>) {
+                                       else if constexpr (glaze_object_t<T>) {
                                           condition = bool(get_member(value, get<I>(reflect<T>::values)));
                                        }
                                     }
@@ -162,10 +162,10 @@ namespace glz
 
                   // Handle regular placeholder
                   static constexpr auto N = reflect<T>::size;
-                  static constexpr auto HashInfo = detail::hash_info<T>;
+                  static constexpr auto HashInfo = hash_info<T>;
 
                   const auto index =
-                     detail::decode_hash_with_size<STENCIL, T, HashInfo, HashInfo.type>::op(start, end, key.size());
+                     decode_hash_with_size<STENCIL, T, HashInfo, HashInfo.type>::op(start, end, key.size());
 
                   if (index >= N) [[unlikely]] {
                      ctx.error = error_code::unknown_key;
@@ -182,13 +182,13 @@ namespace glz
                      visit<N>(
                         [&]<size_t I>() {
                            static constexpr auto TargetKey = get<I>(reflect<T>::keys);
-                           if ((TargetKey.size() == key.size()) && detail::comparitor<TargetKey>(start)) [[likely]] {
-                              if constexpr (detail::reflectable<T>) {
-                                 detail::write<Opts.format>::template op<RawOpts>(
+                           if ((TargetKey.size() == key.size()) && comparitor<TargetKey>(start)) [[likely]] {
+                              if constexpr (reflectable<T>) {
+                                 serialize<Opts.format>::template op<RawOpts>(
                                     get_member(value, get<I>(to_tie(value))), ctx, buffer, ix);
                               }
-                              else if constexpr (detail::glaze_object_t<T>) {
-                                 detail::write<Opts.format>::template op<RawOpts>(
+                              else if constexpr (glaze_object_t<T>) {
+                                 serialize<Opts.format>::template op<RawOpts>(
                                     get_member(value, get<I>(reflect<T>::values)), ctx, buffer, ix);
                               }
                            }

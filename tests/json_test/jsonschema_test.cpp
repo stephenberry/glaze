@@ -70,7 +70,7 @@ auto expect_property(const test_case& test, std::string_view key, Value value)
       expect[std::holds_alternative<Value>(prop_value.value())];
       expect(std::get<Value>(prop_value.value()) == value);
    }
-   else if constexpr (is_optional<prop_value_t> && glz::detail::is_span<typename prop_value_t::value_type>) {
+   else if constexpr (is_optional<prop_value_t> && glz::is_span<typename prop_value_t::value_type>) {
       expect(fatal(prop_value.value().size() == value.size()));
       for (std::size_t i = 0; i < prop_value.value().size(); ++i) {
          expect(prop_value.value()[i] == value[i]);

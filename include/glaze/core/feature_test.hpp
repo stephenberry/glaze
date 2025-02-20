@@ -20,6 +20,6 @@
 #define glaze_v3_6_0_reflect
 
 // v3.5.0 change glz::detail::to_json and glz::detail::from_json specializations
-// to glz::detail::to<JSON and glz::detail::from<JSON
+// to glz::to<JSON and glz::from<JSON
 // The template specialization takes a uint32_t Format as the first template parameter
 #define glaze_v3_5_0_to_from

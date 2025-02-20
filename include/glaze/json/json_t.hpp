@@ -137,7 +137,7 @@ namespace glz
       }
 
       // for integers
-      template <detail::int_t T>
+      template <int_t T>
       json_t& operator=(const T value)
       {
          data = static_cast<double>(value);

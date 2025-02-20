@@ -319,7 +319,7 @@ namespace glz
             else if constexpr (glaze_const_value_t<T>) { // &T::constexpr_member
                using constexpr_val_t = member_t<T, meta_wrapper_t<T>>;
                static constexpr auto val_v{*glz::meta_wrapper_v<T>};
-               if constexpr (glz::detail::glaze_enum_t<constexpr_val_t>) {
+               if constexpr (glz::glaze_enum_t<constexpr_val_t>) {
                   s.attributes.constant = glz::enum_name_v<val_v>;
                }
                else {

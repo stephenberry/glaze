@@ -69,7 +69,7 @@ namespace glz
    concept non_const_buffer = !std::is_const_v<Buffer>;
 }
 
-namespace glz::detail
+namespace glz
 {
    template <class T>
    concept char_t = std::same_as<std::remove_cvref_t<T>, char>;

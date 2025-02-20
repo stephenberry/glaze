@@ -8,7 +8,7 @@
 
 // Common behavior for `to` specializations, typically applies for all formats
 
-namespace glz::detail
+namespace glz
 {
    template <uint32_t Format>
    struct to<Format, hidden>

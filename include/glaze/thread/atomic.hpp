@@ -7,7 +7,7 @@
 
 // Supports serialization/deserialization of std::atomic
 
-namespace glz::detail
+namespace glz
 {
    template <typename T>
    concept is_atomic = requires(T a, typename std::remove_reference_t<decltype(a.load())>& expected,
@@ -41,7 +41,7 @@ namespace glz::detail
       {
          using V = typename T::value_type;
          V temp{};
-         read<Format>::template op<Opts>(temp, ctx, it, end);
+         parse<Format>::template op<Opts>(temp, ctx, it, end);
          value.store(temp);
       }
    };
@@ -54,7 +54,7 @@ namespace glz::detail
       static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept
       {
          const auto v = value.load();
-         write<Format>::template op<Opts>(v, ctx, args...);
+         serialize<Format>::template op<Opts>(v, ctx, args...);
       }
    };
 }

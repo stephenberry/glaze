@@ -149,24 +149,6 @@ namespace glz
    template <class T>
    using core_t = std::remove_cvref_t<T>;
 
-   namespace detail
-   {
-      // These templates save typing by determining the core type used to select the proper to/from specialization
-      // Long term I would like to remove these detail indirections.
-
-      template <uint32_t Format>
-      struct read
-      {};
-
-      template <uint32_t Format>
-      struct write
-      {};
-
-      template <uint32_t Format>
-      struct write_partial
-      {};
-   }
-
    // Use std::stringview if you know the buffer is going to outlive this
    template <class string_type = std::string>
    struct basic_raw_json
@@ -218,229 +200,226 @@ namespace glz
    using text = basic_text<std::string>;
    using text_view = basic_text<std::string_view>;
 
-   namespace detail
+   template <class T>
+   concept constructible = requires { meta<std::decay_t<T>>::construct; } || local_construct_t<std::decay_t<T>>;
+   
+   template <class T>
+   concept meta_value_t = glaze_t<std::decay_t<T>>;
+   
+   // this concept requires that T is just a view
+   template <class T>
+   concept string_view_t = std::same_as<std::decay_t<T>, std::string_view>;
+   
+   template <class T>
+   concept array_char_t =
+   requires { std::tuple_size<T>::value; } && std::same_as<T, std::array<char, std::tuple_size_v<T>>>;
+   
+   template <class T>
+   concept str_t =
+   (!std::same_as<std::nullptr_t, T> && std::constructible_from<std::string_view, std::decay_t<T>>) ||
+   array_char_t<T>;
+   
+   template <class T>
+   concept is_static_string = requires { meta<std::decay_t<T>>::glaze_static_string == true; } ||
+   std::decay_t<T>::glaze_static_string == true;
+   
+   // this concept requires that T is a writeable string. It can be resized, appended to, or assigned to
+   template <class T>
+   concept string_t = str_t<T> && !string_view_t<T> &&
+   (has_assign<T> || (resizable<T> && has_data<T>) || has_append<T>)&&!is_static_string<T>;
+   
+   // static string; very like `string_t`, but with a fixed max capacity
+   template <class T>
+   concept static_string_t = str_t<T> && !string_view_t<T> &&
+   (has_assign<T> || (resizable<T> && has_data<T>) || has_append<T>)&&is_static_string<T>;
+   
+   template <class T>
+   concept char_array_t = str_t<T> && std::is_array_v<std::remove_pointer_t<std::remove_reference_t<T>>>;
+   
+   template <class T>
+   concept readable_map_t = !custom_read<T> && !meta_value_t<T> && !str_t<T> && range<T> &&
+   pair_t<range_value_t<T>> && map_subscriptable<std::decay_t<T>>;
+   
+   template <class T>
+   concept writable_map_t = !custom_write<T> && !meta_value_t<T> && !str_t<T> && range<T> &&
+   pair_t<range_value_t<T>> && map_subscriptable<std::decay_t<T>>;
+   
+   template <class Map>
+   concept heterogeneous_map = requires {
+      typename Map::key_compare;
+      requires(std::same_as<typename Map::key_compare, std::less<>> ||
+               std::same_as<typename Map::key_compare, std::greater<>> ||
+               requires { typename Map::key_compare::is_transparent; });
+   };
+   
+   template <class T>
+   concept array_t = (!meta_value_t<T> && !str_t<T> && !(readable_map_t<T> || writable_map_t<T>)&&range<T>);
+   
+   template <class T>
+   concept readable_array_t =
+   (range<T> && !custom_read<T> && !meta_value_t<T> && !str_t<T> && !readable_map_t<T> && !filesystem_path<T>);
+   
+   template <class T>
+   concept writable_array_t =
+   (range<T> && !custom_write<T> && !meta_value_t<T> && !str_t<T> && !writable_map_t<T> && !filesystem_path<T>);
+   
+   template <class T>
+   concept fixed_array_value_t = array_t<std::decay_t<decltype(std::declval<T>()[0])>> &&
+   !resizable<std::decay_t<decltype(std::declval<T>()[0])>>;
+   
+   template <class T>
+   concept boolean_like =
+   std::same_as<std::remove_cvref_t<T>, bool> || std::same_as<T, std::vector<bool>::reference> ||
+   std::same_as<T, std::vector<bool>::const_reference>;
+   
+   template <class T>
+   concept is_no_reflect = requires(T t) { requires T::glaze_reflect == false; };
+   
+   /// \brief check if container has fixed size and its subsequent T::value_type
+   template <class T>
+   concept has_static_size =
+   (is_span<T> && !is_dynamic_span<T>) || (
+                                           requires(T container) {
+                                              {
+                                                 std::bool_constant<(std::decay_t<T>{}.size(), true)>()
+                                              } -> std::same_as<std::true_type>;
+                                           } && std::decay_t<T>{}.size() > 0 &&
+                                           requires {
+                                              typename T::value_type;
+                                              requires std::is_trivially_copyable_v<typename T::value_type>;
+                                           });
+   static_assert(has_static_size<std::array<int, 2>>);
+   static_assert(!has_static_size<std::array<std::string, 2>>);
+   
+   template <class T>
+   constexpr bool is_std_array = false;
+   template <class T, std::size_t N>
+   constexpr bool is_std_array<std::array<T, N>> = true;
+   
+   template <class T>
+   concept has_fixed_size_container = std::is_array_v<T> || is_std_array<T>;
+   static_assert(has_fixed_size_container<std::array<std::string, 2>>);
+   static_assert(has_fixed_size_container<int[54]>);
+   
+   template <class T>
+   constexpr size_t get_size() noexcept
    {
-      template <class T>
-      concept constructible = requires { meta<std::decay_t<T>>::construct; } || local_construct_t<std::decay_t<T>>;
-
-      template <class T>
-      concept meta_value_t = glaze_t<std::decay_t<T>>;
-
-      // this concept requires that T is just a view
-      template <class T>
-      concept string_view_t = std::same_as<std::decay_t<T>, std::string_view>;
-
-      template <class T>
-      concept array_char_t =
-         requires { std::tuple_size<T>::value; } && std::same_as<T, std::array<char, std::tuple_size_v<T>>>;
-
-      template <class T>
-      concept str_t =
-         (!std::same_as<std::nullptr_t, T> && std::constructible_from<std::string_view, std::decay_t<T>>) ||
-         array_char_t<T>;
-
-      template <class T>
-      concept is_static_string = requires { meta<std::decay_t<T>>::glaze_static_string == true; } ||
-                                 std::decay_t<T>::glaze_static_string == true;
-
-      // this concept requires that T is a writeable string. It can be resized, appended to, or assigned to
-      template <class T>
-      concept string_t = str_t<T> && !string_view_t<T> &&
-                         (has_assign<T> || (resizable<T> && has_data<T>) || has_append<T>)&&!is_static_string<T>;
-
-      // static string; very like `string_t`, but with a fixed max capacity
-      template <class T>
-      concept static_string_t = str_t<T> && !string_view_t<T> &&
-                                (has_assign<T> || (resizable<T> && has_data<T>) || has_append<T>)&&is_static_string<T>;
-
-      template <class T>
-      concept char_array_t = str_t<T> && std::is_array_v<std::remove_pointer_t<std::remove_reference_t<T>>>;
-
-      template <class T>
-      concept readable_map_t = !custom_read<T> && !meta_value_t<T> && !str_t<T> && range<T> &&
-                               pair_t<range_value_t<T>> && map_subscriptable<std::decay_t<T>>;
-
-      template <class T>
-      concept writable_map_t = !custom_write<T> && !meta_value_t<T> && !str_t<T> && range<T> &&
-                               pair_t<range_value_t<T>> && map_subscriptable<std::decay_t<T>>;
-
-      template <class Map>
-      concept heterogeneous_map = requires {
-         typename Map::key_compare;
-         requires(std::same_as<typename Map::key_compare, std::less<>> ||
-                  std::same_as<typename Map::key_compare, std::greater<>> ||
-                  requires { typename Map::key_compare::is_transparent; });
-      };
-
-      template <class T>
-      concept array_t = (!meta_value_t<T> && !str_t<T> && !(readable_map_t<T> || writable_map_t<T>)&&range<T>);
-
-      template <class T>
-      concept readable_array_t =
-         (range<T> && !custom_read<T> && !meta_value_t<T> && !str_t<T> && !readable_map_t<T> && !filesystem_path<T>);
-
-      template <class T>
-      concept writable_array_t =
-         (range<T> && !custom_write<T> && !meta_value_t<T> && !str_t<T> && !writable_map_t<T> && !filesystem_path<T>);
-
-      template <class T>
-      concept fixed_array_value_t = array_t<std::decay_t<decltype(std::declval<T>()[0])>> &&
-                                    !resizable<std::decay_t<decltype(std::declval<T>()[0])>>;
-
-      template <class T>
-      concept boolean_like =
-         std::same_as<std::remove_cvref_t<T>, bool> || std::same_as<T, std::vector<bool>::reference> ||
-         std::same_as<T, std::vector<bool>::const_reference>;
-
-      template <class T>
-      concept is_no_reflect = requires(T t) { requires T::glaze_reflect == false; };
-
-      /// \brief check if container has fixed size and its subsequent T::value_type
-      template <class T>
-      concept has_static_size =
-         (is_span<T> && !is_dynamic_span<T>) || (
-                                                   requires(T container) {
-                                                      {
-                                                         std::bool_constant<(std::decay_t<T>{}.size(), true)>()
-                                                      } -> std::same_as<std::true_type>;
-                                                   } && std::decay_t<T>{}.size() > 0 &&
-                                                   requires {
-                                                      typename T::value_type;
-                                                      requires std::is_trivially_copyable_v<typename T::value_type>;
-                                                   });
-      static_assert(has_static_size<std::array<int, 2>>);
-      static_assert(!has_static_size<std::array<std::string, 2>>);
-
-      template <class T>
-      constexpr bool is_std_array = false;
-      template <class T, std::size_t N>
-      constexpr bool is_std_array<std::array<T, N>> = true;
-
-      template <class T>
-      concept has_fixed_size_container = std::is_array_v<T> || is_std_array<T>;
-      static_assert(has_fixed_size_container<std::array<std::string, 2>>);
-      static_assert(has_fixed_size_container<int[54]>);
-
-      template <class T>
-      constexpr size_t get_size() noexcept
-      {
-         if constexpr (is_span<T>) {
-            return T::extent;
-         }
-         else if constexpr (std::is_array_v<T>) {
-            return std::extent_v<T>;
-         }
-         else if constexpr (is_std_array<T>) {
-            return glz::tuple_size_v<T>;
-         }
-         else {
-            return std::decay_t<T>{}.size();
-         }
+      if constexpr (is_span<T>) {
+         return T::extent;
       }
-
-      template <class T>
-      concept is_reference_wrapper = is_specialization_v<T, std::reference_wrapper>;
-
-      template <class T>
-      concept tuple_t = requires(T t) {
-         glz::tuple_size<T>::value;
-         glz::get<0>(t);
-      } && !meta_value_t<T> && !range<T>;
-
-      template <class T>
-      concept glaze_wrapper = requires { requires T::glaze_wrapper == true; };
-
-      template <class T>
-      concept always_null_t =
-         std::same_as<T, std::nullptr_t> || std::convertible_to<T, std::monostate> || std::same_as<T, std::nullopt_t>;
-
-      template <class T>
-      concept always_skipped = is_includer<T> || std::same_as<T, hidden> || std::same_as<T, skip>;
-
-      template <class T>
-      concept nullable_t = !meta_value_t<T> && !str_t<T> && requires(T t) {
-         bool(t);
-         {
-            *t
-         };
+      else if constexpr (std::is_array_v<T>) {
+         return std::extent_v<T>;
+      }
+      else if constexpr (is_std_array<T>) {
+         return glz::tuple_size_v<T>;
+      }
+      else {
+         return std::decay_t<T>{}.size();
+      }
+   }
+   
+   template <class T>
+   concept is_reference_wrapper = is_specialization_v<T, std::reference_wrapper>;
+   
+   template <class T>
+   concept tuple_t = requires(T t) {
+      glz::tuple_size<T>::value;
+      glz::get<0>(t);
+   } && !meta_value_t<T> && !range<T>;
+   
+   template <class T>
+   concept glaze_wrapper = requires { requires T::glaze_wrapper == true; };
+   
+   template <class T>
+   concept always_null_t =
+   std::same_as<T, std::nullptr_t> || std::convertible_to<T, std::monostate> || std::same_as<T, std::nullopt_t>;
+   
+   template <class T>
+   concept always_skipped = is_includer<T> || std::same_as<T, hidden> || std::same_as<T, skip>;
+   
+   template <class T>
+   concept nullable_t = !meta_value_t<T> && !str_t<T> && requires(T t) {
+      bool(t);
+      {
+         *t
       };
-
-      template <class T>
-      concept nullable_like = nullable_t<T> && (!is_expected<T> && !std::is_array_v<T>);
-
-      // For optional like types that cannot overload `operator bool()`
-      template <class T>
-      concept nullable_value_t = !meta_value_t<T> && requires(T t) {
-         t.value();
-         {
-            t.has_value()
-         } -> std::convertible_to<bool>;
-      };
-
-      template <class T>
-      concept nullable_wrapper = glaze_wrapper<T> && nullable_t<typename T::value_type>;
-
-      template <class T>
-      concept null_t = nullable_t<T> || nullable_value_t<T> || always_null_t<T> || nullable_wrapper<T>;
-
-      template <class T>
-      concept func_t = requires(T t) {
-         typename T::result_type;
-         std::function(t);
-      } && !glaze_t<T>;
-
-      template <class T>
-      concept glaze_array_t = glaze_t<T> && is_specialization_v<meta_wrapper_t<T>, Array>;
-
-      template <class T>
-      concept glaze_object_t = glaze_t<T> && (is_specialization_v<meta_wrapper_t<T>, Object> ||
-                                              (not std::is_enum_v<std::decay_t<T>> && meta_keys<T>));
-
-      template <class T>
-      concept glaze_enum_t = glaze_t<T> && is_specialization_v<meta_wrapper_t<T>, Enum>;
-
-      template <class T>
-      concept glaze_flags_t = glaze_t<T> && is_specialization_v<meta_wrapper_t<T>, Flags>;
-
-      template <class T>
-      concept glaze_value_t =
-         glaze_t<T> && !(glaze_array_t<T> || glaze_object_t<T> || glaze_enum_t<T> || meta_keys<T> || glaze_flags_t<T>);
-
-      template <class T>
-      concept reflectable = std::is_aggregate_v<std::remove_cvref_t<T>> && std::is_class_v<std::remove_cvref_t<T>> &&
-                            !(is_no_reflect<T> || glaze_value_t<T> || glaze_object_t<T> || glaze_array_t<T> ||
-                              glaze_flags_t<T> || range<T> || pair_t<T> || null_t<T> || meta_keys<T>);
-
-      template <class T>
-      concept is_memory_object = is_memory_type<T> && (glaze_object_t<memory_type<T>> || reflectable<memory_type<T>>);
-
-      template <class T>
-      concept glaze_const_value_t = glaze_value_t<T> && std::is_pointer_v<glz::meta_wrapper_t<T>> &&
-                                    std::is_const_v<std::remove_pointer_t<glz::meta_wrapper_t<T>>>;
-
-      template <class From, class To>
-      concept non_narrowing_convertable = requires(From from, To to) {
+   };
+   
+   template <class T>
+   concept nullable_like = nullable_t<T> && (!is_expected<T> && !std::is_array_v<T>);
+   
+   // For optional like types that cannot overload `operator bool()`
+   template <class T>
+   concept nullable_value_t = !meta_value_t<T> && requires(T t) {
+      t.value();
+      {
+         t.has_value()
+      } -> std::convertible_to<bool>;
+   };
+   
+   template <class T>
+   concept nullable_wrapper = glaze_wrapper<T> && nullable_t<typename T::value_type>;
+   
+   template <class T>
+   concept null_t = nullable_t<T> || nullable_value_t<T> || always_null_t<T> || nullable_wrapper<T>;
+   
+   template <class T>
+   concept func_t = requires(T t) {
+      typename T::result_type;
+      std::function(t);
+   } && !glaze_t<T>;
+   
+   template <class T>
+   concept glaze_array_t = glaze_t<T> && is_specialization_v<meta_wrapper_t<T>, detail::Array>;
+   
+   template <class T>
+   concept glaze_object_t = glaze_t<T> && (is_specialization_v<meta_wrapper_t<T>, detail::Object> ||
+                                           (not std::is_enum_v<std::decay_t<T>> && meta_keys<T>));
+   
+   template <class T>
+   concept glaze_enum_t = glaze_t<T> && is_specialization_v<meta_wrapper_t<T>, detail::Enum>;
+   
+   template <class T>
+   concept glaze_flags_t = glaze_t<T> && is_specialization_v<meta_wrapper_t<T>, detail::Flags>;
+   
+   template <class T>
+   concept glaze_value_t =
+   glaze_t<T> && !(glaze_array_t<T> || glaze_object_t<T> || glaze_enum_t<T> || meta_keys<T> || glaze_flags_t<T>);
+   
+   template <class T>
+   concept reflectable = std::is_aggregate_v<std::remove_cvref_t<T>> && std::is_class_v<std::remove_cvref_t<T>> &&
+   !(is_no_reflect<T> || glaze_value_t<T> || glaze_object_t<T> || glaze_array_t<T> ||
+     glaze_flags_t<T> || range<T> || pair_t<T> || null_t<T> || meta_keys<T>);
+   
+   template <class T>
+   concept is_memory_object = is_memory_type<T> && (glaze_object_t<memory_type<T>> || reflectable<memory_type<T>>);
+   
+   template <class T>
+   concept glaze_const_value_t = glaze_value_t<T> && std::is_pointer_v<glz::meta_wrapper_t<T>> &&
+   std::is_const_v<std::remove_pointer_t<glz::meta_wrapper_t<T>>>;
+   
+   template <class From, class To>
+   concept non_narrowing_convertable = requires(From from, To to) {
 #if __GNUC__
-         // TODO: guard gcc against narrowing conversions when fixed
-         to = from;
+      // TODO: guard gcc against narrowing conversions when fixed
+      to = from;
 #else
-         To{from};
+      To{from};
 #endif
-      };
-
-      template <is_variant T, size_t... I>
-      constexpr auto make_variant_id_map_impl(std::index_sequence<I...>, auto&& variant_ids)
-      {
-         return normal_map<sv, size_t, std::variant_size_v<T>>(std::array{pair<sv, size_t>{sv(variant_ids[I]), I}...});
-      }
-
-      template <is_variant T>
-      constexpr auto make_variant_id_map()
-      {
-         constexpr auto indices = std::make_index_sequence<std::variant_size_v<T>>{};
-
-         return make_variant_id_map_impl<T>(indices, ids_v<T>);
-      }
+   };
+   
+   template <is_variant T, size_t... I>
+   constexpr auto make_variant_id_map_impl(std::index_sequence<I...>, auto&& variant_ids)
+   {
+      return normal_map<sv, size_t, std::variant_size_v<T>>(std::array{pair<sv, size_t>{sv(variant_ids[I]), I}...});
+   }
+   
+   template <is_variant T>
+   constexpr auto make_variant_id_map()
+   {
+      constexpr auto indices = std::make_index_sequence<std::variant_size_v<T>>{};
+      
+      return make_variant_id_map_impl<T>(indices, ids_v<T>);
    }
 
    /**
@@ -499,37 +478,34 @@ namespace glz
    template <class Value, class Element>
    using member_t = decltype(get_member(std::declval<std::add_lvalue_reference_t<Value>>(), std::declval<Element>()));
 
-   namespace detail
+   // member_ptr and lambda wrapper helper
+   template <template <class> class Wrapper, class Wrapped>
+   struct wrap
    {
-      // member_ptr and lambda wrapper helper
-      template <template <class> class Wrapper, class Wrapped>
-      struct wrap
+      Wrapped wrapped;
+      constexpr decltype(auto) operator()(auto&& value) const
       {
-         Wrapped wrapped;
-         constexpr decltype(auto) operator()(auto&& value) const
-         {
-            return Wrapper<std::decay_t<decltype(get_member(value, wrapped))>>{get_member(value, wrapped)};
-         }
-
-         constexpr decltype(auto) unwrap(auto&& value) const { return get_member(value, wrapped); }
-      };
-
-      // Output variants in the following format  ["variant_type", variant_json_data] with
-      // glz::detail:array_variant(&T::var);
-      template <is_variant T>
-      struct array_variant_wrapper final
-      {
-         T& value;
-      };
-      // TODO: Could do this if the compiler supports alias template deduction
-      // template <class T>
-      // using array_var = wrap<array_var_wrapper, T>;
-      template <class T>
-      struct array_variant : wrap<array_variant_wrapper, T>
-      {};
-      template <class T>
-      array_variant(T) -> array_variant<T>; // Only needed on older compilers until we move to template alias deduction
-   } // namespace detail
+         return Wrapper<std::decay_t<decltype(get_member(value, wrapped))>>{get_member(value, wrapped)};
+      }
+      
+      constexpr decltype(auto) unwrap(auto&& value) const { return get_member(value, wrapped); }
+   };
+   
+   // Output variants in the following format  ["variant_type", variant_json_data] with
+   // glz::detail:array_variant(&T::var);
+   template <is_variant T>
+   struct array_variant_wrapper final
+   {
+      T& value;
+   };
+   // TODO: Could do this if the compiler supports alias template deduction
+   // template <class T>
+   // using array_var = wrap<array_var_wrapper, T>;
+   template <class T>
+   struct array_variant : wrap<array_variant_wrapper, T>
+   {};
+   template <class T>
+   array_variant(T) -> array_variant<T>; // Only needed on older compilers until we move to template alias deduction
 
    constexpr decltype(auto) conv_sv(auto&& value) noexcept
    {
@@ -573,10 +549,7 @@ namespace glz
 
    template <class T>
    unexpected_wrapper(T*) -> unexpected_wrapper<T>;
-}
-
-namespace glz::detail
-{
+   
    template <opts Opts, class Value>
    [[nodiscard]] GLZ_ALWAYS_INLINE constexpr bool skip_member(const Value& value) noexcept
    {
