@@ -108,7 +108,7 @@ inline void should_fail()
       }
    };
 
-   if constexpr (Opts.validate_trailing_whitespace) {
+   if constexpr (check_validate_trailing_whitespace(Opts)) {
       "comma after close"_test = [] {
          constexpr sv s = R"(["Comma after the close"],)";
          {
@@ -341,6 +341,11 @@ inline void should_pass()
    };
 }
 
+struct opts_validate : glz::opts
+{
+   bool validate_trailing_whitespace = true;
+};
+
 suite json_conformance = [] {
    "error_on_unknown_keys = true"_test = [] {
       should_fail<glz::opts{}>();
@@ -353,8 +358,8 @@ suite json_conformance = [] {
    };
 
    "validate_trailing_whitespace = true"_test = [] {
-      should_fail<glz::opts{.validate_trailing_whitespace = true}>();
-      should_pass<glz::opts{.validate_trailing_whitespace = true}>();
+      should_fail<opts_validate{}>();
+      should_pass<opts_validate{}>();
    };
 };
 
