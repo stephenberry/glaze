@@ -1286,7 +1286,7 @@ namespace glz
             using S = std::make_signed_t<U>;
             // The largest magnitude we can represent in a negative value is (max + 1)
             // since -(min()) = max() + 1.
-            U limit = static_cast<U>(std::numeric_limits<I>::max()) + 1U;
+            U limit = static_cast<U>((std::numeric_limits<I>::max)()) + 1U;
             if (negative) {
                if (acc > limit) {
                   result.ec = std::errc::result_out_of_range;
@@ -1296,7 +1296,7 @@ namespace glz
                value = static_cast<I>(0 - static_cast<S>(acc));
             }
             else {
-               if (acc > static_cast<U>(std::numeric_limits<I>::max())) {
+               if (acc > static_cast<U>((std::numeric_limits<I>::max)())) {
                   result.ec = std::errc::result_out_of_range;
                   result.ptr = first;
                   return result;
