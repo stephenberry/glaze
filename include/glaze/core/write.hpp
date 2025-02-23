@@ -11,7 +11,7 @@
 namespace glz
 {
    // For writing to a std::string, std::vector<char>, std::deque<char> and the like
-   template <opts Opts, class T, output_buffer Buffer>
+   template <auto Opts, class T, output_buffer Buffer>
       requires write_supported<Opts.format, T>
    [[nodiscard]] error_ctx write(T&& value, Buffer& buffer, is_context auto&& ctx)
    {
@@ -30,7 +30,7 @@ namespace glz
       return {ctx.error, ctx.custom_error_message};
    }
 
-   template <auto& Partial, opts Opts, class T, output_buffer Buffer>
+   template <auto& Partial, auto Opts, class T, output_buffer Buffer>
       requires write_supported<Opts.format, T>
    [[nodiscard]] error_ctx write(T&& value, Buffer& buffer)
    {
@@ -49,7 +49,7 @@ namespace glz
       return {ctx.error, ctx.custom_error_message};
    }
 
-   template <auto& Partial, opts Opts, class T, raw_buffer Buffer>
+   template <auto& Partial, auto Opts, class T, raw_buffer Buffer>
       requires write_supported<Opts.format, T>
    [[nodiscard]] glz::expected<size_t, error_ctx> write(T&& value, Buffer& buffer)
    {
@@ -62,7 +62,7 @@ namespace glz
       return {ix};
    }
 
-   template <opts Opts, class T, output_buffer Buffer>
+   template <auto Opts, class T, output_buffer Buffer>
       requires write_supported<Opts.format, T>
    [[nodiscard]] error_ctx write(T&& value, Buffer& buffer)
    {
@@ -70,7 +70,7 @@ namespace glz
       return write<Opts>(std::forward<T>(value), buffer, ctx);
    }
 
-   template <opts Opts, class T>
+   template <auto Opts, class T>
       requires write_supported<Opts.format, T>
    [[nodiscard]] glz::expected<std::string, error_ctx> write(T&& value)
    {
@@ -83,7 +83,7 @@ namespace glz
       return {buffer};
    }
 
-   template <opts Opts, class T, raw_buffer Buffer>
+   template <auto Opts, class T, raw_buffer Buffer>
       requires write_supported<Opts.format, T>
    [[nodiscard]] glz::expected<size_t, error_ctx> write(T&& value, Buffer&& buffer, is_context auto&& ctx)
    {
@@ -95,7 +95,7 @@ namespace glz
       return {ix};
    }
 
-   template <opts Opts, class T, raw_buffer Buffer>
+   template <auto Opts, class T, raw_buffer Buffer>
       requires write_supported<Opts.format, T>
    [[nodiscard]] glz::expected<size_t, error_ctx> write(T&& value, Buffer&& buffer)
    {

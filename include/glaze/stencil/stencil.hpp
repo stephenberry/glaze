@@ -9,7 +9,7 @@
 
 namespace glz
 {
-   template <opts Opts = opts{}, class Template, class T, resizable Buffer>
+   template <auto Opts = opts{}, class Template, class T, resizable Buffer>
    [[nodiscard]] error_ctx stencil(Template&& layout, T&& value, Buffer& buffer)
    {
       context ctx{};
@@ -241,7 +241,7 @@ namespace glz
       return {};
    }
 
-   template <opts Opts = opts{}, class Template, class T>
+   template <auto Opts = opts{}, class Template, class T>
    [[nodiscard]] expected<std::string, error_ctx> stencil(Template&& layout, T&& value)
    {
       std::string buffer{};

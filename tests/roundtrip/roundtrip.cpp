@@ -11,13 +11,13 @@ using namespace ut;
 // By changing the GLZ_TEST_FORMAT macro we are able to change what format is
 // tested in CMake.
 
-template <glz::opts Opts, class T, class Buffer>
+template <auto Opts, class T, class Buffer>
 decltype(auto) read(T&& value, Buffer&& buffer)
 {
    return glz::read<Opts>(std::forward<T>(value), std::forward<Buffer>(buffer));
 }
 
-template <glz::opts Opts, class T, class Buffer>
+template <auto Opts, class T, class Buffer>
 decltype(auto) write(T&& value, Buffer&& buffer)
 {
    return glz::write<Opts>(std::forward<T>(value), std::forward<Buffer>(buffer));
@@ -34,7 +34,7 @@ struct my_struct
    std::map<std::string, int> map{{"one", 1}, {"two", 2}};
 };
 
-template <glz::opts Opts, class T>
+template <auto Opts, class T>
 void roundtrip(T& v)
 {
    std::string buffer{};

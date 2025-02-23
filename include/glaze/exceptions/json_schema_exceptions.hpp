@@ -10,7 +10,7 @@
 
 namespace glz::ex
 {
-   template <class T, opts Opts = opts{}, class Buffer>
+   template <class T, auto Opts = opts{}, class Buffer>
    void write_json_schema(Buffer&& buffer)
    {
       const auto ec = glz::write_json_schema<T, Opts>(buffer);
@@ -19,7 +19,7 @@ namespace glz::ex
       }
    }
 
-   template <class T, opts Opts = opts{}>
+   template <class T, auto Opts = opts{}>
    [[nodiscard]] std::string write_json_schema()
    {
       std::string buffer{};

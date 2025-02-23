@@ -11,7 +11,7 @@ namespace glz
 {
    namespace detail
    {
-      template <opts Opts>
+      template <auto Opts>
       inline void prettify_json(is_context auto&& ctx, auto&& it, auto&& end, auto&& b, auto&& ix)
       {
          constexpr bool use_tabs = Opts.indentation_char == '\t';
@@ -171,7 +171,7 @@ namespace glz
          }
       }
 
-      template <opts Opts, contiguous In, output_buffer Out>
+      template <auto Opts, contiguous In, output_buffer Out>
       inline void prettify_json(is_context auto&& ctx, In&& in, Out&& out)
       {
          if constexpr (resizable<Out>) {
@@ -204,7 +204,7 @@ namespace glz
    // should not happen since we prettify auto-generated JSON.
    // The detail version can be used if error context is needed
 
-   template <opts Opts = opts{}>
+   template <auto Opts = opts{}>
    inline void prettify_json(const auto& in, auto& out)
    {
       context ctx{};
@@ -214,7 +214,7 @@ namespace glz
    /// <summary>
    /// allocating version of prettify
    /// </summary>
-   template <opts Opts = opts{}>
+   template <auto Opts = opts{}>
    inline std::string prettify_json(const auto& in)
    {
       context ctx{};
@@ -223,7 +223,7 @@ namespace glz
       return out;
    }
 
-   template <opts Opts = opts{}>
+   template <auto Opts = opts{}>
    inline void prettify_jsonc(const auto& in, auto& out)
    {
       context ctx{};
@@ -233,7 +233,7 @@ namespace glz
    /// <summary>
    /// allocating version of prettify
    /// </summary>
-   template <opts Opts = opts{}>
+   template <auto Opts = opts{}>
    inline std::string prettify_jsonc(const auto& in)
    {
       context ctx{};

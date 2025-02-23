@@ -214,7 +214,7 @@ namespace glz
    template <class T, size_t I>
    using field_t = std::remove_cvref_t<refl_t<T, I>>;
 
-   template <opts Opts, class T>
+   template <auto Opts, class T>
    inline constexpr bool maybe_skipped = [] {
       if constexpr (reflect<T>::size > 0) {
          constexpr auto N = reflect<T>::size;

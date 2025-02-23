@@ -14,7 +14,7 @@ namespace glz
    template <>
    struct skip_value<BEVE>
    {
-      template <opts Opts>
+      template <auto Opts>
       inline static void op(is_context auto&& ctx, auto&& it, auto&& end) noexcept;
    };
 
@@ -44,7 +44,7 @@ namespace glz
       it += byte_count;
    }
 
-   template <opts Opts>
+   template <auto Opts>
    inline void skip_object_beve(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       if (invalid_end(ctx, it, end)) {
@@ -101,7 +101,7 @@ namespace glz
       }
    }
 
-   template <opts Opts>
+   template <auto Opts>
    inline void skip_typed_array_beve(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       const auto tag = uint8_t(*it);
@@ -158,7 +158,7 @@ namespace glz
       }
    }
 
-   template <opts Opts>
+   template <auto Opts>
    inline void skip_untyped_array_beve(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       ++it;
@@ -172,7 +172,7 @@ namespace glz
       }
    }
 
-   template <opts Opts>
+   template <auto Opts>
       requires(Opts.format == BEVE)
    void skip_array(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
@@ -190,14 +190,14 @@ namespace glz
       }
    }
 
-   template <opts Opts>
+   template <auto Opts>
    GLZ_ALWAYS_INLINE void skip_additional_beve(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       ++it;
       skip_value<BEVE>::op<Opts>(ctx, it, end);
    }
 
-   template <opts Opts>
+   template <auto Opts>
    inline void skip_value<BEVE>::op(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       using namespace glz::detail;

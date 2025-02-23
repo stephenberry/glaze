@@ -147,7 +147,7 @@ namespace glz
       return false;
    }
 
-   template <opts Opts, class T, size_t I, class Value, class... SelectedIndex>
+   template <auto Opts, class T, size_t I, class Value, class... SelectedIndex>
       requires(glaze_object_t<T> || reflectable<T>)
    void decode_index(Value&& value, is_context auto&& ctx, auto&& it, auto&& end, SelectedIndex&&... selected_index)
    {
@@ -227,7 +227,7 @@ namespace glz
       }
    }
 
-   template <opts Opts, class T, size_t I, class Value>
+   template <auto Opts, class T, size_t I, class Value>
       requires(glaze_enum_t<T> || (meta_keys<T> && std::is_enum_v<T>))
    void decode_index(Value&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
@@ -256,7 +256,7 @@ namespace glz
       }
    }
 
-   template <opts Opts, class T, auto& HashInfo, class Value, class... SelectedIndex>
+   template <auto Opts, class T, auto& HashInfo, class Value, class... SelectedIndex>
       requires(glaze_object_t<T> || reflectable<T>)
    GLZ_ALWAYS_INLINE constexpr void parse_and_invoke(Value&& value, is_context auto&& ctx, auto&& it, auto&& end,
                                                      SelectedIndex&&... selected_index)
@@ -1582,7 +1582,7 @@ namespace glz
       // for types like std::vector<std::pair...> that can't look up with operator[]
       // Intead of hashing or linear searching, we just clear the input and overwrite the entire contents
       template <auto Options>
-         requires(pair_t<range_value_t<T>> && Options.concatenate == true)
+         requires(pair_t<range_value_t<T>> && check_concatenate(Options) == true)
       static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
       {
          static constexpr auto Opts = opening_handled_off<ws_handled_off<Options>()>();
@@ -1996,7 +1996,7 @@ namespace glz
    template <pair_t T>
    struct from<JSON, T>
    {
-      template <opts Options, string_literal tag = "">
+      template <auto Options, string_literal tag = "">
       static void op(T& value, is_context auto&& ctx, auto&& it, auto&& end)
       {
          constexpr auto Opts = opening_handled_off<ws_handled_off<Options>()>();
@@ -3220,13 +3220,18 @@ namespace glz
          value = buffer;
       }
    };
+   
+   struct opts_validate : opts
+   {
+      bool validate_trailing_whitespace = true;
+   };
 
    template <is_buffer Buffer>
    [[nodiscard]] error_ctx validate_json(Buffer&& buffer) noexcept
    {
       context ctx{};
       glz::skip skip_value{};
-      return read<opts{.validate_skipped = true, .validate_trailing_whitespace = true}>(
+      return read<opts_validate{{.validate_skipped = true}}>(
          skip_value, std::forward<Buffer>(buffer), ctx);
    }
 
@@ -3235,7 +3240,7 @@ namespace glz
    {
       context ctx{};
       glz::skip skip_value{};
-      return read<opts{.comments = true, .validate_skipped = true, .validate_trailing_whitespace = true}>(
+      return read<opts_validate{{.comments = true, .validate_skipped = true}}>(
          skip_value, std::forward<Buffer>(buffer), ctx);
    }
 

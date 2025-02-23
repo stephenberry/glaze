@@ -10,16 +10,16 @@ namespace glz
    template <>
    struct skip_value<JSON>
    {
-      template <opts Opts>
+      template <auto Opts>
          requires(not Opts.comments)
       GLZ_ALWAYS_INLINE static void op(is_context auto&& ctx, auto&& it, auto&& end) noexcept;
 
-      template <opts Opts>
+      template <auto Opts>
          requires(bool(Opts.comments))
       GLZ_ALWAYS_INLINE static void op(is_context auto&& ctx, auto&& it, auto&& end) noexcept;
    };
 
-   template <opts Opts>
+   template <auto Opts>
    void skip_object(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       if constexpr (!Opts.validate_skipped) {
@@ -107,7 +107,7 @@ namespace glz
       }
    }
 
-   template <opts Opts>
+   template <auto Opts>
       requires(Opts.format == JSON || Opts.format == NDJSON)
    void skip_array(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
@@ -184,7 +184,7 @@ namespace glz
    // we want the JSON pointer access to not care about trailing whitespace
    // so we use validate_skipped for precise validation and value skipping
    // expects opening whitespace to be handled
-   template <opts Opts>
+   template <auto Opts>
    GLZ_ALWAYS_INLINE auto parse_value(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       auto start = it;
@@ -192,7 +192,7 @@ namespace glz
       return std::span{start, size_t(it - start)};
    }
 
-   template <opts Opts>
+   template <auto Opts>
       requires(not Opts.comments)
    GLZ_ALWAYS_INLINE void skip_value<JSON>::op(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
@@ -302,7 +302,7 @@ namespace glz
       }
    }
 
-   template <opts Opts>
+   template <auto Opts>
       requires(bool(Opts.comments))
    GLZ_ALWAYS_INLINE void skip_value<JSON>::op(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {

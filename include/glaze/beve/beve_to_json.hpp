@@ -10,7 +10,7 @@ namespace glz
 {
    namespace detail
    {
-      template <opts Opts>
+      template <auto Opts>
       inline void beve_to_json_number(auto&& tag, auto&& ctx, auto&& it, auto&& end, auto& out, auto&& ix) noexcept
       {
          const auto number_type = (tag & 0b000'11'000) >> 3;
@@ -104,7 +104,7 @@ namespace glz
          }
       }
 
-      template <glz::opts Opts, class Buffer>
+      template <auto Opts, class Buffer>
       inline void beve_to_json_value(auto&& ctx, auto&& it, auto&& end, Buffer& out, auto&& ix)
       {
          if (it >= end) [[unlikely]] {
@@ -637,7 +637,7 @@ namespace glz
       }
    }
 
-   template <glz::opts Opts = glz::opts{}, class BEVEBuffer, class JSONBuffer>
+   template <auto Opts = glz::opts{}, class BEVEBuffer, class JSONBuffer>
    [[nodiscard]] inline error_ctx beve_to_json(const BEVEBuffer& beve, JSONBuffer& out)
    {
       size_t ix{}; // write index
