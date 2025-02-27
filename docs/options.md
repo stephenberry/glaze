@@ -55,6 +55,9 @@ bool concatenate = true;
 bool allow_conversions = true;
 // Whether conversions between convertible types are allowed in binary, e.g. double -> float
 
+bool shrink_to_fit = false;
+// Shrinks dynamic containers to new size to save memory
+
 bool hide_non_invocable = true;
 // Hides non-invocable members from the cli_menu (may be applied elsewhere in the future)
 ```

@@ -728,7 +728,7 @@ namespace glz
             if constexpr (resizable<T>) {
                value.resize(n);
 
-               if constexpr (Opts.shrink_to_fit) {
+               if constexpr (check_shrink_to_fit(Opts)) {
                   value.shrink_to_fit();
                }
             }
@@ -772,7 +772,7 @@ namespace glz
                if constexpr (resizable<T>) {
                   value.resize(n);
 
-                  if constexpr (Opts.shrink_to_fit) {
+                  if constexpr (check_shrink_to_fit(Opts)) {
                      value.shrink_to_fit();
                   }
                }
@@ -885,7 +885,7 @@ namespace glz
             if constexpr (resizable<T>) {
                value.resize(n);
 
-               if constexpr (Opts.shrink_to_fit) {
+               if constexpr (check_shrink_to_fit(Opts)) {
                   value.shrink_to_fit();
                }
             }
@@ -902,7 +902,7 @@ namespace glz
 
                x.resize(length);
 
-               if constexpr (Opts.shrink_to_fit) {
+               if constexpr (check_shrink_to_fit(Opts)) {
                   value.shrink_to_fit();
                }
 
@@ -948,7 +948,7 @@ namespace glz
             if constexpr (resizable<T>) {
                value.resize(n);
 
-               if constexpr (Opts.shrink_to_fit) {
+               if constexpr (check_shrink_to_fit(Opts)) {
                   value.shrink_to_fit();
                }
             }
@@ -982,7 +982,7 @@ namespace glz
             if constexpr (resizable<T>) {
                value.resize(n);
 
-               if constexpr (Opts.shrink_to_fit) {
+               if constexpr (check_shrink_to_fit(Opts)) {
                   value.shrink_to_fit();
                }
             }

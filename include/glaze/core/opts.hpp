@@ -79,7 +79,6 @@ namespace glz
       uint8_t indentation_width = 3; // Prettified JSON indentation size
       bool new_lines_in_arrays = true; // Whether prettified arrays should have new lines for each element
       bool append_arrays = false; // When reading into an array the data will be appended if the type supports it
-      bool shrink_to_fit = false; // Shrinks dynamic containers to new size to save memory
       bool write_type_info = true; // Write type info for meta objects in variants
       bool error_on_missing_keys = false; // Require all non nullable keys to be present in the object. Use
                                           // skip_null_members = false to require nullable members
@@ -128,6 +127,10 @@ namespace glz
    // Whether conversions between convertible types are allowed in binary, e.g. double -> float
    
    // ---
+   // bool shrink_to_fit = false;
+   // Shrinks dynamic containers to new size to save memory
+   
+   // ---
    // bool hide_non_invocable = true;
    // Hides non-invocable members from the cli_menu (may be applied elsewhere in the future)
    
@@ -168,6 +171,14 @@ namespace glz
          return Opts.allow_conversions;
       } else {
          return true;
+      }
+   }
+   
+   consteval bool check_shrink_to_fit(auto&& Opts) {
+      if constexpr (requires { Opts.shrink_to_fit; }) {
+         return Opts.shrink_to_fit;
+      } else {
+         return false;
       }
    }
    
