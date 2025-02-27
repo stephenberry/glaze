@@ -772,7 +772,7 @@ buffer.resize(n);
 
 ## Compile Time Options
 
-The `glz::opts` struct defines compile time optional settings for reading/writing.
+The `glz::opts` struct defines the default compile time options for reading/writing.
 
 Instead of calling `glz::read_json(...)`, you can call `glz::read<glz::opts{}>(...)` and customize the options.
 
@@ -783,13 +783,20 @@ For example: `glz::read<glz::opts{.error_on_unknown_keys = false}>(...)` will tu
 - `glz::read<glz::opts{.format = glz::BEVE}>(...)` -> `glz::read_beve(...)`
 - `glz::read<glz::opts{.format = glz::JSON}>(...)` -> `glz::read_json(...)`
 
-## Available Compile Time Options
+> [!IMPORTANT]
+>
+> Many options for Glaze are not part of `glz::opts`. This keeps compiler errors shorter and makes options more manageable. See [Options](./docs/recorder.md) documentation for more details on available compile time options.
 
-The struct below shows the available options and the default behavior.
+### Available Default Compile Time Options
+
+The struct below shows the available options in `glz::opts` and the defaults. See [Options](./docs/recorder.md) for additional options for user customization.
 
 ```c++
-struct opts {
-  uint32_t format = json;
+struct opts
+{
+  // USER CONFIGURABLE
+  uint32_t format = JSON;
+  bool null_terminated = true; // Whether the input buffer is null terminated
   bool comments = false; // Support reading in JSONC style comments
   bool error_on_unknown_keys = true; // Error when an unknown key is encountered
   bool skip_null_members = true; // Skip writing out params in an object if the value is null
@@ -799,15 +806,13 @@ struct opts {
   char indentation_char = ' '; // Prettified JSON indentation char
   uint8_t indentation_width = 3; // Prettified JSON indentation size
   bool new_lines_in_arrays = true; // Whether prettified arrays should have new lines for each element
+  bool append_arrays = false; // When reading into an array the data will be appended if the type supports it
   bool shrink_to_fit = false; // Shrinks dynamic containers to new size to save memory
   bool write_type_info = true; // Write type info for meta objects in variants
   bool error_on_missing_keys = false; // Require all non nullable keys to be present in the object. Use
-                                        // skip_null_members = false to require nullable members
+                                      // skip_null_members = false to require nullable members
   bool error_on_const_read =
      false; // Error if attempt is made to read into a const value, by default the value is skipped without error
-  bool validate_skipped = false; // If full validation should be performed on skipped values
-  bool validate_trailing_whitespace =
-     false; // If, after parsing a value, we want to validate the trailing whitespace
 
   uint8_t layout = rowwise; // CSV row wise output/input
 
@@ -817,22 +822,13 @@ struct opts {
   bool bools_as_numbers = false; // Read and write booleans with 1's and 0's
 
   bool quoted_num = false; // treat numbers as quoted or array-like types as having quoted numbers
-  bool number = false; // read numbers as strings and write these string as numbers
+  bool number = false; // treats all types like std::string as numbers: read/write these quoted numbers
   bool raw = false; // write out string like values without quotes
-  bool raw_string =
-     false; // do not decode/encode escaped characters for strings (improves read/write performance)
+  bool raw_string = false; // do not decode/encode escaped characters for strings (improves read/write performance)
   bool structs_as_arrays = false; // Handle structs (reading/writing) without keys, which applies
-  bool allow_conversions = true; // Whether conversions between convertible types are
-  // allowed in binary, e.g. double -> float
 
   bool partial_read =
      false; // Reads into the deepest structural object and then exits without parsing the rest of the input
-
-  // glaze_object_t concepts
-  bool concatenate = true; // Concatenates ranges of std::pair into single objects when writing
-
-  bool hide_non_invocable =
-     true; // Hides non-invocable members from the cli_menu (may be applied elsewhere in the future)
 };
 ```
 

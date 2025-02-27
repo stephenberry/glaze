@@ -102,6 +102,7 @@ namespace glz
       bool partial_read =
          false; // Reads into the deepest structural object and then exits without parsing the rest of the input
       
+      // INTERNAL OPTIONS
       uint32_t internal{}; // default should be 0
 
       [[nodiscard]] constexpr bool operator==(const opts&) const noexcept = default;
