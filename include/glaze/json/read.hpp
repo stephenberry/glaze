@@ -3220,7 +3220,7 @@ namespace glz
          value = buffer;
       }
    };
-   
+
    struct opts_validate : opts
    {
       bool validate_skipped = true;
@@ -3232,8 +3232,7 @@ namespace glz
    {
       context ctx{};
       glz::skip skip_value{};
-      return read<opts_validate{}>(
-         skip_value, std::forward<Buffer>(buffer), ctx);
+      return read<opts_validate{}>(skip_value, std::forward<Buffer>(buffer), ctx);
    }
 
    template <is_buffer Buffer>
@@ -3241,8 +3240,7 @@ namespace glz
    {
       context ctx{};
       glz::skip skip_value{};
-      return read<opts_validate{{opts{.comments = true}}}>(
-         skip_value, std::forward<Buffer>(buffer), ctx);
+      return read<opts_validate{{opts{.comments = true}}}>(skip_value, std::forward<Buffer>(buffer), ctx);
    }
 
    template <class T, is_buffer Buffer>

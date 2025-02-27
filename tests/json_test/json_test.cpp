@@ -844,7 +844,7 @@ suite container_types = [] {
    "vector pair"_test = [] {
       std::vector<std::pair<int, int>> v;
       expect(!glz::read<opts_concatenate{{}, false}>(v, R"([{"1":2},{"3":4}])"));
-      //constexpr glz::opts opts{.prettify = true};
+      // constexpr glz::opts opts{.prettify = true};
       const auto s = glz::write<opts_concatenate{{glz::opts{.prettify = true}}, false}>(v).value_or("error");
       expect(s == R"([
    {
@@ -9586,10 +9586,8 @@ suite TestSettingsData_test = [] {
    };
 
    static constexpr opts_allow_conversions write_options{{glz::opts{.comments = true, .prettify = true}}};
-   static constexpr opts_allow_conversions read_options{{glz::opts{.comments = true,
-         .error_on_unknown_keys = false,
-         .skip_null_members = true,
-      .error_on_missing_keys = false}}};
+   static constexpr opts_allow_conversions read_options{{glz::opts{
+      .comments = true, .error_on_unknown_keys = false, .skip_null_members = true, .error_on_missing_keys = false}}};
 
    "TestSettingsData options"_test = [] {
       TestSettingsData obj{};
@@ -10023,13 +10021,14 @@ struct Foo
 suite ndjson_options = [] {
    "ndjson_options"_test = [] {
       std::vector<Foo> assets{};
-      
-      struct opts : glz::opts {
+
+      struct opts : glz::opts
+      {
          bool validate_skipped = true;
       };
-      
+
       const auto ec = glz::read<opts{{glz::opts{.format = glz::NDJSON, .error_on_unknown_keys = false}}}>(
-            assets, "{\"x\":1}\n{\"x\":2}");
+         assets, "{\"x\":1}\n{\"x\":2}");
       expect(not ec);
    };
 };

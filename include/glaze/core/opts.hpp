@@ -44,7 +44,7 @@ namespace glz
 #ifndef GLZ_NULL_TERMINATED
 #define GLZ_NULL_TERMINATED true
 #endif
-   
+
    enum struct opts_internal : uint32_t {
       none = 0,
       opening_handled = 1 << 0, // the opening character has been handled
@@ -52,12 +52,12 @@ namespace glz
       ws_handled = 1 << 2, // whitespace has already been parsed
       no_header = 1 << 3, // whether or not a binary header is needed
       disable_write_unknown =
-      1 << 4, // whether to turn off writing unknown fields for a glz::meta specialized for unknown writing
+         1 << 4, // whether to turn off writing unknown fields for a glz::meta specialized for unknown writing
       is_padded = 1 << 5, // whether or not the read buffer is padded
       disable_padding = 1 << 6, // to explicitly disable padding for contexts like includers
       write_unchecked = 1 << 7 // the write buffer has sufficient space and does not need to be checked
    };
-   
+
    // NOTE TO USER:
    // glz::opts are the default options for using Glaze
    // You can create your own options struct with more or less fields as long as your struct has:
@@ -99,104 +99,120 @@ namespace glz
 
       bool partial_read =
          false; // Reads into the deepest structural object and then exits without parsing the rest of the input
-      
+
       // INTERNAL OPTIONS
       uint32_t internal{}; // default should be 0
 
       [[nodiscard]] constexpr bool operator==(const opts&) const noexcept = default;
    };
-   
+
    // Add these to a custom options struct if you want to use them
    // OTHER AVAILABLE OPTIONS (and default values):
-   
+
    // ---
    // bool validate_skipped = false;
    // If full validation should be performed on skipped values
-   
+
    // ---
    // bool validate_trailing_whitespace = false;
    // If, after parsing a value, we want to validate the trailing whitespace
-   
+
    // ---
    // bool concatenate = true;
    // Concatenates ranges of std::pair into single objects when writing
-   
+
    // ---
    // bool allow_conversions = true;
    // Whether conversions between convertible types are allowed in binary, e.g. double -> float
-   
+
    // ---
    // bool write_type_info = true;
    // Write type info for meta objects in variants
-   
+
    // ---
    // bool shrink_to_fit = false;
    // Shrinks dynamic containers to new size to save memory
-   
+
    // ---
    // bool hide_non_invocable = true;
    // Hides non-invocable members from the cli_menu (may be applied elsewhere in the future)
-   
-   consteval bool check_validate_skipped(auto&& Opts) {
+
+   consteval bool check_validate_skipped(auto&& Opts)
+   {
       if constexpr (requires { Opts.validate_skipped; }) {
          return Opts.validate_skipped;
-      } else {
+      }
+      else {
          return false;
       }
    }
-   
-   consteval bool check_validate_trailing_whitespace(auto&& Opts) {
+
+   consteval bool check_validate_trailing_whitespace(auto&& Opts)
+   {
       if constexpr (requires { Opts.validate_trailing_whitespace; }) {
          return Opts.validate_trailing_whitespace;
-      } else {
+      }
+      else {
          return false;
       }
    }
-   
-   consteval bool check_partial_read(auto&& Opts) {
+
+   consteval bool check_partial_read(auto&& Opts)
+   {
       if constexpr (requires { Opts.partial_read; }) {
          return Opts.partial_read;
-      } else {
+      }
+      else {
          return false;
       }
    }
-   
-   consteval bool check_concatenate(auto&& Opts) {
+
+   consteval bool check_concatenate(auto&& Opts)
+   {
       if constexpr (requires { Opts.concatenate; }) {
          return Opts.concatenate;
-      } else {
+      }
+      else {
          return true;
       }
    }
-   
-   consteval bool check_allow_conversions(auto&& Opts) {
+
+   consteval bool check_allow_conversions(auto&& Opts)
+   {
       if constexpr (requires { Opts.allow_conversions; }) {
          return Opts.allow_conversions;
-      } else {
+      }
+      else {
          return true;
       }
    }
-   
-   consteval bool check_write_type_info(auto&& Opts) {
+
+   consteval bool check_write_type_info(auto&& Opts)
+   {
       if constexpr (requires { Opts.write_type_info; }) {
          return Opts.write_type_info;
-      } else {
+      }
+      else {
          return true;
       }
    }
-   
-   consteval bool check_shrink_to_fit(auto&& Opts) {
+
+   consteval bool check_shrink_to_fit(auto&& Opts)
+   {
       if constexpr (requires { Opts.shrink_to_fit; }) {
          return Opts.shrink_to_fit;
-      } else {
+      }
+      else {
          return false;
       }
    }
-   
-   consteval bool check_hide_non_invocable(auto&& Opts) {
+
+   consteval bool check_hide_non_invocable(auto&& Opts)
+   {
       if constexpr (requires { Opts.hide_non_invocable; }) {
          return Opts.hide_non_invocable;
-      } else {
+      }
+      else {
          return true;
       }
    }
