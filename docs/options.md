@@ -55,6 +55,9 @@ bool concatenate = true;
 bool allow_conversions = true;
 // Whether conversions between convertible types are allowed in binary, e.g. double -> float
 
+bool write_type_info = true;
+// Write type info for meta objects in variants
+
 bool shrink_to_fit = false;
 // Shrinks dynamic containers to new size to save memory
 
