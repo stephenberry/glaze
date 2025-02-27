@@ -196,7 +196,7 @@ namespace glz
          constexpr auto is_volatile = std::is_volatile_v<std::remove_reference_t<decltype(value)>>;
 
          if (tag != header) {
-            if constexpr (Opts.allow_conversions) {
+            if constexpr (check_allow_conversions(Opts)) {
                if constexpr (num_t<T>) {
                   if ((tag & 0b00000111) != tag::number) {
                      ctx.error = error_code::syntax_error;
@@ -728,7 +728,7 @@ namespace glz
             if constexpr (resizable<T>) {
                value.resize(n);
 
-               if constexpr (Opts.shrink_to_fit) {
+               if constexpr (check_shrink_to_fit(Opts)) {
                   value.shrink_to_fit();
                }
             }
@@ -772,7 +772,7 @@ namespace glz
                if constexpr (resizable<T>) {
                   value.resize(n);
 
-                  if constexpr (Opts.shrink_to_fit) {
+                  if constexpr (check_shrink_to_fit(Opts)) {
                      value.shrink_to_fit();
                   }
                }
@@ -787,9 +787,9 @@ namespace glz
             };
 
             if (tag != header) {
-               if constexpr (Opts.allow_conversions) {
+               if constexpr (check_allow_conversions(Opts)) {
                   if (tag != header) [[unlikely]] {
-                     if constexpr (Opts.allow_conversions) {
+                     if constexpr (check_allow_conversions(Opts)) {
                         if ((tag & 0b00000111) != tag::typed_array) {
                            ctx.error = error_code::syntax_error;
                            return;
@@ -885,7 +885,7 @@ namespace glz
             if constexpr (resizable<T>) {
                value.resize(n);
 
-               if constexpr (Opts.shrink_to_fit) {
+               if constexpr (check_shrink_to_fit(Opts)) {
                   value.shrink_to_fit();
                }
             }
@@ -902,7 +902,7 @@ namespace glz
 
                x.resize(length);
 
-               if constexpr (Opts.shrink_to_fit) {
+               if constexpr (check_shrink_to_fit(Opts)) {
                   value.shrink_to_fit();
                }
 
@@ -948,7 +948,7 @@ namespace glz
             if constexpr (resizable<T>) {
                value.resize(n);
 
-               if constexpr (Opts.shrink_to_fit) {
+               if constexpr (check_shrink_to_fit(Opts)) {
                   value.shrink_to_fit();
                }
             }
@@ -970,7 +970,7 @@ namespace glz
                return;
             }
             ++it;
-            std::conditional_t<Opts.partial_read, size_t, const size_t> n = int_from_compressed(ctx, it, end);
+            std::conditional_t<check_partial_read(Opts), size_t, const size_t> n = int_from_compressed(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]] {
                return;
             }
@@ -982,7 +982,7 @@ namespace glz
             if constexpr (resizable<T>) {
                value.resize(n);
 
-               if constexpr (Opts.shrink_to_fit) {
+               if constexpr (check_shrink_to_fit(Opts)) {
                   value.shrink_to_fit();
                }
             }
@@ -996,7 +996,7 @@ namespace glz
       // for types like std::vector<std::pair...> that can't look up with operator[]
       // Instead of hashing or linear searching, we just clear the input and overwrite the entire contents
       template <auto Opts>
-         requires(pair_t<range_value_t<T>> && Opts.concatenate == true)
+         requires(pair_t<range_value_t<T>> && check_concatenate(Opts) == true)
       static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
       {
          using Element = typename T::value_type;
@@ -1011,7 +1011,7 @@ namespace glz
          }
          const auto tag = uint8_t(*it);
          if (tag != header) [[unlikely]] {
-            if constexpr (Opts.allow_conversions) {
+            if constexpr (check_allow_conversions(Opts)) {
                const auto key_type = tag & 0b000'11'000;
                if constexpr (str_t<Key>) {
                   if (key_type != 0) {
@@ -1115,7 +1115,7 @@ namespace glz
          }
          const auto tag = uint8_t(*it);
          if (tag != header) [[unlikely]] {
-            if constexpr (Opts.allow_conversions) {
+            if constexpr (check_allow_conversions(Opts)) {
                const auto key_type = tag & 0b000'11'000;
                if constexpr (str_t<Key>) {
                   if (key_type != 0) {
@@ -1555,7 +1555,7 @@ namespace glz
       return value;
    }
 
-   template <opts Opts = opts{}, class T>
+   template <auto Opts = opts{}, class T>
       requires(read_supported<BEVE, T>)
    [[nodiscard]] inline error_ctx read_file_beve(T& value, const sv file_name, auto&& buffer)
    {
@@ -1591,7 +1591,7 @@ namespace glz
       return value;
    }
 
-   template <opts Opts = opts{}, class T>
+   template <auto Opts = opts{}, class T>
       requires(read_supported<BEVE, T>)
    [[nodiscard]] inline error_ctx read_file_beve_untagged(T& value, const std::string& file_name, auto&& buffer)
    {

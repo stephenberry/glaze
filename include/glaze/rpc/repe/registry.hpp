@@ -34,7 +34,7 @@ namespace glz::repe
       };
    }
 
-   template <opts Opts, class Value>
+   template <auto Opts, class Value>
    void write_response(Value&& value, is_state auto&& state)
    {
       auto& in = state.in;
@@ -56,7 +56,7 @@ namespace glz::repe
       }
    }
 
-   template <opts Opts>
+   template <auto Opts>
    void write_response(is_state auto&& state)
    {
       auto& in = state.in;
@@ -80,7 +80,7 @@ namespace glz::repe
    }
 
    // returns 0 on error
-   template <opts Opts, class Value>
+   template <auto Opts, class Value>
    size_t read_params(Value&& value, auto&& state)
    {
       glz::context ctx{};
@@ -118,7 +118,7 @@ namespace glz::repe
 
    namespace detail
    {
-      template <opts Opts>
+      template <auto Opts>
       struct request_impl
       {
          message operator()(const user_header& h) const
@@ -169,7 +169,7 @@ namespace glz::repe
       };
    }
 
-   template <opts Opts>
+   template <auto Opts>
    inline constexpr auto request = detail::request_impl<Opts>{};
 
    inline constexpr auto request_beve = request<opts{BEVE}>;
@@ -188,7 +188,7 @@ namespace glz::repe
    }
 
    // This registry does not support adding methods from RPC calls or adding methods once RPC calls can be made.
-   template <opts Opts = opts{}>
+   template <auto Opts = opts{}>
    struct registry
    {
       using procedure = std::function<void(state&&)>; // RPC method

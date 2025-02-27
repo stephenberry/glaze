@@ -44,6 +44,25 @@ namespace glz
 #ifndef GLZ_NULL_TERMINATED
 #define GLZ_NULL_TERMINATED true
 #endif
+   
+   enum struct opts_internal : uint32_t {
+      none = 0,
+      opening_handled = 1 << 0, // the opening character has been handled
+      closing_handled = 1 << 1, // the closing character has been handled
+      ws_handled = 1 << 2, // whitespace has already been parsed
+      no_header = 1 << 3, // whether or not a binary header is needed
+      disable_write_unknown =
+      1 << 4, // whether to turn off writing unknown fields for a glz::meta specialized for unknown writing
+      is_padded = 1 << 5, // whether or not the read buffer is padded
+      disable_padding = 1 << 6, // to explicitly disable padding for contexts like includers
+      write_unchecked = 1 << 7 // the write buffer has sufficient space and does not need to be checked
+   };
+   
+   // NOTE TO USER:
+   // glz::opts are the default options for using Glaze
+   // You can create your own options struct with more or less fields as long as your struct has:
+   // - opts_internal internal{};
+   // - uint32_t format
 
    struct opts
    {
@@ -60,15 +79,10 @@ namespace glz
       uint8_t indentation_width = 3; // Prettified JSON indentation size
       bool new_lines_in_arrays = true; // Whether prettified arrays should have new lines for each element
       bool append_arrays = false; // When reading into an array the data will be appended if the type supports it
-      bool shrink_to_fit = false; // Shrinks dynamic containers to new size to save memory
-      bool write_type_info = true; // Write type info for meta objects in variants
       bool error_on_missing_keys = false; // Require all non nullable keys to be present in the object. Use
                                           // skip_null_members = false to require nullable members
       bool error_on_const_read =
          false; // Error if attempt is made to read into a const value, by default the value is skipped without error
-      bool validate_skipped = false; // If full validation should be performed on skipped values
-      bool validate_trailing_whitespace =
-         false; // If, after parsing a value, we want to validate the trailing whitespace
 
       uint8_t layout = rowwise; // CSV row wise output/input
 
@@ -82,235 +96,309 @@ namespace glz
       bool raw = false; // write out string like values without quotes
       bool raw_string = false; // do not decode/encode escaped characters for strings (improves read/write performance)
       bool structs_as_arrays = false; // Handle structs (reading/writing) without keys, which applies
-      bool allow_conversions = true; // Whether conversions between convertible types are
-      // allowed in binary, e.g. double -> float
 
       bool partial_read =
          false; // Reads into the deepest structural object and then exits without parsing the rest of the input
-
-      // glaze_object_t concepts
-      bool concatenate = true; // Concatenates ranges of std::pair into single objects when writing
-
-      bool hide_non_invocable =
-         true; // Hides non-invocable members from the cli_menu (may be applied elsewhere in the future)
-
-      enum struct internal : uint32_t {
-         none = 0,
-         opening_handled = 1 << 0, // the opening character has been handled
-         closing_handled = 1 << 1, // the closing character has been handled
-         ws_handled = 1 << 2, // whitespace has already been parsed
-         no_header = 1 << 3, // whether or not a binary header is needed
-         disable_write_unknown =
-            1 << 4, // whether to turn off writing unknown fields for a glz::meta specialized for unknown writing
-         is_padded = 1 << 5, // whether or not the read buffer is padded
-         disable_padding = 1 << 6, // to explicitly disable padding for contexts like includers
-         write_unchecked = 1 << 7 // the write buffer has sufficient space and does not need to be checked
-      };
-      // Sufficient space is only applicable to writing certain types and based on the write_padding_bytes
-
-      // INTERNAL USE
+      
+      // INTERNAL OPTIONS
       uint32_t internal{}; // default should be 0
 
       [[nodiscard]] constexpr bool operator==(const opts&) const noexcept = default;
    };
-
-   consteval bool has_opening_handled(opts o) { return o.internal & uint32_t(opts::internal::opening_handled); }
-
-   consteval bool has_closing_handled(opts o) { return o.internal & uint32_t(opts::internal::closing_handled); }
-
-   consteval bool has_ws_handled(opts o) { return o.internal & uint32_t(opts::internal::ws_handled); }
-
-   consteval bool has_no_header(opts o) { return o.internal & uint32_t(opts::internal::no_header); }
-
-   consteval bool has_disable_write_unknown(opts o)
-   {
-      return o.internal & uint32_t(opts::internal::disable_write_unknown);
+   
+   // Add these to a custom options struct if you want to use them
+   // OTHER AVAILABLE OPTIONS (and default values):
+   
+   // ---
+   // bool validate_skipped = false;
+   // If full validation should be performed on skipped values
+   
+   // ---
+   // bool validate_trailing_whitespace = false;
+   // If, after parsing a value, we want to validate the trailing whitespace
+   
+   // ---
+   // bool concatenate = true;
+   // Concatenates ranges of std::pair into single objects when writing
+   
+   // ---
+   // bool allow_conversions = true;
+   // Whether conversions between convertible types are allowed in binary, e.g. double -> float
+   
+   // ---
+   // bool write_type_info = true;
+   // Write type info for meta objects in variants
+   
+   // ---
+   // bool shrink_to_fit = false;
+   // Shrinks dynamic containers to new size to save memory
+   
+   // ---
+   // bool hide_non_invocable = true;
+   // Hides non-invocable members from the cli_menu (may be applied elsewhere in the future)
+   
+   consteval bool check_validate_skipped(auto&& Opts) {
+      if constexpr (requires { Opts.validate_skipped; }) {
+         return Opts.validate_skipped;
+      } else {
+         return false;
+      }
+   }
+   
+   consteval bool check_validate_trailing_whitespace(auto&& Opts) {
+      if constexpr (requires { Opts.validate_trailing_whitespace; }) {
+         return Opts.validate_trailing_whitespace;
+      } else {
+         return false;
+      }
+   }
+   
+   consteval bool check_partial_read(auto&& Opts) {
+      if constexpr (requires { Opts.partial_read; }) {
+         return Opts.partial_read;
+      } else {
+         return false;
+      }
+   }
+   
+   consteval bool check_concatenate(auto&& Opts) {
+      if constexpr (requires { Opts.concatenate; }) {
+         return Opts.concatenate;
+      } else {
+         return true;
+      }
+   }
+   
+   consteval bool check_allow_conversions(auto&& Opts) {
+      if constexpr (requires { Opts.allow_conversions; }) {
+         return Opts.allow_conversions;
+      } else {
+         return true;
+      }
+   }
+   
+   consteval bool check_write_type_info(auto&& Opts) {
+      if constexpr (requires { Opts.write_type_info; }) {
+         return Opts.write_type_info;
+      } else {
+         return true;
+      }
+   }
+   
+   consteval bool check_shrink_to_fit(auto&& Opts) {
+      if constexpr (requires { Opts.shrink_to_fit; }) {
+         return Opts.shrink_to_fit;
+      } else {
+         return false;
+      }
+   }
+   
+   consteval bool check_hide_non_invocable(auto&& Opts) {
+      if constexpr (requires { Opts.hide_non_invocable; }) {
+         return Opts.hide_non_invocable;
+      } else {
+         return true;
+      }
    }
 
-   consteval bool has_is_padded(opts o) { return o.internal & uint32_t(opts::internal::is_padded); }
+   // TODO: These has_ checks should probably be changed to check_
+   consteval bool has_opening_handled(auto&& o) { return o.internal & uint32_t(opts_internal::opening_handled); }
 
-   consteval bool has_disable_padding(opts o) { return o.internal & uint32_t(opts::internal::disable_padding); }
+   consteval bool has_closing_handled(auto&& o) { return o.internal & uint32_t(opts_internal::closing_handled); }
 
-   consteval bool has_write_unchecked(opts o) { return o.internal & uint32_t(opts::internal::write_unchecked); }
+   consteval bool has_ws_handled(auto&& o) { return o.internal & uint32_t(opts_internal::ws_handled); }
 
-   template <opts Opts>
+   consteval bool has_no_header(auto&& o) { return o.internal & uint32_t(opts_internal::no_header); }
+
+   consteval bool has_disable_write_unknown(auto&& o)
+   {
+      return o.internal & uint32_t(opts_internal::disable_write_unknown);
+   }
+
+   consteval bool has_is_padded(auto&& o) { return o.internal & uint32_t(opts_internal::is_padded); }
+
+   consteval bool has_disable_padding(auto&& o) { return o.internal & uint32_t(opts_internal::disable_padding); }
+
+   consteval bool has_write_unchecked(auto&& o) { return o.internal & uint32_t(opts_internal::write_unchecked); }
+
+   template <auto Opts>
    constexpr auto opening_handled()
    {
-      opts ret = Opts;
-      ret.internal |= uint32_t(opts::internal::opening_handled);
+      auto ret = Opts;
+      ret.internal |= uint32_t(opts_internal::opening_handled);
       return ret;
    }
 
-   template <opts Opts>
+   template <auto Opts>
    constexpr auto opening_and_closing_handled()
    {
-      opts ret = Opts;
-      ret.internal |= (uint32_t(opts::internal::opening_handled) | uint32_t(opts::internal::closing_handled));
+      auto ret = Opts;
+      ret.internal |= (uint32_t(opts_internal::opening_handled) | uint32_t(opts_internal::closing_handled));
       return ret;
    }
 
-   template <opts Opts>
+   template <auto Opts>
    constexpr auto opening_handled_off()
    {
-      opts ret = Opts;
-      ret.internal &= ~uint32_t(opts::internal::opening_handled);
+      auto ret = Opts;
+      ret.internal &= ~uint32_t(opts_internal::opening_handled);
       return ret;
    }
 
-   template <opts Opts>
+   template <auto Opts>
    constexpr auto opening_and_closing_handled_off()
    {
-      opts ret = Opts;
-      ret.internal &= ~(uint32_t(opts::internal::opening_handled) | uint32_t(opts::internal::closing_handled));
+      auto ret = Opts;
+      ret.internal &= ~(uint32_t(opts_internal::opening_handled) | uint32_t(opts_internal::closing_handled));
       return ret;
    }
 
-   template <opts Opts>
+   template <auto Opts>
    constexpr auto ws_handled()
    {
-      opts ret = Opts;
-      ret.internal |= uint32_t(opts::internal::ws_handled);
+      auto ret = Opts;
+      ret.internal |= uint32_t(opts_internal::ws_handled);
       return ret;
    }
 
-   template <opts Opts>
+   template <auto Opts>
    constexpr auto ws_handled_off()
    {
-      opts ret = Opts;
-      ret.internal &= ~uint32_t(opts::internal::ws_handled);
+      auto ret = Opts;
+      ret.internal &= ~uint32_t(opts_internal::ws_handled);
       return ret;
    }
 
-   template <opts Opts>
+   template <auto Opts>
    constexpr auto no_header_on()
    {
-      opts ret = Opts;
-      ret.internal |= uint32_t(opts::internal::no_header);
+      auto ret = Opts;
+      ret.internal |= uint32_t(opts_internal::no_header);
       return ret;
    }
 
-   template <opts Opts>
+   template <auto Opts>
    constexpr auto no_header_off()
    {
-      opts ret = Opts;
-      ret.internal &= ~uint32_t(opts::internal::no_header);
+      auto ret = Opts;
+      ret.internal &= ~uint32_t(opts_internal::no_header);
       return ret;
    }
 
-   template <opts Opts>
+   template <auto Opts>
    constexpr auto is_padded_on()
    {
-      opts ret = Opts;
-      ret.internal |= uint32_t(opts::internal::is_padded);
+      auto ret = Opts;
+      ret.internal |= uint32_t(opts_internal::is_padded);
       return ret;
    }
 
-   template <opts Opts>
+   template <auto Opts>
    constexpr auto is_padded_off()
    {
-      opts ret = Opts;
-      ret.internal &= ~uint32_t(opts::internal::is_padded);
+      auto ret = Opts;
+      ret.internal &= ~uint32_t(opts_internal::is_padded);
       return ret;
    }
 
-   template <opts Opts>
+   template <auto Opts>
    constexpr auto disable_padding_on()
    {
-      opts ret = Opts;
-      ret.internal |= uint32_t(opts::internal::disable_padding);
+      auto ret = Opts;
+      ret.internal |= uint32_t(opts_internal::disable_padding);
       return ret;
    }
 
-   template <opts Opts>
+   template <auto Opts>
    constexpr auto disable_padding_off()
    {
-      opts ret = Opts;
-      ret.internal &= ~uint32_t(opts::internal::disable_padding);
+      auto ret = Opts;
+      ret.internal &= ~uint32_t(opts_internal::disable_padding);
       return ret;
    }
 
-   template <opts Opts>
+   template <auto Opts>
    constexpr auto write_unchecked_on()
    {
-      opts ret = Opts;
-      ret.internal |= uint32_t(opts::internal::write_unchecked);
+      auto ret = Opts;
+      ret.internal |= uint32_t(opts_internal::write_unchecked);
       return ret;
    }
 
-   template <opts Opts>
+   template <auto Opts>
    constexpr auto write_unchecked_off()
    {
-      opts ret = Opts;
-      ret.internal &= ~uint32_t(opts::internal::write_unchecked);
+      auto ret = Opts;
+      ret.internal &= ~uint32_t(opts_internal::write_unchecked);
       return ret;
    }
 
-   template <opts Opts, auto member_ptr>
+   template <auto Opts, auto member_ptr>
    constexpr auto set_opt(auto&& value)
    {
-      opts ret = Opts;
+      auto ret = Opts;
       ret.*member_ptr = value;
       return ret;
    }
 
-   template <opts Opts, auto member_ptr>
+   template <auto Opts, auto member_ptr>
    constexpr auto opt_on()
    {
-      opts ret = Opts;
+      auto ret = Opts;
       ret.*member_ptr = true;
       return ret;
    }
 
-   template <opts Opts, auto member_ptr>
+   template <auto Opts, auto member_ptr>
    inline constexpr auto opt_true = opt_on<Opts, member_ptr>();
 
-   template <opts Opts, auto member_ptr>
+   template <auto Opts, auto member_ptr>
    constexpr auto opt_off()
    {
-      opts ret = Opts;
+      auto ret = Opts;
       ret.*member_ptr = false;
       return ret;
    }
 
-   template <opts Opts, auto member_ptr>
+   template <auto Opts, auto member_ptr>
    inline constexpr auto opt_false = opt_off<Opts, member_ptr>();
 
-   template <opts Opts>
+   template <auto Opts>
    constexpr auto disable_write_unknown_off()
    {
-      opts ret = Opts;
-      ret.internal &= ~uint32_t(opts::internal::disable_write_unknown);
+      auto ret = Opts;
+      ret.internal &= ~uint32_t(opts_internal::disable_write_unknown);
       return ret;
    }
 
-   template <opts Opts>
+   template <auto Opts>
    constexpr auto disable_write_unknown_on()
    {
-      opts ret = Opts;
-      ret.internal |= uint32_t(opts::internal::disable_write_unknown);
+      auto ret = Opts;
+      ret.internal |= uint32_t(opts_internal::disable_write_unknown);
       return ret;
    }
 
-   template <opts Opts>
+   template <auto Opts>
    constexpr auto set_beve()
    {
-      opts ret = Opts;
+      auto ret = Opts;
       ret.format = BEVE;
       return ret;
    }
 
-   template <opts Opts>
+   template <auto Opts>
    constexpr auto set_json()
    {
-      opts ret = Opts;
+      auto ret = Opts;
       ret.format = JSON;
       return ret;
    }
 
-   template <opts Opts>
+   template <auto Opts>
    constexpr auto set_toml()
    {
-      opts ret = Opts;
+      auto ret = Opts;
       ret.format = TOML;
       return ret;
    }

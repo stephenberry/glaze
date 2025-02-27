@@ -548,7 +548,7 @@ namespace glz
    template <class T>
    unexpected_wrapper(T*) -> unexpected_wrapper<T>;
 
-   template <opts Opts, class Value>
+   template <auto Opts, class Value>
    [[nodiscard]] GLZ_ALWAYS_INLINE constexpr bool skip_member(const Value& value) noexcept
    {
       if constexpr (null_t<Value> && Opts.skip_null_members) {

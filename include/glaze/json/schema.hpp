@@ -666,16 +666,20 @@ namespace glz
 
    }
 
-   template <class T, opts Opts = opts{}, class Buffer>
+   template <class T, auto Opts = opts{}, class Buffer>
    [[nodiscard]] error_ctx write_json_schema(Buffer&& buffer)
    {
       detail::schematic s{};
       s.defs.emplace();
       detail::to_json_schema<std::decay_t<T>>::template op<Opts>(s, *s.defs);
-      return write<opt_false<Opts, &opts::write_type_info>>(std::move(s), std::forward<Buffer>(buffer));
+      struct opts_write_type_info_off : std::decay_t<decltype(Opts)>
+      {
+         bool write_type_info = false;
+      };
+      return write<opts_write_type_info_off{{Opts}}>(std::move(s), std::forward<Buffer>(buffer));
    }
 
-   template <class T, opts Opts = opts{}>
+   template <class T, auto Opts = opts{}>
    [[nodiscard]] glz::expected<std::string, error_ctx> write_json_schema()
    {
       std::string buffer{};

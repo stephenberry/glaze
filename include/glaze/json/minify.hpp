@@ -12,7 +12,7 @@ namespace glz
    namespace detail
    {
       // We can use unchecked dumping to the output because we know minifying will not make the output any larger
-      template <opts Opts>
+      template <auto Opts>
       inline void minify_json(is_context auto&& ctx, auto&& it, auto&& end, auto&& b, auto&& ix) noexcept
       {
          using enum json_type;
@@ -154,7 +154,7 @@ namespace glz
          }
       }
 
-      template <opts Opts, class In, output_buffer Out>
+      template <auto Opts, class In, output_buffer Out>
          requires(contiguous<In> && resizable<In>)
       inline void minify_json(is_context auto&& ctx, In&& in, Out&& out)
       {
@@ -191,14 +191,14 @@ namespace glz
    // should not happen since we minify auto-generated JSON.
    // The detail version can be used if error context is needed
 
-   template <opts Opts = opts{}>
+   template <auto Opts = opts{}>
    inline void minify_json(resizable auto& in, auto& out)
    {
       context ctx{};
       detail::minify_json<Opts>(ctx, in, out);
    }
 
-   template <opts Opts = opts{}>
+   template <auto Opts = opts{}>
    inline std::string minify_json(resizable auto& in)
    {
       context ctx{};
@@ -207,14 +207,14 @@ namespace glz
       return out;
    }
 
-   template <opts Opts = opts{}>
+   template <auto Opts = opts{}>
    inline void minify_jsonc(const auto& in, auto& out)
    {
       context ctx{};
       detail::minify_json<opt_true<Opts, &opts::comments>>(ctx, in, out);
    }
 
-   template <opts Opts = opts{}>
+   template <auto Opts = opts{}>
    inline std::string minify_jsonc(resizable auto& in)
    {
       context ctx{};

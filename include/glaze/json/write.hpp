@@ -73,7 +73,7 @@ namespace glz
       }
    };
 
-   template <opts Opts, bool minified_check = true, class B>
+   template <auto Opts, bool minified_check = true, class B>
       requires(Opts.format == JSON || Opts.format == NDJSON)
    GLZ_ALWAYS_INLINE void write_object_entry_separator(is_context auto&& ctx, B&& b, auto&& ix)
    {
@@ -886,7 +886,7 @@ namespace glz
       }
    };
 
-   template <opts Opts, bool minified_check = true, class B>
+   template <auto Opts, bool minified_check = true, class B>
    GLZ_ALWAYS_INLINE void write_array_entry_separator(is_context auto&& ctx, B&& b, auto&& ix)
    {
       if constexpr (Opts.prettify) {
@@ -920,7 +920,7 @@ namespace glz
    }
 
    // "key":value pair output
-   template <opts Opts, class Key, class Value, is_context Ctx, class B>
+   template <auto Opts, class Key, class Value, is_context Ctx, class B>
    GLZ_ALWAYS_INLINE void write_pair_content(const Key& key, Value&& value, Ctx& ctx, B&& b, auto&& ix)
    {
       if constexpr (str_t<Key> || char_t<Key> || glaze_enum_t<Key> || Opts.quoted_num) {
@@ -954,7 +954,7 @@ namespace glz
       static constexpr bool map_like_array = writable_array_t<T> && pair_t<range_value_t<T>>;
 
       template <auto Opts, class B>
-         requires(writable_array_t<T> && (map_like_array ? Opts.concatenate == false : true))
+         requires(writable_array_t<T> && (map_like_array ? check_concatenate(Opts) == false : true))
       GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, B&& b, auto&& ix)
       {
          if (empty_range(value)) {
@@ -1136,7 +1136,7 @@ namespace glz
       }
 
       template <auto Opts, class B>
-         requires(writable_map_t<T> || (map_like_array && Opts.concatenate == true))
+         requires(writable_map_t<T> || (map_like_array && check_concatenate(Opts) == true))
       static void op(auto&& value, is_context auto&& ctx, B&& b, auto&& ix)
       {
          if constexpr (not has_opening_handled(Opts)) {
@@ -1235,7 +1235,7 @@ namespace glz
    template <pair_t T>
    struct to<JSON, T>
    {
-      template <glz::opts Opts, class B, class Ix>
+      template <auto Opts, class B, class Ix>
       static void op(const T& value, is_context auto&& ctx, B&& b, Ix&& ix)
       {
          const auto& [key, val] = value;
@@ -1361,7 +1361,7 @@ namespace glz
             [&](auto&& val) {
                using V = std::decay_t<decltype(val)>;
 
-               if constexpr (Opts.write_type_info && not tag_v<T>.empty() && glaze_object_t<V>) {
+               if constexpr (check_write_type_info(Opts) && not tag_v<T>.empty() && glaze_object_t<V>) {
                   constexpr auto N = reflect<V>::size;
 
                   // must first write out type
@@ -2005,7 +2005,7 @@ namespace glz
       return write<opts{.comments = true}>(std::forward<T>(value));
    }
 
-   template <opts Opts = opts{}, class T>
+   template <auto Opts = opts{}, class T>
       requires(write_supported<JSON, T>)
    [[nodiscard]] error_ctx write_file_json(T&& value, const sv file_name, auto&& buffer)
    {

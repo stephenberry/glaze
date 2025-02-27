@@ -486,7 +486,7 @@ namespace glz
       static constexpr bool map_like_array = pair_t<range_value_t<T>>;
 
       template <auto Opts>
-         requires(map_like_array ? Opts.concatenate == false : true)
+         requires(map_like_array ? check_concatenate(Opts) == false : true)
       static void op(auto&& value, is_context auto&& ctx, auto&&... args)
       {
          using V = range_value_t<std::decay_t<T>>;
@@ -612,7 +612,7 @@ namespace glz
       }
 
       template <auto Opts>
-         requires(map_like_array && Opts.concatenate == true)
+         requires(map_like_array && check_concatenate(Opts) == true)
       static auto op(auto&& value, is_context auto&& ctx, auto&&... args)
       {
          using Element = typename T::value_type;
@@ -913,7 +913,7 @@ namespace glz
       return write<opts{.format = BEVE}>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
 
-   template <opts Opts = opts{}, class T>
+   template <auto Opts = opts{}, class T>
       requires(write_supported<BEVE, T>)
    [[nodiscard]] glz::expected<std::string, error_ctx> write_beve(T&& value)
    {
@@ -928,7 +928,7 @@ namespace glz
    }
 
    // requires file_name to be null terminated
-   template <opts Opts = opts{}, class T>
+   template <auto Opts = opts{}, class T>
       requires(write_supported<BEVE, T>)
    [[nodiscard]] error_ctx write_file_beve(T&& value, const sv file_name, auto&& buffer)
    {
@@ -966,7 +966,7 @@ namespace glz
       return write<opts{.format = BEVE, .structs_as_arrays = true}>(std::forward<T>(value));
    }
 
-   template <opts Opts = opts{}, class T>
+   template <auto Opts = opts{}, class T>
       requires(write_supported<BEVE, T>)
    [[nodiscard]] error_ctx write_file_beve_untagged(T&& value, const std::string& file_name, auto&& buffer)
    {
