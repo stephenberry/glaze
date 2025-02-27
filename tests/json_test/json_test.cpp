@@ -9585,12 +9585,11 @@ suite TestSettingsData_test = [] {
       expect(not ec) << glz::format_error(ec, buffer);
    };
 
-   static constexpr opts_allow_conversions write_options{{.comments = 1U, .prettify = 1U}, .allow_conversions = 1U};
-   static constexpr opts_allow_conversions read_options{{.comments = 1U,
-         .error_on_unknown_keys = 0U,
-         .skip_null_members = 1U,
-      .error_on_missing_keys = 0U},
-                                           .allow_conversions = 1U};
+   static constexpr opts_allow_conversions write_options{{glz::opts{.comments = true, .prettify = true}}};
+   static constexpr opts_allow_conversions read_options{{glz::opts{.comments = true,
+         .error_on_unknown_keys = false,
+         .skip_null_members = true,
+      .error_on_missing_keys = false}}};
 
    "TestSettingsData options"_test = [] {
       TestSettingsData obj{};
