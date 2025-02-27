@@ -11,6 +11,8 @@ Glaze also supports:
 > Glaze `main` branch is currently in development for v5.0.0
 >
 > v5.0.0 will remove the `detail` namespace from `to/from` specializations and many more internal functions, which will enable cleaner user customization and shorter compilation error messages.
+>
+> The `glz::opts` struct is also becoming the default options, and more specialized options can be added to custom option structs. See [Options](./docs/options.md) for new compile time option customization. This reduces the size of compiler errors and makes compilation faster.
 
 ## With compile time reflection for MSVC, Clang, and GCC!
 
@@ -785,11 +787,11 @@ For example: `glz::read<glz::opts{.error_on_unknown_keys = false}>(...)` will tu
 
 > [!IMPORTANT]
 >
-> Many options for Glaze are not part of `glz::opts`. This keeps compiler errors shorter and makes options more manageable. See [Options](./docs/recorder.md) documentation for more details on available compile time options.
+> Many options for Glaze are not part of `glz::opts`. This keeps compiler errors shorter and makes options more manageable. See [Options](./docs/options.md) documentation for more details on available compile time options.
 
 ### Available Default Compile Time Options
 
-The struct below shows the available options in `glz::opts` and the defaults. See [Options](./docs/recorder.md) for additional options for user customization.
+The struct below shows the available options in `glz::opts` and the defaults. See [Options](./docs/options.md) for additional options for user customization.
 
 ```c++
 struct opts
