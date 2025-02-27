@@ -3223,6 +3223,7 @@ namespace glz
    
    struct opts_validate : opts
    {
+      bool validate_skipped = true;
       bool validate_trailing_whitespace = true;
    };
 
@@ -3231,7 +3232,7 @@ namespace glz
    {
       context ctx{};
       glz::skip skip_value{};
-      return read<opts_validate{{.validate_skipped = true}}>(
+      return read<opts_validate{}>(
          skip_value, std::forward<Buffer>(buffer), ctx);
    }
 
@@ -3240,7 +3241,7 @@ namespace glz
    {
       context ctx{};
       glz::skip skip_value{};
-      return read<opts_validate{{.comments = true, .validate_skipped = true}}>(
+      return read<opts_validate{{opts{.comments = true}}}>(
          skip_value, std::forward<Buffer>(buffer), ctx);
    }
 

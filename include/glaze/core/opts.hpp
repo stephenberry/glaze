@@ -85,7 +85,6 @@ namespace glz
                                           // skip_null_members = false to require nullable members
       bool error_on_const_read =
          false; // Error if attempt is made to read into a const value, by default the value is skipped without error
-      bool validate_skipped = false; // If full validation should be performed on skipped values
 
       uint8_t layout = rowwise; // CSV row wise output/input
 
@@ -112,6 +111,10 @@ namespace glz
    // OTHER AVAILABLE OPTIONS (and default values):
    
    // ---
+   // bool validate_skipped = false;
+   // If full validation should be performed on skipped values
+   
+   // ---
    // bool validate_trailing_whitespace = false;
    // If, after parsing a value, we want to validate the trailing whitespace
    
@@ -126,6 +129,14 @@ namespace glz
    // ---
    // bool hide_non_invocable = true;
    // Hides non-invocable members from the cli_menu (may be applied elsewhere in the future)
+   
+   consteval bool check_validate_skipped(auto&& Opts) {
+      if constexpr (requires { Opts.validate_skipped; }) {
+         return Opts.validate_skipped;
+      } else {
+         return false;
+      }
+   }
    
    consteval bool check_validate_trailing_whitespace(auto&& Opts) {
       if constexpr (requires { Opts.validate_trailing_whitespace; }) {

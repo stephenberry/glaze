@@ -5157,12 +5157,12 @@ break"])";
       expect(glz::validate_json(fail6) != glz::error_code::none);
 
       std::string fail7 = R"(["Comma after the close"],)";
-      auto ec_fail7 = glz::read<opts_validate{true}>(json, fail7);
+      auto ec_fail7 = glz::read<opts_validate_trailing_whitespace{true}>(json, fail7);
       expect(ec_fail7 != glz::error_code::none);
       expect(glz::validate_json(fail7) != glz::error_code::none);
 
       std::string fail8 = R"(["Extra close"]])";
-      auto ec_fail8 = glz::read<opts_validate{true}>(json, fail8);
+      auto ec_fail8 = glz::read<opts_validate_trailing_whitespace{true}>(json, fail8);
       expect(ec_fail8 != glz::error_code::none);
       expect(glz::validate_json(fail8) != glz::error_code::none);
 
@@ -10024,8 +10024,12 @@ struct Foo
 suite ndjson_options = [] {
    "ndjson_options"_test = [] {
       std::vector<Foo> assets{};
-      const auto ec =
-         glz::read<glz::opts{.format = glz::NDJSON, .error_on_unknown_keys = false, .validate_skipped = true}>(
+      
+      struct opts : glz::opts {
+         bool validate_skipped = true;
+      };
+      
+      const auto ec = glz::read<opts{{glz::opts{.format = glz::NDJSON, .error_on_unknown_keys = false}}}>(
             assets, "{\"x\":1}\n{\"x\":2}");
       expect(not ec);
    };

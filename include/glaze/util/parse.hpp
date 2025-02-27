@@ -682,7 +682,7 @@ namespace glz
          ++it;
       }
 
-      if constexpr (Opts.validate_skipped) {
+      if constexpr (check_validate_skipped(Opts)) {
          while (true) {
             uint64_t swar{};
             std::memcpy(&swar, it, 8);
@@ -772,7 +772,7 @@ namespace glz
          ++it;
       }
 
-      if constexpr (Opts.validate_skipped) {
+      if constexpr (check_validate_skipped(Opts)) {
          while (true) {
             if ((*it & 0b11100000) == 0) [[unlikely]] {
                ctx.error = error_code::syntax_error;
@@ -1155,7 +1155,7 @@ namespace glz
    template <auto Opts>
    GLZ_ALWAYS_INLINE void skip_number(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
-      if constexpr (!Opts.validate_skipped) {
+      if constexpr (!check_validate_skipped(Opts)) {
          while (numeric_table[uint8_t(*it)]) {
             ++it;
          }

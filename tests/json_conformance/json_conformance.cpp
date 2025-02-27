@@ -341,7 +341,7 @@ inline void should_pass()
    };
 }
 
-struct opts_validate : glz::opts
+struct opts_validate_trailing_whitespace : glz::opts
 {
    bool validate_trailing_whitespace = true;
 };
@@ -358,8 +358,8 @@ suite json_conformance = [] {
    };
 
    "validate_trailing_whitespace = true"_test = [] {
-      should_fail<opts_validate{}>();
-      should_pass<opts_validate{}>();
+      should_fail<opts_validate_trailing_whitespace{}>();
+      should_pass<opts_validate_trailing_whitespace{}>();
    };
 };
 
