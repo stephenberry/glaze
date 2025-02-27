@@ -111,15 +111,19 @@ namespace glz
    // Add these to a custom options struct if you want to use them
    // OTHER AVAILABLE OPTIONS (and default values):
    
+   // ---
    // bool validate_trailing_whitespace = false;
    // If, after parsing a value, we want to validate the trailing whitespace
    
+   // ---
    // bool concatenate = true;
    // Concatenates ranges of std::pair into single objects when writing
    
+   // ---
    // bool allow_conversions = true;
    // Whether conversions between convertible types are allowed in binary, e.g. double -> float
    
+   // ---
    // bool hide_non_invocable = true;
    // Hides non-invocable members from the cli_menu (may be applied elsewhere in the future)
    

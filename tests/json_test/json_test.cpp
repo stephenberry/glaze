@@ -837,13 +837,13 @@ suite container_types = [] {
    };
    "vector pair"_test = [] {
       std::vector<std::pair<int, int>> v;
-      expect(!glz::read<opts_concatenate{.concatenate = false}>(v, R"([{"1":2},{"3":4}])"));
-      const auto s = glz::write<opts_concatenate{.concatenate = false}>(v).value_or("error");
+      expect(!glz::read<opts_concatenate{{}, false}>(v, R"([{"1":2},{"3":4}])"));
+      const auto s = glz::write<opts_concatenate{{}, false}>(v).value_or("error");
       expect(s == R"([{"1":2},{"3":4}])") << s;
    };
    "vector pair"_test = [] {
       std::vector<std::pair<int, int>> v;
-      expect(!glz::read<opts_concatenate{.concatenate = false}>(v, R"([{"1":2},{"3":4}])"));
+      expect(!glz::read<opts_concatenate{{}, false}>(v, R"([{"1":2},{"3":4}])"));
       const auto s = glz::write<opts_concatenate{{.prettify = true}, .concatenate = false}>(v).value_or("error");
       expect(s == R"([
    {
