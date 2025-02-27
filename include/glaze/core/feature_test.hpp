@@ -3,11 +3,15 @@
 
 #pragma once
 
-// Glaze Feature Test Macros
+// Glaze Feature Test Macros for breaking changes
 
+// v5.0.0 removes many internal functions and concepts out of the detail namespace to enable cleaner customization
+#define glaze_v5_0_0
 // v5.0.0 moves to more generic read_supported and write_supported concepts
 // removes concepts like `read_json_supported` and uses `read_supported<JSON, T>`
 #define glaze_v5_0_0_generic_supported
+// v5.0.0 makes glz::opts the default options and moves some of the compile time options out of the struct
+#define glaze_v5_0_0_customized_opts
 
 // v4.3.0 removed global glz::trace
 #define glaze_v4_3_0_trace
