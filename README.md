@@ -8,11 +8,11 @@ Glaze also supports:
 
 > [!IMPORTANT]
 >
-> Glaze `main` branch is currently in development for v5.0.0
+> Glaze [v5.0.0](https://github.com/stephenberry/glaze/releases/tag/v5.0.0) has been released! See release for more details, but the critical changes are:
 >
-> v5.0.0 will remove the `detail` namespace from `to/from` specializations and many more internal functions, which will enable cleaner user customization and shorter compilation error messages.
+> v5.0.0 removes the `detail` namespace from `to/from` specializations and many more internal functions, which enables cleaner user customization and shorter compiler error messages.
 >
-> The `glz::opts` struct is also becoming the default options, and more specialized options can be added to custom option structs. See [Options](./docs/options.md) for new compile time option customization. This reduces the size of compiler errors and makes compilation faster.
+> The `glz::opts` struct is now only the default options. Specialized options can be added to custom option structs. See [Options](./docs/options.md) for new compile time option customization. This reduces the length of compiler errors.
 
 ## With compile time reflection for MSVC, Clang, and GCC!
 

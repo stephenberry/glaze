@@ -106,7 +106,7 @@ namespace glz
       [[nodiscard]] constexpr bool operator==(const opts&) const noexcept = default;
    };
 
-   // Add these to a custom options struct if you want to use them
+   // Add these fields to a custom options struct if you want to use them
    // OTHER AVAILABLE OPTIONS (and default values):
 
    // ---
@@ -123,7 +123,7 @@ namespace glz
 
    // ---
    // bool allow_conversions = true;
-   // Whether conversions between convertible types are allowed in binary, e.g. double -> float
+   // Whether conversions between convertible types are allowed in BEVE, e.g. double -> float
 
    // ---
    // bool write_type_info = true;
