@@ -40,7 +40,7 @@ std::string input_col =
 
     my_struct obj{};
 
-    glz::read_csv<glz::colwise>(obj, input_col);
+    expect(!glz::read_csv<glz::colwise>(obj, input_col));
 
     expect(obj.num1[0] == 11);
     expect(obj.num2[2] == 66);
@@ -52,7 +52,7 @@ std::string input_col =
 
     std::string out{};
 
-    glz::write<glz::opts{.format = glz::csv, .layout = glz::colwise}>(obj, out);
+    expect(!glz::write<glz::opts{.format = glz::csv, .layout = glz::colwise}>(obj, out));
     expect(out ==
            R"(num1,num2,maybe,v3s[0],v3s[1],v3s[2]
 11,22,1,1,1,1

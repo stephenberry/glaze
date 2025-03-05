@@ -21,7 +21,7 @@ glz::read_beve(s, buffer);
 
 > [!NOTE]
 >
-> As of v3.3.0 reading binary is safe for invalid input and doesn't require null terminated buffers.
+> Reading binary is safe for invalid input and does not require null terminated buffers.
 
 ## Untagged Binary
 
