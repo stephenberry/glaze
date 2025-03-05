@@ -1,8 +1,8 @@
 # Compile Time Options
 
-Glaze has a large number of available compile time options. These options are passed as a non-type template parameter to read/write calls.
+Glaze has a large number of available compile time options. These options are passed as a non-type template parameter to `read/write` and `from/to` calls.
 
-In order to keep template errors more succinct and allow more customization, Glaze allows users to build their own option structs.
+In order to keep template errors more succinct and allow more customization, Glaze allows (and in some cases requires) users to build their own option structs.
 
 Example:
 
