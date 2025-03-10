@@ -68,13 +68,13 @@ struct manage_x
 {
    std::vector<int> x{};
    std::vector<int> y{};
-   
+
    bool read_x()
    {
       y = x;
       return true;
    }
-   
+
    bool write_x()
    {
       x = y;
@@ -114,7 +114,7 @@ struct manage_test_struct
 {
    std::string a{};
    std::string b{};
-   
+
    bool read_a() { return true; }
    bool write_a() { return false; }
 };
@@ -128,7 +128,7 @@ struct glz::meta<manage_test_struct>
 
 suite manage_test = [] {
    "manage"_test = [] {
-      manage_x obj{.x = {1,2,3}, .y = {1,2,3}};
+      manage_x obj{.x = {1, 2, 3}, .y = {1, 2, 3}};
       std::string s{};
       expect(not glz::write<default_opts>(obj, s));
       obj = {};
@@ -143,9 +143,9 @@ suite manage_test = [] {
       expect(obj.x[1] == 2);
       expect(obj.x[2] == 3);
    };
-   
+
    "manage_lambdas"_test = [] {
-      manage_x_lambda obj{.x = {1,2,3}, .y = {1,2,3}};
+      manage_x_lambda obj{.x = {1, 2, 3}, .y = {1, 2, 3}};
       std::string s{};
       expect(not glz::write<default_opts>(obj, s));
       obj = {};
@@ -160,7 +160,7 @@ suite manage_test = [] {
       expect(obj.x[1] == 2);
       expect(obj.x[2] == 3);
    };
-   
+
    "manage_test_struct"_test = [] {
       manage_test_struct obj{.a = "aaa", .b = "bbb"};
       std::string s{};
