@@ -9,7 +9,7 @@
 #include "glaze/json/json_concepts.hpp"
 #include "glaze/json/json_ptr.hpp"
 #include "glaze/json/json_t.hpp"
-#include "glaze/json/manage.hpp"
+#include "glaze/core/manage.hpp"
 #include "glaze/json/max_write_precision.hpp"
 #include "glaze/json/minify.hpp"
 #include "glaze/json/ndjson.hpp"
