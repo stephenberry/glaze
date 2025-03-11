@@ -97,7 +97,7 @@ namespace glz::detail
 
       if constexpr (glaze_object_t<T> || reflectable<T>) {
          static constexpr auto N = reflect<T>::size;
-         static constexpr auto HashInfo = detail::hash_info<T>;
+         static constexpr auto HashInfo = hash_info<T>;
 
          const auto index = decode_hash_with_size<JSON_PTR, T, HashInfo, HashInfo.type>::op(
             key.data(), key.data() + key.size(), key.size());
@@ -107,7 +107,7 @@ namespace glz::detail
             jump_table<N>(
                [&]<size_t I>() {
                   if constexpr (reflectable<T>) {
-                     ret = seek_impl(std::forward<F>(func), get_member(value, get<I>(to_tuple(value))), json_ptr);
+                     ret = seek_impl(std::forward<F>(func), get_member(value, get<I>(to_tie(value))), json_ptr);
                   }
                   else {
                      ret = seek_impl(std::forward<F>(func), get_member(value, get<I>(reflect<T>::values)), json_ptr);
@@ -248,7 +248,7 @@ namespace glz
       detail::seek_impl(
          [&](auto&& val) {
             if constexpr (std::is_assignable_v<V, decltype(val)> &&
-                          detail::non_narrowing_convertable<std::decay_t<decltype(val)>, V>) {
+                          non_narrowing_convertable<std::decay_t<decltype(val)>, V>) {
                found = true;
                result = val;
             }
@@ -276,8 +276,7 @@ namespace glz
       detail::seek_impl(
          [&](auto&& val) {
             if constexpr (std::is_assignable_v<decltype(val), decltype(value)> &&
-                          detail::non_narrowing_convertable<std::decay_t<decltype(value)>,
-                                                            std::decay_t<decltype(val)>>) {
+                          non_narrowing_convertable<std::decay_t<decltype(value)>, std::decay_t<decltype(val)>>) {
                result = true;
 #if defined(__GNUC__) || defined(__GNUG__)
 #pragma GCC diagnostic push
@@ -494,7 +493,7 @@ namespace glz
          n_items_per_group[i] = std::count(first_keys.begin(), first_keys.end(), unique_keys[i]);
       }
 
-      return glz::tuplet::tuple{n_items_per_group, n_unique, unique_keys};
+      return glz::tuple{n_items_per_group, n_unique, unique_keys};
    }
 
    template <auto Arr, std::size_t... Is>
@@ -533,59 +532,52 @@ namespace glz
       return arrs;
    }
 
-   template <class T, string_literal key_str>
-   struct member_getter
-   {
-      static constexpr auto frozen_map = detail::make_map<T>();
-      static constexpr auto member_it = frozen_map.find(key_str.sv());
-   };
-
    // TODO support custom types
-   template <class Root_t, string_literal ptr, class Expected_t = void>
+   template <class Root, string_literal ptr, class Expected = void>
    constexpr bool valid()
    {
-      using V = std::decay_t<Root_t>;
+      using V = std::decay_t<Root>;
       if constexpr (ptr.sv() == sv{""}) {
-         return std::same_as<Expected_t, void> || std::same_as<V, Expected_t>;
+         return std::same_as<Expected, void> || std::same_as<V, Expected>;
       }
       else {
          constexpr auto tokens = tokenize_json_ptr(ptr.sv());
          constexpr auto key_str = tokens.first;
          constexpr auto rem_ptr = glz::string_literal_from_view<tokens.second.size()>(tokens.second);
-         if constexpr (glz::detail::glaze_object_t<V>) {
-            constexpr auto string_literal_key = glz::string_literal_from_view<key_str.size()>(key_str);
-            using G = member_getter<V, string_literal_key>;
-            if constexpr (G::member_it != G::frozen_map.end()) {
-               constexpr auto& element = G::member_it->second;
-               constexpr auto I = element.index();
-               constexpr auto& member_ptr = get<I>(element);
+         if constexpr (glz::glaze_object_t<V>) {
+            constexpr auto& HashInfo = hash_info<V>;
+            constexpr auto I = decode_hash_with_size<JSON, V, HashInfo, HashInfo.type>::op(
+               key_str.data(), key_str.data() + key_str.size(), key_str.size());
 
-               using mptr_t = std::decay_t<decltype(member_ptr)>;
-               using T = member_t<V, mptr_t>;
+            if constexpr (I < reflect<V>::size) {
+               if constexpr (key_str != reflect<V>::keys[I]) {
+                  return false;
+               }
+               using T = refl_t<V, I>;
                if constexpr (is_specialization_v<T, includer>) {
-                  return valid<file_include, rem_ptr, Expected_t>();
+                  return valid<file_include, rem_ptr, Expected>();
                }
                else {
-                  return valid<T, rem_ptr, Expected_t>();
+                  return valid<T, rem_ptr, Expected>();
                }
             }
             else {
                return false;
             }
          }
-         else if constexpr (glz::detail::writable_map_t<V>) {
-            return valid<typename V::mapped_type, rem_ptr, Expected_t>();
+         else if constexpr (glz::writable_map_t<V>) {
+            return valid<typename V::mapped_type, rem_ptr, Expected>();
          }
-         else if constexpr (glz::detail::glaze_array_t<V>) {
+         else if constexpr (glz::glaze_array_t<V>) {
             constexpr auto member_array = glz::detail::make_array<std::decay_t<V>>();
-            constexpr auto optional_index = glz::detail::stoui(key_str); // TODO: Will not build if not int
+            constexpr auto optional_index = stoui(key_str); // TODO: Will not build if not int
             if constexpr (optional_index) {
                constexpr auto index = *optional_index;
                if constexpr (index >= 0 && index < member_array.size()) {
                   constexpr auto member = member_array[index];
                   constexpr auto member_ptr = std::get<member.index()>(member);
                   using sub_t = decltype(glz::get_member(std::declval<V>(), member_ptr));
-                  return valid<sub_t, rem_ptr, Expected_t>();
+                  return valid<sub_t, rem_ptr, Expected>();
                }
                else {
                   return false;
@@ -595,15 +587,15 @@ namespace glz
                return false;
             }
          }
-         else if constexpr (glz::detail::array_t<V>) {
-            if (glz::detail::stoui(key_str)) {
-               return valid<range_value_t<V>, rem_ptr, Expected_t>();
+         else if constexpr (glz::array_t<V>) {
+            if (stoui(key_str)) {
+               return valid<range_value_t<V>, rem_ptr, Expected>();
             }
             return false;
          }
-         else if constexpr (glz::detail::nullable_t<V>) {
+         else if constexpr (glz::nullable_t<V>) {
             using sub_t = decltype(*std::declval<V>());
-            return valid<sub_t, ptr, Expected_t>();
+            return valid<sub_t, ptr, Expected>();
          }
          else {
             return false;

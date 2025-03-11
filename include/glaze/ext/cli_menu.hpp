@@ -54,8 +54,8 @@ namespace glz
       }
    }
 
-   template <opts Opts = opts{.prettify = true}, class T>
-      requires(detail::glaze_object_t<T> || detail::reflectable<T>)
+   template <auto Opts = opts{.prettify = true}, class T>
+      requires(glaze_object_t<T> || reflectable<T>)
    inline void run_cli_menu(T& value, cli_menu_boolean auto& show_menu)
    {
       using namespace detail;
@@ -70,7 +70,7 @@ namespace glz
 
          [[maybe_unused]] decltype(auto) t = [&] {
             if constexpr (reflectable<T>) {
-               return to_tuple(value);
+               return to_tie(value);
             }
             else {
                return nullptr;
@@ -154,7 +154,7 @@ namespace glz
                         run_cli_menu<Opts>(v, menu_boolean);
                      }
                   }
-                  else if constexpr (Opts.hide_non_invocable) {
+                  else if constexpr (check_hide_non_invocable(Opts)) {
                   }
                   else {
                      static_assert(false_v<Func>, "Your function is not invocable or not concrete");
@@ -181,7 +181,7 @@ namespace glz
             else {
                [[maybe_unused]] decltype(auto) t = [&] {
                   if constexpr (reflectable<T>) {
-                     return to_tuple(value);
+                     return to_tie(value);
                   }
                   else {
                      return nullptr;
@@ -204,7 +204,7 @@ namespace glz
                else if constexpr (is_invocable_concrete<std::remove_cvref_t<Func>>) {
                   std::printf("  %d   %.*s\n", uint32_t(I + 1), int(key.size()), key.data());
                }
-               else if constexpr (Opts.hide_non_invocable) {
+               else if constexpr (check_hide_non_invocable(Opts)) {
                   // do not print non-invocable member
                }
                else {
@@ -251,8 +251,8 @@ namespace glz
       }
    }
 
-   template <opts Opts = opts{.prettify = true}, class T>
-      requires(detail::glaze_object_t<T> || detail::reflectable<T>)
+   template <auto Opts = opts{.prettify = true}, class T>
+      requires(glaze_object_t<T> || reflectable<T>)
    inline void run_cli_menu(T& value)
    {
       std::atomic<bool> menu_boolean = true;

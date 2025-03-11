@@ -16,7 +16,7 @@ the user and computed at compile time.
 
 > CUSTOMIZATION NOTE:
 >
-> When writing custom serializers specializing `to_json` or `from_json`, your concepts for custom types might not take precedence over the reflection engine (when you haven't written a `glz::meta` for your type). The reflection engine tries to discern that no specialization occurs for your type, but this is not always possible.
+> When writing custom serializers specializing `to<JSON>` or `from<JSON>`, your concepts for custom types might not take precedence over the reflection engine (when you haven't written a `glz::meta` for your type). The reflection engine tries to discern that no specialization occurs for your type, but this is not always possible.
 >
 > To solve this problem, you can add `static constexpr auto glaze_reflect = false;` to your class. Or, you can add a `glz::meta` for your type.
 

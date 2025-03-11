@@ -423,19 +423,21 @@ namespace glz
 
    namespace detail
    {
-      template <opts Opts = opts{}, class T>
+      template <auto Opts = opts{}, class T>
          requires(Opts.format == JSON && not readable_array_t<T>)
       inline void handle_slice(const jmespath::ArrayParseResult&, T&&, context& ctx, auto&&, auto&&)
       {
          ctx.error = error_code::syntax_error;
       }
 
-      template <opts Opts = opts{}, class T>
+      template <auto Opts = opts{}, class T>
          requires(Opts.format == JSON && readable_array_t<T>)
       inline void handle_slice(const jmespath::ArrayParseResult& decomposed_key, T&& value, context& ctx, auto&& it,
                                auto&& end)
       {
-         GLZ_SKIP_WS();
+         if (skip_ws<Opts>(ctx, it, end)) {
+            return;
+         }
 
          // Determine slice parameters
          int32_t step_idx = decomposed_key.step.value_or(1);
@@ -452,11 +454,13 @@ namespace glz
             }
             else {
                while (true) {
-                  detail::read<Opts.format>::template op<Opts>(value.emplace_back(), ctx, it, end);
+                  parse<Opts.format>::template op<Opts>(value.emplace_back(), ctx, it, end);
                   if (bool(ctx.error)) [[unlikely]]
                      return;
 
-                  GLZ_SKIP_WS();
+                  if (skip_ws<Opts>(ctx, it, end)) {
+                     return;
+                  }
                   if (*it == ']') {
                      ++it;
                      break;
@@ -466,7 +470,9 @@ namespace glz
                      return;
                   }
                   ++it;
-                  GLZ_SKIP_WS();
+                  if (skip_ws<Opts>(ctx, it, end)) {
+                     return;
+                  }
                }
             }
 
@@ -474,7 +480,7 @@ namespace glz
             const int32_t size = static_cast<int32_t>(value.size());
             auto wrap_index = [&](int32_t idx) {
                if (idx < 0) idx += size;
-               return std::clamp(idx, 0, size);
+               return std::clamp(idx, int32_t{0}, size);
             };
 
             const int32_t start_idx = wrap_index(decomposed_key.start.value_or(0));
@@ -516,7 +522,7 @@ namespace glz
          // If we reach here, step == 1 and no negative indices, so we can do partial reading.
          value.clear();
          const int32_t start_idx = decomposed_key.start.value_or(0);
-         const int32_t end_idx = decomposed_key.end.value_or(std::numeric_limits<int32_t>::max());
+         const int32_t end_idx = decomposed_key.end.value_or((std::numeric_limits<int32_t>::max)());
 
          // If empty array
          if (*it == ']') {
@@ -527,7 +533,9 @@ namespace glz
          // We'll read elements and track their index
          int32_t current_index = 0;
          while (true) {
-            GLZ_SKIP_WS();
+            if (skip_ws<Opts>(ctx, it, end)) {
+               return;
+            }
 
             // Decide whether we read or skip this element
             if (current_index < start_idx) {
@@ -538,7 +546,7 @@ namespace glz
             }
             else if (current_index >= start_idx && current_index < end_idx) {
                // Read this element into value
-               detail::read<Opts.format>::template op<Opts>(value.emplace_back(), ctx, it, end);
+               parse<Opts.format>::template op<Opts>(value.emplace_back(), ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
                   return;
             }
@@ -549,7 +557,9 @@ namespace glz
                   return;
             }
 
-            GLZ_SKIP_WS();
+            if (skip_ws<Opts>(ctx, it, end)) {
+               return;
+            }
             if (*it == ']') {
                ++it; // finished reading array
                break;
@@ -559,7 +569,9 @@ namespace glz
                return;
             }
             ++it; // consume ','
-            GLZ_SKIP_WS();
+            if (skip_ws<Opts>(ctx, it, end)) {
+               return;
+            }
 
             ++current_index;
          }
@@ -567,7 +579,7 @@ namespace glz
    }
 
    // Read into a C++ type given a path denoted by a JMESPath query
-   template <string_literal Path, opts Options = opts{}, class T, contiguous Buffer>
+   template <string_literal Path, auto Options = opts{}, class T, contiguous Buffer>
       requires(Options.format == JSON)
    [[nodiscard]] inline error_ctx read_jmespath(T&& value, Buffer&& buffer)
    {
@@ -591,7 +603,7 @@ namespace glz
       context ctx{};
 
       if constexpr (N == 0) {
-         detail::read<Opts.format>::template op<Opts>(value, ctx, it, end);
+         parse<Opts.format>::template op<Opts>(value, ctx, it, end);
       }
       else {
          using namespace glz::detail;
@@ -609,8 +621,13 @@ namespace glz
             if constexpr (decomposed_key.is_array_access) {
                // If we have a key, that means we're looking into an object like: key[0:5]
                if constexpr (key.empty()) {
-                  GLZ_SKIP_WS();
-                  GLZ_MATCH_OPEN_BRACKET; // We expect the JSON at this level to be an array
+                  if (skip_ws<Opts>(ctx, it, end)) {
+                     return;
+                  }
+                  // We expect the JSON at this level to be an array
+                  if (match_invalid_end<'[', Opts>(ctx, it, end)) {
+                     return;
+                  }
 
                   // If this is a slice (colon_count > 0)
                   if constexpr (decomposed_key.colon_count > 0) {
@@ -633,11 +650,13 @@ namespace glz
                                  return;
                               }
                               ++it;
-                              GLZ_SKIP_WS();
+                              if (skip_ws<Opts>(ctx, it, end)) {
+                                 return;
+                              }
                            }
 
                            // Now read the element at index n
-                           detail::read<Opts.format>::template op<Opts>(value, ctx, it, end);
+                           parse<Opts.format>::template op<Opts>(value, ctx, it, end);
                         }
                         else {
                            // Not the last token. We must still parse the element at index n so the next indexing can
@@ -652,7 +671,9 @@ namespace glz
                                  return;
                               }
                               ++it;
-                              GLZ_SKIP_WS();
+                              if (skip_ws<Opts>(ctx, it, end)) {
+                                 return;
+                              }
                            }
                         }
                      }
@@ -667,11 +688,17 @@ namespace glz
                }
                else {
                   // Object scenario with a key, like: key[0:5]
-                  GLZ_MATCH_OPEN_BRACE;
+                  if (match_invalid_end<'{', Opts>(ctx, it, end)) {
+                     return;
+                  }
 
                   while (true) {
-                     GLZ_SKIP_WS();
-                     GLZ_MATCH_QUOTE;
+                     if (skip_ws<Opts>(ctx, it, end)) {
+                        return;
+                     }
+                     if (match<'"'>(ctx, it)) {
+                        return;
+                     }
 
                      auto* start = it;
                      skip_string_view<Opts>(ctx, it, end);
@@ -681,10 +708,18 @@ namespace glz
                      ++it;
 
                      if (key.size() == k.size() && comparitor<key>(k.data())) {
-                        GLZ_SKIP_WS();
-                        GLZ_MATCH_COLON();
-                        GLZ_SKIP_WS();
-                        GLZ_MATCH_OPEN_BRACKET;
+                        if (skip_ws<Opts>(ctx, it, end)) {
+                           return;
+                        }
+                        if (match_invalid_end<':', Opts>(ctx, it, end)) {
+                           return;
+                        }
+                        if (skip_ws<Opts>(ctx, it, end)) {
+                           return;
+                        }
+                        if (match_invalid_end<'[', Opts>(ctx, it, end)) {
+                           return;
+                        }
 
                         // Distinguish single index vs slice using colon_count
                         if constexpr (decomposed_key.colon_count > 0) {
@@ -705,13 +740,17 @@ namespace glz
                                     return;
                                  }
                                  ++it;
-                                 GLZ_SKIP_WS();
+                                 if (skip_ws<Opts>(ctx, it, end)) {
+                                    return;
+                                 }
                               }
 
-                              GLZ_SKIP_WS();
+                              if (skip_ws<Opts>(ctx, it, end)) {
+                                 return;
+                              }
 
                               if constexpr (I == (N - 1)) {
-                                 detail::read<Opts.format>::template op<Opts>(value, ctx, it, end);
+                                 parse<Opts.format>::template op<Opts>(value, ctx, it, end);
                               }
                               return;
                            }
@@ -737,11 +776,17 @@ namespace glz
             }
             else {
                // If it's not array access, we are dealing with an object key
-               GLZ_MATCH_OPEN_BRACE;
+               if (match_invalid_end<'{', Opts>(ctx, it, end)) {
+                  return;
+               }
 
                while (it < end) {
-                  GLZ_SKIP_WS();
-                  GLZ_MATCH_QUOTE;
+                  if (skip_ws<Opts>(ctx, it, end)) {
+                     return;
+                  }
+                  if (match<'"'>(ctx, it)) {
+                     return;
+                  }
 
                   auto* start = it;
                   skip_string_view<Opts>(ctx, it, end);
@@ -751,12 +796,18 @@ namespace glz
                   ++it;
 
                   if (key.size() == k.size() && comparitor<key>(k.data())) {
-                     GLZ_SKIP_WS();
-                     GLZ_MATCH_COLON();
-                     GLZ_SKIP_WS();
+                     if (skip_ws<Opts>(ctx, it, end)) {
+                        return;
+                     }
+                     if (match_invalid_end<':', Opts>(ctx, it, end)) {
+                        return;
+                     }
+                     if (skip_ws<Opts>(ctx, it, end)) {
+                        return;
+                     }
 
                      if constexpr (I == (N - 1)) {
-                        detail::read<Opts.format>::template op<Opts>(value, ctx, it, end);
+                        parse<Opts.format>::template op<Opts>(value, ctx, it, end);
                      }
                      return;
                   }
@@ -809,7 +860,7 @@ namespace glz
 
    // Read into a C++ type given a path denoted by a JMESPath query
    // This version supports a runtime path
-   template <opts Options = opts{}, class T, contiguous Buffer>
+   template <auto Options = opts{}, class T, contiguous Buffer>
       requires(Options.format == JSON)
    [[nodiscard]] inline error_ctx read_jmespath(const jmespath_expression& expression, T&& value, Buffer&& buffer)
    {
@@ -835,7 +886,7 @@ namespace glz
       context ctx{};
 
       if (N == 0) {
-         detail::read<Opts.format>::template op<Opts>(value, ctx, it, end);
+         parse<Opts.format>::template op<Opts>(value, ctx, it, end);
       }
       else {
          using namespace glz::detail;
@@ -854,8 +905,12 @@ namespace glz
                if (decomposed_key.is_array_access) {
                   if (key.empty()) {
                      // Top-level array scenario
-                     GLZ_SKIP_WS();
-                     GLZ_MATCH_OPEN_BRACKET;
+                     if (skip_ws<Opts>(ctx, it, end)) {
+                        return;
+                     }
+                     if (match_invalid_end<'[', Opts>(ctx, it, end)) {
+                        return;
+                     }
 
                      if (decomposed_key.colon_count > 0) {
                         // Slice scenario
@@ -879,11 +934,13 @@ namespace glz
                                     return;
                                  }
                                  ++it;
-                                 GLZ_SKIP_WS();
+                                 if (skip_ws<Opts>(ctx, it, end)) {
+                                    return;
+                                 }
                               }
 
                               // Now read the element at index n
-                              detail::read<Opts.format>::template op<Opts>(value, ctx, it, end);
+                              parse<Opts.format>::template op<Opts>(value, ctx, it, end);
                            }
                            else {
                               // Not the last token. We must still parse the element at index n so the next indexing can
@@ -898,7 +955,9 @@ namespace glz
                                     return;
                                  }
                                  ++it;
-                                 GLZ_SKIP_WS();
+                                 if (skip_ws<Opts>(ctx, it, end)) {
+                                    return;
+                                 }
                               }
                            }
                         }
@@ -911,11 +970,17 @@ namespace glz
                   }
                   else {
                      // Object scenario: key[...]
-                     GLZ_MATCH_OPEN_BRACE;
+                     if (match_invalid_end<'{', Opts>(ctx, it, end)) {
+                        return;
+                     }
 
                      while (true) {
-                        GLZ_SKIP_WS();
-                        GLZ_MATCH_QUOTE;
+                        if (skip_ws<Opts>(ctx, it, end)) {
+                           return;
+                        }
+                        if (match<'"'>(ctx, it)) {
+                           return;
+                        }
 
                         auto* start_pos = it;
                         skip_string_view<Opts>(ctx, it, end);
@@ -925,10 +990,18 @@ namespace glz
                         ++it;
 
                         if (key.size() == k.size() && memcmp(key.data(), k.data(), key.size()) == 0) {
-                           GLZ_SKIP_WS();
-                           GLZ_MATCH_COLON();
-                           GLZ_SKIP_WS();
-                           GLZ_MATCH_OPEN_BRACKET;
+                           if (skip_ws<Opts>(ctx, it, end)) {
+                              return;
+                           }
+                           if (match_invalid_end<':', Opts>(ctx, it, end)) {
+                              return;
+                           }
+                           if (skip_ws<Opts>(ctx, it, end)) {
+                              return;
+                           }
+                           if (match_invalid_end<'[', Opts>(ctx, it, end)) {
+                              return;
+                           }
 
                            if (decomposed_key.colon_count > 0) {
                               // Slice scenario
@@ -949,13 +1022,17 @@ namespace glz
                                        return;
                                     }
                                     ++it;
-                                    GLZ_SKIP_WS();
+                                    if (skip_ws<Opts>(ctx, it, end)) {
+                                       return;
+                                    }
                                  }
 
-                                 GLZ_SKIP_WS();
+                                 if (skip_ws<Opts>(ctx, it, end)) {
+                                    return;
+                                 }
 
                                  if (I == (N - 1)) {
-                                    detail::read<Opts.format>::template op<Opts>(value, ctx, it, end);
+                                    parse<Opts.format>::template op<Opts>(value, ctx, it, end);
                                  }
                                  return;
                               }
@@ -981,11 +1058,17 @@ namespace glz
                }
                else {
                   // Non-array access: key-only navigation
-                  GLZ_MATCH_OPEN_BRACE;
+                  if (match_invalid_end<'{', Opts>(ctx, it, end)) {
+                     return;
+                  }
 
                   while (it < end) {
-                     GLZ_SKIP_WS();
-                     GLZ_MATCH_QUOTE;
+                     if (skip_ws<Opts>(ctx, it, end)) {
+                        return;
+                     }
+                     if (match<'"'>(ctx, it)) {
+                        return;
+                     }
 
                      auto* start_pos = it;
                      skip_string_view<Opts>(ctx, it, end);
@@ -995,12 +1078,18 @@ namespace glz
                      ++it;
 
                      if (key.size() == k.size() && memcmp(key.data(), k.data(), key.size()) == 0) {
-                        GLZ_SKIP_WS();
-                        GLZ_MATCH_COLON();
-                        GLZ_SKIP_WS();
+                        if (skip_ws<Opts>(ctx, it, end)) {
+                           return;
+                        }
+                        if (match_invalid_end<':', Opts>(ctx, it, end)) {
+                           return;
+                        }
+                        if (skip_ws<Opts>(ctx, it, end)) {
+                           return;
+                        }
 
                         if (I == (N - 1)) {
-                           detail::read<Opts.format>::template op<Opts>(value, ctx, it, end);
+                           parse<Opts.format>::template op<Opts>(value, ctx, it, end);
                         }
                         return;
                      }

@@ -240,12 +240,13 @@ namespace glz
    template <string_literal Str>
    inline constexpr auto escape_unicode = []() constexpr -> std::string_view {
       constexpr auto escaped = []() constexpr {
-         constexpr auto output_length = detail::escaped_length(Str.sv());
-         std::array<char, output_length + 1> result{}; // + 1 for null character
-         const auto escaped = detail::escape_json_string(Str.sv(), output_length);
-         for (size_t i = 0; i < output_length; ++i) {
+         constexpr auto len = detail::escaped_length(Str.sv());
+         std::array<char, len + 1> result; // + 1 for null character
+         const auto escaped = detail::escape_json_string(Str.sv(), len);
+         for (size_t i = 0; i < len; ++i) {
             result[i] = escaped[i];
          }
+         result[len] = '\0';
          return result;
       }();
 

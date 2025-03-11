@@ -25,7 +25,7 @@ namespace glz::detail
       Comment = '/'
    };
 
-   constexpr std::array<json_type, 256> json_types = [] {
+   inline constexpr std::array<json_type, 256> json_types = [] {
       std::array<json_type, 256> t{};
       using enum json_type;
       t['"'] = String;
@@ -65,7 +65,7 @@ namespace glz::detail
       }
    };
 
-   template <opts Opts>
+   template <auto Opts>
       requires(has_is_padded(Opts))
    sv read_json_string(auto&& it, auto&& end) noexcept
    {
@@ -96,7 +96,7 @@ namespace glz::detail
       return {};
    }
 
-   template <opts Opts>
+   template <auto Opts>
       requires(!has_is_padded(Opts))
    sv read_json_string(auto&& it, auto&& end) noexcept
    {

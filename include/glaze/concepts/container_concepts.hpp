@@ -8,6 +8,7 @@
 #include <ranges>
 #include <utility>
 #include <vector>
+#include <version>
 
 // Over time we want most concepts to use the nomenclature:
 // is_
@@ -19,6 +20,18 @@ namespace glz
 {
    template <class T, class... U>
    concept is_any_of = (std::same_as<T, U> || ...);
+
+   template <class T>
+   concept has_value_type = requires { typename T::value_type; };
+
+   template <class T>
+   concept has_element_type = requires { typename T::element_type; };
+
+   template <class T>
+   concept has_first_type = requires { typename T::first_type; };
+
+   template <class T>
+   concept has_second_type = requires { typename T::second_type; };
 
    template <class T>
    concept resizable = requires(T v) { v.resize(0); };
@@ -56,7 +69,7 @@ namespace glz
    concept non_const_buffer = !std::is_const_v<Buffer>;
 }
 
-namespace glz::detail
+namespace glz
 {
    template <class T>
    concept char_t = std::same_as<std::remove_cvref_t<T>, char>;
@@ -252,20 +265,36 @@ namespace glz
       requires std::input_iterator<decltype(t.begin())>;
    };
 
+   // Concept for a matrix type (not a vector, which is a range)
    template <class T>
    concept matrix_t = requires(T matrix) {
       matrix.resize(2, 4);
       matrix.data();
       {
          matrix.rows()
-      } -> std::convertible_to<size_t>;
+      } -> std::convertible_to<int>;
       {
          matrix.cols()
-      } -> std::convertible_to<size_t>;
+      } -> std::convertible_to<int>;
       {
          matrix.size()
-      } -> std::convertible_to<size_t>;
+      } -> std::convertible_to<int>;
    } && !range<T>;
+
+   // concept for the Eigen library: matrices and vectors
+   template <class T>
+   concept eigen_t = requires(T matrix) {
+      matrix.data();
+      {
+         matrix.rows()
+      } -> std::convertible_to<int>;
+      {
+         matrix.cols()
+      } -> std::convertible_to<int>;
+      {
+         matrix.size()
+      } -> std::convertible_to<int>;
+   };
 
    // range like
    template <class T>
@@ -312,4 +341,51 @@ namespace glz
 
    template <class T>
    constexpr bool const_value_v = std::is_const_v<std::remove_pointer_t<std::remove_reference_t<T>>>;
+}
+
+namespace glz::detail
+{
+   template <class Container>
+   using iterator_pair_type =
+      typename std::iterator_traits<decltype(std::begin(std::declval<Container&>()))>::value_type;
+
+   template <class Container, typename Iterator = iterator_pair_type<Container>>
+   struct iterator_second_impl;
+
+   template <class Container, typename Iterator>
+      requires has_value_type<Iterator>
+   struct iterator_second_impl<Container, Iterator>
+   {
+      using type = typename Iterator::value_type;
+   };
+
+   template <class Container, typename Iterator>
+      requires(!has_value_type<Iterator> && has_second_type<Iterator>)
+   struct iterator_second_impl<Container, Iterator>
+   {
+      using type = typename Iterator::second_type;
+   };
+
+   template <class Container>
+   using iterator_second_type = typename iterator_second_impl<Container>::type;
+
+   template <class Container, typename Iterator = iterator_pair_type<Container>>
+   struct iterator_first_impl;
+
+   template <class Container, typename Iterator>
+      requires has_value_type<Iterator>
+   struct iterator_first_impl<Container, Iterator>
+   {
+      using type = typename Iterator::value_type;
+   };
+
+   template <class Container, typename Iterator>
+      requires(!has_value_type<Iterator> && has_first_type<Iterator>)
+   struct iterator_first_impl<Container, Iterator>
+   {
+      using type = typename Iterator::first_type;
+   };
+
+   template <class Container>
+   using iterator_first_type = typename iterator_first_impl<Container>::type;
 }

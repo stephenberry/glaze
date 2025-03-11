@@ -38,21 +38,21 @@ namespace glz
    {
       bool reflection_helper{}; // needed to support automatic reflection, because ref is a std::optional
       std::optional<std::string_view> ref{};
-      using schema_number = std::optional<std::variant<std::int64_t, std::uint64_t, double>>;
-      using schema_any = std::variant<std::monostate, bool, std::int64_t, std::uint64_t, double, std::string_view>;
+      using schema_number = std::optional<std::variant<int64_t, uint64_t, double>>;
+      using schema_any = std::variant<std::monostate, bool, int64_t, uint64_t, double, std::string_view>;
       // meta data keywords, ref: https://www.learnjsonschema.com/2020-12/meta-data/
       std::optional<std::string_view> title{};
       std::optional<std::string_view> description{};
       std::optional<schema_any> defaultValue{};
       std::optional<bool> deprecated{};
-      std::optional<std::span<const std::string_view>> examples{};
+      std::optional<std::vector<std::string_view>> examples{};
       std::optional<bool> readOnly{};
       std::optional<bool> writeOnly{};
       // hereafter validation keywords, ref: https://www.learnjsonschema.com/2020-12/validation/
       std::optional<schema_any> constant{};
       // string only keywords
-      std::optional<std::uint64_t> minLength{};
-      std::optional<std::uint64_t> maxLength{};
+      std::optional<uint64_t> minLength{};
+      std::optional<uint64_t> maxLength{};
       std::optional<std::string_view> pattern{};
       // https://www.learnjsonschema.com/2020-12/format-annotation/format/
       std::optional<detail::defined_formats> format{};
@@ -63,18 +63,18 @@ namespace glz
       schema_number exclusiveMaximum{};
       schema_number multipleOf{};
       // object only keywords
-      std::optional<std::uint64_t> minProperties{};
-      std::optional<std::uint64_t> maxProperties{};
-      //      std::optional<std::map<std::string_view, std::vector<std::string_view>>> dependent_required{};
-      std::optional<std::span<const std::string_view>> required{};
+      std::optional<uint64_t> minProperties{};
+      std::optional<uint64_t> maxProperties{};
+      // std::optional<std::map<std::string_view, std::vector<std::string_view>>> dependent_required{};
+      std::optional<std::vector<std::string_view>> required{};
       // array only keywords
-      std::optional<std::uint64_t> minItems{};
-      std::optional<std::uint64_t> maxItems{};
-      std::optional<std::uint64_t> minContains{};
-      std::optional<std::uint64_t> maxContains{};
+      std::optional<uint64_t> minItems{};
+      std::optional<uint64_t> maxItems{};
+      std::optional<uint64_t> minContains{};
+      std::optional<uint64_t> maxContains{};
       std::optional<bool> uniqueItems{};
       // properties
-      std::optional<std::span<const std::string_view>> enumeration{}; // enum
+      std::optional<std::vector<std::string_view>> enumeration{}; // enum
 
       // out of json schema specification
       std::optional<detail::ExtUnits> ExtUnits{};
@@ -88,36 +88,67 @@ namespace glz
       struct glaze
       {
          using T = schema;
-         static constexpr auto value = glz::object("$ref", &T::ref, //
-                                                   "title", &T::title, //
-                                                   "description", &T::description, //
-                                                   "default", &T::defaultValue, //
-                                                   "deprecated", &T::deprecated, //
-                                                   "examples", raw<&T::examples>, //
-                                                   "readOnly", &T::readOnly, //
-                                                   "writeOnly", &T::writeOnly, //
-                                                   "const", &T::constant, //
-                                                   "minLength", &T::minLength, //
-                                                   "maxLength", &T::maxLength, //
-                                                   "pattern", &T::pattern, //
-                                                   "format", &T::format, //
-                                                   "minimum", &T::minimum, //
-                                                   "maximum", &T::maximum, //
-                                                   "exclusiveMinimum", &T::exclusiveMinimum, //
-                                                   "exclusiveMaximum", &T::exclusiveMaximum, //
-                                                   "multipleOf", &T::multipleOf, //
-                                                   "minProperties", &T::minProperties, //
-                                                   "maxProperties", &T::maxProperties, //
-                                                   //               "dependentRequired", &T::dependent_required, //
-                                                   "required", &T::required, //
-                                                   "minItems", &T::minItems, //
-                                                   "maxItems", &T::maxItems, //
-                                                   "minContains", &T::minContains, //
-                                                   "maxContains", &T::maxContains, //
-                                                   "uniqueItems", &T::uniqueItems, //
-                                                   "enum", &T::enumeration, //
-                                                   "ExtUnits", &T::ExtUnits, //
-                                                   "ExtAdvanced", &T::ExtAdvanced);
+         static constexpr std::array keys{"$ref", //
+                                          "title", //
+                                          "description", //
+                                          "default", //
+                                          "deprecated", //
+                                          "examples", //
+                                          "readOnly", //
+                                          "writeOnly", //
+                                          "const", //
+                                          "minLength", //
+                                          "maxLength", //
+                                          "pattern", //
+                                          "format", //
+                                          "minimum", //
+                                          "maximum", //
+                                          "exclusiveMinimum", //
+                                          "exclusiveMaximum", //
+                                          "multipleOf", //
+                                          "minProperties", //
+                                          "maxProperties", //
+                                          //"dependentRequired", //
+                                          "required", //
+                                          "minItems", //
+                                          "maxItems", //
+                                          "minContains", //
+                                          "maxContains", //
+                                          "uniqueItems", //
+                                          "enum", //
+                                          "ExtUnits", //
+                                          "ExtAdvanced"};
+
+         static constexpr glz::tuple value = {&T::ref, //
+                                              &T::title, //
+                                              &T::description, //
+                                              &T::defaultValue, //
+                                              &T::deprecated, //
+                                              raw<&T::examples>, //
+                                              &T::readOnly, //
+                                              &T::writeOnly, //
+                                              &T::constant, //
+                                              &T::minLength, //
+                                              &T::maxLength, //
+                                              &T::pattern, //
+                                              &T::format, //
+                                              &T::minimum, //
+                                              &T::maximum, //
+                                              &T::exclusiveMinimum, //
+                                              &T::exclusiveMaximum, //
+                                              &T::multipleOf, //
+                                              &T::minProperties, //
+                                              &T::maxProperties, //
+                                              // &T::dependent_required, //
+                                              &T::required, //
+                                              &T::minItems, //
+                                              &T::maxItems, //
+                                              &T::minContains, //
+                                              &T::maxContains, //
+                                              &T::uniqueItems, //
+                                              &T::enumeration, //
+                                              &T::ExtUnits, //
+                                              &T::ExtAdvanced};
       };
    };
 
@@ -196,69 +227,84 @@ struct glz::meta<glz::detail::schematic>
 {
    static constexpr std::string_view name = "glz::detail::schema";
    using T = detail::schematic;
-   static constexpr auto value = glz::object(
-      "type", &T::type, //
-      "properties", &T::properties, //
-      "items", &T::items, //
-      "additionalProperties", &T::additionalProperties, //
-      "$defs", &T::defs, //
-      "oneOf", &T::oneOf, //
-      "examples", raw<&T::examples>, //
-      "required", &T::required, //
-      "title", [](auto&& self) -> auto& { return self.attributes.title; }, //
-      "description", [](auto&& self) -> auto& { return self.attributes.description; }, //
-      "default", [](auto&& self) -> auto& { return self.attributes.defaultValue; }, //
-      "deprecated", [](auto&& self) -> auto& { return self.attributes.deprecated; }, //
-      "readOnly", [](auto&& self) -> auto& { return self.attributes.readOnly; }, //
-      "writeOnly", [](auto&& self) -> auto& { return self.attributes.writeOnly; }, //
-      "const", [](auto&& self) -> auto& { return self.attributes.constant; }, //
-      "minLength", [](auto&& self) -> auto& { return self.attributes.minLength; }, //
-      "maxLength", [](auto&& self) -> auto& { return self.attributes.maxLength; }, //
-      "pattern", [](auto&& self) -> auto& { return self.attributes.pattern; }, //
-      "format", [](auto&& self) -> auto& { return self.attributes.format; }, //
-      "minimum", [](auto&& self) -> auto& { return self.attributes.minimum; }, //
-      "maximum", [](auto&& self) -> auto& { return self.attributes.maximum; }, //
-      "exclusiveMinimum", [](auto&& self) -> auto& { return self.attributes.exclusiveMinimum; }, //
-      "exclusiveMaximum", [](auto&& self) -> auto& { return self.attributes.exclusiveMaximum; }, //
-      "multipleOf", [](auto&& self) -> auto& { return self.attributes.multipleOf; }, //
-      "minProperties", [](auto&& self) -> auto& { return self.attributes.minProperties; }, //
-      "maxProperties", [](auto&& self) -> auto& { return self.attributes.maxProperties; }, //
-      //               "dependentRequired", [](auto&& self) -> auto& { return self.attributes.dependent_required; }, //
-      "minItems", [](auto&& self) -> auto& { return self.attributes.minItems; }, //
-      "maxItems", [](auto&& self) -> auto& { return self.attributes.maxItems; }, //
-      "minContains", [](auto&& self) -> auto& { return self.attributes.minContains; }, //
-      "maxContains", [](auto&& self) -> auto& { return self.attributes.maxContains; }, //
-      "uniqueItems", [](auto&& self) -> auto& { return self.attributes.uniqueItems; }, //
-      "enum", [](auto&& self) -> auto& { return self.attributes.enumeration; }, //
-      "ExtUnits", [](auto&& self) -> auto& { return self.attributes.ExtUnits; }, //
-      "ExtAdvanced", [](auto&& self) -> auto& { return self.attributes.ExtAdvanced; });
+   static constexpr std::array keys{"type", //
+                                    "properties", //
+                                    "items", //
+                                    "additionalProperties", //
+                                    "$defs", //
+                                    "oneOf", //
+                                    "examples", //
+                                    "required", //
+                                    "title", //
+                                    "description", //
+                                    "default", //
+                                    "deprecated", //
+                                    "readOnly", //
+                                    "writeOnly", //
+                                    "const", //
+                                    "minLength", //
+                                    "maxLength", //
+                                    "pattern", //
+                                    "format", //
+                                    "minimum", //
+                                    "maximum", //
+                                    "exclusiveMinimum", //
+                                    "exclusiveMaximum", //
+                                    "multipleOf", //
+                                    "minProperties", //
+                                    "maxProperties", //
+                                    // "dependentRequired", //
+                                    "minItems", //
+                                    "maxItems", //
+                                    "minContains", //
+                                    "maxContains", //
+                                    "uniqueItems", //
+                                    "enum", //
+                                    "ExtUnits", //
+                                    "ExtAdvanced"};
+
+   [[maybe_unused]] static constexpr glz::tuple value{
+      &T::type, //
+      &T::properties, //
+      &T::items, //
+      &T::additionalProperties, //
+      &T::defs, //
+      &T::oneOf, //
+      raw<&T::examples>, //
+      &T::required, //
+      [](auto&& s) -> auto& { return s.attributes.title; }, //
+      [](auto&& s) -> auto& { return s.attributes.description; }, //
+      [](auto&& s) -> auto& { return s.attributes.defaultValue; }, //
+      [](auto&& s) -> auto& { return s.attributes.deprecated; }, //
+      [](auto&& s) -> auto& { return s.attributes.readOnly; }, //
+      [](auto&& s) -> auto& { return s.attributes.writeOnly; }, //
+      [](auto&& s) -> auto& { return s.attributes.constant; }, //
+      [](auto&& s) -> auto& { return s.attributes.minLength; }, //
+      [](auto&& s) -> auto& { return s.attributes.maxLength; }, //
+      [](auto&& s) -> auto& { return s.attributes.pattern; }, //
+      [](auto&& s) -> auto& { return s.attributes.format; }, //
+      [](auto&& s) -> auto& { return s.attributes.minimum; }, //
+      [](auto&& s) -> auto& { return s.attributes.maximum; }, //
+      [](auto&& s) -> auto& { return s.attributes.exclusiveMinimum; }, //
+      [](auto&& s) -> auto& { return s.attributes.exclusiveMaximum; }, //
+      [](auto&& s) -> auto& { return s.attributes.multipleOf; }, //
+      [](auto&& s) -> auto& { return s.attributes.minProperties; }, //
+      [](auto&& s) -> auto& { return s.attributes.maxProperties; }, //
+      // [](auto&& s) -> auto& { return s.attributes.dependent_required; }, //
+      [](auto&& s) -> auto& { return s.attributes.minItems; }, //
+      [](auto&& s) -> auto& { return s.attributes.maxItems; }, //
+      [](auto&& s) -> auto& { return s.attributes.minContains; }, //
+      [](auto&& s) -> auto& { return s.attributes.maxContains; }, //
+      [](auto&& s) -> auto& { return s.attributes.uniqueItems; }, //
+      [](auto&& s) -> auto& { return s.attributes.enumeration; }, //
+      [](auto&& s) -> auto& { return s.attributes.ExtUnits; }, //
+      [](auto&& s) -> auto& { return s.attributes.ExtAdvanced; }};
 };
 
 namespace glz
 {
    namespace detail
    {
-      // The reflection schema map makes a map of all schema types within a glz::json_schema
-      // and returns a map of these schemas with their reflected names.
-      template <class T>
-      consteval auto make_reflection_schema_map()
-      {
-         auto schema_instance = json_schema_v<T>;
-         auto tuple = to_tuple(schema_instance);
-         using V = std::decay_t<decltype(tuple)>;
-         constexpr auto N = glz::tuple_size_v<V>;
-         if constexpr (N > 0) {
-            constexpr auto& names = member_names<json_schema_type<T>>;
-            return [&]<size_t... I>(std::index_sequence<I...>) {
-               return detail::normal_map<sv, schema, N>(
-                  std::array<pair<sv, schema>, N>{pair{names[I], get<I>(tuple)}...});
-            }(std::make_index_sequence<N>{});
-         }
-         else {
-            return detail::normal_map<sv, schema, 0>(std::array<pair<sv, schema>, 0>{});
-         }
-      }
-
       template <class T = void>
       struct to_json_schema
       {
@@ -273,7 +319,7 @@ namespace glz
             else if constexpr (glaze_const_value_t<T>) { // &T::constexpr_member
                using constexpr_val_t = member_t<T, meta_wrapper_t<T>>;
                static constexpr auto val_v{*glz::meta_wrapper_v<T>};
-               if constexpr (glz::detail::glaze_enum_t<constexpr_val_t>) {
+               if constexpr (glz::glaze_enum_t<constexpr_val_t>) {
                   s.attributes.constant = glz::enum_name_v<val_v>;
                }
                else {
@@ -500,19 +546,11 @@ namespace glz
       };
 
       template <class T>
-      inline constexpr auto glaze_names = []() {
-         constexpr auto N = reflect<T>::size;
-         std::array<sv, N> names{};
-         for_each<N>([&](auto I) { names[I] = reflect<T>::keys[I]; });
-         return names;
-      }();
-
-      template <class T>
       consteval bool json_schema_matches_object_keys()
       {
          if constexpr (json_schema_t<T> && (count_members<json_schema_type<T>> > 0)) {
             constexpr auto& json_schema_names = member_names<json_schema_type<T>>;
-            auto fields = glaze_names<T>;
+            auto fields = reflect<T>::keys;
             std::sort(fields.begin(), fields.end());
 
             for (const auto& key : json_schema_names) {
@@ -574,8 +612,7 @@ namespace glz
             }
 
             static constexpr auto N = reflect<T>::size;
-
-            static constexpr auto schema_map = make_reflection_schema_map<T>();
+            static constexpr auto json_schema_size = reflect<json_schema_type<T>>::size;
 
             s.properties = std::map<sv, schema, std::less<>>();
             for_each<N>([&](auto I) {
@@ -583,13 +620,33 @@ namespace glz
 
                auto& def = defs[name_v<val_t>];
 
-               constexpr sv key = reflect<T>::keys[I];
+               static constexpr sv key = reflect<T>::keys[I];
 
                schema ref_val{};
-               if constexpr (schema_map.size()) {
-                  static constexpr auto it = schema_map.find(key);
-                  if constexpr (it != schema_map.end()) {
-                     ref_val = it->second;
+               if constexpr (N > 0 && json_schema_size > 0) {
+                  // We need schema_index to be the index within json_schema_type<T>,
+                  // but this struct may have fewer keys that don't match the full set of keys in the struct T
+                  // we therefore can't use `decode_hash_with_size` for either structure.
+                  // Instead we just loop over the keys, looking for a match:
+
+                  constexpr auto schema_index = [] {
+                     size_t i{};
+                     const auto& schema_keys = reflect<json_schema_type<T>>::keys;
+                     for (; i < json_schema_size; ++i) {
+                        if (schema_keys[i] == key) {
+                           return i;
+                        }
+                     }
+                     return json_schema_size;
+                  }();
+
+                  if constexpr (schema_index < json_schema_size) {
+                     // Experimented with a to_array approach, but the compilation times were significantly higher
+                     // even when converting this access to a run-time access
+                     // Tested with both creating a std::array and a heap allocated C-style array and storing in a
+                     // unique_ptr
+                     static const auto schema_v = json_schema_type<T>{};
+                     ref_val = get<schema_index>(to_tie(schema_v));
                   }
                }
                if (!ref_val.ref) {
@@ -609,16 +666,20 @@ namespace glz
 
    }
 
-   template <class T, opts Opts = opts{}, class Buffer>
+   template <class T, auto Opts = opts{}, class Buffer>
    [[nodiscard]] error_ctx write_json_schema(Buffer&& buffer)
    {
       detail::schematic s{};
       s.defs.emplace();
       detail::to_json_schema<std::decay_t<T>>::template op<Opts>(s, *s.defs);
-      return write<opt_false<Opts, &opts::write_type_info>>(std::move(s), std::forward<Buffer>(buffer));
+      struct opts_write_type_info_off : std::decay_t<decltype(Opts)>
+      {
+         bool write_type_info = false;
+      };
+      return write<opts_write_type_info_off{{Opts}}>(std::move(s), std::forward<Buffer>(buffer));
    }
 
-   template <class T, opts Opts = opts{}>
+   template <class T, auto Opts = opts{}>
    [[nodiscard]] glz::expected<std::string, error_ctx> write_json_schema()
    {
       std::string buffer{};

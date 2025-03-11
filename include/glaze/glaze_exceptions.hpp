@@ -13,7 +13,7 @@
 
 namespace glz::ex
 {
-   template <opts Opts>
+   template <auto Opts>
    void read(auto& value, auto&& buffer)
    {
       auto ec = glz::read<Opts>(value, buffer);
@@ -27,13 +27,13 @@ namespace glz::ex
       }
    }
 
-   template <opts Opts, class T, output_buffer Buffer>
+   template <auto Opts, class T, output_buffer Buffer>
    void write(T&& value, Buffer& buffer) noexcept
    {
       glz::write<Opts>(std::forward<T>(value), buffer);
    }
 
-   template <opts Opts, class T, raw_buffer Buffer>
+   template <auto Opts, class T, raw_buffer Buffer>
    size_t write(T&& value, Buffer&& buffer) noexcept
    {
       return glz::write<Opts>(std::forward<T>(value), std::forward<Buffer>(buffer));

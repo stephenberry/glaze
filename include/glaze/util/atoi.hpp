@@ -46,28 +46,28 @@
 #pragma warning(disable : 4244)
 #endif
 
-namespace glz::detail
+namespace glz
 {
-   constexpr std::array<uint64_t, 20> powers_of_ten_int{1ull,
-                                                        10ull,
-                                                        100ull,
-                                                        1000ull,
-                                                        10000ull,
-                                                        100000ull,
-                                                        1000000ull,
-                                                        10000000ull,
-                                                        100000000ull,
-                                                        1000000000ull,
-                                                        10000000000ull,
-                                                        100000000000ull,
-                                                        1000000000000ull,
-                                                        10000000000000ull,
-                                                        100000000000000ull,
-                                                        1000000000000000ull,
-                                                        10000000000000000ull,
-                                                        100000000000000000ull,
-                                                        1000000000000000000ull,
-                                                        10000000000000000000ull};
+   inline constexpr std::array<uint64_t, 20> powers_of_ten_int{1ull,
+                                                               10ull,
+                                                               100ull,
+                                                               1000ull,
+                                                               10000ull,
+                                                               100000ull,
+                                                               1000000ull,
+                                                               10000000ull,
+                                                               100000000ull,
+                                                               1000000000ull,
+                                                               10000000000ull,
+                                                               100000000000ull,
+                                                               1000000000000ull,
+                                                               10000000000000ull,
+                                                               100000000000000ull,
+                                                               1000000000000000ull,
+                                                               10000000000000000ull,
+                                                               100000000000000000ull,
+                                                               1000000000000000000ull,
+                                                               10000000000000000000ull};
 
    inline constexpr std::array<bool, 256> exp_dec_table = [] {
       std::array<bool, 256> t{};
@@ -792,7 +792,7 @@ namespace glz::detail
 
          const auto start = data.data();
          const auto* c = start;
-         const auto valid = glz::detail::atoi(v, c);
+         const auto valid = glz::atoi(v, c);
          it += size_t(c - start);
          return valid;
       }

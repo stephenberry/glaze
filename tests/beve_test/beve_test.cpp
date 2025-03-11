@@ -24,6 +24,8 @@
 #include "glaze/trace/trace.hpp"
 #include "ut/ut.hpp"
 
+inline glz::trace trace{};
+
 struct my_struct
 {
    int i = 287;
@@ -44,8 +46,8 @@ struct glz::meta<my_struct>
    );
 };
 
-static_assert(glz::write_beve_supported<my_struct>);
-static_assert(glz::read_beve_supported<my_struct>);
+static_assert(glz::write_supported<glz::BEVE, my_struct>);
+static_assert(glz::read_supported<glz::BEVE, my_struct>);
 
 struct sub_thing
 {
@@ -413,7 +415,7 @@ void bench()
 {
    using namespace ut;
    "bench"_test = [] {
-      glz::trace_begin("bench");
+      trace.begin("bench");
       std::cout << "\nPerformance regresion test: \n";
 #ifdef NDEBUG
       size_t repeat = 100000;
@@ -446,7 +448,7 @@ void bench()
       mbytes_per_sec = repeat * buffer.size() / (duration * 1048576);
       std::cout << "from_beve: " << duration << " s, " << mbytes_per_sec << " MB/s"
                 << "\n";
-      glz::trace_end("bench");
+      trace.end("bench");
    };
 }
 
@@ -513,9 +515,8 @@ struct glz::meta<some_struct>
 
 void test_partial()
 {
-   expect(
-      glz::name_v<glz::detail::member_tuple_t<some_struct>> ==
-      R"(glz::tuplet::tuple<int32_t,double,Color,std::string,std::array<uint64_t,3>,sub,std::map<std::string,int32_t>>)");
+   expect(glz::name_v<glz::detail::member_tuple_t<some_struct>> ==
+          R"(glz::tuple<int32_t,double,Color,std::string,std::array<uint64_t,3>,sub,std::map<std::string,int32_t>>)");
 
    some_struct s{};
    some_struct s2{};
@@ -1167,7 +1168,7 @@ suite signal_tests = [] {
 
 suite vector_tests = [] {
    "std::vector<uint8_t>"_test = [] {
-      glz::duration_trace trace{"test std::vector<uint8_t>"};
+      auto scoped = trace.scope("test std::vector<uint8_t>");
       std::string s;
       static constexpr auto n = 10000;
       std::vector<uint8_t> v(n);
@@ -1190,7 +1191,7 @@ suite vector_tests = [] {
    };
 
    "std::vector<uint16_t>"_test = [] {
-      glz::duration_trace trace{"test std::vector<uint16_t>"};
+      auto scoped = trace.scope("test std::vector<uint16_t>");
       std::string s;
       static constexpr auto n = 10000;
       std::vector<uint16_t> v(n);
@@ -1214,7 +1215,7 @@ suite vector_tests = [] {
    };
 
    "std::vector<float>"_test = [] {
-      glz::async_trace trace{"test std::vector<float>"};
+      auto scoped = trace.async_scope("test std::vector<float>");
       std::string s;
       static constexpr auto n = 10000;
       std::vector<float> v(n);
@@ -1238,7 +1239,7 @@ suite vector_tests = [] {
    };
 
    "std::vector<double>"_test = [] {
-      glz::async_trace trace{"test std::vector<double>"};
+      auto scoped = trace.async_scope("test std::vector<double>");
       std::string s;
       static constexpr auto n = 10000;
       std::vector<double> v(n);
@@ -1318,7 +1319,7 @@ struct reflectable_t
    constexpr bool operator==(const reflectable_t&) const noexcept = default;
 };
 
-static_assert(glz::detail::reflectable<reflectable_t>);
+static_assert(glz::reflectable<reflectable_t>);
 
 suite reflection_test = [] {
    "reflectable_t"_test = [] {
@@ -2376,8 +2377,13 @@ suite custom_load_test = [] {
    };
 };
 
+struct opts_concatenate : glz::opts
+{
+   bool concatenate = true;
+};
+
 suite pair_ranges_tests = [] {
-   static constexpr glz::opts concatenate_off{.format = glz::BEVE, .concatenate = false};
+   static constexpr opts_concatenate concatenate_off{{glz::BEVE}, false};
 
    "vector pair"_test = [] {
       std::vector<std::pair<int, int>> v{{1, 2}, {3, 4}};
@@ -2403,15 +2409,15 @@ suite pair_ranges_tests = [] {
 
 int main()
 {
-   glz::trace_begin("binary_test");
+   trace.begin("binary_test");
    write_tests();
    bench();
    test_partial();
    file_include_test();
    container_types();
 
-   glz::trace_end("binary_test");
-   const auto ec = glz::write_file_trace("binary_test.trace.json", std::string{});
+   trace.end("binary_test");
+   const auto ec = glz::write_file_json(trace, "binary_test.trace.json", std::string{});
    if (ec) {
       std::cerr << "trace output failed\n";
    }

@@ -10,7 +10,7 @@
 
 namespace glz
 {
-   template <opts Opts = opts{}, class Template, class T, resizable Buffer>
+   template <auto Opts = opts{}, class Template, class T, resizable Buffer>
    [[nodiscard]] error_ctx stencilcount(Template&& layout, T&& value, Buffer& buffer)
    {
       context ctx{};
@@ -27,7 +27,7 @@ namespace glz
       }
       if (not bool(ctx.error)) [[likely]] {
          auto skip_whitespace = [&] {
-            while (detail::whitespace_table[uint8_t(*it)]) {
+            while (whitespace_table[uint8_t(*it)]) {
                ++it;
             }
          };
@@ -98,23 +98,23 @@ namespace glz
                   skip_whitespace();
 
                   static constexpr auto N = reflect<T>::size;
-                  static constexpr auto HashInfo = detail::hash_info<T>;
+                  static constexpr auto HashInfo = hash_info<T>;
 
                   const auto index =
-                     detail::decode_hash_with_size<STENCIL, T, HashInfo, HashInfo.type>::op(start, end, key.size());
+                     decode_hash_with_size<STENCIL, T, HashInfo, HashInfo.type>::op(start, end, key.size());
 
                   if (index < N) [[likely]] {
                      static thread_local std::string temp{};
-                     detail::jump_table<N>(
+                     visit<N>(
                         [&]<size_t I>() {
                            static constexpr auto TargetKey = get<I>(reflect<T>::keys);
                            static constexpr auto Length = TargetKey.size();
-                           if ((Length == key.size()) && detail::comparitor<TargetKey>(start)) [[likely]] {
-                              if constexpr (detail::reflectable<T> && N > 0) {
+                           if ((Length == key.size()) && comparitor<TargetKey>(start)) [[likely]] {
+                              if constexpr (reflectable<T> && N > 0) {
                                  std::ignore = write<opt_true<Opts, &opts::raw>>(
-                                    get_member(value, get<I>(to_tuple(value))), temp, ctx);
+                                    get_member(value, get<I>(to_tie(value))), temp, ctx);
                               }
-                              else if constexpr (detail::glaze_object_t<T> && N > 0) {
+                              else if constexpr (glaze_object_t<T> && N > 0) {
                                  std::ignore = write<opt_true<Opts, &opts::raw>>(
                                     get_member(value, get<I>(reflect<T>::values)), temp, ctx);
                               }
@@ -170,7 +170,7 @@ namespace glz
       return {};
    }
 
-   template <opts Opts = opts{}, class Template, class T>
+   template <auto Opts = opts{}, class Template, class T>
    [[nodiscard]] expected<std::string, error_ctx> stencilcount(Template&& layout, T&& value)
    {
       std::string buffer{};

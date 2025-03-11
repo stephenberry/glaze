@@ -8,19 +8,10 @@
 
 namespace glz::repe
 {
-   struct error_t final
-   {
-      error_code code = error_code::none;
-      std::string message = "";
-
-      operator bool() const noexcept { return bool(code); }
-   };
-
    struct state final
    {
       repe::message& in;
       repe::message& out;
-      error_t& error;
 
       bool notify() const { return in.header.notify(); }
 
@@ -43,14 +34,13 @@ namespace glz::repe
       };
    }
 
-   template <opts Opts, class Value>
+   template <auto Opts, class Value>
    void write_response(Value&& value, is_state auto&& state)
    {
       auto& in = state.in;
       auto& out = state.out;
       out.header.id = in.header.id;
-      if (state.error) {
-         out.header.error = true;
+      if (bool(out.header.ec)) {
          out.header.query_length = out.query.size();
          out.header.body_length = out.body.size();
          out.header.length = sizeof(repe::header) + out.query.size() + out.body.size();
@@ -58,7 +48,7 @@ namespace glz::repe
       else {
          const auto ec = write<Opts>(std::forward<Value>(value), out.body);
          if (bool(ec)) [[unlikely]] {
-            out.header.error = true;
+            out.header.ec = ec.ec;
          }
          out.header.query_length = out.query.size();
          out.header.body_length = out.body.size();
@@ -66,14 +56,13 @@ namespace glz::repe
       }
    }
 
-   template <opts Opts>
+   template <auto Opts>
    void write_response(is_state auto&& state)
    {
       auto& in = state.in;
       auto& out = state.out;
       out.header.id = in.header.id;
-      if (state.error) {
-         out.header.error = true;
+      if (bool(out.header.ec)) {
          out.header.query_length = out.query.size();
          out.header.body_length = out.body.size();
          out.header.length = sizeof(repe::header) + out.query.size() + out.body.size();
@@ -81,7 +70,7 @@ namespace glz::repe
       else {
          const auto ec = write<Opts>(nullptr, out.body);
          if (bool(ec)) [[unlikely]] {
-            out.header.error = true;
+            out.header.ec = ec.ec;
          }
          out.query.clear();
          out.header.query_length = out.query.size();
@@ -91,7 +80,7 @@ namespace glz::repe
    }
 
    // returns 0 on error
-   template <opts Opts, class Value>
+   template <auto Opts, class Value>
    size_t read_params(Value&& value, auto&& state)
    {
       glz::context ctx{};
@@ -104,12 +93,23 @@ namespace glz::repe
       }
       auto start = b;
 
-      glz::detail::read<Opts.format>::template op<Opts>(std::forward<Value>(value), ctx, b, e);
+      glz::parse<Opts.format>::template op<Opts>(std::forward<Value>(value), ctx, b, e);
 
       if (bool(ctx.error)) {
-         state.out.header.error = true;
+         state.out.header.ec = ctx.error;
          error_ctx ec{ctx.error, ctx.custom_error_message, size_t(b - start), ctx.includer_error};
-         write_response<Opts>(error_t{error_code::parse_error, format_error(ec, state.in.body)}, state);
+
+         auto& in = state.in;
+         auto& out = state.out;
+
+         std::string error_message = format_error(ec, in.body);
+         const uint32_t n = uint32_t(error_message.size());
+         out.header.body_length = 4 + n;
+         out.body.resize(out.header.body_length);
+         std::memcpy(out.body.data(), &n, 4);
+         std::memcpy(out.body.data() + 4, error_message.data(), n);
+
+         write_response<Opts>(state);
          return 0;
       }
 
@@ -118,35 +118,58 @@ namespace glz::repe
 
    namespace detail
    {
-      template <opts Opts>
+      template <auto Opts>
       struct request_impl
       {
-         error_t operator()(message& msg, const user_header& h) const
+         message operator()(const user_header& h) const
+         {
+            message msg{};
+            msg.header = encode(h);
+            msg.header.read(true); // because no value provided
+            msg.query = std::string{h.query};
+            msg.header.body_length = msg.body.size();
+            msg.header.length = sizeof(repe::header) + msg.query.size() + msg.body.size();
+            return msg;
+         }
+
+         template <class Value>
+         message operator()(const user_header& h, Value&& value) const
+         {
+            message msg{};
+            msg.header = encode(h);
+            msg.query = std::string{h.query};
+            msg.header.write(true);
+            // TODO: Handle potential write errors and put in msg
+            std::ignore = glz::write<Opts>(std::forward<Value>(value), msg.body);
+            msg.header.body_length = msg.body.size();
+            msg.header.length = sizeof(repe::header) + msg.query.size() + msg.body.size();
+            return msg;
+         }
+
+         void operator()(const user_header& h, message& msg) const
          {
             msg.header = encode(h);
             msg.header.read(true); // because no value provided
             msg.query = std::string{h.query};
-            std::ignore = glz::write<Opts>(nullptr, msg.body);
             msg.header.body_length = msg.body.size();
             msg.header.length = sizeof(repe::header) + msg.query.size() + msg.body.size();
-            return {};
          }
 
          template <class Value>
-         error_t operator()(message& msg, const user_header& h, Value&& value) const
+         void operator()(const user_header& h, message& msg, Value&& value) const
          {
             msg.header = encode(h);
             msg.query = std::string{h.query};
             msg.header.write(true);
+            // TODO: Handle potential write errors and put in msg
             std::ignore = glz::write<Opts>(std::forward<Value>(value), msg.body);
             msg.header.body_length = msg.body.size();
             msg.header.length = sizeof(repe::header) + msg.query.size() + msg.body.size();
-            return {};
          }
       };
    }
 
-   template <opts Opts>
+   template <auto Opts>
    inline constexpr auto request = detail::request_impl<Opts>{};
 
    inline constexpr auto request_beve = request<opts{BEVE}>;
@@ -165,7 +188,7 @@ namespace glz::repe
    }
 
    // This registry does not support adding methods from RPC calls or adding methods once RPC calls can be made.
-   template <opts Opts = opts{}>
+   template <auto Opts = opts{}>
    struct registry
    {
       using procedure = std::function<void(state&&)>; // RPC method
@@ -175,23 +198,22 @@ namespace glz::repe
 
       // Register a C++ type that stores pointers to the value, so be sure to keep the registered value alive
       template <const std::string_view& root = detail::empty_path, class T, const std::string_view& parent = root>
-         requires(glz::detail::glaze_object_t<T> || glz::detail::reflectable<T>)
+         requires(glz::glaze_object_t<T> || glz::reflectable<T>)
       void on(T& value)
       {
          using namespace glz::detail;
          static constexpr auto N = reflect<T>::size;
 
          [[maybe_unused]] decltype(auto) t = [&]() -> decltype(auto) {
-            if constexpr (reflectable<T> && requires { to_tuple(value); }) {
-               return to_tuple(value);
+            if constexpr (reflectable<T> && requires { to_tie(value); }) {
+               return to_tie(value);
             }
             else {
                return nullptr;
             }
          }();
 
-         if constexpr (parent == root && (glaze_object_t<T> ||
-                                          reflectable<T>)&&!std::same_as<std::decay_t<decltype(t)>, std::nullptr_t>) {
+         if constexpr (parent == root && (glaze_object_t<T> || reflectable<T>)) {
             // build read/write calls to the top level object
             methods[root] = [&value](repe::state&& state) mutable {
                if (state.write()) {
@@ -453,24 +475,28 @@ namespace glz::repe
          });
       }
 
-      void call(message& in, message& out)
+      template <class In = message, class Out = message>
+      void call(In&& in, Out&& out)
       {
          if (auto it = methods.find(in.query); it != methods.end()) {
-            static thread_local error_t error{};
-            it->second(state{in, out, error}); // handle the body
+            if (bool(in.header.ec)) {
+               out = in;
+            }
+            else {
+               it->second(state{in, out}); // handle the body
+            }
          }
          else {
-            static constexpr error_code code = error_code::method_not_found;
-            static constexpr sv body{"method not found"};
+            std::string body = "invalid_query: " + in.query;
 
-            const auto body_length = 8 + body.size(); // 4 bytes for code, 4 bytes for size, + message
+            const uint32_t n = uint32_t(body.size());
+            const auto body_length = 4 + n; // 4 bytes for size, + message
 
-            out.body.resize(sizeof(header) + body_length);
-            header h{.error = true, .body_length = body_length};
-            std::memcpy(out.body.data(), &h, sizeof(header));
-            std::memcpy(out.body.data() + sizeof(header), &code, 4);
-            std::memcpy(out.body.data() + sizeof(header) + 4, &body_length, 4);
-            std::memcpy(out.body.data() + sizeof(header) + 8, body.data(), body.size());
+            out.body.resize(body_length);
+            out.header.ec = error_code::method_not_found;
+            out.header.body_length = body_length;
+            std::memcpy(out.body.data(), &n, 4);
+            std::memcpy(out.body.data() + 4, body.data(), n);
          }
       }
    };

@@ -174,7 +174,7 @@ namespace glz
       decltype(auto) unwrap(T&& val)
       {
          using V = std::decay_t<T>;
-         if constexpr (detail::nullable_t<V>) {
+         if constexpr (nullable_t<V>) {
             if (val) {
                return unwrap(*val);
             }

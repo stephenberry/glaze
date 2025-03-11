@@ -20,6 +20,9 @@
 // For struct fields
 namespace glz::detail
 {
+   // Do not const qualify this value to avoid duplicate `to_tie` template instantiations with rest of Glaze
+   // Temporary fix: const qualify it despite. Caused issues with reflect begin/end indices
+   // See https://github.com/stephenberry/glaze/issues/1568
    template <class T>
    extern const T external;
 

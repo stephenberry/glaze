@@ -45,7 +45,7 @@ namespace glz
 
    struct lib_loader final
    {
-      using create = glz::iface_fn (*)(void);
+      using create = glz::iface_fn (*)(void) noexcept;
 
       iface api_map{};
       std::vector<lib_t> loaded_libs{};

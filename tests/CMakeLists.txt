@@ -1,8 +1,5 @@
 include(FetchContent)
 
-set(BOOST_UT_ENABLE_RUN_AFTER_BUILD OFF CACHE INTERNAL "")
-set(BOOST_UT_DISABLE_MODULE ON CACHE INTERNAL "")
-
 FetchContent_Declare(
   ut
   GIT_REPOSITORY https://github.com/openalgz/ut
@@ -26,7 +23,13 @@ target_compile_features(glz_test_common INTERFACE cxx_std_23)
 target_link_libraries(glz_test_common INTERFACE ut::ut glaze::glaze)
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     target_compile_options(glz_test_common INTERFACE -fno-exceptions -fno-rtti)
-    if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    if(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
+        if(CMAKE_CXX_COMPILER_VERSION VERSION_LESS 13)
+            target_compile_options(glz_test_common INTERFACE -Wall -Wextra -pedantic)
+        else()
+            target_compile_options(glz_test_common INTERFACE -Wall -Wextra -pedantic $<$<CONFIG:Debug>:-Werror>)
+        endif()
+    elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
         target_compile_options(glz_test_common INTERFACE -Wall -Wextra -pedantic $<$<CONFIG:Debug>:-Werror>)
     else()
         target_compile_options(glz_test_common INTERFACE -Wall -Wextra -pedantic)
@@ -74,8 +77,8 @@ add_subdirectory(repe_test)
 add_subdirectory(reflection)
 add_subdirectory(roundtrip)
 add_subdirectory(stencil)
+add_subdirectory(toml_test)
 add_subdirectory(utility_formats)
-add_subdirectory(gcc_json_t_issue)
 
 # We don't run find_package_test or glaze-install_test with MSVC/Windows, because the Github action runner often chokes
 # Don't run find_package on Clang, because Linux runs with Clang try to use GCC standard library and have errors before Clang 18

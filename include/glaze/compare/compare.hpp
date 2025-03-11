@@ -12,7 +12,7 @@ namespace glz
 {
    struct equal_to final
    {
-      template <detail::glaze_object_t T>
+      template <glaze_object_t T>
       constexpr bool operator()(T&& lhs, T&& rhs) noexcept
       {
          if constexpr (std::equality_comparable<T>) {
@@ -39,7 +39,7 @@ namespace glz
 
    struct less final
    {
-      template <detail::glaze_object_t T>
+      template <glaze_object_t T>
       constexpr bool operator()(T&& lhs, T&& rhs) noexcept
       {
          constexpr auto N = reflect<T>::size;
@@ -61,7 +61,7 @@ namespace glz
 
    struct less_equal final
    {
-      template <detail::glaze_object_t T>
+      template <glaze_object_t T>
       constexpr bool operator()(T&& lhs, T&& rhs) noexcept
       {
          constexpr auto N = reflect<T>::size;
@@ -83,7 +83,7 @@ namespace glz
 
    struct greater final
    {
-      template <detail::glaze_object_t T>
+      template <glaze_object_t T>
       constexpr bool operator()(T&& lhs, T&& rhs) noexcept
       {
          constexpr auto N = reflect<T>::size;
@@ -105,7 +105,7 @@ namespace glz
 
    struct greater_equal final
    {
-      template <detail::glaze_object_t T>
+      template <glaze_object_t T>
       constexpr bool operator()(T&& lhs, T&& rhs) noexcept
       {
          constexpr auto N = reflect<T>::size;

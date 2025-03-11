@@ -184,4 +184,25 @@ suite jmespath_slice_tests = [] {
    };
 };
 
+// A test case for a GCC14 warning
+struct gcc_maybe_uninitialized_t
+{
+   int acc{};
+   int abbb{};
+   int cqqq{};
+};
+
+suite gcc_maybe_uninitialized_tests = [] {
+   "gcc_maybe_uninitialized"_test = [] {
+      using namespace std::string_view_literals;
+
+      gcc_maybe_uninitialized_t log{};
+
+      constexpr glz::opts opts{.null_terminated = 0, .error_on_unknown_keys = 0};
+      auto ec = glz::read_jmespath<"test", opts>(log, R"({"test":{"acc":1}})"sv);
+      expect(not ec) << glz::format_error(ec, R"({"test":{"acc":1}})"sv);
+      expect(log.acc == 1);
+   };
+};
+
 int main() { return 0; }

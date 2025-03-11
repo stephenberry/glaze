@@ -10,11 +10,11 @@ namespace glz
 {
    namespace detail
    {
-      template <opts Opts>
+      template <auto Opts>
       inline void beve_to_json_number(auto&& tag, auto&& ctx, auto&& it, auto&& end, auto& out, auto&& ix) noexcept
       {
          const auto number_type = (tag & 0b000'11'000) >> 3;
-         const uint8_t byte_count = detail::byte_count_lookup[tag >> 5];
+         const uint8_t byte_count = byte_count_lookup[tag >> 5];
 
          auto write_number = [&]<class T>(T&& value) {
             if ((it + sizeof(T)) > end) [[unlikely]] {
@@ -104,7 +104,7 @@ namespace glz
          }
       }
 
-      template <glz::opts Opts, class Buffer>
+      template <auto Opts, class Buffer>
       inline void beve_to_json_value(auto&& ctx, auto&& it, auto&& end, Buffer& out, auto&& ix)
       {
          if (it >= end) [[unlikely]] {
@@ -137,7 +137,7 @@ namespace glz
          }
          case tag::string: {
             ++it;
-            const auto n = detail::int_from_compressed(ctx, it, end);
+            const auto n = int_from_compressed(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]] {
                return;
             }
@@ -173,13 +173,13 @@ namespace glz
             switch (key_type) {
             case 0: {
                // string key
-               const auto n_fields = detail::int_from_compressed(ctx, it, end);
+               const auto n_fields = int_from_compressed(ctx, it, end);
                if (bool(ctx.error)) {
                   return;
                }
                for (size_t i = 0; i < n_fields; ++i) {
                   // convert the key
-                  const auto n = detail::int_from_compressed(ctx, it, end);
+                  const auto n = int_from_compressed(ctx, it, end);
                   if (bool(ctx.error)) [[unlikely]] {
                      return;
                   }
@@ -212,7 +212,7 @@ namespace glz
                [[fallthrough]]; // signed integer key
             case 2: {
                // unsigned integer key
-               const auto n_fields = detail::int_from_compressed(ctx, it, end);
+               const auto n_fields = int_from_compressed(ctx, it, end);
                if (bool(ctx.error)) {
                   return;
                }
@@ -262,7 +262,7 @@ namespace glz
          case tag::typed_array: {
             ++it;
             const auto value_type = (tag & 0b000'11'000) >> 3;
-            const uint8_t byte_count = detail::byte_count_lookup[tag >> 5];
+            const uint8_t byte_count = byte_count_lookup[tag >> 5];
 
             auto write_array = [&]<class T>(T&& value) {
                const auto n = int_from_compressed(ctx, it, end);
@@ -373,7 +373,7 @@ namespace glz
                      return;
                   }
                   for (size_t i = 0; i < n_strings; ++i) {
-                     const auto n = detail::int_from_compressed(ctx, it, end);
+                     const auto n = int_from_compressed(ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]] {
                         return;
                      }
@@ -637,7 +637,7 @@ namespace glz
       }
    }
 
-   template <glz::opts Opts = glz::opts{}, class BEVEBuffer, class JSONBuffer>
+   template <auto Opts = glz::opts{}, class BEVEBuffer, class JSONBuffer>
    [[nodiscard]] inline error_ctx beve_to_json(const BEVEBuffer& beve, JSONBuffer& out)
    {
       size_t ix{}; // write index

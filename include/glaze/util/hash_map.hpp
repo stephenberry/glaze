@@ -52,7 +52,7 @@ namespace glz
    template <class T1, class T2>
    pair(T1, T2) -> pair<T1, T2>;
 
-   template <size_t I, detail::pair_t T>
+   template <size_t I, pair_t T>
    constexpr decltype(auto) get(T&& p) noexcept
    {
       if constexpr (I == 0) {
@@ -67,9 +67,9 @@ namespace glz
    }
 }
 
-namespace glz::detail
+namespace glz
 {
-   constexpr size_t naive_map_max_size = 128;
+   inline constexpr size_t naive_map_max_size = 128;
 
    struct naive_map_desc
    {
@@ -271,10 +271,11 @@ namespace glz::detail
       }
    };
 
-   constexpr bool contains(auto&& data, auto&& val) noexcept
+   // Check if a size_t value exists inside of a container like std::array<size_t, N>
+   // Using a pointer and size rather than std::span for faster compile times
+   constexpr bool contains(const size_t* data, const size_t size, const size_t val) noexcept
    {
-      const auto n = data.size();
-      for (size_t i = 0; i < n; ++i) {
+      for (size_t i = 0; i < size; ++i) {
          if (data[i] == val) {
             return true;
          }
@@ -319,7 +320,7 @@ namespace glz::detail
                   break;
                }
                const auto bucket = hash % desc.bucket_size;
-               if (contains(std::span{bucket_index.data(), index}, bucket)) {
+               if (contains(bucket_index.data(), index, bucket)) {
                   break;
                }
                bucket_index[index] = bucket;
@@ -329,7 +330,7 @@ namespace glz::detail
             if (index == N) {
                // make sure the seed does not collide with any hashes
                const auto bucket = seed % desc.bucket_size;
-               if (not contains(std::span{bucket_index.data(), N}, bucket)) {
+               if (not contains(bucket_index.data(), N, bucket)) {
                   return; // found working seed
                }
             }
@@ -519,7 +520,7 @@ namespace glz::detail
          else {
             std::array<std::array<storage_type, max_bucket_size>, N> full_buckets{};
             std::array<size_t, N> bucket_sizes{};
-            detail::naive_prng gen{};
+            naive_prng gen{};
 
             bool failed;
             do {

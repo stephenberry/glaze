@@ -37,7 +37,7 @@ namespace glz
       return {};
    }
 
-   template <opts Opts = opts{}, detail::readable_map_t T>
+   template <auto Opts = opts{}, readable_map_t T>
    [[nodiscard]] error_ctx read_directory(T& value, const sv directory_path, const sv target_extension = ".json")
    {
       std::unordered_map<std::filesystem::path, std::string, detail::fs_path_hash> files{};

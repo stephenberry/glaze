@@ -15,7 +15,7 @@ struct my_struct
    std::array<uint64_t, 3> arr{};
 };
 
-static_assert(glz::detail::reflectable<my_struct>);
+static_assert(glz::reflectable<my_struct>);
 
 static_assert(glz::name_v<my_struct> == "my_struct");
 
@@ -68,7 +68,7 @@ struct nested_t
    my_struct thing{};
 };
 
-static_assert(glz::detail::reflectable<nested_t>);
+static_assert(glz::reflectable<nested_t>);
 
 #ifndef _MSC_VER
 suite nested_reflection = [] {
@@ -454,8 +454,7 @@ struct empty_t
 {};
 
 static_assert(glz::reflect<empty_t>::size == 0);
-static_assert(not glz::object_info<glz::opts{}, empty_t>::first_will_be_written);
-static_assert(not glz::object_info<glz::opts{}, empty_t>::maybe_skipped);
+static_assert(not glz::maybe_skipped<glz::opts{}, empty_t>);
 
 suite empty_test = [] {
    "empty_t"_test = [] {
@@ -488,7 +487,7 @@ struct V2Wrapper
    V2 x{};
 };
 
-static_assert(glz::detail::reflectable<V2Wrapper>);
+static_assert(glz::reflectable<V2Wrapper>);
 static_assert(glz::detail::count_members<V2Wrapper> == 1);
 
 suite v2_wrapper_test = [] {
@@ -528,7 +527,8 @@ struct glz::json_schema<meta_schema_t>
    schema is_valid{.description = "for validation"};
 };
 
-static_assert(glz::detail::reflectable<glz::json_schema<meta_schema_t>>);
+static_assert(glz::json_schema_t<glz::json_schema<meta_schema_t>>);
+static_assert(glz::reflectable<glz::json_schema<meta_schema_t>>);
 static_assert(glz::detail::count_members<glz::json_schema<meta_schema_t>> == 3);
 
 struct local_schema_t
@@ -545,7 +545,8 @@ struct local_schema_t
    };
 };
 
-static_assert(glz::detail::local_json_schema_t<local_schema_t>);
+static_assert(glz::local_json_schema_t<local_schema_t>);
+static_assert(glz::json_schema_t<local_schema_t>);
 
 suite meta_schema_reflection_tests = [] {
    "meta_schema_reflection"_test = [] {
@@ -685,7 +686,7 @@ suite large_struct_tests = [] {
    };
 };
 
-namespace glz::detail
+namespace glz
 {
    template <>
    struct from<JSON, std::chrono::seconds>
@@ -694,7 +695,7 @@ namespace glz::detail
       static void op(std::chrono::seconds& value, is_context auto&& ctx, auto&&... args)
       {
          int32_t sec_count{};
-         read<JSON>::op<Opts>(sec_count, ctx, args...);
+         parse<JSON>::op<Opts>(sec_count, ctx, args...);
          if (glz::error_code::none == ctx.error) value = std::chrono::seconds{sec_count};
       }
    };
@@ -820,9 +821,8 @@ suite hash_tests = [] {
    };
 
    "front_64"_test = [] {
-      glz::detail::keys_info_t info{.min_length = 8, .max_length = 8};
-      [[maybe_unused]] const auto valid =
-         glz::detail::front_bytes_hash_info<uint64_t>(glz::reflect<front_64_t>::keys, info);
+      glz::keys_info_t info{.min_length = 8, .max_length = 8};
+      [[maybe_unused]] const auto valid = glz::front_bytes_hash_info<uint64_t>(glz::reflect<front_64_t>::keys, info);
 
       front_64_t obj{};
       std::string_view buffer = R"({"aaaaaaaa":1,"aaaaaaaz":2,"aaaaaaza":3})";

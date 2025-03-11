@@ -17,6 +17,12 @@ namespace glz::repe
       write = 1 << 2 // Write a value or invoke a function
    };
 
+   inline action pack_action(bool notify, bool read, bool write) noexcept
+   {
+      return static_cast<action>((notify ? uint32_t(action::notify) : 0) | (read ? uint32_t(action::read) : 0) |
+                                 (write ? uint32_t(action::write) : 0));
+   }
+
    inline constexpr auto no_length_provided = (std::numeric_limits<uint64_t>::max)();
 
    struct header
@@ -25,7 +31,7 @@ namespace glz::repe
       //
       uint16_t spec{0x1507}; // (5383) Magic two bytes to denote the REPE specification
       uint8_t version = 1; // REPE version
-      bool error{}; // Whether an error has occurred
+      uint8_t reserved{}; // Must be zero
       repe::action action{}; // Action to take, multiple actions may be bit-packed together
       //
       uint64_t id{}; // Identifier
@@ -36,7 +42,7 @@ namespace glz::repe
       //
       uint16_t query_format{};
       uint16_t body_format{};
-      uint32_t reserved{}; // Must be set to zero
+      error_code ec{};
 
       bool notify() const { return bool(uint32_t(action) & uint32_t(repe::action::notify)); }
 
@@ -83,6 +89,10 @@ namespace glz::repe
       repe::header header{};
       std::string query{};
       std::string body{};
+
+      operator bool() const { return bool(header.ec); }
+
+      error_code error() const { return header.ec; }
    };
 
    // User interface that will be encoded into a REPE header
@@ -90,54 +100,20 @@ namespace glz::repe
    {
       std::string_view query = ""; // The JSON pointer path to call or member to access/assign
       uint64_t id{}; // Identifier
-      bool error{}; // Whether an error has occurred
+      error_code ec{};
 
-      repe::action action{}; // Action to take, multiple actions may be bit-packed together
-
-      bool notify() const { return bool(uint32_t(action) & uint32_t(repe::action::notify)); }
-
-      bool read() const { return bool(uint32_t(action) & uint32_t(repe::action::read)); }
-
-      bool write() const { return bool(uint32_t(action) & uint32_t(repe::action::write)); }
-
-      void notify(bool enable)
-      {
-         if (enable) {
-            action = static_cast<repe::action>(uint32_t(action) | uint32_t(action::notify));
-         }
-         else {
-            action = static_cast<repe::action>(uint32_t(action) & ~uint32_t(action::notify));
-         }
-      }
-
-      void read(bool enable)
-      {
-         if (enable) {
-            action = static_cast<repe::action>(uint32_t(action) | uint32_t(action::read));
-         }
-         else {
-            action = static_cast<repe::action>(uint32_t(action) & ~uint32_t(action::read));
-         }
-      }
-
-      void write(bool enable)
-      {
-         if (enable) {
-            action = static_cast<repe::action>(uint32_t(action) | uint32_t(action::write));
-         }
-         else {
-            action = static_cast<repe::action>(uint32_t(action) & ~uint32_t(action::write));
-         }
-      }
+      bool notify{};
+      bool read{};
+      bool write{};
    };
 
    inline repe::header encode(const user_header& h) noexcept
    {
       repe::header ret{
-         .error = h.error, //
-         .action = h.action, //
+         .action = pack_action(h.notify, h.read, h.write), //
          .id = h.id, //
-         .query_length = h.query.size() //
+         .query_length = h.query.size(), //
+         .ec = h.ec //
       };
       return ret;
    }

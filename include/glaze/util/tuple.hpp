@@ -15,17 +15,7 @@ namespace glz
    template <class T>
    concept is_std_tuple = is_specialization_v<T, std::tuple>;
 
-   // group builder code
-   template <size_t N>
-   constexpr auto shrink_index_array(auto&& arr)
-   {
-      std::array<size_t, N> res{};
-      for (size_t i = 0; i < N; ++i) {
-         res[i] = arr[i];
-      }
-      return res;
-   }
-
+   // TODO: This doesn't appear to be used. Should it be removed?
    template <class Type>
    concept is_schema_class = requires {
       requires std::is_class_v<Type>;
