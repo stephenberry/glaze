@@ -792,49 +792,39 @@ namespace glz
       }
       
       // Iterators
-      // These methods should acquire locks that will be shared among iterators
       iterator begin()
       {
-         acquire_unique_lock();
+         auto lock = acquire_unique_lock();
          return iterator(items.begin(), this);
       }
       
       const_iterator begin() const
       {
-         acquire_shared_lock();
+         auto lock = acquire_shared_lock();
          return const_iterator(items.cbegin(), this);
       }
       
       const_iterator cbegin() const
       {
-         acquire_shared_lock();
+         auto lock = acquire_shared_lock();
          return const_iterator(items.cbegin(), this);
       }
       
       iterator end()
       {
-         // We need to use the same lock type as begin()
-         if (!global_lock) {
-            acquire_unique_lock();
-         }
+         auto lock = acquire_unique_lock();
          return iterator(items.end(), this);
       }
       
       const_iterator end() const
       {
-         // We need to use the same lock type as begin()
-         if (!global_lock) {
-            acquire_shared_lock();
-         }
+         auto lock = acquire_shared_lock();
          return const_iterator(items.cend(), this);
       }
       
       const_iterator cend() const
       {
-         // We need to use the same lock type as cbegin()
-         if (!global_lock) {
-            acquire_shared_lock();
-         }
+         auto lock = acquire_shared_lock();
          return const_iterator(items.cend(), this);
       }
    };
