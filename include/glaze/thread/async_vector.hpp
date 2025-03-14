@@ -101,8 +101,7 @@ namespace glz
          }
       };
       
-      // Unified lock manager
-      mutable early_shared_ptr<lock_base> global_lock;
+      mutable early_shared_ptr<lock_base> global_lock{};
       
       // Custom deleter for lock management
       class lock_deleter {
