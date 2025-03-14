@@ -8,6 +8,10 @@
 #include <shared_mutex>
 #include <utility>
 #include <vector>
+#include <type_traits>
+
+// glz::early_shared_ptr deletes memory when the use count reaches 0 rather than 1 like a std::shared_ptr
+#include "glaze/thread/early_shared_ptr.hpp"
 
 #ifndef GLZ_THROW_OR_ABORT
 #if __cpp_exceptions
@@ -39,45 +43,79 @@ namespace glz
       std::vector<std::unique_ptr<V>> items;
       mutable std::shared_mutex mutex;
       
-      // Shared lock state for the entire container with custom deleters
-      mutable std::shared_ptr<std::unique_lock<std::shared_mutex>> global_unique_lock;
-      mutable std::shared_ptr<std::shared_lock<std::shared_mutex>> global_shared_lock;
+      // Base lock class for type erasure
+      class lock_base {
+      public:
+         virtual ~lock_base() = default;
+         virtual bool owns_lock() const = 0;
+         virtual bool is_unique() const = 0;
+      };
       
-      // Custom deleter for unique locks that resets the global pointer when count reaches 1
-      class unique_lock_deleter {
+      // Derived class for unique locks
+      class unique_lock_wrapper : public lock_base {
+      private:
+         std::unique_lock<std::shared_mutex> lock;
+         
+      public:
+         explicit unique_lock_wrapper(std::shared_mutex& mutex)
+         : lock(mutex) {}
+         
+         explicit unique_lock_wrapper(std::shared_mutex& mutex, std::defer_lock_t defer)
+         : lock(mutex, defer) {}
+         
+         bool owns_lock() const override {
+            return lock.owns_lock();
+         }
+         
+         bool is_unique() const override {
+            return true;
+         }
+         
+         std::unique_lock<std::shared_mutex>& get_lock() {
+            return lock;
+         }
+      };
+      
+      // Derived class for shared locks
+      class shared_lock_wrapper : public lock_base {
+      private:
+         std::shared_lock<std::shared_mutex> lock;
+         
+      public:
+         explicit shared_lock_wrapper(std::shared_mutex& mutex)
+         : lock(mutex) {}
+         
+         explicit shared_lock_wrapper(std::shared_mutex& mutex, std::defer_lock_t defer)
+         : lock(mutex, defer) {}
+         
+         bool owns_lock() const override {
+            return lock.owns_lock();
+         }
+         
+         bool is_unique() const override {
+            return false;
+         }
+         
+         std::shared_lock<std::shared_mutex>& get_lock() {
+            return lock;
+         }
+      };
+      
+      // Unified lock manager
+      mutable early_shared_ptr<lock_base> global_lock;
+      
+      // Custom deleter for lock management
+      class lock_deleter {
       private:
          async_vector* parent;
          
       public:
-         explicit unique_lock_deleter(async_vector* parent) : parent(parent) {}
+         explicit lock_deleter(async_vector* parent) : parent(parent) {}
          
-         void operator()(std::unique_lock<std::shared_mutex>* lock) {
-            // We want to check if this is the last reference from the async_vector class
-            // (not counting external copies passed to iterators/proxies)
-            if (parent->global_unique_lock.use_count() == 1) {
+         void operator()(lock_base* lock) {
+            if (parent->global_lock.use_count() == 1) {
                // This is the last reference in the parent, reset the global pointer
-               parent->global_unique_lock.reset();
-            }
-            
-            // Always delete the actual lock object
-            delete lock;
-         }
-      };
-      
-      // Custom deleter for shared locks that resets the global pointer when count reaches 1
-      class shared_lock_deleter {
-      private:
-         const async_vector* parent;
-         
-      public:
-         explicit shared_lock_deleter(const async_vector* parent) : parent(parent) {}
-         
-         void operator()(std::shared_lock<std::shared_mutex>* lock) {
-            // We want to check if this is the last reference from the async_vector class
-            // (not counting external copies passed to iterators/proxies)
-            if (parent->global_shared_lock.use_count() == 1) {
-               // This is the last reference in the parent, reset the global pointer
-               parent->global_shared_lock.reset();
+               parent->global_lock.reset();
             }
             
             // Always delete the actual lock object
@@ -86,11 +124,11 @@ namespace glz
       };
       
       // Helper methods to acquire locks with proper blocking
-      std::shared_ptr<std::unique_lock<std::shared_mutex>> acquire_unique_lock() const
+      early_shared_ptr<lock_base> acquire_unique_lock() const
       {
          // If a unique lock already exists, use it
-         if (global_unique_lock && global_unique_lock->owns_lock()) {
-            return global_unique_lock;
+         if (global_lock && global_lock->owns_lock() && global_lock->is_unique()) {
+            return global_lock;
          }
          
          // We need to wait for any existing locks to be released and then acquire a unique lock
@@ -98,30 +136,25 @@ namespace glz
          std::lock_guard<std::mutex> lock_guard(lock_mutex);
          
          // Create new unique lock - will block until it can be acquired
-         auto raw_lock = new std::unique_lock<std::shared_mutex>(mutex);
+         auto raw_lock = new unique_lock_wrapper(mutex);
          
          // Use custom deleter that will reset the global pointer when appropriate
-         global_unique_lock = std::shared_ptr<std::unique_lock<std::shared_mutex>>(
-                                                                                   raw_lock, unique_lock_deleter(const_cast<async_vector*>(this)));
+         global_lock = early_shared_ptr<lock_base>(
+                                                  raw_lock, lock_deleter(const_cast<async_vector*>(this)));
          
-         // Safe to reset shared lock now since we have the unique lock
-         if (global_shared_lock) {
-            global_shared_lock.reset();
-         }
-         
-         return global_unique_lock;
+         return global_lock;
       }
       
-      std::shared_ptr<std::shared_lock<std::shared_mutex>> acquire_shared_lock() const
+      early_shared_ptr<lock_base> acquire_shared_lock() const
       {
          // If a shared lock already exists, use it
-         if (global_shared_lock && global_shared_lock->owns_lock()) {
-            return global_shared_lock;
+         if (global_lock && global_lock->owns_lock()) {
+            return global_lock;
          }
          
-         // If a unique lock exists, we can use it instead (read access is covered by write access)
-         if (global_unique_lock && global_unique_lock->owns_lock()) {
-            return global_shared_lock; // Will be null or already reset, but that's okay
+         // If a unique lock already exists, we can use it instead (read access is covered by write access)
+         if (global_lock && global_lock->owns_lock() && global_lock->is_unique()) {
+            return global_lock;
          }
          
          // Need to create a new shared lock
@@ -129,13 +162,13 @@ namespace glz
          std::lock_guard<std::mutex> lock_guard(lock_mutex);
          
          // Create new shared lock - will block until it can be acquired
-         auto raw_lock = new std::shared_lock<std::shared_mutex>(mutex);
+         auto raw_lock = new shared_lock_wrapper(mutex);
          
          // Use custom deleter that will reset the global pointer when appropriate
-         global_shared_lock = std::shared_ptr<std::shared_lock<std::shared_mutex>>(
-                                                                                   raw_lock, shared_lock_deleter(this));
+         global_lock = early_shared_ptr<lock_base>(
+                                                  raw_lock, lock_deleter(const_cast<async_vector*>(this)));
          
-         return global_shared_lock;
+         return global_lock;
       }
       
    public:
@@ -216,18 +249,14 @@ namespace glz
       private:
          typename std::vector<std::unique_ptr<V>>::iterator item_it;
          async_vector* parent;
-         std::shared_ptr<std::unique_lock<std::shared_mutex>> unique_lock_ptr;
-         std::shared_ptr<std::shared_lock<std::shared_mutex>> shared_lock_ptr;
+         early_shared_ptr<lock_base> lock_ptr;
          
       public:
          iterator(typename std::vector<std::unique_ptr<V>>::iterator item_it, async_vector* parent)
          : item_it(item_it), parent(parent)
          {
-            // Try to use parent's unique lock first, then shared lock
-            unique_lock_ptr = parent->global_unique_lock;
-            if (!unique_lock_ptr || !unique_lock_ptr->owns_lock()) {
-               shared_lock_ptr = parent->acquire_shared_lock();
-            }
+            // Acquire a lock for the iterator
+            lock_ptr = parent->acquire_unique_lock();
          }
          
          ~iterator()
@@ -239,16 +268,14 @@ namespace glz
          iterator(const iterator& other)
          : item_it(other.item_it),
          parent(other.parent),
-         unique_lock_ptr(other.unique_lock_ptr),
-         shared_lock_ptr(other.shared_lock_ptr)
+         lock_ptr(other.lock_ptr)
          {}
          
          // Move Constructor
          iterator(iterator&& other) noexcept
          : item_it(std::move(other.item_it)),
          parent(other.parent),
-         unique_lock_ptr(std::move(other.unique_lock_ptr)),
-         shared_lock_ptr(std::move(other.shared_lock_ptr))
+         lock_ptr(std::move(other.lock_ptr))
          {}
          
          // Copy Assignment
@@ -257,8 +284,7 @@ namespace glz
             if (this != &other) {
                item_it = other.item_it;
                parent = other.parent;
-               unique_lock_ptr = other.unique_lock_ptr;
-               shared_lock_ptr = other.shared_lock_ptr;
+               lock_ptr = other.lock_ptr;
             }
             return *this;
          }
@@ -350,19 +376,15 @@ namespace glz
       private:
          typename std::vector<std::unique_ptr<V>>::const_iterator item_it;
          const async_vector* parent;
-         std::shared_ptr<std::unique_lock<std::shared_mutex>> unique_lock_ptr;
-         std::shared_ptr<std::shared_lock<std::shared_mutex>> shared_lock_ptr;
+         early_shared_ptr<lock_base> lock_ptr;
          
       public:
          const_iterator(typename std::vector<std::unique_ptr<V>>::const_iterator item_it,
                         const async_vector* parent)
          : item_it(item_it), parent(parent)
          {
-            // Try to use parent's unique lock first, then shared lock
-            unique_lock_ptr = parent->global_unique_lock;
-            if (!unique_lock_ptr || !unique_lock_ptr->owns_lock()) {
-               shared_lock_ptr = parent->acquire_shared_lock();
-            }
+            // Acquire a lock for the iterator
+            lock_ptr = parent->acquire_shared_lock();
          }
          
          ~const_iterator()
@@ -374,16 +396,14 @@ namespace glz
          const_iterator(const const_iterator& other)
          : item_it(other.item_it),
          parent(other.parent),
-         unique_lock_ptr(other.unique_lock_ptr),
-         shared_lock_ptr(other.shared_lock_ptr)
+         lock_ptr(other.lock_ptr)
          {}
          
          // Move Constructor
          const_iterator(const_iterator&& other) noexcept
          : item_it(std::move(other.item_it)),
          parent(other.parent),
-         unique_lock_ptr(std::move(other.unique_lock_ptr)),
-         shared_lock_ptr(std::move(other.shared_lock_ptr))
+         lock_ptr(std::move(other.lock_ptr))
          {}
          
          // Copy Assignment
@@ -392,8 +412,7 @@ namespace glz
             if (this != &other) {
                item_it = other.item_it;
                parent = other.parent;
-               unique_lock_ptr = other.unique_lock_ptr;
-               shared_lock_ptr = other.shared_lock_ptr;
+               lock_ptr = other.lock_ptr;
             }
             return *this;
          }
@@ -477,18 +496,14 @@ namespace glz
       {
       private:
          V& value_ref;
-         std::shared_ptr<std::unique_lock<std::shared_mutex>> unique_lock_ptr;
-         std::shared_ptr<std::shared_lock<std::shared_mutex>> shared_lock_ptr;
+         early_shared_ptr<lock_base> lock_ptr;
          
       public:
          value_proxy(V& value_ref, async_vector* parent)
          : value_ref(value_ref)
          {
-            // Try to use parent's unique lock first, then shared lock
-            unique_lock_ptr = parent->global_unique_lock;
-            if (!unique_lock_ptr || !unique_lock_ptr->owns_lock()) {
-               shared_lock_ptr = parent->acquire_shared_lock();
-            }
+            // Acquire a lock for the proxy
+            lock_ptr = parent->acquire_shared_lock();
          }
          
          ~value_proxy()
@@ -542,18 +557,14 @@ namespace glz
       {
       private:
          const V& value_ref;
-         std::shared_ptr<std::unique_lock<std::shared_mutex>> unique_lock_ptr;
-         std::shared_ptr<std::shared_lock<std::shared_mutex>> shared_lock_ptr;
+         early_shared_ptr<lock_base> lock_ptr;
          
       public:
          const_value_proxy(const V& value_ref, const async_vector* parent)
          : value_ref(value_ref)
          {
-            // Try to use parent's unique lock first, then shared lock
-            unique_lock_ptr = parent->global_unique_lock;
-            if (!unique_lock_ptr || !unique_lock_ptr->owns_lock()) {
-               shared_lock_ptr = parent->acquire_shared_lock();
-            }
+            // Acquire a lock for the proxy
+            lock_ptr = parent->acquire_shared_lock();
          }
          
          ~const_value_proxy()
@@ -588,19 +599,19 @@ namespace glz
       // Element Access Methods
       value_proxy operator[](size_type pos)
       {
-         acquire_shared_lock();
+         auto lock = acquire_shared_lock();
          return value_proxy(*items[pos], this);
       }
       
       const_value_proxy operator[](size_type pos) const
       {
-         acquire_shared_lock();
+         auto lock = acquire_shared_lock();
          return const_value_proxy(*items[pos], this);
       }
       
       value_proxy at(size_type pos)
       {
-         acquire_shared_lock();
+         auto lock = acquire_shared_lock();
          if (pos >= items.size()) {
             GLZ_THROW_OR_ABORT(std::out_of_range("Index out of range"));
          }
@@ -609,7 +620,7 @@ namespace glz
       
       const_value_proxy at(size_type pos) const
       {
-         acquire_shared_lock();
+         auto lock = acquire_shared_lock();
          if (pos >= items.size()) {
             GLZ_THROW_OR_ABORT(std::out_of_range("Index out of range"));
          }
@@ -618,25 +629,25 @@ namespace glz
       
       value_proxy front()
       {
-         acquire_shared_lock();
+         auto lock = acquire_shared_lock();
          return value_proxy(*items.front(), this);
       }
       
       const_value_proxy front() const
       {
-         acquire_shared_lock();
+         auto lock = acquire_shared_lock();
          return const_value_proxy(*items.front(), this);
       }
       
       value_proxy back()
       {
-         acquire_shared_lock();
+         auto lock = acquire_shared_lock();
          return value_proxy(*items.back(), this);
       }
       
       const_value_proxy back() const
       {
-         acquire_shared_lock();
+         auto lock = acquire_shared_lock();
          return const_value_proxy(*items.back(), this);
       }
       
@@ -804,7 +815,7 @@ namespace glz
       iterator end()
       {
          // We need to use the same lock type as begin()
-         if (!global_unique_lock) {
+         if (!global_lock) {
             acquire_unique_lock();
          }
          return iterator(items.end(), this);
@@ -813,7 +824,7 @@ namespace glz
       const_iterator end() const
       {
          // We need to use the same lock type as begin()
-         if (!global_shared_lock && !global_unique_lock) {
+         if (!global_lock) {
             acquire_shared_lock();
          }
          return const_iterator(items.cend(), this);
@@ -822,7 +833,7 @@ namespace glz
       const_iterator cend() const
       {
          // We need to use the same lock type as cbegin()
-         if (!global_shared_lock && !global_unique_lock) {
+         if (!global_lock) {
             acquire_shared_lock();
          }
          return const_iterator(items.cend(), this);
