@@ -9,6 +9,8 @@
 #include <utility>
 #include <vector>
 #include <type_traits>
+#include <thread>
+#include <unordered_map>
 
 // glz::early_shared_ptr deletes memory when the use count reaches 0 rather than 1 like a std::shared_ptr
 #include "glaze/thread/early_shared_ptr.hpp"
@@ -101,20 +103,20 @@ namespace glz
          }
       };
       
-      mutable early_shared_ptr<lock_base> global_lock{};
-      
       // Custom deleter for lock management
       class lock_deleter {
       private:
          async_vector* parent;
+         std::thread::id thread_id;
          
       public:
-         explicit lock_deleter(async_vector* parent) : parent(parent) {}
+         explicit lock_deleter(async_vector* parent, std::thread::id thread_id)
+         : parent(parent), thread_id(thread_id) {}
          
          void operator()(lock_base* lock) {
-            if (parent->global_lock.use_count() == 1) {
-               // This is the last reference in the parent, reset the global pointer
-               parent->global_lock.reset();
+            if (parent->thread_local_locks().use_count() == 1) {
+               // This is the last reference in the current thread, reset the thread-local pointer
+               parent->thread_local_locks().reset();
             }
             
             // Always delete the actual lock object
@@ -122,52 +124,60 @@ namespace glz
          }
       };
       
+      // Store locks in a thread-local variable
+      early_shared_ptr<lock_base>& thread_local_locks() const {
+         // Thread-local storage for locks
+         thread_local early_shared_ptr<lock_base> local_lock{};
+         return local_lock;
+      }
+      
       // Helper methods to acquire locks with proper blocking
       early_shared_ptr<lock_base> acquire_unique_lock() const
       {
-         // If a unique lock already exists, use it
-         if (global_lock && global_lock->owns_lock() && global_lock->is_unique()) {
-            return global_lock;
+         // Get the thread-local lock
+         auto& local_lock = thread_local_locks();
+         
+         // If a unique lock already exists for this thread, use it
+         if (local_lock && local_lock->owns_lock() && local_lock->is_unique()) {
+            return local_lock;
          }
          
-         // We need to wait for any existing locks to be released and then acquire a unique lock
-         static std::mutex lock_mutex;
+         // We need to create a new unique lock for this thread
+         static thread_local std::mutex lock_mutex;
          std::lock_guard<std::mutex> lock_guard(lock_mutex);
          
          // Create new unique lock - will block until it can be acquired
          auto raw_lock = new unique_lock_wrapper(mutex);
          
-         // Use custom deleter that will reset the global pointer when appropriate
-         global_lock = early_shared_ptr<lock_base>(
-                                                  raw_lock, lock_deleter(const_cast<async_vector*>(this)));
+         // Use custom deleter that will reset the thread-local pointer when appropriate
+         local_lock = early_shared_ptr<lock_base>(
+                                                  raw_lock, lock_deleter(const_cast<async_vector*>(this), std::this_thread::get_id()));
          
-         return global_lock;
+         return local_lock;
       }
       
       early_shared_ptr<lock_base> acquire_shared_lock() const
       {
-         // If a shared lock already exists, use it
-         if (global_lock && global_lock->owns_lock()) {
-            return global_lock;
+         // Get the thread-local lock
+         auto& local_lock = thread_local_locks();
+         
+         // If a lock already exists for this thread, use it
+         if (local_lock && local_lock->owns_lock()) {
+            return local_lock;
          }
          
-         // If a unique lock already exists, we can use it instead (read access is covered by write access)
-         if (global_lock && global_lock->owns_lock() && global_lock->is_unique()) {
-            return global_lock;
-         }
-         
-         // Need to create a new shared lock
-         static std::mutex lock_mutex;
+         // Need to create a new shared lock for this thread
+         static thread_local std::mutex lock_mutex;
          std::lock_guard<std::mutex> lock_guard(lock_mutex);
          
          // Create new shared lock - will block until it can be acquired
          auto raw_lock = new shared_lock_wrapper(mutex);
          
-         // Use custom deleter that will reset the global pointer when appropriate
-         global_lock = early_shared_ptr<lock_base>(
-                                                  raw_lock, lock_deleter(const_cast<async_vector*>(this)));
+         // Use custom deleter that will reset the thread-local pointer when appropriate
+         local_lock = early_shared_ptr<lock_base>(
+                                                  raw_lock, lock_deleter(const_cast<async_vector*>(this), std::this_thread::get_id()));
          
-         return global_lock;
+         return local_lock;
       }
       
    public:
