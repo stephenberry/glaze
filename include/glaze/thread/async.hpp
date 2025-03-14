@@ -11,14 +11,14 @@
 
 #include "glaze/util/type_traits.hpp"
 
-// The purpose of glz::sync is to create a thread-safe wrapper around a type
+// The purpose of glz::async is to create a thread-safe wrapper around a type
 // The only way to access the data is by supplying lambdas to `read` or `write`
 // methods, which feed underlying data into the lambda.
 // A lock is held for the duration of the call.
 
 // Example:
 // struct foo { int x{}; };
-// sync<foo> s{};
+// async<foo> s{};
 // s.write([](auto& value) { value.x = 42; });
 // s.read([](const auto& value) { std::cout << value.x << '\n'; });
 
