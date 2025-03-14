@@ -256,6 +256,16 @@ namespace glz
          : item_it(other.item_it), parent(other.parent), shared_lock_ptr(other.shared_lock_ptr)
          {}
          
+         // Constructor that allows conversion from iterator to const_iterator
+         const_iterator(const iterator& other)
+         : item_it(other.item_it), parent(other.parent), shared_lock_ptr(other.shared_lock_ptr)
+         {
+            // If the iterator had a unique lock, we need to create a shared lock instead
+            if (other.unique_lock_ptr && !shared_lock_ptr) {
+               shared_lock_ptr = std::make_shared<std::shared_lock<std::shared_mutex>>(parent->mutex);
+            }
+         }
+         
          // Move Constructor
          const_iterator(const_iterator&& other) noexcept
          : item_it(std::move(other.item_it)),

@@ -447,16 +447,16 @@ suite async_vector_tests = [] {
       vec.emplace_back(3, "three");
       
       expect(vec.size() == 3) << "Size should reflect number of complex objects";
-      expect(vec[0].id == 1 && vec[0].name == "one") << "Complex object should be stored correctly";
-      expect(vec[1].id == 2 && vec[1].name == "two") << "Complex object should be stored correctly";
-      expect(vec[2].id == 3 && vec[2].name == "three") << "Complex object should be stored correctly";
+      expect(vec[0]->id == 1 && vec[0]->name == "one") << "Complex object should be stored correctly";
+      expect(vec[1]->id == 2 && vec[1]->name == "two") << "Complex object should be stored correctly";
+      expect(vec[2]->id == 3 && vec[2]->name == "three") << "Complex object should be stored correctly";
       
       // Test copying of complex types
       glz::async_vector<TestObject> vec_copy = vec;
-      vec[0].id = 10;
-      vec[0].name = "modified";
+      vec[0]->id = 10;
+      vec[0]->name = "modified";
       
-      expect(vec_copy[0].id == 1 && vec_copy[0].name == "one")
+      expect(vec_copy[0]->id == 1 && vec_copy[0]->name == "one")
       << "Copied vector should not be affected by changes to original";
    };
    
