@@ -77,6 +77,7 @@ add_subdirectory(repe_test)
 add_subdirectory(reflection)
 add_subdirectory(roundtrip)
 add_subdirectory(stencil)
+add_subdirectory(threading_test)
 add_subdirectory(toml_test)
 add_subdirectory(utility_formats)
 
