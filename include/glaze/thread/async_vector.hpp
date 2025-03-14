@@ -665,10 +665,10 @@ namespace glz
          return const_iterator(items.cbegin(), this, shared_lock_ptr);
       }
       
+      // end() is unsafe so taht we can acquire a begin() and end() in tandem
       iterator end()
       {
-         auto unique_lock_ptr = std::make_shared<std::unique_lock<std::shared_mutex>>(mutex);
-         return iterator(items.end(), this, nullptr, unique_lock_ptr);
+         return iterator(items.end(), this, nullptr, nullptr);
       }
       
       const_iterator end() const

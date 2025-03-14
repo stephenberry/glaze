@@ -678,10 +678,10 @@ suite additional_async_vector_tests = [] {
       threads.emplace_back([&]() {
          while (!stop) {
             auto it1 = vec.begin();
-            auto it2 = vec.begin();
+            [[maybe_unused]] auto it2 = vec.begin();
             auto it3 = vec.end();
-            auto it4 = vec.cbegin();
-            auto it5 = vec.cend();
+            [[maybe_unused]] auto it4 = vec.cbegin();
+            [[maybe_unused]] auto it5 = vec.cend();
             
             // Test iterator arithmetic and comparisons
             try {
@@ -698,8 +698,8 @@ suite additional_async_vector_tests = [] {
                
                // Create iterator and then immediately discard
                for (int i = 0; i < 50; ++i) {
-                  auto temp_it = vec.begin() + i;
-                  auto temp_cit = vec.cbegin() + i;
+                  [[maybe_unused]] auto temp_it = vec.begin() + i;
+                  [[maybe_unused]] auto temp_cit = vec.cbegin() + i;
                }
             } catch (const std::exception& e) {
                errors++;
