@@ -2,6 +2,7 @@
 // For the license information refer to glaze.hpp
 
 #include <thread>
+#include <random>
 
 #include "glaze/glaze_exceptions.hpp"
 #include "glaze/thread/atom.hpp"
@@ -380,25 +381,29 @@ suite async_vector_tests = [] {
       expect(vec.size() == 2) << "Size should decrease after pop_back";
       expect(vec[1] == 2) << "Last element should be removed";
       
+      // Test insert
       {
-         // Test insert
-         auto it = vec.insert(vec.cbegin(), 0);
+         auto it = vec.insert(vec.begin(), 0);
          expect(*it == 0) << "Insert should return iterator to inserted element";
-         expect(vec.size() == 3) << "Size should increase after insert";
-         expect(vec[0] == 0 && vec[1] == 1 && vec[2] == 2) << "Elements should be in correct order after insert";
-         
-         // Test emplace
-         auto it2 = vec.emplace(vec.cbegin() + 2, 15);
-         expect(*it2 == 15) << "Emplace should return iterator to inserted element";
-         expect(vec.size() == 4) << "Size should increase after emplace";
-         expect(vec[0] == 0 && vec[1] == 1 && vec[2] == 15 && vec[3] == 2) << "Elements should be in correct order after emplace";
-         
-         // Test erase
-         auto it3 = vec.erase(vec.cbegin() + 1);
-         expect(*it3 == 15) << "Erase should return iterator to element after erased";
-         expect(vec.size() == 3) << "Size should decrease after erase";
-         expect(vec[0] == 0 && vec[1] == 15 && vec[2] == 2) << "Elements should be in correct order after erase";
       }
+      expect(vec.size() == 3) << "Size should increase after insert";
+      expect(vec[0] == 0 && vec[1] == 1 && vec[2] == 2) << "Elements should be in correct order after insert";
+      
+      // Test emplace
+      {
+         auto it2 = vec.emplace(vec.begin() + 2, 15);
+         expect(*it2 == 15) << "Emplace should return iterator to inserted element";
+      }
+      expect(vec.size() == 4) << "Size should increase after emplace";
+      expect(vec[0] == 0 && vec[1] == 1 && vec[2] == 15 && vec[3] == 2) << "Elements should be in correct order after emplace";
+      
+      // Test erase
+      {
+         auto it3 = vec.erase(vec.begin() + 1);
+         expect(*it3 == 15) << "Erase should return iterator to element after erased";
+      }
+      expect(vec.size() == 3) << "Size should decrease after erase";
+      expect(vec[0] == 0 && vec[1] == 15 && vec[2] == 2) << "Elements should be in correct order after erase";
       
       // Test clear
       vec.clear();
@@ -589,6 +594,669 @@ suite async_vector_tests = [] {
       
       // We can't check exact values due to the concurrent nature, but we should have more than we started with
       expect(vec.size() > 100) << "Vector should have grown during concurrent operations";
+   };
+};
+
+// Additional stress tests and edge cases for async_vector
+
+// Complex data type with move/copy semantics verification
+struct ComplexObject {
+   int id;
+   std::string data;
+   std::vector<double> values;
+   std::unique_ptr<int> ptr;
+   bool was_moved = false;
+   std::atomic<int> access_count{0};
+   
+   ComplexObject(int id, std::string data, std::vector<double> values)
+   : id(id), data(std::move(data)), values(std::move(values)), ptr(std::make_unique<int>(id)) {}
+   
+   ComplexObject() : id(0), ptr(std::make_unique<int>(0)) {}
+   
+   // Copy constructor
+   ComplexObject(const ComplexObject& other)
+   : id(other.id), data(other.data), values(other.values),
+   ptr(other.ptr ? std::make_unique<int>(*other.ptr) : nullptr),
+   access_count(other.access_count.load()) {}
+   
+   // Move constructor
+   ComplexObject(ComplexObject&& other) noexcept
+   : id(other.id), data(std::move(other.data)), values(std::move(other.values)),
+   ptr(std::move(other.ptr)), was_moved(true),
+   access_count(other.access_count.load()) {}
+   
+   // Copy assignment
+   ComplexObject& operator=(const ComplexObject& other) {
+      if (this != &other) {
+         id = other.id;
+         data = other.data;
+         values = other.values;
+         ptr = other.ptr ? std::make_unique<int>(*other.ptr) : nullptr;
+         access_count.store(other.access_count.load());
+      }
+      return *this;
+   }
+   
+   // Move assignment
+   ComplexObject& operator=(ComplexObject&& other) noexcept {
+      if (this != &other) {
+         id = other.id;
+         data = std::move(other.data);
+         values = std::move(other.values);
+         ptr = std::move(other.ptr);
+         was_moved = true;
+         access_count.store(other.access_count.load());
+      }
+      return *this;
+   }
+   
+   void access() {
+      access_count++;
+   }
+   
+   bool operator==(const ComplexObject& other) const {
+      return id == other.id &&
+      data == other.data &&
+      values == other.values &&
+      ((!ptr && !other.ptr) || (ptr && other.ptr && *ptr == *other.ptr));
+   }
+};
+
+suite additional_async_vector_tests = [] {
+   
+   "concurrent_iterator_stress"_test = [] {
+      glz::async_vector<int> vec;
+      for (int i = 0; i < 1000; ++i) {
+         vec.push_back(i);
+      }
+      
+      std::atomic<bool> stop{false};
+      std::vector<std::thread> threads;
+      std::atomic<int> errors{0};
+      
+      // Thread that continually creates and destroys iterators
+      threads.emplace_back([&]() {
+         while (!stop) {
+            auto it1 = vec.begin();
+            auto it2 = vec.begin();
+            auto it3 = vec.end();
+            auto it4 = vec.cbegin();
+            auto it5 = vec.cend();
+            
+            // Test iterator arithmetic and comparisons
+            try {
+               auto it_mid = it1 + vec.size() / 2;
+               if (!(it_mid > it1 && it_mid < it3)) {
+                  errors++;
+               }
+               
+               auto it_adv = it1;
+               it_adv += 10;
+               if (it_adv - it1 != 10) {
+                  errors++;
+               }
+               
+               // Create iterator and then immediately discard
+               for (int i = 0; i < 50; ++i) {
+                  auto temp_it = vec.begin() + i;
+                  auto temp_cit = vec.cbegin() + i;
+               }
+            } catch (const std::exception& e) {
+               errors++;
+            }
+         }
+      });
+      
+      // Thread that reads through iterators
+      threads.emplace_back([&]() {
+         while (!stop) {
+            try {
+               int sum = 0;
+               for (auto it = vec.begin(); it != vec.end(); ++it) {
+                  sum += *it;
+               }
+               // Basic validation check
+               if (sum < 0) {
+                  errors++;
+               }
+            } catch (const std::exception& e) {
+               errors++;
+            }
+         }
+      });
+      
+      // Thread that modifies through iterators
+      threads.emplace_back([&]() {
+         int counter = 0;
+         while (!stop) {
+            try {
+               auto it = vec.begin() + (counter % vec.size());
+               *it = counter;
+               counter++;
+            } catch (const std::exception& e) {
+               errors++;
+            }
+         }
+      });
+      
+      // Run for a short time
+      std::this_thread::sleep_for(std::chrono::milliseconds(200));
+      stop = true;
+      
+      for (auto& t : threads) {
+         t.join();
+      }
+      
+      expect(errors == 0) << "Iterator operations should not produce errors";
+   };
+   
+   "concurrent_insert_erase"_test = [] {
+      glz::async_vector<int> vec;
+      for (int i = 0; i < 100; ++i) {
+         vec.push_back(i);
+      }
+      
+      std::atomic<bool> stop{false};
+      std::vector<std::thread> threads;
+      std::atomic<int> errors{0};
+      
+      // Multiple threads inserting and erasing concurrently
+      for (int t = 0; t < 5; ++t) {
+         threads.emplace_back([&, t]() {
+            for (int i = 0; i < 100 && !stop; ++i) {
+               try {
+                  // Pick a random position
+                  size_t pos = std::rand() % (vec.size() + 1);
+                  auto insert_pos = vec.begin();
+                  std::advance(insert_pos, std::min(pos, vec.size()));
+                  
+                  // Insert a new value
+                  auto it = vec.insert(insert_pos, t * 1000 + i);
+                  
+                  // Verify the inserted value
+                  if (*it != t * 1000 + i) {
+                     errors++;
+                  }
+                  
+                  // Small delay to increase chance of contention
+                  std::this_thread::sleep_for(std::chrono::microseconds(std::rand() % 100));
+                  
+                  // Pick another random position for erasure
+                  if (vec.size() > 0) {
+                     size_t erase_pos = std::rand() % vec.size();
+                     auto erase_iter = vec.begin();
+                     std::advance(erase_iter, erase_pos);
+                     vec.erase(erase_iter);
+                  }
+               } catch (const std::exception& e) {
+                  errors++;
+               }
+            }
+         });
+      }
+      
+      // Run for a short time
+      std::this_thread::sleep_for(std::chrono::milliseconds(500));
+      stop = true;
+      
+      for (auto& t : threads) {
+         t.join();
+      }
+      
+      expect(errors == 0) << "Concurrent insert/erase operations should not produce errors";
+   };
+   
+   "emplace_stress"_test = [] {
+      glz::async_vector<ComplexObject> vec;
+      
+      std::atomic<bool> stop{false};
+      std::vector<std::thread> threads;
+      std::atomic<int> errors{0};
+      
+      // Multiple threads using emplace concurrently
+      for (int t = 0; t < 5; ++t) {
+         threads.emplace_back([&, t]() {
+            for (int i = 0; i < 100 && !stop; ++i) {
+               try {
+                  // Pick a random position
+                  size_t pos = std::rand() % (vec.size() + 1);
+                  auto insert_pos = vec.begin();
+                  std::advance(insert_pos, std::min(pos, vec.size()));
+                  
+                  // Create a string and vector for the complex object
+                  std::string data = "Thread " + std::to_string(t) + " Item " + std::to_string(i);
+                  std::vector<double> values;
+                  for (int j = 0; j < 5; ++j) {
+                     values.push_back(t + i + j / 10.0);
+                  }
+                  
+                  // Emplace a new complex object
+                  auto it = vec.emplace(insert_pos, t * 1000 + i, data, values);
+                  
+                  // Verify the emplaced object
+                  if (it->id != t * 1000 + i || it->data != data) {
+                     errors++;
+                  }
+                  
+                  // Small delay to increase chance of contention
+                  std::this_thread::sleep_for(std::chrono::microseconds(std::rand() % 100));
+               } catch (const std::exception& e) {
+                  errors++;
+               }
+            }
+         });
+      }
+      
+      // Run for a short time
+      std::this_thread::sleep_for(std::chrono::milliseconds(300));
+      stop = true;
+      
+      for (auto& t : threads) {
+         t.join();
+      }
+      
+      expect(errors == 0) << "Concurrent emplace operations should not produce errors";
+      expect(vec.size() > 0) << "Vector should contain elements after emplace operations";
+      
+      // Validate all objects
+      for (const auto& obj : vec) {
+         expect(obj.ptr != nullptr) << "Each object should have a valid unique_ptr";
+         expect(*obj.ptr == obj.id) << "Each object's unique_ptr should point to correct value";
+      }
+   };
+   
+   "deadlock_prevention"_test = [] {
+      glz::async_vector<int> vec;
+      for (int i = 0; i < 1000; ++i) {
+         vec.push_back(i);
+      }
+      
+      // Test the most deadlock-prone operations:
+      // - Getting an iterator
+      // - Using that iterator to modify the container
+      // - Multiple nesting levels
+      
+      std::atomic<bool> stop{false};
+      std::vector<std::thread> threads;
+      std::atomic<int> completed_operations{0};
+      
+      for (int t = 0; t < 5; ++t) {
+         threads.emplace_back([&, t]() {
+            while (!stop) {
+               try {
+                  // Get a const_iterator
+                  auto it1 = vec.begin() + (t * 100 % vec.size());
+                  int val1 = *it1;
+                  
+                  // Use that iterator in an insert operation (potential deadlock scenario)
+                  auto new_it = vec.insert(it1, val1 * 2);
+                  
+                  // Now use the new iterator in another operation
+                  auto another_it = vec.begin() + (vec.size() / 2);
+                  auto erased_it = vec.erase(another_it);
+                  
+                  // Try to use all three iterators
+                  if (*it1 >= 0 && *new_it >= 0 && (erased_it == vec.end() || *erased_it >= 0)) {
+                     completed_operations++;
+                  }
+               } catch (const std::exception& e) {
+                  // Error, but not necessarily a deadlock
+               }
+            }
+         });
+      }
+      
+      // Run for enough time to detect deadlocks
+      std::this_thread::sleep_for(std::chrono::milliseconds(400));
+      stop = true;
+      
+      for (auto& t : threads) {
+         if (t.joinable()) {
+            t.join();
+         }
+      }
+      
+      expect(completed_operations > 0) << "Some operations should complete without deadlock";
+   };
+   
+   "iterator_races"_test = [] {
+      glz::async_vector<ComplexObject> vec;
+      
+      // Fill with complex objects
+      for (int i = 0; i < 100; ++i) {
+         std::vector<double> values{static_cast<double>(i), static_cast<double>(i*2)};
+         vec.emplace_back(i, "Object " + std::to_string(i), values);
+      }
+      
+      std::atomic<bool> stop{false};
+      std::vector<std::thread> threads;
+      std::atomic<int> errors{0};
+      
+      // Thread that creates iterators and performs random jumps
+      threads.emplace_back([&]() {
+         auto it = vec.begin();
+         while (!stop) {
+            try {
+               int jump = std::rand() % 20 - 10; // Random jump forward or backward
+               if (it + jump >= vec.begin() && it + jump < vec.end()) {
+                  it += jump;
+                  it->access(); // Access the object to increment counter
+               }
+            } catch (const std::exception& e) {
+               errors++;
+            }
+         }
+      });
+      
+      // Thread that continually modifies the vector
+      threads.emplace_back([&]() {
+         int counter = 0;
+         while (!stop) {
+            try {
+               if (counter % 3 == 0 && vec.size() > 0) {
+                  // Remove from beginning
+                  vec.erase(vec.begin());
+               } else if (counter % 3 == 1) {
+                  // Add to end
+                  std::vector<double> values{static_cast<double>(counter)};
+                  vec.emplace_back(1000 + counter, "New " + std::to_string(counter), values);
+               } else if (vec.size() > 0) {
+                  // Replace middle
+                  size_t mid = vec.size() / 2;
+                  auto mid_it = vec.begin() + mid;
+                  std::vector<double> values{static_cast<double>(counter * 10)};
+                  *mid_it = ComplexObject(2000 + counter, "Replaced", values);
+               }
+               counter++;
+               std::this_thread::sleep_for(std::chrono::microseconds(100));
+            } catch (const std::exception& e) {
+               errors++;
+            }
+         }
+      });
+      
+      // Run for a short time
+      std::this_thread::sleep_for(std::chrono::milliseconds(500));
+      stop = true;
+      
+      for (auto& t : threads) {
+         t.join();
+      }
+      
+      expect(errors < 10) << "Iterator races should be handled gracefully";
+      // We expect some errors due to race conditions, but not too many
+   };
+   
+   "swap_under_contention"_test = [] {
+      glz::async_vector<int> vec1;
+      glz::async_vector<int> vec2;
+      
+      // Fill vectors
+      for (int i = 0; i < 1000; ++i) {
+         vec1.push_back(i);
+         vec2.push_back(1000 - i);
+      }
+      
+      std::atomic<bool> stop{false};
+      std::vector<std::thread> threads;
+      std::atomic<int> swap_count{0};
+      std::atomic<int> errors{0};
+      
+      // Thread that continually swaps the vectors
+      threads.emplace_back([&]() {
+         while (!stop) {
+            try {
+               vec1.swap(vec2);
+               swap_count++;
+            } catch (const std::exception& e) {
+               errors++;
+            }
+            std::this_thread::sleep_for(std::chrono::microseconds(100));
+         }
+      });
+      
+      // Threads that concurrently read from both vectors
+      for (int t = 0; t < 3; ++t) {
+         threads.emplace_back([&]() {
+            while (!stop) {
+               try {
+                  int sum1 = 0, sum2 = 0;
+                  for (const auto& v : vec1) {
+                     sum1 += v;
+                  }
+                  for (const auto& v : vec2) {
+                     sum2 += v;
+                  }
+                  // Basic validation: we can't know which vector has which values due to swaps
+                  // but we know what the total should be
+                  int total = sum1 + sum2;
+                  int expected_total = 0;
+                  for (int i = 0; i < 1000; ++i) {
+                     expected_total += i + (1000 - i);
+                  }
+                  if (total != expected_total) {
+                     errors++;
+                  }
+               } catch (const std::exception& e) {
+                  errors++;
+               }
+            }
+         });
+      }
+      
+      // Threads that concurrently modify both vectors
+      for (int t = 0; t < 2; ++t) {
+         threads.emplace_back([&, t]() {
+            int counter = 0;
+            while (!stop) {
+               try {
+                  size_t idx = std::rand() % std::min(vec1.size(), vec2.size());
+                  vec1[idx] = t * 1000 + counter;
+                  vec2[idx] = t * 2000 + counter;
+                  counter++;
+                  std::this_thread::sleep_for(std::chrono::microseconds(50));
+               } catch (const std::exception& e) {
+                  errors++;
+               }
+            }
+         });
+      }
+      
+      // Run for a short time
+      std::this_thread::sleep_for(std::chrono::milliseconds(500));
+      stop = true;
+      
+      for (auto& t : threads) {
+         t.join();
+      }
+      
+      expect(swap_count > 0) << "Multiple swaps should succeed";
+      expect(errors < 10) << "Concurrent swap operations should not cause many errors";
+   };
+   
+   "resize_under_contention"_test = [] {
+      glz::async_vector<int> vec;
+      for (int i = 0; i < 1000; ++i) {
+         vec.push_back(i);
+      }
+      
+      std::atomic<bool> stop{false};
+      std::vector<std::thread> threads;
+      std::atomic<int> resize_count{0};
+      std::atomic<int> errors{0};
+      
+      // Thread that continually resizes the vector
+      threads.emplace_back([&]() {
+         int size = 1000;
+         bool growing = true;
+         
+         while (!stop) {
+            try {
+               if (growing) {
+                  size += 100;
+                  if (size > 2000) growing = false;
+               } else {
+                  size -= 100;
+                  if (size < 500) growing = true;
+               }
+               
+               vec.resize(size, 42);
+               resize_count++;
+               std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            } catch (const std::exception& e) {
+               errors++;
+            }
+         }
+      });
+      
+      // Threads that read the vector during resizing
+      std::atomic<int> sum = 0;
+      for (int t = 0; t < 3; ++t) {
+         threads.emplace_back([&]() {
+            while (!stop) {
+               try {
+                  size_t current_size = vec.size();
+                  for (size_t i = 0; i < current_size && i < vec.size(); ++i) {
+                     sum += vec[i];
+                  }
+               } catch (const std::exception& e) {
+                  errors++;
+               }
+            }
+         });
+      }
+      
+      // Threads that write to the vector during resizing
+      for (int t = 0; t < 2; ++t) {
+         threads.emplace_back([&]() {
+            int counter = 0;
+            while (!stop) {
+               try {
+                  size_t current_size = vec.size();
+                  if (current_size > 0) {
+                     size_t idx = counter % current_size;
+                     if (idx < vec.size()) {
+                        vec[idx] = counter;
+                     }
+                  }
+                  counter++;
+               } catch (const std::exception& e) {
+                  errors++;
+               }
+            }
+         });
+      }
+      
+      // Run for a short time
+      std::this_thread::sleep_for(std::chrono::milliseconds(300));
+      stop = true;
+      
+      for (auto& t : threads) {
+         t.join();
+      }
+      
+      expect(resize_count > 0) << "Multiple resize operations should succeed";
+   };
+   
+   "massive_parallel_operations"_test = [] {
+      glz::async_vector<size_t> vec;
+      
+      std::atomic<bool> stop{false};
+      std::vector<std::thread> threads;
+      std::atomic<size_t> operation_count{0};
+      
+      // Create numerous threads performing different operations
+      for (int t = 0; t < 20; ++t) {
+         threads.emplace_back([&, t]() {
+            std::mt19937 gen(t); // Deterministic random generator
+            std::uniform_int_distribution<> dis(0, 9);
+            
+            while (!stop) {
+               int op = dis(gen);
+               try {
+                  switch (op) {
+                     case 0: { // Push back
+                        vec.push_back(t * 1000 + operation_count.load());
+                        break;
+                     }
+                     case 1: { // Pop back if not empty
+                        if (!vec.empty()) {
+                           vec.pop_back();
+                        }
+                        break;
+                     }
+                     case 2: { // Read random element
+                        if (!vec.empty()) {
+                           size_t idx = gen() % vec.size();
+                           [[maybe_unused]] volatile size_t val = vec[idx]; // Force read
+                        }
+                        break;
+                     }
+                     case 3: { // Modify random element
+                        if (!vec.empty()) {
+                           size_t idx = gen() % vec.size();
+                           vec[idx] = t;
+                        }
+                        break;
+                     }
+                     case 4: { // Insert at random position
+                        size_t pos = vec.empty() ? 0 : (gen() % vec.size());
+                        auto it = vec.begin();
+                        std::advance(it, std::min(pos, vec.size()));
+                        vec.insert(it, t);
+                        break;
+                     }
+                     case 5: { // Erase at random position
+                        if (!vec.empty()) {
+                           size_t pos = gen() % vec.size();
+                           auto it = vec.begin();
+                           std::advance(it, pos);
+                           vec.erase(it);
+                        }
+                        break;
+                     }
+                     case 6: { // Iterate through
+                        [[maybe_unused]] volatile size_t count = 0;
+                        for (const auto& val : vec) {
+                           count += (val > 0 ? 1 : 0); // Simple operation to ensure compiler doesn't optimize away
+                        }
+                        break;
+                     }
+                     case 7: { // Resize
+                        size_t new_size = 500 + (gen() % 500);
+                        vec.resize(new_size, t);
+                        break;
+                     }
+                     case 8: { // Reserve
+                        size_t new_cap = 1000 + (gen() % 1000);
+                        vec.reserve(new_cap);
+                        break;
+                     }
+                     case 9: { // Clear occasionally
+                        if (gen() % 100 == 0) { // Rare
+                           vec.clear();
+                        }
+                        break;
+                     }
+                  }
+                  operation_count++;
+               } catch (const std::exception& e) {
+                  // Ignore exceptions in this stress test
+               }
+            }
+         });
+      }
+      
+      // Run for a longer time to stress test
+      std::this_thread::sleep_for(std::chrono::seconds(1));
+      stop = true;
+      
+      for (auto& t : threads) {
+         t.join();
+      }
+      
+      // Check that we completed many operations without crashing
+      expect(operation_count > 1000) << "Should complete many operations without failing";
    };
 };
 
