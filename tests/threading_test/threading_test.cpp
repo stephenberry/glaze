@@ -5,6 +5,7 @@
 
 #include "glaze/glaze_exceptions.hpp"
 #include "glaze/thread/atom.hpp"
+#include "glaze/thread/async_vector.hpp"
 #include "ut/ut.hpp"
 
 using namespace ut;
@@ -216,6 +217,376 @@ suite atom_tests = [] {
       int old = a.exchange(200, std::memory_order_acq_rel);
       expect(old == 100) << "Exchange with acq_rel memory order should work";
       expect(a.load() == 200) << "Value should be updated";
+   };
+};
+
+struct TestObject
+{
+   int id = 0;
+   std::string name = "default";
+   
+   TestObject() = default;
+   TestObject(int id, std::string name) : id(id), name(std::move(name)) {}
+   
+   bool operator==(const TestObject& other) const
+   {
+      return id == other.id && name == other.name;
+   }
+};
+
+suite async_vector_tests = [] {
+   "construction"_test = [] {
+      glz::async_vector<int> vec;
+      expect(vec.size() == 0) << "Default constructor should create empty vector";
+      expect(vec.empty()) << "Default constructed vector should be empty";
+      
+      // Initialize with elements
+      glz::async_vector<int> vec_with_size;
+      vec_with_size.resize(5, 42);
+      expect(vec_with_size.size() == 5) << "Size should match requested size";
+      for (size_t i = 0; i < vec_with_size.size(); ++i) {
+         expect(vec_with_size[i] == 42) << "All elements should be initialized with the provided value";
+      }
+   };
+   
+   "copy_semantics"_test = [] {
+      glz::async_vector<int> original;
+      original.push_back(1);
+      original.push_back(2);
+      original.push_back(3);
+      
+      // Test copy constructor
+      glz::async_vector<int> copy_constructed = original;
+      expect(copy_constructed.size() == original.size()) << "Copy constructed vector should have same size";
+      for (size_t i = 0; i < original.size(); ++i) {
+         expect(copy_constructed[i] == original[i]) << "Elements should match after copy construction";
+      }
+      
+      // Modify original to verify deep copy
+      original.push_back(4);
+      expect(copy_constructed.size() == 3) << "Copy should not be affected by changes to original";
+      
+      // Test copy assignment
+      glz::async_vector<int> copy_assigned;
+      copy_assigned = original;
+      expect(copy_assigned.size() == original.size()) << "Copy assigned vector should have same size";
+      for (size_t i = 0; i < original.size(); ++i) {
+         expect(copy_assigned[i] == original[i]) << "Elements should match after copy assignment";
+      }
+      
+      // Modify original again to verify deep copy
+      original[0] = 99;
+      expect(copy_assigned[0] == 1) << "Copy should not be affected by changes to original values";
+   };
+   
+   "move_semantics"_test = [] {
+      glz::async_vector<int> original;
+      original.push_back(1);
+      original.push_back(2);
+      original.push_back(3);
+      
+      // Test move constructor
+      glz::async_vector<int> move_constructed = std::move(original);
+      expect(move_constructed.size() == 3) << "Move constructed vector should have original size";
+      expect(move_constructed[0] == 1) << "Elements should be moved correctly";
+      expect(move_constructed[1] == 2) << "Elements should be moved correctly";
+      expect(move_constructed[2] == 3) << "Elements should be moved correctly";
+      
+      // Test move assignment
+      glz::async_vector<int> move_assigned;
+      move_assigned = std::move(move_constructed);
+      expect(move_assigned.size() == 3) << "Move assigned vector should have original size";
+      expect(move_assigned[0] == 1) << "Elements should be moved correctly";
+      expect(move_assigned[1] == 2) << "Elements should be moved correctly";
+      expect(move_assigned[2] == 3) << "Elements should be moved correctly";
+   };
+   
+   "element_access"_test = [] {
+      glz::async_vector<int> vec;
+      vec.push_back(10);
+      vec.push_back(20);
+      vec.push_back(30);
+      
+      // Test operator[]
+      expect(vec[0] == 10) << "Operator[] should return correct element";
+      expect(vec[1] == 20) << "Operator[] should return correct element";
+      expect(vec[2] == 30) << "Operator[] should return correct element";
+      
+      // Test at()
+      expect(vec.at(0) == 10) << "at() should return correct element";
+      expect(vec.at(1) == 20) << "at() should return correct element";
+      expect(vec.at(2) == 30) << "at() should return correct element";
+      
+      // Test front() and back()
+      expect(vec.front() == 10) << "front() should return first element";
+      expect(vec.back() == 30) << "back() should return last element";
+      
+      // Test out of bounds with at()
+      bool exception_thrown = false;
+      try {
+         vec.at(5);
+      } catch (const std::out_of_range&) {
+         exception_thrown = true;
+      }
+      expect(exception_thrown) << "at() should throw std::out_of_range for out of bounds access";
+      
+      // Test modification through element access
+      vec[1] = 25;
+      expect(vec[1] == 25) << "Element should be modifiable through operator[]";
+      
+      vec.at(2) = 35;
+      expect(vec[2] == 35) << "Element should be modifiable through at()";
+   };
+   
+   "capacity"_test = [] {
+      glz::async_vector<int> vec;
+      expect(vec.empty()) << "New vector should be empty";
+      
+      vec.push_back(1);
+      expect(!vec.empty()) << "Vector with elements should not be empty";
+      expect(vec.size() == 1) << "Size should reflect number of elements";
+      
+      vec.reserve(10);
+      expect(vec.capacity() >= 10) << "Capacity should be at least the reserved amount";
+      expect(vec.size() == 1) << "Reserve should not change size";
+      
+      vec.resize(5);
+      expect(vec.size() == 5) << "Resize should change size";
+      
+      vec.resize(3);
+      expect(vec.size() == 3) << "Resize to smaller should reduce size";
+      
+      size_t cap_before = vec.capacity();
+      vec.shrink_to_fit();
+      expect(vec.capacity() <= cap_before) << "Shrink to fit should not increase capacity";
+   };
+   
+   "modifiers"_test = [] {
+      glz::async_vector<int> vec;
+      
+      // Test push_back
+      vec.push_back(1);
+      vec.push_back(2);
+      expect(vec.size() == 2) << "Size should increase after push_back";
+      expect(vec[0] == 1 && vec[1] == 2) << "Elements should be in correct order";
+      
+      // Test emplace_back
+      vec.emplace_back(3);
+      expect(vec.size() == 3) << "Size should increase after emplace_back";
+      expect(vec[2] == 3) << "Element should be constructed in place";
+      
+      // Test pop_back
+      vec.pop_back();
+      expect(vec.size() == 2) << "Size should decrease after pop_back";
+      expect(vec[1] == 2) << "Last element should be removed";
+      
+      // Test insert
+      auto it = vec.insert(vec.begin(), 0);
+      expect(*it == 0) << "Insert should return iterator to inserted element";
+      expect(vec.size() == 3) << "Size should increase after insert";
+      expect(vec[0] == 0 && vec[1] == 1 && vec[2] == 2) << "Elements should be in correct order after insert";
+      
+      // Test emplace
+      auto it2 = vec.emplace(vec.begin() + 2, 15);
+      expect(*it2 == 15) << "Emplace should return iterator to inserted element";
+      expect(vec.size() == 4) << "Size should increase after emplace";
+      expect(vec[0] == 0 && vec[1] == 1 && vec[2] == 15 && vec[3] == 2) << "Elements should be in correct order after emplace";
+      
+      // Test erase
+      auto it3 = vec.erase(vec.begin() + 1);
+      expect(*it3 == 15) << "Erase should return iterator to element after erased";
+      expect(vec.size() == 3) << "Size should decrease after erase";
+      expect(vec[0] == 0 && vec[1] == 15 && vec[2] == 2) << "Elements should be in correct order after erase";
+      
+      // Test clear
+      vec.clear();
+      expect(vec.empty()) << "Vector should be empty after clear";
+   };
+   
+   "iterators"_test = [] {
+      glz::async_vector<int> vec;
+      for (int i = 0; i < 5; ++i) {
+         vec.push_back(i);
+      }
+      
+      // Test iterator traversal
+      int sum = 0;
+      for (auto it = vec.begin(); it != vec.end(); ++it) {
+         sum += *it;
+      }
+      expect(sum == 10) << "Iterator traversal should access all elements";
+      
+      // Test const_iterator traversal
+      const glz::async_vector<int>& const_vec = vec;
+      sum = 0;
+      for (auto it = const_vec.begin(); it != const_vec.end(); ++it) {
+         sum += *it;
+      }
+      expect(sum == 10) << "Const iterator traversal should access all elements";
+      
+      // Test iterator modification
+      for (auto it = vec.begin(); it != vec.end(); ++it) {
+         *it *= 2;
+      }
+      expect(vec[0] == 0 && vec[1] == 2 && vec[2] == 4 && vec[3] == 6 && vec[4] == 8)
+      << "Elements should be modifiable through iterators";
+      
+      // Test range-based for loop
+      sum = 0;
+      for (const auto& val : vec) {
+         sum += val;
+      }
+      expect(sum == 20) << "Range-based for loop should access all elements";
+   };
+   
+   "complex_types"_test = [] {
+      glz::async_vector<TestObject> vec;
+      
+      vec.emplace_back(1, "one");
+      vec.emplace_back(2, "two");
+      vec.emplace_back(3, "three");
+      
+      expect(vec.size() == 3) << "Size should reflect number of complex objects";
+      expect(vec[0].id == 1 && vec[0].name == "one") << "Complex object should be stored correctly";
+      expect(vec[1].id == 2 && vec[1].name == "two") << "Complex object should be stored correctly";
+      expect(vec[2].id == 3 && vec[2].name == "three") << "Complex object should be stored correctly";
+      
+      // Test copying of complex types
+      glz::async_vector<TestObject> vec_copy = vec;
+      vec[0].id = 10;
+      vec[0].name = "modified";
+      
+      expect(vec_copy[0].id == 1 && vec_copy[0].name == "one")
+      << "Copied vector should not be affected by changes to original";
+   };
+   
+   "swap"_test = [] {
+      glz::async_vector<int> vec1;
+      vec1.push_back(1);
+      vec1.push_back(2);
+      
+      glz::async_vector<int> vec2;
+      vec2.push_back(3);
+      vec2.push_back(4);
+      vec2.push_back(5);
+      
+      vec1.swap(vec2);
+      
+      expect(vec1.size() == 3) << "First vector should have size of second vector after swap";
+      expect(vec2.size() == 2) << "Second vector should have size of first vector after swap";
+      
+      expect(vec1[0] == 3 && vec1[1] == 4 && vec1[2] == 5) << "First vector should have elements of second vector";
+      expect(vec2[0] == 1 && vec2[1] == 2) << "Second vector should have elements of first vector";
+   };
+   
+   "thread_safety_read"_test = [] {
+      glz::async_vector<int> vec;
+      for (int i = 0; i < 100; ++i) {
+         vec.push_back(i);
+      }
+      
+      std::vector<std::thread> threads;
+      std::vector<int> sums(10, 0);
+      
+      // Create multiple threads that read from the vector
+      for (int i = 0; i < 10; ++i) {
+         threads.emplace_back([&vec, &sums, i]() {
+            for (int j = 0; j < 100; ++j) {
+               sums[i] += vec[j];
+            }
+         });
+      }
+      
+      for (auto& t : threads) {
+         t.join();
+      }
+      
+      // All threads should have computed the same sum
+      for (const auto& sum : sums) {
+         expect(sum == 4950) << "All threads should read the same values";
+      }
+   };
+   
+   "thread_safety_write"_test = [] {
+      glz::async_vector<int> vec;
+      
+      std::vector<std::thread> threads;
+      
+      // Create multiple threads that write to the vector
+      for (int i = 0; i < 10; ++i) {
+         threads.emplace_back([&vec, i]() {
+            for (int j = 0; j < 100; ++j) {
+               vec.push_back(i * 100 + j);
+            }
+         });
+      }
+      
+      for (auto& t : threads) {
+         t.join();
+      }
+      
+      expect(vec.size() == 1000) << "Vector should contain all elements from all threads";
+      
+      // Verify that all expected values are in the vector
+      std::vector<int> expected_values;
+      for (int i = 0; i < 10; ++i) {
+         for (int j = 0; j < 100; ++j) {
+            expected_values.push_back(i * 100 + j);
+         }
+      }
+      
+      std::vector<int> actual_values;
+      for (size_t i = 0; i < vec.size(); ++i) {
+         actual_values.push_back(vec[i]);
+      }
+      
+      std::sort(actual_values.begin(), actual_values.end());
+      std::sort(expected_values.begin(), expected_values.end());
+      
+      expect(actual_values == expected_values) << "Vector should contain all expected values";
+   };
+   
+   "thread_safety_mixed"_test = [] {
+      glz::async_vector<int> vec;
+      for (int i = 0; i < 100; ++i) {
+         vec.push_back(i);
+      }
+      
+      std::atomic<bool> stop{false};
+      std::vector<std::thread> threads;
+      
+      // Reader threads
+      for (int i = 0; i < 5; ++i) {
+         std::atomic<size_t> sum = 0;
+         threads.emplace_back([&vec, &stop, &sum]() {
+            while (!stop) {
+               for (size_t j = 0; j < vec.size(); ++j) {
+                  sum += vec[j];
+               }
+            }
+         });
+      }
+      
+      // Writer threads
+      for (int i = 0; i < 5; ++i) {
+         threads.emplace_back([&vec, &stop, i]() {
+            for (int j = 0; j < 100 && !stop; ++j) {
+               vec.push_back(i * 100 + j);
+               std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            }
+         });
+      }
+      
+      // Let the threads run for a short time
+      std::this_thread::sleep_for(std::chrono::milliseconds(100));
+      stop = true;
+      
+      for (auto& t : threads) {
+         t.join();
+      }
+      
+      // We can't check exact values due to the concurrent nature, but we should have more than we started with
+      expect(vec.size() > 100) << "Vector should have grown during concurrent operations";
    };
 };
 
