@@ -380,23 +380,25 @@ suite async_vector_tests = [] {
       expect(vec.size() == 2) << "Size should decrease after pop_back";
       expect(vec[1] == 2) << "Last element should be removed";
       
-      // Test insert
-      auto it = vec.insert(vec.begin(), 0);
-      expect(*it == 0) << "Insert should return iterator to inserted element";
-      expect(vec.size() == 3) << "Size should increase after insert";
-      expect(vec[0] == 0 && vec[1] == 1 && vec[2] == 2) << "Elements should be in correct order after insert";
-      
-      // Test emplace
-      auto it2 = vec.emplace(vec.begin() + 2, 15);
-      expect(*it2 == 15) << "Emplace should return iterator to inserted element";
-      expect(vec.size() == 4) << "Size should increase after emplace";
-      expect(vec[0] == 0 && vec[1] == 1 && vec[2] == 15 && vec[3] == 2) << "Elements should be in correct order after emplace";
-      
-      // Test erase
-      auto it3 = vec.erase(vec.begin() + 1);
-      expect(*it3 == 15) << "Erase should return iterator to element after erased";
-      expect(vec.size() == 3) << "Size should decrease after erase";
-      expect(vec[0] == 0 && vec[1] == 15 && vec[2] == 2) << "Elements should be in correct order after erase";
+      {
+         // Test insert
+         auto it = vec.insert(vec.cbegin(), 0);
+         expect(*it == 0) << "Insert should return iterator to inserted element";
+         expect(vec.size() == 3) << "Size should increase after insert";
+         expect(vec[0] == 0 && vec[1] == 1 && vec[2] == 2) << "Elements should be in correct order after insert";
+         
+         // Test emplace
+         auto it2 = vec.emplace(vec.cbegin() + 2, 15);
+         expect(*it2 == 15) << "Emplace should return iterator to inserted element";
+         expect(vec.size() == 4) << "Size should increase after emplace";
+         expect(vec[0] == 0 && vec[1] == 1 && vec[2] == 15 && vec[3] == 2) << "Elements should be in correct order after emplace";
+         
+         // Test erase
+         auto it3 = vec.erase(vec.cbegin() + 1);
+         expect(*it3 == 15) << "Erase should return iterator to element after erased";
+         expect(vec.size() == 3) << "Size should decrease after erase";
+         expect(vec[0] == 0 && vec[1] == 15 && vec[2] == 2) << "Elements should be in correct order after erase";
+      }
       
       // Test clear
       vec.clear();

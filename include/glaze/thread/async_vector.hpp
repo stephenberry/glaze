@@ -256,16 +256,6 @@ namespace glz
          : item_it(other.item_it), parent(other.parent), shared_lock_ptr(other.shared_lock_ptr)
          {}
          
-         // Constructor that allows conversion from iterator to const_iterator
-         const_iterator(const iterator& other)
-         : item_it(other.item_it), parent(other.parent), shared_lock_ptr(other.shared_lock_ptr)
-         {
-            // If the iterator had a unique lock, we need to create a shared lock instead
-            if (other.unique_lock_ptr && !shared_lock_ptr) {
-               shared_lock_ptr = std::make_shared<std::shared_lock<std::shared_mutex>>(parent->mutex);
-            }
-         }
-         
          // Move Constructor
          const_iterator(const_iterator&& other) noexcept
          : item_it(std::move(other.item_it)),
@@ -572,52 +562,146 @@ namespace glz
       
       iterator insert(const_iterator pos, const V& value)
       {
-         auto unique_lock_ptr = std::make_shared<std::unique_lock<std::shared_mutex>>(mutex);
-         auto it = items.insert(pos.item_it, std::make_unique<V>(value));
-         return iterator(it, this, nullptr, unique_lock_ptr);
+         // Use the lock from the iterator instead of creating a new one
+         std::unique_lock<std::shared_mutex> lock(mutex, std::defer_lock);
+         
+         // Only lock if the iterator doesn't already have a lock
+         if (!pos.shared_lock_ptr || !pos.shared_lock_ptr->owns_lock()) {
+            lock.lock();
+         }
+         
+         // Create a unique_ptr for the new value
+         auto new_item = std::make_unique<V>(value);
+         
+         // Calculate the index from the iterator position
+         auto index = std::distance(items.cbegin(), pos.item_it);
+         
+         // Insert the item
+         auto it = items.insert(items.begin() + index, std::move(new_item));
+         
+         // Create a new shared_ptr for the unique lock if we created one
+         std::shared_ptr<std::unique_lock<std::shared_mutex>> unique_lock_ptr = nullptr;
+         if (lock.owns_lock()) {
+            unique_lock_ptr = std::make_shared<std::unique_lock<std::shared_mutex>>(std::move(lock));
+         }
+         
+         return iterator(it, this, pos.shared_lock_ptr, unique_lock_ptr);
       }
       
+      // Modified insert method for rvalue references
       iterator insert(const_iterator pos, V&& value)
       {
-         auto unique_lock_ptr = std::make_shared<std::unique_lock<std::shared_mutex>>(mutex);
-         auto it = items.insert(pos.item_it, std::make_unique<V>(std::move(value)));
-         return iterator(it, this, nullptr, unique_lock_ptr);
+         // Use the lock from the iterator instead of creating a new one
+         std::unique_lock<std::shared_mutex> lock(mutex, std::defer_lock);
+         
+         // Only lock if the iterator doesn't already have a lock
+         if (!pos.shared_lock_ptr || !pos.shared_lock_ptr->owns_lock()) {
+            lock.lock();
+         }
+         
+         // Create a unique_ptr for the new value
+         auto new_item = std::make_unique<V>(std::move(value));
+         
+         // Calculate the index from the iterator position
+         auto index = std::distance(items.cbegin(), pos.item_it);
+         
+         // Insert the item
+         auto it = items.insert(items.begin() + index, std::move(new_item));
+         
+         // Create a new shared_ptr for the unique lock if we created one
+         std::shared_ptr<std::unique_lock<std::shared_mutex>> unique_lock_ptr = nullptr;
+         if (lock.owns_lock()) {
+            unique_lock_ptr = std::make_shared<std::unique_lock<std::shared_mutex>>(std::move(lock));
+         }
+         
+         return iterator(it, this, pos.shared_lock_ptr, unique_lock_ptr);
       }
       
+      // Modified emplace method
       template <class... Args>
       iterator emplace(const_iterator pos, Args&&... args)
       {
-         auto unique_lock_ptr = std::make_shared<std::unique_lock<std::shared_mutex>>(mutex);
-         auto it = items.emplace(pos.item_it, std::make_unique<V>(std::forward<Args>(args)...));
-         return iterator(it, this, nullptr, unique_lock_ptr);
+         // Use the lock from the iterator instead of creating a new one
+         std::unique_lock<std::shared_mutex> lock(mutex, std::defer_lock);
+         
+         // Only lock if the iterator doesn't already have a lock
+         if (!pos.shared_lock_ptr || !pos.shared_lock_ptr->owns_lock()) {
+            lock.lock();
+         }
+         
+         // Create a unique_ptr for the new value
+         auto new_item = std::make_unique<V>(std::forward<Args>(args)...);
+         
+         // Calculate the index from the iterator position
+         auto index = std::distance(items.cbegin(), pos.item_it);
+         
+         // Insert the item
+         auto it = items.insert(items.begin() + index, std::move(new_item));
+         
+         // Create a new shared_ptr for the unique lock if we created one
+         std::shared_ptr<std::unique_lock<std::shared_mutex>> unique_lock_ptr = nullptr;
+         if (lock.owns_lock()) {
+            unique_lock_ptr = std::make_shared<std::unique_lock<std::shared_mutex>>(std::move(lock));
+         }
+         
+         return iterator(it, this, pos.shared_lock_ptr, unique_lock_ptr);
       }
       
-      iterator erase(iterator pos)
-      {
-         auto unique_lock_ptr = std::make_shared<std::unique_lock<std::shared_mutex>>(mutex);
-         auto it = items.erase(pos.item_it);
-         return iterator(it, this, nullptr, unique_lock_ptr);
-      }
-      
-      iterator erase(iterator first, iterator last)
-      {
-         auto unique_lock_ptr = std::make_shared<std::unique_lock<std::shared_mutex>>(mutex);
-         auto it = items.erase(first.item_it, last.item_it);
-         return iterator(it, this, nullptr, unique_lock_ptr);
-      }
-      
+      // Similar fixes should be applied to erase methods
       iterator erase(const_iterator pos)
       {
-         auto unique_lock_ptr = std::make_shared<std::unique_lock<std::shared_mutex>>(mutex);
-         auto it = items.erase(pos.item_it);
-         return iterator(it, this, nullptr, unique_lock_ptr);
+         // Use the lock from the iterator instead of creating a new one
+         std::unique_lock<std::shared_mutex> lock(mutex, std::defer_lock);
+         
+         // Only lock if the iterator doesn't already have a lock
+         if (!pos.shared_lock_ptr || !pos.shared_lock_ptr->owns_lock()) {
+            lock.lock();
+         }
+         
+         // Calculate the index from the iterator position
+         auto index = std::distance(items.cbegin(), pos.item_it);
+         
+         // Erase the item
+         auto it = items.erase(items.begin() + index);
+         
+         // Create a new shared_ptr for the unique lock if we created one
+         std::shared_ptr<std::unique_lock<std::shared_mutex>> unique_lock_ptr = nullptr;
+         if (lock.owns_lock()) {
+            unique_lock_ptr = std::make_shared<std::unique_lock<std::shared_mutex>>(std::move(lock));
+         }
+         
+         return iterator(it, this, pos.shared_lock_ptr, unique_lock_ptr);
       }
       
       iterator erase(const_iterator first, const_iterator last)
       {
-         auto unique_lock_ptr = std::make_shared<std::unique_lock<std::shared_mutex>>(mutex);
-         auto it = items.erase(first.item_it, last.item_it);
-         return iterator(it, this, nullptr, unique_lock_ptr);
+         // Use the lock from the iterator instead of creating a new one
+         std::unique_lock<std::shared_mutex> lock(mutex, std::defer_lock);
+         
+         // Only lock if neither iterator has a lock
+         if ((!first.shared_lock_ptr || !first.shared_lock_ptr->owns_lock()) &&
+             (!last.shared_lock_ptr || !last.shared_lock_ptr->owns_lock())) {
+            lock.lock();
+         }
+         
+         // Calculate indices from iterator positions
+         auto first_index = std::distance(items.cbegin(), first.item_it);
+         auto last_index = std::distance(items.cbegin(), last.item_it);
+         
+         // Erase the items
+         auto it = items.erase(items.begin() + first_index, items.begin() + last_index);
+         
+         // Create a new shared_ptr for the unique lock if we created one
+         std::shared_ptr<std::unique_lock<std::shared_mutex>> unique_lock_ptr = nullptr;
+         if (lock.owns_lock()) {
+            unique_lock_ptr = std::make_shared<std::unique_lock<std::shared_mutex>>(std::move(lock));
+         }
+         
+         // Use either iterator's lock if available
+         std::shared_ptr<std::shared_lock<std::shared_mutex>> shared_lock_ptr =
+         first.shared_lock_ptr ? first.shared_lock_ptr : last.shared_lock_ptr;
+         
+         return iterator(it, this, shared_lock_ptr, unique_lock_ptr);
       }
       
       void resize(size_type count)
