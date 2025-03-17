@@ -168,7 +168,7 @@ suite atom_tests = [] {
    "thread_safety"_test = []() mutable {
       glz::atom<int> counter(0);
 
-      std::vector<std::thread> threads;
+      std::deque<std::thread> threads;
       for (int i = 0; i < 10; ++i) {
          threads.emplace_back([&counter]() {
             for (int j = 0; j < 1000; ++j) {
@@ -492,7 +492,7 @@ suite async_vector_tests = [] {
          vec.push_back(i);
       }
       
-      std::vector<std::thread> threads;
+      std::deque<std::thread> threads;
       std::vector<int> sums(10, 0);
       
       // Create multiple threads that read from the vector
@@ -517,7 +517,7 @@ suite async_vector_tests = [] {
    "thread_safety_write"_test = [] {
       glz::async_vector<int> vec;
       
-      std::vector<std::thread> threads;
+      std::deque<std::thread> threads;
       
       // Create multiple threads that write to the vector
       for (int i = 0; i < 10; ++i) {
@@ -560,7 +560,7 @@ suite async_vector_tests = [] {
       }
       
       std::atomic<bool> stop{false};
-      std::vector<std::thread> threads;
+      std::deque<std::thread> threads;
       
       // Reader threads
       for (int i = 0; i < 5; ++i) {
@@ -671,7 +671,7 @@ suite additional_async_vector_tests = [] {
       }
       
       std::atomic<bool> stop{false};
-      std::vector<std::thread> threads;
+      std::deque<std::thread> threads;
       std::atomic<int> errors{0};
       
       // Thread that continually creates and destroys iterators
@@ -757,7 +757,7 @@ suite additional_async_vector_tests = [] {
       }
       
       std::atomic<bool> stop{false};
-      std::vector<std::thread> threads;
+      std::deque<std::thread> threads;
       std::atomic<int> errors{0};
       
       // Multiple threads inserting and erasing concurrently
@@ -810,7 +810,7 @@ suite additional_async_vector_tests = [] {
       glz::async_vector<ComplexObject> vec;
       
       std::atomic<bool> stop{false};
-      std::vector<std::thread> threads;
+      std::deque<std::thread> threads;
       std::atomic<int> errors{0};
       
       // Multiple threads using emplace concurrently
@@ -877,7 +877,7 @@ suite additional_async_vector_tests = [] {
       // - Multiple nesting levels
       
       std::atomic<bool> stop{false};
-      std::vector<std::thread> threads;
+      std::deque<std::thread> threads;
       std::atomic<int> completed_operations{0};
       
       for (int t = 0; t < 5; ++t) {
@@ -929,7 +929,7 @@ suite additional_async_vector_tests = [] {
       }
       
       std::atomic<bool> stop{false};
-      std::vector<std::thread> threads;
+      std::deque<std::thread> threads;
       std::atomic<int> errors{0};
       
       // Thread that creates iterators and performs random jumps
@@ -998,7 +998,7 @@ suite additional_async_vector_tests = [] {
       }
       
       std::atomic<bool> stop{false};
-      std::vector<std::thread> threads;
+      std::deque<std::thread> threads;
       std::atomic<int> swap_count{0};
       std::atomic<int> errors{0};
       
@@ -1081,7 +1081,7 @@ suite additional_async_vector_tests = [] {
       }
       
       std::atomic<bool> stop{false};
-      std::vector<std::thread> threads;
+      std::deque<std::thread> threads;
       std::atomic<int> resize_count{0};
       std::atomic<int> errors{0};
       
@@ -1162,7 +1162,7 @@ suite additional_async_vector_tests = [] {
       glz::async_vector<size_t> vec;
       
       std::atomic<bool> stop{false};
-      std::vector<std::thread> threads;
+      std::deque<std::thread> threads;
       std::atomic<size_t> operation_count{0};
       
       // Create numerous threads performing different operations
@@ -1248,7 +1248,7 @@ suite additional_async_vector_tests = [] {
       }
       
       // Run for a longer time to stress test
-      std::this_thread::sleep_for(std::chrono::seconds(1));
+      std::this_thread::sleep_for(std::chrono::milliseconds(10));
       stop = true;
       
       for (auto& t : threads) {
