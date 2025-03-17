@@ -12,9 +12,6 @@
 #include <thread>
 #include <unordered_map>
 
-// glz::early_shared_ptr deletes memory when the use count reaches 0 rather than 1 like a std::shared_ptr
-#include "glaze/thread/early_shared_ptr.hpp"
-
 #ifndef GLZ_THROW_OR_ABORT
 #if __cpp_exceptions
 #define GLZ_THROW_OR_ABORT(EXC) (throw(EXC))
@@ -25,7 +22,7 @@
 #endif
 #endif
 
-// Provides a thread-safe vector
+// Provides a thread-safe vector with a simplified locking mechanism
 // This async_vector copies its state when the vector is copied
 // It ensures thread safety during read and write operations
 
@@ -33,9 +30,8 @@ namespace glz
 {
    // Design considerations
    // We use a std::unique_ptr inside the vector so that we can store types that are not copyable and no movable
-   // iterators need unique_locks, because they allow write access
-   // const iterators use shared_locks, because the access is read only
-   // We use non const iterators for instert and erase calls so that we can reuse the same unique_lock and avoid dead locks
+   // iterators need unique locks, because they allow write access
+   // const iterators use shared locks, because the access is read only
    // We use shared_ptrs of locks so that we can share locks and avoid dead locks when copying iterators
    
    template <class V>
@@ -45,138 +41,74 @@ namespace glz
       std::vector<std::unique_ptr<V>> items;
       mutable std::shared_mutex mutex;
       
-      // Base lock class for type erasure
-      class lock_base {
-      public:
-         virtual ~lock_base() = default;
-         virtual bool owns_lock() const = 0;
-         virtual bool is_unique() const = 0;
-      };
-      
-      // Derived class for unique locks
-      class unique_lock_wrapper : public lock_base {
+      // Custom mutex deleter that unlocks the mutex when the shared_ptr is destroyed
+      class mutex_deleter {
       private:
-         std::unique_lock<std::shared_mutex> lock;
+         bool is_unique{};
          
       public:
-         explicit unique_lock_wrapper(std::shared_mutex& mutex)
-         : lock(mutex) {}
+         explicit mutex_deleter(bool is_unique) : is_unique(is_unique) {}
          
-         explicit unique_lock_wrapper(std::shared_mutex& mutex, std::defer_lock_t defer)
-         : lock(mutex, defer) {}
-         
-         bool owns_lock() const override {
-            return lock.owns_lock();
-         }
-         
-         bool is_unique() const override {
-            return true;
-         }
-         
-         std::unique_lock<std::shared_mutex>& get_lock() {
-            return lock;
-         }
-      };
-      
-      // Derived class for shared locks
-      class shared_lock_wrapper : public lock_base {
-      private:
-         std::shared_lock<std::shared_mutex> lock;
-         
-      public:
-         explicit shared_lock_wrapper(std::shared_mutex& mutex)
-         : lock(mutex) {}
-         
-         explicit shared_lock_wrapper(std::shared_mutex& mutex, std::defer_lock_t defer)
-         : lock(mutex, defer) {}
-         
-         bool owns_lock() const override {
-            return lock.owns_lock();
-         }
-         
-         bool is_unique() const override {
-            return false;
-         }
-         
-         std::shared_lock<std::shared_mutex>& get_lock() {
-            return lock;
-         }
-      };
-      
-      // Custom deleter for lock management
-      class lock_deleter {
-      private:
-         const async_vector* parent;
-         
-      public:
-         explicit lock_deleter(const async_vector* parent)
-         : parent(parent) {}
-         
-         void operator()(lock_base* lock) {
-            if (parent->thread_local_locks().use_count() == 1) {
-               // This is the last reference in the current thread, reset the thread-local pointer
-               parent->thread_local_locks().reset();
+         void operator()(std::shared_mutex* m) {
+            // Unlock based on lock type
+            if (is_unique) {
+               m->unlock();
+            } else {
+               m->unlock_shared();
             }
-            
-            // Always delete the actual lock object
-            delete lock;
          }
       };
       
-      // Store locks in a thread-local variable
-      early_shared_ptr<lock_base>& thread_local_locks() const {
-         // Thread-local storage for locks
-         thread_local early_shared_ptr<lock_base> local_lock{};
-         return local_lock;
+      // Thread-local storage for tracking the current lock
+      struct thread_lock_info {
+         std::shared_ptr<std::shared_mutex> mutex_ptr;
+         bool is_unique = false;
+      };
+      
+      thread_lock_info& get_thread_lock_info() const {
+         thread_local thread_lock_info info;
+         return info;
       }
       
-      // Helper methods to acquire locks with proper blocking
-      early_shared_ptr<lock_base> acquire_unique_lock() const
-      {
-         // Get the thread-local lock
-         auto& local_lock = thread_local_locks();
+      // Acquire a unique lock on the mutex
+      std::shared_ptr<std::shared_mutex> acquire_unique_lock() const {
+         auto& info = get_thread_lock_info();
          
-         // If a unique lock already exists for this thread, use it
-         if (local_lock && local_lock->owns_lock() && local_lock->is_unique()) {
-            return local_lock;
+         // If we already have a unique lock, reuse it
+         if (info.mutex_ptr && info.is_unique) {
+            return info.mutex_ptr;
          }
          
-         // We need to create a new unique lock for this thread
-         static thread_local std::mutex lock_mutex;
-         std::lock_guard<std::mutex> lock_guard(lock_mutex);
+         // Reset any existing lock (shared or unique)
+         info.mutex_ptr.reset();
          
-         // Create new unique lock - will block until it can be acquired
-         auto raw_lock = new unique_lock_wrapper(mutex);
+         // Lock the mutex
+         mutex.lock();
          
-         // Use custom deleter that will reset the thread-local pointer when appropriate
-         local_lock = early_shared_ptr<lock_base>(
-                                                  raw_lock, lock_deleter(this));
+         // Create a shared_ptr with custom deleter
+         info.mutex_ptr = std::shared_ptr<std::shared_mutex>(&mutex, mutex_deleter(true));
+         info.is_unique = true;
          
-         return local_lock;
+         return info.mutex_ptr;
       }
       
-      early_shared_ptr<lock_base> acquire_shared_lock() const
-      {
-         // Get the thread-local lock
-         auto& local_lock = thread_local_locks();
+      // Acquire a shared lock on the mutex
+      std::shared_ptr<std::shared_mutex> acquire_shared_lock() const {
+         auto& info = get_thread_lock_info();
          
-         // If a lock already exists for this thread, use it
-         if (local_lock && local_lock->owns_lock()) {
-            return local_lock;
+         // If we already have any lock, reuse it
+         if (info.mutex_ptr) {
+            return info.mutex_ptr;
          }
          
-         // Need to create a new shared lock for this thread
-         static thread_local std::mutex lock_mutex;
-         std::lock_guard<std::mutex> lock_guard(lock_mutex);
+         // Lock the mutex for shared access
+         mutex.lock_shared();
          
-         // Create new shared lock - will block until it can be acquired
-         auto raw_lock = new shared_lock_wrapper(mutex);
+         // Create a shared_ptr with custom deleter
+         info.mutex_ptr = std::shared_ptr<std::shared_mutex>(&mutex, mutex_deleter(false));
+         info.is_unique = false;
          
-         // Use custom deleter that will reset the thread-local pointer when appropriate
-         local_lock = early_shared_ptr<lock_base>(
-                                                  raw_lock, lock_deleter(this));
-         
-         return local_lock;
+         return info.mutex_ptr;
       }
       
    public:
@@ -187,8 +119,6 @@ namespace glz
       using const_reference = const V&;
       using pointer = V*;
       using const_pointer = const V*;
-      
-      // Rest of the class implementation remains unchanged...
       
       // Constructors
       async_vector() = default;
@@ -259,7 +189,7 @@ namespace glz
       private:
          typename std::vector<std::unique_ptr<V>>::iterator item_it;
          async_vector* parent;
-         early_shared_ptr<lock_base> lock_ptr;
+         std::shared_ptr<std::shared_mutex> lock_ptr;
          
       public:
          iterator(typename std::vector<std::unique_ptr<V>>::iterator item_it, async_vector* parent)
@@ -267,11 +197,6 @@ namespace glz
          {
             // Acquire a lock for the iterator
             lock_ptr = parent->acquire_unique_lock();
-         }
-         
-         ~iterator()
-         {
-            // No need to release locks here - the parent will handle it
          }
          
          // Copy Constructor
@@ -386,7 +311,7 @@ namespace glz
       private:
          typename std::vector<std::unique_ptr<V>>::const_iterator item_it;
          const async_vector* parent;
-         early_shared_ptr<lock_base> lock_ptr;
+         std::shared_ptr<std::shared_mutex> lock_ptr;
          
       public:
          const_iterator(typename std::vector<std::unique_ptr<V>>::const_iterator item_it,
@@ -395,11 +320,6 @@ namespace glz
          {
             // Acquire a lock for the iterator
             lock_ptr = parent->acquire_shared_lock();
-         }
-         
-         ~const_iterator()
-         {
-            // No need to release locks here - the parent will handle it
          }
          
          // Copy Constructor
@@ -506,7 +426,7 @@ namespace glz
       {
       private:
          V& value_ref;
-         early_shared_ptr<lock_base> lock_ptr;
+         std::shared_ptr<std::shared_mutex> lock_ptr;
          
       public:
          value_proxy(V& value_ref, async_vector* parent)
@@ -514,11 +434,6 @@ namespace glz
          {
             // Acquire a lock for the proxy
             lock_ptr = parent->acquire_shared_lock();
-         }
-         
-         ~value_proxy()
-         {
-            // No need to release locks here - the parent will handle it
          }
          
          static constexpr bool glaze_value_proxy = true;
@@ -567,7 +482,7 @@ namespace glz
       {
       private:
          const V& value_ref;
-         early_shared_ptr<lock_base> lock_ptr;
+         std::shared_ptr<std::shared_mutex> lock_ptr;
          
       public:
          const_value_proxy(const V& value_ref, const async_vector* parent)
@@ -575,11 +490,6 @@ namespace glz
          {
             // Acquire a lock for the proxy
             lock_ptr = parent->acquire_shared_lock();
-         }
-         
-         ~const_value_proxy()
-         {
-            // No need to release locks here - the parent will handle it
          }
          
          // Disable Copy and Move
