@@ -1,16 +1,10 @@
 #pragma once
 
 #include <algorithm>
-#include <cassert>
-#include <iterator>
-#include <memory>
 #include <mutex>
 #include <shared_mutex>
 #include <utility>
 #include <vector>
-#include <type_traits>
-#include <thread>
-#include <unordered_map>
 
 #ifndef GLZ_THROW_OR_ABORT
 #if __cpp_exceptions
@@ -23,133 +17,49 @@
 #endif
 
 // Provides a thread-safe vector
-// This async_vector copies its state when the vector is copied
-// It ensures thread safety during read and write operations
+// Uses simple proxy objects with appropriate locks for read/write operations
 
 namespace glz
-{   
-   template <class V>
+{
+   template <class T>
    struct async_vector
    {
    private:
-      std::vector<std::unique_ptr<V>> items;
+      std::vector<T> items;
       mutable std::shared_mutex mutex;
       
-      // Custom mutex deleter that unlocks the mutex when the shared_ptr is destroyed
-      class mutex_deleter {
-      private:
-         bool is_unique{};
-         
-      public:
-         explicit mutex_deleter(bool is_unique) : is_unique(is_unique) {}
-         
-         void operator()(std::shared_mutex* m) {
-            // Unlock based on lock type
-            if (is_unique) {
-               m->unlock();
-            } else {
-               m->unlock_shared();
-            }
-         }
-      };
-      
-      // Thread-local storage for tracking the current lock
-      struct thread_lock_info {
-         std::shared_ptr<std::shared_mutex> mutex_ptr;
-         bool is_unique = false;
-      };
-      
-      thread_lock_info& get_thread_lock_info() const {
-         thread_local thread_lock_info info;
-         return info;
-      }
-      
-      // Acquire a unique lock on the mutex
-      std::shared_ptr<std::shared_mutex> acquire_unique_lock() const {
-         auto& info = get_thread_lock_info();
-         
-         // If we already have a unique lock, reuse it
-         if (info.mutex_ptr && info.is_unique) {
-            return info.mutex_ptr;
-         }
-         
-         // Reset any existing lock (shared or unique)
-         info.mutex_ptr.reset();
-         
-         // Lock the mutex
-         mutex.lock();
-         
-         // Create a shared_ptr with custom deleter
-         info.mutex_ptr = std::shared_ptr<std::shared_mutex>(&mutex, mutex_deleter(true));
-         info.is_unique = true;
-         
-         return info.mutex_ptr;
-      }
-      
-      // Acquire a shared lock on the mutex
-      std::shared_ptr<std::shared_mutex> acquire_shared_lock() const {
-         auto& info = get_thread_lock_info();
-         
-         // If we already have any lock, reuse it
-         if (info.mutex_ptr) {
-            return info.mutex_ptr;
-         }
-         
-         // Lock the mutex for shared access
-         mutex.lock_shared();
-         
-         // Create a shared_ptr with custom deleter
-         info.mutex_ptr = std::shared_ptr<std::shared_mutex>(&mutex, mutex_deleter(false));
-         info.is_unique = false;
-         
-         return info.mutex_ptr;
-      }
-      
    public:
-      using value_type = V;
+      using value_type = T;
       using size_type = std::size_t;
       using difference_type = std::ptrdiff_t;
-      using reference = V&;
-      using const_reference = const V&;
-      using pointer = V*;
-      using const_pointer = const V*;
+      using reference = T&;
+      using const_reference = const T&;
       
       // Constructors
       async_vector() = default;
       
-      // Copy constructor - performs deep copy
+      // Copy constructor
       async_vector(const async_vector& other)
       {
-         auto other_lock = other.acquire_shared_lock();
-         auto this_lock = acquire_unique_lock();
-         
-         items.reserve(other.items.size());
-         for (const auto& item : other.items) {
-            items.push_back(std::make_unique<V>(*item));
-         }
+         std::shared_lock lock(other.mutex);
+         items = other.items;
       }
       
       // Move constructor
       async_vector(async_vector&& other) noexcept
       {
-         auto other_lock = other.acquire_unique_lock();
-         auto this_lock = acquire_unique_lock();
-         
+         std::unique_lock lock(other.mutex);
          items = std::move(other.items);
       }
       
-      // Copy assignment - performs deep copy
+      // Copy assignment
       async_vector& operator=(const async_vector& other)
       {
          if (this != &other) {
-            auto other_lock = other.acquire_shared_lock();
-            auto this_lock = acquire_unique_lock();
-            
-            items.clear();
-            items.reserve(other.items.size());
-            for (const auto& item : other.items) {
-               items.push_back(std::make_unique<V>(*item));
-            }
+            std::unique_lock lock1(mutex, std::defer_lock);
+            std::shared_lock lock2(other.mutex, std::defer_lock);
+            std::lock(lock1, lock2);
+            items = other.items;
          }
          return *this;
       }
@@ -158,589 +68,307 @@ namespace glz
       async_vector& operator=(async_vector&& other) noexcept
       {
          if (this != &other) {
-            auto other_lock = other.acquire_unique_lock();
-            auto this_lock = acquire_unique_lock();
-            
+            std::unique_lock lock1(mutex, std::defer_lock);
+            std::unique_lock lock2(other.mutex, std::defer_lock);
+            std::lock(lock1, lock2);
             items = std::move(other.items);
          }
          return *this;
       }
       
-      // Forward declaration of iterator classes
-      class iterator;
-      class const_iterator;
-      
-      // Iterator Class Definition
-      class iterator
+      // Proxy for write access
+      struct proxy
       {
+         using value_type = typename std::vector<T>::value_type;
+         using size_type = typename std::vector<T>::size_type;
+         using difference_type = typename std::vector<T>::difference_type;
+         using reference = typename std::vector<T>::reference;
+         using const_reference = typename std::vector<T>::const_reference;
+         using pointer = typename std::vector<T>::pointer;
+         using const_pointer = typename std::vector<T>::const_pointer;
+         using iterator = typename std::vector<T>::iterator;
+         using const_iterator = typename std::vector<T>::const_iterator;
+         using reverse_iterator = typename std::vector<T>::reverse_iterator;
+         using const_reverse_iterator = typename std::vector<T>::const_reverse_iterator;
+         
+         std::vector<T>* ptr{};
+         std::unique_lock<std::shared_mutex> lock{};
+         
       public:
-         using iterator_category = std::random_access_iterator_tag;
-         using value_type = V;
-         using difference_type = std::ptrdiff_t;
-         using pointer = V*;
-         using reference = V&;
-         
-      private:
-         typename std::vector<std::unique_ptr<V>>::iterator item_it;
-         async_vector* parent;
-         std::shared_ptr<std::shared_mutex> lock_ptr;
-         
-      public:
-         iterator(typename std::vector<std::unique_ptr<V>>::iterator item_it, async_vector* parent)
-         : item_it(item_it), parent(parent)
-         {
-            // Acquire a lock for the iterator
-            lock_ptr = parent->acquire_unique_lock();
-         }
-         
-         // Copy Constructor
-         iterator(const iterator& other)
-         : item_it(other.item_it),
-         parent(other.parent),
-         lock_ptr(other.lock_ptr)
+         proxy(std::vector<T>& p, std::unique_lock<std::shared_mutex>&& lock) noexcept
+         : ptr{&p}, lock(std::move(lock))
          {}
          
-         // Move Constructor
-         iterator(iterator&& other) noexcept
-         : item_it(std::move(other.item_it)),
-         parent(other.parent),
-         lock_ptr(std::move(other.lock_ptr))
-         {}
+         // Size and capacity
+         bool empty() const noexcept { return ptr->empty(); }
+         size_type size() const noexcept { return ptr->size(); }
+         size_type max_size() const noexcept { return ptr->max_size(); }
+         size_type capacity() const noexcept { return ptr->capacity(); }
+         void reserve(size_type new_cap) { ptr->reserve(new_cap); }
+         void shrink_to_fit() { ptr->shrink_to_fit(); }
+         void resize(size_type count) { ptr->resize(count); }
+         void resize(size_type count, const value_type& value) { ptr->resize(count, value); }
          
-         // Copy Assignment
-         iterator& operator=(const iterator& other)
-         {
-            if (this != &other) {
-               item_it = other.item_it;
-               parent = other.parent;
-               lock_ptr = other.lock_ptr;
-            }
-            return *this;
+         // Element access
+         reference operator[](size_type pos) { return (*ptr)[pos]; }
+         const_reference operator[](size_type pos) const { return (*ptr)[pos]; }
+         reference at(size_type pos) { return ptr->at(pos); }
+         const_reference at(size_type pos) const { return ptr->at(pos); }
+         reference front() { return ptr->front(); }
+         const_reference front() const { return ptr->front(); }
+         reference back() { return ptr->back(); }
+         const_reference back() const { return ptr->back(); }
+         T* data() noexcept { return ptr->data(); }
+         const T* data() const noexcept { return ptr->data(); }
+         
+         // Iterators
+         iterator begin() noexcept { return ptr->begin(); }
+         const_iterator begin() const noexcept { return ptr->begin(); }
+         const_iterator cbegin() const noexcept { return ptr->cbegin(); }
+         
+         iterator end() noexcept { return ptr->end(); }
+         const_iterator end() const noexcept { return ptr->end(); }
+         const_iterator cend() const noexcept { return ptr->cend(); }
+         
+         reverse_iterator rbegin() noexcept { return ptr->rbegin(); }
+         const_reverse_iterator rbegin() const noexcept { return ptr->rbegin(); }
+         const_reverse_iterator crbegin() const noexcept { return ptr->crbegin(); }
+         
+         reverse_iterator rend() noexcept { return ptr->rend(); }
+         const_reverse_iterator rend() const noexcept { return ptr->rend(); }
+         const_reverse_iterator crend() const noexcept { return ptr->crend(); }
+         
+         // Modifiers
+         void clear() { ptr->clear(); }
+         
+         iterator insert(const_iterator pos, const T& value) {
+            return ptr->insert(pos, value);
          }
          
-         friend struct async_vector<V>;
-         
-         // Dereference operators
-         reference operator*() const { return *(*item_it); }
-         pointer operator->() const { return (*item_it).get(); }
-         
-         // Increment and Decrement operators
-         iterator& operator++()
-         {
-            ++item_it;
-            return *this;
+         iterator insert(const_iterator pos, T&& value) {
+            return ptr->insert(pos, std::move(value));
          }
          
-         iterator operator++(int)
-         {
-            iterator tmp(*this);
-            ++(*this);
-            return tmp;
+         iterator insert(const_iterator pos, size_type count, const T& value) {
+            return ptr->insert(pos, count, value);
          }
          
-         iterator& operator--()
-         {
-            --item_it;
-            return *this;
+         template <class InputIt>
+         iterator insert(const_iterator pos, InputIt first, InputIt last) {
+            return ptr->insert(pos, first, last);
          }
          
-         iterator operator--(int)
-         {
-            iterator tmp(*this);
-            --(*this);
-            return tmp;
+         iterator insert(const_iterator pos, std::initializer_list<T> ilist) {
+            return ptr->insert(pos, ilist);
          }
          
-         // Arithmetic operators
-         iterator operator+(difference_type n) const
-         {
-            iterator result = *this;
-            result.item_it += n;
-            return result;
+         template <class... Args>
+         iterator emplace(const_iterator pos, Args&&... args) {
+            return ptr->emplace(pos, std::forward<Args>(args)...);
          }
          
-         iterator& operator+=(difference_type n)
-         {
-            item_it += n;
-            return *this;
+         iterator erase(const_iterator pos) {
+            return ptr->erase(pos);
          }
          
-         iterator operator-(difference_type n) const
-         {
-            iterator result = *this;
-            result.item_it -= n;
-            return result;
+         iterator erase(const_iterator first, const_iterator last) {
+            return ptr->erase(first, last);
          }
          
-         iterator& operator-=(difference_type n)
-         {
-            item_it -= n;
-            return *this;
+         void push_back(const T& value) {
+            ptr->push_back(value);
          }
          
-         difference_type operator-(const iterator& other) const { return item_it - other.item_it; }
+         void push_back(T&& value) {
+            ptr->push_back(std::move(value));
+         }
+         
+         template <class... Args>
+         reference emplace_back(Args&&... args) {
+            return ptr->emplace_back(std::forward<Args>(args)...);
+         }
+         
+         void pop_back() { ptr->pop_back(); }
+         
+         void swap(proxy& other) noexcept(noexcept(ptr->swap(*other.ptr))) {
+            ptr->swap(*other.ptr);
+         }
+         
+         void swap(std::vector<T>& other) noexcept(noexcept(ptr->swap(other))) {
+            ptr->swap(other);
+         }
          
          // Comparison operators
-         bool operator==(const iterator& other) const noexcept { return item_it == other.item_it; }
-         bool operator!=(const iterator& other) const noexcept { return item_it != other.item_it; }
-         bool operator<(const iterator& other) const noexcept { return item_it < other.item_it; }
-         bool operator>(const iterator& other) const noexcept { return item_it > other.item_it; }
-         bool operator<=(const iterator& other) const noexcept { return item_it <= other.item_it; }
-         bool operator>=(const iterator& other) const noexcept { return item_it >= other.item_it; }
-         
-         // Access operator
-         reference operator[](difference_type n) const { return *(*(item_it + n)); }
-      };
-      
-      // Const Iterator Class Definition
-      class const_iterator
-      {
-      public:
-         using iterator_category = std::random_access_iterator_tag;
-         using value_type = V;
-         using difference_type = std::ptrdiff_t;
-         using pointer = const V*;
-         using reference = const V&;
-         
-      private:
-         typename std::vector<std::unique_ptr<V>>::const_iterator item_it;
-         const async_vector* parent;
-         std::shared_ptr<std::shared_mutex> lock_ptr;
-         
-      public:
-         const_iterator(typename std::vector<std::unique_ptr<V>>::const_iterator item_it,
-                        const async_vector* parent)
-         : item_it(item_it), parent(parent)
-         {
-            // Acquire a lock for the iterator
-            lock_ptr = parent->acquire_shared_lock();
+         bool operator==(const proxy& other) const {
+            return *ptr == *other.ptr;
          }
          
-         // Copy Constructor
-         const_iterator(const const_iterator& other)
-         : item_it(other.item_it),
-         parent(other.parent),
-         lock_ptr(other.lock_ptr)
+         bool operator!=(const proxy& other) const {
+            return *ptr != *other.ptr;
+         }
+         
+         bool operator<(const proxy& other) const {
+            return *ptr < *other.ptr;
+         }
+         
+         bool operator<=(const proxy& other) const {
+            return *ptr <= *other.ptr;
+         }
+         
+         bool operator>(const proxy& other) const {
+            return *ptr > *other.ptr;
+         }
+         
+         bool operator>=(const proxy& other) const {
+            return *ptr >= *other.ptr;
+         }
+         
+         // Allow access to the underlying vector for advanced operations
+         std::vector<T>* operator->() noexcept { return ptr; }
+         const std::vector<T>* operator->() const noexcept { return ptr; }
+         
+         std::vector<T>& operator*() noexcept { return *ptr; }
+         const std::vector<T>& operator*() const noexcept { return *ptr; }
+         
+         std::vector<T>& value() noexcept { return *ptr; }
+         const std::vector<T>& value() const noexcept { return *ptr; }
+      };
+      
+      // Proxy for read access
+      struct const_proxy
+      {
+         using value_type = typename std::vector<T>::value_type;
+         using size_type = typename std::vector<T>::size_type;
+         using difference_type = typename std::vector<T>::difference_type;
+         using reference = typename std::vector<T>::reference;
+         using const_reference = typename std::vector<T>::const_reference;
+         using pointer = typename std::vector<T>::pointer;
+         using const_pointer = typename std::vector<T>::const_pointer;
+         using iterator = typename std::vector<T>::iterator;
+         using const_iterator = typename std::vector<T>::const_iterator;
+         using reverse_iterator = typename std::vector<T>::reverse_iterator;
+         using const_reverse_iterator = typename std::vector<T>::const_reverse_iterator;
+         
+         const std::vector<T>* ptr{};
+         std::shared_lock<std::shared_mutex> lock{};
+         
+      public:
+         const_proxy(const std::vector<T>& p, std::shared_lock<std::shared_mutex>&& lock) noexcept
+         : ptr{&p}, lock(std::move(lock))
          {}
          
-         // Move Constructor
-         const_iterator(const_iterator&& other) noexcept
-         : item_it(std::move(other.item_it)),
-         parent(other.parent),
-         lock_ptr(std::move(other.lock_ptr))
-         {}
+         // Size and capacity
+         bool empty() const noexcept { return ptr->empty(); }
+         size_type size() const noexcept { return ptr->size(); }
+         size_type max_size() const noexcept { return ptr->max_size(); }
+         size_type capacity() const noexcept { return ptr->capacity(); }
          
-         // Copy Assignment
-         const_iterator& operator=(const const_iterator& other)
-         {
-            if (this != &other) {
-               item_it = other.item_it;
-               parent = other.parent;
-               lock_ptr = other.lock_ptr;
-            }
-            return *this;
-         }
+         // Iterators
+         const_iterator begin() const noexcept { return ptr->begin(); }
+         const_iterator cbegin() const noexcept { return ptr->cbegin(); }
          
-         friend struct async_vector<V>;
+         const_iterator end() const noexcept { return ptr->end(); }
+         const_iterator cend() const noexcept { return ptr->cend(); }
          
-         // Dereference operators
-         reference operator*() const { return *(*item_it); }
-         pointer operator->() const { return (*item_it).get(); }
+         const_reverse_iterator rbegin() const noexcept { return ptr->rbegin(); }
+         const_reverse_iterator crbegin() const noexcept { return ptr->crbegin(); }
          
-         // Increment and Decrement operators
-         const_iterator& operator++()
-         {
-            ++item_it;
-            return *this;
-         }
+         const_reverse_iterator rend() const noexcept { return ptr->rend(); }
+         const_reverse_iterator crend() const noexcept { return ptr->crend(); }
          
-         const_iterator operator++(int)
-         {
-            const_iterator tmp(*this);
-            ++(*this);
-            return tmp;
-         }
+         // Element access
+         const T& operator[](size_type pos) const { return (*ptr)[pos]; }
+         const T& at(size_type pos) const { return ptr->at(pos); }
+         const T& front() const { return ptr->front(); }
+         const T& back() const { return ptr->back(); }
          
-         const_iterator& operator--()
-         {
-            --item_it;
-            return *this;
-         }
-         
-         const_iterator operator--(int)
-         {
-            const_iterator tmp(*this);
-            --(*this);
-            return tmp;
-         }
-         
-         // Arithmetic operators
-         const_iterator operator+(difference_type n) const
-         {
-            const_iterator result = *this;
-            result.item_it += n;
-            return result;
-         }
-         
-         const_iterator& operator+=(difference_type n)
-         {
-            item_it += n;
-            return *this;
-         }
-         
-         const_iterator operator-(difference_type n) const
-         {
-            const_iterator result = *this;
-            result.item_it -= n;
-            return result;
-         }
-         
-         const_iterator& operator-=(difference_type n)
-         {
-            item_it -= n;
-            return *this;
-         }
-         
-         difference_type operator-(const const_iterator& other) const { return item_it - other.item_it; }
-         
-         // Comparison operators
-         bool operator==(const const_iterator& other) const noexcept { return item_it == other.item_it; }
-         bool operator!=(const const_iterator& other) const noexcept { return item_it != other.item_it; }
-         bool operator<(const const_iterator& other) const noexcept { return item_it < other.item_it; }
-         bool operator>(const const_iterator& other) const noexcept { return item_it > other.item_it; }
-         bool operator<=(const const_iterator& other) const noexcept { return item_it <= other.item_it; }
-         bool operator>=(const const_iterator& other) const noexcept { return item_it >= other.item_it; }
-         
-         // Access operator
-         reference operator[](difference_type n) const { return *(*(item_it + n)); }
+         // Allow access to the underlying vector for advanced operations
+         const std::vector<T>* operator->() const noexcept { return ptr; }
+         const std::vector<T>& operator*() const noexcept { return *ptr; }
+         const std::vector<T>& value() const noexcept { return *ptr; }
       };
       
-      // Value Proxy Class Definition
-      class value_proxy
-      {
-      private:
-         V& value_ref;
-         std::shared_ptr<std::shared_mutex> lock_ptr;
-         
-      public:
-         value_proxy(V& value_ref, async_vector* parent)
-         : value_ref(value_ref)
-         {
-            // Acquire a lock for the proxy
-            lock_ptr = parent->acquire_shared_lock();
-         }
-         
-         static constexpr bool glaze_value_proxy = true;
-         
-         // Disable Copy and Move
-         value_proxy(const value_proxy&) = delete;
-         value_proxy& operator=(const value_proxy&) = delete;
-         value_proxy(value_proxy&&) = delete;
-         value_proxy& operator=(value_proxy&&) = delete;
-         
-         // Access the value
-         V& value() { return value_ref; }
-         
-         const V& value() const { return value_ref; }
-         
-         // Arrow Operator
-         V* operator->() { return &value_ref; }
-         
-         const V* operator->() const { return &value_ref; }
-         
-         V& operator*() { return value_ref; }
-         
-         const V& operator*() const { return value_ref; }
-         
-         // Implicit Conversion to V&
-         operator V&() { return value_ref; }
-         
-         operator const V&() const { return value_ref; }
-         
-         template <class T>
-         value_proxy& operator=(const T& other)
-         {
-            value_ref = other;
-            return *this;
-         }
-         
-         bool operator==(const V& other) const { return value() == other; }
-         
-         bool operator==(const value_proxy& other) const {
-            return value() == other.value();
-         }
-      };
+      // Core access methods
+      proxy write() { return {items, std::unique_lock{mutex}}; }
+      const_proxy read() const { return {items, std::shared_lock{mutex}}; }
       
-      // Const Value Proxy Class Definition
-      class const_value_proxy
+      // Common operations with their own locks (for convenience)
+      bool empty() const noexcept
       {
-      private:
-         const V& value_ref;
-         std::shared_ptr<std::shared_mutex> lock_ptr;
-         
-      public:
-         const_value_proxy(const V& value_ref, const async_vector* parent)
-         : value_ref(value_ref)
-         {
-            // Acquire a lock for the proxy
-            lock_ptr = parent->acquire_shared_lock();
-         }
-         
-         // Disable Copy and Move
-         const_value_proxy(const const_value_proxy&) = delete;
-         const_value_proxy& operator=(const const_value_proxy&) = delete;
-         const_value_proxy(const_value_proxy&&) = delete;
-         const_value_proxy& operator=(const const_value_proxy&&) = delete;
-         
-         // Access the value
-         const V& value() const { return value_ref; }
-         
-         // Arrow Operator
-         const V* operator->() const { return &value_ref; }
-         
-         const V& operator*() const { return value_ref; }
-         
-         // Implicit Conversion to const V&
-         operator const V&() const { return value_ref; }
-         
-         bool operator==(const V& other) const { return value() == other; }
-         
-         bool operator==(const const_value_proxy& other) const {
-            return value() == other.value();
-         }
-      };
-      
-      // Element Access Methods
-      value_proxy operator[](size_type pos)
-      {
-         auto lock = acquire_shared_lock();
-         return value_proxy(*items[pos], this);
-      }
-      
-      const_value_proxy operator[](size_type pos) const
-      {
-         auto lock = acquire_shared_lock();
-         return const_value_proxy(*items[pos], this);
-      }
-      
-      value_proxy at(size_type pos)
-      {
-         auto lock = acquire_shared_lock();
-         if (pos >= items.size()) {
-            GLZ_THROW_OR_ABORT(std::out_of_range("Index out of range"));
-         }
-         return value_proxy(*items[pos], this);
-      }
-      
-      const_value_proxy at(size_type pos) const
-      {
-         auto lock = acquire_shared_lock();
-         if (pos >= items.size()) {
-            GLZ_THROW_OR_ABORT(std::out_of_range("Index out of range"));
-         }
-         return const_value_proxy(*items[pos], this);
-      }
-      
-      value_proxy front()
-      {
-         auto lock = acquire_shared_lock();
-         return value_proxy(*items.front(), this);
-      }
-      
-      const_value_proxy front() const
-      {
-         auto lock = acquire_shared_lock();
-         return const_value_proxy(*items.front(), this);
-      }
-      
-      value_proxy back()
-      {
-         auto lock = acquire_shared_lock();
-         return value_proxy(*items.back(), this);
-      }
-      
-      const_value_proxy back() const
-      {
-         auto lock = acquire_shared_lock();
-         return const_value_proxy(*items.back(), this);
-      }
-      
-      // Capacity Methods
-      bool empty() const
-      {
-         auto lock = acquire_shared_lock();
+         std::shared_lock lock(mutex);
          return items.empty();
       }
       
-      size_type size() const
+      size_type size() const noexcept
       {
-         auto lock = acquire_shared_lock();
+         std::shared_lock lock(mutex);
          return items.size();
       }
       
-      size_type max_size() const
+      void clear() noexcept
       {
-         auto lock = acquire_shared_lock();
-         return items.max_size();
-      }
-      
-      void reserve(size_type new_cap)
-      {
-         auto lock = acquire_unique_lock();
-         items.reserve(new_cap);
-      }
-      
-      size_type capacity() const
-      {
-         auto lock = acquire_shared_lock();
-         return items.capacity();
-      }
-      
-      void shrink_to_fit()
-      {
-         auto lock = acquire_unique_lock();
-         items.shrink_to_fit();
-      }
-      
-      // Modifiers
-      void clear()
-      {
-         auto lock = acquire_unique_lock();
+         std::unique_lock lock(mutex);
          items.clear();
       }
       
-      void push_back(const V& value)
+      void push_back(const T& value)
       {
-         auto lock = acquire_unique_lock();
-         items.push_back(std::make_unique<V>(value));
+         std::unique_lock lock(mutex);
+         items.push_back(value);
+      }
+      
+      void push_back(T&& value)
+      {
+         std::unique_lock lock(mutex);
+         items.push_back(std::move(value));
       }
       
       template <class... Args>
       void emplace_back(Args&&... args)
       {
-         auto lock = acquire_unique_lock();
-         items.emplace_back(std::make_unique<V>(std::forward<Args>(args)...));
+         std::unique_lock lock(mutex);
+         items.emplace_back(std::forward<Args>(args)...);
       }
       
       void pop_back()
       {
-         auto lock = acquire_unique_lock();
+         std::unique_lock lock(mutex);
          items.pop_back();
       }
       
-      iterator insert(iterator pos, const V& value)
+      // Capacity methods
+      size_type max_size() const noexcept
       {
-         auto lock = acquire_unique_lock();
-         auto index = std::distance(items.begin(), pos.item_it);
-         auto it = items.insert(items.begin() + index, std::make_unique<V>(value));
-         return iterator(it, this);
+         std::shared_lock lock(mutex);
+         return items.max_size();
       }
       
-      iterator insert(iterator pos, V&& value)
+      void reserve(size_type new_cap)
       {
-         auto lock = acquire_unique_lock();
-         auto index = std::distance(items.begin(), pos.item_it);
-         auto it = items.insert(items.begin() + index, std::make_unique<V>(std::move(value)));
-         return iterator(it, this);
+         std::unique_lock lock(mutex);
+         items.reserve(new_cap);
       }
       
-      template <class... Args>
-      iterator emplace(iterator pos, Args&&... args)
+      size_type capacity() const noexcept
       {
-         auto lock = acquire_unique_lock();
-         auto index = std::distance(items.begin(), pos.item_it);
-         auto it = items.insert(items.begin() + index, std::make_unique<V>(std::forward<Args>(args)...));
-         return iterator(it, this);
+         std::shared_lock lock(mutex);
+         return items.capacity();
       }
       
-      iterator erase(iterator pos)
+      void shrink_to_fit()
       {
-         auto lock = acquire_unique_lock();
-         auto index = std::distance(items.begin(), pos.item_it);
-         auto it = items.erase(items.begin() + index);
-         return iterator(it, this);
+         std::unique_lock lock(mutex);
+         items.shrink_to_fit();
       }
       
-      iterator erase(iterator first, iterator last)
-      {
-         auto lock = acquire_unique_lock();
-         auto first_index = std::distance(items.begin(), first.item_it);
-         auto last_index = std::distance(items.begin(), last.item_it);
-         auto it = items.erase(items.begin() + first_index, items.begin() + last_index);
-         return iterator(it, this);
-      }
-      
-      void resize(size_type count)
-      {
-         auto lock = acquire_unique_lock();
-         if (count < items.size()) {
-            items.resize(count);
-         }
-         else {
-            while (items.size() < count) {
-               items.emplace_back(std::make_unique<V>());
-            }
-         }
-      }
-      
-      void resize(size_type count, const V& value)
-      {
-         auto lock = acquire_unique_lock();
-         if (count < items.size()) {
-            items.resize(count);
-         }
-         else {
-            while (items.size() < count) {
-               items.emplace_back(std::make_unique<V>(value));
-            }
-         }
-      }
-      
-      void swap(async_vector& other)
+      // Swap operations
+      void swap(async_vector& other) noexcept
       {
          if (this == &other) return;
-         
-         auto this_lock = acquire_unique_lock();
-         auto other_lock = other.acquire_unique_lock();
-         
+         std::scoped_lock lock(mutex, other.mutex);
          items.swap(other.items);
       }
       
-      // Iterators
-      iterator begin()
-      {
-         auto lock = acquire_unique_lock();
-         return iterator(items.begin(), this);
-      }
-      
-      const_iterator begin() const
-      {
-         auto lock = acquire_shared_lock();
-         return const_iterator(items.cbegin(), this);
-      }
-      
-      const_iterator cbegin() const
-      {
-         auto lock = acquire_shared_lock();
-         return const_iterator(items.cbegin(), this);
-      }
-      
-      iterator end()
-      {
-         auto lock = acquire_unique_lock();
-         return iterator(items.end(), this);
-      }
-      
-      const_iterator end() const
-      {
-         auto lock = acquire_shared_lock();
-         return const_iterator(items.cend(), this);
-      }
-      
-      const_iterator cend() const
-      {
-         auto lock = acquire_shared_lock();
-         return const_iterator(items.cend(), this);
-      }
+      friend void swap(async_vector& a, async_vector& b) noexcept { a.swap(b); }
    };
 }

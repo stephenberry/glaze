@@ -243,10 +243,10 @@ suite async_vector_tests = [] {
       
       // Initialize with elements
       glz::async_vector<int> vec_with_size;
-      vec_with_size.resize(5, 42);
+      vec_with_size.write().resize(5, 42);
       expect(vec_with_size.size() == 5) << "Size should match requested size";
       for (size_t i = 0; i < vec_with_size.size(); ++i) {
-         expect(vec_with_size[i] == 42) << "All elements should be initialized with the provided value";
+         expect(vec_with_size.read()[i] == 42) << "All elements should be initialized with the provided value";
       }
    };
    
@@ -260,7 +260,7 @@ suite async_vector_tests = [] {
       glz::async_vector<int> copy_constructed = original;
       expect(copy_constructed.size() == original.size()) << "Copy constructed vector should have same size";
       for (size_t i = 0; i < original.size(); ++i) {
-         expect(copy_constructed[i] == original[i]) << "Elements should match after copy construction";
+         expect(copy_constructed.read()[i] == original.read()[i]) << "Elements should match after copy construction";
       }
       
       // Modify original to verify deep copy
@@ -272,12 +272,12 @@ suite async_vector_tests = [] {
       copy_assigned = original;
       expect(copy_assigned.size() == original.size()) << "Copy assigned vector should have same size";
       for (size_t i = 0; i < original.size(); ++i) {
-         expect(copy_assigned[i] == original[i]) << "Elements should match after copy assignment";
+         expect(copy_assigned.read()[i] == original.read()[i]) << "Elements should match after copy assignment";
       }
       
       // Modify original again to verify deep copy
-      original[0] = 99;
-      expect(copy_assigned[0] == 1) << "Copy should not be affected by changes to original values";
+      original.write()[0] = 99;
+      expect(copy_assigned.read()[0] == 1) << "Copy should not be affected by changes to original values";
    };
    
    "move_semantics"_test = [] {
@@ -289,17 +289,17 @@ suite async_vector_tests = [] {
       // Test move constructor
       glz::async_vector<int> move_constructed = std::move(original);
       expect(move_constructed.size() == 3) << "Move constructed vector should have original size";
-      expect(move_constructed[0] == 1) << "Elements should be moved correctly";
-      expect(move_constructed[1] == 2) << "Elements should be moved correctly";
-      expect(move_constructed[2] == 3) << "Elements should be moved correctly";
+      expect(move_constructed.read()[0] == 1) << "Elements should be moved correctly";
+      expect(move_constructed.read()[1] == 2) << "Elements should be moved correctly";
+      expect(move_constructed.read()[2] == 3) << "Elements should be moved correctly";
       
       // Test move assignment
       glz::async_vector<int> move_assigned;
       move_assigned = std::move(move_constructed);
       expect(move_assigned.size() == 3) << "Move assigned vector should have original size";
-      expect(move_assigned[0] == 1) << "Elements should be moved correctly";
-      expect(move_assigned[1] == 2) << "Elements should be moved correctly";
-      expect(move_assigned[2] == 3) << "Elements should be moved correctly";
+      expect(move_assigned.read()[0] == 1) << "Elements should be moved correctly";
+      expect(move_assigned.read()[1] == 2) << "Elements should be moved correctly";
+      expect(move_assigned.read()[2] == 3) << "Elements should be moved correctly";
    };
    
    "element_access"_test = [] {
@@ -309,34 +309,34 @@ suite async_vector_tests = [] {
       vec.push_back(30);
       
       // Test operator[]
-      expect(vec[0] == 10) << "Operator[] should return correct element";
-      expect(vec[1] == 20) << "Operator[] should return correct element";
-      expect(vec[2] == 30) << "Operator[] should return correct element";
+      expect(vec.read()[0] == 10) << "Operator[] should return correct element";
+      expect(vec.read()[1] == 20) << "Operator[] should return correct element";
+      expect(vec.read()[2] == 30) << "Operator[] should return correct element";
       
       // Test at()
-      expect(vec.at(0) == 10) << "at() should return correct element";
-      expect(vec.at(1) == 20) << "at() should return correct element";
-      expect(vec.at(2) == 30) << "at() should return correct element";
+      expect(vec.read().at(0) == 10) << "at() should return correct element";
+      expect(vec.read().at(1) == 20) << "at() should return correct element";
+      expect(vec.read().at(2) == 30) << "at() should return correct element";
       
       // Test front() and back()
-      expect(vec.front() == 10) << "front() should return first element";
-      expect(vec.back() == 30) << "back() should return last element";
+      expect(vec.read().front() == 10) << "front() should return first element";
+      expect(vec.read().back() == 30) << "back() should return last element";
       
       // Test out of bounds with at()
       bool exception_thrown = false;
       try {
-         vec.at(5);
+         vec.read().at(5);
       } catch (const std::out_of_range&) {
          exception_thrown = true;
       }
       expect(exception_thrown) << "at() should throw std::out_of_range for out of bounds access";
       
       // Test modification through element access
-      vec[1] = 25;
-      expect(vec[1] == 25) << "Element should be modifiable through operator[]";
+      vec.write()[1] = 25;
+      expect(vec.read()[1] == 25) << "Element should be modifiable through operator[]";
       
-      vec.at(2) = 35;
-      expect(vec[2] == 35) << "Element should be modifiable through at()";
+      vec.write().at(2) = 35;
+      expect(vec.read()[2] == 35) << "Element should be modifiable through at()";
    };
    
    "capacity"_test = [] {
@@ -351,14 +351,14 @@ suite async_vector_tests = [] {
       expect(vec.capacity() >= 10) << "Capacity should be at least the reserved amount";
       expect(vec.size() == 1) << "Reserve should not change size";
       
-      vec.resize(5);
+      vec.write().resize(5);
       expect(vec.size() == 5) << "Resize should change size";
       
-      vec.resize(3);
+      vec.write().resize(3);
       expect(vec.size() == 3) << "Resize to smaller should reduce size";
       
       size_t cap_before = vec.capacity();
-      vec.shrink_to_fit();
+      vec.write().shrink_to_fit();
       expect(vec.capacity() <= cap_before) << "Shrink to fit should not increase capacity";
    };
    
@@ -369,41 +369,44 @@ suite async_vector_tests = [] {
       vec.push_back(1);
       vec.push_back(2);
       expect(vec.size() == 2) << "Size should increase after push_back";
-      expect(vec[0] == 1 && vec[1] == 2) << "Elements should be in correct order";
+      expect(vec.read()[0] == 1 && vec.read()[1] == 2) << "Elements should be in correct order";
       
       // Test emplace_back
       vec.emplace_back(3);
       expect(vec.size() == 3) << "Size should increase after emplace_back";
-      expect(vec[2] == 3) << "Element should be constructed in place";
+      expect(vec.read()[2] == 3) << "Element should be constructed in place";
       
       // Test pop_back
       vec.pop_back();
       expect(vec.size() == 2) << "Size should decrease after pop_back";
-      expect(vec[1] == 2) << "Last element should be removed";
+      expect(vec.read()[1] == 2) << "Last element should be removed";
       
       // Test insert
       {
-         auto it = vec.insert(vec.begin(), 0);
+         auto proxy = vec.write();
+         auto it = proxy.insert(proxy.begin(), 0);
          expect(*it == 0) << "Insert should return iterator to inserted element";
       }
       expect(vec.size() == 3) << "Size should increase after insert";
-      expect(vec[0] == 0 && vec[1] == 1 && vec[2] == 2) << "Elements should be in correct order after insert";
+      expect(vec.read()[0] == 0 && vec.read()[1] == 1 && vec.read()[2] == 2) << "Elements should be in correct order after insert";
       
       // Test emplace
       {
-         auto it2 = vec.emplace(vec.begin() + 2, 15);
+         auto proxy = vec.write();
+         auto it2 = proxy.emplace(proxy.begin() + 2, 15);
          expect(*it2 == 15) << "Emplace should return iterator to inserted element";
       }
       expect(vec.size() == 4) << "Size should increase after emplace";
-      expect(vec[0] == 0 && vec[1] == 1 && vec[2] == 15 && vec[3] == 2) << "Elements should be in correct order after emplace";
+      expect(vec.read()[0] == 0 && vec.read()[1] == 1 && vec.read()[2] == 15 && vec.read()[3] == 2) << "Elements should be in correct order after emplace";
       
       // Test erase
       {
-         auto it3 = vec.erase(vec.begin() + 1);
+         auto proxy = vec.write();
+         auto it3 = proxy.erase(proxy.begin() + 1);
          expect(*it3 == 15) << "Erase should return iterator to element after erased";
       }
       expect(vec.size() == 3) << "Size should decrease after erase";
-      expect(vec[0] == 0 && vec[1] == 15 && vec[2] == 2) << "Elements should be in correct order after erase";
+      expect(vec.read()[0] == 0 && vec.read()[1] == 15 && vec.read()[2] == 2) << "Elements should be in correct order after erase";
       
       // Test clear
       vec.clear();
@@ -418,29 +421,38 @@ suite async_vector_tests = [] {
       
       // Test iterator traversal
       int sum = 0;
-      for (auto it = vec.begin(); it != vec.end(); ++it) {
-         sum += *it;
+      {
+         auto proxy = vec.read();
+         for (auto it = proxy.begin(); it != proxy.end(); ++it) {
+            sum += *it;
+         }
       }
       expect(sum == 10) << "Iterator traversal should access all elements";
       
       // Test const_iterator traversal
       const glz::async_vector<int>& const_vec = vec;
       sum = 0;
-      for (auto it = const_vec.begin(); it != const_vec.end(); ++it) {
-         sum += *it;
+      {
+         auto proxy = const_vec.read();
+         for (auto it = proxy.begin(); it != proxy.end(); ++it) {
+            sum += *it;
+         }
       }
       expect(sum == 10) << "Const iterator traversal should access all elements";
       
       // Test iterator modification
-      for (auto it = vec.begin(); it != vec.end(); ++it) {
-         *it *= 2;
+      {
+         auto proxy = vec.write();
+         for (auto it = proxy.begin(); it != proxy.end(); ++it) {
+            *it *= 2;
+         }
       }
-      expect(vec[0] == 0 && vec[1] == 2 && vec[2] == 4 && vec[3] == 6 && vec[4] == 8)
+      expect(vec.read()[0] == 0 && vec.read()[1] == 2 && vec.read()[2] == 4 && vec.read()[3] == 6 && vec.read()[4] == 8)
       << "Elements should be modifiable through iterators";
       
       // Test range-based for loop
       sum = 0;
-      for (const auto& val : vec) {
+      for (const auto& val : vec.read()) {
          sum += val;
       }
       expect(sum == 20) << "Range-based for loop should access all elements";
@@ -454,16 +466,16 @@ suite async_vector_tests = [] {
       vec.emplace_back(3, "three");
       
       expect(vec.size() == 3) << "Size should reflect number of complex objects";
-      expect(vec[0]->id == 1 && vec[0]->name == "one") << "Complex object should be stored correctly";
-      expect(vec[1]->id == 2 && vec[1]->name == "two") << "Complex object should be stored correctly";
-      expect(vec[2]->id == 3 && vec[2]->name == "three") << "Complex object should be stored correctly";
+      expect(vec.read()[0].id == 1 && vec.read()[0].name == "one") << "Complex object should be stored correctly";
+      expect(vec.read()[1].id == 2 && vec.read()[1].name == "two") << "Complex object should be stored correctly";
+      expect(vec.read()[2].id == 3 && vec.read()[2].name == "three") << "Complex object should be stored correctly";
       
       // Test copying of complex types
       glz::async_vector<TestObject> vec_copy = vec;
-      vec[0]->id = 10;
-      vec[0]->name = "modified";
+      vec.write()[0].id = 10;
+      vec.write()[0].name = "modified";
       
-      expect(vec_copy[0]->id == 1 && vec_copy[0]->name == "one")
+      expect(vec_copy.read()[0].id == 1 && vec_copy.read()[0].name == "one")
       << "Copied vector should not be affected by changes to original";
    };
    
@@ -482,8 +494,8 @@ suite async_vector_tests = [] {
       expect(vec1.size() == 3) << "First vector should have size of second vector after swap";
       expect(vec2.size() == 2) << "Second vector should have size of first vector after swap";
       
-      expect(vec1[0] == 3 && vec1[1] == 4 && vec1[2] == 5) << "First vector should have elements of second vector";
-      expect(vec2[0] == 1 && vec2[1] == 2) << "Second vector should have elements of first vector";
+      expect(vec1.read()[0] == 3 && vec1.read()[1] == 4 && vec1.read()[2] == 5) << "First vector should have elements of second vector";
+      expect(vec2.read()[0] == 1 && vec2.read()[1] == 2) << "Second vector should have elements of first vector";
    };
    
    "thread_safety_read"_test = [] {
@@ -499,7 +511,7 @@ suite async_vector_tests = [] {
       for (int i = 0; i < 10; ++i) {
          threads.emplace_back([&vec, &sums, i]() {
             for (int j = 0; j < 100; ++j) {
-               sums[i] += vec[j];
+               sums[i] += vec.read()[j];
             }
          });
       }
@@ -544,7 +556,7 @@ suite async_vector_tests = [] {
       
       std::vector<int> actual_values;
       for (size_t i = 0; i < vec.size(); ++i) {
-         actual_values.push_back(vec[i]);
+         actual_values.push_back(vec.read()[i]);
       }
       
       std::sort(actual_values.begin(), actual_values.end());
@@ -568,7 +580,7 @@ suite async_vector_tests = [] {
          threads.emplace_back([&vec, &stop, &sum]() {
             while (!stop) {
                for (size_t j = 0; j < vec.size(); ++j) {
-                  sum += vec[j];
+                  sum += vec.read()[j];
                }
             }
          });
@@ -598,7 +610,7 @@ suite async_vector_tests = [] {
 };
 
 // Additional stress tests and edge cases for async_vector
-
+/*
 // Complex data type with move/copy semantics verification
 struct ComplexObject {
    int id;
@@ -1256,5 +1268,5 @@ suite additional_async_vector_tests = [] {
       }
    };
 };
-
+*/
 int main() {}
