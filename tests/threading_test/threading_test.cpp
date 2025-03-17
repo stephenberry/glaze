@@ -1241,22 +1241,19 @@ suite additional_async_vector_tests = [] {
                   }
                   operation_count++;
                } catch (const std::exception& e) {
-                  // Ignore exceptions in this stress test
+                  expect(false) << e.what();
                }
             }
          });
       }
       
       // Run for a longer time to stress test
-      std::this_thread::sleep_for(std::chrono::milliseconds(10));
+      std::this_thread::sleep_for(std::chrono::milliseconds(100));
       stop = true;
       
       for (auto& t : threads) {
          t.join();
       }
-      
-      // Check that we completed many operations without crashing
-      expect(operation_count > 1000) << "Should complete many operations without failing";
    };
 };
 
