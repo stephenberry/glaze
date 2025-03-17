@@ -22,7 +22,7 @@
 #endif
 #endif
 
-// Provides a thread-safe vector with a simplified locking mechanism
+// Provides a thread-safe vector
 // This async_vector copies its state when the vector is copied
 // It ensures thread safety during read and write operations
 
