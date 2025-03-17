@@ -47,9 +47,9 @@ namespace glz
          explicit ControlBlock(T* p, std::function<void(T*)> d = std::default_delete<T>())
          : ptr(p), deleter(std::move(d)) {}
          
-         void increment() { ++use_count; }
+         void increment() noexcept { ++use_count; }
          
-         size_t decrement() { return --use_count; }
+         size_t decrement() noexcept { return --use_count; }
       };
       
       ControlBlock* control_block = nullptr;
@@ -88,7 +88,6 @@ namespace glz
       // Copy assignment
       early_shared_ptr& operator=(const early_shared_ptr& other) noexcept {
          if (this != &other) {
-            reset();
             control_block = other.control_block;
             if (control_block) {
                control_block->increment();
@@ -100,7 +99,6 @@ namespace glz
       // Move assignment
       early_shared_ptr& operator=(early_shared_ptr&& other) noexcept {
          if (this != &other) {
-            reset();
             control_block = other.control_block;
             other.control_block = nullptr;
          }
@@ -109,14 +107,9 @@ namespace glz
       
       // Destructor
       ~early_shared_ptr() {
-         reset();
-      }
-      
-      // Reset to empty
-      void reset() noexcept {
          if (control_block) {
-            // Key difference: destroy the object when count reaches 1
-            size_t count = control_block->decrement();
+            // Destroy the object when count reaches 1
+            const size_t count = control_block->decrement();
             if (count == 1) {
                // We're at use count 1, meaning only the control block has a reference
                // Delete the managed object but keep the control block
@@ -125,9 +118,25 @@ namespace glz
                   control_block->ptr = nullptr;
                }
             } else if (count == 0) {
+               if (control_block->ptr) {
+                  control_block->deleter(control_block->ptr);
+                  control_block->ptr = nullptr;
+               }
                // No more references, delete the control block
                delete control_block;
+               control_block = nullptr;
             }
+         }
+      }
+      
+      // Reset to empty
+      void reset() noexcept {
+         if (control_block) {
+            if (control_block->ptr) {
+               control_block->deleter(control_block->ptr);
+               control_block->ptr = nullptr;
+            }
+            delete control_block;
             control_block = nullptr;
          }
       }
@@ -158,12 +167,6 @@ namespace glz
          return control_block ? control_block->use_count.load() : 0;
       }
       
-      // Check if this is the only reference
-      bool unique() const noexcept {
-         return use_count() == 1;
-      }
-      
-      // Conversion to bool
       explicit operator bool() const noexcept {
          return get() != nullptr;
       }

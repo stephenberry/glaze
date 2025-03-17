@@ -221,6 +221,226 @@ suite atom_tests = [] {
    };
 };
 
+suite early_shared_ptr_tests = [] {
+   "construction"_test = [] {
+      glz::early_shared_ptr<int> empty;
+      expect(empty.get() == nullptr) << "Default constructor should create empty pointer";
+      expect(empty.use_count() == 0) << "Default constructed pointer should have 0 use count";
+      expect(!empty) << "Empty pointer should convert to false";
+      
+      glz::early_shared_ptr<int> null_ptr(nullptr);
+      expect(null_ptr.get() == nullptr) << "nullptr constructor should create empty pointer";
+      expect(null_ptr.use_count() == 0) << "nullptr constructed pointer should have 0 use count";
+      
+      auto ptr = new int(42);
+      glz::early_shared_ptr<int> p(ptr);
+      expect(p.get() == ptr) << "Pointer constructor should store raw pointer";
+      expect(p.use_count() == 1) << "Should have use count 1 after construction";
+      expect(*p == 42) << "Dereferencing should access the stored value";
+      expect(bool(p)) << "Non-empty pointer should convert to true";
+      
+      glz::early_shared_ptr<int> p2 = glz::make_early_shared<int>(100);
+      expect(*p2 == 100) << "make_early_shared should construct and initialize the object";
+      expect(p2.use_count() == 1) << "Should have use count 1 after make_early_shared";
+   };
+   
+   "copy_semantics"_test = [] {
+      auto ptr = glz::make_early_shared<int>(42);
+      expect(ptr.use_count() == 1) << "Initial pointer should have use count 1";
+      
+      // Copy construction
+      glz::early_shared_ptr<int> copy_ptr = ptr;
+      expect(copy_ptr.get() == ptr.get()) << "Copy constructed pointer should share ownership";
+      expect(ptr.use_count() == 2) << "Original pointer should have use count 2 after copy";
+      expect(copy_ptr.use_count() == 2) << "Copy constructed pointer should have use count 2";
+      
+      // Copy assignment
+      glz::early_shared_ptr<int> assign_ptr;
+      assign_ptr = ptr;
+      expect(assign_ptr.get() == ptr.get()) << "Copy assigned pointer should share ownership";
+      expect(ptr.use_count() == 3) << "Original pointer should have use count 3 after copy assignment";
+      expect(assign_ptr.use_count() == 3) << "Copy assigned pointer should have use count 3";
+   };
+   
+   "move_semantics"_test = [] {
+      auto ptr = glz::make_early_shared<int>(42);
+      void* original_address = ptr.get();
+      expect(ptr.use_count() == 1) << "Initial pointer should have use count 1";
+      
+      // Move construction
+      glz::early_shared_ptr<int> move_ptr = std::move(ptr);
+      expect(move_ptr.get() == original_address) << "Move constructed pointer should contain original pointer";
+      expect(ptr.get() == nullptr) << "Original pointer should be empty after move";
+      expect(move_ptr.use_count() == 1) << "Move constructed pointer should have use count 1";
+      expect(ptr.use_count() == 0) << "Original pointer should have use count 0 after move";
+      
+      // Move assignment
+      auto ptr2 = glz::make_early_shared<int>(100);
+      void* address2 = ptr2.get();
+      glz::early_shared_ptr<int> assign_move;
+      assign_move = std::move(ptr2);
+      expect(assign_move.get() == address2) << "Move assigned pointer should contain original pointer";
+      expect(ptr2.get() == nullptr) << "Original pointer should be empty after move assignment";
+      expect(assign_move.use_count() == 1) << "Move assigned pointer should have use count 1";
+      expect(ptr2.use_count() == 0) << "Original pointer should have use count 0 after move assignment";
+   };
+   
+   "early_destruction"_test = [] {
+      struct DestructionTracker {
+         bool* destroyed{};
+         explicit DestructionTracker(bool* d) : destroyed(d) {}
+         ~DestructionTracker() { *destroyed = true; }
+      };
+      
+      bool destroyed = false;
+      auto tracker = new DestructionTracker(&destroyed);
+      
+      {
+         auto ptr1 = glz::early_shared_ptr<DestructionTracker>(tracker);
+         expect(!destroyed) << "Object should not be destroyed yet";
+         
+         {
+            auto ptr2 = ptr1;
+            expect(ptr1.use_count() == 2) << "Should have use count 2 with two references";
+            expect(!destroyed) << "Object should not be destroyed with multiple references";
+         }
+         
+         // ptr2 is now out of scope, ptr1 is the only reference, so object should be destroyed
+         expect(destroyed) << "Object should be destroyed when only one reference remains";
+         expect(ptr1.get() == nullptr) << "Pointer should be nullified after early destruction";
+         expect(ptr1.use_count() == 1) << "Control block should still exist with use count 1";
+      }
+      
+      // At this point, all smart pointers are gone, but we don't need to check
+      // for memory leaks as that's handled by the implementation's destructor
+   };
+   
+   "reset"_test = [] {
+      bool destroyed1 = false;
+      bool destroyed2 = false;
+      
+      struct DestructionTracker {
+         bool* destroyed;
+         explicit DestructionTracker(bool* d) : destroyed(d) {}
+         ~DestructionTracker() { *destroyed = true; }
+      };
+      
+      auto ptr = glz::early_shared_ptr<DestructionTracker>(new DestructionTracker(&destroyed1));
+      expect(!destroyed1) << "Object should not be destroyed initially";
+      
+      // Reset to nullptr
+      ptr.reset();
+      expect(destroyed1) << "Object should be destroyed after reset to nullptr";
+      expect(ptr.get() == nullptr) << "Pointer should be null after reset";
+      expect(ptr.use_count() == 0) << "Use count should be 0 after reset";
+      
+      // Reset with new pointer
+      ptr.reset(new DestructionTracker(&destroyed2));
+      expect(!destroyed2) << "New object should not be destroyed initially";
+      expect(ptr.use_count() == 1) << "Use count should be 1 after reset with new pointer";
+      
+      // Reset to nullptr again
+      ptr.reset();
+      expect(destroyed2) << "New object should be destroyed after reset";
+   };
+   
+   "swap"_test = [] {
+      auto ptr1 = glz::make_early_shared<int>(10);
+      auto ptr2 = glz::make_early_shared<int>(20);
+      
+      int* addr1 = ptr1.get();
+      int* addr2 = ptr2.get();
+      
+      ptr1.swap(ptr2);
+      
+      expect(ptr1.get() == addr2) << "First pointer should have second pointer's address after swap";
+      expect(ptr2.get() == addr1) << "Second pointer should have first pointer's address after swap";
+      expect(*ptr1 == 20) << "First pointer should point to second pointer's value after swap";
+      expect(*ptr2 == 10) << "Second pointer should point to first pointer's value after swap";
+      expect(ptr1.use_count() == 1) << "Use count should remain unchanged after swap";
+      expect(ptr2.use_count() == 1) << "Use count should remain unchanged after swap";
+   };
+   
+   "custom_deleter"_test = [] {
+      bool custom_deleted = false;
+      auto deleter = [&custom_deleted](int* p) {
+         custom_deleted = true;
+         delete p;
+      };
+      
+      {
+         glz::early_shared_ptr<int> ptr(new int(42), deleter);
+         expect(!custom_deleted) << "Deleter should not be called initially";
+      }
+      
+      expect(custom_deleted) << "Custom deleter should be called when pointer is destroyed";
+   };
+   
+   "comparison"_test = [] {
+      auto ptr1 = glz::make_early_shared<int>(10);
+      auto ptr2 = ptr1;
+      auto ptr3 = glz::make_early_shared<int>(20);
+      
+      expect(ptr1 == ptr2) << "Same pointers should compare equal";
+      expect(ptr1 != ptr3) << "Different pointers should not compare equal";
+      expect(ptr1 != nullptr) << "Non-null pointer should not compare equal to nullptr";
+      expect(nullptr != ptr1) << "nullptr should not compare equal to non-null pointer";
+      
+      glz::early_shared_ptr<int> null_ptr;
+      expect(null_ptr == nullptr) << "Null pointer should compare equal to nullptr";
+      expect(nullptr == null_ptr) << "nullptr should compare equal to null pointer";
+   };
+   
+   "unique"_test = [] {
+      auto ptr = glz::make_early_shared<int>(42);
+      expect(ptr.use_count() == 1) << "Single pointer should be 1";
+      
+      auto ptr2 = ptr;
+      expect(ptr.use_count() != 1) << "Shared pointer should not be 1";
+      
+      ptr2.reset();
+      expect(ptr.use_count() == 0) << "Pointer should be 0 after other reference is reset";
+   };
+   
+   "thread_safety"_test = [] {
+      auto ptr = glz::make_early_shared<std::atomic<int>>(0);
+      auto ptr2 = ptr; // copy to keep alive for final test
+      
+      std::vector<std::thread> threads;
+      threads.reserve(10);
+      for (int i = 0; i < 10; ++i) {
+         threads.emplace_back([ptr]() {
+            for (int j = 0; j < 1000; ++j) {
+               (*ptr)++;
+            }
+         });
+      }
+      
+      for (auto& t : threads) {
+         t.join();
+      }
+      
+      expect(ptr->load() == 10000) << "Concurrent access should be thread-safe";
+   };
+   
+   "make_early_shared"_test = [] {
+      struct Complex {
+         int x;
+         double y;
+         std::string z;
+         
+         Complex(int a, double b, std::string c) : x(a), y(b), z(std::move(c)) {}
+      };
+      
+      auto ptr = glz::make_early_shared<Complex>(10, 3.14, "test");
+      
+      expect(ptr->x == 10) << "make_early_shared should forward first argument";
+      expect(ptr->y == 3.14) << "make_early_shared should forward second argument";
+      expect(ptr->z == "test") << "make_early_shared should forward third argument";
+      expect(ptr.use_count() == 1) << "make_early_shared should return pointer with use count 1";
+   };
+};
+
 struct TestObject
 {
    int id = 0;

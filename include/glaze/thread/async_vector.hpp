@@ -106,12 +106,11 @@ namespace glz
       // Custom deleter for lock management
       class lock_deleter {
       private:
-         const async_vector* parent;  // Changed from async_vector* to const async_vector*
-         std::thread::id thread_id;
+         const async_vector* parent;
          
       public:
-         explicit lock_deleter(const async_vector* parent, std::thread::id thread_id)  // Changed parameter to const
-         : parent(parent), thread_id(thread_id) {}
+         explicit lock_deleter(const async_vector* parent)
+         : parent(parent) {}
          
          void operator()(lock_base* lock) {
             if (parent->thread_local_locks().use_count() == 1) {
@@ -151,7 +150,7 @@ namespace glz
          
          // Use custom deleter that will reset the thread-local pointer when appropriate
          local_lock = early_shared_ptr<lock_base>(
-                                                  raw_lock, lock_deleter(this, std::this_thread::get_id()));
+                                                  raw_lock, lock_deleter(this));
          
          return local_lock;
       }
@@ -175,7 +174,7 @@ namespace glz
          
          // Use custom deleter that will reset the thread-local pointer when appropriate
          local_lock = early_shared_ptr<lock_base>(
-                                                  raw_lock, lock_deleter(this, std::this_thread::get_id()));
+                                                  raw_lock, lock_deleter(this));
          
          return local_lock;
       }
