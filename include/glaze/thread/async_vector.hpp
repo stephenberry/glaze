@@ -305,6 +305,18 @@ namespace glz
          return items.size();
       }
       
+      void resize(size_type count)
+      {
+         std::unique_lock lock(mutex);
+         items.resize(count);
+      }
+      
+      void resize(size_type count, const value_type& value)
+      {
+         std::unique_lock lock(mutex);
+         items.resize(count, value);
+      }
+      
       void clear() noexcept
       {
          std::unique_lock lock(mutex);

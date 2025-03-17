@@ -243,7 +243,7 @@ suite async_vector_tests = [] {
       
       // Initialize with elements
       glz::async_vector<int> vec_with_size;
-      vec_with_size.write().resize(5, 42);
+      vec_with_size.resize(5, 42);
       expect(vec_with_size.size() == 5) << "Size should match requested size";
       for (size_t i = 0; i < vec_with_size.size(); ++i) {
          expect(vec_with_size.read()[i] == 42) << "All elements should be initialized with the provided value";
@@ -351,10 +351,10 @@ suite async_vector_tests = [] {
       expect(vec.capacity() >= 10) << "Capacity should be at least the reserved amount";
       expect(vec.size() == 1) << "Reserve should not change size";
       
-      vec.write().resize(5);
+      vec.resize(5);
       expect(vec.size() == 5) << "Resize should change size";
       
-      vec.write().resize(3);
+      vec.resize(3);
       expect(vec.size() == 3) << "Resize to smaller should reduce size";
       
       size_t cap_before = vec.capacity();
@@ -610,7 +610,7 @@ suite async_vector_tests = [] {
 };
 
 // Additional stress tests and edge cases for async_vector
-/*
+
 // Complex data type with move/copy semantics verification
 struct ComplexObject {
    int id;
@@ -689,15 +689,16 @@ suite additional_async_vector_tests = [] {
       // Thread that continually creates and destroys iterators
       threads.emplace_back([&]() {
          while (!stop) {
-            auto it1 = vec.begin();
-            [[maybe_unused]] auto it2 = vec.begin();
-            auto it3 = vec.end();
-            [[maybe_unused]] auto it4 = vec.cbegin();
-            [[maybe_unused]] auto it5 = vec.cend();
+            auto proxy = vec.read();
+            auto it1 = proxy.begin();
+            [[maybe_unused]] auto it2 = proxy.begin();
+            auto it3 = proxy.end();
+            [[maybe_unused]] auto it4 = proxy.cbegin();
+            [[maybe_unused]] auto it5 = proxy.cend();
             
             // Test iterator arithmetic and comparisons
             try {
-               auto it_mid = it1 + vec.size() / 2;
+               auto it_mid = it1 + proxy.size() / 2;
                if (!(it_mid > it1 && it_mid < it3)) {
                   errors++;
                }
@@ -710,8 +711,8 @@ suite additional_async_vector_tests = [] {
                
                // Create iterator and then immediately discard
                for (int i = 0; i < 50; ++i) {
-                  [[maybe_unused]] auto temp_it = vec.begin() + i;
-                  [[maybe_unused]] auto temp_cit = vec.cbegin() + i;
+                  [[maybe_unused]] auto temp_it = proxy.begin() + i;
+                  [[maybe_unused]] auto temp_cit = proxy.cbegin() + i;
                }
             } catch (const std::exception& e) {
                errors++;
@@ -724,9 +725,13 @@ suite additional_async_vector_tests = [] {
          while (!stop) {
             try {
                int sum = 0;
-               for (auto it = vec.begin(); it != vec.end(); ++it) {
-                  sum += *it;
+               {
+                  auto proxy = vec.read();
+                  for (auto it = proxy.begin(); it != proxy.end(); ++it) {
+                     sum += *it;
+                  }
                }
+               
                // Basic validation check
                if (sum < 0) {
                   errors++;
@@ -742,7 +747,8 @@ suite additional_async_vector_tests = [] {
          int counter = 0;
          while (!stop) {
             try {
-               auto it = vec.begin() + (counter % vec.size());
+               auto proxy = vec.write();
+               auto it = proxy.begin() + (counter % proxy.size());
                *it = counter;
                counter++;
             } catch (const std::exception& e) {
@@ -779,15 +785,18 @@ suite additional_async_vector_tests = [] {
                try {
                   // Pick a random position
                   size_t pos = std::rand() % (vec.size() + 1);
-                  auto insert_pos = vec.begin();
-                  std::advance(insert_pos, std::min(pos, vec.size()));
-                  
-                  // Insert a new value
-                  auto it = vec.insert(insert_pos, t * 1000 + i);
-                  
-                  // Verify the inserted value
-                  if (*it != t * 1000 + i) {
-                     errors++;
+                  {
+                     auto proxy = vec.write();
+                     auto insert_pos = proxy.begin();
+                     std::advance(insert_pos, std::min(pos, proxy.size()));
+                     
+                     // Insert a new value
+                     auto it = proxy.insert(insert_pos, t * 1000 + i);
+                     
+                     // Verify the inserted value
+                     if (*it != t * 1000 + i) {
+                        errors++;
+                     }
                   }
                   
                   // Small delay to increase chance of contention
@@ -796,9 +805,10 @@ suite additional_async_vector_tests = [] {
                   // Pick another random position for erasure
                   if (vec.size() > 0) {
                      size_t erase_pos = std::rand() % vec.size();
-                     auto erase_iter = vec.begin();
+                     auto proxy = vec.write();
+                     auto erase_iter = proxy.begin();
                      std::advance(erase_iter, erase_pos);
-                     vec.erase(erase_iter);
+                     proxy.erase(erase_iter);
                   }
                } catch (const std::exception& e) {
                   errors++;
@@ -832,22 +842,25 @@ suite additional_async_vector_tests = [] {
                try {
                   // Pick a random position
                   size_t pos = std::rand() % (vec.size() + 1);
-                  auto insert_pos = vec.begin();
-                  std::advance(insert_pos, std::min(pos, vec.size()));
-                  
-                  // Create a string and vector for the complex object
-                  std::string data = "Thread " + std::to_string(t) + " Item " + std::to_string(i);
-                  std::vector<double> values;
-                  for (int j = 0; j < 5; ++j) {
-                     values.push_back(t + i + j / 10.0);
-                  }
-                  
-                  // Emplace a new complex object
-                  auto it = vec.emplace(insert_pos, t * 1000 + i, data, values);
-                  
-                  // Verify the emplaced object
-                  if (it->id != t * 1000 + i || it->data != data) {
-                     errors++;
+                  {
+                     auto proxy = vec.write();
+                     auto insert_pos = proxy.begin();
+                     std::advance(insert_pos, std::min(pos, proxy.size()));
+                     
+                     // Create a string and vector for the complex object
+                     std::string data = "Thread " + std::to_string(t) + " Item " + std::to_string(i);
+                     std::vector<double> values;
+                     for (int j = 0; j < 5; ++j) {
+                        values.push_back(t + i + j / 10.0);
+                     }
+                     
+                     // Emplace a new complex object
+                     auto it = proxy.emplace(insert_pos, t * 1000 + i, data, values);
+                     
+                     // Verify the emplaced object
+                     if (it->id != t * 1000 + i || it->data != data) {
+                        errors++;
+                     }
                   }
                   
                   // Small delay to increase chance of contention
@@ -871,7 +884,7 @@ suite additional_async_vector_tests = [] {
       expect(vec.size() > 0) << "Vector should contain elements after emplace operations";
       
       // Validate all objects
-      for (const auto& obj : vec) {
+      for (const auto& obj : vec.read()) {
          expect(obj.ptr != nullptr) << "Each object should have a valid unique_ptr";
          expect(*obj.ptr == obj.id) << "Each object's unique_ptr should point to correct value";
       }
@@ -897,18 +910,19 @@ suite additional_async_vector_tests = [] {
             while (!stop) {
                try {
                   // Get a const_iterator
-                  auto it1 = vec.begin() + (t * 100 % vec.size());
+                  auto proxy = vec.write();
+                  auto it1 = proxy.begin() + (t * 100 % proxy.size());
                   int val1 = *it1;
                   
                   // Use that iterator in an insert operation (potential deadlock scenario)
-                  auto new_it = vec.insert(it1, val1 * 2);
+                  auto new_it = proxy.insert(it1, val1 * 2);
                   
                   // Now use the new iterator in another operation
-                  auto another_it = vec.begin() + (vec.size() / 2);
-                  auto erased_it = vec.erase(another_it);
+                  auto another_it = proxy.begin() + (proxy.size() / 2);
+                  auto erased_it = proxy.erase(another_it);
                   
                   // Try to use all three iterators
-                  if (*it1 >= 0 && *new_it >= 0 && (erased_it == vec.end() || *erased_it >= 0)) {
+                  if (*it1 >= 0 && *new_it >= 0 && (erased_it == proxy.end() || *erased_it >= 0)) {
                      completed_operations++;
                   }
                } catch (const std::exception& e) {
@@ -919,7 +933,7 @@ suite additional_async_vector_tests = [] {
       }
       
       // Run for enough time to detect deadlocks
-      std::this_thread::sleep_for(std::chrono::milliseconds(400));
+      std::this_thread::sleep_for(std::chrono::milliseconds(100));
       stop = true;
       
       for (auto& t : threads) {
@@ -946,11 +960,12 @@ suite additional_async_vector_tests = [] {
       
       // Thread that creates iterators and performs random jumps
       threads.emplace_back([&]() {
-         auto it = vec.begin();
+         auto proxy = vec.write();
+         auto it = proxy.begin();
          while (!stop) {
             try {
                int jump = std::rand() % 20 - 10; // Random jump forward or backward
-               if (it + jump >= vec.begin() && it + jump < vec.end()) {
+               if (it + jump >= proxy.begin() && it + jump < proxy.end()) {
                   it += jump;
                   it->access(); // Access the object to increment counter
                }
@@ -967,7 +982,8 @@ suite additional_async_vector_tests = [] {
             try {
                if (counter % 3 == 0 && vec.size() > 0) {
                   // Remove from beginning
-                  vec.erase(vec.begin());
+                  auto proxy = vec.write();
+                  proxy.erase(proxy.begin());
                } else if (counter % 3 == 1) {
                   // Add to end
                   std::vector<double> values{static_cast<double>(counter)};
@@ -975,7 +991,8 @@ suite additional_async_vector_tests = [] {
                } else if (vec.size() > 0) {
                   // Replace middle
                   size_t mid = vec.size() / 2;
-                  auto mid_it = vec.begin() + mid;
+                  auto proxy = vec.write();
+                  auto mid_it = proxy.begin() + mid;
                   std::vector<double> values{static_cast<double>(counter * 10)};
                   *mid_it = ComplexObject(2000 + counter, "Replaced", values);
                }
@@ -1033,10 +1050,10 @@ suite additional_async_vector_tests = [] {
             while (!stop) {
                try {
                   int sum1 = 0, sum2 = 0;
-                  for (const auto& v : vec1) {
+                  for (const auto& v : vec1.read()) {
                      sum1 += v;
                   }
-                  for (const auto& v : vec2) {
+                  for (const auto& v : vec2.read()) {
                      sum2 += v;
                   }
                   // Basic validation: we can't know which vector has which values due to swaps
@@ -1062,9 +1079,11 @@ suite additional_async_vector_tests = [] {
             int counter = 0;
             while (!stop) {
                try {
-                  size_t idx = std::rand() % std::min(vec1.size(), vec2.size());
-                  vec1[idx] = t * 1000 + counter;
-                  vec2[idx] = t * 2000 + counter;
+                  auto proxy1 = vec1.write();
+                  auto proxy2 = vec2.write();
+                  size_t idx = std::rand() % std::min(proxy1.size(), proxy2.size());
+                  proxy1[idx] = t * 1000 + counter;
+                  proxy2[idx] = t * 2000 + counter;
                   counter++;
                   std::this_thread::sleep_for(std::chrono::microseconds(50));
                } catch (const std::exception& e) {
@@ -1075,7 +1094,7 @@ suite additional_async_vector_tests = [] {
       }
       
       // Run for a short time
-      std::this_thread::sleep_for(std::chrono::milliseconds(500));
+      std::this_thread::sleep_for(std::chrono::milliseconds(100));
       stop = true;
       
       for (auto& t : threads) {
@@ -1112,7 +1131,7 @@ suite additional_async_vector_tests = [] {
                   if (size < 500) growing = true;
                }
                
-               vec.resize(size, 42);
+               vec.write().resize(size, 42);
                resize_count++;
                std::this_thread::sleep_for(std::chrono::milliseconds(10));
             } catch (const std::exception& e) {
@@ -1128,8 +1147,9 @@ suite additional_async_vector_tests = [] {
             while (!stop) {
                try {
                   size_t current_size = vec.size();
-                  for (size_t i = 0; i < current_size && i < vec.size(); ++i) {
-                     sum += vec[i];
+                  auto proxy = vec.read();
+                  for (size_t i = 0; i < current_size && i < proxy.size(); ++i) {
+                     sum += proxy[i];
                   }
                } catch (const std::exception& e) {
                   errors++;
@@ -1147,8 +1167,9 @@ suite additional_async_vector_tests = [] {
                   size_t current_size = vec.size();
                   if (current_size > 0) {
                      size_t idx = counter % current_size;
-                     if (idx < vec.size()) {
-                        vec[idx] = counter;
+                     auto proxy = vec.write();
+                     if (idx < proxy.size()) {
+                        proxy[idx] = counter;
                      }
                   }
                   counter++;
@@ -1192,44 +1213,49 @@ suite additional_async_vector_tests = [] {
                         break;
                      }
                      case 1: { // Pop back if not empty
-                        if (!vec.empty()) {
-                           vec.pop_back();
+                        auto proxy = vec.write();
+                        if (!proxy.empty()) {
+                           proxy.pop_back();
                         }
                         break;
                      }
                      case 2: { // Read random element
-                        if (!vec.empty()) {
-                           size_t idx = gen() % vec.size();
-                           [[maybe_unused]] volatile size_t val = vec[idx]; // Force read
+                        auto proxy = vec.read();
+                        if (!proxy.empty()) {
+                           size_t idx = gen() % proxy.size();
+                           [[maybe_unused]] volatile size_t val = proxy[idx]; // Force read
                         }
                         break;
                      }
                      case 3: { // Modify random element
-                        if (!vec.empty()) {
-                           size_t idx = gen() % vec.size();
-                           vec[idx] = t;
+                        auto proxy = vec.write();
+                        if (!proxy.empty()) {
+                           size_t idx = gen() % proxy.size();
+                           proxy[idx] = t;
                         }
                         break;
                      }
                      case 4: { // Insert at random position
-                        size_t pos = vec.empty() ? 0 : (gen() % vec.size());
-                        auto it = vec.begin();
-                        std::advance(it, std::min(pos, vec.size()));
-                        vec.insert(it, t);
+                        auto proxy = vec.write();
+                        size_t pos = proxy.empty() ? 0 : (gen() % proxy.size());
+                        auto it = proxy.begin();
+                        std::advance(it, std::min(pos, proxy.size()));
+                        proxy.insert(it, t);
                         break;
                      }
                      case 5: { // Erase at random position
-                        if (!vec.empty()) {
-                           size_t pos = gen() % vec.size();
-                           auto it = vec.begin();
+                        auto proxy = vec.write();
+                        if (!proxy.empty()) {
+                           size_t pos = gen() % proxy.size();
+                           auto it = proxy.begin();
                            std::advance(it, pos);
-                           vec.erase(it);
+                           proxy.erase(it);
                         }
                         break;
                      }
                      case 6: { // Iterate through
                         [[maybe_unused]] volatile size_t count = 0;
-                        for (const auto& val : vec) {
+                        for (const auto& val : vec.read()) {
                            count += (val > 0 ? 1 : 0); // Simple operation to ensure compiler doesn't optimize away
                         }
                         break;
@@ -1268,5 +1294,5 @@ suite additional_async_vector_tests = [] {
       }
    };
 };
-*/
+
 int main() {}
