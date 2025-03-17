@@ -27,13 +27,7 @@
 // It ensures thread safety during read and write operations
 
 namespace glz
-{
-   // Design considerations
-   // We use a std::unique_ptr inside the vector so that we can store types that are not copyable and no movable
-   // iterators need unique locks, because they allow write access
-   // const iterators use shared locks, because the access is read only
-   // We use shared_ptrs of locks so that we can share locks and avoid dead locks when copying iterators
-   
+{   
    template <class V>
    struct async_vector
    {
