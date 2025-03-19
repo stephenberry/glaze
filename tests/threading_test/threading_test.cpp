@@ -7,53 +7,53 @@
 #include "glaze/glaze_exceptions.hpp"
 #include "glaze/thread/async_string.hpp"
 #include "glaze/thread/async_vector.hpp"
-#include "glaze/thread/atom.hpp"
+#include "glaze/thread/guard.hpp"
 #include "ut/ut.hpp"
 
 using namespace ut;
 
 suite atom_tests = [] {
    "construction"_test = [] {
-      glz::atom<int> a;
+      glz::guard<int> a;
       expect(a.load() == 0) << "Default constructor should initialize to 0";
 
-      glz::atom<int> b(42);
+      glz::guard<int> b(42);
       expect(b.load() == 42) << "Value constructor should initialize to given value";
 
-      glz::atom<double> c(3.14);
+      glz::guard<double> c(3.14);
       expect(c.load() == 3.14) << "Should work with floating point types";
    };
 
    "copy_semantics"_test = [] {
-      glz::atom<int> a(42);
-      glz::atom<int> b = a;
+      glz::guard<int> a(42);
+      glz::guard<int> b = a;
       expect(b.load() == 42) << "Copy constructor should copy the value";
 
-      glz::atom<int> c(10);
+      glz::guard<int> c(10);
       c = a;
       expect(c.load() == 42) << "Copy assignment should copy the value";
 
-      glz::atom<int> d;
+      glz::guard<int> d;
       d = 100;
       expect(d.load() == 100) << "Assignment from T should store the value";
    };
 
    "move_semantics"_test = [] {
-      glz::atom<int> a(42);
-      glz::atom<int> b = std::move(a);
+      glz::guard<int> a(42);
+      glz::guard<int> b = std::move(a);
       expect(b.load() == 42) << "Move constructor should copy the value";
       expect(a.load() == 42) << "Source should still have its value after move";
 
-      glz::atom<int> c(10);
+      glz::guard<int> c(10);
       c = std::move(a);
       expect(c.load() == 42) << "Move assignment should copy the value";
       expect(a.load() == 42) << "Source should still have its value after move";
    };
 
    "comparison_with_atom"_test = [] {
-      glz::atom<int> a(42);
-      glz::atom<int> b(42);
-      glz::atom<int> c(100);
+      glz::guard<int> a(42);
+      glz::guard<int> b(42);
+      glz::guard<int> c(100);
 
       expect(a == b) << "Equal atoms should compare equal";
       expect(a != c) << "Different atoms should not compare equal";
@@ -64,7 +64,7 @@ suite atom_tests = [] {
    };
 
    "comparison_with_value"_test = [] {
-      glz::atom<int> a(42);
+      glz::guard<int> a(42);
 
       expect(a == 42) << "Atom should compare equal with equal value";
       expect(a != 100) << "Atom should not compare equal with different value";
@@ -73,8 +73,8 @@ suite atom_tests = [] {
       expect(a > 10) << "Greater than should work with value";
       expect(a >= 42) << "Greater than or equal should work with value";
 
-      expect(42 == a) << "Value should compare equal with equal glz::atom";
-      expect(100 != a) << "Value should not compare equal with different glz::atom";
+      expect(42 == a) << "Value should compare equal with equal glz::guard";
+      expect(100 != a) << "Value should not compare equal with different glz::guard";
       expect(10 < a) << "Less than should work with value on left";
       expect(42 <= a) << "Less than or equal should work with value on left";
       expect(100 > a) << "Greater than should work with value on left";
@@ -82,7 +82,7 @@ suite atom_tests = [] {
    };
 
    "load_store"_test = [] {
-      glz::atom<int> a(42);
+      glz::guard<int> a(42);
       expect(a.load() == 42) << "Load should return current value";
 
       a.store(100);
@@ -92,7 +92,7 @@ suite atom_tests = [] {
    };
 
    "exchange"_test = [] {
-      glz::atom<int> a(42);
+      glz::guard<int> a(42);
       int old = a.exchange(100);
 
       expect(old == 42) << "Exchange should return old value";
@@ -100,7 +100,7 @@ suite atom_tests = [] {
    };
 
    "compare_exchange"_test = [] {
-      glz::atom<int> a(42);
+      glz::guard<int> a(42);
 
       int expected = 42;
       bool success = a.compare_exchange_strong(expected, 100);
@@ -117,7 +117,7 @@ suite atom_tests = [] {
    };
 
    "arithmetic_operations"_test = [] {
-      glz::atom<int> a(42);
+      glz::guard<int> a(42);
 
       expect(a.fetch_add(10) == 42) << "Fetch add should return old value";
       expect(a.load() == 52) << "Fetch add should update the value";
@@ -145,7 +145,7 @@ suite atom_tests = [] {
    };
 
    "bitwise_operations"_test = [] {
-      glz::atom<int> a(0b1100);
+      glz::guard<int> a(0b1100);
 
       expect(a.fetch_and(0b1010) == 0b1100) << "Fetch AND should return old value";
       expect(a.load() == 0b1000) << "Fetch AND should update the value";
@@ -167,7 +167,7 @@ suite atom_tests = [] {
    };
 
    "thread_safety"_test = []() mutable {
-      glz::atom<int> counter(0);
+      glz::guard<int> counter(0);
 
       std::deque<std::thread> threads;
       for (int i = 0; i < 10; ++i) {
@@ -197,9 +197,9 @@ suite atom_tests = [] {
       Point p2{1, 2};
       Point p3{3, 4};
 
-      glz::atom<Point> a(p1);
-      glz::atom<Point> b(p2);
-      glz::atom<Point> c(p3);
+      glz::guard<Point> a(p1);
+      glz::guard<Point> b(p2);
+      glz::guard<Point> c(p3);
 
       expect(a == b) << "Atoms with structs should compare correctly";
       expect(a != c) << "Atoms with structs should compare correctly";
@@ -207,7 +207,7 @@ suite atom_tests = [] {
    };
 
    "memory_order"_test = [] {
-      glz::atom<int> a(42);
+      glz::guard<int> a(42);
 
       int v1 = a.load(std::memory_order_relaxed);
       expect(v1 == 42) << "Load with relaxed memory order should work";

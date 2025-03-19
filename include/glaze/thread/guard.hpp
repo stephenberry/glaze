@@ -4,16 +4,16 @@
 #pragma once
 
 /**
- * @class atom
+ * @class guard
  * @brief A copyable and comparable wrapper for std::atomic
  * @tparam T The underlying value type
  *
- * The atom<T> class provides a wrapper around std::atomic<T> that adds copyability
+ * The guard<T> class provides a wrapper around std::atomic<T> that adds copyability
  * and comparability while maintaining thread-safety for individual operations.
  * This allows for more intuitive usage patterns where atomic values need to be
  * treated occasionally as regular values.
  *
- * Unlike std::atomic, atom<T> can be:
+ * Unlike std::atomic, guard<T> can be:
  * - Copied (using atomic load operations)
  * - Compared (between atoms and with raw values)
  * - Used with familiar operator syntax
@@ -30,14 +30,14 @@
  *
  * Example usage:
  * @code
- * atom<int> counter(0);
+ * guard<int> counter(0);
  *
  * // Thread-safe operations
  * counter++;
  * counter += 5;
  *
  * // Copyable
- * atom<int> copy = counter;
+ * guard<int> copy = counter;
  *
  * // Comparable
  * if (counter > 10) { ... }
@@ -51,53 +51,53 @@
 namespace glz
 {
    template <typename T>
-   class atom
+   class guard
    {
      private:
       std::atomic<T> value;
 
      public:
       // Default constructor
-      constexpr atom() noexcept : value() {}
+      constexpr guard() noexcept : value() {}
 
       // Constructor with initial value
-      explicit constexpr atom(T desired) noexcept : value(desired) {}
+      explicit constexpr guard(T desired) noexcept : value(desired) {}
 
-      atom(const atom& other) noexcept : value(other.load()) {}
+      guard(const guard& other) noexcept : value(other.load()) {}
 
-      atom(atom&& other) noexcept : value(other.load()) {}
+      guard(guard&& other) noexcept : value(other.load()) {}
 
-      atom& operator=(const atom& other) noexcept
+      guard& operator=(const guard& other) noexcept
       {
          store(other.load());
          return *this;
       }
 
-      atom& operator=(atom&& other) noexcept
+      guard& operator=(guard&& other) noexcept
       {
          store(other.load());
          return *this;
       }
 
       // Assignment from T
-      atom& operator=(T desired) noexcept
+      guard& operator=(T desired) noexcept
       {
          store(desired);
          return *this;
       }
 
       // Comparison operators
-      bool operator==(const atom& other) const noexcept { return load() == other.load(); }
+      bool operator==(const guard& other) const noexcept { return load() == other.load(); }
 
-      bool operator!=(const atom& other) const noexcept { return load() != other.load(); }
+      bool operator!=(const guard& other) const noexcept { return load() != other.load(); }
 
-      bool operator<(const atom& other) const noexcept { return load() < other.load(); }
+      bool operator<(const guard& other) const noexcept { return load() < other.load(); }
 
-      bool operator<=(const atom& other) const noexcept { return load() <= other.load(); }
+      bool operator<=(const guard& other) const noexcept { return load() <= other.load(); }
 
-      bool operator>(const atom& other) const noexcept { return load() > other.load(); }
+      bool operator>(const guard& other) const noexcept { return load() > other.load(); }
 
-      bool operator>=(const atom& other) const noexcept { return load() >= other.load(); }
+      bool operator>=(const guard& other) const noexcept { return load() >= other.load(); }
 
       // Comparison with T
       bool operator==(const T& other) const noexcept { return load() == other; }
@@ -230,37 +230,37 @@ namespace glz
 
    // Non-member comparison operators
    template <typename T>
-   bool operator==(const T& lhs, const atom<T>& rhs) noexcept
+   bool operator==(const T& lhs, const guard<T>& rhs) noexcept
    {
       return lhs == rhs.load();
    }
 
    template <typename T>
-   bool operator!=(const T& lhs, const atom<T>& rhs) noexcept
+   bool operator!=(const T& lhs, const guard<T>& rhs) noexcept
    {
       return lhs != rhs.load();
    }
 
    template <typename T>
-   bool operator<(const T& lhs, const atom<T>& rhs) noexcept
+   bool operator<(const T& lhs, const guard<T>& rhs) noexcept
    {
       return lhs < rhs.load();
    }
 
    template <typename T>
-   bool operator<=(const T& lhs, const atom<T>& rhs) noexcept
+   bool operator<=(const T& lhs, const guard<T>& rhs) noexcept
    {
       return lhs <= rhs.load();
    }
 
    template <typename T>
-   bool operator>(const T& lhs, const atom<T>& rhs) noexcept
+   bool operator>(const T& lhs, const guard<T>& rhs) noexcept
    {
       return lhs > rhs.load();
    }
 
    template <typename T>
-   bool operator>=(const T& lhs, const atom<T>& rhs) noexcept
+   bool operator>=(const T& lhs, const guard<T>& rhs) noexcept
    {
       return lhs >= rhs.load();
    }
