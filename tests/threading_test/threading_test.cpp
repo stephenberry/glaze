@@ -5,8 +5,8 @@
 #include <thread>
 
 #include "glaze/glaze_exceptions.hpp"
-#include "glaze/thread/async_vector.hpp"
 #include "glaze/thread/async_string.hpp"
+#include "glaze/thread/async_vector.hpp"
 #include "glaze/thread/atom.hpp"
 #include "ut/ut.hpp"
 
@@ -229,40 +229,40 @@ suite async_string_tests = [] {
       expect(s.size() == 0);
       expect(s.length() == 0);
    };
-   
+
    "async_string param constructors"_test = [] {
       glz::async_string s1("Hello");
       expect(s1.size() == 5) << "s1.size()";
       expect(s1 == "Hello");
-      
+
       std::string st = "World";
       glz::async_string s2(st);
       expect(s2 == "World");
-      
+
       std::string_view sv("View me");
       glz::async_string s3(sv);
       expect(s3 == "View me");
-      
+
       // Move construct
       glz::async_string s4(std::move(s2));
       expect(s4 == "World");
       expect(s2.empty()); // Moved-from string should be empty
    };
-   
+
    "async_string copy constructor"_test = [] {
       glz::async_string original("Copy me");
       glz::async_string copy(original);
       expect(copy == "Copy me");
       expect(copy == original);
    };
-   
+
    "async_string move constructor"_test = [] {
       glz::async_string original("Move me");
       glz::async_string moved(std::move(original));
       expect(moved == "Move me");
       expect(original.empty());
    };
-   
+
    "async_string copy assignment"_test = [] {
       glz::async_string s1("First");
       glz::async_string s2("Second");
@@ -270,7 +270,7 @@ suite async_string_tests = [] {
       expect(s1 == s2);
       expect(s1 == "Second");
    };
-   
+
    "async_string move assignment"_test = [] {
       glz::async_string s1("First");
       glz::async_string s2("Second");
@@ -278,24 +278,24 @@ suite async_string_tests = [] {
       expect(s1 == "Second");
       expect(s2.empty());
    };
-   
+
    "async_string assignment from various types"_test = [] {
       glz::async_string s;
       s = "Hello again";
       expect(s == "Hello again");
       expect(s.size() == 11);
-      
+
       std::string st = "Another test";
       s = st;
       expect(s == "Another test");
       expect(s.size() == 12);
-      
+
       std::string_view sv("Testing 123");
       s = sv;
       expect(s == "Testing 123");
       expect(s.size() == 11);
    };
-   
+
    "async_string read/write proxy"_test = [] {
       glz::async_string s("initial");
       {
@@ -303,68 +303,68 @@ suite async_string_tests = [] {
          writer->append(" data");
       }
       expect(s == "initial data");
-      
+
       {
          auto reader = s.read();
          expect(*reader == "initial data");
          expect(reader->size() == 12);
       }
    };
-   
+
    "async_string modifiers"_test = [] {
       glz::async_string s("Hello");
       s.push_back('!');
       expect(s == "Hello!");
       expect(s.size() == 6);
-      
+
       s.pop_back();
       expect(s == "Hello");
       expect(s.size() == 5);
-      
+
       s.clear();
       expect(s.empty());
       expect(s.size() == 0);
    };
-   
+
    "async_string append and operator+="_test = [] {
       glz::async_string s("Hello");
       s.append(", ").append("World");
       expect(s == "Hello, World");
       expect(s.size() == 12);
-      
+
       s += "!!!";
       expect(s == "Hello, World!!!");
       expect(s.size() == 15);
-      
+
       s += '?';
       expect(s == "Hello, World!!!?");
       expect(s.size() == 16);
    };
-   
+
    "async_string element access"_test = [] {
       glz::async_string s("Test");
       expect(s.at(0) == 'T');
       expect(s[1] == 'e');
       expect(s.front() == 'T');
       expect(s.back() == 't');
-      
+
       // Check out_of_range
       expect(throws([&] {
          (void)s.at(10); // out_of_range
       }));
    };
-   
+
    "async_string compare"_test = [] {
       glz::async_string s1("abc");
       glz::async_string s2("abcd");
       expect(s1.compare(s2) < 0);
       expect(s2.compare(s1) > 0);
-      
+
       expect(s1 < s2);
       expect(s1 != s2);
       expect(not(s1 == s2));
    };
-   
+
    "async_string relational ops"_test = [] {
       glz::async_string s1("abc");
       glz::async_string s2("abc");
@@ -373,7 +373,7 @@ suite async_string_tests = [] {
       expect(s1 >= s2);
       expect(s1 <= s2);
    };
-   
+
    "async_string swap"_test = [] {
       glz::async_string s1("Hello");
       glz::async_string s2("World");
@@ -381,165 +381,165 @@ suite async_string_tests = [] {
       expect(s1 == "World");
       expect(s2 == "Hello");
    };
-   
+
    // Demonstrate Glaze JSON serialization/deserialization
    "async_string write_json / read_json"_test = [] {
       glz::async_string s("Serialize me!");
       std::string buffer{};
-      
+
       // write_json returns a status code: false means success, true means error
       expect(not glz::write_json(s, buffer)) << "Failed to serialize async_string.";
       // The JSON for a single string is just a quoted string
       expect(buffer == R"("Serialize me!")") << buffer;
-      
+
       glz::async_string t;
       expect(not glz::read_json(t, buffer)) << "Failed to deserialize async_string.";
       expect(*t.read() == "Serialize me!");
    };
-   
+
    // Test an empty string's serialization
    "async_string empty serialization"_test = [] {
       glz::async_string s;
       std::string buffer{};
-      
+
       expect(not glz::write_json(s, buffer));
       // An empty string in JSON
       expect(buffer == R"("")") << buffer;
-      
+
       glz::async_string t("placeholder");
       expect(not glz::read_json(t, buffer));
       expect(t.empty());
    };
-   
+
    "async_string starts_with"_test = [] {
       glz::async_string s("Hello, World!");
-      
+
       // Positive cases
       expect(s.starts_with("Hello"));
       expect(s.starts_with(std::string("Hello")));
       expect(s.starts_with(std::string_view("Hello")));
-      
+
       // Negative cases
       expect(not s.starts_with("World"));
       expect(not s.starts_with("hello")); // Case-sensitive
       expect(not s.starts_with("Hello, World! And more"));
-      
+
       // Edge cases
       glz::async_string empty;
       expect(empty.starts_with("")); // An empty string starts with an empty string
       expect(not empty.starts_with("Non-empty"));
-      
+
       expect(s.starts_with("")); // Any string starts with an empty string
    };
-   
+
    "async_string ends_with"_test = [] {
       glz::async_string s("Hello, World!");
-      
+
       // Positive cases
       expect(s.ends_with("World!"));
       expect(s.ends_with(std::string("World!")));
       expect(s.ends_with(std::string_view("World!")));
-      
+
       // Negative cases
       expect(not s.ends_with("Hello"));
       expect(not s.ends_with("world!")); // Case-sensitive
       expect(not s.ends_with("...World!"));
-      
+
       // Edge cases
       glz::async_string empty;
       expect(empty.ends_with("")); // An empty string ends with an empty string
       expect(not empty.ends_with("Non-empty"));
-      
+
       expect(s.ends_with("")); // Any string ends with an empty string
    };
-   
+
    "async_string substr"_test = [] {
       glz::async_string s("Hello, World!");
-      
+
       // Basic substrings
       auto sub1 = s.substr(0, 5);
       expect(sub1 == "Hello");
       expect(sub1.size() == 5);
-      
+
       auto sub2 = s.substr(7, 5);
       expect(sub2 == "World");
       expect(sub2.size() == 5);
-      
+
       // Substring to the end
       auto sub3 = s.substr(7);
       expect(sub3 == "World!");
       expect(sub3.size() == 6);
-      
+
       // Full string
       auto sub4 = s.substr(0, s.size());
       expect(sub4 == s);
-      
+
       // Empty substring
       auto sub5 = s.substr(5, 0);
       expect(sub5.empty());
       expect(sub5.size() == 0);
-      
+
       // Edge cases
       glz::async_string empty;
       auto sub_empty = empty.substr(0, 1);
       expect(sub_empty.empty());
-      
+
       // Out of range positions
       expect(throws([&] {
          s.substr(100, 5); // Start position out of range
       }));
-      
+
       expect(not throws([&] { s.substr(5, 100); }));
-      
+
       // Start position at the end of the string
       auto sub_end = s.substr(s.size(), 0);
       expect(sub_end.empty());
-      
+
       // Start position just before the end
       auto sub_last = s.substr(s.size() - 1, 1);
       expect(sub_last == "!");
       expect(sub_last.size() == 1);
    };
-   
+
 #ifdef __cpp_lib_format
    "async_string std::format single argument"_test = [] {
       glz::async_string name("Alice");
       std::string formatted = std::format("Hello, {}!", name);
       expect(formatted == "Hello, Alice!");
    };
-   
+
    "async_string std::format multiple arguments"_test = [] {
       glz::async_string name("Bob");
       glz::async_string city("New York");
       std::string formatted = std::format("{} is from {}.", name, city);
       expect(formatted == "Bob is from New York.");
    };
-   
+
    "async_string std::format with empty strings"_test = [] {
       glz::async_string empty{};
-      
+
       // Formatting with an empty glz::async_string as an argument
       std::string formatted_empty_arg = std::format("Hello, {}!", empty);
       expect(formatted_empty_arg == "Hello, !");
    };
-   
+
    "async_string std::format numeric and other types"_test = [] {
       glz::async_string name("Diana");
       int age = 30;
       double height = 5.6;
-      
+
       std::string formatted = std::format("{} is {} years old and {} feet tall.", name, age, height);
       expect(formatted == "Diana is 30 years old and 5.6 feet tall.");
    };
 #endif
-   
+
    "async_string concurrent reads"_test = [] {
       std::string long_string(1024, 'A');
       glz::async_string s(long_string);
       std::vector<std::thread> threads;
       std::mutex mutex;
       std::vector<std::string> results(10);
-      
+
       for (int i = 0; i < 10; ++i) {
          threads.emplace_back([&, i]() {
             auto reader = s.read();
@@ -547,16 +547,16 @@ suite async_string_tests = [] {
             results[i] = *reader;
          });
       }
-      
+
       for (auto& t : threads) {
          t.join();
       }
-      
+
       for (const auto& result : results) {
          expect(result == long_string);
       }
    };
-   
+
    "async_string concurrent writes with single char"_test = [] {
       glz::async_string s;
       std::vector<std::thread> threads;
@@ -567,7 +567,7 @@ suite async_string_tests = [] {
       }
       std::string sorted_expected_result = expected_result;
       std::sort(sorted_expected_result.begin(), sorted_expected_result.end());
-      
+
       for (int i = 0; i < num_threads; ++i) {
          threads.emplace_back([&, char_to_append = char('a' + i)]() {
             for (int j = 0; j < 256; ++j) {
@@ -575,17 +575,17 @@ suite async_string_tests = [] {
             }
          });
       }
-      
+
       for (auto& t : threads) {
          t.join();
       }
-      
+
       std::string actual_result = *s.read();
       std::string sorted_actual_result = actual_result;
       std::sort(sorted_actual_result.begin(), sorted_actual_result.end());
       expect(sorted_actual_result == sorted_expected_result);
    };
-   
+
    "async_string concurrent writes with append"_test = [] {
       glz::async_string s;
       std::vector<std::thread> threads;
@@ -598,20 +598,20 @@ suite async_string_tests = [] {
          expected_result += append_str;
       }
       std::sort(expected_result.begin(), expected_result.end());
-      
+
       for (int i = 0; i < num_threads; ++i) {
          threads.emplace_back([&, str_to_append = to_append[i]]() { s.append(str_to_append); });
       }
-      
+
       for (auto& t : threads) {
          t.join();
       }
-      
+
       std::string actual_result = *s.read();
       std::sort(actual_result.begin(), actual_result.end());
       expect(actual_result == expected_result);
    };
-   
+
    "async_string concurrent reads and writes"_test = [] {
       std::string initial_string(512, 'I');
       glz::async_string s(initial_string);
@@ -630,7 +630,7 @@ suite async_string_tests = [] {
       }
       std::sort(sorted_appends_expected.begin(), sorted_appends_expected.end());
       expected_final_string = initial_string + sorted_appends_expected;
-      
+
       for (int i = 0; i < num_threads; ++i) {
          threads.emplace_back([&, id = i]() {
             // Writer thread
@@ -650,17 +650,17 @@ suite async_string_tests = [] {
             s.append(appends[id]);
          });
       }
-      
+
       for (auto& t : threads) {
          t.join();
       }
-      
+
       std::string actual_result = *s.read();
       std::string sorted_appends_actual = actual_result.substr(initial_string.length());
       std::sort(sorted_appends_actual.begin(), sorted_appends_actual.end());
       expect(initial_string + sorted_appends_actual == expected_final_string);
    };
-   
+
    "async_string multiple concurrent write proxies"_test = [] {
       glz::async_string s;
       std::vector<std::thread> threads;
@@ -673,23 +673,23 @@ suite async_string_tests = [] {
          expected_append += append_str;
       }
       std::sort(expected_append.begin(), expected_append.end());
-      
+
       for (int i = 0; i < num_threads; ++i) {
          threads.emplace_back([&, str_to_append = to_append[i]]() {
             auto writer = s.write();
             writer->append(str_to_append);
          });
       }
-      
+
       for (auto& t : threads) {
          t.join();
       }
-      
+
       std::string actual_result = *s.read();
       std::sort(actual_result.begin(), actual_result.end());
       expect(actual_result == expected_append);
    };
-   
+
    "async_string concurrent read and modify"_test = [] {
       std::string initial_value(1024, 'X');
       glz::async_string s(initial_value);
@@ -697,7 +697,7 @@ suite async_string_tests = [] {
       int num_threads = 10;
       std::mutex m;
       std::vector<std::string> observed_values;
-      
+
       for (int i = 0; i < num_threads; ++i) {
          threads.emplace_back([&, id = i]() {
             if (id % 2 == 0) {
@@ -717,82 +717,80 @@ suite async_string_tests = [] {
             }
          });
       }
-      
+
       for (auto& t : threads) {
          t.join();
       }
-      
+
       // It's hard to predict the exact sequence of observed values, but we can check for consistency.
       // All observed values should at least start with the initial value.
       for (const auto& val : observed_values) {
          expect(val.rfind(initial_value, 0) == 0);
       }
-      
+
       // The final string should have been modified by the modifier threads.
       expect(*s.read().operator->() != initial_value);
       expect(s.read()->length() > initial_value.length());
    };
-   
+
    // Tests for proxy size/capacity methods
    "proxy size and capacity methods"_test = [] {
       glz::async_string s("Hello, world!");
       auto p = s.write();
-      
+
       expect(p.size() == 13);
       expect(p.length() == 13);
       expect(p.max_size() > 0);
       expect(p.capacity() >= p.size());
       expect(!p.empty());
-      
+
       p.reserve(100);
       expect(p.capacity() >= 100);
-      
+
       p.shrink_to_fit();
       expect(p.capacity() >= p.size());
-      
+
       glz::async_string empty_str;
       auto empty_p = empty_str.write();
       expect(empty_p.empty());
       expect(empty_p.size() == 0);
    };
-   
+
    // Tests for proxy element access methods
    "proxy element access methods"_test = [] {
       glz::async_string s("Test string");
       auto p = s.write();
-      
+
       expect(p[0] == 'T');
       expect(p.at(1) == 'e');
       expect(p.front() == 'T');
       expect(p.back() == 'g');
-      
+
       // data() and c_str() should return valid pointers
       expect(p.data() != nullptr);
       expect(p.c_str() != nullptr);
-      
+
       // Content should match
       expect(std::string(p.data()) == "Test string");
       expect(std::string(p.c_str()) == "Test string");
-      
+
       // Null termination for c_str()
       expect(p.c_str()[p.size()] == '\0');
-      
+
       // Check out_of_range for at()
-      expect(throws([&] {
-         (void)p.at(100);
-      }));
-      
+      expect(throws([&] { (void)p.at(100); }));
+
       // Modifying through operator[]
       p[0] = 'B';
       expect(p[0] == 'B');
       expect(*p == "Best string");
    };
-   
+
    // Tests for proxy string operations
    "proxy string operations"_test = [] {
       glz::async_string s("Hello, world!");
       auto p = s.write();
-      
+
       // compare
       expect(p.compare("Hello, world!") == 0);
       expect(p.compare("Hello") > 0);
@@ -800,30 +798,30 @@ suite async_string_tests = [] {
       expect(p.compare(std::string("Hello, world!")) == 0);
       expect(p.compare(std::string_view("Hello, world!")) == 0);
       expect(p.compare(0, 5, std::string("Hello")) == 0);
-      
+
       // substr
       expect(p.substr(0, 5) == "Hello");
       expect(p.substr(7, 5) == "world");
       expect(p.substr(7) == "world!");
-      
+
       // starts_with
       expect(p.starts_with("Hello"));
       expect(p.starts_with(std::string_view("Hello")));
       expect(p.starts_with('H'));
       expect(!p.starts_with("hello")); // case sensitive
-      
+
       // ends_with
       expect(p.ends_with("world!"));
       expect(p.ends_with(std::string_view("world!")));
       expect(p.ends_with('!'));
       expect(!p.ends_with("World!")); // case sensitive
    };
-   
+
    // Tests for proxy search operations
    "proxy search operations"_test = [] {
       glz::async_string s("Hello, world! Hello again!");
       auto p = s.write();
-      
+
       // find
       expect(p.find("world") == 7);
       expect(p.find('w') == 7);
@@ -832,14 +830,14 @@ suite async_string_tests = [] {
       expect(p.find(std::string("world")) == 7);
       expect(p.find(std::string_view("world")) == 7);
       expect(p.find("o", 0, 1) == 4);
-      
+
       // rfind
       expect(p.rfind("Hello") == 14);
       expect(p.rfind('!') == 25);
       expect(p.rfind("notfound") == std::string::npos);
       expect(p.rfind(std::string("Hello")) == 14);
       expect(p.rfind(std::string_view("Hello")) == 14);
-      
+
       // find_first_of
       expect(p.find_first_of("aeiou") == 1); // 'e' in "Hello"
       expect(p.find_first_of('e') == 1);
@@ -847,25 +845,25 @@ suite async_string_tests = [] {
       expect(p.find_first_of(std::string("aeiou")) == 1);
       expect(p.find_first_of(std::string_view("aeiou")) == 1);
       expect(p.find_first_of("aeiou", 5) == 8); // 'o' in "world"
-      
+
       // find_last_of
       expect(p.find_last_of("aeiou") == 23); // 'i' in "again"
       expect(p.find_last_of('n') == 24);
       expect(p.find_last_of("xyz") == std::string::npos);
-      
+
       // find_first_not_of
       expect(p.find_first_not_of("Helo") == 5); // ',' after "Hello"
       expect(p.find_first_not_of('H') == 1);
-      
+
       // find_last_not_of
       expect(p.find_last_not_of("!") == 24); // 'n' before final '!'
       expect(p.find_last_not_of(" !") == 24); // 'n' before final '!'
    };
-   
+
    // Tests for proxy modifiers
    "proxy advanced modifiers"_test = [] {
       glz::async_string s("Hello, world!");
-      
+
       // Testing clear
       {
          auto p = s.write();
@@ -873,109 +871,109 @@ suite async_string_tests = [] {
          expect(p.empty());
          expect(p.size() == 0);
       }
-      
+
       // Testing resize
       {
          s = "Resize me";
          auto p = s.write();
-         
+
          // Shrink
          p.resize(7);
          expect(*p == "Resize ");
          expect(p.size() == 7);
-         
+
          // Expand with default char
          p.resize(10);
          expect(p.size() == 10);
          expect(p[7] == '\0');
-         
+
          // Expand with specified char
          p.resize(15, '!');
          expect(p.size() == 15);
          expect(p[10] == '!');
          expect(p[14] == '!');
       }
-      
+
       // Testing push_back and pop_back
       {
          s = "Test";
          auto p = s.write();
-         
+
          p.push_back('!');
          expect(*p == "Test!");
-         
+
          p.pop_back();
          expect(*p == "Test");
-         
+
          // Multiple operations
          p.push_back('1');
          p.push_back('2');
          p.push_back('3');
          expect(*p == "Test123");
-         
+
          p.pop_back();
          p.pop_back();
          expect(*p == "Test1");
       }
-      
+
       // Testing append and operator+=
       {
          s = "Hello";
          auto p = s.write();
-         
+
          p.append(", ");
          expect(*p == "Hello, ");
-         
+
          p.append(std::string("world"));
          expect(*p == "Hello, world");
-         
+
          p.append(std::string_view("!"));
          expect(*p == "Hello, world!");
-         
+
          p.append(" How", 4);
          expect(*p == "Hello, world! How");
-         
+
          p.append(3, '!');
          expect(*p == "Hello, world! How!!!");
-         
+
          // Testing operator+=
          p += " Testing";
          expect(*p == "Hello, world! How!!! Testing");
-         
+
          p += std::string(" operator");
          expect(*p == "Hello, world! How!!! Testing operator");
-         
+
          p += std::string_view(" +=");
          expect(*p == "Hello, world! How!!! Testing operator +=");
-         
+
          p += '!';
          expect(*p == "Hello, world! How!!! Testing operator +=!");
       }
-      
+
       // Testing swap
       {
          s = "First string";
          std::string other = "Second string";
          auto p = s.write();
-         
+
          p.swap(other);
          expect(*p == "Second string");
          expect(other == "First string");
       }
    };
-   
+
    // Tests for const_proxy methods
    "const_proxy methods"_test = [] {
       const glz::async_string s("This is a const test string!");
       auto cp = s.read();
-      
+
       // Size/capacity
       expect(cp.size() == 28);
       expect(cp.length() == 28);
       expect(cp.max_size() > 0);
       expect(cp.capacity() >= cp.size());
       expect(!cp.empty());
-      
+
       // Element access
       expect(cp[0] == 'T');
       expect(cp.at(1) == 'h');
@@ -983,56 +981,56 @@ suite async_string_tests = [] {
       expect(cp.back() == '!');
       expect(std::string(cp.data()) == "This is a const test string!");
       expect(std::string(cp.c_str()) == "This is a const test string!");
-      
+
       // String operations
       expect(cp.compare("This is a const test string!") == 0);
       expect(cp.compare("This") > 0);
       expect(cp.compare("Zebra") < 0);
       expect(cp.compare(std::string("This is a const test string!")) == 0);
       expect(cp.compare(std::string_view("This is a const test string!")) == 0);
-      
+
       expect(cp.substr(0, 4) == "This");
       expect(cp.substr(10, 5) == "const");
       expect(cp.substr(10) == "const test string!");
-      
+
       expect(cp.starts_with("This"));
       expect(cp.starts_with('T'));
       expect(cp.starts_with(std::string_view("This")));
       expect(!cp.starts_with("this")); // case sensitive
-      
+
       expect(cp.ends_with("string!"));
       expect(cp.ends_with('!'));
       expect(cp.ends_with(std::string_view("string!")));
       expect(!cp.ends_with("String!")); // case sensitive
-      
+
       // Search operations
       expect(cp.find("const") == 10);
       expect(cp.find('c') == 10);
       expect(cp.find("notfound") == std::string::npos);
       expect(cp.find(std::string("test")) == 16);
       expect(cp.find(std::string_view("string")) == 21);
-      
+
       expect(cp.rfind("is") == 5);
       expect(cp.rfind('s') == 21);
-      
+
       // Testing operator conversions and dereference
       std::string_view sv = cp;
       expect(sv == "This is a const test string!");
-      
+
       const std::string& ref = *cp;
       expect(ref == "This is a const test string!");
-      
+
       const std::string* ptr = cp.operator->();
       expect(*ptr == "This is a const test string!");
-      
+
       // Test .value() method still works
       expect(cp.value() == "This is a const test string!");
    };
-   
+
    // Test proxy chain operations (ensuring method chaining works)
    "proxy method chaining"_test = [] {
       glz::async_string s("Start");
-      
+
       // Chain several operations
       auto p = s.write();
       p.append(" ").append("with").append(" chaining").replace(0, 5, "Begin");
