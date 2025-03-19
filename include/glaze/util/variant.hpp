@@ -3,8 +3,8 @@
 
 #pragma once
 
-#include <array>
 #include <algorithm>
+#include <array>
 #include <cstddef>
 #include <variant>
 
