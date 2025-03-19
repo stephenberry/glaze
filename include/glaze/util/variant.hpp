@@ -3,12 +3,11 @@
 
 #pragma once
 
+#include <array>
 #include <algorithm>
 #include <cstddef>
 #include <variant>
 
-#include "glaze/util/for_each.hpp"
-#include "glaze/util/parse.hpp"
 #include "glaze/util/type_traits.hpp"
 
 namespace glz
