@@ -116,6 +116,221 @@ namespace glz
 
          std::string& value() noexcept { return *ptr; }
          const std::string& value() const noexcept { return *ptr; }
+
+         // Size/capacity
+         [[nodiscard]] size_t size() const noexcept { return ptr->size(); }
+         [[nodiscard]] size_t length() const noexcept { return ptr->length(); }
+         [[nodiscard]] size_t max_size() const noexcept { return ptr->max_size(); }
+         [[nodiscard]] size_t capacity() const noexcept { return ptr->capacity(); }
+         [[nodiscard]] bool empty() const noexcept { return ptr->empty(); }
+         void reserve(size_t new_cap) { ptr->reserve(new_cap); }
+         void shrink_to_fit() { ptr->shrink_to_fit(); }
+
+         // Element access
+         char& operator[](size_t pos) { return (*ptr)[pos]; }
+         const char& operator[](size_t pos) const { return (*ptr)[pos]; }
+         char& at(size_t pos) { return ptr->at(pos); }
+         const char& at(size_t pos) const { return ptr->at(pos); }
+         char& front() { return ptr->front(); }
+         const char& front() const { return ptr->front(); }
+         char& back() { return ptr->back(); }
+         const char& back() const { return ptr->back(); }
+         char* data() noexcept { return ptr->data(); }
+         const char* data() const noexcept { return ptr->data(); }
+         const char* c_str() const noexcept { return ptr->c_str(); }
+
+         // Modifiers
+         void clear() noexcept { ptr->clear(); }
+         void insert(size_t pos, const std::string& str) { ptr->insert(pos, str); }
+         void insert(size_t pos, const std::string_view& sv) { ptr->insert(pos, sv); }
+         void insert(size_t pos, const char* s) { ptr->insert(pos, s); }
+         void insert(size_t pos, const char* s, size_t n) { ptr->insert(pos, s, n); }
+         void insert(size_t pos, size_t n, char c) { ptr->insert(pos, n, c); }
+         void erase(size_t pos = 0, size_t count = std::string::npos) { ptr->erase(pos, count); }
+         void push_back(char c) { ptr->push_back(c); }
+         void pop_back() { ptr->pop_back(); }
+
+         proxy& append(const std::string& str)
+         {
+            ptr->append(str);
+            return *this;
+         }
+         proxy& append(const std::string_view& sv)
+         {
+            ptr->append(sv);
+            return *this;
+         }
+         proxy& append(const char* s)
+         {
+            ptr->append(s);
+            return *this;
+         }
+         proxy& append(const char* s, size_t n)
+         {
+            ptr->append(s, n);
+            return *this;
+         }
+         proxy& append(size_t n, char c)
+         {
+            ptr->append(n, c);
+            return *this;
+         }
+
+         proxy& operator+=(const std::string& str)
+         {
+            ptr->operator+=(str);
+            return *this;
+         }
+         proxy& operator+=(const std::string_view& sv)
+         {
+            ptr->operator+=(sv);
+            return *this;
+         }
+         proxy& operator+=(const char* s)
+         {
+            ptr->operator+=(s);
+            return *this;
+         }
+         proxy& operator+=(char c)
+         {
+            ptr->operator+=(c);
+            return *this;
+         }
+
+         void resize(size_t count) { ptr->resize(count); }
+         void resize(size_t count, char ch) { ptr->resize(count, ch); }
+         void swap(std::string& other) { ptr->swap(other); }
+
+         // String operations
+         int compare(const std::string& str) const noexcept { return ptr->compare(str); }
+         int compare(const std::string_view& sv) const noexcept { return ptr->compare(sv); }
+         int compare(const char* s) const noexcept { return ptr->compare(s); }
+         int compare(size_t pos1, size_t count1, const std::string& str) const
+         {
+            return ptr->compare(pos1, count1, str);
+         }
+
+         std::string substr(size_t pos = 0, size_t count = std::string::npos) const { return ptr->substr(pos, count); }
+
+         bool starts_with(const std::string_view& sv) const noexcept { return ptr->starts_with(sv); }
+         bool starts_with(char c) const noexcept { return ptr->starts_with(c); }
+         bool starts_with(const char* s) const { return ptr->starts_with(s); }
+
+         bool ends_with(const std::string_view& sv) const noexcept { return ptr->ends_with(sv); }
+         bool ends_with(char c) const noexcept { return ptr->ends_with(c); }
+         bool ends_with(const char* s) const { return ptr->ends_with(s); }
+
+         // Search
+         size_t find(const std::string& str, size_t pos = 0) const noexcept { return ptr->find(str, pos); }
+         size_t find(const std::string_view& sv, size_t pos = 0) const noexcept { return ptr->find(sv, pos); }
+         size_t find(const char* s, size_t pos = 0) const { return ptr->find(s, pos); }
+         size_t find(const char* s, size_t pos, size_t count) const { return ptr->find(s, pos, count); }
+         size_t find(char ch, size_t pos = 0) const noexcept { return ptr->find(ch, pos); }
+
+         size_t rfind(const std::string& str, size_t pos = std::string::npos) const noexcept
+         {
+            return ptr->rfind(str, pos);
+         }
+         size_t rfind(const std::string_view& sv, size_t pos = std::string::npos) const noexcept
+         {
+            return ptr->rfind(sv, pos);
+         }
+         size_t rfind(const char* s, size_t pos = std::string::npos) const { return ptr->rfind(s, pos); }
+         size_t rfind(const char* s, size_t pos, size_t count) const { return ptr->rfind(s, pos, count); }
+         size_t rfind(char ch, size_t pos = std::string::npos) const noexcept { return ptr->rfind(ch, pos); }
+
+         size_t find_first_of(const std::string& str, size_t pos = 0) const noexcept
+         {
+            return ptr->find_first_of(str, pos);
+         }
+         size_t find_first_of(const std::string_view& sv, size_t pos = 0) const noexcept
+         {
+            return ptr->find_first_of(sv, pos);
+         }
+         size_t find_first_of(const char* s, size_t pos = 0) const { return ptr->find_first_of(s, pos); }
+         size_t find_first_of(const char* s, size_t pos, size_t count) const
+         {
+            return ptr->find_first_of(s, pos, count);
+         }
+         size_t find_first_of(char ch, size_t pos = 0) const noexcept { return ptr->find_first_of(ch, pos); }
+
+         size_t find_last_of(const std::string& str, size_t pos = std::string::npos) const noexcept
+         {
+            return ptr->find_last_of(str, pos);
+         }
+         size_t find_last_of(const std::string_view& sv, size_t pos = std::string::npos) const noexcept
+         {
+            return ptr->find_last_of(sv, pos);
+         }
+         size_t find_last_of(const char* s, size_t pos = std::string::npos) const { return ptr->find_last_of(s, pos); }
+         size_t find_last_of(const char* s, size_t pos, size_t count) const { return ptr->find_last_of(s, pos, count); }
+         size_t find_last_of(char ch, size_t pos = std::string::npos) const noexcept
+         {
+            return ptr->find_last_of(ch, pos);
+         }
+
+         size_t find_first_not_of(const std::string& str, size_t pos = 0) const noexcept
+         {
+            return ptr->find_first_not_of(str, pos);
+         }
+         size_t find_first_not_of(const std::string_view& sv, size_t pos = 0) const noexcept
+         {
+            return ptr->find_first_not_of(sv, pos);
+         }
+         size_t find_first_not_of(const char* s, size_t pos = 0) const { return ptr->find_first_not_of(s, pos); }
+         size_t find_first_not_of(const char* s, size_t pos, size_t count) const
+         {
+            return ptr->find_first_not_of(s, pos, count);
+         }
+         size_t find_first_not_of(char ch, size_t pos = 0) const noexcept { return ptr->find_first_not_of(ch, pos); }
+
+         size_t find_last_not_of(const std::string& str, size_t pos = std::string::npos) const noexcept
+         {
+            return ptr->find_last_not_of(str, pos);
+         }
+         size_t find_last_not_of(const std::string_view& sv, size_t pos = std::string::npos) const noexcept
+         {
+            return ptr->find_last_not_of(sv, pos);
+         }
+         size_t find_last_not_of(const char* s, size_t pos = std::string::npos) const
+         {
+            return ptr->find_last_not_of(s, pos);
+         }
+         size_t find_last_not_of(const char* s, size_t pos, size_t count) const
+         {
+            return ptr->find_last_not_of(s, pos, count);
+         }
+         size_t find_last_not_of(char ch, size_t pos = std::string::npos) const noexcept
+         {
+            return ptr->find_last_not_of(ch, pos);
+         }
+
+         // Additional functionality
+         proxy& replace(size_t pos, size_t count, const std::string& str)
+         {
+            ptr->replace(pos, count, str);
+            return *this;
+         }
+         proxy& replace(size_t pos, size_t count, const std::string_view& sv)
+         {
+            ptr->replace(pos, count, sv);
+            return *this;
+         }
+         proxy& replace(size_t pos, size_t count, const char* s)
+         {
+            ptr->replace(pos, count, s);
+            return *this;
+         }
+         proxy& replace(size_t pos, size_t count, const char* s, size_t count2)
+         {
+            ptr->replace(pos, count, s, count2);
+            return *this;
+         }
+         proxy& replace(size_t pos, size_t count, size_t count2, char ch)
+         {
+            ptr->replace(pos, count, count2, ch);
+            return *this;
+         }
       };
 
       proxy write() { return {str, std::unique_lock{mutex}}; }
@@ -137,6 +352,125 @@ namespace glz
          const std::string& operator*() const noexcept { return *ptr; }
 
          const std::string& value() const noexcept { return *ptr; }
+
+         // Size/capacity
+         [[nodiscard]] size_t size() const noexcept { return ptr->size(); }
+         [[nodiscard]] size_t length() const noexcept { return ptr->length(); }
+         [[nodiscard]] size_t max_size() const noexcept { return ptr->max_size(); }
+         [[nodiscard]] size_t capacity() const noexcept { return ptr->capacity(); }
+         [[nodiscard]] bool empty() const noexcept { return ptr->empty(); }
+
+         // Element access
+         const char& operator[](size_t pos) const { return (*ptr)[pos]; }
+         const char& at(size_t pos) const { return ptr->at(pos); }
+         const char& front() const { return ptr->front(); }
+         const char& back() const { return ptr->back(); }
+         const char* data() const noexcept { return ptr->data(); }
+         const char* c_str() const noexcept { return ptr->c_str(); }
+
+         // String operations
+         int compare(const std::string& str) const noexcept { return ptr->compare(str); }
+         int compare(const std::string_view& sv) const noexcept { return ptr->compare(sv); }
+         int compare(const char* s) const noexcept { return ptr->compare(s); }
+         int compare(size_t pos1, size_t count1, const std::string& str) const
+         {
+            return ptr->compare(pos1, count1, str);
+         }
+
+         std::string substr(size_t pos = 0, size_t count = std::string::npos) const { return ptr->substr(pos, count); }
+
+         bool starts_with(const std::string_view& sv) const noexcept { return ptr->starts_with(sv); }
+         bool starts_with(char c) const noexcept { return ptr->starts_with(c); }
+         bool starts_with(const char* s) const { return ptr->starts_with(s); }
+
+         bool ends_with(const std::string_view& sv) const noexcept { return ptr->ends_with(sv); }
+         bool ends_with(char c) const noexcept { return ptr->ends_with(c); }
+         bool ends_with(const char* s) const { return ptr->ends_with(s); }
+
+         // Search
+         size_t find(const std::string& str, size_t pos = 0) const noexcept { return ptr->find(str, pos); }
+         size_t find(const std::string_view& sv, size_t pos = 0) const noexcept { return ptr->find(sv, pos); }
+         size_t find(const char* s, size_t pos = 0) const { return ptr->find(s, pos); }
+         size_t find(const char* s, size_t pos, size_t count) const { return ptr->find(s, pos, count); }
+         size_t find(char ch, size_t pos = 0) const noexcept { return ptr->find(ch, pos); }
+
+         size_t rfind(const std::string& str, size_t pos = std::string::npos) const noexcept
+         {
+            return ptr->rfind(str, pos);
+         }
+         size_t rfind(const std::string_view& sv, size_t pos = std::string::npos) const noexcept
+         {
+            return ptr->rfind(sv, pos);
+         }
+         size_t rfind(const char* s, size_t pos = std::string::npos) const { return ptr->rfind(s, pos); }
+         size_t rfind(const char* s, size_t pos, size_t count) const { return ptr->rfind(s, pos, count); }
+         size_t rfind(char ch, size_t pos = std::string::npos) const noexcept { return ptr->rfind(ch, pos); }
+
+         size_t find_first_of(const std::string& str, size_t pos = 0) const noexcept
+         {
+            return ptr->find_first_of(str, pos);
+         }
+         size_t find_first_of(const std::string_view& sv, size_t pos = 0) const noexcept
+         {
+            return ptr->find_first_of(sv, pos);
+         }
+         size_t find_first_of(const char* s, size_t pos = 0) const { return ptr->find_first_of(s, pos); }
+         size_t find_first_of(const char* s, size_t pos, size_t count) const
+         {
+            return ptr->find_first_of(s, pos, count);
+         }
+         size_t find_first_of(char ch, size_t pos = 0) const noexcept { return ptr->find_first_of(ch, pos); }
+
+         size_t find_last_of(const std::string& str, size_t pos = std::string::npos) const noexcept
+         {
+            return ptr->find_last_of(str, pos);
+         }
+         size_t find_last_of(const std::string_view& sv, size_t pos = std::string::npos) const noexcept
+         {
+            return ptr->find_last_of(sv, pos);
+         }
+         size_t find_last_of(const char* s, size_t pos = std::string::npos) const { return ptr->find_last_of(s, pos); }
+         size_t find_last_of(const char* s, size_t pos, size_t count) const { return ptr->find_last_of(s, pos, count); }
+         size_t find_last_of(char ch, size_t pos = std::string::npos) const noexcept
+         {
+            return ptr->find_last_of(ch, pos);
+         }
+
+         size_t find_first_not_of(const std::string& str, size_t pos = 0) const noexcept
+         {
+            return ptr->find_first_not_of(str, pos);
+         }
+         size_t find_first_not_of(const std::string_view& sv, size_t pos = 0) const noexcept
+         {
+            return ptr->find_first_not_of(sv, pos);
+         }
+         size_t find_first_not_of(const char* s, size_t pos = 0) const { return ptr->find_first_not_of(s, pos); }
+         size_t find_first_not_of(const char* s, size_t pos, size_t count) const
+         {
+            return ptr->find_first_not_of(s, pos, count);
+         }
+         size_t find_first_not_of(char ch, size_t pos = 0) const noexcept { return ptr->find_first_not_of(ch, pos); }
+
+         size_t find_last_not_of(const std::string& str, size_t pos = std::string::npos) const noexcept
+         {
+            return ptr->find_last_not_of(str, pos);
+         }
+         size_t find_last_not_of(const std::string_view& sv, size_t pos = std::string::npos) const noexcept
+         {
+            return ptr->find_last_not_of(sv, pos);
+         }
+         size_t find_last_not_of(const char* s, size_t pos = std::string::npos) const
+         {
+            return ptr->find_last_not_of(s, pos);
+         }
+         size_t find_last_not_of(const char* s, size_t pos, size_t count) const
+         {
+            return ptr->find_last_not_of(s, pos, count);
+         }
+         size_t find_last_not_of(char ch, size_t pos = std::string::npos) const noexcept
+         {
+            return ptr->find_last_not_of(ch, pos);
+         }
       };
 
       const_proxy read() const { return {str, std::shared_lock{mutex}}; }
