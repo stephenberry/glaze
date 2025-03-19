@@ -575,8 +575,8 @@ suite async_vector_tests = [] {
       std::deque<std::thread> threads;
       
       // Reader threads
+      std::atomic<size_t> sum = 0;
       for (int i = 0; i < 5; ++i) {
-         std::atomic<size_t> sum = 0;
          threads.emplace_back([&vec, &stop, &sum]() {
             while (!stop) {
                for (size_t j = 0; j < vec.size(); ++j) {
