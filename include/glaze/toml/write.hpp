@@ -12,6 +12,7 @@
 #include "glaze/util/dump.hpp"
 #include "glaze/util/for_each.hpp"
 #include "glaze/util/itoa.hpp"
+#include "glaze/util/parse.hpp"
 
 namespace glz
 {
