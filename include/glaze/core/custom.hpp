@@ -3,7 +3,8 @@
 
 #pragma once
 
-#include "glaze/core/seek.hpp"
+#include "glaze/core/read.hpp"
+#include "glaze/core/write.hpp"
 #include "glaze/core/wrappers.hpp"
 
 namespace glz
