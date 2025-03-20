@@ -844,4 +844,47 @@ suite hash_tests = [] {
    };
 };
 
+
+struct custom_state
+{
+   std::array<uint32_t, 8> statuses() {
+      return {};
+   }
+};
+
+template <>
+struct glz::meta<custom_state>
+{
+   using T = custom_state;
+   static constexpr auto read = [](T&, const std::array<uint32_t, 8>&) {};
+   static constexpr auto value = custom<read, &T::statuses>;
+};
+
+struct custom_holder
+{
+   uint32_t x{};
+   uint32_t y{};
+   uint32_t z{};
+   custom_state state{};
+};
+
+suite custom_holder_tests = []
+{
+   "custom_holder"_test = [] {
+      custom_holder obj{};
+      std::string buffer{};
+      expect(not glz::write_json(obj, buffer));
+      expect(not glz::read_json(obj, buffer));
+   };
+   
+   "custom_holder seek"_test = []
+   {
+      custom_holder obj{};
+      std::string buffer{};
+      bool b = glz::seek([&](auto&& val) { std::ignore = glz::write_json(val, buffer); }, obj, "/state");
+      expect(b);
+      expect(buffer == "[0,0,0,0,0,0,0,0]") << buffer;
+   };
+};
+
 int main() { return 0; }

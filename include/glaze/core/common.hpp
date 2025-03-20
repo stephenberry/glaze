@@ -271,7 +271,7 @@ namespace glz
                           std::same_as<T, std::vector<bool>::const_reference>;
 
    template <class T>
-   concept is_no_reflect = requires(T t) { requires T::glaze_reflect == false; };
+   concept is_no_reflect = requires(T t) { requires std::remove_cvref_t<T>::glaze_reflect == false; };
 
    /// \brief check if container has fixed size and its subsequent T::value_type
    template <class T>

@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include "glaze/core/custom.hpp"
 #include "glaze/core/read.hpp"
 #include "glaze/core/reflect.hpp"
 #include "glaze/core/write.hpp"
@@ -98,6 +99,7 @@ namespace glz::detail
       if constexpr (glaze_object_t<T> || reflectable<T>) {
          static constexpr auto N = reflect<T>::size;
          static constexpr auto HashInfo = hash_info<T>;
+         static_assert(HashInfo.type != hash_type::invalid, "Hashing failed");
 
          const auto index = decode_hash_with_size<JSON_PTR, T, HashInfo, HashInfo.type>::op(
             key.data(), key.data() + key.size(), key.size());
