@@ -844,12 +844,9 @@ suite hash_tests = [] {
    };
 };
 
-
 struct custom_state
 {
-   std::array<uint32_t, 8> statuses() {
-      return {};
-   }
+   std::array<uint32_t, 8> statuses() { return {}; }
 };
 
 template <>
@@ -868,17 +865,15 @@ struct custom_holder
    custom_state state{};
 };
 
-suite custom_holder_tests = []
-{
+suite custom_holder_tests = [] {
    "custom_holder"_test = [] {
       custom_holder obj{};
       std::string buffer{};
       expect(not glz::write_json(obj, buffer));
       expect(not glz::read_json(obj, buffer));
    };
-   
-   "custom_holder seek"_test = []
-   {
+
+   "custom_holder seek"_test = [] {
       custom_holder obj{};
       std::string buffer{};
       bool b = glz::seek([&](auto&& val) { std::ignore = glz::write_json(val, buffer); }, obj, "/state");
