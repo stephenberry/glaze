@@ -10376,6 +10376,38 @@ suite tagged_variant_null_members = [] {
    };
 };
 
+class private_fields_t
+{
+private:
+   double cash = 22.0;
+   std::string currency = "$";
+   
+   friend struct glz::meta<private_fields_t>;
+};
+
+template <>
+struct glz::meta<private_fields_t>
+{
+   using T = private_fields_t;
+   static constexpr auto value = object(&T::cash, &T::currency);
+};
+
+suite private_fields_tests = []
+{
+   "private fields"_test = [] {
+      private_fields_t obj{};
+      std::string buffer{};
+      expect(not glz::write_json(obj, buffer));
+      expect(buffer == R"({"cash":22,"currency":"$"})");
+      
+      buffer = R"({"cash":2200.0, "currency":"¢"})";
+      expect(not glz::read_json(obj, buffer));
+      buffer.clear();
+      expect(not glz::write_json(obj, buffer));
+      expect(buffer == R"({"cash":2200,"currency":"¢"})");
+   };
+};
+
 int main()
 {
    trace.end("json_test");

@@ -492,6 +492,48 @@ struct glz::meta<S> {
 };
 ```
 
+# Reading/Writing Private Fields
+
+Serialize and deserialize private fields by making a `glz::meta<T>` and adding `friend struct glz::meta<T>;` to your class.
+
+<details><summary>See example:</summary>
+
+```c++
+class private_fields_t
+{
+private:
+   double cash = 22.0;
+   std::string currency = "$";
+
+   friend struct glz::meta<private_fields_t>;
+};
+
+template <>
+struct glz::meta<private_fields_t>
+{
+   using T = private_fields_t;
+   static constexpr auto value = object(&T::cash, &T::currency);
+};
+
+suite private_fields_tests = []
+{
+   "private fields"_test = [] {
+      private_fields_t obj{};
+      std::string buffer{};
+      expect(not glz::write_json(obj, buffer));
+      expect(buffer == R"({"cash":22,"currency":"$"})");
+      
+      buffer = R"({"cash":2200.0, "currency":"¢"})";
+      expect(not glz::read_json(obj, buffer));
+      buffer.clear();
+      expect(not glz::write_json(obj, buffer));
+      expect(buffer == R"({"cash":2200,"currency":"¢"})");
+   };
+};
+```
+
+</details>
+
 # Error Handling
 
 Glaze is safe to use with untrusted messages. Errors are returned as error codes, typically within a `glz::expected`, which behaves just like a `std::expected`.
