@@ -10407,6 +10407,60 @@ suite private_fields_tests = [] {
    };
 };
 
+struct ImmutableStruct {
+   const int val1;
+   const float val2;
+};
+
+struct MyStruct {
+   std::vector<ImmutableStruct> vals;
+};
+
+struct ImmutableStructInserter_t {
+   std::vector<ImmutableStruct>& container;
+   int parsedInt{};
+   float parsedFloat{};
+};
+
+template <auto Member>
+constexpr auto ImmutableStructInserter = []{
+   return [](auto&& v) { return ImmutableStructInserter_t{v.*Member}; };
+}();
+
+template <>
+struct glz::meta<ImmutableStructInserter_t> {
+   using T = ImmutableStructInserter_t;
+   static constexpr auto insert = [](ImmutableStructInserter_t& s) {
+      s.container.emplace_back(s.parsedInt, s.parsedFloat);
+      return true;
+   };
+   
+   static constexpr auto value = object("val1", &T::parsedInt, "val2", manage<&T::parsedFloat, insert, nullptr>);
+};
+
+template <>
+struct glz::meta<MyStruct> {
+   using T = MyStruct;
+   static constexpr auto value = object("vals", custom<array_adapter<ImmutableStructInserter<&T::vals>>, &T::vals>);
+};
+
+suite immutable_array_read_tests = []
+{
+   "immutable_read"_test = [] {
+      MyStruct myStruct;
+      myStruct.vals.emplace_back(1, 1.1f);
+      myStruct.vals.emplace_back(2, 2.1f);
+      myStruct.vals.emplace_back(3, 3.1f);
+      
+      std::string buffer = glz::write_json(myStruct).value_or("error");
+      
+      myStruct.vals.clear();
+      expect(not glz::read_json(myStruct, buffer));
+      buffer = glz::write<glz::opts{.format = glz::JSON}>(myStruct).value_or("error");
+      expect(buffer == R"({"vals":[{"val1":1,"val2":1.1},{"val1":2,"val2":2.1},{"val1":3,"val2":3.1}]})") << buffer;
+   };
+};
+
 int main()
 {
    trace.end("json_test");

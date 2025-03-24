@@ -11,6 +11,7 @@
 #include <type_traits>
 #include <vector>
 
+#include "glaze/core/array_adapter.hpp"
 #include "glaze/concepts/container_concepts.hpp"
 #include "glaze/core/context.hpp"
 #include "glaze/core/feature_test.hpp"
