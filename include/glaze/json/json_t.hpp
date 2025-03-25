@@ -178,6 +178,12 @@ namespace glz
          return *this;
       }
 
+      json_t& operator=(const char* value)
+      {
+         data = std::string(value);
+         return *this;
+      }
+
       json_t& operator=(const bool value)
       {
          data = value;

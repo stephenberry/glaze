@@ -3726,6 +3726,12 @@ suite generic_json_tests = [] {
       json = 44;
       expect(glz::write_json(json).value() == "44");
    };
+
+   "json_t const char*"_test = [] {
+      glz::json_t j{};
+      j["some key"] = "some value";
+      expect(j.dump() == R"({"some key":"some value"})");
+   };
 };
 
 struct holder0_t
