@@ -17,15 +17,7 @@ namespace glz
       uint8_t minor = 0;
       uint8_t patch = 1;
 
-      constexpr auto operator<=>(const version_t& other) const noexcept
-      {
-         // Compare major versions first
-         if (auto cmp = major <=> other.major; cmp != 0) return cmp;
-         // If major versions are equal, compare minor versions
-         if (auto cmp = minor <=> other.minor; cmp != 0) return cmp;
-         // If major and minor versions are equal, compare patch versions
-         return patch <=> other.patch;
-      }
+      constexpr auto operator<=>(const version_t& other) const noexcept = default;
 
       // In C++23, this is optional when we have a custom <=> operator,
       // but included for clarity
