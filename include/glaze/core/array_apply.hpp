@@ -8,7 +8,7 @@
 namespace glz
 {
    template <class Adapter>
-   struct array_adapter_t
+   struct array_apply_t
    {
       Adapter adapter{};
       size_t m_size{};
@@ -44,7 +44,7 @@ namespace glz
    };
    
    template <auto Adapter>
-   constexpr auto array_adapter = [] {
-      return [](auto&& v) { return array_adapter_t{ Adapter(v) }; };
+   constexpr auto array_apply = [] {
+      return [](auto&& v) { return array_apply_t{ Adapter(v) }; };
    }();
 }

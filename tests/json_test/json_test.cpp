@@ -10447,7 +10447,7 @@ struct glz::meta<ImmutableStructInserter_t> {
 template <>
 struct glz::meta<MyStruct> {
    using T = MyStruct;
-   static constexpr auto value = object("vals", custom<array_adapter<ImmutableStructInserter<&T::vals>>, &T::vals>);
+   static constexpr auto value = object("vals", custom<array_apply<ImmutableStructInserter<&T::vals>>, &T::vals>);
 };
 
 suite immutable_array_read_tests = []
