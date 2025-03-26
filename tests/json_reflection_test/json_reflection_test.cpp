@@ -882,4 +882,40 @@ suite custom_holder_tests = [] {
    };
 };
 
+enum struct some_enum
+{
+   one,
+   two,
+   three
+};
+
+template <>
+struct glz::meta<some_enum> {
+   using enum some_enum;
+   static constexpr auto value = enumerate(one, two, three);
+};
+
+struct struct_with_a_pair
+{
+   std::pair<some_enum, std::string> value{};
+   
+   constexpr bool operator<=>(const struct_with_a_pair& rhs) const = default;
+};
+
+suite enum_pair_tests = []
+{
+   "enum pair"_test = [] {
+      struct_with_a_pair obj{};
+      std::string buffer{};
+      expect(not glz::write_json(obj, buffer));
+      expect(buffer == R"({"value":{"one":""}})") << buffer;
+      
+      buffer = R"({"value":{"two":"message"}})";
+      
+      expect(not glz::read_json(obj, buffer));
+      expect(obj.value.first == some_enum::two);
+      expect(obj.value.second == "message");
+   };
+};
+
 int main() { return 0; }
