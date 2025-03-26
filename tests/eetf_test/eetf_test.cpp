@@ -179,6 +179,45 @@ suite etf_tests = [] {
       expect(s.hello == "Hello write meta");
    };
 
+   "write_proplist_term"_test = [] {
+      trace.begin("write_term");
+      my_struct sw{.i = 123, .d = 2.71827, .hello = "Hello write", .a = "qwe"_atom, .arr = {45, 67, 89}};
+      std::vector<std::uint8_t> buff;
+      auto ec = glz::write_term<glz::eetf::proplist_layout>(sw, buff);
+      trace.end("write_term");
+
+      expect(not ec) << glz::format_error(ec, "can't write");
+
+      my_struct s{};
+      ec = glz::read_term<glz::eetf::proplist_layout>(s, buff);
+      expect(not ec) << glz::format_error(ec, "can't read");
+
+      expect(s.a == "qwe");
+      expect(s.d == 2.71827);
+      expect(s.i == 123);
+      expect(s.arr == decltype(s.arr){45, 67, 89});
+      expect(s.hello == "Hello write");
+   };
+
+   "write_proplist_term_meta"_test = [] {
+      trace.begin("write_term");
+      my_struct_meta sw(123, 2.71827, "Hello write meta", {45, 67, 89});
+      std::vector<std::uint8_t> buff;
+      auto ec = glz::write_term<glz::eetf::proplist_layout>(sw, buff);
+      trace.end("write_term");
+
+      expect(not ec) << glz::format_error(ec, "can't write");
+
+      my_struct s{};
+      ec = glz::read_term<glz::eetf::proplist_layout>(s, buff);
+      expect(not ec) << glz::format_error(ec, "can't read");
+
+      expect(s.d == 2.71827);
+      expect(s.i == 123);
+      expect(s.arr == decltype(s.arr){45, 67, 89});
+      expect(s.hello == "Hello write meta");
+   };
+
    "read_write_string_as_atom"_test = [] {
       trace.begin("read_write_string_as_atom");
       atom_rw s{}, r{};

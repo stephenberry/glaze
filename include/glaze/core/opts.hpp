@@ -419,12 +419,6 @@ namespace glz
       ret.format = TOML;
       return ret;
    }
-
-   template <auto Opts, uint32_t Format>
-   consteval bool has_format()
-   {
-      return Opts.format == Format;
-   }
 }
 
 namespace glz

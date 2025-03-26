@@ -301,7 +301,6 @@ namespace glz
             if constexpr (N > 0) {
                static constexpr auto HashInfo = hash_info<T>;
 
-               // TODO this is only for erlmap with atom keys
                eetf::atom mkey;
                from<ERLANG, eetf::atom>::op<Opts>(mkey, ctx, it, end);
                if (bool(ctx.error)) [[unlikely]] {

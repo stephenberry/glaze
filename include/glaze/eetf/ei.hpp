@@ -402,10 +402,11 @@ namespace glz
    }
 
    template <class... Args>
-   GLZ_ALWAYS_INLINE void encode_tuple_header(int arity, Args&&... args)
+   GLZ_ALWAYS_INLINE void encode_tuple_header(std::size_t arity, Args&&... args)
    {
       using namespace std::placeholders;
-      detail::encode_impl(std::bind(ei_encode_tuple_header, _1, _2, arity), std::forward<Args>(args)...);
+      detail::encode_impl(std::bind(ei_encode_tuple_header, _1, _2, static_cast<int>(arity)),
+                          std::forward<Args>(args)...);
    }
 
    template <class... Args>

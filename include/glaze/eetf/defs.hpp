@@ -1,6 +1,7 @@
 #pragma once
 
-#include "glaze/core/common.hpp"
+#include <glaze/core/common.hpp>
+
 #include "types.hpp"
 
 namespace glz

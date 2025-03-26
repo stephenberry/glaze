@@ -227,6 +227,18 @@ namespace glz
       GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
       {
          static constexpr auto N = reflect<T>::size;
+
+         if constexpr (Opts.layout == eetf::map_layout) {
+            encode_map_header(N, ctx, std::forward<Args>(args)...);
+         }
+         else {
+            encode_list_header(N, ctx, std::forward<Args>(args)...);
+         }
+
+         if (bool(ctx.error)) [[unlikely]] {
+            return;
+         }
+
          [[maybe_unused]] decltype(auto) t = [&]() -> decltype(auto) {
             if constexpr (reflectable<T>) {
                return to_tie(value);
@@ -236,15 +248,11 @@ namespace glz
             }
          }();
 
-         // TODO propmap
-
-         // map layout
-         encode_map_header(N, ctx, std::forward<Args>(args)...);
-         if (bool(ctx.error)) [[unlikely]] {
-            return;
-         }
-
          invoke_table<N>([&]<size_t I>() {
+            if constexpr (Opts.layout == eetf::proplist_layout) {
+               encode_tuple_header(2, ctx, std::forward<Args>(args)...);
+            }
+
             static constexpr sv key = reflect<T>::keys[I];
             serialize<ERLANG>::op<Opts>(key, ctx, std::forward<Args>(args)...);
 
