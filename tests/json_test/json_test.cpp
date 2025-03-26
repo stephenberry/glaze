@@ -9769,7 +9769,7 @@ struct naive_static_string_t
    naive_static_string_t(std::string_view sv) { assign(sv.data(), sv.size()); }
    operator std::string_view() const { return std::string_view(buffer, length); }
 
-   size_t size() const { return N; }
+   size_t size() const { return length; }
    size_t capacity() const { return N; }
    const char* data() const { return buffer; }
 
