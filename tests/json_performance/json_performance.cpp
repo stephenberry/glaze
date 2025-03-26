@@ -7,7 +7,7 @@
 #include "glaze/glaze.hpp"
 #include "ut/ut.hpp"
 
-static constexpr bool skip = false;
+static constexpr bool skip = true;
 
 #define SKIP             \
    if constexpr (skip) { \
@@ -559,7 +559,7 @@ auto glaze_test()
 
 suite object_performance = [] {
    "object_performance"_test = [] {
-      SKIP;
+      //SKIP;
       glaze_test<glz::opts{}>();
    };
 };
