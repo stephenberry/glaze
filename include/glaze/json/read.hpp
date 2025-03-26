@@ -1159,7 +1159,7 @@ namespace glz
          }
          else if constexpr (static_string_t<T>) {
             const size_t n = it - start;
-            if (n > value.size()) {
+            if (n > value.capacity()) {
                ctx.error = error_code::unexpected_end;
                return;
             }
