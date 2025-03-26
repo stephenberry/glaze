@@ -559,7 +559,7 @@ auto glaze_test()
 
 suite object_performance = [] {
    "object_performance"_test = [] {
-      //SKIP;
+      // SKIP;
       glaze_test<glz::opts{}>();
    };
 };
