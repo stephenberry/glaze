@@ -26,10 +26,6 @@ namespace glz
    inline constexpr uint8_t rowwise = 0;
    inline constexpr uint8_t colwise = 1;
 
-   // layout erlang term
-   inline constexpr uint8_t map = 0;
-   inline constexpr uint8_t proplist = 1;
-
    enum struct float_precision : uint8_t { //
       full, //
       float32 = 4, //

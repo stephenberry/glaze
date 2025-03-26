@@ -263,7 +263,7 @@ namespace glz
       // TODO handle elang list endings
    }
 
-   template <opts Opts, class T, is_context Ctx, class It0, class It1>
+   template <auto Opts, class T, is_context Ctx, class It0, class It1>
    GLZ_ALWAYS_INLINE void decode_sequence(T&& value, Ctx&& ctx, It0&& it, It1&& end)
    {
       int index{};

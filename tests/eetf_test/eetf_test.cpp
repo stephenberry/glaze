@@ -8,9 +8,8 @@
 #include <string>
 
 #include "glaze/eetf/read.hpp"
-#include "glaze/eetf/write.hpp"
 #include "glaze/eetf/wrappers.hpp"
-
+#include "glaze/eetf/write.hpp"
 #include "glaze/trace/trace.hpp"
 #include "ut/ut.hpp"
 
@@ -73,17 +72,17 @@ struct glz::meta<my_struct_meta>
    );
 };
 
-// struct atom_rw
-// {
-//    std::string a;
-// };
+struct atom_rw
+{
+   std::string a;
+};
 
-// template <>
-// struct glz::meta<atom_rw>
-// {
-//    using T = atom_rw;
-//    static constexpr auto value = object("a", glz::atom_as_string<&T::a>);
-// };
+template <>
+struct glz::meta<atom_rw>
+{
+   using T = atom_rw;
+   static constexpr auto value = object("a", glz::atom_as_string<&T::a>);
+};
 
 static_assert(glz::write_supported<glz::ERLANG, my_struct_meta>);
 static_assert(glz::read_supported<glz::ERLANG, my_struct_meta>);
@@ -105,7 +104,7 @@ suite etf_tests = [] {
    "read_map_term_meta"_test = [] {
       trace.begin("read_map_term_meta");
       my_struct_meta s{};
-      auto ec = glz::read<glz::opts{.format = glz::ERLANG, .error_on_unknown_keys = false}>(s, term_map_001);
+      auto ec = glz::read<glz::eetf::eetf_opts{.format = glz::ERLANG, .error_on_unknown_keys = false}>(s, term_map_001);
       expect(not ec) << glz::format_error(ec, "can't read");
       expect(s.val_d == 3.1415926);
       expect(s.val_i == 1);
@@ -117,7 +116,7 @@ suite etf_tests = [] {
    "read_proplist_term"_test = [] {
       trace.begin("read_proplist_term");
       my_struct s{};
-      auto ec = glz::read_term<glz::proplist>(s, term_proplist_001);
+      auto ec = glz::read_term<glz::eetf::proplist_layout>(s, term_proplist_001);
       expect(not ec) << glz::format_error(ec, "can't read");
       expect(s.a == "atom_term");
       expect(s.d == 3.1415926);
@@ -130,7 +129,8 @@ suite etf_tests = [] {
    "read_proplist_term_meta"_test = [] {
       trace.begin("read_proplist_term_meta");
       my_struct_meta s{};
-      auto ec = glz::read<glz::opts{.format = glz::ERLANG, .error_on_unknown_keys = false, .layout = glz::proplist}>(
+      auto ec = glz::read<glz::eetf::eetf_opts{
+         .format = glz::ERLANG, .layout = glz::eetf::proplist_layout, .error_on_unknown_keys = false}>(
          s, term_proplist_001);
       expect(not ec) << glz::format_error(ec, "can't read");
       expect(s.val_d == 3.1415926);
@@ -139,12 +139,6 @@ suite etf_tests = [] {
       expect(s.val_str == "Hello Erlang Term");
       trace.end("read_proplist_term_meta");
    };
-
-   // "write_simple_term"_test = [] {
-   //    std::vector<std::uint8_t> buff;
-   //    auto ec = glz::write_term(123, buff);
-   //    expect(not ec) << glz::format_error(ec, "can't write");
-   // };
 
    "write_term"_test = [] {
       trace.begin("write_term");
@@ -185,20 +179,20 @@ suite etf_tests = [] {
       expect(s.hello == "Hello write meta");
    };
 
-   // "read_write_string_as_atom"_test = [] {
-   //    trace.begin("read_write_string_as_atom");
-   //    atom_rw s{}, r{};
-   //    auto ec = glz::read_term(s, term_atom);
-   //    expect(not ec) << glz::format_error(ec, "can't read");
-   //    expect(s.a == "qwe");
+   "read_write_string_as_atom"_test = [] {
+      trace.begin("read_write_string_as_atom");
+      atom_rw s{}, r{};
+      auto ec = glz::read_term(s, term_atom);
+      expect(not ec) << glz::format_error(ec, "can't read");
+      expect(s.a == "qwe");
 
-   //    std::vector<std::uint8_t> out{};
-   //    expect(not glz::write_term(s, out)) << "can't write";
-   //    expect(not glz::read_term(r, out)) << "can't read again";
-   //    expect(r.a == "qwe");
+      std::vector<std::uint8_t> out{};
+      expect(not glz::write_term(s, out)) << "can't write";
+      expect(not glz::read_term(r, out)) << "can't read again";
+      expect(r.a == "qwe");
 
-   //    trace.end("read_write_string_as_atom");
-   // };
+      trace.end("read_write_string_as_atom");
+   };
 };
 
 int main()

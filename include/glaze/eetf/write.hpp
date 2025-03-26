@@ -1,11 +1,11 @@
 #pragma once
 
-#include <glaze/core/opts.hpp>
 #include <glaze/core/reflect.hpp>
 #include <glaze/core/write.hpp>
 
 #include "defs.hpp"
 #include "ei.hpp"
+#include "opts.hpp"
 
 namespace glz
 {
@@ -224,7 +224,7 @@ namespace glz
 
       template <auto Opts, class... Args>
          requires(has_no_header(Opts))
-      GLZ_ALWAYS_INLINE static void op(auto&& value, [[maybe_unused]]is_context auto&& ctx, Args&&... args) noexcept
+      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
       {
          static constexpr auto N = reflect<T>::size;
          [[maybe_unused]] decltype(auto) t = [&]() -> decltype(auto) {
@@ -268,25 +268,27 @@ namespace glz
       // empty for compilation error if use unsupported value type
    };
 
-   template <uint32_t layout = glz::map, class T, output_buffer Buffer>
+   template <uint8_t layout = glz::eetf::map_layout, class T, output_buffer Buffer>
       requires(write_supported<ERLANG, T>)
    [[nodiscard]] error_ctx write_term(T&& value, Buffer&& buffer) noexcept
    {
-      return write<opts{.format = ERLANG, .layout = layout}>(std::forward<T>(value), std::forward<Buffer>(buffer));
+      return write<eetf::eetf_opts{.format = ERLANG, .layout = layout}>(std::forward<T>(value),
+                                                                        std::forward<Buffer>(buffer));
    }
 
-   template <uint32_t layout = glz::map, class T, raw_buffer Buffer>
+   template <uint8_t layout = glz::eetf::map_layout, class T, raw_buffer Buffer>
       requires(write_supported<ERLANG, T>)
    [[nodiscard]] expected<size_t, error_ctx> write_term(T&& value, Buffer&& buffer) noexcept
    {
-      return write<opts{.format = ERLANG, .layout = layout}>(std::forward<T>(value), std::forward<Buffer>(buffer));
+      return write<eetf::eetf_opts{.format = ERLANG, .layout = layout}>(std::forward<T>(value),
+                                                                        std::forward<Buffer>(buffer));
    }
 
    template <class T>
       requires(write_supported<ERLANG, T>)
    [[nodiscard]] expected<std::string, error_ctx> write_term(T&& value) noexcept
    {
-      return write<opts{.format = ERLANG}>(std::forward<T>(value));
+      return write<eetf::eetf_opts{.format = ERLANG}>(std::forward<T>(value));
    }
 
 } // namespace glz

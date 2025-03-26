@@ -1,11 +1,11 @@
 #pragma once
 
-#include <glaze/core/opts.hpp>
 #include <glaze/core/read.hpp>
 #include <glaze/core/reflect.hpp>
 
 #include "defs.hpp"
 #include "ei.hpp"
+#include "opts.hpp"
 
 namespace glz
 {
@@ -227,7 +227,7 @@ namespace glz
                return false;
             }
 
-            if constexpr (Opts.layout == glz::proplist) {
+            if constexpr (Opts.layout == glz::eetf::proplist_layout) {
                const auto header = decode_tuple_header(ctx, it);
                if (bool(ctx.error)) [[unlikely]] {
                   return false;
@@ -265,17 +265,17 @@ namespace glz
             return fi(ctx.error, ctx);
          }
 
-         if (eetf::is_map(tag) && Opts.layout == glz::map) {
+         if (eetf::is_map(tag) && Opts.layout == glz::eetf::map_layout) {
             return fi(decode_map_header<Ctx, It0>, ctx, it, end);
          }
-         else if (eetf::is_list(tag) && Opts.layout == glz::proplist) {
+         else if (eetf::is_list(tag) && Opts.layout == glz::eetf::proplist_layout) {
             return fi(decode_list_header<Ctx, It0>, ctx, it, end);
          }
 
          return fi(error_code::invalid_header, ctx);
       }
 
-      template <opts Opts, is_context Ctx, class It0, class It1>
+      template <auto Opts, is_context Ctx, class It0, class It1>
       static void op(auto&& value, Ctx&& ctx, It0&& it, It1&& end) noexcept
       {
          if (bool(ctx.error)) [[unlikely]] {
@@ -370,20 +370,21 @@ namespace glz
       }
    };
 
-   template <uint32_t layout = glz::map, class T, class Buffer>
+   template <uint8_t layout = glz::eetf::map_layout, class T, class Buffer>
       requires(read_supported<ERLANG, T>)
    [[nodiscard]] inline error_ctx read_term(T&& value, Buffer&& buffer) noexcept
    {
-      return read<opts{.format = ERLANG, .layout = layout}>(value, std::forward<Buffer>(buffer));
+      return read<eetf::eetf_opts{.format = ERLANG, .layout = layout}>(value, std::forward<Buffer>(buffer));
    }
 
-   template <uint32_t layout = glz::map, class T, is_buffer Buffer>
+   template <uint8_t layout = glz::eetf::map_layout, class T, is_buffer Buffer>
       requires(read_supported<ERLANG, T>)
    [[nodiscard]] expected<T, error_ctx> read_term(Buffer&& buffer) noexcept
    {
       T value{};
       context ctx{};
-      const error_ctx ec = read<opts{.format = ERLANG, .layout = layout}>(value, std::forward<Buffer>(buffer), ctx);
+      const error_ctx ec =
+         read<eetf::eetf_opts{.format = ERLANG, .layout = layout}>(value, std::forward<Buffer>(buffer), ctx);
       if (ec) {
          return unexpected<error_ctx>(ec);
       }

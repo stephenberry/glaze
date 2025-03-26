@@ -1,59 +1,54 @@
 #pragma once
 
 #include <array>
-#include <utility>
-
 #include <glaze/concepts/container_concepts.hpp>
+#include <utility>
 
 namespace glz::eetf
 {
 
-namespace detail
-{
+   namespace detail
+   {
 
-// Primary template
-template <typename Tag>
-struct in_impl;
+      // Primary template
+      template <typename Tag>
+      struct in_impl;
 
-// Specialization for `int...`
-template <int N, int... Vs>
-struct in_impl<std::integer_sequence<int, N, Vs...>>
-{
-	bool value{false};
+      // Specialization for `int...`
+      template <int N, int... Vs>
+      struct in_impl<std::integer_sequence<int, N, Vs...>>
+      {
+         bool value{false};
 
-	template <int_t T>
-	constexpr in_impl(const T & val)
-		: value{(val == N) || in_impl<std::integer_sequence<int, Vs...>>(val).value}
-	{
-	}
-};
+         template <int_t T>
+         constexpr in_impl(const T& val) : value{(val == N) || in_impl<std::integer_sequence<int, Vs...>>(val).value}
+         {}
+      };
 
-template <int N>
-struct in_impl<std::integer_sequence<int, N>>
-{
-	bool value{false};
+      template <int N>
+      struct in_impl<std::integer_sequence<int, N>>
+      {
+         bool value{false};
 
-	template <int_t T>
-	constexpr in_impl(const T & val)
-		: value{val == N}
-	{
-	}
-};
+         template <int_t T>
+         constexpr in_impl(const T& val) : value{val == N}
+         {}
+      };
 
-} // namespace detail
+   } // namespace detail
 
-template <typename T>
-using in = detail::in_impl<T>;
+   template <typename T>
+   using in = detail::in_impl<T>;
 
-namespace cmp
-{
+   namespace cmp
+   {
 
-template <template <class> class Op, int... Vs, typename T>
-constexpr bool is(const T & val)
-{
-	return Op<std::integer_sequence<int, Vs...>>(val).value;
-}
+      template <template <class> class Op, int... Vs, typename T>
+      constexpr bool is(const T& val)
+      {
+         return Op<std::integer_sequence<int, Vs...>>(val).value;
+      }
 
-};
+   };
 
 } // namespace erlterm
