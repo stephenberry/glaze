@@ -159,7 +159,7 @@ namespace glz
       basic_raw_json() = default;
 
       template <class T>
-         requires(!std::same_as<std::decay_t<T>, basic_raw_json>)
+         requires(!std::same_as<std::decay_t<T>, basic_raw_json> && std::constructible_from<string_type, T>)
       basic_raw_json(T&& s) : str(std::forward<T>(s))
       {}
 
@@ -226,12 +226,12 @@ namespace glz
    // this concept requires that T is a writeable string. It can be resized, appended to, or assigned to
    template <class T>
    concept string_t = str_t<T> && !string_view_t<T> &&
-                      (has_assign<T> || (resizable<T> && has_data<T>) || has_append<T>)&&!is_static_string<T>;
+                      (has_assign<T> || (resizable<T> && has_data<T>) || has_append<T>) && !is_static_string<T>;
 
    // static string; very like `string_t`, but with a fixed max capacity
    template <class T>
    concept static_string_t = str_t<T> && !string_view_t<T> &&
-                             (has_assign<T> || (resizable<T> && has_data<T>) || has_append<T>)&&is_static_string<T>;
+                             (has_assign<T> || (resizable<T> && has_data<T>) || has_append<T>) && is_static_string<T>;
 
    template <class T>
    concept char_array_t = str_t<T> && std::is_array_v<std::remove_pointer_t<std::remove_reference_t<T>>>;
@@ -253,7 +253,7 @@ namespace glz
    };
 
    template <class T>
-   concept array_t = (!meta_value_t<T> && !str_t<T> && !(readable_map_t<T> || writable_map_t<T>)&&range<T>);
+   concept array_t = (!meta_value_t<T> && !str_t<T> && !(readable_map_t<T> || writable_map_t<T>) && range<T>);
 
    template <class T>
    concept readable_array_t =
@@ -339,9 +339,7 @@ namespace glz
    template <class T>
    concept nullable_t = !meta_value_t<T> && !str_t<T> && requires(T t) {
       bool(t);
-      {
-         *t
-      };
+      { *t };
    };
 
    template <class T>
@@ -351,9 +349,7 @@ namespace glz
    template <class T>
    concept nullable_value_t = !meta_value_t<T> && requires(T t) {
       t.value();
-      {
-         t.has_value()
-      } -> std::convertible_to<bool>;
+      { t.has_value() } -> std::convertible_to<bool>;
    };
 
    template <class T>
