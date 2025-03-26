@@ -377,6 +377,9 @@ namespace glz
 
    template <class T>
    concept glaze_enum_t = glaze_t<T> && is_specialization_v<meta_wrapper_t<T>, detail::Enum>;
+   
+   template <class T>
+   concept is_named_enum = ((glaze_enum_t<T> || (meta_keys<T> && std::is_enum_v<T>)) && !custom_read<T>);
 
    template <class T>
    concept glaze_flags_t = glaze_t<T> && is_specialization_v<meta_wrapper_t<T>, detail::Flags>;

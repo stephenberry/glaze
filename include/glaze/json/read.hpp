@@ -1261,7 +1261,7 @@ namespace glz
    };
 
    template <class T>
-      requires((glaze_enum_t<T> || (meta_keys<T> && std::is_enum_v<T>)) && !custom_read<T>)
+      requires(is_named_enum<T>)
    struct from<JSON, T>
    {
       template <auto Opts>
@@ -2017,9 +2017,6 @@ namespace glz
             return;
          }
 
-         // Only used if error_on_missing_keys = true
-         [[maybe_unused]] bit_array<1> fields{};
-
          if (*it == '}') {
             if constexpr (not Opts.null_terminated) {
                --ctx.indentation_level;
@@ -2030,7 +2027,8 @@ namespace glz
             return;
          }
 
-         if constexpr (str_t<typename T::first_type>) {
+         using first_type = typename T::first_type;
+         if constexpr (str_t<first_type> || is_named_enum<first_type>) {
             parse<JSON>::op<Opts>(value.first, ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
                return;
