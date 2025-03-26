@@ -14,7 +14,7 @@
 #if defined(_MSC_VER)
 #define GLZ_ALWAYS_INLINE [[msvc::forceinline]] inline
 #else
-#define GLZ_ALWAYS_INLINE inline
+#define GLZ_ALWAYS_INLINE inline __attribute__((always_inline))
 #endif
 #endif
 #endif

@@ -7,7 +7,7 @@
 #include "glaze/glaze.hpp"
 #include "ut/ut.hpp"
 
-static constexpr bool skip = true;
+static constexpr bool skip = false;
 
 #define SKIP             \
    if constexpr (skip) { \
