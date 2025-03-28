@@ -62,7 +62,7 @@ if(glaze_BUILD_EXAMPLES)
   add_subdirectory(examples)
 endif()
 
-option(glaze_ERLANG_FORMAT "Enable Erlang external term format parsing" ON)
+option(glaze_ERLANG_FORMAT "Enable Erlang external term format parsing" OFF)
 
 if(glaze_ERLANG_FORMAT)
   list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
@@ -72,5 +72,6 @@ if(glaze_ERLANG_FORMAT)
     INTERFACE
       Erlang::EI
       Erlang::Erlang
-)
+  )
+  target_compile_definitions(glaze_glaze INTERFACE GLZ_ENABLE_EETF)
 endif(glaze_ERLANG_FORMAT)
