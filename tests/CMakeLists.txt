@@ -114,6 +114,8 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
     "-Dglaze_ROOT:PATH=${CMAKE_CURRENT_BINARY_DIR}/install"
     "-DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}"
     "-DBUILD_TESTING=ON"
+    "$<$<BOOL:${glaze_ERLANG_FORMAT}>:-Dglaze_ERLANG_FORMAT=ON>"
+    "$<$<BOOL:${glaze_ERLANG_FORMAT}>:-DEXTERNAL_MODULE_PATH=${PROJECT_SOURCE_DIR}/cmake>"
     --test-command "${CMAKE_CTEST_COMMAND}" --verbose --output-on-failure # inner ctest command
     )
 
