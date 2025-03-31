@@ -84,8 +84,8 @@ struct glz::meta<atom_rw>
    static constexpr auto value = object("a", glz::atom_as_string<&T::a>);
 };
 
-static_assert(glz::write_supported<glz::ERLANG, my_struct_meta>);
-static_assert(glz::read_supported<glz::ERLANG, my_struct_meta>);
+static_assert(glz::write_supported<glz::EETF, my_struct_meta>);
+static_assert(glz::read_supported<glz::EETF, my_struct_meta>);
 
 suite etf_tests = [] {
    "read_map_term"_test = [] {
@@ -104,7 +104,7 @@ suite etf_tests = [] {
    "read_map_term_meta"_test = [] {
       trace.begin("read_map_term_meta");
       my_struct_meta s{};
-      auto ec = glz::read<glz::eetf::eetf_opts{.format = glz::ERLANG, .error_on_unknown_keys = false}>(s, term_map_001);
+      auto ec = glz::read<glz::eetf::eetf_opts{.format = glz::EETF, .error_on_unknown_keys = false}>(s, term_map_001);
       expect(not ec) << glz::format_error(ec, "can't read");
       expect(s.val_d == 3.1415926);
       expect(s.val_i == 1);
@@ -130,7 +130,7 @@ suite etf_tests = [] {
       trace.begin("read_proplist_term_meta");
       my_struct_meta s{};
       auto ec = glz::read<glz::eetf::eetf_opts{
-         .format = glz::ERLANG, .layout = glz::eetf::proplist_layout, .error_on_unknown_keys = false}>(
+         .format = glz::EETF, .layout = glz::eetf::proplist_layout, .error_on_unknown_keys = false}>(
          s, term_proplist_001);
       expect(not ec) << glz::format_error(ec, "can't read");
       expect(s.val_d == 3.1415926);

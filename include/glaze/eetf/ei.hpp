@@ -252,7 +252,7 @@ namespace glz
 
       for (std::size_t idx = 0; idx < arity; idx++) {
          V v;
-         from<ERLANG, V>::template op<Opts>(v, ctx, it, end);
+         from<EETF, V>::template op<Opts>(v, ctx, it, end);
          if (bool(ctx.error)) [[unlikely]] {
             return;
          }

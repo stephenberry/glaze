@@ -20,7 +20,7 @@ namespace glz
    inline constexpr uint32_t TOML = 400;
    inline constexpr uint32_t STENCIL = 500;
    inline constexpr uint32_t CSV = 10000;
-   inline constexpr uint32_t ERLANG = 20000;
+   inline constexpr uint32_t EETF = 20000;
 
    // layout
    inline constexpr uint8_t rowwise = 0;

@@ -11,7 +11,7 @@ namespace glz
 {
 
    template <>
-   struct skip_value<ERLANG>
+   struct skip_value<EETF>
    {
       template <auto Opts>
       GLZ_ALWAYS_INLINE static void op(is_context auto&& ctx, auto&& it, auto&& end) noexcept
@@ -21,7 +21,7 @@ namespace glz
    };
 
    template <>
-   struct parse<ERLANG>
+   struct parse<EETF>
    {
       template <auto Opts, class T, is_context Ctx, class It0, class It1>
          requires(not has_no_header(Opts))
@@ -57,18 +57,18 @@ namespace glz
             }
             else {
                // do not read anything into the const value
-               skip_value<ERLANG>::op<Opts>(std::forward<Ctx>(ctx), std::forward<It0>(it), std::forward<It1>(end));
+               skip_value<EETF>::op<Opts>(std::forward<Ctx>(ctx), std::forward<It0>(it), std::forward<It1>(end));
             }
          }
          else {
-            from<ERLANG, std::remove_cvref_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
+            from<EETF, std::remove_cvref_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
                                                                     std::forward<It0>(it), std::forward<It1>(end));
          }
       }
    };
 
    template <readable_array_t T>
-   struct from<ERLANG, T> final
+   struct from<EETF, T> final
    {
       template <auto Opts, is_context Ctx, class It0, class It1>
       GLZ_ALWAYS_INLINE static void op(auto&& value, Ctx&& ctx, It0&& it, It1&& end) noexcept
@@ -79,7 +79,7 @@ namespace glz
    };
 
    template <boolean_like T>
-   struct from<ERLANG, T>
+   struct from<EETF, T>
    {
       template <auto Opts, is_context Ctx, class It0, class It1>
       GLZ_ALWAYS_INLINE static void op(auto&& value, Ctx&& ctx, It0&& it, It1&& end) noexcept
@@ -97,7 +97,7 @@ namespace glz
    };
 
    template <num_t T>
-   struct from<ERLANG, T> final
+   struct from<EETF, T> final
    {
       template <auto Opts, is_context Ctx, class It0, class It1>
       GLZ_ALWAYS_INLINE static void op(auto&& value, Ctx&& ctx, It0&& it, It1&& end) noexcept
@@ -115,7 +115,7 @@ namespace glz
    };
 
    template <atom_t T>
-   struct from<ERLANG, T> final
+   struct from<EETF, T> final
    {
       template <auto Opts, is_context Ctx, class It0, class It1>
       GLZ_ALWAYS_INLINE static void op(auto&& value, Ctx&& ctx, It0&& it, It1&& end) noexcept
@@ -135,7 +135,7 @@ namespace glz
    };
 
    template <str_t T>
-   struct from<ERLANG, T> final
+   struct from<EETF, T> final
    {
       template <auto Opts, is_context Ctx, class It0, class It1>
       GLZ_ALWAYS_INLINE static void op(auto&& value, Ctx&& ctx, It0&& it, It1&& end) noexcept
@@ -156,7 +156,7 @@ namespace glz
 
    template <class T>
       requires(tuple_t<T> || is_std_tuple<T>)
-   struct from<ERLANG, T> final
+   struct from<EETF, T> final
    {
       template <auto Opts>
       static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
@@ -190,17 +190,17 @@ namespace glz
          }
 
          if constexpr (is_std_tuple<T>) {
-            invoke_table<N>([&]<size_t I>() { parse<ERLANG>::op<Opts>(std::get<I>(value), ctx, it, end); });
+            invoke_table<N>([&]<size_t I>() { parse<EETF>::op<Opts>(std::get<I>(value), ctx, it, end); });
          }
          else {
-            invoke_table<N>([&]<size_t I>() { parse<ERLANG>::op<Opts>(glz::get<I>(value), ctx, it, end); });
+            invoke_table<N>([&]<size_t I>() { parse<EETF>::op<Opts>(glz::get<I>(value), ctx, it, end); });
          }
       }
    };
 
    template <class T>
       requires glaze_object_t<T> || reflectable<T>
-   struct from<ERLANG, T> final
+   struct from<EETF, T> final
    {
       template <is_context Ctx, class It0, class It1>
       class field_iterator
@@ -302,14 +302,14 @@ namespace glz
                static constexpr auto HashInfo = hash_info<T>;
 
                eetf::atom mkey;
-               from<ERLANG, eetf::atom>::op<Opts>(mkey, ctx, it, end);
+               from<EETF, eetf::atom>::op<Opts>(mkey, ctx, it, end);
                if (bool(ctx.error)) [[unlikely]] {
                   return;
                }
 
                const auto n = mkey.size();
                const auto index =
-                  decode_hash_with_size<ERLANG, T, HashInfo, HashInfo.type>::op(mkey.data(), mkey.data() + n, n);
+                  decode_hash_with_size<EETF, T, HashInfo, HashInfo.type>::op(mkey.data(), mkey.data() + n, n);
                if (index < N) [[likely]] {
                   const sv key{mkey.data(), n};
 
@@ -319,10 +319,10 @@ namespace glz
                         static constexpr auto Length = TargetKey.size();
                         if ((Length == n) && compare<Length>(TargetKey.data(), key.data())) [[likely]] {
                            if constexpr (reflectable<T>) {
-                              parse<ERLANG>::op<Opts>(get_member(value, get<I>(to_tie(value))), ctx, it, end);
+                              parse<EETF>::op<Opts>(get_member(value, get<I>(to_tie(value))), ctx, it, end);
                            }
                            else {
-                              parse<ERLANG>::op<Opts>(get_member(value, get<I>(reflect<T>::values)), ctx, it, end);
+                              parse<EETF>::op<Opts>(get_member(value, get<I>(reflect<T>::values)), ctx, it, end);
                            }
                         }
                         else {
@@ -331,7 +331,7 @@ namespace glz
                               return;
                            }
                            else {
-                              skip_value<ERLANG>::op<Opts>(ctx, it, end);
+                              skip_value<EETF>::op<Opts>(ctx, it, end);
                               if (bool(ctx.error)) [[unlikely]]
                                  return;
                            }
@@ -349,7 +349,7 @@ namespace glz
                      return;
                   }
                   else {
-                     skip_value<ERLANG>::op<Opts>(ctx, it, end);
+                     skip_value<EETF>::op<Opts>(ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
                   }
@@ -360,7 +360,7 @@ namespace glz
                return;
             }
             else {
-               skip_value<ERLANG>::op<Opts>(ctx, it, end);
+               skip_value<EETF>::op<Opts>(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]] {
                   return;
                }
@@ -370,20 +370,20 @@ namespace glz
    };
 
    template <uint8_t layout = glz::eetf::map_layout, class T, class Buffer>
-      requires(read_supported<ERLANG, T>)
+      requires(read_supported<EETF, T>)
    [[nodiscard]] inline error_ctx read_term(T&& value, Buffer&& buffer) noexcept
    {
-      return read<eetf::eetf_opts{.format = ERLANG, .layout = layout}>(value, std::forward<Buffer>(buffer));
+      return read<eetf::eetf_opts{.format = EETF, .layout = layout}>(value, std::forward<Buffer>(buffer));
    }
 
    template <uint8_t layout = glz::eetf::map_layout, class T, is_buffer Buffer>
-      requires(read_supported<ERLANG, T>)
+      requires(read_supported<EETF, T>)
    [[nodiscard]] expected<T, error_ctx> read_term(Buffer&& buffer) noexcept
    {
       T value{};
       context ctx{};
       const error_ctx ec =
-         read<eetf::eetf_opts{.format = ERLANG, .layout = layout}>(value, std::forward<Buffer>(buffer), ctx);
+         read<eetf::eetf_opts{.format = EETF, .layout = layout}>(value, std::forward<Buffer>(buffer), ctx);
       if (ec) {
          return unexpected<error_ctx>(ec);
       }
