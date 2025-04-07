@@ -1617,7 +1617,7 @@ suite additional_async_vector_tests = [] {
                   {
                      auto proxy = vec.write();
                      auto insert_pos = proxy.begin();
-                     std::advance(insert_pos, std::min(pos, proxy.size()));
+                     std::advance(insert_pos, (std::min)(pos, proxy.size()));
 
                      // Insert a new value
                      auto it = proxy.insert(insert_pos, t * 1000 + i);
@@ -1675,7 +1675,7 @@ suite additional_async_vector_tests = [] {
                   {
                      auto proxy = vec.write();
                      auto insert_pos = proxy.begin();
-                     std::advance(insert_pos, std::min(pos, proxy.size()));
+                     std::advance(insert_pos, (std::min)(pos, proxy.size()));
 
                      // Create a string and vector for the complex object
                      std::string data = "Thread " + std::to_string(t) + " Item " + std::to_string(i);
@@ -1990,7 +1990,7 @@ suite additional_async_vector_tests = [] {
                      auto proxy = vec.write();
                      size_t pos = proxy.empty() ? 0 : (gen() % proxy.size());
                      auto it = proxy.begin();
-                     std::advance(it, std::min(pos, proxy.size()));
+                     std::advance(it, (std::min)(pos, proxy.size()));
                      proxy.insert(it, t);
                      break;
                   }

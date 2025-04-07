@@ -222,7 +222,7 @@ namespace glz
    template <class T>
    constexpr size_t required_padding()
    {
-      const auto value = []() -> size_t {
+      constexpr auto value = []() -> size_t {
          if constexpr (boolean_like<T>) {
             return 8;
          }
@@ -267,7 +267,7 @@ namespace glz
          }
       }();
 
-      if (value >= (write_padding_bytes - 16)) {
+      if constexpr (value >= (write_padding_bytes - 16)) {
          // we always require 16 bytes available from write_padding_bytes
          // for opening and closing characters
          return 0;

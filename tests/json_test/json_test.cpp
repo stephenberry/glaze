@@ -9775,7 +9775,7 @@ struct naive_static_string_t
 
    naive_static_string_t& assign(const char* v, size_t sz)
    {
-      const auto bytes_to_copy = std::min(N, sz);
+      const auto bytes_to_copy = (std::min)(N, sz);
       length = bytes_to_copy;
       memcpy(buffer, v, bytes_to_copy);
       return *this;
@@ -9783,7 +9783,7 @@ struct naive_static_string_t
 
    void resize(size_t sz)
    {
-      const auto bytes_to_keep = std::min(N, sz);
+      const auto bytes_to_keep = (std::min)(N, sz);
       length = bytes_to_keep;
    }
 

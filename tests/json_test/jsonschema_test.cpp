@@ -34,7 +34,7 @@ struct glz::json_schema<schema_obj>
       .exclusiveMaximum = 2L,
       .multipleOf = 3L,
       .minProperties = 4UL,
-      .maxProperties = std::numeric_limits<std::uint64_t>::max(),
+      .maxProperties = (std::numeric_limits<std::uint64_t>::max)(),
       // .required = , // read of std::span is not supported
       .minItems = 1UL,
       .maxItems = 2UL,
@@ -146,7 +146,7 @@ suite schema_attributes = [] {
    };
    "maxProperties"_test = [] {
       test_case const test{};
-      expect_property<&glz::schema::maxProperties>(test, "variable", std::numeric_limits<std::uint64_t>::max());
+      expect_property<&glz::schema::maxProperties>(test, "variable", (std::numeric_limits<std::uint64_t>::max)());
    };
    "minItems"_test = [] {
       test_case const test{};

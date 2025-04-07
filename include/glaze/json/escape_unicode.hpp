@@ -223,8 +223,8 @@ namespace glz::detail
             else {
                // Supplementary character (needs surrogate pair)
                codepoint -= 0x10000;
-               uint16_t high_surrogate = 0xD800 + (codepoint >> 10);
-               uint16_t low_surrogate = 0xDC00 + (codepoint & 0x3FF);
+               uint16_t high_surrogate = uint16_t(0xD800 + (codepoint >> 10));
+               uint16_t low_surrogate = uint16_t(0xDC00 + (codepoint & 0x3FF));
                append_unicode_escape(output, high_surrogate);
                append_unicode_escape(output, low_surrogate);
             }

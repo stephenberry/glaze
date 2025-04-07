@@ -895,7 +895,7 @@ struct struct_with_a_pair
 {
    std::pair<some_enum, std::string> value{};
 
-   constexpr bool operator<=>(const struct_with_a_pair& rhs) const = default;
+   constexpr auto operator<=>(const struct_with_a_pair& rhs) const = default;
 };
 
 suite enum_pair_tests = [] {
