@@ -281,7 +281,7 @@ namespace glz
    [[nodiscard]] error_ctx write_term(T&& value, Buffer&& buffer) noexcept
    {
       return write<eetf::eetf_opts{.format = EETF, .layout = layout}>(std::forward<T>(value),
-                                                                        std::forward<Buffer>(buffer));
+                                                                      std::forward<Buffer>(buffer));
    }
 
    template <uint8_t layout = glz::eetf::map_layout, class T, raw_buffer Buffer>
@@ -289,7 +289,7 @@ namespace glz
    [[nodiscard]] expected<size_t, error_ctx> write_term(T&& value, Buffer&& buffer) noexcept
    {
       return write<eetf::eetf_opts{.format = EETF, .layout = layout}>(std::forward<T>(value),
-                                                                        std::forward<Buffer>(buffer));
+                                                                      std::forward<Buffer>(buffer));
    }
 
    template <class T>

@@ -62,7 +62,7 @@ namespace glz
          }
          else {
             from<EETF, std::remove_cvref_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
-                                                                    std::forward<It0>(it), std::forward<It1>(end));
+                                                                  std::forward<It0>(it), std::forward<It1>(end));
          }
       }
    };

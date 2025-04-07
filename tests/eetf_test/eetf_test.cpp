@@ -130,8 +130,8 @@ suite etf_tests = [] {
       trace.begin("read_proplist_term_meta");
       my_struct_meta s{};
       auto ec = glz::read<glz::eetf::eetf_opts{
-         .format = glz::EETF, .layout = glz::eetf::proplist_layout, .error_on_unknown_keys = false}>(
-         s, term_proplist_001);
+         .format = glz::EETF, .layout = glz::eetf::proplist_layout, .error_on_unknown_keys = false}>(s,
+                                                                                                     term_proplist_001);
       expect(not ec) << glz::format_error(ec, "can't read");
       expect(s.val_d == 3.1415926);
       expect(s.val_i == 1);
