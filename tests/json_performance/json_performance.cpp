@@ -668,7 +668,7 @@ struct test_generator
 
    double generateDouble()
    {
-      auto newValue = randomizeNumberNormal(double{}, std::numeric_limits<double>::max() / 50000000);
+      auto newValue = randomizeNumberNormal(double{}, (std::numeric_limits<double>::max)() / 50000000);
       return generateBool() ? newValue : -newValue;
    };
 
@@ -676,12 +676,12 @@ struct test_generator
 
    uint64_t generateUint()
    {
-      return randomizeNumberNormal(std::numeric_limits<uint64_t>::max() / 2, std::numeric_limits<uint64_t>::max() / 2);
+      return randomizeNumberNormal((std::numeric_limits<uint64_t>::max)() / 2, (std::numeric_limits<uint64_t>::max)() / 2);
    };
 
    int64_t generateInt()
    {
-      auto newValue = randomizeNumberNormal(int64_t{}, std::numeric_limits<int64_t>::max());
+      auto newValue = randomizeNumberNormal(int64_t{}, (std::numeric_limits<int64_t>::max)());
       return generateBool() ? newValue : -newValue;
    };
 
