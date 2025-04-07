@@ -120,7 +120,9 @@ struct api
       std::this_thread::sleep_for(std::chrono::milliseconds(100));
       return std::reduce(vec.begin(), vec.end());
    };
-   std::function<double(std::vector<double>& vec)> max = [](std::vector<double>& vec) { return (std::ranges::max)(vec); };
+   std::function<double(std::vector<double>& vec)> max = [](std::vector<double>& vec) {
+      return (std::ranges::max)(vec);
+   };
 };
 
 void asio_client_test()

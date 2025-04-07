@@ -676,7 +676,8 @@ struct test_generator
 
    uint64_t generateUint()
    {
-      return randomizeNumberNormal((std::numeric_limits<uint64_t>::max)() / 2, (std::numeric_limits<uint64_t>::max)() / 2);
+      return randomizeNumberNormal((std::numeric_limits<uint64_t>::max)() / 2,
+                                   (std::numeric_limits<uint64_t>::max)() / 2);
    };
 
    int64_t generateInt()

@@ -20,7 +20,9 @@ struct my_functions_t
    std::function<std::string_view()> world = []() -> std::string_view { return "World"; };
    std::function<int()> get_number = [] { return 42; };
    std::function<void()> void_func = [] {};
-   std::function<double(std::vector<double>& vec)> max = [](std::vector<double>& vec) { return (std::ranges::max)(vec); };
+   std::function<double(std::vector<double>& vec)> max = [](std::vector<double>& vec) {
+      return (std::ranges::max)(vec);
+   };
 };
 
 struct meta_functions_t
