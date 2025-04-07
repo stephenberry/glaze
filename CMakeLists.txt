@@ -61,3 +61,17 @@ option(glaze_BUILD_EXAMPLES "Build GLAZE examples" OFF)
 if(glaze_BUILD_EXAMPLES)
   add_subdirectory(examples)
 endif()
+
+option(glaze_EETF_FORMAT "Enable Erlang external term format parsing" OFF)
+
+if(glaze_EETF_FORMAT)
+  list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+  find_package(Erlang REQUIRED)
+  target_link_libraries(
+    glaze_glaze ${warning_guard}
+    INTERFACE
+      Erlang::EI
+      Erlang::Erlang
+  )
+  target_compile_definitions(glaze_glaze INTERFACE GLZ_ENABLE_EETF)
+endif(glaze_EETF_FORMAT)
