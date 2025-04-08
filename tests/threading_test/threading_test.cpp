@@ -2047,4 +2047,209 @@ suite additional_async_vector_tests = [] {
    };
 };
 
+struct Point {
+   int x;
+   int y;
+   
+   bool operator==(const Point& other) const {
+      return x == other.x && y == other.y;
+   }
+   
+   struct glaze
+   {
+      using T = Point;
+      static constexpr auto value = glz::object(
+                                                "x", &T::x,
+                                                "y", &T::y
+                                                );
+   };
+};
+
+struct User {
+   std::string name;
+   int age;
+   std::vector<std::string> hobbies;
+   
+   bool operator==(const User& other) const {
+      return name == other.name &&
+      age == other.age &&
+      hobbies == other.hobbies;
+   }
+   
+   struct glaze {
+      using T = User;
+      static constexpr auto value = glz::object(
+                                           "name", &T::name,
+                                           "age", &T::age,
+                                           "hobbies", &T::hobbies
+                                           );
+   };
+};
+
+suite async_vector_json_tests = [] {
+   // JSON serialization/deserialization tests
+   "async_vector write_json / read_json"_test = [] {
+      glz::async_vector<int> v;
+      v.push_back(1);
+      v.push_back(2);
+      v.push_back(3);
+      v.push_back(4);
+      v.push_back(5);
+      
+      std::string buffer{};
+      
+      // write_json returns a status code: false means success, true means error
+      expect(not glz::write_json(v, buffer)) << "Failed to serialize async_vector";
+      // The JSON for a vector of integers should be an array of numbers
+      expect(buffer == "[1,2,3,4,5]") << buffer;
+      
+      glz::async_vector<int> result;
+      expect(not glz::read_json(result, buffer)) << "Failed to deserialize async_vector";
+      
+      auto result_reader = result.read();
+      expect(result_reader->size() == 5);
+      expect((*result_reader)[0] == 1);
+      expect((*result_reader)[1] == 2);
+      expect((*result_reader)[2] == 3);
+      expect((*result_reader)[3] == 4);
+      expect((*result_reader)[4] == 5);
+   };
+   
+   // Test an empty vector's serialization
+   "async_vector empty serialization"_test = [] {
+      glz::async_vector<int> v;
+      std::string buffer{};
+      
+      expect(not glz::write_json(v, buffer));
+      // An empty array in JSON
+      expect(buffer == "[]") << buffer;
+      
+      glz::async_vector<int> result;
+      result.push_back(99);
+      result.push_back(100); // Non-empty to start
+      expect(not glz::read_json(result, buffer));
+      expect(result.empty());
+   };
+   
+   // Test serialization with custom objects
+   "async_vector custom object serialization"_test = [] {
+      glz::async_vector<Point> points;
+      points.push_back({1, 2});
+      points.push_back({3, 4});
+      points.push_back({5, 6});
+      
+      std::string buffer{};
+      expect(not glz::write_json(points, buffer)) << "Failed to serialize custom objects in async_vector";
+      
+      glz::async_vector<Point> result;
+      expect(not glz::read_json(result, buffer)) << "Failed to deserialize custom objects in async_vector";
+      
+      auto result_reader = result.read();
+      expect(result_reader->size() == 3);
+      expect((*result_reader)[0] == Point{1, 2});
+      expect((*result_reader)[1] == Point{3, 4});
+      expect((*result_reader)[2] == Point{5, 6});
+   };
+   
+   // Test serialization with nested async_vector
+   "async_vector nested serialization"_test = [] {
+      glz::async_vector<glz::async_vector<int>> nested;
+      
+      // Create and add inner vectors
+      glz::async_vector<int> inner1;
+      inner1.push_back(1);
+      inner1.push_back(2);
+      inner1.push_back(3);
+      
+      glz::async_vector<int> inner2;
+      inner2.push_back(4);
+      inner2.push_back(5);
+      
+      glz::async_vector<int> inner3;
+      inner3.push_back(6);
+      
+      nested.push_back(std::move(inner1));
+      nested.push_back(std::move(inner2));
+      nested.push_back(std::move(inner3));
+      
+      std::string buffer{};
+      expect(not glz::write_json(nested, buffer)) << "Failed to serialize nested async_vector";
+      
+      // JSON should be a nested array
+      expect(buffer == "[[1,2,3],[4,5],[6]]") << buffer;
+      
+      glz::async_vector<glz::async_vector<int>> result;
+      expect(not glz::read_json(result, buffer)) << "Failed to deserialize nested async_vector";
+      
+      auto result_reader = result.read();
+      expect(result_reader->size() == 3);
+      
+      auto inner1_reader = (*result_reader)[0].read();
+      expect(inner1_reader->size() == 3);
+      expect((*inner1_reader)[0] == 1);
+      expect((*inner1_reader)[1] == 2);
+      expect((*inner1_reader)[2] == 3);
+      
+      auto inner2_reader = (*result_reader)[1].read();
+      expect(inner2_reader->size() == 2);
+      expect((*inner2_reader)[0] == 4);
+      expect((*inner2_reader)[1] == 5);
+      
+      auto inner3_reader = (*result_reader)[2].read();
+      expect(inner3_reader->size() == 1);
+      expect((*inner3_reader)[0] == 6);
+   };
+   
+   // Test with more complex JSON structures
+   "async_vector complex JSON structures"_test = [] {
+      // Create test data
+      glz::async_vector<User> users;
+      users.push_back({"Alice", 30, {"reading", "hiking"}});
+      users.push_back({"Bob", 25, {"gaming", "coding", "music"}});
+      
+      std::string buffer{};
+      expect(not glz::write_json(users, buffer)) << "Failed to serialize complex structure";
+      
+      // Check JSON format (approximate)
+      expect(buffer.find("Alice") != std::string::npos);
+      expect(buffer.find("Bob") != std::string::npos);
+      expect(buffer.find("reading") != std::string::npos);
+      expect(buffer.find("gaming") != std::string::npos);
+      
+      // Deserialize
+      glz::async_vector<User> result;
+      expect(not glz::read_json(result, buffer)) << "Failed to deserialize complex structure";
+      
+      auto reader = result.read();
+      expect(reader->size() == 2);
+      expect((*reader)[0] == User{"Alice", 30, {"reading", "hiking"}});
+      expect((*reader)[1] == User{"Bob", 25, {"gaming", "coding", "music"}});
+   };
+   
+   // Test JSON serialization with pretty print
+   "async_vector pretty print JSON"_test = [] {
+      glz::async_vector<int> v;
+      v.push_back(1);
+      v.push_back(2);
+      v.push_back(3);
+      
+      std::string buffer{};
+      expect(not glz::write<glz::opts{.prettify = true}>(v, buffer)) << "Failed to serialize with pretty print";
+      
+      // Should include newlines and indentation
+      expect(buffer.find("\n") != std::string::npos);
+      expect(buffer.find(" ") != std::string::npos);
+      
+      // Should still deserialize correctly
+      glz::async_vector<int> result;
+      expect(not glz::read_json(result, buffer)) << "Failed to deserialize pretty-printed JSON";
+      
+      auto reader = result.read();
+      expect(reader->size() == 3);
+      expect((*reader)[0] == 1);
+      expect((*reader)[1] == 2);
+      expect((*reader)[2] == 3);
+   };
+};
+
 int main() {}
