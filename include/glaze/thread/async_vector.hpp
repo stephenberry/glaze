@@ -368,7 +368,7 @@ namespace glz
          parse<Format>::template op<Opts>(*proxy, ctx, it, end);
       }
    };
-   
+
    template <uint32_t Format, class T>
       requires(is_specialization_v<T, glz::async_vector>)
    struct to<Format, T>
