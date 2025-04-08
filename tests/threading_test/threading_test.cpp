@@ -12,6 +12,10 @@
 
 using namespace ut;
 
+static_assert(glz::is_atomic<glz::guard<int>>);
+static_assert(glz::read_supported<glz::guard<int>, glz::JSON>);
+static_assert(glz::read_supported<glz::guard<int>, glz::JSON>);
+
 suite atom_tests = [] {
    "construction"_test = [] {
       glz::guard<int> a;
