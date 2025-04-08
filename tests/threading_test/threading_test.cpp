@@ -224,6 +224,18 @@ suite atom_tests = [] {
       expect(old == 100) << "Exchange with acq_rel memory order should work";
       expect(a.load() == 200) << "Value should be updated";
    };
+   
+   "json read/write"_test = [] {
+      glz::guard<int> a(42);
+      
+      std::string buffer{};
+      expect(not glz::write_json(a, buffer));
+      expect(buffer == "42");
+      
+      a = 100;
+      expect(not glz::read_json(a, buffer));
+      expect(a == 42);
+   };
 };
 
 suite async_string_tests = [] {
