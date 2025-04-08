@@ -5,6 +5,9 @@
 
 // Glaze Feature Test Macros for breaking changes
 
+// v5.1.0 swaps the template parameters of read_supported/write_supported to enable cleaner concepts and usage
+#define glaze_v5_1_0_supported_swap
+
 // v5.0.0 removes many internal functions and concepts out of the detail namespace to enable cleaner customization
 #define glaze_v5_0_0
 // v5.0.0 moves to more generic read_supported and write_supported concepts

@@ -12,7 +12,7 @@ namespace glz
 {
    // For writing to a std::string, std::vector<char>, std::deque<char> and the like
    template <auto Opts, class T, output_buffer Buffer>
-      requires write_supported<Opts.format, T>
+      requires write_supported<T, Opts.format>
    [[nodiscard]] error_ctx write(T&& value, Buffer& buffer, is_context auto&& ctx)
    {
       if constexpr (resizable<Buffer>) {
@@ -31,7 +31,7 @@ namespace glz
    }
 
    template <auto& Partial, auto Opts, class T, output_buffer Buffer>
-      requires write_supported<Opts.format, T>
+      requires write_supported<T, Opts.format>
    [[nodiscard]] error_ctx write(T&& value, Buffer& buffer)
    {
       if constexpr (resizable<Buffer>) {
@@ -50,7 +50,7 @@ namespace glz
    }
 
    template <auto& Partial, auto Opts, class T, raw_buffer Buffer>
-      requires write_supported<Opts.format, T>
+      requires write_supported<T, Opts.format>
    [[nodiscard]] glz::expected<size_t, error_ctx> write(T&& value, Buffer& buffer)
    {
       context ctx{};
@@ -63,7 +63,7 @@ namespace glz
    }
 
    template <auto Opts, class T, output_buffer Buffer>
-      requires write_supported<Opts.format, T>
+      requires write_supported<T, Opts.format>
    [[nodiscard]] error_ctx write(T&& value, Buffer& buffer)
    {
       context ctx{};
@@ -71,7 +71,7 @@ namespace glz
    }
 
    template <auto Opts, class T>
-      requires write_supported<Opts.format, T>
+      requires write_supported<T, Opts.format>
    [[nodiscard]] glz::expected<std::string, error_ctx> write(T&& value)
    {
       std::string buffer{};
@@ -84,7 +84,7 @@ namespace glz
    }
 
    template <auto Opts, class T, raw_buffer Buffer>
-      requires write_supported<Opts.format, T>
+      requires write_supported<T, Opts.format>
    [[nodiscard]] glz::expected<size_t, error_ctx> write(T&& value, Buffer&& buffer, is_context auto&& ctx)
    {
       size_t ix = 0;
@@ -96,7 +96,7 @@ namespace glz
    }
 
    template <auto Opts, class T, raw_buffer Buffer>
-      requires write_supported<Opts.format, T>
+      requires write_supported<T, Opts.format>
    [[nodiscard]] glz::expected<size_t, error_ctx> write(T&& value, Buffer&& buffer)
    {
       context ctx{};

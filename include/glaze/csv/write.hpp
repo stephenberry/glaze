@@ -328,22 +328,19 @@ namespace glz
       }
    };
 
-   template <uint32_t layout = rowwise, class T, class Buffer>
-      requires(write_supported<CSV, T>)
+   template <uint32_t layout = rowwise, write_supported<CSV> T, class Buffer>
    [[nodiscard]] auto write_csv(T&& value, Buffer&& buffer)
    {
       return write<opts{.format = CSV, .layout = layout}>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
 
-   template <uint32_t layout = rowwise, class T>
-      requires(write_supported<CSV, T>)
+   template <uint32_t layout = rowwise, write_supported<CSV> T>
    [[nodiscard]] expected<std::string, error_ctx> write_csv(T&& value)
    {
       return write<opts{.format = CSV, .layout = layout}>(std::forward<T>(value));
    }
 
-   template <uint32_t layout = rowwise, class T>
-      requires(write_supported<CSV, T>)
+   template <uint32_t layout = rowwise, write_supported<CSV> T>
    [[nodiscard]] error_ctx write_file_csv(T&& value, const std::string& file_name, auto&& buffer)
    {
       const auto ec = write<opts{.format = CSV, .layout = layout}>(std::forward<T>(value), buffer);

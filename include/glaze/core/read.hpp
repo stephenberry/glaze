@@ -30,7 +30,7 @@ namespace glz
    }
 
    template <auto Opts, class T>
-      requires read_supported<Opts.format, T>
+      requires read_supported<T, Opts.format>
    [[nodiscard]] error_ctx read(T& value, contiguous auto&& buffer, is_context auto&& ctx)
    {
       static_assert(sizeof(decltype(*buffer.data())) == 1);
@@ -107,7 +107,7 @@ namespace glz
    }
 
    template <auto Opts, class T>
-      requires read_supported<Opts.format, T>
+      requires read_supported<T, Opts.format>
    [[nodiscard]] error_ctx read(T& value, contiguous auto&& buffer)
    {
       context ctx{};
@@ -122,7 +122,7 @@ namespace glz
 
    // for char array input
    template <auto Opts, class T, c_style_char_buffer Buffer>
-      requires read_supported<Opts.format, T>
+      requires read_supported<T, Opts.format>
    [[nodiscard]] error_ctx read(T& value, Buffer&& buffer, auto&& ctx)
    {
       const auto str = std::string_view{std::forward<Buffer>(buffer)};
@@ -133,7 +133,7 @@ namespace glz
    }
 
    template <auto Opts, class T, c_style_char_buffer Buffer>
-      requires read_supported<Opts.format, T>
+      requires read_supported<T, Opts.format>
    [[nodiscard]] error_ctx read(T& value, Buffer&& buffer)
    {
       context ctx{};

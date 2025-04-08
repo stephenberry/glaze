@@ -369,15 +369,13 @@ namespace glz
       }
    };
 
-   template <uint8_t layout = glz::eetf::map_layout, class T, class Buffer>
-      requires(read_supported<EETF, T>)
+   template <uint8_t layout = glz::eetf::map_layout, read_supported<EETF> T, class Buffer>
    [[nodiscard]] inline error_ctx read_term(T&& value, Buffer&& buffer) noexcept
    {
       return read<eetf::eetf_opts{.format = EETF, .layout = layout}>(value, std::forward<Buffer>(buffer));
    }
 
-   template <uint8_t layout = glz::eetf::map_layout, class T, is_buffer Buffer>
-      requires(read_supported<EETF, T>)
+   template <uint8_t layout = glz::eetf::map_layout, read_supported<EETF> T, is_buffer Buffer>
    [[nodiscard]] expected<T, error_ctx> read_term(Buffer&& buffer) noexcept
    {
       T value{};

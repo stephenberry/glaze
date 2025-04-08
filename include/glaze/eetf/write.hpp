@@ -276,24 +276,21 @@ namespace glz
       // empty for compilation error if use unsupported value type
    };
 
-   template <uint8_t layout = glz::eetf::map_layout, class T, output_buffer Buffer>
-      requires(write_supported<EETF, T>)
+   template <uint8_t layout = glz::eetf::map_layout, write_supported<EETF> T, output_buffer Buffer>
    [[nodiscard]] error_ctx write_term(T&& value, Buffer&& buffer) noexcept
    {
       return write<eetf::eetf_opts{.format = EETF, .layout = layout}>(std::forward<T>(value),
                                                                       std::forward<Buffer>(buffer));
    }
 
-   template <uint8_t layout = glz::eetf::map_layout, class T, raw_buffer Buffer>
-      requires(write_supported<EETF, T>)
+   template <uint8_t layout = glz::eetf::map_layout, write_supported<EETF> T, raw_buffer Buffer>
    [[nodiscard]] expected<size_t, error_ctx> write_term(T&& value, Buffer&& buffer) noexcept
    {
       return write<eetf::eetf_opts{.format = EETF, .layout = layout}>(std::forward<T>(value),
                                                                       std::forward<Buffer>(buffer));
    }
 
-   template <class T>
-      requires(write_supported<EETF, T>)
+   template <write_supported<EETF> T>
    [[nodiscard]] expected<std::string, error_ctx> write_term(T&& value) noexcept
    {
       return write<eetf::eetf_opts{.format = EETF}>(std::forward<T>(value));

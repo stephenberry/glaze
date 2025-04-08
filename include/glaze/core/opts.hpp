@@ -435,10 +435,10 @@ namespace glz
    template <uint32_t Format = INVALID>
    struct skip_value;
 
-   template <uint32_t Format, class T>
+   template <class T, uint32_t Format>
    concept write_supported = requires { to<Format, std::remove_cvref_t<T>>{}; };
 
-   template <uint32_t Format, class T>
+   template <class T, uint32_t Format>
    concept read_supported = requires { from<Format, std::remove_cvref_t<T>>{}; };
 
    // These templates save typing by determining the core type used to select the proper to/from specialization
