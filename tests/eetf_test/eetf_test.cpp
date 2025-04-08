@@ -84,8 +84,8 @@ struct glz::meta<atom_rw>
    static constexpr auto value = object("a", glz::atom_as_string<&T::a>);
 };
 
-static_assert(glz::write_supported<glz::EETF, my_struct_meta>);
-static_assert(glz::read_supported<glz::EETF, my_struct_meta>);
+static_assert(glz::write_supported<my_struct_meta, glz::EETF>);
+static_assert(glz::read_supported<my_struct_meta, glz::EETF>);
 
 suite etf_tests = [] {
    "read_map_term"_test = [] {
