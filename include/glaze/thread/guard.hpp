@@ -60,7 +60,7 @@ namespace glz
 
      public:
       using value_type = T;
-      
+
       // Default constructor
       constexpr guard() noexcept : value() {}
 
