@@ -646,15 +646,13 @@ namespace glz
       }
    };
 
-   template <uint32_t layout = rowwise, class T, class Buffer>
-      requires(read_supported<CSV, T>)
+   template <uint32_t layout = rowwise, read_supported<CSV> T, class Buffer>
    [[nodiscard]] inline auto read_csv(T&& value, Buffer&& buffer)
    {
       return read<opts{.format = CSV, .layout = layout}>(value, std::forward<Buffer>(buffer));
    }
 
-   template <uint32_t layout = rowwise, class T, class Buffer>
-      requires(read_supported<CSV, T>)
+   template <uint32_t layout = rowwise, read_supported<CSV> T, class Buffer>
    [[nodiscard]] inline auto read_csv(Buffer&& buffer)
    {
       T value{};
@@ -662,8 +660,7 @@ namespace glz
       return value;
    }
 
-   template <uint32_t layout = rowwise, class T, is_buffer Buffer>
-      requires(read_supported<CSV, T>)
+   template <uint32_t layout = rowwise, read_supported<CSV> T, is_buffer Buffer>
    [[nodiscard]] inline error_ctx read_file_csv(T& value, const sv file_name, Buffer&& buffer)
    {
       context ctx{};

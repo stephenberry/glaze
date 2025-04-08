@@ -11,7 +11,7 @@
 namespace glz::ex
 {
    template <auto Opts, class T>
-      requires read_supported<Opts.format, T>
+      requires read_supported<T, Opts.format>
    void read(T&& value, auto&& buffer)
    {
       const auto ec = glz::read<Opts>(std::forward<T>(value), buffer);
@@ -25,7 +25,7 @@ namespace glz::ex
 {
    // For writing to a std::string, std::vector<char>, std::deque<char> and the like
    template <auto Opts, class T, output_buffer Buffer>
-      requires write_supported<Opts.format, T>
+      requires write_supported<T, Opts.format>
    void write(T&& value, Buffer& buffer, is_context auto&& ctx)
    {
       const auto ec = glz::write<Opts>(std::forward<T>(value), buffer, ctx);
@@ -35,7 +35,7 @@ namespace glz::ex
    }
 
    template <auto& Partial, auto Opts, class T, output_buffer Buffer>
-      requires write_supported<Opts.format, T>
+      requires write_supported<T, Opts.format>
    void write(T&& value, Buffer& buffer)
    {
       const auto ec = glz::write(std::forward<T>(value), buffer);
@@ -45,7 +45,7 @@ namespace glz::ex
    }
 
    template <auto Opts, class T, output_buffer Buffer>
-      requires write_supported<Opts.format, T>
+      requires write_supported<T, Opts.format>
    void write(T&& value, Buffer& buffer)
    {
       glz::context ctx{};
@@ -53,7 +53,7 @@ namespace glz::ex
    }
 
    template <auto Opts, class T>
-      requires write_supported<Opts.format, T>
+      requires write_supported<T, Opts.format>
    [[nodiscard]] std::string write(T&& value)
    {
       const auto e = glz::write<Opts>(std::forward<T>(value));
@@ -64,7 +64,7 @@ namespace glz::ex
    }
 
    template <auto Opts, class T, raw_buffer Buffer>
-      requires write_supported<Opts.format, T>
+      requires write_supported<T, Opts.format>
    [[nodiscard]] size_t write(T&& value, Buffer&& buffer)
    {
       const auto e = write<Opts>(std::forward<T>(value), std::forward<Buffer>(buffer));

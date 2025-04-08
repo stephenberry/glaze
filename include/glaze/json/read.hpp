@@ -3241,16 +3241,14 @@ namespace glz
       return read<opts_validate{{opts{.comments = true}}}>(skip_value, std::forward<Buffer>(buffer), ctx);
    }
 
-   template <class T, is_buffer Buffer>
-      requires(read_supported<JSON, T>)
+   template <read_supported<JSON> T, is_buffer Buffer>
    [[nodiscard]] error_ctx read_json(T& value, Buffer&& buffer)
    {
       context ctx{};
       return read<opts{}>(value, std::forward<Buffer>(buffer), ctx);
    }
 
-   template <class T, is_buffer Buffer>
-      requires(read_supported<JSON, T>)
+   template <read_supported<JSON> T, is_buffer Buffer>
    [[nodiscard]] expected<T, error_ctx> read_json(Buffer&& buffer)
    {
       T value{};
@@ -3262,16 +3260,14 @@ namespace glz
       return value;
    }
 
-   template <class T, is_buffer Buffer>
-      requires(read_supported<JSON, T>)
+   template <read_supported<JSON> T, is_buffer Buffer>
    [[nodiscard]] error_ctx read_jsonc(T& value, Buffer&& buffer)
    {
       context ctx{};
       return read<opts{.comments = true}>(value, std::forward<Buffer>(buffer), ctx);
    }
 
-   template <class T, is_buffer Buffer>
-      requires(read_supported<JSON, T>)
+   template <read_supported<JSON> T, is_buffer Buffer>
    [[nodiscard]] expected<T, error_ctx> read_jsonc(Buffer&& buffer)
    {
       T value{};
@@ -3283,8 +3279,7 @@ namespace glz
       return value;
    }
 
-   template <auto Opts = opts{}, class T, is_buffer Buffer>
-      requires(read_supported<JSON, T>)
+   template <auto Opts = opts{}, read_supported<JSON> T, is_buffer Buffer>
    [[nodiscard]] error_ctx read_file_json(T& value, const sv file_name, Buffer&& buffer)
    {
       context ctx{};
@@ -3299,8 +3294,7 @@ namespace glz
       return read<set_json<Opts>()>(value, buffer, ctx);
    }
 
-   template <auto Opts = opts{}, class T, is_buffer Buffer>
-      requires(read_supported<JSON, T>)
+   template <auto Opts = opts{}, read_supported<JSON> T, is_buffer Buffer>
    [[nodiscard]] error_ctx read_file_jsonc(T& value, const sv file_name, Buffer&& buffer)
    {
       context ctx{};
