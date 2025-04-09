@@ -1557,7 +1557,7 @@ suite additional_async_vector_tests = [] {
                   [[maybe_unused]] auto temp_cit = proxy.cbegin() + i;
                }
             }
-            catch (const std::exception& e) {
+            catch (const std::exception&) {
                errors++;
             }
          }
@@ -1580,7 +1580,7 @@ suite additional_async_vector_tests = [] {
                   errors++;
                }
             }
-            catch (const std::exception& e) {
+            catch (const std::exception&) {
                errors++;
             }
          }
@@ -1596,7 +1596,7 @@ suite additional_async_vector_tests = [] {
                *it = counter;
                counter++;
             }
-            catch (const std::exception& e) {
+            catch (const std::exception&) {
                errors++;
             }
          }
@@ -1656,7 +1656,7 @@ suite additional_async_vector_tests = [] {
                      proxy.erase(erase_iter);
                   }
                }
-               catch (const std::exception& e) {
+               catch (const std::exception&) {
                   errors++;
                }
             }
@@ -1712,7 +1712,7 @@ suite additional_async_vector_tests = [] {
                   // Small delay to increase chance of contention
                   std::this_thread::sleep_for(std::chrono::microseconds(std::rand() % 100));
                }
-               catch (const std::exception& e) {
+               catch (const std::exception&) {
                   errors++;
                }
             }
@@ -1773,7 +1773,7 @@ suite additional_async_vector_tests = [] {
                      completed_operations++;
                   }
                }
-               catch (const std::exception& e) {
+               catch (const std::exception&) {
                   // Error, but not necessarily a deadlock
                }
             }
@@ -1818,7 +1818,7 @@ suite additional_async_vector_tests = [] {
                   it->access(); // Access the object to increment counter
                }
             }
-            catch (const std::exception& e) {
+            catch (const std::exception&) {
                errors++;
             }
          }
@@ -1850,7 +1850,7 @@ suite additional_async_vector_tests = [] {
                counter++;
                std::this_thread::sleep_for(std::chrono::microseconds(100));
             }
-            catch (const std::exception& e) {
+            catch (const std::exception&) {
                errors++;
             }
          }
@@ -1899,7 +1899,7 @@ suite additional_async_vector_tests = [] {
                resize_count++;
                std::this_thread::sleep_for(std::chrono::milliseconds(10));
             }
-            catch (const std::exception& e) {
+            catch (const std::exception&) {
                errors++;
             }
          }
@@ -1917,7 +1917,7 @@ suite additional_async_vector_tests = [] {
                      sum += proxy[i];
                   }
                }
-               catch (const std::exception& e) {
+               catch (const std::exception&) {
                   errors++;
                }
             }
@@ -1940,7 +1940,7 @@ suite additional_async_vector_tests = [] {
                   }
                   counter++;
                }
-               catch (const std::exception& e) {
+               catch (const std::exception&) {
                   errors++;
                }
             }

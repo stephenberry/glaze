@@ -57,27 +57,27 @@ void test()
    };
 
    const auto nthreads = std::thread::hardware_concurrency();
-   const UT step = std::numeric_limits<UT>::max() / nthreads;
+   const UT step = (std::numeric_limits<UT>::max)() / nthreads;
 
    std::vector<std::thread> threads;
    threads.reserve(nthreads);
    for (int threadi = 0; threadi < nthreads; ++threadi) {
       const UT start = threadi * step;
-      const UT stop = (threadi == nthreads - 1) ? std::numeric_limits<UT>::max() : start + step;
+      const UT stop = (threadi == nthreads - 1) ? (std::numeric_limits<UT>::max)() : start + step;
       // std::cout << "thread i=" << threadi << " goes from " << start << " to " << stop << '\n';
       threads.emplace_back(test_all_in_range, start, stop);
    }
    // test the last value here.
    {
       std::string buf;
-      test_one_value(std::numeric_limits<UT>::max(), buf);
+      test_one_value((std::numeric_limits<UT>::max)(), buf);
    }
 
    std::cout << "started testing in " << nthreads << " threads." << std::endl;
    for (auto& t : threads) {
       t.join();
    }
-   std::cout << "tested " << std::numeric_limits<UT>::max() << " values of float" << std::endl;
+   std::cout << "tested " << (std::numeric_limits<UT>::max)() << " values of float" << std::endl;
 }
 
 int main(int argc, char* argv[]) { test(); }
