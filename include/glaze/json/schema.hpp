@@ -664,7 +664,7 @@ namespace glz
          }
       };
    }
-   
+
    // Moved definition outside of write_json_schema to fix MSVC bug
    template <class Opts>
    struct opts_write_type_info_off : std::decay_t<Opts>
