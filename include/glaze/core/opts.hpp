@@ -137,7 +137,7 @@ namespace glz
    // ---
    // bool hide_non_invocable = true;
    // Hides non-invocable members from the cli_menu (may be applied elsewhere in the future)
-   
+
    // ---
    // bool escape_control_characters = false;
    // Escapes control characters like 0x01 or null characters with proper unicode escape sequences.
@@ -225,7 +225,7 @@ namespace glz
          return true;
       }
    }
-   
+
    consteval bool check_escape_control_characters(auto&& Opts)
    {
       if constexpr (requires { Opts.escape_control_characters; }) {

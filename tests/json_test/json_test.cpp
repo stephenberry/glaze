@@ -4596,52 +4596,48 @@ suite control_character_tests = [] {
    "basic_control_char_escaping"_test = [] {
       // Test basic escaping of control characters in strings
       std::string str = "Hello\x01World\x02!";
-      
+
       std::string buffer{};
       expect(not glz::write<opts_escape_control_characters{}>(str, buffer));
-      
+
       // Buffer should contain escaped control chars
-      expect(buffer.find("\\u0001") != std::string::npos)
-      << "SOH control character should be escaped";
-      expect(buffer.find("\\u0002") != std::string::npos)
-      << "STX control character should be escaped";
-      
+      expect(buffer.find("\\u0001") != std::string::npos) << "SOH control character should be escaped";
+      expect(buffer.find("\\u0002") != std::string::npos) << "STX control character should be escaped";
+
       // Reading back the escaped JSON
       std::string result;
       expect(not glz::read_json(result, buffer));
       expect(result == str) << "Original string should match after read/write";
    };
-   
+
    "null_character_escaping"_test = [] {
       // Test NULL character (U+0000)
       std::string str = "before\0after", expected = "before\0after";
       str.resize(11); // Ensure null byte is included in size
       expected.resize(11);
-      
+
       std::string buffer{};
       expect(not glz::write<opts_escape_control_characters{}>(str, buffer));
-      
+
       // Buffer should contain escaped NULL
-      expect(buffer.find("\\u0000") != std::string::npos)
-      << "NULL character should be escaped";
-      
+      expect(buffer.find("\\u0000") != std::string::npos) << "NULL character should be escaped";
+
       // Reading back the escaped JSON
       std::string result;
       expect(not glz::read_json(result, buffer));
       expect(result.size() == 11) << "String with NULL should preserve size";
       expect(result == expected) << "String with NULL should match original";
    };
-   
+
    "control_char_explicitly_escaped"_test = [] {
       // Test explicitly escaped control character
       std::string str = R"({"\u0001":"control char value"})";
       control_char_escaped_t obj{};
-      
+
       expect(not glz::read_json(obj, str));
-      expect(obj.value == "control char value")
-      << "Value with escaped control char key should be read correctly";
+      expect(obj.value == "control char value") << "Value with escaped control char key should be read correctly";
    };
-   
+
    "mixed_control_and_regular"_test = [] {
       // Test mix of control and regular characters
       // Build string using individual characters to avoid compiler issues
@@ -4653,90 +4649,84 @@ suite control_character_tests = [] {
       str += "Control";
       str += char(0x1F);
       str += "Chars";
-      
+
       std::string buffer{};
       expect(not glz::write<opts_escape_control_characters{}>(str, buffer));
-      
+
       expect(buffer == R"("Regular\u0000\u0001\u0002\u0003Control\u001FChars")");
-      
+
       // Reading back
       std::string result;
       expect(not glz::read_json(result, buffer));
       expect(result == str) << "Mixed string should match original";
    };
-   
+
    "multiple_control_chars"_test = [] {
       // String with multiple consecutive control characters
       std::string str = "\x01\x02\x03\x04\x05";
-      
+
       std::string buffer{};
       expect(not glz::write<opts_escape_control_characters{}>(str, buffer));
-      
+
       // Buffer should have all characters escaped
       expect(buffer.find("\\u0001\\u0002\\u0003\\u0004\\u0005") != std::string::npos)
-      << "Multiple consecutive control chars should be escaped";
-      
+         << "Multiple consecutive control chars should be escaped";
+
       // Reading back
       std::string result;
       expect(not glz::read_json(result, buffer));
       expect(result == str) << "Multiple control chars string should match original";
    };
-   
+
    "control_with_surrogate_pairs"_test = [] {
       // Mix control chars with surrogate pairs
       std::string str = "\x01🍀\x02😀\x03";
-      
+
       std::string buffer{};
       expect(not glz::write<opts_escape_control_characters{}>(str, buffer));
-      
+
       // Reading back
       std::string result;
       expect(not glz::read_json(result, buffer));
       expect(result == str) << "Control chars with surrogate pairs should match original";
    };
-   
+
    "object_with_control_chars"_test = [] {
       // Test object with control chars in both keys and values
       std::string json = R"({"normal":"\u0001\u0002\u0003","key\u0004":"value"})";
-      
+
       std::map<std::string, std::string> obj;
       expect(not glz::read_json(obj, json));
-      
+
       // Check the values were parsed correctly
-      expect(obj["normal"] == "\x01\x02\x03")
-      << "Control chars in values should be decoded";
-      expect(obj.find("key\x04") != obj.end())
-      << "Control chars in keys should be decoded";
-      expect(obj["key\x04"] == "value")
-      << "Value for key with control char should match";
+      expect(obj["normal"] == "\x01\x02\x03") << "Control chars in values should be decoded";
+      expect(obj.find("key\x04") != obj.end()) << "Control chars in keys should be decoded";
+      expect(obj["key\x04"] == "value") << "Value for key with control char should match";
    };
-   
+
    "invalid_escape_sequences"_test = [] {
       // Test invalid Unicode escape sequences
       const char* json = R"("\u001")"; // incomplete escape sequence
       std::string val;
-      expect(glz::read_json(val, json) != glz::error_code::none)
-      << "Invalid escape sequence should fail";
+      expect(glz::read_json(val, json) != glz::error_code::none) << "Invalid escape sequence should fail";
    };
-   
+
    "all_ascii_control_chars"_test = [] {
       // Test all ASCII control characters (0-31 plus DEL=127)
       std::string str;
       for (int i = 0; i < 32; i++) {
          str += static_cast<char>(i);
       }
-      str += static_cast<char>(127);  // DEL
-      
+      str += static_cast<char>(127); // DEL
+
       std::string buffer{};
       expect(not glz::write<opts_escape_control_characters{}>(str, buffer))
-      << "Should successfully write all control characters";
-      
+         << "Should successfully write all control characters";
+
       std::string result;
-      expect(not glz::read_json(result, buffer))
-      << "Should successfully read all control characters";
-      
-      expect(result == str)
-      << "All control characters should roundtrip correctly";
+      expect(not glz::read_json(result, buffer)) << "Should successfully read all control characters";
+
+      expect(result == str) << "All control characters should roundtrip correctly";
    };
 };
 

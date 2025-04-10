@@ -709,7 +709,7 @@ namespace glz
                         const auto length = (countr_zero(next) >> 3);
                         c += length;
                         data += length;
-                        
+
                         if constexpr (check_escape_control_characters(Opts)) {
                            if (const auto escaped = char_escape_table[uint8_t(*c)]; escaped) {
                               std::memcpy(data, &escaped, 2);
