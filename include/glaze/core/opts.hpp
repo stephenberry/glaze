@@ -217,6 +217,16 @@ namespace glz
          return true;
       }
    }
+   
+   consteval bool check_escape_control_characters(auto&& Opts)
+   {
+      if constexpr (requires { Opts.escape_control_characters; }) {
+         return Opts.escape_control_characters;
+      }
+      else {
+         return false;
+      }
+   }
 
    // TODO: These has_ checks should probably be changed to check_
    consteval bool has_opening_handled(auto&& o) { return o.internal & uint32_t(opts_internal::opening_handled); }
