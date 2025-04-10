@@ -511,6 +511,21 @@ namespace glz
                else if (value == '\0') {
                   // null character treated as empty string
                }
+               else if constexpr (check_escape_control_characters(Opts)) {
+                  if (uint8_t(value) < 0x20) {
+                     // Write as \uXXXX format
+                     char unicode_escape[6] = {'\\', 'u', '0', '0', '0', '0'};
+                     constexpr char hex_digits[] = "0123456789ABCDEF";
+                     unicode_escape[4] = hex_digits[(value >> 4) & 0xF];
+                     unicode_escape[5] = hex_digits[value & 0xF];
+                     std::memcpy(&b[ix], unicode_escape, 6);
+                     ix += 6;
+                  }
+                  else {
+                     std::memcpy(&b[ix], &value, 1);
+                     ++ix;
+                  }
+               }
                else {
                   std::memcpy(&b[ix], &value, 1);
                   ++ix;
@@ -567,12 +582,23 @@ namespace glz
 
                // In the case n == 0 we need two characters for quotes.
                // For each individual character we need room for two characters to handle escapes.
-               // So, we need 2 + 2 * n characters to handle all cases.
-               // We add another 8 characters to support SWAR
-               if constexpr (resizable<B>) {
-                  const auto k = ix + 10 + 2 * n;
-                  if (k > b.size()) [[unlikely]] {
-                     b.resize(2 * k);
+               // When using Unicode escapes, we might need up to 6 characters (\uXXXX) per character
+               if constexpr (check_escape_control_characters(Opts)) {
+                  if constexpr (resizable<B>) {
+                     // We need 2 + 6 * n characters in the worst case (all control chars)
+                     const auto k = ix + 10 + 6 * n;
+                     if (k > b.size()) [[unlikely]] {
+                        b.resize(2 * k);
+                     }
+                  }
+               }
+               else {
+                  // Using the original sizing
+                  if constexpr (resizable<B>) {
+                     const auto k = ix + 10 + 2 * n;
+                     if (k > b.size()) [[unlikely]] {
+                        b.resize(2 * k);
+                     }
                   }
                }
                // now we don't have to check writing
@@ -598,88 +624,7 @@ namespace glz
                   // showcase the error and make the JSON invalid. These would then be detected upon reading
                   // the JSON.
 
-                  // This 128bit SWAR approach tends to be slower than SIMD approaches
-                  /*for (const auto end_m15 = e - 15; c < end_m15;) {
-                   std::memcpy(data, c, 16);
-                   __uint128_t swar;
-                   std::memcpy(&swar, c, 16);
-
-                   constexpr __uint128_t lo7_mask = repeat_byte16(0b01111111);
-                   const __uint128_t lo7 = swar & lo7_mask;
-                   const __uint128_t quote = (lo7 ^ repeat_byte16('"')) + lo7_mask;
-                   const __uint128_t backslash = (lo7 ^ repeat_byte16('\\')) + lo7_mask;
-                   const __uint128_t less_32 = (swar & repeat_byte16(0b01100000)) + lo7_mask;
-                   __uint128_t next = ~((quote & backslash & less_32) | swar);
-
-                   next &= repeat_byte16(0b10000000);
-                   if (next == 0) {
-                   data += 16;
-                   c += 16;
-                   continue;
-                   }
-
-                   const auto length = (countr_zero(next) >> 3);
-                   c += length;
-                   data += length;
-
-                   std::memcpy(data, &char_escape_table[uint8_t(*c)], 2);
-                   data += 2;
-                   ++c;
-                   }*/
-
-#if defined(__APPLE__)
-                  // This approach is faster when strings don't contain many escapes
-                  // But, this is not faster in the general case
-                  /*if (n > 15) {
-                   const uint8x16_t lo7_mask = vdupq_n_u8(0b01111111);
-                   const uint8x16_t quote_char = vdupq_n_u8('"');
-                   const uint8x16_t backslash_char = vdupq_n_u8('\\');
-                   const uint8x16_t less_32_mask = vdupq_n_u8(0b01100000);
-                   const uint8x16_t high_bit_mask = vdupq_n_u8(0b10000000);
-
-                   for (const auto end_m15 = e - 15; c < end_m15;) {
-                   uint8x16_t v = vld1q_u8(reinterpret_cast<const uint8_t*>(c));
-
-                   vst1q_u8(reinterpret_cast<uint8_t*>(data), v);
-
-                   const uint8x16_t lo7 = vandq_u8(v, lo7_mask);
-                   const uint8x16_t quote = vaddq_u8(veorq_u8(lo7, quote_char), lo7_mask);
-                   const uint8x16_t backslash = vaddq_u8(veorq_u8(lo7, backslash_char), lo7_mask);
-                   const uint8x16_t less_32 = vaddq_u8(vandq_u8(v, less_32_mask), lo7_mask);
-
-                   uint8x16_t temp = vandq_u8(quote, backslash);
-                   temp = vandq_u8(temp, less_32);
-                   temp = vorrq_u8(temp, v);
-                   uint8x16_t next = vmvnq_u8(temp);
-                   next = vandq_u8(next, high_bit_mask);
-
-                   uint64x2_t next64 = vreinterpretq_u64_u8(next);
-                   uint64_t next_low = vgetq_lane_u64(next64, 0);
-                   uint64_t next_high = vgetq_lane_u64(next64, 1);
-
-                   if (next_low == 0 && next_high == 0) {
-                   data += 16;
-                   c += 16;
-                   continue;
-                   }
-
-                   uint32_t length;
-                   if (next_low != 0) {
-                   length = (__builtin_ctzll(next_low)) >> 3;
-                   }
-                   else {
-                   length = (__builtin_ctzll(next_high) >> 3) + 8;
-                   }
-
-                   c += length;
-                   data += length;
-
-                   std::memcpy(data, &char_escape_table[uint8_t(*c)], 2);
-                   data += 2;
-                   ++c;
-                   }
-                   }*/
-#elif defined(GLZ_USE_AVX2)
+#if defined(GLZ_USE_AVX2)
                   // Optimization for systems with AVX2 support
                   if (n > 31) {
                      const __m256i lo7_mask = _mm256_set1_epi8(0b01111111);
@@ -717,8 +662,25 @@ namespace glz
                         c += length;
                         data += length;
 
-                        std::memcpy(data, &char_escape_table[uint8_t(*c)], 2);
-                        data += 2;
+                        if constexpr (check_escape_control_characters(Opts)) {
+                           if (const auto escaped = char_escape_table[uint8_t(*c)]; escaped) {
+                              std::memcpy(data, &escaped, 2);
+                              data += 2;
+                           }
+                           else {
+                              // Write as \uXXXX format for control characters
+                              char unicode_escape[6] = {'\\', 'u', '0', '0', '0', '0'};
+                              constexpr char hex_digits[] = "0123456789ABCDEF";
+                              unicode_escape[4] = hex_digits[(uint8_t(*c) >> 4) & 0xF];
+                              unicode_escape[5] = hex_digits[uint8_t(*c) & 0xF];
+                              std::memcpy(data, unicode_escape, 6);
+                              data += 6;
+                           }
+                        }
+                        else {
+                           std::memcpy(data, &char_escape_table[uint8_t(*c)], 2);
+                           data += 2;
+                        }
                         ++c;
                      }
                   }
@@ -747,9 +709,26 @@ namespace glz
                         const auto length = (countr_zero(next) >> 3);
                         c += length;
                         data += length;
-
-                        std::memcpy(data, &char_escape_table[uint8_t(*c)], 2);
-                        data += 2;
+                        
+                        if constexpr (check_escape_control_characters(Opts)) {
+                           if (const auto escaped = char_escape_table[uint8_t(*c)]; escaped) {
+                              std::memcpy(data, &escaped, 2);
+                              data += 2;
+                           }
+                           else {
+                              // Write as \uXXXX format for control characters
+                              char unicode_escape[6] = {'\\', 'u', '0', '0', '0', '0'};
+                              constexpr char hex_digits[] = "0123456789ABCDEF";
+                              unicode_escape[4] = hex_digits[(uint8_t(*c) >> 4) & 0xF];
+                              unicode_escape[5] = hex_digits[uint8_t(*c) & 0xF];
+                              std::memcpy(data, unicode_escape, 6);
+                              data += 6;
+                           }
+                        }
+                        else {
+                           std::memcpy(data, &char_escape_table[uint8_t(*c)], 2);
+                           data += 2;
+                        }
                         ++c;
                      }
                   }
@@ -759,6 +738,21 @@ namespace glz
                      if (const auto escaped = char_escape_table[uint8_t(*c)]; escaped) {
                         std::memcpy(data, &escaped, 2);
                         data += 2;
+                     }
+                     else if constexpr (check_escape_control_characters(Opts)) {
+                        if (uint8_t(*c) < 0x20) {
+                           // Write as \uXXXX format for control characters
+                           char unicode_escape[6] = {'\\', 'u', '0', '0', '0', '0'};
+                           constexpr char hex_digits[] = "0123456789ABCDEF";
+                           unicode_escape[4] = hex_digits[(uint8_t(*c) >> 4) & 0xF];
+                           unicode_escape[5] = hex_digits[uint8_t(*c) & 0xF];
+                           std::memcpy(data, unicode_escape, 6);
+                           data += 6;
+                        }
+                        else {
+                           std::memcpy(data, c, 1);
+                           ++data;
+                        }
                      }
                      else {
                         std::memcpy(data, c, 1);
