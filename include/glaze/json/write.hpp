@@ -515,7 +515,7 @@ namespace glz
                   if (uint8_t(value) < 0x20) {
                      // Write as \uXXXX format
                      char unicode_escape[6] = {'\\', 'u', '0', '0', '0', '0'};
-                     constexpr char hex_digits[] = "0123456789abcdef";
+                     constexpr char hex_digits[] = "0123456789ABCDEF";
                      unicode_escape[4] = hex_digits[(value >> 4) & 0xF];
                      unicode_escape[5] = hex_digits[value & 0xF];
                      std::memcpy(&b[ix], unicode_escape, 6);
@@ -670,7 +670,7 @@ namespace glz
                            else {
                               // Write as \uXXXX format for control characters
                               char unicode_escape[6] = {'\\', 'u', '0', '0', '0', '0'};
-                              constexpr char hex_digits[] = "0123456789abcdef";
+                              constexpr char hex_digits[] = "0123456789ABCDEF";
                               unicode_escape[4] = hex_digits[(uint8_t(*c) >> 4) & 0xF];
                               unicode_escape[5] = hex_digits[uint8_t(*c) & 0xF];
                               std::memcpy(data, unicode_escape, 6);
@@ -718,7 +718,7 @@ namespace glz
                            else {
                               // Write as \uXXXX format for control characters
                               char unicode_escape[6] = {'\\', 'u', '0', '0', '0', '0'};
-                              constexpr char hex_digits[] = "0123456789abcdef";
+                              constexpr char hex_digits[] = "0123456789ABCDEF";
                               unicode_escape[4] = hex_digits[(uint8_t(*c) >> 4) & 0xF];
                               unicode_escape[5] = hex_digits[uint8_t(*c) & 0xF];
                               std::memcpy(data, unicode_escape, 6);
@@ -743,7 +743,7 @@ namespace glz
                         if (uint8_t(*c) < 0x20) {
                            // Write as \uXXXX format for control characters
                            char unicode_escape[6] = {'\\', 'u', '0', '0', '0', '0'};
-                           constexpr char hex_digits[] = "0123456789abcdef";
+                           constexpr char hex_digits[] = "0123456789ABCDEF";
                            unicode_escape[4] = hex_digits[(uint8_t(*c) >> 4) & 0xF];
                            unicode_escape[5] = hex_digits[uint8_t(*c) & 0xF];
                            std::memcpy(data, unicode_escape, 6);
