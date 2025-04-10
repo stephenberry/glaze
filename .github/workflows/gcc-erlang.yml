@@ -44,10 +44,10 @@ jobs:
         CXXFLAGS="-g3" cmake -B ${{github.workspace}}/build \
           -DCMAKE_BUILD_TYPE=${{matrix.build_type}} \
           -DCMAKE_CXX_STANDARD=${{matrix.std}} \
-          -Dglaze_ERLANG_FORMAT=ON
+          -Dglaze_EETF_FORMAT=ON
 
     - name: Build
-      run: cmake --build build -j $(nproc)
+      run: cmake --build build -j $(nproc) --target eetf_test
 
     - name: Test
-      run: ctest --output-on-failure --test-dir ${{github.workspace}}/build
+      run: ctest --output-on-failure --test-dir ${{github.workspace}}/build -R eetf_test

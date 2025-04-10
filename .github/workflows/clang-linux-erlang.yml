@@ -49,11 +49,11 @@ jobs:
           -DCMAKE_CXX_COMPILER=${{env.CXX}} \
           -DCMAKE_CXX_FLAGS="-stdlib=libc++" \
           -DCMAKE_EXE_LINKER_FLAGS="-stdlib=libc++ -lc++abi" \
-          -Dglaze_ERLANG_FORMAT=ON
+          -Dglaze_EETF_FORMAT=ON
 
     - name: Build
-      run: cmake --build build -j $(nproc)
+      run: cmake --build build -j $(nproc) --target eetf_test
 
     - name: Test
       working-directory: build
-      run: ctest -j $(nproc) --output-on-failure
+      run: ctest -j $(nproc) --output-on-failure -R eetf_test
