@@ -890,7 +890,14 @@ By default Glaze is strictly conformant with the latest JSON standard except in 
 
 > [!NOTE]
 >
-> Glaze does not automatically unicode escape control characters (e.g. `"\x1f"` to `"\u001f"`), as this poses a risk of embedding null characters and other invisible characters in strings. A compile time option will be added to enable these conversions (open issue: [unicode escaped write](https://github.com/stephenberry/glaze/issues/812)), but it will not be the default behavior.
+> By default, Glaze does not unicode escape control characters (e.g. `"\x1f"` to `"\u001f"`), as this poses a risk of embedding null characters and other invisible characters in strings. The compile time option `escape_control_characters` is available for those who desire to write out control characters as escaped unicode in strings.
+>
+> ```c++
+> // Example options for enabling escape_control_characters
+> struct options : glz::opts {
+>    bool escape_control_characters = true;
+> };
+> ```
 
 ## Skip
 

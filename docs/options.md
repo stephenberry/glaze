@@ -63,5 +63,12 @@ bool shrink_to_fit = false;
 
 bool hide_non_invocable = true;
 // Hides non-invocable members from the cli_menu (may be applied elsewhere in the future)
+
+bool escape_control_characters = false;
+// Escapes control characters like 0x01 or null characters with proper unicode escape sequences.
+// The default behavior does not escape these characters for performance and safety
+// (embedding nulls can cause issues, especially with C APIs)
+// Glaze will error when parsing non-escaped control character (per the JSON spec)
+// This option allows escaping control characters to avoid such errors.
 ```
 
