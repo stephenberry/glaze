@@ -85,7 +85,6 @@ namespace glz
       std::string body{};
       asio::ip::tcp::endpoint remote_endpoint{};
       
-      // JSON parsing helpers using Glaze
       template <class T>
       std::expected<T, std::string> parse_json() const {
          T result;

@@ -17,27 +17,8 @@ struct User {
    std::string email{};
 };
 
-// Add GLZ meta for JSON serialization
-template <>
-struct glz::meta<User> {
-   using T = User;
-   static constexpr auto value = object(
-                                        "id", &T::id,
-                                        "name", &T::name,
-                                        "email", &T::email
-                                        );
-};
-
 struct ErrorResponse {
    std::string error{};
-};
-
-template <>
-struct glz::meta<ErrorResponse> {
-   using T = ErrorResponse;
-   static constexpr auto value = object(
-                                        "error", &T::error
-                                        );
 };
 
 // Helper function to read a file into a string
