@@ -842,6 +842,6 @@ namespace glz
 namespace glz
 {
    // Convenience alias for REST registry
-   template <auto Opts = glz::opts{}>
-   using rest_registry = glz::registry<Opts, glz::protocol::REST>;
+   template <auto Opts = opts{}>
+   using rest_registry = registry<Opts, protocol::REST>;
 }
