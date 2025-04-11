@@ -78,12 +78,12 @@ namespace glz
    
    // Request context object
    struct Request {
-      Method method;
-      std::string target;
-      std::unordered_map<std::string, std::string> params;
-      std::unordered_map<std::string, std::string> headers;
-      std::string body;
-      asio::ip::tcp::endpoint remote_endpoint;
+      Method method{};
+      std::string target{};
+      std::unordered_map<std::string, std::string> params{};
+      std::unordered_map<std::string, std::string> headers{};
+      std::string body{};
+      asio::ip::tcp::endpoint remote_endpoint{};
       
       // JSON parsing helpers using Glaze
       template <class T>
@@ -100,8 +100,8 @@ namespace glz
    // Response builder
    struct Response {
       int status_code = 200;
-      std::unordered_map<std::string, std::string> response_headers;
-      std::string response_body;
+      std::unordered_map<std::string, std::string> response_headers{};
+      std::string response_body{};
       
       inline Response& status(int code) {
          status_code = code;
@@ -134,15 +134,15 @@ namespace glz
    // Router for handling different paths
    struct Router {
       // Defines parameter constraints for validation
-      struct ParamConstraint {
-         std::string regex_pattern; // Custom regex for this parameter
-         std::string description;   // For error reporting
+      struct param_constraint {
+         std::string regex_pattern{}; // Custom regex for this parameter
+         std::string description{};   // For error reporting
       };
       
-      struct RoutePattern {
+      struct route_pattern {
          std::regex regex;
          std::vector<std::string> param_names;
-         std::unordered_map<std::string, ParamConstraint> constraints;
+         std::unordered_map<std::string, param_constraint> constraints;
          Method method;
          Handler handler;
       };
@@ -152,7 +152,7 @@ namespace glz
       
       // Add a route with a specific method
       inline Router& route(Method method, std::string_view path, Handler handler,
-                           const std::unordered_map<std::string, ParamConstraint>& constraints = {}) {
+                           const std::unordered_map<std::string, param_constraint>& constraints = {}) {
          try {
             // Check if path contains parameters (e.g., ":id")
             if (path.find(':') != std::string_view::npos) {
@@ -173,7 +173,7 @@ namespace glz
       // Helper method for routes with integer parameters
       inline Router& route_int(Method method, std::string_view path, Handler handler,
                                const std::unordered_map<std::string, std::string>& param_descriptions = {}) {
-         std::unordered_map<std::string, ParamConstraint> constraints;
+         std::unordered_map<std::string, param_constraint> constraints;
          for (const auto& [param, desc] : param_descriptions) {
             constraints[param] = {R"(\d+)", desc};
          }
@@ -182,7 +182,7 @@ namespace glz
       
       // Standard HTTP method helpers
       inline Router& get(std::string_view path, Handler handler,
-                         const std::unordered_map<std::string, ParamConstraint>& constraints = {}) {
+                         const std::unordered_map<std::string, param_constraint>& constraints = {}) {
          return route(Method::GET, path, std::move(handler), constraints);
       }
       
@@ -192,7 +192,7 @@ namespace glz
       }
       
       inline Router& post(std::string_view path, Handler handler,
-                          const std::unordered_map<std::string, ParamConstraint>& constraints = {}) {
+                          const std::unordered_map<std::string, param_constraint>& constraints = {}) {
          return route(Method::POST, path, std::move(handler), constraints);
       }
       
@@ -202,7 +202,7 @@ namespace glz
       }
       
       inline Router& put(std::string_view path, Handler handler,
-                         const std::unordered_map<std::string, ParamConstraint>& constraints = {}) {
+                         const std::unordered_map<std::string, param_constraint>& constraints = {}) {
          return route(Method::PUT, path, std::move(handler), constraints);
       }
       
@@ -212,7 +212,7 @@ namespace glz
       }
       
       inline Router& del(std::string_view path, Handler handler,
-                         const std::unordered_map<std::string, ParamConstraint>& constraints = {}) {
+                         const std::unordered_map<std::string, param_constraint>& constraints = {}) {
          return route(Method::DELETE, path, std::move(handler), constraints);
       }
       
@@ -222,7 +222,7 @@ namespace glz
       }
       
       inline Router& patch(std::string_view path, Handler handler,
-                           const std::unordered_map<std::string, ParamConstraint>& constraints = {}) {
+                           const std::unordered_map<std::string, param_constraint>& constraints = {}) {
          return route(Method::PATCH, path, std::move(handler), constraints);
       }
       
@@ -233,7 +233,7 @@ namespace glz
       
       // Async versions
       inline Router& route_async(Method method, std::string_view path, AsyncHandler handler,
-                                 const std::unordered_map<std::string, ParamConstraint>& constraints = {}) {
+                                 const std::unordered_map<std::string, param_constraint>& constraints = {}) {
          // Convert async handler to sync handler
          return route(method, path, [handler](const Request& req, Response& res) {
             // Create a future and wait for it
@@ -243,12 +243,12 @@ namespace glz
       }
       
       inline Router& get_async(std::string_view path, AsyncHandler handler,
-                               const std::unordered_map<std::string, ParamConstraint>& constraints = {}) {
+                               const std::unordered_map<std::string, param_constraint>& constraints = {}) {
          return route_async(Method::GET, path, std::move(handler), constraints);
       }
       
       inline Router& post_async(std::string_view path, AsyncHandler handler,
-                                const std::unordered_map<std::string, ParamConstraint>& constraints = {}) {
+                                const std::unordered_map<std::string, param_constraint>& constraints = {}) {
          return route_async(Method::POST, path, std::move(handler), constraints);
       }
       
@@ -314,16 +314,16 @@ namespace glz
       
       // Data members
       std::unordered_map<std::string, std::unordered_map<Method, Handler>> routes;
-      std::vector<RoutePattern> route_patterns;
+      std::vector<route_pattern> route_patterns;
       std::vector<Handler> middlewares;
       
    private:
       // Parse a route pattern like "/api/users/:id" into a regex and parameter names
-      RoutePattern parse_route_pattern(std::string_view path, Method method, Handler handler,
-                                       const std::unordered_map<std::string, ParamConstraint>& constraints = {}) {
+      route_pattern parse_route_pattern(std::string_view path, Method method, Handler handler,
+                                       const std::unordered_map<std::string, param_constraint>& constraints = {}) {
          std::string pattern_str;
          std::vector<std::string> param_names;
-         std::unordered_map<std::string, ParamConstraint> applied_constraints;
+         std::unordered_map<std::string, param_constraint> applied_constraints;
          
          // Convert "/api/users/:id" to "^/api/users/([^/]+)$" and extract param names
          std::string path_str(path);
@@ -533,12 +533,12 @@ namespace glz
       ErrorHandler error_handler;
       
       // Path pattern matching
-      struct RoutePattern {
+      struct route_pattern {
          std::regex regex;
          std::vector<std::string> param_names;
       };
       
-      std::unordered_map<std::string, RoutePattern> route_patterns;
+      std::unordered_map<std::string, route_pattern> route_patterns;
       
       inline void do_accept() {
          acceptor->async_accept(
@@ -1208,13 +1208,11 @@ namespace glz
          return future;
       }
       
-      // JSON helpers using Glaze
-      template<typename T>
+      template <class T>
       inline std::expected<Response, std::error_code> post_json(
                                                                 std::string_view url,
                                                                 const T& data,
                                                                 const std::unordered_map<std::string, std::string>& headers = {}) {
-         
          std::string json_str;
          glz::write_json(data, json_str);
          
