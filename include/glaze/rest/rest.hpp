@@ -36,9 +36,9 @@ namespace glz
    // Forward declarations
    struct Request;
    struct Response;
-   struct Router;
-   struct Server;
-   struct Client;
+   struct http_router;
+   struct http_server;
+   struct http_client;
 
    using handler = std::function<void(const Request&, Response&)>;
    using async_handler = std::function<std::future<void>(const Request&, Response&)>;
@@ -135,7 +135,7 @@ namespace glz
    };
 
    // Router for handling different paths
-   struct Router
+   struct http_router
    {
       // Defines parameter constraints for validation
       struct param_constraint
@@ -154,10 +154,10 @@ namespace glz
       };
 
       // Default constructor
-      Router() = default;
+      http_router() = default;
 
       // Add a route with a specific method
-      inline Router& route(http_method method, std::string_view path, handler handle,
+      inline http_router& route(http_method method, std::string_view path, handler handle,
                            const std::unordered_map<std::string, param_constraint>& constraints = {})
       {
          try {
@@ -180,38 +180,38 @@ namespace glz
       }
 
       // Standard HTTP method helpers
-      inline Router& get(std::string_view path, handler handle,
+      inline http_router& get(std::string_view path, handler handle,
                          const std::unordered_map<std::string, param_constraint>& constraints = {})
       {
          return route(http_method::GET, path, std::move(handle), constraints);
       }
 
-      inline Router& post(std::string_view path, handler handle,
+      inline http_router& post(std::string_view path, handler handle,
                           const std::unordered_map<std::string, param_constraint>& constraints = {})
       {
          return route(http_method::POST, path, std::move(handle), constraints);
       }
 
-      inline Router& put(std::string_view path, handler handle,
+      inline http_router& put(std::string_view path, handler handle,
                          const std::unordered_map<std::string, param_constraint>& constraints = {})
       {
          return route(http_method::PUT, path, std::move(handle), constraints);
       }
 
-      inline Router& del(std::string_view path, handler handle,
+      inline http_router& del(std::string_view path, handler handle,
                          const std::unordered_map<std::string, param_constraint>& constraints = {})
       {
          return route(http_method::DELETE, path, std::move(handle), constraints);
       }
 
-      inline Router& patch(std::string_view path, handler handle,
+      inline http_router& patch(std::string_view path, handler handle,
                            const std::unordered_map<std::string, param_constraint>& constraints = {})
       {
          return route(http_method::PATCH, path, std::move(handle), constraints);
       }
 
       // Async versions
-      inline Router& route_async(http_method method, std::string_view path, async_handler handle,
+      inline http_router& route_async(http_method method, std::string_view path, async_handler handle,
                                  const std::unordered_map<std::string, param_constraint>& constraints = {})
       {
          // Convert async handle to sync handle
@@ -225,20 +225,20 @@ namespace glz
             constraints);
       }
 
-      inline Router& get_async(std::string_view path, async_handler handle,
+      inline http_router& get_async(std::string_view path, async_handler handle,
                                const std::unordered_map<std::string, param_constraint>& constraints = {})
       {
          return route_async(http_method::GET, path, std::move(handle), constraints);
       }
 
-      inline Router& post_async(std::string_view path, async_handler handle,
+      inline http_router& post_async(std::string_view path, async_handler handle,
                                 const std::unordered_map<std::string, param_constraint>& constraints = {})
       {
          return route_async(http_method::POST, path, std::move(handle), constraints);
       }
 
       // Middleware support
-      inline Router& use(handler middleware)
+      inline http_router& use(handler middleware)
       {
          middlewares.push_back(std::move(middleware));
          return *this;
@@ -384,23 +384,23 @@ namespace glz
    };
 
    // Server implementation using non-blocking asio
-   struct Server
+   struct http_server
    {
-      inline Server() : io_context(std::make_unique<asio::io_context>())
+      inline http_server() : io_context(std::make_unique<asio::io_context>())
       {
          error_handler = [](std::error_code ec, std::source_location loc) {
             std::cerr << std::format("Error at {}:{}: {}\n", loc.file_name(), loc.line(), ec.message());
          };
       }
 
-      inline ~Server()
+      inline ~http_server()
       {
          if (running) {
             stop();
          }
       }
 
-      inline Server& bind(std::string_view address, uint16_t port)
+      inline http_server& bind(std::string_view address, uint16_t port)
       {
          try {
             asio::ip::tcp::endpoint endpoint(asio::ip::make_address(address), port);
@@ -413,7 +413,7 @@ namespace glz
          return *this;
       }
 
-      inline Server& bind(uint16_t port) { return bind("0.0.0.0", port); }
+      inline http_server& bind(uint16_t port) { return bind("0.0.0.0", port); }
 
       inline void start(size_t num_threads = 0)
       {
@@ -473,7 +473,7 @@ namespace glz
          io_context = std::make_unique<asio::io_context>();
       }
 
-      inline Server& mount(std::string_view base_path, const Router& router)
+      inline http_server& mount(std::string_view base_path, const http_router& router)
       {
          // Mount all routes from the router at the specified base path
          for (const auto& [path, method_handlers] : router.routes) {
@@ -496,16 +496,16 @@ namespace glz
          return *this;
       }
 
-      inline Router& route(http_method method, std::string_view path, handler handle)
+      inline http_router& route(http_method method, std::string_view path, handler handle)
       {
          return root_router.route(method, path, handle);
       }
 
-      inline Router& get(std::string_view path, handler handle) { return root_router.get(path, handle); }
+      inline http_router& get(std::string_view path, handler handle) { return root_router.get(path, handle); }
 
-      inline Router& post(std::string_view path, handler handle) { return root_router.post(path, handle); }
+      inline http_router& post(std::string_view path, handler handle) { return root_router.post(path, handle); }
 
-      inline Server& on_error(error_handler handle)
+      inline http_server& on_error(error_handler handle)
       {
          error_handler = std::move(handle);
          return *this;
@@ -515,7 +515,7 @@ namespace glz
       std::unique_ptr<asio::io_context> io_context;
       std::unique_ptr<asio::ip::tcp::acceptor> acceptor;
       std::vector<std::thread> threads;
-      Router root_router;
+      http_router root_router;
       bool running = false;
       error_handler error_handler;
 
@@ -818,15 +818,15 @@ namespace glz
    };
 
    // Client implementation using non-blocking asio
-   struct Client
+   struct http_client
    {
-      inline Client() : io_context(std::make_unique<asio::io_context>())
+      inline http_client() : io_context(std::make_unique<asio::io_context>())
       {
          // Start the IO thread
          io_thread = std::thread([this] { io_context->run(); });
       }
 
-      inline ~Client()
+      inline ~http_client()
       {
          // Stop the IO context
          io_context->stop();

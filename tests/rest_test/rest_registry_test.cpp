@@ -83,7 +83,7 @@ std::string read_file(const std::string& path) {
 }
 
 int main() {
-   glz::Server server;
+   glz::http_server server;
    
    UserService userService;
    

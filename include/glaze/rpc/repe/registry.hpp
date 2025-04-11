@@ -367,11 +367,11 @@ namespace glz::repe
       // REST-specific functionality
 
       // Create a router from this registry (only for REST protocol)
-      Router create_router() const
+      http_router create_router() const
       {
          static_assert(proto == protocol::REST, "create_router() is only available for REST protocol");
 
-         Router router;
+         http_router router;
 
          // Register all endpoints with the router
          for (const auto& endpoint : endpoints) {
@@ -382,7 +382,7 @@ namespace glz::repe
       }
 
       // Mount this registry to an existing router (only for REST protocol)
-      void mount_to_router(Router& router, std::string_view base_path = "/") const
+      void mount_to_router(http_router& router, std::string_view base_path = "/") const
       {
          static_assert(proto == protocol::REST, "mount_to_router() is only available for REST protocol");
 

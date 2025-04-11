@@ -34,7 +34,7 @@ std::string read_file(const std::string& path) {
 
 int main() {
    // Create a server
-   glz::Server server;
+   glz::http_server server;
    
    // Mock database
    std::unordered_map<int, User> users = {
