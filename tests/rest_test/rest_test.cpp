@@ -63,7 +63,7 @@ int main() {
    int next_id = 3;
    
    // Set up routes for API
-   server.get("/api/users", [&](const glz::Request& req, glz::Response& res) {
+   server.get("/api/users", [&](const glz::Request& /*req*/, glz::Response& res) {
       std::vector<User> user_list;
       for (const auto& [id, user] : users) {
          user_list.push_back(user);
@@ -107,7 +107,7 @@ int main() {
    });
    
    // Serve the frontend files
-   server.get("/", [](const glz::Request& req, glz::Response& res) {
+   server.get("/", [](const glz::Request& /*req*/, glz::Response& res) {
       // Inline HTML for simplicity (in a real app, you would read from a file)
       std::string html = R"(
       <!DOCTYPE html>
