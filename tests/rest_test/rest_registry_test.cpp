@@ -3,7 +3,7 @@
 
 #include "glaze/glaze.hpp"
 #include "glaze/rest/rest.hpp"
-#include "glaze/rpc/repe/registry.hpp"
+#include "glaze/rpc/registry.hpp"
 #include "ut/ut.hpp"
 
 #include <iostream>

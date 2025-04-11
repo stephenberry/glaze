@@ -18,7 +18,7 @@ static_assert(false, "standalone or boost asio must be included to use glaze/ext
 #include <coroutine>
 #include <iostream>
 
-#include "glaze/rpc/repe/registry.hpp"
+#include "glaze/rpc/registry.hpp"
 #include "glaze/util/memory_pool.hpp"
 
 namespace glz
