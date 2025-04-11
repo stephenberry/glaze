@@ -373,31 +373,7 @@ namespace glz::repe
                }
                else {
                   // this is a variable and not a function, so we build RPC read/write calls
-                  if constexpr (proto == protocol::REPE) {
-                     endpoints[full_key] = [&func](repe::state&& state) mutable {
-                        if (state.write()) {
-                           if (read_params<Opts>(func, state) == 0) {
-                              return;
-                           }
-                        }
-
-                        if (state.notify()) {
-                           state.out.header.notify(true);
-                           return;
-                        }
-
-                        if (state.read()) {
-                           write_response<Opts>(func, state);
-                        }
-                        else {
-                           write_response<Opts>(state);
-                        }
-                     };
-                  }
-
-                  if constexpr (proto == protocol::REST) {
-                     register_rest_variable_endpoint<full_key, std::remove_cvref_t<Func>>(func);
-                  }
+                  register_variable_endpoint<full_key, std::remove_cvref_t<Func>>(func);
                }
             }
          });
@@ -758,29 +734,53 @@ namespace glz::repe
 
       // Helper for registering variable endpoints
       template <const std::string_view& path, class Var>
-      void register_rest_variable_endpoint(Var& var)
+         requires (proto == protocol::REPE)
+      void register_variable_endpoint(Var& var)
       {
-         if constexpr (proto == protocol::REST) {
-            std::string rest_path = convert_to_rest_path(path);
-
-            // GET handler for variables
-            endpoints.push_back(
-               {Method::GET, rest_path, [&var](const Request& /*req*/, Response& res) { res.json(var); }});
-
-            // PUT handler for updating variables
-            endpoints.push_back({Method::PUT, rest_path, [&var](const Request& req, Response& res) {
-                                    // Parse the JSON request body
-                                    auto data_result = req.parse_json<Var>();
-                                    if (!data_result) {
-                                       res.status(400).body("Invalid request body: " + data_result.error());
-                                       return;
-                                    }
-
-                                    // Update the variable
-                                    var = data_result.value();
-                                    res.status(204); // No Content
-                                 }});
-         }
+         endpoints[path] = [&var](repe::state&& state) mutable {
+            if (state.write()) {
+               if (read_params<Opts>(var, state) == 0) {
+                  return;
+               }
+            }
+            
+            if (state.notify()) {
+               state.out.header.notify(true);
+               return;
+            }
+            
+            if (state.read()) {
+               write_response<Opts>(var, state);
+            }
+            else {
+               write_response<Opts>(state);
+            }
+         };
+      }
+      
+      template <const std::string_view& path, class Var>
+         requires (proto == protocol::REST)
+      void register_variable_endpoint(Var& var)
+      {
+         std::string rest_path = convert_to_rest_path(path);
+         
+         // GET handler for variables
+         endpoints.push_back(
+                             {Method::GET, rest_path, [&var](const Request& /*req*/, Response& res) { res.json(var); }});
+         
+         // PUT handler for updating variables
+         endpoints.push_back({Method::PUT, rest_path, [&var](const Request& req, Response& res) {
+            // Parse the JSON request body
+            auto data_result = req.parse_json<Var>();
+            if (!data_result) {
+               res.status(400).body("Invalid request body: " + data_result.error());
+               return;
+            }
+            
+            // Update the variable
+            var = data_result.value();
+            res.status(204); // No Content
+         }});
       }
 
       // Helper for registering member function endpoints
