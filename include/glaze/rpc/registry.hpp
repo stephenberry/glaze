@@ -186,32 +186,28 @@ namespace glz
 
       // Function to call methods - only available for REPE protocol
       template <class In = repe::message, class Out = repe::message>
+         requires (Proto == protocol::REPE) // call method is only available for REPE protocol
       void call(In&& in, Out&& out)
       {
-         if constexpr (Proto == protocol::REPE) {
-            if (auto it = endpoints.find(in.query); it != endpoints.end()) {
-               if (bool(in.header.ec)) {
-                  out = in;
-               }
-               else {
-                  it->second(repe::state{in, out}); // handle the body
-               }
+         if (auto it = endpoints.find(in.query); it != endpoints.end()) {
+            if (bool(in.header.ec)) {
+               out = in;
             }
             else {
-               std::string body = "invalid_query: " + in.query;
-
-               const uint32_t n = uint32_t(body.size());
-               const auto body_length = 4 + n; // 4 bytes for size, + message
-
-               out.body.resize(body_length);
-               out.header.ec = error_code::method_not_found;
-               out.header.body_length = body_length;
-               std::memcpy(out.body.data(), &n, 4);
-               std::memcpy(out.body.data() + 4, body.data(), n);
+               it->second(repe::state{in, out}); // handle the body
             }
          }
          else {
-            static_assert(Proto == protocol::REPE, "call method is only available for REPE protocol");
+            std::string body = "invalid_query: " + in.query;
+            
+            const uint32_t n = uint32_t(body.size());
+            const auto body_length = 4 + n; // 4 bytes for size, + message
+            
+            out.body.resize(body_length);
+            out.header.ec = error_code::method_not_found;
+            out.header.body_length = body_length;
+            std::memcpy(out.body.data(), &n, 4);
+            std::memcpy(out.body.data() + 4, body.data(), n);
          }
       }
 
