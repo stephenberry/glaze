@@ -1023,7 +1023,7 @@ namespace glz
                                  // Read the rest of the response
                                  asio::async_read(
                                     *socket, *buffer, asio::transfer_all(),
-                                    [this, socket, buffer, status_code, response_headers, promise = std::move(promise)](
+                                    [socket, buffer, status_code, response_headers, promise = std::move(promise)](
                                        std::error_code ec, std::size_t /*bytes_transferred*/) mutable {
                                        // Ignore EOF, which is expected
                                        if (ec && ec != asio::error::eof) {
