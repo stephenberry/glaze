@@ -788,8 +788,8 @@ namespace glz::repe
          requires (proto == protocol::REPE)
       void register_member_function_endpoint(T& value, F func)
       {
-         if constexpr (std::same_as<Ret, void>) {
-            endpoints[path] = [&value, func](repe::state&& state) mutable {
+         endpoints[path] = [&value, func](repe::state&& state) mutable {
+            if constexpr (std::same_as<Ret, void>) {
                (value.*func)();
                
                if (state.notify()) {
@@ -798,18 +798,16 @@ namespace glz::repe
                }
                
                write_response<Opts>(state);
-            };
-         }
-         else {
-            endpoints[path] = [&value, func](repe::state&& state) mutable {
+            }
+            else {
                if (state.notify()) {
                   std::ignore = (value.*func)();
                   return;
                }
                
                write_response<Opts>((value.*func)(), state);
-            };
-         }
+            }
+         };
       }
       
       template <const std::string_view& path, class T, class F, class Ret>
