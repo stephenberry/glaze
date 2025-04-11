@@ -135,10 +135,10 @@ namespace glz
 
       // JSON response helper using Glaze
       template <class T>
-      Response& json(const T& value)
+      Response& json(T&& value)
       {
          std::string json_str;
-         glz::write_json(value, json_str);
+         glz::write_json(std::forward<T>(value), json_str);
          return content_type("application/json").body(json_str);
       }
    };

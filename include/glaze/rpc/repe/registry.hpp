@@ -301,24 +301,7 @@ namespace glz::repe
                   constexpr auto n_args = glz::tuple_size_v<Tuple>;
                   if constexpr (std::is_void_v<Ret>) {
                      if constexpr (n_args == 0) {
-                        if constexpr (proto == protocol::REPE) {
-                           endpoints[full_key] = [&value, &func](repe::state&& state) mutable {
-                              {
-                                 (value.*func)();
-                              }
-
-                              if (state.notify()) {
-                                 state.out.header.notify(true);
-                                 return;
-                              }
-
-                              write_response<Opts>(state);
-                           };
-                        }
-
-                        if constexpr (proto == protocol::REST) {
-                           register_rest_member_function_endpoint<full_key, T, F, void>(value, func);
-                        }
+                        register_member_function_endpoint<full_key, T, F, void>(value, func);
                      }
                      else if constexpr (n_args == 1) {
                         using Input = std::decay_t<glz::tuple_element_t<0, Tuple>>;
@@ -354,20 +337,7 @@ namespace glz::repe
                   else {
                      // Member function pointers
                      if constexpr (n_args == 0) {
-                        if constexpr (proto == protocol::REPE) {
-                           endpoints[full_key] = [&value, &func](repe::state&& state) mutable {
-                              if (state.notify()) {
-                                 std::ignore = (value.*func)();
-                                 return;
-                              }
-
-                              write_response<Opts>((value.*func)(), state);
-                           };
-                        }
-
-                        if constexpr (proto == protocol::REST) {
-                           register_rest_member_function_endpoint<full_key, T, F, Ret>(value, func);
-                        }
+                        register_member_function_endpoint<full_key, T, F, Ret>(value, func);
                      }
                      else if constexpr (n_args == 1) {
                         using Input = std::decay_t<glz::tuple_element_t<0, Tuple>>;
@@ -815,23 +785,50 @@ namespace glz::repe
 
       // Helper for registering member function endpoints
       template <const std::string_view& path, class T, class F, class Ret>
-      void register_rest_member_function_endpoint(T& value, F func)
+         requires (proto == protocol::REPE)
+      void register_member_function_endpoint(T& value, F func)
       {
-         if constexpr (proto == protocol::REST) {
-            std::string rest_path = convert_to_rest_path(path);
-
-            // GET handler for member functions with no args
-            endpoints.push_back({Method::GET, rest_path, [&value, func](const Request& /*req*/, Response& res) {
-                                    if constexpr (std::same_as<Ret, void>) {
-                                       (value.*func)();
-                                       res.status(204); // No Content
-                                    }
-                                    else {
-                                       auto result = (value.*func)();
-                                       res.json(result);
-                                    }
-                                 }});
+         if constexpr (std::same_as<Ret, void>) {
+            endpoints[path] = [&value, func](repe::state&& state) mutable {
+               (value.*func)();
+               
+               if (state.notify()) {
+                  state.out.header.notify(true);
+                  return;
+               }
+               
+               write_response<Opts>(state);
+            };
          }
+         else {
+            endpoints[path] = [&value, func](repe::state&& state) mutable {
+               if (state.notify()) {
+                  std::ignore = (value.*func)();
+                  return;
+               }
+               
+               write_response<Opts>((value.*func)(), state);
+            };
+         }
+      }
+      
+      template <const std::string_view& path, class T, class F, class Ret>
+         requires (proto == protocol::REST)
+      void register_member_function_endpoint(T& value, F func)
+      {
+         std::string rest_path = convert_to_rest_path(path);
+         
+         // GET handler for member functions with no args
+         endpoints.push_back({Method::GET, rest_path, [&value, func](const Request& /*req*/, Response& res) {
+            if constexpr (std::same_as<Ret, void>) {
+               (value.*func)();
+               res.status(204); // No Content
+            }
+            else {
+               auto result = (value.*func)();
+               res.json(result);
+            }
+         }});
       }
 
       // Helper for registering member function endpoints with parameters
