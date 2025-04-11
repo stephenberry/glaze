@@ -40,7 +40,7 @@ namespace glz
    struct Server;
    struct Client;
 
-   using Handler = std::function<void(const Request&, Response&)>;
+   using handler = std::function<void(const Request&, Response&)>;
    using AsyncHandler = std::function<std::future<void>(const Request&, Response&)>;
    using ErrorHandler = std::function<void(std::error_code, std::source_location)>;
 
@@ -151,26 +151,26 @@ namespace glz
          std::vector<std::string> param_names;
          std::unordered_map<std::string, param_constraint> constraints;
          Method method;
-         Handler handler;
+         handler handle;
       };
 
       // Default constructor
       Router() = default;
 
       // Add a route with a specific method
-      inline Router& route(Method method, std::string_view path, Handler handler,
+      inline Router& route(Method method, std::string_view path, handler handle,
                            const std::unordered_map<std::string, param_constraint>& constraints = {})
       {
          try {
             // Check if path contains parameters (e.g., ":id")
             if (path.find(':') != std::string_view::npos) {
                // This is a parameterized route - parse it
-               auto pattern = parse_route_pattern(path, method, handler, constraints);
+               auto pattern = parse_route_pattern(path, method, handle, constraints);
                route_patterns.push_back(std::move(pattern));
             }
             else {
                // This is a simple route - store it directly
-               routes[std::string(path)][method] = std::move(handler);
+               routes[std::string(path)][method] = std::move(handle);
             }
          }
          catch (const std::exception& e) {
@@ -181,75 +181,75 @@ namespace glz
       }
 
       // Standard HTTP method helpers
-      inline Router& get(std::string_view path, Handler handler,
+      inline Router& get(std::string_view path, handler handle,
                          const std::unordered_map<std::string, param_constraint>& constraints = {})
       {
-         return route(Method::GET, path, std::move(handler), constraints);
+         return route(Method::GET, path, std::move(handle), constraints);
       }
 
-      inline Router& post(std::string_view path, Handler handler,
+      inline Router& post(std::string_view path, handler handle,
                           const std::unordered_map<std::string, param_constraint>& constraints = {})
       {
-         return route(Method::POST, path, std::move(handler), constraints);
+         return route(Method::POST, path, std::move(handle), constraints);
       }
 
-      inline Router& put(std::string_view path, Handler handler,
+      inline Router& put(std::string_view path, handler handle,
                          const std::unordered_map<std::string, param_constraint>& constraints = {})
       {
-         return route(Method::PUT, path, std::move(handler), constraints);
+         return route(Method::PUT, path, std::move(handle), constraints);
       }
 
-      inline Router& del(std::string_view path, Handler handler,
+      inline Router& del(std::string_view path, handler handle,
                          const std::unordered_map<std::string, param_constraint>& constraints = {})
       {
-         return route(Method::DELETE, path, std::move(handler), constraints);
+         return route(Method::DELETE, path, std::move(handle), constraints);
       }
 
-      inline Router& patch(std::string_view path, Handler handler,
+      inline Router& patch(std::string_view path, handler handle,
                            const std::unordered_map<std::string, param_constraint>& constraints = {})
       {
-         return route(Method::PATCH, path, std::move(handler), constraints);
+         return route(Method::PATCH, path, std::move(handle), constraints);
       }
 
       // Async versions
-      inline Router& route_async(Method method, std::string_view path, AsyncHandler handler,
+      inline Router& route_async(Method method, std::string_view path, AsyncHandler handle,
                                  const std::unordered_map<std::string, param_constraint>& constraints = {})
       {
-         // Convert async handler to sync handler
+         // Convert async handle to sync handle
          return route(
             method, path,
-            [handler](const Request& req, Response& res) {
+            [handle](const Request& req, Response& res) {
                // Create a future and wait for it
-               auto future = handler(req, res);
+               auto future = handle(req, res);
                future.wait();
             },
             constraints);
       }
 
-      inline Router& get_async(std::string_view path, AsyncHandler handler,
+      inline Router& get_async(std::string_view path, AsyncHandler handle,
                                const std::unordered_map<std::string, param_constraint>& constraints = {})
       {
-         return route_async(Method::GET, path, std::move(handler), constraints);
+         return route_async(Method::GET, path, std::move(handle), constraints);
       }
 
-      inline Router& post_async(std::string_view path, AsyncHandler handler,
+      inline Router& post_async(std::string_view path, AsyncHandler handle,
                                 const std::unordered_map<std::string, param_constraint>& constraints = {})
       {
-         return route_async(Method::POST, path, std::move(handler), constraints);
+         return route_async(Method::POST, path, std::move(handle), constraints);
       }
 
       // Middleware support
-      inline Router& use(Handler middleware)
+      inline Router& use(handler middleware)
       {
          middlewares.push_back(std::move(middleware));
          return *this;
       }
 
       // Methods to check if a route matches a request
-      inline std::pair<Handler, std::unordered_map<std::string, std::string>> match(Method method,
+      inline std::pair<handler, std::unordered_map<std::string, std::string>> match(Method method,
                                                                                     const std::string& target) const
       {
-         Handler handler = nullptr;
+         handler handle = nullptr;
          std::unordered_map<std::string, std::string> params;
 
          // 1. Try to find an exact match first (for efficiency)
@@ -258,8 +258,8 @@ namespace glz
             // Found a matching path, check method
             auto method_it = route_it->second.find(method);
             if (method_it != route_it->second.end()) {
-               handler = method_it->second;
-               return {handler, params}; // No params for exact match
+               handle = method_it->second;
+               return {handle, params}; // No params for exact match
             }
          }
 
@@ -273,7 +273,7 @@ namespace glz
             std::smatch matches;
             if (std::regex_match(target, matches, pattern.regex)) {
                // We have a match!
-               handler = pattern.handler;
+               handle = pattern.handle;
 
                // Extract parameters
                bool all_constraints_passed = true;
@@ -286,28 +286,28 @@ namespace glz
                }
 
                if (all_constraints_passed) {
-                  // All constraints passed, use this handler
+                  // All constraints passed, use this handle
                   break;
                }
                else {
-                  // Reset handler and params if constraints failed
-                  handler = nullptr;
+                  // Reset handle and params if constraints failed
+                  handle = nullptr;
                   params.clear();
                }
             }
          }
 
-         return {handler, params};
+         return {handle, params};
       }
 
       // Data members
-      std::unordered_map<std::string, std::unordered_map<Method, Handler>> routes;
+      std::unordered_map<std::string, std::unordered_map<Method, handler>> routes;
       std::vector<route_pattern> route_patterns;
-      std::vector<Handler> middlewares;
+      std::vector<handler> middlewares;
 
      private:
       // Parse a route pattern like "/api/users/:id" into a regex and parameter names
-      route_pattern parse_route_pattern(std::string_view path, Method method, Handler handler,
+      route_pattern parse_route_pattern(std::string_view path, Method method, handler handle,
                                         const std::unordered_map<std::string, param_constraint>& constraints = {})
       {
          std::string pattern_str;
@@ -361,7 +361,7 @@ namespace glz
          try {
             // Create the regex - may throw if pattern is invalid
             std::regex regex(pattern_str);
-            return {regex, param_names, applied_constraints, method, handler};
+            return {regex, param_names, applied_constraints, method, handle};
          }
          catch (const std::regex_error& e) {
             throw std::runtime_error("Invalid route pattern: " + std::string(path) +
@@ -484,8 +484,8 @@ namespace glz
             }
             full_path += path;
 
-            for (const auto& [method, handler] : method_handlers) {
-               root_router.route(method, full_path, handler);
+            for (const auto& [method, handle] : method_handlers) {
+               root_router.route(method, full_path, handle);
             }
          }
 
@@ -497,18 +497,18 @@ namespace glz
          return *this;
       }
 
-      inline Router& route(Method method, std::string_view path, Handler handler)
+      inline Router& route(Method method, std::string_view path, handler handle)
       {
-         return root_router.route(method, path, handler);
+         return root_router.route(method, path, handle);
       }
 
-      inline Router& get(std::string_view path, Handler handler) { return root_router.get(path, handler); }
+      inline Router& get(std::string_view path, handler handle) { return root_router.get(path, handle); }
 
-      inline Router& post(std::string_view path, Handler handler) { return root_router.post(path, handler); }
+      inline Router& post(std::string_view path, handler handle) { return root_router.post(path, handle); }
 
-      inline Server& on_error(ErrorHandler handler)
+      inline Server& on_error(ErrorHandler handle)
       {
-         error_handler = std::move(handler);
+         error_handler = std::move(handle);
          return *this;
       }
 
@@ -685,12 +685,12 @@ namespace glz
          request.remote_endpoint = remote_endpoint;
 
          // Find a matching route using Router::match which handles both exact and parameterized routes
-         auto [handler, params] = root_router.match(method, target);
+         auto [handle, params] = root_router.match(method, target);
 
          // Update the request with any extracted parameters
          request.params = std::move(params);
 
-         if (!handler) {
+         if (!handle) {
             // No matching route found
             send_error_response(socket, 404, "Not Found");
             return;
@@ -705,8 +705,8 @@ namespace glz
                middleware(request, response);
             }
 
-            // Call the handler
-            handler(request, response);
+            // Call the handle
+            handle(request, response);
 
             // Send the response
             send_response(socket, response);

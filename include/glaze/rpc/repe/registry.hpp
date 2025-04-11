@@ -199,7 +199,7 @@ namespace glz::repe
       {
          Method method;
          std::string path;
-         Handler handler;
+         handler handler;
       };
 
       // Single template storage for all protocol-specific storage
