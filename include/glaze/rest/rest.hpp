@@ -41,8 +41,8 @@ namespace glz
    struct Client;
 
    using handler = std::function<void(const Request&, Response&)>;
-   using AsyncHandler = std::function<std::future<void>(const Request&, Response&)>;
-   using ErrorHandler = std::function<void(std::error_code, std::source_location)>;
+   using async_handler = std::function<std::future<void>(const Request&, Response&)>;
+   using error_handler = std::function<void(std::error_code, std::source_location)>;
 
    // HTTP Methods
    enum struct Method { GET, POST, PUT, DELETE, PATCH, HEAD, OPTIONS };
@@ -212,7 +212,7 @@ namespace glz
       }
 
       // Async versions
-      inline Router& route_async(Method method, std::string_view path, AsyncHandler handle,
+      inline Router& route_async(Method method, std::string_view path, async_handler handle,
                                  const std::unordered_map<std::string, param_constraint>& constraints = {})
       {
          // Convert async handle to sync handle
@@ -226,13 +226,13 @@ namespace glz
             constraints);
       }
 
-      inline Router& get_async(std::string_view path, AsyncHandler handle,
+      inline Router& get_async(std::string_view path, async_handler handle,
                                const std::unordered_map<std::string, param_constraint>& constraints = {})
       {
          return route_async(Method::GET, path, std::move(handle), constraints);
       }
 
-      inline Router& post_async(std::string_view path, AsyncHandler handle,
+      inline Router& post_async(std::string_view path, async_handler handle,
                                 const std::unordered_map<std::string, param_constraint>& constraints = {})
       {
          return route_async(Method::POST, path, std::move(handle), constraints);
@@ -506,7 +506,7 @@ namespace glz
 
       inline Router& post(std::string_view path, handler handle) { return root_router.post(path, handle); }
 
-      inline Server& on_error(ErrorHandler handle)
+      inline Server& on_error(error_handler handle)
       {
          error_handler = std::move(handle);
          return *this;
@@ -518,7 +518,7 @@ namespace glz
       std::vector<std::thread> threads;
       Router root_router;
       bool running = false;
-      ErrorHandler error_handler;
+      error_handler error_handler;
 
       // Path pattern matching
       struct route_pattern
