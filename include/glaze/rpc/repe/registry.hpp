@@ -464,14 +464,12 @@ namespace glz::repe
          // PUT handler for updating the entire object
          endpoints.push_back({Method::PUT, rest_path, [&value](const Request& req, Response& res) {
             // Parse the JSON request body
-            auto data_result = req.parse_json<T>();
-            if (!data_result) {
-               res.status(400).body("Invalid request body: " + data_result.error());
+            auto ec = read_json(value, req.body);
+            if (ec) {
+               res.status(400).body("Invalid request body: " + format_error(ec, req.body));
                return;
             }
             
-            // Update the object
-            value = data_result.value();
             res.status(204); // No Content
          }});
       }
@@ -566,9 +564,9 @@ namespace glz::repe
          // POST handler for functions with parameters
          endpoints.push_back({Method::POST, rest_path, [&func](const Request& req, Response& res) {
             // Parse the JSON request body
-            auto params_result = req.parse_json<Params>();
+            auto params_result = read_json<Params>(req.body);
             if (!params_result) {
-               res.status(400).body("Invalid request body: " + params_result.error());
+               res.status(400).body("Invalid request body: " + format_error(params_result, req.body));
                return;
             }
             
@@ -623,14 +621,13 @@ namespace glz::repe
          // PUT handler for updating nested objects
          endpoints.push_back({Method::PUT, rest_path, [&obj](const Request& req, Response& res) {
             // Parse the JSON request body
-            auto data_result = req.parse_json<Obj>();
-            if (!data_result) {
-               res.status(400).body("Invalid request body: " + data_result.error());
+            auto ec = read_json(obj, req.body);
+            if (ec) {
+               res.status(400).body("Invalid request body: " + format_error(ec, req.body));
                return;
             }
             
             // Update the object
-            obj = data_result.value();
             res.status(204); // No Content
          }});
       }
@@ -674,14 +671,12 @@ namespace glz::repe
          // PUT handler for updating values
          endpoints.push_back({Method::PUT, rest_path, [&value](const Request& req, Response& res) {
             // Parse the JSON request body
-            auto data_result = req.parse_json<Value>();
-            if (!data_result) {
-               res.status(400).body("Invalid request body: " + data_result.error());
+            auto ec = read_json(value, req.body);
+            if (!ec) {
+               res.status(400).body("Invalid request body: " + format_error(ec, req.body));
                return;
             }
             
-            // Update the value
-            value = data_result.value();
             res.status(204); // No Content
          }});
       }
@@ -725,14 +720,12 @@ namespace glz::repe
          // PUT handler for updating variables
          endpoints.push_back({Method::PUT, rest_path, [&var](const Request& req, Response& res) {
             // Parse the JSON request body
-            auto data_result = req.parse_json<Var>();
-            if (!data_result) {
-               res.status(400).body("Invalid request body: " + data_result.error());
+            auto ec = read_json(var, req.body);
+            if (!ec) {
+               res.status(400).body("Invalid request body: " + format_error(ec, req.body));
                return;
             }
             
-            // Update the variable
-            var = data_result.value();
             res.status(204); // No Content
          }});
       }
@@ -827,9 +820,9 @@ namespace glz::repe
          // POST handler for member functions with args
          endpoints.push_back({Method::POST, rest_path, [&value, func](const Request& req, Response& res) {
             // Parse the JSON request body
-            auto params_result = req.parse_json<Input>();
+            auto params_result = read_json<Input>(req.body);
             if (!params_result) {
-               res.status(400).body("Invalid request body: " + params_result.error());
+               res.status(400).body("Invalid request body: " + format_error(params_result, req.body));
                return;
             }
             

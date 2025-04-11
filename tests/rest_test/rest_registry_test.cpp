@@ -96,8 +96,7 @@ int main() {
    
    // Serve the frontend files
    server.get("/", [](const glz::Request& /*req*/, glz::Response& res) {
-      // Inline HTML for simplicity (in a real app, you would read from a file)
-      std::string html = R"(
+      std::string_view html = R"(
       <!DOCTYPE html>
       <html lang="en">
       <head>

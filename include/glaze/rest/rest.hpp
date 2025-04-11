@@ -93,17 +93,6 @@ namespace glz
       std::unordered_map<std::string, std::string> headers{};
       std::string body{};
       asio::ip::tcp::endpoint remote_endpoint{};
-
-      template <class T>
-      std::expected<T, std::string> parse_json() const
-      {
-         T result;
-         auto error = glz::read_json(result, body);
-         if (error) {
-            return std::unexpected(glz::format_error(error, body));
-         }
-         return result;
-      }
    };
 
    // Response builder

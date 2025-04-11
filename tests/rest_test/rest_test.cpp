@@ -71,9 +71,9 @@ int main() {
    
    server.post("/api/users", [&](const glz::Request& req, glz::Response& res) {
       // Parse JSON request body
-      auto result = req.parse_json<User>();
+      auto result = glz::read_json<User>(req.body);
       if (!result) {
-         res.status(400).json(ErrorResponse{result.error()});
+         res.status(400).json(ErrorResponse{glz::format_error(result, req.body)});
          return;
       }
       
