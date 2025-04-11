@@ -688,21 +688,11 @@ namespace glz
          request.body = std::move(body);
          request.remote_endpoint = remote_endpoint;
          
-         // Find a matching route
-         Handler handler = nullptr;
+         // Find a matching route using Router::match which handles both exact and parameterized routes
+         auto [handler, params] = root_router.match(method, target);
          
-         // Simple exact matching for now
-         auto route_it = root_router.routes.find(request.target);
-         if (route_it != root_router.routes.end()) {
-            // Found a matching path, check method
-            auto method_it = route_it->second.find(method);
-            if (method_it != route_it->second.end()) {
-               handler = method_it->second;
-            }
-         }
-         
-         // TODO: Implement route matching with path parameters
-         // For now, just handle exact matches
+         // Update the request with any extracted parameters
+         request.params = std::move(params);
          
          if (!handler) {
             // No matching route found
@@ -725,11 +715,13 @@ namespace glz
             // Send the response
             send_response(socket, response);
          } catch (const std::exception& e) {
-            // Handle exceptions
+            // Log the exception details for debugging
+            std::string error_message = e.what();
             error_handler(
                           std::make_error_code(std::errc::invalid_argument),
                           std::source_location::current());
             
+            // Send a 500 error response back to the client
             send_error_response(socket, 500, "Internal Server Error");
          }
       }
