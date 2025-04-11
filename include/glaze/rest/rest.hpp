@@ -35,10 +35,10 @@ namespace glz
 {
    // Forward declarations
    struct Request;
-   class Response;
+   struct Response;
    struct Router;
-   class Server;
-   class Client;
+   struct Server;
+   struct Client;
    
    using Handler = std::function<void(const Request&, Response&)>;
    using AsyncHandler = std::function<std::future<void>(const Request&, Response&)>;
@@ -394,8 +394,8 @@ namespace glz
    };
    
    // Server implementation using non-blocking asio
-   class Server {
-   public:
+   struct Server
+   {
       inline Server() : io_context(std::make_unique<asio::io_context>()) {
          error_handler = [](std::error_code ec, std::source_location loc) {
             std::cerr << std::format("Error at {}:{}: {}\n",
@@ -815,8 +815,8 @@ namespace glz
    };
    
    // Client implementation using non-blocking asio
-   class Client {
-   public:
+   struct Client
+   {
       inline Client() : io_context(std::make_unique<asio::io_context>()) {
          // Start the IO thread
          io_thread = std::thread([this] {
