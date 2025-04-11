@@ -780,7 +780,7 @@ namespace glz
          send_response(socket, response);
       }
 
-      inline std::string get_status_message(int status_code)
+      inline std::string_view get_status_message(int status_code)
       {
          switch (status_code) {
          case 200:
