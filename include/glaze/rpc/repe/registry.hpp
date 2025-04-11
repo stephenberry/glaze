@@ -285,31 +285,7 @@ namespace glz::repe
             else if constexpr (glaze_object_t<std::remove_cvref_t<Func>> || reflectable<std::remove_cvref_t<Func>>) {
                on<root, std::remove_cvref_t<Func>, full_key>(func);
 
-               // build read/write calls to the object as a variable only for REPE protocol
-               if constexpr (proto == protocol::REPE) {
-                  endpoints[full_key] = [&func](repe::state&& state) mutable {
-                     if (state.write()) {
-                        if (read_params<Opts>(func, state) == 0) {
-                           return;
-                        }
-                     }
-
-                     if (state.notify()) {
-                        return;
-                     }
-
-                     if (state.read()) {
-                        write_response<Opts>(func, state);
-                     }
-                     else {
-                        write_response<Opts>(state);
-                     }
-                  };
-               }
-
-               if constexpr (proto == protocol::REST) {
-                  register_rest_object_endpoint<full_key, std::remove_cvref_t<Func>>(func);
-               }
+               register_object_endpoint<full_key, std::remove_cvref_t<Func>>(func);
             }
             else if constexpr (not std::is_lvalue_reference_v<Func>) {
                // For glz::custom, glz::manage, etc.
@@ -735,29 +711,52 @@ namespace glz::repe
 
       // Helper for registering nested object endpoints
       template <const std::string_view& path, class Obj>
-      void register_rest_object_endpoint(Obj& obj)
+         requires (proto == protocol::REPE)
+      void register_object_endpoint(Obj& obj)
       {
-         if constexpr (proto == protocol::REST) {
-            std::string rest_path = convert_to_rest_path(path);
-
-            // GET handler for nested objects
-            endpoints.push_back(
-               {Method::GET, rest_path, [&obj](const Request& /*req*/, Response& res) { res.json(obj); }});
-
-            // PUT handler for updating nested objects
-            endpoints.push_back({Method::PUT, rest_path, [&obj](const Request& req, Response& res) {
-                                    // Parse the JSON request body
-                                    auto data_result = req.parse_json<Obj>();
-                                    if (!data_result) {
-                                       res.status(400).body("Invalid request body: " + data_result.error());
-                                       return;
-                                    }
-
-                                    // Update the object
-                                    obj = data_result.value();
-                                    res.status(204); // No Content
-                                 }});
-         }
+         endpoints[path] = [&obj](repe::state&& state) mutable {
+            if (state.write()) {
+               if (read_params<Opts>(obj, state) == 0) {
+                  return;
+               }
+            }
+            
+            if (state.notify()) {
+               return;
+            }
+            
+            if (state.read()) {
+               write_response<Opts>(obj, state);
+            }
+            else {
+               write_response<Opts>(state);
+            }
+         };
+      }
+      
+      template <const std::string_view& path, class Obj>
+         requires (proto == protocol::REST)
+      void register_object_endpoint(Obj& obj)
+      {
+         std::string rest_path = convert_to_rest_path(path);
+         
+         // GET handler for nested objects
+         endpoints.push_back(
+                             {Method::GET, rest_path, [&obj](const Request& /*req*/, Response& res) { res.json(obj); }});
+         
+         // PUT handler for updating nested objects
+         endpoints.push_back({Method::PUT, rest_path, [&obj](const Request& req, Response& res) {
+            // Parse the JSON request body
+            auto data_result = req.parse_json<Obj>();
+            if (!data_result) {
+               res.status(400).body("Invalid request body: " + data_result.error());
+               return;
+            }
+            
+            // Update the object
+            obj = data_result.value();
+            res.status(204); // No Content
+         }});
       }
 
       // Helper for registering value endpoints
