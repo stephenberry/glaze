@@ -243,32 +243,7 @@ namespace glz::repe
          }();
 
          if constexpr (parent == root && (glaze_object_t<T> || reflectable<T>)) {
-            // Only build read/write calls to the top level object for REPE protocol
-            if constexpr (proto == protocol::REPE) {
-               endpoints[root] = [&value](repe::state&& state) mutable {
-                  if (state.write()) {
-                     if (read_params<Opts>(value, state) == 0) {
-                        return;
-                     }
-                  }
-
-                  if (state.notify()) {
-                     return;
-                  }
-
-                  if (state.read()) {
-                     write_response<Opts>(value, state);
-                  }
-                  else {
-                     write_response<Opts>(state);
-                  }
-               };
-            }
-
-            // For REST protocol, register the root object
-            if constexpr (proto == protocol::REST) {
-               register_rest_endpoint<root, T>(value, root);
-            }
+            register_endpoint<root, T>(value);
          }
 
          for_each<N>([&](auto I) {
@@ -657,32 +632,55 @@ namespace glz::repe
             return std::string{}; // Dummy return to satisfy the compiler
          }
       }
+      
+      template <const std::string_view& path, class T>
+         requires (proto == protocol::REPE)
+      void register_endpoint(T& value, sv)
+      {
+         endpoints[path] = [&value](repe::state&& state) mutable {
+            if (state.write()) {
+               if (read_params<Opts>(value, state) == 0) {
+                  return;
+               }
+            }
+            
+            if (state.notify()) {
+               return;
+            }
+            
+            if (state.read()) {
+               write_response<Opts>(value, state);
+            }
+            else {
+               write_response<Opts>(state);
+            }
+         };
+      }
 
       // Helper for registering the root object
       template <const std::string_view& path, class T>
-      void register_rest_endpoint(T& value, sv json_pointer_path)
+         requires (proto == protocol::REST)
+      void register_endpoint(T& value)
       {
-         if constexpr (proto == protocol::REST) {
-            std::string rest_path = convert_to_rest_path(json_pointer_path);
-
-            // GET handler for the entire object
-            endpoints.push_back(
-               {Method::GET, rest_path, [&value](const Request& /*req*/, Response& res) { res.json(value); }});
-
-            // PUT handler for updating the entire object
-            endpoints.push_back({Method::PUT, rest_path, [&value](const Request& req, Response& res) {
-                                    // Parse the JSON request body
-                                    auto data_result = req.parse_json<T>();
-                                    if (!data_result) {
-                                       res.status(400).body("Invalid request body: " + data_result.error());
-                                       return;
-                                    }
-
-                                    // Update the object
-                                    value = data_result.value();
-                                    res.status(204); // No Content
-                                 }});
-         }
+         std::string rest_path = convert_to_rest_path(path);
+         
+         // GET handler for the entire object
+         endpoints.push_back(
+                             {Method::GET, rest_path, [&value](const Request& /*req*/, Response& res) { res.json(value); }});
+         
+         // PUT handler for updating the entire object
+         endpoints.push_back({Method::PUT, rest_path, [&value](const Request& req, Response& res) {
+            // Parse the JSON request body
+            auto data_result = req.parse_json<T>();
+            if (!data_result) {
+               res.status(400).body("Invalid request body: " + data_result.error());
+               return;
+            }
+            
+            // Update the object
+            value = data_result.value();
+            res.status(204); // No Content
+         }});
       }
 
       // Helper for registering function endpoints
