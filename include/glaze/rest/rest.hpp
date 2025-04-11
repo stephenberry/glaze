@@ -188,28 +188,11 @@ namespace glz
          return *this;
       }
 
-      // Helper method for routes with integer parameters
-      inline Router& route_int(Method method, std::string_view path, Handler handler,
-                               const std::unordered_map<std::string, std::string>& param_descriptions = {})
-      {
-         std::unordered_map<std::string, param_constraint> constraints;
-         for (const auto& [param, desc] : param_descriptions) {
-            constraints[param] = {R"(\d+)", desc};
-         }
-         return route(method, path, std::move(handler), constraints);
-      }
-
       // Standard HTTP method helpers
       inline Router& get(std::string_view path, Handler handler,
                          const std::unordered_map<std::string, param_constraint>& constraints = {})
       {
          return route(Method::GET, path, std::move(handler), constraints);
-      }
-
-      inline Router& get_int(std::string_view path, Handler handler,
-                             const std::unordered_map<std::string, std::string>& param_descriptions = {})
-      {
-         return route_int(Method::GET, path, std::move(handler), param_descriptions);
       }
 
       inline Router& post(std::string_view path, Handler handler,
@@ -218,22 +201,10 @@ namespace glz
          return route(Method::POST, path, std::move(handler), constraints);
       }
 
-      inline Router& post_int(std::string_view path, Handler handler,
-                              const std::unordered_map<std::string, std::string>& param_descriptions = {})
-      {
-         return route_int(Method::POST, path, std::move(handler), param_descriptions);
-      }
-
       inline Router& put(std::string_view path, Handler handler,
                          const std::unordered_map<std::string, param_constraint>& constraints = {})
       {
          return route(Method::PUT, path, std::move(handler), constraints);
-      }
-
-      inline Router& put_int(std::string_view path, Handler handler,
-                             const std::unordered_map<std::string, std::string>& param_descriptions = {})
-      {
-         return route_int(Method::PUT, path, std::move(handler), param_descriptions);
       }
 
       inline Router& del(std::string_view path, Handler handler,
@@ -242,22 +213,10 @@ namespace glz
          return route(Method::DELETE, path, std::move(handler), constraints);
       }
 
-      inline Router& del_int(std::string_view path, Handler handler,
-                             const std::unordered_map<std::string, std::string>& param_descriptions = {})
-      {
-         return route_int(Method::DELETE, path, std::move(handler), param_descriptions);
-      }
-
       inline Router& patch(std::string_view path, Handler handler,
                            const std::unordered_map<std::string, param_constraint>& constraints = {})
       {
          return route(Method::PATCH, path, std::move(handler), constraints);
-      }
-
-      inline Router& patch_int(std::string_view path, Handler handler,
-                               const std::unordered_map<std::string, std::string>& param_descriptions = {})
-      {
-         return route_int(Method::PATCH, path, std::move(handler), param_descriptions);
       }
 
       // Async versions
@@ -608,7 +567,7 @@ namespace glz
          // Read the request asynchronously
          asio::async_read_until(
             *socket_ptr, *buffer, "\r\n\r\n",
-            [this, socket_ptr, buffer, remote_endpoint](std::error_code ec, std::size_t bytes_transferred) {
+            [this, socket_ptr, buffer, remote_endpoint](std::error_code ec, std::size_t /*bytes_transferred*/) {
                if (ec) {
                   error_handler(ec, std::source_location::current());
                   return;
