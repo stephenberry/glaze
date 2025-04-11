@@ -933,8 +933,8 @@ namespace glz
                // Connect to the server
                asio::async_connect(
                   *socket, results,
-                  [this, socket, host, path, headers, promise = std::move(promise)](
-                     std::error_code ec, const asio::ip::tcp::endpoint& endpoint) mutable {
+                  [socket, host, path, headers, promise = std::move(promise)](
+                     std::error_code ec, const asio::ip::tcp::endpoint& /*endpoint*/) mutable {
                      if (ec) {
                         promise.set_value(std::unexpected(ec));
                         return;
@@ -959,7 +959,7 @@ namespace glz
                      // Send the request
                      asio::async_write(
                         *socket, asio::buffer(request_str),
-                        [this, socket, promise = std::move(promise)](std::error_code ec,
+                        [socket, promise = std::move(promise)](std::error_code ec,
                                                                      std::size_t /*bytes_transferred*/) mutable {
                            if (ec) {
                               promise.set_value(std::unexpected(ec));
@@ -972,7 +972,7 @@ namespace glz
                            // Read the response headers
                            asio::async_read_until(
                               *socket, *buffer, "\r\n\r\n",
-                              [this, socket, buffer, promise = std::move(promise)](
+                              [socket, buffer, promise = std::move(promise)](
                                  std::error_code ec, std::size_t /*bytes_transferred*/) mutable {
                                  if (ec) {
                                     promise.set_value(std::unexpected(ec));
@@ -1101,8 +1101,8 @@ namespace glz
                // Connect to the server
                asio::async_connect(
                   *socket, results,
-                  [this, socket, host, path, body, headers, promise = std::move(promise)](
-                     std::error_code ec, const asio::ip::tcp::endpoint& endpoint) mutable {
+                  [socket, host, path, body, headers, promise = std::move(promise)](
+                     std::error_code ec, const asio::ip::tcp::endpoint& /*endpoint*/) mutable {
                      if (ec) {
                         promise.set_value(std::unexpected(ec));
                         return;
@@ -1131,7 +1131,7 @@ namespace glz
                      // Send the request
                      asio::async_write(
                         *socket, asio::buffer(request_str),
-                        [this, socket, promise = std::move(promise)](std::error_code ec,
+                        [socket, promise = std::move(promise)](std::error_code ec,
                                                                      std::size_t /*bytes_transferred*/) mutable {
                            if (ec) {
                               promise.set_value(std::unexpected(ec));
@@ -1145,7 +1145,7 @@ namespace glz
                            // Read the response headers
                            asio::async_read_until(
                               *socket, *buffer, "\r\n\r\n",
-                              [this, socket, buffer, promise = std::move(promise)](
+                              [socket, buffer, promise = std::move(promise)](
                                  std::error_code ec, std::size_t /*bytes_transferred*/) mutable {
                                  if (ec) {
                                     promise.set_value(std::unexpected(ec));
