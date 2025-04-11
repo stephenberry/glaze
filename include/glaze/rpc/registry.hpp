@@ -30,8 +30,8 @@ namespace glz
 }
 
 // Include implementation files
-#include "glaze/rpc/repe/repe_registry_impl.hpp"
 #include "glaze/rest/rest_registry_impl.hpp"
+#include "glaze/rpc/repe/repe_registry_impl.hpp"
 
 namespace glz
 {
@@ -41,16 +41,8 @@ namespace glz
    {
       // procedure for REPE protocol
       using procedure = std::function<void(repe::state&&)>; // RPC method
-      
-      static constexpr auto proto = Proto;
 
-      // REST-specific structure
-      struct rest_endpoint
-      {
-         http_method method;
-         std::string path;
-         handler handler;
-      };
+      static constexpr auto proto = Proto;
 
       // Single template storage for all protocol-specific storage
       template <protocol P>
@@ -68,7 +60,7 @@ namespace glz
          requires(P == protocol::REST)
       struct protocol_storage<P>
       {
-         using type = std::vector<rest_endpoint>;
+         using type = http_router; // Changed from std::vector<rest_endpoint> to http_router
       };
 
       typename protocol_storage<Proto>::type endpoints{};
@@ -91,7 +83,7 @@ namespace glz
                return nullptr;
             }
          }();
-         
+
          using impl = registry_impl<Opts, Proto>;
 
          if constexpr (parent == root && (glaze_object_t<T> || reflectable<T>)) {
@@ -157,7 +149,8 @@ namespace glz
                      }
                      else if constexpr (n_args == 1) {
                         using Input = std::decay_t<glz::tuple_element_t<0, Tuple>>;
-                        impl::template register_member_function_with_params_endpoint<T, F, Input, void>(full_key, value, func, *this);
+                        impl::template register_member_function_with_params_endpoint<T, F, Input, void>(full_key, value,
+                                                                                                        func, *this);
                      }
                      else {
                         static_assert(false_v<Func>, "function cannot have more than one input");
@@ -170,7 +163,8 @@ namespace glz
                      }
                      else if constexpr (n_args == 1) {
                         using Input = std::decay_t<glz::tuple_element_t<0, Tuple>>;
-                        impl::template register_member_function_with_params_endpoint<T, F, Input, Ret>(full_key, value, func, *this);
+                        impl::template register_member_function_with_params_endpoint<T, F, Input, Ret>(full_key, value,
+                                                                                                       func, *this);
                      }
                      else {
                         static_assert(false_v<Func>, "function cannot have more than one input");
@@ -187,7 +181,7 @@ namespace glz
 
       // Function to call methods - only available for REPE protocol
       template <class In = repe::message, class Out = repe::message>
-         requires (Proto == protocol::REPE) // call method is only available for REPE protocol
+         requires(Proto == protocol::REPE) // call method is only available for REPE protocol
       void call(In&& in, Out&& out)
       {
          if (auto it = endpoints.find(in.query); it != endpoints.end()) {
@@ -200,10 +194,10 @@ namespace glz
          }
          else {
             std::string body = "invalid_query: " + in.query;
-            
+
             const uint32_t n = uint32_t(body.size());
             const auto body_length = 4 + n; // 4 bytes for size, + message
-            
+
             out.body.resize(body_length);
             out.header.ec = error_code::method_not_found;
             out.header.body_length = body_length;
@@ -216,39 +210,4 @@ namespace glz
    // Convenience alias for REST registry
    template <auto Opts = opts{}>
    using rest_registry = registry<Opts, protocol::REST>;
-   
-   // REST-specific functionality
-   
-   // Create a router from this registry (only for REST protocol)
-   template <class Registry>
-      requires (Registry::proto == protocol::REST) // create_router() is only available for REST protocol
-   http_router create_router(const Registry& reg)
-   {      
-      http_router router;
-      
-      // Register all endpoints with the router
-      for (const auto& endpoint : reg.endpoints) {
-         router.route(endpoint.method, endpoint.path, endpoint.handler);
-      }
-      
-      return router;
-   }
-   
-   // Mount this registry to an existing router (only for REST protocol)
-   template <class Registry>
-      requires (Registry::proto == protocol::REST) // mount_to_router() is only available for REST protocol
-   void mount_to_router(const Registry& reg, http_router& router, std::string_view base_path = "/")
-   {
-      // Register all endpoints with the router
-      for (const auto& endpoint : reg.endpoints) {
-         std::string full_path = std::string(base_path);
-         if (!full_path.empty() && full_path.back() == '/' && endpoint.path.front() == '/') {
-            // Avoid double slash
-            full_path.pop_back();
-         }
-         full_path += endpoint.path;
-         
-         router.route(endpoint.method, full_path, endpoint.handler);
-      }
-   }
 }
