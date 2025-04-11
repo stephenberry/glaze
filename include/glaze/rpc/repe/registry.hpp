@@ -271,33 +271,7 @@ namespace glz::repe
             using Func = decltype(func);
             if constexpr (std::is_invocable_v<Func>) {
                using Result = std::decay_t<std::invoke_result_t<Func>>;
-
-               if constexpr (proto == protocol::REPE) {
-                  if constexpr (std::same_as<Result, void>) {
-                     endpoints[full_key] = [&func](repe::state&& state) mutable {
-                        func();
-                        if (state.notify()) {
-                           state.out.header.notify(true);
-                           return;
-                        }
-                        write_response<Opts>(state);
-                     };
-                  }
-                  else {
-                     endpoints[full_key] = [&func](repe::state&& state) mutable {
-                        if (state.notify()) {
-                           std::ignore = func();
-                           state.out.header.notify(true);
-                           return;
-                        }
-                        write_response<Opts>(func(), state);
-                     };
-                  }
-               }
-
-               if constexpr (proto == protocol::REST) {
-                  register_rest_function_endpoint<full_key, Func, Result>(func);
-               }
+               register_function_endpoint<full_key, Func, Result>(func);
             }
             else if constexpr (is_invocable_concrete<std::remove_cvref_t<Func>>) {
                using Tuple = invocable_args_t<std::remove_cvref_t<Func>>;
@@ -685,23 +659,48 @@ namespace glz::repe
 
       // Helper for registering function endpoints
       template <const std::string_view& path, class Func, class Result>
-      void register_rest_function_endpoint(Func& func)
+         requires (proto == protocol::REPE)
+      void register_function_endpoint(Func& func)
       {
-         if constexpr (proto == protocol::REST) {
-            std::string rest_path = convert_to_rest_path(path);
-
-            // GET handler for functions
-            endpoints.push_back({Method::GET, rest_path, [&func](const Request& /*req*/, Response& res) {
-                                    if constexpr (std::same_as<Result, void>) {
-                                       func();
-                                       res.status(204); // No Content
-                                    }
-                                    else {
-                                       auto result = func();
-                                       res.json(result);
-                                    }
-                                 }});
+         if constexpr (std::same_as<Result, void>) {
+            endpoints[path] = [&func](repe::state&& state) mutable {
+               func();
+               if (state.notify()) {
+                  state.out.header.notify(true);
+                  return;
+               }
+               write_response<Opts>(state);
+            };
          }
+         else {
+            endpoints[path] = [&func](repe::state&& state) mutable {
+               if (state.notify()) {
+                  std::ignore = func();
+                  state.out.header.notify(true);
+                  return;
+               }
+               write_response<Opts>(func(), state);
+            };
+         }
+      }
+      
+      template <const std::string_view& path, class Func, class Result>
+         requires (proto == protocol::REST)
+      void register_function_endpoint(Func& func)
+      {
+         std::string rest_path = convert_to_rest_path(path);
+         
+         // GET handler for functions
+         endpoints.push_back({Method::GET, rest_path, [&func](const Request& /*req*/, Response& res) {
+            if constexpr (std::same_as<Result, void>) {
+               func();
+               res.status(204); // No Content
+            }
+            else {
+               auto result = func();
+               res.json(result);
+            }
+         }});
       }
 
       // Helper for registering function endpoints with parameters
