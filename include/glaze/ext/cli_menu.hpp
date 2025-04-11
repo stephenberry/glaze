@@ -98,7 +98,7 @@ namespace glz
                      using Ret = typename return_type<F>::type;
                      using Tuple = typename inputs_as_tuple<F>::type;
                      constexpr auto n_args = glz::tuple_size_v<Tuple>;
-                     
+
                      if constexpr (n_args == 0) {
                         if constexpr (std::same_as<Ret, void>) {
                            (value.*func)();
@@ -121,7 +121,7 @@ namespace glz
                         else {
                            print_input_type<P>();
                         }
-                        
+
                         if (fgets(input.data(), int(input.size()), stdin)) {
                            std::string_view input_sv{input.data()};
                            if (input_sv.back() == '\n') {
@@ -138,7 +138,8 @@ namespace glz
                                  (value.*func)(params);
                               }
                               else {
-                                 const auto result = glz::write<Opts>((value.*func)(params)).value_or("result serialization error");
+                                 const auto result =
+                                    glz::write<Opts>((value.*func)(params)).value_or("result serialization error");
                                  std::printf("%.*s\n", int(result.size()), result.data());
                               }
                            }

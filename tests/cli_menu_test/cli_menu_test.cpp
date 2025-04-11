@@ -6,18 +6,12 @@
 struct my_functions
 {
    std::function<void()> hello = [] { std::printf("Hello\n"); };
-   
-   void member_function() {
-      std::printf("Member Function!\n");
-   }
-   
-   std::string dump() {
-      return "dumping\n";
-   }
-   
-   void input(int i) {
-      std::printf("i: %d\n", i);
-   }
+
+   void member_function() { std::printf("Member Function!\n"); }
+
+   std::string dump() { return "dumping\n"; }
+
+   void input(int i) { std::printf("i: %d\n", i); }
 };
 
 template <>
