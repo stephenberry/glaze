@@ -182,13 +182,6 @@ namespace glz::repe
    inline constexpr auto request_beve = request<opts{BEVE}>;
    inline constexpr auto request_json = request<opts{JSON}>;
 
-   // DESIGN NOTE: It might appear that we are locking ourselves into a poor design choice by using a runtime
-   // std::unordered_map. However, we can actually improve this in the future by allowing glz::meta specialization on
-   // the server to list out the method names and allow us to build a compile time map prior to function registration.
-   // This is made possible by constinit, and the same approach used for compile time maps and struct reflection.
-   // This will then be an opt-in performance improvement where a bit more code must be written by the user to
-   // list the method names.
-
    namespace detail
    {
       static constexpr std::string_view empty_path = "";
@@ -198,10 +191,39 @@ namespace glz::repe
    template <auto Opts = opts{}, protocol proto = protocol::REPE>
    struct registry
    {
+      // Only define methods and procedure for REPE protocol
       using procedure = std::function<void(state&&)>; // RPC method
-      std::unordered_map<sv, procedure, detail::string_hash, std::equal_to<>> methods;
 
-      void clear() { methods.clear(); }
+      // REST-specific structure
+      struct rest_endpoint
+      {
+         Method method;
+         std::string path;
+         Handler handler;
+      };
+
+      // Single template storage for all protocol-specific storage
+      template <protocol P>
+      struct protocol_storage
+      {};
+
+      template <protocol P>
+         requires(P == protocol::REPE)
+      struct protocol_storage<P>
+      {
+         using type = std::unordered_map<sv, procedure, detail::string_hash, std::equal_to<>>;
+      };
+
+      template <protocol P>
+         requires(P == protocol::REST)
+      struct protocol_storage<P>
+      {
+         using type = std::vector<rest_endpoint>;
+      };
+
+      typename protocol_storage<proto>::type endpoints{};
+
+      void clear() { endpoints.clear(); }
 
       // Register a C++ type that stores pointers to the value, so be sure to keep the registered value alive
       template <const std::string_view& root = detail::empty_path, class T, const std::string_view& parent = root>
@@ -221,25 +243,27 @@ namespace glz::repe
          }();
 
          if constexpr (parent == root && (glaze_object_t<T> || reflectable<T>)) {
-            // build read/write calls to the top level object
-            methods[root] = [&value](repe::state&& state) mutable {
-               if (state.write()) {
-                  if (read_params<Opts>(value, state) == 0) {
+            // Only build read/write calls to the top level object for REPE protocol
+            if constexpr (proto == protocol::REPE) {
+               endpoints[root] = [&value](repe::state&& state) mutable {
+                  if (state.write()) {
+                     if (read_params<Opts>(value, state) == 0) {
+                        return;
+                     }
+                  }
+
+                  if (state.notify()) {
                      return;
                   }
-               }
 
-               if (state.notify()) {
-                  return;
-               }
-
-               if (state.read()) {
-                  write_response<Opts>(value, state);
-               }
-               else {
-                  write_response<Opts>(state);
-               }
-            };
+                  if (state.read()) {
+                     write_response<Opts>(value, state);
+                  }
+                  else {
+                     write_response<Opts>(state);
+                  }
+               };
+            }
 
             // For REST protocol, register the root object
             if constexpr (proto == protocol::REST) {
@@ -272,28 +296,30 @@ namespace glz::repe
             using Func = decltype(func);
             if constexpr (std::is_invocable_v<Func>) {
                using Result = std::decay_t<std::invoke_result_t<Func>>;
-               if constexpr (std::same_as<Result, void>) {
-                  methods[full_key] = [&func](repe::state&& state) mutable {
-                     func();
-                     if (state.notify()) {
-                        state.out.header.notify(true);
-                        return;
-                     }
-                     write_response<Opts>(state);
-                  };
-               }
-               else {
-                  methods[full_key] = [&func](repe::state&& state) mutable {
-                     if (state.notify()) {
-                        std::ignore = func();
-                        state.out.header.notify(true);
-                        return;
-                     }
-                     write_response<Opts>(func(), state);
-                  };
+
+               if constexpr (proto == protocol::REPE) {
+                  if constexpr (std::same_as<Result, void>) {
+                     endpoints[full_key] = [&func](repe::state&& state) mutable {
+                        func();
+                        if (state.notify()) {
+                           state.out.header.notify(true);
+                           return;
+                        }
+                        write_response<Opts>(state);
+                     };
+                  }
+                  else {
+                     endpoints[full_key] = [&func](repe::state&& state) mutable {
+                        if (state.notify()) {
+                           std::ignore = func();
+                           state.out.header.notify(true);
+                           return;
+                        }
+                        write_response<Opts>(func(), state);
+                     };
+                  }
                }
 
-               // For REST protocol, register function endpoint
                if constexpr (proto == protocol::REST) {
                   register_rest_function_endpoint<full_key, Func, Result>(func);
                }
@@ -305,36 +331,37 @@ namespace glz::repe
 
                using Params = glz::tuple_element_t<0, Tuple>;
 
-               methods[full_key] = [&func](repe::state&& state) mutable {
-                  static thread_local std::decay_t<Params> params{};
-                  // no need lock locals
-                  if (read_params<Opts>(params, state) == 0) {
-                     return;
-                  }
+               if constexpr (proto == protocol::REPE) {
+                  endpoints[full_key] = [&func](repe::state&& state) mutable {
+                     static thread_local std::decay_t<Params> params{};
+                     // no need lock locals
+                     if (read_params<Opts>(params, state) == 0) {
+                        return;
+                     }
 
-                  using Result = std::invoke_result_t<decltype(func), Params>;
+                     using Result = std::invoke_result_t<decltype(func), Params>;
 
-                  if (state.notify()) {
+                     if (state.notify()) {
+                        if constexpr (std::same_as<Result, void>) {
+                           func(params);
+                        }
+                        else {
+                           std::ignore = func(params);
+                        }
+                        state.out.header.notify(true);
+                        return;
+                     }
                      if constexpr (std::same_as<Result, void>) {
                         func(params);
+                        write_response<Opts>(state);
                      }
                      else {
-                        std::ignore = func(params);
+                        auto ret = func(params);
+                        write_response<Opts>(ret, state);
                      }
-                     state.out.header.notify(true);
-                     return;
-                  }
-                  if constexpr (std::same_as<Result, void>) {
-                     func(params);
-                     write_response<Opts>(state);
-                  }
-                  else {
-                     auto ret = func(params);
-                     write_response<Opts>(ret, state);
-                  }
-               };
+                  };
+               }
 
-               // For REST protocol, register parameterized function endpoint
                if constexpr (proto == protocol::REST) {
                   register_rest_param_function_endpoint<full_key, Func, Params>(func);
                }
@@ -342,165 +369,36 @@ namespace glz::repe
             else if constexpr (glaze_object_t<std::remove_cvref_t<Func>> || reflectable<std::remove_cvref_t<Func>>) {
                on<root, std::remove_cvref_t<Func>, full_key>(func);
 
-               // build read/write calls to the object as a variable
-               methods[full_key] = [&func](repe::state&& state) mutable {
-                  if (state.write()) {
-                     if (read_params<Opts>(func, state) == 0) {
+               // build read/write calls to the object as a variable only for REPE protocol
+               if constexpr (proto == protocol::REPE) {
+                  endpoints[full_key] = [&func](repe::state&& state) mutable {
+                     if (state.write()) {
+                        if (read_params<Opts>(func, state) == 0) {
+                           return;
+                        }
+                     }
+
+                     if (state.notify()) {
                         return;
                      }
-                  }
 
-                  if (state.notify()) {
-                     return;
-                  }
+                     if (state.read()) {
+                        write_response<Opts>(func, state);
+                     }
+                     else {
+                        write_response<Opts>(state);
+                     }
+                  };
+               }
 
-                  if (state.read()) {
-                     write_response<Opts>(func, state);
-                  }
-                  else {
-                     write_response<Opts>(state);
-                  }
-               };
-
-               // For REST protocol, register nested object
                if constexpr (proto == protocol::REST) {
                   register_rest_object_endpoint<full_key, std::remove_cvref_t<Func>>(func);
                }
             }
             else if constexpr (not std::is_lvalue_reference_v<Func>) {
                // For glz::custom, glz::manage, etc.
-               methods[full_key] = [func](repe::state&& state) mutable {
-                  if (state.write()) {
-                     if (read_params<Opts>(func, state) == 0) {
-                        return;
-                     }
-                  }
-
-                  if (state.notify()) {
-                     state.out.header.notify(true);
-                     return;
-                  }
-
-                  if (state.read()) {
-                     write_response<Opts>(func, state);
-                  }
-                  else {
-                     write_response<Opts>(state);
-                  }
-               };
-
-               // For REST protocol, register custom value
-               if constexpr (proto == protocol::REST) {
-                  register_rest_value_endpoint<full_key, std::remove_cvref_t<Func>>(func);
-               }
-            }
-            else {
-               static_assert(std::is_lvalue_reference_v<Func>);
-
-               if constexpr (std::is_member_function_pointer_v<std::decay_t<Func>>) {
-                  using F = std::decay_t<Func>;
-                  using Ret = typename return_type<F>::type;
-                  using Tuple = typename inputs_as_tuple<F>::type;
-                  constexpr auto n_args = glz::tuple_size_v<Tuple>;
-                  if constexpr (std::is_void_v<Ret>) {
-                     if constexpr (n_args == 0) {
-                        methods[full_key] = [&value, &func](repe::state&& state) mutable {
-                           {
-                              (value.*func)();
-                           }
-
-                           if (state.notify()) {
-                              state.out.header.notify(true);
-                              return;
-                           }
-
-                           write_response<Opts>(state);
-                        };
-
-                        // For REST protocol, register member function with no args and void return
-                        if constexpr (proto == protocol::REST) {
-                           register_rest_member_function_endpoint<full_key, T, F, void>(value, func);
-                        }
-                     }
-                     else if constexpr (n_args == 1) {
-                        using Input = std::decay_t<glz::tuple_element_t<0, Tuple>>;
-                        methods[full_key] = [&value, &func](repe::state&& state) mutable {
-                           static thread_local Input input{};
-                           if (state.write()) {
-                              if (read_params<Opts>(input, state) == 0) {
-                                 return;
-                              }
-                           }
-
-                           (value.*func)(input);
-
-                           if (state.notify()) {
-                              state.out.header.notify(true);
-                              return;
-                           }
-
-                           write_response<Opts>(state);
-                        };
-
-                        // For REST protocol, register member function with args and void return
-                        if constexpr (proto == protocol::REST) {
-                           register_rest_member_function_with_params_endpoint<full_key, T, F, Input, void>(value, func);
-                        }
-                     }
-                     else {
-                        static_assert(false_v<Func>, "function cannot have more than one input");
-                     }
-                  }
-                  else {
-                     // Member function pointers
-                     if constexpr (n_args == 0) {
-                        methods[full_key] = [&value, &func](repe::state&& state) mutable {
-                           if (state.notify()) {
-                              std::ignore = (value.*func)();
-                              return;
-                           }
-
-                           write_response<Opts>((value.*func)(), state);
-                        };
-
-                        // For REST protocol, register member function with no args and return value
-                        if constexpr (proto == protocol::REST) {
-                           register_rest_member_function_endpoint<full_key, T, F, Ret>(value, func);
-                        }
-                     }
-                     else if constexpr (n_args == 1) {
-                        using Input = std::decay_t<glz::tuple_element_t<0, Tuple>>;
-                        methods[full_key] = [this, &value, &func](repe::state&& state) mutable {
-                           static thread_local Input input{};
-
-                           if (state.write()) {
-                              if (read_params<Opts>(input, state) == 0) {
-                                 return;
-                              }
-                           }
-
-                           if (state.notify()) {
-                              std::ignore = (value.*func)(input);
-                              state.out.header.notify(true);
-                              return;
-                           }
-
-                           write_response<Opts>((value.*func)(input), state);
-                        };
-
-                        // For REST protocol, register member function with args and return value
-                        if constexpr (proto == protocol::REST) {
-                           register_rest_member_function_with_params_endpoint<full_key, T, F, Input, Ret>(value, func);
-                        }
-                     }
-                     else {
-                        static_assert(false_v<Func>, "function cannot have more than one input");
-                     }
-                  }
-               }
-               else {
-                  // this is a variable and not a function, so we build RPC read/write calls
-                  methods[full_key] = [&func](repe::state&& state) mutable {
+               if constexpr (proto == protocol::REPE) {
+                  endpoints[full_key] = [func](repe::state&& state) mutable {
                      if (state.write()) {
                         if (read_params<Opts>(func, state) == 0) {
                            return;
@@ -519,8 +417,146 @@ namespace glz::repe
                         write_response<Opts>(state);
                      }
                   };
+               }
 
-                  // For REST protocol, register variable endpoint
+               if constexpr (proto == protocol::REST) {
+                  register_rest_value_endpoint<full_key, std::remove_cvref_t<Func>>(func);
+               }
+            }
+            else {
+               static_assert(std::is_lvalue_reference_v<Func>);
+
+               if constexpr (std::is_member_function_pointer_v<std::decay_t<Func>>) {
+                  using F = std::decay_t<Func>;
+                  using Ret = typename return_type<F>::type;
+                  using Tuple = typename inputs_as_tuple<F>::type;
+                  constexpr auto n_args = glz::tuple_size_v<Tuple>;
+                  if constexpr (std::is_void_v<Ret>) {
+                     if constexpr (n_args == 0) {
+                        if constexpr (proto == protocol::REPE) {
+                           endpoints[full_key] = [&value, &func](repe::state&& state) mutable {
+                              {
+                                 (value.*func)();
+                              }
+
+                              if (state.notify()) {
+                                 state.out.header.notify(true);
+                                 return;
+                              }
+
+                              write_response<Opts>(state);
+                           };
+                        }
+
+                        if constexpr (proto == protocol::REST) {
+                           register_rest_member_function_endpoint<full_key, T, F, void>(value, func);
+                        }
+                     }
+                     else if constexpr (n_args == 1) {
+                        using Input = std::decay_t<glz::tuple_element_t<0, Tuple>>;
+
+                        if constexpr (proto == protocol::REPE) {
+                           endpoints[full_key] = [&value, &func](repe::state&& state) mutable {
+                              static thread_local Input input{};
+                              if (state.write()) {
+                                 if (read_params<Opts>(input, state) == 0) {
+                                    return;
+                                 }
+                              }
+
+                              (value.*func)(input);
+
+                              if (state.notify()) {
+                                 state.out.header.notify(true);
+                                 return;
+                              }
+
+                              write_response<Opts>(state);
+                           };
+                        }
+
+                        if constexpr (proto == protocol::REST) {
+                           register_rest_member_function_with_params_endpoint<full_key, T, F, Input, void>(value, func);
+                        }
+                     }
+                     else {
+                        static_assert(false_v<Func>, "function cannot have more than one input");
+                     }
+                  }
+                  else {
+                     // Member function pointers
+                     if constexpr (n_args == 0) {
+                        if constexpr (proto == protocol::REPE) {
+                           endpoints[full_key] = [&value, &func](repe::state&& state) mutable {
+                              if (state.notify()) {
+                                 std::ignore = (value.*func)();
+                                 return;
+                              }
+
+                              write_response<Opts>((value.*func)(), state);
+                           };
+                        }
+
+                        if constexpr (proto == protocol::REST) {
+                           register_rest_member_function_endpoint<full_key, T, F, Ret>(value, func);
+                        }
+                     }
+                     else if constexpr (n_args == 1) {
+                        using Input = std::decay_t<glz::tuple_element_t<0, Tuple>>;
+
+                        if constexpr (proto == protocol::REPE) {
+                           endpoints[full_key] = [this, &value, &func](repe::state&& state) mutable {
+                              static thread_local Input input{};
+
+                              if (state.write()) {
+                                 if (read_params<Opts>(input, state) == 0) {
+                                    return;
+                                 }
+                              }
+
+                              if (state.notify()) {
+                                 std::ignore = (value.*func)(input);
+                                 state.out.header.notify(true);
+                                 return;
+                              }
+
+                              write_response<Opts>((value.*func)(input), state);
+                           };
+                        }
+
+                        if constexpr (proto == protocol::REST) {
+                           register_rest_member_function_with_params_endpoint<full_key, T, F, Input, Ret>(value, func);
+                        }
+                     }
+                     else {
+                        static_assert(false_v<Func>, "function cannot have more than one input");
+                     }
+                  }
+               }
+               else {
+                  // this is a variable and not a function, so we build RPC read/write calls
+                  if constexpr (proto == protocol::REPE) {
+                     endpoints[full_key] = [&func](repe::state&& state) mutable {
+                        if (state.write()) {
+                           if (read_params<Opts>(func, state) == 0) {
+                              return;
+                           }
+                        }
+
+                        if (state.notify()) {
+                           state.out.header.notify(true);
+                           return;
+                        }
+
+                        if (state.read()) {
+                           write_response<Opts>(func, state);
+                        }
+                        else {
+                           write_response<Opts>(state);
+                        }
+                     };
+                  }
+
                   if constexpr (proto == protocol::REST) {
                      register_rest_variable_endpoint<full_key, std::remove_cvref_t<Func>>(func);
                   }
@@ -529,28 +565,34 @@ namespace glz::repe
          });
       }
 
+      // Function to call methods - only available for REPE protocol
       template <class In = message, class Out = message>
       void call(In&& in, Out&& out)
       {
-         if (auto it = methods.find(in.query); it != methods.end()) {
-            if (bool(in.header.ec)) {
-               out = in;
+         if constexpr (proto == protocol::REPE) {
+            if (auto it = endpoints.find(in.query); it != endpoints.end()) {
+               if (bool(in.header.ec)) {
+                  out = in;
+               }
+               else {
+                  it->second(state{in, out}); // handle the body
+               }
             }
             else {
-               it->second(state{in, out}); // handle the body
+               std::string body = "invalid_query: " + in.query;
+
+               const uint32_t n = uint32_t(body.size());
+               const auto body_length = 4 + n; // 4 bytes for size, + message
+
+               out.body.resize(body_length);
+               out.header.ec = error_code::method_not_found;
+               out.header.body_length = body_length;
+               std::memcpy(out.body.data(), &n, 4);
+               std::memcpy(out.body.data() + 4, body.data(), n);
             }
          }
          else {
-            std::string body = "invalid_query: " + in.query;
-
-            const uint32_t n = uint32_t(body.size());
-            const auto body_length = 4 + n; // 4 bytes for size, + message
-
-            out.body.resize(body_length);
-            out.header.ec = error_code::method_not_found;
-            out.header.body_length = body_length;
-            std::memcpy(out.body.data(), &n, 4);
-            std::memcpy(out.body.data() + 4, body.data(), n);
+            static_assert(proto == protocol::REPE, "call method is only available for REPE protocol");
          }
       }
 
@@ -564,7 +606,7 @@ namespace glz::repe
          Router router;
 
          // Register all endpoints with the router
-         for (const auto& endpoint : rest_endpoints) {
+         for (const auto& endpoint : endpoints) {
             router.route(endpoint.method, endpoint.path, endpoint.handler);
          }
 
@@ -577,7 +619,7 @@ namespace glz::repe
          static_assert(proto == protocol::REST, "mount_to_router() is only available for REST protocol");
 
          // Register all endpoints with the router
-         for (const auto& endpoint : rest_endpoints) {
+         for (const auto& endpoint : endpoints) {
             std::string full_path = std::string(base_path);
             if (!full_path.empty() && full_path.back() == '/' && endpoint.path.front() == '/') {
                // Avoid double slash
@@ -590,32 +632,30 @@ namespace glz::repe
       }
 
      private:
-      // For REST protocol, we need to store endpoint information
-      struct rest_endpoint
-      {
-         Method method;
-         std::string path;
-         Handler handler;
-      };
-
-      // Only used when proto == Protocol::REST
-      std::vector<rest_endpoint> rest_endpoints;
-
       // Helper method to convert a JSON pointer path to a REST path
+      // Only defined for REST protocol
+      template <protocol P = proto>
       std::string convert_to_rest_path(sv json_pointer_path) const
       {
-         // For many cases, JSON pointer and REST paths can be similar
-         // This is a basic implementation - you might need to customize it
+         if constexpr (P == protocol::REST) {
+            // For many cases, JSON pointer and REST paths can be similar
+            // This is a basic implementation - you might need to customize it
 
-         // Make a copy of the path
-         std::string rest_path(json_pointer_path);
+            // Make a copy of the path
+            std::string rest_path(json_pointer_path);
 
-         // Remove trailing slashes
-         if (!rest_path.empty() && rest_path.back() == '/') {
-            rest_path.pop_back();
+            // Remove trailing slashes
+            if (!rest_path.empty() && rest_path.back() == '/') {
+               rest_path.pop_back();
+            }
+
+            return rest_path;
          }
-
-         return rest_path;
+         else {
+            // This will cause a compile-time error if accessed with REPE protocol
+            static_assert(P == protocol::REST, "convert_to_rest_path is only available for REST protocol");
+            return std::string{}; // Dummy return to satisfy the compiler
+         }
       }
 
       // Helper for registering the root object
@@ -626,22 +666,22 @@ namespace glz::repe
             std::string rest_path = convert_to_rest_path(json_pointer_path);
 
             // GET handler for the entire object
-            rest_endpoints.push_back(
-               {Method::GET, rest_path, [&value](const Request& req, Response& res) { res.json(value); }});
+            endpoints.push_back(
+               {Method::GET, rest_path, [&value](const Request& /*req*/, Response& res) { res.json(value); }});
 
             // PUT handler for updating the entire object
-            rest_endpoints.push_back({Method::PUT, rest_path, [&value](const Request& req, Response& res) {
-                                         // Parse the JSON request body
-                                         auto data_result = req.parse_json<T>();
-                                         if (!data_result) {
-                                            res.status(400).body("Invalid request body: " + data_result.error());
-                                            return;
-                                         }
+            endpoints.push_back({Method::PUT, rest_path, [&value](const Request& req, Response& res) {
+                                    // Parse the JSON request body
+                                    auto data_result = req.parse_json<T>();
+                                    if (!data_result) {
+                                       res.status(400).body("Invalid request body: " + data_result.error());
+                                       return;
+                                    }
 
-                                         // Update the object
-                                         value = data_result.value();
-                                         res.status(204); // No Content
-                                      }});
+                                    // Update the object
+                                    value = data_result.value();
+                                    res.status(204); // No Content
+                                 }});
          }
       }
 
@@ -653,16 +693,16 @@ namespace glz::repe
             std::string rest_path = convert_to_rest_path(path);
 
             // GET handler for functions
-            rest_endpoints.push_back({Method::GET, rest_path, [&func](const Request& /*req*/, Response& res) {
-                                         if constexpr (std::same_as<Result, void>) {
-                                            func();
-                                            res.status(204); // No Content
-                                         }
-                                         else {
-                                            auto result = func();
-                                            res.json(result);
-                                         }
-                                      }});
+            endpoints.push_back({Method::GET, rest_path, [&func](const Request& /*req*/, Response& res) {
+                                    if constexpr (std::same_as<Result, void>) {
+                                       func();
+                                       res.status(204); // No Content
+                                    }
+                                    else {
+                                       auto result = func();
+                                       res.json(result);
+                                    }
+                                 }});
          }
       }
 
@@ -674,25 +714,25 @@ namespace glz::repe
             std::string rest_path = convert_to_rest_path(path);
 
             // POST handler for functions with parameters
-            rest_endpoints.push_back({Method::POST, rest_path, [&func](const Request& req, Response& res) {
-                                         // Parse the JSON request body
-                                         auto params_result = req.parse_json<Params>();
-                                         if (!params_result) {
-                                            res.status(400).body("Invalid request body: " + params_result.error());
-                                            return;
-                                         }
+            endpoints.push_back({Method::POST, rest_path, [&func](const Request& req, Response& res) {
+                                    // Parse the JSON request body
+                                    auto params_result = req.parse_json<Params>();
+                                    if (!params_result) {
+                                       res.status(400).body("Invalid request body: " + params_result.error());
+                                       return;
+                                    }
 
-                                         using Result = std::invoke_result_t<decltype(func), Params>;
+                                    using Result = std::invoke_result_t<decltype(func), Params>;
 
-                                         if constexpr (std::same_as<Result, void>) {
-                                            func(params_result.value());
-                                            res.status(204); // No Content
-                                         }
-                                         else {
-                                            auto result = func(params_result.value());
-                                            res.json(result);
-                                         }
-                                      }});
+                                    if constexpr (std::same_as<Result, void>) {
+                                       func(params_result.value());
+                                       res.status(204); // No Content
+                                    }
+                                    else {
+                                       auto result = func(params_result.value());
+                                       res.json(result);
+                                    }
+                                 }});
          }
       }
 
@@ -704,22 +744,22 @@ namespace glz::repe
             std::string rest_path = convert_to_rest_path(path);
 
             // GET handler for nested objects
-            rest_endpoints.push_back(
+            endpoints.push_back(
                {Method::GET, rest_path, [&obj](const Request& /*req*/, Response& res) { res.json(obj); }});
 
             // PUT handler for updating nested objects
-            rest_endpoints.push_back({Method::PUT, rest_path, [&obj](const Request& req, Response& res) {
-                                         // Parse the JSON request body
-                                         auto data_result = req.parse_json<Obj>();
-                                         if (!data_result) {
-                                            res.status(400).body("Invalid request body: " + data_result.error());
-                                            return;
-                                         }
+            endpoints.push_back({Method::PUT, rest_path, [&obj](const Request& req, Response& res) {
+                                    // Parse the JSON request body
+                                    auto data_result = req.parse_json<Obj>();
+                                    if (!data_result) {
+                                       res.status(400).body("Invalid request body: " + data_result.error());
+                                       return;
+                                    }
 
-                                         // Update the object
-                                         obj = data_result.value();
-                                         res.status(204); // No Content
-                                      }});
+                                    // Update the object
+                                    obj = data_result.value();
+                                    res.status(204); // No Content
+                                 }});
          }
       }
 
@@ -731,22 +771,22 @@ namespace glz::repe
             std::string rest_path = convert_to_rest_path(path);
 
             // GET handler for values
-            rest_endpoints.push_back(
+            endpoints.push_back(
                {Method::GET, rest_path, [&value](const Request& /*req*/, Response& res) { res.json(value); }});
 
             // PUT handler for updating values
-            rest_endpoints.push_back({Method::PUT, rest_path, [&value](const Request& req, Response& res) {
-                                         // Parse the JSON request body
-                                         auto data_result = req.parse_json<Value>();
-                                         if (!data_result) {
-                                            res.status(400).body("Invalid request body: " + data_result.error());
-                                            return;
-                                         }
+            endpoints.push_back({Method::PUT, rest_path, [&value](const Request& req, Response& res) {
+                                    // Parse the JSON request body
+                                    auto data_result = req.parse_json<Value>();
+                                    if (!data_result) {
+                                       res.status(400).body("Invalid request body: " + data_result.error());
+                                       return;
+                                    }
 
-                                         // Update the value
-                                         value = data_result.value();
-                                         res.status(204); // No Content
-                                      }});
+                                    // Update the value
+                                    value = data_result.value();
+                                    res.status(204); // No Content
+                                 }});
          }
       }
 
@@ -758,22 +798,22 @@ namespace glz::repe
             std::string rest_path = convert_to_rest_path(path);
 
             // GET handler for variables
-            rest_endpoints.push_back(
+            endpoints.push_back(
                {Method::GET, rest_path, [&var](const Request& /*req*/, Response& res) { res.json(var); }});
 
             // PUT handler for updating variables
-            rest_endpoints.push_back({Method::PUT, rest_path, [&var](const Request& req, Response& res) {
-                                         // Parse the JSON request body
-                                         auto data_result = req.parse_json<Var>();
-                                         if (!data_result) {
-                                            res.status(400).body("Invalid request body: " + data_result.error());
-                                            return;
-                                         }
+            endpoints.push_back({Method::PUT, rest_path, [&var](const Request& req, Response& res) {
+                                    // Parse the JSON request body
+                                    auto data_result = req.parse_json<Var>();
+                                    if (!data_result) {
+                                       res.status(400).body("Invalid request body: " + data_result.error());
+                                       return;
+                                    }
 
-                                         // Update the variable
-                                         var = data_result.value();
-                                         res.status(204); // No Content
-                                      }});
+                                    // Update the variable
+                                    var = data_result.value();
+                                    res.status(204); // No Content
+                                 }});
          }
       }
 
@@ -785,16 +825,16 @@ namespace glz::repe
             std::string rest_path = convert_to_rest_path(path);
 
             // GET handler for member functions with no args
-            rest_endpoints.push_back({Method::GET, rest_path, [&value, func](const Request& /*req*/, Response& res) {
-                                         if constexpr (std::same_as<Ret, void>) {
-                                            (value.*func)();
-                                            res.status(204); // No Content
-                                         }
-                                         else {
-                                            auto result = (value.*func)();
-                                            res.json(result);
-                                         }
-                                      }});
+            endpoints.push_back({Method::GET, rest_path, [&value, func](const Request& /*req*/, Response& res) {
+                                    if constexpr (std::same_as<Ret, void>) {
+                                       (value.*func)();
+                                       res.status(204); // No Content
+                                    }
+                                    else {
+                                       auto result = (value.*func)();
+                                       res.json(result);
+                                    }
+                                 }});
          }
       }
 
@@ -806,23 +846,23 @@ namespace glz::repe
             std::string rest_path = convert_to_rest_path(path);
 
             // POST handler for member functions with args
-            rest_endpoints.push_back({Method::POST, rest_path, [&value, func](const Request& req, Response& res) {
-                                         // Parse the JSON request body
-                                         auto params_result = req.parse_json<Input>();
-                                         if (!params_result) {
-                                            res.status(400).body("Invalid request body: " + params_result.error());
-                                            return;
-                                         }
+            endpoints.push_back({Method::POST, rest_path, [&value, func](const Request& req, Response& res) {
+                                    // Parse the JSON request body
+                                    auto params_result = req.parse_json<Input>();
+                                    if (!params_result) {
+                                       res.status(400).body("Invalid request body: " + params_result.error());
+                                       return;
+                                    }
 
-                                         if constexpr (std::same_as<Ret, void>) {
-                                            (value.*func)(params_result.value());
-                                            res.status(204); // No Content
-                                         }
-                                         else {
-                                            auto result = (value.*func)(params_result.value());
-                                            res.json(result);
-                                         }
-                                      }});
+                                    if constexpr (std::same_as<Ret, void>) {
+                                       (value.*func)(params_result.value());
+                                       res.status(204); // No Content
+                                    }
+                                    else {
+                                       auto result = (value.*func)(params_result.value());
+                                       res.json(result);
+                                    }
+                                 }});
          }
       }
    };
