@@ -197,7 +197,7 @@ namespace glz::repe
       // REST-specific structure
       struct rest_endpoint
       {
-         Method method;
+         http_method method;
          std::string path;
          handler handler;
       };
@@ -459,10 +459,10 @@ namespace glz::repe
          
          // GET handler for the entire object
          endpoints.push_back(
-                             {Method::GET, rest_path, [&value](const Request& /*req*/, Response& res) { res.json(value); }});
+                             {http_method::GET, rest_path, [&value](const Request& /*req*/, Response& res) { res.json(value); }});
          
          // PUT handler for updating the entire object
-         endpoints.push_back({Method::PUT, rest_path, [&value](const Request& req, Response& res) {
+         endpoints.push_back({http_method::PUT, rest_path, [&value](const Request& req, Response& res) {
             // Parse the JSON request body
             auto ec = read_json(value, req.body);
             if (ec) {
@@ -508,7 +508,7 @@ namespace glz::repe
          std::string rest_path = convert_to_rest_path(path);
          
          // GET handler for functions
-         endpoints.push_back({Method::GET, rest_path, [&func](const Request& /*req*/, Response& res) {
+         endpoints.push_back({http_method::GET, rest_path, [&func](const Request& /*req*/, Response& res) {
             if constexpr (std::same_as<Result, void>) {
                func();
                res.status(204); // No Content
@@ -562,7 +562,7 @@ namespace glz::repe
          std::string rest_path = convert_to_rest_path(path);
          
          // POST handler for functions with parameters
-         endpoints.push_back({Method::POST, rest_path, [&func](const Request& req, Response& res) {
+         endpoints.push_back({http_method::POST, rest_path, [&func](const Request& req, Response& res) {
             // Parse the JSON request body
             auto params_result = read_json<Params>(req.body);
             if (!params_result) {
@@ -616,10 +616,10 @@ namespace glz::repe
          
          // GET handler for nested objects
          endpoints.push_back(
-                             {Method::GET, rest_path, [&obj](const Request& /*req*/, Response& res) { res.json(obj); }});
+                             {http_method::GET, rest_path, [&obj](const Request& /*req*/, Response& res) { res.json(obj); }});
          
          // PUT handler for updating nested objects
-         endpoints.push_back({Method::PUT, rest_path, [&obj](const Request& req, Response& res) {
+         endpoints.push_back({http_method::PUT, rest_path, [&obj](const Request& req, Response& res) {
             // Parse the JSON request body
             auto ec = read_json(obj, req.body);
             if (ec) {
@@ -666,10 +666,10 @@ namespace glz::repe
          
          // GET handler for values
          endpoints.push_back(
-                             {Method::GET, rest_path, [&value](const Request& /*req*/, Response& res) { res.json(value); }});
+                             {http_method::GET, rest_path, [&value](const Request& /*req*/, Response& res) { res.json(value); }});
          
          // PUT handler for updating values
-         endpoints.push_back({Method::PUT, rest_path, [&value](const Request& req, Response& res) {
+         endpoints.push_back({http_method::PUT, rest_path, [&value](const Request& req, Response& res) {
             // Parse the JSON request body
             auto ec = read_json(value, req.body);
             if (!ec) {
@@ -715,10 +715,10 @@ namespace glz::repe
          
          // GET handler for variables
          endpoints.push_back(
-                             {Method::GET, rest_path, [&var](const Request& /*req*/, Response& res) { res.json(var); }});
+                             {http_method::GET, rest_path, [&var](const Request& /*req*/, Response& res) { res.json(var); }});
          
          // PUT handler for updating variables
-         endpoints.push_back({Method::PUT, rest_path, [&var](const Request& req, Response& res) {
+         endpoints.push_back({http_method::PUT, rest_path, [&var](const Request& req, Response& res) {
             // Parse the JSON request body
             auto ec = read_json(var, req.body);
             if (!ec) {
@@ -764,7 +764,7 @@ namespace glz::repe
          std::string rest_path = convert_to_rest_path(path);
          
          // GET handler for member functions with no args
-         endpoints.push_back({Method::GET, rest_path, [&value, func](const Request& /*req*/, Response& res) {
+         endpoints.push_back({http_method::GET, rest_path, [&value, func](const Request& /*req*/, Response& res) {
             if constexpr (std::same_as<Ret, void>) {
                (value.*func)();
                res.status(204); // No Content
@@ -818,7 +818,7 @@ namespace glz::repe
          std::string rest_path = convert_to_rest_path(path);
          
          // POST handler for member functions with args
-         endpoints.push_back({Method::POST, rest_path, [&value, func](const Request& req, Response& res) {
+         endpoints.push_back({http_method::POST, rest_path, [&value, func](const Request& req, Response& res) {
             // Parse the JSON request body
             auto params_result = read_json<Input>(req.body);
             if (!params_result) {

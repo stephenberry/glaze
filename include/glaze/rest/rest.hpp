@@ -44,13 +44,12 @@ namespace glz
    using async_handler = std::function<std::future<void>(const Request&, Response&)>;
    using error_handler = std::function<void(std::error_code, std::source_location)>;
 
-   // HTTP Methods
-   enum struct Method { GET, POST, PUT, DELETE, PATCH, HEAD, OPTIONS };
+   enum struct http_method { GET, POST, PUT, DELETE, PATCH, HEAD, OPTIONS };
 
    // Utility functions for HTTP methods
-   inline std::string_view to_string(Method method)
+   inline std::string_view to_string(http_method method)
    {
-      using enum Method;
+      using enum http_method;
       switch (method) {
       case GET:
          return "GET";
@@ -71,9 +70,9 @@ namespace glz
       }
    }
 
-   inline std::optional<Method> from_string(std::string_view method)
+   inline std::optional<http_method> from_string(std::string_view method)
    {
-      using enum Method;
+      using enum http_method;
       if (method == "GET") return GET;
       if (method == "POST") return POST;
       if (method == "PUT") return PUT;
@@ -87,7 +86,7 @@ namespace glz
    // Request context object
    struct Request
    {
-      Method method{};
+      http_method method{};
       std::string target{};
       std::unordered_map<std::string, std::string> params{};
       std::unordered_map<std::string, std::string> headers{};
@@ -150,7 +149,7 @@ namespace glz
          std::regex regex;
          std::vector<std::string> param_names;
          std::unordered_map<std::string, param_constraint> constraints;
-         Method method;
+         http_method method;
          handler handle;
       };
 
@@ -158,7 +157,7 @@ namespace glz
       Router() = default;
 
       // Add a route with a specific method
-      inline Router& route(Method method, std::string_view path, handler handle,
+      inline Router& route(http_method method, std::string_view path, handler handle,
                            const std::unordered_map<std::string, param_constraint>& constraints = {})
       {
          try {
@@ -184,35 +183,35 @@ namespace glz
       inline Router& get(std::string_view path, handler handle,
                          const std::unordered_map<std::string, param_constraint>& constraints = {})
       {
-         return route(Method::GET, path, std::move(handle), constraints);
+         return route(http_method::GET, path, std::move(handle), constraints);
       }
 
       inline Router& post(std::string_view path, handler handle,
                           const std::unordered_map<std::string, param_constraint>& constraints = {})
       {
-         return route(Method::POST, path, std::move(handle), constraints);
+         return route(http_method::POST, path, std::move(handle), constraints);
       }
 
       inline Router& put(std::string_view path, handler handle,
                          const std::unordered_map<std::string, param_constraint>& constraints = {})
       {
-         return route(Method::PUT, path, std::move(handle), constraints);
+         return route(http_method::PUT, path, std::move(handle), constraints);
       }
 
       inline Router& del(std::string_view path, handler handle,
                          const std::unordered_map<std::string, param_constraint>& constraints = {})
       {
-         return route(Method::DELETE, path, std::move(handle), constraints);
+         return route(http_method::DELETE, path, std::move(handle), constraints);
       }
 
       inline Router& patch(std::string_view path, handler handle,
                            const std::unordered_map<std::string, param_constraint>& constraints = {})
       {
-         return route(Method::PATCH, path, std::move(handle), constraints);
+         return route(http_method::PATCH, path, std::move(handle), constraints);
       }
 
       // Async versions
-      inline Router& route_async(Method method, std::string_view path, async_handler handle,
+      inline Router& route_async(http_method method, std::string_view path, async_handler handle,
                                  const std::unordered_map<std::string, param_constraint>& constraints = {})
       {
          // Convert async handle to sync handle
@@ -229,13 +228,13 @@ namespace glz
       inline Router& get_async(std::string_view path, async_handler handle,
                                const std::unordered_map<std::string, param_constraint>& constraints = {})
       {
-         return route_async(Method::GET, path, std::move(handle), constraints);
+         return route_async(http_method::GET, path, std::move(handle), constraints);
       }
 
       inline Router& post_async(std::string_view path, async_handler handle,
                                 const std::unordered_map<std::string, param_constraint>& constraints = {})
       {
-         return route_async(Method::POST, path, std::move(handle), constraints);
+         return route_async(http_method::POST, path, std::move(handle), constraints);
       }
 
       // Middleware support
@@ -246,7 +245,7 @@ namespace glz
       }
 
       // Methods to check if a route matches a request
-      inline std::pair<handler, std::unordered_map<std::string, std::string>> match(Method method,
+      inline std::pair<handler, std::unordered_map<std::string, std::string>> match(http_method method,
                                                                                     const std::string& target) const
       {
          handler handle = nullptr;
@@ -301,13 +300,13 @@ namespace glz
       }
 
       // Data members
-      std::unordered_map<std::string, std::unordered_map<Method, handler>> routes;
+      std::unordered_map<std::string, std::unordered_map<http_method, handler>> routes;
       std::vector<route_pattern> route_patterns;
       std::vector<handler> middlewares;
 
      private:
       // Parse a route pattern like "/api/users/:id" into a regex and parameter names
-      route_pattern parse_route_pattern(std::string_view path, Method method, handler handle,
+      route_pattern parse_route_pattern(std::string_view path, http_method method, handler handle,
                                         const std::unordered_map<std::string, param_constraint>& constraints = {})
       {
          std::string pattern_str;
@@ -497,7 +496,7 @@ namespace glz
          return *this;
       }
 
-      inline Router& route(Method method, std::string_view path, handler handle)
+      inline Router& route(http_method method, std::string_view path, handler handle)
       {
          return root_router.route(method, path, handle);
       }
@@ -671,7 +670,7 @@ namespace glz
             });
       }
 
-      inline void process_full_request(std::shared_ptr<asio::ip::tcp::socket> socket, Method method,
+      inline void process_full_request(std::shared_ptr<asio::ip::tcp::socket> socket, http_method method,
                                        const std::string& target,
                                        const std::unordered_map<std::string, std::string>& headers, std::string body,
                                        asio::ip::tcp::endpoint remote_endpoint)
