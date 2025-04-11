@@ -305,30 +305,7 @@ namespace glz::repe
                      }
                      else if constexpr (n_args == 1) {
                         using Input = std::decay_t<glz::tuple_element_t<0, Tuple>>;
-
-                        if constexpr (proto == protocol::REPE) {
-                           endpoints[full_key] = [&value, &func](repe::state&& state) mutable {
-                              static thread_local Input input{};
-                              if (state.write()) {
-                                 if (read_params<Opts>(input, state) == 0) {
-                                    return;
-                                 }
-                              }
-
-                              (value.*func)(input);
-
-                              if (state.notify()) {
-                                 state.out.header.notify(true);
-                                 return;
-                              }
-
-                              write_response<Opts>(state);
-                           };
-                        }
-
-                        if constexpr (proto == protocol::REST) {
-                           register_rest_member_function_with_params_endpoint<full_key, T, F, Input, void>(value, func);
-                        }
+                        register_member_function_with_params_endpoint<full_key, T, F, Input, void>(value, func);
                      }
                      else {
                         static_assert(false_v<Func>, "function cannot have more than one input");
@@ -341,30 +318,7 @@ namespace glz::repe
                      }
                      else if constexpr (n_args == 1) {
                         using Input = std::decay_t<glz::tuple_element_t<0, Tuple>>;
-
-                        if constexpr (proto == protocol::REPE) {
-                           endpoints[full_key] = [this, &value, &func](repe::state&& state) mutable {
-                              static thread_local Input input{};
-
-                              if (state.write()) {
-                                 if (read_params<Opts>(input, state) == 0) {
-                                    return;
-                                 }
-                              }
-
-                              if (state.notify()) {
-                                 std::ignore = (value.*func)(input);
-                                 state.out.header.notify(true);
-                                 return;
-                              }
-
-                              write_response<Opts>((value.*func)(input), state);
-                           };
-                        }
-
-                        if constexpr (proto == protocol::REST) {
-                           register_rest_member_function_with_params_endpoint<full_key, T, F, Input, Ret>(value, func);
-                        }
+                        register_member_function_with_params_endpoint<full_key, T, F, Input, Ret>(value, func);
                      }
                      else {
                         static_assert(false_v<Func>, "function cannot have more than one input");
@@ -831,30 +785,63 @@ namespace glz::repe
 
       // Helper for registering member function endpoints with parameters
       template <const std::string_view& path, class T, class F, class Input, class Ret>
-      void register_rest_member_function_with_params_endpoint(T& value, F func)
+         requires (proto == protocol::REPE)
+      void register_member_function_with_params_endpoint(T& value, F func)
       {
-         if constexpr (proto == protocol::REST) {
-            std::string rest_path = convert_to_rest_path(path);
-
-            // POST handler for member functions with args
-            endpoints.push_back({Method::POST, rest_path, [&value, func](const Request& req, Response& res) {
-                                    // Parse the JSON request body
-                                    auto params_result = req.parse_json<Input>();
-                                    if (!params_result) {
-                                       res.status(400).body("Invalid request body: " + params_result.error());
-                                       return;
-                                    }
-
-                                    if constexpr (std::same_as<Ret, void>) {
-                                       (value.*func)(params_result.value());
-                                       res.status(204); // No Content
-                                    }
-                                    else {
-                                       auto result = (value.*func)(params_result.value());
-                                       res.json(result);
-                                    }
-                                 }});
-         }
+         endpoints[path] = [&value, func](repe::state&& state) mutable {
+            static thread_local Input input{};
+            if (state.write()) {
+               if (read_params<Opts>(input, state) == 0) {
+                  return;
+               }
+            }
+            
+            if constexpr (std::same_as<Ret, void>) {
+               (value.*func)(input);
+               
+               if (state.notify()) {
+                  state.out.header.notify(true);
+                  return;
+               }
+               
+               write_response<Opts>(state);
+            }
+            else {
+               if (state.notify()) {
+                  std::ignore = (value.*func)(input);
+                  state.out.header.notify(true);
+                  return;
+               }
+               
+               write_response<Opts>((value.*func)(input), state);
+            }
+         };
+      }
+      
+      template <const std::string_view& path, class T, class F, class Input, class Ret>
+         requires (proto == protocol::REST)
+      void register_member_function_with_params_endpoint(T& value, F func)
+      {
+         std::string rest_path = convert_to_rest_path(path);
+         
+         // POST handler for member functions with args
+         endpoints.push_back({Method::POST, rest_path, [&value, func](const Request& req, Response& res) {
+            // Parse the JSON request body
+            auto params_result = req.parse_json<Input>();
+            if (!params_result) {
+               res.status(400).body("Invalid request body: " + params_result.error());
+               return;
+            }
+            
+            if constexpr (std::same_as<Ret, void>) {
+               (value.*func)(params_result.value());
+               res.status(204); // No Content
+            }
+            else {
+               auto result = (value.*func)(params_result.value());
+               res.json(result);
+            }
+         }});
       }
    };
 }
