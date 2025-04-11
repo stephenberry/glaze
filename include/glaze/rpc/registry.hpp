@@ -11,10 +11,7 @@ namespace glz
 {
    // Define the protocol enum to differentiate between REPE and REST
    enum struct protocol : uint32_t { REPE, REST };
-}
 
-namespace glz
-{
    namespace detail
    {
       struct string_hash
@@ -24,10 +21,21 @@ namespace glz
          [[nodiscard]] size_t operator()(std::string_view txt) const { return std::hash<std::string_view>{}(txt); }
          [[nodiscard]] size_t operator()(const std::string& txt) const { return std::hash<std::string>{}(txt); }
       };
-      
+
       static constexpr std::string_view empty_path = "";
    }
 
+   // Forward declaration of implementation template
+   template <auto Opts, protocol P>
+   struct registry_impl;
+}
+
+// Include implementation files
+#include "glaze/rpc/repe/repe_registry_impl.hpp"
+#include "glaze/rest/rest_registry_impl.hpp"
+
+namespace glz
+{
    // This registry does not support adding methods from RPC calls or adding methods once RPC calls can be made.
    template <auto Opts = opts{}, protocol proto = protocol::REPE>
    struct registry
@@ -84,7 +92,7 @@ namespace glz
          }();
 
          if constexpr (parent == root && (glaze_object_t<T> || reflectable<T>)) {
-            register_endpoint<root>(value);
+            registry_impl<Opts, proto>::template register_endpoint<root>(value, *this);
          }
 
          for_each<N>([&](auto I) {
@@ -112,7 +120,7 @@ namespace glz
             using Func = decltype(func);
             if constexpr (std::is_invocable_v<Func>) {
                using Result = std::decay_t<std::invoke_result_t<Func>>;
-               register_function_endpoint<full_key, Func, Result>(func);
+               registry_impl<Opts, proto>::template register_function_endpoint<full_key, Func, Result>(func, *this);
             }
             else if constexpr (is_invocable_concrete<std::remove_cvref_t<Func>>) {
                using Tuple = invocable_args_t<std::remove_cvref_t<Func>>;
@@ -121,16 +129,19 @@ namespace glz
 
                using Params = glz::tuple_element_t<0, Tuple>;
 
-               register_param_function_endpoint<full_key, Func, Params>(func);
+               registry_impl<Opts, proto>::template register_param_function_endpoint<full_key, Func, Params>(func,
+                                                                                                             *this);
             }
             else if constexpr (glaze_object_t<std::remove_cvref_t<Func>> || reflectable<std::remove_cvref_t<Func>>) {
                on<root, std::remove_cvref_t<Func>, full_key>(func);
 
-               register_object_endpoint<full_key, std::remove_cvref_t<Func>>(func);
+               registry_impl<Opts, proto>::template register_object_endpoint<full_key, std::remove_cvref_t<Func>>(
+                  func, *this);
             }
             else if constexpr (not std::is_lvalue_reference_v<Func>) {
                // For glz::custom, glz::manage, etc.
-               register_value_endpoint<full_key, std::remove_cvref_t<Func>>(func);
+               registry_impl<Opts, proto>::template register_value_endpoint<full_key, std::remove_cvref_t<Func>>(func,
+                                                                                                                 *this);
             }
             else {
                static_assert(std::is_lvalue_reference_v<Func>);
@@ -142,11 +153,13 @@ namespace glz
                   constexpr auto n_args = glz::tuple_size_v<Tuple>;
                   if constexpr (std::is_void_v<Ret>) {
                      if constexpr (n_args == 0) {
-                        register_member_function_endpoint<full_key, T, F, void>(value, func);
+                        registry_impl<Opts, proto>::template register_member_function_endpoint<full_key, T, F, void>(
+                           value, func, *this);
                      }
                      else if constexpr (n_args == 1) {
                         using Input = std::decay_t<glz::tuple_element_t<0, Tuple>>;
-                        register_member_function_with_params_endpoint<full_key, T, F, Input, void>(value, func);
+                        registry_impl<Opts, proto>::template register_member_function_with_params_endpoint<
+                           full_key, T, F, Input, void>(value, func, *this);
                      }
                      else {
                         static_assert(false_v<Func>, "function cannot have more than one input");
@@ -155,11 +168,13 @@ namespace glz
                   else {
                      // Member function pointers
                      if constexpr (n_args == 0) {
-                        register_member_function_endpoint<full_key, T, F, Ret>(value, func);
+                        registry_impl<Opts, proto>::template register_member_function_endpoint<full_key, T, F, Ret>(
+                           value, func, *this);
                      }
                      else if constexpr (n_args == 1) {
                         using Input = std::decay_t<glz::tuple_element_t<0, Tuple>>;
-                        register_member_function_with_params_endpoint<full_key, T, F, Input, Ret>(value, func);
+                        registry_impl<Opts, proto>::template register_member_function_with_params_endpoint<
+                           full_key, T, F, Input, Ret>(value, func, *this);
                      }
                      else {
                         static_assert(false_v<Func>, "function cannot have more than one input");
@@ -168,7 +183,8 @@ namespace glz
                }
                else {
                   // this is a variable and not a function, so we build RPC read/write calls
-                  register_variable_endpoint<full_key, std::remove_cvref_t<Func>>(func);
+                  registry_impl<Opts, proto>::template register_variable_endpoint<full_key, std::remove_cvref_t<Func>>(
+                     func, *this);
                }
             }
          });
@@ -239,449 +255,8 @@ namespace glz
             router.route(endpoint.method, full_path, endpoint.handler);
          }
       }
-
-     private:
-      // Helper method to convert a JSON pointer path to a REST path
-      // Only defined for REST protocol
-      template <protocol P = proto>
-      std::string convert_to_rest_path(sv json_pointer_path) const
-      {
-         if constexpr (P == protocol::REST) {
-            // For many cases, JSON pointer and REST paths can be similar
-            // This is a basic implementation - you might need to customize it
-
-            // Make a copy of the path
-            std::string rest_path(json_pointer_path);
-
-            // Remove trailing slashes
-            if (!rest_path.empty() && rest_path.back() == '/') {
-               rest_path.pop_back();
-            }
-
-            return rest_path;
-         }
-         else {
-            // This will cause a compile-time error if accessed with REPE protocol
-            static_assert(P == protocol::REST, "convert_to_rest_path is only available for REST protocol");
-            return std::string{}; // Dummy return to satisfy the compiler
-         }
-      }
-      
-      template <const std::string_view& path, class T>
-         requires (proto == protocol::REPE)
-      void register_endpoint(T& value)
-      {
-         endpoints[path] = [&value](repe::state&& state) mutable {
-            if (state.write()) {
-               if (read_params<Opts>(value, state) == 0) {
-                  return;
-               }
-            }
-            
-            if (state.notify()) {
-               return;
-            }
-            
-            if (state.read()) {
-               write_response<Opts>(value, state);
-            }
-            else {
-               write_response<Opts>(state);
-            }
-         };
-      }
-
-      // Helper for registering the root object
-      template <const std::string_view& path, class T>
-         requires (proto == protocol::REST)
-      void register_endpoint(T& value)
-      {
-         std::string rest_path = convert_to_rest_path(path);
-         
-         // GET handler for the entire object
-         endpoints.push_back(
-                             {http_method::GET, rest_path, [&value](const Request& /*req*/, Response& res) { res.json(value); }});
-         
-         // PUT handler for updating the entire object
-         endpoints.push_back({http_method::PUT, rest_path, [&value](const Request& req, Response& res) {
-            // Parse the JSON request body
-            auto ec = read_json(value, req.body);
-            if (ec) {
-               res.status(400).body("Invalid request body: " + format_error(ec, req.body));
-               return;
-            }
-            
-            res.status(204); // No Content
-         }});
-      }
-
-      // Helper for registering function endpoints
-      template <const std::string_view& path, class Func, class Result>
-         requires (proto == protocol::REPE)
-      void register_function_endpoint(Func& func)
-      {
-         if constexpr (std::same_as<Result, void>) {
-            endpoints[path] = [&func](repe::state&& state) mutable {
-               func();
-               if (state.notify()) {
-                  state.out.header.notify(true);
-                  return;
-               }
-               write_response<Opts>(state);
-            };
-         }
-         else {
-            endpoints[path] = [&func](repe::state&& state) mutable {
-               if (state.notify()) {
-                  std::ignore = func();
-                  state.out.header.notify(true);
-                  return;
-               }
-               write_response<Opts>(func(), state);
-            };
-         }
-      }
-      
-      template <const std::string_view& path, class Func, class Result>
-         requires (proto == protocol::REST)
-      void register_function_endpoint(Func& func)
-      {
-         std::string rest_path = convert_to_rest_path(path);
-         
-         // GET handler for functions
-         endpoints.push_back({http_method::GET, rest_path, [&func](const Request& /*req*/, Response& res) {
-            if constexpr (std::same_as<Result, void>) {
-               func();
-               res.status(204); // No Content
-            }
-            else {
-               auto result = func();
-               res.json(result);
-            }
-         }});
-      }
-
-      // Helper for registering function endpoints with parameters
-      template <const std::string_view& path, class Func, class Params>
-         requires (proto == protocol::REPE)
-      void register_param_function_endpoint(Func& func)
-      {
-         endpoints[path] = [&func](repe::state&& state) mutable {
-            static thread_local std::decay_t<Params> params{};
-            // no need lock locals
-            if (read_params<Opts>(params, state) == 0) {
-               return;
-            }
-            
-            using Result = std::invoke_result_t<decltype(func), Params>;
-            
-            if (state.notify()) {
-               if constexpr (std::same_as<Result, void>) {
-                  func(params);
-               }
-               else {
-                  std::ignore = func(params);
-               }
-               state.out.header.notify(true);
-               return;
-            }
-            if constexpr (std::same_as<Result, void>) {
-               func(params);
-               write_response<Opts>(state);
-            }
-            else {
-               auto ret = func(params);
-               write_response<Opts>(ret, state);
-            }
-         };
-      }
-      
-      template <const std::string_view& path, class Func, class Params>
-         requires (proto == protocol::REST)
-      void register_param_function_endpoint(Func& func)
-      {
-         std::string rest_path = convert_to_rest_path(path);
-         
-         // POST handler for functions with parameters
-         endpoints.push_back({http_method::POST, rest_path, [&func](const Request& req, Response& res) {
-            // Parse the JSON request body
-            auto params_result = read_json<Params>(req.body);
-            if (!params_result) {
-               res.status(400).body("Invalid request body: " + format_error(params_result, req.body));
-               return;
-            }
-            
-            using Result = std::invoke_result_t<decltype(func), Params>;
-            
-            if constexpr (std::same_as<Result, void>) {
-               func(params_result.value());
-               res.status(204); // No Content
-            }
-            else {
-               auto result = func(params_result.value());
-               res.json(result);
-            }
-         }});
-      }
-
-      // Helper for registering nested object endpoints
-      template <const std::string_view& path, class Obj>
-         requires (proto == protocol::REPE)
-      void register_object_endpoint(Obj& obj)
-      {
-         endpoints[path] = [&obj](repe::state&& state) mutable {
-            if (state.write()) {
-               if (read_params<Opts>(obj, state) == 0) {
-                  return;
-               }
-            }
-            
-            if (state.notify()) {
-               return;
-            }
-            
-            if (state.read()) {
-               write_response<Opts>(obj, state);
-            }
-            else {
-               write_response<Opts>(state);
-            }
-         };
-      }
-      
-      template <const std::string_view& path, class Obj>
-         requires (proto == protocol::REST)
-      void register_object_endpoint(Obj& obj)
-      {
-         std::string rest_path = convert_to_rest_path(path);
-         
-         // GET handler for nested objects
-         endpoints.push_back(
-                             {http_method::GET, rest_path, [&obj](const Request& /*req*/, Response& res) { res.json(obj); }});
-         
-         // PUT handler for updating nested objects
-         endpoints.push_back({http_method::PUT, rest_path, [&obj](const Request& req, Response& res) {
-            // Parse the JSON request body
-            auto ec = read_json(obj, req.body);
-            if (ec) {
-               res.status(400).body("Invalid request body: " + format_error(ec, req.body));
-               return;
-            }
-            
-            // Update the object
-            res.status(204); // No Content
-         }});
-      }
-
-      // Helper for registering value endpoints
-      template <const std::string_view& path, class Value>
-         requires (proto == protocol::REPE)
-      void register_value_endpoint(Value& value)
-      {
-         endpoints[path] = [value](repe::state&& state) mutable {
-            if (state.write()) {
-               if (read_params<Opts>(value, state) == 0) {
-                  return;
-               }
-            }
-            
-            if (state.notify()) {
-               state.out.header.notify(true);
-               return;
-            }
-            
-            if (state.read()) {
-               write_response<Opts>(value, state);
-            }
-            else {
-               write_response<Opts>(state);
-            }
-         };
-      }
-      
-      template <const std::string_view& path, class Value>
-         requires (proto == protocol::REST)
-      void register_value_endpoint(Value& value)
-      {
-         std::string rest_path = convert_to_rest_path(path);
-         
-         // GET handler for values
-         endpoints.push_back(
-                             {http_method::GET, rest_path, [&value](const Request& /*req*/, Response& res) { res.json(value); }});
-         
-         // PUT handler for updating values
-         endpoints.push_back({http_method::PUT, rest_path, [&value](const Request& req, Response& res) {
-            // Parse the JSON request body
-            auto ec = read_json(value, req.body);
-            if (!ec) {
-               res.status(400).body("Invalid request body: " + format_error(ec, req.body));
-               return;
-            }
-            
-            res.status(204); // No Content
-         }});
-      }
-
-      // Helper for registering variable endpoints
-      template <const std::string_view& path, class Var>
-         requires (proto == protocol::REPE)
-      void register_variable_endpoint(Var& var)
-      {
-         endpoints[path] = [&var](repe::state&& state) mutable {
-            if (state.write()) {
-               if (read_params<Opts>(var, state) == 0) {
-                  return;
-               }
-            }
-            
-            if (state.notify()) {
-               state.out.header.notify(true);
-               return;
-            }
-            
-            if (state.read()) {
-               write_response<Opts>(var, state);
-            }
-            else {
-               write_response<Opts>(state);
-            }
-         };
-      }
-      
-      template <const std::string_view& path, class Var>
-         requires (proto == protocol::REST)
-      void register_variable_endpoint(Var& var)
-      {
-         std::string rest_path = convert_to_rest_path(path);
-         
-         // GET handler for variables
-         endpoints.push_back(
-                             {http_method::GET, rest_path, [&var](const Request& /*req*/, Response& res) { res.json(var); }});
-         
-         // PUT handler for updating variables
-         endpoints.push_back({http_method::PUT, rest_path, [&var](const Request& req, Response& res) {
-            // Parse the JSON request body
-            auto ec = read_json(var, req.body);
-            if (!ec) {
-               res.status(400).body("Invalid request body: " + format_error(ec, req.body));
-               return;
-            }
-            
-            res.status(204); // No Content
-         }});
-      }
-
-      // Helper for registering member function endpoints
-      template <const std::string_view& path, class T, class F, class Ret>
-         requires (proto == protocol::REPE)
-      void register_member_function_endpoint(T& value, F func)
-      {
-         endpoints[path] = [&value, func](repe::state&& state) mutable {
-            if constexpr (std::same_as<Ret, void>) {
-               (value.*func)();
-               
-               if (state.notify()) {
-                  state.out.header.notify(true);
-                  return;
-               }
-               
-               write_response<Opts>(state);
-            }
-            else {
-               if (state.notify()) {
-                  std::ignore = (value.*func)();
-                  return;
-               }
-               
-               write_response<Opts>((value.*func)(), state);
-            }
-         };
-      }
-      
-      template <const std::string_view& path, class T, class F, class Ret>
-         requires (proto == protocol::REST)
-      void register_member_function_endpoint(T& value, F func)
-      {
-         std::string rest_path = convert_to_rest_path(path);
-         
-         // GET handler for member functions with no args
-         endpoints.push_back({http_method::GET, rest_path, [&value, func](const Request& /*req*/, Response& res) {
-            if constexpr (std::same_as<Ret, void>) {
-               (value.*func)();
-               res.status(204); // No Content
-            }
-            else {
-               auto result = (value.*func)();
-               res.json(result);
-            }
-         }});
-      }
-
-      // Helper for registering member function endpoints with parameters
-      template <const std::string_view& path, class T, class F, class Input, class Ret>
-         requires (proto == protocol::REPE)
-      void register_member_function_with_params_endpoint(T& value, F func)
-      {
-         endpoints[path] = [&value, func](repe::state&& state) mutable {
-            static thread_local Input input{};
-            if (state.write()) {
-               if (read_params<Opts>(input, state) == 0) {
-                  return;
-               }
-            }
-            
-            if constexpr (std::same_as<Ret, void>) {
-               (value.*func)(input);
-               
-               if (state.notify()) {
-                  state.out.header.notify(true);
-                  return;
-               }
-               
-               write_response<Opts>(state);
-            }
-            else {
-               if (state.notify()) {
-                  std::ignore = (value.*func)(input);
-                  state.out.header.notify(true);
-                  return;
-               }
-               
-               write_response<Opts>((value.*func)(input), state);
-            }
-         };
-      }
-      
-      template <const std::string_view& path, class T, class F, class Input, class Ret>
-         requires (proto == protocol::REST)
-      void register_member_function_with_params_endpoint(T& value, F func)
-      {
-         std::string rest_path = convert_to_rest_path(path);
-         
-         // POST handler for member functions with args
-         endpoints.push_back({http_method::POST, rest_path, [&value, func](const Request& req, Response& res) {
-            // Parse the JSON request body
-            auto params_result = read_json<Input>(req.body);
-            if (!params_result) {
-               res.status(400).body("Invalid request body: " + format_error(params_result, req.body));
-               return;
-            }
-            
-            if constexpr (std::same_as<Ret, void>) {
-               (value.*func)(params_result.value());
-               res.status(204); // No Content
-            }
-            else {
-               auto result = (value.*func)(params_result.value());
-               res.json(result);
-            }
-         }});
-      }
    };
-}
 
-namespace glz
-{
    // Convenience alias for REST registry
    template <auto Opts = opts{}>
    using rest_registry = registry<Opts, protocol::REST>;
