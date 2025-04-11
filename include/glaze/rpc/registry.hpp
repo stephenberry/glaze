@@ -37,7 +37,7 @@ namespace glz
 namespace glz
 {
    // This registry does not support adding methods from RPC calls or adding methods once RPC calls can be made.
-   template <auto Opts = opts{}, protocol proto = protocol::REPE>
+   template <auto Opts = opts{}, protocol Proto = protocol::REPE>
    struct registry
    {
       // procedure for REPE protocol
@@ -70,7 +70,7 @@ namespace glz
          using type = std::vector<rest_endpoint>;
       };
 
-      typename protocol_storage<proto>::type endpoints{};
+      typename protocol_storage<Proto>::type endpoints{};
 
       void clear() { endpoints.clear(); }
 
@@ -90,9 +90,11 @@ namespace glz
                return nullptr;
             }
          }();
+         
+         using impl = registry_impl<Opts, Proto>;
 
          if constexpr (parent == root && (glaze_object_t<T> || reflectable<T>)) {
-            registry_impl<Opts, proto>::template register_endpoint<root>(value, *this);
+            impl::template register_endpoint<root>(value, *this);
          }
 
          for_each<N>([&](auto I) {
@@ -120,7 +122,7 @@ namespace glz
             using Func = decltype(func);
             if constexpr (std::is_invocable_v<Func>) {
                using Result = std::decay_t<std::invoke_result_t<Func>>;
-               registry_impl<Opts, proto>::template register_function_endpoint<full_key, Func, Result>(func, *this);
+               registry_impl<Opts, Proto>::template register_function_endpoint<full_key, Func, Result>(func, *this);
             }
             else if constexpr (is_invocable_concrete<std::remove_cvref_t<Func>>) {
                using Tuple = invocable_args_t<std::remove_cvref_t<Func>>;
@@ -129,18 +131,18 @@ namespace glz
 
                using Params = glz::tuple_element_t<0, Tuple>;
 
-               registry_impl<Opts, proto>::template register_param_function_endpoint<full_key, Func, Params>(func,
+               registry_impl<Opts, Proto>::template register_param_function_endpoint<full_key, Func, Params>(func,
                                                                                                              *this);
             }
             else if constexpr (glaze_object_t<std::remove_cvref_t<Func>> || reflectable<std::remove_cvref_t<Func>>) {
                on<root, std::remove_cvref_t<Func>, full_key>(func);
 
-               registry_impl<Opts, proto>::template register_object_endpoint<full_key, std::remove_cvref_t<Func>>(
+               registry_impl<Opts, Proto>::template register_object_endpoint<full_key, std::remove_cvref_t<Func>>(
                   func, *this);
             }
             else if constexpr (not std::is_lvalue_reference_v<Func>) {
                // For glz::custom, glz::manage, etc.
-               registry_impl<Opts, proto>::template register_value_endpoint<full_key, std::remove_cvref_t<Func>>(func,
+               registry_impl<Opts, Proto>::template register_value_endpoint<full_key, std::remove_cvref_t<Func>>(func,
                                                                                                                  *this);
             }
             else {
@@ -153,12 +155,12 @@ namespace glz
                   constexpr auto n_args = glz::tuple_size_v<Tuple>;
                   if constexpr (std::is_void_v<Ret>) {
                      if constexpr (n_args == 0) {
-                        registry_impl<Opts, proto>::template register_member_function_endpoint<full_key, T, F, void>(
+                        registry_impl<Opts, Proto>::template register_member_function_endpoint<full_key, T, F, void>(
                            value, func, *this);
                      }
                      else if constexpr (n_args == 1) {
                         using Input = std::decay_t<glz::tuple_element_t<0, Tuple>>;
-                        registry_impl<Opts, proto>::template register_member_function_with_params_endpoint<
+                        registry_impl<Opts, Proto>::template register_member_function_with_params_endpoint<
                            full_key, T, F, Input, void>(value, func, *this);
                      }
                      else {
@@ -168,12 +170,12 @@ namespace glz
                   else {
                      // Member function pointers
                      if constexpr (n_args == 0) {
-                        registry_impl<Opts, proto>::template register_member_function_endpoint<full_key, T, F, Ret>(
+                        registry_impl<Opts, Proto>::template register_member_function_endpoint<full_key, T, F, Ret>(
                            value, func, *this);
                      }
                      else if constexpr (n_args == 1) {
                         using Input = std::decay_t<glz::tuple_element_t<0, Tuple>>;
-                        registry_impl<Opts, proto>::template register_member_function_with_params_endpoint<
+                        registry_impl<Opts, Proto>::template register_member_function_with_params_endpoint<
                            full_key, T, F, Input, Ret>(value, func, *this);
                      }
                      else {
@@ -183,7 +185,7 @@ namespace glz
                }
                else {
                   // this is a variable and not a function, so we build RPC read/write calls
-                  registry_impl<Opts, proto>::template register_variable_endpoint<full_key, std::remove_cvref_t<Func>>(
+                  registry_impl<Opts, Proto>::template register_variable_endpoint<full_key, std::remove_cvref_t<Func>>(
                      func, *this);
                }
             }
@@ -194,7 +196,7 @@ namespace glz
       template <class In = repe::message, class Out = repe::message>
       void call(In&& in, Out&& out)
       {
-         if constexpr (proto == protocol::REPE) {
+         if constexpr (Proto == protocol::REPE) {
             if (auto it = endpoints.find(in.query); it != endpoints.end()) {
                if (bool(in.header.ec)) {
                   out = in;
@@ -217,7 +219,7 @@ namespace glz
             }
          }
          else {
-            static_assert(proto == protocol::REPE, "call method is only available for REPE protocol");
+            static_assert(Proto == protocol::REPE, "call method is only available for REPE protocol");
          }
       }
 
@@ -226,7 +228,7 @@ namespace glz
       // Create a router from this registry (only for REST protocol)
       http_router create_router() const
       {
-         static_assert(proto == protocol::REST, "create_router() is only available for REST protocol");
+         static_assert(Proto == protocol::REST, "create_router() is only available for REST protocol");
 
          http_router router;
 
@@ -241,7 +243,7 @@ namespace glz
       // Mount this registry to an existing router (only for REST protocol)
       void mount_to_router(http_router& router, std::string_view base_path = "/") const
       {
-         static_assert(proto == protocol::REST, "mount_to_router() is only available for REST protocol");
+         static_assert(Proto == protocol::REST, "mount_to_router() is only available for REST protocol");
 
          // Register all endpoints with the router
          for (const auto& endpoint : endpoints) {

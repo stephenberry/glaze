@@ -9,7 +9,7 @@
 namespace glz
 {
    // Forward declaration of the registry template
-   template <auto Opts, protocol proto>
+   template <auto Opts, protocol Proto>
    struct registry;
    
    // Specialized implementation for REST protocol
