@@ -92,7 +92,7 @@ int main() {
    registry.on(userService);
    
    // Mount the registry router to the server
-   server.mount("/api", registry.create_router());
+   server.mount("/api", glz::create_router(registry));
    
    // Serve the frontend files
    server.get("/", [](const glz::Request& /*req*/, glz::Response& res) {

@@ -4,7 +4,6 @@
 #pragma once
 
 #include "glaze/glaze.hpp"
-#include "glaze/rest/rest.hpp"
 #include "glaze/rpc/repe/repe.hpp"
 
 namespace glz
@@ -42,6 +41,8 @@ namespace glz
    {
       // procedure for REPE protocol
       using procedure = std::function<void(repe::state&&)>; // RPC method
+      
+      static constexpr auto proto = Proto;
 
       // REST-specific structure
       struct rest_endpoint
@@ -210,44 +211,44 @@ namespace glz
             std::memcpy(out.body.data() + 4, body.data(), n);
          }
       }
-
-      // REST-specific functionality
-
-      // Create a router from this registry (only for REST protocol)
-      http_router create_router() const
-      {
-         static_assert(Proto == protocol::REST, "create_router() is only available for REST protocol");
-
-         http_router router;
-
-         // Register all endpoints with the router
-         for (const auto& endpoint : endpoints) {
-            router.route(endpoint.method, endpoint.path, endpoint.handler);
-         }
-
-         return router;
-      }
-
-      // Mount this registry to an existing router (only for REST protocol)
-      void mount_to_router(http_router& router, std::string_view base_path = "/") const
-      {
-         static_assert(Proto == protocol::REST, "mount_to_router() is only available for REST protocol");
-
-         // Register all endpoints with the router
-         for (const auto& endpoint : endpoints) {
-            std::string full_path = std::string(base_path);
-            if (!full_path.empty() && full_path.back() == '/' && endpoint.path.front() == '/') {
-               // Avoid double slash
-               full_path.pop_back();
-            }
-            full_path += endpoint.path;
-
-            router.route(endpoint.method, full_path, endpoint.handler);
-         }
-      }
    };
 
    // Convenience alias for REST registry
    template <auto Opts = opts{}>
    using rest_registry = registry<Opts, protocol::REST>;
+   
+   // REST-specific functionality
+   
+   // Create a router from this registry (only for REST protocol)
+   template <class Registry>
+      requires (Registry::proto == protocol::REST) // create_router() is only available for REST protocol
+   http_router create_router(const Registry& reg)
+   {      
+      http_router router;
+      
+      // Register all endpoints with the router
+      for (const auto& endpoint : reg.endpoints) {
+         router.route(endpoint.method, endpoint.path, endpoint.handler);
+      }
+      
+      return router;
+   }
+   
+   // Mount this registry to an existing router (only for REST protocol)
+   template <class Registry>
+      requires (Registry::proto == protocol::REST) // mount_to_router() is only available for REST protocol
+   void mount_to_router(const Registry& reg, http_router& router, std::string_view base_path = "/")
+   {
+      // Register all endpoints with the router
+      for (const auto& endpoint : reg.endpoints) {
+         std::string full_path = std::string(base_path);
+         if (!full_path.empty() && full_path.back() == '/' && endpoint.path.front() == '/') {
+            // Avoid double slash
+            full_path.pop_back();
+         }
+         full_path += endpoint.path;
+         
+         router.route(endpoint.method, full_path, endpoint.handler);
+      }
+   }
 }
