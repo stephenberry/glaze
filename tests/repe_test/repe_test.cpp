@@ -72,7 +72,7 @@ suite header_tests = [] {
 
 suite structs_of_functions = [] {
    "structs_of_functions"_test = [] {
-      repe::registry server{};
+      glz::registry server{};
 
       my_functions_t obj{};
 
@@ -96,7 +96,7 @@ suite structs_of_functions = [] {
    };
 
    "nested_structs_of_functions"_test = [] {
-      repe::registry server{};
+      glz::registry server{};
 
       my_nested_functions_t obj{};
 
@@ -156,7 +156,7 @@ suite structs_of_functions = [] {
    };
 
    "example_functions"_test = [] {
-      repe::registry server{};
+      glz::registry server{};
 
       example_functions_t obj{};
 
@@ -192,7 +192,7 @@ suite structs_of_functions = [] {
 
 suite structs_of_functions_beve = [] {
    "structs_of_functions"_test = [] {
-      repe::registry<glz::opts{.format = glz::BEVE}> server{};
+      glz::registry<glz::opts{.format = glz::BEVE}> server{};
 
       my_functions_t obj{};
 
@@ -226,7 +226,7 @@ suite structs_of_functions_beve = [] {
    };
 
    "nested_structs_of_functions"_test = [] {
-      repe::registry<glz::opts{.format = glz::BEVE}> server{};
+      glz::registry<glz::opts{.format = glz::BEVE}> server{};
 
       my_nested_functions_t obj{};
 
@@ -298,7 +298,7 @@ suite structs_of_functions_beve = [] {
    };
 
    "example_functions"_test = [] {
-      repe::registry<glz::opts{.format = glz::BEVE}> server{};
+      glz::registry<glz::opts{.format = glz::BEVE}> server{};
 
       example_functions_t obj{};
 
@@ -356,7 +356,7 @@ struct wrapper_t
 
 suite wrapper_tests = [] {
    "wrapper"_test = [] {
-      repe::registry server{};
+      glz::registry server{};
 
       my_nested_functions_t instance{};
       wrapper_t<my_nested_functions_t> obj{&instance};
@@ -378,7 +378,7 @@ suite wrapper_tests = [] {
 
 suite root_tests = [] {
    "root /sub"_test = [] {
-      repe::registry server{};
+      glz::registry server{};
 
       my_nested_functions_t obj{};
 
@@ -399,7 +399,7 @@ suite root_tests = [] {
 
 suite wrapper_tests_beve = [] {
    "wrapper"_test = [] {
-      repe::registry<glz::opts{.format = glz::BEVE}> server{};
+      glz::registry<glz::opts{.format = glz::BEVE}> server{};
 
       my_nested_functions_t instance{};
       wrapper_t<my_nested_functions_t> obj{&instance};
@@ -434,7 +434,7 @@ struct tester
 suite multi_threading_tests = [] {
    // TODO: Why is this randomly failing with Linux with Clang???
    /*"multi-threading"_test = [] {
-      repe::registry registry{};
+      glz::registry registry{};
       tester obj{};
 
       registry.on(obj);
@@ -542,7 +542,7 @@ suite glaze_types_test = [] {
    "glaze_types"_test = [] {
       glaze_types obj{};
 
-      glz::repe::registry<> registry{};
+      glz::registry<> registry{};
       registry.on(obj);
    };
 };

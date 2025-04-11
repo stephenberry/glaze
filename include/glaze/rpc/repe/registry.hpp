@@ -19,28 +19,17 @@ namespace glz::repe
    {
       repe::message& in;
       repe::message& out;
-
+      
       bool notify() const { return in.header.notify(); }
-
+      
       bool read() const { return in.header.read(); }
-
+      
       bool write() const { return in.header.write(); }
    };
-
+   
    template <class T>
    concept is_state = std::same_as<std::decay_t<T>, state>;
-
-   namespace detail
-   {
-      struct string_hash
-      {
-         using is_transparent = void;
-         [[nodiscard]] size_t operator()(const char* txt) const { return std::hash<std::string_view>{}(txt); }
-         [[nodiscard]] size_t operator()(std::string_view txt) const { return std::hash<std::string_view>{}(txt); }
-         [[nodiscard]] size_t operator()(const std::string& txt) const { return std::hash<std::string>{}(txt); }
-      };
-   }
-
+   
    template <auto Opts, class Value>
    void write_response(Value&& value, is_state auto&& state)
    {
@@ -62,7 +51,7 @@ namespace glz::repe
          out.header.length = sizeof(repe::header) + out.query.size() + out.body.size();
       }
    }
-
+   
    template <auto Opts>
    void write_response(is_state auto&& state)
    {
@@ -85,7 +74,7 @@ namespace glz::repe
          out.header.length = sizeof(repe::header) + out.query.size() + out.body.size();
       }
    }
-
+   
    // returns 0 on error
    template <auto Opts, class Value>
    size_t read_params(Value&& value, auto&& state)
@@ -99,30 +88,30 @@ namespace glz::repe
          return 0;
       }
       auto start = b;
-
+      
       glz::parse<Opts.format>::template op<Opts>(std::forward<Value>(value), ctx, b, e);
-
+      
       if (bool(ctx.error)) {
          state.out.header.ec = ctx.error;
          error_ctx ec{ctx.error, ctx.custom_error_message, size_t(b - start), ctx.includer_error};
-
+         
          auto& in = state.in;
          auto& out = state.out;
-
+         
          std::string error_message = format_error(ec, in.body);
          const uint32_t n = uint32_t(error_message.size());
          out.header.body_length = 4 + n;
          out.body.resize(out.header.body_length);
          std::memcpy(out.body.data(), &n, 4);
          std::memcpy(out.body.data() + 4, error_message.data(), n);
-
+         
          write_response<Opts>(state);
          return 0;
       }
-
+      
       return size_t(b - start);
    }
-
+   
    namespace detail
    {
       template <auto Opts>
@@ -138,7 +127,7 @@ namespace glz::repe
             msg.header.length = sizeof(repe::header) + msg.query.size() + msg.body.size();
             return msg;
          }
-
+         
          template <class Value>
          message operator()(const user_header& h, Value&& value) const
          {
@@ -152,7 +141,7 @@ namespace glz::repe
             msg.header.length = sizeof(repe::header) + msg.query.size() + msg.body.size();
             return msg;
          }
-
+         
          void operator()(const user_header& h, message& msg) const
          {
             msg.header = encode(h);
@@ -161,7 +150,7 @@ namespace glz::repe
             msg.header.body_length = msg.body.size();
             msg.header.length = sizeof(repe::header) + msg.query.size() + msg.body.size();
          }
-
+         
          template <class Value>
          void operator()(const user_header& h, message& msg, Value&& value) const
          {
@@ -175,15 +164,26 @@ namespace glz::repe
          }
       };
    }
-
+   
    template <auto Opts>
    inline constexpr auto request = detail::request_impl<Opts>{};
-
+   
    inline constexpr auto request_beve = request<opts{BEVE}>;
    inline constexpr auto request_json = request<opts{JSON}>;
+}
 
+namespace glz
+{
    namespace detail
    {
+      struct string_hash
+      {
+         using is_transparent = void;
+         [[nodiscard]] size_t operator()(const char* txt) const { return std::hash<std::string_view>{}(txt); }
+         [[nodiscard]] size_t operator()(std::string_view txt) const { return std::hash<std::string_view>{}(txt); }
+         [[nodiscard]] size_t operator()(const std::string& txt) const { return std::hash<std::string>{}(txt); }
+      };
+      
       static constexpr std::string_view empty_path = "";
    }
 
@@ -191,8 +191,8 @@ namespace glz::repe
    template <auto Opts = opts{}, protocol proto = protocol::REPE>
    struct registry
    {
-      // Only define methods and procedure for REPE protocol
-      using procedure = std::function<void(state&&)>; // RPC method
+      // procedure for REPE protocol
+      using procedure = std::function<void(repe::state&&)>; // RPC method
 
       // REST-specific structure
       struct rest_endpoint
@@ -227,7 +227,7 @@ namespace glz::repe
 
       // Register a C++ type that stores pointers to the value, so be sure to keep the registered value alive
       template <const std::string_view& root = detail::empty_path, class T, const std::string_view& parent = root>
-         requires(glz::glaze_object_t<T> || glz::reflectable<T>)
+         requires(glaze_object_t<T> || reflectable<T>)
       void on(T& value)
       {
          using namespace glz::detail;
@@ -334,7 +334,7 @@ namespace glz::repe
       }
 
       // Function to call methods - only available for REPE protocol
-      template <class In = message, class Out = message>
+      template <class In = repe::message, class Out = repe::message>
       void call(In&& in, Out&& out)
       {
          if constexpr (proto == protocol::REPE) {
@@ -343,7 +343,7 @@ namespace glz::repe
                   out = in;
                }
                else {
-                  it->second(state{in, out}); // handle the body
+                  it->second(repe::state{in, out}); // handle the body
                }
             }
             else {
@@ -843,5 +843,5 @@ namespace glz
 {
    // Convenience alias for REST registry
    template <auto Opts = glz::opts{}>
-   using rest_registry = glz::repe::registry<Opts, glz::protocol::REST>;
+   using rest_registry = glz::registry<Opts, glz::protocol::REST>;
 }

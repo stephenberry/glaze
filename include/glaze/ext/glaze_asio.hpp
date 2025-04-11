@@ -405,12 +405,12 @@ namespace glz
       std::shared_ptr<asio::signal_set> signals{};
       std::shared_ptr<std::vector<std::thread>> threads{};
 
-      repe::registry<Opts> registry{};
+      registry<Opts> registry{};
 
       void clear_registry() { registry.clear(); }
 
-      template <const std::string_view& Root = repe::detail::empty_path, class T>
-         requires(glz::glaze_object_t<T> || glz::reflectable<T>)
+      template <const std::string_view& Root = detail::empty_path, class T>
+         requires(glaze_object_t<T> || reflectable<T>)
       void on(T& value)
       {
          registry.template on<Root>(value);
