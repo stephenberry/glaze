@@ -4,7 +4,14 @@
 #pragma once
 
 #include "glaze/glaze.hpp"
+#include "glaze/rest/rest.hpp"
 #include "glaze/rpc/repe/header.hpp"
+
+namespace glz
+{
+   // Define the protocol enum to differentiate between REPE and REST
+   enum struct protocol : uint32_t { REPE, REST };
+}
 
 namespace glz::repe
 {
@@ -188,7 +195,7 @@ namespace glz::repe
    }
 
    // This registry does not support adding methods from RPC calls or adding methods once RPC calls can be made.
-   template <auto Opts = opts{}>
+   template <auto Opts = opts{}, protocol proto = protocol::REPE>
    struct registry
    {
       using procedure = std::function<void(state&&)>; // RPC method
@@ -233,6 +240,11 @@ namespace glz::repe
                   write_response<Opts>(state);
                }
             };
+
+            // For REST protocol, register the root object
+            if constexpr (proto == protocol::REST) {
+               register_rest_endpoint<root, T>(value, root);
+            }
          }
 
          for_each<N>([&](auto I) {
@@ -255,9 +267,6 @@ namespace glz::repe
                   return join_v<parent, chars<"/">, key>;
                }
             }();
-
-            // static_assert(std::same_as<decltype(func), refl_t<T, I>>);
-            using E = std::remove_cvref_t<decltype(func)>;
 
             // This logic chain should match glz::cli_menu
             using Func = decltype(func);
@@ -282,6 +291,11 @@ namespace glz::repe
                      }
                      write_response<Opts>(func(), state);
                   };
+               }
+
+               // For REST protocol, register function endpoint
+               if constexpr (proto == protocol::REST) {
+                  register_rest_function_endpoint<full_key, Func, Result>(func);
                }
             }
             else if constexpr (is_invocable_concrete<std::remove_cvref_t<Func>>) {
@@ -319,9 +333,14 @@ namespace glz::repe
                      write_response<Opts>(ret, state);
                   }
                };
+
+               // For REST protocol, register parameterized function endpoint
+               if constexpr (proto == protocol::REST) {
+                  register_rest_param_function_endpoint<full_key, Func, Params>(func);
+               }
             }
-            else if constexpr (glaze_object_t<E> || reflectable<E>) {
-               on<root, E, full_key>(func);
+            else if constexpr (glaze_object_t<std::remove_cvref_t<Func>> || reflectable<std::remove_cvref_t<Func>>) {
+               on<root, std::remove_cvref_t<Func>, full_key>(func);
 
                // build read/write calls to the object as a variable
                methods[full_key] = [&func](repe::state&& state) mutable {
@@ -342,6 +361,11 @@ namespace glz::repe
                      write_response<Opts>(state);
                   }
                };
+
+               // For REST protocol, register nested object
+               if constexpr (proto == protocol::REST) {
+                  register_rest_object_endpoint<full_key, std::remove_cvref_t<Func>>(func);
+               }
             }
             else if constexpr (not std::is_lvalue_reference_v<Func>) {
                // For glz::custom, glz::manage, etc.
@@ -364,6 +388,11 @@ namespace glz::repe
                      write_response<Opts>(state);
                   }
                };
+
+               // For REST protocol, register custom value
+               if constexpr (proto == protocol::REST) {
+                  register_rest_value_endpoint<full_key, std::remove_cvref_t<Func>>(func);
+               }
             }
             else {
                static_assert(std::is_lvalue_reference_v<Func>);
@@ -387,6 +416,11 @@ namespace glz::repe
 
                            write_response<Opts>(state);
                         };
+
+                        // For REST protocol, register member function with no args and void return
+                        if constexpr (proto == protocol::REST) {
+                           register_rest_member_function_endpoint<full_key, T, F, void>(value, func);
+                        }
                      }
                      else if constexpr (n_args == 1) {
                         using Input = std::decay_t<glz::tuple_element_t<0, Tuple>>;
@@ -407,6 +441,11 @@ namespace glz::repe
 
                            write_response<Opts>(state);
                         };
+
+                        // For REST protocol, register member function with args and void return
+                        if constexpr (proto == protocol::REST) {
+                           register_rest_member_function_with_params_endpoint<full_key, T, F, Input, void>(value, func);
+                        }
                      }
                      else {
                         static_assert(false_v<Func>, "function cannot have more than one input");
@@ -423,6 +462,11 @@ namespace glz::repe
 
                            write_response<Opts>((value.*func)(), state);
                         };
+
+                        // For REST protocol, register member function with no args and return value
+                        if constexpr (proto == protocol::REST) {
+                           register_rest_member_function_endpoint<full_key, T, F, Ret>(value, func);
+                        }
                      }
                      else if constexpr (n_args == 1) {
                         using Input = std::decay_t<glz::tuple_element_t<0, Tuple>>;
@@ -443,6 +487,11 @@ namespace glz::repe
 
                            write_response<Opts>((value.*func)(input), state);
                         };
+
+                        // For REST protocol, register member function with args and return value
+                        if constexpr (proto == protocol::REST) {
+                           register_rest_member_function_with_params_endpoint<full_key, T, F, Input, Ret>(value, func);
+                        }
                      }
                      else {
                         static_assert(false_v<Func>, "function cannot have more than one input");
@@ -470,6 +519,11 @@ namespace glz::repe
                         write_response<Opts>(state);
                      }
                   };
+
+                  // For REST protocol, register variable endpoint
+                  if constexpr (proto == protocol::REST) {
+                     register_rest_variable_endpoint<full_key, std::remove_cvref_t<Func>>(func);
+                  }
                }
             }
          });
@@ -499,5 +553,284 @@ namespace glz::repe
             std::memcpy(out.body.data() + 4, body.data(), n);
          }
       }
+
+      // REST-specific functionality
+
+      // Create a router from this registry (only for REST protocol)
+      Router create_router() const
+      {
+         static_assert(proto == protocol::REST, "create_router() is only available for REST protocol");
+
+         Router router;
+
+         // Register all endpoints with the router
+         for (const auto& endpoint : rest_endpoints) {
+            router.route(endpoint.method, endpoint.path, endpoint.handler);
+         }
+
+         return router;
+      }
+
+      // Mount this registry to an existing router (only for REST protocol)
+      void mount_to_router(Router& router, std::string_view base_path = "/") const
+      {
+         static_assert(proto == protocol::REST, "mount_to_router() is only available for REST protocol");
+
+         // Register all endpoints with the router
+         for (const auto& endpoint : rest_endpoints) {
+            std::string full_path = std::string(base_path);
+            if (!full_path.empty() && full_path.back() == '/' && endpoint.path.front() == '/') {
+               // Avoid double slash
+               full_path.pop_back();
+            }
+            full_path += endpoint.path;
+
+            router.route(endpoint.method, full_path, endpoint.handler);
+         }
+      }
+
+     private:
+      // For REST protocol, we need to store endpoint information
+      struct rest_endpoint
+      {
+         Method method;
+         std::string path;
+         Handler handler;
+      };
+
+      // Only used when proto == Protocol::REST
+      std::vector<rest_endpoint> rest_endpoints;
+
+      // Helper method to convert a JSON pointer path to a REST path
+      std::string convert_to_rest_path(sv json_pointer_path) const
+      {
+         // For many cases, JSON pointer and REST paths can be similar
+         // This is a basic implementation - you might need to customize it
+
+         // Make a copy of the path
+         std::string rest_path(json_pointer_path);
+
+         // Remove trailing slashes
+         if (!rest_path.empty() && rest_path.back() == '/') {
+            rest_path.pop_back();
+         }
+
+         return rest_path;
+      }
+
+      // Helper for registering the root object
+      template <const std::string_view& path, class T>
+      void register_rest_endpoint(T& value, sv json_pointer_path)
+      {
+         if constexpr (proto == protocol::REST) {
+            std::string rest_path = convert_to_rest_path(json_pointer_path);
+
+            // GET handler for the entire object
+            rest_endpoints.push_back(
+               {Method::GET, rest_path, [&value](const Request& req, Response& res) { res.json(value); }});
+
+            // PUT handler for updating the entire object
+            rest_endpoints.push_back({Method::PUT, rest_path, [&value](const Request& req, Response& res) {
+                                         // Parse the JSON request body
+                                         auto data_result = req.parse_json<T>();
+                                         if (!data_result) {
+                                            res.status(400).body("Invalid request body: " + data_result.error());
+                                            return;
+                                         }
+
+                                         // Update the object
+                                         value = data_result.value();
+                                         res.status(204); // No Content
+                                      }});
+         }
+      }
+
+      // Helper for registering function endpoints
+      template <const std::string_view& path, class Func, class Result>
+      void register_rest_function_endpoint(Func& func)
+      {
+         if constexpr (proto == protocol::REST) {
+            std::string rest_path = convert_to_rest_path(path);
+
+            // GET handler for functions
+            rest_endpoints.push_back({Method::GET, rest_path, [&func](const Request& /*req*/, Response& res) {
+                                         if constexpr (std::same_as<Result, void>) {
+                                            func();
+                                            res.status(204); // No Content
+                                         }
+                                         else {
+                                            auto result = func();
+                                            res.json(result);
+                                         }
+                                      }});
+         }
+      }
+
+      // Helper for registering function endpoints with parameters
+      template <const std::string_view& path, class Func, class Params>
+      void register_rest_param_function_endpoint(Func& func)
+      {
+         if constexpr (proto == protocol::REST) {
+            std::string rest_path = convert_to_rest_path(path);
+
+            // POST handler for functions with parameters
+            rest_endpoints.push_back({Method::POST, rest_path, [&func](const Request& req, Response& res) {
+                                         // Parse the JSON request body
+                                         auto params_result = req.parse_json<Params>();
+                                         if (!params_result) {
+                                            res.status(400).body("Invalid request body: " + params_result.error());
+                                            return;
+                                         }
+
+                                         using Result = std::invoke_result_t<decltype(func), Params>;
+
+                                         if constexpr (std::same_as<Result, void>) {
+                                            func(params_result.value());
+                                            res.status(204); // No Content
+                                         }
+                                         else {
+                                            auto result = func(params_result.value());
+                                            res.json(result);
+                                         }
+                                      }});
+         }
+      }
+
+      // Helper for registering nested object endpoints
+      template <const std::string_view& path, class Obj>
+      void register_rest_object_endpoint(Obj& obj)
+      {
+         if constexpr (proto == protocol::REST) {
+            std::string rest_path = convert_to_rest_path(path);
+
+            // GET handler for nested objects
+            rest_endpoints.push_back(
+               {Method::GET, rest_path, [&obj](const Request& /*req*/, Response& res) { res.json(obj); }});
+
+            // PUT handler for updating nested objects
+            rest_endpoints.push_back({Method::PUT, rest_path, [&obj](const Request& req, Response& res) {
+                                         // Parse the JSON request body
+                                         auto data_result = req.parse_json<Obj>();
+                                         if (!data_result) {
+                                            res.status(400).body("Invalid request body: " + data_result.error());
+                                            return;
+                                         }
+
+                                         // Update the object
+                                         obj = data_result.value();
+                                         res.status(204); // No Content
+                                      }});
+         }
+      }
+
+      // Helper for registering value endpoints
+      template <const std::string_view& path, class Value>
+      void register_rest_value_endpoint(Value& value)
+      {
+         if constexpr (proto == protocol::REST) {
+            std::string rest_path = convert_to_rest_path(path);
+
+            // GET handler for values
+            rest_endpoints.push_back(
+               {Method::GET, rest_path, [&value](const Request& /*req*/, Response& res) { res.json(value); }});
+
+            // PUT handler for updating values
+            rest_endpoints.push_back({Method::PUT, rest_path, [&value](const Request& req, Response& res) {
+                                         // Parse the JSON request body
+                                         auto data_result = req.parse_json<Value>();
+                                         if (!data_result) {
+                                            res.status(400).body("Invalid request body: " + data_result.error());
+                                            return;
+                                         }
+
+                                         // Update the value
+                                         value = data_result.value();
+                                         res.status(204); // No Content
+                                      }});
+         }
+      }
+
+      // Helper for registering variable endpoints
+      template <const std::string_view& path, class Var>
+      void register_rest_variable_endpoint(Var& var)
+      {
+         if constexpr (proto == protocol::REST) {
+            std::string rest_path = convert_to_rest_path(path);
+
+            // GET handler for variables
+            rest_endpoints.push_back(
+               {Method::GET, rest_path, [&var](const Request& /*req*/, Response& res) { res.json(var); }});
+
+            // PUT handler for updating variables
+            rest_endpoints.push_back({Method::PUT, rest_path, [&var](const Request& req, Response& res) {
+                                         // Parse the JSON request body
+                                         auto data_result = req.parse_json<Var>();
+                                         if (!data_result) {
+                                            res.status(400).body("Invalid request body: " + data_result.error());
+                                            return;
+                                         }
+
+                                         // Update the variable
+                                         var = data_result.value();
+                                         res.status(204); // No Content
+                                      }});
+         }
+      }
+
+      // Helper for registering member function endpoints
+      template <const std::string_view& path, class T, class F, class Ret>
+      void register_rest_member_function_endpoint(T& value, F func)
+      {
+         if constexpr (proto == protocol::REST) {
+            std::string rest_path = convert_to_rest_path(path);
+
+            // GET handler for member functions with no args
+            rest_endpoints.push_back({Method::GET, rest_path, [&value, func](const Request& /*req*/, Response& res) {
+                                         if constexpr (std::same_as<Ret, void>) {
+                                            (value.*func)();
+                                            res.status(204); // No Content
+                                         }
+                                         else {
+                                            auto result = (value.*func)();
+                                            res.json(result);
+                                         }
+                                      }});
+         }
+      }
+
+      // Helper for registering member function endpoints with parameters
+      template <const std::string_view& path, class T, class F, class Input, class Ret>
+      void register_rest_member_function_with_params_endpoint(T& value, F func)
+      {
+         if constexpr (proto == protocol::REST) {
+            std::string rest_path = convert_to_rest_path(path);
+
+            // POST handler for member functions with args
+            rest_endpoints.push_back({Method::POST, rest_path, [&value, func](const Request& req, Response& res) {
+                                         // Parse the JSON request body
+                                         auto params_result = req.parse_json<Input>();
+                                         if (!params_result) {
+                                            res.status(400).body("Invalid request body: " + params_result.error());
+                                            return;
+                                         }
+
+                                         if constexpr (std::same_as<Ret, void>) {
+                                            (value.*func)(params_result.value());
+                                            res.status(204); // No Content
+                                         }
+                                         else {
+                                            auto result = (value.*func)(params_result.value());
+                                            res.json(result);
+                                         }
+                                      }});
+         }
+      }
    };
+}
+
+namespace glz
+{
+   // Convenience alias for REST registry
+   template <auto Opts = glz::opts{}>
+   using rest_registry = glz::repe::registry<Opts, glz::protocol::REST>;
 }
