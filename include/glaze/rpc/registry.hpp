@@ -94,7 +94,7 @@ namespace glz
          using impl = registry_impl<Opts, Proto>;
 
          if constexpr (parent == root && (glaze_object_t<T> || reflectable<T>)) {
-            impl::template register_endpoint<root>(value, *this);
+            impl::register_endpoint(root, value, *this);
          }
 
          for_each<N>([&](auto I) {
@@ -122,7 +122,7 @@ namespace glz
             using Func = decltype(func);
             if constexpr (std::is_invocable_v<Func>) {
                using Result = std::decay_t<std::invoke_result_t<Func>>;
-               registry_impl<Opts, Proto>::template register_function_endpoint<full_key, Func, Result>(func, *this);
+               impl::template register_function_endpoint<Func, Result>(full_key, func, *this);
             }
             else if constexpr (is_invocable_concrete<std::remove_cvref_t<Func>>) {
                using Tuple = invocable_args_t<std::remove_cvref_t<Func>>;
@@ -131,19 +131,16 @@ namespace glz
 
                using Params = glz::tuple_element_t<0, Tuple>;
 
-               registry_impl<Opts, Proto>::template register_param_function_endpoint<full_key, Func, Params>(func,
-                                                                                                             *this);
+               impl::template register_param_function_endpoint<Func, Params>(full_key, func, *this);
             }
             else if constexpr (glaze_object_t<std::remove_cvref_t<Func>> || reflectable<std::remove_cvref_t<Func>>) {
                on<root, std::remove_cvref_t<Func>, full_key>(func);
 
-               registry_impl<Opts, Proto>::template register_object_endpoint<full_key, std::remove_cvref_t<Func>>(
-                  func, *this);
+               impl::template register_object_endpoint<std::remove_cvref_t<Func>>(full_key, func, *this);
             }
             else if constexpr (not std::is_lvalue_reference_v<Func>) {
                // For glz::custom, glz::manage, etc.
-               registry_impl<Opts, Proto>::template register_value_endpoint<full_key, std::remove_cvref_t<Func>>(func,
-                                                                                                                 *this);
+               impl::template register_value_endpoint<std::remove_cvref_t<Func>>(full_key, func, *this);
             }
             else {
                static_assert(std::is_lvalue_reference_v<Func>);
@@ -155,13 +152,11 @@ namespace glz
                   constexpr auto n_args = glz::tuple_size_v<Tuple>;
                   if constexpr (std::is_void_v<Ret>) {
                      if constexpr (n_args == 0) {
-                        registry_impl<Opts, Proto>::template register_member_function_endpoint<full_key, T, F, void>(
-                           value, func, *this);
+                        impl::template register_member_function_endpoint<T, F, void>(full_key, value, func, *this);
                      }
                      else if constexpr (n_args == 1) {
                         using Input = std::decay_t<glz::tuple_element_t<0, Tuple>>;
-                        registry_impl<Opts, Proto>::template register_member_function_with_params_endpoint<
-                           full_key, T, F, Input, void>(value, func, *this);
+                        impl::template register_member_function_with_params_endpoint<T, F, Input, void>(full_key, value, func, *this);
                      }
                      else {
                         static_assert(false_v<Func>, "function cannot have more than one input");
@@ -170,13 +165,11 @@ namespace glz
                   else {
                      // Member function pointers
                      if constexpr (n_args == 0) {
-                        registry_impl<Opts, Proto>::template register_member_function_endpoint<full_key, T, F, Ret>(
-                           value, func, *this);
+                        impl::template register_member_function_endpoint<T, F, Ret>(full_key, value, func, *this);
                      }
                      else if constexpr (n_args == 1) {
                         using Input = std::decay_t<glz::tuple_element_t<0, Tuple>>;
-                        registry_impl<Opts, Proto>::template register_member_function_with_params_endpoint<
-                           full_key, T, F, Input, Ret>(value, func, *this);
+                        impl::template register_member_function_with_params_endpoint<T, F, Input, Ret>(full_key, value, func, *this);
                      }
                      else {
                         static_assert(false_v<Func>, "function cannot have more than one input");
@@ -185,8 +178,7 @@ namespace glz
                }
                else {
                   // this is a variable and not a function, so we build RPC read/write calls
-                  registry_impl<Opts, Proto>::template register_variable_endpoint<full_key, std::remove_cvref_t<Func>>(
-                     func, *this);
+                  impl::template register_variable_endpoint<std::remove_cvref_t<Func>>(full_key, func, *this);
                }
             }
          });

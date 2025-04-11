@@ -30,8 +30,8 @@ namespace glz
          return rest_path;
       }
       
-      template <const std::string_view& path, class T, class RegistryType>
-      static void register_endpoint(T& value, RegistryType& reg)
+      template <class T, class RegistryType>
+      static void register_endpoint(sv path, T& value, RegistryType& reg)
       {
          std::string rest_path = convert_to_rest_path(path);
          
@@ -52,8 +52,8 @@ namespace glz
          }});
       }
       
-      template <const std::string_view& path, class Func, class Result, class RegistryType>
-      static void register_function_endpoint(Func& func, RegistryType& reg)
+      template <class Func, class Result, class RegistryType>
+      static void register_function_endpoint(sv path, Func& func, RegistryType& reg)
       {
          std::string rest_path = convert_to_rest_path(path);
          
@@ -70,8 +70,8 @@ namespace glz
          }});
       }
       
-      template <const std::string_view& path, class Func, class Params, class RegistryType>
-      static void register_param_function_endpoint(Func& func, RegistryType& reg)
+      template <class Func, class Params, class RegistryType>
+      static void register_param_function_endpoint(sv path, Func& func, RegistryType& reg)
       {
          std::string rest_path = convert_to_rest_path(path);
          
@@ -97,8 +97,8 @@ namespace glz
          }});
       }
       
-      template <const std::string_view& path, class Obj, class RegistryType>
-      static void register_object_endpoint(Obj& obj, RegistryType& reg)
+      template <class Obj, class RegistryType>
+      static void register_object_endpoint(sv path, Obj& obj, RegistryType& reg)
       {
          std::string rest_path = convert_to_rest_path(path);
          
@@ -119,8 +119,8 @@ namespace glz
          }});
       }
       
-      template <const std::string_view& path, class Value, class RegistryType>
-      static void register_value_endpoint(Value& value, RegistryType& reg)
+      template <class Value, class RegistryType>
+      static void register_value_endpoint(sv path, Value& value, RegistryType& reg)
       {
          std::string rest_path = convert_to_rest_path(path);
          
@@ -141,8 +141,8 @@ namespace glz
          }});
       }
       
-      template <const std::string_view& path, class Var, class RegistryType>
-      static void register_variable_endpoint(Var& var, RegistryType& reg)
+      template <class Var, class RegistryType>
+      static void register_variable_endpoint(sv path, Var& var, RegistryType& reg)
       {
          std::string rest_path = convert_to_rest_path(path);
          
@@ -163,8 +163,8 @@ namespace glz
          }});
       }
       
-      template <const std::string_view& path, class T, class F, class Ret, class RegistryType>
-      static void register_member_function_endpoint(T& value, F func, RegistryType& reg)
+      template <class T, class F, class Ret, class RegistryType>
+      static void register_member_function_endpoint(sv path, T& value, F func, RegistryType& reg)
       {
          std::string rest_path = convert_to_rest_path(path);
          
@@ -181,8 +181,8 @@ namespace glz
          }});
       }
       
-      template <const std::string_view& path, class T, class F, class Input, class Ret, class RegistryType>
-      static void register_member_function_with_params_endpoint(T& value, F func, RegistryType& reg)
+      template <class T, class F, class Input, class Ret, class RegistryType>
+      static void register_member_function_with_params_endpoint(sv path, T& value, F func, RegistryType& reg)
       {
          std::string rest_path = convert_to_rest_path(path);
          
