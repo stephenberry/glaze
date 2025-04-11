@@ -280,40 +280,7 @@ namespace glz::repe
 
                using Params = glz::tuple_element_t<0, Tuple>;
 
-               if constexpr (proto == protocol::REPE) {
-                  endpoints[full_key] = [&func](repe::state&& state) mutable {
-                     static thread_local std::decay_t<Params> params{};
-                     // no need lock locals
-                     if (read_params<Opts>(params, state) == 0) {
-                        return;
-                     }
-
-                     using Result = std::invoke_result_t<decltype(func), Params>;
-
-                     if (state.notify()) {
-                        if constexpr (std::same_as<Result, void>) {
-                           func(params);
-                        }
-                        else {
-                           std::ignore = func(params);
-                        }
-                        state.out.header.notify(true);
-                        return;
-                     }
-                     if constexpr (std::same_as<Result, void>) {
-                        func(params);
-                        write_response<Opts>(state);
-                     }
-                     else {
-                        auto ret = func(params);
-                        write_response<Opts>(ret, state);
-                     }
-                  };
-               }
-
-               if constexpr (proto == protocol::REST) {
-                  register_rest_param_function_endpoint<full_key, Func, Params>(func);
-               }
+               register_param_function_endpoint<full_key, Func, Params>(func);
             }
             else if constexpr (glaze_object_t<std::remove_cvref_t<Func>> || reflectable<std::remove_cvref_t<Func>>) {
                on<root, std::remove_cvref_t<Func>, full_key>(func);
@@ -705,32 +672,65 @@ namespace glz::repe
 
       // Helper for registering function endpoints with parameters
       template <const std::string_view& path, class Func, class Params>
-      void register_rest_param_function_endpoint(Func& func)
+         requires (proto == protocol::REPE)
+      void register_param_function_endpoint(Func& func)
       {
-         if constexpr (proto == protocol::REST) {
-            std::string rest_path = convert_to_rest_path(path);
-
-            // POST handler for functions with parameters
-            endpoints.push_back({Method::POST, rest_path, [&func](const Request& req, Response& res) {
-                                    // Parse the JSON request body
-                                    auto params_result = req.parse_json<Params>();
-                                    if (!params_result) {
-                                       res.status(400).body("Invalid request body: " + params_result.error());
-                                       return;
-                                    }
-
-                                    using Result = std::invoke_result_t<decltype(func), Params>;
-
-                                    if constexpr (std::same_as<Result, void>) {
-                                       func(params_result.value());
-                                       res.status(204); // No Content
-                                    }
-                                    else {
-                                       auto result = func(params_result.value());
-                                       res.json(result);
-                                    }
-                                 }});
-         }
+         endpoints[path] = [&func](repe::state&& state) mutable {
+            static thread_local std::decay_t<Params> params{};
+            // no need lock locals
+            if (read_params<Opts>(params, state) == 0) {
+               return;
+            }
+            
+            using Result = std::invoke_result_t<decltype(func), Params>;
+            
+            if (state.notify()) {
+               if constexpr (std::same_as<Result, void>) {
+                  func(params);
+               }
+               else {
+                  std::ignore = func(params);
+               }
+               state.out.header.notify(true);
+               return;
+            }
+            if constexpr (std::same_as<Result, void>) {
+               func(params);
+               write_response<Opts>(state);
+            }
+            else {
+               auto ret = func(params);
+               write_response<Opts>(ret, state);
+            }
+         };
+      }
+      
+      template <const std::string_view& path, class Func, class Params>
+         requires (proto == protocol::REST)
+      void register_param_function_endpoint(Func& func)
+      {
+         std::string rest_path = convert_to_rest_path(path);
+         
+         // POST handler for functions with parameters
+         endpoints.push_back({Method::POST, rest_path, [&func](const Request& req, Response& res) {
+            // Parse the JSON request body
+            auto params_result = req.parse_json<Params>();
+            if (!params_result) {
+               res.status(400).body("Invalid request body: " + params_result.error());
+               return;
+            }
+            
+            using Result = std::invoke_result_t<decltype(func), Params>;
+            
+            if constexpr (std::same_as<Result, void>) {
+               func(params_result.value());
+               res.status(204); // No Content
+            }
+            else {
+               auto result = func(params_result.value());
+               res.json(result);
+            }
+         }});
       }
 
       // Helper for registering nested object endpoints
