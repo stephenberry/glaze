@@ -670,49 +670,50 @@ namespace glz
                if (content_length_it != headers.end()) {
                   content_length = std::stoul(content_length_it->second);
                }
-
+               
                // Read the request body if needed
                if (content_length > 0) {
+                  // Create a string for the body with proper capacity
+                  std::string body;
+                  body.reserve(content_length);
+                  
+                  // Create a stream for reading from the buffer
+                  std::istream request_stream(buffer.get());
+                  
                   // Calculate how much of the body we've already read
-                  std::size_t body_bytes_already_read = buffer->size() - bytes_transferred;
-
-                  if (body_bytes_already_read < content_length) {
+                  std::size_t available = buffer->in_avail();
+                  std::size_t to_read = std::min(available, content_length);
+                  
+                  if (to_read > 0) {
+                     // Read what's already in the buffer
+                     body.resize(to_read);
+                     request_stream.read(&body[0], to_read);
+                  }
+                  
+                  if (to_read < content_length) {
                      // Need to read more data
                      asio::async_read(*socket_ptr, *buffer,
-                                      asio::transfer_exactly(content_length - body_bytes_already_read),
+                                      asio::transfer_exactly(content_length - to_read),
                                       [this, socket_ptr, buffer, method_opt, target, headers, remote_endpoint,
-                                       content_length](std::error_code ec, std::size_t /*bytes_transferred*/) {
-                                         if (ec) {
-                                            error_handler(ec, std::source_location::current());
-                                            return;
-                                         }
-
-                                         // Now we have the full request, process it
-                                         std::string body;
-                                         body.reserve(content_length);
-
-                                         for (std::size_t i = 0; i < content_length; ++i) {
-                                            body.push_back(static_cast<char>(buffer->sbumpc()));
-                                         }
-
-                                         process_full_request(socket_ptr, *method_opt, target, headers, std::move(body),
-                                                              remote_endpoint);
-                                      });
-                  }
-                  else {
-                     // We've already read enough data
-                     std::string body;
-                     body.reserve(content_length);
-
-                     // Extract the body from the buffer
-                     for (std::size_t i = 0; i < content_length; ++i) {
-                        body.push_back(static_cast<char>(buffer->sbumpc()));
-                     }
-
+                                       content_length, body = std::move(body), to_read]
+                                      (std::error_code ec, std::size_t /*bytes_transferred*/) mutable {
+                        if (ec) {
+                           error_handler(ec, std::source_location::current());
+                           return;
+                        }
+                        
+                        // Read the remaining data
+                        std::istream request_stream(buffer.get());
+                        body.resize(content_length);
+                        request_stream.read(&body[to_read], content_length - to_read);
+                        
+                        process_full_request(socket_ptr, *method_opt, target, headers, std::move(body), remote_endpoint);
+                     });
+                  } else {
+                     // We already have the full body
                      process_full_request(socket_ptr, *method_opt, target, headers, std::move(body), remote_endpoint);
                   }
-               }
-               else {
+               } else {
                   // No body, process the request immediately
                   process_full_request(socket_ptr, *method_opt, target, headers, "", remote_endpoint);
                }
