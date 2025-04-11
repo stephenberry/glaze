@@ -289,31 +289,7 @@ namespace glz::repe
             }
             else if constexpr (not std::is_lvalue_reference_v<Func>) {
                // For glz::custom, glz::manage, etc.
-               if constexpr (proto == protocol::REPE) {
-                  endpoints[full_key] = [func](repe::state&& state) mutable {
-                     if (state.write()) {
-                        if (read_params<Opts>(func, state) == 0) {
-                           return;
-                        }
-                     }
-
-                     if (state.notify()) {
-                        state.out.header.notify(true);
-                        return;
-                     }
-
-                     if (state.read()) {
-                        write_response<Opts>(func, state);
-                     }
-                     else {
-                        write_response<Opts>(state);
-                     }
-                  };
-               }
-
-               if constexpr (proto == protocol::REST) {
-                  register_rest_value_endpoint<full_key, std::remove_cvref_t<Func>>(func);
-               }
+               register_value_endpoint<full_key, std::remove_cvref_t<Func>>(func);
             }
             else {
                static_assert(std::is_lvalue_reference_v<Func>);
@@ -761,29 +737,53 @@ namespace glz::repe
 
       // Helper for registering value endpoints
       template <const std::string_view& path, class Value>
-      void register_rest_value_endpoint(Value& value)
+         requires (proto == protocol::REPE)
+      void register_value_endpoint(Value& value)
       {
-         if constexpr (proto == protocol::REST) {
-            std::string rest_path = convert_to_rest_path(path);
-
-            // GET handler for values
-            endpoints.push_back(
-               {Method::GET, rest_path, [&value](const Request& /*req*/, Response& res) { res.json(value); }});
-
-            // PUT handler for updating values
-            endpoints.push_back({Method::PUT, rest_path, [&value](const Request& req, Response& res) {
-                                    // Parse the JSON request body
-                                    auto data_result = req.parse_json<Value>();
-                                    if (!data_result) {
-                                       res.status(400).body("Invalid request body: " + data_result.error());
-                                       return;
-                                    }
-
-                                    // Update the value
-                                    value = data_result.value();
-                                    res.status(204); // No Content
-                                 }});
-         }
+         endpoints[path] = [value](repe::state&& state) mutable {
+            if (state.write()) {
+               if (read_params<Opts>(value, state) == 0) {
+                  return;
+               }
+            }
+            
+            if (state.notify()) {
+               state.out.header.notify(true);
+               return;
+            }
+            
+            if (state.read()) {
+               write_response<Opts>(value, state);
+            }
+            else {
+               write_response<Opts>(state);
+            }
+         };
+      }
+      
+      template <const std::string_view& path, class Value>
+         requires (proto == protocol::REST)
+      void register_value_endpoint(Value& value)
+      {
+         std::string rest_path = convert_to_rest_path(path);
+         
+         // GET handler for values
+         endpoints.push_back(
+                             {Method::GET, rest_path, [&value](const Request& /*req*/, Response& res) { res.json(value); }});
+         
+         // PUT handler for updating values
+         endpoints.push_back({Method::PUT, rest_path, [&value](const Request& req, Response& res) {
+            // Parse the JSON request body
+            auto data_result = req.parse_json<Value>();
+            if (!data_result) {
+               res.status(400).body("Invalid request body: " + data_result.error());
+               return;
+            }
+            
+            // Update the value
+            value = data_result.value();
+            res.status(204); // No Content
+         }});
       }
 
       // Helper for registering variable endpoints
