@@ -243,7 +243,7 @@ namespace glz::repe
          }();
 
          if constexpr (parent == root && (glaze_object_t<T> || reflectable<T>)) {
-            register_endpoint<root, T>(value);
+            register_endpoint<root>(value);
          }
 
          for_each<N>([&](auto I) {
@@ -635,7 +635,7 @@ namespace glz::repe
       
       template <const std::string_view& path, class T>
          requires (proto == protocol::REPE)
-      void register_endpoint(T& value, sv)
+      void register_endpoint(T& value)
       {
          endpoints[path] = [&value](repe::state&& state) mutable {
             if (state.write()) {
