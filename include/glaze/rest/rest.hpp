@@ -126,9 +126,12 @@ namespace glz
       template <class T>
       Response& json(T&& value)
       {
-         std::string json_str;
-         glz::write_json(std::forward<T>(value), json_str);
-         return content_type("application/json").body(json_str);
+         content_type("application/json");
+         auto ec = glz::write_json(std::forward<T>(value), response_body);
+         if (ec) {
+            response_body = R"({"error":"glz::write_json error"})"; // rare that this would ever happen
+         }
+         return *this;
       }
    };
 
