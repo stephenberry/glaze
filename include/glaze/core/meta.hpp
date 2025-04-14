@@ -11,6 +11,7 @@
 #include "glaze/util/string_literal.hpp"
 #include "glaze/util/type_traits.hpp"
 #include "glaze/util/variant.hpp"
+#include "glaze/version.hpp"
 
 namespace glz
 {
@@ -289,13 +290,11 @@ namespace glz
       }
    }();
 
-   using version_t = std::array<uint32_t, 3>;
-
    template <class T>
    concept versioned = requires { meta<std::decay_t<T>>::version; };
 
    template <class T>
-   inline constexpr version_t version = []() -> version_t {
+   inline constexpr version_t version_v = []() -> version_t {
       if constexpr (versioned<T>) {
          return meta<std::decay_t<T>>::version;
       }
