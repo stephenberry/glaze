@@ -34,6 +34,7 @@ namespace glz
 {
    // This registry does not support adding methods from RPC calls or adding methods once RPC calls can be made.
    template <auto Opts = opts{}, uint32_t Proto = REPE>
+      requires (Proto == REST || Proto == REPE)
    struct registry
    {
       // procedure for REPE protocol
