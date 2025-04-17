@@ -405,7 +405,7 @@ namespace glz
       std::shared_ptr<asio::signal_set> signals{};
       std::shared_ptr<std::vector<std::thread>> threads{};
 
-      registry<Opts> registry{};
+      glz::registry<Opts> registry{};
 
       void clear_registry() { registry.clear(); }
 
