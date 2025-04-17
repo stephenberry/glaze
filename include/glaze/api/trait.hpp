@@ -22,9 +22,9 @@ namespace glz
 
       static constexpr sv type_size_hash = hash128_v<int_to_sv_v<size_t, sizeof(T)>>; // must hash for consistent length
 
-      static constexpr sv major_version = hash128_i_v<version<T>[0]>; // must hash for consistent length
-      static constexpr sv minor_version = hash128_i_v<version<T>[1]>; // must hash for consistent length
-      static constexpr sv revision = hash128_i_v<version<T>[2]>; // must hash for consistent length
+      static constexpr sv major_version = hash128_i_v<version_v<T>.major>; // must hash for consistent length
+      static constexpr sv minor_version = hash128_i_v<version_v<T>.minor>; // must hash for consistent length
+      static constexpr sv revision = hash128_i_v<version_v<T>.patch>; // must hash for consistent length
 
 #define std_trait(x) static constexpr sv x = to_sv<std::x##_v<T>>()
       std_trait(is_trivial);
@@ -114,7 +114,7 @@ namespace glz
 
      public:
       static constexpr sv version_sv = join_v<v, major_version, comma, minor_version, comma, revision>;
-      static constexpr version_t version = ::glz::version<T>;
+      static constexpr version_t version = ::glz::version_v<T>;
 
       static constexpr sv hash = hash128_v<to_hash>;
    };
