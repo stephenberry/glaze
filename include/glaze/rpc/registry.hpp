@@ -34,9 +34,10 @@ namespace glz
 {
    // This registry does not support adding methods from RPC calls or adding methods once RPC calls can be made.
    template <auto Opts = opts{}, uint32_t Proto = REPE>
-      requires (Proto == REST || Proto == REPE)
    struct registry
    {
+      static_assert(Proto == REST || Proto == REPE, "REST and REPE are the only currently supported protocol formats");
+      
       // procedure for REPE protocol
       using procedure = std::function<void(repe::state&&)>; // RPC method
 
