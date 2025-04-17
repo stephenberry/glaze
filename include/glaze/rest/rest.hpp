@@ -517,7 +517,7 @@ namespace glz
       std::vector<std::thread> threads;
       http_router root_router;
       bool running = false;
-      error_handler error_handler;
+      glz::error_handler error_handler;
 
       // Path pattern matching
       struct route_pattern
