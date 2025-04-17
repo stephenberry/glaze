@@ -9,12 +9,12 @@
 namespace glz
 {
    // Forward declaration of the registry template
-   template <auto Opts, protocol Proto>
+   template <auto Opts, uint32_t Proto>
    struct registry;
    
    // Specialized implementation for REPE protocol
    template <auto Opts>
-   struct registry_impl<Opts, protocol::REPE>
+   struct registry_impl<Opts, REPE>
    {
       template <class T, class RegistryType>
       static void register_endpoint(sv path, T& value, RegistryType& reg)

@@ -8,9 +8,6 @@
 
 namespace glz
 {
-   // Define the protocol enum to differentiate between REPE and REST
-   enum struct protocol : uint32_t { REPE, REST };
-
    namespace detail
    {
       struct string_hash
@@ -25,7 +22,7 @@ namespace glz
    }
 
    // Forward declaration of implementation template
-   template <auto Opts, protocol P>
+   template <auto Opts, uint32_t Protocol>
    struct registry_impl;
 }
 
@@ -36,7 +33,7 @@ namespace glz
 namespace glz
 {
    // This registry does not support adding methods from RPC calls or adding methods once RPC calls can be made.
-   template <auto Opts = opts{}, protocol Proto = protocol::REPE>
+   template <auto Opts = opts{}, uint32_t Proto = REPE>
    struct registry
    {
       // procedure for REPE protocol
@@ -45,20 +42,20 @@ namespace glz
       static constexpr auto proto = Proto;
 
       // Single template storage for all protocol-specific storage
-      template <protocol P>
+      template <uint32_t P>
       struct protocol_storage
       {};
 
-      template <protocol P>
-         requires(P == protocol::REPE)
-      struct protocol_storage<P>
+      template <uint32_t Protocol>
+         requires(Protocol == REPE)
+      struct protocol_storage<Protocol>
       {
          using type = std::unordered_map<sv, procedure, detail::string_hash, std::equal_to<>>;
       };
 
-      template <protocol P>
-         requires(P == protocol::REST)
-      struct protocol_storage<P>
+      template <uint32_t Protocol>
+         requires(Protocol == REST)
+      struct protocol_storage<Protocol>
       {
          using type = http_router; // Changed from std::vector<rest_endpoint> to http_router
       };
@@ -181,7 +178,7 @@ namespace glz
 
       // Function to call methods - only available for REPE protocol
       template <class In = repe::message, class Out = repe::message>
-         requires(Proto == protocol::REPE) // call method is only available for REPE protocol
+         requires(Proto == REPE) // call method is only available for REPE protocol
       void call(In&& in, Out&& out)
       {
          if (auto it = endpoints.find(in.query); it != endpoints.end()) {
@@ -206,8 +203,4 @@ namespace glz
          }
       }
    };
-
-   // Convenience alias for REST registry
-   template <auto Opts = opts{}>
-   using rest_registry = registry<Opts, protocol::REST>;
 }

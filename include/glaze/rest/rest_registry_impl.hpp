@@ -9,12 +9,12 @@
 namespace glz
 {
    // Forward declaration of the registry template
-   template <auto Opts, protocol Proto>
+   template <auto Opts, uint32_t Proto>
    struct registry;
 
    // Specialized implementation for REST protocol
    template <auto Opts>
-   struct registry_impl<Opts, protocol::REST>
+   struct registry_impl<Opts, REST>
    {
       using enum http_method;
       

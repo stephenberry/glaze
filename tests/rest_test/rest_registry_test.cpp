@@ -87,7 +87,7 @@ int main() {
    
    UserService userService;
    
-   glz::rest_registry registry;
+   glz::registry<glz::opts{}, glz::REST> registry;
    
    registry.on(userService);
    
