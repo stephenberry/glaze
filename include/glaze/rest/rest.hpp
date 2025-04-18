@@ -6,7 +6,6 @@
 #include <atomic>
 #include <chrono>
 #include <expected>
-#include <format>
 #include <functional>
 #include <future>
 #include <glaze/glaze.hpp>
@@ -27,9 +26,6 @@
 #else
 static_assert(false, "standalone or boost asio must be included to use glaze/ext/glaze_asio.hpp");
 #endif
-
-// TODO: Get rid of iostream dependency
-#include <iostream>
 
 namespace glz
 {
@@ -174,7 +170,8 @@ namespace glz
          }
          catch (const std::exception& e) {
             // Log the error instead of propagating it
-            std::cerr << "Error adding route '" << path << "': " << e.what() << std::endl;
+            std::fprintf(stderr, "Error adding route '%.*s': %s\n",
+                         static_cast<int>(path.length()), path.data(), e.what());
          }
          return *this;
       }
@@ -389,7 +386,10 @@ namespace glz
       inline http_server() : io_context(std::make_unique<asio::io_context>())
       {
          error_handler = [](std::error_code ec, std::source_location loc) {
-            std::cerr << std::format("Error at {}:{}: {}\n", loc.file_name(), loc.line(), ec.message());
+            std::fprintf(stderr, "Error at %s:%d: %s\n",
+                         loc.file_name(),
+                         static_cast<int>(loc.line()),
+                         ec.message().c_str());
          };
       }
 
