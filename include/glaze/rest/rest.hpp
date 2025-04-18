@@ -34,14 +34,14 @@ static_assert(false, "standalone or boost asio must be included to use glaze/ext
 namespace glz
 {
    // Forward declarations
-   struct Request;
-   struct Response;
+   struct request;
+   struct response;
    struct http_router;
    struct http_server;
    struct http_client;
 
-   using handler = std::function<void(const Request&, Response&)>;
-   using async_handler = std::function<std::future<void>(const Request&, Response&)>;
+   using handler = std::function<void(const request&, response&)>;
+   using async_handler = std::function<std::future<void>(const request&, response&)>;
    using error_handler = std::function<void(std::error_code, std::source_location)>;
 
    enum struct http_method { GET, POST, PUT, DELETE, PATCH, HEAD, OPTIONS };
@@ -84,7 +84,7 @@ namespace glz
    }
 
    // Request context object
-   struct Request
+   struct request
    {
       http_method method{};
       std::string target{};
@@ -95,35 +95,35 @@ namespace glz
    };
 
    // Response builder
-   struct Response
+   struct response
    {
       int status_code = 200;
       std::unordered_map<std::string, std::string> response_headers{};
       std::string response_body{};
 
-      inline Response& status(int code)
+      inline response& status(int code)
       {
          status_code = code;
          return *this;
       }
 
-      inline Response& header(std::string_view name, std::string_view value)
+      inline response& header(std::string_view name, std::string_view value)
       {
          response_headers[std::string(name)] = std::string(value);
          return *this;
       }
 
-      inline Response& body(std::string_view content)
+      inline response& body(std::string_view content)
       {
          response_body = std::string(content);
          return *this;
       }
 
-      inline Response& content_type(std::string_view type) { return header("Content-Type", type); }
+      inline response& content_type(std::string_view type) { return header("Content-Type", type); }
 
       // JSON response helper using Glaze
       template <class T>
-      Response& json(T&& value)
+      response& json(T&& value)
       {
          content_type("application/json");
          auto ec = glz::write_json(std::forward<T>(value), response_body);
@@ -217,7 +217,7 @@ namespace glz
          // Convert async handle to sync handle
          return route(
             method, path,
-            [handle](const Request& req, Response& res) {
+            [handle](const request& req, response& res) {
                // Create a future and wait for it
                auto future = handle(req, res);
                future.wait();
@@ -676,7 +676,7 @@ namespace glz
                                        asio::ip::tcp::endpoint remote_endpoint)
       {
          // Create the request object
-         Request request;
+         request request;
          request.method = method;
          request.target = target;
          request.headers = headers;
@@ -696,7 +696,7 @@ namespace glz
          }
 
          // Create the response object
-         Response response;
+         response response;
 
          try {
             // Apply middleware
@@ -720,7 +720,7 @@ namespace glz
          }
       }
 
-      inline void send_response(std::shared_ptr<asio::ip::tcp::socket> socket, const Response& response)
+      inline void send_response(std::shared_ptr<asio::ip::tcp::socket> socket, const response& response)
       {
          // Format the response
          std::ostringstream oss;
@@ -765,7 +765,7 @@ namespace glz
       inline void send_error_response(std::shared_ptr<asio::ip::tcp::socket> socket, int status_code,
                                       const std::string& message)
       {
-         Response response;
+         response response;
          response.status(status_code).content_type("text/plain").body(message);
 
          send_response(socket, response);
@@ -837,7 +837,7 @@ namespace glz
          }
       }
 
-      inline std::expected<Response, std::error_code> get(
+      inline std::expected<response, std::error_code> get(
          std::string_view url, const std::unordered_map<std::string, std::string>& headers = {})
       {
          // Parse the URL
@@ -862,7 +862,7 @@ namespace glz
          }
 
          // Create a promise for the response
-         std::promise<std::expected<Response, std::error_code>> promise;
+         std::promise<std::expected<response, std::error_code>> promise;
          auto future = promise.get_future();
 
          // Create a resolver to translate the hostname into IP address
@@ -987,7 +987,7 @@ namespace glz
                                                         std::istreambuf_iterator<char>()};
 
                                        // Create response object
-                                       Response response;
+                                       response response;
                                        response.status_code = status_code;
                                        response.response_headers = response_headers;
                                        response.response_body = std::move(body);
@@ -1004,7 +1004,7 @@ namespace glz
          return future.get();
       }
 
-      inline std::expected<Response, std::error_code> post(
+      inline std::expected<response, std::error_code> post(
          std::string_view url, std::string_view body, const std::unordered_map<std::string, std::string>& headers = {})
       {
          // Implementation similar to get, but with POST method and body
@@ -1030,7 +1030,7 @@ namespace glz
          }
 
          // Create a promise for the response
-         std::promise<std::expected<Response, std::error_code>> promise;
+         std::promise<std::expected<response, std::error_code>> promise;
          auto future = promise.get_future();
 
          // Create a resolver to translate the hostname into IP address
@@ -1158,7 +1158,7 @@ namespace glz
                                                         std::istreambuf_iterator<char>()};
 
                                        // Create response object
-                                       Response response;
+                                       response response;
                                        response.status_code = status_code;
                                        response.response_headers = response_headers;
                                        response.response_body = std::move(body);
@@ -1175,11 +1175,11 @@ namespace glz
          return future.get();
       }
 
-      inline std::future<std::expected<Response, std::error_code>> get_async(
+      inline std::future<std::expected<response, std::error_code>> get_async(
          std::string_view url, const std::unordered_map<std::string, std::string>& headers = {})
       {
          // Create a promise and future
-         auto promise = std::make_shared<std::promise<std::expected<Response, std::error_code>>>();
+         auto promise = std::make_shared<std::promise<std::expected<response, std::error_code>>>();
          auto future = promise->get_future();
 
          // Run the operation asynchronously
@@ -1196,11 +1196,11 @@ namespace glz
          return future;
       }
 
-      inline std::future<std::expected<Response, std::error_code>> post_async(
+      inline std::future<std::expected<response, std::error_code>> post_async(
          std::string_view url, std::string_view body, const std::unordered_map<std::string, std::string>& headers = {})
       {
          // Create a promise and future
-         auto promise = std::make_shared<std::promise<std::expected<Response, std::error_code>>>();
+         auto promise = std::make_shared<std::promise<std::expected<response, std::error_code>>>();
          auto future = promise->get_future();
 
          // Run the operation asynchronously
@@ -1218,7 +1218,7 @@ namespace glz
       }
 
       template <class T>
-      inline std::expected<Response, std::error_code> post_json(
+      inline std::expected<response, std::error_code> post_json(
          std::string_view url, const T& data, const std::unordered_map<std::string, std::string>& headers = {})
       {
          std::string json_str;

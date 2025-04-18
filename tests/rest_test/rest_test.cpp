@@ -44,7 +44,7 @@ int main() {
    int next_id = 3;
    
    // Set up routes for API
-   server.get("/api/users", [&](const glz::Request& /*req*/, glz::Response& res) {
+   server.get("/api/users", [&](const glz::request& /*req*/, glz::response& res) {
       std::vector<User> user_list;
       for (const auto& [id, user] : users) {
          user_list.push_back(user);
@@ -52,7 +52,7 @@ int main() {
       res.json(user_list);
    });
    
-   server.get("/api/users/:id", [&](const glz::Request& req, glz::Response& res) {
+   server.get("/api/users/:id", [&](const glz::request& req, glz::response& res) {
       try {
          // Get the id from the path parameters
          int id = std::stoi(req.params.at("id"));
@@ -69,7 +69,7 @@ int main() {
       }
    });
    
-   server.post("/api/users", [&](const glz::Request& req, glz::Response& res) {
+   server.post("/api/users", [&](const glz::request& req, glz::response& res) {
       // Parse JSON request body
       auto result = glz::read_json<User>(req.body);
       if (!result) {
@@ -88,7 +88,7 @@ int main() {
    });
    
    // Serve the frontend files
-   server.get("/", [](const glz::Request& /*req*/, glz::Response& res) {
+   server.get("/", [](const glz::request& /*req*/, glz::response& res) {
       // Inline HTML for simplicity (in a real app, you would read from a file)
       std::string html = R"(
       <!DOCTYPE html>

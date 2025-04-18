@@ -94,7 +94,7 @@ int main() {
    server.mount("/api", registry.endpoints);
    
    // Serve the frontend files
-   server.get("/", [](const glz::Request& /*req*/, glz::Response& res) {
+   server.get("/", [](const glz::request& /*req*/, glz::response& res) {
       std::string_view html = R"(
       <!DOCTYPE html>
       <html lang="en">

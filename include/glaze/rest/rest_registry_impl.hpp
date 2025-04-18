@@ -39,10 +39,10 @@ namespace glz
 
          // GET handler for the entire object
          reg.endpoints.route(GET, rest_path,
-                             [&value](const Request& /*req*/, Response& res) { res.json(value); });
+                             [&value](const request& /*req*/, response& res) { res.json(value); });
 
          // PUT handler for updating the entire object
-         reg.endpoints.route(PUT, rest_path, [&value](const Request& req, Response& res) {
+         reg.endpoints.route(PUT, rest_path, [&value](const request& req, response& res) {
             // Parse the JSON request body
             auto ec = read_json(value, req.body);
             if (ec) {
@@ -60,7 +60,7 @@ namespace glz
          std::string rest_path = convert_to_rest_path(path);
 
          // GET handler for functions
-         reg.endpoints.route(GET, rest_path, [&func](const Request& /*req*/, Response& res) {
+         reg.endpoints.route(GET, rest_path, [&func](const request& /*req*/, response& res) {
             if constexpr (std::same_as<Result, void>) {
                func();
                res.status(204); // No Content
@@ -78,7 +78,7 @@ namespace glz
          std::string rest_path = convert_to_rest_path(path);
 
          // POST handler for functions with parameters
-         reg.endpoints.route(POST, rest_path, [&func](const Request& req, Response& res) {
+         reg.endpoints.route(POST, rest_path, [&func](const request& req, response& res) {
             // Parse the JSON request body
             auto params_result = read_json<Params>(req.body);
             if (!params_result) {
@@ -106,10 +106,10 @@ namespace glz
 
          // GET handler for nested objects
          reg.endpoints.route(GET, rest_path,
-                             [&obj](const Request& /*req*/, Response& res) { res.json(obj); });
+                             [&obj](const request& /*req*/, response& res) { res.json(obj); });
 
          // PUT handler for updating nested objects
-         reg.endpoints.route(PUT, rest_path, [&obj](const Request& req, Response& res) {
+         reg.endpoints.route(PUT, rest_path, [&obj](const request& req, response& res) {
             // Parse the JSON request body
             auto ec = read_json(obj, req.body);
             if (ec) {
@@ -128,10 +128,10 @@ namespace glz
 
          // GET handler for values
          reg.endpoints.route(GET, rest_path,
-                             [&value](const Request& /*req*/, Response& res) { res.json(value); });
+                             [&value](const request& /*req*/, response& res) { res.json(value); });
 
          // PUT handler for updating values
-         reg.endpoints.route(PUT, rest_path, [&value](const Request& req, Response& res) {
+         reg.endpoints.route(PUT, rest_path, [&value](const request& req, response& res) {
             // Parse the JSON request body
             auto ec = read_json(value, req.body);
             if (!ec) {
@@ -150,10 +150,10 @@ namespace glz
 
          // GET handler for variables
          reg.endpoints.route(GET, rest_path,
-                             [&var](const Request& /*req*/, Response& res) { res.json(var); });
+                             [&var](const request& /*req*/, response& res) { res.json(var); });
 
          // PUT handler for updating variables
-         reg.endpoints.route(PUT, rest_path, [&var](const Request& req, Response& res) {
+         reg.endpoints.route(PUT, rest_path, [&var](const request& req, response& res) {
             // Parse the JSON request body
             auto ec = read_json(var, req.body);
             if (!ec) {
@@ -171,7 +171,7 @@ namespace glz
          std::string rest_path = convert_to_rest_path(path);
 
          // GET handler for member functions with no args
-         reg.endpoints.route(GET, rest_path, [&value, func](const Request& /*req*/, Response& res) {
+         reg.endpoints.route(GET, rest_path, [&value, func](const request& /*req*/, response& res) {
             if constexpr (std::same_as<Ret, void>) {
                (value.*func)();
                res.status(204); // No Content
@@ -189,7 +189,7 @@ namespace glz
          std::string rest_path = convert_to_rest_path(path);
 
          // POST handler for member functions with args
-         reg.endpoints.route(POST, rest_path, [&value, func](const Request& req, Response& res) {
+         reg.endpoints.route(POST, rest_path, [&value, func](const request& req, response& res) {
             // Parse the JSON request body
             auto params_result = read_json<Input>(req.body);
             if (!params_result) {
