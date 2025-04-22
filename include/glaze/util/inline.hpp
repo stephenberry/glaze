@@ -11,7 +11,7 @@
 
 #if defined(GLZ_USE_ALWAYS_INLINE) && defined(NDEBUG)
 #ifndef GLZ_ALWAYS_INLINE
-#if defined(_MSC_VER)
+#if defined(_MSC_VER) && !defined(__clang__)
 #define GLZ_ALWAYS_INLINE [[msvc::forceinline]] inline
 #else
 #define GLZ_ALWAYS_INLINE inline __attribute__((always_inline))
