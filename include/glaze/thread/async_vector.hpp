@@ -16,6 +16,8 @@
 #endif
 #endif
 
+#include "glaze/thread/value_proxy.hpp"
+
 // Provides a thread-safe vector
 // Uses simple proxy objects with appropriate locks for read/write operations
 
