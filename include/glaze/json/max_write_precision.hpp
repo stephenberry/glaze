@@ -63,7 +63,7 @@ namespace glz
       template <auto Opts>
       GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept
       {
-         static constexpr auto O = set_opt<Opts, &opts::float_max_write_precision>(float_precision::float32);
+         static constexpr auto O = set_opt<Opts, &decltype(Opts)::float_max_write_precision>(float_precision::float32);
          using Value = core_t<decltype(value.val)>;
          to<JSON, Value>::template op<O>(value.val, ctx, args...);
       }
@@ -75,7 +75,7 @@ namespace glz
       template <auto Opts>
       GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept
       {
-         static constexpr auto O = set_opt<Opts, &opts::float_max_write_precision>(float_precision::float64);
+         static constexpr auto O = set_opt<Opts, &decltype(Opts)::float_max_write_precision>(float_precision::float64);
          using Value = core_t<decltype(value.val)>;
          to<JSON, Value>::template op<O>(value.val, ctx, args...);
       }
@@ -87,7 +87,7 @@ namespace glz
       template <auto Opts>
       GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept
       {
-         static constexpr auto O = set_opt<Opts, &opts::float_max_write_precision>(float_precision::full);
+         static constexpr auto O = set_opt<Opts, &decltype(Opts)::float_max_write_precision>(float_precision::full);
          using Value = core_t<decltype(value.val)>;
          to<JSON, Value>::template op<O>(value.val, ctx, args...);
       }

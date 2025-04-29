@@ -87,9 +87,6 @@ namespace glz
 
       uint8_t layout = rowwise; // CSV row wise output/input
 
-      // The maximum precision type used for writing floats, higher precision floats will be cast down to this precision
-      float_precision float_max_write_precision{};
-
       bool bools_as_numbers = false; // Read and write booleans with 1's and 0's
 
       bool quoted_num = false; // treat numbers as quoted or array-like types as having quoted numbers
@@ -145,6 +142,10 @@ namespace glz
    // (embedding nulls can cause issues, especially with C APIs)
    // Glaze will error when parsing non-escaped control character (per the JSON spec)
    // This option allows escaping control characters to avoid such errors.
+   
+   // ---
+   // The maximum precision type used for writing floats, higher precision floats will be cast down to this precision
+   // float_precision float_max_write_precision{};
 
    consteval bool check_validate_skipped(auto&& Opts)
    {
@@ -233,6 +234,16 @@ namespace glz
       }
       else {
          return false;
+      }
+   }
+   
+   consteval float_precision check_float_max_write_precision(auto&& Opts)
+   {
+      if constexpr (requires { Opts.float_max_write_precision; }) {
+         return Opts.float_max_write_precision;
+      }
+      else {
+         return {};
       }
    }
 

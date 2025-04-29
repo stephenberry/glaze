@@ -432,12 +432,17 @@ struct FloatPrecision
    double val{3.141592653589793};
 };
 
+struct float_opts : glz::opts
+{
+   glz::float_precision float_max_write_precision{};
+};
+
 suite float_precision_test = [] {
    "float_precision"_test = [] {
       FloatPrecision fp{};
       std::string json;
       // limit float precision to float32
-      expect(not glz::write<glz::opts{.float_max_write_precision = glz::float_precision::float32}>(fp, json));
+      expect(not glz::write<float_opts{{}, glz::float_precision::float32}>(fp, json));
       // This should produce fewer decimal places.
       expect(json.find("3.1415927") != std::string::npos); // approximate float32 rounding
    };

@@ -9005,12 +9005,17 @@ struct write_precision_t
    };
 };
 
+struct float_opts : glz::opts
+{
+   glz::float_precision float_max_write_precision{};
+};
+
 suite max_write_precision_tests = [] {
    "max_write_precision"_test = [] {
       double pi = std::numbers::pi_v<double>;
       std::string json_double = glz::write_json(pi).value_or("error");
 
-      constexpr glz::opts options{.float_max_write_precision = glz::float_precision::float32};
+      constexpr float_opts options{{}, glz::float_precision::float32};
       std::string json_float = glz::write<options>(pi).value_or("error");
       expect(json_double != json_float);
       expect(json_float == glz::write_json(std::numbers::pi_v<float>));
@@ -9026,7 +9031,7 @@ suite max_write_precision_tests = [] {
 
    "write_precision_t"_test = [] {
       write_precision_t obj{};
-      std::string json_float = glz::write_json(obj).value_or("error");
+      std::string json_float = glz::write<float_opts{}>(obj).value_or("error");
       expect(json_float == R"({"pi":3.1415927})") << json_float;
    };
 };

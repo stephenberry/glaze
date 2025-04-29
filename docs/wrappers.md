@@ -388,11 +388,19 @@ struct write_precision_t
 };
 ```
 
+> [!IMPORTANT]
+>
+> The `glz::float_precision float_max_write_precision` is not a core option in `glz::opts`. You must create an options structure that adds this field to enable float precision control. The example below shows this user defined options struct that inherits from `glz::opts`.
+
 In use:
 
 ```c++
+struct float_opts : glz::opts {
+   glz::float_precision float_max_write_precision{};
+};
+
 write_precision_t obj{};
-std::string json_float = glz::write_json(obj);
+std::string json_float = glz::write<float_opts{}>(obj);
 expect(json_float == R"({"pi":3.1415927})") << json_float;
 ```
 
