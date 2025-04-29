@@ -249,7 +249,7 @@ namespace glz
          return reflect<T>::keys[I];
       }
    }();
-   
+
    template <class V, class From>
    consteval bool custom_type_is_nullable()
    {
@@ -268,7 +268,7 @@ namespace glz
             using Value = std::decay_t<decltype(std::declval<V>().val.*(std::declval<V>().from))>;
             if constexpr (is_specialization_v<Value, std::function>) {
                using Ret = typename function_traits<Value>::result_type;
-               
+
                if constexpr (std::is_void_v<Ret>) {
                   using Tuple = typename function_traits<Value>::arguments;
                   if constexpr (glz::tuple_size_v<Tuple> == 1) {
@@ -295,7 +295,7 @@ namespace glz
             }
          }
       }
-      
+
       return false;
    }
 
@@ -310,11 +310,11 @@ namespace glz
             using V = std::decay_t<refl_t<T, I>>;
             if constexpr (is_specialization_v<V, custom_t>) {
                using From = typename V::from_t;
-               
-               // If we are reading a glz::custom_t, we must deduce the input argument and not require the key if it is optional
-               // This allows error_on_missing_keys to work properly with glz::custom_t wrapping optional types
+
+               // If we are reading a glz::custom_t, we must deduce the input argument and not require the key if it is
+               // optional This allows error_on_missing_keys to work properly with glz::custom_t wrapping optional types
                constexpr bool nullable_in_custom = custom_type_is_nullable<V, From>();
-               
+
                fields[I] = !Opts.skip_null_members || !(std::same_as<From, skip> || nullable_in_custom);
             }
             else {
