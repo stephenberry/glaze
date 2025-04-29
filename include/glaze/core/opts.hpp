@@ -64,6 +64,10 @@ namespace glz
    // You can create your own options struct with more or less fields as long as your struct has:
    // - opts_internal internal{};
    // - uint32_t format
+   // The recommended approach is to inherit:
+   // struct custom_opts : glz::opts {
+   //   bool validate_trailing_whitespace = true;
+   // };
 
    struct opts
    {
@@ -144,8 +148,8 @@ namespace glz
    // This option allows escaping control characters to avoid such errors.
 
    // ---
-   // The maximum precision type used for writing floats, higher precision floats will be cast down to this precision
    // float_precision float_max_write_precision{};
+   // The maximum precision type used for writing floats, higher precision floats will be cast down to this precision
 
    consteval bool check_validate_skipped(auto&& Opts)
    {
@@ -247,25 +251,24 @@ namespace glz
       }
    }
 
-   // TODO: These has_ checks should probably be changed to check_
-   consteval bool has_opening_handled(auto&& o) { return o.internal & uint32_t(opts_internal::opening_handled); }
+   consteval bool check_opening_handled(auto&& o) { return o.internal & uint32_t(opts_internal::opening_handled); }
 
-   consteval bool has_closing_handled(auto&& o) { return o.internal & uint32_t(opts_internal::closing_handled); }
+   consteval bool check_closing_handled(auto&& o) { return o.internal & uint32_t(opts_internal::closing_handled); }
 
-   consteval bool has_ws_handled(auto&& o) { return o.internal & uint32_t(opts_internal::ws_handled); }
+   consteval bool check_ws_handled(auto&& o) { return o.internal & uint32_t(opts_internal::ws_handled); }
 
-   consteval bool has_no_header(auto&& o) { return o.internal & uint32_t(opts_internal::no_header); }
+   consteval bool check_no_header(auto&& o) { return o.internal & uint32_t(opts_internal::no_header); }
 
-   consteval bool has_disable_write_unknown(auto&& o)
+   consteval bool check_disable_write_unknown(auto&& o)
    {
       return o.internal & uint32_t(opts_internal::disable_write_unknown);
    }
 
-   consteval bool has_is_padded(auto&& o) { return o.internal & uint32_t(opts_internal::is_padded); }
+   consteval bool check_is_padded(auto&& o) { return o.internal & uint32_t(opts_internal::is_padded); }
 
-   consteval bool has_disable_padding(auto&& o) { return o.internal & uint32_t(opts_internal::disable_padding); }
+   consteval bool check_disable_padding(auto&& o) { return o.internal & uint32_t(opts_internal::disable_padding); }
 
-   consteval bool has_write_unchecked(auto&& o) { return o.internal & uint32_t(opts_internal::write_unchecked); }
+   consteval bool check_write_unchecked(auto&& o) { return o.internal & uint32_t(opts_internal::write_unchecked); }
 
    template <auto Opts>
    constexpr auto opening_handled()

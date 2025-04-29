@@ -203,7 +203,7 @@ namespace glz
       using namespace glz::detail;
 
       if constexpr (not check_validate_skipped(Opts)) {
-         if constexpr (not has_ws_handled(Opts)) {
+         if constexpr (not check_ws_handled(Opts)) {
             if (skip_ws<Opts>(ctx, it, end)) {
                return;
             }
@@ -262,7 +262,7 @@ namespace glz
          }
       }
       else {
-         if constexpr (not has_ws_handled(Opts)) {
+         if constexpr (not check_ws_handled(Opts)) {
             if (skip_ws<Opts>(ctx, it, end)) {
                return;
             }
@@ -312,7 +312,7 @@ namespace glz
    {
       using namespace glz::detail;
 
-      if constexpr (not has_ws_handled(Opts)) {
+      if constexpr (not check_ws_handled(Opts)) {
          if (skip_ws<Opts>(ctx, it, end)) {
             return;
          }
