@@ -14,7 +14,7 @@ namespace glz
    struct serialize<EETF>
    {
       template <auto Opts, class T, class... Args>
-         requires(has_no_header(Opts))
+         requires(check_no_header(Opts))
       GLZ_ALWAYS_INLINE static void op(T&& value, Args&&... args) noexcept
       {
          to<EETF, std::remove_cvref_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Args>(args)...);
@@ -25,7 +25,7 @@ namespace glz
    struct to<EETF, T>
    {
       template <auto Opts, class V, class... Args>
-         requires(not has_no_header(Opts))
+         requires(not check_no_header(Opts))
       GLZ_ALWAYS_INLINE static void op(V&& v, Args... args) noexcept
       {
          encode_version(std::forward<Args>(args)...);
@@ -33,7 +33,7 @@ namespace glz
       }
 
       template <auto Opts, class... Args>
-         requires(has_no_header(Opts))
+         requires(check_no_header(Opts))
       GLZ_ALWAYS_INLINE static void op(const bool value, Args&&... args) noexcept
       {
          encode_boolean(value, std::forward<Args>(args)...);
@@ -44,7 +44,7 @@ namespace glz
    struct to<EETF, T> final
    {
       template <auto Opts, class V, class... Args>
-         requires(not has_no_header(Opts))
+         requires(not check_no_header(Opts))
       GLZ_ALWAYS_INLINE static void op(V&& v, Args... args) noexcept
       {
          encode_version(std::forward<Args>(args)...);
@@ -52,7 +52,7 @@ namespace glz
       }
 
       template <auto Opts, class... Args>
-         requires(has_no_header(Opts))
+         requires(check_no_header(Opts))
       GLZ_ALWAYS_INLINE static void op(auto&& value, Args&&... args) noexcept
       {
          encode_number(value, std::forward<Args>(args)...);
@@ -63,7 +63,7 @@ namespace glz
    struct to<EETF, T> final
    {
       template <auto Opts, class V, class... Args>
-         requires(not has_no_header(Opts))
+         requires(not check_no_header(Opts))
       GLZ_ALWAYS_INLINE static void op(V&& v, Args... args) noexcept
       {
          encode_version(std::forward<Args>(args)...);
@@ -71,7 +71,7 @@ namespace glz
       }
 
       template <auto Opts, class... Args>
-         requires(has_no_header(Opts))
+         requires(check_no_header(Opts))
       GLZ_ALWAYS_INLINE static void op(auto&& value, Args&&... args) noexcept
       {
          encode_atom(value, std::forward<Args>(args)...);
@@ -83,7 +83,7 @@ namespace glz
    struct to<EETF, T> final
    {
       template <auto Opts, class V, class... Args>
-         requires(not has_no_header(Opts))
+         requires(not check_no_header(Opts))
       GLZ_ALWAYS_INLINE static void op(V&& v, Args... args) noexcept
       {
          encode_version(std::forward<Args>(args)...);
@@ -91,7 +91,7 @@ namespace glz
       }
 
       template <auto Opts, class... Args>
-         requires(has_no_header(Opts))
+         requires(check_no_header(Opts))
       GLZ_ALWAYS_INLINE static void op(auto&& value, Args&&... args) noexcept
       {
          encode_atom_len(value, value.size(), std::forward<Args>(args)...);
@@ -102,7 +102,7 @@ namespace glz
    struct to<EETF, T> final
    {
       template <auto Opts, class V, class... Args>
-         requires(not has_no_header(Opts))
+         requires(not check_no_header(Opts))
       GLZ_ALWAYS_INLINE static void op(V&& v, Args... args) noexcept
       {
          encode_version(std::forward<Args>(args)...);
@@ -110,7 +110,7 @@ namespace glz
       }
 
       template <auto Opts, class... Args>
-         requires(has_no_header(Opts))
+         requires(check_no_header(Opts))
       GLZ_ALWAYS_INLINE static void op(auto&& value, Args&&... args) noexcept
       {
          encode_string(value, std::forward<Args>(args)...);
@@ -122,7 +122,7 @@ namespace glz
    struct to<EETF, T> final
    {
       template <auto Opts, class V, class... Args>
-         requires(not has_no_header(Opts))
+         requires(not check_no_header(Opts))
       GLZ_ALWAYS_INLINE static void op(V&& v, Args... args) noexcept
       {
          encode_version(std::forward<Args>(args)...);
@@ -130,7 +130,7 @@ namespace glz
       }
 
       template <auto Opts, is_context Ctx, class... Args>
-         requires(has_no_header(Opts))
+         requires(check_no_header(Opts))
       GLZ_ALWAYS_INLINE static void op(auto&& value, Ctx&& ctx, Args&&... args) noexcept
       {
          static constexpr auto N = glz::tuple_size_v<T>;
@@ -157,7 +157,7 @@ namespace glz
    struct to<EETF, T> final
    {
       template <auto Opts, class V, class... Args>
-         requires(not has_no_header(Opts))
+         requires(not check_no_header(Opts))
       GLZ_ALWAYS_INLINE static void op(V&& v, Args... args) noexcept
       {
          encode_version(std::forward<Args>(args)...);
@@ -165,7 +165,7 @@ namespace glz
       }
 
       template <auto Opts, is_context Ctx, class... Args>
-         requires(has_no_header(Opts))
+         requires(check_no_header(Opts))
       GLZ_ALWAYS_INLINE static void op(auto&& value, Ctx&& ctx, Args&&... args) noexcept
       {
          const auto n = value.size();
@@ -186,7 +186,7 @@ namespace glz
    struct to<EETF, T> final
    {
       template <auto Opts, class V, class... Args>
-         requires(not has_no_header(Opts))
+         requires(not check_no_header(Opts))
       GLZ_ALWAYS_INLINE static void op(V&& v, Args... args) noexcept
       {
          encode_version(std::forward<Args>(args)...);
@@ -194,7 +194,7 @@ namespace glz
       }
 
       template <auto Opts, is_context Ctx, class... Args>
-         requires(has_no_header(Opts))
+         requires(check_no_header(Opts))
       GLZ_ALWAYS_INLINE static void op(T&& value, Ctx&& ctx, Args&&... args) noexcept
       {
          const auto n = value.size();
@@ -215,7 +215,7 @@ namespace glz
    struct to<EETF, T> final
    {
       template <auto Opts, class V, class... Args>
-         requires(not has_no_header(Opts))
+         requires(not check_no_header(Opts))
       GLZ_ALWAYS_INLINE static void op(V&& v, Args&&... args) noexcept
       {
          encode_version(std::forward<Args>(args)...);
@@ -223,7 +223,7 @@ namespace glz
       }
 
       template <auto Opts, class... Args>
-         requires(has_no_header(Opts))
+         requires(check_no_header(Opts))
       GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
       {
          static constexpr auto N = reflect<T>::size;

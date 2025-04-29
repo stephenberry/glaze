@@ -121,7 +121,7 @@ namespace glz
 
          constexpr auto Opts = opening_handled_off<ws_handled_off<Options>()>();
 
-         if constexpr (!has_opening_handled(Options)) {
+         if constexpr (!check_opening_handled(Options)) {
             if (skip_ws<Opts>(ctx, it, end)) {
                return;
             }

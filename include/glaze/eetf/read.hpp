@@ -24,7 +24,7 @@ namespace glz
    struct parse<EETF>
    {
       template <auto Opts, class T, is_context Ctx, class It0, class It1>
-         requires(not has_no_header(Opts))
+         requires(not check_no_header(Opts))
       GLZ_ALWAYS_INLINE static void op(T&& value, Ctx&& ctx, It0&& it, It1&& end) noexcept
       {
          // TODO Check version
@@ -44,7 +44,7 @@ namespace glz
       }
 
       template <auto Opts, class T, is_context Ctx, class It0, class It1>
-         requires(has_no_header(Opts))
+         requires(check_no_header(Opts))
       GLZ_ALWAYS_INLINE static void op(T&& value, Ctx&& ctx, It0&& it, It1&& end) noexcept
       {
          if (bool(ctx.error)) {

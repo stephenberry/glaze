@@ -58,7 +58,7 @@ namespace glz
       template <auto Opts, class B>
       GLZ_ALWAYS_INLINE static void op(const bool value, is_context auto&&, B&& b, auto&& ix)
       {
-         static constexpr auto checked = not has_write_unchecked(Opts);
+         static constexpr auto checked = not check_write_unchecked(Opts);
          if constexpr (checked && vector_like<B>) {
             if (const auto n = ix + 8; n > b.size()) [[unlikely]] {
                b.resize(2 * n);

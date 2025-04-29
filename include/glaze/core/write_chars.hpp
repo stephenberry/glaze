@@ -55,7 +55,7 @@ namespace glz
 
          // https://stackoverflow.com/questions/1701055/what-is-the-maximum-length-in-chars-needed-to-represent-any-double-value
          // maximum length for a double should be 24 chars, we use 64 to be sufficient for float128_t
-         if constexpr (resizable<B> && not has_write_unchecked(Opts)) {
+         if constexpr (resizable<B> && not check_write_unchecked(Opts)) {
             if (const auto k = ix + 64; k > b.size()) {
                b.resize(2 * k);
             }

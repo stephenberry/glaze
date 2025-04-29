@@ -109,7 +109,7 @@ namespace glz
       template <auto& Partial, auto Opts, class... Args>
       static void op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix)
       {
-         if constexpr (!has_opening_handled(Opts)) {
+         if constexpr (!check_opening_handled(Opts)) {
             dump<'{'>(b, ix);
             if constexpr (Opts.prettify) {
                ctx.indentation_level += Opts.indentation_width;
@@ -409,7 +409,7 @@ namespace glz
       template <auto Opts, class B>
       GLZ_ALWAYS_INLINE static void op(const bool value, is_context auto&&, B&& b, auto&& ix)
       {
-         static constexpr auto checked = not has_write_unchecked(Opts);
+         static constexpr auto checked = not check_write_unchecked(Opts);
          if constexpr (checked && vector_like<B>) {
             if (const auto n = ix + 8; n > b.size()) [[unlikely]] {
                b.resize(2 * n);
@@ -444,7 +444,7 @@ namespace glz
       template <auto Opts, class B>
       GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, B&& b, auto&& ix)
       {
-         if constexpr (not has_write_unchecked(Opts) && vector_like<B>) {
+         if constexpr (not check_write_unchecked(Opts) && vector_like<B>) {
             static_assert(required_padding<T>());
             if (const auto n = ix + required_padding<T>(); n > b.size()) [[unlikely]] {
                b.resize(2 * n);
@@ -1133,12 +1133,12 @@ namespace glz
          requires(writable_map_t<T> || (map_like_array && check_concatenate(Opts) == true))
       static void op(auto&& value, is_context auto&& ctx, B&& b, auto&& ix)
       {
-         if constexpr (not has_opening_handled(Opts)) {
+         if constexpr (not check_opening_handled(Opts)) {
             dump<'{'>(b, ix);
          }
 
          if (!empty_range(value)) {
-            if constexpr (!has_opening_handled(Opts)) {
+            if constexpr (!check_opening_handled(Opts)) {
                if constexpr (Opts.prettify) {
                   ctx.indentation_level += Opts.indentation_width;
                   if constexpr (vector_like<B>) {
@@ -1204,7 +1204,7 @@ namespace glz
                }
             }
 
-            if constexpr (!has_closing_handled(Opts)) {
+            if constexpr (!check_closing_handled(Opts)) {
                if constexpr (Opts.prettify) {
                   ctx.indentation_level -= Opts.indentation_width;
                   if constexpr (vector_like<B>) {
@@ -1220,7 +1220,7 @@ namespace glz
             }
          }
 
-         if constexpr (!has_closing_handled(Opts)) {
+         if constexpr (!check_closing_handled(Opts)) {
             dump<'}'>(b, ix);
          }
       }
@@ -1307,7 +1307,7 @@ namespace glz
             }
          }
          else {
-            dump<"null", not has_write_unchecked(Opts)>(b, ix);
+            dump<"null", not check_write_unchecked(Opts)>(b, ix);
          }
       }
    };
@@ -1334,7 +1334,7 @@ namespace glz
       template <auto Opts, class B>
       GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&&, B&& b, auto&& ix)
       {
-         if constexpr (not has_write_unchecked(Opts)) {
+         if constexpr (not check_write_unchecked(Opts)) {
             if (const auto k = ix + 4; k > b.size()) [[unlikely]] {
                b.resize(2 * k);
             }
@@ -1565,7 +1565,7 @@ namespace glz
       template <auto Options>
       static void op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix)
       {
-         if constexpr (!has_opening_handled(Options)) {
+         if constexpr (!check_opening_handled(Options)) {
             dump<'{'>(b, ix);
             if constexpr (Options.prettify) {
                ctx.indentation_level += Options.indentation_width;
@@ -1621,7 +1621,7 @@ namespace glz
             }
          });
 
-         if constexpr (!has_closing_handled(Options)) {
+         if constexpr (!check_closing_handled(Options)) {
             if constexpr (Options.prettify) {
                ctx.indentation_level -= Options.indentation_width;
                dump<'\n'>(b, ix);
@@ -1639,7 +1639,7 @@ namespace glz
       template <auto Options>
       static void op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix)
       {
-         if constexpr (!has_opening_handled(Options)) {
+         if constexpr (!check_opening_handled(Options)) {
             dump<'{'>(b, ix);
             if constexpr (Options.prettify) {
                ctx.indentation_level += Options.indentation_width;
@@ -1715,7 +1715,7 @@ namespace glz
       static void op(V&& value, is_context auto&& ctx, B&& b, auto&& ix)
       {
          using ValueType = std::decay_t<V>;
-         if constexpr (has_unknown_writer<ValueType> && not has_disable_write_unknown(Options)) {
+         if constexpr (has_unknown_writer<ValueType> && not check_disable_write_unknown(Options)) {
             constexpr auto& writer = meta_unknown_write_v<ValueType>;
 
             using WriterType = meta_unknown_write_t<ValueType>;
@@ -1750,7 +1750,7 @@ namespace glz
             static constexpr auto Opts =
                disable_write_unknown_off<opening_and_closing_handled_off<ws_handled_off<Options>()>()>();
 
-            if constexpr (not has_opening_handled(Options)) {
+            if constexpr (not check_opening_handled(Options)) {
                if constexpr (Options.prettify) {
                   ctx.indentation_level += Options.indentation_width;
                   if constexpr (vector_like<B>) {
@@ -1927,7 +1927,7 @@ namespace glz
             }
 
             // Options is required here, because it must be the top level
-            if constexpr (not has_closing_handled(Options)) {
+            if constexpr (not check_closing_handled(Options)) {
                if constexpr (Options.prettify) {
                   ctx.indentation_level -= Options.indentation_width;
                   if constexpr (vector_like<B>) {
