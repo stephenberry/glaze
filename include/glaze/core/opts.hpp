@@ -142,7 +142,7 @@ namespace glz
    // (embedding nulls can cause issues, especially with C APIs)
    // Glaze will error when parsing non-escaped control character (per the JSON spec)
    // This option allows escaping control characters to avoid such errors.
-   
+
    // ---
    // The maximum precision type used for writing floats, higher precision floats will be cast down to this precision
    // float_precision float_max_write_precision{};
@@ -236,7 +236,7 @@ namespace glz
          return false;
       }
    }
-   
+
    consteval float_precision check_float_max_write_precision(auto&& Opts)
    {
       if constexpr (requires { Opts.float_max_write_precision; }) {
