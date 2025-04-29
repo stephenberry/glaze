@@ -5,6 +5,7 @@
 
 #include "glaze/beve/header.hpp"
 #include "glaze/core/common.hpp"
+#include "glaze/core/wrappers.hpp"
 #include "glaze/util/primes_64.hpp"
 
 #ifdef _MSC_VER
@@ -248,6 +249,55 @@ namespace glz
          return reflect<T>::keys[I];
       }
    }();
+   
+   template <class V, class From>
+   consteval bool custom_type_is_nullable()
+   {
+      if constexpr (std::is_member_pointer_v<From>) {
+         if constexpr (std::is_member_function_pointer_v<From>) {
+            using Ret = typename return_type<From>::type;
+            if constexpr (std::is_void_v<Ret>) {
+               using Tuple = typename inputs_as_tuple<From>::type;
+               if constexpr (glz::tuple_size_v<Tuple> == 1) {
+                  using Input = std::decay_t<glz::tuple_element_t<0, Tuple>>;
+                  return bool(null_t<Input>);
+               }
+            }
+         }
+         else if constexpr (std::is_member_object_pointer_v<From>) {
+            using Value = std::decay_t<decltype(std::declval<V>().val.*(std::declval<V>().from))>;
+            if constexpr (is_specialization_v<Value, std::function>) {
+               using Ret = typename function_traits<Value>::result_type;
+               
+               if constexpr (std::is_void_v<Ret>) {
+                  using Tuple = typename function_traits<Value>::arguments;
+                  if constexpr (glz::tuple_size_v<Tuple> == 1) {
+                     using Input = std::decay_t<glz::tuple_element_t<0, Tuple>>;
+                     return bool(null_t<Input>);
+                  }
+               }
+            }
+            else {
+               return bool(null_t<Value>);
+            }
+         }
+      }
+      else {
+         if constexpr (is_invocable_concrete<From>) {
+            using Ret = invocable_result_t<From>;
+            if constexpr (std::is_void_v<Ret>) {
+               using Tuple = invocable_args_t<From>;
+               constexpr auto N = glz::tuple_size_v<Tuple>;
+               if constexpr (N == 2) {
+                  using Input = std::decay_t<glz::tuple_element_t<1, Tuple>>;
+                  return bool(null_t<Input>);
+               }
+            }
+         }
+      }
+      
+      return false;
+   }
 
    template <class T, auto Opts>
    constexpr auto required_fields()
@@ -257,7 +307,19 @@ namespace glz
       bit_array<N> fields{};
       if constexpr (Opts.error_on_missing_keys) {
          for_each<N>([&](auto I) constexpr {
-            fields[I] = !bool(Opts.skip_null_members) || !null_t<std::decay_t<refl_t<T, I>>>;
+            using V = std::decay_t<refl_t<T, I>>;
+            if constexpr (is_specialization_v<V, custom_t>) {
+               using From = typename V::from_t;
+               
+               // If we are reading a glz::custom_t, we must deduce the input argument and not require the key if it is optional
+               // This allows error_on_missing_keys to work properly with glz::custom_t wrapping optional types
+               constexpr bool nullable_in_custom = custom_type_is_nullable<V, From>();
+               
+               fields[I] = !Opts.skip_null_members || !(std::same_as<From, skip> || nullable_in_custom);
+            }
+            else {
+               fields[I] = !Opts.skip_null_members || !null_t<V>;
+            }
          });
       }
       return fields;
