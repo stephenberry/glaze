@@ -313,7 +313,7 @@ namespace glz
                
                // If we are reading a glz::custom_t, we must deduce the input argument and not require the key if it is optional
                // This allows error_on_missing_keys to work properly with glz::custom_t wrapping optional types
-               constexpr bool nullable_in_custom = custom_type_is_nullable<V, From>;
+               constexpr bool nullable_in_custom = custom_type_is_nullable<V, From>();
                
                fields[I] = !Opts.skip_null_members || !(std::same_as<From, skip> || nullable_in_custom);
             }
