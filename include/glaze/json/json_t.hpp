@@ -98,7 +98,7 @@ namespace glz
       }
 
       template <class T>
-         requires (requires { static_cast<T>(std::declval<double>()); })
+         requires(requires { static_cast<T>(std::declval<double>()); })
       [[nodiscard]] T as() const
       {
          // Can be used for int and the like
