@@ -2269,14 +2269,14 @@ suite async_vector_beve_tests = [] {
       v.push_back(3);
       v.push_back(4);
       v.push_back(5);
-      
+
       std::string buffer{};
-      
+
       // write_json returns a status code: false means success, true means error
       expect(not glz::write_beve(v, buffer)) << "Failed to serialize async_vector";
       glz::async_vector<int> result;
       expect(not glz::read_beve(result, buffer)) << "Failed to deserialize async_vector";
-      
+
       auto result_reader = result.read();
       expect(result_reader->size() == 5);
       expect((*result_reader)[0] == 1);
@@ -2285,19 +2285,19 @@ suite async_vector_beve_tests = [] {
       expect((*result_reader)[3] == 4);
       expect((*result_reader)[4] == 5);
    };
-   
+
    "async_vector custom object serialization"_test = [] {
       glz::async_vector<Point> points;
       points.push_back({1, 2});
       points.push_back({3, 4});
       points.push_back({5, 6});
-      
+
       std::string buffer{};
       expect(not glz::write_beve(points, buffer)) << "Failed to serialize custom objects in async_vector";
-      
+
       glz::async_vector<Point> result;
       expect(not glz::read_beve(result, buffer)) << "Failed to deserialize custom objects in async_vector";
-      
+
       auto result_reader = result.read();
       expect(result_reader->size() == 3);
       expect((*result_reader)[0] == Point{1, 2});
