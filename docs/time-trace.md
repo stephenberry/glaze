@@ -13,11 +13,21 @@ An example of the API in use:
 
 glz::trace trace{}; // make a structure to store a trace
 
-trace.begin("my event name")
+trace.begin("my event name");
 // compute something here
-trace.end("my event name")
+trace.end("my event name");
   
 auto ec = glz::write_file_json(trace, "trace.json", std::string{});
+```
+
+Or, for async events:
+
+```c++
+glz::trace trace{}; // make a structure to store a trace
+
+trace.async_begin("my event name");
+// compute something here
+trace.async_end("my event name");
 ```
 
 ## Args (metadata)
@@ -47,9 +57,25 @@ trace.disabled = true; // no data will be collected
 
 ## Scoped Tracing
 
-`auto scoper = trace.scope("event name");` automatically ends the event when it goes out of scope.
+Automatically ends the event when it goes out of scope:
 
-`auto scoper = trace.async_scope("event name");` automatically ends the async event when it goes out of scope.
+```c++
+{
+  auto scoper = trace.scope("event name"); // trace.begin("event name") called
+  // run event
+}
+// end("event name") automatically called when leaving scope
+```
+
+Automatically ends the async event when it goes out of scope:
+
+```c++
+{
+  auto scoper = trace.async_scope("event name"); // trace.async_begin("event name") called
+  // run event
+}
+// trace.async_end("event name") automatically called when leaving scope
+```
 
 ## Global tracing
 

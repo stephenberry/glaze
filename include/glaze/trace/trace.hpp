@@ -184,13 +184,13 @@ namespace glz
          async_scoper(trace& tr, const std::string_view name) noexcept : tr(tr), name(name)
          {
             if (not tr.disabled) {
-               tr.begin(name);
+               tr.async_begin(name);
             }
          }
          ~async_scoper() noexcept
          {
             if (not tr.disabled) {
-               tr.end(name);
+               tr.async_end(name);
             }
          }
 
