@@ -2,6 +2,8 @@
 
 Use Google's [Perfetto](https://ui.perfetto.dev/) to visualize time traces, enabling simple profiling of your C++. Glaze writes out JSON traces conformant to Google's [Trace Event Format](https://docs.google.com/document/d/1CvAClvFfyA5R-PhYUmn5OOQtYMH4h6I0nSsKchNAySU/preview).
 
+> The glz::trace class is entirely thread safe.
+
 Glaze provides `begin` and `end` members for duration traces. Asynchronous traces use `async_begin` and `async_end`.
 
 An example of the API in use:
@@ -43,37 +45,16 @@ trace.end("my event name");
 trace.disabled = true; // no data will be collected
 ```
 
+## Scoped Tracing
+
+`trace.scope("event name")` automatically ends the event when it goes out of scope.
+
+`trace.async_scope("event name")` automatically ends the async event when it goes out of scope.
+
 ## Global tracing
 
-It can be bothersome to pass around a `glz::trace` instance. A global instance is available with a separate API to avoid needing to pass a trace instance around.
-
-`glz::disable_trace()` - Turns off the global tracing.
-`glz::enable_trace()` - Turns on the global tracing if it had been disabled (enabled by default).
-`glz::trace_begin("my event")` - Add a begin event for "my event"
-`glz::trace_end("my event")` - Add an end event for "my event"
-`glz::trace_async_begin("my event")` - Add an async_begin event for "my event"
-`glz::trace_async_end("my event")` - Add an aysnc_end event for "my event"
-
-Two structs are also provided that will automatically add the end events when they leave scope:
-`glz::duration_trace`
-`glz::async_trace`
-
-Example:
-```c++
-void my_function_to_profile()
-{
-   glz::duration_trace trace{"my function to profile"};
-   // do stuff here
-   // glz::duration_trace will automatically add the end event when it goes out of scope.
-}
-```
-
-Then, somewhere at the end of your program, write your global trace to file:
+It can be bothersome to pass around a `glz::trace` instance. A global instance can be made for convenience:
 
 ```c++
-const auto ec = glz::write_file_trace("trace.json", std::string{});
-if (ec) {
-  std::cerr << "trace output failed\n";
-}
+inline glz::trace global_trace{};
 ```
-
