@@ -47,9 +47,9 @@ trace.disabled = true; // no data will be collected
 
 ## Scoped Tracing
 
-`trace.scope("event name")` automatically ends the event when it goes out of scope.
+`auto scoper = trace.scope("event name");` automatically ends the event when it goes out of scope.
 
-`trace.async_scope("event name")` automatically ends the async event when it goes out of scope.
+`auto scoper = trace.async_scope("event name");` automatically ends the async event when it goes out of scope.
 
 ## Global tracing
 
