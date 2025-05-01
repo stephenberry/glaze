@@ -13,11 +13,21 @@ An example of the API in use:
 
 glz::trace trace{}; // make a structure to store a trace
 
-trace.begin("my event name")
+trace.begin("my event name");
 // compute something here
-trace.end("my event name")
+trace.end("my event name");
   
 auto ec = glz::write_file_json(trace, "trace.json", std::string{});
+```
+
+Or, for async events:
+
+```c++
+glz::trace trace{}; // make a structure to store a trace
+
+trace.async_begin("my event name");
+// compute something here
+trace.async_end("my event name");
 ```
 
 ## Args (metadata)
@@ -39,17 +49,43 @@ trace.begin("my event name", "My event description");
 trace.end("my event name");
 ```
 
-## Disabling trace
+## Runtime Disabling Trace
 
 ```c++
 trace.disabled = true; // no data will be collected
 ```
 
+## Compile Time Disabling Trace
+
+A boolean template parameter `Enabled` defaults to `true`, but can be set to `false` to compile time disable tracing and thus remove the binary when compiled.
+
+```c++
+glz::trace<false> trace{};
+```
+
+When disabled, writing `glz::trace` as JSON will result in an empty JSON object: `{}`
+
 ## Scoped Tracing
 
-`trace.scope("event name")` automatically ends the event when it goes out of scope.
+Automatically ends the event when it goes out of scope:
 
-`trace.async_scope("event name")` automatically ends the async event when it goes out of scope.
+```c++
+{
+  auto scoper = trace.scope("event name"); // trace.begin("event name") called
+  // run event
+}
+// end("event name") automatically called when leaving scope
+```
+
+Automatically ends the async event when it goes out of scope:
+
+```c++
+{
+  auto scoper = trace.async_scope("event name"); // trace.async_begin("event name") called
+  // run event
+}
+// trace.async_end("event name") automatically called when leaving scope
+```
 
 ## Global tracing
 
