@@ -136,9 +136,21 @@ namespace glz
    {
       using type = std::tuple<Args...>;
    };
+   
+   template <class ClassType, class Result, class... Args>
+   struct inputs_as_tuple<Result (ClassType::*)(Args...) noexcept>
+   {
+      using type = std::tuple<Args...>;
+   };
 
    template <class ClassType, class Result, class... Args>
    struct inputs_as_tuple<Result (ClassType::*)(Args...) const>
+   {
+      using type = std::tuple<Args...>;
+   };
+   
+   template <class ClassType, class Result, class... Args>
+   struct inputs_as_tuple<Result (ClassType::*)(Args...) const noexcept>
    {
       using type = std::tuple<Args...>;
    };
@@ -151,9 +163,21 @@ namespace glz
    {
       using type = ClassType;
    };
+   
+   template <class ClassType, class Result, class... Args>
+   struct parent_of_fn<Result (ClassType::*)(Args...) noexcept>
+   {
+      using type = ClassType;
+   };
 
    template <class ClassType, class Result, class... Args>
    struct parent_of_fn<Result (ClassType::*)(Args...) const>
+   {
+      using type = ClassType;
+   };
+   
+   template <class ClassType, class Result, class... Args>
+   struct parent_of_fn<Result (ClassType::*)(Args...) const noexcept>
    {
       using type = ClassType;
    };
@@ -176,12 +200,32 @@ namespace glz
          return (reinterpret_cast<T*>(ptr)->*MemPtr)(std::forward<Args>(args)...);
       }
    };
+   
+   template <auto MemPtr, class T, class R, class... Args>
+   struct arguments<MemPtr, R (T::*)(Args...) noexcept>
+   {
+      static constexpr auto op(void* ptr, Args&&... args)
+      -> std::invoke_result_t<decltype(std::mem_fn(MemPtr)), T, Args...>
+      {
+         return (reinterpret_cast<T*>(ptr)->*MemPtr)(std::forward<Args>(args)...);
+      }
+   };
 
    template <auto MemPtr, class T, class R, class... Args>
    struct arguments<MemPtr, R (T::*)(Args...) const>
    {
       static constexpr auto op(void* ptr, Args&&... args)
          -> std::invoke_result_t<decltype(std::mem_fn(MemPtr)), T, Args...>
+      {
+         return (reinterpret_cast<T*>(ptr)->*MemPtr)(std::forward<Args>(args)...);
+      }
+   };
+   
+   template <auto MemPtr, class T, class R, class... Args>
+   struct arguments<MemPtr, R (T::*)(Args...) const noexcept>
+   {
+      static constexpr auto op(void* ptr, Args&&... args)
+      -> std::invoke_result_t<decltype(std::mem_fn(MemPtr)), T, Args...>
       {
          return (reinterpret_cast<T*>(ptr)->*MemPtr)(std::forward<Args>(args)...);
       }
@@ -210,9 +254,25 @@ namespace glz
       using arguments = std::tuple<Args...>;
       using object_type = T;
    };
+   
+   template <class R, class T, class... Args>
+   struct invocable_traits<R (T::*)(Args...) const noexcept> : std::true_type
+   {
+      using result_type = R;
+      using arguments = std::tuple<Args...>;
+      using object_type = T;
+   };
 
    template <class R, class T, class... Args>
    struct invocable_traits<R (T::*)(Args...)> : std::true_type
+   {
+      using result_type = R;
+      using arguments = std::tuple<Args...>;
+      using object_type = T;
+   };
+   
+   template <class R, class T, class... Args>
+   struct invocable_traits<R (T::*)(Args...) noexcept> : std::true_type
    {
       using result_type = R;
       using arguments = std::tuple<Args...>;
