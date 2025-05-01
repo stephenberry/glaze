@@ -49,11 +49,21 @@ trace.begin("my event name", "My event description");
 trace.end("my event name");
 ```
 
-## Disabling trace
+## Runtime Disabling Trace
 
 ```c++
 trace.disabled = true; // no data will be collected
 ```
+
+## Compile Time Disabling Trace
+
+A boolean template parameter `Enabled` defaults to `true`, but can be set to `false` to compile time disable tracing and thus remove the binary when compiled.
+
+```c++
+glz::trace<false> trace{};
+```
+
+When disabled, writing `glz::trace` as JSON will result in an empty JSON object: `{}`
 
 ## Scoped Tracing
 
