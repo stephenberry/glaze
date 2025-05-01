@@ -57,12 +57,10 @@ namespace glz
 
    struct trace
    {
-      std::deque<trace_event> traceEvents{};
-      display_time_unit displayTimeUnit = display_time_unit::ms;
-
-      std::optional<std::chrono::time_point<std::chrono::steady_clock>> t0{}; // the time of the first event
-
       std::atomic<bool> disabled = false;
+      display_time_unit displayTimeUnit = display_time_unit::ms;
+      std::deque<trace_event> traceEvents{};
+      std::optional<std::chrono::time_point<std::chrono::steady_clock>> t0{}; // the time of the first event
       std::mutex mtx{};
 
       template <class... Args>
