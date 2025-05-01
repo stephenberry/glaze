@@ -63,10 +63,8 @@ namespace glz
       std::deque<trace_event> traceEvents{};
       std::optional<std::chrono::time_point<std::chrono::steady_clock>> t0{}; // the time of the first event
       std::mutex mtx{};
-      
-      void clear() {
-         traceEvents.clear();
-      }
+
+      void clear() { traceEvents.clear(); }
 
       template <class... Args>
          requires(sizeof...(Args) <= 1)
@@ -84,8 +82,7 @@ namespace glz
          requires(sizeof...(Args) <= 1)
       void end(const std::string_view name, Args&&... args) noexcept
       {
-         if constexpr (Enabled)
-         {
+         if constexpr (Enabled) {
             if (disabled) {
                return;
             }
@@ -97,12 +94,11 @@ namespace glz
          requires(sizeof...(Args) <= 1)
       void duration(const std::string_view name, const char phase, Args&&... args) noexcept
       {
-         if constexpr (Enabled)
-         {
+         if constexpr (Enabled) {
             if (disabled) {
                return;
             }
-            
+
             const auto tnow = std::chrono::steady_clock::now();
             trace_event* event{};
             {
@@ -126,8 +122,7 @@ namespace glz
          requires(sizeof...(Args) <= 1)
       void async_begin(const std::string_view name, Args&&... args) noexcept
       {
-         if constexpr (Enabled)
-         {
+         if constexpr (Enabled) {
             if (disabled) {
                return;
             }
@@ -155,7 +150,7 @@ namespace glz
             if (disabled) {
                return;
             }
-            
+
             const auto tnow = std::chrono::steady_clock::now();
             trace_event* event{};
             {
@@ -236,7 +231,7 @@ namespace glz
       using T = trace<true>;
       static constexpr auto value = object(&T::traceEvents, &T::displayTimeUnit);
    };
-   
+
    template <>
    struct meta<trace<false>>
    {
