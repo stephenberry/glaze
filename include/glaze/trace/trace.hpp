@@ -63,6 +63,10 @@ namespace glz
       std::deque<trace_event> traceEvents{};
       std::optional<std::chrono::time_point<std::chrono::steady_clock>> t0{}; // the time of the first event
       std::mutex mtx{};
+      
+      void clear() {
+         traceEvents.clear();
+      }
 
       template <class... Args>
          requires(sizeof...(Args) <= 1)
