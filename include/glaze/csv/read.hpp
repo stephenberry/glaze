@@ -275,7 +275,7 @@ namespace glz
       template <auto Opts, class It>
       static void op(auto&& value, is_context auto&& ctx, It&& it, auto&& end)
       {
-         if constexpr (Opts.layout == rowwise) {
+         if constexpr (check_layout(Opts) == rowwise) {
             while (it != end) {
                auto start = it;
                goto_delim<','>(it, end);
@@ -439,7 +439,7 @@ namespace glz
          static constexpr auto N = reflect<T>::size;
          static constexpr auto HashInfo = hash_info<T>;
 
-         if constexpr (Opts.layout == rowwise) {
+         if constexpr (check_layout(Opts) == rowwise) {
             while (it != end) {
                auto start = it;
                goto_delim<','>(it, end);
@@ -649,14 +649,14 @@ namespace glz
    template <uint32_t layout = rowwise, read_supported<CSV> T, class Buffer>
    [[nodiscard]] inline auto read_csv(T&& value, Buffer&& buffer)
    {
-      return read<opts{.format = CSV, .layout = layout}>(value, std::forward<Buffer>(buffer));
+      return read<opts_csv{.layout = layout}>(value, std::forward<Buffer>(buffer));
    }
 
    template <uint32_t layout = rowwise, read_supported<CSV> T, class Buffer>
    [[nodiscard]] inline auto read_csv(Buffer&& buffer)
    {
       T value{};
-      read<opts{.format = CSV, .layout = layout}>(value, std::forward<Buffer>(buffer));
+      read<opts_csv{.layout = layout}>(value, std::forward<Buffer>(buffer));
       return value;
    }
 
@@ -672,6 +672,6 @@ namespace glz
          return {ec};
       }
 
-      return read<opts{.format = CSV, .layout = layout}>(value, buffer, ctx);
+      return read<opts_csv{.layout = layout}>(value, buffer, ctx);
    }
 }

@@ -66,7 +66,7 @@ namespace glz
       static void op(auto&& value, is_context auto&& ctx, B&& b, auto&& ix)
       {
          if constexpr (resizable<T>) {
-            if constexpr (Opts.layout == rowwise) {
+            if constexpr (check_layout(Opts) == rowwise) {
                const auto n = value.size();
                for (size_t i = 0; i < n; ++i) {
                   serialize<CSV>::op<Opts>(value[i], ctx, b, ix);
@@ -110,10 +110,12 @@ namespace glz
       template <auto Opts, class B>
       static void op(auto&& value, is_context auto&& ctx, B&& b, auto&& ix)
       {
-         if constexpr (Opts.layout == rowwise) {
+         if constexpr (check_layout(Opts) == rowwise) {
             for (auto& [name, data] : value) {
-               dump_maybe_empty(name, b, ix);
-               dump<','>(b, ix);
+               if constexpr (check_csv_write_headers(Opts)) {
+                  dump_maybe_empty(name, b, ix);
+                  dump<','>(b, ix);
+               }
                const auto n = data.size();
                for (size_t i = 0; i < n; ++i) {
                   serialize<CSV>::op<Opts>(data[i], ctx, b, ix);
@@ -127,21 +129,22 @@ namespace glz
          else {
             // dump titles
             const auto n = value.size();
-            size_t i = 0;
-            for (auto& [name, data] : value) {
-               dump_maybe_empty(name, b, ix);
-               ++i;
-               if (i < n) {
-                  dump<','>(b, ix);
+            if constexpr (check_csv_write_headers(Opts)) {
+               size_t i = 0;
+               for (auto& [name, data] : value) {
+                  dump_maybe_empty(name, b, ix);
+                  ++i;
+                  if (i < n) {
+                     dump<','>(b, ix);
+                  }
                }
+               dump<'\n'>(b, ix);
             }
-
-            dump<'\n'>(b, ix);
 
             size_t row = 0;
             bool end = false;
             while (true) {
-               i = 0;
+               size_t i = 0;
                for (auto& [name, data] : value) {
                   if (row >= data.size()) {
                      end = true;
@@ -185,7 +188,7 @@ namespace glz
             }
          }();
 
-         if constexpr (Opts.layout == rowwise) {
+         if constexpr (check_layout(Opts) == rowwise) {
             for_each<N>([&](auto I) {
                using value_type = typename std::decay_t<refl_t<T, I>>::value_type;
 
@@ -205,11 +208,13 @@ namespace glz
                   const auto count = member.size();
                   const auto size = member[0].size();
                   for (size_t i = 0; i < size; ++i) {
-                     dump<key>(b, ix);
-                     dump<'['>(b, ix);
-                     write_chars::op<Opts>(i, ctx, b, ix);
-                     dump<']'>(b, ix);
-                     dump<','>(b, ix);
+                     if constexpr (check_csv_write_headers(Opts)) {
+                        dump<key>(b, ix);
+                        dump<'['>(b, ix);
+                        write_chars::op<Opts>(i, ctx, b, ix);
+                        dump<']'>(b, ix);
+                        dump<','>(b, ix);
+                     }
 
                      for (size_t j = 0; j < count; ++j) {
                         serialize<CSV>::op<Opts>(member[j][i], ctx, b, ix);
@@ -224,8 +229,10 @@ namespace glz
                   }
                }
                else {
-                  dump<key>(b, ix);
-                  dump<','>(b, ix);
+                  if constexpr (check_csv_write_headers(Opts)) {
+                     dump<key>(b, ix);
+                     dump<','>(b, ix);
+                  }
                   serialize<CSV>::op<Opts>(get_member(value, mem), ctx, b, ix);
                   dump<'\n'>(b, ix);
                }
@@ -233,42 +240,44 @@ namespace glz
          }
          else {
             // write titles
-            for_each<N>([&](auto I) {
-               using X = refl_t<T, I>;
+            if constexpr (check_csv_write_headers(Opts)) {
+               for_each<N>([&](auto I) {
+                  using X = refl_t<T, I>;
 
-               static constexpr sv key = reflect<T>::keys[I];
+                  static constexpr sv key = reflect<T>::keys[I];
 
-               decltype(auto) member = [&]() -> decltype(auto) {
-                  if constexpr (reflectable<T>) {
-                     return get<I>(t);
-                  }
-                  else {
-                     return get<I>(reflect<T>::values);
-                  }
-               }();
+                  decltype(auto) member = [&]() -> decltype(auto) {
+                     if constexpr (reflectable<T>) {
+                        return get<I>(t);
+                     }
+                     else {
+                        return get<I>(reflect<T>::values);
+                     }
+                  }();
 
-               if constexpr (fixed_array_value_t<X>) {
-                  const auto size = get_member(value, member)[0].size();
-                  for (size_t i = 0; i < size; ++i) {
-                     dump<key>(b, ix);
-                     dump<'['>(b, ix);
-                     write_chars::op<Opts>(i, ctx, b, ix);
-                     dump<']'>(b, ix);
-                     if (i != size - 1) {
-                        dump<','>(b, ix);
+                  if constexpr (fixed_array_value_t<X>) {
+                     const auto size = get_member(value, member)[0].size();
+                     for (size_t i = 0; i < size; ++i) {
+                        dump<key>(b, ix);
+                        dump<'['>(b, ix);
+                        write_chars::op<Opts>(i, ctx, b, ix);
+                        dump<']'>(b, ix);
+                        if (i != size - 1) {
+                           dump<','>(b, ix);
+                        }
                      }
                   }
-               }
-               else {
-                  serialize<CSV>::op<Opts>(key, ctx, b, ix);
-               }
+                  else {
+                     serialize<CSV>::op<Opts>(key, ctx, b, ix);
+                  }
 
-               if (I != N - 1) {
-                  dump<','>(b, ix);
-               }
-            });
+                  if (I != N - 1) {
+                     dump<','>(b, ix);
+                  }
+               });
 
-            dump<'\n'>(b, ix);
+               dump<'\n'>(b, ix);
+            }
 
             size_t row = 0;
             bool end = false;
@@ -328,22 +337,72 @@ namespace glz
       }
    };
 
+   // For types like std::vector<T> where T is a struct/object
+   template <writable_array_t T>
+      requires(glaze_object_t<typename T::value_type> || reflectable<typename T::value_type>)
+   struct to<CSV, T>
+   {
+      using U = typename T::value_type;
+
+      template <auto Opts, class B>
+      static void op(auto&& value, is_context auto&& ctx, B&& b, auto&& ix)
+      {
+         static constexpr auto N = reflect<U>::size;
+
+         // Write headers (field names) if enabled
+         if constexpr (check_csv_write_headers(Opts)) {
+            for_each<N>([&](auto I) {
+               static constexpr sv key = reflect<U>::keys[I];
+               serialize<CSV>::op<Opts>(key, ctx, b, ix);
+
+               if (I < N - 1) {
+                  dump<','>(b, ix);
+               }
+            });
+
+            dump<'\n'>(b, ix);
+         }
+
+         // Write each struct as a row
+         for (const auto& item : value) {
+            for_each<N>([&](auto I) {
+               decltype(auto) mem = [&]() -> decltype(auto) {
+                  if constexpr (reflectable<U>) {
+                     return get<I>(to_tie(item));
+                  }
+                  else {
+                     return get<I>(reflect<U>::values);
+                  }
+               }();
+
+               serialize<CSV>::op<Opts>(get_member(item, mem), ctx, b, ix);
+
+               if (I < N - 1) {
+                  dump<','>(b, ix);
+               }
+            });
+
+            dump<'\n'>(b, ix);
+         }
+      }
+   };
+
    template <uint32_t layout = rowwise, write_supported<CSV> T, class Buffer>
    [[nodiscard]] auto write_csv(T&& value, Buffer&& buffer)
    {
-      return write<opts{.format = CSV, .layout = layout}>(std::forward<T>(value), std::forward<Buffer>(buffer));
+      return write<opts_csv{.layout = layout}>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
 
    template <uint32_t layout = rowwise, write_supported<CSV> T>
    [[nodiscard]] expected<std::string, error_ctx> write_csv(T&& value)
    {
-      return write<opts{.format = CSV, .layout = layout}>(std::forward<T>(value));
+      return write<opts_csv{.layout = layout}>(std::forward<T>(value));
    }
 
    template <uint32_t layout = rowwise, write_supported<CSV> T>
    [[nodiscard]] error_ctx write_file_csv(T&& value, const std::string& file_name, auto&& buffer)
    {
-      const auto ec = write<opts{.format = CSV, .layout = layout}>(std::forward<T>(value), buffer);
+      const auto ec = write<opts_csv{.layout = layout}>(std::forward<T>(value), buffer);
       if (bool(ec)) [[unlikely]] {
          return ec;
       }
