@@ -108,9 +108,10 @@ namespace glz
    
    // CSV Format Options
    // Note: You can always create your own options struct if you want to share it between formats
-   struct opts_csv : opts
+   struct opts_csv
    {
       uint32_t format = CSV;
+      bool null_terminated = true; // Whether the input buffer is null terminated
       uint8_t layout = rowwise; // CSV row wise output/input
       bool csv_write_headers = true; // Whether to write column/row headers in CSV format
       
