@@ -71,7 +71,7 @@ suite csv_tests = [] {
 
       std::string out{};
 
-      expect(not glz::write<glz::opts{.format = glz::CSV, .layout = glz::colwise}>(obj, out));
+      expect(not glz::write<glz::opts_csv{.layout = glz::colwise}>(obj, out));
       expect(out ==
              R"(num1,num2,maybe,v3s[0],v3s[1],v3s[2]
 11,22,1,1,1,1
@@ -101,7 +101,7 @@ suite csv_tests = [] {
 
       std::string out{};
 
-      expect(not glz::write<glz::opts{.format = glz::CSV, .layout = glz::colwise}>(obj, out));
+      expect(not glz::write<glz::opts_csv{.layout = glz::colwise}>(obj, out));
       expect(out ==
              R"(num1,num2,maybe,v3s[0],v3s[1],v3s[2]
 11,22,1,1,1,1
@@ -136,7 +136,7 @@ suite csv_tests = [] {
 
       std::string out{};
 
-      expect(not glz::write<glz::opts{.format = glz::CSV, .layout = glz::colwise}>(obj, out));
+      expect(not glz::write<glz::opts_csv{.layout = glz::colwise}>(obj, out));
       expect(out ==
              R"(id,udl
 1,BRN
@@ -167,7 +167,7 @@ v3s[2],1,2,3,4)";
 
       std::string out{};
 
-      expect(not glz::write<glz::opts{.format = glz::CSV}>(obj, out));
+      expect(not glz::write<glz::opts_csv{}>(obj, out));
       expect(out ==
              R"(num1,11,33,55,77
 num2,22,44,66,88
@@ -193,7 +193,7 @@ v3s[2],1,2,3,4)");
 
       std::string out{};
 
-      expect(not glz::write<glz::opts{.format = glz::CSV}>(obj, out));
+      expect(not glz::write<glz::opts_csv{}>(obj, out));
       expect(out ==
              R"(num1,11,33,55,77
 num2,22,44,66,88
@@ -216,16 +216,16 @@ v3s[2],1,2,3,4)");
       }
 
       std::string out{};
-      expect(not glz::write<glz::opts{.format = glz::CSV}>(m, out));
+      expect(not glz::write<glz::opts_csv{}>(m, out));
       expect(out == R"(x,0,1,2,3,4,5,6,7,8,9
 y,1,2,3,4,5,6,7,8,9,10
 )");
 
       out.clear();
-      expect(not glz::write<glz::opts{.format = glz::CSV}>(m, out));
+      expect(not glz::write<glz::opts_csv{}>(m, out));
 
       m.clear();
-      expect(!glz::read<glz::opts{.format = glz::CSV}>(m, out));
+      expect(!glz::read<glz::opts_csv{}>(m, out));
 
       expect(m["x"] == std::vector<uint64_t>{0, 1, 2, 3, 4, 5, 6, 7, 8, 9});
       expect(m["y"] == std::vector<uint64_t>{1, 2, 3, 4, 5, 6, 7, 8, 9, 10});
@@ -242,7 +242,7 @@ y,1,2,3,4,5,6,7,8,9,10
       }
 
       std::string out{};
-      expect(not glz::write<glz::opts{.format = glz::CSV, .layout = glz::colwise}>(m, out));
+      expect(not glz::write<glz::opts_csv{.layout = glz::colwise}>(m, out));
       expect(out == R"(x,y
 0,1
 1,2
@@ -257,10 +257,10 @@ y,1,2,3,4,5,6,7,8,9,10
 )");
 
       out.clear();
-      expect(not glz::write<glz::opts{.format = glz::CSV, .layout = glz::colwise}>(m, out));
+      expect(not glz::write<glz::opts_csv{.layout = glz::colwise}>(m, out));
 
       m.clear();
-      expect(!glz::read<glz::opts{.format = glz::CSV, .layout = glz::colwise}>(m, out));
+      expect(!glz::read<glz::opts_csv{.layout = glz::colwise}>(m, out));
 
       expect(m["x"] == std::vector<uint64_t>{0, 1, 2, 3, 4, 5, 6, 7, 8, 9});
       expect(m["y"] == std::vector<uint64_t>{1, 2, 3, 4, 5, 6, 7, 8, 9, 10});
@@ -277,7 +277,7 @@ y,1,2,3,4,5,6,7,8,9,10
       }
 
       std::string out{};
-      expect(not glz::write<glz::opts{.format = glz::CSV}>(m, out));
+      expect(not glz::write<glz::opts_csv{}>(m, out));
       expect(out == R"(y,1,2,3,4,5,6,7,8,9,10
 x,0,1,2,3,4,5,6,7,8,9
 )" || out == R"(x,0,1,2,3,4,5,6,7,8,9
@@ -285,10 +285,10 @@ y,1,2,3,4,5,6,7,8,9,10
 )");
 
       out.clear();
-      expect(not glz::write<glz::opts{.format = glz::CSV}>(m, out));
+      expect(not glz::write<glz::opts_csv{}>(m, out));
 
       m.clear();
-      expect(!glz::read<glz::opts{.format = glz::CSV}>(m, out));
+      expect(!glz::read<glz::opts_csv{}>(m, out));
 
       expect(m["x"] == std::vector<uint64_t>{0, 1, 2, 3, 4, 5, 6, 7, 8, 9});
       expect(m["y"] == std::vector<uint64_t>{1, 2, 3, 4, 5, 6, 7, 8, 9, 10});
@@ -328,7 +328,7 @@ x,1,2,3,4,5)");
       }
 
       std::string s;
-      expect(not write<glz::opts{.format = glz::CSV, .layout = glz::colwise}>(recorder, s));
+      expect(not write<glz::opts_csv{.layout = glz::colwise}>(recorder, s));
       expect(s ==
              R"(t,x
 0,1
@@ -346,8 +346,7 @@ x,1,2,3,4,5)");
 33,Krakow)";
       glz::context ctx{};
       issue_768_test_struct value;
-      glz::error_ctx glaze_err{
-         glz::read<glz::opts{.format = glz::CSV, .layout = glz::colwise}>(value, std::string{valid_record}, ctx)};
+      glz::error_ctx glaze_err{glz::read<glz::opts_csv{.layout = glz::colwise}>(value, std::string{valid_record}, ctx)};
       expect(!bool(glaze_err));
    };
    "issue 768 invalid_record 1"_test = [] {
@@ -360,7 +359,7 @@ x,1,2,3,4,5)");
       glz::context ctx{};
       issue_768_test_struct value;
       glz::error_ctx glaze_err{
-         glz::read<glz::opts{.format = glz::CSV, .layout = glz::colwise}>(value, std::string{invalid_record_1}, ctx)};
+         glz::read<glz::opts_csv{.layout = glz::colwise}>(value, std::string{invalid_record_1}, ctx)};
       expect(bool(glaze_err));
    };
 
@@ -374,7 +373,7 @@ x,1,2,3,4,5)");
       glz::context ctx{};
       issue_768_test_struct value;
       glz::error_ctx glaze_err{
-         glz::read<glz::opts{.format = glz::CSV, .layout = glz::colwise}>(value, std::string{invalid_record_2}, ctx)};
+         glz::read<glz::opts_csv{.layout = glz::colwise}>(value, std::string{invalid_record_2}, ctx)};
       expect(bool(glaze_err));
    };
 };
@@ -410,7 +409,7 @@ suite reflect_my_struct_test = [] {
 
       std::string out{};
 
-      expect(not glz::write<glz::opts{.format = glz::CSV, .layout = glz::colwise}>(obj, out));
+      expect(not glz::write<glz::opts_csv{.layout = glz::colwise}>(obj, out));
       expect(out ==
              R"(num1,num2,maybe,v3s[0],v3s[1],v3s[2]
 11,22,1,1,1,1
@@ -441,7 +440,7 @@ v3s[2],1,2,3,4)";
 
       std::string out{};
 
-      expect(not glz::write<glz::opts{.format = glz::CSV}>(obj, out));
+      expect(not glz::write<glz::opts_csv{}>(obj, out));
       expect(out ==
              R"(num1,11,33,55,77
 num2,22,44,66,88
@@ -642,6 +641,277 @@ suite currency_csv_test = [] {
       expect(not ec);
       ec = glz::read_file_csv(obj, "currency_rowwise.csv", buffer);
       expect(not ec) << glz::format_error(ec, buffer) << '\n';*/
+   };
+};
+
+struct csv_headers_struct
+{
+   std::vector<int> num1{1, 2, 3};
+   std::vector<float> num2{4.0f, 5.0f, 6.0f};
+   std::vector<std::string> text{"a", "b", "c"};
+};
+
+template <>
+struct glz::meta<csv_headers_struct>
+{
+   using T = csv_headers_struct;
+   static constexpr auto value = glz::object(&T::num1, &T::num2, &T::text);
+};
+
+struct data_point
+{
+   int id{};
+   float value{};
+   std::string name{};
+};
+
+template <>
+struct glz::meta<data_point>
+{
+   using T = data_point;
+   static constexpr auto value = glz::object(&T::id, &T::value, &T::name);
+};
+
+suite csv_headers_control_tests = [] {
+   "rowwise_with_headers"_test = [] {
+      csv_headers_struct obj{};
+      std::string buffer{};
+
+      expect(not glz::write<glz::opts_csv{.use_headers = true}>(obj, buffer));
+      expect(buffer ==
+             R"(num1,1,2,3
+num2,4,5,6
+text,a,b,c
+)");
+   };
+
+   "rowwise_without_headers"_test = [] {
+      csv_headers_struct obj{};
+      std::string buffer{};
+
+      expect(not glz::write<glz::opts_csv{.use_headers = false}>(obj, buffer));
+      expect(buffer ==
+             R"(1,2,3
+4,5,6
+a,b,c
+)");
+   };
+
+   "colwise_with_headers"_test = [] {
+      csv_headers_struct obj{};
+      std::string buffer{};
+
+      expect(not glz::write<glz::opts_csv{.layout = glz::colwise, .use_headers = true}>(obj, buffer));
+      expect(buffer ==
+             R"(num1,num2,text
+1,4,a
+2,5,b
+3,6,c
+)");
+   };
+
+   "colwise_without_headers"_test = [] {
+      csv_headers_struct obj{};
+      std::string buffer{};
+
+      expect(not glz::write<glz::opts_csv{.layout = glz::colwise, .use_headers = false}>(obj, buffer));
+      expect(buffer ==
+             R"(1,4,a
+2,5,b
+3,6,c
+)");
+   };
+
+   "incremental_writing"_test = [] {
+      csv_headers_struct obj{};
+      std::string result;
+      std::string buffer;
+
+      // First write with headers
+      expect(not glz::write<glz::opts_csv{.layout = glz::colwise, .use_headers = true}>(obj, buffer));
+      result.append(buffer);
+
+      // Subsequent write without headers
+      buffer.clear();
+      expect(not glz::write<glz::opts_csv{.layout = glz::colwise, .use_headers = false}>(obj, buffer));
+      result.append(buffer);
+
+      expect(result ==
+             R"(num1,num2,text
+1,4,a
+2,5,b
+3,6,c
+1,4,a
+2,5,b
+3,6,c
+)");
+   };
+};
+
+// Read the CSV data into a struct with vectors
+struct csv_data
+{
+   std::vector<int> id{};
+   std::vector<float> value{};
+   std::vector<std::string> name{};
+
+   struct glaze
+   {
+      using T = csv_data;
+      static constexpr auto value = glz::object(&T::id, &T::value, &T::name);
+   };
+};
+
+// Test suite for the vector-of-structs feature
+suite vector_struct_csv_tests = [] {
+   "vector_of_structs_with_headers"_test = [] {
+      std::vector<data_point> data = {{1, 10.5f, "Point A"}, {2, 20.3f, "Point B"}, {3, 15.7f, "Point C"}};
+
+      std::string buffer{};
+      expect(not glz::write<glz::opts_csv{}>(data, buffer));
+
+      expect(buffer ==
+             R"(id,value,name
+1,10.5,Point A
+2,20.3,Point B
+3,15.7,Point C
+)");
+   };
+
+   "vector_of_structs_without_headers"_test = [] {
+      std::vector<data_point> data = {{1, 10.5f, "Point A"}, {2, 20.3f, "Point B"}, {3, 15.7f, "Point C"}};
+
+      std::string buffer{};
+      expect(not glz::write<glz::opts_csv{.use_headers = false}>(data, buffer));
+
+      expect(buffer ==
+             R"(1,10.5,Point A
+2,20.3,Point B
+3,15.7,Point C
+)");
+   };
+
+   "empty_vector"_test = [] {
+      std::vector<data_point> data{};
+
+      std::string buffer{};
+      expect(not glz::write<glz::opts_csv{}>(data, buffer));
+
+      // Should only contain headers
+      expect(buffer == R"(id,value,name
+)");
+   };
+
+   "vector_roundtrip"_test = [] {
+      // Create test data
+      std::vector<data_point> original = {{1, 10.5f, "Point A"}, {2, 20.3f, "Point B"}, {3, 15.7f, "Point C"}};
+
+      // Write to CSV string
+      std::string csv_str{};
+      expect(not glz::write<glz::opts_csv{}>(original, csv_str));
+
+      csv_data data{};
+      expect(not glz::read<glz::opts_csv{.layout = glz::colwise}>(data, csv_str));
+
+      // Verify the data was read correctly
+      expect(data.id.size() == 3);
+      expect(data.value.size() == 3);
+      expect(data.name.size() == 3);
+
+      expect(data.id[0] == 1);
+      expect(data.id[1] == 2);
+      expect(data.id[2] == 3);
+
+      expect(data.value[0] == 10.5f);
+      expect(data.value[1] == 20.3f);
+      expect(data.value[2] == 15.7f);
+
+      expect(data.name[0] == "Point A");
+      expect(data.name[1] == "Point B");
+      expect(data.name[2] == "Point C");
+   };
+};
+
+suite vector_struct_direct_read_tests = [] {
+   "read_vector_of_structs"_test = [] {
+      // Create test data
+      std::vector<data_point> original = {{1, 10.5f, "Point A"}, {2, 20.3f, "Point B"}, {3, 15.7f, "Point C"}};
+
+      // Write to CSV string
+      std::string csv_str{};
+      expect(not glz::write<glz::opts_csv{}>(original, csv_str));
+
+      // This is what the CSV looks like
+      expect(csv_str ==
+             R"(id,value,name
+1,10.5,Point A
+2,20.3,Point B
+3,15.7,Point C
+)");
+
+      // Now read directly back into vector of structs
+      std::vector<data_point> read_back{};
+      expect(not glz::read<glz::opts_csv{.layout = glz::colwise}>(read_back, csv_str));
+
+      // Verify the data was read correctly
+      expect(read_back.size() == 3);
+
+      expect(read_back[0].id == 1);
+      expect(read_back[0].value == 10.5f);
+      expect(read_back[0].name == "Point A");
+
+      expect(read_back[1].id == 2);
+      expect(read_back[1].value == 20.3f);
+      expect(read_back[1].name == "Point B");
+
+      expect(read_back[2].id == 3);
+      expect(read_back[2].value == 15.7f);
+      expect(read_back[2].name == "Point C");
+   };
+
+   "read_vector_of_structs_without_headers"_test = [] {
+      std::string csv_str =
+         R"(1,10.5,Point A
+2,20.3,Point B
+3,15.7,Point C)";
+
+      std::vector<data_point> read_back{};
+      expect(not glz::read<glz::opts_csv{.layout = glz::colwise, .use_headers = false}>(read_back, csv_str));
+
+      // Verify the data was read correctly
+      expect(read_back.size() == 3);
+
+      expect(read_back[0].id == 1);
+      expect(read_back[0].value == 10.5f);
+      expect(read_back[0].name == "Point A");
+
+      expect(read_back[1].id == 2);
+      expect(read_back[1].value == 20.3f);
+      expect(read_back[1].name == "Point B");
+
+      expect(read_back[2].id == 3);
+      expect(read_back[2].value == 15.7f);
+      expect(read_back[2].name == "Point C");
+   };
+
+   "append_to_vector"_test = [] {
+      // Initial vector with some data
+      std::vector<data_point> data = {{1, 10.5f, "Point A"}};
+
+      // CSV with additional data
+      std::string csv_str =
+         R"(id,value,name
+2,20.3,Point B
+3,15.7,Point C)";
+
+      // Append the new data
+      expect(not glz::read<glz::opts_csv{.layout = glz::colwise, .append_arrays = true}>(data, csv_str));
+
+      // Verify combined data
+      expect(data.size() == 3);
+      expect(data[0].id == 1);
+      expect(data[1].id == 2);
+      expect(data[2].id == 3);
    };
 };
 
