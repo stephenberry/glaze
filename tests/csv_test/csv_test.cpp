@@ -678,7 +678,7 @@ suite csv_headers_control_tests = [] {
       csv_headers_struct obj{};
       std::string buffer{};
       
-      expect(not glz::write<glz::opts_csv{.csv_write_headers = true}>(obj, buffer));
+      expect(not glz::write<glz::opts_csv{.use_headers = true}>(obj, buffer));
       expect(buffer ==
              R"(num1,1,2,3
 num2,4,5,6
@@ -690,7 +690,7 @@ text,a,b,c
       csv_headers_struct obj{};
       std::string buffer{};
       
-      expect(not glz::write<glz::opts_csv{.csv_write_headers = false}>(obj, buffer));
+      expect(not glz::write<glz::opts_csv{.use_headers = false}>(obj, buffer));
       expect(buffer ==
              R"(1,2,3
 4,5,6
@@ -702,7 +702,7 @@ a,b,c
       csv_headers_struct obj{};
       std::string buffer{};
       
-      expect(not glz::write<glz::opts_csv{.layout = glz::colwise, .csv_write_headers = true}>(obj, buffer));
+      expect(not glz::write<glz::opts_csv{.layout = glz::colwise, .use_headers = true}>(obj, buffer));
       expect(buffer ==
              R"(num1,num2,text
 1,4,a
@@ -715,7 +715,7 @@ a,b,c
       csv_headers_struct obj{};
       std::string buffer{};
       
-      expect(not glz::write<glz::opts_csv{.layout = glz::colwise, .csv_write_headers = false}>(obj, buffer));
+      expect(not glz::write<glz::opts_csv{.layout = glz::colwise, .use_headers = false}>(obj, buffer));
       expect(buffer ==
              R"(1,4,a
 2,5,b
@@ -729,12 +729,12 @@ a,b,c
       std::string buffer;
       
       // First write with headers
-      expect(not glz::write<glz::opts_csv{.layout = glz::colwise, .csv_write_headers = true}>(obj, buffer));
+      expect(not glz::write<glz::opts_csv{.layout = glz::colwise, .use_headers = true}>(obj, buffer));
       result.append(buffer);
       
       // Subsequent write without headers
       buffer.clear();
-      expect(not glz::write<glz::opts_csv{.layout = glz::colwise, .csv_write_headers = false}>(obj, buffer));
+      expect(not glz::write<glz::opts_csv{.layout = glz::colwise, .use_headers = false}>(obj, buffer));
       result.append(buffer);
       
       expect(result ==
@@ -789,7 +789,7 @@ suite vector_struct_csv_tests = [] {
       };
       
       std::string buffer{};
-      expect(not glz::write<glz::opts_csv{.csv_write_headers = false}>(data, buffer));
+      expect(not glz::write<glz::opts_csv{.use_headers = false}>(data, buffer));
       
       expect(buffer ==
              R"(1,10.5,Point A

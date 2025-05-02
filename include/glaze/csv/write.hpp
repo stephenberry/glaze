@@ -112,7 +112,7 @@ namespace glz
       {
          if constexpr (check_layout(Opts) == rowwise) {
             for (auto& [name, data] : value) {
-               if constexpr (check_csv_write_headers(Opts)) {
+               if constexpr (check_use_headers(Opts)) {
                   dump_maybe_empty(name, b, ix);
                   dump<','>(b, ix);
                }
@@ -129,7 +129,7 @@ namespace glz
          else {
             // dump titles
             const auto n = value.size();
-            if constexpr (check_csv_write_headers(Opts)) {
+            if constexpr (check_use_headers(Opts)) {
                size_t i = 0;
                for (auto& [name, data] : value) {
                   dump_maybe_empty(name, b, ix);
@@ -208,7 +208,7 @@ namespace glz
                   const auto count = member.size();
                   const auto size = member[0].size();
                   for (size_t i = 0; i < size; ++i) {
-                     if constexpr (check_csv_write_headers(Opts)) {
+                     if constexpr (check_use_headers(Opts)) {
                         dump<key>(b, ix);
                         dump<'['>(b, ix);
                         write_chars::op<Opts>(i, ctx, b, ix);
@@ -229,7 +229,7 @@ namespace glz
                   }
                }
                else {
-                  if constexpr (check_csv_write_headers(Opts)) {
+                  if constexpr (check_use_headers(Opts)) {
                      dump<key>(b, ix);
                      dump<','>(b, ix);
                   }
@@ -240,7 +240,7 @@ namespace glz
          }
          else {
             // write titles
-            if constexpr (check_csv_write_headers(Opts)) {
+            if constexpr (check_use_headers(Opts)) {
                for_each<N>([&](auto I) {
                   using X = refl_t<T, I>;
 
@@ -350,7 +350,7 @@ namespace glz
          static constexpr auto N = reflect<U>::size;
 
          // Write headers (field names) if enabled
-         if constexpr (check_csv_write_headers(Opts)) {
+         if constexpr (check_use_headers(Opts)) {
             for_each<N>([&](auto I) {
                static constexpr sv key = reflect<U>::keys[I];
                serialize<CSV>::op<Opts>(key, ctx, b, ix);

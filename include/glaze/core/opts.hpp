@@ -113,7 +113,7 @@ namespace glz
       uint32_t format = CSV;
       bool null_terminated = true; // Whether the input buffer is null terminated
       uint8_t layout = rowwise; // CSV row wise output/input
-      bool csv_write_headers = true; // Whether to write column/row headers in CSV format
+      bool use_headers = true; // Whether to write column/row headers in CSV format
       
       // INTERNAL OPTIONS
       uint32_t internal{}; // default should be 0
@@ -254,10 +254,10 @@ namespace glz
       }
    }
 
-   consteval bool check_csv_write_headers(auto&& Opts)
+   consteval bool check_use_headers(auto&& Opts)
    {
-      if constexpr (requires { Opts.csv_write_headers; }) {
-         return Opts.csv_write_headers;
+      if constexpr (requires { Opts.use_headers; }) {
+         return Opts.use_headers;
       }
       else {
          return true;
