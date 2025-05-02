@@ -9,7 +9,7 @@
 
 namespace glz
 {
-   // format
+   // Formats
    // Built in formats must be less than 65536
    // User defined formats can be 65536 to 4294967296
    inline constexpr uint32_t INVALID = 0;
@@ -89,8 +89,6 @@ namespace glz
       bool error_on_const_read =
          false; // Error if attempt is made to read into a const value, by default the value is skipped without error
 
-      uint8_t layout = rowwise; // CSV row wise output/input
-
       bool bools_as_numbers = false; // Read and write booleans with 1's and 0's
 
       bool quoted_num = false; // treat numbers as quoted or array-like types as having quoted numbers
@@ -106,6 +104,22 @@ namespace glz
       uint32_t internal{}; // default should be 0
 
       [[nodiscard]] constexpr bool operator==(const opts&) const noexcept = default;
+   };
+   
+   // CSV Format Options
+   // Note: You can always create your own options struct if you want to share it between formats
+   struct opts_csv
+   {
+      uint32_t format = CSV;
+      static constexpr bool null_terminated = true; // Whether the input buffer is null terminated
+      uint8_t layout = rowwise; // CSV row wise output/input
+      bool use_headers = true; // Whether to write column/row headers in CSV format
+      bool append_arrays = false; // When reading into an array the data will be appended if the type supports it
+      
+      // INTERNAL OPTIONS
+      uint32_t internal{}; // default should be 0
+      
+      [[nodiscard]] constexpr bool operator==(const opts_csv&) const noexcept = default;
    };
 
    // Add these fields to a custom options struct if you want to use them
@@ -238,6 +252,26 @@ namespace glz
       }
       else {
          return false;
+      }
+   }
+
+   consteval bool check_use_headers(auto&& Opts)
+   {
+      if constexpr (requires { Opts.use_headers; }) {
+         return Opts.use_headers;
+      }
+      else {
+         return true;
+      }
+   }
+   
+   consteval uint8_t check_layout(auto&& Opts)
+   {
+      if constexpr (requires { Opts.layout; }) {
+         return Opts.layout;
+      }
+      else {
+         return rowwise;
       }
    }
 
