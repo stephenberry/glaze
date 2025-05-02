@@ -843,4 +843,93 @@ suite vector_struct_csv_tests = [] {
    };
 };
 
+suite vector_struct_direct_read_tests = [] {
+   "read_vector_of_structs"_test = [] {
+      // Create test data
+      std::vector<data_point> original = {
+         {1, 10.5f, "Point A"},
+         {2, 20.3f, "Point B"},
+         {3, 15.7f, "Point C"}
+      };
+      
+      // Write to CSV string
+      std::string csv_str{};
+      expect(not glz::write<glz::opts_csv{}>(original, csv_str));
+      
+      // This is what the CSV looks like
+      expect(csv_str ==
+             R"(id,value,name
+1,10.5,Point A
+2,20.3,Point B
+3,15.7,Point C
+)");
+      
+      // Now read directly back into vector of structs
+      std::vector<data_point> read_back{};
+      expect(not glz::read<glz::opts_csv{.layout = glz::colwise}>(read_back, csv_str));
+      
+      // Verify the data was read correctly
+      expect(read_back.size() == 3);
+      
+      expect(read_back[0].id == 1);
+      expect(read_back[0].value == 10.5f);
+      expect(read_back[0].name == "Point A");
+      
+      expect(read_back[1].id == 2);
+      expect(read_back[1].value == 20.3f);
+      expect(read_back[1].name == "Point B");
+      
+      expect(read_back[2].id == 3);
+      expect(read_back[2].value == 15.7f);
+      expect(read_back[2].name == "Point C");
+   };
+   
+   "read_vector_of_structs_without_headers"_test = [] {
+      std::string csv_str =
+          R"(1,10.5,Point A
+2,20.3,Point B
+3,15.7,Point C)";
+      
+      std::vector<data_point> read_back{};
+      expect(not glz::read<glz::opts_csv{.layout = glz::colwise, .use_headers = false}>(read_back, csv_str));
+      
+      // Verify the data was read correctly
+      expect(read_back.size() == 3);
+      
+      expect(read_back[0].id == 1);
+      expect(read_back[0].value == 10.5f);
+      expect(read_back[0].name == "Point A");
+      
+      expect(read_back[1].id == 2);
+      expect(read_back[1].value == 20.3f);
+      expect(read_back[1].name == "Point B");
+      
+      expect(read_back[2].id == 3);
+      expect(read_back[2].value == 15.7f);
+      expect(read_back[2].name == "Point C");
+   };
+   
+   "append_to_vector"_test = [] {
+      // Initial vector with some data
+      std::vector<data_point> data = {
+         {1, 10.5f, "Point A"}
+      };
+      
+      // CSV with additional data
+      std::string csv_str =
+          R"(id,value,name
+2,20.3,Point B
+3,15.7,Point C)";
+      
+      // Append the new data
+      expect(not glz::read<glz::opts_csv{.layout = glz::colwise, .append_arrays = true}>(data, csv_str));
+      
+      // Verify combined data
+      expect(data.size() == 3);
+      expect(data[0].id == 1);
+      expect(data[1].id == 2);
+      expect(data[2].id == 3);
+   };
+};
+
 int main() { return 0; }

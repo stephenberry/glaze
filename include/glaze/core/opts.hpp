@@ -111,9 +111,10 @@ namespace glz
    struct opts_csv
    {
       uint32_t format = CSV;
-      bool null_terminated = true; // Whether the input buffer is null terminated
+      static constexpr bool null_terminated = true; // Whether the input buffer is null terminated
       uint8_t layout = rowwise; // CSV row wise output/input
       bool use_headers = true; // Whether to write column/row headers in CSV format
+      bool append_arrays = false; // When reading into an array the data will be appended if the type supports it
       
       // INTERNAL OPTIONS
       uint32_t internal{}; // default should be 0
