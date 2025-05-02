@@ -428,147 +428,127 @@ namespace glz
          }
       }
    };
-   
+
    // For types like std::vector<T> where T is a struct/object
    template <readable_array_t T>
       requires(glaze_object_t<typename T::value_type> || reflectable<typename T::value_type>)
    struct from<CSV, T>
    {
       using U = typename T::value_type;
-      
+
       template <auto Opts, class It>
       static void op(auto&& value, is_context auto&& ctx, It&& it, auto&& end)
       {
          static constexpr auto N = reflect<U>::size;
          static constexpr auto HashInfo = hash_info<U>;
-         
+
          // Clear existing data if not appending
          if constexpr (!Opts.append_arrays) {
             value.clear();
          }
-         
-         if constexpr (check_layout(Opts) == colwise)
-         {
+
+         if constexpr (check_layout(Opts) == colwise) {
             // Read column headers
             std::vector<size_t> member_indices;
-            
-            if constexpr (check_use_headers(Opts))
-            {
+
+            if constexpr (check_use_headers(Opts)) {
                auto headers = read_column_wise_keys(ctx, it, end);
-               
-               if (bool(ctx.error)) [[unlikely]]
-               {
+
+               if (bool(ctx.error)) [[unlikely]] {
                   return;
                }
-               
-               if (csv_new_line(ctx, it))
-               {
+
+               if (csv_new_line(ctx, it)) {
                   return;
                }
-               
+
                // Map header names to member indices
-               for (const auto& [key, idx] : headers)
-               {
+               for (const auto& [key, idx] : headers) {
                   const auto member_idx = decode_hash_with_size<CSV, U, HashInfo, HashInfo.type>::op(
-                                                                                                     key.data(), key.data() + key.size(), key.size());
-                  
-                  if (member_idx >= N) [[unlikely]]
-                  {
+                     key.data(), key.data() + key.size(), key.size());
+
+                  if (member_idx >= N) [[unlikely]] {
                      ctx.error = error_code::unknown_key;
                      return;
                   }
-                  
+
                   member_indices.push_back(member_idx);
                }
             }
-            else
-            {
+            else {
                // Use default order of members
-               for (size_t i = 0; i < N; ++i)
-               {
+               for (size_t i = 0; i < N; ++i) {
                   member_indices.push_back(i);
                }
             }
-            
+
             const auto n_cols = member_indices.size();
-            
+
             // Read rows
-            while (it != end)
-            {
+            while (it != end) {
                U struct_value{};
-               
-               for (size_t i = 0; i < n_cols; ++i)
-               {
+
+               for (size_t i = 0; i < n_cols; ++i) {
                   const auto member_idx = member_indices[i];
-                  
-                  visit<N>([&]<size_t I>() {
-                     if (I == member_idx)
-                     {
-                        decltype(auto) member = [&]() -> decltype(auto) {
-                           if constexpr (reflectable<U>) {
-                              return get_member(struct_value, get<I>(to_tie(struct_value)));
-                           }
-                           else {
-                              return get_member(struct_value, get<I>(reflect<U>::values));
-                           }
-                        }();
-                        
-                        parse<CSV>::op<Opts>(member, ctx, it, end);
-                     }
-                  }, member_idx);
-                  
-                  if (bool(ctx.error)) [[unlikely]]
-                  {
+
+                  visit<N>(
+                     [&]<size_t I>() {
+                        if (I == member_idx) {
+                           decltype(auto) member = [&]() -> decltype(auto) {
+                              if constexpr (reflectable<U>) {
+                                 return get_member(struct_value, get<I>(to_tie(struct_value)));
+                              }
+                              else {
+                                 return get_member(struct_value, get<I>(reflect<U>::values));
+                              }
+                           }();
+
+                           parse<CSV>::op<Opts>(member, ctx, it, end);
+                        }
+                     },
+                     member_idx);
+
+                  if (bool(ctx.error)) [[unlikely]] {
                      return;
                   }
-                  
-                  if (i < n_cols - 1)
-                  {
-                     if (*it == ',')
-                     {
+
+                  if (i < n_cols - 1) {
+                     if (*it == ',') {
                         ++it;
                      }
-                     else [[unlikely]]
-                     {
+                     else [[unlikely]] {
                         ctx.error = error_code::syntax_error;
                         return;
                      }
                   }
                }
-               
+
                value.push_back(std::move(struct_value));
-               
-               if (it == end)
-               {
+
+               if (it == end) {
                   break;
                }
-               
+
                // Handle newlines
-               if (*it == '\r')
-               {
+               if (*it == '\r') {
                   ++it;
-                  if (it != end && *it == '\n')
-                  {
+                  if (it != end && *it == '\n') {
                      ++it;
                   }
-                  else [[unlikely]]
-                  {
+                  else [[unlikely]] {
                      ctx.error = error_code::syntax_error;
                      return;
                   }
                }
-               else if (*it == '\n')
-               {
+               else if (*it == '\n') {
                   ++it;
                }
-               else [[unlikely]]
-               {
+               else [[unlikely]] {
                   ctx.error = error_code::syntax_error;
                   return;
                }
-               
-               if (it == end)
-               {
+
+               if (it == end) {
                   break;
                }
             }

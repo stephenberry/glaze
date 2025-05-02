@@ -105,7 +105,7 @@ namespace glz
 
       [[nodiscard]] constexpr bool operator==(const opts&) const noexcept = default;
    };
-   
+
    // CSV Format Options
    // Note: You can always create your own options struct if you want to share it between formats
    struct opts_csv
@@ -115,10 +115,10 @@ namespace glz
       uint8_t layout = rowwise; // CSV row wise output/input
       bool use_headers = true; // Whether to write column/row headers in CSV format
       bool append_arrays = false; // When reading into an array the data will be appended if the type supports it
-      
+
       // INTERNAL OPTIONS
       uint32_t internal{}; // default should be 0
-      
+
       [[nodiscard]] constexpr bool operator==(const opts_csv&) const noexcept = default;
    };
 
@@ -264,7 +264,7 @@ namespace glz
          return true;
       }
    }
-   
+
    consteval uint8_t check_layout(auto&& Opts)
    {
       if constexpr (requires { Opts.layout; }) {
