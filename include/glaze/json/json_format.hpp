@@ -66,7 +66,7 @@ namespace glz::detail
    };
 
    template <auto Opts>
-      requires(has_is_padded(Opts))
+      requires(check_is_padded(Opts))
    sv read_json_string(auto&& it, auto&& end) noexcept
    {
       auto start = it;
@@ -97,7 +97,7 @@ namespace glz::detail
    }
 
    template <auto Opts>
-      requires(!has_is_padded(Opts))
+      requires(!check_is_padded(Opts))
    sv read_json_string(auto&& it, auto&& end) noexcept
    {
       auto start = it;

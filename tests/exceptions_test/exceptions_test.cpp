@@ -696,4 +696,49 @@ suite async_tests = [] {
    };
 };
 
+struct times
+{
+   uint64_t time;
+   std::optional<uint64_t> time1;
+
+   void read_time(uint64_t timeValue) { time = timeValue; }
+
+   void read_time1(std::optional<uint64_t> time1Value) { time1 = time1Value; }
+};
+
+struct date
+{
+   times t;
+};
+
+template <>
+struct glz::meta<times>
+{
+   using T = times;
+   static constexpr auto value =
+      object("time", glz::custom<&T::read_time, nullptr>, "time1", glz::custom<&T::read_time1, nullptr>);
+};
+
+template <>
+struct glz::meta<date>
+{
+   using T = date;
+   static constexpr auto value = object("date", &T::t);
+};
+
+suite custom_tests = [] {
+   "glz::custom"_test = [] {
+      constexpr std::string_view onlyTimeJson = R"({"date":{"time":1}})";
+
+      date d{};
+
+      try {
+         glz::ex::read<glz::opts{.error_on_missing_keys = true}>(d, onlyTimeJson);
+      }
+      catch (std::exception const& error) {
+         expect(false) << error.what() << '\n';
+      }
+   };
+};
+
 int main() { return 0; }

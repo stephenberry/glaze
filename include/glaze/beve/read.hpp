@@ -22,7 +22,7 @@ namespace glz
    struct parse<BEVE>
    {
       template <auto Opts, class T, class Tag, is_context Ctx, class It0, class It1>
-         requires(has_no_header(Opts))
+         requires(check_no_header(Opts))
       GLZ_ALWAYS_INLINE static void op(T&& value, Tag&& tag, Ctx&& ctx, It0&& it, It1&& end)
       {
          if constexpr (const_value_v<T>) {
@@ -42,7 +42,7 @@ namespace glz
       }
 
       template <auto Opts, class T, is_context Ctx, class It0, class It1>
-         requires(not has_no_header(Opts))
+         requires(not check_no_header(Opts))
       GLZ_ALWAYS_INLINE static void op(T&& value, Ctx&& ctx, It0&& it, It1&& end)
       {
          if constexpr (const_value_v<T>) {
@@ -183,7 +183,7 @@ namespace glz
       static constexpr uint8_t header = tag::number | type | (byte_count<T> << 5);
 
       template <auto Opts>
-         requires(has_no_header(Opts))
+         requires(check_no_header(Opts))
       GLZ_ALWAYS_INLINE static void op(auto&& value, const uint8_t tag, is_context auto&& ctx, auto&& it,
                                        auto&& end) noexcept
       {
@@ -300,7 +300,7 @@ namespace glz
       }
 
       template <auto Opts>
-         requires(not has_no_header(Opts))
+         requires(not check_no_header(Opts))
       GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
       {
          if (invalid_end(ctx, it, end)) {
@@ -321,7 +321,7 @@ namespace glz
       {
          using V = std::underlying_type_t<std::decay_t<T>>;
 
-         if constexpr (has_no_header(Opts)) {
+         if constexpr (check_no_header(Opts)) {
             if ((it + sizeof(V)) > end) [[unlikely]] {
                ctx.error = error_code::unexpected_end;
                return;
@@ -362,7 +362,7 @@ namespace glz
       template <auto Opts>
       static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
       {
-         if constexpr (has_no_header(Opts)) {
+         if constexpr (check_no_header(Opts)) {
             using V = std::decay_t<T>;
             if ((it + sizeof(V)) > end) [[unlikely]] {
                ctx.error = error_code::unexpected_end;
@@ -506,7 +506,7 @@ namespace glz
       static_assert(sizeof(V) == 1);
 
       template <auto Opts>
-         requires(has_no_header(Opts))
+         requires(check_no_header(Opts))
       GLZ_ALWAYS_INLINE static void op(auto&& value, const uint8_t, is_context auto&& ctx, auto&& it, auto&& end)
       {
          const auto n = int_from_compressed(ctx, it, end);
@@ -523,7 +523,7 @@ namespace glz
       }
 
       template <auto Opts>
-         requires(not has_no_header(Opts))
+         requires(not check_no_header(Opts))
       GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
       {
          constexpr uint8_t header = tag::string;
@@ -1242,7 +1242,7 @@ namespace glz
       template <auto Opts>
       GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&& ctx, auto&& it, auto&& end) noexcept
       {
-         if constexpr (has_no_header(Opts)) {
+         if constexpr (check_no_header(Opts)) {
             skip_compressed_int(ctx, it, end);
          }
          else {

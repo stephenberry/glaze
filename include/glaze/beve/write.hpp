@@ -709,7 +709,7 @@ namespace glz
          using V = std::decay_t<decltype(value.value)>;
          static constexpr auto N = glz::tuple_size_v<V> / 2;
 
-         if constexpr (!has_opening_handled(Options)) {
+         if constexpr (!check_opening_handled(Options)) {
             constexpr uint8_t type = 0; // string key
             constexpr uint8_t tag = tag::object | type;
             dump_type(tag, args...);
@@ -821,7 +821,7 @@ namespace glz
          requires(Options.structs_as_arrays == false)
       static void op(auto&& value, is_context auto&& ctx, Args&&... args)
       {
-         if constexpr (!has_opening_handled(Options)) {
+         if constexpr (!check_opening_handled(Options)) {
             constexpr uint8_t type = 0; // string key
             constexpr uint8_t tag = tag::object | type;
             dump_type(tag, args...);

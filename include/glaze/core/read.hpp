@@ -43,7 +43,7 @@ namespace glz
          }
       }
 
-      constexpr bool use_padded = resizable<Buffer> && non_const_buffer<Buffer> && !has_disable_padding(Opts);
+      constexpr bool use_padded = resizable<Buffer> && non_const_buffer<Buffer> && !check_disable_padding(Opts);
 
       if constexpr (use_padded) {
          // Pad the buffer for SWAR

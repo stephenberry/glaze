@@ -46,8 +46,8 @@ namespace glz
       };
    }
 
-   // custom_t allows a user to register member functions (and std::function members) to implement custom reading and
-   // writing
+   // custom_t allows a user to register member functions, std::function members, and member variables
+   // to implement custom reading and writing
    template <class T, class From, class To>
    struct custom_t final
    {

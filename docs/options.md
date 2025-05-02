@@ -70,5 +70,8 @@ bool escape_control_characters = false;
 // (embedding nulls can cause issues, especially with C APIs)
 // Glaze will error when parsing non-escaped control character (per the JSON spec)
 // This option allows escaping control characters to avoid such errors.
+
+float_precision float_max_write_precision{};
+// The maximum precision type used for writing floats, higher precision floats will be cast down to this precision
 ```
 
