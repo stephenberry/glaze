@@ -1,0 +1,61 @@
+name: gcc-linux-big-endian
+
+on:
+  push:
+    branches:
+      - main
+      - feature/*
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+  pull_request:
+    branches:
+      - main
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+
+    strategy:
+      fail-fast: false
+      matrix:
+        build_type: [Debug]
+        std: [23]
+        target: [
+          { arch: s390x, triple: s390x-unknown-linux-gnu }
+        ]
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          cmake \
+          ninja-build \
+          qemu-user-static \
+          binutils-${{ matrix.target.arch }}-linux-gnu \
+          g++-${{ matrix.target.arch }}-linux-gnu
+
+    - name: Configure CMake
+      run: |
+        cmake \
+          -B ${{github.workspace}}/build \
+          -G Ninja \
+          -DCMAKE_BUILD_TYPE=${{matrix.build_type}} \
+          -DCMAKE_CXX_STANDARD=${{matrix.std}} \
+          -DCMAKE_C_COMPILER=${{ matrix.target.arch }}-linux-gnu-gcc \
+          -DCMAKE_CXX_COMPILER=${{ matrix.target.arch }}-linux-gnu-g++ \
+          -DCMAKE_SYSTEM_NAME=Linux
+
+    - name: Build
+      run: cmake --build build -j $(nproc)
+
+    - name: Test
+      working-directory: build
+      run: ctest -j $(nproc) --output-on-failure
