@@ -69,18 +69,6 @@ namespace glz
 
 namespace glz
 {
-   inline constexpr size_t naive_map_max_size = 128;
-
-   struct naive_map_desc
-   {
-      size_t N{};
-      uint64_t seed{};
-      size_t bucket_size{};
-      bool use_hash_comparison = false;
-      size_t min_length = (std::numeric_limits<size_t>::max)();
-      size_t max_length{};
-   };
-
    inline constexpr uint64_t to_uint64_n_below_8(const char* bytes, const size_t N) noexcept
    {
       static_assert(std::endian::native == std::endian::little);
