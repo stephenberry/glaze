@@ -11,14 +11,12 @@ FetchContent_Declare(
 
 FetchContent_MakeAvailable(inplace_vector)
 
-add_executable(${PROJECT_NAME} inplace_vector_noexcept.cpp)
-target_link_libraries(${PROJECT_NAME} PRIVATE glz_test_common beman::inplace_vector)
+add_executable(${PROJECT_NAME} inplace_vector_test.cpp)
+target_link_libraries(${PROJECT_NAME} PRIVATE glz_test_exceptions beman::inplace_vector)
 
 if (MINGW)
     target_compile_options(${PROJECT_NAME} PRIVATE "-Wa,-mbig-obj")
 endif ()
-
-set_source_files_properties(inplace_vector_noexcept.cpp PROPERTIES COMPILE_FLAGS "-fno-exceptions")
 
 add_test(NAME ${PROJECT_NAME} COMMAND ${PROJECT_NAME})
 

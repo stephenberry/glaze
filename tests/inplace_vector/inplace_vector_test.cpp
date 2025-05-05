@@ -1,4 +1,5 @@
 #include <beman/inplace_vector/inplace_vector.hpp>
+#include <compare>
 
 #include "glaze/glaze.hpp"
 #include "ut/ut.hpp"
@@ -13,8 +14,14 @@ struct my_struct
       int a;
       int b;
       int c;
+      auto operator<=>(const entry_t&) const = default;
    };
    inplace_vector<entry_t, 3> vec;
+
+   auto operator<=>(const my_struct&) const
+   {
+      return std::lexicographical_compare_three_way(vec.begin(), vec.end(), vec.begin(), vec.end());
+   }
 };
 
 suite json_test = [] {
@@ -25,12 +32,7 @@ suite json_test = [] {
 
       expect(!glz::read<glz::opts{}>(vec, json));
       expect(vec.size() == 5);
-      // at the time of writing beman inplace_vector initializer list dose not work without exceptions
-      expect(vec[0] == 1);
-      expect(vec[1] == 2);
-      expect(vec[2] == 3);
-      expect(vec[3] == 4);
-      expect(vec[4] == 5);
+      expect(vec == inplace_vector<int, 10>{1, 2, 3, 4, 5});
 
       expect(!glz::write<glz::opts{}>(vec, buffer));
       expect(buffer == json);
@@ -62,16 +64,7 @@ suite json_test = [] {
 
       expect(!glz::read<glz::opts{}>(s, json));
       expect(s.vec.size() == 3);
-      // at the time of writing beman inplace_vector initializer list dose not work without exceptions
-      expect(s.vec[0].a == 1);
-      expect(s.vec[0].b == 2);
-      expect(s.vec[0].c == 3);
-      expect(s.vec[1].a == 4);
-      expect(s.vec[1].b == 5);
-      expect(s.vec[1].c == 6);
-      expect(s.vec[2].a == 7);
-      expect(s.vec[2].b == 8);
-      expect(s.vec[2].c == 9);
+      expect(s.vec == inplace_vector<my_struct::entry_t, 3>{{1, 2, 3}, {4, 5, 6}, {7, 8, 9}});
 
       expect(!glz::write<glz::opts{}>(s, buffer));
       expect(buffer == json);
