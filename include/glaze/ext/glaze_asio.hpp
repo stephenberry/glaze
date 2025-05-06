@@ -334,9 +334,9 @@ namespace glz
 
       [[nodiscard]] error_code init()
       {
-         ctx = std::make_shared<asio::io_context>(concurrency);
          {
             std::unique_lock lock{socket_pool->mtx}; // lock the socket_pool when setting up
+            ctx = std::make_shared<asio::io_context>(concurrency);
             socket_pool->ctx = ctx;
             socket_pool->host = host;
             socket_pool->service = service;
