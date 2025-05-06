@@ -5,6 +5,9 @@
 
 // Glaze Feature Test Macros for breaking changes
 
+// v5.2.0 Moves `layout` CSV option into glz::opts_csv
+#define glaze_v5_2_0_opts_csv
+
 // v5.1.0 swaps the template parameters of read_supported/write_supported to enable cleaner concepts and usage
 #define glaze_v5_1_0_supported_swap
 
