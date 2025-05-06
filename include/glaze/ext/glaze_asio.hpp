@@ -219,6 +219,11 @@ namespace glz
       std::tuple<std::shared_ptr<asio::ip::tcp::socket>, size_t, std::error_code> get()
       {
          std::unique_lock lock{mtx};
+         
+         if (not ctx) {
+            // TODO: make this error into an error code
+            throw std::runtime_error("asio::io_context is null");
+         }
 
          // reset all socket pointers if a connection failed
          if (not *is_connected) {
@@ -351,6 +356,10 @@ namespace glz
       void call(Header&& header, repe::message& response, Params&&... params)
       {
          auto request = message_pool->borrow();
+         if (not connected()) {
+            encode_error(request->error(), response, "call failure: NOT CONNECTED");
+            return;
+         }
          repe::request<Opts>(std::move(header), *request, std::forward<Params>(params)...);
          if (bool(request->error())) {
             encode_error(request->error(), response, "bad request");
