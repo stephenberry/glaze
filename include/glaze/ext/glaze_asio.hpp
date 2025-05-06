@@ -219,7 +219,7 @@ namespace glz
       std::tuple<std::shared_ptr<asio::ip::tcp::socket>, size_t, std::error_code> get()
       {
          std::unique_lock lock{mtx};
-         
+
          if (not ctx) {
             // TODO: make this error into an error code
             throw std::runtime_error("asio::io_context is null");
@@ -335,10 +335,10 @@ namespace glz
       [[nodiscard]] error_code init()
       {
          *is_connected = false;
-         // create a new socket_pool if we are initilaizing, this is needed because the sockets hold references to the io_context
-         // which is being recreated with init()
+         // create a new socket_pool if we are initilaizing, this is needed because the sockets hold references to the
+         // io_context which is being recreated with init()
          socket_pool = std::make_shared<glz::socket_pool>();
-         
+
          {
             std::unique_lock lock{socket_pool->mtx}; // lock the socket_pool when setting up
             ctx = std::make_shared<asio::io_context>(concurrency);
