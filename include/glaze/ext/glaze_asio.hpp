@@ -323,7 +323,7 @@ namespace glz
       };
 
       std::shared_ptr<asio::io_context> ctx{};
-      std::shared_ptr<glz::socket_pool> socket_pool = std::make_shared<glz::socket_pool>();
+      std::shared_ptr<glz::socket_pool> socket_pool{};
       std::shared_ptr<glz::memory_pool<repe::message>> message_pool =
          std::make_shared<glz::memory_pool<repe::message>>();
 
@@ -334,6 +334,11 @@ namespace glz
 
       [[nodiscard]] error_code init()
       {
+         *is_connected = false;
+         // create a new socket_pool if we are initilaizing, this is needed because the sockets hold references to the io_context
+         // which is being recreated with init()
+         socket_pool = std::make_shared<glz::socket_pool>();
+         
          {
             std::unique_lock lock{socket_pool->mtx}; // lock the socket_pool when setting up
             ctx = std::make_shared<asio::io_context>(concurrency);
