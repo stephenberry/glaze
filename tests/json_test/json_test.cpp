@@ -167,12 +167,44 @@ static_assert(glz::enum_name_v<Color::Red> == "Red");
 
 static_assert(glz::get_enum_name(Color::Green) == "Green");
 
-suite get_enum_name_tests = [] {
+struct enum_array_t
+{
+   Color array[3]{};
+};
+
+template <>
+struct glz::meta<enum_array_t>
+{
+   using T = enum_array_t;
+   static constexpr auto value = object("array", [](auto& s) { return std::span{s.array, 3}; });
+};
+
+suite enum_tests = [] {
    "get_enum_name"_test = [] {
       auto color = Color::Green;
 
       const auto name = glz::get_enum_name(color);
       expect(name == "Green");
+   };
+   
+   "array of enums"_test = [] {
+      std::array<Color, 3> arr{};
+      std::string_view buffer = R"(["Green", "Red", "Blue"])";
+      expect(not glz::read_json(arr, buffer));
+      using enum Color;
+      expect(arr[0] == Green);
+      expect(arr[1] == Red);
+      expect(arr[2] == Blue);
+   };
+   
+   "enum_array_t"_test = [] {
+      enum_array_t obj{};
+      std::string_view buffer = R"({"array": ["Green", "Red", "Blue"]})";
+      expect(not glz::read_json(obj, buffer));
+      using enum Color;
+      expect(obj.array[0] == Green);
+      expect(obj.array[1] == Red);
+      expect(obj.array[2] == Blue);
    };
 };
 
