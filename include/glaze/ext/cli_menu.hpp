@@ -78,147 +78,148 @@ namespace glz
          }();
 
          if (item_number > 0 && item_number <= long(N)) {
-            jump_table<N>([&]<size_t I>() {
-                             using E = refl_t<T, I>;
-                             
-                             // MSVC bug requires Index alias here
-                             decltype(auto) func = [&]<size_t J>() -> decltype(auto) {
-                                if constexpr (reflectable<T>) {
-                                   return get_member(value, get<J>(t));
-                                }
-                                else {
-                                   return get_member(value, get<J>(reflect<T>::values));
-                                }
-                             }.template operator()<I>();
-                             
-                             using Func = decltype(func);
-                             if constexpr (std::is_member_function_pointer_v<std::decay_t<Func>>) {
-                                using F = std::decay_t<Func>;
-                                using Ret = typename return_type<F>::type;
-                                using Tuple = typename inputs_as_tuple<F>::type;
-                                constexpr auto n_args = glz::tuple_size_v<Tuple>;
-                                
-                                if constexpr (n_args == 0) {
-                                   if constexpr (std::same_as<Ret, void>) {
-                                      (value.*func)();
-                                   }
-                                   else {
-                                      const auto result = glz::write<Opts>((value.*func)()).value_or("result serialization error");
-                                      std::printf("%.*s\n", int(result.size()), result.data());
-                                   }
-                                }
-                                else if constexpr (n_args == 1) {
-                                   using Params = glz::tuple_element_t<0, Tuple>;
-                                   using P = std::decay_t<Params>;
-                                   constexpr auto N = glz::tuple_size_v<Tuple>;
-                                   static_assert(N == 1, "Only one input is allowed for your function");
-                                   static thread_local std::array<char, 256> input{};
-                                   if constexpr (is_help<P>) {
-                                      std::printf("%.*s\n", int(P::help_message.size()), P::help_message.data());
-                                      print_input_type<typename P::value_type>();
-                                   }
-                                   else {
-                                      print_input_type<P>();
-                                   }
-                                   
-                                   if (fgets(input.data(), int(input.size()), stdin)) {
-                                      std::string_view input_sv{input.data()};
-                                      if (input_sv.back() == '\n') {
-                                         input_sv = input_sv.substr(0, input_sv.size() - 1);
-                                      }
-                                      P params{};
-                                      const auto ec = glz::read<Opts>(params, input_sv);
-                                      if (ec) {
-                                         const auto error = glz::format_error(ec, input_sv);
-                                         std::printf("%.*s\n", int(error.size()), error.data());
-                                      }
-                                      else {
-                                         if constexpr (std::same_as<Ret, void>) {
-                                            (value.*func)(params);
-                                         }
-                                         else {
-                                            const auto result =
-                                            glz::write<Opts>((value.*func)(params)).value_or("result serialization error");
-                                            std::printf("%.*s\n", int(result.size()), result.data());
-                                         }
-                                      }
-                                   }
-                                   else {
-                                      std::fprintf(stderr, "Invalid input.\n");
-                                   }
-                                }
-                                else {
-                                   static_assert(false_v<Func>, "function cannot have more than one input");
-                                }
-                             }
-                             else if constexpr (std::is_invocable_v<Func>) {
-                                using R = std::invoke_result_t<Func>;
-                                if constexpr (std::same_as<R, void>) {
-                                   func();
-                                }
-                                else {
-                                   const auto result = glz::write<Opts>(func()).value_or("result serialization error");
-                                   std::printf("%.*s\n", int(result.size()), result.data());
-                                }
-                             }
-                             else if constexpr (is_invocable_concrete<std::remove_cvref_t<Func>>) {
-                                using Tuple = invocable_args_t<std::remove_cvref_t<Func>>;
-                                using Params = glz::tuple_element_t<0, Tuple>;
-                                using P = std::decay_t<Params>;
-                                constexpr auto N = glz::tuple_size_v<Tuple>;
-                                static_assert(N == 1, "Only one input is allowed for your function");
-                                static thread_local std::array<char, 256> input{};
-                                if constexpr (is_help<P>) {
-                                   std::printf("%.*s\n", int(P::help_message.size()), P::help_message.data());
-                                   print_input_type<typename P::value_type>();
-                                }
-                                else {
-                                   print_input_type<P>();
-                                }
-                                
-                                if (fgets(input.data(), int(input.size()), stdin)) {
-                                   std::string_view input_sv{input.data()};
-                                   if (input_sv.back() == '\n') {
-                                      input_sv = input_sv.substr(0, input_sv.size() - 1);
-                                   }
-                                   using R = std::invoke_result_t<Func, Params>;
-                                   P params{};
-                                   const auto ec = glz::read<Opts>(params, input_sv);
-                                   if (ec) {
-                                      const auto error = glz::format_error(ec, input_sv);
-                                      std::printf("%.*s\n", int(error.size()), error.data());
-                                   }
-                                   else {
-                                      if constexpr (std::same_as<R, void>) {
-                                         func(params);
-                                      }
-                                      else {
-                                         const auto result = glz::write<Opts>(func(params)).value_or("result serialization error");
-                                         std::printf("%.*s\n", int(result.size()), result.data());
-                                      }
-                                   }
-                                }
-                                else {
-                                   std::fprintf(stderr, "Invalid input.\n");
-                                }
-                             }
-                             else if constexpr (glaze_object_t<E> || reflectable<E>) {
-                                std::atomic<bool> menu_boolean = true;
-                                if constexpr (reflectable<T>) {
-                                   run_cli_menu<Opts>(get<I>(t), menu_boolean);
-                                }
-                                else {
-                                   decltype(auto) v = get_member(value, get<I>(reflect<T>::values));
-                                   run_cli_menu<Opts>(v, menu_boolean);
-                                }
-                             }
-                             else if constexpr (check_hide_non_invocable(Opts)) {
-                             }
-                             else {
-                                static_assert(false_v<Func>, "Your function is not invocable or not concrete");
-                             }
-                          },
-                          item_number - 1);
+            jump_table<N>(
+               [&]<size_t I>() {
+                  using E = refl_t<T, I>;
+
+                  // MSVC bug requires Index alias here
+                  decltype(auto) func = [&]<size_t J>() -> decltype(auto) {
+                     if constexpr (reflectable<T>) {
+                        return get_member(value, get<J>(t));
+                     }
+                     else {
+                        return get_member(value, get<J>(reflect<T>::values));
+                     }
+                  }.template operator()<I>();
+
+                  using Func = decltype(func);
+                  if constexpr (std::is_member_function_pointer_v<std::decay_t<Func>>) {
+                     using F = std::decay_t<Func>;
+                     using Ret = typename return_type<F>::type;
+                     using Tuple = typename inputs_as_tuple<F>::type;
+                     constexpr auto n_args = glz::tuple_size_v<Tuple>;
+
+                     if constexpr (n_args == 0) {
+                        if constexpr (std::same_as<Ret, void>) {
+                           (value.*func)();
+                        }
+                        else {
+                           const auto result = glz::write<Opts>((value.*func)()).value_or("result serialization error");
+                           std::printf("%.*s\n", int(result.size()), result.data());
+                        }
+                     }
+                     else if constexpr (n_args == 1) {
+                        using Params = glz::tuple_element_t<0, Tuple>;
+                        using P = std::decay_t<Params>;
+                        constexpr auto N = glz::tuple_size_v<Tuple>;
+                        static_assert(N == 1, "Only one input is allowed for your function");
+                        static thread_local std::array<char, 256> input{};
+                        if constexpr (is_help<P>) {
+                           std::printf("%.*s\n", int(P::help_message.size()), P::help_message.data());
+                           print_input_type<typename P::value_type>();
+                        }
+                        else {
+                           print_input_type<P>();
+                        }
+
+                        if (fgets(input.data(), int(input.size()), stdin)) {
+                           std::string_view input_sv{input.data()};
+                           if (input_sv.back() == '\n') {
+                              input_sv = input_sv.substr(0, input_sv.size() - 1);
+                           }
+                           P params{};
+                           const auto ec = glz::read<Opts>(params, input_sv);
+                           if (ec) {
+                              const auto error = glz::format_error(ec, input_sv);
+                              std::printf("%.*s\n", int(error.size()), error.data());
+                           }
+                           else {
+                              if constexpr (std::same_as<Ret, void>) {
+                                 (value.*func)(params);
+                              }
+                              else {
+                                 const auto result =
+                                    glz::write<Opts>((value.*func)(params)).value_or("result serialization error");
+                                 std::printf("%.*s\n", int(result.size()), result.data());
+                              }
+                           }
+                        }
+                        else {
+                           std::fprintf(stderr, "Invalid input.\n");
+                        }
+                     }
+                     else {
+                        static_assert(false_v<Func>, "function cannot have more than one input");
+                     }
+                  }
+                  else if constexpr (std::is_invocable_v<Func>) {
+                     using R = std::invoke_result_t<Func>;
+                     if constexpr (std::same_as<R, void>) {
+                        func();
+                     }
+                     else {
+                        const auto result = glz::write<Opts>(func()).value_or("result serialization error");
+                        std::printf("%.*s\n", int(result.size()), result.data());
+                     }
+                  }
+                  else if constexpr (is_invocable_concrete<std::remove_cvref_t<Func>>) {
+                     using Tuple = invocable_args_t<std::remove_cvref_t<Func>>;
+                     using Params = glz::tuple_element_t<0, Tuple>;
+                     using P = std::decay_t<Params>;
+                     constexpr auto N = glz::tuple_size_v<Tuple>;
+                     static_assert(N == 1, "Only one input is allowed for your function");
+                     static thread_local std::array<char, 256> input{};
+                     if constexpr (is_help<P>) {
+                        std::printf("%.*s\n", int(P::help_message.size()), P::help_message.data());
+                        print_input_type<typename P::value_type>();
+                     }
+                     else {
+                        print_input_type<P>();
+                     }
+
+                     if (fgets(input.data(), int(input.size()), stdin)) {
+                        std::string_view input_sv{input.data()};
+                        if (input_sv.back() == '\n') {
+                           input_sv = input_sv.substr(0, input_sv.size() - 1);
+                        }
+                        using R = std::invoke_result_t<Func, Params>;
+                        P params{};
+                        const auto ec = glz::read<Opts>(params, input_sv);
+                        if (ec) {
+                           const auto error = glz::format_error(ec, input_sv);
+                           std::printf("%.*s\n", int(error.size()), error.data());
+                        }
+                        else {
+                           if constexpr (std::same_as<R, void>) {
+                              func(params);
+                           }
+                           else {
+                              const auto result = glz::write<Opts>(func(params)).value_or("result serialization error");
+                              std::printf("%.*s\n", int(result.size()), result.data());
+                           }
+                        }
+                     }
+                     else {
+                        std::fprintf(stderr, "Invalid input.\n");
+                     }
+                  }
+                  else if constexpr (glaze_object_t<E> || reflectable<E>) {
+                     std::atomic<bool> menu_boolean = true;
+                     if constexpr (reflectable<T>) {
+                        run_cli_menu<Opts>(get<I>(t), menu_boolean);
+                     }
+                     else {
+                        decltype(auto) v = get_member(value, get<I>(reflect<T>::values));
+                        run_cli_menu<Opts>(v, menu_boolean);
+                     }
+                  }
+                  else if constexpr (check_hide_non_invocable(Opts)) {
+                  }
+                  else {
+                     static_assert(false_v<Func>, "Your function is not invocable or not concrete");
+                  }
+               },
+               item_number - 1);
          }
          else {
             std::fprintf(stderr, "Invalid menu item.\n");

@@ -186,7 +186,7 @@ suite enum_tests = [] {
       const auto name = glz::get_enum_name(color);
       expect(name == "Green");
    };
-   
+
    "array of enums"_test = [] {
       std::array<Color, 3> arr{};
       std::string_view buffer = R"(["Green", "Red", "Blue"])";
@@ -196,7 +196,7 @@ suite enum_tests = [] {
       expect(arr[1] == Red);
       expect(arr[2] == Blue);
    };
-   
+
    "enum_array_t"_test = [] {
       enum_array_t obj{};
       std::string_view buffer = R"({"array": ["Green", "Red", "Blue"]})";
@@ -210,7 +210,8 @@ suite enum_tests = [] {
 
 static constexpr auto MY_ARRAY_MAX = 2;
 
-struct MyArrayStruct {
+struct MyArrayStruct
+{
    uint8_t my_array[MY_ARRAY_MAX]{};
 };
 
@@ -220,27 +221,26 @@ enum UnscopedEnum : uint8_t {
 };
 
 template <>
-struct glz::meta<UnscopedEnum> {
-   static constexpr auto value = enumerate(
-                                           ENUM_VALUE_0,
-                                           ENUM_VALUE_1
-                                           );
+struct glz::meta<UnscopedEnum>
+{
+   static constexpr auto value = enumerate(ENUM_VALUE_0, ENUM_VALUE_1);
 };
 
 template <>
-struct glz::meta<MyArrayStruct> {
+struct glz::meta<MyArrayStruct>
+{
    using T = MyArrayStruct;
    // Mapping enum parsing to a uint8_t array
-   static constexpr auto value = object(
-                                        "my_array", [](auto& s) { return std::span{ reinterpret_cast<UnscopedEnum*>(s.my_array), MY_ARRAY_MAX }; }
-                                        );
+   static constexpr auto value = object("my_array", [](auto& s) {
+      return std::span{reinterpret_cast<UnscopedEnum*>(s.my_array), MY_ARRAY_MAX};
+   });
 };
 
 suite unscoped_enum_tests = [] {
    "enum_array"_test = [] {
       MyArrayStruct s;
       std::string buffer = R"({"my_array": ["ENUM_VALUE_0", "ENUM_VALUE_1"]})";
-      
+
       auto ec = glz::read_json(s, buffer);
       expect(not ec) << glz::format_error(ec, buffer);
       expect(s.my_array[0] == 0);
