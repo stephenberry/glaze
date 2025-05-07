@@ -208,6 +208,45 @@ suite enum_tests = [] {
    };
 };
 
+static constexpr auto MY_ARRAY_MAX = 2;
+
+struct MyArrayStruct {
+   uint8_t my_array[MY_ARRAY_MAX]{};
+};
+
+enum UnscopedEnum : uint8_t {
+   ENUM_VALUE_0 = 0,
+   ENUM_VALUE_1,
+};
+
+template <>
+struct glz::meta<UnscopedEnum> {
+   static constexpr auto value = enumerate(
+                                           ENUM_VALUE_0,
+                                           ENUM_VALUE_1
+                                           );
+};
+
+template <>
+struct glz::meta<MyArrayStruct> {
+   using T = MyArrayStruct;
+   static constexpr auto value = object(
+                                        "my_array", [](auto& s) { return std::span{ reinterpret_cast<UnscopedEnum*>(s.my_array), MY_ARRAY_MAX }; }
+                                        );
+};
+
+suite unscoped_enum_tests = [] {
+   "enum_array"_test = [] {
+      MyArrayStruct s;
+      std::string buffer = R"({"my_array": ["ENUM_VALUE_0", "ENUM_VALUE_1"]})";
+      
+      auto ec = glz::read_json(s, buffer);
+      expect(not ec) << glz::format_error(ec, buffer);
+      expect(s.my_array[0] = 0);
+      expect(s.my_array[1] = 1);
+   };
+};
+
 enum struct Vehicle : uint32_t { Car, Truck, Plane };
 
 enum struct Shapes : uint32_t { circ, sq, triangle };
