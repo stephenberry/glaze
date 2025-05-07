@@ -243,8 +243,8 @@ suite unscoped_enum_tests = [] {
       
       auto ec = glz::read_json(s, buffer);
       expect(not ec) << glz::format_error(ec, buffer);
-      expect(s.my_array[0] = 0);
-      expect(s.my_array[1] = 1);
+      expect(s.my_array[0] == 0);
+      expect(s.my_array[1] == 1);
    };
 };
 
