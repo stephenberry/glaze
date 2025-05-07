@@ -230,6 +230,7 @@ struct glz::meta<UnscopedEnum> {
 template <>
 struct glz::meta<MyArrayStruct> {
    using T = MyArrayStruct;
+   // Mapping enum parsing to a uint8_t array
    static constexpr auto value = object(
                                         "my_array", [](auto& s) { return std::span{ reinterpret_cast<UnscopedEnum*>(s.my_array), MY_ARRAY_MAX }; }
                                         );
