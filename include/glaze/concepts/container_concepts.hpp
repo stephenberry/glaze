@@ -179,6 +179,13 @@ namespace glz
    };
 
    template <class T>
+   concept has_try_emplace_back = requires(T container) {
+      {
+         container.try_emplace_back()
+      } -> std::same_as<typename T::pointer>;
+   };
+
+   template <class T>
    concept has_append = requires(T t, typename T::const_iterator it) { t.append(it, it); };
 
    template <class T>
