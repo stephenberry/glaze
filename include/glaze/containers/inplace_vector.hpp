@@ -64,13 +64,13 @@ namespace glz
          if (n > N) throw std::bad_alloc();
 
          if constexpr (std::is_trivially_default_constructible_v<T>) {
-            // No need to initialize for trivially default constructible types
-            size_ = n;
+            // Use std::uninitialized_value_construct_n for proper value-initialization
+            std::uninitialized_value_construct_n(data_ptr(), n);
          }
          else {
             for (size_type i = 0; i < n; ++i) std::construct_at(data_ptr() + i);
-            size_ = n;
          }
+         size_ = n;
       }
 
       constexpr inplace_vector(size_type n, const T& value)
