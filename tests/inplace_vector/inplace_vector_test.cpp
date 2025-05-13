@@ -888,8 +888,7 @@ suite edge_cases_tests = [] {
       expect(ptr == nullptr) << "try_push_back on vector with zero capacity should return nullptr\n";
       
       // Test that the is_empty type trait works
-      // TODO: Maybe we should implement this, but it would require a bunch of code to just remove the `size_` stack allocation
-      //expect(std::is_empty_v<inplace_vector<int, 0>>) << "inplace_vector<T, 0> should be an empty type\n";
+      expect(std::is_empty_v<inplace_vector<int, 0>>) << "inplace_vector<T, 0> should be an empty type\n";
    };
    
    "non_default_constructible_type"_test = [] {
