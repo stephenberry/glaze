@@ -51,8 +51,6 @@ namespace glz
       std_trait(is_aggregate);
 #undef std_trait
 
-      // static constexpr sv cplusplus = empty_if<std::is_standard_layout_v<T>>(to_sv<__cplusplus>());
-
 #ifdef __clang__
       static constexpr sv clang = "clang";
 #endif
