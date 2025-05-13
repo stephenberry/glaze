@@ -572,7 +572,7 @@ namespace glz
       template <const std::string_view& ref>
       auto consteval validate_ref() noexcept -> void
       {
-#if __cpp_static_assert >= 202306L
+#if (__cpp_static_assert >= 202306L) && (__cplusplus > 202302L)
          static_assert(!has_slash(ref),
                        join_v<chars<"Slash in name: \"">, ref, chars<"\" in json schema references is not allowed">>);
 #else
