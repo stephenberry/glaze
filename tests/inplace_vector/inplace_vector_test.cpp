@@ -1,11 +1,12 @@
-#include <beman/inplace_vector/inplace_vector.hpp>
 #include <compare>
 
+#include "glaze/containers/inplace_vector.hpp"
 #include "glaze/glaze.hpp"
 #include "ut/ut.hpp"
 
 using namespace ut;
-using namespace beman;
+
+using glz::inplace_vector;
 
 struct my_struct
 {
