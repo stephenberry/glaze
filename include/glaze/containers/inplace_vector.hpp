@@ -723,8 +723,15 @@ namespace glz
             }
          }
          else {
-            // For non-sized ranges, convert to temporary buffer first
+            // For non-sized ranges, convert to temporary buffer first            
+#ifdef __cpp_lib_containers_ranges
             inplace_vector<T, N> temp(std::from_range, std::forward<R>(rg));
+#else
+            inplace_vector<T, N> temp;
+            for (auto&& item : rg) {
+               temp.push_back(std::forward<decltype(item)>(item));
+            }
+#endif
 
             if (size_ + temp.size() > N) throw std::bad_alloc();
 
