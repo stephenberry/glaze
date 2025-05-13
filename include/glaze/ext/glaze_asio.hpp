@@ -220,8 +220,13 @@ namespace glz
       {
          std::unique_lock lock{mtx};
 
+         if (not ctx) {
+            // TODO: make this error into an error code
+            throw std::runtime_error("asio::io_context is null");
+         }
+
          // reset all socket pointers if a connection failed
-         if (not *is_connected) {
+         if (not*is_connected) {
             for (auto& socket : sockets) {
                socket.reset();
             }
@@ -318,7 +323,7 @@ namespace glz
       };
 
       std::shared_ptr<asio::io_context> ctx{};
-      std::shared_ptr<glz::socket_pool> socket_pool = std::make_shared<glz::socket_pool>();
+      std::shared_ptr<glz::socket_pool> socket_pool{};
       std::shared_ptr<glz::memory_pool<repe::message>> message_pool =
          std::make_shared<glz::memory_pool<repe::message>>();
 
@@ -329,11 +334,19 @@ namespace glz
 
       [[nodiscard]] error_code init()
       {
-         ctx = std::make_shared<asio::io_context>(concurrency);
-         socket_pool->ctx = ctx;
-         socket_pool->host = host;
-         socket_pool->service = service;
-         is_connected = socket_pool->is_connected;
+         *is_connected = false;
+         // create a new socket_pool if we are initilaizing, this is needed because the sockets hold references to the
+         // io_context which is being recreated with init()
+         socket_pool = std::make_shared<glz::socket_pool>();
+
+         {
+            std::unique_lock lock{socket_pool->mtx}; // lock the socket_pool when setting up
+            ctx = std::make_shared<asio::io_context>(concurrency);
+            socket_pool->ctx = ctx;
+            socket_pool->host = host;
+            socket_pool->service = service;
+            is_connected = socket_pool->is_connected;
+         }
 
          unique_socket socket{socket_pool.get()};
          if (socket) {
@@ -348,6 +361,10 @@ namespace glz
       void call(Header&& header, repe::message& response, Params&&... params)
       {
          auto request = message_pool->borrow();
+         if (not connected()) {
+            encode_error(request->error(), response, "call failure: NOT CONNECTED");
+            return;
+         }
          repe::request<Opts>(std::move(header), *request, std::forward<Params>(params)...);
          if (bool(request->error())) {
             encode_error(request->error(), response, "bad request");

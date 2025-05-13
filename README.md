@@ -859,8 +859,6 @@ struct opts
   bool error_on_const_read =
      false; // Error if attempt is made to read into a const value, by default the value is skipped without error
 
-  uint8_t layout = rowwise; // CSV row wise output/input
-
   // The maximum precision type used for writing floats, higher precision floats will be cast down to this precision
   float_precision float_max_write_precision{};
 

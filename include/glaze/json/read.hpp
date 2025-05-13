@@ -2144,7 +2144,7 @@ namespace glz
          }
          const size_t ws_size = size_t(it - ws_start);
 
-         if constexpr ((glaze_object_t<T> || reflectable<T>)&&num_members == 0 && Opts.error_on_unknown_keys) {
+         if constexpr ((glaze_object_t<T> || reflectable<T>) && num_members == 0 && Opts.error_on_unknown_keys) {
             if constexpr (not tag.sv().empty()) {
                if (*it == '"') {
                   ++it;
@@ -2209,7 +2209,8 @@ namespace glz
          }
          else {
             decltype(auto) fields = [&]() -> decltype(auto) {
-               if constexpr ((glaze_object_t<T> || reflectable<T>)&&(Opts.error_on_missing_keys || Opts.partial_read)) {
+               if constexpr ((glaze_object_t<T> || reflectable<T>) &&
+                             (Opts.error_on_missing_keys || Opts.partial_read)) {
                   return bit_array<num_members>{};
                }
                else {
@@ -2221,7 +2222,7 @@ namespace glz
 
             bool first = true;
             while (true) {
-               if constexpr ((glaze_object_t<T> || reflectable<T>)&&Opts.partial_read) {
+               if constexpr ((glaze_object_t<T> || reflectable<T>) && Opts.partial_read) {
                   static constexpr bit_array<num_members> all_fields = [] {
                      bit_array<num_members> arr{};
                      for (size_t i = 0; i < num_members; ++i) {
@@ -2240,14 +2241,14 @@ namespace glz
                   if constexpr (not Opts.null_terminated) {
                      --ctx.indentation_level;
                   }
-                  if constexpr ((glaze_object_t<T> ||
-                                 reflectable<T>)&&(Opts.partial_read && Opts.error_on_missing_keys)) {
+                  if constexpr ((glaze_object_t<T> || reflectable<T>) &&
+                                (Opts.partial_read && Opts.error_on_missing_keys)) {
                      ctx.error = error_code::missing_key;
                      return;
                   }
                   else {
                      ++it;
-                     if constexpr ((glaze_object_t<T> || reflectable<T>)&&Opts.error_on_missing_keys) {
+                     if constexpr ((glaze_object_t<T> || reflectable<T>) && Opts.error_on_missing_keys) {
                         constexpr auto req_fields = required_fields<T, Opts>();
                         if ((req_fields & fields) != req_fields) {
                            ctx.error = error_code::missing_key;

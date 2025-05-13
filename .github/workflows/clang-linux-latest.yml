@@ -1,4 +1,7 @@
-name: clang-linux
+name: clang-linux-latest
+# This is for the latest version of Clang that aren't yet
+# supported by default in the Github Action runners
+# and instead need to be installed
 
 on:
   push:
@@ -23,21 +26,30 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        clang: [17, 18]
+        clang: [19, 20]
         build_type: [Debug]
         std: [23]
 
     env:
       CC: clang-${{matrix.clang}}
       CXX: clang++-${{matrix.clang}}
+      LLVM_VERSION: ${{matrix.clang}}
 
     steps:
     - uses: actions/checkout@v4
 
-    - name: Install dependencies
+    - name: Install latest clang
       run: |
+        wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
+        echo "deb http://apt.llvm.org/jammy/ llvm-toolchain-jammy-${{matrix.clang}} main" | sudo tee /etc/apt/sources.list.d/llvm.list
         sudo apt-get update
-        sudo apt-get install -y libc++-dev libc++abi-dev
+        sudo apt-get install -y clang-${{matrix.clang}} libc++-${{matrix.clang}}-dev libc++abi-${{matrix.clang}}-dev
+
+    - name: Set path for clang
+      run: |
+        echo "PATH=/usr/lib/llvm-${{matrix.clang}}/bin:$PATH" >> $GITHUB_ENV
+        clang-${{matrix.clang}} --version
+        clang++-${{matrix.clang}} --version
 
     - name: Configure CMake
       run: |

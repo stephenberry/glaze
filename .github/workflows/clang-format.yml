@@ -15,12 +15,12 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
-    - uses: DoozyX/clang-format-lint-action@v0.18.1
+    - uses: DoozyX/clang-format-lint-action@v0.20
       with:
         source: '.'
         exclude: ''
         extensions: 'h,hpp,cpp'
-        clangFormatVersion: 16
+        clangFormatVersion: 20
         style: file
         inplace: True
     - uses: EndBug/add-and-commit@v9

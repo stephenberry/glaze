@@ -169,7 +169,7 @@ struct Thing
    std::map<int, double> mapi{{5, 3.14}, {7, 7.42}, {2, 9.63}};
    sub_thing* thing_ptr{};
 
-   Thing() : thing_ptr(&thing){};
+   Thing() : thing_ptr(&thing) {};
 };
 
 template <>

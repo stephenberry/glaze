@@ -18,9 +18,7 @@ namespace glz
    // To support bool and std::atomic<bool> and other custom boolean types
    template <class T>
    concept cli_menu_boolean = requires(T t) {
-      {
-         t
-      } -> std::convertible_to<bool>;
+      { t } -> std::convertible_to<bool>;
    };
 
    namespace detail
@@ -78,17 +76,17 @@ namespace glz
          }();
 
          if (item_number > 0 && item_number <= long(N)) {
-            for_each_short_circuit<N>([&](auto I) {
-               if (I == item_number - 1) {
+            jump_table<N>(
+               [&]<size_t I>() {
                   using E = refl_t<T, I>;
 
                   // MSVC bug requires Index alias here
-                  decltype(auto) func = [&]<size_t I>() -> decltype(auto) {
+                  decltype(auto) func = [&]<size_t J>() -> decltype(auto) {
                      if constexpr (reflectable<T>) {
-                        return get_member(value, get<I>(t));
+                        return get_member(value, get<J>(t));
                      }
                      else {
-                        return get_member(value, get<I>(reflect<T>::values));
+                        return get_member(value, get<J>(reflect<T>::values));
                      }
                   }.template operator()<I>();
 
@@ -218,10 +216,8 @@ namespace glz
                   else {
                      static_assert(false_v<Func>, "Your function is not invocable or not concrete");
                   }
-                  return true; // exit
-               }
-               return false; // continue
-            });
+               },
+               item_number - 1);
          }
          else {
             std::fprintf(stderr, "Invalid menu item.\n");
@@ -297,6 +293,7 @@ namespace glz
             }
             std::string_view str{buf, size_t(it - buf)};
             if (str == "cls" || str == "clear") {
+               std::printf("\n");
                continue;
             }
 

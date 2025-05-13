@@ -44,9 +44,7 @@ namespace glz
 
    template <class T>
    concept has_empty = requires(T v) {
-      {
-         v.empty()
-      } -> std::convertible_to<bool>;
+      { v.empty() } -> std::convertible_to<bool>;
    };
 
    template <class T>
@@ -57,9 +55,7 @@ namespace glz
 
    template <class T>
    concept has_capacity = requires(T t) {
-      {
-         t.capacity()
-      } -> std::integral;
+      { t.capacity() } -> std::integral;
    };
 
    template <class T>
@@ -97,85 +93,47 @@ namespace glz
 
    template <typename T>
    concept complex_t = requires(T a, T b) {
-      {
-         a.real()
-      } -> std::convertible_to<typename T::value_type>;
-      {
-         a.imag()
-      } -> std::convertible_to<typename T::value_type>;
-      {
-         T(a.real(), a.imag())
-      } -> std::same_as<T>;
-      {
-         a + b
-      } -> std::same_as<T>;
-      {
-         a - b
-      } -> std::same_as<T>;
-      {
-         a* b
-      } -> std::same_as<T>;
-      {
-         a / b
-      } -> std::same_as<T>;
+      { a.real() } -> std::convertible_to<typename T::value_type>;
+      { a.imag() } -> std::convertible_to<typename T::value_type>;
+      { T(a.real(), a.imag()) } -> std::same_as<T>;
+      { a + b } -> std::same_as<T>;
+      { a - b } -> std::same_as<T>;
+      { a * b } -> std::same_as<T>;
+      { a / b } -> std::same_as<T>;
    };
 
    template <class T>
    concept optional_like = requires(T t, typename T::value_type v) {
-      {
-         T()
-      } -> std::same_as<T>;
-      {
-         T(v)
-      } -> std::same_as<T>;
-      {
-         t.has_value()
-      } -> std::convertible_to<bool>;
-      {
-         t.value()
-      };
-      {
-         t = v
-      };
-      {
-         t.reset()
-      };
-      {
-         t.emplace()
-      };
+      { T() } -> std::same_as<T>;
+      { T(v) } -> std::same_as<T>;
+      { t.has_value() } -> std::convertible_to<bool>;
+      { t.value() };
+      { t = v };
+      { t.reset() };
+      { t.emplace() };
    };
 
    template <class T>
    concept pair_t = requires(T pair) {
       typename std::decay_t<T>::first_type;
       typename std::decay_t<T>::second_type;
-      {
-         pair.first
-      };
-      {
-         pair.second
-      };
+      { pair.first };
+      { pair.second };
    };
 
    template <class T>
    concept emplaceable = requires(T container) {
-      {
-         container.emplace(std::declval<typename T::value_type>())
-      };
+      { container.emplace(std::declval<typename T::value_type>()) };
    };
 
    template <class T>
    concept push_backable = requires(T container) {
-      {
-         container.push_back(std::declval<typename T::value_type>())
-      };
+      { container.push_back(std::declval<typename T::value_type>()) };
    };
 
    template <class T>
    concept emplace_backable = requires(T container) {
-      {
-         container.emplace_back()
-      } -> std::same_as<typename T::reference>;
+      { container.emplace_back() } -> std::same_as<typename T::reference>;
    };
 
    template <class T>
@@ -193,9 +151,7 @@ namespace glz
 
    template <class T>
    concept accessible = requires(T container) {
-      {
-         container[size_t{}]
-      } -> std::same_as<typename T::reference>;
+      { container[size_t{}] } -> std::same_as<typename T::reference>;
    };
 
    template <class T>
@@ -204,25 +160,15 @@ namespace glz
 
    template <class T>
    concept map_subscriptable = requires(T container) {
-      {
-         container[std::declval<typename T::key_type>()]
-      };
+      { container[std::declval<typename T::key_type>()] };
    };
 
    template <typename T>
    concept string_like = requires(T s) {
-      {
-         s.size()
-      } -> std::integral;
-      {
-         s.data()
-      };
-      {
-         s.empty()
-      } -> std::convertible_to<bool>;
-      {
-         s.substr(0, 1)
-      };
+      { s.size() } -> std::integral;
+      { s.data() };
+      { s.empty() } -> std::convertible_to<bool>;
+      { s.substr(0, 1) };
    };
 
    template <typename T>
@@ -230,9 +176,7 @@ namespace glz
       bitset.flip();
       bitset.set(0);
       requires string_like<decltype(bitset.to_string())>;
-      {
-         bitset.count()
-      } -> std::same_as<size_t>;
+      { bitset.count() } -> std::same_as<size_t>;
    };
 
    template <class T>
@@ -254,12 +198,8 @@ namespace glz
       path.filename();
       path.extension();
       path.parent_path();
-      {
-         path.has_filename()
-      } -> std::convertible_to<bool>;
-      {
-         path.has_extension()
-      } -> std::convertible_to<bool>;
+      { path.has_filename() } -> std::convertible_to<bool>;
+      { path.has_extension() } -> std::convertible_to<bool>;
    };
 }
 
@@ -277,30 +217,18 @@ namespace glz
    concept matrix_t = requires(T matrix) {
       matrix.resize(2, 4);
       matrix.data();
-      {
-         matrix.rows()
-      } -> std::convertible_to<int>;
-      {
-         matrix.cols()
-      } -> std::convertible_to<int>;
-      {
-         matrix.size()
-      } -> std::convertible_to<int>;
+      { matrix.rows() } -> std::convertible_to<int>;
+      { matrix.cols() } -> std::convertible_to<int>;
+      { matrix.size() } -> std::convertible_to<int>;
    } && !range<T>;
 
    // concept for the Eigen library: matrices and vectors
    template <class T>
    concept eigen_t = requires(T matrix) {
       matrix.data();
-      {
-         matrix.rows()
-      } -> std::convertible_to<int>;
-      {
-         matrix.cols()
-      } -> std::convertible_to<int>;
-      {
-         matrix.size()
-      } -> std::convertible_to<int>;
+      { matrix.rows() } -> std::convertible_to<int>;
+      { matrix.cols() } -> std::convertible_to<int>;
+      { matrix.size() } -> std::convertible_to<int>;
    };
 
    // range like
@@ -318,16 +246,12 @@ namespace glz
 #else
       // in lieu of std::ranges::empty
       if constexpr (requires() {
-                       {
-                          rng.empty()
-                       } -> std::convertible_to<bool>;
+                       { rng.empty() } -> std::convertible_to<bool>;
                     }) {
          return rng.empty();
       }
       else if constexpr (requires() {
-                            {
-                               rng.size()
-                            } -> std::same_as<std::size_t>;
+                            { rng.size() } -> std::same_as<std::size_t>;
                          }) {
          return rng.size() == std::size_t{0};
       }
