@@ -1184,26 +1184,91 @@ namespace glz
       inline std::expected<response, std::error_code> post(
          std::string_view url, std::string_view body, const std::unordered_map<std::string, std::string>& headers = {})
       {
-         // Implementation similar to get, but with POST method and body
-         // Parse the URL
-         std::regex url_regex(R"(^(http|https)://([^:/]+)(?::(\d+))?(/.*)?$)");
-         std::cmatch matches;
+         // Manual URL parsing, same as regex pattern: ^(http|https)://([^:/]+)(?::(\d+))?(/.*)?$
 
-         if (!std::regex_match(url.begin(), url.end(), matches, url_regex)) {
+         // Check for protocol
+         if (url.size() < 8) { // Minimum for "http://" + 1 char host
             return std::unexpected(std::make_error_code(std::errc::invalid_argument));
          }
 
-         std::string protocol = matches[1];
-         std::string host = matches[2];
-         std::string port_str = matches[3].matched ? matches[3].str() : "";
-         std::string path = matches[4].matched ? matches[4].str() : "/";
+         // Check protocol prefix
+         std::string_view protocolView;
+         size_t protocolEnd = url.find("://");
+         if (protocolEnd == std::string_view::npos) {
+            return std::unexpected(std::make_error_code(std::errc::invalid_argument));
+         }
 
+         protocolView = url.substr(0, protocolEnd);
+         std::string protocol(protocolView);
+         if (protocol != "http" && protocol != "https") {
+            return std::unexpected(std::make_error_code(std::errc::invalid_argument));
+         }
+
+         // Process host, port and path
+         size_t hostStart = protocolEnd + 3;
+         if (hostStart >= url.size()) {
+            return std::unexpected(std::make_error_code(std::errc::invalid_argument));
+         }
+
+         // Find the end of host (first '/' or ':' character)
+         size_t hostEnd = url.find_first_of("/:", hostStart);
+         std::string host;
+         std::string port_str;
+         std::string path = "/";
+
+         if (hostEnd == std::string_view::npos) {
+            // No port or path specified
+            host = std::string(url.substr(hostStart));
+         }
+         else if (url[hostEnd] == ':') {
+            // Port specified
+            host = std::string(url.substr(hostStart, hostEnd - hostStart));
+
+            size_t portStart = hostEnd + 1;
+            size_t portEnd = url.find('/', portStart);
+
+            if (portEnd == std::string_view::npos) {
+               // No path after port
+               port_str = std::string(url.substr(portStart));
+            }
+            else {
+               // Path after port
+               port_str = std::string(url.substr(portStart, portEnd - portStart));
+               path = std::string(url.substr(portEnd));
+            }
+
+            // Validate port (must be all digits)
+            if (!port_str.empty() && !std::all_of(port_str.begin(), port_str.end(), ::isdigit)) {
+               return std::unexpected(std::make_error_code(std::errc::invalid_argument));
+            }
+         }
+         else if (url[hostEnd] == '/') {
+            // Path specified, no port
+            host = std::string(url.substr(hostStart, hostEnd - hostStart));
+            path = std::string(url.substr(hostEnd));
+         }
+
+         // Host validation - ensure it contains valid characters
+         if (host.empty() || host.find_first_of(":/") != std::string::npos) {
+            return std::unexpected(std::make_error_code(std::errc::invalid_argument));
+         }
+
+         // Determine port
          uint16_t port = 0;
          if (port_str.empty()) {
             port = (protocol == "https") ? 443 : 80;
          }
          else {
-            port = static_cast<uint16_t>(std::stoi(port_str));
+            try {
+               long portLong = std::stol(port_str);
+               if (portLong <= 0 || portLong > 65535) {
+                  return std::unexpected(std::make_error_code(std::errc::invalid_argument));
+               }
+               port = static_cast<uint16_t>(portLong);
+            }
+            catch (const std::exception&) {
+               return std::unexpected(std::make_error_code(std::errc::invalid_argument));
+            }
          }
 
          // Create a promise for the response
@@ -1266,7 +1331,6 @@ namespace glz
                               return;
                            }
 
-                           // ... Rest of code similar to get() implementation ...
                            // Create a buffer for the response
                            auto buffer = std::make_shared<asio::streambuf>();
 
