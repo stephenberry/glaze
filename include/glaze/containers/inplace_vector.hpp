@@ -177,7 +177,7 @@ namespace glz
       }
 
       // Assign methods
-      template <class InputIterator>
+      template <std::input_iterator InputIterator>
       constexpr void assign(InputIterator first, InputIterator last)
       {
          clear();
