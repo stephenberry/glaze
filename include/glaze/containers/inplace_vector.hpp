@@ -21,6 +21,7 @@
 #define GLZ_THROW_OR_ABORT(EXC) (throw(EXC))
 #define GLZ_NOEXCEPT noexcept(false)
 #else
+#include <cstdlib> // for std::abort
 #define GLZ_THROW_OR_ABORT(EXC) (std::abort())
 #define GLZ_NOEXCEPT noexcept(true)
 #endif
