@@ -7,6 +7,7 @@
 #include <compare>
 #include <cstddef>
 #include <cstring>
+#include <new>
 #include <initializer_list>
 #include <iterator>
 #include <memory>
