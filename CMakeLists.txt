@@ -30,8 +30,6 @@ if (MSVC)
         $<$<CONFIG:MinSizeRel>:/LTCG /INCREMENTAL:NO>)
     endif()
    endif()
-else()
-  target_compile_options(glaze_glaze INTERFACE "-Wno-missing-braces")
 endif()
 
 set_property(TARGET glaze_glaze PROPERTY EXPORT_NAME glaze)
