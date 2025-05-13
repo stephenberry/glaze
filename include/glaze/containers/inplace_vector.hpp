@@ -63,13 +63,8 @@ namespace glz
       {
          if (n > N) throw std::bad_alloc();
 
-         if constexpr (std::is_trivially_default_constructible_v<T>) {
-            // Use std::uninitialized_value_construct_n for proper value-initialization
-            std::uninitialized_value_construct_n(data_ptr(), n);
-         }
-         else {
-            for (size_type i = 0; i < n; ++i) std::construct_at(data_ptr() + i);
-         }
+         // Use std::uninitialized_value_construct_n for proper value-initialization
+         std::uninitialized_value_construct_n(data_ptr(), n);
          size_ = n;
       }
 
@@ -298,15 +293,9 @@ namespace glz
          if (sz > N) throw std::bad_alloc();
 
          if (sz > size_) {
-            if constexpr (std::is_trivially_default_constructible_v<T>) {
-               // No need to initialize trivially default constructible types
-               size_ = sz;
-            }
-            else {
-               // Expand and default-construct new elements
-               for (size_type i = size_; i < sz; ++i) std::construct_at(data_ptr() + i);
-               size_ = sz;
-            }
+            // Value-initialize the new elements
+            std::uninitialized_value_construct_n(data_ptr() + size_, sz - size_);
+            size_ = sz;
          }
          else if (sz < size_) {
             // Destroy excess elements
