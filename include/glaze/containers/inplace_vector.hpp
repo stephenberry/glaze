@@ -723,7 +723,7 @@ namespace glz
             }
          }
          else {
-            // For non-sized ranges, convert to temporary buffer first            
+            // For non-sized ranges, convert to temporary buffer first
 #ifdef __cpp_lib_containers_ranges
             inplace_vector<T, N> temp(std::from_range, std::forward<R>(rg));
 #else
@@ -893,12 +893,12 @@ namespace glz
       c.erase(it, c.end());
       return r;
    }
-   
+
    // Partial specialization for N = 0
    template <class T>
    class inplace_vector<T, 0>
    {
-   public:
+     public:
       // types
       using value_type = T;
       using pointer = T*;
@@ -911,21 +911,31 @@ namespace glz
       using const_iterator = const T*;
       using reverse_iterator = std::reverse_iterator<iterator>;
       using const_reverse_iterator = std::reverse_iterator<const_iterator>;
-      
-   public:
+
+     public:
       // Constructors
       constexpr inplace_vector() noexcept = default;
-      constexpr explicit inplace_vector(size_type n) { if (n > 0) throw std::bad_alloc(); }
-      constexpr inplace_vector(size_type n, const T&) { if (n > 0) throw std::bad_alloc(); }
-      
+      constexpr explicit inplace_vector(size_type n)
+      {
+         if (n > 0) throw std::bad_alloc();
+      }
+      constexpr inplace_vector(size_type n, const T&)
+      {
+         if (n > 0) throw std::bad_alloc();
+      }
+
       template <class InputIterator>
-      constexpr inplace_vector(InputIterator, InputIterator) {}
-      
+      constexpr inplace_vector(InputIterator, InputIterator)
+      {}
+
       constexpr inplace_vector(const inplace_vector&) = default;
       constexpr inplace_vector(inplace_vector&&) noexcept = default;
-      constexpr inplace_vector(std::initializer_list<T> il) { if (il.size() > 0) throw std::bad_alloc(); }
+      constexpr inplace_vector(std::initializer_list<T> il)
+      {
+         if (il.size() > 0) throw std::bad_alloc();
+      }
       constexpr ~inplace_vector() = default;
-      
+
       // Assignment operators
       constexpr inplace_vector& operator=(const inplace_vector&) = default;
       constexpr inplace_vector& operator=(inplace_vector&&) noexcept = default;
@@ -934,7 +944,7 @@ namespace glz
          if (il.size() > 0) throw std::bad_alloc();
          return *this;
       }
-      
+
       // Iterators - all return null pointers
       constexpr iterator begin() noexcept { return nullptr; }
       constexpr const_iterator begin() const noexcept { return nullptr; }
@@ -948,20 +958,32 @@ namespace glz
       constexpr const_iterator cend() const noexcept { return nullptr; }
       constexpr const_reverse_iterator crbegin() const noexcept { return const_reverse_iterator(nullptr); }
       constexpr const_reverse_iterator crend() const noexcept { return const_reverse_iterator(nullptr); }
-      
+
       // Capacity - all hardcoded to 0
       constexpr bool empty() const noexcept { return true; }
-      constexpr size_type size() const noexcept { return 0; }  // Always returns 0 instead of size_ member
+      constexpr size_type size() const noexcept { return 0; } // Always returns 0 instead of size_ member
       static constexpr size_type max_size() noexcept { return 0; }
       static constexpr size_type capacity() noexcept { return 0; }
-      constexpr void resize(size_type sz) { if (sz > 0) throw std::bad_alloc(); }
-      constexpr void resize(size_type sz, const T&) { if (sz > 0) throw std::bad_alloc(); }
-      static constexpr void reserve(size_type n) { if (n > 0) throw std::bad_alloc(); }
+      constexpr void resize(size_type sz)
+      {
+         if (sz > 0) throw std::bad_alloc();
+      }
+      constexpr void resize(size_type sz, const T&)
+      {
+         if (sz > 0) throw std::bad_alloc();
+      }
+      static constexpr void reserve(size_type n)
+      {
+         if (n > 0) throw std::bad_alloc();
+      }
       static constexpr void shrink_to_fit() noexcept {}
-      
+
       // Element access - all will throw
       constexpr reference operator[](size_type) { throw std::out_of_range("inplace_vector: empty container"); }
-      constexpr const_reference operator[](size_type) const { throw std::out_of_range("inplace_vector: empty container"); }
+      constexpr const_reference operator[](size_type) const
+      {
+         throw std::out_of_range("inplace_vector: empty container");
+      }
       constexpr reference at(size_type) { throw std::out_of_range("inplace_vector: empty container"); }
       constexpr const_reference at(size_type) const { throw std::out_of_range("inplace_vector: empty container"); }
       constexpr reference front() { throw std::out_of_range("inplace_vector: empty container"); }
@@ -970,44 +992,62 @@ namespace glz
       constexpr const_reference back() const { throw std::out_of_range("inplace_vector: empty container"); }
       constexpr T* data() noexcept { return nullptr; }
       constexpr const T* data() const noexcept { return nullptr; }
-      
+
       // Modifiers - all throw on attempt to add elements
       template <class... Args>
-      constexpr reference emplace_back(Args&&...) { throw std::bad_alloc(); }
+      constexpr reference emplace_back(Args&&...)
+      {
+         throw std::bad_alloc();
+      }
       constexpr reference push_back(const T&) { throw std::bad_alloc(); }
       constexpr reference push_back(T&&) { throw std::bad_alloc(); }
       constexpr void pop_back() { throw std::out_of_range("inplace_vector: empty container"); }
-      
+
       // Fallible APIs
       template <class... Args>
-      constexpr T* try_emplace_back(Args&&...) { return nullptr; }
+      constexpr T* try_emplace_back(Args&&...)
+      {
+         return nullptr;
+      }
       constexpr T* try_push_back(const T&) { return nullptr; }
       constexpr T* try_push_back(T&&) { return nullptr; }
-      
+
       // Unchecked APIs
       template <class... Args>
-      constexpr reference unchecked_emplace_back(Args&&...) { throw std::bad_alloc(); }
+      constexpr reference unchecked_emplace_back(Args&&...)
+      {
+         throw std::bad_alloc();
+      }
       constexpr reference unchecked_push_back(const T&) { throw std::bad_alloc(); }
       constexpr reference unchecked_push_back(T&&) { throw std::bad_alloc(); }
-      
+
       // Insert operations
       template <class... Args>
-      constexpr iterator emplace(const_iterator, Args&&...) { throw std::bad_alloc(); }
+      constexpr iterator emplace(const_iterator, Args&&...)
+      {
+         throw std::bad_alloc();
+      }
       constexpr iterator insert(const_iterator, const T&) { throw std::bad_alloc(); }
       constexpr iterator insert(const_iterator, T&&) { throw std::bad_alloc(); }
       constexpr iterator insert(const_iterator, size_type, const T&) { throw std::bad_alloc(); }
       template <class InputIterator>
-      constexpr iterator insert(const_iterator, InputIterator, InputIterator) { throw std::bad_alloc(); }
+      constexpr iterator insert(const_iterator, InputIterator, InputIterator)
+      {
+         throw std::bad_alloc();
+      }
       constexpr iterator insert(const_iterator, std::initializer_list<T>) { throw std::bad_alloc(); }
-      
+
       // Erase operations
       constexpr iterator erase(const_iterator) { throw std::out_of_range("inplace_vector: empty container"); }
       constexpr iterator erase(const_iterator, const_iterator) { return nullptr; }
       constexpr void clear() noexcept {}
       constexpr void swap(inplace_vector&) noexcept {}
-      
+
       // Comparison operators
       friend constexpr bool operator==(const inplace_vector&, const inplace_vector&) { return true; }
-      friend constexpr auto operator<=>(const inplace_vector&, const inplace_vector&) { return std::strong_ordering::equal; }
+      friend constexpr auto operator<=>(const inplace_vector&, const inplace_vector&)
+      {
+         return std::strong_ordering::equal;
+      }
    };
 }
