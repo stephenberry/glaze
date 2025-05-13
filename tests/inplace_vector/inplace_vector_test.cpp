@@ -121,6 +121,7 @@ suite construction_tests = [] {
       }
    };
    
+#ifdef __cpp_lib_containers_ranges
    "from_range_constructor"_test = [] {
       std::array<int, 5> arr = {1, 2, 3, 4, 5};
       inplace_vector<int, 10> v(std::from_range, arr);
@@ -131,6 +132,7 @@ suite construction_tests = [] {
          expect(v[i] == arr[i]) << "Elements should match source range\n";
       }
    };
+#endif
    
    "copy_constructor"_test = [] {
       inplace_vector<int, 10> v1(5, 42);
