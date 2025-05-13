@@ -30,13 +30,15 @@ if (MSVC)
         $<$<CONFIG:MinSizeRel>:/LTCG /INCREMENTAL:NO>)
     endif()
    endif()
+else()
+  target_compile_options(${PROJECT_NAME}_${PROJECT_NAME} INTERFACE "-Wno-missing-braces")
 endif()
 
-set_property(TARGET glaze_glaze PROPERTY EXPORT_NAME glaze)
+set_property(TARGET ${PROJECT_NAME}_${PROJECT_NAME} PROPERTY EXPORT_NAME glaze)
 
-target_compile_features(glaze_glaze INTERFACE cxx_std_23)
+target_compile_features(${PROJECT_NAME}_${PROJECT_NAME} INTERFACE cxx_std_23)
 target_include_directories(
-    glaze_glaze ${warning_guard}
+    ${PROJECT_NAME}_${PROJECT_NAME} ${warning_guard}
     INTERFACE "$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>"
 )
 
