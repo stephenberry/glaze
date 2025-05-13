@@ -16,6 +16,16 @@
 #include <type_traits>
 #include <utility>
 
+#ifndef GLZ_THROW_OR_ABORT
+#if __cpp_exceptions
+#define GLZ_THROW_OR_ABORT(EXC) (throw(EXC))
+#define GLZ_NOEXCEPT noexcept(false)
+#else
+#define GLZ_THROW_OR_ABORT(EXC) (std::abort())
+#define GLZ_NOEXCEPT noexcept(true)
+#endif
+#endif
+
 namespace glz
 {
    template <class T, size_t N>
@@ -61,7 +71,7 @@ namespace glz
 
       constexpr explicit inplace_vector(size_type n)
       {
-         if (n > N) throw std::bad_alloc();
+         if (n > N) GLZ_THROW_OR_ABORT(std::bad_alloc());
 
          // Use std::uninitialized_value_construct_n for proper value-initialization
          std::uninitialized_value_construct_n(data_ptr(), n);
@@ -70,7 +80,7 @@ namespace glz
 
       constexpr inplace_vector(size_type n, const T& value)
       {
-         if (n > N) throw std::bad_alloc();
+         if (n > N) GLZ_THROW_OR_ABORT(std::bad_alloc());
 
          if constexpr (std::is_trivially_copyable_v<T>) {
             // Construct first element then copy it
@@ -192,7 +202,7 @@ namespace glz
 
          // Calculate distance if possible (for random access iterators)
          if constexpr (std::random_access_iterator<InputIterator>) {
-            if (std::distance(first, last) > static_cast<difference_type>(N)) throw std::bad_alloc();
+            if (std::distance(first, last) > static_cast<difference_type>(N)) GLZ_THROW_OR_ABORT(std::bad_alloc());
          }
 
          if constexpr (std::is_trivially_copyable_v<T> && std::contiguous_iterator<InputIterator>) {
@@ -206,7 +216,7 @@ namespace glz
          else {
             // General path
             while (first != last) {
-               if (size_ >= N) throw std::bad_alloc();
+               if (size_ >= N) GLZ_THROW_OR_ABORT(std::bad_alloc());
 
                std::construct_at(data_ptr() + size_, *first);
                ++size_;
@@ -223,7 +233,7 @@ namespace glz
 
          // Check size if possible
          if constexpr (std::ranges::sized_range<R>) {
-            if (std::ranges::size(rg) > N) throw std::bad_alloc();
+            if (std::ranges::size(rg) > N) GLZ_THROW_OR_ABORT(std::bad_alloc());
          }
 
          // Fast path for contiguous ranges of trivially copyable types
@@ -238,7 +248,7 @@ namespace glz
          else {
             // General path
             for (auto&& item : rg) {
-               if (size_ >= N) throw std::bad_alloc();
+               if (size_ >= N) GLZ_THROW_OR_ABORT(std::bad_alloc());
 
                std::construct_at(data_ptr() + size_, std::forward<decltype(item)>(item));
                ++size_;
@@ -248,7 +258,7 @@ namespace glz
 
       constexpr void assign(size_type n, const T& value)
       {
-         if (n > N) throw std::bad_alloc();
+         if (n > N) GLZ_THROW_OR_ABORT(std::bad_alloc());
 
          clear();
 
@@ -303,7 +313,7 @@ namespace glz
 
       constexpr void resize(size_type sz)
       {
-         if (sz > N) throw std::bad_alloc();
+         if (sz > N) GLZ_THROW_OR_ABORT(std::bad_alloc());
 
          if (sz > size_) {
             // Value-initialize the new elements
@@ -319,7 +329,7 @@ namespace glz
 
       constexpr void resize(size_type sz, const T& c)
       {
-         if (sz > N) throw std::bad_alloc();
+         if (sz > N) GLZ_THROW_OR_ABORT(std::bad_alloc());
 
          if (sz > size_) {
             if constexpr (std::is_trivially_copyable_v<T>) {
@@ -353,7 +363,7 @@ namespace glz
 
       static constexpr void reserve(size_type n)
       {
-         if (n > N) throw std::bad_alloc();
+         if (n > N) GLZ_THROW_OR_ABORT(std::bad_alloc());
          // No-op otherwise since capacity is fixed
       }
 
@@ -369,13 +379,13 @@ namespace glz
 
       constexpr reference at(size_type n)
       {
-         if (n >= size_) throw std::out_of_range("inplace_vector::at: index out of range");
+         if (n >= size_) GLZ_THROW_OR_ABORT(std::out_of_range("inplace_vector::at: index out of range"));
          return data_ptr()[n];
       }
 
       constexpr const_reference at(size_type n) const
       {
-         if (n >= size_) throw std::out_of_range("inplace_vector::at: index out of range");
+         if (n >= size_) GLZ_THROW_OR_ABORT(std::out_of_range("inplace_vector::at: index out of range"));
          return data_ptr()[n];
       }
 
@@ -395,7 +405,7 @@ namespace glz
       template <class... Args>
       constexpr reference emplace_back(Args&&... args)
       {
-         if (size_ >= N) throw std::bad_alloc();
+         if (size_ >= N) GLZ_THROW_OR_ABORT(std::bad_alloc());
 
          std::construct_at(data_ptr() + size_, std::forward<Args>(args)...);
          return data_ptr()[size_++];
@@ -403,7 +413,7 @@ namespace glz
 
       constexpr reference push_back(const T& x)
       {
-         if (size_ >= N) throw std::bad_alloc();
+         if (size_ >= N) GLZ_THROW_OR_ABORT(std::bad_alloc());
 
          if constexpr (std::is_trivially_copyable_v<T>) {
             std::memcpy(data_ptr() + size_, &x, sizeof(T));
@@ -416,7 +426,7 @@ namespace glz
 
       constexpr reference push_back(T&& x)
       {
-         if (size_ >= N) throw std::bad_alloc();
+         if (size_ >= N) GLZ_THROW_OR_ABORT(std::bad_alloc());
 
          std::construct_at(data_ptr() + size_, std::move(x));
          return data_ptr()[size_++];
@@ -428,11 +438,11 @@ namespace glz
       {
          // Check size if possible
          if constexpr (std::ranges::sized_range<R>) {
-            if (size_ + std::ranges::size(rg) > N) throw std::bad_alloc();
+            if (size_ + std::ranges::size(rg) > N) GLZ_THROW_OR_ABORT(std::bad_alloc());
          }
 
          for (auto&& item : rg) {
-            if (size_ >= N) throw std::bad_alloc();
+            if (size_ >= N) GLZ_THROW_OR_ABORT(std::bad_alloc());
 
             std::construct_at(data_ptr() + size_, std::forward<decltype(item)>(item));
             ++size_;
@@ -508,7 +518,7 @@ namespace glz
       template <class... Args>
       constexpr iterator emplace(const_iterator position, Args&&... args)
       {
-         if (size_ >= N) throw std::bad_alloc();
+         if (size_ >= N) GLZ_THROW_OR_ABORT(std::bad_alloc());
 
          // Calculate position index
          size_type pos_idx = position - cbegin();
@@ -552,7 +562,7 @@ namespace glz
 
       constexpr iterator insert(const_iterator position, size_type n, const T& x)
       {
-         if (size_ + n > N) throw std::bad_alloc();
+         if (size_ + n > N) GLZ_THROW_OR_ABORT(std::bad_alloc());
 
          if (n == 0) return begin() + (position - cbegin());
 
@@ -611,7 +621,7 @@ namespace glz
          // For random access iterators, we can check size upfront
          if constexpr (std::random_access_iterator<InputIterator>) {
             auto count = std::distance(first, last);
-            if (size_ + count > N) throw std::bad_alloc();
+            if (size_ + count > N) GLZ_THROW_OR_ABORT(std::bad_alloc());
 
             if (count == 0) return begin() + pos_idx;
 
@@ -659,7 +669,7 @@ namespace glz
             // For non-random access iterators, copy to temporary buffer first
             inplace_vector<T, N> temp(first, last);
 
-            if (size_ + temp.size() > N) throw std::bad_alloc();
+            if (size_ + temp.size() > N) GLZ_THROW_OR_ABORT(std::bad_alloc());
 
             insert(position, temp.begin(), temp.end());
          }
@@ -676,7 +686,7 @@ namespace glz
 
          if constexpr (std::ranges::sized_range<R>) {
             auto count = std::ranges::size(rg);
-            if (size_ + count > N) throw std::bad_alloc();
+            if (size_ + count > N) GLZ_THROW_OR_ABORT(std::bad_alloc());
 
             if (count == 0) return begin() + pos_idx;
 
@@ -733,7 +743,7 @@ namespace glz
             }
 #endif
 
-            if (size_ + temp.size() > N) throw std::bad_alloc();
+            if (size_ + temp.size() > N) GLZ_THROW_OR_ABORT(std::bad_alloc());
 
             insert(position, temp.begin(), temp.end());
          }
@@ -917,11 +927,11 @@ namespace glz
       constexpr inplace_vector() noexcept = default;
       constexpr explicit inplace_vector(size_type n)
       {
-         if (n > 0) throw std::bad_alloc();
+         if (n > 0) GLZ_THROW_OR_ABORT(std::bad_alloc());
       }
       constexpr inplace_vector(size_type n, const T&)
       {
-         if (n > 0) throw std::bad_alloc();
+         if (n > 0) GLZ_THROW_OR_ABORT(std::bad_alloc());
       }
 
       template <class InputIterator>
@@ -932,7 +942,7 @@ namespace glz
       constexpr inplace_vector(inplace_vector&&) noexcept = default;
       constexpr inplace_vector(std::initializer_list<T> il)
       {
-         if (il.size() > 0) throw std::bad_alloc();
+         if (il.size() > 0) GLZ_THROW_OR_ABORT(std::bad_alloc());
       }
       constexpr ~inplace_vector() = default;
 
@@ -941,7 +951,7 @@ namespace glz
       constexpr inplace_vector& operator=(inplace_vector&&) noexcept = default;
       constexpr inplace_vector& operator=(std::initializer_list<T> il)
       {
-         if (il.size() > 0) throw std::bad_alloc();
+         if (il.size() > 0) GLZ_THROW_OR_ABORT(std::bad_alloc());
          return *this;
       }
 
@@ -966,30 +976,42 @@ namespace glz
       static constexpr size_type capacity() noexcept { return 0; }
       constexpr void resize(size_type sz)
       {
-         if (sz > 0) throw std::bad_alloc();
+         if (sz > 0) GLZ_THROW_OR_ABORT(std::bad_alloc());
       }
       constexpr void resize(size_type sz, const T&)
       {
-         if (sz > 0) throw std::bad_alloc();
+         if (sz > 0) GLZ_THROW_OR_ABORT(std::bad_alloc());
       }
       static constexpr void reserve(size_type n)
       {
-         if (n > 0) throw std::bad_alloc();
+         if (n > 0) GLZ_THROW_OR_ABORT(std::bad_alloc());
       }
       static constexpr void shrink_to_fit() noexcept {}
 
       // Element access - all will throw
-      constexpr reference operator[](size_type) { throw std::out_of_range("inplace_vector: empty container"); }
+      constexpr reference operator[](size_type)
+      {
+         GLZ_THROW_OR_ABORT(std::out_of_range("inplace_vector: empty container"));
+      }
       constexpr const_reference operator[](size_type) const
       {
-         throw std::out_of_range("inplace_vector: empty container");
+         GLZ_THROW_OR_ABORT(std::out_of_range("inplace_vector: empty container"));
       }
-      constexpr reference at(size_type) { throw std::out_of_range("inplace_vector: empty container"); }
-      constexpr const_reference at(size_type) const { throw std::out_of_range("inplace_vector: empty container"); }
-      constexpr reference front() { throw std::out_of_range("inplace_vector: empty container"); }
-      constexpr const_reference front() const { throw std::out_of_range("inplace_vector: empty container"); }
-      constexpr reference back() { throw std::out_of_range("inplace_vector: empty container"); }
-      constexpr const_reference back() const { throw std::out_of_range("inplace_vector: empty container"); }
+      constexpr reference at(size_type) { GLZ_THROW_OR_ABORT(std::out_of_range("inplace_vector: empty container")); }
+      constexpr const_reference at(size_type) const
+      {
+         GLZ_THROW_OR_ABORT(std::out_of_range("inplace_vector: empty container"));
+      }
+      constexpr reference front() { GLZ_THROW_OR_ABORT(std::out_of_range("inplace_vector: empty container")); }
+      constexpr const_reference front() const
+      {
+         GLZ_THROW_OR_ABORT(std::out_of_range("inplace_vector: empty container"));
+      }
+      constexpr reference back() { GLZ_THROW_OR_ABORT(std::out_of_range("inplace_vector: empty container")); }
+      constexpr const_reference back() const
+      {
+         GLZ_THROW_OR_ABORT(std::out_of_range("inplace_vector: empty container"));
+      }
       constexpr T* data() noexcept { return nullptr; }
       constexpr const T* data() const noexcept { return nullptr; }
 
@@ -997,11 +1019,11 @@ namespace glz
       template <class... Args>
       constexpr reference emplace_back(Args&&...)
       {
-         throw std::bad_alloc();
+         GLZ_THROW_OR_ABORT(std::bad_alloc());
       }
-      constexpr reference push_back(const T&) { throw std::bad_alloc(); }
-      constexpr reference push_back(T&&) { throw std::bad_alloc(); }
-      constexpr void pop_back() { throw std::out_of_range("inplace_vector: empty container"); }
+      constexpr reference push_back(const T&) { GLZ_THROW_OR_ABORT(std::bad_alloc()); }
+      constexpr reference push_back(T&&) { GLZ_THROW_OR_ABORT(std::bad_alloc()); }
+      constexpr void pop_back() { GLZ_THROW_OR_ABORT(std::out_of_range("inplace_vector: empty container")); }
 
       // Fallible APIs
       template <class... Args>
@@ -1016,29 +1038,32 @@ namespace glz
       template <class... Args>
       constexpr reference unchecked_emplace_back(Args&&...)
       {
-         throw std::bad_alloc();
+         GLZ_THROW_OR_ABORT(std::bad_alloc());
       }
-      constexpr reference unchecked_push_back(const T&) { throw std::bad_alloc(); }
-      constexpr reference unchecked_push_back(T&&) { throw std::bad_alloc(); }
+      constexpr reference unchecked_push_back(const T&) { GLZ_THROW_OR_ABORT(std::bad_alloc()); }
+      constexpr reference unchecked_push_back(T&&) { GLZ_THROW_OR_ABORT(std::bad_alloc()); }
 
       // Insert operations
       template <class... Args>
       constexpr iterator emplace(const_iterator, Args&&...)
       {
-         throw std::bad_alloc();
+         GLZ_THROW_OR_ABORT(std::bad_alloc());
       }
-      constexpr iterator insert(const_iterator, const T&) { throw std::bad_alloc(); }
-      constexpr iterator insert(const_iterator, T&&) { throw std::bad_alloc(); }
-      constexpr iterator insert(const_iterator, size_type, const T&) { throw std::bad_alloc(); }
+      constexpr iterator insert(const_iterator, const T&) { GLZ_THROW_OR_ABORT(std::bad_alloc()); }
+      constexpr iterator insert(const_iterator, T&&) { GLZ_THROW_OR_ABORT(std::bad_alloc()); }
+      constexpr iterator insert(const_iterator, size_type, const T&) { GLZ_THROW_OR_ABORT(std::bad_alloc()); }
       template <class InputIterator>
       constexpr iterator insert(const_iterator, InputIterator, InputIterator)
       {
-         throw std::bad_alloc();
+         GLZ_THROW_OR_ABORT(std::bad_alloc());
       }
-      constexpr iterator insert(const_iterator, std::initializer_list<T>) { throw std::bad_alloc(); }
+      constexpr iterator insert(const_iterator, std::initializer_list<T>) { GLZ_THROW_OR_ABORT(std::bad_alloc()); }
 
       // Erase operations
-      constexpr iterator erase(const_iterator) { throw std::out_of_range("inplace_vector: empty container"); }
+      constexpr iterator erase(const_iterator)
+      {
+         GLZ_THROW_OR_ABORT(std::out_of_range("inplace_vector: empty container"));
+      }
       constexpr iterator erase(const_iterator, const_iterator) { return nullptr; }
       constexpr void clear() noexcept {}
       constexpr void swap(inplace_vector&) noexcept {}
