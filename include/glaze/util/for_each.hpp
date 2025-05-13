@@ -57,7 +57,7 @@ namespace glz
    {
       if constexpr (N > 0) {
          static constexpr auto mem_ptrs = []<size_t... I>(std::index_sequence<I...>) constexpr {
-            return std::array{&std::decay_t<decltype(lambda)>::template operator()<I>...};
+            return std::array { &std::decay_t<decltype(lambda)>::template operator()<I>... };
          }(std::make_index_sequence<N>{});
 
          (lambda.*mem_ptrs[index])();

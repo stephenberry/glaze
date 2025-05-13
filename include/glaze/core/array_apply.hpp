@@ -38,7 +38,7 @@ namespace glz
 
       using reference = Adapter&;
 
-      void clear(){};
+      void clear() {};
       void resize(size_t newSize) { m_size = newSize; }
       reference emplace_back() { return adapter; }
       size_t size() const { return m_size; }

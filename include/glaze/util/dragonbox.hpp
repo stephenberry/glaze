@@ -671,7 +671,7 @@ namespace glz::jkj
                GLZ_JKJ_CONSTEXPR20 uint128& operator+=(stdr::uint_least64_t n) & noexcept
                {
                   const auto generic_impl = [&] {
-                     auto const sum = (low_ + n) & UINT64_C(0xffffffffffffffff);
+                     const auto sum = (low_ + n) & UINT64_C(0xffffffffffffffff);
                      high_ += (sum < low_ ? 1 : 0);
                      low_ = sum;
                   };
@@ -763,17 +763,17 @@ namespace glz::jkj
                                                                            stdr::uint_least64_t y) noexcept
             {
                const auto generic_impl = [=]() -> uint128 {
-                  auto const a = stdr::uint_least32_t(x >> 32);
-                  auto const b = stdr::uint_least32_t(x);
-                  auto const c = stdr::uint_least32_t(y >> 32);
-                  auto const d = stdr::uint_least32_t(y);
+                  const auto a = stdr::uint_least32_t(x >> 32);
+                  const auto b = stdr::uint_least32_t(x);
+                  const auto c = stdr::uint_least32_t(y >> 32);
+                  const auto d = stdr::uint_least32_t(y);
 
-                  auto const ac = umul64(a, c);
-                  auto const bc = umul64(b, c);
-                  auto const ad = umul64(a, d);
-                  auto const bd = umul64(b, d);
+                  const auto ac = umul64(a, c);
+                  const auto bc = umul64(b, c);
+                  const auto ad = umul64(a, d);
+                  const auto bd = umul64(b, d);
 
-                  auto const intermediate = (bd >> 32) + stdr::uint_least32_t(ad) + stdr::uint_least32_t(bc);
+                  const auto intermediate = (bd >> 32) + stdr::uint_least32_t(ad) + stdr::uint_least32_t(bc);
 
                   return {ac + (intermediate >> 32) + (ad >> 32) + (bc >> 32),
                           (intermediate << 32) + stdr::uint_least32_t(bd)};
@@ -810,17 +810,17 @@ namespace glz::jkj
                stdr::uint_least64_t x, stdr::uint_least64_t y) noexcept
             {
                const auto generic_impl = [=]() -> stdr::uint_least64_t {
-                  auto const a = stdr::uint_least32_t(x >> 32);
-                  auto const b = stdr::uint_least32_t(x);
-                  auto const c = stdr::uint_least32_t(y >> 32);
-                  auto const d = stdr::uint_least32_t(y);
+                  const auto a = stdr::uint_least32_t(x >> 32);
+                  const auto b = stdr::uint_least32_t(x);
+                  const auto c = stdr::uint_least32_t(y >> 32);
+                  const auto d = stdr::uint_least32_t(y);
 
-                  auto const ac = umul64(a, c);
-                  auto const bc = umul64(b, c);
-                  auto const ad = umul64(a, d);
-                  auto const bd = umul64(b, d);
+                  const auto ac = umul64(a, c);
+                  const auto bc = umul64(b, c);
+                  const auto ad = umul64(a, d);
+                  const auto bd = umul64(b, d);
 
-                  auto const intermediate = (bd >> 32) + stdr::uint_least32_t(ad) + stdr::uint_least32_t(bc);
+                  const auto intermediate = (bd >> 32) + stdr::uint_least32_t(ad) + stdr::uint_least32_t(bc);
 
                   return ac + (intermediate >> 32) + (ad >> 32) + (bc >> 32);
                };
