@@ -158,9 +158,7 @@ namespace glz::rpc
       template <class T>
       concept method_type = requires(T) {
          T::name_v;
-         {
-            std::same_as<decltype(T::name_v), std::string_view>
-         };
+         { std::same_as<decltype(T::name_v), std::string_view> };
          typename T::params_t;
          typename T::result_t;
       };
@@ -178,9 +176,8 @@ namespace glz::rpc
       using result_t = typename Method::result_t;
       using request_t = rpc::request_t<params_t>;
       using response_t = rpc::response_t<result_t>;
-      std::function<expected<result_t, rpc::error>(const params_t&)> callback{[](const auto&) {
-         return glz::unexpected{rpc::error{rpc::error_e::internal, "Not implemented"}};
-      }};
+      std::function<expected<result_t, rpc::error>(const params_t&)> callback{
+         [](const auto&) { return glz::unexpected{rpc::error{rpc::error_e::internal, "Not implemented"}}; }};
    };
 
    template <concepts::method_type Method>
@@ -359,7 +356,7 @@ namespace glz::rpc
             if (req.method != meth_t::name_v) {
                return false;
             }
-            auto const& params_request{glz::read_json<typename meth_t::request_t>(json_request)};
+            const auto& params_request{glz::read_json<typename meth_t::request_t>(json_request)};
             if (params_request.has_value()) {
                expected<typename meth_t::result_t, rpc::error> result{
                   std::invoke(method.callback, params_request->params)};

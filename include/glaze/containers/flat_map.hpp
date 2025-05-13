@@ -31,12 +31,8 @@ namespace glz
 {
    template <typename K1, typename K2>
    concept KeyEqualComparable = requires(const K1& k1, const K2& k2) {
-      {
-         k1 == k2
-      } -> std::convertible_to<bool>;
-      {
-         k2 == k1
-      } -> std::convertible_to<bool>;
+      { k1 == k2 } -> std::convertible_to<bool>;
+      { k2 == k1 } -> std::convertible_to<bool>;
    };
 
    template <class Key, class T, class Compare = std::less<>, class Container = std::vector<std::pair<Key, T>>>
@@ -180,8 +176,8 @@ namespace glz
       }
 
       void swap(flat_map& other) noexcept(
-         std::allocator_traits<typename Container::allocator_type>::is_always_equal::value&&
-            std::is_nothrow_swappable_v<Compare>)
+         std::allocator_traits<typename Container::allocator_type>::is_always_equal::value &&
+         std::is_nothrow_swappable_v<Compare>)
       {
          data_.swap(other.data_);
          std::swap(comp_, other.comp_);

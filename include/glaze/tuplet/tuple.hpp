@@ -62,15 +62,11 @@ namespace glz
 
       template <class T>
       concept ordered = requires(const T& t) {
-         {
-            t <=> t
-         };
+         { t <=> t };
       };
       template <class T>
       concept equality_comparable = requires(const T& t) {
-         {
-            t == t
-         } -> std::same_as<bool>;
+         { t == t } -> std::same_as<bool>;
       };
    } // namespace tuplet
 

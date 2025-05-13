@@ -735,7 +735,7 @@ suite custom_tests = [] {
       try {
          glz::ex::read<glz::opts{.error_on_missing_keys = true}>(d, onlyTimeJson);
       }
-      catch (std::exception const& error) {
+      catch (const std::exception& error) {
          expect(false) << error.what() << '\n';
       }
    };

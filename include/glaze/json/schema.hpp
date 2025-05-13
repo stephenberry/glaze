@@ -520,7 +520,7 @@ namespace glz
                   schema_val.attributes.title = ids[I];
                }
 
-               if constexpr ((glaze_object_t<V> || reflectable<V>)&&not tag_v<T>.empty()) {
+               if constexpr ((glaze_object_t<V> || reflectable<V>) && not tag_v<T>.empty()) {
                   if (not schema_val.required) {
                      schema_val.required = std::vector<sv>{}; // allocate
                   }

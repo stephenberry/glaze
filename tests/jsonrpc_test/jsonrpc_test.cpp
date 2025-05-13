@@ -153,7 +153,7 @@ ut::suite struct_test_cases = [] {
       bool called{};
       auto request_str{client.request<"bar">(
          "bar-uuid", bar_params{.bar_a = 1337, .bar_b = "hello world"},
-         [&called](glz::expected<bar_result, rpc::error> const& value, rpc::id_t const& id) -> void {
+         [&called](const glz::expected<bar_result, rpc::error>& value, const rpc::id_t& id) -> void {
             called = true;
             ut::expect(value.has_value());
             ut::expect(value.value() == bar_result{.bar_c = true, .bar_d = "new world"});

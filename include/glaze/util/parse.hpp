@@ -419,8 +419,7 @@ namespace glz
          ctx.error = error_code::unexpected_end;
       }
       else if (*it == '/') {
-         while (++it != end && *it != '\n')
-            ;
+         while (++it != end && *it != '\n');
       }
       else if (*it == '*') {
          while (++it != end) {

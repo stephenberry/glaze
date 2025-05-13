@@ -226,7 +226,7 @@ namespace glz
          }
 
          // reset all socket pointers if a connection failed
-         if (not *is_connected) {
+         if (not*is_connected) {
             for (auto& socket : sockets) {
                socket.reset();
             }

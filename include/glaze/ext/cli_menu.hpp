@@ -18,9 +18,7 @@ namespace glz
    // To support bool and std::atomic<bool> and other custom boolean types
    template <class T>
    concept cli_menu_boolean = requires(T t) {
-      {
-         t
-      } -> std::convertible_to<bool>;
+      { t } -> std::convertible_to<bool>;
    };
 
    namespace detail

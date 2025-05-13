@@ -12,24 +12,12 @@ namespace glz
    template <typename T>
    concept is_atomic = requires(T a, typename std::remove_reference_t<decltype(a.load())>& expected,
                                 const typename std::remove_reference_t<decltype(a.load())>& desired) {
-      {
-         a.is_lock_free()
-      } -> std::convertible_to<bool>;
-      {
-         a.store(desired)
-      } noexcept;
-      {
-         a.load()
-      } -> std::same_as<typename std::remove_reference_t<decltype(a.load())>>;
-      {
-         a.exchange(desired)
-      } -> std::same_as<typename std::remove_reference_t<decltype(a.load())>>;
-      {
-         a.compare_exchange_weak(expected, desired)
-      } -> std::convertible_to<bool>;
-      {
-         a.compare_exchange_strong(expected, desired)
-      } -> std::convertible_to<bool>;
+      { a.is_lock_free() } -> std::convertible_to<bool>;
+      { a.store(desired) } noexcept;
+      { a.load() } -> std::same_as<typename std::remove_reference_t<decltype(a.load())>>;
+      { a.exchange(desired) } -> std::same_as<typename std::remove_reference_t<decltype(a.load())>>;
+      { a.compare_exchange_weak(expected, desired) } -> std::convertible_to<bool>;
+      { a.compare_exchange_strong(expected, desired) } -> std::convertible_to<bool>;
    };
 
    template <uint32_t Format, is_atomic T>
