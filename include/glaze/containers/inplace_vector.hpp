@@ -487,20 +487,11 @@ namespace glz
       constexpr auto try_append_range(R&& rg) -> std::ranges::borrowed_iterator_t<R>
       {
          auto it = std::ranges::begin(rg);
-         auto end = std::ranges::end(rg);
-
-         try {
-            while (it != end && size_ < N) {
-               std::construct_at(data_ptr() + size_, *it);
-               ++size_;
-               ++it;
-            }
-            return it;
+         const auto end = std::ranges::end(rg);
+         for (; size_ != N && it != end; ++it) {
+            try_emplace_back(*it);
          }
-         catch (...) {
-            // If an exception is thrown, the successfully inserted elements remain
-            throw;
-         }
+         return it;
       }
 
       // Unchecked APIs
