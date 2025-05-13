@@ -572,18 +572,70 @@ namespace glz
                   request_line.pop_back();
                }
 
-               // Parse method, target, and HTTP version
-               std::regex request_regex(R"((\w+) ([^ ]+) HTTP/(\d+\.\d+))");
-               std::smatch request_match;
-
-               if (!std::regex_match(request_line, request_match, request_regex)) {
-                  // Malformed request
+               // Parse method, target, and HTTP version using manual parsing
+               if (request_line.empty()) {
                   send_error_response(socket_ptr, 400, "Bad Request");
                   return;
                }
 
-               std::string method_str = request_match[1];
-               std::string target = request_match[2];
+               // Find the first space to separate method from target
+               size_t first_space = request_line.find(' ');
+               if (first_space == std::string::npos) {
+                  send_error_response(socket_ptr, 400, "Bad Request");
+                  return;
+               }
+
+               // Extract method
+               std::string method_str = request_line.substr(0, first_space);
+               // Validate method (must be only word characters: [a-zA-Z0-9_])
+               if (method_str.empty() || !std::all_of(method_str.begin(), method_str.end(),
+                                                      [](char c) { return std::isalnum(c) || c == '_'; })) {
+                  send_error_response(socket_ptr, 400, "Bad Request");
+                  return;
+               }
+
+               // Find the second space to separate target from HTTP version
+               size_t second_space = request_line.find(' ', first_space + 1);
+               if (second_space == std::string::npos) {
+                  send_error_response(socket_ptr, 400, "Bad Request");
+                  return;
+               }
+
+               // Extract target
+               std::string target = request_line.substr(first_space + 1, second_space - first_space - 1);
+               if (target.empty() || target.find(' ') != std::string::npos) {
+                  send_error_response(socket_ptr, 400, "Bad Request");
+                  return;
+               }
+
+               // Extract HTTP version
+               std::string http_version_part = request_line.substr(second_space + 1);
+
+               // Validate HTTP version format
+               // Must start with "HTTP/"
+               if (http_version_part.size() < 7 || http_version_part.substr(0, 5) != "HTTP/") {
+                  send_error_response(socket_ptr, 400, "Bad Request");
+                  return;
+               }
+
+               // Extract version number and verify format (must be digit.digit)
+               std::string version_number = http_version_part.substr(5);
+               size_t decimal_point = version_number.find('.');
+               if (decimal_point == std::string::npos || decimal_point == 0 ||
+                   decimal_point == version_number.length() - 1) {
+                  send_error_response(socket_ptr, 400, "Bad Request");
+                  return;
+               }
+
+               // Verify major and minor version numbers are digits
+               std::string major_version = version_number.substr(0, decimal_point);
+               std::string minor_version = version_number.substr(decimal_point + 1);
+
+               if (major_version.empty() || !std::all_of(major_version.begin(), major_version.end(), ::isdigit) ||
+                   minor_version.empty() || !std::all_of(minor_version.begin(), minor_version.end(), ::isdigit)) {
+                  send_error_response(socket_ptr, 400, "Bad Request");
+                  return;
+               }
 
                auto method_opt = from_string(method_str);
                if (!method_opt) {
@@ -616,7 +668,13 @@ namespace glz
                std::size_t content_length = 0;
                auto content_length_it = headers.find("Content-Length");
                if (content_length_it != headers.end()) {
-                  content_length = std::stoul(content_length_it->second);
+                  try {
+                     content_length = std::stoul(content_length_it->second);
+                  }
+                  catch (const std::exception&) {
+                     send_error_response(socket_ptr, 400, "Bad Request");
+                     return;
+                  }
                }
 
                // Read the request body if needed
