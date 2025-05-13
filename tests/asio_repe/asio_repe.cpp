@@ -6,6 +6,7 @@
 using namespace ut;
 
 #include <iostream>
+#include <thread>
 
 #include "glaze/ext/glaze_asio.hpp"
 #include "glaze/thread/async_string.hpp"
