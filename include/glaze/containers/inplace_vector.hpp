@@ -94,12 +94,14 @@ namespace glz
          assign(first, last);
       }
 
+#if __cpp_lib_containers_ranges >= 202202L
       template <std::ranges::input_range R>
          requires std::convertible_to<std::ranges::range_reference_t<R>, T>
       constexpr inplace_vector(std::from_range_t, R&& rg)
       {
          assign_range(std::forward<R>(rg));
       }
+#endif
 
       // Trivially copyable copy constructor
       constexpr inplace_vector(const inplace_vector& other)
