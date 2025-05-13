@@ -7,10 +7,10 @@
 #include <compare>
 #include <cstddef>
 #include <cstring>
-#include <new>
 #include <initializer_list>
 #include <iterator>
 #include <memory>
+#include <new>
 #include <ranges>
 #include <stdexcept>
 #include <type_traits>
@@ -101,66 +101,77 @@ namespace glz
          assign_range(std::forward<R>(rg));
       }
 
+      // Trivially copyable copy constructor
       constexpr inplace_vector(const inplace_vector& other)
+         requires std::is_trivially_copyable_v<T>
+      = default;
+
+      // Non-trivially copyable copy constructor
+      constexpr inplace_vector(const inplace_vector& other)
+         requires(!std::is_trivially_copyable_v<T>)
       {
-         if constexpr (std::is_trivially_copyable_v<T>) {
-            std::memcpy(storage, other.storage, other.size_ * sizeof(T));
-            size_ = other.size_;
-         }
-         else {
-            assign(other.begin(), other.end());
-         }
+         assign(other.begin(), other.end());
       }
 
+      // Trivially copyable move constructor
       constexpr inplace_vector(inplace_vector&& other) noexcept(N == 0 || std::is_nothrow_move_constructible_v<T>)
+         requires std::is_trivially_copyable_v<T>
+      = default;
+
+      // Non-trivially copyable move constructor
+      constexpr inplace_vector(inplace_vector&& other) noexcept(N == 0 || std::is_nothrow_move_constructible_v<T>)
+         requires(!std::is_trivially_copyable_v<T>)
       {
-         if constexpr (std::is_trivially_copyable_v<T>) {
-            std::memcpy(storage, other.storage, other.size_ * sizeof(T));
-            size_ = other.size_;
-            // Note: We don't modify other.size_ for trivially copyable types
-         }
-         else {
-            assign(std::make_move_iterator(other.begin()), std::make_move_iterator(other.end()));
-            other.clear();
-         }
+         assign(std::make_move_iterator(other.begin()), std::make_move_iterator(other.end()));
+         other.clear();
       }
 
       constexpr inplace_vector(std::initializer_list<T> il) { assign(il.begin(), il.end()); }
 
-      constexpr ~inplace_vector() { destroy_range(0, size_); }
+      // Trivially destructible destructor
+      constexpr ~inplace_vector()
+         requires std::is_trivially_destructible_v<T>
+      = default;
 
-      // Assignment operators
+      // Non-trivially destructible destructor
+      constexpr ~inplace_vector()
+         requires(!std::is_trivially_destructible_v<T>)
+      {
+         destroy_range(0, size_);
+      }
+
+      // Trivially copyable copy assignment
       constexpr inplace_vector& operator=(const inplace_vector& other)
+         requires std::is_trivially_copyable_v<T>
+      = default;
+
+      // Non-trivially copyable copy assignment
+      constexpr inplace_vector& operator=(const inplace_vector& other)
+         requires(!std::is_trivially_copyable_v<T>)
       {
          if (this != &other) {
-            if constexpr (std::is_trivially_copyable_v<T>) {
-               destroy_range(0, size_);
-               std::memcpy(storage, other.storage, other.size_ * sizeof(T));
-               size_ = other.size_;
-            }
-            else {
-               assign(other.begin(), other.end());
-            }
+            assign(other.begin(), other.end());
          }
          return *this;
       }
 
+      // Trivially copyable move assignment
       constexpr inplace_vector& operator=(inplace_vector&& other) noexcept(N == 0 ||
                                                                            (std::is_nothrow_move_assignable_v<T> &&
                                                                             std::is_nothrow_move_constructible_v<T>))
+         requires std::is_trivially_copyable_v<T>
+      = default;
+
+      // Non-trivially copyable move assignment
+      constexpr inplace_vector& operator=(inplace_vector&& other) noexcept(N == 0 ||
+                                                                           (std::is_nothrow_move_assignable_v<T> &&
+                                                                            std::is_nothrow_move_constructible_v<T>))
+         requires(!std::is_trivially_copyable_v<T>)
       {
          if (this != &other) {
-            if constexpr (std::is_trivially_copyable_v<T>) {
-               destroy_range(0, size_);
-               std::memcpy(storage, other.storage, other.size_ * sizeof(T));
-               size_ = other.size_;
-               // Note: We don't modify other.size_ for trivially copyable types
-            }
-            else {
-               clear();
-               assign(std::make_move_iterator(other.begin()), std::make_move_iterator(other.end()));
-               other.clear();
-            }
+            clear();
+            assign(std::make_move_iterator(other.begin()), std::make_move_iterator(other.end()));
+            other.clear();
          }
          return *this;
       }
