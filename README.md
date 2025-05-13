@@ -859,9 +859,6 @@ struct opts
   bool error_on_const_read =
      false; // Error if attempt is made to read into a const value, by default the value is skipped without error
 
-  // The maximum precision type used for writing floats, higher precision floats will be cast down to this precision
-  float_precision float_max_write_precision{};
-
   bool bools_as_numbers = false; // Read and write booleans with 1's and 0's
 
   bool quoted_num = false; // treat numbers as quoted or array-like types as having quoted numbers
