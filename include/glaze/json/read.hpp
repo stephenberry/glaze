@@ -1004,13 +1004,15 @@ namespace glz
 
                      it = start;
                      while (it < end) [[likely]] {
-                        *p = *it;
                         if (*it == '"') {
                            value.resize(size_t(p - value.data()));
                            ++it;
                            return;
                         }
-                        else if (*it == '\\') {
+
+                        *p = *it;
+
+                        if (*it == '\\') {
                            ++it; // skip the escape
                            if (*it == 'u') {
                               ++it;
