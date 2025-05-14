@@ -10706,7 +10706,7 @@ suite immutable_array_read_tests = [] {
 
 suite factor8_strings = [] {
    // string parsing invokes separate path when there's >= 8 chars to parse.  There was a bug where
-   // inputs of exact factors of 8 chars caused overwriting, therefore not terminated correctly. 
+   // inputs of exact factors of 8 chars caused overwriting, therefore not terminated correctly.
 
    "exactly 8"_test = [] {
       const auto payload = R"("abcdefg")"; // 8 chars after open quote
