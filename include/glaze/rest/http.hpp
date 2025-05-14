@@ -9,9 +9,49 @@
 #include <expected>
 #include <charconv>
 #include <system_error>
+#include <optional>
 
 namespace glz
 {
+   enum struct http_method { GET, POST, PUT, DELETE, PATCH, HEAD, OPTIONS };
+   
+   // Utility functions for HTTP methods
+   inline std::string_view to_string(http_method method)
+   {
+      using enum http_method;
+      switch (method) {
+         case GET:
+            return "GET";
+         case POST:
+            return "POST";
+         case PUT:
+            return "PUT";
+         case DELETE:
+            return "DELETE";
+         case PATCH:
+            return "PATCH";
+         case HEAD:
+            return "HEAD";
+         case OPTIONS:
+            return "OPTIONS";
+         default:
+            return "UNKNOWN";
+      }
+   }
+   
+   inline std::optional<http_method> from_string(std::string_view method)
+   {
+      using enum http_method;
+      if (method == "GET") return GET;
+      if (method == "POST") return POST;
+      if (method == "PUT") return PUT;
+      if (method == "DELETE") return DELETE;
+      if (method == "PATCH") return PATCH;
+      if (method == "HEAD") return HEAD;
+      if (method == "OPTIONS") return OPTIONS;
+      return std::nullopt;
+   }
+   
    struct HttpStatusLine {
       std::string_view version{};
       int status_code{};
