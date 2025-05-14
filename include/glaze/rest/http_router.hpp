@@ -72,6 +72,174 @@ namespace glz
       // Default constructor
       http_router() = default;
 
+      // Custom pattern matcher supporting wildcards, character classes, and more
+      static bool match_pattern(std::string_view value, std::string_view pattern)
+      {
+         enum class State { Literal, Escape, CharClass, NegateCharClass };
+
+         if (pattern.empty()) return true; // Empty pattern matches anything
+
+         size_t v_pos = 0;
+         size_t p_pos = 0;
+
+         // For backtracking when we encounter *
+         std::optional<size_t> backtrack_pattern;
+         std::optional<size_t> backtrack_value;
+
+         // For character classes
+         State state = State::Literal;
+         bool negate_class = false;
+         bool char_class_match = false;
+
+         while (v_pos < value.size() || p_pos < pattern.size()) {
+            // Pattern exhausted but value remains
+            if (p_pos >= pattern.size()) {
+               // Can we backtrack for wildcard?
+               if (backtrack_pattern) {
+                  p_pos = *backtrack_pattern;
+                  v_pos = ++(*backtrack_value);
+                  continue;
+               }
+               return false;
+            }
+
+            // Value exhausted but pattern remains
+            if (v_pos >= value.size()) {
+               // If remaining pattern is just * wildcard, it's a match
+               if (pattern[p_pos] == '*' && p_pos == pattern.size() - 1) return true;
+
+               // Can we backtrack?
+               if (backtrack_pattern) {
+                  p_pos = *backtrack_pattern;
+                  v_pos = ++(*backtrack_value);
+                  continue;
+               }
+               return false;
+            }
+
+            switch (state) {
+            case State::Literal:
+               if (pattern[p_pos] == '\\') {
+                  // Escape sequence
+                  state = State::Escape;
+                  p_pos++;
+                  continue;
+               }
+               else if (pattern[p_pos] == '[') {
+                  // Begin character class
+                  state = State::CharClass;
+                  char_class_match = false;
+                  p_pos++;
+
+                  // Check for negation
+                  if (p_pos < pattern.size() && pattern[p_pos] == '^') {
+                     negate_class = true;
+                     p_pos++;
+                  }
+                  else {
+                     negate_class = false;
+                  }
+                  continue;
+               }
+               else if (pattern[p_pos] == '*') {
+                  // Wildcard - match zero or more chars
+                  backtrack_pattern = p_pos;
+                  backtrack_value = v_pos;
+                  p_pos++;
+                  continue;
+               }
+               else if (pattern[p_pos] == '?') {
+                  // Match any single character
+                  p_pos++;
+                  v_pos++;
+                  continue;
+               }
+               else if (pattern[p_pos] == '^' && p_pos == 0) {
+                  // Beginning of string anchor
+                  p_pos++;
+                  continue;
+               }
+               else if (pattern[p_pos] == '$' && p_pos == pattern.size() - 1) {
+                  // End of string anchor - only matches if we're at the end
+                  return v_pos == value.size();
+               }
+               else {
+                  // Literal character
+                  if (pattern[p_pos] != value[v_pos]) {
+                     // Can we backtrack?
+                     if (backtrack_pattern) {
+                        p_pos = *backtrack_pattern;
+                        v_pos = ++(*backtrack_value);
+                        continue;
+                     }
+                     return false;
+                  }
+                  p_pos++;
+                  v_pos++;
+               }
+               break;
+
+            case State::Escape:
+               // Escaped character - match literally
+               if (p_pos >= pattern.size() || pattern[p_pos] != value[v_pos]) {
+                  // Can we backtrack?
+                  if (backtrack_pattern) {
+                     p_pos = *backtrack_pattern;
+                     v_pos = ++(*backtrack_value);
+                     state = State::Literal;
+                     continue;
+                  }
+                  return false;
+               }
+               p_pos++;
+               v_pos++;
+               state = State::Literal;
+               break;
+
+            case State::CharClass:
+               if (pattern[p_pos] == ']') {
+                  // End of character class
+                  p_pos++;
+                  if (negate_class) {
+                     if (char_class_match) {
+                        // Negated and found a match = fail
+                        return false;
+                     }
+                     v_pos++; // Character not in class
+                  }
+                  else {
+                     if (!char_class_match) {
+                        // Not negated and no match = fail
+                        return false;
+                     }
+                     v_pos++; // Character in class
+                  }
+                  state = State::Literal;
+                  continue;
+               }
+               else if (p_pos + 2 < pattern.size() && pattern[p_pos + 1] == '-') {
+                  // Character range
+                  char start = pattern[p_pos];
+                  char end = pattern[p_pos + 2];
+                  if (value[v_pos] >= start && value[v_pos] <= end) {
+                     char_class_match = true;
+                  }
+                  p_pos += 3; // Skip the range
+               }
+               else {
+                  // Single character in class
+                  if (pattern[p_pos] == value[v_pos]) {
+                     char_class_match = true;
+                  }
+                  p_pos++;
+               }
+               break;
+            }
+         }
+
+         return v_pos == value.size() && p_pos == pattern.size();
+      }
+
       // Helper function to split a path into segments
       static std::vector<std::string> split_path(std::string_view path)
       {
@@ -350,10 +518,14 @@ namespace glz
                         auto param_it = params.find(param_name);
                         if (param_it != params.end()) {
                            const std::string& value = param_it->second;
-                           // For simplicity, just checking if the value is not empty
-                           // In a real implementation, you'd match against the pattern
-                           if (value.empty()) {
-                              return false; // Constraint failed
+
+                           // If pattern is empty, any non-empty value is valid
+                           if (constraint.pattern.empty() && value.empty()) {
+                              return false; // Empty value fails for empty pattern
+                           }
+                           // Otherwise, match against the pattern
+                           else if (!constraint.pattern.empty() && !match_pattern(value, constraint.pattern)) {
+                              return false; // Pattern match failed
                            }
                         }
                      }
@@ -413,9 +585,14 @@ namespace glz
                         auto param_it = params.find(param_name);
                         if (param_it != params.end()) {
                            const std::string& value = param_it->second;
-                           // Simplified constraint check
-                           if (value.empty()) {
-                              return false; // Constraint failed
+
+                           // If pattern is empty, any non-empty value is valid
+                           if (constraint.pattern.empty() && value.empty()) {
+                              return false; // Empty value fails for empty pattern
+                           }
+                           // Otherwise, match against the pattern
+                           else if (!constraint.pattern.empty() && !match_pattern(value, constraint.pattern)) {
+                              return false; // Pattern match failed
                            }
                         }
                      }
