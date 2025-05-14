@@ -23,41 +23,122 @@ namespace glz
    struct request;
    struct response;
 
-   // Radix tree router for handling different paths
+   /**
+    * @brief HTTP router based on a radix tree for efficient path matching
+    *
+    * The http_router class provides fast route matching for HTTP requests using a radix tree
+    * data structure. It supports static routes, parameterized routes (e.g., "/users/:id"),
+    * wildcard routes (e.g., "/files/*path"), and parameter validation via constraints.
+    */
    struct http_router
    {
+      /**
+       * @brief Function type for request handlers
+       *
+       * Handlers are called when a route matches the incoming request.
+       */
       using handler = std::function<void(const struct request&, struct response&)>;
+
+      /**
+       * @brief Function type for asynchronous request handlers
+       *
+       * Async handlers return a future that completes when the request is processed.
+       */
       using async_handler = std::function<std::future<void>(const struct request&, struct response&)>;
 
-      // Defines parameter constraints for validation
+      /**
+       * @brief Parameter constraint for route validation
+       *
+       * Defines validation rules for route parameters using pattern matching.
+       */
       struct param_constraint
       {
-         std::string pattern{}; // Custom pattern for this parameter
-         std::string description{}; // For error reporting
+         /**
+          * @brief Pattern to validate parameter values against
+          *
+          * The pattern supports wildcards (*), character classes ([a-z]), and more.
+          * If empty, any non-empty value is considered valid.
+          */
+         std::string pattern{};
+
+         /**
+          * @brief Human-readable description of the constraint
+          *
+          * Used for error reporting and debugging.
+          */
+         std::string description{};
       };
 
-      // Structure representing a node in the radix tree
+      /**
+       * @brief Node in the radix tree routing structure
+       *
+       * Each node represents a segment of a path, which can be a static string,
+       * a parameter (prefixed with ":"), or a wildcard (prefixed with "*").
+       */
       struct RadixNode
       {
-         std::string segment; // The path segment this node represents
-         bool is_parameter = false; // Is this a parameter segment (e.g., ":id")
-         bool is_wildcard = false; // Is this a wildcard segment (e.g., "*action")
-         std::string parameter_name; // Name of the parameter (if is_parameter or is_wildcard is true)
+         /**
+          * @brief The path segment this node represents
+          */
+         std::string segment;
 
-         // Children nodes
+         /**
+          * @brief Whether this node represents a parameter (e.g., ":id")
+          */
+         bool is_parameter = false;
+
+         /**
+          * @brief Whether this node represents a wildcard (e.g., "*action")
+          */
+         bool is_wildcard = false;
+
+         /**
+          * @brief Name of the parameter (if is_parameter or is_wildcard is true)
+          */
+         std::string parameter_name;
+
+         /**
+          * @brief Map of static child nodes indexed by segment
+          */
          std::unordered_map<std::string, std::unique_ptr<RadixNode>> static_children;
+
+         /**
+          * @brief Parameter child node (only one parameter child per node is allowed)
+          */
          std::unique_ptr<RadixNode> parameter_child;
+
+         /**
+          * @brief Wildcard child node (only one wildcard child per node is allowed)
+          */
          std::unique_ptr<RadixNode> wildcard_child;
 
-         // Route information (if this node is an endpoint)
+         /**
+          * @brief Map of handlers for different HTTP methods
+          *
+          * Only present if this node represents an endpoint.
+          */
          std::unordered_map<http_method, handler> handlers;
+
+         /**
+          * @brief Map of parameter constraints for different HTTP methods
+          */
          std::unordered_map<http_method, std::unordered_map<std::string, param_constraint>> constraints;
+
+         /**
+          * @brief Whether this node represents an endpoint (route handler)
+          */
          bool is_endpoint = false;
 
-         // For debugging and conflict detection
+         /**
+          * @brief Full path to this node (for debugging and conflict detection)
+          */
          std::string full_path;
 
-         // Return a human-readable representation of this node
+         /**
+          * @brief Return a human-readable representation of this node
+          *
+          * @return String representation of the node
+          */
          std::string to_string() const
          {
             std::stringstream ss;
@@ -69,10 +150,25 @@ namespace glz
          }
       };
 
-      // Default constructor
+      /**
+       * @brief Default constructor
+       */
       http_router() = default;
 
-      // Custom pattern matcher supporting wildcards, character classes, and more
+      /**
+       * @brief Match a value against a pattern with advanced pattern matching features
+       *
+       * Supports:
+       * - Wildcards (*) for matching any number of characters
+       * - Question marks (?) for matching a single character
+       * - Character classes ([a-z], [^0-9])
+       * - Anchors (^ for start of string, $ for end of string)
+       * - Escape sequences with backslash
+       *
+       * @param value The string to match
+       * @param pattern The pattern to match against
+       * @return true if the value matches the pattern, false otherwise
+       */
       static bool match_pattern(std::string_view value, std::string_view pattern)
       {
          enum class State { Literal, Escape, CharClass, NegateCharClass };
@@ -106,7 +202,7 @@ namespace glz
             // Value exhausted but pattern remains
             if (v_pos >= value.size()) {
                // If remaining pattern is just * wildcard, it's a match
-               if (pattern[p_pos] == '*' && p_pos == pattern.size() - 1) return true;
+               if (p_pos < pattern.size() && pattern[p_pos] == '*' && p_pos == pattern.size() - 1) return true;
 
                // Can we backtrack?
                if (backtrack_pattern) {
@@ -240,10 +336,18 @@ namespace glz
          return v_pos == value.size() && p_pos == pattern.size();
       }
 
-      // Helper function to split a path into segments
+      /**
+       * @brief Split a path into segments
+       *
+       * Splits a path like "/users/:id/profile" into ["users", ":id", "profile"]
+       *
+       * @param path The path to split
+       * @return Vector of path segments
+       */
       static std::vector<std::string> split_path(std::string_view path)
       {
          std::vector<std::string> segments;
+         segments.reserve(std::count(path.begin(), path.end(), '/') + 1);
 
          size_t start = 0;
          while (start < path.size()) {
@@ -262,7 +366,16 @@ namespace glz
          return segments;
       }
 
-      // Add a route with a specific method
+      /**
+       * @brief Register a route with the router
+       *
+       * @param method The HTTP method (GET, POST, etc.)
+       * @param path The route path, can include parameters (":param") and wildcards ("*param")
+       * @param handle The handler function to call when this route matches
+       * @param constraints Optional constraints for parameter validation
+       * @return Reference to this router for method chaining
+       * @throws std::runtime_error if there's a route conflict
+       */
       inline http_router& route(http_method method, std::string_view path, handler handle,
                                 const std::unordered_map<std::string, param_constraint>& constraints = {})
       {
@@ -281,42 +394,89 @@ namespace glz
          return *this;
       }
 
-      // Standard HTTP method helpers
+      /**
+       * @brief Register a GET route
+       *
+       * @param path The route path
+       * @param handle The handler function
+       * @param constraints Optional parameter constraints
+       * @return Reference to this router for method chaining
+       */
       inline http_router& get(std::string_view path, handler handle,
                               const std::unordered_map<std::string, param_constraint>& constraints = {})
       {
          return route(http_method::GET, path, std::move(handle), constraints);
       }
 
+      /**
+       * @brief Register a POST route
+       *
+       * @param path The route path
+       * @param handle The handler function
+       * @param constraints Optional parameter constraints
+       * @return Reference to this router for method chaining
+       */
       inline http_router& post(std::string_view path, handler handle,
                                const std::unordered_map<std::string, param_constraint>& constraints = {})
       {
          return route(http_method::POST, path, std::move(handle), constraints);
       }
 
+      /**
+       * @brief Register a PUT route
+       *
+       * @param path The route path
+       * @param handle The handler function
+       * @param constraints Optional parameter constraints
+       * @return Reference to this router for method chaining
+       */
       inline http_router& put(std::string_view path, handler handle,
                               const std::unordered_map<std::string, param_constraint>& constraints = {})
       {
          return route(http_method::PUT, path, std::move(handle), constraints);
       }
 
+      /**
+       * @brief Register a DELETE route
+       *
+       * @param path The route path
+       * @param handle The handler function
+       * @param constraints Optional parameter constraints
+       * @return Reference to this router for method chaining
+       */
       inline http_router& del(std::string_view path, handler handle,
                               const std::unordered_map<std::string, param_constraint>& constraints = {})
       {
          return route(http_method::DELETE, path, std::move(handle), constraints);
       }
 
+      /**
+       * @brief Register a PATCH route
+       *
+       * @param path The route path
+       * @param handle The handler function
+       * @param constraints Optional parameter constraints
+       * @return Reference to this router for method chaining
+       */
       inline http_router& patch(std::string_view path, handler handle,
                                 const std::unordered_map<std::string, param_constraint>& constraints = {})
       {
          return route(http_method::PATCH, path, std::move(handle), constraints);
       }
 
-      // Async versions
+      /**
+       * @brief Register an asynchronous route
+       *
+       * @param method The HTTP method
+       * @param path The route path
+       * @param handle The async handler function
+       * @param constraints Optional parameter constraints
+       * @return Reference to this router for method chaining
+       */
       inline http_router& route_async(http_method method, std::string_view path, async_handler handle,
                                       const std::unordered_map<std::string, param_constraint>& constraints = {})
       {
-         // Convert async handle to sync handle (same as in original code)
+         // Convert async handle to sync handle
          return route(
             method, path,
             [handle](const request& req, response& res) {
@@ -327,26 +487,97 @@ namespace glz
             constraints);
       }
 
+      /**
+       * @brief Register an asynchronous GET route
+       *
+       * @param path The route path
+       * @param handle The async handler function
+       * @param constraints Optional parameter constraints
+       * @return Reference to this router for method chaining
+       */
       inline http_router& get_async(std::string_view path, async_handler handle,
                                     const std::unordered_map<std::string, param_constraint>& constraints = {})
       {
          return route_async(http_method::GET, path, std::move(handle), constraints);
       }
 
+      /**
+       * @brief Register an asynchronous POST route
+       *
+       * @param path The route path
+       * @param handle The async handler function
+       * @param constraints Optional parameter constraints
+       * @return Reference to this router for method chaining
+       */
       inline http_router& post_async(std::string_view path, async_handler handle,
                                      const std::unordered_map<std::string, param_constraint>& constraints = {})
       {
          return route_async(http_method::POST, path, std::move(handle), constraints);
       }
 
-      // Middleware support
+      /**
+       * @brief Register an asynchronous PUT route
+       *
+       * @param path The route path
+       * @param handle The async handler function
+       * @param constraints Optional parameter constraints
+       * @return Reference to this router for method chaining
+       */
+      inline http_router& put_async(std::string_view path, async_handler handle,
+                                    const std::unordered_map<std::string, param_constraint>& constraints = {})
+      {
+         return route_async(http_method::PUT, path, std::move(handle), constraints);
+      }
+
+      /**
+       * @brief Register an asynchronous DELETE route
+       *
+       * @param path The route path
+       * @param handle The async handler function
+       * @param constraints Optional parameter constraints
+       * @return Reference to this router for method chaining
+       */
+      inline http_router& del_async(std::string_view path, async_handler handle,
+                                    const std::unordered_map<std::string, param_constraint>& constraints = {})
+      {
+         return route_async(http_method::DELETE, path, std::move(handle), constraints);
+      }
+
+      /**
+       * @brief Register an asynchronous PATCH route
+       *
+       * @param path The route path
+       * @param handle The async handler function
+       * @param constraints Optional parameter constraints
+       * @return Reference to this router for method chaining
+       */
+      inline http_router& patch_async(std::string_view path, async_handler handle,
+                                      const std::unordered_map<std::string, param_constraint>& constraints = {})
+      {
+         return route_async(http_method::PATCH, path, std::move(handle), constraints);
+      }
+
+      /**
+       * @brief Register middleware to be executed before route handlers
+       *
+       * Middleware functions are executed in the order they are registered.
+       *
+       * @param middleware The middleware function
+       * @return Reference to this router for method chaining
+       */
       inline http_router& use(handler middleware)
       {
          middlewares.push_back(std::move(middleware));
          return *this;
       }
 
-      // Find a route matching the given method and path
+      /**
+       * @brief Match a request against registered routes
+       *
+       * @param method The HTTP method of the request
+       * @param target The target path of the request
+       * @return A pair containing the matched handler and extracted parameters
+       */
       inline std::pair<handler, std::unordered_map<std::string, std::string>> match(http_method method,
                                                                                     const std::string& target) const
       {
@@ -371,25 +602,47 @@ namespace glz
          return {result, params};
       }
 
-      // Debug function to print the entire tree structure
+      /**
+       * @brief Print the entire router tree structure for debugging
+       */
       void print_tree() const
       {
          std::cout << "Radix Tree Structure:\n";
          print_node(&root, 0);
       }
 
-      // Data members (maintaining API compatibility)
+      /**
+       * @brief Map of routes registered with this router
+       *
+       * Used for compatibility with mount functionality.
+       */
       std::unordered_map<std::string, std::unordered_map<http_method, handler>> routes;
+
+      /**
+       * @brief Vector of middleware handlers
+       */
       std::vector<handler> middlewares;
 
      private:
-      // The root node of the radix tree
+      /**
+       * @brief Root node of the radix tree
+       */
       mutable RadixNode root;
 
-      // Direct lookup table for non-parameterized routes (optimization)
+      /**
+       * @brief Direct lookup table for non-parameterized routes (optimization)
+       */
       std::unordered_map<std::string, std::unordered_map<http_method, handler>> direct_routes;
 
-      // Internal function to add a route to the tree
+      /**
+       * @brief Add a route to the radix tree
+       *
+       * @param method HTTP method for the route
+       * @param path Path pattern for the route
+       * @param handle Handler function for the route
+       * @param constraints Optional parameter constraints
+       * @throws std::runtime_error if there's a route conflict
+       */
       void add_route(http_method method, std::string_view path, handler handle,
                      const std::unordered_map<std::string, param_constraint>& constraints = {})
       {
@@ -499,7 +752,19 @@ namespace glz
          }
       }
 
-      // Internal function to match a path against the tree
+      /**
+       * @brief Match a path against the radix tree
+       *
+       * Recursive function to match a path against the tree and extract parameters.
+       *
+       * @param node Current node in the tree
+       * @param segments Path segments to match
+       * @param index Current segment index
+       * @param method HTTP method to match
+       * @param params Map to store extracted parameters
+       * @param result Handler if a match is found
+       * @return true if a match was found, false otherwise
+       */
       bool match_node(RadixNode* node, const std::vector<std::string>& segments, size_t index, http_method method,
                       std::unordered_map<std::string, std::string>& params, handler& result) const
       {
@@ -606,7 +871,12 @@ namespace glz
          return false;
       }
 
-      // Recursive helper to print the tree structure
+      /**
+       * @brief Print a node in the radix tree (for debugging)
+       *
+       * @param node The node to print
+       * @param depth Current depth in the tree (for indentation)
+       */
       void print_node(const RadixNode* node, int depth) const
       {
          if (!node) return;
