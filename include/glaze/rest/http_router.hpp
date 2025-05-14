@@ -37,14 +37,14 @@ namespace glz
        *
        * Handlers are called when a route matches the incoming request.
        */
-      using handler = std::function<void(const struct request&, struct response&)>;
+      using handler = std::function<void(const request&, response&)>;
 
       /**
        * @brief Function type for asynchronous request handlers
        *
        * Async handlers return a future that completes when the request is processed.
        */
-      using async_handler = std::function<std::future<void>(const struct request&, struct response&)>;
+      using async_handler = std::function<std::future<void>(const request&, response&)>;
 
       /**
        * @brief Parameter constraint for route validation
@@ -171,7 +171,7 @@ namespace glz
        */
       static bool match_pattern(std::string_view value, std::string_view pattern)
       {
-         enum class State { Literal, Escape, CharClass, NegateCharClass };
+         enum struct State { Literal, Escape, CharClass, NegateCharClass };
 
          if (pattern.empty()) return true; // Empty pattern matches anything
 
