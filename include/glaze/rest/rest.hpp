@@ -10,7 +10,6 @@
 #include <future>
 #include <glaze/glaze.hpp>
 #include <iostream>
-#include <regex>
 #include <source_location>
 #include <thread>
 #include <unordered_map>
@@ -228,15 +227,6 @@ namespace glz
       http_router root_router;
       bool running = false;
       glz::error_handler error_handler;
-
-      // Path pattern matching
-      struct route_pattern
-      {
-         std::regex regex;
-         std::vector<std::string> param_names;
-      };
-
-      std::unordered_map<std::string, route_pattern> route_patterns;
 
       inline void do_accept()
       {
