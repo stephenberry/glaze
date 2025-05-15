@@ -1543,7 +1543,16 @@ namespace glz
             // growing
             if constexpr (emplace_backable<T>) {
                while (it < end) {
-                  parse<JSON>::op<ws_handled<Opts>()>(value.emplace_back(), ctx, it, end);
+                  if constexpr (has_try_emplace_back<T>) {
+                     if (value.try_emplace_back() != nullptr)
+                        parse<JSON>::op<ws_handled<Opts>()>(value.back(), ctx, it, end);
+                     else
+                        ctx.error = error_code::exceeded_static_array_size;
+                  }
+                  else {
+                     parse<JSON>::op<ws_handled<Opts>()>(value.emplace_back(), ctx, it, end);
+                  }
+
                   if (bool(ctx.error)) [[unlikely]]
                      return;
                   if (skip_ws<Opts>(ctx, it, end)) {
@@ -1630,7 +1639,16 @@ namespace glz
                return;
             }
 
-            auto& item = value.emplace_back();
+            if constexpr (has_try_emplace_back<T>) {
+               if (value.try_emplace_back() == nullptr) [[unlikely]] {
+                  ctx.error = error_code::exceeded_static_array_size;
+                  return;
+               }
+            }
+            else {
+               value.emplace_back();
+            }
+            auto& item = value.back();
 
             using V = std::decay_t<decltype(item)>;
 
