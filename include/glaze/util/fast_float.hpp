@@ -2958,8 +2958,8 @@ compute_float(int64_t q, uint64_t w) noexcept {
 #define GLZ_FASTFLOAT_BIGINT_H
 
 #include <algorithm>
-#include <cstdint>
 #include <climits>
+#include <cstdint>
 #include <cstring>
 
 
