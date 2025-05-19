@@ -38,7 +38,7 @@ namespace glz
                      parse<Format>::template op<Opts>(input, ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
-                     (value.val.*(value.from))(input);
+                     (value.val.*(value.from))(std::move(input));
                   }
                   else {
                      static_assert(false_v<T>, "function cannot have more than one input");
@@ -67,7 +67,7 @@ namespace glz
                         parse<Format>::template op<Opts>(input, ctx, it, end);
                         if (bool(ctx.error)) [[unlikely]]
                            return;
-                        from(input);
+                        from(std::move(input));
                      }
                      else {
                         static_assert(false_v<T>, "function cannot have more than one input");
@@ -105,7 +105,7 @@ namespace glz
                      parse<Format>::template op<Opts>(input, ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
-                     value.from(value.val, input);
+                     value.from(value.val, std::move(input));
                   }
                   else {
                      static_assert(false_v<T>, "lambda cannot have more than two inputs");
