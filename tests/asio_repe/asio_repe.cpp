@@ -21,7 +21,7 @@ struct notify_api
 void notify_test()
 {
    static constexpr int16_t port = 8431;
-   glz::asio_server<> server{.port = port, .concurrency = 4};
+   glz::asio_server server{.port = port, .concurrency = 4};
 
    std::future<void> server_thread = std::async([&] {
       try {
@@ -35,7 +35,7 @@ void notify_test()
    });
 
    try {
-      glz::asio_client<> client{"localhost", std::to_string(port)};
+      glz::asio_client client{"localhost", std::to_string(port)};
 
       if (auto ec = client.init(); bool(ec)) {
          throw std::runtime_error(glz::write_json(ec).value_or("error"));
@@ -71,7 +71,7 @@ void async_clients_test()
 {
    static constexpr int16_t port = 8431;
 
-   glz::asio_server<> server{.port = port, .concurrency = 4};
+   glz::asio_server server{.port = port, .concurrency = 4};
 
    std::future<void> server_thread = std::async([&] {
       try {
@@ -85,7 +85,7 @@ void async_clients_test()
    });
 
    try {
-      glz::asio_client<> client{"localhost", std::to_string(port)};
+      glz::asio_client client{"localhost", std::to_string(port)};
 
       if (auto ec = client.init(); bool(ec)) {
          throw std::runtime_error(glz::write_json(ec).value_or("error"));
@@ -130,7 +130,7 @@ void asio_client_test()
 {
    static constexpr int16_t port = 8431;
 
-   glz::asio_server<> server{.port = port, .concurrency = 4};
+   glz::asio_server server{.port = port, .concurrency = 4};
 
    std::future<void> server_thread = std::async([&] {
       std::cout << "Server active...\n";
@@ -158,7 +158,7 @@ void asio_client_test()
       threads.reserve(N);
 
       for (size_t i = 0; i < N; ++i) {
-         clients.emplace_back(glz::asio_client<>{"localhost", std::to_string(port)});
+         clients.emplace_back(glz::asio_client{"localhost", std::to_string(port)});
       }
 
       for (size_t i = 0; i < N; ++i) {
@@ -231,7 +231,7 @@ void async_calls()
 {
    static constexpr int16_t port = 8765;
 
-   glz::asio_server<> server{.port = port, .concurrency = 2};
+   glz::asio_server server{.port = port, .concurrency = 2};
 
    std::future<void> server_thread = std::async([&] {
       api2 methods{};
@@ -242,7 +242,7 @@ void async_calls()
    std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
    try {
-      glz::asio_client<> client{"localhost", std::to_string(port)};
+      glz::asio_client client{"localhost", std::to_string(port)};
       (void)client.init();
 
       std::vector<std::future<void>> threads;
@@ -283,7 +283,7 @@ void raw_json_tests()
 {
    static constexpr int16_t port = 8765;
 
-   glz::asio_server<> server{.port = port, .concurrency = 2};
+   glz::asio_server server{.port = port, .concurrency = 2};
 
    std::future<void> server_thread = std::async([&] {
       api2 methods{};
@@ -296,7 +296,7 @@ void raw_json_tests()
 
    glz::raw_json results{};
 
-   glz::asio_client<> client{"localhost", std::to_string(port)};
+   glz::asio_client client{"localhost", std::to_string(port)};
    (void)client.init();
 
    glz::repe::message msg{};
@@ -317,14 +317,14 @@ void async_server_test()
 {
    static constexpr int16_t port = 8765;
 
-   glz::asio_server<> server{.port = port, .concurrency = 1};
+   glz::asio_server server{.port = port, .concurrency = 1};
 
    async_api api{};
    server.on(api);
 
    server.run_async();
 
-   glz::asio_client<> client{"localhost", std::to_string(port)};
+   glz::asio_client client{"localhost", std::to_string(port)};
    (void)client.init();
 
    int result{};
@@ -347,7 +347,7 @@ void server_error_test()
 {
    static constexpr int16_t port = 8765;
 
-   glz::asio_server<> server{.port = port, .concurrency = 1};
+   glz::asio_server server{.port = port, .concurrency = 1};
    server.error_handler = [](const std::string& error) { expect(error == "func error"); };
 
    error_api api{};
@@ -355,7 +355,7 @@ void server_error_test()
 
    server.run_async();
 
-   glz::asio_client<> client{"localhost", std::to_string(port)};
+   glz::asio_client client{"localhost", std::to_string(port)};
    (void)client.init();
 
    int result{};
@@ -363,6 +363,48 @@ void server_error_test()
    client.call({"/func"}, msg, 100);
    expect(bool(glz::repe::decode_message(result, msg)));
 }
+
+struct some_object_t
+{
+   std::string name{};
+   int age{};
+   float speed{};
+};
+
+suite send_receive_api_tests = []
+{
+   "send"_test = [] {
+      static constexpr int16_t port = 8765;
+      
+      glz::asio_server server{.port = port, .concurrency = 1};
+      
+      some_object_t obj{};
+      server.on(obj);
+      
+      server.run_async();
+      
+      glz::asio_client client{"localhost", std::to_string(port)};
+      (void)client.init();
+      
+      client.set("/age", 33);
+      expect(bool(obj.age == 33));
+      
+      {
+         int age{};
+         client.get("/age", age);
+         expect(age == 33);
+      }
+      
+      client.set("/name", "Ryan");
+      expect(bool(obj.name == "Ryan"));
+      
+      {
+         std::string name{};
+         client.get("/name", name);
+         expect(name == "Ryan");
+      }
+   };
+};
 
 int main()
 {
