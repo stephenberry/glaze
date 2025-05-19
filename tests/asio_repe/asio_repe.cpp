@@ -402,10 +402,10 @@ suite send_receive_api_tests = [] {
          client.get("/name", name);
          expect(name == "Ryan");
       }
-      
+
       client.set("/name", "Paul");
       expect(bool(obj.name == "Paul"));
-      
+
       expect("Paul" == client.get<std::string>("/name"));
    };
 };
