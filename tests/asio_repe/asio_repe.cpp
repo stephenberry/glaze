@@ -364,6 +364,48 @@ void server_error_test()
    expect(bool(glz::repe::decode_message(result, msg)));
 }
 
+struct some_object_t
+{
+   std::string name{};
+   int age{};
+   float speed{};
+};
+
+suite send_receive_api_tests = []
+{
+   "send"_test = [] {
+      static constexpr int16_t port = 8765;
+      
+      glz::asio_server server{.port = port, .concurrency = 1};
+      
+      some_object_t obj{};
+      server.on(obj);
+      
+      server.run_async();
+      
+      glz::asio_client client{"localhost", std::to_string(port)};
+      (void)client.init();
+      
+      client.set("/age", 33);
+      expect(bool(obj.age == 33));
+      
+      {
+         int age{};
+         client.get("/age", age);
+         expect(age == 33);
+      }
+      
+      client.set("/name", "Ryan");
+      expect(bool(obj.name == "Ryan"));
+      
+      {
+         std::string name{};
+         client.get("/name", name);
+         expect(name == "Ryan");
+      }
+   };
+};
+
 int main()
 {
    notify_test();
