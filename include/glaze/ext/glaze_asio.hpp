@@ -485,6 +485,15 @@ namespace glz
             throw std::runtime_error(glz::format_error(ec, response.body));
          }
       }
+      
+      // Allocating version of `get`
+      template <class Output>
+      auto get(const std::string_view query)
+      {
+         Output out{};
+         get(query, out);
+         return out;
+      }
    };
 
    template <auto Opts = opts{}>
