@@ -3,9 +3,7 @@
 
 #pragma once
 
-#include "glaze/core/read.hpp"
-#include "glaze/core/wrappers.hpp"
-#include "glaze/core/write.hpp"
+#include "glaze/core/opts.hpp"
 
 namespace glz
 {
