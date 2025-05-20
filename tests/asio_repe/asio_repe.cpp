@@ -369,7 +369,7 @@ struct some_object_t
    std::string name{};
    int age{};
    float speed{};
-   std::function<int(int)> square = [](int x){ return x * x; };
+   std::function<int(int)> square = [](int x) { return x * x; };
 };
 
 suite send_receive_api_tests = [] {
@@ -408,7 +408,7 @@ suite send_receive_api_tests = [] {
       expect(bool(obj.name == "Paul"));
 
       expect("Paul" == client.get<std::string>("/name"));
-      
+
       {
          int x = 3;
          client.inout("/square", x, x);
