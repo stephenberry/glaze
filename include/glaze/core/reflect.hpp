@@ -1978,6 +1978,7 @@ namespace glz
          error_str.append(pe.includer_error);
       }
       if (pe.custom_error_message.size()) {
+         error_str.append(" ");
          error_str.append(pe.custom_error_message.begin(), pe.custom_error_message.end());
       }
       return error_str;
@@ -1993,6 +1994,7 @@ namespace glz
          error_str.append(pe.includer_error);
       }
       if (pe.custom_error_message.size()) {
+         error_str.append(" ");
          error_str.append(pe.custom_error_message.begin(), pe.custom_error_message.end());
       }
       return error_str;

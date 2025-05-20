@@ -6989,17 +6989,11 @@ struct glz::meta<constrained_object>
 {
    using T = constrained_object;
    static constexpr auto limit_age = [](const T&, int age) {
-      if (age < 0 || age > 120) {
-         return false;
-      }
-      return true;
+      return (age >= 0 && age <= 120);
    };
    
    static constexpr auto limit_name = [](const T&, const std::string& name) {
-      if (name.size() > 8) {
-         return false;
-      }
-      return true;
+      return name.size() <= 8;
    };
    
    static constexpr auto value = object("age", read_constraint<&T::age, limit_age, "Age out of range">, //
@@ -7019,14 +7013,14 @@ suite constraint_tests = []
       auto ec = glz::read_json(obj, buffer);
       expect(bool(ec));
       auto error_message = glz::format_error(ec, buffer);
-      expect(error_message == R"()") << error_message;
+      expect(error_message == "1:11: constraint_violated\n   {\"age\": -1, \"name\": \"Victor\"}\n             ^ Age out of range") << error_message << '\n';
       
       buffer = R"({"age": 10, "name": "Abra Cadabra"})";
       ec = glz::read_json(obj, buffer);
       expect(obj.age == 10);
       expect(bool(ec));
       error_message = glz::format_error(ec, buffer);
-      expect(error_message == R"()") << error_message;
+      expect(error_message == "1:35: constraint_violated\n   {\"age\": 10, \"name\": \"Abra Cadabra\"}\n                                     ^ Name is too long") << error_message << '\n';
    };
 };
 
