@@ -1973,7 +1973,14 @@ namespace glz
 
    [[nodiscard]] inline std::string format_error(const error_ctx& pe)
    {
-      return std::string{meta<error_code>::keys[uint32_t(pe.ec)]};
+      std::string error_str{meta<error_code>::keys[uint32_t(pe.ec)]};
+      if (pe.includer_error.size()) {
+         error_str.append(pe.includer_error);
+      }
+      if (pe.custom_error_message.size()) {
+         error_str.append(pe.custom_error_message.begin(), pe.custom_error_message.end());
+      }
+      return error_str;
    }
 
    [[nodiscard]] inline std::string format_error(const error_ctx& pe, const auto& buffer)
@@ -1984,6 +1991,9 @@ namespace glz
       auto error_str = detail::generate_error_string(error_type_str, info);
       if (pe.includer_error.size()) {
          error_str.append(pe.includer_error);
+      }
+      if (pe.custom_error_message.size()) {
+         error_str.append(pe.custom_error_message.begin(), pe.custom_error_message.end());
       }
       return error_str;
    }

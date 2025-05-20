@@ -63,7 +63,7 @@ namespace glz
    custom_t(T&, From, To) -> custom_t<T, From, To>;
 
    template <auto From, auto To>
-   inline constexpr auto custom_impl() noexcept
+   constexpr auto custom_impl() noexcept
    {
       return [](auto&& v) { return custom_t{v, From, To}; };
    }
@@ -92,6 +92,7 @@ namespace glz
    template <auto MemPtr>
    constexpr auto partial_read = opts_wrapper<MemPtr, &opts::partial_read>();
 
+   // Customize reading and writing
    template <auto From, auto To>
    constexpr auto custom = custom_impl<From, To>();
 }
