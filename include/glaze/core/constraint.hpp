@@ -4,6 +4,7 @@
 #pragma once
 
 #include "glaze/core/opts.hpp"
+#include "glaze/util/string_literal.hpp"
 
 namespace glz
 {
