@@ -369,6 +369,7 @@ struct some_object_t
    std::string name{};
    int age{};
    float speed{};
+   std::function<int(int)> square = [](int x) { return x * x; };
 };
 
 suite send_receive_api_tests = [] {
@@ -401,6 +402,17 @@ suite send_receive_api_tests = [] {
          std::string name{};
          client.get("/name", name);
          expect(name == "Ryan");
+      }
+
+      client.set("/name", "Paul");
+      expect(bool(obj.name == "Paul"));
+
+      expect("Paul" == client.get<std::string>("/name"));
+
+      {
+         int x = 3;
+         client.inout("/square", x, x);
+         expect(x == 9);
       }
    };
 };

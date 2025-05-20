@@ -485,6 +485,57 @@ namespace glz
             throw std::runtime_error(glz::format_error(ec, response.body));
          }
       }
+
+      // Allocating version of `get`
+      template <class Output>
+      auto get(const std::string_view query)
+      {
+         Output out{};
+         get(query, out);
+         return out;
+      }
+
+      template <class Input, class Output>
+      void inout(const std::string_view query, Input&& input, Output& output)
+      {
+         if (not connected()) {
+            throw std::runtime_error("asio_client: NOT CONNECTED");
+         }
+
+         repe::message response{};
+         auto request = message_pool->borrow();
+         repe::request<Opts>(repe::user_header{.query = query}, *request, std::forward<Input>(input));
+         if (bool(request->error())) {
+            throw std::runtime_error("bad request");
+         }
+
+         unique_socket socket{socket_pool.get()};
+         if (not socket) {
+            socket.ptr.reset();
+            (*is_connected) = false;
+            throw std::runtime_error("socket failure");
+         }
+
+         send_buffer(*socket, *request);
+
+         if (bool(request->error())) {
+            socket.ptr.reset();
+            (*is_connected) = false;
+            throw std::runtime_error(glz::format_error(request->error()));
+         }
+
+         receive_buffer(*socket, response);
+         if (bool(response.error())) {
+            socket.ptr.reset();
+            (*is_connected) = false;
+            throw std::runtime_error(glz::format_error(response.error()));
+         }
+
+         auto ec = read<Opts>(output, response.body);
+         if (bool(ec)) {
+            throw std::runtime_error(glz::format_error(ec, response.body));
+         }
+      }
    };
 
    template <auto Opts = opts{}>

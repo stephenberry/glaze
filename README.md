@@ -493,6 +493,45 @@ struct glz::meta<S> {
 };
 ```
 
+# Read Constraints
+
+Glaze provides a wrapper to enable complex reading constraints for struct members: `glz::read_constraint`.
+
+```c++
+struct constrained_object
+{
+   int age{};
+   std::string name{};
+};
+
+template <>
+struct glz::meta<constrained_object>
+{
+   using T = constrained_object;
+   static constexpr auto limit_age = [](const T&, int age) {
+      return (age >= 0 && age <= 120);
+   };
+   
+   static constexpr auto limit_name = [](const T&, const std::string& name) {
+      return name.size() <= 8;
+   };
+   
+   static constexpr auto value = object("age", read_constraint<&T::age, limit_age, "Age out of range">, //
+                                        "name", read_constraint<&T::name, limit_name, "Name is too long">);
+};
+```
+
+For invalid input such as `{"age": -1, "name": "Victor"}`, Glaze will outut the following formatted error message:
+
+```
+1:11: constraint_violated
+   {"age": -1, "name": "Victor"}
+             ^ Age out of range
+```
+
+- Member functions can also be registered as the constraint. 
+- The first field of the constraint lambda is the parent object, allowing complex constraints to be written by the user.
+
 # Reading/Writing Private Fields
 
 Serialize and deserialize private fields by making a `glz::meta<T>` and adding `friend struct glz::meta<T>;` to your class.
