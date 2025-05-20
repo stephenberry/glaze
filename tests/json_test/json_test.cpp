@@ -7021,6 +7021,9 @@ suite constraint_tests = []
       expect(bool(ec));
       error_message = glz::format_error(ec, buffer);
       expect(error_message == "1:35: constraint_violated\n   {\"age\": 10, \"name\": \"Abra Cadabra\"}\n                                     ^ Name is too long") << error_message << '\n';
+      
+      expect(not glz::write_json(obj, buffer));
+      expect(buffer == R"({"age":10,"name":"José"})") << buffer;
    };
 };
 
