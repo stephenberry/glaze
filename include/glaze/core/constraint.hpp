@@ -23,14 +23,14 @@ namespace glz
       static constexpr auto target = Target;
       static constexpr auto constraint = Constraint;
    };
-   
+
    template <class T>
    concept is_read_constraint = requires {
       requires !T::glaze_reflect;
       typename T::target_t;
       typename T::constraint_t;
    };
-   
+
    template <uint32_t Format, is_read_constraint T>
    struct from<Format, T>
    {
@@ -39,8 +39,8 @@ namespace glz
       {
          using V = std::decay_t<decltype(value)>;
          using Constraint = typename V::constraint_t;
-         
-         auto assign_to_target = [&]<class Input>(Input&& input){
+
+         auto assign_to_target = [&]<class Input>(Input&& input) {
             using Target = typename V::target_t;
             if constexpr (std::is_member_object_pointer_v<Target>) {
                (value.val).*(value.target) = std::forward<Input>(input);
@@ -50,7 +50,8 @@ namespace glz
             }
             else {
                static_assert(false_v<Target>,
-                             "expected invocable function or member object pointer, perhaps you need const qualified input on your lambda");
+                             "expected invocable function or member object pointer, perhaps you need const qualified "
+                             "input on your lambda");
             }
          };
 
@@ -85,7 +86,7 @@ namespace glz
                using Func = std::decay_t<decltype(constraint)>;
                if constexpr (is_specialization_v<Func, std::function>) {
                   using Ret = typename function_traits<Func>::result_type;
-                  
+
                   if constexpr (std::same_as<Ret, bool>) {
                      using Tuple = typename function_traits<Func>::arguments;
                      if constexpr (glz::tuple_size_v<Tuple> == 1) {
@@ -124,7 +125,9 @@ namespace glz
                   using Tuple = invocable_args_t<Constraint>;
                   constexpr auto N = glz::tuple_size_v<Tuple>;
                   if constexpr (N == 0) {
-                     static_assert(false_v<T>, "lambda must take in the class as the first argument and the type to deserialize as the second");
+                     static_assert(false_v<T>,
+                                   "lambda must take in the class as the first argument and the type to deserialize as "
+                                   "the second");
                   }
                   else if constexpr (N == 2) {
                      std::decay_t<glz::tuple_element_t<1, Tuple>> input{};
@@ -188,13 +191,14 @@ namespace glz
          }
       }
    };
-   
+
    template <auto Target, auto Constraint, string_literal Message>
    constexpr auto read_constraint_impl() noexcept
    {
-      return [](auto&& v) { return read_constraint_t<std::remove_cvref_t<decltype(v)>, Target, Constraint, Message>{v}; };
+      return
+         [](auto&& v) { return read_constraint_t<std::remove_cvref_t<decltype(v)>, Target, Constraint, Message>{v}; };
    }
-   
+
    template <auto Target, auto Constraint, string_literal Message>
    constexpr auto read_constraint = read_constraint_impl<Target, Constraint, Message>();
 }
