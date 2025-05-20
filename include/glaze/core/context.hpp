@@ -50,6 +50,7 @@ namespace glz
       invalid_variant_string, //
       no_matching_variant_type, //
       expected_true_or_false, //
+      constraint_violated, //
       // Key errors
       key_not_found, //
       unknown_key, //
