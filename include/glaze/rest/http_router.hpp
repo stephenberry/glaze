@@ -28,7 +28,7 @@ namespace glz
     *
     * The http_router class provides fast route matching for HTTP requests using a radix tree
     * data structure. It supports static routes, parameterized routes (e.g., "/users/:id"),
-    * wildcard routes (e.g., "/files/*path"), and parameter validation via constraints.
+    * wildcard routes, and parameter validation via constraints.
     */
    struct http_router
    {

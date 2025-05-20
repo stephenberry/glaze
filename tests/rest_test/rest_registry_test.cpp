@@ -348,7 +348,7 @@ int main() {
    
    // Start the server
    server.bind("127.0.0.1", 8080);
-   std::cout << "Server listening on http://127.0.0.1:8080" << std::endl;
+   std::cout << "Server listening on http://127.0.0.1:8080\n";
    server.start();
    
    // Keep the server running
