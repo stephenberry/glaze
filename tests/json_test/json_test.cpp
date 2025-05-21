@@ -4537,53 +4537,61 @@ suite date_test = [] {
    };
 };
 
-struct date_base {
-   uint64_t    data;
+struct date_base
+{
+   uint64_t data;
    std::string human_readable;
 };
 
 template <class T>
    requires std::derived_from<T, date_base>
-struct glz::meta<T> {
-   static constexpr auto value        = glz::object("date", &T::human_readable);
-   static constexpr auto custom_read  = true;
+struct glz::meta<T>
+{
+   static constexpr auto value = glz::object("date", &T::human_readable);
+   static constexpr auto custom_read = true;
    static constexpr auto custom_write = true;
 };
 
-namespace glz {
+namespace glz
+{
    template <class T>
       requires std::derived_from<T, date_base>
-   struct from<JSON, T> {
+   struct from<JSON, T>
+   {
       template <auto Opts>
-      static void op(date_base& value, auto&&... args) {
+      static void op(date_base& value, auto&&... args)
+      {
          parse<JSON>::op<Opts>(value.human_readable, args...);
          value.data = std::stoi(value.human_readable);
       }
    };
-   
+
    template <class T>
       requires std::derived_from<T, date_base>
-   struct to<JSON, T> {
+   struct to<JSON, T>
+   {
       template <auto Opts>
-      static void op(date_base& value, auto&&... args) noexcept {
+      static void op(date_base& value, auto&&... args) noexcept
+      {
          value.human_readable = std::to_string(value.data);
          serialize<JSON>::op<Opts>(value.human_readable, args...);
       }
    };
 }
 
-struct date_derived : date_base {};
+struct date_derived : date_base
+{};
 
 suite date_base_test = [] {
    "date_base"_test = [] {
       date_derived d{};
       d.data = 55;
-      
+
       std::string s{};
       expect(not glz::write_json(d, s));
-      
+
       expect(s == R"("55")");
-      
+
       d.data = 0;
       expect(not glz::read_json(d, s));
       expect(d.data == 55);

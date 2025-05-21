@@ -171,7 +171,7 @@ namespace glz
    };
 
    template <class T>
-      requires ((glaze_object_t<T> || reflectable<T>) && not custom_write<T>)
+      requires((glaze_object_t<T> || reflectable<T>) && not custom_write<T>)
    struct to<CSV, T>
    {
       template <auto Opts, class B>

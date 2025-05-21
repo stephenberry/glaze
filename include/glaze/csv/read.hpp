@@ -563,7 +563,7 @@ namespace glz
    };
 
    template <class T>
-      requires ((glaze_object_t<T> || reflectable<T>) && not custom_read<T>)
+      requires((glaze_object_t<T> || reflectable<T>) && not custom_read<T>)
    struct from<CSV, T>
    {
       template <auto Opts, class It>

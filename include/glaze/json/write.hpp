@@ -1707,7 +1707,7 @@ namespace glz
    }();
 
    template <class T>
-      requires ((glaze_object_t<T> || reflectable<T>) && not custom_write<T>)
+      requires((glaze_object_t<T> || reflectable<T>) && not custom_write<T>)
    struct to<JSON, T>
    {
       template <auto Options, class V, class B>

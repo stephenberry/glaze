@@ -2094,7 +2094,7 @@ namespace glz
    }
 
    template <class T>
-      requires ((readable_map_t<T> || glaze_object_t<T> || reflectable<T>) && not custom_read<T>)
+      requires((readable_map_t<T> || glaze_object_t<T> || reflectable<T>) && not custom_read<T>)
    struct from<JSON, T>
    {
       template <auto Options, string_literal tag = "">
