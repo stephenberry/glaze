@@ -1131,16 +1131,16 @@ suite async_vector_tests = [] {
       expect(move_assigned.read()[1] == 2) << "Elements should be moved correctly";
       expect(move_assigned.read()[2] == 3) << "Elements should be moved correctly";
    };
-   
+
    "compare"_test = [] {
       glz::async_vector<int> v1;
       v1.push_back(10);
       v1.push_back(20);
       v1.push_back(30);
       glz::async_vector v2 = v1;
-      
+
       expect(v1 == v2);
-      
+
       std::vector<int> std_vec = {10, 20, 30};
       expect(v1 == std_vec);
    };
