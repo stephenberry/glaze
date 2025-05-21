@@ -10772,6 +10772,92 @@ suite factor8_strings = [] {
    };
 };
 
+struct Ipv4Addr {
+   std::string_view value;
+};
+
+template <>
+struct glz::meta<Ipv4Addr>
+{
+   using T = Ipv4Addr;
+   static constexpr auto value = object(
+                                        "ipv4Addr", &T::value
+                                        );
+};
+
+struct Ipv6Addr {
+   std::string_view value;
+};
+
+template <>
+struct glz::meta<Ipv6Addr>
+{
+   using T = Ipv6Addr;
+   static constexpr auto value = object(
+                                        "ipv6Addr", &T::value
+                                        );
+};
+
+struct Ipv6Prefix {
+   std::string_view value;
+};
+
+template <>
+struct glz::meta<Ipv6Prefix>
+{
+   using T = Ipv6Prefix;
+   static constexpr auto value = object(
+                                        "ipv6Prefix", &T::value
+                                        );
+};
+
+struct IpAddress {
+   std::variant<Ipv4Addr, Ipv6Addr, Ipv6Prefix> ipAddress;
+};
+
+template <>
+struct glz::meta<IpAddress>
+{
+   using T = IpAddress;
+   static constexpr auto value = &T::ipAddress;
+};
+
+struct DnnConfiguration {
+   std::optional<std::vector<IpAddress>> staticIpAddress;
+   
+   void read_staticIpAddress(std::optional<std::vector<IpAddress>>&& value) {
+      if (value.has_value() && (value.value().empty() || value.value().size() > 2)) [[unlikely]] {
+         std::abort();
+      }
+      
+      staticIpAddress = std::move(value);
+   }
+};
+
+template <>
+struct glz::meta<DnnConfiguration>
+{
+   using T = DnnConfiguration;
+   static constexpr auto value = object(
+                                        "staticIpAddress", custom<&T::read_staticIpAddress, &T::staticIpAddress>
+                                        );
+};
+
+suite ip_address_variant_tests = []
+{
+   "ip_address_variant"_test = [] {
+      DnnConfiguration config{};
+      std::string_view buffer = R"({"staticIpAddress":[{"ipv4Addr":"14.6.0.1"}, {"ipv6Addr":"14.6.0.1"}]})";
+      
+      auto ec = glz::read_json(config, buffer);
+      expect(not ec) << glz::format_error(ec, buffer);
+      
+      std::string out;
+      expect(not glz::write_json(config, out));
+      expect(out == R"({"staticIpAddress":[{"ipv4Addr":"14.6.0.1"},{"ipv6Addr":"14.6.0.1"}]})");
+   };
+};
+
 int main()
 {
    trace.end("json_test");
