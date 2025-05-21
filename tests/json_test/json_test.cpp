@@ -4545,7 +4545,7 @@ struct date_base {
 template <class T>
    requires std::derived_from<T, date_base>
 struct glz::meta<T> {
-   static constexpr auto value        = object("date", &T::human_readable);
+   static constexpr auto value        = glz::object("date", &T::human_readable);
    static constexpr auto custom_read  = true;
    static constexpr auto custom_write = true;
 };
