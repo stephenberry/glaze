@@ -10842,7 +10842,8 @@ template <>
 struct glz::meta<cast_obj>
 {
    using T = cast_obj;
-   static constexpr auto value = object("integer", cast<&T::integer, double>);
+   static constexpr auto value = object("integer", cast<&T::integer, double>, //
+                                        "indirect", cast<[](T& s) -> auto& { return s.integer; }, double>);
 };
 
 suite cast_tests = []
@@ -10857,8 +10858,15 @@ suite cast_tests = []
       
       obj.integer = 77;
       expect(not glz::write_json(obj, buffer));
+      expect(buffer == R"({"integer":77,"indirect":77})");
       
-      expect(buffer == R"({"integer":77})");
+      buffer = R"({"indirect":33.5})";
+      expect(not glz::read_json(obj, buffer));
+      expect(obj.integer == 33);
+      
+      obj.integer = 77;
+      expect(not glz::write_json(obj, buffer));
+      expect(buffer == R"({"integer":77,"indirect":77})");
    };
 };
 
