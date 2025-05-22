@@ -382,16 +382,12 @@ namespace glz
          send_buffer(*socket, *request);
 
          if (bool(request->error())) {
-            socket.ptr.reset();
-            (*is_connected) = false;
             return;
          }
 
          if (not header.notify) {
             receive_buffer(*socket, response);
             if (bool(response.error())) {
-               socket.ptr.reset();
-               (*is_connected) = false;
                return;
             }
          }
@@ -431,16 +427,17 @@ namespace glz
          send_buffer(*socket, *request);
 
          if (bool(request->error())) {
-            socket.ptr.reset();
-            (*is_connected) = false;
             throw std::runtime_error(glz::format_error(request->error()));
          }
 
          receive_buffer(*socket, response);
          if (bool(response.error())) {
-            socket.ptr.reset();
-            (*is_connected) = false;
-            throw std::runtime_error(glz::format_error(response.error()));
+            std::string error_message = glz::format_error(response.error());
+            if (response.body.size()) {
+               error_message.append(": ");
+               error_message.append(response.body);
+            }
+            throw std::runtime_error(error_message);
          }
       }
 
@@ -468,16 +465,17 @@ namespace glz
          send_buffer(*socket, *request);
 
          if (bool(request->error())) {
-            socket.ptr.reset();
-            (*is_connected) = false;
             throw std::runtime_error(glz::format_error(request->error()));
          }
 
          receive_buffer(*socket, response);
          if (bool(response.error())) {
-            socket.ptr.reset();
-            (*is_connected) = false;
-            throw std::runtime_error(glz::format_error(response.error()));
+            std::string error_message = glz::format_error(response.error());
+            if (response.body.size()) {
+               error_message.append(": ");
+               error_message.append(response.body);
+            }
+            throw std::runtime_error(error_message);
          }
 
          auto ec = read<Opts>(output, response.body);
@@ -519,16 +517,17 @@ namespace glz
          send_buffer(*socket, *request);
 
          if (bool(request->error())) {
-            socket.ptr.reset();
-            (*is_connected) = false;
             throw std::runtime_error(glz::format_error(request->error()));
          }
 
          receive_buffer(*socket, response);
          if (bool(response.error())) {
-            socket.ptr.reset();
-            (*is_connected) = false;
-            throw std::runtime_error(glz::format_error(response.error()));
+            std::string error_message = glz::format_error(response.error());
+            if (response.body.size()) {
+               error_message.append(": ");
+               error_message.append(response.body);
+            }
+            throw std::runtime_error(error_message);
          }
 
          auto ec = read<Opts>(output, response.body);
