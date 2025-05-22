@@ -184,13 +184,8 @@ namespace glz
       void call(In&& in, Out&& out)
       {
          auto write_error = [&](const std::string& body) {
-            const uint32_t n = uint32_t(body.size());
-            const auto body_length = 4 + n; // 4 bytes for size, + message
-            
-            out.body.resize(body_length);
-            out.header.body_length = body_length;
-            std::memcpy(out.body.data(), &n, 4);
-            std::memcpy(out.body.data() + 4, body.data(), n);
+            out.body = body;
+            out.header.body_length = body.size();
             out.header.length = sizeof(repe::header) + out.query.size() + out.body.size();
          };
          

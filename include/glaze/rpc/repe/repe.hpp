@@ -91,11 +91,8 @@ namespace glz::repe
          auto& out = state.out;
          
          std::string error_message = format_error(ec, in.body);
-         const uint32_t n = uint32_t(error_message.size());
-         out.header.body_length = 4 + n;
-         out.body.resize(out.header.body_length);
-         std::memcpy(out.body.data(), &n, 4);
-         std::memcpy(out.body.data() + 4, error_message.data(), n);
+         out.header.body_length = uint32_t(error_message.size());
+         out.body = error_message;
          
          write_response<Opts>(state);
          return 0;

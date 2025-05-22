@@ -43,10 +43,7 @@ namespace glz
          }
          const auto error_size = 4 + error_message.size(); // 4 bytes for message length
          msg.header.body_length = error_size;
-         msg.body.resize(error_size);
-         const uint32_t n = uint32_t(error_message.size());
-         std::memcpy(msg.body.data(), &n, 4);
-         std::memcpy(msg.body.data() + 4, error_message.data(), n);
+         msg.body = error_message;
       }
 
       template <class ErrorMessage>
@@ -62,9 +59,7 @@ namespace glz
          if (bool(msg.error())) {
             const auto ec = msg.header.ec;
             if (msg.header.body_length >= 4) {
-               uint32_t error_length{};
-               std::memcpy(&error_length, msg.body.data(), 4);
-               const std::string_view error_message{msg.body.data() + 4, error_length};
+               const std::string_view error_message = msg.body;
                std::string ret = "REPE error: ";
                ret.append(format_error(ec));
                ret.append(" | ");
@@ -86,9 +81,7 @@ namespace glz
          if (bool(msg.header.ec)) {
             const auto ec = msg.header.ec;
             if (msg.header.body_length >= 4) {
-               uint32_t error_length{};
-               std::memcpy(&error_length, msg.body.data(), 4);
-               const std::string_view error_message{msg.body.data() + 4, error_length};
+               const std::string_view error_message = msg.body;
                std::string ret = "REPE error: ";
                ret.append(format_error(ec));
                ret.append(" | ");
