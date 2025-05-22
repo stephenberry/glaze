@@ -211,11 +211,19 @@ namespace glz
                   else if constexpr (glaze_object_t<E> || reflectable<E>) {
                      std::atomic<bool> menu_boolean = true;
                      if constexpr (reflectable<T>) {
+#if __cpp_exceptions
+                        run_cli_menu<Opts>(get<I>(t), menu_boolean, exception_callback);
+#else
                         run_cli_menu<Opts>(get<I>(t), menu_boolean);
+#endif
                      }
                      else {
                         decltype(auto) v = get_member(value, get<I>(reflect<T>::values));
-                        run_cli_menu<Opts>(v, menu_boolean);
+#if __cpp_exceptions
+                        run_cli_menu<Opts>(get<I>(t), menu_boolean, exception_callback);
+#else
+                        run_cli_menu<Opts>(get<I>(t), menu_boolean);
+#endif
                      }
                   }
                   else if constexpr (check_hide_non_invocable(Opts)) {
