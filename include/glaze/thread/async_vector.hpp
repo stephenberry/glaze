@@ -354,6 +354,38 @@ namespace glz
       }
 
       friend void swap(async_vector& a, async_vector& b) noexcept { a.swap(b); }
+
+      friend bool operator==(const async_vector& lhs, const async_vector& rhs)
+      {
+         if (&lhs == &rhs) return true;
+         std::shared_lock lock(lhs.mutex, std::defer_lock);
+         std::shared_lock lock2(rhs.mutex, std::defer_lock);
+         std::lock(lock, lock2);
+         return lhs.items == rhs.items;
+      }
+
+      // async_vector != async_vector
+      friend bool operator!=(const async_vector& lhs, const async_vector& rhs) { return !(lhs == rhs); }
+
+      // async_vector == const std::vector<T>&
+      friend bool operator==(const async_vector& lhs, const std::vector<T>& rhs)
+      {
+         std::shared_lock lock(lhs.mutex);
+         return lhs.items == rhs;
+      }
+
+      // const std::vector<T>& == async_vector
+      friend bool operator==(const std::vector<T>& lhs, const async_vector& rhs)
+      {
+         std::shared_lock lock(rhs.mutex);
+         return lhs == rhs.items;
+      }
+
+      // async_vector != const std::vector<T>&
+      friend bool operator!=(const async_vector& lhs, const std::vector<T>& rhs) { return !(lhs == rhs); }
+
+      // const std::vector<T>& != async_vector
+      friend bool operator!=(const std::vector<T>& lhs, const async_vector& rhs) { return !(lhs == rhs); }
    };
 }
 

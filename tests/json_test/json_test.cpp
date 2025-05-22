@@ -4532,7 +4532,68 @@ suite date_test = [] {
       expect(s == R"("55")");
 
       d.data = 0;
-      expect(glz::read_json(d, s) == glz::error_code::none);
+      expect(not glz::read_json(d, s));
+      expect(d.data == 55);
+   };
+};
+
+struct date_base
+{
+   uint64_t data;
+   std::string human_readable;
+};
+
+template <class T>
+   requires std::derived_from<T, date_base>
+struct glz::meta<T>
+{
+   static constexpr auto value = glz::object("date", &T::human_readable);
+   static constexpr auto custom_read = true;
+   static constexpr auto custom_write = true;
+};
+
+namespace glz
+{
+   template <class T>
+      requires std::derived_from<T, date_base>
+   struct from<JSON, T>
+   {
+      template <auto Opts>
+      static void op(date_base& value, auto&&... args)
+      {
+         parse<JSON>::op<Opts>(value.human_readable, args...);
+         value.data = std::stoi(value.human_readable);
+      }
+   };
+
+   template <class T>
+      requires std::derived_from<T, date_base>
+   struct to<JSON, T>
+   {
+      template <auto Opts>
+      static void op(date_base& value, auto&&... args) noexcept
+      {
+         value.human_readable = std::to_string(value.data);
+         serialize<JSON>::op<Opts>(value.human_readable, args...);
+      }
+   };
+}
+
+struct date_derived : date_base
+{};
+
+suite date_base_test = [] {
+   "date_base"_test = [] {
+      date_derived d{};
+      d.data = 55;
+
+      std::string s{};
+      expect(not glz::write_json(d, s));
+
+      expect(s == R"("55")");
+
+      d.data = 0;
+      expect(not glz::read_json(d, s));
       expect(d.data == 55);
    };
 };
@@ -10769,6 +10830,42 @@ suite factor8_strings = [] {
       const auto parsed = glz::read_json<std::string>(payload);
       expect(parsed.has_value());
       expect(*parsed->end() == '\0');
+   };
+};
+
+struct cast_obj
+{
+   int integer{};
+};
+
+template <>
+struct glz::meta<cast_obj>
+{
+   using T = cast_obj;
+   static constexpr auto value = object("integer", cast<&T::integer, double>, //
+                                        "indirect", cast<[](T& s) -> auto& { return s.integer; }, double>);
+};
+
+suite cast_tests = [] {
+   "cast"_test = [] {
+      cast_obj obj{};
+
+      std::string buffer = R"({"integer":5.7})";
+      expect(not glz::read_json(obj, buffer));
+
+      expect(obj.integer == 5);
+
+      obj.integer = 77;
+      expect(not glz::write_json(obj, buffer));
+      expect(buffer == R"({"integer":77,"indirect":77})");
+
+      buffer = R"({"indirect":33.5})";
+      expect(not glz::read_json(obj, buffer));
+      expect(obj.integer == 33);
+
+      obj.integer = 77;
+      expect(not glz::write_json(obj, buffer));
+      expect(buffer == R"({"integer":77,"indirect":77})");
    };
 };
 

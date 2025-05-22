@@ -7,6 +7,7 @@ Glaze provides a number of wrappers that indicate at compile time how a value sh
 ```c++
 glz::append_arrays<&T::x> // When reading into an array that is appendable, the new data will be appended rather than overwrite
 glz::bools_as_numbers<&T::x> // Read and write booleans as numbers
+glz::cast<&T::x, CastType> // Casts a value to and from the CastType, which is parsed/serialized
 glz::quoted_num<&T::x> // Read and write numbers as strings
 glz::quoted<&T::x> // Read a value as a string and unescape, to avoid the user having to parse twice
 glz::number<&T::x> // Read a string as a number and writes the string as a number
@@ -14,6 +15,8 @@ glz::raw<&T::x> // Write out string like types without quotes
 glz::raw_string<&T::string> // Do not decode/encode escaped characters for strings (improves read/write performance)
 glz::escaped<&T::string> // Opposite of glz::raw_string, it turns off this behavior
 
+glz::read_constraint<&T::x, constraint_function, "Message"> // Applies a constraint function when reading
+  
 glz::partial_read<&T::x> // Reads into only existing fields and elements and then exits without parsing the rest of the input
 
 glz::invoke<&T::func> // Invoke a std::function, lambda, or member function with n-arguments as an array input
@@ -106,6 +109,33 @@ std::array<bool, 4> obj{};
 constexpr glz::opts opts{.bools_as_numbers = true};
 expect(!glz::read<opts>(obj, s));
 expect(glz::write<opts>(obj) == s);
+```
+
+## cast
+
+`glz::cast` is a simple wrapper that will serialize and deserialize the cast type rather than underlying type. This enables the user to parse JSON for a floating point value into an integer, or perform similar `static_cast` behaviors.
+
+```c++
+struct cast_obj
+{
+   int integer{};
+};
+
+template <>
+struct glz::meta<cast_obj>
+{
+   using T = cast_obj;
+   static constexpr auto value = object("integer", cast<&T::integer, double>);
+};
+```
+
+In use:
+
+```c++
+cast_obj obj{};
+std::string buffer = R"({"integer":5.7})";
+expect(not glz::read_json(obj, buffer));
+expect(obj.integer == 5);
 ```
 
 ## quoted_num
@@ -323,6 +353,30 @@ World)");
 buffer.clear();
 glz::write_json(obj, buffer);
 expect(buffer == R"({"a":"Hello\nWorld","b":"","c":""})");
+```
+
+## read_constraint
+
+Enables complex constraints to be defined within a `glz::meta` or using member functions. Parsing is short circuited upon violating a constraint and a nicely formatted error can be produced with a custom error message.
+
+```c++
+struct constrained_object
+{
+   int age{};
+   std::string name{};
+};
+
+template <>
+struct glz::meta<constrained_object>
+{
+   using T = constrained_object;
+   static constexpr auto limit_age = [](const T&, int age) { return (age >= 0 && age <= 120); };
+
+   static constexpr auto limit_name = [](const T&, const std::string& name) { return name.size() <= 8; };
+
+   static constexpr auto value = object("age", read_constraint<&T::age, limit_age, "Age out of range">, //
+                                        "name", read_constraint<&T::name, limit_name, "Name is too long">);
+};
 ```
 
 ## partial_read
