@@ -10833,6 +10833,44 @@ suite factor8_strings = [] {
    };
 };
 
+struct cast_obj
+{
+   int integer{};
+};
+
+template <>
+struct glz::meta<cast_obj>
+{
+   using T = cast_obj;
+   static constexpr auto value = object("integer", cast<&T::integer, double>, //
+                                        "indirect", cast<[](T& s) -> auto& { return s.integer; }, double>);
+};
+
+suite cast_tests = []
+{
+   "cast"_test = [] {
+      cast_obj obj{};
+      
+      std::string buffer = R"({"integer":5.7})";
+      expect(not glz::read_json(obj, buffer));
+      
+      expect(obj.integer == 5);
+      
+      obj.integer = 77;
+      expect(not glz::write_json(obj, buffer));
+      expect(buffer == R"({"integer":77,"indirect":77})");
+      
+      buffer = R"({"indirect":33.5})";
+      expect(not glz::read_json(obj, buffer));
+      expect(obj.integer == 33);
+      
+      obj.integer = 77;
+      expect(not glz::write_json(obj, buffer));
+      expect(buffer == R"({"integer":77,"indirect":77})");
+   };
+};
+
+
 int main()
 {
    trace.end("json_test");
