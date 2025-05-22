@@ -220,9 +220,9 @@ namespace glz
                      else {
                         decltype(auto) v = get_member(value, get<I>(reflect<T>::values));
 #if __cpp_exceptions
-                        run_cli_menu<Opts>(get<I>(t), menu_boolean, exception_callback);
+                        run_cli_menu<Opts>(v, menu_boolean, exception_callback);
 #else
-                        run_cli_menu<Opts>(get<I>(t), menu_boolean);
+                        run_cli_menu<Opts>(v, menu_boolean);
 #endif
                      }
                   }
