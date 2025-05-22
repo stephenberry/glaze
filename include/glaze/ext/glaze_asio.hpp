@@ -632,12 +632,15 @@ namespace glz
       asio::awaitable<void> run_instance(asio::ip::tcp::socket socket)
       {
          socket.set_option(asio::ip::tcp::no_delay(true));
+         
+         // Allocate once and reuse memory
          repe::message request{};
          repe::message response{};
 
          try {
             while (true) {
                co_await co_receive_buffer(socket, request);
+               response.header.ec = {}; // clear error code, as we use this field to determine if a new error occured
                registry.call(request, response);
                if (not request.header.notify()) {
                   co_await co_send_buffer(socket, response);
