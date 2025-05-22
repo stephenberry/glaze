@@ -59,7 +59,7 @@ namespace glz
          requires(Protocol == REST)
       struct protocol_storage<Protocol>
       {
-         using type = http_router; // Changed from std::vector<rest_endpoint> to http_router
+         using type = http_router;
       };
 
       typename protocol_storage<Proto>::type endpoints{};
@@ -183,25 +183,39 @@ namespace glz
          requires(Proto == REPE) // call method is only available for REPE protocol
       void call(In&& in, Out&& out)
       {
+         auto write_error = [&](const std::string& body) {
+            const uint32_t n = uint32_t(body.size());
+            const auto body_length = 4 + n; // 4 bytes for size, + message
+            
+            out.body.resize(body_length);
+            out.header.body_length = body_length;
+            std::memcpy(out.body.data(), &n, 4);
+            std::memcpy(out.body.data() + 4, body.data(), n);
+            out.header.length = sizeof(repe::header) + out.query.size() + out.body.size();
+         };
+         
          if (auto it = endpoints.find(in.query); it != endpoints.end()) {
             if (bool(in.header.ec)) {
                out = in;
             }
             else {
-               it->second(repe::state{in, out}); // handle the body
+               try {
+                  it->second(repe::state{in, out}); // handle the body
+               }
+               catch (const std::exception& e) {
+                  out = repe::message{}; // reset the output message because it could have been modified
+                  out.header.query_length = 0;
+                  std::string body = "registry error for `" + in.query + "`: ";
+                  body.append(e.what());
+                  out.header.ec = error_code::parse_error;
+                  write_error(body);
+               }
             }
          }
          else {
             std::string body = "invalid_query: " + in.query;
-
-            const uint32_t n = uint32_t(body.size());
-            const auto body_length = 4 + n; // 4 bytes for size, + message
-
-            out.body.resize(body_length);
             out.header.ec = error_code::method_not_found;
-            out.header.body_length = body_length;
-            std::memcpy(out.body.data(), &n, 4);
-            std::memcpy(out.body.data() + 4, body.data(), n);
+            write_error(body);
          }
       }
    };

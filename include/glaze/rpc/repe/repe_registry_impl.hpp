@@ -12,7 +12,7 @@ namespace glz
    template <auto Opts, uint32_t Proto>
    struct registry;
    
-   // Specialized implementation for REPE protocol
+   // Implementation for REPE protocol
    template <auto Opts>
    struct registry_impl<Opts, REPE>
    {
@@ -69,7 +69,6 @@ namespace glz
       {
          reg.endpoints[path] = [&func](repe::state&& state) mutable {
             static thread_local std::decay_t<Params> params{};
-            // no need lock locals
             if (read_params<Opts>(params, state) == 0) {
                return;
             }

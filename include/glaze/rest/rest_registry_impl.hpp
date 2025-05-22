@@ -12,7 +12,7 @@ namespace glz
    template <auto Opts, uint32_t Proto>
    struct registry;
 
-   // Specialized implementation for REST protocol
+   // Implementation for REST protocol
    template <auto Opts>
    struct registry_impl<Opts, REST>
    {
