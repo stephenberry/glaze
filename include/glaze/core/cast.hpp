@@ -22,14 +22,14 @@ namespace glz
       T& val;
       static constexpr auto target = Target;
    };
-   
+
    template <class T>
    concept is_cast = requires {
       requires !T::glaze_reflect;
       typename T::target_t;
       typename T::cast_type;
    };
-   
+
    template <uint32_t Format, is_cast T>
    struct from<Format, T>
    {
@@ -39,12 +39,12 @@ namespace glz
          using V = std::decay_t<decltype(value)>;
          using Target = typename V::target_t;
          using Cast = typename V::cast_type;
-         
+
          Cast temp{};
          parse<Format>::template op<Opts>(temp, ctx, it, end);
          if (bool(ctx.error)) [[unlikely]]
             return;
-         
+
          if constexpr (std::is_member_object_pointer_v<Target>) {
             auto& field = value.val.*(value.target);
             using Field = std::remove_cvref_t<decltype(field)>;
@@ -60,7 +60,7 @@ namespace glz
          }
       }
    };
-   
+
    template <uint32_t Format, is_cast T>
    struct to<Format, T>
    {
@@ -70,7 +70,7 @@ namespace glz
          using V = std::decay_t<decltype(value)>;
          using Target = typename V::target_t;
          using Cast = typename V::cast_type;
-         
+
          if constexpr (std::is_member_object_pointer_v<Target>) {
             serialize<Format>::template op<Opts>(static_cast<Cast>(value.val.*(value.target)), ctx, args...);
          }
@@ -82,14 +82,13 @@ namespace glz
          }
       }
    };
-   
+
    template <auto Target, class CastType>
    constexpr auto cast_impl() noexcept
    {
-      return
-      [](auto&& v) { return cast_t<std::remove_cvref_t<decltype(v)>, Target, CastType>{v}; };
+      return [](auto&& v) { return cast_t<std::remove_cvref_t<decltype(v)>, Target, CastType>{v}; };
    }
-   
+
    template <auto Target, class CastType>
    constexpr auto cast = cast_impl<Target, CastType>();
 }
