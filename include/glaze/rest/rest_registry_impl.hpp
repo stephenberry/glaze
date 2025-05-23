@@ -4,7 +4,7 @@
 #pragma once
 
 #include "glaze/glaze.hpp"
-#include "glaze/rest/rest.hpp"
+#include "glaze/rest/http_router.hpp"
 
 namespace glz
 {
