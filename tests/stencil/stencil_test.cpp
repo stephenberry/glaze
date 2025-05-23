@@ -199,6 +199,172 @@ suite mustache_tests = [] {
    };
 };
 
+struct html_content
+{
+   std::string title{};
+   std::string description{};
+   std::string raw_html{};
+   std::string safe_text{};
+};
+
+struct person_with_html {
+   std::string description = "Working <hard>";
+   std::string raw_html = "<strong>Employed</strong>";
+   bool employed = true;
+};
+
+suite html_escaping_tests = [] {
+   "double_braces_escape_html"_test = [] {
+      std::string_view layout = R"(<h1>{{title}}</h1><p>{{description}}</p>)";
+      
+      html_content content{
+         "My <Script> Title",
+         "A description with & ampersands and \"quotes\"",
+         "",
+         ""
+      };
+      
+      auto result = glz::stencil(layout, content).value_or("error");
+      expect(result == "<h1>My &lt;Script&gt; Title</h1><p>A description with &amp; ampersands and &quot;quotes&quot;</p>") << result;
+   };
+   
+   "triple_braces_no_escape"_test = [] {
+      std::string_view layout = R"(<div>{{{raw_html}}}</div>)";
+      
+      html_content content{
+         "",
+         "",
+         "<strong>Bold text</strong> & <em>italic</em>",
+         ""
+      };
+      
+      auto result = glz::stencil(layout, content).value_or("error");
+      expect(result == "<div><strong>Bold text</strong> & <em>italic</em></div>") << result;
+   };
+   
+   "mixed_escaping"_test = [] {
+      std::string_view layout = R"(<h1>{{title}}</h1><div>{{{raw_html}}}</div><p>{{description}}</p>)";
+      
+      html_content content{
+         "Article <Title>",
+         "Safe & sound content",
+         "<span class=\"highlight\">Important!</span>",
+         ""
+      };
+      
+      auto result = glz::stencil(layout, content).value_or("error");
+      std::string expected = "<h1>Article &lt;Title&gt;</h1>"
+      "<div><span class=\"highlight\">Important!</span></div>"
+      "<p>Safe &amp; sound content</p>";
+      expect(result == expected) << result;
+   };
+   
+   "all_html_entities_escaped"_test = [] {
+      std::string_view layout = R"({{safe_text}})";
+      
+      html_content content{
+         "",
+         "",
+         "",
+         "<>&\"'"
+      };
+      
+      auto result = glz::stencil(layout, content).value_or("error");
+      expect(result == "&lt;&gt;&amp;&quot;&#x27;") << result;
+   };
+   
+   "triple_braces_preserve_all_chars"_test = [] {
+      std::string_view layout = R"({{{raw_html}}})";
+      
+      html_content content{
+         "",
+         "",
+         "<>&\"'",
+         ""
+      };
+      
+      auto result = glz::stencil(layout, content).value_or("error");
+      expect(result == "<>&\"'") << result;
+   };
+   
+   "section_with_html_escaping"_test = [] {
+      std::string_view layout = R"({{#employed}}<p>Status: {{description}} & {{{raw_html}}}</p>{{/employed}})";
+      
+      person_with_html p;
+      auto result = glz::stencil(layout, p).value_or("error");
+      expect(result == "<p>Status: Working &lt;hard&gt; & <strong>Employed</strong></p>") << result;
+   };
+   
+   "empty_content_handling"_test = [] {
+      std::string_view layout = R"(Before: {{title}} | {{{raw_html}}} | After)";
+      
+      html_content content{"", "", "", ""};
+      
+      auto result = glz::stencil(layout, content).value_or("error");
+      expect(result == "Before:  |  | After") << result;
+   };
+   
+   "malformed_triple_braces"_test = [] {
+      std::string_view layout = R"({{{title}})"; // Missing closing brace
+      
+      html_content content{"Test", "", "", ""};
+      
+      auto result = glz::stencil(layout, content);
+      expect(not result.has_value());
+      expect(result.error() == glz::error_code::syntax_error);
+   };
+   
+   "nested_quotes_escaping"_test = [] {
+      std::string_view layout = R"(<div title="{{description}}">Content</div>)";
+      
+      html_content content{
+         "",
+         "A \"quoted\" value with 'apostrophes'",
+         "",
+         ""
+      };
+      
+      auto result = glz::stencil(layout, content).value_or("error");
+      expect(result == "<div title=\"A &quot;quoted&quot; value with &#x27;apostrophes&#x27;\">Content</div>") << result;
+   };
+};
+
+// Example usage demonstrating the HTML escaping
+suite html_example_tests = [] {
+   "blog_post_template"_test = [] {
+      std::string_view blog_template = R"(
+<!DOCTYPE html>
+<html>
+<head>
+    <title>{{title}}</title>
+</head>
+<body>
+    <h1>{{title}}</h1>
+    <p>{{description}}</p>
+    <div class="content">
+        {{{raw_html}}}
+    </div>
+</body>
+</html>)";
+      
+      html_content blog_post{
+         "My <Amazing> Blog Post",
+         "This post discusses \"HTML\" & safety",
+         "<p>This is <strong>formatted content</strong> that should render as HTML.</p>",
+         ""
+      };
+      
+      auto result = glz::stencil(blog_template, blog_post).value_or("error");
+      
+      // Check that title is escaped in both places
+      expect(result.find("My &lt;Amazing&gt; Blog Post") != std::string::npos) << "Title should be escaped";
+      // Check that description is escaped
+      expect(result.find("This post discusses &quot;HTML&quot; &amp; safety") != std::string::npos) << "Description should be escaped";
+      // Check that raw HTML is preserved
+      expect(result.find("<p>This is <strong>formatted content</strong>") != std::string::npos) << "Raw HTML should be preserved";
+   };
+};
+
 #include "glaze/stencil/stencilcount.hpp"
 
 suite stencilcount_tests = [] {

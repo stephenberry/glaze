@@ -168,6 +168,10 @@ namespace glz
    // ---
    // float_precision float_max_write_precision{};
    // The maximum precision type used for writing floats, higher precision floats will be cast down to this precision
+   
+   // ---
+   // bool escape_html = true;
+   // Escaped HTML when using double braces `{{}}` in stencils
 
    consteval bool check_validate_skipped(auto&& Opts)
    {
@@ -286,6 +290,16 @@ namespace glz
       }
       else {
          return {};
+      }
+   }
+   
+   consteval bool check_escape_html(auto&& Opts)
+   {
+      if constexpr (requires { Opts.escape_html; }) {
+         return Opts.escape_html;
+      }
+      else {
+         return true;
       }
    }
 

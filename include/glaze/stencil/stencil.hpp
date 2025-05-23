@@ -9,6 +9,37 @@
 
 namespace glz
 {
+   // HTML escape function
+   inline std::string html_escape(const std::string& input)
+   {
+      std::string result;
+      result.reserve(input.size() * 1.1); // Reserve some extra space
+
+      for (char c : input) {
+         switch (c) {
+         case '<':
+            result += "&lt;";
+            break;
+         case '>':
+            result += "&gt;";
+            break;
+         case '&':
+            result += "&amp;";
+            break;
+         case '"':
+            result += "&quot;";
+            break;
+         case '\'':
+            result += "&#x27;";
+            break;
+         default:
+            result += c;
+            break;
+         }
+      }
+      return result;
+   }
+
    template <auto Opts = opts{}, class Template, class T, resizable Buffer>
    [[nodiscard]] error_ctx stencil(Template&& layout, T&& value, Buffer& buffer)
    {
@@ -36,11 +67,19 @@ namespace glz
                ++it;
                if (it != end && *it == '{') {
                   ++it;
+
+                  // Check for triple braces (unescaped HTML)
+                  bool is_triple_brace = false;
+                  if (it != end && *it == '{') {
+                     ++it;
+                     is_triple_brace = true;
+                  }
+
                   bool is_section = false;
                   bool is_inverted_section = false;
                   bool is_comment = false;
 
-                  if (it != end) {
+                  if (it != end && !is_triple_brace) {
                      if (*it == '!') {
                         ++it;
                         is_comment = true;
@@ -160,7 +199,7 @@ namespace glz
                      continue;
                   }
 
-                  // Handle regular placeholder
+                  // Handle regular placeholder (double braces) or unescaped (triple braces)
                   static constexpr auto N = reflect<T>::size;
                   static constexpr auto HashInfo = hash_info<T>;
 
@@ -172,25 +211,44 @@ namespace glz
                      return {ctx.error, ctx.custom_error_message, size_t(it - start)};
                   }
                   else [[likely]] {
-                     size_t ix = buffer.size(); // overwrite index
-                     if (buffer.empty()) {
-                        buffer.resize(2 * write_padding_bytes);
+                     // For triple braces, we need to expect three closing braces
+                     size_t expected_closing_braces = is_triple_brace ? 3 : 2;
+
+                     // Check for correct closing braces
+                     size_t closing_brace_count = 0;
+                     auto temp_it = it;
+                     while (temp_it < end && *temp_it == '}' && closing_brace_count < 3) {
+                        ++temp_it;
+                        ++closing_brace_count;
                      }
 
-                     static constexpr auto RawOpts = opt_true<Opts, &opts::raw>;
+                     if (closing_brace_count < expected_closing_braces) {
+                        ctx.error = error_code::syntax_error;
+                        return {ctx.error, ctx.custom_error_message, size_t(it - start)};
+                     }
+
+                     // Serialize the value
+                     std::string temp_buffer;
+                     static constexpr auto RawOpts =
+                        opt_true<Opts, &opts::raw>; // write out string like values without quotes
 
                      visit<N>(
                         [&]<size_t I>() {
                            static constexpr auto TargetKey = get<I>(reflect<T>::keys);
                            if ((TargetKey.size() == key.size()) && comparitor<TargetKey>(start)) [[likely]] {
+                              size_t ix = 0;
+                              temp_buffer.resize(2 * write_padding_bytes);
+
                               if constexpr (reflectable<T>) {
                                  serialize<Opts.format>::template op<RawOpts>(get_member(value, get<I>(to_tie(value))),
-                                                                              ctx, buffer, ix);
+                                                                              ctx, temp_buffer, ix);
                               }
                               else if constexpr (glaze_object_t<T>) {
                                  serialize<Opts.format>::template op<RawOpts>(
-                                    get_member(value, get<I>(reflect<T>::values)), ctx, buffer, ix);
+                                    get_member(value, get<I>(reflect<T>::values)), ctx, temp_buffer, ix);
                               }
+
+                              temp_buffer.resize(ix);
                            }
                            else {
                               ctx.error = error_code::unknown_key;
@@ -202,24 +260,22 @@ namespace glz
                         return {ctx.error, ctx.custom_error_message, size_t(it - start)};
                      }
 
-                     buffer.resize(ix);
-                  }
-
-                  skip_whitespace();
-
-                  if (*it == '}') {
-                     ++it;
-                     if (it != end && *it == '}') {
-                        ++it;
-                        continue;
+                     // Apply HTML escaping for double braces, leave unescaped for triple braces
+                     if (is_triple_brace) {
+                        buffer.append(temp_buffer);
                      }
                      else {
-                        buffer.append("}");
+                        if constexpr (check_escape_html(Opts)) {
+                           buffer.append(html_escape(temp_buffer));
+                        }
+                        else {
+                           buffer.append(temp_buffer);
+                        }
                      }
-                  }
-                  else {
-                     ctx.error = error_code::syntax_error;
-                     return {ctx.error, ctx.custom_error_message, size_t(it - start)};
+
+                     // Skip the closing braces
+                     it += expected_closing_braces;
+                     continue;
                   }
                }
                else {
