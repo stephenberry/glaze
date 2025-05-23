@@ -12,6 +12,12 @@ namespace glz
    template <auto Opts, uint32_t Proto>
    struct registry;
    
+   template <>
+   struct protocol_storage<REPE>
+   {
+      using type = std::unordered_map<sv, std::function<void(repe::state&&)>, detail::string_hash, std::equal_to<>>;
+   };
+   
    // Implementation for REPE protocol
    template <auto Opts>
    struct registry_impl<Opts, REPE>

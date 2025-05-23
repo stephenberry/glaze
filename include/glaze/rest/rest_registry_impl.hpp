@@ -11,6 +11,12 @@ namespace glz
    // Forward declaration of the registry template
    template <auto Opts, uint32_t Proto>
    struct registry;
+   
+   template <>
+   struct protocol_storage<REST>
+   {
+      using type = http_router;
+   };
 
    // Implementation for REST protocol
    template <auto Opts>

@@ -8,19 +8,10 @@
 
 namespace glz
 {
-   namespace detail
-   {
-      struct string_hash
-      {
-         using is_transparent = void;
-         [[nodiscard]] size_t operator()(const char* txt) const { return std::hash<std::string_view>{}(txt); }
-         [[nodiscard]] size_t operator()(std::string_view txt) const { return std::hash<std::string_view>{}(txt); }
-         [[nodiscard]] size_t operator()(const std::string& txt) const { return std::hash<std::string>{}(txt); }
-      };
-
+   namespace detail {
       static constexpr std::string_view empty_path = "";
    }
-
+   
    // Forward declaration of implementation template
    template <auto Opts, uint32_t Protocol>
    struct registry_impl;
@@ -41,26 +32,7 @@ namespace glz
       // procedure for REPE protocol
       using procedure = std::function<void(repe::state&&)>; // RPC method
 
-      static constexpr auto proto = Proto;
-
-      // Single template storage for all protocol-specific storage
-      template <uint32_t P>
-      struct protocol_storage
-      {};
-
-      template <uint32_t Protocol>
-         requires(Protocol == REPE)
-      struct protocol_storage<Protocol>
-      {
-         using type = std::unordered_map<sv, procedure, detail::string_hash, std::equal_to<>>;
-      };
-
-      template <uint32_t Protocol>
-         requires(Protocol == REST)
-      struct protocol_storage<Protocol>
-      {
-         using type = http_router;
-      };
+      static constexpr auto protocol = Proto;
 
       typename protocol_storage<Proto>::type endpoints{};
 
