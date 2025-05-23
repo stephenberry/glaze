@@ -19,9 +19,57 @@
 
 namespace glz
 {
-   // Forward declaration of the request/response structures
-   struct request;
-   struct response;
+   // Request context object
+   struct request
+   {
+      http_method method{};
+      std::string target{};
+      std::unordered_map<std::string, std::string> params{};
+      std::unordered_map<std::string, std::string> headers{};
+      std::string body{};
+      std::string remote_ip{};
+      uint16_t remote_port{};
+   };
+   
+   // Response builder
+   struct response
+   {
+      int status_code = 200;
+      std::unordered_map<std::string, std::string> response_headers{};
+      std::string response_body{};
+      
+      inline response& status(int code)
+      {
+         status_code = code;
+         return *this;
+      }
+      
+      inline response& header(std::string_view name, std::string_view value)
+      {
+         response_headers[std::string(name)] = std::string(value);
+         return *this;
+      }
+      
+      inline response& body(std::string_view content)
+      {
+         response_body = std::string(content);
+         return *this;
+      }
+      
+      inline response& content_type(std::string_view type) { return header("Content-Type", type); }
+      
+      // JSON response helper using Glaze
+      template <class T>
+      response& json(T&& value)
+      {
+         content_type("application/json");
+         auto ec = glz::write_json(std::forward<T>(value), response_body);
+         if (ec) {
+            response_body = R"({"error":"glz::write_json error"})"; // rare that this would ever happen
+         }
+         return *this;
+      }
+   };
 
    /**
     * @brief HTTP router based on a radix tree for efficient path matching
