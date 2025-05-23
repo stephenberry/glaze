@@ -140,6 +140,8 @@ namespace glz
 
                      // Retrieve the value associated with 'key'
                      bool condition = false;
+                     bool is_container = false;
+
                      {
                         static constexpr auto N = reflect<T>::size;
                         static constexpr auto HashInfo = hash_info<T>;
@@ -156,7 +158,10 @@ namespace glz
                               [&]<size_t I>() {
                                  static constexpr auto TargetKey = get<I>(reflect<T>::keys);
                                  if (TargetKey == key) [[likely]] {
-                                    if constexpr (bool_t<refl_t<T, I>>) {
+                                    using field_type = refl_t<T, I>;
+
+                                    if constexpr (bool_t<field_type>) {
+                                       // Boolean field
                                        if constexpr (reflectable<T>) {
                                           condition = bool(get_member(value, get<I>(to_tie(value))));
                                        }
@@ -164,9 +169,66 @@ namespace glz
                                           condition = bool(get_member(value, get<I>(reflect<T>::values)));
                                        }
                                     }
+                                    else if constexpr (writable_array_t<field_type>) {
+                                       // Container field - check if empty for condition
+                                       is_container = true;
+
+                                       if constexpr (reflectable<T>) {
+                                          auto& container = get_member(value, get<I>(to_tie(value)));
+                                          condition = !empty_range(container);
+
+                                          // Process container iteration for regular sections
+                                          if (is_section && condition) {
+                                             using element_type = std::decay_t<decltype(*std::begin(container))>;
+                                             if constexpr (reflectable<element_type> || glaze_object_t<element_type>) {
+                                                for (const auto& item : container) {
+                                                   std::string inner_buffer;
+                                                   auto inner_ec = stencil<Opts>(inner_template, item, inner_buffer);
+                                                   if (inner_ec) {
+                                                      ctx.error = inner_ec.ec;
+                                                      return;
+                                                   }
+                                                   buffer.append(inner_buffer);
+                                                }
+                                             }
+                                             else {
+                                                // For primitive containers, we can't do recursive stencil
+                                                // This would require special handling for {{.}} syntax
+                                                ctx.error = error_code::syntax_error;
+                                                return;
+                                             }
+                                          }
+                                       }
+                                       else if constexpr (glaze_object_t<T>) {
+                                          auto& container = get_member(value, get<I>(reflect<T>::values));
+                                          condition = !empty_range(container);
+
+                                          // Process container iteration for regular sections
+                                          if (is_section && condition) {
+                                             using element_type = std::decay_t<decltype(*std::begin(container))>;
+                                             if constexpr (reflectable<element_type> || glaze_object_t<element_type>) {
+                                                for (const auto& item : container) {
+                                                   std::string inner_buffer;
+                                                   auto inner_ec = stencil<Opts>(inner_template, item, inner_buffer);
+                                                   if (inner_ec) {
+                                                      ctx.error = inner_ec.ec;
+                                                      return;
+                                                   }
+                                                   buffer.append(inner_buffer);
+                                                }
+                                             }
+                                             else {
+                                                // For primitive containers, we can't do recursive stencil
+                                                // This would require special handling for {{.}} syntax
+                                                ctx.error = error_code::syntax_error;
+                                                return;
+                                             }
+                                          }
+                                       }
+                                    }
                                     else {
-                                       // For non-boolean types
-                                       ctx.error = error_code::syntax_error;
+                                       // For other types, default to false for sections
+                                       condition = false;
                                     }
                                  }
                                  else {
@@ -181,19 +243,30 @@ namespace glz
                         return {ctx.error, ctx.custom_error_message, size_t(it - outer_start)};
                      }
 
-                     // If it's an inverted section, include inner content if condition is false
-                     // Otherwise (regular section), include if condition is true
-                     bool should_include = is_inverted_section ? !condition : condition;
-
-                     if (should_include) {
-                        // Recursively process the inner template
-                        std::string inner_buffer;
-                        auto inner_ec = stencil<Opts>(inner_template, value, inner_buffer);
-                        if (inner_ec) {
-                           return inner_ec;
+                     // Handle inverted sections and boolean sections
+                     if (is_inverted_section) {
+                        // For inverted sections, show content if condition is false
+                        if (!condition) {
+                           std::string inner_buffer;
+                           auto inner_ec = stencil<Opts>(inner_template, value, inner_buffer);
+                           if (inner_ec) {
+                              return inner_ec;
+                           }
+                           buffer.append(inner_buffer);
                         }
-                        buffer.append(inner_buffer);
                      }
+                     else if (is_section && !is_container) {
+                        // For boolean sections (non-containers), show content if condition is true
+                        if (condition) {
+                           std::string inner_buffer;
+                           auto inner_ec = stencil<Opts>(inner_template, value, inner_buffer);
+                           if (inner_ec) {
+                              return inner_ec;
+                           }
+                           buffer.append(inner_buffer);
+                        }
+                     }
+                     // Container iteration for regular sections was already handled above
 
                      skip_whitespace();
                      continue;
