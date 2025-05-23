@@ -208,7 +208,7 @@ namespace glz
                res.status(204); // No Content
             }
             else {
-               auto result = (value.*func)(params_result.value());
+               auto result = (value.*func)(std::move(params_result.value()));
                res.json(result);
             }
          });

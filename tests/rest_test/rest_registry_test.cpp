@@ -47,7 +47,7 @@ struct UserService {
    }
    
    // Get user by ID
-   User getUserById(UserIdRequest request) {
+   User getUserById(const UserIdRequest& request) {
       auto it = users.find(request.id);
       if (it != users.end()) {
          return it->second;
@@ -58,7 +58,7 @@ struct UserService {
    }
    
    // Create a new user
-   User createUser(User user) {
+   User createUser(User&& user) {
       user.id = next_id++;
       users[user.id] = user;
       return user;
