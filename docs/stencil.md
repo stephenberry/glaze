@@ -58,6 +58,14 @@ struct person
 - `{{! Here is a comment}}`
   - Comments are skipped when interpolating.
 
+## Escaped HTML
+
+Double braces `{{}}` will perform HTML escaping to prevent XSS (cross-site scripting) attacks. Triple braces `{{{}}}` insert content **without escaping**.
+
+> [!TIP]
+>
+> If you aren't using stencils for HTML then you can use the compile time option `escape_html = false` to avoid escaping HTML even for double braces `{{}}`. This will improve performance.
+
 ## Why Not Full Mustache Specification?
 
-At some point Glaze may introduce a `glz::mustache` function with full support. But, `glz::stencil` attempts to provide a more efficient solution by limiting the specification and not escaping HTML characters. HTML escaping could always be added as a compile time option in the future.
+At some point Glaze may introduce a `glz::mustache` function with full support. But, `glz::stencil` attempts to provide a more efficient solution by limiting the specification.
