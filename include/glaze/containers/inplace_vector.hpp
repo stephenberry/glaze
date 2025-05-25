@@ -407,31 +407,16 @@ namespace glz
       constexpr reference emplace_back(Args&&... args)
       {
          if (size_ >= N) GLZ_THROW_OR_ABORT(std::bad_alloc());
-
-         std::construct_at(data_ptr() + size_, std::forward<Args>(args)...);
-         return data_ptr()[size_++];
+         return unchecked_emplace_back(std::forward<Args>(args)...);
       }
 
       constexpr reference push_back(const T& x)
       {
          if (size_ >= N) GLZ_THROW_OR_ABORT(std::bad_alloc());
-
-         if constexpr (std::is_trivially_copyable_v<T>) {
-            std::memcpy(data_ptr() + size_, &x, sizeof(T));
-         }
-         else {
-            std::construct_at(data_ptr() + size_, x);
-         }
-         return data_ptr()[size_++];
+         return unchecked_push_back(x);
       }
 
-      constexpr reference push_back(T&& x)
-      {
-         if (size_ >= N) GLZ_THROW_OR_ABORT(std::bad_alloc());
-
-         std::construct_at(data_ptr() + size_, std::move(x));
-         return data_ptr()[size_++];
-      }
+      constexpr reference push_back(T&& x) { return emplace_back(std::move(x)); }
 
       template <std::ranges::input_range R>
          requires std::convertible_to<std::ranges::range_reference_t<R>, T>
@@ -443,10 +428,7 @@ namespace glz
          }
 
          for (auto&& item : rg) {
-            if (size_ >= N) GLZ_THROW_OR_ABORT(std::bad_alloc());
-
-            std::construct_at(data_ptr() + size_, std::forward<decltype(item)>(item));
-            ++size_;
+            emplace_back(std::forward<decltype(item)>(item));
          }
       }
 
@@ -455,6 +437,7 @@ namespace glz
       // Fallible APIs
       template <class... Args>
       constexpr T* try_emplace_back(Args&&... args)
+         requires(std::constructible_from<T, Args...>)
       {
          if (size_ >= N) return nullptr;
 
