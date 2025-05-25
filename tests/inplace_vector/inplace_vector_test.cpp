@@ -353,6 +353,12 @@ suite capacity_tests = [] {
 
       expect(throws([&v] { v.insert(v.begin(), 0); })) << "insert should throw if capacity would be exceeded\n";
 #endif
+
+      expect(v.try_emplace_back(4) == nullptr);
+      expect(v.size() == 3) << "try_emplace_back should not modify size if capacity exceeded\n";
+
+      expect(v.try_push_back(4) == nullptr);
+      expect(v.size() == 3) << "try_push_back should not modify size if capacity exceeded\n";
    };
 };
 
