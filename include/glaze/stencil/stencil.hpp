@@ -40,7 +40,7 @@ namespace glz
       return result;
    }
 
-   template <auto Opts = opts{}, class Template, class T, resizable Buffer>
+   template <auto Opts = opts{.format = STENCIL}, class Template, class T, resizable Buffer>
    [[nodiscard]] error_ctx stencil(Template&& layout, T&& value, Buffer& buffer)
    {
       context ctx{};
@@ -303,7 +303,7 @@ namespace glz
                      // Serialize the value
                      std::string temp_buffer;
                      static constexpr auto RawOpts =
-                        opt_true<Opts, &opts::raw>; // write out string like values without quotes
+                        set_json<opt_true<Opts, &opts::raw>>(); // write out string like values without quotes
 
                      visit<N>(
                         [&]<size_t I>() {
@@ -313,11 +313,11 @@ namespace glz
                               temp_buffer.resize(2 * write_padding_bytes);
 
                               if constexpr (reflectable<T>) {
-                                 serialize<Opts.format>::template op<RawOpts>(get_member(value, get<I>(to_tie(value))),
+                                 serialize<JSON>::template op<RawOpts>(get_member(value, get<I>(to_tie(value))),
                                                                               ctx, temp_buffer, ix);
                               }
                               else if constexpr (glaze_object_t<T>) {
-                                 serialize<Opts.format>::template op<RawOpts>(
+                                 serialize<JSON>::template op<RawOpts>(
                                     get_member(value, get<I>(reflect<T>::values)), ctx, temp_buffer, ix);
                               }
 
@@ -338,7 +338,7 @@ namespace glz
                         buffer.append(temp_buffer);
                      }
                      else {
-                        if constexpr (check_escape_html(Opts)) {
+                        if constexpr (Opts.format == MUSTACHE) {
                            buffer.append(html_escape(temp_buffer));
                         }
                         else {
@@ -370,11 +370,30 @@ namespace glz
       return {};
    }
 
-   template <auto Opts = opts{}, class Template, class T>
+   template <auto Opts = opts{.format = STENCIL}, class Template, class T>
    [[nodiscard]] expected<std::string, error_ctx> stencil(Template&& layout, T&& value)
    {
       std::string buffer{};
-      auto ec = stencil(std::forward<Template>(layout), std::forward<T>(value), buffer);
+      auto ec = stencil<Opts>(std::forward<Template>(layout), std::forward<T>(value), buffer);
+      if (ec) {
+         return unexpected<error_ctx>(ec);
+      }
+      return {buffer};
+   }
+   
+   template <auto Opts = opts{.format = MUSTACHE}, class Template, class T, resizable Buffer>
+      requires (Opts.format == MUSTACHE)
+   [[nodiscard]] error_ctx mustache(Template&& layout, T&& value, Buffer& buffer)
+   {
+      return stencil<Opts>(std::forward<Template>(layout), std::forward<T>(value), buffer);
+   }
+   
+   template <auto Opts = opts{.format = MUSTACHE}, class Template, class T>
+      requires (Opts.format == MUSTACHE)
+   [[nodiscard]] expected<std::string, error_ctx> mustache(Template&& layout, T&& value)
+   {
+      std::string buffer{};
+      auto ec = stencil<Opts>(std::forward<Template>(layout), std::forward<T>(value), buffer);
       if (ec) {
          return unexpected<error_ctx>(ec);
       }

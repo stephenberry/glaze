@@ -91,6 +91,9 @@ namespace glz
    struct error_ctx final
    {
       error_code ec{};
+      // Glaze uses the custom_error_message for some error reporting
+      // But, since the first error always short-circuits parsing, developers are free to inject
+      // their own errors in the custom_error_message.
       std::string_view custom_error_message{};
       // INTERNAL USE:
       size_t location{};

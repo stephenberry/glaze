@@ -15,7 +15,7 @@ struct person
    bool employed{};
 };
 
-suite mustache_tests = [] {
+suite stencil_tests = [] {
    "person"_test = [] {
       std::string_view layout = R"({{first_name}} {{last_name}} {{age}})";
 
@@ -213,7 +213,7 @@ struct person_with_html {
    bool employed = true;
 };
 
-suite html_escaping_tests = [] {
+suite mustache_tests = [] {
    "double_braces_escape_html"_test = [] {
       std::string_view layout = R"(<h1>{{title}}</h1><p>{{description}}</p>)";
       
@@ -224,7 +224,7 @@ suite html_escaping_tests = [] {
          ""
       };
       
-      auto result = glz::stencil(layout, content).value_or("error");
+      auto result = glz::mustache(layout, content).value_or("error");
       expect(result == "<h1>My &lt;Script&gt; Title</h1><p>A description with &amp; ampersands and &quot;quotes&quot;</p>") << result;
    };
    
@@ -238,7 +238,7 @@ suite html_escaping_tests = [] {
          ""
       };
       
-      auto result = glz::stencil(layout, content).value_or("error");
+      auto result = glz::mustache(layout, content).value_or("error");
       expect(result == "<div><strong>Bold text</strong> & <em>italic</em></div>") << result;
    };
    
@@ -252,7 +252,7 @@ suite html_escaping_tests = [] {
          ""
       };
       
-      auto result = glz::stencil(layout, content).value_or("error");
+      auto result = glz::mustache(layout, content).value_or("error");
       std::string expected = "<h1>Article &lt;Title&gt;</h1>"
       "<div><span class=\"highlight\">Important!</span></div>"
       "<p>Safe &amp; sound content</p>";
@@ -269,7 +269,7 @@ suite html_escaping_tests = [] {
          "<>&\"'"
       };
       
-      auto result = glz::stencil(layout, content).value_or("error");
+      auto result = glz::mustache(layout, content).value_or("error");
       expect(result == "&lt;&gt;&amp;&quot;&#x27;") << result;
    };
    
@@ -283,7 +283,7 @@ suite html_escaping_tests = [] {
          ""
       };
       
-      auto result = glz::stencil(layout, content).value_or("error");
+      auto result = glz::mustache(layout, content).value_or("error");
       expect(result == "<>&\"'") << result;
    };
    
@@ -291,7 +291,7 @@ suite html_escaping_tests = [] {
       std::string_view layout = R"({{#employed}}<p>Status: {{description}} & {{{raw_html}}}</p>{{/employed}})";
       
       person_with_html p;
-      auto result = glz::stencil(layout, p).value_or("error");
+      auto result = glz::mustache(layout, p).value_or("error");
       expect(result == "<p>Status: Working &lt;hard&gt; & <strong>Employed</strong></p>") << result;
    };
    
@@ -300,7 +300,7 @@ suite html_escaping_tests = [] {
       
       html_content content{"", "", "", ""};
       
-      auto result = glz::stencil(layout, content).value_or("error");
+      auto result = glz::mustache(layout, content).value_or("error");
       expect(result == "Before:  |  | After") << result;
    };
    
@@ -309,7 +309,7 @@ suite html_escaping_tests = [] {
       
       html_content content{"Test", "", "", ""};
       
-      auto result = glz::stencil(layout, content);
+      auto result = glz::mustache(layout, content);
       expect(not result.has_value());
       expect(result.error() == glz::error_code::syntax_error);
    };
@@ -324,13 +324,12 @@ suite html_escaping_tests = [] {
          ""
       };
       
-      auto result = glz::stencil(layout, content).value_or("error");
+      auto result = glz::mustache(layout, content).value_or("error");
       expect(result == "<div title=\"A &quot;quoted&quot; value with &#x27;apostrophes&#x27;\">Content</div>") << result;
    };
 };
 
-// Example usage demonstrating the HTML escaping
-suite html_example_tests = [] {
+suite mustache_example_tests = [] {
    "blog_post_template"_test = [] {
       std::string_view blog_template = R"(
 <!DOCTYPE html>
@@ -354,7 +353,7 @@ suite html_example_tests = [] {
          ""
       };
       
-      auto result = glz::stencil(blog_template, blog_post).value_or("error");
+      auto result = glz::mustache(blog_template, blog_post).value_or("error");
       
       // Check that title is escaped in both places
       expect(result.find("My &lt;Amazing&gt; Blog Post") != std::string::npos) << "Title should be escaped";
@@ -420,7 +419,7 @@ struct TodoListData
    size_t pending_items;
 };
 
-suite container_iteration_tests = [] {
+suite mustache_container_iteration_tests = [] {
    "basic_container_iteration"_test = [] {
       std::string_view layout = R"({{title}}: {{#items}}{{text}} {{/items}})";
       
@@ -432,7 +431,7 @@ suite container_iteration_tests = [] {
          2
       };
       
-      auto result = glz::stencil(layout, list).value_or("error");
+      auto result = glz::mustache(layout, list).value_or("error");
       expect(result == "My Tasks: Task 1 Task 2 ") << result;
    };
    
@@ -447,7 +446,7 @@ suite container_iteration_tests = [] {
          2
       };
       
-      auto result = glz::stencil(layout, list).value_or("error");
+      auto result = glz::mustache(layout, list).value_or("error");
       expect(result == "[1:Buy milk:normal] [2:Call mom:high] ") << result;
    };
    
@@ -456,7 +455,7 @@ suite container_iteration_tests = [] {
       
       TodoList empty_list{"Empty List", {}, false, 0};
       
-      auto result = glz::stencil(layout, empty_list).value_or("error");
+      auto result = glz::mustache(layout, empty_list).value_or("error");
       expect(result == "Empty List: ") << result;
    };
    
@@ -472,7 +471,7 @@ suite container_iteration_tests = [] {
          3
       };
       
-      auto result = glz::stencil(layout, list).value_or("error");
+      auto result = glz::mustache(layout, list).value_or("error");
       expect(result == "Task 1 ○Task 2 ✓Task 3 ○") << result;
    };
    
@@ -481,7 +480,7 @@ suite container_iteration_tests = [] {
       
       TodoList empty_list{"Empty List", {}, false, 0};
       
-      auto result = glz::stencil(layout, empty_list).value_or("error");
+      auto result = glz::mustache(layout, empty_list).value_or("error");
       expect(result == "Empty List - No items found") << result;
    };
    
@@ -495,7 +494,7 @@ suite container_iteration_tests = [] {
          1
       };
       
-      auto result = glz::stencil(layout, list).value_or("error");
+      auto result = glz::mustache(layout, list).value_or("error");
       expect(result == "Tasks") << result;
    };
    
@@ -509,11 +508,11 @@ suite container_iteration_tests = [] {
          2
       };
       
-      auto result1 = glz::stencil(layout, list_with_items).value_or("error");
+      auto result1 = glz::mustache(layout, list_with_items).value_or("error");
       expect(result1 == "Active List (2 items): Task 1 ✓| Task 2| ") << result1;
       
       TodoList empty_list{"Empty List", {}, false, 0};
-      auto result2 = glz::stencil(layout, empty_list).value_or("error");
+      auto result2 = glz::mustache(layout, empty_list).value_or("error");
       expect(result2 == "Empty List No items yet") << result2;
    };
    
@@ -527,7 +526,7 @@ suite container_iteration_tests = [] {
          1
       };
       
-      auto result = glz::stencil(layout, list).value_or("error");
+      auto result = glz::mustache(layout, list).value_or("error");
       expect(result == "<p>&lt;script&gt;alert(&#x27;test&#x27;)&lt;/script&gt;</p>") << result;
    };
    
@@ -544,12 +543,12 @@ suite container_iteration_tests = [] {
          true
       };
       
-      auto result = glz::stencil(layout, team).value_or("error");
+      auto result = glz::mustache(layout, team).value_or("error");
       expect(result == "Engineering: Alice (30) *| Bob (25)| Charlie (35) *| ") << result;
    };
 };
 
-suite list_template_tests = [] {
+suite mustache_list_template_tests = [] {
    "list_template"_test = [] {
       std::string_view layout = R"(
 <div class="todo-list" data-component-id="{{component_id}}">
@@ -591,7 +590,7 @@ suite list_template_tests = [] {
          2
       };
       
-      auto result = glz::stencil(layout, data).value_or("error");
+      auto result = glz::mustache(layout, data).value_or("error");
       
       // Verify key components are present
       expect(result.find("data-component-id=\"todo-123\"") != std::string::npos) << "Component ID should be rendered";
@@ -653,7 +652,7 @@ suite list_template_tests = [] {
          0
       };
       
-      auto result = glz::stencil(layout, empty_data).value_or("error");
+      auto result = glz::mustache(layout, empty_data).value_or("error");
       
       expect(result.find("data-component-id=\"empty-todo\"") != std::string::npos) << "Component ID should be rendered";
       expect(result.find("No items yet. Add some above!") != std::string::npos) << "Empty state should be shown";
@@ -697,7 +696,7 @@ suite list_template_tests = [] {
          1
       };
       
-      auto result = glz::stencil(layout, data).value_or("error");
+      auto result = glz::mustache(layout, data).value_or("error");
       
       // Verify HTMX attributes are preserved and not parsed as template syntax
       expect(result.find("hx-post=\"/api/todo/addTodo\"") != std::string::npos) << "HTMX post attribute should be preserved";
