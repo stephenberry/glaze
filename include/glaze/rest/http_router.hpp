@@ -71,6 +71,10 @@ namespace glz
          return *this;
       }
    };
+   
+   using handler = std::function<void(const request&, response&)>;
+   using async_handler = std::function<std::future<void>(const request&, response&)>;
+   using error_handler = std::function<void(std::error_code, std::source_location)>;
 
    /**
     * @brief HTTP router based on a radix tree for efficient path matching

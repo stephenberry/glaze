@@ -7,7 +7,7 @@
 #include <sstream>
 
 #include "glaze/glaze.hpp"
-#include "glaze/rest/rest.hpp"
+#include "glaze/rest/rest_server.hpp"
 #include "glaze/rpc/registry.hpp"
 
 struct User
