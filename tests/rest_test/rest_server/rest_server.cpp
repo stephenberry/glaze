@@ -1,7 +1,6 @@
 // Glaze REST Demo Server
 
 #include <filesystem>
-#include <format>
 #include <fstream>
 #include <iostream>
 #include <sstream>
@@ -182,8 +181,7 @@ std::string read_file(const std::string& path) {
    std::string full_path = std::string{SOURCE_DIR} + "/" + path;
    std::ifstream file(full_path);
    if (!file.is_open()) {
-      std::cerr << std::format("Failed to open '{}', current directory: {}\n",
-                               full_path, std::filesystem::current_path().string());
+      std::cerr << "Failed to open " << full_path << ", current directory: " << std::filesystem::current_path().string() << "\n";
       return "";
    }
    std::stringstream buffer;
