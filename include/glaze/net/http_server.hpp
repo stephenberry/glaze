@@ -16,6 +16,7 @@
 
 #include "glaze/net/cors.hpp"
 #include "glaze/net/http_router.hpp"
+#include "glaze/net/websocket_connection.hpp"
 
 #if __has_include(<asio.hpp>) && !defined(GLZ_USE_BOOST_ASIO)
 #include <asio.hpp>
@@ -30,7 +31,7 @@ static_assert(false, "standalone or boost asio must be included to use glaze/ext
 
 namespace glz
 {
-   // Server implementation using non-blocking asio
+   // Server implementation using non-blocking asio with WebSocket support
    struct http_server
    {
       inline http_server() : io_context(std::make_unique<asio::io_context>())
@@ -52,7 +53,6 @@ namespace glz
       {
          try {
             asio::ip::tcp::endpoint endpoint(asio::ip::make_address(address), port);
-
             acceptor = std::make_unique<asio::ip::tcp::acceptor>(*io_context, endpoint);
          }
          catch (const std::exception& e) {
@@ -158,7 +158,7 @@ namespace glz
          error_handler = std::move(handle);
          return *this;
       }
-      
+
       /**
        * @brief Enable CORS with default configuration (allows all origins)
        *
@@ -171,7 +171,7 @@ namespace glz
          root_router.use(glz::simple_cors());
          return *this;
       }
-      
+
       /**
        * @brief Enable CORS with custom configuration
        *
@@ -183,7 +183,7 @@ namespace glz
          root_router.use(glz::create_cors_middleware(config));
          return *this;
       }
-      
+
       /**
        * @brief Enable CORS for specific origins
        *
@@ -200,6 +200,19 @@ namespace glz
          return *this;
       }
 
+      /**
+       * @brief Register a WebSocket handler for a specific path
+       *
+       * @param path The path to handle WebSocket connections on
+       * @param server The WebSocket server instance to handle connections
+       * @return Reference to this http_server for method chaining
+       */
+      inline http_server& websocket(std::string_view path, std::shared_ptr<websocket_server> server)
+      {
+         websocket_handlers_[std::string(path)] = server;
+         return *this;
+      }
+
      private:
       std::unique_ptr<asio::io_context> io_context;
       std::unique_ptr<asio::ip::tcp::acceptor> acceptor;
@@ -207,6 +220,7 @@ namespace glz
       http_router root_router;
       bool running = false;
       glz::error_handler error_handler;
+      std::unordered_map<std::string, std::shared_ptr<websocket_server>> websocket_handlers_;
 
       inline void do_accept()
       {
@@ -294,7 +308,6 @@ namespace glz
                std::string http_version_part = request_line.substr(second_space + 1);
 
                // Validate HTTP version format
-               // Must start with "HTTP/"
                if (http_version_part.size() < 7 || http_version_part.substr(0, 5) != "HTTP/") {
                   send_error_response(socket_ptr, 400, "Bad Request");
                   return;
@@ -342,13 +355,22 @@ namespace glz
                      // Trim leading whitespace from value
                      value.erase(0, value.find_first_not_of(" \t"));
 
+                     // Convert header name to lowercase for easier matching
+                     std::transform(name.begin(), name.end(), name.begin(), ::tolower);
+
                      headers[name] = value;
                   }
                }
 
+               // Check if this is a WebSocket upgrade request
+               if (is_websocket_upgrade(headers)) {
+                  handle_websocket_upgrade(socket_ptr, *method_opt, target, headers, remote_endpoint);
+                  return;
+               }
+
                // Check if there's a Content-Length header
                std::size_t content_length = 0;
-               auto content_length_it = headers.find("Content-Length");
+               auto content_length_it = headers.find("content-length");
                if (content_length_it != headers.end()) {
                   try {
                      content_length = std::stoul(content_length_it->second);
@@ -408,6 +430,51 @@ namespace glz
                   process_full_request(socket_ptr, *method_opt, target, headers, "", remote_endpoint);
                }
             });
+      }
+
+      inline bool is_websocket_upgrade(const std::unordered_map<std::string, std::string>& headers)
+      {
+         auto upgrade_it = headers.find("upgrade");
+         if (upgrade_it == headers.end()) return false;
+
+         auto connection_it = headers.find("connection");
+         if (connection_it == headers.end()) return false;
+
+         // Check if upgrade header contains "websocket" (case-insensitive)
+         std::string upgrade_value = upgrade_it->second;
+         std::transform(upgrade_value.begin(), upgrade_value.end(), upgrade_value.begin(), ::tolower);
+         if (upgrade_value.find("websocket") == std::string::npos) return false;
+
+         // Check if connection header contains "upgrade" (case-insensitive)
+         std::string connection_value = connection_it->second;
+         std::transform(connection_value.begin(), connection_value.end(), connection_value.begin(), ::tolower);
+         return connection_value.find("upgrade") != std::string::npos;
+      }
+
+      inline void handle_websocket_upgrade(std::shared_ptr<asio::ip::tcp::socket> socket, http_method method,
+                                           const std::string& target,
+                                           const std::unordered_map<std::string, std::string>& headers,
+                                           asio::ip::tcp::endpoint remote_endpoint)
+      {
+         // Find matching WebSocket handler
+         auto ws_it = websocket_handlers_.find(target);
+         if (ws_it == websocket_handlers_.end()) {
+            send_error_response(socket, 404, "Not Found");
+            return;
+         }
+
+         // Create request object for WebSocket handler
+         request req;
+         req.method = method;
+         req.target = target;
+         req.headers = headers;
+         req.remote_ip = remote_endpoint.address().to_string();
+         req.remote_port = remote_endpoint.port();
+
+         // Create WebSocket connection and start it
+         // Need to include websocket_connection.hpp for this to work
+         auto ws_conn = std::make_shared<websocket_connection>(std::move(*socket), ws_it->second.get());
+         ws_conn->start(req);
       }
 
       inline void process_full_request(std::shared_ptr<asio::ip::tcp::socket> socket, http_method method,
@@ -484,7 +551,7 @@ namespace glz
 
          // Add Server header if not present
          if (response.response_headers.find("Server") == response.response_headers.end()) {
-            oss << "Server: ResonanceHTTP/0.1\r\n";
+            oss << "Server: Glaze/1.0\r\n";
          }
 
          // End of headers

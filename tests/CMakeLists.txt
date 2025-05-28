@@ -81,6 +81,8 @@ add_subdirectory(stencil)
 add_subdirectory(threading_test)
 add_subdirectory(toml_test)
 add_subdirectory(utility_formats)
+add_subdirectory(websocket_test)
+
 if(glaze_EETF_FORMAT)
     add_subdirectory(eetf_test)
 endif(glaze_EETF_FORMAT)

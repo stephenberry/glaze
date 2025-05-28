@@ -8,7 +8,6 @@
 #include <unordered_set>
 #include <vector>
 
-#include "glaze/net/http.hpp"
 #include "glaze/net/http_router.hpp"
 
 namespace glz
