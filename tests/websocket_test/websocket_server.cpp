@@ -28,7 +28,7 @@ int main()
    std::cout << "=====================================\n";
    
    // Show which SHA-1 implementation is being used
-#if defined(GLZ_ENABLE_OPENSSL) || defined(GLZ_HAS_OPENSSL)
+#if defined(GLZ_ENABLE_OPENSSL) && defined(GLZ_HAS_OPENSSL)
    std::cout << "✅ Using OpenSSL for WebSocket handshake\n";
 #else
    std::cout << "⚠️ Using fallback SHA-1 implementation\n";
@@ -144,7 +144,7 @@ int main()
          {"server", "Glaze WebSocket + HTTP Server"},
          {"websocket_clients", clients.size()},
          {"implementation",
-#if defined(GLZ_ENABLE_OPENSSL) || defined(GLZ_HAS_OPENSSL)
+#if defined(GLZ_ENABLE_OPENSSL) && defined(GLZ_HAS_OPENSSL)
             "OpenSSL"
 #else
             "fallback_sha1"

@@ -25,9 +25,7 @@
 #endif
 
 // Optional OpenSSL support - detected at compile time
-#ifdef GLZ_ENABLE_OPENSSL
-   #include <openssl/sha.h>
-#elif __has_include(<openssl/sha.h>)
+#if defined(GLZ_ENABLE_OPENSSL) && __has_include(<openssl/sha.h>)
    #include <openssl/sha.h>
    #define GLZ_HAS_OPENSSL
 #endif
@@ -89,7 +87,7 @@ namespace glz
    // WebSocket utilities
    namespace ws_util
    {
-#if !defined(GLZ_ENABLE_OPENSSL) && !defined(GLZ_HAS_OPENSSL)
+#if !defined(GLZ_ENABLE_OPENSSL)
       // Fallback SHA-1 implementation when OpenSSL is not available
       namespace fallback_sha1
       {
@@ -199,7 +197,7 @@ namespace glz
          
          unsigned char hash[20];
 
-#if defined(GLZ_ENABLE_OPENSSL) || defined(GLZ_HAS_OPENSSL)
+#if defined(GLZ_ENABLE_OPENSSL) && defined(GLZ_HAS_OPENSSL)
          // Use OpenSSL when available
 #if OPENSSL_VERSION_NUMBER <= 0x030000000L
          SHA_CTX sha1;
