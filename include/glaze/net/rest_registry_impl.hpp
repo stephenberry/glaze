@@ -50,7 +50,7 @@ namespace glz
          // PUT handler for updating the entire object
          reg.endpoints.route(PUT, rest_path, [&value](const request& req, response& res) {
             // Parse the JSON request body
-            auto ec = read_json(value, req.body);
+            auto ec = read<Opts>(value, req.body);
             if (ec) {
                res.status(400).body("Invalid request body: " + format_error(ec, req.body));
                return;
@@ -86,20 +86,21 @@ namespace glz
          // POST handler for functions with parameters
          reg.endpoints.route(POST, rest_path, [&func](const request& req, response& res) {
             // Parse the JSON request body
-            auto params_result = read_json<Params>(req.body);
-            if (!params_result) {
-               res.status(400).body("Invalid request body: " + format_error(params_result, req.body));
+            Params params_result{};
+            auto ec = read<Opts>(params_result, req.body);
+            if (bool(ec)) {
+               res.status(400).body("Invalid request body: " + format_error(ec, req.body));
                return;
             }
 
             using Result = std::invoke_result_t<decltype(func), Params>;
 
             if constexpr (std::same_as<Result, void>) {
-               func(params_result.value());
+               func(std::move(params_result));
                res.status(204); // No Content
             }
             else {
-               auto result = func(params_result.value());
+               auto result = func(std::move(params_result));
                res.json(result);
             }
          });
@@ -117,7 +118,7 @@ namespace glz
          // PUT handler for updating nested objects
          reg.endpoints.route(PUT, rest_path, [&obj](const request& req, response& res) {
             // Parse the JSON request body
-            auto ec = read_json(obj, req.body);
+            auto ec = read<Opts>(obj, req.body);
             if (ec) {
                res.status(400).body("Invalid request body: " + format_error(ec, req.body));
                return;
@@ -139,7 +140,7 @@ namespace glz
          // PUT handler for updating values
          reg.endpoints.route(PUT, rest_path, [&value](const request& req, response& res) {
             // Parse the JSON request body
-            auto ec = read_json(value, req.body);
+            auto ec = read<Opts>(value, req.body);
             if (!ec) {
                res.status(400).body("Invalid request body: " + format_error(ec, req.body));
                return;
@@ -161,7 +162,7 @@ namespace glz
          // PUT handler for updating variables
          reg.endpoints.route(PUT, rest_path, [&var](const request& req, response& res) {
             // Parse the JSON request body
-            auto ec = read_json(var, req.body);
+            auto ec = read<Opts>(var, req.body);
             if (!ec) {
                res.status(400).body("Invalid request body: " + format_error(ec, req.body));
                return;
@@ -197,18 +198,19 @@ namespace glz
          // POST handler for member functions with args
          reg.endpoints.route(POST, rest_path, [&value, func](const request& req, response& res) {
             // Parse the JSON request body
-            auto params_result = read_json<Input>(req.body);
-            if (!params_result) {
-               res.status(400).body("Invalid request body: " + format_error(params_result, req.body));
+            Input params_result{};
+            auto ec = read<Opts>(params_result, req.body);
+            if (bool(ec)) {
+               res.status(400).body("Invalid request body: " + format_error(ec, req.body));
                return;
             }
 
             if constexpr (std::same_as<Ret, void>) {
-               (value.*func)(params_result.value());
+               (value.*func)(std::move(params_result));
                res.status(204); // No Content
             }
             else {
-               auto result = (value.*func)(std::move(params_result.value()));
+               auto result = (value.*func)(std::move(params_result));
                res.json(result);
             }
          });
