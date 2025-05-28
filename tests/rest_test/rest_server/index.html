@@ -190,8 +190,9 @@
 
             deleteUser: (userId) => {
                 return m.request({
-                    method: 'DELETE',
-                    url: `/api/deleteUser/${userId}`
+                    method: 'POST',
+                    url: '/api/deleteUser',
+                    body: { id: parseInt(userId) }
                 }).then(() => {
                     State.users = State.users.filter(u => u.id != userId);
                     incrementRequestCount();
@@ -295,13 +296,13 @@
                                     m('button.button.is-small.is-warning', {
                                         onclick: () => {
                                             api.updateUser(user.id, { avatar: '🎭', id: user.id })
-                                                .catch(() => {}); // Error handling could be added here
+                                                .catch(() => { }); // Error handling could be added here
                                         }
                                     }, 'Update Avatar'),
                                     m('button.button.is-small.is-danger', {
                                         onclick: () => {
                                             api.deleteUser(user.id)
-                                                .catch(() => {}); // Error handling could be added here
+                                                .catch(() => { }); // Error handling could be added here
                                         }
                                     }, 'Delete')
                                 ])
@@ -321,7 +322,7 @@
                         onclick: () => api.getAllUsers()
                     }, 'Load Users'),
                     m('#usersList.content',
-                        State.users.length > 0 
+                        State.users.length > 0
                             ? State.users.map(user => m(UserCard, { user, key: user.id }))
                             : m('p.has-text-grey', 'Users will load automatically...')
                     ),
@@ -335,7 +336,7 @@
         const AddUserSection = {
             view: () => {
                 let formData = { name: '', email: '', avatar: '👤' };
-                
+
                 return m('.column.is-half',
                     m('.box', [
                         m('h2.title.is-4', '➕ Add New User'),
@@ -356,7 +357,7 @@
                         }, [
                             m('.field', [
                                 m('label.label[for=newUserName]', 'Name:'),
-                                m('.control', 
+                                m('.control',
                                     m('input.input[type=text][name=name][required]')
                                 )
                             ]),
@@ -425,7 +426,7 @@
                         )
                     ]),
                     m('#userResult.mt-2',
-                        State.foundUser && State.foundUser.id ? 
+                        State.foundUser && State.foundUser.id ?
                             m('.box.mt-3',
                                 m('.level', [
                                     m('.level-left', [
@@ -439,7 +440,7 @@
                                         )
                                     ])
                                 ])
-                            ) : 
+                            ) :
                             State.foundUser && State.foundUser.message ?
                                 m('.notification.is-warning.mt-3', State.foundUser.message) :
                                 State.foundUser === null && !State.loading.findUser ?
@@ -477,7 +478,7 @@
                         onclick: () => api.getAllPosts()
                     }, 'Load Posts'),
                     m('#postsList.content',
-                        State.posts.length > 0 
+                        State.posts.length > 0
                             ? State.posts.map(post => m(PostCard, { post, key: post.id }))
                             : m('p.has-text-grey', 'Posts will load automatically...')
                     ),
