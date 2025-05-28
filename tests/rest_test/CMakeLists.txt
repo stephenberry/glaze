@@ -17,3 +17,5 @@ add_executable(rest_registry_test rest_registry_test.cpp)
 
 target_include_directories(rest_registry_test PRIVATE include ${asio_SOURCE_DIR}/asio/include)
 target_link_libraries(rest_registry_test PRIVATE glz_test_exceptions)
+
+add_subdirectory(rest_server)
