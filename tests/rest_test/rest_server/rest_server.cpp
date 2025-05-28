@@ -279,7 +279,6 @@ int main()
    // Start the server
    server.bind("127.0.0.1", 8080);
    std::cout << "Glaze Demo Server running on http://127.0.0.1:8080\n";
-   std::cout << "Make sure index.html is in the same directory\n";
    std::cout << "🛑 Press Enter to stop the server...\n\n";
 
    server.start();
