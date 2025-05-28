@@ -1,5 +1,5 @@
 // CORS Support for Glaze Library
-// Add this to a new file: glaze/rest/cors.hpp
+// Add this to a new file: glaze/net/cors.hpp
 
 #pragma once
 
@@ -8,8 +8,8 @@
 #include <unordered_set>
 #include <vector>
 
-#include "glaze/rest/http.hpp"
-#include "glaze/rest/http_router.hpp"
+#include "glaze/net/http.hpp"
+#include "glaze/net/http_router.hpp"
 
 namespace glz
 {

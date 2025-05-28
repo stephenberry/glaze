@@ -18,7 +18,7 @@ namespace glz
 }
 
 // Include implementation files
-#include "glaze/rest/rest_registry_impl.hpp"
+#include "glaze/net/rest_registry_impl.hpp"
 #include "glaze/rpc/repe/repe_registry_impl.hpp"
 
 namespace glz

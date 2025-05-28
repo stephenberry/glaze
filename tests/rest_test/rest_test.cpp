@@ -2,7 +2,7 @@
 // For the license information refer to glaze.hpp
 
 #include "glaze/glaze.hpp"
-#include "glaze/rest/http_server.hpp"
+#include "glaze/net/http_server.hpp"
 #include "ut/ut.hpp"
 
 #include <iostream>

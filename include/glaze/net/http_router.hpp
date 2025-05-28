@@ -16,7 +16,7 @@
 #include <unordered_map>
 #include <vector>
 
-#include "glaze/rest/http.hpp"
+#include "glaze/net/http.hpp"
 
 namespace glz
 {

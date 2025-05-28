@@ -14,8 +14,8 @@
 #include <thread>
 #include <unordered_map>
 
-#include "glaze/rest/cors.hpp"
-#include "glaze/rest/http_router.hpp"
+#include "glaze/net/cors.hpp"
+#include "glaze/net/http_router.hpp"
 
 #if __has_include(<asio.hpp>) && !defined(GLZ_USE_BOOST_ASIO)
 #include <asio.hpp>
