@@ -260,13 +260,11 @@ namespace glz
    }
 
    // Forward declarations
-   class websocket_connection;
-   class websocket_server;
+   struct websocket_connection;
 
    // WebSocket server class
-   class websocket_server
+   struct websocket_server
    {
-   public:
       using message_handler = std::function<void(std::shared_ptr<websocket_connection>, std::string_view, ws_opcode)>;
       using close_handler = std::function<void(std::shared_ptr<websocket_connection>)>;
       using error_handler = std::function<void(std::shared_ptr<websocket_connection>, std::error_code)>;
@@ -351,7 +349,7 @@ namespace glz
    };
 
    // WebSocket connection class - implementations come after websocket_server
-   class websocket_connection : public std::enable_shared_from_this<websocket_connection>
+   struct websocket_connection : public std::enable_shared_from_this<websocket_connection>
    {
    public:
       inline websocket_connection(asio::ip::tcp::socket socket, websocket_server* server)
