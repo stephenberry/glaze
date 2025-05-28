@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Glaze WebSocket + HTTP Server</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: #2c3e50;
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .content {
+            padding: 20px;
+        }
+
+        #messages {
+            height: 400px;
+            overflow-y: auto;
+            border: 2px solid #ecf0f1;
+            padding: 15px;
+            background: #f8f9fa;
+            margin: 20px 0;
+            border-radius: 5px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+        }
+
+        .message {
+            margin: 8px 0;
+            padding: 8px;
+            border-radius: 4px;
+        }
+
+        .system {
+            background: #e8f4fd;
+            color: #2980b9;
+            border-left: 4px solid #3498db;
+        }
+
+        .user {
+            background: #e8f5e8;
+            color: #27ae60;
+            border-left: 4px solid #2ecc71;
+        }
+
+        .server {
+            background: #fef9e7;
+            color: #f39c12;
+            border-left: 4px solid #f1c40f;
+        }
+
+        .error {
+            background: #fadbd8;
+            color: #e74c3c;
+            border-left: 4px solid #e74c3c;
+        }
+
+        .input-group {
+            display: flex;
+            gap: 10px;
+            margin: 20px 0;
+        }
+
+        input[type="text"] {
+            flex: 1;
+            padding: 12px;
+            border: 2px solid #bdc3c7;
+            border-radius: 5px;
+            font-size: 16px;
+        }
+
+        input[type="text"]:focus {
+            border-color: #3498db;
+            outline: none;
+        }
+
+        button {
+            padding: 12px 20px;
+            background: #3498db;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background 0.3s;
+        }
+
+        button:hover {
+            background: #2980b9;
+        }
+
+        button:disabled {
+            background: #bdc3c7;
+            cursor: not-allowed;
+        }
+
+        .status {
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+            font-weight: bold;
+        }
+
+        .connected {
+            background: #d5f4e6;
+            color: #27ae60;
+        }
+
+        .disconnected {
+            background: #fadbd8;
+            color: #e74c3c;
+        }
+
+        .commands {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+
+        .commands h3 {
+            margin-top: 0;
+        }
+
+        .commands code {
+            background: #e9ecef;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚀 Glaze WebSocket + HTTP Server</h1>
+            <p>Real-time communication with header-only C++ WebSocket implementation</p>
+        </div>
+
+        <div class="content">
+            <div id="status" class="status disconnected">🔴 Disconnected</div>
+
+            <div class="commands">
+                <h3>Available Commands:</h3>
+                <ul>
+                    <li><code>/ping</code> - Send a ping to the server</li>
+                    <li><code>/clients</code> - Get number of connected clients</li>
+                    <li><code>/echo [message]</code> - Echo a message back</li>
+                    <li>Any other text will be broadcast to all clients</li>
+                </ul>
+            </div>
+
+            <div id="messages"></div>
+
+            <div class="input-group">
+                <input id="messageInput" type="text" placeholder="Type your message here..." disabled />
+                <button id="sendButton" onclick="sendMessage()" disabled>Send</button>
+                <button onclick="sendPing()">Ping</button>
+                <button onclick="getClientCount()">Count</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let ws;
+        const messages = document.getElementById('messages');
+        const input = document.getElementById('messageInput');
+        const sendButton = document.getElementById('sendButton');
+        const status = document.getElementById('status');
+
+        function addMessage(text, type = 'system') {
+            const div = document.createElement('div');
+            div.className = 'message ' + type;
+            const timestamp = new Date().toLocaleTimeString();
+            div.innerHTML = `<strong>${timestamp}</strong> - ${text}`;
+            messages.appendChild(div);
+            messages.scrollTop = messages.scrollHeight;
+        }
+
+        function updateStatus(connected) {
+            if (connected) {
+                status.textContent = '🟢 Connected to WebSocket server';
+                status.className = 'status connected';
+                input.disabled = false;
+                sendButton.disabled = false;
+            } else {
+                status.textContent = '🔴 Disconnected from server';
+                status.className = 'status disconnected';
+                input.disabled = true;
+                sendButton.disabled = true;
+            }
+        }
+
+        function connect() {
+            try {
+                addMessage('🔄 Connecting to WebSocket server...', 'system');
+                ws = new WebSocket('ws://localhost:8080/ws');
+
+                ws.onopen = function () {
+                    addMessage('✅ Connected successfully!', 'system');
+                    updateStatus(true);
+                };
+
+                ws.onmessage = function (event) {
+                    if (event.data.startsWith('📢')) {
+                        addMessage(event.data, 'system');
+                    } else if (event.data.startsWith('🔄') || event.data.startsWith('🏓') || event.data.startsWith('👥')) {
+                        addMessage(event.data, 'server');
+                    } else {
+                        addMessage(event.data, 'server');
+                    }
+                };
+
+                ws.onclose = function () {
+                    addMessage('❌ Connection closed. Attempting to reconnect in 3 seconds...', 'system');
+                    updateStatus(false);
+                    setTimeout(connect, 3000);
+                };
+
+                ws.onerror = function () {
+                    addMessage('🚨 Connection error occurred', 'error');
+                };
+
+            } catch (error) {
+                addMessage('❌ Failed to connect: ' + error.message, 'error');
+                setTimeout(connect, 5000);
+            }
+        }
+
+        function sendMessage() {
+            if (ws && ws.readyState === WebSocket.OPEN && input.value.trim()) {
+                const message = input.value.trim();
+                ws.send(message);
+                addMessage('You: ' + message, 'user');
+                input.value = '';
+            }
+        }
+
+        function sendPing() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send('/ping');
+                addMessage('You: /ping', 'user');
+            }
+        }
+
+        function getClientCount() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send('/clients');
+                addMessage('You: /clients', 'user');
+            }
+        }
+
+        // Event listeners
+        input.addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') {
+                sendMessage();
+            }
+        });
+
+        // Auto-connect on page load
+        connect();
+    </script>
+</body>
+
+</html>
