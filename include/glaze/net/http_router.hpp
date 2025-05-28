@@ -57,6 +57,25 @@ namespace glz
          return *this;
       }
       
+      // Use glz::opts for format deduction and serialization
+      // my_response.res<Opts>(value);
+      template <auto Opts, class T>
+      response& body(T&& value)
+      {
+         if constexpr (Opts.format == JSON) {
+            content_type("application/json");
+         }
+         else if constexpr (Opts.format == BEVE) {
+            content_type("application/beve");
+         }
+         auto ec = glz::write<Opts>(std::forward<T>(value), response_body);
+         if (ec) {
+            // TODO serialize a struct into proper format for errors
+            response_body = R"({"error":"glz::write_json error"})"; // rare that this would ever happen
+         }
+         return *this;
+      }
+      
       inline response& content_type(std::string_view type) { return header("Content-Type", type); }
       
       // JSON response helper using Glaze

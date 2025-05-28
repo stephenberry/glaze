@@ -45,7 +45,7 @@ namespace glz
 
          // GET handler for the entire object
          reg.endpoints.route(GET, rest_path,
-                             [&value](const request& /*req*/, response& res) { res.json(value); });
+                             [&value](const request& /*req*/, response& res) { res.body<Opts>(value); });
 
          // PUT handler for updating the entire object
          reg.endpoints.route(PUT, rest_path, [&value](const request& req, response& res) {
@@ -73,7 +73,7 @@ namespace glz
             }
             else {
                auto result = func();
-               res.json(result);
+               res.body<Opts>(result);
             }
          });
       }
@@ -101,7 +101,7 @@ namespace glz
             }
             else {
                auto result = func(std::move(params_result));
-               res.json(result);
+               res.body<Opts>(result);
             }
          });
       }
@@ -113,7 +113,7 @@ namespace glz
 
          // GET handler for nested objects
          reg.endpoints.route(GET, rest_path,
-                             [&obj](const request& /*req*/, response& res) { res.json(obj); });
+                             [&obj](const request& /*req*/, response& res) { res.body<Opts>(obj); });
 
          // PUT handler for updating nested objects
          reg.endpoints.route(PUT, rest_path, [&obj](const request& req, response& res) {
@@ -135,7 +135,7 @@ namespace glz
 
          // GET handler for values
          reg.endpoints.route(GET, rest_path,
-                             [&value](const request& /*req*/, response& res) { res.json(value); });
+                             [&value](const request& /*req*/, response& res) { res.body<Opts>(value); });
 
          // PUT handler for updating values
          reg.endpoints.route(PUT, rest_path, [&value](const request& req, response& res) {
@@ -157,7 +157,7 @@ namespace glz
 
          // GET handler for variables
          reg.endpoints.route(GET, rest_path,
-                             [&var](const request& /*req*/, response& res) { res.json(var); });
+                             [&var](const request& /*req*/, response& res) { res.body<Opts>(var); });
 
          // PUT handler for updating variables
          reg.endpoints.route(PUT, rest_path, [&var](const request& req, response& res) {
@@ -185,7 +185,7 @@ namespace glz
             }
             else {
                auto result = (value.*func)();
-               res.json(result);
+               res.body<Opts>(result);
             }
          });
       }
@@ -211,7 +211,7 @@ namespace glz
             }
             else {
                auto result = (value.*func)(std::move(params_result));
-               res.json(result);
+               res.body<Opts>(result);
             }
          });
       }
