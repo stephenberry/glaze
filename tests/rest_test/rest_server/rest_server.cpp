@@ -179,11 +179,10 @@ struct glz::meta<PostService>
 
 // Helper function to read files
 std::string read_file(const std::string& path) {
-   // Use the SOURCE_DIR macro defined in CMakeLists.txt
    std::string full_path = std::string{SOURCE_DIR} + "/" + path;
    std::ifstream file(full_path);
    if (!file.is_open()) {
-      std::cerr << std::format("Failed to open '{}', current directory: {}\n", 
+      std::cerr << std::format("Failed to open '{}', current directory: {}\n",
                                full_path, std::filesystem::current_path().string());
       return "";
    }
@@ -230,6 +229,28 @@ int main()
    // Register services
    registry.on(userService);
    registry.on(postService);
+   
+   // OPTION 1: Enable CORS with default settings (allow all origins - good for development)
+   server.enable_cors();
+   
+   // OPTION 2: Enable CORS with custom configuration
+   /*
+    glz::cors_config cors_config;
+    cors_config.allowed_origins = {"http://localhost:3000", "https://myapp.com"};
+    cors_config.allowed_methods = {"GET", "POST", "PUT", "DELETE"};
+    cors_config.allowed_headers = {"Content-Type", "Authorization", "X-API-Key"};
+    cors_config.allow_credentials = true;
+    cors_config.max_age = 3600; // 1 hour
+    server.enable_cors(cors_config);
+    */
+   
+   // OPTION 3: Enable CORS for specific origins (good for production)
+   /*
+    server.enable_cors({
+    "https://myapp.com",
+    "https://api.myapp.com"
+    }, true); // allow credentials
+    */
 
    // Mount API endpoints
    server.mount("/api", registry.endpoints);
@@ -244,21 +265,16 @@ int main()
          res.content_type("text/html").body(html);
       }
    });
-
-   // CORS headers for development
-   // LEAVE THIS COMMENTED FOR NOW
-   /*server.use([](const glz::request&, glz::response& res, auto next) {
-      res.header("Access-Control-Allow-Origin", "*");
-      res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, PATCH, OPTIONS");
-      res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
-      next();
-   });*/
-
-   // Handle preflight requests
-   // LEAVE THIS COMMENTED FOR NOW
-   // server.options("/*", [](const glz::request&, glz::response& res) {
-   //   res.status(200).body("");
-   //});
+   
+   // Example of a custom endpoint that returns CORS headers
+   server.get("/test-cors", [](const glz::request& req, glz::response& res) {
+      // The CORS middleware will automatically add the appropriate headers
+      res.json(glz::json_t{
+         {"message", "CORS test endpoint"},
+         {"origin", req.headers.count("Origin") ? req.headers.at("Origin") : "none"},
+         {"method", glz::to_string(req.method)}
+      });
+   });
 
    // Start the server
    server.bind("127.0.0.1", 8080);

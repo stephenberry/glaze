@@ -14,6 +14,7 @@
 #include <thread>
 #include <unordered_map>
 
+#include "glaze/rest/cors.hpp"
 #include "glaze/rest/http_router.hpp"
 
 #if __has_include(<asio.hpp>) && !defined(GLZ_USE_BOOST_ASIO)
@@ -155,6 +156,47 @@ namespace glz
       inline http_server& on_error(error_handler handle)
       {
          error_handler = std::move(handle);
+         return *this;
+      }
+      
+      /**
+       * @brief Enable CORS with default configuration (allows all origins)
+       *
+       * This is suitable for development environments
+       *
+       * @return Reference to this server for method chaining
+       */
+      http_server& enable_cors()
+      {
+         root_router.use(glz::simple_cors());
+         return *this;
+      }
+      
+      /**
+       * @brief Enable CORS with custom configuration
+       *
+       * @param config The CORS configuration to use
+       * @return Reference to this server for method chaining
+       */
+      http_server& enable_cors(const glz::cors_config& config)
+      {
+         root_router.use(glz::create_cors_middleware(config));
+         return *this;
+      }
+      
+      /**
+       * @brief Enable CORS for specific origins
+       *
+       * This is suitable for production environments where you want to restrict
+       * which origins can access your API
+       *
+       * @param origins Vector of allowed origins (e.g., {"https://example.com", "https://app.example.com"})
+       * @param allow_credentials Whether to allow credentials (cookies, auth headers)
+       * @return Reference to this server for method chaining
+       */
+      http_server& enable_cors(const std::vector<std::string>& origins, bool allow_credentials = false)
+      {
+         root_router.use(glz::restrictive_cors(origins, allow_credentials));
          return *this;
       }
 
