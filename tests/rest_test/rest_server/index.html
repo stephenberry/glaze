@@ -172,9 +172,12 @@
 
             updateUser: (userId, updates) => {
                 return m.request({
-                    method: 'PUT',
-                    url: `/api/updateUser/${userId}`,
-                    body: updates
+                    method: 'POST',
+                    url: '/api/updateUser',
+                    body: {
+                        id: parseInt(userId),
+                        ...updates  // Spread the updates into the body
+                    }
                 }).then(updatedUser => {
                     const index = State.users.findIndex(u => u.id == userId);
                     if (index !== -1) {
