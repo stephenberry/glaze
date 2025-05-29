@@ -1,5 +1,5 @@
-name: gcc-15-linux
-# This workflow is for building with GCC 15
+name: gcc-linux-latest
+# This workflow sets up and tests with the latest GCC (15)
 
 on:
   push:
@@ -24,30 +24,37 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        gcc_version: [15]
         build_type: [Debug]
         std: [23]
 
     env:
-      CC: gcc-${{matrix.gcc_version}}
-      CXX: g++-${{matrix.gcc_version}}
+      CC: gcc
+      CXX: g++
 
     steps:
     - uses: actions/checkout@v4
 
-    - name: Install GCC 15
+    - name: Install dependencies
       run: |
-        sudo apt-get update
-        sudo apt-get install -y software-properties-common
-        sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
-        sudo apt-get update
-        sudo apt-get install -y gcc-15 g++-15
+        sudo apt update
+        sudo apt install -y build-essential libgmp-dev libmpfr-dev libmpc-dev flex bison wget
 
-    - name: Verify GCC version
+    - name: Download and extract GCC 15.1
       run: |
-        gcc-15 --version
-        g++-15 --version
-        echo "PATH=$(dirname $(which gcc-15)):$PATH" >> $GITHUB_ENV # Ensure it's found if not in default path after install
+        wget https://ftp.gnu.org/gnu/gcc/gcc-15.1.0/gcc-15.1.0.tar.gz
+        tar -xzf gcc-15.1.0.tar.gz
+        mkdir gcc-15.1.0/build
+        cd gcc-15.1.0/build
+        ../configure --prefix=/opt/gcc-15.1 --enable-languages=c,c++ --disable-multilib
+        make -j$(nproc)
+        sudo make install
+
+    - name: Set GCC 15 as default
+      run: |
+        sudo update-alternatives --install /usr/bin/gcc gcc /opt/gcc-15.1/bin/gcc 100
+        sudo update-alternatives --install /usr/bin/g++ g++ /opt/gcc-15.1/bin/g++ 100
+        gcc --version
+        g++ --version
 
     - name: Configure CMake
       run: |
@@ -56,7 +63,6 @@ jobs:
           -DCMAKE_CXX_STANDARD=${{matrix.std}} \
           -DCMAKE_C_COMPILER=${{env.CC}} \
           -DCMAKE_CXX_COMPILER=${{env.CXX}}
-          # GCC uses libstdc++ by default, so Clang-specific flags are removed
 
     - name: Build
       run: cmake --build build -j $(nproc)
