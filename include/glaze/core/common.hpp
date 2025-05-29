@@ -13,6 +13,8 @@
 
 #include "glaze/concepts/container_concepts.hpp"
 #include "glaze/core/array_apply.hpp"
+#include "glaze/core/cast.hpp"
+#include "glaze/core/constraint.hpp"
 #include "glaze/core/context.hpp"
 #include "glaze/core/feature_test.hpp"
 #include "glaze/core/meta.hpp"
@@ -604,6 +606,7 @@ struct glz::meta<glz::error_code>
                                     "invalid_variant_string",
                                     "no_matching_variant_type",
                                     "expected_true_or_false",
+                                    "constraint_violated",
                                     "key_not_found",
                                     "unknown_key",
                                     "missing_key",
@@ -668,6 +671,7 @@ struct glz::meta<glz::error_code>
                                      invalid_variant_string, //
                                      no_matching_variant_type, //
                                      expected_true_or_false, //
+                                     constraint_violated, //
                                      // Key errors
                                      key_not_found, //
                                      unknown_key, //

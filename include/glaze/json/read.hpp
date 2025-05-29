@@ -1004,13 +1004,15 @@ namespace glz
 
                      it = start;
                      while (it < end) [[likely]] {
-                        *p = *it;
                         if (*it == '"') {
                            value.resize(size_t(p - value.data()));
                            ++it;
                            return;
                         }
-                        else if (*it == '\\') {
+
+                        *p = *it;
+
+                        if (*it == '\\') {
                            ++it; // skip the escape
                            if (*it == 'u') {
                               ++it;
@@ -2110,7 +2112,7 @@ namespace glz
    }
 
    template <class T>
-      requires readable_map_t<T> || glaze_object_t<T> || reflectable<T>
+      requires((readable_map_t<T> || glaze_object_t<T> || reflectable<T>) && not custom_read<T>)
    struct from<JSON, T>
    {
       template <auto Options, string_literal tag = "">

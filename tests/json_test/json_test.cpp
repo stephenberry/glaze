@@ -4532,7 +4532,68 @@ suite date_test = [] {
       expect(s == R"("55")");
 
       d.data = 0;
-      expect(glz::read_json(d, s) == glz::error_code::none);
+      expect(not glz::read_json(d, s));
+      expect(d.data == 55);
+   };
+};
+
+struct date_base
+{
+   uint64_t data;
+   std::string human_readable;
+};
+
+template <class T>
+   requires std::derived_from<T, date_base>
+struct glz::meta<T>
+{
+   static constexpr auto value = glz::object("date", &T::human_readable);
+   static constexpr auto custom_read = true;
+   static constexpr auto custom_write = true;
+};
+
+namespace glz
+{
+   template <class T>
+      requires std::derived_from<T, date_base>
+   struct from<JSON, T>
+   {
+      template <auto Opts>
+      static void op(date_base& value, auto&&... args)
+      {
+         parse<JSON>::op<Opts>(value.human_readable, args...);
+         value.data = std::stoi(value.human_readable);
+      }
+   };
+
+   template <class T>
+      requires std::derived_from<T, date_base>
+   struct to<JSON, T>
+   {
+      template <auto Opts>
+      static void op(date_base& value, auto&&... args) noexcept
+      {
+         value.human_readable = std::to_string(value.data);
+         serialize<JSON>::op<Opts>(value.human_readable, args...);
+      }
+   };
+}
+
+struct date_derived : date_base
+{};
+
+suite date_base_test = [] {
+   "date_base"_test = [] {
+      date_derived d{};
+      d.data = 55;
+
+      std::string s{};
+      expect(not glz::write_json(d, s));
+
+      expect(s == R"("55")");
+
+      d.data = 0;
+      expect(not glz::read_json(d, s));
       expect(d.data == 55);
    };
 };
@@ -6975,6 +7036,55 @@ suite const_mem_func_tests = [] {
       s.clear();
       expect(not glz::write_json(obj, s));
       expect(s == R"({"i":55})");
+   };
+};
+
+struct constrained_object
+{
+   int age{};
+   std::string name{};
+};
+
+template <>
+struct glz::meta<constrained_object>
+{
+   using T = constrained_object;
+   static constexpr auto limit_age = [](const T&, int age) { return (age >= 0 && age <= 120); };
+
+   static constexpr auto limit_name = [](const T&, const std::string& name) { return name.size() <= 8; };
+
+   static constexpr auto value = object("age", read_constraint<&T::age, limit_age, "Age out of range">, //
+                                        "name", read_constraint<&T::name, limit_name, "Name is too long">);
+};
+
+suite constraint_tests = [] {
+   "constrained_object"_test = [] {
+      constrained_object obj{};
+
+      expect(not glz::read_json(obj, R"({"age": 25, "name": "José"})"));
+      expect(obj.age == 25);
+      expect(obj.name == "José");
+
+      std::string buffer = R"({"age": -1, "name": "Victor"})";
+      auto ec = glz::read_json(obj, buffer);
+      expect(bool(ec));
+      auto error_message = glz::format_error(ec, buffer);
+      expect(error_message ==
+             "1:11: constraint_violated\n   {\"age\": -1, \"name\": \"Victor\"}\n             ^ Age out of range")
+         << error_message << '\n';
+
+      buffer = R"({"age": 10, "name": "Abra Cadabra"})";
+      ec = glz::read_json(obj, buffer);
+      expect(obj.age == 10);
+      expect(bool(ec));
+      error_message = glz::format_error(ec, buffer);
+      expect(error_message ==
+             "1:35: constraint_violated\n   {\"age\": 10, \"name\": \"Abra Cadabra\"}\n                                "
+             "     ^ Name is too long")
+         << error_message << '\n';
+
+      expect(not glz::write_json(obj, buffer));
+      expect(buffer == R"({"age":10,"name":"José"})") << buffer;
    };
 };
 
@@ -10701,6 +10811,61 @@ suite immutable_array_read_tests = [] {
       expect(not glz::read_json(myStruct, buffer));
       buffer = glz::write<glz::opts{.format = glz::JSON}>(myStruct).value_or("error");
       expect(buffer == R"({"vals":[{"val1":1,"val2":1.1},{"val1":2,"val2":2.1},{"val1":3,"val2":3.1}]})") << buffer;
+   };
+};
+
+suite factor8_strings = [] {
+   // string parsing invokes separate path when there's >= 8 chars to parse.  There was a bug where
+   // inputs of exact factors of 8 chars caused overwriting, therefore not terminated correctly.
+
+   "exactly 8"_test = [] {
+      const auto payload = R"("abcdefg")"; // 8 chars after open quote
+      const auto parsed = glz::read_json<std::string>(payload);
+      expect(parsed.has_value());
+      expect(*parsed->end() == '\0');
+   };
+
+   "factor of 8"_test = [] {
+      const auto payload = R"("abcdefghijklmno")"; // 16 chars after open quote
+      const auto parsed = glz::read_json<std::string>(payload);
+      expect(parsed.has_value());
+      expect(*parsed->end() == '\0');
+   };
+};
+
+struct cast_obj
+{
+   int integer{};
+};
+
+template <>
+struct glz::meta<cast_obj>
+{
+   using T = cast_obj;
+   static constexpr auto value = object("integer", cast<&T::integer, double>, //
+                                        "indirect", cast<[](T& s) -> auto& { return s.integer; }, double>);
+};
+
+suite cast_tests = [] {
+   "cast"_test = [] {
+      cast_obj obj{};
+
+      std::string buffer = R"({"integer":5.7})";
+      expect(not glz::read_json(obj, buffer));
+
+      expect(obj.integer == 5);
+
+      obj.integer = 77;
+      expect(not glz::write_json(obj, buffer));
+      expect(buffer == R"({"integer":77,"indirect":77})");
+
+      buffer = R"({"indirect":33.5})";
+      expect(not glz::read_json(obj, buffer));
+      expect(obj.integer == 33);
+
+      obj.integer = 77;
+      expect(not glz::write_json(obj, buffer));
+      expect(buffer == R"({"integer":77,"indirect":77})");
    };
 };
 
