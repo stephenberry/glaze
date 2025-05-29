@@ -1137,6 +1137,7 @@ suite swap_bug_tests = [] {
    };
 };
 
+#if __cpp_exceptions
 suite bounds_checking_tests = [] {
    "at_method_exception_type"_test = [] {
       inplace_vector<int, 5> v{1, 2, 3};
@@ -1151,5 +1152,6 @@ suite bounds_checking_tests = [] {
       }
    };
 };
+#endif
 
 int main() { return 0; }
