@@ -138,9 +138,7 @@ namespace glz
 
    template <class T>
    concept has_try_emplace_back = requires(T container) {
-      {
-         container.try_emplace_back()
-      } -> std::same_as<typename T::pointer>;
+      { container.try_emplace_back() } -> std::same_as<typename T::pointer>;
    };
 
    template <class T>
@@ -157,6 +155,10 @@ namespace glz
    template <class T>
    concept vector_like =
       resizable<std::remove_cvref_t<T>> && accessible<std::remove_cvref_t<T>> && has_data<std::remove_cvref_t<T>>;
+
+   template <class T>
+   concept is_inplace_vector =
+      has_try_emplace_back<T> && accessible<std::remove_cvref_t<T>> && has_data<std::remove_cvref_t<T>>;
 
    template <class T>
    concept map_subscriptable = requires(T container) {

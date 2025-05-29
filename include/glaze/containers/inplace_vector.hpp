@@ -405,7 +405,7 @@ namespace glz
             }
             else {
                if (lhs.storage_size() != rhs.storage_size()) return false;
-               
+
                if constexpr (std::is_trivially_copyable_v<T>) {
                   return std::memcmp(lhs.data_ptr(), rhs.data_ptr(), lhs.storage_size() * sizeof(T)) == 0;
                }
@@ -1004,6 +1004,8 @@ namespace glz
 
         public:
          // Constructors
+
+         constexpr inplace_vector() noexcept = default;
 
          constexpr explicit inplace_vector(size_type n) // freestanding-deleted
             = delete;

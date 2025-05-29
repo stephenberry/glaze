@@ -9,79 +9,123 @@ using namespace ut;
 
 using glz::inplace_vector;
 
+template <typename T, size_t N>
+using freestanding_iv = glz::freestanding::inplace_vector<T, N>;
+
+// used for initializing freestading inplace_vector without il constructor
+template <typename T>
+auto vec_of(std::initializer_list<typename T::value_type> il)
+{
+   T vec;
+   for (const auto& item : il) {
+      vec.try_emplace_back(item);
+   }
+   return vec;
+}
+
+struct my_struct_entry
+{
+   int a;
+   int b;
+   int c;
+   auto operator<=>(const my_struct_entry&) const = default;
+};
+
+template <typename Container>
 struct my_struct
 {
-   struct entry_t
-   {
-      int a;
-      int b;
-      int c;
-      auto operator<=>(const entry_t&) const = default;
-   };
-   inplace_vector<entry_t, 3> vec;
-
+   Container vec;
    auto operator<=>(const my_struct&) const
    {
       return std::lexicographical_compare_three_way(vec.begin(), vec.end(), vec.begin(), vec.end());
    }
 };
 
+template <typename IV>
+constexpr auto test_int_vec = [] {
+   const std::string_view json{R"([1,2,3,4,5])"};
+   IV vec;
+   std::string buffer{};
+
+   expect(!glz::read<glz::opts{}>(vec, json));
+   expect(vec.size() == 5);
+   expect(vec == vec_of<IV>({1, 2, 3, 4, 5}));
+
+   expect(!glz::write<glz::opts{}>(vec, buffer));
+   expect(buffer == json);
+};
+
+template <typename IV>
+constexpr auto test_int_vec_overflow = [] {
+   IV vec;
+   expect(glz::read<glz::opts{}>(vec, "[1,2,3,4,5,6,7,8,9,10]") == glz::error_code::none);
+   expect(vec.size() == 10);
+
+   expect(glz::read<glz::opts{}>(vec, "[1,2,3,4,5,6,7,8,9,10,11]") == glz::error_code::exceeded_static_array_size);
+   expect(vec.size() == 10);
+
+   expect(glz::read<glz::opts{}>(vec, "[1]") == glz::error_code::none);
+   expect(vec.size() == 1);
+
+   expect(glz::read<glz::opts{}>(vec, "[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16]") ==
+          glz::error_code::exceeded_static_array_size);
+   expect(vec.size() == 10);
+
+   expect(glz::read<glz::opts{}>(vec, "[]") == glz::error_code::none);
+   expect(vec.size() == 0) << "result: " << vec.size() << " expected: 0";
+};
+
+template <typename IV>
+constexpr auto test_struct_vec = [] {
+   const std::string_view json{R"({"vec":[{"a":1,"b":2,"c":3},{"a":4,"b":5,"c":6},{"a":7,"b":8,"c":9}]})"};
+   std::string buffer{};
+   my_struct<IV> s;
+
+   expect(!glz::read<glz::opts{}>(s, json));
+   expect(s.vec.size() == 3);
+   expect(s.vec == vec_of<IV>({{1, 2, 3}, {4, 5, 6}, {7, 8, 9}}));
+
+   expect(!glz::write<glz::opts{}>(s, buffer));
+   expect(buffer == json);
+};
+
+template <typename IV>
+constexpr auto test_pair_vec = [] {
+   IV vec;
+   std::string buffer{};
+
+   expect(!glz::read_json(vec, R"({"1":2,"3":4})"));
+   expect(vec.size() == 2);
+   expect(!glz::write_json(vec, buffer));
+   expect(buffer == R"({"1":2,"3":4})");
+
+   expect(glz::read_json(vec, R"({"1":2,"3":4,"5":6})") == glz::error_code::exceeded_static_array_size);
+   expect(!glz::read_json(vec, R"({})"));
+   expect(vec.size() == 0);
+
+   expect(!glz::write_json(vec, buffer));
+   expect(buffer == R"({})") << buffer;
+};
+
 suite json_test = [] {
    "int_vec"_test = [] {
-      const std::string_view json{R"([1,2,3,4,5])"};
-      inplace_vector<int, 10> vec;
-      std::string buffer{};
-
-      expect(!glz::read<glz::opts{}>(vec, json));
-      expect(vec.size() == 5);
-      expect(vec == inplace_vector<int, 10>{1, 2, 3, 4, 5});
-
-      expect(!glz::write<glz::opts{}>(vec, buffer));
-      expect(buffer == json);
+      test_int_vec<inplace_vector<int, 10>>();
+      test_int_vec<freestanding_iv<int, 10>>();
    };
 
    "int_vec_overflow"_test = [] {
-      inplace_vector<int, 10> vec;
-      expect(glz::read<glz::opts{}>(vec, "[1,2,3,4,5,6,7,8,9,10]") == glz::error_code::none);
-      expect(vec.size() == 10);
-
-      expect(glz::read<glz::opts{}>(vec, "[1,2,3,4,5,6,7,8,9,10,11]") == glz::error_code::exceeded_static_array_size);
-      expect(vec.size() == 10);
-
-      expect(glz::read<glz::opts{}>(vec, "[1]") == glz::error_code::none);
-      expect(vec.size() == 1);
-
-      expect(glz::read<glz::opts{}>(vec, "[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16]") ==
-             glz::error_code::exceeded_static_array_size);
-      expect(vec.size() == 10);
-
-      expect(glz::read<glz::opts{}>(vec, "[]") == glz::error_code::none);
-      expect(vec.size() == 0);
+      test_int_vec_overflow<inplace_vector<int, 10>>();
+      test_int_vec_overflow<freestanding_iv<int, 10>>();
    };
 
    "struct_vec"_test = [] {
-      const std::string_view json{R"({"vec":[{"a":1,"b":2,"c":3},{"a":4,"b":5,"c":6},{"a":7,"b":8,"c":9}]})"};
-      std::string buffer{};
-      my_struct s;
-
-      expect(!glz::read<glz::opts{}>(s, json));
-      expect(s.vec.size() == 3);
-      expect(s.vec == inplace_vector<my_struct::entry_t, 3>{{1, 2, 3}, {4, 5, 6}, {7, 8, 9}});
-
-      expect(!glz::write<glz::opts{}>(s, buffer));
-      expect(buffer == json);
+      test_struct_vec<inplace_vector<my_struct_entry, 3>>();
+      test_struct_vec<freestanding_iv<my_struct_entry, 3>>();
    };
 
    "pair_vec"_test = [] {
-      inplace_vector<std::pair<int, int>, 2> vec;
-      expect(!glz::read_json(vec, R"({"1":2,"3":4})"));
-      expect(vec.size() == 2);
-      const auto s = glz::write_json(vec).value_or("error");
-      expect(s == R"({"1":2,"3":4})") << s;
-
-      expect(glz::read_json(vec, R"({"1":2,"3":4,"5":6})") == glz::error_code::exceeded_static_array_size);
-      expect(glz::read_json(vec, R"({})") == glz::error_code::none);
-      expect(vec.size() == 0);
+      test_pair_vec<inplace_vector<std::pair<int, int>, 2>>();
+      test_pair_vec<freestanding_iv<std::pair<int, int>, 2>>();
    };
 };
 
@@ -1020,14 +1064,13 @@ suite edge_cases_tests = [] {
    };
 };
 
-struct TrackingDestructor {
+struct TrackingDestructor
+{
    int value;
    static inline int last_destroyed_value = -1;
-   
+
    TrackingDestructor(int v) : value(v) {}
-   ~TrackingDestructor() {
-      last_destroyed_value = value;
-   }
+   ~TrackingDestructor() { last_destroyed_value = value; }
 };
 
 suite pop_back_tests = [] {
@@ -1036,20 +1079,20 @@ suite pop_back_tests = [] {
       v.emplace_back(10);
       v.emplace_back(20);
       v.emplace_back(30);
-      
+
       // Before pop_back: v = [10, 20, 30], size = 3
       // back() should point to element with value 30
       expect(v.back().value == 30) << "back() should point to last element";
-      
+
       TrackingDestructor::last_destroyed_value = -1;
       v.pop_back();
-      
+
       // After pop_back: size should be 2, and value 30 should have been destroyed
       expect(v.size() == 2) << "size should be decremented";
       expect(TrackingDestructor::last_destroyed_value == 30)
-      << "The element with value 30 should have been destroyed, but got: "
-      << TrackingDestructor::last_destroyed_value;
-      
+         << "The element with value 30 should have been destroyed, but got: "
+         << TrackingDestructor::last_destroyed_value;
+
       // The remaining elements should be [10, 20]
       expect(v[0].value == 10) << "First element should still be 10";
       expect(v[1].value == 20) << "Second element should still be 20";
@@ -1061,15 +1104,15 @@ suite zero_capacity_tests = [] {
    "zero_capacity_comparison"_test = [] {
       inplace_vector<int, 0> v1;
       inplace_vector<int, 0> v2;
-      
+
       bool result = (v1 == v2);
       expect(result) << "Two empty zero-capacity vectors should be equal";
    };
-   
+
    "zero_capacity_assignment"_test = [] {
       inplace_vector<int, 0> v1;
       inplace_vector<int, 0> v2;
-      
+
       v1 = v2;
       expect(v1 == v2) << "Assignment should work for zero-capacity vectors";
    };
@@ -1079,22 +1122,22 @@ suite storage_access_tests = [] {
    "trivial_type_comparison_consistency"_test = [] {
       inplace_vector<int, 5> v1{1, 2, 3};
       inplace_vector<int, 5> v2{1, 2, 3};
-      
+
       expect(v1 == v2) << "Identical vectors should be equal";
    };
-   
+
    "assign_method_storage_access"_test = [] {
       std::vector<int> source{1, 2, 3, 4, 5};
-      
+
       inplace_vector<int, 10> v1;
       inplace_vector<int, 10> v2;
-      
+
       v1.assign(source.begin(), source.end());
       v2.assign_range(source);
-      
+
       expect(v1 == v2) << "assign() and assign_range() should produce identical results";
       expect(v1.size() == 5) << "Size should match source";
-      
+
       for (size_t i = 0; i < v1.size(); ++i) {
          expect(v1[i] == source[i]) << "Elements should match source at index " << i;
       }
@@ -1105,33 +1148,33 @@ suite swap_bug_tests = [] {
    "swap_trivial_types"_test = [] {
       inplace_vector<int, 5> v1{1, 2, 3};
       inplace_vector<int, 5> v2{4, 5, 6, 7};
-      
+
       std::vector<int> orig_v1(v1.begin(), v1.end());
       std::vector<int> orig_v2(v2.begin(), v2.end());
-      
+
       v1.swap(v2);
-      
+
       expect(v1.size() == orig_v2.size()) << "v1 should have v2's original size";
       expect(v2.size() == orig_v1.size()) << "v2 should have v1's original size";
-      
+
       for (size_t i = 0; i < v1.size(); ++i) {
          expect(v1[i] == orig_v2[i]) << "v1 element " << i << " should match v2's original";
       }
-      
+
       for (size_t i = 0; i < v2.size(); ++i) {
          expect(v2[i] == orig_v1[i]) << "v2 element " << i << " should match v1's original";
       }
    };
-   
+
    "swap_with_different_sizes"_test = [] {
       inplace_vector<int, 10> v1{1, 2};
       inplace_vector<int, 10> v2{3, 4, 5, 6, 7};
-      
+
       size_t orig_v1_size = v1.size();
       size_t orig_v2_size = v2.size();
-      
+
       v1.swap(v2);
-      
+
       expect(v1.size() == orig_v2_size) << "Sizes should be swapped";
       expect(v2.size() == orig_v1_size) << "Sizes should be swapped";
    };
@@ -1141,13 +1184,15 @@ suite swap_bug_tests = [] {
 suite bounds_checking_tests = [] {
    "at_method_exception_type"_test = [] {
       inplace_vector<int, 5> v{1, 2, 3};
-      
+
       try {
          v.at(10);
          expect(false) << "at() should have thrown an exception";
-      } catch (const std::out_of_range&) {
+      }
+      catch (const std::out_of_range&) {
          expect(true) << "at() correctly threw std::out_of_range";
-      } catch (...) {
+      }
+      catch (...) {
          expect(false) << "at() threw unexpected exception type";
       }
    };
