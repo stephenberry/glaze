@@ -1,0 +1,66 @@
+name: gcc-15-linux
+# This workflow is for building with GCC 15
+
+on:
+  push:
+    branches:
+      - main
+      - feature/*
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+  pull_request:
+    branches:
+      - main
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        gcc_version: [15]
+        build_type: [Debug]
+        std: [23]
+
+    env:
+      CC: gcc-${{matrix.gcc_version}}
+      CXX: g++-${{matrix.gcc_version}}
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install GCC 15
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y software-properties-common
+        sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
+        sudo apt-get update
+        sudo apt-get install -y gcc-15 g++-15
+
+    - name: Verify GCC version
+      run: |
+        gcc-15 --version
+        g++-15 --version
+        echo "PATH=$(dirname $(which gcc-15)):$PATH" >> $GITHUB_ENV # Ensure it's found if not in default path after install
+
+    - name: Configure CMake
+      run: |
+        cmake -B ${{github.workspace}}/build \
+          -DCMAKE_BUILD_TYPE=${{matrix.build_type}} \
+          -DCMAKE_CXX_STANDARD=${{matrix.std}} \
+          -DCMAKE_C_COMPILER=${{env.CC}} \
+          -DCMAKE_CXX_COMPILER=${{env.CXX}}
+          # GCC uses libstdc++ by default, so Clang-specific flags are removed
+
+    - name: Build
+      run: cmake --build build -j $(nproc)
+
+    - name: Test
+      working-directory: build
+      run: ctest -j $(nproc) --output-on-failure

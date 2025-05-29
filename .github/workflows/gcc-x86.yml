@@ -1,4 +1,5 @@
 name: gcc-x86
+#32bit machine testing
 
 on:
   push:
