@@ -225,8 +225,8 @@ namespace glz
          // Standard modifiers
          constexpr void pop_back()
          {
-            set_storage_size(storage_size() - 1);
             std::destroy_at(&back());
+            set_storage_size(storage_size() - 1);
          }
 
          // Fallible APIs
@@ -403,7 +403,7 @@ namespace glz
             if (lhs.storage_size() != rhs.storage_size()) return false;
 
             if constexpr (std::is_trivially_copyable_v<T>) {
-               return std::memcmp(lhs.storage, rhs.storage, lhs.storage_size() * sizeof(T)) == 0;
+               return std::memcmp(lhs.data_ptr(), rhs.data_ptr(), lhs.storage_size() * sizeof(T)) == 0;
             }
             else {
                return std::equal(lhs.begin(), lhs.end(), rhs.begin());

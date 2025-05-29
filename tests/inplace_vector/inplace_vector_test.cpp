@@ -1020,4 +1020,136 @@ suite edge_cases_tests = [] {
    };
 };
 
+struct TrackingDestructor {
+   int value;
+   static inline int last_destroyed_value = -1;
+   
+   TrackingDestructor(int v) : value(v) {}
+   ~TrackingDestructor() {
+      last_destroyed_value = value;
+   }
+};
+
+suite pop_back_tests = [] {
+   "pop_back_destroy_correct_element"_test = [] {
+      inplace_vector<TrackingDestructor, 5> v;
+      v.emplace_back(10);
+      v.emplace_back(20);
+      v.emplace_back(30);
+      
+      // Before pop_back: v = [10, 20, 30], size = 3
+      // back() should point to element with value 30
+      expect(v.back().value == 30) << "back() should point to last element";
+      
+      TrackingDestructor::last_destroyed_value = -1;
+      v.pop_back();
+      
+      // After pop_back: size should be 2, and value 30 should have been destroyed
+      expect(v.size() == 2) << "size should be decremented";
+      expect(TrackingDestructor::last_destroyed_value == 30)
+      << "The element with value 30 should have been destroyed, but got: "
+      << TrackingDestructor::last_destroyed_value;
+      
+      // The remaining elements should be [10, 20]
+      expect(v[0].value == 10) << "First element should still be 10";
+      expect(v[1].value == 20) << "Second element should still be 20";
+      expect(v.back().value == 20) << "back() should now point to element with value 20";
+   };
+};
+
+suite zero_capacity_tests = [] {
+   "zero_capacity_comparison"_test = [] {
+      inplace_vector<int, 0> v1;
+      inplace_vector<int, 0> v2;
+      
+      bool result = (v1 == v2);
+      expect(result) << "Two empty zero-capacity vectors should be equal";
+   };
+   
+   "zero_capacity_assignment"_test = [] {
+      inplace_vector<int, 0> v1;
+      inplace_vector<int, 0> v2;
+      
+      v1 = v2;
+      expect(v1 == v2) << "Assignment should work for zero-capacity vectors";
+   };
+};
+
+suite storage_access_tests = [] {
+   "trivial_type_comparison_consistency"_test = [] {
+      inplace_vector<int, 5> v1{1, 2, 3};
+      inplace_vector<int, 5> v2{1, 2, 3};
+      
+      expect(v1 == v2) << "Identical vectors should be equal";
+   };
+   
+   "assign_method_storage_access"_test = [] {
+      std::vector<int> source{1, 2, 3, 4, 5};
+      
+      inplace_vector<int, 10> v1;
+      inplace_vector<int, 10> v2;
+      
+      v1.assign(source.begin(), source.end());
+      v2.assign_range(source);
+      
+      expect(v1 == v2) << "assign() and assign_range() should produce identical results";
+      expect(v1.size() == 5) << "Size should match source";
+      
+      for (size_t i = 0; i < v1.size(); ++i) {
+         expect(v1[i] == source[i]) << "Elements should match source at index " << i;
+      }
+   };
+};
+
+suite swap_bug_tests = [] {
+   "swap_trivial_types"_test = [] {
+      inplace_vector<int, 5> v1{1, 2, 3};
+      inplace_vector<int, 5> v2{4, 5, 6, 7};
+      
+      std::vector<int> orig_v1(v1.begin(), v1.end());
+      std::vector<int> orig_v2(v2.begin(), v2.end());
+      
+      v1.swap(v2);
+      
+      expect(v1.size() == orig_v2.size()) << "v1 should have v2's original size";
+      expect(v2.size() == orig_v1.size()) << "v2 should have v1's original size";
+      
+      for (size_t i = 0; i < v1.size(); ++i) {
+         expect(v1[i] == orig_v2[i]) << "v1 element " << i << " should match v2's original";
+      }
+      
+      for (size_t i = 0; i < v2.size(); ++i) {
+         expect(v2[i] == orig_v1[i]) << "v2 element " << i << " should match v1's original";
+      }
+   };
+   
+   "swap_with_different_sizes"_test = [] {
+      inplace_vector<int, 10> v1{1, 2};
+      inplace_vector<int, 10> v2{3, 4, 5, 6, 7};
+      
+      size_t orig_v1_size = v1.size();
+      size_t orig_v2_size = v2.size();
+      
+      v1.swap(v2);
+      
+      expect(v1.size() == orig_v2_size) << "Sizes should be swapped";
+      expect(v2.size() == orig_v1_size) << "Sizes should be swapped";
+   };
+};
+
+suite bounds_checking_tests = [] {
+   "at_method_exception_type"_test = [] {
+      inplace_vector<int, 5> v{1, 2, 3};
+      
+      try {
+         v.at(10);
+         expect(false) << "at() should have thrown an exception";
+      } catch (const std::out_of_range&) {
+         expect(true) << "at() correctly threw std::out_of_range";
+      } catch (...) {
+         expect(false) << "at() threw unexpected exception type";
+      }
+   };
+};
+
 int main() { return 0; }
