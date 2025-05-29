@@ -400,13 +400,18 @@ namespace glz
          // Comparison operators
          friend constexpr bool operator==(const inplace_vector_base& lhs, const inplace_vector_base& rhs)
          {
-            if (lhs.storage_size() != rhs.storage_size()) return false;
-
-            if constexpr (std::is_trivially_copyable_v<T>) {
-               return std::memcmp(lhs.data_ptr(), rhs.data_ptr(), lhs.storage_size() * sizeof(T)) == 0;
+            if constexpr (N == 0) {
+               return true; // Both are inplace_vector<T, 0>, always empty and thus equal.
             }
             else {
-               return std::equal(lhs.begin(), lhs.end(), rhs.begin());
+               if (lhs.storage_size() != rhs.storage_size()) return false;
+               
+               if constexpr (std::is_trivially_copyable_v<T>) {
+                  return std::memcmp(lhs.data_ptr(), rhs.data_ptr(), lhs.storage_size() * sizeof(T)) == 0;
+               }
+               else {
+                  return std::equal(lhs.begin(), lhs.end(), rhs.begin());
+               }
             }
          }
 
