@@ -362,8 +362,8 @@ namespace glz
                // For trivially copyable types, we can use a temporary buffer
                alignas(T) unsigned char temp[sizeof(T) * N];
                std::memcpy(temp, data_ptr(), storage_size() * sizeof(T));
-               std::memcpy(data_ptr(), x.storage, x.storage_size() * sizeof(T));
-               std::memcpy(x.storage, temp, storage_size() * sizeof(T));
+               std::memcpy(data_ptr(), x.data_ptr(), x.storage_size() * sizeof(T));
+               std::memcpy(x.data_ptr(), temp, storage_size() * sizeof(T));
                size_type temp_size = storage_size();
                set_storage_size(x.storage_size());
                x.set_storage_size(temp_size);
