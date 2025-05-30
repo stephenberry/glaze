@@ -10914,7 +10914,7 @@ suite integer_id_variant_tests = [] {
       expect(not glz::write_json(v, out));
 
       expect(out == buffer) << out;
-      
+
       expect(not glz::write<glz::opts{.prettify = true}>(v, out));
       expect(out == R"([
    {
