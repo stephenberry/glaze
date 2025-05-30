@@ -75,18 +75,76 @@ namespace glz
    inline constexpr void visit(auto&& lambda, const size_t index)
    {
       if constexpr (N > 0) {
+         // Explicit sizes for small N to help the compiler and make debugging easier
          if constexpr (N == 1) {
             (void)index;
             (void)(lambda.template operator()<0>());
          }
+         else if constexpr (N == 2) {
+            switch (index) {
+               case 0: lambda.template operator()<0>(); break;
+               case 1: lambda.template operator()<1>(); break;
+               default: std::unreachable();
+            }
+         }
+         else if constexpr (N == 3) {
+            switch (index) {
+               case 0: lambda.template operator()<0>(); break;
+               case 1: lambda.template operator()<1>(); break;
+               case 2: lambda.template operator()<2>(); break;
+               default: std::unreachable();
+            }
+         }
+         else if constexpr (N == 4) {
+            switch (index) {
+               case 0: lambda.template operator()<0>(); break;
+               case 1: lambda.template operator()<1>(); break;
+               case 2: lambda.template operator()<2>(); break;
+               case 3: lambda.template operator()<3>(); break;
+               default: std::unreachable();
+            }
+         }
+         else if constexpr (N == 5) {
+            switch (index) {
+               case 0: lambda.template operator()<0>(); break;
+               case 1: lambda.template operator()<1>(); break;
+               case 2: lambda.template operator()<2>(); break;
+               case 3: lambda.template operator()<3>(); break;
+               case 4: lambda.template operator()<4>(); break;
+               default: std::unreachable();
+            }
+         }
+         else if constexpr (N == 6) {
+            switch (index) {
+               case 0: lambda.template operator()<0>(); break;
+               case 1: lambda.template operator()<1>(); break;
+               case 2: lambda.template operator()<2>(); break;
+               case 3: lambda.template operator()<3>(); break;
+               case 4: lambda.template operator()<4>(); break;
+               case 5: lambda.template operator()<5>(); break;
+               default: std::unreachable();
+            }
+         }
+         else if constexpr (N == 7) {
+            switch (index) {
+               case 0: lambda.template operator()<0>(); break;
+               case 1: lambda.template operator()<1>(); break;
+               case 2: lambda.template operator()<2>(); break;
+               case 3: lambda.template operator()<3>(); break;
+               case 4: lambda.template operator()<4>(); break;
+               case 5: lambda.template operator()<5>(); break;
+               case 6: lambda.template operator()<6>(); break;
+               default: std::unreachable();
+            }
+         }
          else {
-#if defined(__clang_major__) && (__clang_major__ >= 19)
-            [[assume(index < N)]];
-#endif
-            
             static constexpr auto jump_table = []<size_t... I>(std::index_sequence<I...>) {
                return std::array{+[](std::decay_t<decltype(lambda)>& l) { l.template operator()<I>(); }...};
             }(std::make_index_sequence<N>{});
+            
+#if defined(__clang_major__) && (__clang_major__ >= 19)
+            [[assume(index < N)]];
+#endif
             jump_table[index](lambda);
             
             // Clang generates an additional branch with the code below
