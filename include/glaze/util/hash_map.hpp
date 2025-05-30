@@ -434,7 +434,7 @@ namespace glz
          // more efficient instructions So this is not as expensive as this looks
          const auto extra = buckets[hash % N];
          const size_t index = extra < 1 ? -extra : table[combine(hash, extra) % storage_size];
-         
+
          if (index >= N) [[unlikely]] {
             return items.end();
          }
@@ -447,7 +447,7 @@ namespace glz
             if (!compare_sv(item.first, key)) [[unlikely]]
                return items.end();
          }
-         
+
          return items.begin() + index;
       }
 
@@ -456,7 +456,7 @@ namespace glz
          const auto hash = hash_alg{}(key, seed);
          const auto extra = buckets[hash % N];
          const size_t index = extra < 1 ? -extra : table[combine(hash, extra) % storage_size];
-         
+
          if (index >= N) [[unlikely]] {
             return items.end();
          }
@@ -469,7 +469,7 @@ namespace glz
             if (!compare_sv(item.first, key)) [[unlikely]]
                return items.end();
          }
-         
+
          return items.begin() + index;
       }
 
