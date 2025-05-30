@@ -80,7 +80,9 @@ namespace glz
             (void)(lambda.template operator()<0>());
          }
          else {
+#if defined(__clang_major__) && (__clang_major__ >= 19)
             [[assume(index < N)]];
+#endif
             // Clang very efficiently optimizes this even with 01
             // so, we don't bother implementing switch cases or if-else chains for specific N
             [&, index]<size_t... I>(std::index_sequence<I...>) {
