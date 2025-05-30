@@ -890,7 +890,7 @@ suite container_types = [] {
    };
    "vector float roundtrip"_test = [] {
       std::vector<float> vec(100);
-      for (auto& item : vec) item = rand() / (1.0 + rand());
+      for (auto& item : vec) item = float(rand() / (1.0 + rand()));
       std::string buffer{};
       std::vector<float> vec2{};
       expect(not glz::write_json(vec, buffer));
