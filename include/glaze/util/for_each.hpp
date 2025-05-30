@@ -18,10 +18,11 @@ namespace glz
    // It actually removes an assembly instruction on GCC and Clang to pass by reference with O0
    // With O0 GCC and Clang produce better assembly using the templated I approach rather than
    // the approach that passes std::integral_constant
-   
+
    // Compile time iterate over I indices
    template <size_t N>
-   inline constexpr void for_each(auto&& lambda) {
+   inline constexpr void for_each(auto&& lambda)
+   {
       if constexpr (N > 0) {
          // Explicit sizes for small N to help the compiler and make debugging easier
          // These generate less assembly with O0, but make no difference for higher optimization
@@ -50,7 +51,7 @@ namespace glz
          }
       }
    }
-   
+
    // Runtime short circuiting if function returns true, return false to continue evaluation
    template <size_t N>
    constexpr void for_each_short_circuit(auto&& lambda)
@@ -61,19 +62,18 @@ namespace glz
          }(std::make_index_sequence<N>{});
       }
    }
-   
+
    template <class Func, class Tuple>
    constexpr void for_each_apply(Func&& f, Tuple&& t)
    {
       constexpr size_t N = std::tuple_size_v<std::decay_t<Tuple>>;
-      [&]<size_t... I>(std::index_sequence<I...>) {
-         (f(std::get<I>(t)), ...);
-      }(std::make_index_sequence<N>{});
+      [&]<size_t... I>(std::index_sequence<I...>) { (f(std::get<I>(t)), ...); }(std::make_index_sequence<N>{});
    }
-   
+
    // Important: index must be less than N
    template <size_t N>
-   inline constexpr void visit(auto&& lambda, const size_t index) {
+   inline constexpr void visit(auto&& lambda, const size_t index)
+   {
       if constexpr (N > 0) {
          if constexpr (N == 1) {
             (void)index;
