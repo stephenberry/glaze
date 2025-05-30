@@ -262,9 +262,21 @@ namespace glz
    namespace detail
    {
       template <class T, size_t N>
-      inline constexpr std::array<std::string_view, N> convert_ids_to_array_of_sv(const std::array<T, N>& arr)
+      requires (not std::integral<T>)
+      inline constexpr auto convert_ids_to_array(const std::array<T, N>& arr)
       {
          std::array<std::string_view, N> result;
+         for (size_t i = 0; i < N; ++i) {
+            result[i] = arr[i];
+         }
+         return result;
+      }
+      
+      template <class T, size_t N>
+      requires (std::integral<T>)
+      inline constexpr auto convert_ids_to_array(const std::array<T, N>& arr)
+      {
+         std::array<T, N> result;
          for (size_t i = 0; i < N; ++i) {
             result[i] = arr[i];
          }
@@ -276,10 +288,10 @@ namespace glz
    inline constexpr auto ids_v = [] {
       if constexpr (ided<T>) {
          if constexpr (local_meta_t<T>) {
-            return detail::convert_ids_to_array_of_sv(std::decay_t<T>::glaze::ids);
+            return detail::convert_ids_to_array(std::decay_t<T>::glaze::ids);
          }
          else {
-            return detail::convert_ids_to_array_of_sv(meta<std::decay_t<T>>::ids);
+            return detail::convert_ids_to_array(meta<std::decay_t<T>>::ids);
          }
       }
       else {
