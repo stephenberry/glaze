@@ -169,7 +169,7 @@ namespace glz
          std::memcpy(data, it, Length);
          it += Length;
 
-         invoke_table<N>([&]<size_t I>() {
+         visit_all<N>([&]<size_t I>() {
             get_member(value, get<I>(reflect<T>::values)) = data[I / 8] & (uint8_t{1} << (7 - (I % 8)));
          });
       }
@@ -1293,7 +1293,7 @@ namespace glz
                return;
             }
 
-            invoke_table<N>(
+            visit_all<N>(
                [&]<size_t I>() { parse<BEVE>::op<Opts>(get_member(value, get<I>(reflect<V>::values)), ctx, it, end); });
          }
       }
@@ -1452,7 +1452,7 @@ namespace glz
             return;
          }
 
-         invoke_table<N>(
+         visit_all<N>(
             [&]<size_t I>() { parse<BEVE>::op<Opts>(get_member(value, get<I>(reflect<T>::values)), ctx, it, end); });
       }
    };
@@ -1512,10 +1512,10 @@ namespace glz
             }
 
             if constexpr (is_std_tuple<T>) {
-               invoke_table<N>([&]<size_t I>() { parse<BEVE>::op<Opts>(std::get<I>(value), ctx, it, end); });
+               visit_all<N>([&]<size_t I>() { parse<BEVE>::op<Opts>(std::get<I>(value), ctx, it, end); });
             }
             else {
-               invoke_table<N>([&]<size_t I>() { parse<BEVE>::op<Opts>(glz::get<I>(value), ctx, it, end); });
+               visit_all<N>([&]<size_t I>() { parse<BEVE>::op<Opts>(glz::get<I>(value), ctx, it, end); });
             }
          }
       }

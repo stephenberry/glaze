@@ -319,7 +319,7 @@ namespace glz
          static constexpr auto padding = round_up_to_nearest_16(maximum_key_size<T> + write_padding_bytes);
          bool first = true;
 
-         invoke_table<N>([&]<size_t I>() {
+         visit_all<N>([&]<size_t I>() {
             using val_t = field_t<T, I>;
 
             if constexpr (always_skipped<val_t>)
@@ -520,7 +520,7 @@ namespace glz
 
          dump<'['>(args...);
          using V = std::decay_t<T>;
-         invoke_table<N>([&]<size_t I>() {
+         visit_all<N>([&]<size_t I>() {
             if constexpr (glaze_array_t<V>) {
                serialize<TOML>::op<Opts>(get_member(value, glz::get<I>(meta_v<T>)), ctx, args...);
             }

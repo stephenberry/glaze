@@ -1827,7 +1827,7 @@ namespace glz
             return;
          }
 
-         invoke_table<N>([&]<size_t I>() {
+         visit_all<N>([&]<size_t I>() {
             if (bool(ctx.error)) [[unlikely]]
                return;
 
