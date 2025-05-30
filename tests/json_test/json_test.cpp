@@ -10869,6 +10869,53 @@ suite cast_tests = [] {
    };
 };
 
+struct Command401
+{
+   int code{};
+   int indent{};
+   std::vector<std::string> parameters{};
+};
+
+struct Command250Params
+{
+   std::string name{};
+   int volume{};
+   int pitch{};
+   int pan{};
+};
+
+struct Command250
+{
+   int code{};
+   int indent{};
+   std::vector<Command250Params> parameters{};
+};
+
+using CommandVariant = std::variant<Command250, Command401>;
+
+template <>
+struct glz::meta<CommandVariant>
+{
+   static constexpr std::string_view tag = "code";
+   static constexpr std::array ids = {250, 401};
+};
+
+suite integer_id_variant_tests = [] {
+   "command variant"_test = [] {
+      std::vector<CommandVariant> v{};
+      
+      std::string buffer = R"([{"code":401,"indent":0,"parameters":["You light the torch."]},{"code":250,"indent":0,"parameters":[{"name":"fnh_book1","volume":90,"pitch":100,"pan":0}]}])";
+      
+      auto ec = glz::read_json(v, buffer);
+      expect(not ec) << glz::format_error(ec, buffer);
+      
+      std::string out{};
+      expect(not glz::write_json(v, out));
+      
+      expect(out == buffer) << out;
+   };
+};
+
 int main()
 {
    trace.end("json_test");
