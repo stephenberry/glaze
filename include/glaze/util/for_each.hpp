@@ -47,7 +47,7 @@ namespace glz
       }(std::make_index_sequence<N>{});
    }
    
-   // There is no benefit of perfectly forwarding the lambda because it is immediately invoked.
+   // There is no benefit to perfectly forward the lambda (in the internal lambda) because it is immediately invoked
    // It actually removes an assembly instruction on GCC and Clang to pass by reference with O0
    // With O0 GCC and Clang produce better assembly using the templated I approach rather than
    // the approach that passes std::integral_constant
@@ -55,18 +55,48 @@ namespace glz
    template <size_t N>
    inline constexpr void visit(auto&& lambda, const size_t index) {
       if constexpr (N > 0) {
-         [&, index]<size_t... I>(std::index_sequence<I...>) constexpr {
-            (void)((index == I ? lambda.template operator()<I>() : void()), ...);
-         }(std::make_index_sequence<N>{});
+         if constexpr (N == 1) {
+            (void)(lambda.template operator()<0>());
+         }
+         else {
+            [[assume(index < N)]];
+            // Clang very efficiently optimizes this even with 01
+            // so, we don't bother implementing switch cases or if-else chains for specific N
+            [&, index]<size_t... I>(std::index_sequence<I...>) {
+               (void)((index == I ? lambda.template operator()<I>() : void()), ...);
+            }(std::make_index_sequence<N>{});
+         }
       }
    }
    
    template <size_t N>
    inline constexpr void visit_all(auto&& lambda) {
       if constexpr (N > 0) {
-         [&]<size_t... I>(std::index_sequence<I...>) constexpr {
-            (void)(lambda.template operator()<I>(), ...);
-         }(std::make_index_sequence<N>{});
+         // Explicit sizes for small N to help the compiler and make debugging easier
+         // These generate less assembly with O0, but make no difference for higher optimization
+         if constexpr (N == 1) {
+            lambda.template operator()<0>();
+         }
+         else if constexpr (N == 2) {
+            lambda.template operator()<0>();
+            lambda.template operator()<1>();
+         }
+         else if constexpr (N == 3) {
+            lambda.template operator()<0>();
+            lambda.template operator()<1>();
+            lambda.template operator()<2>();
+         }
+         else if constexpr (N == 4) {
+            lambda.template operator()<0>();
+            lambda.template operator()<1>();
+            lambda.template operator()<2>();
+            lambda.template operator()<3>();
+         }
+         else {
+            [&]<size_t... I>(std::index_sequence<I...>) {
+               (void)(lambda.template operator()<I>(), ...);
+            }(std::make_index_sequence<N>{});
+         }
       }
    }
 }
