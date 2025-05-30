@@ -83,11 +83,17 @@ namespace glz
 #if defined(__clang_major__) && (__clang_major__ >= 19)
             [[assume(index < N)]];
 #endif
-            // Clang very efficiently optimizes this even with 01
-            // so, we don't bother implementing switch cases or if-else chains for specific N
-            [&, index]<size_t... I>(std::index_sequence<I...>) {
-               (void)((index == I ? lambda.template operator()<I>() : void()), ...);
+            
+            static constexpr auto jump_table = []<size_t... I>(std::index_sequence<I...>) {
+               return std::array{+[](std::decay_t<decltype(lambda)>& l) { l.template operator()<I>(); }...};
             }(std::make_index_sequence<N>{});
+            jump_table[index](lambda);
+            
+            // Clang generates an additional branch with the code below
+            // This branch has a huge impact on read performance
+            /*[&, index]<size_t... I>(std::index_sequence<I...>) {
+               (void)((index == I ? lambda.template operator()<I>() : void()), ...);
+            }(std::make_index_sequence<N>{});*/
          }
       }
    }
