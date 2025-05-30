@@ -7038,7 +7038,7 @@ struct glz::meta<age_custom_error_obj>
    using T = age_custom_error_obj;
    static constexpr auto read_x = [](T& s, int age, glz::context& ctx) {
       if (age < 21) {
-         ctx.error = glz::error_code::syntax_error;
+         ctx.error = glz::error_code::constraint_violated;
          ctx.custom_error_message = "age too young";
       }
       else {
@@ -7055,7 +7055,8 @@ suite custom_error_tests = [] {
       auto ec = glz::read_json(obj, s);
       auto err_msg = glz::format_error(ec, s);
       expect(bool(ec)) << err_msg;
-      expect(err_msg == R"("1:10: syntax_error\n   {\"age\":18}\n            ^ age too young")");
+      //std::cout << err_msg << '\n';
+      expect(err_msg == "1:10: constraint_violated\n   {\"age\":18}\n            ^ age too young");
       
       expect(not glz::write_json(obj, s));
       expect(s == R"({"age":0})");
