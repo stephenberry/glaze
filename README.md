@@ -450,6 +450,53 @@ suite custom_lambdas_test = [] {
 
 </details>
 
+### Error handling with `glz::custom`
+
+Developers can throw errors, but for builds that disable exceptions or if it is desirable to integrate error handling within Glaze's `context`, the last argument of custom lambdas may be a `glz::context&`. This enables custom error handling that integrates well with the rest of Glaze.
+
+<details><summary>See example:</summary>
+
+```c++
+struct age_custom_error_obj
+{
+   int age{};
+};
+
+template <>
+struct glz::meta<age_custom_error_obj>
+{
+   using T = age_custom_error_obj;
+   static constexpr auto read_x = [](T& s, int age, glz::context& ctx) {
+      if (age < 21) {
+         ctx.error = glz::error_code::constraint_violated;
+         ctx.custom_error_message = "age too young";
+      }
+      else {
+         s.age = age;
+      }
+   };
+   static constexpr auto value = object("age", glz::custom<read_x, &T::age>);
+};
+```
+
+In use:
+```c++
+age_custom_error_obj obj{};
+std::string s = R"({"age":18})";
+auto ec = glz::read_json(obj, s);
+auto err_msg = glz::format_error(ec, s);
+std::cout << err_msg << '\n';
+```
+
+Console output:
+```
+1:10: constraint_violated
+   {"age":18}
+            ^ age too young
+```
+
+</details>
+
 # Object Mapping
 
 When using member pointers (e.g. `&T::a`) the C++ class structures must match the JSON interface. It may be desirable to map C++ classes with differing layouts to the same object interface. This is accomplished through registering lambda functions instead of member pointers.
