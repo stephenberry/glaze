@@ -9,17 +9,18 @@
 #include "glaze/util/inline.hpp"
 #include "glaze/util/utility.hpp"
 
+// We do not mark these functions noexcept so that it can be used in exception contexts
+// Furthermore, adding noexcept can increase assembly size because exceptions need to cause termination
+
 namespace glz
 {
+   // TODO: Replace for_each with the syntax of visit_all and keep one function named for_each
+   
    // Compile time iterate over I indices
-   // We do not make this noexcept so that it can be used in exception contexts
    template <std::size_t N, class Func>
    constexpr void for_each(Func&& f)
    {
-      if constexpr (N == 0) {
-         return;
-      }
-      else {
+      if constexpr (N > 0) {
          [&]<std::size_t... I>(std::index_sequence<I...>) constexpr {
             (f(std::integral_constant<std::size_t, I>{}), ...);
          }(std::make_index_sequence<N>{});
@@ -30,10 +31,7 @@ namespace glz
    template <std::size_t N, class Func>
    constexpr void for_each_short_circuit(Func&& f)
    {
-      if constexpr (N == 0) {
-         return;
-      }
-      else {
+      if constexpr (N > 0) {
          [&]<std::size_t... I>(std::index_sequence<I...>) constexpr {
             (f(std::integral_constant<std::size_t, I>{}) || ...);
          }(std::make_index_sequence<N>{});
@@ -48,12 +46,11 @@ namespace glz
          (f(std::get<I>(t)), ...);
       }(std::make_index_sequence<N>{});
    }
-}
-
-namespace glz
-{
+   
    // There is no benefit of perfectly forwarding the lambda because it is immediately invoked.
    // It actually removes an assembly instruction on GCC and Clang to pass by reference with O0
+   // With O0 GCC and Clang produce better assembly using the templated I approach rather than
+   // the approach that passes std::integral_constant
    
    template <size_t N>
    inline constexpr void visit(auto&& lambda, const size_t index) {
