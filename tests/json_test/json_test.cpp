@@ -10903,15 +10903,16 @@ struct glz::meta<CommandVariant>
 suite integer_id_variant_tests = [] {
    "command variant"_test = [] {
       std::vector<CommandVariant> v{};
-      
-      std::string buffer = R"([{"code":401,"indent":0,"parameters":["You light the torch."]},{"code":250,"indent":0,"parameters":[{"name":"fnh_book1","volume":90,"pitch":100,"pan":0}]}])";
-      
+
+      std::string buffer =
+         R"([{"code":401,"indent":0,"parameters":["You light the torch."]},{"code":250,"indent":0,"parameters":[{"name":"fnh_book1","volume":90,"pitch":100,"pan":0}]}])";
+
       auto ec = glz::read_json(v, buffer);
       expect(not ec) << glz::format_error(ec, buffer);
-      
+
       std::string out{};
       expect(not glz::write_json(v, out));
-      
+
       expect(out == buffer) << out;
    };
 };

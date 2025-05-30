@@ -413,7 +413,7 @@ namespace glz
    {
       return normal_map<sv, size_t, std::variant_size_v<T>>(std::array{pair<sv, size_t>{sv(variant_ids[I]), I}...});
    }
-   
+
    template <is_variant T, size_t... I>
    constexpr auto make_variant_id_map_impl(std::index_sequence<I...>, auto&& variant_ids)
    {
@@ -425,9 +425,9 @@ namespace glz
    constexpr auto make_variant_id_map()
    {
       constexpr auto indices = std::make_index_sequence<std::variant_size_v<T>>{};
-      
+
       using id_type = std::decay_t<decltype(ids_v<T>[0])>;
-      
+
       if constexpr (std::integral<id_type>) {
          return make_variant_id_map_impl<T>(indices, ids_v<T>);
       }

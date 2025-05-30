@@ -1365,9 +1365,9 @@ namespace glz
                      dumpn<Opts.indentation_char>(ctx.indentation_level, b, ix);
                      dump<'"'>(b, ix);
                      dump_maybe_empty(tag_v<T>, b, ix);
-                     
+
                      using id_type = std::decay_t<decltype(ids_v<T>[value.index()])>;
-                     
+
                      if constexpr (std::integral<id_type>) {
                         dump<"\": ">(b, ix);
                         serialize<JSON>::op<Opts>(ids_v<T>[value.index()], ctx, b, ix);
@@ -1393,10 +1393,10 @@ namespace glz
                   }
                   else {
                      using id_type = std::decay_t<decltype(ids_v<T>[value.index()])>;
-                     
+
                      dump<"{\"">(b, ix);
                      dump_maybe_empty(tag_v<T>, b, ix);
-                     
+
                      if constexpr (std::integral<id_type>) {
                         dump<"\":">(b, ix);
                         serialize<JSON>::op<Opts>(ids_v<T>[value.index()], ctx, b, ix);

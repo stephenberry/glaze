@@ -2704,9 +2704,9 @@ namespace glz
                               if (parse_ws_colon<Opts>(ctx, it, end)) {
                                  return;
                               }
-                              
+
                               using id_type = std::decay_t<decltype(ids_v<T>[0])>;
-                              
+
                               std::conditional_t<std::integral<id_type>, id_type, sv> type_id{};
                               if constexpr (std::integral<id_type>) {
                                  from<JSON, id_type>::template op<ws_handled<Opts>()>(type_id, ctx, it, end);

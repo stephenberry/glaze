@@ -262,7 +262,7 @@ namespace glz
    namespace detail
    {
       template <class T, size_t N>
-      requires (not std::integral<T>)
+         requires(not std::integral<T>)
       inline constexpr auto convert_ids_to_array(const std::array<T, N>& arr)
       {
          std::array<std::string_view, N> result;
@@ -271,9 +271,9 @@ namespace glz
          }
          return result;
       }
-      
+
       template <class T, size_t N>
-      requires (std::integral<T>)
+         requires(std::integral<T>)
       inline constexpr auto convert_ids_to_array(const std::array<T, N>& arr)
       {
          std::array<T, N> result;
