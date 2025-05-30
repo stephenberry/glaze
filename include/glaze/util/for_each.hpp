@@ -189,8 +189,9 @@ namespace glz
 #endif
             jump_table[index](lambda);
             
-            // Clang generates an additional branch with the code below
-            // This branch has a huge impact on read performance
+            // This code runs significantly slower on Clang
+            // Simple tests with assembly show that this should be faster,
+            // but full Glaze assembly need to be looked into
             /*[&, index]<size_t... I>(std::index_sequence<I...>) {
                (void)((index == I ? lambda.template operator()<I>() : void()), ...);
             }(std::make_index_sequence<N>{});*/
