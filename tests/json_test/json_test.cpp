@@ -6617,7 +6617,7 @@ suite write_to_map = [] {
       std::map<std::string, glz::raw_json> map;
       glz::obj obj{"arr", glz::arr{1, 2, 3}, "hello", "world"};
       using T = std::decay_t<decltype(obj.value)>;
-      glz::for_each<glz::tuple_size_v<T>>([&](auto I) {
+      glz::for_each<glz::tuple_size_v<T>>([&]<auto I>() {
          if constexpr (I % 2 == 0) {
             map[std::string(glz::get<I>(obj.value))] = glz::write_json(glz::get<I + 1>(obj.value)).value();
          }

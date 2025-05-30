@@ -310,7 +310,6 @@ namespace glz
             }
          }
          else {
-            // We see better performance with function pointers than a glz::jump_table here.
             visit<N>([&]<size_t I>() { decode_index<Opts, T, I>(value, ctx, it, end, selected_index...); }, index);
          }
       }
@@ -1302,7 +1301,7 @@ namespace glz
                return;
             }
 
-            jump_table<N>([&]<size_t I>() { decode_index<Opts, T, I>(value, ctx, it, end); }, index);
+            visit<N>([&]<size_t I>() { decode_index<Opts, T, I>(value, ctx, it, end); }, index);
          }
       }
    };
@@ -1828,7 +1827,7 @@ namespace glz
             return;
          }
 
-         invoke_table<N>([&]<size_t I>() {
+         for_each<N>([&]<size_t I>() {
             if (bool(ctx.error)) [[unlikely]]
                return;
 
@@ -2494,7 +2493,7 @@ namespace glz
       // unique combinations of keys
       int bools{}, numbers{}, strings{}, objects{}, meta_objects{}, arrays{};
       constexpr auto N = std::variant_size_v<T>;
-      for_each<N>([&](auto I) {
+      for_each<N>([&]<auto I>() {
          using V = std::decay_t<std::variant_alternative_t<I, T>>;
          // ICE workaround
          bools += bool_t<V>;
@@ -2577,7 +2576,7 @@ namespace glz
          else {
             using const_glaze_types = typename tuple_types<Tuple>::glaze_const_types;
             bool found_match{};
-            for_each<glz::tuple_size_v<const_glaze_types>>([&]([[maybe_unused]] auto I) {
+            for_each<glz::tuple_size_v<const_glaze_types>>([&]<size_t I>() {
                if (found_match) {
                   return;
                }

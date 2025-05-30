@@ -147,7 +147,7 @@ namespace glz
          dump_compressed_int<N>(b, ix);
 
          if constexpr (glaze_object_t<T>) {
-            for_each<N>([&](auto I) {
+            for_each<N>([&]<auto I>() {
                if (bool(ctx.error)) [[unlikely]] {
                   return;
                }
@@ -172,7 +172,7 @@ namespace glz
             });
          }
          else if constexpr (writable_map_t<T>) {
-            for_each<N>([&](auto I) {
+            for_each<N>([&]<auto I>() {
                if (bool(ctx.error)) [[unlikely]] {
                   return;
                }
@@ -268,7 +268,7 @@ namespace glz
 
          std::array<uint8_t, byte_length<T>()> data{};
 
-         invoke_table<N>([&]<size_t I>() {
+         for_each<N>([&]<size_t I>() {
             data[I / 8] |= static_cast<uint8_t>(get_member(value, get<I>(reflect<T>::values))) << (7 - (I % 8));
          });
 
@@ -716,7 +716,7 @@ namespace glz
             dump_compressed_int<N>(args...);
          }
 
-         invoke_table<N>([&]<size_t I>() {
+         for_each<N>([&]<size_t I>() {
             constexpr auto Opts = opening_handled_off<Options>();
             serialize<BEVE>::no_header<Opts>(get<2 * I>(value.value), ctx, args...);
             serialize<BEVE>::op<Opts>(get<2 * I + 1>(value.value), ctx, args...);
@@ -730,7 +730,7 @@ namespace glz
    {
       size_t count{};
       using Tuple = std::decay_t<decltype(std::declval<T>().value)>;
-      for_each<glz::tuple_size_v<Tuple>>([&](auto I) constexpr {
+      for_each<glz::tuple_size_v<Tuple>>([&]<auto I>() constexpr {
          using Value = std::decay_t<glz::tuple_element_t<I, Tuple>>;
          if constexpr (is_specialization_v<Value, glz::obj> || is_specialization_v<Value, glz::obj_copy>) {
             count += glz::tuple_size_v<decltype(std::declval<Value>().value)> / 2;
@@ -770,7 +770,7 @@ namespace glz
       static constexpr auto N = reflect<T>::size;
       static constexpr size_t count_to_write = [] {
          size_t count{};
-         invoke_table<N>([&]<size_t I>() {
+         for_each<N>([&]<size_t I>() {
             using V = field_t<T, I>;
 
             if constexpr (std::same_as<V, hidden> || std::same_as<V, skip>) {
@@ -800,7 +800,7 @@ namespace glz
             }
          }();
 
-         invoke_table<N>([&]<size_t I>() {
+         for_each<N>([&]<size_t I>() {
             using val_t = field_t<T, I>;
 
             if constexpr (std::same_as<val_t, hidden> || std::same_as<val_t, skip>) {
@@ -838,7 +838,7 @@ namespace glz
             }
          }();
 
-         invoke_table<N>([&]<size_t I>() {
+         for_each<N>([&]<size_t I>() {
             using val_t = field_t<T, I>;
 
             if constexpr (std::same_as<val_t, hidden> || std::same_as<val_t, skip>) {
@@ -875,7 +875,7 @@ namespace glz
          static constexpr auto N = reflect<T>::size;
          dump_compressed_int<N>(args...);
 
-         invoke_table<reflect<T>::size>([&]<size_t I>() {
+         for_each<reflect<T>::size>([&]<size_t I>() {
             serialize<BEVE>::op<Opts>(get_member(value, get<I>(reflect<T>::values)), ctx, args...);
          });
       }

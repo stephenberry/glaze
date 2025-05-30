@@ -31,7 +31,7 @@ namespace glz
       constexpr auto in_keys = reflect<In>::keys;
       constexpr auto out_keys = reflect<Out>::keys;
 
-      for_each<N>([&](auto I) {
+      for_each<N>([&]<auto I>() {
          static_assert(in_keys[I] == out_keys[I]);
          decltype(auto) l = get<I>(out_tuple);
          decltype(auto) r = get<I>(in_tuple);

@@ -106,7 +106,7 @@ namespace glz::detail
 
          if (index < N) [[likely]] {
             bool ret{};
-            jump_table<N>(
+            visit<N>(
                [&]<size_t I>() {
                   if constexpr (reflectable<T>) {
                      ret = seek_impl(std::forward<F>(func), get_member(value, get<I>(to_tie(value))), json_ptr);
@@ -523,7 +523,7 @@ namespace glz
       auto arrs = make_arrays<n_items_per_group>(std::make_index_sequence<n_unique>{});
       size_t start{};
 
-      for_each<n_unique>([&](auto I) {
+      for_each<n_unique>([&]<auto I>() {
          constexpr size_t n_items = n_items_per_group[I];
 
          glz::get<I>(arrs).first = unique_keys[I];

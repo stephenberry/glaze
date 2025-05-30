@@ -297,7 +297,7 @@ namespace glz
       else {
          constexpr auto N = std::variant_size_v<T>;
          std::array<std::string_view, N> ids{};
-         for_each<N>([&](auto I) { ids[I] = glz::name_v<std::decay_t<std::variant_alternative_t<I, T>>>; });
+         for_each<N>([&]<auto I>() { ids[I] = glz::name_v<std::decay_t<std::variant_alternative_t<I, T>>>; });
          return ids;
       }
    }();

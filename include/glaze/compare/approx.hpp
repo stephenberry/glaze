@@ -17,7 +17,7 @@ namespace glz
          constexpr auto N = reflect<T>::size;
 
          bool equal = true;
-         for_each_short_circuit<N>([&](auto I) {
+         for_each_short_circuit<N>([&]<auto I>() {
             auto& l = get_member(lhs, get<I>(reflect<T>::values));
             auto& r = get_member(rhs, get<I>(reflect<T>::values));
             using V = std::decay_t<decltype(l)>;
