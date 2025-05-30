@@ -100,7 +100,7 @@ namespace glz
 
          auto tuple_args = std::forward_as_tuple(std::forward<Args>(args)...);
 
-         for_each<N>([&](auto I) { std::get<I>(arguments) = &std::get<I>(tuple_args); });
+         for_each<N>([&]<auto I>() { std::get<I>(arguments) = &std::get<I>(tuple_args); });
 
          if constexpr (std::is_pointer_v<Ret>) {
             void* ptr{};

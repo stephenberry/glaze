@@ -141,7 +141,7 @@ namespace glz
             }
          };
 
-         for_each<N>([&](auto I) {
+         for_each<N>([&]<auto I>() {
             if (it == end) {
                return;
             }
@@ -207,7 +207,7 @@ namespace glz
          }();
 
          using V = std::decay_t<T>;
-         for_each<N>([&](auto I) {
+         for_each<N>([&]<auto I>() {
             if constexpr (glaze_array_t<V>) {
                serialize<JSON>::op<Opts>(get_member(value, glz::get<I>(meta_v<T>)), ctx, args...);
             }
@@ -239,7 +239,7 @@ namespace glz
          }();
 
          using V = std::decay_t<T>;
-         for_each<N>([&](auto I) {
+         for_each<N>([&]<auto I>() {
             if constexpr (glaze_array_t<V>) {
                serialize<JSON>::op<Opts>(value.*std::get<I>(meta_v<V>), ctx, std::forward<Args>(args)...);
             }

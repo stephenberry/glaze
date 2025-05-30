@@ -169,7 +169,7 @@ namespace glz
          std::memcpy(data, it, Length);
          it += Length;
 
-         visit_all<N>([&]<size_t I>() {
+         for_each<N>([&]<size_t I>() {
             get_member(value, get<I>(reflect<T>::values)) = data[I / 8] & (uint8_t{1} << (7 - (I % 8)));
          });
       }
@@ -1293,7 +1293,7 @@ namespace glz
                return;
             }
 
-            visit_all<N>(
+            for_each<N>(
                [&]<size_t I>() { parse<BEVE>::op<Opts>(get_member(value, get<I>(reflect<V>::values)), ctx, it, end); });
          }
       }
@@ -1452,7 +1452,7 @@ namespace glz
             return;
          }
 
-         visit_all<N>(
+         for_each<N>(
             [&]<size_t I>() { parse<BEVE>::op<Opts>(get_member(value, get<I>(reflect<T>::values)), ctx, it, end); });
       }
    };
@@ -1483,7 +1483,7 @@ namespace glz
             }
 
             if constexpr (is_std_tuple<T>) {
-               for_each_short_circuit<N>([&](auto I) {
+               for_each_short_circuit<N>([&]<auto I>() {
                   if (I < n) {
                      parse<BEVE>::op<Opts>(std::get<I>(value), ctx, it, end);
                      return false; // continue
@@ -1492,7 +1492,7 @@ namespace glz
                });
             }
             else {
-               for_each_short_circuit<N>([&](auto I) {
+               for_each_short_circuit<N>([&]<auto I>() {
                   if (I < n) {
                      parse<BEVE>::op<Opts>(glz::get<I>(value), ctx, it, end);
                      return false; // continue
@@ -1512,10 +1512,10 @@ namespace glz
             }
 
             if constexpr (is_std_tuple<T>) {
-               visit_all<N>([&]<size_t I>() { parse<BEVE>::op<Opts>(std::get<I>(value), ctx, it, end); });
+               for_each<N>([&]<size_t I>() { parse<BEVE>::op<Opts>(std::get<I>(value), ctx, it, end); });
             }
             else {
-               visit_all<N>([&]<size_t I>() { parse<BEVE>::op<Opts>(glz::get<I>(value), ctx, it, end); });
+               for_each<N>([&]<size_t I>() { parse<BEVE>::op<Opts>(glz::get<I>(value), ctx, it, end); });
             }
          }
       }

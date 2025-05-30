@@ -125,7 +125,7 @@ namespace glz
          static constexpr auto num_members = reflect<T>::size;
 
          if constexpr ((num_members > 0) && (glaze_object_t<T> || reflectable<T>)) {
-            visit_all<N>([&]<size_t I>() {
+            for_each<N>([&]<size_t I>() {
                if (bool(ctx.error)) [[unlikely]] {
                   return;
                }
@@ -157,7 +157,7 @@ namespace glz
             });
          }
          else if constexpr (writable_map_t<T>) {
-            visit_all<N>([&]<size_t I>() {
+            for_each<N>([&]<size_t I>() {
                if (bool(ctx.error)) [[unlikely]] {
                   return;
                }
@@ -329,7 +329,7 @@ namespace glz
          std::memcpy(&b[ix], "[", 1);
          ++ix;
 
-         visit_all<N>([&]<size_t I>() {
+         for_each<N>([&]<size_t I>() {
             if (get_member(value, get<I>(reflect<T>::values))) {
                std::memcpy(&b[ix], "\"", 1);
                ++ix;
@@ -1493,7 +1493,7 @@ namespace glz
                dump_newline_indent<Opts.indentation_char>(ctx.indentation_level, args...);
             }
          }
-         visit_all<N>([&]<size_t I>() {
+         for_each<N>([&]<size_t I>() {
             if constexpr (glaze_array_t<V>) {
                serialize<JSON>::op<Opts>(get_member(value.value, glz::get<I>(meta_v<T>)), ctx, args...);
             }
@@ -1539,7 +1539,7 @@ namespace glz
             }
          }
          using V = std::decay_t<T>;
-         visit_all<N>([&]<size_t I>() {
+         for_each<N>([&]<size_t I>() {
             if constexpr (glaze_array_t<V>) {
                serialize<JSON>::op<Opts>(get_member(value, glz::get<I>(meta_v<T>)), ctx, args...);
             }
@@ -1605,7 +1605,7 @@ namespace glz
          static constexpr auto N = glz::tuple_size_v<V> / 2;
 
          bool first = true;
-         visit_all<N>([&]<size_t I>() {
+         for_each<N>([&]<size_t I>() {
             constexpr auto Opts = opening_and_closing_handled_off<ws_handled_off<Options>()>();
             decltype(auto) item = glz::get<2 * I + 1>(value.value);
             using val_t = std::decay_t<decltype(item)>;
@@ -1683,7 +1683,7 @@ namespace glz
          // When merging it is possible that objects are completed empty
          // and therefore behave like skipped members even when skip_null_members is off
 
-         visit_all<N>([&]<size_t I>() {
+         for_each<N>([&]<size_t I>() {
             // We don't want to dump a comma when nothing is written
             const auto ix_start = ix;
             using Value = core_t<decltype(get<I>(value.value))>;
@@ -1714,7 +1714,7 @@ namespace glz
    inline constexpr size_t fixed_padding = [] {
       constexpr auto N = reflect<T>::size;
       size_t fixed = 2 + 16; // {} + extra padding
-      for_each_short_circuit<N>([&](auto I) -> bool {
+      for_each_short_circuit<N>([&]<auto I>() -> bool {
          using val_t = field_t<T, I>;
          if constexpr (required_padding<val_t>()) {
             fixed += required_padding<val_t>();
@@ -1809,7 +1809,7 @@ namespace glz
             static constexpr auto padding = round_up_to_nearest_16(maximum_key_size<T> + write_padding_bytes);
             if constexpr (maybe_skipped<Opts, T>) {
                bool first = true;
-               visit_all<N>([&]<size_t I>() {
+               for_each<N>([&]<size_t I>() {
                   using val_t = field_t<T, I>;
 
                   if constexpr (always_skipped<val_t>) {
@@ -1892,7 +1892,7 @@ namespace glz
                   maybe_pad<fixed_max_size>(b, ix);
                }
 
-               visit_all<N>([&]<size_t I>() {
+               for_each<N>([&]<size_t I>() {
                   if constexpr (not fixed_max_size) {
                      if constexpr (Opts.prettify) {
                         maybe_pad(padding + ctx.indentation_level, b, ix);

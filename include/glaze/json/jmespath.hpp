@@ -610,7 +610,7 @@ namespace glz
 
          skip_ws<Opts>(ctx, it, end);
 
-         for_each<N>([&](auto I) {
+         for_each<N>([&]<auto I>() {
             if (bool(ctx.error)) [[unlikely]] {
                return;
             }

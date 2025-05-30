@@ -523,7 +523,7 @@ namespace glz
       auto arrs = make_arrays<n_items_per_group>(std::make_index_sequence<n_unique>{});
       size_t start{};
 
-      for_each<n_unique>([&](auto I) {
+      for_each<n_unique>([&]<auto I>() {
          constexpr size_t n_items = n_items_per_group[I];
 
          glz::get<I>(arrs).first = unique_keys[I];
