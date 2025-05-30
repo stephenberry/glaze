@@ -10914,6 +10914,29 @@ suite integer_id_variant_tests = [] {
       expect(not glz::write_json(v, out));
 
       expect(out == buffer) << out;
+      
+      expect(not glz::write<glz::opts{.prettify = true}>(v, out));
+      expect(out == R"([
+   {
+      "code": 401,
+      "indent": 0,
+      "parameters": [
+         "You light the torch."
+      ]
+   },
+   {
+      "code": 250,
+      "indent": 0,
+      "parameters": [
+         {
+            "name": "fnh_book1",
+            "volume": 90,
+            "pitch": 100,
+            "pan": 0
+         }
+      ]
+   }
+])") << out;
    };
 };
 
