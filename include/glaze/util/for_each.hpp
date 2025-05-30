@@ -75,19 +75,126 @@ namespace glz
    inline constexpr void visit(auto&& lambda, const size_t index)
    {
       if constexpr (N > 0) {
+         // Explicit sizes for small N to help the compiler and make debugging easier
          if constexpr (N == 1) {
             (void)index;
             (void)(lambda.template operator()<0>());
          }
+         else if constexpr (N == 2) {
+            switch (index) {
+               case 0: lambda.template operator()<0>(); break;
+               case 1: lambda.template operator()<1>(); break;
+               default: std::unreachable();
+            }
+         }
+         else if constexpr (N == 3) {
+            switch (index) {
+               case 0: lambda.template operator()<0>(); break;
+               case 1: lambda.template operator()<1>(); break;
+               case 2: lambda.template operator()<2>(); break;
+               default: std::unreachable();
+            }
+         }
+         else if constexpr (N == 4) {
+            switch (index) {
+               case 0: lambda.template operator()<0>(); break;
+               case 1: lambda.template operator()<1>(); break;
+               case 2: lambda.template operator()<2>(); break;
+               case 3: lambda.template operator()<3>(); break;
+               default: std::unreachable();
+            }
+         }
+         else if constexpr (N == 5) {
+            switch (index) {
+               case 0: lambda.template operator()<0>(); break;
+               case 1: lambda.template operator()<1>(); break;
+               case 2: lambda.template operator()<2>(); break;
+               case 3: lambda.template operator()<3>(); break;
+               case 4: lambda.template operator()<4>(); break;
+               default: std::unreachable();
+            }
+         }
+         else if constexpr (N == 6) {
+            switch (index) {
+               case 0: lambda.template operator()<0>(); break;
+               case 1: lambda.template operator()<1>(); break;
+               case 2: lambda.template operator()<2>(); break;
+               case 3: lambda.template operator()<3>(); break;
+               case 4: lambda.template operator()<4>(); break;
+               case 5: lambda.template operator()<5>(); break;
+               default: std::unreachable();
+            }
+         }
+         else if constexpr (N == 7) {
+            switch (index) {
+               case 0: lambda.template operator()<0>(); break;
+               case 1: lambda.template operator()<1>(); break;
+               case 2: lambda.template operator()<2>(); break;
+               case 3: lambda.template operator()<3>(); break;
+               case 4: lambda.template operator()<4>(); break;
+               case 5: lambda.template operator()<5>(); break;
+               case 6: lambda.template operator()<6>(); break;
+               default: std::unreachable();
+            }
+         }
+         else if constexpr (N == 8) {
+            switch (index) {
+               case 0: lambda.template operator()<0>(); break;
+               case 1: lambda.template operator()<1>(); break;
+               case 2: lambda.template operator()<2>(); break;
+               case 3: lambda.template operator()<3>(); break;
+               case 4: lambda.template operator()<4>(); break;
+               case 5: lambda.template operator()<5>(); break;
+               case 6: lambda.template operator()<6>(); break;
+               case 7: lambda.template operator()<7>(); break;
+               default: std::unreachable();
+            }
+         }
+         else if constexpr (N == 9) {
+            switch (index) {
+               case 0: lambda.template operator()<0>(); break;
+               case 1: lambda.template operator()<1>(); break;
+               case 2: lambda.template operator()<2>(); break;
+               case 3: lambda.template operator()<3>(); break;
+               case 4: lambda.template operator()<4>(); break;
+               case 5: lambda.template operator()<5>(); break;
+               case 6: lambda.template operator()<6>(); break;
+               case 7: lambda.template operator()<7>(); break;
+               case 8: lambda.template operator()<8>(); break;
+               default: std::unreachable();
+            }
+         }
+         else if constexpr (N == 10) {
+            switch (index) {
+               case 0: lambda.template operator()<0>(); break;
+               case 1: lambda.template operator()<1>(); break;
+               case 2: lambda.template operator()<2>(); break;
+               case 3: lambda.template operator()<3>(); break;
+               case 4: lambda.template operator()<4>(); break;
+               case 5: lambda.template operator()<5>(); break;
+               case 6: lambda.template operator()<6>(); break;
+               case 7: lambda.template operator()<7>(); break;
+               case 8: lambda.template operator()<8>(); break;
+               case 9: lambda.template operator()<9>(); break;
+               default: std::unreachable();
+            }
+         }
          else {
+            static constexpr auto jump_table = []<size_t... I>(std::index_sequence<I...>) {
+               return std::array{+[](std::decay_t<decltype(lambda)>& l) { l.template operator()<I>(); }...};
+            }(std::make_index_sequence<N>{});
+            
 #if defined(__clang_major__) && (__clang_major__ >= 19)
             [[assume(index < N)]];
 #endif
-            // Clang very efficiently optimizes this even with 01
-            // so, we don't bother implementing switch cases or if-else chains for specific N
-            [&, index]<size_t... I>(std::index_sequence<I...>) {
+            jump_table[index](lambda);
+            
+            // This code runs significantly slower on Clang
+            // Simple tests with assembly show that this should be faster,
+            // but full Glaze assembly need to be looked into
+            /*[&, index]<size_t... I>(std::index_sequence<I...>) {
                (void)((index == I ? lambda.template operator()<I>() : void()), ...);
-            }(std::make_index_sequence<N>{});
+            }(std::make_index_sequence<N>{});*/
          }
       }
    }
