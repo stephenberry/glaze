@@ -7027,6 +7027,50 @@ suite custom_buffer_input_test = [] {
    };
 };
 
+struct age_custom_error_obj
+{
+   int age{};
+};
+
+template <>
+struct glz::meta<age_custom_error_obj>
+{
+   using T = age_custom_error_obj;
+   static constexpr auto read_x = [](T& s, int age, glz::context& ctx) {
+      if (age < 21) {
+         ctx.error = glz::error_code::syntax_error;
+         ctx.custom_error_message = "age too young";
+      }
+      else {
+         s.age = age;
+      }
+   };
+   static constexpr auto value = object("age", glz::custom<read_x, &T::age>);
+};
+
+suite custom_error_tests = [] {
+   "age_custom_error_obj"_test = [] {
+      age_custom_error_obj obj{};
+      std::string s = R"({"age":18})";
+      auto ec = glz::read_json(obj, s);
+      auto err_msg = glz::format_error(ec, s);
+      expect(bool(ec)) << err_msg;
+      expect(err_msg == R"("1:10: syntax_error\n   {\"age\":18}\n            ^ age too young")");
+      
+      expect(not glz::write_json(obj, s));
+      expect(s == R"({"age":0})");
+      
+      obj.age = 21;
+      expect(not glz::write_json(obj, s));
+      expect(s == R"({"age":21})");
+      
+      obj.age = 0;
+      
+      expect(not glz::read_json(obj, s));
+      expect(obj.age == 21);
+   };
+};
+
 class class_with_const_mem_func
 {
   public:
