@@ -7055,18 +7055,18 @@ suite custom_error_tests = [] {
       auto ec = glz::read_json(obj, s);
       auto err_msg = glz::format_error(ec, s);
       expect(bool(ec)) << err_msg;
-      //std::cout << err_msg << '\n';
+      // std::cout << err_msg << '\n';
       expect(err_msg == "1:10: constraint_violated\n   {\"age\":18}\n            ^ age too young");
-      
+
       expect(not glz::write_json(obj, s));
       expect(s == R"({"age":0})");
-      
+
       obj.age = 21;
       expect(not glz::write_json(obj, s));
       expect(s == R"({"age":21})");
-      
+
       obj.age = 0;
-      
+
       expect(not glz::read_json(obj, s));
       expect(obj.age == 21);
    };
