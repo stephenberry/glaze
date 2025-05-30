@@ -6062,19 +6062,22 @@ suite required_keys = [] {
       expect(bool(err));
       auto err_msg = glz::format_error(err, buffer);
       expect(err_msg == "index 45: missing_key d") << err_msg;
-      
+
       buffer = R"({"i":287,"d":0.0,"arr":[1,2,3]})";
       err = glz::read<glz::opts{.error_on_missing_keys = true}>(obj, buffer);
       expect(bool(err));
       err_msg = glz::format_error(err, buffer);
       expect(err_msg == "index 31: missing_key hello") << err_msg;
-      
+
       std::vector<my_struct> vec{};
       buffer = R"([{"i":287,"d":0.0,"arr":[1,2,3]}])";
       err = glz::read<glz::opts{.error_on_missing_keys = true}>(vec, buffer);
       expect(bool(err));
       err_msg = glz::format_error(err, buffer);
-      expect(err_msg == "1:33: missing_key\n   [{\"i\":287,\"d\":0.0,\"arr\":[1,2,3]}]\n                                   ^ hello") << err_msg;
+      expect(
+         err_msg ==
+         "1:33: missing_key\n   [{\"i\":287,\"d\":0.0,\"arr\":[1,2,3]}]\n                                   ^ hello")
+         << err_msg;
    };
 };
 

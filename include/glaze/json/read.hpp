@@ -2242,7 +2242,7 @@ namespace glz
                                  break;
                               }
                            }
-                           
+
                            ctx.error = error_code::missing_key;
                            return;
                         }
