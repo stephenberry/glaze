@@ -604,7 +604,6 @@ namespace glz
                // now we don't have to check writing
 
                if constexpr (Opts.raw) {
-                  const auto n = str.size();
                   if (n) {
                      std::memcpy(&b[ix], str.data(), n);
                      ix += n;
