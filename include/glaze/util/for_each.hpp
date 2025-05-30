@@ -137,6 +137,48 @@ namespace glz
                default: std::unreachable();
             }
          }
+         else if constexpr (N == 8) {
+            switch (index) {
+               case 0: lambda.template operator()<0>(); break;
+               case 1: lambda.template operator()<1>(); break;
+               case 2: lambda.template operator()<2>(); break;
+               case 3: lambda.template operator()<3>(); break;
+               case 4: lambda.template operator()<4>(); break;
+               case 5: lambda.template operator()<5>(); break;
+               case 6: lambda.template operator()<6>(); break;
+               case 7: lambda.template operator()<7>(); break;
+               default: std::unreachable();
+            }
+         }
+         else if constexpr (N == 9) {
+            switch (index) {
+               case 0: lambda.template operator()<0>(); break;
+               case 1: lambda.template operator()<1>(); break;
+               case 2: lambda.template operator()<2>(); break;
+               case 3: lambda.template operator()<3>(); break;
+               case 4: lambda.template operator()<4>(); break;
+               case 5: lambda.template operator()<5>(); break;
+               case 6: lambda.template operator()<6>(); break;
+               case 7: lambda.template operator()<7>(); break;
+               case 8: lambda.template operator()<8>(); break;
+               default: std::unreachable();
+            }
+         }
+         else if constexpr (N == 10) {
+            switch (index) {
+               case 0: lambda.template operator()<0>(); break;
+               case 1: lambda.template operator()<1>(); break;
+               case 2: lambda.template operator()<2>(); break;
+               case 3: lambda.template operator()<3>(); break;
+               case 4: lambda.template operator()<4>(); break;
+               case 5: lambda.template operator()<5>(); break;
+               case 6: lambda.template operator()<6>(); break;
+               case 7: lambda.template operator()<7>(); break;
+               case 8: lambda.template operator()<8>(); break;
+               case 9: lambda.template operator()<9>(); break;
+               default: std::unreachable();
+            }
+         }
          else {
             static constexpr auto jump_table = []<size_t... I>(std::index_sequence<I...>) {
                return std::array{+[](std::decay_t<decltype(lambda)>& l) { l.template operator()<I>(); }...};
