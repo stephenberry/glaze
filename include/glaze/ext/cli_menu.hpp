@@ -76,7 +76,7 @@ namespace glz
          }();
 
          if (item_number > 0 && item_number <= long(N)) {
-            jump_table<N>(
+            visit<N>(
                [&]<size_t I>() {
                   using E = refl_t<T, I>;
 

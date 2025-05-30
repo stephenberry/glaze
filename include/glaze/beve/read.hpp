@@ -1369,7 +1369,7 @@ namespace glz
                   const sv key{it, n};
                   it += n;
 
-                  jump_table<N>(
+                  visit<N>(
                      [&]<size_t I>() {
                         static constexpr auto TargetKey = get<I>(reflect<T>::keys);
                         static constexpr auto Length = TargetKey.size();

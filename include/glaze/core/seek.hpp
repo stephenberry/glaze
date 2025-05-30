@@ -106,7 +106,7 @@ namespace glz::detail
 
          if (index < N) [[likely]] {
             bool ret{};
-            jump_table<N>(
+            visit<N>(
                [&]<size_t I>() {
                   if constexpr (reflectable<T>) {
                      ret = seek_impl(std::forward<F>(func), get_member(value, get<I>(to_tie(value))), json_ptr);
