@@ -76,7 +76,6 @@ namespace glz
       size_t N{};
       uint64_t seed{};
       size_t bucket_size{};
-      bool use_hash_comparison = false;
       size_t min_length = (std::numeric_limits<size_t>::max)();
       size_t max_length{};
    };
@@ -177,22 +176,12 @@ namespace glz
    // we keep generating seeds until its perfect. This allows for the usage of fast
    // but terible hashing algs.
    // This is one such terible hashing alg
-   template <bool use_hash_comparison>
    struct naive_hash final
    {
       static inline constexpr uint64_t bitmix(uint64_t h) noexcept
       {
-         if constexpr (use_hash_comparison) {
-            h ^= (h >> 33);
-            h *= 0xff51afd7ed558ccdL;
-            h ^= (h >> 33);
-            h *= 0xc4ceb9fe1a85ec53L;
-            h ^= (h >> 33);
-         }
-         else {
-            h *= 0x9FB21C651E98DF25L;
-            h ^= std::rotr(h, 49);
-         }
+         h *= 0x9FB21C651E98DF25L;
+         h ^= std::rotr(h, 49);
          return h;
       };
 
@@ -283,7 +272,7 @@ namespace glz
       return false;
    }
 
-   template <bool use_hash_comparison, size_t N>
+   template <size_t N>
       requires(N <= naive_map_max_size)
    constexpr naive_map_desc naive_map_hash(const std::array<std::string_view, N>& v) noexcept
    {
@@ -294,7 +283,6 @@ namespace glz
       // This uses 512 bytes for 32 keys.
       // Keeping the bucket size a power of 2 probably makes the modulus more efficient.
       desc.bucket_size = (N == 1) ? 1 : std::bit_ceil(N * N) / 2;
-      desc.use_hash_comparison = use_hash_comparison;
       auto& seed = desc.seed;
 
       for (size_t i = 0; i < N; ++i) {
@@ -315,7 +303,7 @@ namespace glz
             seed = gen();
             size_t index = 0;
             for (const auto& key : v) {
-               const auto hash = naive_hash<use_hash_comparison>{}(key, seed);
+               const auto hash = naive_hash{}(key, seed);
                if (hash == seed) {
                   break;
                }
@@ -356,9 +344,8 @@ namespace glz
       // Birthday paradox makes this unsuitable for large numbers of keys without
       // using a ton of memory.
       static constexpr auto N = D.N;
-      using hash_alg = naive_hash<D.use_hash_comparison>;
+      using hash_alg = naive_hash;
       std::array<pair<std::string_view, Value>, N> items{};
-      std::array<uint64_t, N * D.use_hash_comparison> hashes{};
       std::array<uint8_t, D.bucket_size> table{};
 
       constexpr decltype(auto) begin() const noexcept { return items.begin(); }
@@ -372,17 +359,9 @@ namespace glz
          // constexpr bucket_size means the compiler can replace the modulos with
          // more efficient instructions So this is not as expensive as this looks
          const auto index = table[hash % D.bucket_size];
-         if constexpr (D.use_hash_comparison) {
-            // Odds of having a uint64_t hash collision extremely small for naive map sizes
-            // And no valid/known keys could colide becuase of perfect hashing
-            if (hashes[index] != hash) [[unlikely]]
-               return items.end();
-         }
-         else {
-            const auto& item = items[index];
-            if (!compare_sv(item.first, key)) [[unlikely]]
-               return items.end();
-         }
+         const auto& item = items[index];
+         if (!compare_sv(item.first, key)) [[unlikely]]
+            return items.end();
          return items.begin() + index;
       }
    };
@@ -393,13 +372,10 @@ namespace glz
    {
       naive_map<T, D> ht{pairs};
 
-      using hash_alg = naive_hash<D.use_hash_comparison>;
+      using hash_alg = naive_hash;
 
       for (size_t i = 0; i < D.N; ++i) {
          const auto hash = hash_alg{}.template operator()<D>(pairs[i].first);
-         if constexpr (D.use_hash_comparison) {
-            ht.hashes[i] = hash;
-         }
          ht.table[hash % D.bucket_size] = uint8_t(i);
       }
 
@@ -426,13 +402,13 @@ namespace glz
       }
    }
 
-   template <class Key, class Value, size_t N, bool use_hash_comparison = false>
+   template <class Key, class Value, size_t N>
    struct normal_map
    {
       // From serge-sans-paille/frozen
       static constexpr uint64_t storage_size = std::bit_ceil(N) * (N < 32 ? 2 : 1);
       static constexpr auto max_bucket_size = 2 * std::bit_width(N);
-      using hash_alg = naive_hash<use_hash_comparison>;
+      using hash_alg = naive_hash;
       uint64_t seed{};
       // The extra info in the bucket most likely does not need to be 64 bits
       std::array<int64_t, N> buckets{};
@@ -458,26 +434,20 @@ namespace glz
          // more efficient instructions So this is not as expensive as this looks
          const auto extra = buckets[hash % N];
          const size_t index = extra < 1 ? -extra : table[combine(hash, extra) % storage_size];
-         if constexpr (!std::integral<Key> && use_hash_comparison) {
-            // Odds of having a uint64_t hash collision is pretty small
-            // And no valid/known keys could colide becuase of perfect hashing
-            if (hashes[index] != hash) [[unlikely]]
+         
+         if (index >= N) [[unlikely]] {
+            return items.end();
+         }
+         const auto& item = items[index];
+         if constexpr (std::integral<Key>) {
+            if (item.first != key) [[unlikely]]
                return items.end();
          }
          else {
-            if (index >= N) [[unlikely]] {
+            if (!compare_sv(item.first, key)) [[unlikely]]
                return items.end();
-            }
-            const auto& item = items[index];
-            if constexpr (std::integral<Key>) {
-               if (item.first != key) [[unlikely]]
-                  return items.end();
-            }
-            else {
-               if (!compare_sv(item.first, key)) [[unlikely]]
-                  return items.end();
-            }
          }
+         
          return items.begin() + index;
       }
 
@@ -486,24 +456,20 @@ namespace glz
          const auto hash = hash_alg{}(key, seed);
          const auto extra = buckets[hash % N];
          const size_t index = extra < 1 ? -extra : table[combine(hash, extra) % storage_size];
-         if constexpr (!std::integral<Key> && use_hash_comparison) {
-            if (hashes[index] != hash) [[unlikely]]
+         
+         if (index >= N) [[unlikely]] {
+            return items.end();
+         }
+         const auto& item = items[index];
+         if constexpr (std::integral<Key>) {
+            if (item.first != key) [[unlikely]]
                return items.end();
          }
          else {
-            if (index >= N) [[unlikely]] {
+            if (!compare_sv(item.first, key)) [[unlikely]]
                return items.end();
-            }
-            const auto& item = items[index];
-            if constexpr (std::integral<Key>) {
-               if (item.first != key) [[unlikely]]
-                  return items.end();
-            }
-            else {
-               if (!compare_sv(item.first, key)) [[unlikely]]
-                  return items.end();
-            }
          }
+         
          return items.begin() + index;
       }
 
