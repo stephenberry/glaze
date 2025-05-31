@@ -12,7 +12,7 @@
 #include <cmath>
 
 namespace glz::jmespath
-{   
+{
    // Result wrapper for operations that may fail
    struct query_result
    {
@@ -96,7 +96,7 @@ namespace glz::jmespath
    // Main expression evaluator
    class expression_evaluator
    {
-      private:
+   private:
       // Helper to normalize array indices
       static int32_t normalize_index(int32_t idx, size_t size) {
          if (idx < 0) {
@@ -430,24 +430,20 @@ namespace glz::jmespath
          return nullptr;
       }
       
-      // For now, handle simple dot-separated expressions
-      // In a full implementation, you'd handle pipes, multi-select, etc.
-      
+      // Parse the first token as the root
       std::unique_ptr<expression_node> root = parse_token(tokens[0]);
       if (!root) {
          return nullptr;
       }
       
-      std::unique_ptr<expression_node>* current = &root;
-      
+      // Add remaining tokens as children of the root (flat structure)
       for (size_t i = 1; i < tokens.size(); ++i) {
          auto next_node = parse_token(tokens[i]);
          if (!next_node) {
             return nullptr;
          }
          
-         (*current)->children.push_back(std::move(next_node));
-         current = &(*current)->children.back();
+         root->children.push_back(std::move(next_node));
       }
       
       return root;
@@ -460,7 +456,7 @@ namespace glz::jmespath
          case expression_type::identifier: {
             auto result = eval_identifier(expr.identifier, current);
             
-            // Process children if any
+            // Process children sequentially if any
             if (!expr.children.empty() && result) {
                for (const auto& child : expr.children) {
                   result = evaluate(*child, result.value, ctx);
@@ -483,7 +479,7 @@ namespace glz::jmespath
             
             auto result = eval_index(expr.index.value_or(0), target);
             
-            // Process children if any
+            // Process children sequentially if any
             if (!expr.children.empty() && result) {
                for (const auto& child : expr.children) {
                   result = evaluate(*child, result.value, ctx);
@@ -506,7 +502,7 @@ namespace glz::jmespath
             
             auto result = eval_slice(target, expr.slice_start, expr.slice_end, expr.slice_step);
             
-            // Process children if any
+            // Process children sequentially if any
             if (!expr.children.empty() && result) {
                for (const auto& child : expr.children) {
                   result = evaluate(*child, result.value, ctx);
