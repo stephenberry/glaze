@@ -165,57 +165,65 @@ namespace glz::jmespath
       return (*func)(arg_values, ctx);
    }
    
-   // Evaluate a single token against current JSON value
-   inline query_result evaluate_token(std::string_view token, const json_t& current, query_context& ctx) {
+   // Evaluate a single token against current JSON value, returning pointer to avoid copying
+   inline const json_t* evaluate_token_ref(std::string_view token, const json_t& current, query_context& ctx, json_t& temp_storage) {
       // Check for function call
       if (token.find('(') != std::string_view::npos) {
-         return evaluate_function_token(token, current, ctx);
+         auto result = evaluate_function_token(token, current, ctx);
+         if (!result) {
+            return nullptr;
+         }
+         temp_storage = std::move(result.value);
+         return &temp_storage;
       }
       
       // Parse the token
       auto result = parse_jmespath_token(token);
       if (result.error) {
-         return query_result({error_code::syntax_error, "Invalid token"});
+         return nullptr;
       }
       
       if (result.is_array_access) {
          // Handle array access - first navigate to the key if present
          const json_t* target = &current;
-         json_t temp_value;
          
          if (!result.key.empty()) {
             if (current.is_object()) {
                const auto& obj = current.get_object();
                auto it = obj.find(result.key);
                if (it != obj.end()) {
-                  temp_value = it->second;
-                  target = &temp_value;
+                  target = &it->second;
                } else {
-                  return query_result(json_t{});
+                  return nullptr;
                }
             } else {
-               return query_result(json_t{});
+               return nullptr;
             }
          }
          
          if (!target->is_array()) {
-            return query_result(json_t{});
+            return nullptr;
          }
          
          const auto& arr = target->get_array();
          
          if (result.colon_count > 0) {
-            // Slice operation
-            return apply_slice(arr, result.start, result.end, result.step);
+            // Slice operation - need temp storage
+            auto slice_result = apply_slice(arr, result.start, result.end, result.step);
+            if (!slice_result) {
+               return nullptr;
+            }
+            temp_storage = std::move(slice_result.value);
+            return &temp_storage;
          } else {
             // Index operation
             if (result.start.has_value()) {
                const int32_t normalized_idx = normalize_index(result.start.value(), arr.size());
                if (normalized_idx >= 0 && normalized_idx < static_cast<int32_t>(arr.size())) {
-                  return query_result(arr[normalized_idx]);
+                  return &arr[normalized_idx];
                }
             }
-            return query_result(json_t{});
+            return nullptr;
          }
       } else {
          // Simple property access
@@ -223,30 +231,30 @@ namespace glz::jmespath
             const auto& obj = current.get_object();
             auto it = obj.find(result.key);
             if (it != obj.end()) {
-               return query_result(it->second);
+               return &it->second;
             }
          }
-         return query_result(json_t{});
+         return nullptr;
       }
    }
    
-   // Main evaluation function that processes tokens sequentially
+   // Main evaluation function that processes tokens sequentially using references
    inline query_result evaluate_tokens(const std::vector<std::string_view>& tokens, const json_t& data, query_context& ctx) {
       if (tokens.empty()) {
          return query_result(data);
       }
       
-      json_t current = data;
+      const json_t* current = &data;
+      json_t temp_storage; // For cases where we need to store intermediate results
       
       for (const auto& token : tokens) {
-         auto result = evaluate_token(token, current, ctx);
-         if (!result) {
-            return result;
+         current = evaluate_token_ref(token, *current, ctx, temp_storage);
+         if (!current) {
+            return query_result(json_t{}); // null result
          }
-         current = std::move(result.value);
       }
       
-      return query_result(std::move(current));
+      return query_result(*current);
    }
    
    // Main query function
