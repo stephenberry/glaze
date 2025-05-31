@@ -40,7 +40,7 @@ namespace glz::jmespath
    // Function registry for JMESPath functions
    using jmespath_function = std::function<query_result(const std::vector<json_t>&, query_context&)>;
    
-   class function_registry
+   struct function_registry
    {
    private:
       std::unordered_map<std::string, jmespath_function> functions_;
