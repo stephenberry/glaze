@@ -87,6 +87,17 @@ suite basic_queries = [] {
       expect(result.value.get_object().size() == 3) << "Object should have 3 properties\n";
    };
    
+   "empty_query_json_output"_test = [] {
+      auto data = test_data::simple_object();
+      glz::context ctx;
+      
+      auto result = glz::jmespath::query(data, "", ctx);
+      expect(result) << "Query should succeed\n";
+      
+      auto json_output = glz::write_json(result.value).value_or("error");
+      expect(json_output == R"({"active":true,"age":30,"name":"John Doe"})") << "JSON output should match expected format\n";
+   };
+   
    "simple_property_access"_test = [] {
       auto data = test_data::simple_object();
       glz::context ctx;
@@ -95,6 +106,17 @@ suite basic_queries = [] {
       expect(result) << "Property access should succeed\n";
       expect(result.value.is_string()) << "Result should be string\n";
       expect(result.value.get_string() == "John Doe") << "Should return correct name\n";
+   };
+   
+   "simple_property_access_json_output"_test = [] {
+      auto data = test_data::simple_object();
+      glz::context ctx;
+      
+      auto result = glz::jmespath::query(data, "name", ctx);
+      expect(result) << "Query should succeed\n";
+      
+      auto json_output = glz::write_json(result.value).value_or("error");
+      expect(json_output == R"("John Doe")") << "String JSON output should be quoted\n";
    };
    
    "numeric_property_access"_test = [] {
@@ -107,6 +129,17 @@ suite basic_queries = [] {
       expect(result.value.get_number() == 30.0) << "Should return correct age\n";
    };
    
+   "numeric_property_access_json_output"_test = [] {
+      auto data = test_data::simple_object();
+      glz::context ctx;
+      
+      auto result = glz::jmespath::query(data, "age", ctx);
+      expect(result) << "Query should succeed\n";
+      
+      auto json_output = glz::write_json(result.value).value_or("error");
+      expect(json_output == "30") << "Numeric JSON output should be unquoted\n";
+   };
+   
    "boolean_property_access"_test = [] {
       auto data = test_data::simple_object();
       glz::context ctx;
@@ -117,6 +150,17 @@ suite basic_queries = [] {
       expect(result.value.get_boolean() == true) << "Should return correct boolean value\n";
    };
    
+   "boolean_property_access_json_output"_test = [] {
+      auto data = test_data::simple_object();
+      glz::context ctx;
+      
+      auto result = glz::jmespath::query(data, "active", ctx);
+      expect(result) << "Query should succeed\n";
+      
+      auto json_output = glz::write_json(result.value).value_or("error");
+      expect(json_output == "true") << "Boolean JSON output should be lowercase\n";
+   };
+   
    "nonexistent_property_returns_null"_test = [] {
       auto data = test_data::simple_object();
       glz::context ctx;
@@ -124,6 +168,17 @@ suite basic_queries = [] {
       auto result = glz::jmespath::query(data, "nonexistent", ctx);
       expect(result) << "Query should succeed even for nonexistent property\n";
       expect(result.value.is_null()) << "Result should be null for nonexistent property\n";
+   };
+   
+   "nonexistent_property_json_output"_test = [] {
+      auto data = test_data::simple_object();
+      glz::context ctx;
+      
+      auto result = glz::jmespath::query(data, "nonexistent", ctx);
+      expect(result) << "Query should succeed\n";
+      
+      auto json_output = glz::write_json(result.value).value_or("error");
+      expect(json_output == "null") << "Null JSON output should be 'null'\n";
    };
 };
 
@@ -139,6 +194,37 @@ suite nested_queries = [] {
       expect(result.value.get_string() == "Alice") << "Should return correct nested name\n";
    };
    
+   "nested_property_access_json_output"_test = [] {
+      auto data = test_data::nested_object();
+      glz::context ctx;
+      
+      auto result = glz::jmespath::query(data, "person.name", ctx);
+      expect(result) << "Query should succeed\n";
+      
+      auto json_output = glz::write_json(result.value).value_or("error");
+      expect(json_output == R"("Alice")") << "Nested property JSON should be quoted string\n";
+   };
+   
+   "nested_object_access"_test = [] {
+      auto data = test_data::nested_object();
+      glz::context ctx;
+      
+      auto result = glz::jmespath::query(data, "person", ctx);
+      expect(result) << "Nested object access should succeed\n";
+      expect(result.value.is_object()) << "Result should be object\n";
+   };
+   
+   "nested_object_access_json_output"_test = [] {
+      auto data = test_data::nested_object();
+      glz::context ctx;
+      
+      auto result = glz::jmespath::query(data, "person", ctx);
+      expect(result) << "Query should succeed\n";
+      
+      auto json_output = glz::write_json(result.value).value_or("error");
+      expect(json_output == R"({"details":{"age":25,"location":{"city":"Boston","state":"MA"}},"name":"Alice"})") << "Nested object JSON should be properly formatted\n";
+   };
+   
    "deep_nested_access"_test = [] {
       auto data = test_data::nested_object();
       glz::context ctx;
@@ -147,6 +233,17 @@ suite nested_queries = [] {
       expect(result) << "Deep nested access should succeed\n";
       expect(result.value.is_number()) << "Result should be number\n";
       expect(result.value.get_number() == 25.0) << "Should return correct nested age\n";
+   };
+   
+   "deep_nested_access_json_output"_test = [] {
+      auto data = test_data::nested_object();
+      glz::context ctx;
+      
+      auto result = glz::jmespath::query(data, "person.details.age", ctx);
+      expect(result) << "Query should succeed\n";
+      
+      auto json_output = glz::write_json(result.value).value_or("error");
+      expect(json_output == "25") << "Deep nested number JSON should be unquoted\n";
    };
    
    "very_deep_nested_access"_test = [] {
@@ -159,6 +256,28 @@ suite nested_queries = [] {
       expect(result.value.get_string() == "Boston") << "Should return correct nested city\n";
    };
    
+   "very_deep_nested_access_json_output"_test = [] {
+      auto data = test_data::nested_object();
+      glz::context ctx;
+      
+      auto result = glz::jmespath::query(data, "person.details.location.city", ctx);
+      expect(result) << "Query should succeed\n";
+      
+      auto json_output = glz::write_json(result.value).value_or("error");
+      expect(json_output == R"("Boston")") << "Very deep nested string JSON should be quoted\n";
+   };
+   
+   "nested_location_object_json_output"_test = [] {
+      auto data = test_data::nested_object();
+      glz::context ctx;
+      
+      auto result = glz::jmespath::query(data, "person.details.location", ctx);
+      expect(result) << "Query should succeed\n";
+      
+      auto json_output = glz::write_json(result.value).value_or("error");
+      expect(json_output == R"({"city":"Boston","state":"MA"})") << "Deep nested object JSON should be correct\n";
+   };
+   
    "broken_nested_path_returns_null"_test = [] {
       auto data = test_data::nested_object();
       glz::context ctx;
@@ -166,6 +285,17 @@ suite nested_queries = [] {
       auto result = glz::jmespath::query(data, "person.nonexistent.field", ctx);
       expect(result) << "Query should succeed for broken path\n";
       expect(result.value.is_null()) << "Result should be null for broken nested path\n";
+   };
+   
+   "broken_nested_path_json_output"_test = [] {
+      auto data = test_data::nested_object();
+      glz::context ctx;
+      
+      auto result = glz::jmespath::query(data, "person.nonexistent.field", ctx);
+      expect(result) << "Query should succeed\n";
+      
+      auto json_output = glz::write_json(result.value).value_or("error");
+      expect(json_output == "null") << "Broken nested path JSON should be null\n";
    };
 };
 
@@ -181,6 +311,80 @@ suite array_access = [] {
       expect(result.value.get_number() == 1.0) << "Should return first element\n";
    };
    
+   "positive_array_index_json_output"_test = [] {
+      auto data = test_data::array_data();
+      glz::context ctx;
+      
+      auto result = glz::jmespath::query(data, "numbers[0]", ctx);
+      expect(result) << "Query should succeed\n";
+      
+      auto json_output = glz::write_json(result.value).value_or("error");
+      expect(json_output == "1") << "Array element JSON should be unquoted number\n";
+   };
+   
+   "array_access_string_element"_test = [] {
+      auto data = test_data::array_data();
+      glz::context ctx;
+      
+      auto result = glz::jmespath::query(data, "strings[1]", ctx);
+      expect(result) << "String array access should succeed\n";
+      expect(result.value.is_string()) << "Result should be string\n";
+      expect(result.value.get_string() == "banana") << "Should return correct string element\n";
+   };
+   
+   "array_access_string_element_json_output"_test = [] {
+      auto data = test_data::array_data();
+      glz::context ctx;
+      
+      auto result = glz::jmespath::query(data, "strings[1]", ctx);
+      expect(result) << "Query should succeed\n";
+      
+      auto json_output = glz::write_json(result.value).value_or("error");
+      expect(json_output == R"("banana")") << "Array string element JSON should be quoted\n";
+   };
+   
+   "full_array_access"_test = [] {
+      auto data = test_data::array_data();
+      glz::context ctx;
+      
+      auto result = glz::jmespath::query(data, "numbers", ctx);
+      expect(result) << "Full array access should succeed\n";
+      expect(result.value.is_array()) << "Result should be array\n";
+   };
+   
+   "full_array_access_json_output"_test = [] {
+      auto data = test_data::array_data();
+      glz::context ctx;
+      
+      auto result = glz::jmespath::query(data, "numbers", ctx);
+      expect(result) << "Query should succeed\n";
+      
+      auto json_output = glz::write_json(result.value).value_or("error");
+      expect(json_output == "[1,2,3,4,5]") << "Array JSON should be properly formatted\n";
+   };
+   
+   "string_array_json_output"_test = [] {
+      auto data = test_data::array_data();
+      glz::context ctx;
+      
+      auto result = glz::jmespath::query(data, "strings", ctx);
+      expect(result) << "Query should succeed\n";
+      
+      auto json_output = glz::write_json(result.value).value_or("error");
+      expect(json_output == R"(["apple","banana","cherry"])") << "String array JSON should have quoted strings\n";
+   };
+   
+   "mixed_array_json_output"_test = [] {
+      auto data = test_data::array_data();
+      glz::context ctx;
+      
+      auto result = glz::jmespath::query(data, "mixed", ctx);
+      expect(result) << "Query should succeed\n";
+      
+      auto json_output = glz::write_json(result.value).value_or("error");
+      expect(json_output == R"([1,"hello",true,null])") << "Mixed array JSON should handle different types\n";
+   };
+   
    "negative_array_index"_test = [] {
       auto data = test_data::array_data();
       glz::context ctx;
@@ -189,6 +393,17 @@ suite array_access = [] {
       expect(result) << "Negative array index should succeed\n";
       expect(result.value.is_string()) << "Result should be string\n";
       expect(result.value.get_string() == "cherry") << "Should return last element\n";
+   };
+   
+   "negative_array_index_json_output"_test = [] {
+      auto data = test_data::array_data();
+      glz::context ctx;
+      
+      auto result = glz::jmespath::query(data, "strings[-1]", ctx);
+      expect(result) << "Query should succeed\n";
+      
+      auto json_output = glz::write_json(result.value).value_or("error");
+      expect(json_output == R"("cherry")") << "Negative array index JSON should be correct\n";
    };
    
    "out_of_bounds_index_returns_null"_test = [] {
@@ -200,6 +415,17 @@ suite array_access = [] {
       expect(result.value.is_null()) << "Result should be null for out of bounds\n";
    };
    
+   "out_of_bounds_index_json_output"_test = [] {
+      auto data = test_data::array_data();
+      glz::context ctx;
+      
+      auto result = glz::jmespath::query(data, "numbers[100]", ctx);
+      expect(result) << "Query should succeed\n";
+      
+      auto json_output = glz::write_json(result.value).value_or("error");
+      expect(json_output == "null") << "Out of bounds JSON should be null\n";
+   };
+   
    "array_access_on_non_array_returns_null"_test = [] {
       auto data = test_data::simple_object();
       glz::context ctx;
@@ -207,6 +433,17 @@ suite array_access = [] {
       auto result = glz::jmespath::query(data, "name[0]", ctx);
       expect(result) << "Array access on non-array should succeed\n";
       expect(result.value.is_null()) << "Result should be null for array access on non-array\n";
+   };
+   
+   "array_access_on_non_array_json_output"_test = [] {
+      auto data = test_data::simple_object();
+      glz::context ctx;
+      
+      auto result = glz::jmespath::query(data, "name[0]", ctx);
+      expect(result) << "Query should succeed\n";
+      
+      auto json_output = glz::write_json(result.value).value_or("error");
+      expect(json_output == "null") << "Array access on non-array JSON should be null\n";
    };
 };
 
@@ -226,6 +463,17 @@ suite array_slicing = [] {
       expect(arr[2].get_number() == 4.0) << "Last element should be 4.0\n";
    };
    
+   "basic_slice_json_output"_test = [] {
+      auto data = test_data::array_data();
+      glz::context ctx;
+      
+      auto result = glz::jmespath::query(data, "numbers[1:4]", ctx);
+      expect(result) << "Query should succeed\n";
+      
+      auto json_output = glz::write_json(result.value).value_or("error");
+      expect(json_output == "[2,3,4]") << "Array slice JSON should contain correct elements\n";
+   };
+   
    "slice_with_step"_test = [] {
       auto data = test_data::array_data();
       glz::context ctx;
@@ -239,6 +487,17 @@ suite array_slicing = [] {
       expect(arr[0].get_number() == 1.0) << "First element should be 1.0\n";
       expect(arr[1].get_number() == 3.0) << "Second element should be 3.0\n";
       expect(arr[2].get_number() == 5.0) << "Third element should be 5.0\n";
+   };
+   
+   "slice_with_step_json_output"_test = [] {
+      auto data = test_data::array_data();
+      glz::context ctx;
+      
+      auto result = glz::jmespath::query(data, "numbers[::2]", ctx);
+      expect(result) << "Query should succeed\n";
+      
+      auto json_output = glz::write_json(result.value).value_or("error");
+      expect(json_output == "[1,3,5]") << "Slice with step JSON should contain every other element\n";
    };
    
    "slice_with_negative_indices"_test = [] {
@@ -255,6 +514,17 @@ suite array_slicing = [] {
       expect(arr[1].get_number() == 4.0) << "Second element should be 4.0\n";
    };
    
+   "slice_with_negative_indices_json_output"_test = [] {
+      auto data = test_data::array_data();
+      glz::context ctx;
+      
+      auto result = glz::jmespath::query(data, "numbers[-3:-1]", ctx);
+      expect(result) << "Query should succeed\n";
+      
+      auto json_output = glz::write_json(result.value).value_or("error");
+      expect(json_output == "[3,4]") << "Negative slice JSON should be correct\n";
+   };
+   
    "empty_slice"_test = [] {
       auto data = test_data::array_data();
       glz::context ctx;
@@ -265,6 +535,17 @@ suite array_slicing = [] {
       expect(result.value.get_array().empty()) << "Empty slice should return empty array\n";
    };
    
+   "empty_slice_json_output"_test = [] {
+      auto data = test_data::array_data();
+      glz::context ctx;
+      
+      auto result = glz::jmespath::query(data, "numbers[10:20]", ctx);
+      expect(result) << "Query should succeed\n";
+      
+      auto json_output = glz::write_json(result.value).value_or("error");
+      expect(json_output == "[]") << "Empty array slice should return empty array JSON\n";
+   };
+   
    "slice_on_non_array_returns_null"_test = [] {
       auto data = test_data::simple_object();
       glz::context ctx;
@@ -272,6 +553,17 @@ suite array_slicing = [] {
       auto result = glz::jmespath::query(data, "name[1:3]", ctx);
       expect(result) << "Slice on non-array should succeed\n";
       expect(result.value.is_null()) << "Result should be null for slice on non-array\n";
+   };
+   
+   "slice_on_non_array_json_output"_test = [] {
+      auto data = test_data::simple_object();
+      glz::context ctx;
+      
+      auto result = glz::jmespath::query(data, "name[1:3]", ctx);
+      expect(result) << "Query should succeed\n";
+      
+      auto json_output = glz::write_json(result.value).value_or("error");
+      expect(json_output == "null") << "Slice on non-array JSON should be null\n";
    };
 };
 
@@ -287,6 +579,17 @@ suite function_tests = [] {
       expect(result.value.get_number() == 5.0) << "Array length should be 5\n";
    };
    
+   "length_function_on_array_json_output"_test = [] {
+      auto data = test_data::array_data();
+      glz::context ctx;
+      
+      auto result = glz::jmespath::query(data, "length(numbers)", ctx);
+      expect(result) << "Query should succeed\n";
+      
+      auto json_output = glz::write_json(result.value).value_or("error");
+      expect(json_output == "5") << "Function result JSON should be numeric\n";
+   };
+   
    "length_function_on_object"_test = [] {
       auto data = test_data::complex_data();
       glz::context ctx;
@@ -297,6 +600,17 @@ suite function_tests = [] {
       expect(result.value.get_number() == 3.0) << "Object length should be 3\n";
    };
    
+   "length_function_on_object_json_output"_test = [] {
+      auto data = test_data::complex_data();
+      glz::context ctx;
+      
+      auto result = glz::jmespath::query(data, "length(metadata)", ctx);
+      expect(result) << "Query should succeed\n";
+      
+      auto json_output = glz::write_json(result.value).value_or("error");
+      expect(json_output == "3") << "Object length function JSON should be numeric\n";
+   };
+   
    "length_function_on_string"_test = [] {
       auto data = test_data::simple_object();
       glz::context ctx;
@@ -305,6 +619,17 @@ suite function_tests = [] {
       expect(result) << "Length function on string should succeed\n";
       expect(result.value.is_number()) << "Result should be number\n";
       expect(result.value.get_number() == 8.0) << "String length should be 8\n";
+   };
+   
+   "length_function_on_string_json_output"_test = [] {
+      auto data = test_data::simple_object();
+      glz::context ctx;
+      
+      auto result = glz::jmespath::query(data, "length(name)", ctx);
+      expect(result) << "Query should succeed\n";
+      
+      auto json_output = glz::write_json(result.value).value_or("error");
+      expect(json_output == "8") << "String length function JSON should be numeric\n";
    };
    
    "keys_function"_test = [] {
@@ -335,6 +660,25 @@ suite function_tests = [] {
       expect(keys[2].get_string() == "name") << "Third key should be 'name'\n";
    };
    
+   "keys_function_json_output"_test = [] {
+      // clang-format off
+      glz::json_t test_data = {
+         {"test_obj", {
+            {"active", true},
+            {"age", 30.0},
+            {"name", "John Doe"}
+         }}
+      };
+      // clang-format on
+      
+      glz::context ctx;
+      auto result = glz::jmespath::query(test_data, "keys(test_obj)", ctx);
+      expect(result) << "Query should succeed\n";
+      
+      auto json_output = glz::write_json(result.value).value_or("error");
+      expect(json_output == R"(["active","age","name"])") << "Keys function JSON should return sorted array\n";
+   };
+   
    "values_function"_test = [] {
       // clang-format off
       glz::json_t data = {
@@ -355,6 +699,29 @@ suite function_tests = [] {
       expect(values.size() == 3) << "Should have 3 values\n";
    };
    
+   "values_function_json_output"_test = [] {
+      // clang-format off
+      glz::json_t data = {
+         {"test_obj", {
+            {"a", 1.0},
+            {"b", 2.0},
+            {"c", 3.0}
+         }}
+      };
+      // clang-format on
+      
+      glz::context ctx;
+      auto result = glz::jmespath::query(data, "values(test_obj)", ctx);
+      expect(result) << "Query should succeed\n";
+      
+      auto json_output = glz::write_json(result.value).value_or("error");
+      // Values order might vary, so check it contains the right elements
+      expect(json_output.find("1") != std::string::npos) << "Values JSON should contain 1\n";
+      expect(json_output.find("2") != std::string::npos) << "Values JSON should contain 2\n";
+      expect(json_output.find("3") != std::string::npos) << "Values JSON should contain 3\n";
+      expect(json_output.front() == '[' && json_output.back() == ']') << "Values JSON should be array format\n";
+   };
+   
    "type_function"_test = [] {
       auto data = test_data::array_data();
       glz::context ctx;
@@ -363,6 +730,17 @@ suite function_tests = [] {
       expect(result) << "Type function should succeed\n";
       expect(result.value.is_string()) << "Result should be string\n";
       expect(result.value.get_string() == "array") << "Type should be 'array'\n";
+   };
+   
+   "type_function_json_output"_test = [] {
+      auto data = test_data::array_data();
+      glz::context ctx;
+      
+      auto result = glz::jmespath::query(data, "type(numbers)", ctx);
+      expect(result) << "Query should succeed\n";
+      
+      auto json_output = glz::write_json(result.value).value_or("error");
+      expect(json_output == R"("array")") << "Type function JSON should return quoted string\n";
    };
    
    "unknown_function_returns_error"_test = [] {
@@ -387,6 +765,37 @@ suite complex_queries = [] {
       expect(result.value.get_string() == "Alice") << "Should return first user's name\n";
    };
    
+   "nested_array_access_json_output"_test = [] {
+      auto data = test_data::complex_data();
+      glz::context ctx;
+      
+      auto result = glz::jmespath::query(data, "users[0].name", ctx);
+      expect(result) << "Query should succeed\n";
+      
+      auto json_output = glz::write_json(result.value).value_or("error");
+      expect(json_output == R"("Alice")") << "Nested array access JSON should be quoted string\n";
+   };
+   
+   "complex_nested_object_access"_test = [] {
+      auto data = test_data::complex_data();
+      glz::context ctx;
+      
+      auto result = glz::jmespath::query(data, "users[0]", ctx);
+      expect(result) << "Complex nested object access should succeed\n";
+      expect(result.value.is_object()) << "Result should be object\n";
+   };
+   
+   "complex_nested_object_access_json_output"_test = [] {
+      auto data = test_data::complex_data();
+      glz::context ctx;
+      
+      auto result = glz::jmespath::query(data, "users[0]", ctx);
+      expect(result) << "Query should succeed\n";
+      
+      auto json_output = glz::write_json(result.value).value_or("error");
+      expect(json_output == R"({"id":1,"name":"Alice","scores":[85,92,78]})") << "Complex nested object JSON should be correct\n";
+   };
+   
    "nested_array_slice_access"_test = [] {
       auto data = test_data::complex_data();
       glz::context ctx;
@@ -399,6 +808,69 @@ suite complex_queries = [] {
       expect(scores.size() == 2) << "Should have 2 scores\n";
       expect(scores[0].get_number() == 92.0) << "First score should be 92.0\n";
       expect(scores[1].get_number() == 78.0) << "Second score should be 78.0\n";
+   };
+   
+   "nested_array_slice_access_json_output"_test = [] {
+      auto data = test_data::complex_data();
+      glz::context ctx;
+      
+      auto result = glz::jmespath::query(data, "users[0].scores[1:3]", ctx);
+      expect(result) << "Query should succeed\n";
+      
+      auto json_output = glz::write_json(result.value).value_or("error");
+      expect(json_output == "[92,78]") << "Nested slice JSON should be correct\n";
+   };
+   
+   "full_nested_array_access"_test = [] {
+      auto data = test_data::complex_data();
+      glz::context ctx;
+      
+      auto result = glz::jmespath::query(data, "users[1].scores", ctx);
+      expect(result) << "Full nested array access should succeed\n";
+      expect(result.value.is_array()) << "Result should be array\n";
+   };
+   
+   "full_nested_array_access_json_output"_test = [] {
+      auto data = test_data::complex_data();
+      glz::context ctx;
+      
+      auto result = glz::jmespath::query(data, "users[1].scores", ctx);
+      expect(result) << "Query should succeed\n";
+      
+      auto json_output = glz::write_json(result.value).value_or("error");
+      expect(json_output == "[88,95,82]") << "Nested array access JSON should be correct\n";
+   };
+   
+   "metadata_access"_test = [] {
+      auto data = test_data::complex_data();
+      glz::context ctx;
+      
+      auto result = glz::jmespath::query(data, "metadata", ctx);
+      expect(result) << "Metadata access should succeed\n";
+      expect(result.value.is_object()) << "Result should be object\n";
+   };
+   
+   "metadata_access_json_output"_test = [] {
+      auto data = test_data::complex_data();
+      glz::context ctx;
+      
+      auto result = glz::jmespath::query(data, "metadata", ctx);
+      expect(result) << "Query should succeed\n";
+      
+      auto json_output = glz::write_json(result.value).value_or("error");
+      expect(json_output == R"({"created":"2024-01-01","tags":["test","demo","sample"],"version":"1.0"})") << "Metadata object JSON should be correct\n";
+   };
+   
+   "full_complex_data_json_output"_test = [] {
+      auto data = test_data::complex_data();
+      glz::context ctx;
+      
+      auto result = glz::jmespath::query(data, "", ctx);
+      expect(result) << "Query should succeed\n";
+      
+      auto json_output = glz::write_json(result.value).value_or("error");
+      auto expected = R"({"metadata":{"created":"2024-01-01","tags":["test","demo","sample"],"version":"1.0"},"users":[{"id":1,"name":"Alice","scores":[85,92,78]},{"id":2,"name":"Bob","scores":[88,95,82]},{"id":3,"name":"Charlie","scores":[90,87,93]}]})";
+      expect(json_output == expected) << "Full complex data JSON should match expected structure\n";
    };
    
    "function_on_nested_data"_test = [] {
