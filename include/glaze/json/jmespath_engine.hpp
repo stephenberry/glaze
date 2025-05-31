@@ -165,22 +165,17 @@ namespace glz::jmespath
       return (*func)(arg_values, ctx);
    }
    
-   // Evaluate a single token against current JSON value, returning pointer to avoid copying
-   inline const json_t* evaluate_token_ref(std::string_view token, const json_t& current, query_context& ctx, json_t& temp_storage) {
+   // Evaluate a single token against current JSON value
+   inline query_result evaluate_token(std::string_view token, const json_t& current, query_context& ctx) {
       // Check for function call
       if (token.find('(') != std::string_view::npos) {
-         auto result = evaluate_function_token(token, current, ctx);
-         if (!result) {
-            return nullptr;
-         }
-         temp_storage = std::move(result.value);
-         return &temp_storage;
+         return evaluate_function_token(token, current, ctx);
       }
       
       // Parse the token
       auto result = parse_jmespath_token(token);
       if (result.error) {
-         return nullptr;
+         return query_result({error_code::syntax_error, "Invalid token"});
       }
       
       if (result.is_array_access) {
@@ -194,64 +189,69 @@ namespace glz::jmespath
                if (it != obj.end()) {
                   target = &it->second;
                } else {
-                  return nullptr;
+                  return query_result(json_t{});
                }
             } else {
-               return nullptr;
+               return query_result(json_t{});
             }
          }
          
          if (!target->is_array()) {
-            return nullptr;
+            return query_result(json_t{});
          }
          
          const auto& arr = target->get_array();
          
          if (result.colon_count > 0) {
-            // Slice operation - need temp storage
-            auto slice_result = apply_slice(arr, result.start, result.end, result.step);
-            if (!slice_result) {
-               return nullptr;
-            }
-            temp_storage = std::move(slice_result.value);
-            return &temp_storage;
+            // Slice operation
+            return apply_slice(arr, result.start, result.end, result.step);
          } else {
             // Index operation
             if (result.start.has_value()) {
                const int32_t normalized_idx = normalize_index(result.start.value(), arr.size());
                if (normalized_idx >= 0 && normalized_idx < static_cast<int32_t>(arr.size())) {
-                  return &arr[normalized_idx];
+                  return query_result(arr[normalized_idx]);
                }
             }
-            return nullptr;
+            return query_result(json_t{});
          }
       } else {
-         // Simple property access
+         // Simple property access - use pointer to avoid copying
          if (current.is_object()) {
             const auto& obj = current.get_object();
             auto it = obj.find(result.key);
             if (it != obj.end()) {
-               return &it->second;
+               return query_result(it->second);
             }
          }
-         return nullptr;
+         return query_result(json_t{});
       }
    }
    
-   // Main evaluation function that processes tokens sequentially using references
+   // Main evaluation function that processes tokens sequentially
    inline query_result evaluate_tokens(const std::vector<std::string_view>& tokens, const json_t& data, query_context& ctx) {
       if (tokens.empty()) {
          return query_result(data);
       }
       
+      // For performance, avoid copying for simple property chains
       const json_t* current = &data;
-      json_t temp_storage; // For cases where we need to store intermediate results
+      json_t temp_result;
       
-      for (const auto& token : tokens) {
-         current = evaluate_token_ref(token, *current, ctx, temp_storage);
-         if (!current) {
-            return query_result(json_t{}); // null result
+      for (size_t i = 0; i < tokens.size(); ++i) {
+         auto token_result = evaluate_token(tokens[i], *current, ctx);
+         if (!token_result) {
+            return token_result; // Propagate error
          }
+         
+         // For the last token, return the result directly
+         if (i == tokens.size() - 1) {
+            return token_result;
+         }
+         
+         // For intermediate tokens, store result and continue
+         temp_result = std::move(token_result.value);
+         current = &temp_result;
       }
       
       return query_result(*current);
