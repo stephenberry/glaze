@@ -345,6 +345,9 @@ namespace glz::jmespath
       });
    }
    
+   // Forward declaration for recursive parsing
+   std::unique_ptr<expression_node> parse_expression(const std::vector<std::string_view>& tokens);
+   
    // Parse token implementation
    inline std::unique_ptr<expression_node> parse_token(std::string_view token)
    {
@@ -356,7 +359,7 @@ namespace glz::jmespath
             auto node = std::make_unique<expression_node>(expression_type::function_call);
             node->function_name = std::string(token.substr(0, paren_pos));
             
-            // Parse arguments (simplified - assumes no nested function calls for now)
+            // Parse arguments - need to handle complex expressions
             auto args_str = token.substr(paren_pos + 1, close_paren - paren_pos - 1);
             if (!args_str.empty()) {
                // Trim whitespace
@@ -368,10 +371,19 @@ namespace glz::jmespath
                }
                
                if (!args_str.empty()) {
-                  // For now, assume single argument (can be extended for multiple args)
-                  auto arg_node = std::make_unique<expression_node>(expression_type::identifier);
-                  arg_node->identifier = std::string(args_str);
-                  node->arguments.push_back(std::move(arg_node));
+                  // Parse the argument as a full expression
+                  jmespath_expression arg_expr(args_str);
+                  if (arg_expr.error == tokenization_error::none && !arg_expr.tokens.empty()) {
+                     auto arg_tree = parse_expression(arg_expr.tokens);
+                     if (arg_tree) {
+                        node->arguments.push_back(std::move(arg_tree));
+                     }
+                  } else {
+                     // Fall back to treating as simple identifier if tokenization fails
+                     auto arg_node = std::make_unique<expression_node>(expression_type::identifier);
+                     arg_node->identifier = std::string(args_str);
+                     node->arguments.push_back(std::move(arg_node));
+                  }
                }
             }
             return node;
@@ -538,4 +550,4 @@ namespace glz::jmespath
       return (*func)(arg_values, ctx);
    }
    
-}
+} // namespace glz::jmespath
