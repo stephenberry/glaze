@@ -377,6 +377,9 @@ namespace glz::jmespath
                      auto arg_tree = parse_expression(arg_expr.tokens);
                      if (arg_tree) {
                         node->arguments.push_back(std::move(arg_tree));
+                     } else {
+                        // Return null to propagate the parsing failure up the call stack
+                        return nullptr;
                      }
                   } else {
                      // Fall back to treating as simple identifier if tokenization fails
