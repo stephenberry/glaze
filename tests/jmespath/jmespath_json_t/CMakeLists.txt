@@ -1,4 +1,4 @@
-project(jmespath)
+project(jmespath_json_t)
 
 add_executable(${PROJECT_NAME} ${PROJECT_NAME}.cpp)
 
@@ -9,5 +9,3 @@ if (MINGW)
 endif ()
 
 add_test(NAME ${PROJECT_NAME} COMMAND ${PROJECT_NAME})
-
-add_subdirectory(jmespath_json_t)
