@@ -1,0 +1,104 @@
+site_name: Glaze Documentation
+site_description: Extremely fast, in memory, JSON and interface library for modern C++
+site_url: https://stephenberry.github.io/glaze/
+repo_url: https://github.com/stephenberry/glaze
+repo_name: stephenberry/glaze
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  palette:
+    # Palette toggle for automatic mode
+    - media: "(prefers-color-scheme)"
+      toggle:
+        icon: material/brightness-auto
+        name: Switch to light mode
+    # Palette toggle for light mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: blue
+      accent: blue
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    # Palette toggle for dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: blue
+      accent: blue
+      toggle:
+        icon: material/brightness-4
+        name: Switch to system preference
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - navigation.path
+    - navigation.top
+    - search.highlight
+    - search.share
+    - content.action.edit
+    - content.action.view
+    - content.code.copy
+    - content.code.annotate
+
+plugins:
+  - search
+  - autorefs
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.details
+  - admonition
+  - attr_list
+  - md_in_html
+  - toc:
+      permalink: true
+
+nav:
+  - Home: index.md
+  - Getting Started:
+    - Installation: installation.md
+    - Quick Start: quick-start.md
+  - Core Features:
+    - JSON Handling: json.md
+    - Binary (BEVE): binary.md
+    - CSV Support: csv.md
+    - Options: options.md
+    - Wrappers: wrappers.md
+  - Advanced Topics:
+    - Custom Serialization: custom-serialization.md
+    - Variant Handling: variant-handling.md
+    - Unknown Keys: unknown-keys.md
+    - JSON Pointer Syntax: json-pointer-syntax.md
+    - JMESPath: JMESPath.md
+    - Partial Read/Write:
+      - Partial Read: partial-read.md
+      - Partial Write: partial-write.md
+    - Exceptions: exceptions.md
+    - JSON Include: json-include.md
+    - CLI Menu: cli-menu.md
+    - Glaze Interfaces: glaze-interfaces.md
+  - Formats:
+    - EETF: EETF/erlang-external-term-format.md
+    - Generic JSON: generic-json.md
+  - FAQ: FAQ.md
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/stephenberry/glaze
+      name: GitHub Repository
+    - icon: fontawesome/solid/star
+      link: https://github.com/stephenberry/glaze/stargazers
+      name: Star on GitHub
+
+copyright: Copyright &copy; 2025 Stephen Berry

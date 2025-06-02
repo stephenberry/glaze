@@ -915,4 +915,301 @@ suite vector_struct_direct_read_tests = [] {
    };
 };
 
+struct person_data
+{
+   std::vector<int> id{};
+   std::vector<std::string> name{};
+   std::vector<std::string> description{};
+};
+
+struct simple_data
+{
+   std::vector<int> num1{};
+   std::vector<int> num2{};
+
+   struct glaze
+   {
+      using T = simple_data;
+      static constexpr auto value = glz::object(&T::num1, &T::num2);
+   };
+};
+
+struct test_data
+{
+   std::vector<int> id{};
+   std::vector<std::string> name{};
+   std::vector<std::string> value{};
+};
+
+struct unicode_data
+{
+   std::vector<std::string> field1{};
+   std::vector<std::string> field2{};
+};
+
+struct large_data
+{
+   std::vector<int> id{};
+   std::vector<int> value{};
+};
+
+struct mixed_data
+{
+   std::vector<int> a{};
+   std::vector<int> b{};
+};
+
+struct field_data
+{
+   std::vector<std::string> field{};
+};
+
+struct num_data
+{
+   std::vector<int> num{};
+};
+
+suite non_null_terminated_buffer_tests = [] {
+   // Helper function to create a non-null-terminated buffer from a string
+   auto make_buffer = [](const std::string& str) -> std::vector<char> {
+      std::vector<char> buffer;
+      buffer.reserve(str.size());
+      for (char c : str) {
+         buffer.push_back(c);
+      }
+      return buffer;
+   };
+
+   "basic_colwise_non_null_buffer"_test = [&] {
+      std::string csv_data =
+         R"(num1,num2,maybe,v3s[0],v3s[1],v3s[2]
+11,22,1,1,1,1
+33,44,1,2,2,2
+55,66,0,3,3,3
+77,88,0,4,4,4)";
+
+      auto buffer = make_buffer(csv_data);
+      my_struct obj{};
+
+      expect(!glz::read_csv<glz::colwise>(obj, buffer)) << "Should parse non-null-terminated buffer\n";
+
+      expect(obj.num1[0] == 11) << "First num1 value should be 11\n";
+      expect(obj.num2[2] == 66) << "Third num2 value should be 66\n";
+      expect(obj.maybe[3] == false) << "Fourth maybe value should be false\n";
+      expect(obj.v3s[0] == std::array{1, 1, 1}) << "First v3s should be {1,1,1}\n";
+      expect(obj.v3s[3] == std::array{4, 4, 4}) << "Fourth v3s should be {4,4,4}\n";
+   };
+
+   "basic_rowwise_non_null_buffer"_test = [&] {
+      std::string csv_data =
+         R"(num1,11,33,55,77
+num2,22,44,66,88
+maybe,1,1,0,0
+v3s[0],1,2,3,4
+v3s[1],1,2,3,4
+v3s[2],1,2,3,4)";
+
+      auto buffer = make_buffer(csv_data);
+      my_struct obj{};
+
+      expect(!glz::read_csv(obj, buffer)) << "Should parse rowwise non-null-terminated buffer\n";
+
+      expect(obj.num1[0] == 11) << "First num1 value should be 11\n";
+      expect(obj.num2[2] == 66) << "Third num2 value should be 66\n";
+      expect(obj.maybe[3] == false) << "Fourth maybe value should be false\n";
+      expect(obj.v3s[0][2] == 1) << "v3s[0][2] should be 1\n";
+   };
+
+   "string_fields_non_null_buffer"_test = [&] {
+      std::string csv_data =
+         R"(id,udl
+1,BRN
+2,STR
+3,ASD
+4,USN)";
+
+      auto buffer = make_buffer(csv_data);
+      string_elements obj{};
+
+      expect(!glz::read_csv<glz::colwise>(obj, buffer))
+         << "Should parse string fields from non-null-terminated buffer\n";
+
+      expect(obj.id[0] == 1) << "First ID should be 1\n";
+      expect(obj.id[3] == 4) << "Fourth ID should be 4\n";
+      expect(obj.udl[0] == "BRN") << "First UDL should be 'BRN'\n";
+      expect(obj.udl[3] == "USN") << "Fourth UDL should be 'USN'\n";
+   };
+
+   "quoted_strings_non_null_buffer"_test = [&] {
+      std::string csv_data =
+         R"(id,name,description
+1,"John Doe","Software Engineer"
+2,"Jane Smith","Product Manager"
+3,"Bob ""Bobby"" Jones","Has quotes in name")";
+
+      auto buffer = make_buffer(csv_data);
+
+      person_data obj{};
+
+      expect(!glz::read_csv<glz::colwise>(obj, buffer))
+         << "Should parse quoted strings from non-null-terminated buffer\n";
+
+      expect(obj.id.size() == 3) << "Should have 3 records\n";
+      expect(obj.name[0] == "John Doe") << "First name should be 'John Doe'\n";
+      expect(obj.name[1] == "Jane Smith") << "Second name should be 'Jane Smith'\n";
+      expect(obj.name[2] == "Bob \"Bobby\" Jones") << "Third name should handle escaped quotes\n";
+      expect(obj.description[0] == "Software Engineer") << "First description should be 'Software Engineer'\n";
+   };
+
+   "carriage_return_non_null_buffer"_test = [&] {
+      std::string csv_data = "num1,num2\r\n11,22\r\n33,44\r\n55,66";
+
+      auto buffer = make_buffer(csv_data);
+
+      simple_data obj{};
+
+      expect(!glz::read_csv<glz::colwise>(obj, buffer)) << "Should handle CRLF in non-null-terminated buffer\n";
+
+      expect(obj.num1.size() == 3) << "Should have 3 num1 values\n";
+      expect(obj.num2.size() == 3) << "Should have 3 num2 values\n";
+      expect(obj.num1[0] == 11 && obj.num2[0] == 22) << "First row should be 11,22\n";
+      expect(obj.num1[2] == 55 && obj.num2[2] == 66) << "Third row should be 55,66\n";
+   };
+
+   "map_colwise_non_null_buffer"_test = [&] {
+      std::string csv_data =
+         R"(x,y
+0,1
+1,2
+2,3
+3,4)";
+
+      auto buffer = make_buffer(csv_data);
+      std::map<std::string, std::vector<uint64_t>> m;
+
+      expect(!glz::read_csv<glz::colwise>(m, buffer)) << "Should parse map from non-null-terminated buffer\n";
+
+      expect(m["x"].size() == 4) << "Should have 4 x values\n";
+      expect(m["y"].size() == 4) << "Should have 4 y values\n";
+      expect(m["x"][0] == 0 && m["y"][0] == 1) << "First row should be x=0, y=1\n";
+      expect(m["x"][3] == 3 && m["y"][3] == 4) << "Fourth row should be x=3, y=4\n";
+   };
+
+   "vector_of_structs_non_null_buffer"_test = [&] {
+      std::string csv_data =
+         R"(id,value,name
+1,10.5,Point A
+2,20.3,Point B
+3,15.7,Point C)";
+
+      auto buffer = make_buffer(csv_data);
+      std::vector<data_point> data{};
+
+      expect(!glz::read_csv<glz::colwise>(data, buffer))
+         << "Should parse vector of structs from non-null-terminated buffer\n";
+
+      expect(data.size() == 3) << "Should have 3 data points\n";
+      expect(data[0].id == 1 && data[0].value == 10.5f && data[0].name == "Point A")
+         << "First point should be correct\n";
+      expect(data[2].id == 3 && data[2].value == 15.7f && data[2].name == "Point C")
+         << "Third point should be correct\n";
+   };
+
+   "empty_fields_non_null_buffer"_test = [&] {
+      std::string csv_data =
+         R"(id,name,value
+1,,10.5
+2,Test,
+3,"",15.7)";
+
+      auto buffer = make_buffer(csv_data);
+
+      test_data obj{};
+
+      expect(!glz::read_csv<glz::colwise>(obj, buffer)) << "Should handle empty fields in non-null-terminated buffer\n";
+
+      expect(obj.id.size() == 3) << "Should have 3 records\n";
+      expect(obj.name[0] == "") << "First name should be empty\n";
+      expect(obj.name[1] == "Test") << "Second name should be 'Test'\n";
+      expect(obj.value[1] == "") << "Second value should be empty\n";
+   };
+
+   "truncated_buffer_error"_test = [&] {
+      std::string csv_data = "num1,num2\n11,22\n33,44\n55"; // Truncated - missing last value
+
+      auto buffer = make_buffer(csv_data);
+
+      simple_data obj{};
+
+      expect(bool(glz::read_csv<glz::colwise>(obj, buffer)));
+   };
+
+   "single_character_buffer"_test = [&] {
+      std::vector<char> buffer = {'a'};
+
+      field_data obj{};
+
+      expect(bool(glz::read_csv<glz::colwise>(obj, buffer)));
+   };
+
+   "empty_buffer"_test = [&] {
+      std::vector<char> buffer{};
+
+      num_data obj{};
+
+      expect(bool(glz::read_csv<glz::colwise>(obj, buffer)));
+   };
+
+   "unicode_in_non_null_buffer"_test = [&] {
+      std::string csv_data = "field1,field2\n简体汉字,😄\n漢字,💔";
+
+      auto buffer = make_buffer(csv_data);
+
+      unicode_data obj{};
+
+      expect(!glz::read_csv<glz::colwise>(obj, buffer)) << "Should handle Unicode in non-null-terminated buffer\n";
+
+      expect(obj.field1.size() == 2) << "Should have 2 field1 values\n";
+      expect(obj.field2.size() == 2) << "Should have 2 field2 values\n";
+      expect(obj.field1[0] == "简体汉字") << "First field1 should be Chinese characters\n";
+      expect(obj.field2[0] == "😄") << "First field2 should be emoji\n";
+   };
+
+   "large_buffer_stress_test"_test = [&] {
+      // Create a large CSV with many rows to test buffer handling
+      std::string csv_data = "id,value\n";
+      for (int i = 0; i < 1000; ++i) {
+         csv_data += std::to_string(i) + "," + std::to_string(i * 2) + "\n";
+      }
+
+      auto buffer = make_buffer(csv_data);
+
+      large_data obj{};
+
+      expect(!glz::read_csv<glz::colwise>(obj, buffer)) << "Should handle large non-null-terminated buffer\n";
+
+      expect(obj.id.size() == 1000) << "Should have 1000 ID values\n";
+      expect(obj.value.size() == 1000) << "Should have 1000 value values\n";
+      expect(obj.id[999] == 999) << "Last ID should be 999\n";
+      expect(obj.value[999] == 1998) << "Last value should be 1998\n";
+   };
+
+   "mixed_line_endings_non_null_buffer"_test = [&] {
+      // Mix of \n and \r\n line endings
+      std::string csv_data = "a,b\n1,2\r\n3,4\n5,6\r\n";
+
+      auto buffer = make_buffer(csv_data);
+
+      mixed_data obj{};
+
+      expect(!glz::read_csv<glz::colwise>(obj, buffer))
+         << "Should handle mixed line endings in non-null-terminated buffer\n";
+
+      expect(obj.a.size() == 3) << "Should have 3 'a' values\n";
+      expect(obj.b.size() == 3) << "Should have 3 'b' values\n";
+      expect(obj.a[0] == 1 && obj.b[0] == 2) << "First row should be 1,2\n";
+      expect(obj.a[2] == 5 && obj.b[2] == 6) << "Third row should be 5,6\n";
+   };
+};
+
 int main() { return 0; }
