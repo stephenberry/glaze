@@ -667,13 +667,11 @@ auto ec = glz::read<options>(value, buffer); // read in a non-null terminated bu
 
 ## BEVE
 
-Null-termination is not required when parsing BEVE (binary). It makes no difference in performance.
+Null-termination is not required for BEVE (binary). It makes no difference in performance.
 
 ## CSV
 
-> [!WARNING]
->
-> Currently, `null_terminated = false` is not valid for CSV parsing and buffers must be null terminated.
+Null-termination is not required for CSV. It makes no difference in performance.
 
 
 # Type Support
