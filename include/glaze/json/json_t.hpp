@@ -249,18 +249,12 @@ namespace glz
 
       json_t(std::initializer_list<std::pair<const char*, json_t>>&& obj)
       {
-         // TODO: Try to see if there is a beter way to do this initialization without copying the json_t
-         // std::string in std::initializer_list<std::pair<const std::string, json_t>> would match with {"literal",
-         // "other_literal"} So we can't use std::string or std::string view. Luckily, `const char*` will not match with
-         // {"literal", "other_literal"} but then we have to copy the data from the initializer list data =
-         // object_t(obj); // This is what we would use if std::initializer_list<std::pair<const std::string, json_t>>
-         // worked
          data.emplace<object_t>();
          auto& data_obj = std::get<object_t>(data);
          for (auto&& pair : obj) {
             // std::move here shows the desired behavior,
             // but std::initializer_list holds const values that cannot be moved
-            data_obj.emplace(pair.first, std::move(pair.second));
+            data_obj.emplace(pair.first, pair.second);
          }
       }
 
