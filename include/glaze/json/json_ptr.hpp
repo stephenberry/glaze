@@ -59,7 +59,7 @@ namespace glz
 
          result_t ret;
 
-         for_each<N>([&](auto I) {
+         for_each<N>([&]<size_t I>() {
             if (bool(ctx.error)) [[unlikely]] {
                return;
             }
@@ -118,7 +118,7 @@ namespace glz
                   // Could optimize by counting commas
                   static constexpr auto n = stoui(key);
                   if constexpr (n) {
-                     for_each<n.value()>([&](auto) {
+                     for_each<n.value()>([&]<size_t>() {
                         skip_value<JSON>::op<Opts>(ctx, it, end);
                         if (bool(ctx.error)) [[unlikely]] {
                            return;

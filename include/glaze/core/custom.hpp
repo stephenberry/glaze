@@ -100,15 +100,18 @@ namespace glz
                         return;
                      value.from(value.val);
                   }
-                  else if constexpr (N == 2) {
+                  else if constexpr (N > 1) {
                      std::decay_t<glz::tuple_element_t<1, Tuple>> input{};
                      parse<Format>::template op<Opts>(input, ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
-                     value.from(value.val, std::move(input));
-                  }
-                  else {
-                     static_assert(false_v<T>, "lambda cannot have more than two inputs");
+                     if constexpr (N == 2) {
+                        value.from(value.val, std::move(input));
+                     }
+                     else {
+                        // Version that passes the glz::context for custom error handling
+                        value.from(value.val, std::move(input), ctx);
+                     }
                   }
                }
                else {
@@ -117,6 +120,9 @@ namespace glz
             }
             else if constexpr (std::invocable<From, decltype(value.val)>) {
                parse<Format>::template op<Opts>(value.from(value.val), ctx, it, end);
+            }
+            else if constexpr (std::invocable<From, decltype(value.val), context&>) {
+               parse<Format>::template op<Opts>(value.from(value.val, ctx), ctx, it, end);
             }
             else {
                static_assert(
@@ -180,6 +186,9 @@ namespace glz
          else {
             if constexpr (std::invocable<To, decltype(value.val)>) {
                serialize<Format>::template op<Opts>(std::invoke(value.to, value.val), ctx, args...);
+            }
+            else if constexpr (std::invocable<To, decltype(value.val), context&>) {
+               serialize<Format>::template op<Opts>(std::invoke(value.to, value.val, ctx), ctx, args...);
             }
             else {
                static_assert(false_v<To>,

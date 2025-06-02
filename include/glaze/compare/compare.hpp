@@ -22,7 +22,7 @@ namespace glz
             constexpr auto N = reflect<T>::size;
 
             bool equal = true;
-            for_each_short_circuit<N>([&](auto I) {
+            for_each_short_circuit<N>([&]<auto I>() {
                auto& l = get_member(lhs, get<I>(reflect<T>::values));
                auto& r = get_member(rhs, get<I>(reflect<T>::values));
                if (!std::equal_to{}(l, r)) {
@@ -45,7 +45,7 @@ namespace glz
          constexpr auto N = reflect<T>::size;
 
          bool less_than = true;
-         for_each_short_circuit<N>([&](auto I) {
+         for_each_short_circuit<N>([&]<auto I>() {
             auto& l = get_member(lhs, get<I>(reflect<T>::values));
             auto& r = get_member(rhs, get<I>(reflect<T>::values));
             if (!std::less{}(l, r)) {
@@ -67,7 +67,7 @@ namespace glz
          constexpr auto N = reflect<T>::size;
 
          bool less_than = true;
-         for_each_short_circuit<N>([&](auto I) {
+         for_each_short_circuit<N>([&]<auto I>() {
             auto& l = get_member(lhs, get<I>(reflect<T>::values));
             auto& r = get_member(rhs, get<I>(reflect<T>::values));
             if (!std::less_equal{}(l, r)) {
@@ -89,7 +89,7 @@ namespace glz
          constexpr auto N = reflect<T>::size;
 
          bool greater_than = true;
-         for_each_short_circuit<N>([&](auto I) {
+         for_each_short_circuit<N>([&]<auto I>() {
             auto& l = get_member(lhs, get<I>(reflect<T>::values));
             auto& r = get_member(rhs, get<I>(reflect<T>::values));
             if (!std::greater{}(l, r)) {
@@ -111,7 +111,7 @@ namespace glz
          constexpr auto N = reflect<T>::size;
 
          bool greater_than = true;
-         for_each_short_circuit<N>([&](auto I) {
+         for_each_short_circuit<N>([&]<auto I>() {
             auto& l = get_member(lhs, get<I>(reflect<T>::values));
             auto& r = get_member(rhs, get<I>(reflect<T>::values));
             if (!std::greater_equal{}(l, r)) {

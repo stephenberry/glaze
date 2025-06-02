@@ -303,7 +303,7 @@ namespace glz
          using T = std::tuple<Args...>;
 
          constexpr auto N = sizeof...(Args);
-         for_each<N>([&](auto I) {
+         for_each<N>([&]<auto I>() {
             using V = glz::tuple_element_t<I, T>;
             ptr->emplace(name_v<V>, make_api<V>);
          });

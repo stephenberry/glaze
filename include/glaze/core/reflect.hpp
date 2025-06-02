@@ -306,7 +306,7 @@ namespace glz
 
       bit_array<N> fields{};
       if constexpr (Opts.error_on_missing_keys) {
-         for_each<N>([&](auto I) constexpr {
+         for_each<N>([&]<auto I>() constexpr {
             using V = std::decay_t<refl_t<T, I>>;
             if constexpr (is_specialization_v<V, custom_t>) {
                using From = typename V::from_t;
@@ -508,7 +508,7 @@ namespace glz
    template <class T, size_t N>
    constexpr size_t get_max_keys = [] {
       size_t res{};
-      for_each<N>([&](auto I) {
+      for_each<N>([&]<auto I>() {
          using V = std::decay_t<std::variant_alternative_t<I, T>>;
          if constexpr (glaze_object_t<V> || reflectable<V>) {
             res += reflect<V>::size;
@@ -529,7 +529,7 @@ namespace glz
       // This intermediate pointer is necessary for GCC 13 (otherwise segfaults with reflection logic)
       auto* data_ptr = &keys;
       size_t index = 0;
-      for_each<N>([&](auto I) {
+      for_each<N>([&]<auto I>() {
          using V = std::decay_t<std::variant_alternative_t<I, T>>;
          if constexpr (glaze_object_t<V> || reflectable<V> || is_memory_object<V>) {
             using X = std::conditional_t<is_memory_object<V>, memory_type<V>, V>;
@@ -563,7 +563,7 @@ namespace glz
          make_variant_deduction_base_map<T>(std::make_index_sequence<key_size_pair.second>{}, key_size_pair.first);
 
       constexpr auto N = std::variant_size_v<T>;
-      for_each<N>([&](auto I) {
+      for_each<N>([&]<auto I>() {
          using V = decay_keep_volatile_t<std::variant_alternative_t<I, T>>;
          if constexpr (glaze_object_t<V> || reflectable<V> || is_memory_object<V>) {
             using X = std::conditional_t<is_memory_object<V>, memory_type<V>, V>;

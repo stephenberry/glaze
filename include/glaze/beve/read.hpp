@@ -169,7 +169,7 @@ namespace glz
          std::memcpy(data, it, Length);
          it += Length;
 
-         invoke_table<N>([&]<size_t I>() {
+         for_each<N>([&]<size_t I>() {
             get_member(value, get<I>(reflect<T>::values)) = data[I / 8] & (uint8_t{1} << (7 - (I % 8)));
          });
       }
@@ -1293,7 +1293,7 @@ namespace glz
                return;
             }
 
-            invoke_table<N>(
+            for_each<N>(
                [&]<size_t I>() { parse<BEVE>::op<Opts>(get_member(value, get<I>(reflect<V>::values)), ctx, it, end); });
          }
       }
@@ -1369,7 +1369,7 @@ namespace glz
                   const sv key{it, n};
                   it += n;
 
-                  jump_table<N>(
+                  visit<N>(
                      [&]<size_t I>() {
                         static constexpr auto TargetKey = get<I>(reflect<T>::keys);
                         static constexpr auto Length = TargetKey.size();
@@ -1452,7 +1452,7 @@ namespace glz
             return;
          }
 
-         invoke_table<N>(
+         for_each<N>(
             [&]<size_t I>() { parse<BEVE>::op<Opts>(get_member(value, get<I>(reflect<T>::values)), ctx, it, end); });
       }
    };
@@ -1483,7 +1483,7 @@ namespace glz
             }
 
             if constexpr (is_std_tuple<T>) {
-               for_each_short_circuit<N>([&](auto I) {
+               for_each_short_circuit<N>([&]<auto I>() {
                   if (I < n) {
                      parse<BEVE>::op<Opts>(std::get<I>(value), ctx, it, end);
                      return false; // continue
@@ -1492,7 +1492,7 @@ namespace glz
                });
             }
             else {
-               for_each_short_circuit<N>([&](auto I) {
+               for_each_short_circuit<N>([&]<auto I>() {
                   if (I < n) {
                      parse<BEVE>::op<Opts>(glz::get<I>(value), ctx, it, end);
                      return false; // continue
@@ -1512,10 +1512,10 @@ namespace glz
             }
 
             if constexpr (is_std_tuple<T>) {
-               invoke_table<N>([&]<size_t I>() { parse<BEVE>::op<Opts>(std::get<I>(value), ctx, it, end); });
+               for_each<N>([&]<size_t I>() { parse<BEVE>::op<Opts>(std::get<I>(value), ctx, it, end); });
             }
             else {
-               invoke_table<N>([&]<size_t I>() { parse<BEVE>::op<Opts>(glz::get<I>(value), ctx, it, end); });
+               for_each<N>([&]<size_t I>() { parse<BEVE>::op<Opts>(glz::get<I>(value), ctx, it, end); });
             }
          }
       }

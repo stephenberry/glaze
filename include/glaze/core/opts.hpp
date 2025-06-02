@@ -82,7 +82,6 @@ namespace glz
       bool comments = false; // Support reading in JSONC style comments
       bool error_on_unknown_keys = true; // Error when an unknown key is encountered
       bool skip_null_members = true; // Skip writing out params in an object if the value is null
-      bool use_hash_comparison = true; // Will replace some string equality checks with hash checks
       bool prettify = false; // Write out prettified JSON
       bool minified = false; // Require minified input for JSON, which results in faster read performance
       char indentation_char = ' '; // Prettified JSON indentation char

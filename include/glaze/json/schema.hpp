@@ -399,12 +399,12 @@ namespace glz
             // TODO use oneOf instead of enum to handle doc comments
             static constexpr auto N = reflect<T>::size;
             // s.enumeration = std::vector<std::string_view>(N);
-            // for_each<N>([&](auto I) {
+            // for_each<N>([&]<auto I>() {
             //    static constexpr auto item = std::get<I>(meta_v<V>);
             //    (*s.enumeration)[I] = std::get<0>(item);
             // });
             s.oneOf = std::vector<schematic>(N);
-            for_each<N>([&](auto I) {
+            for_each<N>([&]<auto I>() {
                auto& enumeration = (*s.oneOf)[I];
                // Do not override if already set
                if (!enumeration.attributes.constant.has_value()) {
@@ -511,7 +511,7 @@ namespace glz
 
             const auto& ids = ids_v<T>;
 
-            for_each<N>([&](auto I) {
+            for_each<N>([&]<auto I>() {
                using V = std::decay_t<std::variant_alternative_t<I, T>>;
                auto& schema_val = (*s.oneOf)[I];
                to_json_schema<V>::template op<Opts>(schema_val, defs);
@@ -615,7 +615,7 @@ namespace glz
             static constexpr auto json_schema_size = reflect<json_schema_type<T>>::size;
 
             s.properties = std::map<sv, schema, std::less<>>();
-            for_each<N>([&](auto I) {
+            for_each<N>([&]<auto I>() {
                using val_t = std::decay_t<refl_t<T, I>>;
 
                auto& def = defs[name_v<val_t>];
