@@ -252,8 +252,7 @@ namespace glz
          data.emplace<object_t>();
          auto& data_obj = std::get<object_t>(data);
          for (auto&& pair : obj) {
-            // std::move here shows the desired behavior,
-            // but std::initializer_list holds const values that cannot be moved
+            // std::initializer_list holds const values that cannot be moved
             data_obj.emplace(pair.first, pair.second);
          }
       }
