@@ -119,10 +119,29 @@ namespace glz
          return std::array{member_nameof<I, T>...};
       }
    }
-
+   
+   template <class T>
+   struct meta;
+   
+   template <class T>
+   concept meta_has_rename_key = requires(T t, const std::string_view s) {
+      { glz::meta<std::remove_cvref_t<T>>::rename_key(s) } -> std::convertible_to<std::string_view>;
+   };
+   
+   template <meta_has_rename_key T, size_t... I>
+   [[nodiscard]] constexpr auto member_names_impl(std::index_sequence<I...>)
+   {
+      if constexpr (sizeof...(I) == 0) {
+         return std::array<sv, 0>{};
+      }
+      else {
+         return std::array{glz::meta<std::remove_cvref_t<T>>::rename_key(member_nameof<I, T>)...};
+      }
+   }
+   
    template <class T>
    inline constexpr auto member_names =
-      [] { return member_names_impl<T>(std::make_index_sequence<detail::count_members<T>>{}); }();
+   [] { return member_names_impl<T>(std::make_index_sequence<detail::count_members<T>>{}); }();
 }
 
 // For member object pointers

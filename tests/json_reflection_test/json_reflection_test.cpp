@@ -913,4 +913,41 @@ suite enum_pair_tests = [] {
    };
 };
 
+struct renamed_t
+{
+   std::string first_name{};
+   std::string last_name{};
+   int age{};
+};
+
+template <>
+struct glz::meta<renamed_t>
+{
+   static constexpr std::string_view rename_key(const std::string_view key) {
+      if (key == "first_name") {
+         return "firstName";
+      }
+      else if (key == "last_name") {
+         return "lastName";
+      }
+      return key;
+   }
+};
+
+suite rename_tests = [] {
+   "rename"_test = [] {
+      renamed_t obj{};
+      std::string buffer{};
+      expect(not glz::write_json(obj, buffer));
+      expect(buffer == R"({"firstName":"","lastName":"","age":0})") << buffer;
+      
+      buffer = R"({"firstName":"Kira","lastName":"Song","age":29})";
+      
+      expect(not glz::read_json(obj, buffer));
+      expect(obj.first_name == "Kira");
+      expect(obj.last_name == "Song");
+      expect(obj.age == 29);
+   };
+};
+
 int main() { return 0; }
