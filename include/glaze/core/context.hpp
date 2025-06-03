@@ -10,7 +10,7 @@
 
 namespace glz
 {
-   constexpr size_t max_recursive_depth_limit = 256;
+   inline constexpr size_t max_recursive_depth_limit = 256;
 
    enum struct error_code : uint32_t {
       // REPE compliant error codes
