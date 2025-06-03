@@ -16,6 +16,8 @@ namespace glz
       {
          constexpr bool use_tabs = Opts.indentation_char == '\t';
          constexpr auto indent_width = Opts.indentation_width;
+         
+         static constexpr size_t maximum_nested_depth = 256;
 
          using enum json_type;
 
@@ -71,6 +73,10 @@ namespace glz
                ++indent;
                if (size_t(indent) >= state.size()) [[unlikely]] {
                   state.resize(state.size() * 2);
+                  if (state.size() >= max_recursive_depth_limit) [[unlikely]] {
+                     ctx.error = error_code::exceeded_max_recursive_depth;
+                     return;
+                  }
                }
                state[indent] = Array_Start;
                if constexpr (Opts.new_lines_in_arrays) {
@@ -125,6 +131,10 @@ namespace glz
                ++indent;
                if (size_t(indent) >= state.size()) [[unlikely]] {
                   state.resize(state.size() * 2);
+                  if (state.size() >= max_recursive_depth_limit) [[unlikely]] {
+                     ctx.error = error_code::exceeded_max_recursive_depth;
+                     return;
+                  }
                }
                state[indent] = Object_Start;
                if constexpr (not Opts.null_terminated) {
