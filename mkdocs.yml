@@ -88,9 +88,9 @@ nav:
    - JSON Pointer Syntax: json-pointer-syntax.md
    - JMESPath: JMESPath.md
    - JSON Schema: json-schema.md
- - Partial Read/Write:
-   - Partial Read: partial-read.md
-   - Partial Write: partial-write.md
+   - Partial Read/Write:
+     - Partial Read: partial-read.md
+     - Partial Write: partial-write.md
    - Max Float Precision: max-float-precision.md
    - Ranges: ranges.md
  - Interface Utilities:
