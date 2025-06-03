@@ -16,8 +16,6 @@ namespace glz
       {
          constexpr bool use_tabs = Opts.indentation_char == '\t';
          constexpr auto indent_width = Opts.indentation_width;
-         
-         static constexpr size_t maximum_nested_depth = 256;
 
          using enum json_type;
 
