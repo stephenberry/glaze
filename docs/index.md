@@ -31,3 +31,4 @@ std::string buffer = glz::write_json(s).value_or("error");
 
 // Read JSON
 auto s2 = glz::read_json<my_struct>(buffer);
+```
