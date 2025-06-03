@@ -64,46 +64,46 @@ markdown_extensions:
       permalink: true
 
 nav:
-  - Home: index.md
-  - Getting Started:
-    Installation: installation.md
-    Quick Start: quick-start.md
-    Compile Time Options: options.md
-    Generic JSON: generic-json.md
-  - Reflection:
-    Pure Reflection: pure-reflection.md
-  - Formats:
-    JSON: json.md
-    CSV: csv.md
-    BEVE (binary): binary.md
-    Stencil/Mustache String Interpolation: stencil.md
-    EETF: EETF/erlang-external-term-format.md
-  - More Serialization/Parsing:
-    Exceptions: exceptions.md
-    Wrappers: wrappers.md
-    Custom Wrappers: custom-wrappers.md
-    Custom Serialization: custom-serialization.md
-    Variant Handling: variant-handling.md
-    Unknown Keys: unknown-keys.md
-    JSON Pointer Syntax: json-pointer-syntax.md
-    JMESPath: JMESPath.md
-    JSON Schema: json-schema.md
-    Partial Read/Write:
-    - Partial Read: partial-read.md
-      Partial Write: partial-write.md
-    Max Float Precision: max-float-precision.md
-    Ranges: ranges.md
-  - Interface Utilities:
-    JSON Include: json-include.md
-    CLI Menu: cli-menu.md
-    Glaze Interfaces: glaze-interfaces.md
-  - Data Recording/Logging:
-    Time Trace Profiles: time-trace.md
-    Data Recorder: recorder.md
-  - Threading:
-    Thread Pool: thread-pool.md
-    Volatile Support: volatile-support.md
-  - FAQ: FAQ.md
+ - Home: index.md
+ - Getting Started:
+   - Installation: installation.md
+   - Quick Start: quick-start.md
+   - Compile Time Options: options.md
+   - Generic JSON: generic-json.md
+ - Reflection:
+   - Pure Reflection: pure-reflection.md
+ - Formats:
+   - JSON: json.md
+   - CSV: csv.md
+   - BEVE (binary): binary.md
+   - Stencil/Mustache String Interpolation: stencil.md
+   - EETF: EETF/erlang-external-term-format.md
+ - More Serialization/Parsing:
+   - Exceptions: exceptions.md
+   - Wrappers: wrappers.md
+   - Custom Wrappers: custom-wrappers.md
+   - Custom Serialization: custom-serialization.md
+   - Variant Handling: variant-handling.md
+   - Unknown Keys: unknown-keys.md
+   - JSON Pointer Syntax: json-pointer-syntax.md
+   - JMESPath: JMESPath.md
+   - JSON Schema: json-schema.md
+ - Partial Read/Write:
+   - Partial Read: partial-read.md
+   - Partial Write: partial-write.md
+   - Max Float Precision: max-float-precision.md
+   - Ranges: ranges.md
+ - Interface Utilities:
+   - JSON Include: json-include.md
+   - CLI Menu: cli-menu.md
+   - Glaze Interfaces: glaze-interfaces.md
+ - Data Recording/Logging:
+   - Time Trace Profiles: time-trace.md
+   - Data Recorder: recorder.md
+ - Threading:
+   - Thread Pool: thread-pool.md
+   - Volatile Support: volatile-support.md
+ - FAQ: FAQ.md
 
 extra:
   social:
