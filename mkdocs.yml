@@ -66,10 +66,10 @@ markdown_extensions:
 nav:
   - Home: index.md
   - Getting Started:
-    - Installation: installation.md
-    - Quick Start: quick-start.md
-    - Compile Time Options: options.md
-    - Generic JSON: generic-json.md
+    Installation: installation.md
+    Quick Start: quick-start.md
+    Compile Time Options: options.md
+    Generic JSON: generic-json.md
   - Reflection:
     - Pure Reflection: pure-reflection.md
   - Formats:
@@ -78,7 +78,7 @@ nav:
     - BEVE (binary): binary.md
     - Stencil/Mustache String Interpolation: stencil.md
     - EETF: EETF/erlang-external-term-format.md
-  - Advanced Serialization/Parsing:
+  - More Serialization/Parsing:
     - Exceptions: exceptions.md
     - Wrappers: wrappers.md
     - Custom Wrappers: custom-wrappers.md
