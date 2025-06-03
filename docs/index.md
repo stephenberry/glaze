@@ -1,10 +1,10 @@
 # Glaze
 
-**Extremely fast, in memory, JSON and interface library for modern C++**
+**Extremely fast, in memory, JSON and reflection library for modern C++**
 
 One of the fastest JSON libraries in the world. Glaze reads and writes from object memory, simplifying interfaces and offering incredible performance.
 
-## Features
+## Feature Shortlist
 
 - **Pure, compile time reflection** for structs
 - **JSON RFC 8259 compliance** with UTF-8 validation
