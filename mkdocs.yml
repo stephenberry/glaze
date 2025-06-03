@@ -76,7 +76,7 @@ nav:
    - JSON: json.md
    - CSV: csv.md
    - BEVE (binary): binary.md
-   - Stencil/Mustache String Interpolation: stencil.md
+   - Stencil/Mustache: stencil.md
    - EETF: EETF/erlang-external-term-format.md
  - More Serialization/Parsing:
    - Exceptions: exceptions.md

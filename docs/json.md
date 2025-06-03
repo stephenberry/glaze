@@ -2,8 +2,6 @@
 
 Glaze is one of the fastest JSON libraries in the world, offering automatic reflection and direct memory serialization/deserialization with incredible performance. Glaze makes JSON handling in C++ simple, fast, and type-safe. Start with basic automatic reflection and gradually adopt advanced features as your needs grow!
 
-## Quick Start
-
 ### Basic Example
 
 With Glaze, your structs automatically get JSON serialization without any metadata:
