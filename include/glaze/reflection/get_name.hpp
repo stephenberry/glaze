@@ -129,6 +129,12 @@ namespace glz
       { glz::meta<std::remove_cvref_t<T>>::rename_key(s) } -> std::same_as<std::string>;
    };
    
+   template <std::pair V>
+   struct make_static
+   {
+      static constexpr auto value = V;
+   };
+   
    template <meta_has_rename_key_string T, size_t... I>
    [[nodiscard]] constexpr auto member_names_impl(std::index_sequence<I...>)
    {
@@ -153,7 +159,7 @@ namespace glz
 #else
             // GCC does not support constexpr designation on std::string
             // We therefore limit to a maximum of 64 characters on GCC for key transformations
-            static constexpr auto arr = [] {
+            constexpr auto arr_temp = [] {
                const auto str = glz::meta<std::remove_cvref_t<T>>::rename_key(member_nameof<I, T>);
                const size_t len = str.size();
                std::array<char, 65> arr{};
@@ -163,6 +169,8 @@ namespace glz
                arr[len] = '\0';
                return std::pair{arr, len};
             }();
+            // GCC 12 requires this make_static
+            auto& arr = make_static<arr_temp>::value;
             return {arr.first.data(), arr.second};
 #endif
          }()...};
