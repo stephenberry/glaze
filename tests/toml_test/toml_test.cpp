@@ -43,6 +43,68 @@ hello = "Hello World"
 arr = [1, 2, 3])");
    };
 
+   "read_basic_struct"_test = [] {
+      std::string toml_input = R"(i = 42
+d = 2.71
+hello = "Test String"
+arr = [4, 5, 6])";
+      
+      my_struct s{};
+      expect(not glz::read_toml(s, toml_input));
+      expect(s.i == 42);
+      expect(s.d == 2.71);
+      expect(s.hello == "Test String");
+      expect(s.arr[0] == 4);
+      expect(s.arr[1] == 5);
+      expect(s.arr[2] == 6);
+   };
+
+   "read_integer"_test = [] {
+      std::string toml_input = "123";
+      int value{};
+      expect(not glz::read_toml(value, toml_input));
+      expect(value == 123);
+   };
+
+   "read_float"_test = [] {
+      std::string toml_input = "3.14159";
+      double value{};
+      expect(not glz::read_toml(value, toml_input));
+      expect(value == 3.14159);
+   };
+
+   "read_string"_test = [] {
+      std::string toml_input = R"("Hello TOML")";
+      std::string value{};
+      expect(not glz::read_toml(value, toml_input));
+      expect(value == "Hello TOML");
+   };
+
+   "read_boolean_true"_test = [] {
+      std::string toml_input = "true";
+      bool value{};
+      expect(not glz::read_toml(value, toml_input));
+      expect(value == true);
+   };
+
+   "read_boolean_false"_test = [] {
+      std::string toml_input = "false";
+      bool value{};
+      expect(not glz::read_toml(value, toml_input));
+      expect(value == false);
+   };
+
+   "read_array"_test = [] {
+      std::string toml_input = "[1, 2, 3, 4]";
+      std::vector<int> value{};
+      expect(not glz::read_toml(value, toml_input));
+      expect(value.size() == 4);
+      expect(value[0] == 1);
+      expect(value[1] == 2);
+      expect(value[2] == 3);
+      expect(value[3] == 4);
+   };
+
    "scalar_int"_test = [] {
       int i = 42;
       std::string buffer{};
