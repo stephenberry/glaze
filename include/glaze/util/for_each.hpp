@@ -305,10 +305,16 @@ namespace glz
             }
          }
          else {
+#ifdef _MSC_VER
             using Lambda = std::decay_t<decltype(lambda)>;
             static const auto jump_table = []<size_t... I>(std::index_sequence<I...>) {
                return std::array{make_jump_function<I, Lambda>()...};
             }(std::make_index_sequence<N>{});
+#else
+            static constexpr auto jump_table = []<size_t... I>(std::index_sequence<I...>) {
+               return std::array{+[](std::decay_t<decltype(lambda)>& l) { l.template operator()<I>(); }...};
+            }(std::make_index_sequence<N>{});
+#endif
 
 #if defined(__clang_major__) && (__clang_major__ >= 19)
             [[assume(index < N)]];
