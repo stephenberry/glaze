@@ -138,7 +138,8 @@ namespace glz
       else {
          return std::array{[]() -> sv {
             // Need to move allocation into a new static buffer
-            static constexpr auto arr = []() {
+#ifdef __clang__
+            static constexpr auto arr = [] {
                constexpr auto str = glz::meta<std::remove_cvref_t<T>>::rename_key(member_nameof<I, T>);
                constexpr size_t len = str.size();
                std::array<char, len + 1> arr;
@@ -149,6 +150,21 @@ namespace glz
                return arr;
             }();
             return {arr.data(), arr.size() - 1};
+#else
+            // GCC does not support constexpr designation on std::string
+            // We therefore limit to a maximum of 64 characters on GCC for key transformations
+            static constexpr auto arr = [] {
+               const auto str = glz::meta<std::remove_cvref_t<T>>::rename_key(member_nameof<I, T>);
+               const size_t len = str.size();
+               std::array<char, 65> arr{};
+               for (size_t i = 0; i < len; ++i) {
+                  arr[i] = str[i];
+               }
+               arr[len] = '\0';
+               return std::pair{arr, len};
+            }();
+            return {arr.first.data(), arr.second};
+#endif
          }()...};
       }
    }
