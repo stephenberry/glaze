@@ -7,18 +7,14 @@ Glaze also supports:
 - [CSV](./docs/csv.md) (comma separated value)
 - [EETF](./docs/EETF/erlang-external-term-format.md) (Erlang External Term Format) [optionally included]
 
-> [!IMPORTANT]
->
-> Glaze [v5.0.0](https://github.com/stephenberry/glaze/releases/tag/v5.0.0) has been released! See release for more details, but the critical changes are:
->
-> v5.0.0 removes the `detail` namespace from `to/from` specializations and many more internal functions, which enables cleaner user customization and shorter compiler error messages.
->
-> The `glz::opts` struct is now only the default options. Specialized options can be added to custom option structs. See [Options](./docs/options.md) for new compile time option customization. This reduces the length of compiler errors.
-
 ## With compile time reflection for MSVC, Clang, and GCC!
 
 - Read/write aggregate initializable structs without writing any metadata or macros!
 - See [example on Compiler Explorer](https://gcc.godbolt.org/z/T4To5fKfz)
+
+## [📖 Documentation](https://stephenberry.github.io/glaze/)
+
+See this README, the [Glaze Documentation Page](https://stephenberry.github.io/glaze/), or [docs folder](https://github.com/stephenberry/glaze/tree/main/docs) for documentation.
 
 ## Highlights
 
@@ -46,8 +42,6 @@ Glaze also supports:
 - [Partial Read](./docs/partial-read.md) and [Partial Write](./docs/partial-write.md) support
 - [CSV Reading/Writing](./docs/csv.md)
 - [Much more!](#more-features)
-
-See [DOCS](https://github.com/stephenberry/glaze/tree/main/docs) for more documentation.
 
 ## Performance
 
@@ -450,6 +444,53 @@ suite custom_lambdas_test = [] {
 
 </details>
 
+### Error handling with `glz::custom`
+
+Developers can throw errors, but for builds that disable exceptions or if it is desirable to integrate error handling within Glaze's `context`, the last argument of custom lambdas may be a `glz::context&`. This enables custom error handling that integrates well with the rest of Glaze.
+
+<details><summary>See example:</summary>
+
+```c++
+struct age_custom_error_obj
+{
+   int age{};
+};
+
+template <>
+struct glz::meta<age_custom_error_obj>
+{
+   using T = age_custom_error_obj;
+   static constexpr auto read_x = [](T& s, int age, glz::context& ctx) {
+      if (age < 21) {
+         ctx.error = glz::error_code::constraint_violated;
+         ctx.custom_error_message = "age too young";
+      }
+      else {
+         s.age = age;
+      }
+   };
+   static constexpr auto value = object("age", glz::custom<read_x, &T::age>);
+};
+```
+
+In use:
+```c++
+age_custom_error_obj obj{};
+std::string s = R"({"age":18})";
+auto ec = glz::read_json(obj, s);
+auto err_msg = glz::format_error(ec, s);
+std::cout << err_msg << '\n';
+```
+
+Console output:
+```
+1:10: constraint_violated
+   {"age":18}
+            ^ age too young
+```
+
+</details>
+
 # Object Mapping
 
 When using member pointers (e.g. `&T::a`) the C++ class structures must match the JSON interface. It may be desirable to map C++ classes with differing layouts to the same object interface. This is accomplished through registering lambda functions instead of member pointers.
@@ -620,13 +661,11 @@ auto ec = glz::read<options>(value, buffer); // read in a non-null terminated bu
 
 ## BEVE
 
-Null-termination is not required when parsing BEVE (binary). It makes no difference in performance.
+Null-termination is not required for BEVE (binary). It makes no difference in performance.
 
 ## CSV
 
-> [!WARNING]
->
-> Currently, `null_terminated = false` is not valid for CSV parsing and buffers must be null terminated.
+Null-termination is not required for CSV. It makes no difference in performance.
 
 
 # Type Support

@@ -189,7 +189,7 @@ namespace glz
          }();
 
          if constexpr (check_layout(Opts) == rowwise) {
-            for_each<N>([&](auto I) {
+            for_each<N>([&]<auto I>() {
                using value_type = typename std::decay_t<refl_t<T, I>>::value_type;
 
                static constexpr sv key = reflect<T>::keys[I];
@@ -241,7 +241,7 @@ namespace glz
          else {
             // write titles
             if constexpr (check_use_headers(Opts)) {
-               for_each<N>([&](auto I) {
+               for_each<N>([&]<auto I>() {
                   using X = refl_t<T, I>;
 
                   static constexpr sv key = reflect<T>::keys[I];
@@ -283,7 +283,7 @@ namespace glz
             bool end = false;
 
             while (true) {
-               for_each<N>([&](auto I) {
+               for_each<N>([&]<auto I>() {
                   using X = std::decay_t<refl_t<T, I>>;
 
                   decltype(auto) mem = [&]() -> decltype(auto) {
@@ -351,7 +351,7 @@ namespace glz
 
          // Write headers (field names) if enabled
          if constexpr (check_use_headers(Opts)) {
-            for_each<N>([&](auto I) {
+            for_each<N>([&]<auto I>() {
                static constexpr sv key = reflect<U>::keys[I];
                serialize<CSV>::op<Opts>(key, ctx, b, ix);
 
@@ -365,7 +365,7 @@ namespace glz
 
          // Write each struct as a row
          for (const auto& item : value) {
-            for_each<N>([&](auto I) {
+            for_each<N>([&]<auto I>() {
                decltype(auto) mem = [&]() -> decltype(auto) {
                   if constexpr (reflectable<U>) {
                      return get<I>(to_tie(item));

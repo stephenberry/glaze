@@ -190,10 +190,10 @@ namespace glz
          }
 
          if constexpr (is_std_tuple<T>) {
-            invoke_table<N>([&]<size_t I>() { parse<EETF>::op<Opts>(std::get<I>(value), ctx, it, end); });
+            for_each<N>([&]<size_t I>() { parse<EETF>::op<Opts>(std::get<I>(value), ctx, it, end); });
          }
          else {
-            invoke_table<N>([&]<size_t I>() { parse<EETF>::op<Opts>(glz::get<I>(value), ctx, it, end); });
+            for_each<N>([&]<size_t I>() { parse<EETF>::op<Opts>(glz::get<I>(value), ctx, it, end); });
          }
       }
    };
@@ -313,7 +313,7 @@ namespace glz
                if (index < N) [[likely]] {
                   const sv key{mkey.data(), n};
 
-                  jump_table<N>(
+                  visit<N>(
                      [&]<size_t I>() {
                         static constexpr auto TargetKey = get<I>(reflect<T>::keys);
                         static constexpr auto Length = TargetKey.size();

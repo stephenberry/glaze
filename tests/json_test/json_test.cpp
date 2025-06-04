@@ -890,7 +890,7 @@ suite container_types = [] {
    };
    "vector float roundtrip"_test = [] {
       std::vector<float> vec(100);
-      for (auto& item : vec) item = rand() / (1.0 + rand());
+      for (auto& item : vec) item = float(rand() / (1.0 + rand()));
       std::string buffer{};
       std::vector<float> vec2{};
       expect(not glz::write_json(vec, buffer));
@@ -6059,8 +6059,25 @@ suite required_keys = [] {
       my_struct obj{};
       std::string buffer = R"({"i":287,"hello":"Hello World","arr":[1,2,3]})";
       auto err = glz::read<glz::opts{.error_on_missing_keys = true}>(obj, buffer);
-      expect(err != glz::error_code::none);
-      expect(glz::format_error(err, buffer) == "index 45: missing_key") << glz::format_error(err, buffer);
+      expect(bool(err));
+      auto err_msg = glz::format_error(err, buffer);
+      expect(err_msg == "index 45: missing_key d") << err_msg;
+
+      buffer = R"({"i":287,"d":0.0,"arr":[1,2,3]})";
+      err = glz::read<glz::opts{.error_on_missing_keys = true}>(obj, buffer);
+      expect(bool(err));
+      err_msg = glz::format_error(err, buffer);
+      expect(err_msg == "index 31: missing_key hello") << err_msg;
+
+      std::vector<my_struct> vec{};
+      buffer = R"([{"i":287,"d":0.0,"arr":[1,2,3]}])";
+      err = glz::read<glz::opts{.error_on_missing_keys = true}>(vec, buffer);
+      expect(bool(err));
+      err_msg = glz::format_error(err, buffer);
+      expect(
+         err_msg ==
+         "1:33: missing_key\n   [{\"i\":287,\"d\":0.0,\"arr\":[1,2,3]}]\n                                   ^ hello")
+         << err_msg;
    };
 };
 
@@ -6600,7 +6617,7 @@ suite write_to_map = [] {
       std::map<std::string, glz::raw_json> map;
       glz::obj obj{"arr", glz::arr{1, 2, 3}, "hello", "world"};
       using T = std::decay_t<decltype(obj.value)>;
-      glz::for_each<glz::tuple_size_v<T>>([&](auto I) {
+      glz::for_each<glz::tuple_size_v<T>>([&]<auto I>() {
          if constexpr (I % 2 == 0) {
             map[std::string(glz::get<I>(obj.value))] = glz::write_json(glz::get<I + 1>(obj.value)).value();
          }
@@ -7007,6 +7024,51 @@ suite custom_buffer_input_test = [] {
       expect(not glz::write_json(obj, s));
       expect(s == R"({"str":"Hello!"})");
       expect(obj.str == "Hello!");
+   };
+};
+
+struct age_custom_error_obj
+{
+   int age{};
+};
+
+template <>
+struct glz::meta<age_custom_error_obj>
+{
+   using T = age_custom_error_obj;
+   static constexpr auto read_x = [](T& s, int age, glz::context& ctx) {
+      if (age < 21) {
+         ctx.error = glz::error_code::constraint_violated;
+         ctx.custom_error_message = "age too young";
+      }
+      else {
+         s.age = age;
+      }
+   };
+   static constexpr auto value = object("age", glz::custom<read_x, &T::age>);
+};
+
+suite custom_error_tests = [] {
+   "age_custom_error_obj"_test = [] {
+      age_custom_error_obj obj{};
+      std::string s = R"({"age":18})";
+      auto ec = glz::read_json(obj, s);
+      auto err_msg = glz::format_error(ec, s);
+      expect(bool(ec)) << err_msg;
+      // std::cout << err_msg << '\n';
+      expect(err_msg == "1:10: constraint_violated\n   {\"age\":18}\n            ^ age too young");
+
+      expect(not glz::write_json(obj, s));
+      expect(s == R"({"age":0})");
+
+      obj.age = 21;
+      expect(not glz::write_json(obj, s));
+      expect(s == R"({"age":21})");
+
+      obj.age = 0;
+
+      expect(not glz::read_json(obj, s));
+      expect(obj.age == 21);
    };
 };
 
@@ -10866,6 +10928,77 @@ suite cast_tests = [] {
       obj.integer = 77;
       expect(not glz::write_json(obj, buffer));
       expect(buffer == R"({"integer":77,"indirect":77})");
+   };
+};
+
+struct Command401
+{
+   int code{};
+   int indent{};
+   std::vector<std::string> parameters{};
+};
+
+struct Command250Params
+{
+   std::string name{};
+   int volume{};
+   int pitch{};
+   int pan{};
+};
+
+struct Command250
+{
+   int code{};
+   int indent{};
+   std::vector<Command250Params> parameters{};
+};
+
+using CommandVariant = std::variant<Command250, Command401>;
+
+template <>
+struct glz::meta<CommandVariant>
+{
+   static constexpr std::string_view tag = "code";
+   static constexpr std::array ids = {250, 401};
+};
+
+suite integer_id_variant_tests = [] {
+   "command variant"_test = [] {
+      std::vector<CommandVariant> v{};
+
+      std::string buffer =
+         R"([{"code":401,"indent":0,"parameters":["You light the torch."]},{"code":250,"indent":0,"parameters":[{"name":"fnh_book1","volume":90,"pitch":100,"pan":0}]}])";
+
+      auto ec = glz::read_json(v, buffer);
+      expect(not ec) << glz::format_error(ec, buffer);
+
+      std::string out{};
+      expect(not glz::write_json(v, out));
+
+      expect(out == buffer) << out;
+
+      expect(not glz::write<glz::opts{.prettify = true}>(v, out));
+      expect(out == R"([
+   {
+      "code": 401,
+      "indent": 0,
+      "parameters": [
+         "You light the torch."
+      ]
+   },
+   {
+      "code": 250,
+      "indent": 0,
+      "parameters": [
+         {
+            "name": "fnh_book1",
+            "volume": 90,
+            "pitch": 100,
+            "pan": 0
+         }
+      ]
+   }
+])") << out;
    };
 };
 

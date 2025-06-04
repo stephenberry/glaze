@@ -14,7 +14,7 @@ namespace glz
    struct version_t
    {
       uint8_t major = 5;
-      uint8_t minor = 3;
+      uint8_t minor = 4;
       uint8_t patch = 0;
 
       constexpr auto operator<=>(const version_t& other) const noexcept = default;

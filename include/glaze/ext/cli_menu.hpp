@@ -76,7 +76,7 @@ namespace glz
          }();
 
          if (item_number > 0 && item_number <= long(N)) {
-            jump_table<N>(
+            visit<N>(
                [&]<size_t I>() {
                   using E = refl_t<T, I>;
 
@@ -226,7 +226,7 @@ namespace glz
 
       while (show_menu) {
          std::printf("================================\n");
-         for_each<N>([&](auto I) {
+         for_each<N>([&]<auto I>() {
             using E = refl_t<T, I>;
             constexpr sv key = reflect<T>::keys[I];
 

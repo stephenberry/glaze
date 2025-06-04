@@ -235,15 +235,15 @@ namespace glz::repe
             };
          }
 
-         for_each<N>([&](auto I) {
-            decltype(auto) func = [&]<size_t I>() -> decltype(auto) {
+         for_each<N>([&]<auto I>() {
+            decltype(auto) func = [&]() -> decltype(auto) {
                if constexpr (reflectable<T>) {
                   return get_member(value, get<I>(t));
                }
                else {
                   return get_member(value, get<I>(reflect<T>::values));
                }
-            }.template operator()<I>();
+            }();
 
             static constexpr auto key = reflect<T>::keys[I];
 

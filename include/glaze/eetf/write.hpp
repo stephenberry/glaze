@@ -248,7 +248,7 @@ namespace glz
             }
          }();
 
-         invoke_table<N>([&]<size_t I>() {
+         for_each<N>([&]<size_t I>() {
             if constexpr (Opts.layout == eetf::proplist_layout) {
                encode_tuple_header(2, ctx, std::forward<Args>(args)...);
             }
