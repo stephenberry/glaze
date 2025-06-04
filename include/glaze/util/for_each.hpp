@@ -73,9 +73,7 @@ namespace glz
    template <size_t I, class Lambda>
    constexpr auto make_jump_function()
    {
-      return +[](Lambda& l) {
-          l.template operator()<I>(); 
-      };
+      return +[](Lambda& l) { l.template operator()<I>(); };
    }
 
    // Important: index must be less than N
