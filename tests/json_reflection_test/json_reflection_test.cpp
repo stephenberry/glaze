@@ -913,4 +913,69 @@ suite enum_pair_tests = [] {
    };
 };
 
+struct renamed_t
+{
+   std::string first_name{};
+   std::string last_name{};
+   int age{};
+};
+
+template <>
+struct glz::meta<renamed_t>
+{
+   static constexpr std::string_view rename_key(const std::string_view key) {
+      if (key == "first_name") {
+         return "firstName";
+      }
+      else if (key == "last_name") {
+         return "lastName";
+      }
+      return key;
+   }
+};
+
+// This example shows how we use dynamic memory at compile time for string transformations
+struct suffixed_keys_t
+{
+   std::string first{};
+   std::string last{};
+};
+
+template <>
+struct glz::meta<suffixed_keys_t>
+{
+   static constexpr std::string rename_key(const auto key) {
+      return std::string(key) + "_name";
+   }
+};
+
+suite rename_tests = [] {
+   "rename"_test = [] {
+      renamed_t obj{};
+      std::string buffer{};
+      expect(not glz::write_json(obj, buffer));
+      expect(buffer == R"({"firstName":"","lastName":"","age":0})") << buffer;
+      
+      buffer = R"({"firstName":"Kira","lastName":"Song","age":29})";
+      
+      expect(not glz::read_json(obj, buffer));
+      expect(obj.first_name == "Kira");
+      expect(obj.last_name == "Song");
+      expect(obj.age == 29);
+   };
+   
+   "suffixed keys"_test = [] {
+      suffixed_keys_t obj{};
+      std::string buffer{};
+      expect(not glz::write_json(obj, buffer));
+      expect(buffer == R"({"first_name":"","last_name":""})") << buffer;
+      
+      buffer = R"({"first_name":"Kira","last_name":"Song"})";
+      
+      expect(not glz::read_json(obj, buffer));
+      expect(obj.first == "Kira");
+      expect(obj.last == "Song");
+   };
+};
+
 int main() { return 0; }
