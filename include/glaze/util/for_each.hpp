@@ -73,7 +73,7 @@ namespace glz
    template <size_t I, class Lambda>
    constexpr auto make_jump_function()
    {
-      return +[](std::decay_t<Lambda>& l) {
+      return +[](Lambda& l) {
           l.template operator()<I>(); 
       };
    }
@@ -305,8 +305,9 @@ namespace glz
             }
          }
          else {
-            static const auto jump_table = [&lambda]<size_t... I>(std::index_sequence<I...>) {
-               return std::array{make_jump_function<I, decltype(lambda)>()...};
+            using Lambda = std::decay_t<decltype(lambda)>;
+            static const auto jump_table = []<size_t... I>(std::index_sequence<I...>) {
+               return std::array{make_jump_function<I, Lambda>()...};
             }(std::make_index_sequence<N>{});
 
 #if defined(__clang_major__) && (__clang_major__ >= 19)
