@@ -79,7 +79,7 @@ nav:
    - BEVE (binary): binary.md
    - Stencil/Mustache: stencil.md
    - EETF: EETF/erlang-external-term-format.md
- - More Serialization/Parsing:
+ - Serialization/Parsing:
    - Exceptions: exceptions.md
    - Wrappers: wrappers.md
    - Custom Wrappers: custom-wrappers.md
