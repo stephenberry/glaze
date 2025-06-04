@@ -159,7 +159,7 @@ namespace glz
          if (*it == '"') {
             // Quoted field
             ++it; // Skip the opening quote
-            
+
             if constexpr (check_raw_string(Opts)) {
                // Raw string mode: don't process escape sequences
                while (it != end) {
@@ -204,7 +204,7 @@ namespace glz
                   }
                }
             }
-            
+
             // After closing quote, expect comma, newline, or end of input
             if (it != end && *it != ',' && *it != '\n' && *it != '\r') {
                // Invalid character after closing quote

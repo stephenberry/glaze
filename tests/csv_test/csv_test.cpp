@@ -749,7 +749,7 @@ Line 2",Multi-line Currency,DEF)";
       expect(!ec) << "Should parse complex quoted content\n";
 
       expect(obj.Entity.size() == 2) << "Should have 2 entities\n";
-      expect(obj.Entity[0] == "COUNTRY (WITH) [BRACKETS], COMMAS, AND \"QUOTES\"") 
+      expect(obj.Entity[0] == "COUNTRY (WITH) [BRACKETS], COMMAS, AND \"QUOTES\"")
          << "First entity should preserve all special characters\n";
       expect(obj.Entity[1] == "Line 1\nLine 2") << "Second entity should preserve newlines\n";
    };
