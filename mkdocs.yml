@@ -69,6 +69,7 @@ nav:
    - Installation: installation.md
    - Quick Start: quick-start.md
    - Compile Time Options: options.md
+   - Optimizing Performance: optimizing-performance.md
    - Generic JSON: generic-json.md
  - Reflection:
    - Pure Reflection: pure-reflection.md
