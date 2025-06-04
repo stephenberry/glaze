@@ -1,6 +1,7 @@
 #include "glaze/toml.hpp"
 
 #include <map>
+#include <string_view> // Added for std::string_view
 
 #include "ut/ut.hpp"
 
@@ -29,6 +30,83 @@ struct container
 struct optional_struct
 {
    std::optional<int> maybe = 99;
+};
+
+struct inline_table_member {
+    std::string key1{};
+    int key2{};
+
+    bool operator==(const inline_table_member&) const = default;
+};
+
+template <>
+struct glz::meta<inline_table_member> {
+    using T = inline_table_member;
+    static constexpr auto value = object(
+        "key1", &T::key1,
+        "key2", &T::key2
+    );
+};
+
+struct struct_with_inline_table {
+    std::string name{};
+    inline_table_member inline_data{};
+
+    bool operator==(const struct_with_inline_table&) const = default;
+};
+
+template <>
+struct glz::meta<struct_with_inline_table> {
+    using T = struct_with_inline_table;
+    static constexpr auto value = object(
+        "name", &T::name,
+        "inline_data", &T::inline_data
+    );
+};
+
+struct complex_strings_struct {
+    std::string basic_multiline{};
+    std::string literal_multiline{};
+    std::string literal_multiline_with_quotes{};
+
+    bool operator==(const complex_strings_struct&) const = default;
+};
+
+template <>
+struct glz::meta<complex_strings_struct> {
+    using T = complex_strings_struct;
+    static constexpr auto value = object(
+        "basic_multiline", &T::basic_multiline,
+        "literal_multiline", &T::literal_multiline,
+        "literal_multiline_with_quotes", &T::literal_multiline_with_quotes
+    );
+};
+
+struct comment_test_struct {
+    int a{};
+    std::string b{};
+
+    bool operator==(const comment_test_struct&) const = default;
+};
+
+template <>
+struct glz::meta<comment_test_struct> {
+    using T = comment_test_struct;
+    static constexpr auto value = object(
+        "a", &T::a,
+        "b", &T::b
+    );
+};
+
+struct non_null_term_struct {
+    int value{};
+    bool operator==(const non_null_term_struct&) const = default;
+};
+
+template <>
+struct glz::meta<non_null_term_struct> {
+    using T = non_null_term_struct;
+    static constexpr auto value = object("value", &T::value);
 };
 
 suite starter = [] {
@@ -221,6 +299,68 @@ value = 5.5)");
       expect(not glz::write_toml(os, buffer));
       // If all members are null (or skipped) then the output is empty.
       expect(buffer == "");
+   };
+
+   "read_inline_table"_test = [] {
+      std::string toml_input = R"(name = "Test Person"
+inline_data = { key1 = "value1", key2 = 100 })";
+      struct_with_inline_table s{};
+      auto error = glz::read_toml(s, toml_input);
+      expect(!error) << glz::format_error(error, toml_input);
+      expect(s.name == "Test Person");
+      expect(s.inline_data.key1 == "value1");
+      expect(s.inline_data.key2 == 100);
+   };
+
+   "read_complex_strings"_test = [] {
+      std::string toml_input = R"(
+basic_multiline = """
+Roses are red
+Violets are blue"""
+literal_multiline = '''
+The first line.
+  The second line.
+    The third line.'''
+literal_multiline_with_quotes = '''He said "She said 'It is so.''"'''
+)";
+      complex_strings_struct s{};
+      auto error = glz::read_toml(s, toml_input);
+      expect(!error) << glz::format_error(error, toml_input);
+      expect(s.basic_multiline == "Roses are red\nViolets are blue");
+      expect(s.literal_multiline == "The first line.\n  The second line.\n    The third line.");
+      expect(s.literal_multiline_with_quotes == "He said \"She said 'It is so.''\"");
+   };
+
+   "read_with_comments"_test = [] {
+      std::string toml_input = R"(
+# This is a full line comment
+a = 123 # This is an end-of-line comment
+# Another comment
+b = "test string" # another eol comment
+)";
+      comment_test_struct s{};
+      auto error = glz::read_toml(s, toml_input);
+      expect(!error) << glz::format_error(error, toml_input);
+      expect(s.a == 123);
+      expect(s.b == "test string");
+   };
+   
+   "read_non_null_terminated"_test = [] {
+      std::string buffer_with_extra = "value = 123GARBAGE_DATA";
+      // Create a string_view that does not include "GARBAGE_DATA" and is not null-terminated
+      // within the view itself.
+      std::string_view toml_data(buffer_with_extra.data(), 11); // "value = 123"
+      
+      non_null_term_struct s_val{};
+      auto error = glz::read_toml(s_val, toml_data);
+      expect(!error) << glz::format_error(error, toml_data);
+      expect(s_val.value == 123);
+
+      std::string buffer_just_value = "value = 456"; // Null terminated by string constructor
+      non_null_term_struct s_val2{};
+      error = glz::read_toml(s_val2, buffer_just_value);
+      expect(!error) << glz::format_error(error, buffer_just_value);
+      expect(s_val2.value == 456);
    };
 };
 
