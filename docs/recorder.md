@@ -17,5 +17,5 @@ for (int i = 0; i < 100; ++i) {
    rec.update(); // saves the current state of x and y
 }
 
-glz::write_file_json(rec, "recorder_out.json");
+glz::write_file_json(rec, "recorder_out.json", std::string{});
 ```

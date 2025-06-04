@@ -7,18 +7,14 @@ Glaze also supports:
 - [CSV](./docs/csv.md) (comma separated value)
 - [EETF](./docs/EETF/erlang-external-term-format.md) (Erlang External Term Format) [optionally included]
 
-> [!IMPORTANT]
->
-> Glaze [v5.0.0](https://github.com/stephenberry/glaze/releases/tag/v5.0.0) has been released! See release for more details, but the critical changes are:
->
-> v5.0.0 removes the `detail` namespace from `to/from` specializations and many more internal functions, which enables cleaner user customization and shorter compiler error messages.
->
-> The `glz::opts` struct is now only the default options. Specialized options can be added to custom option structs. See [Options](./docs/options.md) for new compile time option customization. This reduces the length of compiler errors.
-
 ## With compile time reflection for MSVC, Clang, and GCC!
 
 - Read/write aggregate initializable structs without writing any metadata or macros!
 - See [example on Compiler Explorer](https://gcc.godbolt.org/z/T4To5fKfz)
+
+## [📖 Documentation](https://stephenberry.github.io/glaze/)
+
+See this README, the [Glaze Documentation Page](https://stephenberry.github.io/glaze/), or [docs folder](https://github.com/stephenberry/glaze/tree/main/docs) for documentation.
 
 ## Highlights
 
@@ -46,8 +42,6 @@ Glaze also supports:
 - [Partial Read](./docs/partial-read.md) and [Partial Write](./docs/partial-write.md) support
 - [CSV Reading/Writing](./docs/csv.md)
 - [Much more!](#more-features)
-
-See [DOCS](https://github.com/stephenberry/glaze/tree/main/docs) for more documentation.
 
 ## Performance
 
