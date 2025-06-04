@@ -9,6 +9,8 @@
 #include <functional>
 #include <future>
 #include <glaze/glaze.hpp>
+#include <iostream>
+#include <sstream>
 #include <source_location>
 #include <thread>
 #include <unordered_map>
@@ -28,17 +30,46 @@
 static_assert(false, "standalone or boost asio must be included to use glaze/ext/glaze_asio.hpp");
 #endif
 
+// Conditionally include SSL headers only when needed
+#ifdef GLZ_ENABLE_SSL
+#if __has_include(<asio.hpp>) && !defined(GLZ_USE_BOOST_ASIO)
+#include <asio/ssl.hpp>
+#elif __has_include(<boost/asio.hpp>)
+#include <boost/asio/ssl.hpp>
+#endif
+#endif
+
 namespace glz
 {
    // Server implementation using non-blocking asio with WebSocket support
+   template<bool EnableTLS = false>
    struct http_server
    {
+      // Socket type abstraction
+      using socket_type = std::conditional_t<EnableTLS, 
+#ifdef GLZ_ENABLE_SSL
+         asio::ssl::stream<asio::ip::tcp::socket>,
+#else
+         asio::ip::tcp::socket,
+#endif
+         asio::ip::tcp::socket>;
+
       inline http_server() : io_context(std::make_unique<asio::io_context>())
       {
          error_handler = [](std::error_code ec, std::source_location loc) {
             std::fprintf(stderr, "Error at %s:%d: %s\n", loc.file_name(), static_cast<int>(loc.line()),
                          ec.message().c_str());
          };
+
+         // Initialize SSL context for TLS-enabled servers
+         if constexpr (EnableTLS) {
+#ifdef GLZ_ENABLE_SSL
+            ssl_context = std::make_unique<asio::ssl::context>(asio::ssl::context::tlsv12);
+            ssl_context->set_default_verify_paths();
+#else
+            static_assert(!EnableTLS, "TLS support requires GLZ_ENABLE_SSL to be defined and OpenSSL to be available");
+#endif
+         }
       }
 
       inline ~http_server()
@@ -212,6 +243,40 @@ namespace glz
          return *this;
       }
 
+      /**
+       * @brief Load SSL certificate and private key for HTTPS servers
+       * 
+       * @param cert_file Path to the certificate file (PEM format)
+       * @param key_file Path to the private key file (PEM format)
+       * @return Reference to this server for method chaining
+       */
+      inline http_server& load_certificate(const std::string& cert_file, const std::string& key_file)
+      {
+         if constexpr (EnableTLS) {
+#ifdef GLZ_ENABLE_SSL
+            ssl_context->use_certificate_chain_file(cert_file);
+            ssl_context->use_private_key_file(key_file, asio::ssl::context::pem);
+#endif
+         }
+         return *this;
+      }
+
+      /**
+       * @brief Set SSL verification mode
+       * 
+       * @param mode SSL verification mode
+       * @return Reference to this server for method chaining
+       */
+      inline http_server& set_ssl_verify_mode(int mode)
+      {
+         if constexpr (EnableTLS) {
+#ifdef GLZ_ENABLE_SSL
+            ssl_context->set_verify_mode(mode);
+#endif
+         }
+         return *this;
+      }
+
      private:
       std::unique_ptr<asio::io_context> io_context;
       std::unique_ptr<asio::ip::tcp::acceptor> acceptor;
@@ -220,6 +285,10 @@ namespace glz
       bool running = false;
       glz::error_handler error_handler;
       std::unordered_map<std::string, std::shared_ptr<websocket_server>> websocket_handlers_;
+
+#ifdef GLZ_ENABLE_SSL
+      std::conditional_t<EnableTLS, std::unique_ptr<asio::ssl::context>, std::monostate> ssl_context;
+#endif
 
       inline void do_accept()
       {
@@ -623,4 +692,7 @@ namespace glz
          return buf;
       }
    };
+
+   // Alias for HTTPS server
+   using https_server = http_server<true>;
 }
