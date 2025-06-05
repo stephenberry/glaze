@@ -32,81 +32,80 @@ struct optional_struct
    std::optional<int> maybe = 99;
 };
 
-struct inline_table_member {
-    std::string key1{};
-    int key2{};
+struct inline_table_member
+{
+   std::string key1{};
+   int key2{};
 
-    bool operator==(const inline_table_member&) const = default;
+   bool operator==(const inline_table_member&) const = default;
 };
 
 template <>
-struct glz::meta<inline_table_member> {
-    using T = inline_table_member;
-    static constexpr auto value = object(
-        "key1", &T::key1,
-        "key2", &T::key2
-    );
+struct glz::meta<inline_table_member>
+{
+   using T = inline_table_member;
+   static constexpr auto value = object("key1", &T::key1, "key2", &T::key2);
 };
 
-struct struct_with_inline_table {
-    std::string name{};
-    inline_table_member inline_data{};
+struct struct_with_inline_table
+{
+   std::string name{};
+   inline_table_member inline_data{};
 
-    bool operator==(const struct_with_inline_table&) const = default;
-};
-
-template <>
-struct glz::meta<struct_with_inline_table> {
-    using T = struct_with_inline_table;
-    static constexpr auto value = object(
-        "name", &T::name,
-        "inline_data", &T::inline_data
-    );
-};
-
-struct complex_strings_struct {
-    std::string basic_multiline{};
-    std::string literal_multiline{};
-    std::string literal_multiline_with_quotes{};
-
-    bool operator==(const complex_strings_struct&) const = default;
+   bool operator==(const struct_with_inline_table&) const = default;
 };
 
 template <>
-struct glz::meta<complex_strings_struct> {
-    using T = complex_strings_struct;
-    static constexpr auto value = object(
-        "basic_multiline", &T::basic_multiline,
-        "literal_multiline", &T::literal_multiline,
-        "literal_multiline_with_quotes", &T::literal_multiline_with_quotes
-    );
+struct glz::meta<struct_with_inline_table>
+{
+   using T = struct_with_inline_table;
+   static constexpr auto value = object("name", &T::name, "inline_data", &T::inline_data);
 };
 
-struct comment_test_struct {
-    int a{};
-    std::string b{};
+struct complex_strings_struct
+{
+   std::string basic_multiline{};
+   std::string literal_multiline{};
+   std::string literal_multiline_with_quotes{};
 
-    bool operator==(const comment_test_struct&) const = default;
-};
-
-template <>
-struct glz::meta<comment_test_struct> {
-    using T = comment_test_struct;
-    static constexpr auto value = object(
-        "a", &T::a,
-        "b", &T::b
-    );
-};
-
-struct non_null_term_struct {
-    int value{};
-    bool operator==(const non_null_term_struct&) const = default;
+   bool operator==(const complex_strings_struct&) const = default;
 };
 
 template <>
-struct glz::meta<non_null_term_struct> {
-    using T = non_null_term_struct;
-    static constexpr auto value = object("value", &T::value);
+struct glz::meta<complex_strings_struct>
+{
+   using T = complex_strings_struct;
+   static constexpr auto value =
+      object("basic_multiline", &T::basic_multiline, "literal_multiline", &T::literal_multiline,
+             "literal_multiline_with_quotes", &T::literal_multiline_with_quotes);
+};
+
+struct comment_test_struct
+{
+   int a{};
+   std::string b{};
+
+   bool operator==(const comment_test_struct&) const = default;
+};
+
+template <>
+struct glz::meta<comment_test_struct>
+{
+   using T = comment_test_struct;
+   static constexpr auto value = object("a", &T::a, "b", &T::b);
+};
+
+struct non_null_term_struct
+{
+   int value{};
+   bool operator==(const non_null_term_struct&) const = default;
+};
+
+template <>
+struct glz::meta<non_null_term_struct>
+{
+   using T = non_null_term_struct;
+   static constexpr auto value = object("value", &T::value);
 };
 
 suite starter = [] {
@@ -126,7 +125,7 @@ arr = [1, 2, 3])");
 d = 2.71
 hello = "Test String"
 arr = [4, 5, 6])";
-      
+
       my_struct s{};
       expect(not glz::read_toml(s, toml_input));
       expect(s.i == 42);
@@ -344,13 +343,13 @@ b = "test string" # another eol comment
       expect(s.a == 123);
       expect(s.b == "test string");
    };
-   
+
    "read_non_null_terminated"_test = [] {
       std::string buffer_with_extra = "value = 123GARBAGE_DATA";
       // Create a string_view that does not include "GARBAGE_DATA" and is not null-terminated
       // within the view itself.
       std::string_view toml_data(buffer_with_extra.data(), 11); // "value = 123"
-      
+
       non_null_term_struct s_val{};
       auto error = glz::read_toml(s_val, toml_data);
       expect(!error) << glz::format_error(error, toml_data);

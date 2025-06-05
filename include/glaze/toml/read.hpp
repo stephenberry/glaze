@@ -3,8 +3,8 @@
 
 #pragma once
 
-#include <charconv>
 #include <cctype>
+#include <charconv>
 
 #include "glaze/core/common.hpp"
 #include "glaze/core/opts.hpp"
@@ -55,7 +55,7 @@ namespace glz
       while (it != end && *it != '\n' && *it != '\r') {
          ++it;
       }
-      
+
       if (it == end) {
          return false;
       }
@@ -69,7 +69,7 @@ namespace glz
       else if (*it == '\n') {
          ++it;
       }
-      
+
       return true;
    }
 
@@ -79,7 +79,7 @@ namespace glz
    {
       key.clear();
       skip_ws_and_comments(it, end);
-      
+
       if (it == end) {
          ctx.error = error_code::unexpected_end;
          return false;
@@ -96,15 +96,25 @@ namespace glz
                   return false;
                }
                switch (*it) {
-                  case '"': key.push_back('"'); break;
-                  case '\\': key.push_back('\\'); break;
-                  case 'n': key.push_back('\n'); break;
-                  case 't': key.push_back('\t'); break;
-                  case 'r': key.push_back('\r'); break;
-                  default: 
-                     key.push_back('\\');
-                     key.push_back(*it);
-                     break;
+               case '"':
+                  key.push_back('"');
+                  break;
+               case '\\':
+                  key.push_back('\\');
+                  break;
+               case 'n':
+                  key.push_back('\n');
+                  break;
+               case 't':
+                  key.push_back('\t');
+                  break;
+               case 'r':
+                  key.push_back('\r');
+                  break;
+               default:
+                  key.push_back('\\');
+                  key.push_back(*it);
+                  break;
                }
             }
             else {
@@ -112,7 +122,7 @@ namespace glz
             }
             ++it;
          }
-         
+
          if (it == end || *it != '"') {
             ctx.error = error_code::syntax_error;
             return false;
@@ -125,13 +135,13 @@ namespace glz
             key.push_back(*it);
             ++it;
          }
-         
+
          if (key.empty()) {
             ctx.error = error_code::syntax_error;
             return false;
          }
       }
-      
+
       return true;
    }
 
@@ -143,7 +153,7 @@ namespace glz
       {
          using V = decltype(get_member(std::declval<T>(), meta_wrapper_v<T>));
          from<TOML, V>::template op<Opts>(get_member(value, meta_wrapper_v<T>), std::forward<Ctx>(ctx),
-                                         std::forward<It0>(it), std::forward<It1>(end));
+                                          std::forward<It0>(it), std::forward<It1>(end));
       }
    };
 
@@ -158,7 +168,7 @@ namespace glz
          }
 
          skip_ws_and_comments(it, end);
-         
+
          if (it == end) [[unlikely]] {
             ctx.error = error_code::unexpected_end;
             return;
@@ -241,8 +251,9 @@ namespace glz
             it += 3; // Skip """
             if (it != end && *it == '\n') { // Skip initial newline
                ++it;
-            } else if (it + 1 < end && *it == '\r' && *(it+1) == '\n') { // Skip initial CRLF
-                it += 2;
+            }
+            else if (it + 1 < end && *it == '\r' && *(it + 1) == '\n') { // Skip initial CRLF
+               it += 2;
             }
 
             while (it + 2 < end && !(*it == '"' && *(it + 1) == '"' && *(it + 2) == '"')) {
@@ -253,35 +264,51 @@ namespace glz
                      return;
                   }
                   switch (*it) {
-                     case '"': value.push_back('"'); break;
-                     case '\\': value.push_back('\\'); break;
-                     case 'n': value.push_back('\n'); break;
-                     case 't': value.push_back('\t'); break;
-                     case 'r': value.push_back('\r'); break;
-                     case 'b': value.push_back('\b'); break;
-                     case 'f': value.push_back('\f'); break;
-                     // TOML: Any other character is an error for escape sequences in basic strings
-                     // However, we also need to handle escaped newlines for line trimming
-                     case '\n': /* ignore escaped newline */ 
-                        // Trim all whitespace after escaped newline until non-whitespace or actual newline
-                        while(it + 1 < end && (*(it+1) == ' ' || *(it+1) == '\t' || *(it+1) == '\r' || *(it+1) == '\n')) {
-                           ++it;
-                           if (*it == '\n') break; // Stop if we hit an actual newline
-                        }
-                        break; 
-                     case '\r': // part of CRLF, handle similar to \n
-                        if (it + 1 < end && *(it+1) == '\n') ++it;
-                         while(it + 1 < end && (*(it+1) == ' ' || *(it+1) == '\t' || *(it+1) == '\r' || *(it+1) == '\n')) {
-                           ++it;
-                           if (*it == '\n') break;
-                        }
-                        break;
-                     default:
-                        // In TOML, an unknown escape sequence is an error.
-                        // For simplicity here, we might just append them or flag an error.
-                        // Glaze JSON parser often appends, let's be stricter for TOML.
-                        ctx.error = error_code::syntax_error;
-                        return;
+                  case '"':
+                     value.push_back('"');
+                     break;
+                  case '\\':
+                     value.push_back('\\');
+                     break;
+                  case 'n':
+                     value.push_back('\n');
+                     break;
+                  case 't':
+                     value.push_back('\t');
+                     break;
+                  case 'r':
+                     value.push_back('\r');
+                     break;
+                  case 'b':
+                     value.push_back('\b');
+                     break;
+                  case 'f':
+                     value.push_back('\f');
+                     break;
+                  // TOML: Any other character is an error for escape sequences in basic strings
+                  // However, we also need to handle escaped newlines for line trimming
+                  case '\n': /* ignore escaped newline */
+                     // Trim all whitespace after escaped newline until non-whitespace or actual newline
+                     while (it + 1 < end &&
+                            (*(it + 1) == ' ' || *(it + 1) == '\t' || *(it + 1) == '\r' || *(it + 1) == '\n')) {
+                        ++it;
+                        if (*it == '\n') break; // Stop if we hit an actual newline
+                     }
+                     break;
+                  case '\r': // part of CRLF, handle similar to \n
+                     if (it + 1 < end && *(it + 1) == '\n') ++it;
+                     while (it + 1 < end &&
+                            (*(it + 1) == ' ' || *(it + 1) == '\t' || *(it + 1) == '\r' || *(it + 1) == '\n')) {
+                        ++it;
+                        if (*it == '\n') break;
+                     }
+                     break;
+                  default:
+                     // In TOML, an unknown escape sequence is an error.
+                     // For simplicity here, we might just append them or flag an error.
+                     // Glaze JSON parser often appends, let's be stricter for TOML.
+                     ctx.error = error_code::syntax_error;
+                     return;
                   }
                }
                else {
@@ -308,21 +335,35 @@ namespace glz
                      return;
                   }
                   switch (*it) {
-                     case '"': value.push_back('"'); break;
-                     case '\\': value.push_back('\\'); break;
-                     case 'n': value.push_back('\n'); break;
-                     case 't': value.push_back('\t'); break;
-                     case 'r': value.push_back('\r'); break;
-                     case 'b': value.push_back('\b'); break;
-                     case 'f': value.push_back('\f'); break;
-                     default:
-                        ctx.error = error_code::syntax_error;
-                        return;
+                  case '"':
+                     value.push_back('"');
+                     break;
+                  case '\\':
+                     value.push_back('\\');
+                     break;
+                  case 'n':
+                     value.push_back('\n');
+                     break;
+                  case 't':
+                     value.push_back('\t');
+                     break;
+                  case 'r':
+                     value.push_back('\r');
+                     break;
+                  case 'b':
+                     value.push_back('\b');
+                     break;
+                  case 'f':
+                     value.push_back('\f');
+                     break;
+                  default:
+                     ctx.error = error_code::syntax_error;
+                     return;
                   }
                }
                else if (*it == '\n' || *it == '\r') { // Newlines not allowed in single-line basic strings
-                   ctx.error = error_code::syntax_error;
-                   return;
+                  ctx.error = error_code::syntax_error;
+                  return;
                }
                else {
                   value.push_back(*it);
@@ -341,10 +382,11 @@ namespace glz
             it += 3; // Skip '''
             if (it != end && *it == '\n') { // Skip initial newline
                ++it;
-            } else if (it + 1 < end && *it == '\r' && *(it+1) == '\n') { // Skip initial CRLF
-                it += 2;
             }
-            
+            else if (it + 1 < end && *it == '\r' && *(it + 1) == '\n') { // Skip initial CRLF
+               it += 2;
+            }
+
             while (it + 2 < end && !(*it == '\'' && *(it + 1) == '\'' && *(it + 2) == '\'')) {
                value.push_back(*it);
                ++it;
@@ -361,9 +403,9 @@ namespace glz
             ++it; // Skip opening quote
 
             while (it != end && *it != '\'') {
-                if (*it == '\n' || *it == '\r') { // Newlines not allowed in single-line literal strings
-                   ctx.error = error_code::syntax_error;
-                   return;
+               if (*it == '\n' || *it == '\r') { // Newlines not allowed in single-line literal strings
+                  ctx.error = error_code::syntax_error;
+                  return;
                }
                value.push_back(*it);
                ++it;
@@ -387,7 +429,7 @@ namespace glz
                value.push_back(*it);
                ++it;
             }
-            
+
             // Trim trailing whitespace
             while (!value.empty() && (value.back() == ' ' || value.back() == '\t')) {
                value.pop_back();
@@ -408,7 +450,7 @@ namespace glz
          }
 
          skip_ws_and_comments(it, end);
-         
+
          if (it == end) [[unlikely]] {
             ctx.error = error_code::unexpected_end;
             return;
@@ -440,25 +482,25 @@ namespace glz
          }
 
          skip_ws_and_comments(it, end);
-         
+
          if (it == end || *it != '[') {
             ctx.error = error_code::syntax_error;
             return;
          }
-         
+
          ++it; // Skip '['
          skip_ws_and_comments(it, end);
-         
+
          // Handle empty array
          if (it != end && *it == ']') {
             ++it;
             return;
          }
-         
+
          size_t index = 0;
          while (it != end) {
             using value_type = typename std::decay_t<T>::value_type;
-            
+
             if constexpr (emplace_backable<T>) {
                auto& element = value.emplace_back();
                from<TOML, value_type>::template op<Opts>(element, ctx, it, end);
@@ -472,18 +514,18 @@ namespace glz
                from<TOML, value_type>::template op<Opts>(value[index], ctx, it, end);
                ++index;
             }
-            
+
             if (bool(ctx.error)) {
                return;
             }
-            
+
             skip_ws_and_comments(it, end);
-            
+
             if (it == end) {
                ctx.error = error_code::unexpected_end;
                return;
             }
-            
+
             if (*it == ']') {
                ++it;
                break;
@@ -500,9 +542,11 @@ namespace glz
       }
    };
 
-   namespace detail {
+   namespace detail
+   {
       template <auto Opts, class T, class It, class End, class Ctx>
-      GLZ_ALWAYS_INLINE void parse_toml_object_members(T&& value, It&& it, End&& end, Ctx&& ctx, bool is_inline_table) {
+      GLZ_ALWAYS_INLINE void parse_toml_object_members(T&& value, It&& it, End&& end, Ctx&& ctx, bool is_inline_table)
+      {
          static constexpr auto N = reflect<std::decay_t<T>>::size;
          static constexpr auto HashInfo = hash_info<std::decay_t<T>>;
 
@@ -518,43 +562,43 @@ namespace glz
                ++it; // Consume '}'
                return; // End of inline table
             }
-            
+
             // Skip empty lines (only if not in an inline table, inline tables don't have newlines)
             if (!is_inline_table && (*it == '\n' || *it == '\r')) {
                skip_to_next_line(ctx, it, end);
                continue;
             }
-            
+
             // Handle section headers [section] (only if not in an inline table)
             if (!is_inline_table && *it == '[') {
                // For now, skip section headers - we'll implement nested object support later
                // Or, this could be where we handle table arrays or nested tables.
                // For the current task, we are focusing on inline tables.
                // This part might need to be more sophisticated for full TOML table support.
-               skip_to_next_line(ctx, it, end); 
+               skip_to_next_line(ctx, it, end);
                continue;
             }
-            
+
             std::string key_str;
             if (!parse_toml_key(key_str, ctx, it, end)) {
                return;
             }
-            
+
             skip_ws_and_comments(it, end);
-            
+
             if (it == end || *it != '=') {
                ctx.error = error_code::syntax_error;
                return;
             }
-            
+
             ++it; // Skip '='
             skip_ws_and_comments(it, end);
 
             if (it == end) {
-                ctx.error = error_code::unexpected_end; // Value expected
-                return;
+               ctx.error = error_code::unexpected_end; // Value expected
+               return;
             }
-            
+
             const auto index = decode_hash_with_size<TOML, std::decay_t<T>, HashInfo, HashInfo.type>::op(
                key_str.data(), key_str.data() + key_str.size(), key_str.size());
 
@@ -592,41 +636,45 @@ namespace glz
                // This requires parsing the value to know where it ends.
                // A simpler skip to next line might not work for inline tables or complex values.
                // For now, let's try a simple skip to comma or end of line/table.
-                while(it != end) {
-                    if (is_inline_table && (*it == ',' || *it == '}')) break;
-                    if (!is_inline_table && (*it == '\n' || *it == '\r')) break;
-                    ++it;
-                }
+               while (it != end) {
+                  if (is_inline_table && (*it == ',' || *it == '}')) break;
+                  if (!is_inline_table && (*it == '\n' || *it == '\r')) break;
+                  ++it;
+               }
             }
-            
+
             skip_ws_and_comments(it, end);
             if (it == end) {
-                if (is_inline_table) ctx.error = error_code::unexpected_end; // Inline table must end with '}'
-                break;
+               if (is_inline_table) ctx.error = error_code::unexpected_end; // Inline table must end with '}'
+               break;
             }
 
             if (is_inline_table) {
-                if (*it == '}') {
-                    // Handled at the start of the loop
-                    continue; 
-                } else if (*it == ',') {
-                    ++it; // Consume comma
-                    skip_ws_and_comments(it, end);
-                    if (it != end && *it == '}') { // Trailing comma case like { key = "val", }
-                        // This is allowed by TOML v1.0.0 for inline tables
-                        // The '}' will be consumed at the start of the next iteration.
-                    }
-                } else {
-                    ctx.error = error_code::syntax_error; // Expected comma or '}'
-                    return;
-                }
-            } else {
-                 // For top-level or standard tables, expect newline or EOF
-                if (it != end && (*it == '\n' || *it == '\r')) {
-                   skip_to_next_line(ctx, it, end);
-                } else if (it != end && *it != '#') { // If not a comment, it's an error unless it's EOF
-                    // Could be an issue if there's no newline before EOF for the last key-value
-                }
+               if (*it == '}') {
+                  // Handled at the start of the loop
+                  continue;
+               }
+               else if (*it == ',') {
+                  ++it; // Consume comma
+                  skip_ws_and_comments(it, end);
+                  if (it != end && *it == '}') { // Trailing comma case like { key = "val", }
+                     // This is allowed by TOML v1.0.0 for inline tables
+                     // The '}' will be consumed at the start of the next iteration.
+                  }
+               }
+               else {
+                  ctx.error = error_code::syntax_error; // Expected comma or '}'
+                  return;
+               }
+            }
+            else {
+               // For top-level or standard tables, expect newline or EOF
+               if (it != end && (*it == '\n' || *it == '\r')) {
+                  skip_to_next_line(ctx, it, end);
+               }
+               else if (it != end && *it != '#') { // If not a comment, it's an error unless it's EOF
+                  // Could be an issue if there's no newline before EOF for the last key-value
+               }
             }
          }
       }
@@ -641,19 +689,20 @@ namespace glz
       {
          skip_ws_and_comments(it, end);
          if (it == end) { // Empty input for an object is valid (empty object)
-             return;
+            return;
          }
 
          if (*it == '{') { // Check if it's an inline table
             ++it; // Consume '{'
             skip_ws_and_comments(it, end);
             if (it != end && *it == '}') { // Empty inline table {}
-                ++it;
-                return;
+               ++it;
+               return;
             }
             detail::parse_toml_object_members<Opts>(value, it, end, ctx, true); // true for is_inline_table
             // The parse_toml_object_members should consume the final '}' if successful
-         } else {
+         }
+         else {
             // Standard table (key-value pairs possibly spanning multiple lines, or top-level object)
             detail::parse_toml_object_members<Opts>(value, it, end, ctx, false); // false for is_inline_table
          }
