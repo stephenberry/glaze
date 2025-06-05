@@ -119,6 +119,7 @@ namespace glz
       uint8_t layout = rowwise; // CSV row wise output/input
       bool use_headers = true; // Whether to write column/row headers in CSV format
       bool append_arrays = false; // When reading into an array the data will be appended if the type supports it
+      bool raw_string = false; // do not decode/encode escaped characters for strings (improves read/write performance)
 
       // INTERNAL OPTIONS
       uint32_t internal{}; // default should be 0
@@ -266,6 +267,16 @@ namespace glz
       }
       else {
          return true;
+      }
+   }
+
+   consteval bool check_raw_string(auto&& Opts)
+   {
+      if constexpr (requires { Opts.raw_string; }) {
+         return Opts.raw_string;
+      }
+      else {
+         return false;
       }
    }
 
