@@ -3,4 +3,5 @@
 
 #pragma once
 
+#include "glaze/toml/read.hpp"
 #include "glaze/toml/write.hpp"
