@@ -29,9 +29,18 @@
 #include <openssl/x509.h>
 #include <openssl/x509v3.h>
 
+#if __has_include(<asio.hpp>) && !defined(GLZ_USE_BOOST_ASIO)
+#include <asio.hpp>
+#elif __has_include(<boost/asio.hpp>)
+#ifndef GLZ_USING_BOOST_ASIO
+#define GLZ_USING_BOOST_ASIO
+#endif
+#include <boost/asio.hpp>
+#endif
+
 using namespace ut;
 
-// Certificate generation class
+// Certificate generation class (unchanged)
 class CertificateGenerator
 {
   private:
@@ -299,7 +308,25 @@ struct TestUser
    std::string email;
 };
 
-// Test server manager class (unchanged except for constructor)
+// Helper function to check if an error should be suppressed
+bool should_suppress_error(const std::error_code& ec)
+{
+   // Common errors that are expected during normal operation
+   if (ec == asio::error::eof) return true; // Client disconnected normally
+   if (ec == asio::error::connection_reset) return true; // Connection reset by peer
+   if (ec == asio::error::operation_aborted) return true; // Operation aborted (shutdown)
+   if (ec == asio::error::bad_descriptor) return true; // Socket already closed
+   if (ec == asio::error::broken_pipe) return true; // Broken pipe (client disconnected)
+
+// SSL-specific errors that are normal
+#ifdef GLZ_ENABLE_SSL
+// Add SSL-specific error codes here if needed
+#endif
+
+   return false;
+}
+
+// Test server manager class with clean error handling
 class HTTPSTestServer
 {
    glz::https_server server_;
@@ -317,6 +344,14 @@ class HTTPSTestServer
                 {2, "Bob Smith", "bob@test.com"},
                 {3, "Charlie Brown", "charlie@test.com"}};
       next_user_id_ = 4;
+
+      // Set up clean error handler that suppresses expected disconnection errors
+      server_.on_error([](std::error_code ec, std::source_location loc) {
+         if (!should_suppress_error(ec)) {
+            std::fprintf(stderr, "⚠️  Server error at %s:%d: %s\n", loc.file_name(), static_cast<int>(loc.line()),
+                         ec.message().c_str());
+         }
+      });
 
       setup_routes();
    }
@@ -338,7 +373,7 @@ class HTTPSTestServer
          return true;
       }
       catch (const std::exception& e) {
-         std::cerr << "Failed to start HTTPS server: " << e.what() << std::endl;
+         std::cerr << "❌ Failed to start HTTPS server: " << e.what() << std::endl;
          return false;
       }
    }
@@ -352,7 +387,7 @@ class HTTPSTestServer
          if (server_future_.valid()) {
             auto status = server_future_.wait_for(std::chrono::seconds(2));
             if (status != std::future_status::ready) {
-               std::cerr << "Warning: Server did not stop cleanly" << std::endl;
+               std::cerr << "⚠️  Warning: Server did not stop cleanly" << std::endl;
             }
          }
       }
@@ -485,7 +520,7 @@ class HTTPSTestServer
    }
 };
 
-// Helper functions
+// Helper functions (unchanged)
 bool file_exists(const std::string& filename)
 {
    std::ifstream file(filename);
@@ -504,7 +539,7 @@ void wait_for_port_free(int port, int max_attempts = 20)
    }
 }
 
-// Test suites (updated to use generated certificates)
+// Test suites (unchanged)
 suite certificate_tests = [] {
    "certificate_generation"_test = [] {
       if (!certificates_exist()) {
@@ -569,7 +604,7 @@ suite api_functionality_tests = [] {
 
       HTTPSTestServer test_server;
       if (!test_server.start(8445)) {
-         std::cout << "Failed to start server for API test\n";
+         std::cout << "❌ Failed to start server for API test\n";
          return;
       }
 
@@ -699,7 +734,6 @@ suite stress_tests = [] {
 
 int main()
 {
-   std::cout << "🔒 Self-Contained Glaze HTTPS Server Test Suite\n";
    std::cout << "===============================================\n\n";
 
    std::cout << "🔐 Checking for SSL certificates...\n";
@@ -724,7 +758,7 @@ int main()
       }
    }
 
-   std::cout << "\n🧪 Running comprehensive HTTPS tests...\n\n";
+   std::cout << "\n🧪 Running comprehensive HTTPS tests...\n";
 
    // Tests run automatically through the ut library
 
