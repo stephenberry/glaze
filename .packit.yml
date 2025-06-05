@@ -1,6 +1,6 @@
 # https://packit.dev/docs/configuration/
 
-specfile_path: contrib/util/glaze.spec
+specfile_path: util/glaze.spec
 
 notifications:
   pull_request:
