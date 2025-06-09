@@ -296,6 +296,7 @@ namespace glz
             start = it;
          }
          else if (*it == '\r' || *it == '\n') {
+            auto line_end = it; // Position before incrementing
             if (*it == '\r') {
                ++it;
                if (it != end && *it != '\n') [[unlikely]] {
@@ -304,11 +305,11 @@ namespace glz
                }
             }
 
-            if (start == it) {
+            if (start == line_end) {
                // trailing comma or empty
             }
             else {
-               read_key(start, it);
+               read_key(start, line_end); // Use original line ending position
             }
             break;
          }
