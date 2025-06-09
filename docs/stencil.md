@@ -1,9 +1,5 @@
 # Stencil/Mustache (String Interpolation)
 
-> [!WARNING]
->
-> `glz::stencil`/`glz::mustache` are still somewhat experimental. The API may not be as stable as other parts of Glaze.
-
 Glaze provides string interpolation for C++ structs. The `stencil`/`mustache` formats provide a templating mechanism for formatting structured data into strings. Inspired by the Mustache templating language, it enables the generation of dynamic output by combining predefined templates with C++ structs.
 
 Example:
@@ -60,12 +56,8 @@ struct person
 
 # Mustache
 
-Glaze provide `glz::mustache` with the same interface as `glz::stencil`, but it escaped HTML when using double braces `{{}}` and does not escape HTML when using triple braces `{{{}}}`. Using `glz::mustache` with triple braces is the same as using `glz::stencil` with double braces.
+Glaze provide `glz::mustache` with the same interface as `glz::stencil`, but escapes HTML when using double braces `{{}}` and does not escape HTML when using triple braces `{{{}}}`. Using `glz::mustache` with triple braces is the same as using `glz::stencil` with double braces.
 
 ## Escaped HTML
 
 Double braces `{{}}` will perform HTML escaping to prevent XSS (cross-site scripting) attacks. Triple braces `{{{}}}` insert content **without escaping**.
-
-> [!TIP]
->
-> If you aren't using stencils for HTML then you can use the compile time option `escape_html = false` to avoid escaping HTML even for double braces `{{}}`. This will improve performance.
