@@ -26,8 +26,8 @@
 
 // Optional OpenSSL support - detected at compile time
 #if defined(GLZ_ENABLE_OPENSSL) && __has_include(<openssl/sha.h>)
-   #include <openssl/sha.h>
-   #define GLZ_HAS_OPENSSL
+#include <openssl/sha.h>
+#define GLZ_HAS_OPENSSL
 #endif
 
 #include "glaze/base64/base64.hpp"
@@ -36,19 +36,10 @@
 namespace glz
 {
    // WebSocket opcode constants
-   enum class ws_opcode : uint8_t
-   {
-      continuation = 0x0,
-      text = 0x1,
-      binary = 0x2,
-      close = 0x8,
-      ping = 0x9,
-      pong = 0xa
-   };
+   enum class ws_opcode : uint8_t { continuation = 0x0, text = 0x1, binary = 0x2, close = 0x8, ping = 0x9, pong = 0xa };
 
    // WebSocket close codes
-   enum class ws_close_code : uint16_t
-   {
+   enum class ws_close_code : uint16_t {
       normal = 1000,
       going_away = 1001,
       protocol_error = 1002,
@@ -91,13 +82,15 @@ namespace glz
       // Fallback SHA-1 implementation when OpenSSL is not available
       namespace fallback_sha1
       {
-         struct sha1_context {
+         struct sha1_context
+         {
             uint32_t state[5];
             uint32_t count[2];
             uint8_t buffer[64];
          };
 
-         inline void sha1_init(sha1_context* context) {
+         inline void sha1_init(sha1_context* context)
+         {
             context->state[0] = 0x67452301;
             context->state[1] = 0xEFCDAB89;
             context->state[2] = 0x98BADCFE;
@@ -106,43 +99,46 @@ namespace glz
             context->count[0] = context->count[1] = 0;
          }
 
-         inline void sha1_process(sha1_context* context, const uint8_t data[64]) {
+         inline void sha1_process(sha1_context* context, const uint8_t data[64])
+         {
             uint32_t w[80], a, b, c, d, e, temp;
-            
+
             for (int i = 0; i < 16; i++) {
-               w[i] = (data[i * 4] << 24) | (data[i * 4 + 1] << 16) | 
-                      (data[i * 4 + 2] << 8) | data[i * 4 + 3];
+               w[i] = (data[i * 4] << 24) | (data[i * 4 + 1] << 16) | (data[i * 4 + 2] << 8) | data[i * 4 + 3];
             }
-            
+
             for (int i = 16; i < 80; i++) {
                w[i] = w[i - 3] ^ w[i - 8] ^ w[i - 14] ^ w[i - 16];
                w[i] = (w[i] << 1) | (w[i] >> 31);
             }
-            
+
             a = context->state[0];
             b = context->state[1];
             c = context->state[2];
             d = context->state[3];
             e = context->state[4];
-            
+
             for (int i = 0; i < 80; i++) {
                if (i < 20) {
                   temp = ((a << 5) | (a >> 27)) + ((b & c) | (~b & d)) + e + w[i] + 0x5A827999;
-               } else if (i < 40) {
+               }
+               else if (i < 40) {
                   temp = ((a << 5) | (a >> 27)) + (b ^ c ^ d) + e + w[i] + 0x6ED9EBA1;
-               } else if (i < 60) {
+               }
+               else if (i < 60) {
                   temp = ((a << 5) | (a >> 27)) + ((b & c) | (b & d) | (c & d)) + e + w[i] + 0x8F1BBCDC;
-               } else {
+               }
+               else {
                   temp = ((a << 5) | (a >> 27)) + (b ^ c ^ d) + e + w[i] + 0xCA62C1D6;
                }
-               
+
                e = d;
                d = c;
                c = (b << 30) | (b >> 2);
                b = a;
                a = temp;
             }
-            
+
             context->state[0] += a;
             context->state[1] += b;
             context->state[2] += c;
@@ -150,13 +146,14 @@ namespace glz
             context->state[4] += e;
          }
 
-         inline void sha1_update(sha1_context* context, const uint8_t* data, size_t len) {
+         inline void sha1_update(sha1_context* context, const uint8_t* data, size_t len)
+         {
             size_t i = 0;
             size_t j = (context->count[0] >> 3) & 63;
-            
+
             if ((context->count[0] += len << 3) < (len << 3)) context->count[1]++;
             context->count[1] += (len >> 29);
-            
+
             if ((j + len) > 63) {
                std::memcpy(&context->buffer[j], data, (i = 64 - j));
                sha1_process(context, context->buffer);
@@ -165,24 +162,25 @@ namespace glz
                }
                j = 0;
             }
-            
+
             std::memcpy(&context->buffer[j], &data[i], len - i);
          }
 
-         inline void sha1_final(sha1_context* context, uint8_t digest[20]) {
+         inline void sha1_final(sha1_context* context, uint8_t digest[20])
+         {
             uint8_t finalcount[8];
-            
+
             for (int i = 0; i < 8; i++) {
                finalcount[i] = (uint8_t)((context->count[(i >= 4 ? 0 : 1)] >> ((3 - (i & 3)) * 8)) & 255);
             }
-            
+
             sha1_update(context, (uint8_t*)"\200", 1);
             while ((context->count[0] & 504) != 448) {
                sha1_update(context, (uint8_t*)"\0", 1);
             }
-            
+
             sha1_update(context, finalcount, 8);
-            
+
             for (int i = 0; i < 20; i++) {
                digest[i] = (uint8_t)((context->state[i >> 2] >> ((3 - (i & 3)) * 8)) & 255);
             }
@@ -194,7 +192,7 @@ namespace glz
       inline std::string generate_accept_key(std::string_view client_key)
       {
          std::string combined = std::string(client_key) + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
-         
+
          unsigned char hash[20];
 
 #if defined(GLZ_ENABLE_OPENSSL) && defined(GLZ_HAS_OPENSSL)
@@ -236,16 +234,16 @@ namespace glz
             // Find the end of this token
             auto comma_pos = header.find(',');
             std::string_view token = header.substr(0, comma_pos);
-            
+
             // Remove trailing whitespace from token
             while (!token.empty() && (token.back() == ' ' || token.back() == '\t')) {
                token.remove_suffix(1);
             }
 
             // Case-insensitive comparison
-            if (token.size() == value.size() && 
+            if (token.size() == value.size() &&
                 std::equal(token.begin(), token.end(), value.begin(), value.end(),
-                          [](char a, char b) { return std::tolower(a) == std::tolower(b); })) {
+                           [](char a, char b) { return std::tolower(a) == std::tolower(b); })) {
                return true;
             }
 
@@ -272,34 +270,19 @@ namespace glz
       websocket_server() = default;
 
       // Set message handler
-      inline void on_message(message_handler handler)
-      {
-         message_handler_ = std::move(handler);
-      }
+      inline void on_message(message_handler handler) { message_handler_ = std::move(handler); }
 
       // Set connection handler
-      inline void on_open(open_handler handler)
-      {
-         open_handler_ = std::move(handler);
-      }
+      inline void on_open(open_handler handler) { open_handler_ = std::move(handler); }
 
       // Set close handler
-      inline void on_close(close_handler handler)
-      {
-         close_handler_ = std::move(handler);
-      }
+      inline void on_close(close_handler handler) { close_handler_ = std::move(handler); }
 
       // Set error handler
-      inline void on_error(error_handler handler)
-      {
-         error_handler_ = std::move(handler);
-      }
+      inline void on_error(error_handler handler) { error_handler_ = std::move(handler); }
 
       // Set connection validator
-      inline void on_validate(validate_handler handler)
-      {
-         validate_handler_ = std::move(handler);
-      }
+      inline void on_validate(validate_handler handler) { validate_handler_ = std::move(handler); }
 
       // Internal methods called by websocket_connection
       inline void notify_open(std::shared_ptr<websocket_connection> conn, const request& req)
@@ -338,7 +321,7 @@ namespace glz
          return true;
       }
 
-   private:
+     private:
       open_handler open_handler_;
       message_handler message_handler_;
       close_handler close_handler_;
@@ -349,85 +332,62 @@ namespace glz
    // WebSocket connection class - implementations come after websocket_server
    struct websocket_connection : public std::enable_shared_from_this<websocket_connection>
    {
-   public:
+     public:
       inline websocket_connection(asio::ip::tcp::socket socket, websocket_server* server)
          : socket_(std::move(socket)), server_(server)
       {
          remote_endpoint_ = socket_.remote_endpoint();
       }
-      
+
       ~websocket_connection() = default;
 
       // Start the WebSocket connection (performs handshake)
-      inline void start(const request& req)
-      {
-         perform_handshake(req);
-      }
+      inline void start(const request& req) { perform_handshake(req); }
 
       // Send a text message
-      inline void send_text(std::string_view message)
-      {
-         send_frame(ws_opcode::text, message);
-      }
+      inline void send_text(std::string_view message) { send_frame(ws_opcode::text, message); }
 
       // Send a binary message
-      inline void send_binary(std::string_view message)
-      {
-         send_frame(ws_opcode::binary, message);
-      }
+      inline void send_binary(std::string_view message) { send_frame(ws_opcode::binary, message); }
 
       // Send a ping frame
-      inline void send_ping(std::string_view payload = {})
-      {
-         send_frame(ws_opcode::ping, payload);
-      }
+      inline void send_ping(std::string_view payload = {}) { send_frame(ws_opcode::ping, payload); }
 
       // Send a pong frame
-      inline void send_pong(std::string_view payload = {})
-      {
-         send_frame(ws_opcode::pong, payload);
-      }
+      inline void send_pong(std::string_view payload = {}) { send_frame(ws_opcode::pong, payload); }
 
       // Close the connection
       inline void close(ws_close_code code = ws_close_code::normal, std::string_view reason = {})
       {
          if (is_closing_) return;
-         
+
          is_closing_ = true;
          send_close_frame(code, reason);
-         
+
          // Close after a short delay to allow the close frame to be sent
          auto self = shared_from_this();
          auto timer = std::make_shared<asio::steady_timer>(socket_.get_executor());
          timer->expires_after(std::chrono::milliseconds(100));
-         timer->async_wait([self, timer](std::error_code) {
-            self->do_close();
-         });
+         timer->async_wait([self, timer](std::error_code) { self->do_close(); });
       }
 
       // Get remote endpoint information
-      inline std::string remote_address() const
-      {
-         return remote_endpoint_.address().to_string();
-      }
-      
-      inline uint16_t remote_port() const
-      {
-         return remote_endpoint_.port();
-      }
+      inline std::string remote_address() const { return remote_endpoint_.address().to_string(); }
+
+      inline uint16_t remote_port() const { return remote_endpoint_.port(); }
 
       // Set user data
       inline void set_user_data(std::shared_ptr<void> data) { user_data_ = data; }
       inline std::shared_ptr<void> get_user_data() const { return user_data_; }
 
-   private:
+     private:
       inline void perform_handshake(const request& req)
       {
          // Validate WebSocket upgrade request
          auto it = req.headers.find("upgrade");
-         if (it == req.headers.end() || 
+         if (it == req.headers.end() ||
              !std::equal(it->second.begin(), it->second.end(), "websocket", "websocket" + 9,
-                        [](char a, char b) { return std::tolower(a) == std::tolower(b); })) {
+                         [](char a, char b) { return std::tolower(a) == std::tolower(b); })) {
             do_close();
             return;
          }
@@ -468,35 +428,33 @@ namespace glz
 
          std::string response_str = response.str();
          auto self = shared_from_this();
-         
-         asio::async_write(socket_, asio::buffer(response_str),
-            [self, req](std::error_code ec, std::size_t) {
-               if (ec) {
-                  if (self->server_) {
-                     self->server_->notify_error(self, ec);
-                  }
-                  return;
-               }
 
-               self->handshake_complete_ = true;
-               
-               // Notify server of successful connection
+         asio::async_write(socket_, asio::buffer(response_str), [self, req](std::error_code ec, std::size_t) {
+            if (ec) {
                if (self->server_) {
-                  self->server_->notify_open(self, req);
+                  self->server_->notify_error(self, ec);
                }
+               return;
+            }
 
-               // Start reading frames
-               self->start_read();
-            });
+            self->handshake_complete_ = true;
+
+            // Notify server of successful connection
+            if (self->server_) {
+               self->server_->notify_open(self, req);
+            }
+
+            // Start reading frames
+            self->start_read();
+         });
       }
-      
+
       inline void start_read()
       {
          auto self = shared_from_this();
-         socket_.async_read_some(asio::buffer(read_buffer_),
-            [self](std::error_code ec, std::size_t bytes_transferred) {
-               self->on_read(ec, bytes_transferred);
-            });
+         socket_.async_read_some(asio::buffer(read_buffer_), [self](std::error_code ec, std::size_t bytes_transferred) {
+            self->on_read(ec, bytes_transferred);
+         });
       }
 
       inline void on_read(std::error_code ec, std::size_t bytes_transferred)
@@ -509,9 +467,7 @@ namespace glz
          }
 
          // Add received data to frame buffer
-         frame_buffer_.insert(frame_buffer_.end(), 
-                             read_buffer_.begin(), 
-                             read_buffer_.begin() + bytes_transferred);
+         frame_buffer_.insert(frame_buffer_.end(), read_buffer_.begin(), read_buffer_.begin() + bytes_transferred);
 
          // Process complete frames
          process_frame(frame_buffer_.data(), frame_buffer_.size());
@@ -545,12 +501,13 @@ namespace glz
 
             // Get payload length
             uint64_t payload_length = header.payload_len();
-            
+
             if (payload_length == 126) {
                if (length - offset < 2) break;
                payload_length = (static_cast<uint64_t>(data[offset]) << 8) | data[offset + 1];
                offset += 2;
-            } else if (payload_length == 127) {
+            }
+            else if (payload_length == 127) {
                if (length - offset < 8) break;
                payload_length = 0;
                for (int i = 0; i < 8; ++i) {
@@ -576,7 +533,7 @@ namespace glz
             std::vector<uint8_t> payload(payload_length);
             if (payload_length > 0) {
                std::copy(data + offset, data + offset + payload_length, payload.begin());
-               
+
                if (header.mask()) {
                   for (std::size_t i = 0; i < payload_length; ++i) {
                      payload[i] ^= mask_key[i % 4];
@@ -600,115 +557,114 @@ namespace glz
       inline void handle_frame(ws_opcode opcode, const uint8_t* payload, std::size_t length, bool fin)
       {
          switch (opcode) {
-            case ws_opcode::text:
-            case ws_opcode::binary:
-               if (is_reading_frame_) {
-                  close(ws_close_code::protocol_error, "Unexpected data frame");
-                  return;
-               }
-               
-               current_opcode_ = opcode;
-               message_buffer_.assign(payload, payload + length);
-               
-               if (fin) {
-                  // Validate UTF-8 for text frames
-                  if (opcode == ws_opcode::text && !is_valid_utf8(message_buffer_.data(), message_buffer_.size())) {
-                     close(ws_close_code::invalid_payload, "Invalid UTF-8");
-                     return;
-                  }
-                  
-                  if (server_) {
-                     server_->notify_message(shared_from_this(), 
-                                           std::string_view(reinterpret_cast<const char*>(message_buffer_.data()), 
-                                                          message_buffer_.size()), 
-                                           current_opcode_);
-                  }
-                  message_buffer_.clear();
-                  current_opcode_ = ws_opcode::continuation;
-               } else {
-                  is_reading_frame_ = true;
-               }
-               break;
+         case ws_opcode::text:
+         case ws_opcode::binary:
+            if (is_reading_frame_) {
+               close(ws_close_code::protocol_error, "Unexpected data frame");
+               return;
+            }
 
-            case ws_opcode::continuation:
-               if (!is_reading_frame_) {
-                  close(ws_close_code::protocol_error, "Unexpected continuation frame");
+            current_opcode_ = opcode;
+            message_buffer_.assign(payload, payload + length);
+
+            if (fin) {
+               // Validate UTF-8 for text frames
+               if (opcode == ws_opcode::text && !is_valid_utf8(message_buffer_.data(), message_buffer_.size())) {
+                  close(ws_close_code::invalid_payload, "Invalid UTF-8");
                   return;
                }
 
-               message_buffer_.insert(message_buffer_.end(), payload, payload + length);
-               
-               if (fin) {
-                  is_reading_frame_ = false;
-                  
-                  // Validate UTF-8 for text frames
-                  if (current_opcode_ == ws_opcode::text && !is_valid_utf8(message_buffer_.data(), message_buffer_.size())) {
-                     close(ws_close_code::invalid_payload, "Invalid UTF-8");
-                     return;
-                  }
-                  
-                  if (server_) {
-                     server_->notify_message(shared_from_this(), 
-                                           std::string_view(reinterpret_cast<const char*>(message_buffer_.data()), 
-                                                          message_buffer_.size()), 
-                                           current_opcode_);
-                  }
-                  message_buffer_.clear();
-                  current_opcode_ = ws_opcode::continuation;
+               if (server_) {
+                  server_->notify_message(
+                     shared_from_this(),
+                     std::string_view(reinterpret_cast<const char*>(message_buffer_.data()), message_buffer_.size()),
+                     current_opcode_);
                }
-               break;
+               message_buffer_.clear();
+               current_opcode_ = ws_opcode::continuation;
+            }
+            else {
+               is_reading_frame_ = true;
+            }
+            break;
 
-            case ws_opcode::close:
-               {
-                  ws_close_code code = ws_close_code::normal;
-                  std::string reason;
-                  
-                  if (length >= 2) {
-                     code = static_cast<ws_close_code>((payload[0] << 8) | payload[1]);
-                     if (length > 2) {
-                        reason = std::string(reinterpret_cast<const char*>(payload + 2), length - 2);
-                     }
-                  }
-                  
-                  if (!is_closing_) {
-                     send_close_frame(code, reason);
-                  }
-                  
-                  do_close();
+         case ws_opcode::continuation:
+            if (!is_reading_frame_) {
+               close(ws_close_code::protocol_error, "Unexpected continuation frame");
+               return;
+            }
+
+            message_buffer_.insert(message_buffer_.end(), payload, payload + length);
+
+            if (fin) {
+               is_reading_frame_ = false;
+
+               // Validate UTF-8 for text frames
+               if (current_opcode_ == ws_opcode::text &&
+                   !is_valid_utf8(message_buffer_.data(), message_buffer_.size())) {
+                  close(ws_close_code::invalid_payload, "Invalid UTF-8");
+                  return;
                }
-               break;
 
-            case ws_opcode::ping:
-               send_pong(std::string_view(reinterpret_cast<const char*>(payload), length));
-               break;
+               if (server_) {
+                  server_->notify_message(
+                     shared_from_this(),
+                     std::string_view(reinterpret_cast<const char*>(message_buffer_.data()), message_buffer_.size()),
+                     current_opcode_);
+               }
+               message_buffer_.clear();
+               current_opcode_ = ws_opcode::continuation;
+            }
+            break;
 
-            case ws_opcode::pong:
-               // Pong frames are just ignored
-               break;
+         case ws_opcode::close: {
+            ws_close_code code = ws_close_code::normal;
+            std::string reason;
 
-            default:
-               close(ws_close_code::protocol_error, "Unknown opcode");
-               break;
+            if (length >= 2) {
+               code = static_cast<ws_close_code>((payload[0] << 8) | payload[1]);
+               if (length > 2) {
+                  reason = std::string(reinterpret_cast<const char*>(payload + 2), length - 2);
+               }
+            }
+
+            if (!is_closing_) {
+               send_close_frame(code, reason);
+            }
+
+            do_close();
+         } break;
+
+         case ws_opcode::ping:
+            send_pong(std::string_view(reinterpret_cast<const char*>(payload), length));
+            break;
+
+         case ws_opcode::pong:
+            // Pong frames are just ignored
+            break;
+
+         default:
+            close(ws_close_code::protocol_error, "Unknown opcode");
+            break;
          }
       }
-      
+
       inline void send_frame(ws_opcode opcode, std::string_view payload, bool fin = true)
       {
          if (is_closing_) return;
 
          std::size_t header_size = get_frame_header_size(payload.size());
          std::vector<uint8_t> frame(header_size + payload.size());
-         
+
          write_frame_header(opcode, payload.size(), fin, frame.data());
          std::copy(payload.begin(), payload.end(), frame.begin() + header_size);
 
          auto self = shared_from_this();
-         asio::async_write(socket_, asio::buffer(frame),
-            [self](std::error_code ec, std::size_t) {
-               if (ec && self->server_) {
-                  self->server_->notify_error(self, ec);
-               }
-            });
+         asio::async_write(socket_, asio::buffer(frame), [self](std::error_code ec, std::size_t) {
+            if (ec && self->server_) {
+               self->server_->notify_error(self, ec);
+            }
+         });
       }
 
       inline void send_close_frame(ws_close_code code, std::string_view reason)
@@ -716,22 +672,23 @@ namespace glz
          std::vector<uint8_t> payload(2 + reason.size());
          payload[0] = static_cast<uint8_t>(static_cast<uint16_t>(code) >> 8);
          payload[1] = static_cast<uint8_t>(static_cast<uint16_t>(code) & 0xFF);
-         
+
          if (!reason.empty()) {
             std::copy(reason.begin(), reason.end(), payload.begin() + 2);
          }
 
-         send_frame(ws_opcode::close, 
-                   std::string_view(reinterpret_cast<const char*>(payload.data()), payload.size()));
+         send_frame(ws_opcode::close, std::string_view(reinterpret_cast<const char*>(payload.data()), payload.size()));
       }
 
       inline std::size_t get_frame_header_size(std::size_t payload_length)
       {
          if (payload_length < 126) {
             return 2;
-         } else if (payload_length <= 0xFFFF) {
+         }
+         else if (payload_length <= 0xFFFF) {
             return 4;
-         } else {
+         }
+         else {
             return 10;
          }
       }
@@ -748,12 +705,14 @@ namespace glz
          if (payload_length < 126) {
             frame_header.payload_len(static_cast<uint8_t>(payload_length));
             header[1] = frame_header.data[1];
-         } else if (payload_length <= 0xFFFF) {
+         }
+         else if (payload_length <= 0xFFFF) {
             frame_header.payload_len(126);
             header[1] = frame_header.data[1];
             header[2] = static_cast<uint8_t>(payload_length >> 8);
             header[3] = static_cast<uint8_t>(payload_length & 0xFF);
-         } else {
+         }
+         else {
             frame_header.payload_len(127);
             header[1] = frame_header.data[1];
             for (int i = 0; i < 8; ++i) {
@@ -765,40 +724,40 @@ namespace glz
       inline bool is_valid_utf8(const uint8_t* data, std::size_t length)
       {
          // Simple UTF-8 validation
-         for (std::size_t i = 0; i < length; ) {
+         for (std::size_t i = 0; i < length;) {
             uint8_t byte = data[i];
-            
+
             if (byte < 0x80) {
                // ASCII character
                i++;
-            } else if ((byte & 0xE0) == 0xC0) {
+            }
+            else if ((byte & 0xE0) == 0xC0) {
                // 2-byte sequence
                if (i + 1 >= length || (data[i + 1] & 0xC0) != 0x80) {
                   return false;
                }
                i += 2;
-            } else if ((byte & 0xF0) == 0xE0) {
+            }
+            else if ((byte & 0xF0) == 0xE0) {
                // 3-byte sequence
-               if (i + 2 >= length || 
-                   (data[i + 1] & 0xC0) != 0x80 || 
-                   (data[i + 2] & 0xC0) != 0x80) {
+               if (i + 2 >= length || (data[i + 1] & 0xC0) != 0x80 || (data[i + 2] & 0xC0) != 0x80) {
                   return false;
                }
                i += 3;
-            } else if ((byte & 0xF8) == 0xF0) {
+            }
+            else if ((byte & 0xF8) == 0xF0) {
                // 4-byte sequence
-               if (i + 3 >= length || 
-                   (data[i + 1] & 0xC0) != 0x80 || 
-                   (data[i + 2] & 0xC0) != 0x80 || 
+               if (i + 3 >= length || (data[i + 1] & 0xC0) != 0x80 || (data[i + 2] & 0xC0) != 0x80 ||
                    (data[i + 3] & 0xC0) != 0x80) {
                   return false;
                }
                i += 4;
-            } else {
+            }
+            else {
                return false;
             }
          }
-         
+
          return true;
       }
 
@@ -807,7 +766,7 @@ namespace glz
          if (server_) {
             server_->notify_close(shared_from_this());
          }
-         
+
          std::error_code ec;
          socket_.close(ec);
       }

@@ -11,13 +11,13 @@ namespace glz
    // Forward declaration of the registry template
    template <auto Opts, uint32_t Proto>
    struct registry;
-   
+
    template <>
    struct protocol_storage<REPE>
    {
       using type = std::unordered_map<sv, std::function<void(repe::state&&)>, detail::string_hash, std::equal_to<>>;
    };
-   
+
    // Implementation for REPE protocol
    template <auto Opts>
    struct registry_impl<Opts, REPE>
@@ -31,11 +31,11 @@ namespace glz
                   return;
                }
             }
-            
+
             if (state.notify()) {
                return;
             }
-            
+
             if (state.read()) {
                write_response<Opts>(value, state);
             }
@@ -44,7 +44,7 @@ namespace glz
             }
          };
       }
-      
+
       template <class Func, class Result, class RegistryType>
       static void register_function_endpoint(sv path, Func& func, RegistryType& reg)
       {
@@ -69,7 +69,7 @@ namespace glz
             };
          }
       }
-      
+
       template <class Func, class Params, class RegistryType>
       static void register_param_function_endpoint(sv path, Func& func, RegistryType& reg)
       {
@@ -78,9 +78,9 @@ namespace glz
             if (read_params<Opts>(params, state) == 0) {
                return;
             }
-            
+
             using Result = std::invoke_result_t<decltype(func), Params>;
-            
+
             if (state.notify()) {
                if constexpr (std::same_as<Result, void>) {
                   func(params);
@@ -101,7 +101,7 @@ namespace glz
             }
          };
       }
-      
+
       template <class Obj, class RegistryType>
       static void register_object_endpoint(sv path, Obj& obj, RegistryType& reg)
       {
@@ -111,11 +111,11 @@ namespace glz
                   return;
                }
             }
-            
+
             if (state.notify()) {
                return;
             }
-            
+
             if (state.read()) {
                write_response<Opts>(obj, state);
             }
@@ -124,7 +124,7 @@ namespace glz
             }
          };
       }
-      
+
       template <class Value, class RegistryType>
       static void register_value_endpoint(sv path, Value& value, RegistryType& reg)
       {
@@ -134,12 +134,12 @@ namespace glz
                   return;
                }
             }
-            
+
             if (state.notify()) {
                state.out.header.notify(true);
                return;
             }
-            
+
             if (state.read()) {
                write_response<Opts>(value, state);
             }
@@ -148,7 +148,7 @@ namespace glz
             }
          };
       }
-      
+
       template <class Var, class RegistryType>
       static void register_variable_endpoint(sv path, Var& var, RegistryType& reg)
       {
@@ -158,12 +158,12 @@ namespace glz
                   return;
                }
             }
-            
+
             if (state.notify()) {
                state.out.header.notify(true);
                return;
             }
-            
+
             if (state.read()) {
                write_response<Opts>(var, state);
             }
@@ -172,19 +172,19 @@ namespace glz
             }
          };
       }
-      
+
       template <class T, class F, class Ret, class RegistryType>
       static void register_member_function_endpoint(sv path, T& value, F func, RegistryType& reg)
       {
          reg.endpoints[path] = [&value, func](repe::state&& state) mutable {
             if constexpr (std::same_as<Ret, void>) {
                (value.*func)();
-               
+
                if (state.notify()) {
                   state.out.header.notify(true);
                   return;
                }
-               
+
                write_response<Opts>(state);
             }
             else {
@@ -193,12 +193,12 @@ namespace glz
                   state.out.header.notify(true);
                   return;
                }
-               
+
                write_response<Opts>((value.*func)(), state);
             }
          };
       }
-      
+
       template <class T, class F, class Input, class Ret, class RegistryType>
       static void register_member_function_with_params_endpoint(sv path, T& value, F func, RegistryType& reg)
       {
@@ -209,15 +209,15 @@ namespace glz
                   return;
                }
             }
-            
+
             if constexpr (std::same_as<Ret, void>) {
                (value.*func)(input);
-               
+
                if (state.notify()) {
                   state.out.header.notify(true);
                   return;
                }
-               
+
                write_response<Opts>(state);
             }
             else {
@@ -226,7 +226,7 @@ namespace glz
                   state.out.header.notify(true);
                   return;
                }
-               
+
                write_response<Opts>((value.*func)(input), state);
             }
          };

@@ -11,7 +11,7 @@ namespace glz
    // Forward declaration of the registry template
    template <auto Opts, uint32_t Proto>
    struct registry;
-   
+
    template <>
    struct protocol_storage<REST>
    {
@@ -23,7 +23,7 @@ namespace glz
    struct registry_impl<Opts, REST>
    {
       using enum http_method;
-      
+
       // Helper method to convert a JSON pointer path to a REST path
       static std::string convert_to_rest_path(sv json_pointer_path)
       {
@@ -112,8 +112,7 @@ namespace glz
          std::string rest_path = convert_to_rest_path(path);
 
          // GET handler for nested objects
-         reg.endpoints.route(GET, rest_path,
-                             [&obj](const request& /*req*/, response& res) { res.body<Opts>(obj); });
+         reg.endpoints.route(GET, rest_path, [&obj](const request& /*req*/, response& res) { res.body<Opts>(obj); });
 
          // PUT handler for updating nested objects
          reg.endpoints.route(PUT, rest_path, [&obj](const request& req, response& res) {
@@ -156,8 +155,7 @@ namespace glz
          std::string rest_path = convert_to_rest_path(path);
 
          // GET handler for variables
-         reg.endpoints.route(GET, rest_path,
-                             [&var](const request& /*req*/, response& res) { res.body<Opts>(var); });
+         reg.endpoints.route(GET, rest_path, [&var](const request& /*req*/, response& res) { res.body<Opts>(var); });
 
          // PUT handler for updating variables
          reg.endpoints.route(PUT, rest_path, [&var](const request& req, response& res) {

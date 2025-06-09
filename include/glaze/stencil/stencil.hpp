@@ -313,12 +313,12 @@ namespace glz
                               temp_buffer.resize(2 * write_padding_bytes);
 
                               if constexpr (reflectable<T>) {
-                                 serialize<JSON>::template op<RawOpts>(get_member(value, get<I>(to_tie(value))),
-                                                                              ctx, temp_buffer, ix);
+                                 serialize<JSON>::template op<RawOpts>(get_member(value, get<I>(to_tie(value))), ctx,
+                                                                       temp_buffer, ix);
                               }
                               else if constexpr (glaze_object_t<T>) {
-                                 serialize<JSON>::template op<RawOpts>(
-                                    get_member(value, get<I>(reflect<T>::values)), ctx, temp_buffer, ix);
+                                 serialize<JSON>::template op<RawOpts>(get_member(value, get<I>(reflect<T>::values)),
+                                                                       ctx, temp_buffer, ix);
                               }
 
                               temp_buffer.resize(ix);
@@ -380,16 +380,16 @@ namespace glz
       }
       return {buffer};
    }
-   
+
    template <auto Opts = opts{.format = MUSTACHE}, class Template, class T, resizable Buffer>
-      requires (Opts.format == MUSTACHE)
+      requires(Opts.format == MUSTACHE)
    [[nodiscard]] error_ctx mustache(Template&& layout, T&& value, Buffer& buffer)
    {
       return stencil<Opts>(std::forward<Template>(layout), std::forward<T>(value), buffer);
    }
-   
+
    template <auto Opts = opts{.format = MUSTACHE}, class Template, class T>
-      requires (Opts.format == MUSTACHE)
+      requires(Opts.format == MUSTACHE)
    [[nodiscard]] expected<std::string, error_ctx> mustache(Template&& layout, T&& value)
    {
       std::string buffer{};

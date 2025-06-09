@@ -177,11 +177,13 @@ struct glz::meta<PostService>
 };
 
 // Helper function to read files
-std::string read_file(const std::string& path) {
+std::string read_file(const std::string& path)
+{
    std::string full_path = std::string{SOURCE_DIR} + "/" + path;
    std::ifstream file(full_path);
    if (!file.is_open()) {
-      std::cerr << "Failed to open " << full_path << ", current directory: " << std::filesystem::current_path().string() << "\n";
+      std::cerr << "Failed to open " << full_path << ", current directory: " << std::filesystem::current_path().string()
+                << "\n";
       return "";
    }
    std::stringstream buffer;
@@ -190,7 +192,8 @@ std::string read_file(const std::string& path) {
 }
 
 // Helper function to check if file exists
-bool file_exists(const std::string& path) {
+bool file_exists(const std::string& path)
+{
    std::string full_path = std::string{SOURCE_DIR} + "/" + path;
    return std::filesystem::exists(full_path);
 }
@@ -227,10 +230,10 @@ int main()
    // Register services
    registry.on(userService);
    registry.on(postService);
-   
+
    // OPTION 1: Enable CORS with default settings (allow all origins - good for development)
    server.enable_cors();
-   
+
    // OPTION 2: Enable CORS with custom configuration
    /*
     glz::cors_config cors_config;
@@ -241,7 +244,7 @@ int main()
     cors_config.max_age = 3600; // 1 hour
     server.enable_cors(cors_config);
     */
-   
+
    // OPTION 3: Enable CORS for specific origins (good for production)
    /*
     server.enable_cors({
@@ -263,15 +266,13 @@ int main()
          res.content_type("text/html").body(html);
       }
    });
-   
+
    // Example of a custom endpoint that returns CORS headers
    server.get("/test-cors", [](const glz::request& req, glz::response& res) {
       // The CORS middleware will automatically add the appropriate headers
-      res.json(glz::json_t{
-         {"message", "CORS test endpoint"},
-         {"origin", req.headers.count("Origin") ? req.headers.at("Origin") : "none"},
-         {"method", glz::to_string(req.method)}
-      });
+      res.json(glz::json_t{{"message", "CORS test endpoint"},
+                           {"origin", req.headers.count("Origin") ? req.headers.at("Origin") : "none"},
+                           {"method", glz::to_string(req.method)}});
    });
 
    // Start the server

@@ -1,28 +1,31 @@
 // Glaze Library
 // For the license information refer to glaze.hpp
 
+#include <fstream>
+#include <iostream>
+#include <sstream>
+
 #include "glaze/glaze.hpp"
 #include "glaze/net/http_server.hpp"
 #include "ut/ut.hpp"
 
-#include <iostream>
-#include <fstream>
-#include <sstream>
-
 using namespace ut;
 
-struct User {
+struct User
+{
    int id{};
    std::string name{};
    std::string email{};
 };
 
-struct ErrorResponse {
+struct ErrorResponse
+{
    std::string error{};
 };
 
 // Helper function to read a file into a string
-std::string read_file(const std::string& path) {
+std::string read_file(const std::string& path)
+{
    std::ifstream file(path);
    if (!file.is_open()) {
       return "";
@@ -32,17 +35,16 @@ std::string read_file(const std::string& path) {
    return buffer.str();
 }
 
-int main() {
+int main()
+{
    // Create a server
    glz::http_server server;
-   
+
    // Mock database
-   std::unordered_map<int, User> users = {
-      {1, {1, "John Doe", "john@example.com"}},
-      {2, {2, "Jane Smith", "jane@example.com"}}
-   };
+   std::unordered_map<int, User> users = {{1, {1, "John Doe", "john@example.com"}},
+                                          {2, {2, "Jane Smith", "jane@example.com"}}};
    int next_id = 3;
-   
+
    // Set up routes for API
    server.get("/api/users", [&](const glz::request& /*req*/, glz::response& res) {
       std::vector<User> user_list;
@@ -51,24 +53,26 @@ int main() {
       }
       res.json(user_list);
    });
-   
+
    server.get("/api/users/:id", [&](const glz::request& req, glz::response& res) {
       try {
          // Get the id from the path parameters
          int id = std::stoi(req.params.at("id"));
-         
+
          // Find the user
          auto it = users.find(id);
          if (it != users.end()) {
             res.json(it->second);
-         } else {
+         }
+         else {
             res.status(404).json(ErrorResponse{"User not found"});
          }
-      } catch (const std::exception& e) {
+      }
+      catch (const std::exception& e) {
          res.status(400).json(ErrorResponse{"Invalid user ID"});
       }
    });
-   
+
    server.post("/api/users", [&](const glz::request& req, glz::response& res) {
       // Parse JSON request body
       auto result = glz::read_json<User>(req.body);
@@ -76,17 +80,17 @@ int main() {
          res.status(400).json(ErrorResponse{glz::format_error(result, req.body)});
          return;
       }
-      
+
       User user = result.value();
       user.id = next_id++;
-      
+
       // Add to database
       users[user.id] = user;
-      
+
       // Return the created user
       res.status(201).json(user);
    });
-   
+
    // Serve the frontend files
    server.get("/", [](const glz::request& /*req*/, glz::response& res) {
       // Inline HTML for simplicity (in a real app, you would read from a file)
@@ -341,17 +345,17 @@ int main() {
       </body>
       </html>
       )";
-      
+
       res.content_type("text/html").body(html);
    });
-   
+
    // Start the server
    server.bind("127.0.0.1", 8080);
    std::cout << "Server listening on http://127.0.0.1:8080" << std::endl;
    server.start();
-   
+
    // Keep the server running
    std::cin.get();
-   
+
    return 0;
 }

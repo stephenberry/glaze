@@ -1,53 +1,57 @@
 // Glaze Library
 // For the license information refer to glaze.hpp
 
+#include <fstream>
+#include <iostream>
+#include <sstream>
+
 #include "glaze/glaze.hpp"
 #include "glaze/net/http_server.hpp"
 #include "glaze/rpc/registry.hpp"
 #include "ut/ut.hpp"
 
-#include <iostream>
-#include <fstream>
-#include <sstream>
-
 using namespace ut;
 
-struct User {
+struct User
+{
    int id{};
    std::string name{};
    std::string email{};
 };
 
-struct UserIdRequest {
+struct UserIdRequest
+{
    int id{};
 };
 
-struct ErrorResponse {
+struct ErrorResponse
+{
    std::string error{};
 };
 
 // Define the UserService that will be exposed via REST
-struct UserService {
+struct UserService
+{
    // State
-   std::unordered_map<int, User> users = {
-      {1, {1, "John Doe", "john@example.com"}},
-      {2, {2, "Jane Smith", "jane@example.com"}}
-   };
+   std::unordered_map<int, User> users = {{1, {1, "John Doe", "john@example.com"}},
+                                          {2, {2, "Jane Smith", "jane@example.com"}}};
    int next_id = 3;
-   
+
    // Methods that will be exposed as REST endpoints
-   
+
    // Get all users
-   std::vector<User> getAllUsers() {
+   std::vector<User> getAllUsers()
+   {
       std::vector<User> user_list;
       for (const auto& [id, user] : users) {
          user_list.push_back(user);
       }
       return user_list;
    }
-   
+
    // Get user by ID
-   User getUserById(const UserIdRequest& request) {
+   User getUserById(const UserIdRequest& request)
+   {
       auto it = users.find(request.id);
       if (it != users.end()) {
          return it->second;
@@ -56,9 +60,10 @@ struct UserService {
       // For simplicity, we'll return an empty user
       return User{};
    }
-   
+
    // Create a new user
-   User createUser(User&& user) {
+   User createUser(User&& user)
+   {
       user.id = next_id++;
       users[user.id] = user;
       return user;
@@ -66,13 +71,15 @@ struct UserService {
 };
 
 template <>
-struct glz::meta<UserService> {
+struct glz::meta<UserService>
+{
    using T = UserService;
    static constexpr auto value = object(&T::getAllUsers, &T::getUserById, &T::createUser);
 };
 
 // Helper function to read a file into a string
-std::string read_file(const std::string& path) {
+std::string read_file(const std::string& path)
+{
    std::ifstream file(path);
    if (!file.is_open()) {
       return "";
@@ -82,17 +89,18 @@ std::string read_file(const std::string& path) {
    return buffer.str();
 }
 
-int main() {
+int main()
+{
    glz::http_server server;
-   
+
    UserService userService;
-   
+
    glz::registry<glz::opts{}, glz::REST> registry;
-   
+
    registry.on(userService);
-   
+
    server.mount("/api", registry.endpoints);
-   
+
    // Serve the frontend files
    server.get("/", [](const glz::request& /*req*/, glz::response& res) {
       std::string_view html = R"(
@@ -342,17 +350,17 @@ int main() {
       </body>
       </html>
       )";
-      
+
       res.content_type("text/html").body(html);
    });
-   
+
    // Start the server
    server.bind("127.0.0.1", 8080);
    std::cout << "Server listening on http://127.0.0.1:8080\n";
    server.start();
-   
+
    // Keep the server running
    std::cin.get();
-   
+
    return 0;
 }

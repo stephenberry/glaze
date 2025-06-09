@@ -632,7 +632,7 @@ namespace glz
       asio::awaitable<void> run_instance(asio::ip::tcp::socket socket)
       {
          socket.set_option(asio::ip::tcp::no_delay(true));
-         
+
          // Allocate once and reuse memory
          repe::message request{};
          repe::message response{};

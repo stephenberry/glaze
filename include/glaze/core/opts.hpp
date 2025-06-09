@@ -22,7 +22,7 @@ namespace glz
    inline constexpr uint32_t MUSTACHE = 501;
    inline constexpr uint32_t CSV = 10000;
    inline constexpr uint32_t EETF = 20000;
-   
+
    // Protocol formats
    inline constexpr uint32_t REPE = 30000;
    inline constexpr uint32_t REST = 30100;

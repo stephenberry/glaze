@@ -10,8 +10,8 @@
 #include <future>
 #include <glaze/glaze.hpp>
 #include <iostream>
-#include <sstream>
 #include <source_location>
+#include <sstream>
 #include <thread>
 #include <unordered_map>
 
@@ -42,17 +42,17 @@ static_assert(false, "standalone or boost asio must be included to use glaze/ext
 namespace glz
 {
    // Server implementation using non-blocking asio with WebSocket support
-   template<bool EnableTLS = false>
+   template <bool EnableTLS = false>
    struct http_server
    {
       // Socket type abstraction
-      using socket_type = std::conditional_t<EnableTLS, 
+      using socket_type = std::conditional_t<EnableTLS,
 #ifdef GLZ_ENABLE_SSL
-         asio::ssl::stream<asio::ip::tcp::socket>,
+                                             asio::ssl::stream<asio::ip::tcp::socket>,
 #else
-         asio::ip::tcp::socket,
+                                             asio::ip::tcp::socket,
 #endif
-         asio::ip::tcp::socket>;
+                                             asio::ip::tcp::socket>;
 
       inline http_server() : io_context(std::make_unique<asio::io_context>())
       {
@@ -245,7 +245,7 @@ namespace glz
 
       /**
        * @brief Load SSL certificate and private key for HTTPS servers
-       * 
+       *
        * @param cert_file Path to the certificate file (PEM format)
        * @param key_file Path to the private key file (PEM format)
        * @return Reference to this server for method chaining
@@ -263,7 +263,7 @@ namespace glz
 
       /**
        * @brief Set SSL verification mode
-       * 
+       *
        * @param mode SSL verification mode
        * @return Reference to this server for method chaining
        */

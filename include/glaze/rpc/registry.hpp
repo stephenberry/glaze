@@ -8,10 +8,11 @@
 
 namespace glz
 {
-   namespace detail {
+   namespace detail
+   {
       static constexpr std::string_view empty_path = "";
    }
-   
+
    // Forward declaration of implementation template
    template <auto Opts, uint32_t Protocol>
    struct registry_impl;
@@ -26,7 +27,7 @@ namespace glz
    // This registry does not support adding methods from RPC calls or adding methods once RPC calls can be made.
    template <auto Opts = opts{}, uint32_t Proto = REPE>
    struct registry
-   {      
+   {
       // procedure for REPE protocol
       using procedure = std::function<void(repe::state&&)>; // RPC method
 
@@ -158,7 +159,7 @@ namespace glz
             out.header.body_length = body.size();
             out.header.length = sizeof(repe::header) + out.query.size() + out.body.size();
          };
-         
+
          if (auto it = endpoints.find(in.query); it != endpoints.end()) {
             if (bool(in.header.ec)) {
                out = in;

@@ -51,12 +51,12 @@ namespace glz
          }
       }
    }
-   
-   // When running with exceptions enabled we allow the user to provide an exceptions callback, which will be invoked when an exception is thrown from running a menu item.
-   // The exception callback must take a `const std::exception&`
-   
+
+   // When running with exceptions enabled we allow the user to provide an exceptions callback, which will be invoked
+   // when an exception is thrown from running a menu item. The exception callback must take a `const std::exception&`
+
    template <auto Opts = opts{.prettify = true}, class T, cli_menu_boolean ShowMenu = std::atomic<bool>>
-   requires(glaze_object_t<T> || reflectable<T>)
+      requires(glaze_object_t<T> || reflectable<T>)
 #if __cpp_exceptions
    inline void run_cli_menu(T& value, ShowMenu&& show_menu, auto&& exception_callback)
 #else
@@ -338,11 +338,11 @@ namespace glz
          std::fprintf(stderr, "Invalid input.\n");
       }
    }
-   
+
 #if __cpp_exceptions
    // Version without exception callback for platforms with exceptions enabled
    template <auto Opts = opts{.prettify = true}, class T, cli_menu_boolean ShowMenu = std::atomic<bool>>
-   requires(glaze_object_t<T> || reflectable<T>)
+      requires(glaze_object_t<T> || reflectable<T>)
    inline void run_cli_menu(T& value, ShowMenu&& show_menu = true)
    {
       run_cli_menu<Opts>(value, show_menu, nullptr);

@@ -31,32 +31,32 @@ namespace glz
       std::string remote_ip{};
       uint16_t remote_port{};
    };
-   
+
    // Response builder
    struct response
    {
       int status_code = 200;
       std::unordered_map<std::string, std::string> response_headers{};
       std::string response_body{};
-      
+
       inline response& status(int code)
       {
          status_code = code;
          return *this;
       }
-      
+
       inline response& header(std::string_view name, std::string_view value)
       {
          response_headers[std::string(name)] = std::string(value);
          return *this;
       }
-      
+
       inline response& body(std::string_view content)
       {
          response_body = std::string(content);
          return *this;
       }
-      
+
       // Use glz::opts for format deduction and serialization
       // my_response.res<Opts>(value);
       template <auto Opts, class T>
@@ -75,9 +75,9 @@ namespace glz
          }
          return *this;
       }
-      
+
       inline response& content_type(std::string_view type) { return header("Content-Type", type); }
-      
+
       // JSON response helper using Glaze
       template <class T>
       response& json(T&& value)
@@ -90,7 +90,7 @@ namespace glz
          return *this;
       }
    };
-   
+
    using handler = std::function<void(const request&, response&)>;
    using async_handler = std::function<std::future<void>(const request&, response&)>;
    using error_handler = std::function<void(std::error_code, std::source_location)>;
