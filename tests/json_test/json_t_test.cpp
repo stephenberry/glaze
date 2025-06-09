@@ -237,6 +237,4 @@ suite generic_json_tests = [] {
    };
 };
 
-int main() {
-    return 0;
-}
+int main() { return 0; }
