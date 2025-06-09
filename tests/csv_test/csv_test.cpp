@@ -1323,4 +1323,34 @@ v3s[2],1,2,3,4)";
    };
 };
 
+struct KeyframeData
+{
+   std::vector<int> start_ind;
+   std::vector<int> duration;
+   std::vector<int> delay;
+   std::vector<std::string> renderHandle;
+   std::vector<int> renderArgument_1;
+   std::vector<int> renderArgument_2;
+};
+
+suite odd_csv_test = [] {
+   "odd_string"_test = [] {
+      KeyframeData obj{};
+      std::string buffer{};
+      std::string csv_data = R"(start_ind,duration,delay,renderHandle,renderArgument_1,renderArgument_2
+0,400,30,gray::SimplePushPull,0,0
+400,250,40,gray::SimplePushPull,1,0
+650,300,80,gray::SimplePushPull,2,0)";
+      auto ec = glz::read<glz::opts_csv{.layout = glz::colwise}>(obj, csv_data);
+      expect(not ec) << glz::format_error(ec, buffer) << '\n';
+      // this passed.
+   };
+   "odd_files"_test = [] {
+      KeyframeData obj{};
+      std::string buffer{};
+      auto ec = glz::read_file_csv<glz::colwise>(obj, GLZ_TEST_DIRECTORY "/kf-data.csv", buffer);
+      expect(not ec) << glz::format_error(ec, buffer) << '\n';
+   };
+};
+
 int main() { return 0; }
