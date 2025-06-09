@@ -72,4 +72,4 @@ When you parse into a `std::string_view` Glaze does not unescape JSON strings wi
 
 > Does the order of members in a struct matter?
 
-No, Glaze uses compile time generated hash maps for C++ structs. Accessing fields out of has little to no performance effect on Glaze.
+No, Glaze uses compile time generated hash maps for C++ structs. Accessing fields out of order has little to no performance effect on Glaze.
