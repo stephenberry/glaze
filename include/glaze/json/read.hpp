@@ -2230,7 +2230,6 @@ namespace glz
                      return;
                   }
                   else {
-                     ++it;
                      if constexpr ((glaze_object_t<T> || reflectable<T>) && Opts.error_on_missing_keys) {
                         constexpr auto req_fields = required_fields<T, Opts>();
                         if ((req_fields & fields) != req_fields) {
@@ -2246,6 +2245,7 @@ namespace glz
                            return;
                         }
                      }
+                     ++it; // Increment after checking for mising keys so errors are within buffer bounds
                      if constexpr (not Opts.null_terminated) {
                         if (it == end) {
                            ctx.error = error_code::end_reached;
