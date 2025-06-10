@@ -230,35 +230,35 @@ namespace glz
          return false;
       }
 
-      // This wrapper uses the whole string_view context for the character class      
+      // Fixed character class matching with proper range and literal handling
       template <class Iterator>
       static bool match_char_class_from_context(Iterator& current, Iterator end, std::string_view char_class)
       {
          if (current == end) return false;
-         
+
          char ch = *current;
          bool negate = false;
          std::size_t start = 0;
-         
+
          if (!char_class.empty() && char_class[0] == '^') {
             negate = true;
             start = 1;
          }
-         
+
          bool found = false;
-         
-         for (std::size_t i = start; i < char_class.size(); ) {
+
+         for (std::size_t i = start; i < char_class.size();) {
             // Check if this is a range pattern X-Y
             // A dash creates a range only if:
-            // 1. There are at least 3 characters from current position (X-Y)
+            // 1. There are exactly 2 more characters (dash and end char)
             // 2. The second character is a dash
-            // 3. We allow ranges at the beginning (after optional ^)
-            
+            // 3. The dash is not at the very beginning or very end
+
             if (i + 2 < char_class.size() && char_class[i + 1] == '-') {
                // Process as range X-Y
                char range_start = char_class[i];
                char range_end = char_class[i + 2];
-               
+
                // Validate range and check if character matches
                if (range_start <= range_end && ch >= range_start && ch <= range_end) {
                   found = true;
@@ -266,8 +266,20 @@ namespace glz
                }
                i += 3; // Skip the entire range pattern X-Y
             }
+            else if (i + 2 == char_class.size() && char_class[i + 1] == '-') {
+               // Special case: X- at the end of character class
+               // Process as range X-Y where Y is the last character
+               char range_start = char_class[i];
+               char range_end = char_class[i + 2];
+
+               if (range_start <= range_end && ch >= range_start && ch <= range_end) {
+                  found = true;
+                  break;
+               }
+               i += 3; // Skip the entire range pattern X-Y
+            }
             else {
-               // Process as literal character (including - at start/end)
+               // Process as literal character (including - at start/end or isolated)
                if (ch == char_class[i]) {
                   found = true;
                   break;
@@ -275,9 +287,9 @@ namespace glz
                i += 1; // Move to next character
             }
          }
-         
+
          if (negate) found = !found;
-         
+
          if (found) {
             ++current;
             return true;
@@ -285,11 +297,13 @@ namespace glz
          return false;
       }
 
-      // Main matching logic for a pattern sequence
+      // Enhanced matching logic with basic backtracking
       template <class Iterator>
-      static bool match_string(std::string_view pattern, Iterator& current_ref, Iterator end,
-                               Iterator begin_of_this_attempt)
+      static bool match_string_with_backtrack(std::string_view pattern, Iterator& current_ref, Iterator end,
+                                              Iterator begin_of_this_attempt, int depth = 0)
       {
+         if (depth > 100) return false; // Prevent infinite recursion
+
          // The function pointer uses a std::string_view for its context.
          using atom_match_ptr = bool (*)(Iterator&, Iterator, std::string_view);
 
@@ -379,23 +393,22 @@ namespace glz
             pat_idx += atom_pattern_len;
 
             int min_repeats = 1, max_repeats = 1;
-            // bool quantified = false; // unused
 
             if (pat_idx < pattern.size()) {
                char q_char = pattern[pat_idx];
                if (q_char == '?') {
                   min_repeats = 0;
-                  max_repeats = 1; /*quantified = true;*/
+                  max_repeats = 1;
                   pat_idx++;
                }
                else if (q_char == '*') {
                   min_repeats = 0;
-                  max_repeats = -1; /*quantified = true;*/
+                  max_repeats = -1;
                   pat_idx++;
                }
                else if (q_char == '+') {
                   min_repeats = 1;
-                  max_repeats = -1; /*quantified = true;*/
+                  max_repeats = -1;
                   pat_idx++;
                }
                else if (q_char == '{') {
@@ -405,7 +418,6 @@ namespace glz
 
                   std::string_view quant_spec_str = pattern.substr(quant_spec_start, quant_spec_end - quant_spec_start);
                   pat_idx = quant_spec_end + 1;
-                  // quantified = true;
 
                   const char* spec_start_ptr = quant_spec_str.data();
                   const char* spec_end_ptr = quant_spec_str.data() + quant_spec_str.size();
@@ -436,35 +448,152 @@ namespace glz
                }
             }
 
-            int match_count = 0;
-            // Iterator iter_before_quantified_match = current; // Unused variable
+            // Try different numbers of matches for this atom with backtracking
+            Iterator saved_pos = current;
 
-            for (int i = 0; (max_repeats == -1 || i < max_repeats); ++i) {
-               Iterator iter_before_this_atom_match = current;
-               // Call the function pointer, passing the context
-               if (atom_match_logic(current, end, atom_context)) {
-                  match_count++;
-                  if (iter_before_this_atom_match == current &&
-                      max_repeats == -1) { // Matched empty and infinite quantifier
-                     break;
+            // For quantified atoms, try from minimum to maximum matches
+            for (int try_count = max_repeats == -1 ? 1000 : max_repeats; try_count >= min_repeats; --try_count) {
+               current = saved_pos;
+               int match_count = 0;
+               bool atom_success = true;
+
+               // Try to match exactly try_count times
+               for (int i = 0; i < try_count && atom_success; ++i) {
+                  Iterator iter_before_this_atom_match = current;
+                  if (atom_match_logic(current, end, atom_context)) {
+                     match_count++;
+                     if (iter_before_this_atom_match == current && max_repeats == -1) {
+                        // Matched empty and infinite quantifier - avoid infinite loop
+                        break;
+                     }
+                  }
+                  else {
+                     atom_success = false;
+                     current = iter_before_this_atom_match;
                   }
                }
-               else {
-                  current = iter_before_this_atom_match; // Backtrack this failed atom match
-                  break;
+
+               if (match_count >= min_repeats) {
+                  // Try to match the rest of the pattern
+                  Iterator test_current = current;
+                  if (match_string_with_backtrack(pattern.substr(pat_idx), test_current, end, begin_of_this_attempt,
+                                                  depth + 1)) {
+                     current_ref = test_current;
+                     return true;
+                  }
+               }
+
+               // If infinite quantifier, limit the tries to reasonable number
+               if (max_repeats == -1 && try_count > 100) {
+                  try_count = 100;
                }
             }
 
-            if (match_count < min_repeats) {
-               // If not enough matches, the whole pattern piece fails.
-               // For greedy matching, we don't backtrack previous atoms here.
-               // A full regex engine would need backtracking for complex cases.
-               return false;
-            }
-            // current is now positioned after the greedily matched sequence.
+            // All attempts failed
+            return false;
          }
 
          current_ref = current; // Commit progress
+         return true;
+      }
+
+      // Main matching logic - wrapper that tries enhanced version first, then falls back
+      template <class Iterator>
+      static bool match_string(std::string_view pattern, Iterator& current_ref, Iterator end,
+                               Iterator begin_of_this_attempt)
+      {
+         // For simple patterns without quantifiers, use the original fast algorithm
+         bool has_quantifiers = false;
+         for (char c : pattern) {
+            if (c == '*' || c == '+' || c == '?' || c == '{') {
+               has_quantifiers = true;
+               break;
+            }
+         }
+
+         if (!has_quantifiers) {
+            return match_string_simple(pattern, current_ref, end, begin_of_this_attempt);
+         }
+
+         return match_string_with_backtrack(pattern, current_ref, end, begin_of_this_attempt);
+      }
+
+      // Original simple matching logic for patterns without quantifiers
+      template <class Iterator>
+      static bool match_string_simple(std::string_view pattern, Iterator& current_ref, Iterator end,
+                                      Iterator begin_of_this_attempt)
+      {
+         using atom_match_ptr = bool (*)(Iterator&, Iterator, std::string_view);
+
+         Iterator current = current_ref;
+         std::size_t pat_idx = 0;
+
+         if (!pattern.empty() && pattern[0] == '^') {
+            if (current != begin_of_this_attempt) {
+               return false;
+            }
+            pat_idx++;
+         }
+
+         while (pat_idx < pattern.size()) {
+            atom_match_ptr atom_match_logic = nullptr;
+            std::string_view atom_context;
+            std::size_t atom_pattern_len = 0;
+
+            char p_char = pattern[pat_idx];
+
+            if (p_char == '\\' && pat_idx + 1 < pattern.size()) {
+               char escaped = pattern[pat_idx + 1];
+               atom_pattern_len = 2;
+               switch (escaped) {
+               case 'd':
+                  atom_match_logic = &match_digit<Iterator>;
+                  break;
+               case 'w':
+                  atom_match_logic = &match_word<Iterator>;
+                  break;
+               case 's':
+                  atom_match_logic = &match_whitespace<Iterator>;
+                  break;
+               default:
+                  atom_context = pattern.substr(pat_idx + 1, 1);
+                  atom_match_logic = &match_char_from_context<Iterator>;
+                  break;
+               }
+            }
+            else if (p_char == '.') {
+               atom_pattern_len = 1;
+               atom_match_logic = &match_any<Iterator>;
+            }
+            else if (p_char == '[') {
+               auto close_pos = pattern.find(']', pat_idx + 1);
+               if (close_pos == std::string_view::npos) return false;
+
+               atom_context = pattern.substr(pat_idx + 1, close_pos - (pat_idx + 1));
+               atom_pattern_len = (close_pos + 1) - pat_idx;
+               atom_match_logic = &match_char_class_from_context<Iterator>;
+            }
+            else if (p_char == '$') {
+               if (pat_idx == pattern.size() - 1) {
+                  current_ref = current;
+                  return current == end;
+               }
+               return false;
+            }
+            else {
+               atom_pattern_len = 1;
+               atom_context = pattern.substr(pat_idx, 1);
+               atom_match_logic = &match_char_from_context<Iterator>;
+            }
+
+            pat_idx += atom_pattern_len;
+
+            if (!atom_match_logic(current, end, atom_context)) {
+               return false;
+            }
+         }
+
+         current_ref = current;
          return true;
       }
 

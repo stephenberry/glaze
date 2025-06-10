@@ -566,4 +566,67 @@ suite comprehensive_regex_debug = [] {
    };
 };
 
+suite backtracking_tests = [] {
+   "email_pattern_with_backtracking"_test = [] {
+      auto email_regex = glz::re<R"([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})">();
+      
+      // These should now work with backtracking
+      expect(email_regex.search("valid@example.com").matched) << "Basic email should match\n";
+      expect(email_regex.search("test.email@domain.org").matched) << "Email with dots should match\n";
+      expect(email_regex.search("user@test.co.uk").matched) << "Email with longer TLD should match\n";
+      
+      // Verify the full match
+      auto result = email_regex.search("valid@example.com");
+      if (result.matched) {
+         expect(result.view() == "valid@example.com") << "Should match entire email\n";
+      }
+   };
+   
+   "backtracking_with_quantifiers"_test = [] {
+      // Pattern that requires backtracking: match "abc" followed by "def"
+      // where the first part could greedily consume the 'd'
+      auto regex = glz::re<R"([a-z]+def)">();
+      
+      expect(regex.search("abcdef").matched) << "Should match with backtracking\n";
+      
+      auto result = regex.search("abcdef");
+      if (result.matched) {
+         expect(result.view() == "abcdef") << "Should match entire string\n";
+      }
+   };
+   
+   "complex_pattern_with_multiple_quantifiers"_test = [] {
+      // A pattern that tests multiple quantifiers requiring coordination
+      auto regex = glz::re<R"(\d+\.\d+)">();
+      
+      expect(regex.search("123.456").matched) << "Should match decimal number\n";
+      expect(regex.search("1.0").matched) << "Should match simple decimal\n";
+      
+      auto result = regex.search("Price: 123.456 dollars");
+      if (result.matched) {
+         expect(result.view() == "123.456") << "Should extract decimal from text\n";
+      }
+   };
+   
+   "character_class_edge_cases"_test = [] {
+      // Test specific character class patterns that were problematic
+      auto dash_at_end = glz::re<R"([a-zA-Z0-9.-]+)">();
+      expect(dash_at_end.search("test-case.example").matched) << "Dash at end of char class should work\n";
+      
+      auto special_chars = glz::re<R"([._%+-]+)">();
+      expect(special_chars.search("test.email_name+tag").matched) << "Special chars should match\n";
+   };
+   
+   "quantifier_combinations"_test = [] {
+      // Test various quantifier combinations
+      auto plus_question = glz::re<R"(\d+\.?\d*)">();
+      expect(plus_question.search("123").matched) << "Should match integer\n";
+      expect(plus_question.search("123.456").matched) << "Should match decimal\n";
+      
+      auto star_plus = glz::re<R"([a-z]*[A-Z]+)">();
+      expect(star_plus.search("helloWORLD").matched) << "Should match lowercase followed by uppercase\n";
+      expect(star_plus.search("WORLD").matched) << "Should match just uppercase\n";
+   };
+};
+
 int main() {}
