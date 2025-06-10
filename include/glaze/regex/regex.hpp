@@ -51,7 +51,7 @@ namespace glz
    }
 
    // Result type for matches
-   template <typename Iterator>
+   template <class Iterator>
    struct match_result
    {
       bool matched = false;
@@ -170,7 +170,7 @@ namespace glz
       }
 
       // Match any character
-      template <typename Iterator>
+      template <class Iterator>
       static bool match_any(Iterator& current, Iterator end)
       {
          if (current != end) {
@@ -181,7 +181,7 @@ namespace glz
       }
 
       // Match digit
-      template <typename Iterator>
+      template <class Iterator>
       static bool match_digit(Iterator& current, Iterator end)
       {
          if (current != end && *current >= '0' && *current <= '9') {
@@ -192,7 +192,7 @@ namespace glz
       }
 
       // Match word character
-      template <typename Iterator>
+      template <class Iterator>
       static bool match_word(Iterator& current, Iterator end)
       {
          if (current != end && ((*current >= 'a' && *current <= 'z') || (*current >= 'A' && *current <= 'Z') ||
@@ -204,7 +204,7 @@ namespace glz
       }
 
       // Match whitespace
-      template <typename Iterator>
+      template <class Iterator>
       static bool match_whitespace(Iterator& current, Iterator end)
       {
          if (current != end && (*current == ' ' || *current == '\t' || *current == '\n' || *current == '\r')) {
@@ -215,7 +215,7 @@ namespace glz
       }
 
      private: // Moved private keyword up, match_pattern and match_string are the main interface from basic_regex
-      template <typename Iterator>
+      template <class Iterator>
       static bool match_char_literal(char expected, Iterator& current, Iterator end)
       {
          if (current != end && *current == expected) {
@@ -225,7 +225,7 @@ namespace glz
          return false;
       }
 
-      template <typename Iterator>
+      template <class Iterator>
       static bool match_char_class(std::string_view char_class, Iterator& current, Iterator end)
       {
          if (current == end) return false;
@@ -269,7 +269,7 @@ namespace glz
       // Note: handle_quantifier is removed as its logic is integrated into match_string.
 
       // Main matching logic for a pattern sequence
-      template <typename Iterator>
+      template <class Iterator>
       static bool match_string(std::string_view pattern, Iterator& current_ref, Iterator end,
                                Iterator begin_of_this_attempt)
       {
@@ -446,7 +446,7 @@ namespace glz
 
      public: // Moved public keyword up, match_pattern is part of public API of matcher
       // Simple pattern matcher using string processing
-      template <typename Iterator>
+      template <class Iterator>
       static match_result<Iterator> match_pattern(std::string_view pattern, Iterator begin, Iterator end, bool anchored)
       {
          if (anchored) {
@@ -499,13 +499,13 @@ namespace glz
      public:
       constexpr basic_regex() = default;
 
-      template <typename Iterator>
+      template <class Iterator>
       match_result<Iterator> match(Iterator begin, Iterator end) const
       {
          return matcher::match_pattern(pattern_view, begin, end, true);
       }
 
-      template <typename Iterator>
+      template <class Iterator>
       match_result<Iterator> search(Iterator begin, Iterator end) const
       {
          return matcher::match_pattern(pattern_view, begin, end, false);
