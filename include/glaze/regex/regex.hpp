@@ -230,41 +230,54 @@ namespace glz
          return false;
       }
 
-      // This wrapper uses the whole string_view context for the character class
+      // This wrapper uses the whole string_view context for the character class      
       template <class Iterator>
       static bool match_char_class_from_context(Iterator& current, Iterator end, std::string_view char_class)
       {
          if (current == end) return false;
-
+         
          char ch = *current;
          bool negate = false;
          std::size_t start = 0;
-
+         
          if (!char_class.empty() && char_class[0] == '^') {
             negate = true;
             start = 1;
          }
-
+         
          bool found = false;
-         for (std::size_t i = start; i < char_class.size(); ++i) {
+         
+         for (std::size_t i = start; i < char_class.size(); ) {
+            // Check if this is a range pattern X-Y
+            // A dash creates a range only if:
+            // 1. There are at least 3 characters from current position (X-Y)
+            // 2. The second character is a dash
+            // 3. We allow ranges at the beginning (after optional ^)
+            
             if (i + 2 < char_class.size() && char_class[i + 1] == '-') {
-               // Character range
-               if (ch >= char_class[i] && ch <= char_class[i + 2]) {
+               // Process as range X-Y
+               char range_start = char_class[i];
+               char range_end = char_class[i + 2];
+               
+               // Validate range and check if character matches
+               if (range_start <= range_end && ch >= range_start && ch <= range_end) {
                   found = true;
                   break;
                }
-               i += 2; // Skip the range
+               i += 3; // Skip the entire range pattern X-Y
             }
             else {
+               // Process as literal character (including - at start/end)
                if (ch == char_class[i]) {
                   found = true;
                   break;
                }
+               i += 1; // Move to next character
             }
          }
-
+         
          if (negate) found = !found;
-
+         
          if (found) {
             ++current;
             return true;
@@ -461,6 +474,7 @@ namespace glz
       static match_result<Iterator> match_pattern(std::string_view pattern, Iterator begin, Iterator end, bool anchored)
       {
          if (anchored) {
+            // Anchored mode (match) - pattern must match from the beginning
             Iterator current = begin;
             if (match_string(pattern, current, end, begin)) { // Pass 'begin' for ^ anchor context
                return match_result<Iterator>{begin, current};
@@ -477,10 +491,21 @@ namespace glz
             return {};
          }
 
-         // Search mode - try at each position
+         // Search mode - special handling for ^ anchor
+         bool has_start_anchor = !pattern.empty() && pattern[0] == '^';
+
+         if (has_start_anchor) {
+            // With ^ anchor in search mode, only try at the very beginning
+            Iterator current = begin;
+            if (match_string(pattern, current, end, begin)) {
+               return match_result<Iterator>{begin, current};
+            }
+            return {};
+         }
+
+         // Normal search mode - try at each position
          for (auto it = begin; it != end; ++it) {
             Iterator current = it;
-            // For ^ in search mode, it should match against `it` (start of this attempt)
             if (match_string(pattern, current, end, it)) {
                return match_result<Iterator>{it, current};
             }
@@ -513,7 +538,15 @@ namespace glz
       template <class Iterator>
       match_result<Iterator> match(Iterator begin, Iterator end) const
       {
-         return matcher::match_pattern(pattern_view, begin, end, true);
+         auto result = matcher::match_pattern(pattern_view, begin, end, true);
+
+         // match() should consume entire string unless pattern has start anchor (^)
+         // which explicitly allows partial matching from the beginning
+         bool has_start_anchor = !pattern_view.empty() && pattern_view[0] == '^';
+         if (result.matched && !has_start_anchor && result.end_pos != end) {
+            return {}; // Partial match without start anchor - should fail
+         }
+         return result;
       }
 
       template <class Iterator>
