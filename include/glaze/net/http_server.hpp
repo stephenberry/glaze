@@ -250,13 +250,17 @@ namespace glz
        * @param key_file Path to the private key file (PEM format)
        * @return Reference to this server for method chaining
        */
-      inline http_server& load_certificate(const std::string& /*cert_file*/, const std::string& /*key_file*/)
+      inline http_server& load_certificate(const std::string& cert_file, const std::string& key_file)
       {
          if constexpr (EnableTLS) {
 #ifdef GLZ_ENABLE_SSL
             ssl_context->use_certificate_chain_file(cert_file);
             ssl_context->use_private_key_file(key_file, asio::ssl::context::pem);
 #endif
+         }
+         else {
+            (void)cert_file;
+            (void)key_file;
          }
          return *this;
       }
@@ -267,7 +271,7 @@ namespace glz
        * @param mode SSL verification mode
        * @return Reference to this server for method chaining
        */
-      inline http_server& set_ssl_verify_mode(int /*mode*/)
+      inline http_server& set_ssl_verify_mode([[maybe_unused]] int mode)
       {
          if constexpr (EnableTLS) {
 #ifdef GLZ_ENABLE_SSL

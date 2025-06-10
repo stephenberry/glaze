@@ -1,0 +1,6 @@
+project(http_server_api_tests)
+
+add_executable(${PROJECT_NAME} ${PROJECT_NAME}.cpp)
+
+target_include_directories(${PROJECT_NAME} PRIVATE include ${asio_SOURCE_DIR}/asio/include)
+target_link_libraries(${PROJECT_NAME} PRIVATE glz_test_exceptions)

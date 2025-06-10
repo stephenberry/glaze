@@ -1,5 +1,7 @@
+// Glaze Library
+// For the license information refer to glaze.hpp
+
 // Complete example showing Glaze HTTP server with WebSocket support
-// Header-only implementation - no separate compilation required
 
 #include <iostream>
 #include <mutex>
