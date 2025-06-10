@@ -90,31 +90,6 @@ namespace glz
       static constexpr char end = End;
    };
 
-   struct any_char
-   {};
-   struct digit
-   {};
-   struct word_char
-   {};
-   struct whitespace
-   {};
-   struct line_start
-   {};
-   struct line_end
-   {};
-
-   template <typename... Items>
-   struct sequence
-   {};
-
-   template <typename... Alternatives>
-   struct alternation
-   {};
-
-   template <typename Content, int Min = 1, int Max = -1>
-   struct repeat
-   {};
-
    // Compile-time string from character pack
    template <char... Chars>
    struct pattern_string
