@@ -1,9 +1,9 @@
 #pragma once
 
 #include <array>
-#include <cstdint>
 #include <charconv>
 #include <concepts>
+#include <cstdint>
 #include <cstdlib>
 #include <string_view>
 #include <type_traits>
@@ -756,6 +756,10 @@ namespace glz
          if (anchored) {
             Iterator current = begin;
             if (match_atoms_recursive<Analysis>(0, current, end, begin)) {
+               // For match(), ensure entire string is consumed unless pattern has start anchor
+               if (current != end && !Analysis.pattern.has_start_anchor) {
+                  return {};
+               }
                return match_result<Iterator>{begin, current};
             }
             return {};
