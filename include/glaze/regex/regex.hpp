@@ -23,30 +23,20 @@ namespace glz
             value[i] = str[i];
          }
       }
+
+      constexpr operator std::string_view() const { return std::string_view{value, N - 1}; }
    };
 
-   // Forward declaration for basic_regex, needed by re_impl
-   template <char... Chars>
+   // Forward declaration for basic_regex
+   template <const std::string_view& Pattern>
    class basic_regex;
-
-   // Helper to expand the fixed_string into a character pack for basic_regex
-   template <fixed_string Str, std::size_t... Is>
-   constexpr auto re_impl(std::index_sequence<Is...>)
-   {
-      // Str.value includes the null terminator.
-      // The Chars... pack for basic_regex should not include the null terminator.
-      // Indices Is... will be 0, 1, ..., (sizeof(Str.value) - 2)
-      return basic_regex<Str.value[Is]...>{};
-   }
 
    template <fixed_string Str>
    constexpr auto re()
    {
-      // sizeof(Str.value) is N (length of literal including null).
-      // We need N-1 characters for the pattern (excluding null).
-      // std::make_index_sequence<sizeof(Str.value) - 1> generates indices for these N-1 chars.
-      // This correctly handles glz::re<"">() which results in basic_regex<>.
-      return re_impl<Str>(std::make_index_sequence<sizeof(Str.value) - 1>{});
+      // Convert fixed_string to string_view and use as template parameter
+      static constexpr std::string_view pattern_view = Str;
+      return basic_regex<pattern_view>{};
    }
 
    // Result type for matches
@@ -75,34 +65,19 @@ namespace glz
       }
    };
 
-   // Compile-time string from character pack
-   template <char... Chars>
-   struct pattern_string
-   {
-      static constexpr std::size_t len = sizeof...(Chars);
-      static constexpr char data[len + 1] = {Chars..., '\0'};
-
-      constexpr char operator[](std::size_t i) const { return data[i]; }
-      constexpr std::size_t size() const { return len; }
-      constexpr const char* c_str() const { return data; }
-      constexpr std::string_view view() const { return std::string_view{data, len}; }
-   };
-
-   // Compile-time parser that validates and creates type representation
-   template <char... Chars>
+   // Compile-time validation
+   template <const std::string_view& Pattern>
    struct parse_result
    {
-      static constexpr auto pattern_inst = pattern_string<Chars...>{};
-
       // Simple validation - just check for basic syntax errors
       static constexpr bool validate()
-      { // Changed back from consteval to constexpr
+      {
          std::size_t bracket_depth = 0;
          std::size_t paren_depth = 0;
          bool in_escape = false;
 
-         for (std::size_t i = 0; i < pattern_inst.size(); ++i) { // Use pattern_inst
-            char c = pattern_inst[i]; // Use pattern_inst
+         for (std::size_t i = 0; i < Pattern.size(); ++i) {
+            char c = Pattern[i];
 
             if (in_escape) {
                in_escape = false;
@@ -137,10 +112,8 @@ namespace glz
          return true;
       }
 
-      static constexpr bool is_valid = validate(); // validate() now uses pattern_inst
-      static_assert(is_valid,
-                    "Invalid regex pattern: The provided pattern has a syntax error (e.g., unclosed "
-                    "brackets/parentheses, or trailing escape).");
+      static constexpr bool is_valid = validate();
+      static_assert(is_valid, "Invalid regex pattern");
    };
 
    // Matcher implementations using function templates for different pattern types
@@ -150,10 +123,12 @@ namespace glz
       // It is unused for context-free matchers.
 
       // Match a single character literal
-      template <char C, typename Iterator>
-      static bool match_char(Iterator& current, Iterator end, std::string_view /*context*/)
+      template <class Iterator>
+      static bool match_char(Iterator& current, Iterator end, std::string_view context)
       {
-         if (current != end && *current == C) {
+         if (context.empty()) return false;
+         char expected = context[0];
+         if (current != end && *current == expected) {
             ++current;
             return true;
          }
@@ -217,19 +192,6 @@ namespace glz
       }
 
      private:
-      // This wrapper uses the first character of the string_view context
-      template <class Iterator>
-      static bool match_char_from_context(Iterator& current, Iterator end, std::string_view context)
-      {
-         if (context.empty()) return false;
-         char expected = context[0];
-         if (current != end && *current == expected) {
-            ++current;
-            return true;
-         }
-         return false;
-      }
-
       // Fixed character class matching with proper range and literal handling
       template <class Iterator>
       static bool match_char_class_from_context(Iterator& current, Iterator end, std::string_view char_class)
@@ -330,7 +292,7 @@ namespace glz
                case 's':
                   atom_match_logic = &match_whitespace<Iterator>;
                   break;
-               // Handle escaped special characters like \., \*, \+, etc.
+                  // Handle escaped special characters like \., \*, \+, etc.
                case '.':
                case '*':
                case '+':
@@ -348,7 +310,7 @@ namespace glz
                default: // All other escaped chars are treated as literals
                   // Create a string_view of length 1 pointing to the escaped character
                   atom_context = pattern.substr(pat_idx + 1, 1);
-                  atom_match_logic = &match_char_from_context<Iterator>;
+                  atom_match_logic = &match_char<Iterator>;
                   break;
                }
             }
@@ -380,7 +342,7 @@ namespace glz
                atom_pattern_len = 1;
                // Create a string_view of length 1 pointing to the literal character
                atom_context = pattern.substr(pat_idx, 1);
-               atom_match_logic = &match_char_from_context<Iterator>;
+               atom_match_logic = &match_char<Iterator>;
             }
 
             pat_idx += atom_pattern_len;
@@ -550,7 +512,7 @@ namespace glz
                   break;
                default:
                   atom_context = pattern.substr(pat_idx + 1, 1);
-                  atom_match_logic = &match_char_from_context<Iterator>;
+                  atom_match_logic = &match_char<Iterator>;
                   break;
                }
             }
@@ -576,7 +538,7 @@ namespace glz
             else {
                atom_pattern_len = 1;
                atom_context = pattern.substr(pat_idx, 1);
-               atom_match_logic = &match_char_from_context<Iterator>;
+               atom_match_logic = &match_char<Iterator>;
             }
 
             pat_idx += atom_pattern_len;
@@ -590,10 +552,11 @@ namespace glz
          return true;
       }
 
-     public: // Moved public keyword up, match_pattern is part of public API of matcher
+     public:
       // Simple pattern matcher using string processing
       template <class Iterator>
-      static match_result<Iterator> match_pattern(const std::string_view pattern, Iterator begin, Iterator end, bool anchored)
+      static match_result<Iterator> match_pattern(const std::string_view pattern, Iterator begin, Iterator end,
+                                                  bool anchored)
       {
          if (anchored) {
             // Anchored mode (match) - pattern must match from the beginning
@@ -645,14 +608,10 @@ namespace glz
    };
 
    // Main regex class
-   template <char... Chars>
+   template <const std::string_view& Pattern>
    class basic_regex
    {
-      // Ensure parse_result is instantiated for its static_assert to run.
-      [[maybe_unused]] static constexpr auto validation_check = parse_result<Chars...>{};
-      // Get the pattern string view from pattern_string
-      static constexpr auto pattern_obj = pattern_string<Chars...>{};
-      static constexpr std::string_view pattern_view{pattern_obj.data, pattern_obj.len};
+      static_assert(parse_result<Pattern>::is_valid, "Invalid regex pattern");
 
      public:
       constexpr basic_regex() = default;
@@ -660,11 +619,11 @@ namespace glz
       template <class Iterator>
       match_result<Iterator> match(Iterator begin, Iterator end) const
       {
-         auto result = matcher::match_pattern(pattern_view, begin, end, true);
+         auto result = matcher::match_pattern(Pattern, begin, end, true);
 
          // match() should consume entire string unless pattern has start anchor (^)
          // which explicitly allows partial matching from the beginning
-         bool has_start_anchor = !pattern_view.empty() && pattern_view[0] == '^';
+         bool has_start_anchor = !Pattern.empty() && Pattern[0] == '^';
          if (result.matched && !has_start_anchor && result.end_pos != end) {
             return {}; // Partial match without start anchor - should fail
          }
@@ -674,7 +633,7 @@ namespace glz
       template <class Iterator>
       match_result<Iterator> search(Iterator begin, Iterator end) const
       {
-         return matcher::match_pattern(pattern_view, begin, end, false);
+         return matcher::match_pattern(Pattern, begin, end, false);
       }
 
       match_result<const char*> match(std::string_view text) const
@@ -688,6 +647,6 @@ namespace glz
       }
 
       // Get the pattern for debugging
-      constexpr std::string_view pattern() const { return pattern_view; }
+      constexpr std::string_view pattern() const { return Pattern; }
    };
 }
