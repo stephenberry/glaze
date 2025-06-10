@@ -145,9 +145,8 @@ namespace glz
    };
 
    // Matcher implementations using function templates for different pattern types
-   class matcher
+   struct matcher
    {
-     public:
       // Match a single character literal
       template <char C, typename Iterator>
       static bool match_char(Iterator& current, Iterator end)
@@ -487,7 +486,7 @@ namespace glz
       }
    };
 
-   // Main regex class - much simpler than the constexpr version
+   // Main regex class
    template <char... Chars>
    class basic_regex
    {
