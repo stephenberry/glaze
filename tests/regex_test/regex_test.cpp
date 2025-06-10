@@ -447,7 +447,7 @@ suite comprehensive_regex_debug = [] {
    };
    
    "literal_characters_in_class"_test = [] {
-      // Test problematic literal characters
+      // Test literal characters
       auto test1 = glz::re<"[.]">();
       expect(test1.search(".").matched) << "Literal dot in class should work\n";
       
@@ -469,7 +469,7 @@ suite comprehensive_regex_debug = [] {
    };
    
    "complex_character_classes"_test = [] {
-      // Build up to the problematic character class step by step
+      // Build up to the character class step by step
       auto test1 = glz::re<"[a-zA-Z.]">();
       expect(test1.search("a").matched) << "Letters + dot should work\n";
       expect(test1.search(".").matched) << "Dot should match in letters + dot\n";
@@ -567,7 +567,6 @@ suite backtracking_tests = [] {
    };
    
    "character_class_edge_cases"_test = [] {
-      // Test specific character class patterns that were problematic
       auto dash_at_end = glz::re<R"([a-zA-Z0-9.-]+)">();
       expect(dash_at_end.search("test-case.example").matched) << "Dash at end of char class should work\n";
       
