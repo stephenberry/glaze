@@ -266,8 +266,6 @@ namespace glz
          return false;
       }
 
-      // Note: handle_quantifier is removed as its logic is integrated into match_string.
-
       // Main matching logic for a pattern sequence
       template <class Iterator>
       static bool match_string(std::string_view pattern, Iterator& current_ref, Iterator end,
