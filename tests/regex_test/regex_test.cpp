@@ -416,17 +416,17 @@ suite email_regex_debugging = [] {
       auto complex_result = email_regex.search("valid@example.com");
       
       // Print debug info regardless of success/failure
-      std::string debug_msg = "Pattern: " + std::string(email_regex.pattern()) +
+      std::string msg = "Pattern: " + std::string(email_regex.pattern()) +
       ", Text: 'valid@example.com', Matched: " +
       (complex_result.matched ? "true" : "false");
-      expect(true) << debug_msg << "\n"; // Always passes, just for debug output
+      expect(true) << msg << "\n"; // Always passes, just for debug output
       
       expect(complex_result.matched) << "Should match 'valid@example.com'\n";
    };
 };
 
 suite comprehensive_regex_debug = [] {
-   "debug_character_class_basics"_test = [] {
+   "character_class_basics"_test = [] {
       // Test the most basic character classes first
       auto test1 = glz::re<"[a]">();
       expect(test1.search("a").matched) << "Single char class should work\n";
@@ -446,7 +446,7 @@ suite comprehensive_regex_debug = [] {
       expect(test5.search("5").matched) << "Triple range should work for digit\n";
    };
    
-   "debug_literal_characters_in_class"_test = [] {
+   "literal_characters_in_class"_test = [] {
       // Test problematic literal characters
       auto test1 = glz::re<"[.]">();
       expect(test1.search(".").matched) << "Literal dot in class should work\n";
@@ -468,7 +468,7 @@ suite comprehensive_regex_debug = [] {
       expect(test6.search("a").matched) << "Letter with dash at end should work\n";
    };
    
-   "debug_complex_character_classes"_test = [] {
+   "complex_character_classes"_test = [] {
       // Build up to the problematic character class step by step
       auto test1 = glz::re<"[a-zA-Z.]">();
       expect(test1.search("a").matched) << "Letters + dot should work\n";
@@ -489,7 +489,7 @@ suite comprehensive_regex_debug = [] {
       expect(test4.search("x").matched) << "Second character class should match 'x'\n";
    };
    
-   "debug_quantifiers_separately"_test = [] {
+   "quantifiers_separately"_test = [] {
       // Test quantifiers with simple patterns
       auto test1 = glz::re<"a+">();
       expect(test1.search("aaa").matched) << "Simple + quantifier should work\n";
@@ -508,7 +508,7 @@ suite comprehensive_regex_debug = [] {
       expect(test5.search("a").matched == false) << "{2,} should reject single char\n";
    };
    
-   "debug_pattern_string_construction"_test = [] {
+   "pattern_string_construction"_test = [] {
       // Test that the pattern string is being constructed correctly
       auto email_regex = glz::re<R"([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})">();
       
