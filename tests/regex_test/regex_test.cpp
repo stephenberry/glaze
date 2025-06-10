@@ -3,11 +3,11 @@
 #include <vector>
 
 int main() {
-    using namespace glz::literals;
+    // using namespace glz::literals; // Removed
     
     // 1. Basic pattern matching
     std::cout << "1. Basic Pattern Matching:\n";
-    auto hello_regex = "hello"_re;
+    auto hello_regex = glz::re<"hello">();
     std::cout << "  Pattern 'hello' matches 'hello': " 
               << std::boolalpha << hello_regex.match("hello").matched << "\n";
     std::cout << "  Pattern 'hello' matches 'world': " 
@@ -15,8 +15,8 @@ int main() {
     
     // 2. Character classes
     std::cout << "2. Character Classes:\n";
-    auto digit_regex = R"(\d+)"_re;
-    auto word_regex = R"(\w+)"_re;
+    auto digit_regex = glz::re<R"(\d+)">();
+    auto word_regex = glz::re<R"(\w+)">();
     
     std::string text = "Hello123 World";
     auto digit_match = digit_regex.search(text);
@@ -32,7 +32,7 @@ int main() {
     
     // 3. Email validation
     std::cout << "3. Email Validation:\n";
-    auto email_regex = R"([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})"_re;
+    auto email_regex = glz::re<R"([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})">();
     
     std::vector<std::string> emails = {
         "valid@example.com",
@@ -49,8 +49,8 @@ int main() {
     
     // 4. Text extraction
     std::cout << "4. Text Extraction:\n";
-    auto phone_regex = R"(\d{3}-\d{3}-\d{4})"_re;
-    auto url_regex = R"(https?://[^\s]+)"_re;
+    auto phone_regex = glz::re<R"(\d{3}-\d{3}-\d{4})">();
+    auto url_regex = glz::re<R"(https?://[^\s]+)">();
     
     std::string contact_info = "Call us at 555-123-4567 or visit https://example.com";
     
@@ -69,10 +69,10 @@ int main() {
     std::cout << "5. Compile-time Pattern Validation:\n";
     std::cout << "  All patterns above were validated at compile time!\n";
     std::cout << "  Try uncommenting the line below to see a compile error:\n";
-    std::cout << "  // auto bad_regex = \"unclosed[bracket\"_re;  // Compilation error!\n\n";
+    std::cout << "  // auto bad_regex = glz::re<\"unclosed[bracket\">();  // Compilation error!\n\n";
     
     // Uncomment to test compile-time error:
-    // auto bad_regex = "unclosed[bracket"_re;
+    // auto bad_regex = glz::re<"unclosed[bracket">();
     
     std::cout << "Benefits of this approach:\n";
     std::cout << "✓ Pattern validation at compile time\n";

@@ -8,9 +8,44 @@
 #include <functional> // For std::function
 #include <charconv>   // For std::from_chars
 #include <system_error> // For std::errc
+#include <utility> // For std::index_sequence
 // #include <algorithm> // For std::copy_n - will be removed with fixed_string
 
 namespace glz {
+
+// Compile-time regex construction using fixed_string NTTP
+template <std::size_t N>
+struct fixed_string {
+    char value[N]; // Includes null terminator
+
+    constexpr fixed_string(const char (&str)[N]) {
+        for (std::size_t i = 0; i < N; ++i) {
+            value[i] = str[i];
+        }
+    }
+};
+
+// Forward declaration for basic_regex, needed by re_impl
+template<char... Chars>
+class basic_regex;
+
+// Helper to expand the fixed_string into a character pack for basic_regex
+template <fixed_string Str, std::size_t... Is>
+constexpr auto re_impl(std::index_sequence<Is...>) {
+    // Str.value includes the null terminator.
+    // The Chars... pack for basic_regex should not include the null terminator.
+    // Indices Is... will be 0, 1, ..., (sizeof(Str.value) - 2)
+    return basic_regex<Str.value[Is]...>{};
+}
+
+template <fixed_string Str>
+constexpr auto re() {
+    // sizeof(Str.value) is N (length of literal including null).
+    // We need N-1 characters for the pattern (excluding null).
+    // std::make_index_sequence<sizeof(Str.value) - 1> generates indices for these N-1 chars.
+    // This correctly handles glz::re<"">() which results in basic_regex<>.
+    return re_impl<Str>(std::make_index_sequence<sizeof(Str.value) - 1>{});
+}
 
 // Result type for matches
 template<typename Iterator>
@@ -456,15 +491,5 @@ public:
 // constexpr auto make_regex() {
 //     return basic_regex<Chars...>{}; // Changed from Pattern
 // }
-
-// User-defined literal - Using explicit CharT... chars form
-namespace literals {
-    template <typename CharT, CharT... CharsPack> // More explicit signature
-    constexpr auto operator""_re() {
-        // We expect CharT to be char, static_assert for safety if needed
-        static_assert(std::is_same_v<CharT, char>, "Regex literal must use char characters.");
-        return basic_regex<CharsPack...>{}; // Pass the deduced character pack
-    }
-}
 
 } // namespace glz
