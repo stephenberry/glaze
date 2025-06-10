@@ -118,12 +118,23 @@ namespace glz
    // Matcher implementations using function templates for different pattern types
    struct matcher
    {
+      // Compile-time function to check if pattern has quantifiers
+      static consteval bool pattern_has_quantifiers(std::string_view pattern)
+      {
+         for (char c : pattern) {
+            if (c == '*' || c == '+' || c == '?' || c == '{') {
+               return true;
+            }
+         }
+         return false;
+      }
+
       // The context parameter is added to all functions that can be pointed to.
       // It is unused for context-free matchers.
 
       // Match a single character literal
       template <class Iterator>
-      static bool match_char(Iterator& current, Iterator end, std::string_view context)
+      static constexpr bool match_char(Iterator& current, Iterator end, std::string_view context)
       {
          if (context.empty()) return false;
          char expected = context[0];
@@ -136,7 +147,7 @@ namespace glz
 
       // Match a character range
       template <char Start, char End, typename Iterator>
-      static bool match_range(Iterator& current, Iterator end, std::string_view /*context*/)
+      static constexpr bool match_range(Iterator& current, Iterator end, std::string_view /*context*/)
       {
          if (current != end && *current >= Start && *current <= End) {
             ++current;
@@ -147,7 +158,7 @@ namespace glz
 
       // Match any character
       template <class Iterator>
-      static bool match_any(Iterator& current, Iterator end, std::string_view /*context*/)
+      static constexpr bool match_any(Iterator& current, Iterator end, std::string_view /*context*/)
       {
          if (current != end) {
             ++current;
@@ -158,7 +169,7 @@ namespace glz
 
       // Match digit
       template <class Iterator>
-      static bool match_digit(Iterator& current, Iterator end, std::string_view /*context*/)
+      static constexpr bool match_digit(Iterator& current, Iterator end, std::string_view /*context*/)
       {
          if (current != end && *current >= '0' && *current <= '9') {
             ++current;
@@ -169,7 +180,7 @@ namespace glz
 
       // Match word character
       template <class Iterator>
-      static bool match_word(Iterator& current, Iterator end, std::string_view /*context*/)
+      static constexpr bool match_word(Iterator& current, Iterator end, std::string_view /*context*/)
       {
          if (current != end && ((*current >= 'a' && *current <= 'z') || (*current >= 'A' && *current <= 'Z') ||
                                 (*current >= '0' && *current <= '9') || *current == '_')) {
@@ -181,7 +192,7 @@ namespace glz
 
       // Match whitespace
       template <class Iterator>
-      static bool match_whitespace(Iterator& current, Iterator end, std::string_view /*context*/)
+      static constexpr bool match_whitespace(Iterator& current, Iterator end, std::string_view /*context*/)
       {
          if (current != end && (*current == ' ' || *current == '\t' || *current == '\n' || *current == '\r')) {
             ++current;
@@ -193,7 +204,7 @@ namespace glz
      private:
       // Fixed character class matching with proper range and literal handling
       template <class Iterator>
-      static bool match_char_class_from_context(Iterator& current, Iterator end, std::string_view char_class)
+      static constexpr bool match_char_class_from_context(Iterator& current, Iterator end, std::string_view char_class)
       {
          if (current == end) return false;
 
@@ -253,7 +264,7 @@ namespace glz
 
       // Enhanced matching logic with basic backtracking
       template <class Iterator>
-      static bool match_string_with_backtrack(const std::string_view pattern, Iterator& current_ref, Iterator end,
+      static constexpr bool match_string_with_backtrack(const std::string_view pattern, Iterator& current_ref, Iterator end,
                                               Iterator begin_of_this_attempt, int depth = 0)
       {
          if (depth > 100) return false; // Prevent infinite recursion
@@ -451,30 +462,9 @@ namespace glz
          return true;
       }
 
-      // Main matching logic - wrapper that tries enhanced version first, then falls back
+      // Simple matching logic for patterns without quantifiers
       template <class Iterator>
-      static bool match_string(const std::string_view pattern, Iterator& current_ref, Iterator end,
-                               Iterator begin_of_this_attempt)
-      {
-         // For simple patterns without quantifiers, use the original fast algorithm
-         bool has_quantifiers = false;
-         for (char c : pattern) {
-            if (c == '*' || c == '+' || c == '?' || c == '{') {
-               has_quantifiers = true;
-               break;
-            }
-         }
-
-         if (!has_quantifiers) {
-            return match_string_simple(pattern, current_ref, end, begin_of_this_attempt);
-         }
-
-         return match_string_with_backtrack(pattern, current_ref, end, begin_of_this_attempt);
-      }
-
-      // Original simple matching logic for patterns without quantifiers
-      template <class Iterator>
-      static bool match_string_simple(std::string_view pattern, Iterator& current_ref, Iterator end,
+      static constexpr bool match_string_simple(std::string_view pattern, Iterator& current_ref, Iterator end,
                                       Iterator begin_of_this_attempt)
       {
          using atom_match_ptr = bool (*)(Iterator&, Iterator, std::string_view);
@@ -551,10 +541,99 @@ namespace glz
          return true;
       }
 
+      // Compile-time dispatch based on whether pattern has quantifiers
+      template <class Iterator, bool HasQuantifiers>
+      static constexpr bool match_string_dispatch(const std::string_view pattern, Iterator& current_ref, Iterator end,
+                                        Iterator begin_of_this_attempt)
+      {
+         if constexpr (!HasQuantifiers) {
+            return match_string_simple(pattern, current_ref, end, begin_of_this_attempt);
+         }
+         else {
+            return match_string_with_backtrack(pattern, current_ref, end, begin_of_this_attempt);
+         }
+      }
+
      public:
+      // Template version that knows the pattern at compile time
+      template <const std::string_view& Pattern, class Iterator>
+      static constexpr bool match_string_ct(Iterator& current_ref, Iterator end, Iterator begin_of_this_attempt)
+      {
+         constexpr bool has_quantifiers = pattern_has_quantifiers(Pattern);
+         return match_string_dispatch<Iterator, has_quantifiers>(Pattern, current_ref, end, begin_of_this_attempt);
+      }
+
+      // Compile-time version of match_pattern
+      template <const std::string_view& Pattern, class Iterator>
+      static constexpr match_result<Iterator> match_pattern_ct(Iterator begin, Iterator end, bool anchored)
+      {
+         if (anchored) {
+            // Anchored mode (match) - pattern must match from the beginning
+            Iterator current = begin;
+            if (match_string_ct<Pattern>(current, end, begin)) {
+               return match_result<Iterator>{begin, current};
+            }
+            // Handle cases like pattern "a*" on empty string ""
+            if (Pattern.empty()) return match_result<Iterator>{begin, begin};
+            Iterator temp_current = begin;
+            if (match_string_ct<Pattern>(temp_current, begin, begin) && temp_current == begin) {
+               return match_result<Iterator>{begin, begin};
+            }
+            return {};
+         }
+
+         // Search mode - special handling for ^ anchor
+         bool has_start_anchor = !Pattern.empty() && Pattern[0] == '^';
+
+         if (has_start_anchor) {
+            Iterator current = begin;
+            if (match_string_ct<Pattern>(current, end, begin)) {
+               return match_result<Iterator>{begin, current};
+            }
+            return {};
+         }
+
+         // Normal search mode - try at each position
+         for (auto it = begin; it != end; ++it) {
+            Iterator current = it;
+            if (match_string_ct<Pattern>(current, end, it)) {
+               return match_result<Iterator>{it, current};
+            }
+         }
+
+         // Check if pattern can match empty string at end
+         Iterator current_at_end = end;
+         if (match_string_ct<Pattern>(current_at_end, end, end) && current_at_end == end) {
+            return match_result<Iterator>{end, end};
+         }
+
+         return {};
+      }
+
+      // Main matching logic - wrapper that tries enhanced version first, then falls back
+      template <class Iterator>
+      static constexpr bool match_string(const std::string_view pattern, Iterator& current_ref, Iterator end,
+                               Iterator begin_of_this_attempt)
+      {
+         // For simple patterns without quantifiers, use a faster algorithm
+         bool has_quantifiers = false;
+         for (char c : pattern) {
+            if (c == '*' || c == '+' || c == '?' || c == '{') {
+               has_quantifiers = true;
+               break;
+            }
+         }
+
+         if (!has_quantifiers) {
+            return match_string_simple(pattern, current_ref, end, begin_of_this_attempt);
+         }
+
+         return match_string_with_backtrack(pattern, current_ref, end, begin_of_this_attempt);
+      }
+
       // Simple pattern matcher using string processing
       template <class Iterator>
-      static match_result<Iterator> match_pattern(const std::string_view pattern, Iterator begin, Iterator end,
+      static constexpr match_result<Iterator> match_pattern(const std::string_view pattern, Iterator begin, Iterator end,
                                                   bool anchored)
       {
          if (anchored) {
@@ -616,9 +695,9 @@ namespace glz
       constexpr basic_regex() = default;
 
       template <class Iterator>
-      match_result<Iterator> match(Iterator begin, Iterator end) const
+      constexpr match_result<Iterator> match(Iterator begin, Iterator end) const
       {
-         auto result = matcher::match_pattern(Pattern, begin, end, true);
+         auto result = matcher::match_pattern_ct<Pattern>(begin, end, true);
 
          // match() should consume entire string unless pattern has start anchor (^)
          // which explicitly allows partial matching from the beginning
@@ -630,17 +709,17 @@ namespace glz
       }
 
       template <class Iterator>
-      match_result<Iterator> search(Iterator begin, Iterator end) const
+      constexpr match_result<Iterator> search(Iterator begin, Iterator end) const
       {
-         return matcher::match_pattern(Pattern, begin, end, false);
+         return matcher::match_pattern_ct<Pattern>(begin, end, false);
       }
 
-      match_result<const char*> match(std::string_view text) const
+      constexpr match_result<const char*> match(std::string_view text) const
       {
          return match(text.data(), text.data() + text.size());
       }
 
-      match_result<const char*> search(std::string_view text) const
+      constexpr match_result<const char*> search(std::string_view text) const
       {
          return search(text.data(), text.data() + text.size());
       }
