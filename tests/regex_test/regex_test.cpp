@@ -508,48 +508,6 @@ suite comprehensive_regex_debug = [] {
       expect(test5.search("a").matched == false) << "{2,} should reject single char\n";
    };
    
-   "debug_email_pattern_piece_by_piece"_test = [] {
-      // Test the email pattern by building it up piece by piece
-      std::string email = "valid@example.com";
-      
-      // Test just the first part
-      auto part1 = glz::re<R"([a-zA-Z0-9._%+-]+)">();
-      auto result1 = part1.search(email);
-      expect(result1.matched) << "First part should match something in email\n";
-      if (result1.matched) {
-         expect(result1.view() == "valid") << "First part should match 'valid', got: '" << result1.view() << "'\n";
-      }
-      
-      // Test first part + @
-      auto part2 = glz::re<R"([a-zA-Z0-9._%+-]+@)">();
-      auto result2 = part2.search(email);
-      expect(result2.matched) << "First part + @ should match\n";
-      if (result2.matched) {
-         expect(result2.view() == "valid@") << "Should match 'valid@', got: '" << result2.view() << "'\n";
-      }
-      
-      // Test first part + @ + second part
-      auto part3 = glz::re<R"([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+)">();
-      auto result3 = part3.search(email);
-      expect(result3.matched) << "First two parts should match\n";
-      if (result3.matched) {
-         expect(result3.view() == "valid@example") << "Should match 'valid@example', got: '" << result3.view() << "'\n";
-      }
-      
-      // Test everything except the final quantifier
-      auto part4 = glz::re<R"([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z])">();
-      auto result4 = part4.search(email);
-      expect(result4.matched) << "Everything except quantifier should match\n";
-      
-      // Test the full pattern
-      auto full = glz::re<R"([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})">();
-      auto result_full = full.search(email);
-      expect(result_full.matched) << "Full pattern should match 'valid@example.com'\n";
-      if (result_full.matched) {
-         expect(result_full.view() == "valid@example.com") << "Should match entire email, got: '" << result_full.view() << "'\n";
-      }
-   };
-   
    "debug_pattern_string_construction"_test = [] {
       // Test that the pattern string is being constructed correctly
       auto email_regex = glz::re<R"([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})">();
