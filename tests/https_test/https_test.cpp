@@ -725,7 +725,7 @@ suite stress_tests = [] {
 
       for (int i = 0; i < 50; ++i) {
          std::string path = "/test" + std::to_string(i);
-         server.get(path, [i](const glz::request&, glz::response& res) { res.json(glz::json_t{"test_id", i}); });
+         server.get(path, [i](const glz::request&, glz::response& res) { res.json({"test_id", i}); });
       }
 
       expect(true) << "Many route registrations should work\n";

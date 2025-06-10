@@ -139,7 +139,7 @@ int main()
    // API endpoints
    server.get("/api/status", [&clients, &clients_mutex](const request&, response& res) {
       std::lock_guard<std::mutex> lock(clients_mutex);
-      res.json(json_t{{"server", "Glaze WebSocket + HTTP Server"},
+      res.json({{"server", "Glaze WebSocket + HTTP Server"},
                       {"websocket_clients", clients.size()},
                       {"implementation",
 #if defined(GLZ_ENABLE_OPENSSL) && defined(GLZ_HAS_OPENSSL)
@@ -154,7 +154,7 @@ int main()
    server.get("/api/broadcast", [&clients, &clients_mutex](const request& req, response& res) {
       auto it = req.params.find("message");
       if (it == req.params.end()) {
-         res.status(400).json(json_t{{"error", "Missing message parameter"}});
+         res.status(400).json({{"error", "Missing message parameter"}});
          return;
       }
 
@@ -165,7 +165,7 @@ int main()
          client->send_text(broadcast_msg);
       }
 
-      res.json(json_t{{"message", "Broadcast sent"}, {"recipients", clients.size()}});
+      res.json({{"message", "Broadcast sent"}, {"recipients", clients.size()}});
    });
 
    // Enable CORS for browser access
@@ -175,10 +175,10 @@ int main()
       // Start server
       server.bind(8080);
 
-      std::cout << "\n🚀 Server running on http://localhost:8080\n";
-      std::cout << "📡 WebSocket endpoint: ws://localhost:8080/ws\n";
-      std::cout << "🌐 Web interface: http://localhost:8080\n";
-      std::cout << "📊 Status API: http://localhost:8080/api/status\n";
+      std::cout << "\nServer running on http://localhost:8080\n";
+      std::cout << "WebSocket endpoint: ws://localhost:8080/ws\n";
+      std::cout << "Web interface: http://localhost:8080\n";
+      std::cout << "Status API: http://localhost:8080/api/status\n";
       std::cout << "\nPress Enter to stop the server...\n\n";
 
       server.start();

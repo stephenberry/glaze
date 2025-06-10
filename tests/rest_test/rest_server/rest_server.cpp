@@ -270,7 +270,7 @@ int main()
    // Example of a custom endpoint that returns CORS headers
    server.get("/test-cors", [](const glz::request& req, glz::response& res) {
       // The CORS middleware will automatically add the appropriate headers
-      res.json(glz::json_t{{"message", "CORS test endpoint"},
+      res.json({{"message", "CORS test endpoint"},
                            {"origin", req.headers.count("Origin") ? req.headers.at("Origin") : "none"},
                            {"method", glz::to_string(req.method)}});
    });
