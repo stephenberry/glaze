@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <cstdint>
 #include <charconv>
 #include <concepts>
 #include <cstdlib>
