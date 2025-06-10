@@ -5,6 +5,10 @@
 #include <type_traits>
 #include <concepts>
 #include <string>
+#include <functional> // For std::function
+#include <charconv>   // For std::from_chars
+#include <system_error> // For std::errc
+// #include <algorithm> // For std::copy_n - will be removed with fixed_string
 
 namespace glz {
 
@@ -73,17 +77,16 @@ struct pattern_string {
 // Compile-time parser that validates and creates type representation
 template<char... Chars>
 struct parse_result {
-    static constexpr auto pattern = pattern_string<Chars...>{};
-    static constexpr bool valid = true;
-    
+    static constexpr auto pattern_inst = pattern_string<Chars...>{};
+
     // Simple validation - just check for basic syntax errors
-    static constexpr bool validate() {
+    static constexpr bool validate() { // Changed back from consteval to constexpr
         std::size_t bracket_depth = 0;
         std::size_t paren_depth = 0;
         bool in_escape = false;
         
-        for (std::size_t i = 0; i < pattern.size(); ++i) {
-            char c = pattern[i];
+        for (std::size_t i = 0; i < pattern_inst.size(); ++i) { // Use pattern_inst
+            char c = pattern_inst[i]; // Use pattern_inst
             
             if (in_escape) {
                 in_escape = false;
@@ -98,23 +101,28 @@ struct parse_result {
                     ++bracket_depth;
                     break;
                 case ']':
-                    if (bracket_depth == 0) return false;
+                    if (bracket_depth == 0) return false; // Invalid: unmatched closing bracket
                     --bracket_depth;
                     break;
                 case '(':
                     ++paren_depth;
                     break;
                 case ')':
-                    if (paren_depth == 0) return false;
+                    if (paren_depth == 0) return false; // Invalid: unmatched closing parenthesis
                     --paren_depth;
                     break;
             }
         }
         
-        return bracket_depth == 0 && paren_depth == 0 && !in_escape;
+        if (bracket_depth != 0) return false; // Invalid: unclosed bracket
+        if (paren_depth != 0) return false;   // Invalid: unclosed parenthesis
+        if (in_escape) return false;          // Invalid: trailing escape character
+        
+        return true;
     }
     
-    static_assert(validate(), "Invalid regex pattern");
+    static constexpr bool is_valid = validate(); // validate() now uses pattern_inst
+    static_assert(is_valid, "Invalid regex pattern: The provided pattern has a syntax error (e.g., unclosed brackets/parentheses, or trailing escape).");
 };
 
 // Matcher implementations using function templates for different pattern types
@@ -183,85 +191,8 @@ public:
         }
         return false;
     }
-    
-    // Simple pattern matcher using string processing
-    template<typename Iterator>
-    static match_result<Iterator> match_pattern(std::string_view pattern, Iterator begin, Iterator end, bool anchored) {
-        Iterator current = begin;
-        
-        if (anchored) {
-            if (match_string(pattern, current, end)) {
-                return match_result<Iterator>{begin, current};
-            }
-            return {};
-        }
-        
-        // Search mode - try at each position
-        for (auto it = begin; it != end; ++it) {
-            current = it;
-            if (match_string(pattern, current, end)) {
-                return match_result<Iterator>{it, current};
-            }
-        }
-        return {};
-    }
-    
-private:
-    template<typename Iterator>
-    static bool match_string(std::string_view pattern, Iterator& current, Iterator end) {
-        std::size_t pos = 0;
-        
-        while (pos < pattern.size() && current != end) {
-            char c = pattern[pos];
-            
-            if (c == '\\' && pos + 1 < pattern.size()) {
-                ++pos;
-                char escaped = pattern[pos];
-                switch (escaped) {
-                    case 'd':
-                        if (!match_digit(current, end)) return false;
-                        break;
-                    case 'w':
-                        if (!match_word(current, end)) return false;
-                        break;
-                    case 's':
-                        if (!match_whitespace(current, end)) return false;
-                        break;
-                    default:
-                        if (!match_char_literal(escaped, current, end)) return false;
-                        break;
-                }
-            } else if (c == '.') {
-                if (!match_any(current, end)) return false;
-            } else if (c == '[') {
-                auto close_pos = pattern.find(']', pos + 1);
-                if (close_pos == std::string_view::npos) return false;
-                
-                auto char_class = pattern.substr(pos + 1, close_pos - pos - 1);
-                if (!match_char_class(char_class, current, end)) return false;
-                pos = close_pos;
-            } else if (c == '*' || c == '+' || c == '?') {
-                // Handle quantifiers (simplified)
-                return handle_quantifier(pattern, pos, current, end);
-            } else if (c == '^') {
-                // Start anchor - only match if at beginning
-                if (current != begin) return false;
-            } else if (c == '$') {
-                // End anchor - only match if at end
-                return current == end;
-            } else if (c == '|') {
-                // Alternation - for simplicity, just match the first alternative
-                return true;
-            } else {
-                if (!match_char_literal(c, current, end)) return false;
-            }
-            
-            ++pos;
-        }
-        
-        return pos >= pattern.size();
-    }
-    
+
+private: // Moved private keyword up, match_pattern and match_string are the main interface from basic_regex
     template<typename Iterator>
     static bool match_char_literal(char expected, Iterator& current, Iterator end) {
         if (current != end && *current == expected) {
@@ -310,28 +241,185 @@ private:
         return false;
     }
     
+    // Note: handle_quantifier is removed as its logic is integrated into match_string.
+
+    // Main matching logic for a pattern sequence
     template<typename Iterator>
-    static bool handle_quantifier(std::string_view pattern, std::size_t& pos, Iterator& current, Iterator end) {
-        // Simplified quantifier handling
-        char quantifier = pattern[pos];
-        
-        switch (quantifier) {
-            case '*': // Zero or more
-                return true; // Always succeeds for *
-            case '+': // One or more
-                return current != end; // Needs at least one character
-            case '?': // Zero or one
-                return true; // Always succeeds for ?
-            default:
-                return false;
+    static bool match_string(std::string_view pattern, Iterator& current_ref, Iterator end, Iterator begin_of_this_attempt) {
+        Iterator current = current_ref; // Work on a local copy, commit on full match
+        std::size_t pat_idx = 0;
+
+        if (!pattern.empty() && pattern[0] == '^') {
+            if (current != begin_of_this_attempt) {
+                return false; // '^' anchor failed
+            }
+            pat_idx++; // Consume '^'
         }
+
+        while (pat_idx < pattern.size()) {
+            std::function<bool(Iterator&, Iterator)> atom_match_logic;
+            std::size_t atom_pattern_len = 0;
+
+            char p_char = pattern[pat_idx];
+
+            if (p_char == '\\' && pat_idx + 1 < pattern.size()) {
+                char escaped = pattern[pat_idx + 1];
+                atom_pattern_len = 2;
+                switch (escaped) {
+                    case 'd': atom_match_logic = match_digit<Iterator>; break;
+                    case 'w': atom_match_logic = match_word<Iterator>; break;
+                    case 's': atom_match_logic = match_whitespace<Iterator>; break;
+                    // Handle escaped special characters like \., \*, \+, etc.
+                    case '.': case '*': case '+': case '?': case '{': case '}':
+                    case '(': case ')': case '[': case ']': case '\\': case '^': case '$': case '|':
+                        atom_match_logic = [c = escaped](Iterator& i, Iterator e){ return match_char_literal(c, i, e); }; break;
+                    default:  atom_match_logic = [c = escaped](Iterator& i, Iterator e){ return match_char_literal(c, i, e); }; break;
+                }
+            } else if (p_char == '.') {
+                atom_pattern_len = 1;
+                atom_match_logic = match_any<Iterator>;
+            } else if (p_char == '[') {
+                auto close_pos = pattern.find(']', pat_idx + 1);
+                if (close_pos == std::string_view::npos) return false; // Malformed pattern
+                std::string_view char_class_str = pattern.substr(pat_idx + 1, close_pos - (pat_idx + 1));
+                atom_pattern_len = (close_pos + 1) - pat_idx;
+                atom_match_logic = [char_class_str](Iterator& i, Iterator e){ return match_char_class(char_class_str, i, e); };
+            } else if (p_char == '$') {
+                if (pat_idx == pattern.size() - 1) { // $ must be last char in pattern
+                    current_ref = current; // Commit progress
+                    return current == end; // Consumes no input, checks if at end
+                }
+                return false; // $ not last in pattern or other complex use not supported
+            } else if (p_char == '*' || p_char == '+' || p_char == '?' || p_char == '{' || p_char == '|') {
+                 // Quantifier/alternator at start of atom - should be caught by validation or implies error
+                return false;
+            }
+            else { // Literal character
+                atom_pattern_len = 1;
+                atom_match_logic = [c = p_char](Iterator& i, Iterator e){ return match_char_literal(c, i, e); };
+            }
+            
+            pat_idx += atom_pattern_len;
+
+            int min_repeats = 1, max_repeats = 1;
+            // bool quantified = false; // unused
+
+            if (pat_idx < pattern.size()) {
+                char q_char = pattern[pat_idx];
+                if (q_char == '?') {
+                    min_repeats = 0; max_repeats = 1; /*quantified = true;*/ pat_idx++;
+                } else if (q_char == '*') {
+                    min_repeats = 0; max_repeats = -1; /*quantified = true;*/ pat_idx++;
+                } else if (q_char == '+') {
+                    min_repeats = 1; max_repeats = -1; /*quantified = true;*/ pat_idx++;
+                } else if (q_char == '{') {
+                    std::size_t quant_spec_start = pat_idx + 1;
+                    std::size_t quant_spec_end = pattern.find('}', quant_spec_start);
+                    if (quant_spec_end == std::string_view::npos) return false; // Malformed {
+                    
+                    std::string_view quant_spec_str = pattern.substr(quant_spec_start, quant_spec_end - quant_spec_start);
+                    pat_idx = quant_spec_end + 1;
+                    // quantified = true;
+
+                    const char* spec_start_ptr = quant_spec_str.data();
+                    const char* spec_end_ptr = quant_spec_str.data() + quant_spec_str.size();
+                    
+                    auto result_min = std::from_chars(spec_start_ptr, spec_end_ptr, min_repeats);
+                    if (result_min.ec != std::errc() || result_min.ptr == spec_start_ptr) return false;
+
+                    if (result_min.ptr == spec_end_ptr) { // Format {N}
+                        max_repeats = min_repeats;
+                    } else if (*result_min.ptr == ',') {
+                        spec_start_ptr = result_min.ptr + 1;
+                        if (spec_start_ptr == spec_end_ptr) { // Format {N,}
+                            max_repeats = -1;
+                        } else { // Format {N,M}
+                            auto result_max = std::from_chars(spec_start_ptr, spec_end_ptr, max_repeats);
+                            if (result_max.ec != std::errc() || result_max.ptr != spec_end_ptr || result_max.ptr == spec_start_ptr) return false;
+                            if (max_repeats < min_repeats && max_repeats != -1) return false; // M < N is invalid (unless M is -1 for infinity)
+                        }
+                    } else {
+                        return false; // Invalid char after N in {N...}
+                    }
+                }
+            }
+
+            int match_count = 0;
+            // Iterator iter_before_quantified_match = current; // Unused variable
+            
+            for (int i = 0; (max_repeats == -1 || i < max_repeats); ++i) {
+                Iterator iter_before_this_atom_match = current;
+                if (atom_match_logic(current, end)) {
+                    match_count++;
+                    if (iter_before_this_atom_match == current && max_repeats == -1) { // Matched empty and infinite quantifier
+                        break; 
+                    }
+                } else {
+                    current = iter_before_this_atom_match; // Backtrack this failed atom match
+                    break; 
+                }
+            }
+
+            if (match_count < min_repeats) {
+                 // If not enough matches, the whole pattern piece fails.
+                 // For greedy matching, we don't backtrack previous atoms here.
+                 // A full regex engine would need backtracking for complex cases.
+                return false;
+            }
+            // current is now positioned after the greedily matched sequence.
+        }
+
+        current_ref = current; // Commit progress
+        return true;
+    }
+
+public: // Moved public keyword up, match_pattern is part of public API of matcher
+    // Simple pattern matcher using string processing
+    template<typename Iterator>
+    static match_result<Iterator> match_pattern(std::string_view pattern, Iterator begin, Iterator end, bool anchored) {
+        if (anchored) {
+            Iterator current = begin;
+            if (match_string(pattern, current, end, begin)) { // Pass 'begin' for ^ anchor context
+                return match_result<Iterator>{begin, current};
+            }
+            // Handle cases like pattern "a*" on empty string ""
+            // If pattern can match an empty string.
+            if (pattern.empty()) return match_result<Iterator>{begin, begin};
+            Iterator temp_current = begin;
+             // Check if pattern can match an empty string at 'begin'
+            if (match_string(pattern, temp_current, begin, begin) && temp_current == begin) {
+                 return match_result<Iterator>{begin, begin};
+            }
+
+            return {};
+        }
+        
+        // Search mode - try at each position
+        for (auto it = begin; it != end; ++it) {
+            Iterator current = it;
+            // For ^ in search mode, it should match against `it` (start of this attempt)
+            if (match_string(pattern, current, end, it)) { 
+                return match_result<Iterator>{it, current};
+            }
+        }
+        
+        // After loop, check if pattern can match an empty string at 'end'
+        // This handles cases like "abc" with pattern "d*", expecting empty match at end of "abc"
+        Iterator current_at_end = end;
+        if (match_string(pattern, current_at_end, end, end) && current_at_end == end) {
+             return match_result<Iterator>{end, end};
+        }
+
+        return {};
     }
 };
 
 // Main regex class - much simpler than the constexpr version
 template<char... Chars>
 class basic_regex {
-    static constexpr auto validation = parse_result<Chars...>{}; // Validates at compile time
+    // Ensure parse_result is instantiated for its static_assert to run.
+    [[maybe_unused]] static constexpr auto validation_check = parse_result<Chars...>{};
+    // Get the pattern string view from pattern_string
     static constexpr auto pattern_obj = pattern_string<Chars...>{};
     static constexpr std::string_view pattern_view{pattern_obj.data, pattern_obj.len};
     
@@ -363,17 +451,19 @@ public:
 };
 
 // Convenience functions
-template<char... Chars>
-constexpr auto make_regex() {
-    return basic_regex<Chars...>{};
-}
+// Not strictly needed if using the UDL, but can be kept if direct construction is desired.
+// template<char... Chars> // Changed from fixed_string
+// constexpr auto make_regex() {
+//     return basic_regex<Chars...>{}; // Changed from Pattern
+// }
 
-// User-defined literal - FIXED VERSION
+// User-defined literal - Using explicit CharT... chars form
 namespace literals {
-    // Character pack template - this is the correct way for string literals
-    template<char... Chars>
+    template <typename CharT, CharT... CharsPack> // More explicit signature
     constexpr auto operator""_re() {
-        return basic_regex<Chars...>{};
+        // We expect CharT to be char, static_assert for safety if needed
+        static_assert(std::is_same_v<CharT, char>, "Regex literal must use char characters.");
+        return basic_regex<CharsPack...>{}; // Pass the deduced character pack
     }
 }
 
