@@ -7,6 +7,7 @@
 #include <string_view>
 #include <type_traits>
 #include <utility>
+#include <cstdlib>
 
 namespace glz
 {
@@ -87,22 +88,22 @@ namespace glz
                ++bracket_depth;
                break;
             case ']':
-               if (bracket_depth == 0) return false; // Invalid: unmatched closing bracket
+               if (bracket_depth == 0) std::abort(); // Invalid: unmatched closing bracket
                --bracket_depth;
                break;
             case '(':
                ++paren_depth;
                break;
             case ')':
-               if (paren_depth == 0) return false; // Invalid: unmatched closing parenthesis
+               if (paren_depth == 0) std::abort(); // Invalid: unmatched closing parenthesis
                --paren_depth;
                break;
          }
       }
       
-      if (bracket_depth != 0) return false; // Invalid: unclosed bracket
-      if (paren_depth != 0) return false; // Invalid: unclosed parenthesis
-      if (in_escape) return false; // Invalid: trailing escape character
+      if (bracket_depth != 0) std::abort(); // Invalid: unclosed bracket
+      if (paren_depth != 0) std::abort(); // Invalid: unclosed parenthesis
+      if (in_escape) std::abort(); // Invalid: trailing escape character
       
       return true;
    }
