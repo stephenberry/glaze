@@ -3,7 +3,6 @@
 #include <array>
 #include <charconv>
 #include <concepts>
-#include <functional>
 #include <string>
 #include <string_view>
 #include <system_error>
@@ -147,9 +146,12 @@ namespace glz
    // Matcher implementations using function templates for different pattern types
    struct matcher
    {
+      // The context parameter is added to all functions that can be pointed to.
+      // It is unused for context-free matchers.
+
       // Match a single character literal
       template <char C, typename Iterator>
-      static bool match_char(Iterator& current, Iterator end)
+      static bool match_char(Iterator& current, Iterator end, std::string_view /*context*/)
       {
          if (current != end && *current == C) {
             ++current;
@@ -160,7 +162,7 @@ namespace glz
 
       // Match a character range
       template <char Start, char End, typename Iterator>
-      static bool match_range(Iterator& current, Iterator end)
+      static bool match_range(Iterator& current, Iterator end, std::string_view /*context*/)
       {
          if (current != end && *current >= Start && *current <= End) {
             ++current;
@@ -171,7 +173,7 @@ namespace glz
 
       // Match any character
       template <class Iterator>
-      static bool match_any(Iterator& current, Iterator end)
+      static bool match_any(Iterator& current, Iterator end, std::string_view /*context*/)
       {
          if (current != end) {
             ++current;
@@ -182,7 +184,7 @@ namespace glz
 
       // Match digit
       template <class Iterator>
-      static bool match_digit(Iterator& current, Iterator end)
+      static bool match_digit(Iterator& current, Iterator end, std::string_view /*context*/)
       {
          if (current != end && *current >= '0' && *current <= '9') {
             ++current;
@@ -193,7 +195,7 @@ namespace glz
 
       // Match word character
       template <class Iterator>
-      static bool match_word(Iterator& current, Iterator end)
+      static bool match_word(Iterator& current, Iterator end, std::string_view /*context*/)
       {
          if (current != end && ((*current >= 'a' && *current <= 'z') || (*current >= 'A' && *current <= 'Z') ||
                                 (*current >= '0' && *current <= '9') || *current == '_')) {
@@ -205,7 +207,7 @@ namespace glz
 
       // Match whitespace
       template <class Iterator>
-      static bool match_whitespace(Iterator& current, Iterator end)
+      static bool match_whitespace(Iterator& current, Iterator end, std::string_view /*context*/)
       {
          if (current != end && (*current == ' ' || *current == '\t' || *current == '\n' || *current == '\r')) {
             ++current;
@@ -214,10 +216,13 @@ namespace glz
          return false;
       }
 
-     private: // Moved private keyword up, match_pattern and match_string are the main interface from basic_regex
+     private:
+      // This wrapper uses the first character of the string_view context
       template <class Iterator>
-      static bool match_char_literal(char expected, Iterator& current, Iterator end)
+      static bool match_char_from_context(Iterator& current, Iterator end, std::string_view context)
       {
+         if (context.empty()) return false;
+         char expected = context[0];
          if (current != end && *current == expected) {
             ++current;
             return true;
@@ -225,8 +230,9 @@ namespace glz
          return false;
       }
 
+      // This wrapper uses the whole string_view context for the character class
       template <class Iterator>
-      static bool match_char_class(std::string_view char_class, Iterator& current, Iterator end)
+      static bool match_char_class_from_context(Iterator& current, Iterator end, std::string_view char_class)
       {
          if (current == end) return false;
 
@@ -271,6 +277,9 @@ namespace glz
       static bool match_string(std::string_view pattern, Iterator& current_ref, Iterator end,
                                Iterator begin_of_this_attempt)
       {
+         // The function pointer uses a std::string_view for its context.
+         using atom_match_ptr = bool (*)(Iterator&, Iterator, std::string_view);
+
          Iterator current = current_ref; // Work on a local copy, commit on full match
          std::size_t pat_idx = 0;
 
@@ -282,7 +291,8 @@ namespace glz
          }
 
          while (pat_idx < pattern.size()) {
-            std::function<bool(Iterator&, Iterator)> atom_match_logic;
+            atom_match_ptr atom_match_logic = nullptr;
+            std::string_view atom_context;
             std::size_t atom_pattern_len = 0;
 
             char p_char = pattern[pat_idx];
@@ -292,13 +302,13 @@ namespace glz
                atom_pattern_len = 2;
                switch (escaped) {
                case 'd':
-                  atom_match_logic = match_digit<Iterator>;
+                  atom_match_logic = &match_digit<Iterator>;
                   break;
                case 'w':
-                  atom_match_logic = match_word<Iterator>;
+                  atom_match_logic = &match_word<Iterator>;
                   break;
                case 's':
-                  atom_match_logic = match_whitespace<Iterator>;
+                  atom_match_logic = &match_whitespace<Iterator>;
                   break;
                // Handle escaped special characters like \., \*, \+, etc.
                case '.':
@@ -315,25 +325,25 @@ namespace glz
                case '^':
                case '$':
                case '|':
-                  atom_match_logic = [c = escaped](Iterator& i, Iterator e) { return match_char_literal(c, i, e); };
-                  break;
-               default:
-                  atom_match_logic = [c = escaped](Iterator& i, Iterator e) { return match_char_literal(c, i, e); };
+               default: // All other escaped chars are treated as literals
+                  // Create a string_view of length 1 pointing to the escaped character
+                  atom_context = pattern.substr(pat_idx + 1, 1);
+                  atom_match_logic = &match_char_from_context<Iterator>;
                   break;
                }
             }
             else if (p_char == '.') {
                atom_pattern_len = 1;
-               atom_match_logic = match_any<Iterator>;
+               atom_match_logic = &match_any<Iterator>;
             }
             else if (p_char == '[') {
                auto close_pos = pattern.find(']', pat_idx + 1);
                if (close_pos == std::string_view::npos) return false; // Malformed pattern
-               std::string_view char_class_str = pattern.substr(pat_idx + 1, close_pos - (pat_idx + 1));
+
+               // The context is the content of the brackets.
+               atom_context = pattern.substr(pat_idx + 1, close_pos - (pat_idx + 1));
                atom_pattern_len = (close_pos + 1) - pat_idx;
-               atom_match_logic = [char_class_str](Iterator& i, Iterator e) {
-                  return match_char_class(char_class_str, i, e);
-               };
+               atom_match_logic = &match_char_class_from_context<Iterator>;
             }
             else if (p_char == '$') {
                if (pat_idx == pattern.size() - 1) { // $ must be last char in pattern
@@ -348,7 +358,9 @@ namespace glz
             }
             else { // Literal character
                atom_pattern_len = 1;
-               atom_match_logic = [c = p_char](Iterator& i, Iterator e) { return match_char_literal(c, i, e); };
+               // Create a string_view of length 1 pointing to the literal character
+               atom_context = pattern.substr(pat_idx, 1);
+               atom_match_logic = &match_char_from_context<Iterator>;
             }
 
             pat_idx += atom_pattern_len;
@@ -416,7 +428,8 @@ namespace glz
 
             for (int i = 0; (max_repeats == -1 || i < max_repeats); ++i) {
                Iterator iter_before_this_atom_match = current;
-               if (atom_match_logic(current, end)) {
+               // Call the function pointer, passing the context
+               if (atom_match_logic(current, end, atom_context)) {
                   match_count++;
                   if (iter_before_this_atom_match == current &&
                       max_repeats == -1) { // Matched empty and infinite quantifier
