@@ -292,7 +292,7 @@ namespace glz
 
       // Enhanced matching logic with basic backtracking
       template <class Iterator>
-      static bool match_string_with_backtrack(std::string_view pattern, Iterator& current_ref, Iterator end,
+      static bool match_string_with_backtrack(const std::string_view pattern, Iterator& current_ref, Iterator end,
                                               Iterator begin_of_this_attempt, int depth = 0)
       {
          if (depth > 100) return false; // Prevent infinite recursion
@@ -492,7 +492,7 @@ namespace glz
 
       // Main matching logic - wrapper that tries enhanced version first, then falls back
       template <class Iterator>
-      static bool match_string(std::string_view pattern, Iterator& current_ref, Iterator end,
+      static bool match_string(const std::string_view pattern, Iterator& current_ref, Iterator end,
                                Iterator begin_of_this_attempt)
       {
          // For simple patterns without quantifiers, use the original fast algorithm
@@ -593,7 +593,7 @@ namespace glz
      public: // Moved public keyword up, match_pattern is part of public API of matcher
       // Simple pattern matcher using string processing
       template <class Iterator>
-      static match_result<Iterator> match_pattern(std::string_view pattern, Iterator begin, Iterator end, bool anchored)
+      static match_result<Iterator> match_pattern(const std::string_view pattern, Iterator begin, Iterator end, bool anchored)
       {
          if (anchored) {
             // Anchored mode (match) - pattern must match from the beginning
