@@ -76,20 +76,6 @@ namespace glz
       }
    };
 
-   // AST node types as simple template classes
-   template <char C>
-   struct char_literal
-   {
-      static constexpr char value = C;
-   };
-
-   template <char Start, char End>
-   struct char_range
-   {
-      static constexpr char start = Start;
-      static constexpr char end = End;
-   };
-
    // Compile-time string from character pack
    template <char... Chars>
    struct pattern_string
