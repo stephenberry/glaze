@@ -63,27 +63,23 @@ namespace glz
          return matched ? std::string(begin_pos, end_pos) : std::string{};
       }
    };
-
-   // Compile-time validation
+   
    template <const std::string_view& Pattern>
-   struct parse_result
+   consteval bool validate_regex()
    {
-      // Simple validation - just check for basic syntax errors
-      static constexpr bool validate()
-      {
-         std::size_t bracket_depth = 0;
-         std::size_t paren_depth = 0;
-         bool in_escape = false;
-
-         for (std::size_t i = 0; i < Pattern.size(); ++i) {
-            char c = Pattern[i];
-
-            if (in_escape) {
-               in_escape = false;
-               continue;
-            }
-
-            switch (c) {
+      std::size_t bracket_depth = 0;
+      std::size_t paren_depth = 0;
+      bool in_escape = false;
+      
+      for (std::size_t i = 0; i < Pattern.size(); ++i) {
+         char c = Pattern[i];
+         
+         if (in_escape) {
+            in_escape = false;
+            continue;
+         }
+         
+         switch (c) {
             case '\\':
                in_escape = true;
                break;
@@ -101,19 +97,15 @@ namespace glz
                if (paren_depth == 0) return false; // Invalid: unmatched closing parenthesis
                --paren_depth;
                break;
-            }
          }
-
-         if (bracket_depth != 0) return false; // Invalid: unclosed bracket
-         if (paren_depth != 0) return false; // Invalid: unclosed parenthesis
-         if (in_escape) return false; // Invalid: trailing escape character
-
-         return true;
       }
-
-      static constexpr bool is_valid = validate();
-      static_assert(is_valid, "Invalid regex pattern");
-   };
+      
+      if (bracket_depth != 0) return false; // Invalid: unclosed bracket
+      if (paren_depth != 0) return false; // Invalid: unclosed parenthesis
+      if (in_escape) return false; // Invalid: trailing escape character
+      
+      return true;
+   }
 
    // Matcher implementations using function templates for different pattern types
    struct matcher
@@ -689,7 +681,7 @@ namespace glz
    template <const std::string_view& Pattern>
    class basic_regex
    {
-      static_assert(parse_result<Pattern>::is_valid, "Invalid regex pattern");
+      static_assert(validate_regex<Pattern>(), "Invalid regex pattern");
 
      public:
       constexpr basic_regex() = default;
