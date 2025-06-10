@@ -552,8 +552,7 @@ namespace glz
       template <const std::string_view& Pattern, class Iterator>
       static constexpr bool match_string_ct(Iterator& current_ref, Iterator end, Iterator begin_of_this_attempt)
       {
-         constexpr bool has_quantifiers = pattern_has_quantifiers(Pattern);
-         return match_string_dispatch<Iterator, has_quantifiers>(Pattern, current_ref, end, begin_of_this_attempt);
+         return match_string_dispatch<Iterator, pattern_has_quantifiers(Pattern)>(Pattern, current_ref, end, begin_of_this_attempt);
       }
 
       // Compile-time version of match_pattern
