@@ -250,12 +250,12 @@ namespace glz
          for (std::size_t i = start; i < char_class.size();) {
             // Check if this is a range pattern X-Y
             // A dash creates a range only if:
-            // 1. There are exactly 2 more characters (dash and end char)
+            // 1. There are at least 3 characters remaining (X-Y)
             // 2. The second character is a dash
             // 3. The dash is not at the very beginning or very end
 
             if (i + 2 < char_class.size() && char_class[i + 1] == '-') {
-               // Process as range X-Y
+               // Process as range X-Y (dash is in the middle, not at end)
                char range_start = char_class[i];
                char range_end = char_class[i + 2];
 
@@ -266,20 +266,13 @@ namespace glz
                }
                i += 3; // Skip the entire range pattern X-Y
             }
-            else if (i + 2 == char_class.size() && char_class[i + 1] == '-') {
-               // Special case: X- at the end of character class
-               // Process as range X-Y where Y is the last character
-               char range_start = char_class[i];
-               char range_end = char_class[i + 2];
-
-               if (range_start <= range_end && ch >= range_start && ch <= range_end) {
-                  found = true;
-                  break;
-               }
-               i += 3; // Skip the entire range pattern X-Y
-            }
             else {
                // Process as literal character (including - at start/end or isolated)
+               // This handles:
+               // - Regular characters
+               // - Dash at the beginning of character class
+               // - Dash at the end of character class
+               // - Any other non-range character
                if (ch == char_class[i]) {
                   found = true;
                   break;
