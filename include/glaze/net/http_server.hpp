@@ -250,7 +250,7 @@ namespace glz
        * @param key_file Path to the private key file (PEM format)
        * @return Reference to this server for method chaining
        */
-      inline http_server& load_certificate(const std::string& cert_file, const std::string& key_file)
+      inline http_server& load_certificate(const std::string& /*cert_file*/, const std::string& /*key_file*/)
       {
          if constexpr (EnableTLS) {
 #ifdef GLZ_ENABLE_SSL
@@ -267,7 +267,7 @@ namespace glz
        * @param mode SSL verification mode
        * @return Reference to this server for method chaining
        */
-      inline http_server& set_ssl_verify_mode(int mode)
+      inline http_server& set_ssl_verify_mode(int /*mode*/)
       {
          if constexpr (EnableTLS) {
 #ifdef GLZ_ENABLE_SSL

@@ -385,8 +385,9 @@ namespace glz
       {
          // Validate WebSocket upgrade request
          auto it = req.headers.find("upgrade");
+         constexpr std::string_view websocket_str = "websocket";
          if (it == req.headers.end() ||
-             !std::equal(it->second.begin(), it->second.end(), "websocket", "websocket" + 9,
+             !std::equal(it->second.begin(), it->second.end(), websocket_str.begin(), websocket_str.end(),
                          [](char a, char b) { return std::tolower(a) == std::tolower(b); })) {
             do_close();
             return;
