@@ -430,7 +430,7 @@ namespace glz
          std::string response_str = response.str();
          auto self = shared_from_this();
 
-         asio::async_write(socket_, asio::buffer(response_str), [self, req](std::error_code ec, std::size_t) {
+         asio::async_write(socket_, asio::buffer(response_str), [self, req, response_str = std::move(response_str)](std::error_code ec, std::size_t) {
             if (ec) {
                if (self->server_) {
                   self->server_->notify_error(self, ec);
