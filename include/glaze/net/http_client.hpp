@@ -170,26 +170,31 @@ namespace glz
                      }
 
                      // Format the request
-                     std::ostringstream oss;
-                     oss << "GET " << path << " HTTP/1.1\r\n";
-                     oss << "Host: " << host << "\r\n";
-                     oss << "Connection: close\r\n";
+                     std::string request_str;
+                     request_str.append("GET ");
+                     request_str.append(path);
+                     request_str.append(" HTTP/1.1\r\n");
+                     request_str.append("Host: ");
+                     request_str.append(host);
+                     request_str.append("\r\n");
+                     request_str.append("Connection: close\r\n");
 
                      // Add headers
                      for (const auto& [name, value] : headers) {
-                        oss << name << ": " << value << "\r\n";
+                        request_str.append(name);
+                        request_str.append(": ");
+                        request_str.append(value);
+                        request_str.append("\r\n");
                      }
 
                      // End of headers
-                     oss << "\r\n";
-
-                     std::string request_str = oss.str();
+                     request_str.append("\r\n");
 
                      // Send the request
                      asio::async_write(
                         *socket, asio::buffer(request_str),
-                        [socket, promise = std::move(promise), request_str = std::move(request_str)](std::error_code ec,
-                                                               std::size_t /*bytes_transferred*/) mutable {
+                        [socket, promise = std::move(promise), request_str = std::move(request_str)](
+                           std::error_code ec, std::size_t /*bytes_transferred*/) mutable {
                            if (ec) {
                               promise.set_value(std::unexpected(ec));
                               return;
@@ -456,24 +461,31 @@ namespace glz
                      }
 
                      // Format the request
-                     std::ostringstream oss;
-                     oss << "POST " << path << " HTTP/1.1\r\n";
-                     oss << "Host: " << host << "\r\n";
-                     oss << "Connection: close\r\n";
-                     oss << "Content-Length: " << body.size() << "\r\n";
+                     std::string request_str;
+                     request_str.append("POST ");
+                     request_str.append(path);
+                     request_str.append(" HTTP/1.1\r\n");
+                     request_str.append("Host: ");
+                     request_str.append(host);
+                     request_str.append("\r\n");
+                     request_str.append("Connection: close\r\n");
+                     request_str.append("Content-Length: ");
+                     request_str.append(std::to_string(body.size()));
+                     request_str.append("\r\n");
 
                      // Add headers
                      for (const auto& [name, value] : headers) {
-                        oss << name << ": " << value << "\r\n";
+                        request_str.append(name);
+                        request_str.append(": ");
+                        request_str.append(value);
+                        request_str.append("\r\n");
                      }
 
                      // End of headers
-                     oss << "\r\n";
+                     request_str.append("\r\n");
 
                      // Add body
-                     oss << body;
-
-                     std::string request_str = oss.str();
+                     request_str.append(body);
 
                      // Send the request
                      asio::async_write(
