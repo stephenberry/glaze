@@ -11,6 +11,7 @@ add_subdirectory(http_examples)
 
 # Networking Tests
 add_subdirectory(asio_repe)
+add_subdirectory(http_client_test)
 add_subdirectory(http_server_api_tests)
 add_subdirectory(https_test)
 add_subdirectory(repe_test)
