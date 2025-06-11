@@ -1,6 +1,6 @@
 # HTTP Client
 
-The Glaze HTTP client provides a simple and efficient way to make HTTP requests.
+The Glaze HTTP client provides a simple and efficient way to make HTTP requests with connection pooling and asynchronous operations.
 
 ## Basic Usage
 
@@ -15,6 +15,11 @@ int main() {
     if (response) {
         std::cout << "Status: " << response->status_code << std::endl;
         std::cout << "Body: " << response->response_body << std::endl;
+        
+        // Access response headers
+        for (const auto& [name, value] : response->response_headers) {
+            std::cout << name << ": " << value << std::endl;
+        }
     } else {
         std::cerr << "Error: " << response.error().message() << std::endl;
     }
@@ -23,43 +28,125 @@ int main() {
 }
 ```
 
-## Methods
+## Features
 
-*   `get(url, headers)`: Performs an HTTP GET request to the specified URL.
-*   `post(url, body, headers)`: Performs an HTTP POST request to the specified URL with the given body and headers.
-*   `put(url, body, headers)`: Performs an HTTP PUT request to the specified URL with the given body and headers.
-*   `del(url, headers)`: Performs an HTTP DELETE request to the specified URL with the given headers.
-*   `patch(url, body, headers)`: Performs an HTTP PATCH request to the specified URL with the given body and headers.
+- **Connection Pooling**: Automatically reuses connections for better performance
+- **Asynchronous Operations**: Non-blocking requests with futures or completion handlers
+- **JSON Support**: Built-in JSON serialization for POST requests
+- **Thread-Safe**: Multiple threads can safely use the same client instance
+- **Error Handling**: Uses `std::expected` for clean error handling
 
-## Asynchronous Requests
+## Synchronous Methods
 
-The Glaze HTTP client also supports asynchronous requests, allowing you to perform non-blocking operations.
+### GET Request
+```cpp
+std::expected<response, std::error_code> get(
+    std::string_view url,
+    const std::unordered_map<std::string, std::string>& headers = {}
+);
+```
 
-*   `get_async(url, headers)`: Performs an asynchronous HTTP GET request to the specified URL. Returns a `std::future` that will hold the response.
-*   `post_async(url, body, headers)`: Performs an asynchronous HTTP POST request to the specified URL with the given body and headers. Returns a `std::future` that will hold the response.
+### POST Request
+```cpp
+std::expected<response, std::error_code> post(
+    std::string_view url, 
+    std::string_view body,
+    const std::unordered_map<std::string, std::string>& headers = {}
+);
+```
+
+### JSON POST Request
+```cpp
+template<class T>
+std::expected<response, std::error_code> post_json(
+    std::string_view url, 
+    const T& data,
+    const std::unordered_map<std::string, std::string>& headers = {}
+);
+```
+
+## Asynchronous Methods
+
+All asynchronous methods come in two variants:
+
+1. **Future-based**: Returns a `std::future` for the response
+2. **Callback-based**: Takes a completion handler that's called when the operation completes
+
+### Async GET Request
+
+**Future-based:**
+```cpp
+std::future<std::expected<response, std::error_code>> get_async(
+    std::string_view url,
+    const std::unordered_map<std::string, std::string>& headers = {}
+);
+```
+
+**Callback-based:**
+```cpp
+template<typename CompletionHandler>
+void get_async(
+    std::string_view url,
+    const std::unordered_map<std::string, std::string>& headers,
+    CompletionHandler&& handler
+);
+```
+
+### Async POST Request
+
+**Future-based:**
+```cpp
+std::future<std::expected<response, std::error_code>> post_async(
+    std::string_view url, 
+    std::string_view body,
+    const std::unordered_map<std::string, std::string>& headers = {}
+);
+```
+
+**Callback-based:**
+```cpp
+template<typename CompletionHandler>
+void post_async(
+    std::string_view url, 
+    std::string_view body,
+    const std::unordered_map<std::string, std::string>& headers,
+    CompletionHandler&& handler
+);
+```
+
+### Async JSON POST Request
+
+**Future-based:**
+```cpp
+template<class T>
+std::future<std::expected<response, std::error_code>> post_json_async(
+    std::string_view url, 
+    const T& data,
+    const std::unordered_map<std::string, std::string>& headers = {}
+);
+```
+
+**Callback-based:**
+```cpp
+template<class T, typename CompletionHandler>
+void post_json_async(
+    std::string_view url, 
+    const T& data,
+    const std::unordered_map<std::string, std::string>& headers,
+    CompletionHandler&& handler
+);
+```
+
+## Response Structure
+
+The `response` object contains:
 
 ```cpp
-#include "glaze/net/http_client.hpp"
-#include <future>
-
-int main() {
-    glz::http_client client;
-
-    auto future_response = client.get_async("https://example.com");
-
-    // Do other work
-
-    auto response = future_response.get(); // Get the response when ready
-
-    if (response) {
-        std::cout << "Status: " << response->status_code << std::endl;
-        std::cout << "Body: " << response->response_body << std::endl;
-    } else {
-        std::cerr << "Error: " << response.error().message() << std::endl;
-    }
-
-    return 0;
-}
+struct response {
+    uint16_t status_code;                                      // HTTP status code
+    std::unordered_map<std::string, std::string> response_headers; // Response headers
+    std::string response_body;                                 // Response body
+};
 ```
 
 ## Error Handling
@@ -67,27 +154,20 @@ int main() {
 The HTTP client returns a `std::expected` object, which contains either the response or an error code. You can check for errors using the `has_value()` method or by accessing the `error()` method.
 
 ```cpp
-#include "glaze/net/http_client.hpp"
+auto response = client.get("https://example.com");
 
-int main() {
-    glz::http_client client;
-
-    auto response = client.get("https://example.com");
-
-    if (response) {
-        // Request was successful
-    } else {
-        std::error_code ec = response.error();
-        std::cerr << "Error: " << ec.message() << std::endl;
-    }
-
-    return 0;
+if (response) {
+    // Request was successful
+    std::cout << "Status: " << response->status_code << std::endl;
+} else {
+    std::error_code ec = response.error();
+    std::cerr << "Error: " << ec.message() << std::endl;
 }
 ```
 
 ## Examples
 
-### GET Request
+### Simple GET Request
 
 ```cpp
 #include "glaze/net/http_client.hpp"
@@ -95,10 +175,11 @@ int main() {
 int main() {
     glz::http_client client;
 
-    auto response = client.get("https://example.com/api/data");
+    auto response = client.get("https://api.github.com/users/octocat");
 
     if (response) {
         std::cout << "Status: " << response->status_code << std::endl;
+        std::cout << "Content-Type: " << response->response_headers["Content-Type"] << std::endl;
         std::cout << "Body: " << response->response_body << std::endl;
     } else {
         std::cerr << "Error: " << response.error().message() << std::endl;
@@ -108,36 +189,152 @@ int main() {
 }
 ```
 
-### POST Request with JSON
+### POST Request with Custom Headers
 
 ```cpp
 #include "glaze/net/http_client.hpp"
-#include "glaze/glaze.hpp"
-
-struct MyData {
-    int id;
-    std::string name;
-};
 
 int main() {
     glz::http_client client;
 
-    MyData data{1, "example"};
-    std::string body;
-    glz::write_json(data, body);
-
     std::unordered_map<std::string, std::string> headers = {
-        {"Content-Type", "application/json"}
+        {"Content-Type", "text/plain"},
+        {"Authorization", "Bearer your-token"}
     };
 
-    auto response = client.post("https://example.com/api/items", body, headers);
+    auto response = client.post("https://api.example.com/data", "Hello, World!", headers);
 
     if (response) {
         std::cout << "Status: " << response->status_code << std::endl;
-        std::cout << "Body: " << response->response_body << std::endl;
+        std::cout << "Response: " << response->response_body << std::endl;
     } else {
         std::cerr << "Error: " << response.error().message() << std::endl;
     }
 
     return 0;
 }
+```
+
+### JSON POST Request
+
+```cpp
+#include "glaze/net/http_client.hpp"
+#include "glaze/glaze.hpp"
+
+struct User {
+    int id;
+    std::string name;
+    std::string email;
+};
+
+int main() {
+    glz::http_client client;
+
+    User user{123, "John Doe", "john@example.com"};
+
+    // Using the convenient post_json method
+    auto response = client.post_json("https://api.example.com/users", user);
+
+    if (response) {
+        std::cout << "User created! Status: " << response->status_code << std::endl;
+        std::cout << "Response: " << response->response_body << std::endl;
+    } else {
+        std::cerr << "Error: " << response.error().message() << std::endl;
+    }
+
+    return 0;
+}
+```
+
+### Asynchronous Requests with Futures
+
+```cpp
+#include "glaze/net/http_client.hpp"
+#include <future>
+#include <vector>
+
+int main() {
+    glz::http_client client;
+
+    // Launch multiple async requests
+    std::vector<std::future<std::expected<glz::response, std::error_code>>> futures;
+    
+    futures.push_back(client.get_async("https://api.github.com/users/octocat"));
+    futures.push_back(client.get_async("https://api.github.com/users/defunkt"));
+    futures.push_back(client.get_async("https://api.github.com/users/pjhyett"));
+
+    // Wait for all requests to complete
+    for (auto& future : futures) {
+        auto response = future.get();
+        if (response) {
+            std::cout << "Status: " << response->status_code << std::endl;
+        } else {
+            std::cerr << "Error: " << response.error().message() << std::endl;
+        }
+    }
+
+    return 0;
+}
+```
+
+### Asynchronous Requests with Callbacks
+
+```cpp
+#include "glaze/net/http_client.hpp"
+#include <iostream>
+
+int main() {
+    glz::http_client client;
+
+    // Async GET with callback
+    client.get_async("https://api.github.com/users/octocat", {},
+        [](std::expected<glz::response, std::error_code> result) {
+            if (result) {
+                std::cout << "Async GET completed! Status: " << result->status_code << std::endl;
+            } else {
+                std::cerr << "Async GET failed: " << result.error().message() << std::endl;
+            }
+        });
+
+    // Async JSON POST with callback
+    struct Data { int value = 42; };
+    Data data;
+    
+    client.post_json_async("https://httpbin.org/post", data, {},
+        [](std::expected<glz::response, std::error_code> result) {
+            if (result) {
+                std::cout << "Async JSON POST completed! Status: " << result->status_code << std::endl;
+            } else {
+                std::cerr << "Async JSON POST failed: " << result.error().message() << std::endl;
+            }
+        });
+
+    // Keep the main thread alive long enough for async operations to complete
+    std::this_thread::sleep_for(std::chrono::seconds(2));
+
+    return 0;
+}
+```
+
+## URL Parsing
+
+The client includes a URL parsing utility:
+
+```cpp
+#include "glaze/net/http_client.hpp"
+
+auto url_parts = glz::parse_url("https://api.example.com:8080/v1/users");
+if (url_parts) {
+    std::cout << "Protocol: " << url_parts->protocol << std::endl; // "https"
+    std::cout << "Host: " << url_parts->host << std::endl;         // "api.example.com"
+    std::cout << "Port: " << url_parts->port << std::endl;         // 8080
+    std::cout << "Path: " << url_parts->path << std::endl;         // "/v1/users"
+}
+```
+
+## Performance Notes
+
+- The client automatically pools connections for better performance when making multiple requests to the same host
+- Multiple worker threads are used internally to handle concurrent requests
+- The connection pool has a configurable limit (default: 10 connections per host)
+- Connections are automatically returned to the pool when requests complete successfully
