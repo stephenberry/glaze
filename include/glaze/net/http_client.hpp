@@ -188,7 +188,7 @@ namespace glz
                      // Send the request
                      asio::async_write(
                         *socket, asio::buffer(request_str),
-                        [socket, promise = std::move(promise)](std::error_code ec,
+                        [socket, promise = std::move(promise), request_str = std::move(request_str)](std::error_code ec,
                                                                std::size_t /*bytes_transferred*/) mutable {
                            if (ec) {
                               promise.set_value(std::unexpected(ec));
