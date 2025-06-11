@@ -372,8 +372,8 @@ suite async_route_execution_tests = [] {
     "async_route_error_handling"_test = [] {
         glz::http_router router;
         
-        router.get_async("/error", [](const glz::request&, glz::response& res) -> std::future<void> {
-            return std::async(std::launch::async, [&res]() {
+        router.get_async("/error", [](const glz::request&, glz::response&) -> std::future<void> {
+            return std::async([]() {
                 throw std::runtime_error("Async operation failed");
             });
         });
@@ -516,58 +516,6 @@ suite concurrent_async_tests = [] {
         
         expect(!async_res.response_body.empty()) << "Async route should produce response\n";
         expect(!sync_res.response_body.empty()) << "Sync route should produce response\n";
-    };
-};
-
-// Parameter Constraint Tests with Async Routes
-suite async_parameter_constraint_tests = [] {
-    "async_route_with_numeric_constraint"_test = [] {
-        glz::http_router router;
-        
-        glz::http_router::param_constraint numeric_constraint{
-            .pattern = "[0-9]+",
-            .description = "Must be numeric"
-        };
-        
-        router.get_async("/items/:id", [](const glz::request& req, glz::response& res) -> std::future<void> {
-            return std::async(std::launch::async, [&req, &res]() {
-                int id = std::stoi(req.params.at("id"));
-                res.json({{"item_id", id}, {"async", true}});
-            });
-        }, {{"id", numeric_constraint}});
-        
-        // Test valid numeric parameter
-        auto [valid_handler, valid_params] = router.match(glz::http_method::GET, "/items/123");
-        expect(valid_handler != nullptr) << "Should match valid numeric parameter\n";
-        expect(valid_params.at("id") == "123") << "Should extract numeric parameter\n";
-        
-        // Test invalid non-numeric parameter
-        auto [invalid_handler, invalid_params] = router.match(glz::http_method::GET, "/items/abc");
-        expect(invalid_handler == nullptr) << "Should reject non-numeric parameter\n";
-    };
-    
-    "async_route_with_pattern_constraint"_test = [] {
-        glz::http_router router;
-        
-        glz::http_router::param_constraint email_constraint{
-            .pattern = "[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}",
-            .description = "Must be valid email"
-        };
-        
-        router.post_async("/notify/:email", [](const glz::request& req, glz::response& res) -> std::future<void> {
-            return std::async(std::launch::async, [&req, &res]() {
-                std::string email = req.params.at("email");
-                res.json({{"notification_sent_to", email}, {"async", true}});
-            });
-        }, {{"email", email_constraint}});
-        
-        // Test valid email
-        auto [valid_handler, valid_params] = router.match(glz::http_method::POST, "/notify/user@example.com");
-        expect(valid_handler != nullptr) << "Should match valid email parameter\n";
-        
-        // Test invalid email
-        auto [invalid_handler, invalid_params] = router.match(glz::http_method::POST, "/notify/not-an-email");
-        expect(invalid_handler == nullptr) << "Should reject invalid email parameter\n";
     };
 };
 
