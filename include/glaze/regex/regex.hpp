@@ -391,6 +391,31 @@ namespace glz
       }
    };
 
+   // State machine states for iterative matching
+   enum class match_state_type {
+      MATCH_ATOM, // Try to match current atom
+      HANDLE_QUANTIFIER, // Handle quantifier logic
+      BACKTRACK, // Backtrack and try fewer repetitions
+      ADVANCE_ATOM, // Move to next atom
+      SUCCESS, // All atoms matched successfully
+      FAILURE // No more options, matching failed
+   };
+
+   // State for iterative matching engine
+   template <class Iterator>
+   struct iterative_state
+   {
+      match_state_type state = match_state_type::MATCH_ATOM;
+      std::size_t atom_idx = 0;
+      Iterator current;
+      Iterator atom_start_pos; // Position where current atom matching started
+      int match_count = 0; // How many times current atom has matched
+      int try_count = 0; // Current attempt count for quantified atoms
+      int max_try_count = 0; // Maximum attempts for current atom
+      bool found_valid_match = false;
+      int iterations = 0; // Prevent infinite loops
+   };
+
    // Optimized matchers based on compile-time analysis
    struct optimized_matcher
    {
@@ -666,77 +691,181 @@ namespace glz
          }
       }
 
-      // Recursive helper for backtracking through pattern atoms
       template <const auto& Analysis, class Iterator>
-      static constexpr bool match_atoms_recursive(std::size_t atom_idx, Iterator& current, Iterator end,
-                                                  Iterator line_begin, int depth = 0)
+      static constexpr bool match_atoms_iterative(std::size_t start_atom_idx, Iterator& current, Iterator end,
+                                                  Iterator line_begin)
       {
-         // Prevent infinite recursion
-         if (depth > 200) return false;
-
          constexpr auto& atoms = Analysis.pattern.atoms;
 
-         // If we've matched all atoms, success
-         if (atom_idx >= atoms.length()) {
-            return true;
+         if (start_atom_idx >= atoms.length()) {
+            return true; // All atoms processed successfully
          }
 
-         const auto& atom = atoms[atom_idx];
+         iterative_state<Iterator> state;
+         state.atom_idx = start_atom_idx;
+         state.current = current;
+         state.atom_start_pos = current;
 
-         // Handle anchors
-         if (atom.type == atom_type::start_anchor) {
-            if (current != line_begin) return false;
-            return match_atoms_recursive<Analysis>(atom_idx + 1, current, end, line_begin, depth + 1);
-         }
+         while (state.state != match_state_type::SUCCESS && state.state != match_state_type::FAILURE) {
+            // Prevent infinite loops
+            if (++state.iterations > 1000) {
+               state.state = match_state_type::FAILURE;
+               break;
+            }
 
-         if (atom.type == atom_type::end_anchor) {
-            if (current != end) return false;
-            return match_atoms_recursive<Analysis>(atom_idx + 1, current, end, line_begin, depth + 1);
-         }
+            switch (state.state) {
+            case match_state_type::MATCH_ATOM: {
+               if (state.atom_idx >= atoms.length()) {
+                  state.state = match_state_type::SUCCESS;
+                  break;
+               }
 
-         // For quantified atoms, try different numbers of matches
-         int min_matches = atom.min_repeats;
-         int max_matches = atom.max_repeats;
+               const auto& atom = atoms[state.atom_idx];
 
-         // Limit unlimited quantifiers to prevent infinite loops
-         int try_max = (max_matches == -1) ? 200 : max_matches;
+               // Handle anchors immediately
+               if (atom.type == atom_type::start_anchor) {
+                  if (state.current != line_begin) {
+                     state.state = match_state_type::FAILURE;
+                  }
+                  else {
+                     state.state = match_state_type::ADVANCE_ATOM;
+                  }
+                  break;
+               }
 
-         // Try from max down to min (greedy matching with backtracking)
-         for (int match_count = try_max; match_count >= min_matches; --match_count) {
-            Iterator saved_pos = current;
-            bool can_match_this_many = true;
-            int actual_matches = 0;
+               if (atom.type == atom_type::end_anchor) {
+                  if (state.current != end) {
+                     state.state = match_state_type::FAILURE;
+                  }
+                  else {
+                     state.state = match_state_type::ADVANCE_ATOM;
+                  }
+                  break;
+               }
 
-            // Try to match exactly match_count times
-            for (int i = 0; i < match_count && can_match_this_many; ++i) {
-               Iterator before_match = current;
-               if (match_single_atom(atom, current, end)) {
-                  actual_matches++;
-                  // Prevent infinite loop on empty matches with unlimited quantifiers
-                  if (before_match == current && max_matches == -1) {
+               // Check if atom has quantifiers
+               if (atom.min_repeats != 1 || atom.max_repeats != 1) {
+                  state.state = match_state_type::HANDLE_QUANTIFIER;
+               }
+               else {
+                  // Simple atom - try to match once
+                  Iterator test_pos = state.current;
+                  if (match_single_atom(atom, test_pos, end)) {
+                     state.current = test_pos;
+                     state.state = match_state_type::ADVANCE_ATOM;
+                  }
+                  else {
+                     state.state = match_state_type::FAILURE;
+                  }
+               }
+               break;
+            }
+
+            case match_state_type::HANDLE_QUANTIFIER: {
+               const auto& atom = atoms[state.atom_idx];
+
+               // Initialize quantifier handling
+               if (state.try_count == 0) {
+                  state.atom_start_pos = state.current;
+                  // Start with maximum possible matches and work down (greedy)
+                  if (atom.max_repeats == -1) {
+                     state.max_try_count = 100; // Reasonable limit for unlimited
+                  }
+                  else {
+                     state.max_try_count = atom.max_repeats;
+                  }
+                  state.try_count = state.max_try_count;
+               }
+
+               // Try to match exactly try_count times
+               Iterator test_pos = state.atom_start_pos;
+               int actual_matches = 0;
+               bool can_match = true;
+
+               for (int i = 0; i < state.try_count && can_match; ++i) {
+                  Iterator before_match = test_pos;
+                  if (match_single_atom(atom, test_pos, end)) {
+                     actual_matches++;
+                     // Prevent infinite loop on zero-width matches
+                     if (before_match == test_pos && atom.max_repeats == -1) {
+                        break;
+                     }
+                  }
+                  else {
+                     can_match = false;
+                  }
+               }
+
+               // Check if this number of matches is valid
+               if (actual_matches >= atom.min_repeats &&
+                   (atom.max_repeats == -1 || actual_matches <= atom.max_repeats)) {
+                  // Try to match the rest of the pattern with this many matches
+                  Iterator saved_pos = state.current;
+                  state.current = test_pos;
+
+                  // Temporarily advance to next atom to test if pattern continues to match
+                  std::size_t next_atom = state.atom_idx + 1;
+                  Iterator test_current = state.current;
+
+                  if (next_atom >= atoms.length()) {
+                     // This was the last atom - success!
+                     state.found_valid_match = true;
+                     state.state = match_state_type::SUCCESS;
                      break;
+                  }
+                  else {
+                     // Test if remaining pattern can match
+                     bool rest_matches = match_atoms_iterative<Analysis>(next_atom, test_current, end, line_begin);
+                     if (rest_matches) {
+                        state.current = test_current;
+                        state.found_valid_match = true;
+                        state.state = match_state_type::SUCCESS;
+                        break;
+                     }
+                     else {
+                        // Restore position and try fewer matches
+                        state.current = saved_pos;
+                        state.state = match_state_type::BACKTRACK;
+                     }
                   }
                }
                else {
-                  can_match_this_many = false;
+                  state.state = match_state_type::BACKTRACK;
                }
+               break;
             }
 
-            // If we matched at least the minimum required
-            if (actual_matches >= min_matches && (max_matches == -1 || actual_matches <= max_matches)) {
-               // Try to match the rest of the pattern
-               if (match_atoms_recursive<Analysis>(atom_idx + 1, current, end, line_begin, depth + 1)) {
-                  return true;
+            case match_state_type::BACKTRACK: {
+               const auto& atom = atoms[state.atom_idx];
+
+               // Try fewer matches
+               state.try_count--;
+
+               if (state.try_count >= atom.min_repeats) {
+                  state.state = match_state_type::HANDLE_QUANTIFIER;
                }
+               else {
+                  state.state = match_state_type::FAILURE;
+               }
+               break;
             }
 
-            // Backtrack
-            current = saved_pos;
-
-            // For unlimited quantifiers, reduce the step size after trying large numbers
-            if (max_matches == -1 && match_count > 50) {
-               match_count = 50; // Jump down to reasonable limit
+            case match_state_type::ADVANCE_ATOM: {
+               state.atom_idx++;
+               state.try_count = 0; // Reset for next atom
+               state.state = match_state_type::MATCH_ATOM;
+               break;
             }
+
+            default:
+               state.state = match_state_type::FAILURE;
+               break;
+            }
+         }
+
+         if (state.state == match_state_type::SUCCESS) {
+            current = state.current;
+            return true;
          }
 
          return false;
@@ -755,7 +884,7 @@ namespace glz
          // For anchored mode (match), start only at beginning
          if (anchored) {
             Iterator current = begin;
-            if (match_atoms_recursive<Analysis>(0, current, end, begin)) {
+            if (match_atoms_iterative<Analysis>(0, current, end, begin)) {
                // For match(), ensure entire string is consumed unless pattern has start anchor
                if (current != end && !Analysis.pattern.has_start_anchor) {
                   return {};
@@ -769,7 +898,7 @@ namespace glz
          if constexpr (Analysis.pattern.has_start_anchor) {
             // With ^ anchor in search mode, only try at the very beginning
             Iterator current = begin;
-            if (match_atoms_recursive<Analysis>(0, current, end, begin)) {
+            if (match_atoms_iterative<Analysis>(0, current, end, begin)) {
                return match_result<Iterator>{begin, current};
             }
             return {};
@@ -778,14 +907,14 @@ namespace glz
          // Normal search - try at each position
          for (auto it = begin; it != end; ++it) {
             Iterator current = it;
-            if (match_atoms_recursive<Analysis>(0, current, end, it)) {
+            if (match_atoms_iterative<Analysis>(0, current, end, it)) {
                return match_result<Iterator>{it, current};
             }
          }
 
          // Also try matching empty string at end for patterns that can match empty
          Iterator current_at_end = end;
-         if (match_atoms_recursive<Analysis>(0, current_at_end, end, end) && current_at_end == end) {
+         if (match_atoms_iterative<Analysis>(0, current_at_end, end, end) && current_at_end == end) {
             return match_result<Iterator>{end, end};
          }
 
