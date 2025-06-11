@@ -552,9 +552,9 @@ namespace glz
          return route(
             method, path,
             [handle](const request& req, response& res) {
-               // Create a future and wait for it
+               // Create a future and get the result, which will propagate any exceptions
                auto future = handle(req, res);
-               future.wait();
+               future.get(); // This will throw if the async operation threw
             },
             constraints);
       }
