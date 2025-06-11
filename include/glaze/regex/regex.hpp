@@ -748,7 +748,7 @@ namespace glz
       {
          constexpr auto& atoms = Analysis.pattern.atoms;
 
-         if (atoms.length() == 0) {
+         if constexpr (atoms.length() == 0) {
             return match_result<Iterator>{begin, begin};
          }
 
@@ -766,7 +766,7 @@ namespace glz
          }
 
          // For search mode, try at each position (unless ^ anchor)
-         if (Analysis.pattern.has_start_anchor) {
+         if constexpr (Analysis.pattern.has_start_anchor) {
             // With ^ anchor in search mode, only try at the very beginning
             Iterator current = begin;
             if (match_atoms_recursive<Analysis>(0, current, end, begin)) {
