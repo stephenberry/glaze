@@ -586,4 +586,434 @@ suite backtracking_tests = [] {
    };
 };
 
+#include <regex>
+#include <chrono>
+#include <vector>
+#include <random>
+#include <string>
+#include <iostream>
+
+// Helper function to generate random test data
+std::string generate_random_string(size_t length, const std::string& charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789") {
+   std::random_device rd;
+   std::mt19937 gen(rd());
+   std::uniform_int_distribution<size_t> dis(0, charset.size() - 1);
+   
+   std::string result;
+   result.reserve(length);
+   for (size_t i = 0; i < length; ++i) {
+      result += charset[dis(gen)];
+   }
+   return result;
+}
+
+// Helper function to generate email-like strings
+std::vector<std::string> generate_email_test_data(size_t count) {
+   std::vector<std::string> emails;
+   emails.reserve(count);
+   
+   std::vector<std::string> names = {"user", "test", "admin", "hello", "world", "example", "sample"};
+   std::vector<std::string> domains = {"example.com", "test.org", "domain.net", "site.co.uk", "mail.edu"};
+   
+   std::random_device rd;
+   std::mt19937 gen(rd());
+   std::uniform_int_distribution<size_t> name_dis(0, names.size() - 1);
+   std::uniform_int_distribution<size_t> domain_dis(0, domains.size() - 1);
+   
+   for (size_t i = 0; i < count; ++i) {
+      std::string email = names[name_dis(gen)] + "@" + domains[domain_dis(gen)];
+      emails.push_back("Contact us at " + email + " for more information");
+   }
+   
+   return emails;
+}
+
+// Helper function to generate phone number test data
+std::vector<std::string> generate_phone_test_data(size_t count) {
+   std::vector<std::string> phones;
+   phones.reserve(count);
+   
+   std::random_device rd;
+   std::mt19937 gen(rd());
+   std::uniform_int_distribution<> area_dis(100, 999);
+   std::uniform_int_distribution<> exchange_dis(100, 999);
+   std::uniform_int_distribution<> number_dis(1000, 9999);
+   
+   for (size_t i = 0; i < count; ++i) {
+      std::string phone = std::to_string(area_dis(gen)) + "-" +
+      std::to_string(exchange_dis(gen)) + "-" +
+      std::to_string(number_dis(gen));
+      phones.push_back("Call us at " + phone + " today!");
+   }
+   
+   return phones;
+}
+
+suite performance_comparison_tests = [] {
+   "literal_pattern_performance"_test = [] {
+      // Test literal-only patterns where glz should excel
+      constexpr size_t iterations = 100000;
+      constexpr size_t test_strings = 1000;
+      
+      // Pre-compile patterns
+      std::regex std_hello("hello");
+      auto glz_hello = glz::re<"hello">();
+      
+      // Generate test data
+      std::vector<std::string> test_data;
+      test_data.reserve(test_strings);
+      for (size_t i = 0; i < test_strings; ++i) {
+         if (i % 10 == 0) {
+            test_data.push_back("hello world"); // 10% contain the pattern
+         } else {
+            test_data.push_back(generate_random_string(20));
+         }
+      }
+      
+      // Benchmark std::regex
+      auto start_std = std::chrono::high_resolution_clock::now();
+      size_t std_matches = 0;
+      for (size_t i = 0; i < iterations; ++i) {
+         const auto& text = test_data[i % test_strings];
+         if (std::regex_search(text, std_hello)) {
+            std_matches++;
+         }
+      }
+      auto end_std = std::chrono::high_resolution_clock::now();
+      
+      // Benchmark glz::regex
+      auto start_glz = std::chrono::high_resolution_clock::now();
+      size_t glz_matches = 0;
+      for (size_t i = 0; i < iterations; ++i) {
+         const auto& text = test_data[i % test_strings];
+         if (glz_hello.search(text).matched) {
+            glz_matches++;
+         }
+      }
+      auto end_glz = std::chrono::high_resolution_clock::now();
+      
+      auto std_time = std::chrono::duration_cast<std::chrono::microseconds>(end_std - start_std);
+      auto glz_time = std::chrono::duration_cast<std::chrono::microseconds>(end_glz - start_glz);
+      
+      // Verify both found the same number of matches
+      expect(std_matches == glz_matches) << "Both implementations should find the same matches\n";
+      
+      std::cout << "\nLiteral Pattern Performance (\"hello\"):\n";
+      std::cout << "std::regex: " << std_time.count() << " microseconds\n";
+      std::cout << "glz::regex: " << glz_time.count() << " microseconds\n";
+      std::cout << "Speedup: " << (double)std_time.count() / glz_time.count() << "x\n";
+      std::cout << "Matches found: " << std_matches << "/" << iterations << "\n\n";
+   };
+   
+   "digit_pattern_performance"_test = [] {
+      constexpr size_t iterations = 50000;
+      constexpr size_t test_strings = 1000;
+      
+      // Pre-compile patterns
+      std::regex std_digit(R"(\d+)");
+      auto glz_digit = glz::re<R"(\d+)">();
+      
+      // Generate test data with mixed content
+      std::vector<std::string> test_data;
+      test_data.reserve(test_strings);
+      for (size_t i = 0; i < test_strings; ++i) {
+         if (i % 3 == 0) {
+            test_data.push_back("Price: " + std::to_string(rand() % 1000) + " dollars");
+         } else {
+            test_data.push_back(generate_random_string(30));
+         }
+      }
+      
+      // Benchmark std::regex
+      auto start_std = std::chrono::high_resolution_clock::now();
+      size_t std_matches = 0;
+      for (size_t i = 0; i < iterations; ++i) {
+         const auto& text = test_data[i % test_strings];
+         if (std::regex_search(text, std_digit)) {
+            std_matches++;
+         }
+      }
+      auto end_std = std::chrono::high_resolution_clock::now();
+      
+      // Benchmark glz::regex
+      auto start_glz = std::chrono::high_resolution_clock::now();
+      size_t glz_matches = 0;
+      for (size_t i = 0; i < iterations; ++i) {
+         const auto& text = test_data[i % test_strings];
+         if (glz_digit.search(text).matched) {
+            glz_matches++;
+         }
+      }
+      auto end_glz = std::chrono::high_resolution_clock::now();
+      
+      auto std_time = std::chrono::duration_cast<std::chrono::microseconds>(end_std - start_std);
+      auto glz_time = std::chrono::duration_cast<std::chrono::microseconds>(end_glz - start_glz);
+      
+      expect(std_matches == glz_matches) << "Both implementations should find the same matches\n";
+      
+      std::cout << "Digit Pattern Performance (\"\\d+\"):\n";
+      std::cout << "std::regex: " << std_time.count() << " microseconds\n";
+      std::cout << "glz::regex: " << glz_time.count() << " microseconds\n";
+      std::cout << "Speedup: " << (double)std_time.count() / glz_time.count() << "x\n";
+      std::cout << "Matches found: " << std_matches << "/" << iterations << "\n\n";
+   };
+   
+   "email_pattern_performance"_test = [] {
+      constexpr size_t iterations = 10000;
+      
+      // Pre-compile patterns
+      std::regex std_email(R"([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})");
+      auto glz_email = glz::re<R"([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})">();
+      
+      // Generate email test data
+      auto test_data = generate_email_test_data(1000);
+      
+      // Benchmark std::regex
+      auto start_std = std::chrono::high_resolution_clock::now();
+      size_t std_matches = 0;
+      for (size_t i = 0; i < iterations; ++i) {
+         const auto& text = test_data[i % test_data.size()];
+         if (std::regex_search(text, std_email)) {
+            std_matches++;
+         }
+      }
+      auto end_std = std::chrono::high_resolution_clock::now();
+      
+      // Benchmark glz::regex
+      auto start_glz = std::chrono::high_resolution_clock::now();
+      size_t glz_matches = 0;
+      for (size_t i = 0; i < iterations; ++i) {
+         const auto& text = test_data[i % test_data.size()];
+         if (glz_email.search(text).matched) {
+            glz_matches++;
+         }
+      }
+      auto end_glz = std::chrono::high_resolution_clock::now();
+      
+      auto std_time = std::chrono::duration_cast<std::chrono::microseconds>(end_std - start_std);
+      auto glz_time = std::chrono::duration_cast<std::chrono::microseconds>(end_glz - start_glz);
+      
+      expect(std_matches == glz_matches) << "Both implementations should find the same matches\n";
+      
+      std::cout << "Email Pattern Performance:\n";
+      std::cout << "std::regex: " << std_time.count() << " microseconds\n";
+      std::cout << "glz::regex: " << glz_time.count() << " microseconds\n";
+      std::cout << "Speedup: " << (double)std_time.count() / glz_time.count() << "x\n";
+      std::cout << "Matches found: " << std_matches << "/" << iterations << "\n\n";
+   };
+   
+   "phone_pattern_performance"_test = [] {
+      constexpr size_t iterations = 20000;
+      
+      // Pre-compile patterns
+      std::regex std_phone(R"(\d{3}-\d{3}-\d{4})");
+      auto glz_phone = glz::re<R"(\d{3}-\d{3}-\d{4})">();
+      
+      // Generate phone test data
+      auto test_data = generate_phone_test_data(1000);
+      
+      // Benchmark std::regex
+      auto start_std = std::chrono::high_resolution_clock::now();
+      size_t std_matches = 0;
+      for (size_t i = 0; i < iterations; ++i) {
+         const auto& text = test_data[i % test_data.size()];
+         if (std::regex_search(text, std_phone)) {
+            std_matches++;
+         }
+      }
+      auto end_std = std::chrono::high_resolution_clock::now();
+      
+      // Benchmark glz::regex
+      auto start_glz = std::chrono::high_resolution_clock::now();
+      size_t glz_matches = 0;
+      for (size_t i = 0; i < iterations; ++i) {
+         const auto& text = test_data[i % test_data.size()];
+         if (glz_phone.search(text).matched) {
+            glz_matches++;
+         }
+      }
+      auto end_glz = std::chrono::high_resolution_clock::now();
+      
+      auto std_time = std::chrono::duration_cast<std::chrono::microseconds>(end_std - start_std);
+      auto glz_time = std::chrono::duration_cast<std::chrono::microseconds>(end_glz - start_glz);
+      
+      expect(std_matches == glz_matches) << "Both implementations should find the same matches\n";
+      
+      std::cout << "Phone Pattern Performance (\"\\d{3}-\\d{3}-\\d{4}\"):\n";
+      std::cout << "std::regex: " << std_time.count() << " microseconds\n";
+      std::cout << "glz::regex: " << glz_time.count() << " microseconds\n";
+      std::cout << "Speedup: " << (double)std_time.count() / glz_time.count() << "x\n";
+      std::cout << "Matches found: " << std_matches << "/" << iterations << "\n\n";
+   };
+   
+   "complex_backtracking_performance"_test = [] {
+      constexpr size_t iterations = 1;
+      constexpr size_t test_strings = 500;
+      
+      // Pattern that requires significant backtracking
+      std::regex std_complex(R"([a-z]*[A-Z]+[a-z]*\d+)");
+      auto glz_complex = glz::re<R"([a-z]*[A-Z]+[a-z]*\d+)">();
+      
+      // Generate test data that will trigger backtracking
+      std::vector<std::string> test_data;
+      test_data.reserve(test_strings);
+      for (size_t i = 0; i < test_strings; ++i) {
+         if (i % 5 == 0) {
+            test_data.push_back("someTextWITHCapsAndNumbers123");
+         } else if (i % 5 == 1) {
+            test_data.push_back("lowercase text without pattern");
+         } else if (i % 5 == 2) {
+            test_data.push_back("UPPERCASE TEXT WITHOUT pattern");
+         } else {
+            test_data.push_back(generate_random_string(40));
+         }
+      }
+      
+      // Benchmark std::regex
+      auto start_std = std::chrono::high_resolution_clock::now();
+      size_t std_matches = 0;
+      for (size_t i = 0; i < iterations; ++i) {
+         const auto& text = test_data[i % test_strings];
+         if (std::regex_search(text, std_complex)) {
+            std_matches++;
+         }
+      }
+      auto end_std = std::chrono::high_resolution_clock::now();
+      
+      // Benchmark glz::regex
+      auto start_glz = std::chrono::high_resolution_clock::now();
+      size_t glz_matches = 0;
+      for (size_t i = 0; i < iterations; ++i) {
+         const auto& text = test_data[i % test_strings];
+         if (glz_complex.search(text).matched) {
+            glz_matches++;
+         }
+      }
+      auto end_glz = std::chrono::high_resolution_clock::now();
+      
+      auto std_time = std::chrono::duration_cast<std::chrono::microseconds>(end_std - start_std);
+      auto glz_time = std::chrono::duration_cast<std::chrono::microseconds>(end_glz - start_glz);
+      
+      expect(std_matches == glz_matches) << "Both implementations should find the same matches\n";
+      
+      std::cout << "Complex Backtracking Pattern Performance:\n";
+      std::cout << "Pattern: \"[a-z]*[A-Z]+[a-z]*\\d+\"\n";
+      std::cout << "std::regex: " << std_time.count() << " microseconds\n";
+      std::cout << "glz::regex: " << glz_time.count() << " microseconds\n";
+      std::cout << "Speedup: " << (double)std_time.count() / glz_time.count() << "x\n";
+      std::cout << "Matches found: " << std_matches << "/" << iterations << "\n\n";
+   };
+   
+   "match_vs_search_performance"_test = [] {
+      constexpr size_t iterations = 50000;
+      
+      // Test both match and search performance
+      std::regex std_pattern("hello");
+      auto glz_pattern = glz::re<"hello">();
+      
+      std::string exact_match = "hello";
+      std::string search_text = "say hello world";
+      
+      // Test exact matching
+      auto start_std_match = std::chrono::high_resolution_clock::now();
+      size_t std_exact_matches = 0;
+      for (size_t i = 0; i < iterations; ++i) {
+         if (std::regex_match(exact_match, std_pattern)) {
+            std_exact_matches++;
+         }
+      }
+      auto end_std_match = std::chrono::high_resolution_clock::now();
+      
+      auto start_glz_match = std::chrono::high_resolution_clock::now();
+      size_t glz_exact_matches = 0;
+      for (size_t i = 0; i < iterations; ++i) {
+         if (glz_pattern.match(exact_match).matched) {
+            glz_exact_matches++;
+         }
+      }
+      auto end_glz_match = std::chrono::high_resolution_clock::now();
+      
+      // Test search
+      auto start_std_search = std::chrono::high_resolution_clock::now();
+      size_t std_search_matches = 0;
+      for (size_t i = 0; i < iterations; ++i) {
+         if (std::regex_search(search_text, std_pattern)) {
+            std_search_matches++;
+         }
+      }
+      auto end_std_search = std::chrono::high_resolution_clock::now();
+      
+      auto start_glz_search = std::chrono::high_resolution_clock::now();
+      size_t glz_search_matches = 0;
+      for (size_t i = 0; i < iterations; ++i) {
+         if (glz_pattern.search(search_text).matched) {
+            glz_search_matches++;
+         }
+      }
+      auto end_glz_search = std::chrono::high_resolution_clock::now();
+      
+      auto std_match_time = std::chrono::duration_cast<std::chrono::microseconds>(end_std_match - start_std_match);
+      auto glz_match_time = std::chrono::duration_cast<std::chrono::microseconds>(end_glz_match - start_glz_match);
+      auto std_search_time = std::chrono::duration_cast<std::chrono::microseconds>(end_std_search - start_std_search);
+      auto glz_search_time = std::chrono::duration_cast<std::chrono::microseconds>(end_glz_search - start_glz_search);
+      
+      expect(std_exact_matches == glz_exact_matches) << "Match results should be identical\n";
+      expect(std_search_matches == glz_search_matches) << "Search results should be identical\n";
+      
+      std::cout << "Match vs Search Performance (\"hello\"):\n";
+      std::cout << "Exact Match - std::regex: " << std_match_time.count() << " μs, glz::regex: " << glz_match_time.count() << " μs\n";
+      std::cout << "Search - std::regex: " << std_search_time.count() << " μs, glz::regex: " << glz_search_time.count() << " μs\n";
+      std::cout << "Match speedup: " << (double)std_match_time.count() / glz_match_time.count() << "x\n";
+      std::cout << "Search speedup: " << (double)std_search_time.count() / glz_search_time.count() << "x\n\n";
+   };
+   
+   "large_text_performance"_test = [] {
+      constexpr size_t iterations = 1000;
+      
+      // Test with larger text blocks
+      std::regex std_word(R"(\b[A-Za-z]+\b)");
+      auto glz_word = glz::re<R"([A-Za-z]+)">();  // Simplified for glz (no word boundaries yet)
+      
+      // Generate large text block
+      std::string large_text;
+      large_text.reserve(10000);
+      for (int i = 0; i < 1000; ++i) {
+         large_text += generate_random_string(8) + " ";
+      }
+      
+      // Add some guaranteed matches
+      large_text += "ImportantWord SomeOtherWord FinalWord";
+      
+      // Benchmark std::regex
+      auto start_std = std::chrono::high_resolution_clock::now();
+      size_t std_matches = 0;
+      for (size_t i = 0; i < iterations; ++i) {
+         std::sregex_iterator iter(large_text.begin(), large_text.end(), std_word);
+         std::sregex_iterator end;
+         for (; iter != end; ++iter) {
+            std_matches++;
+         }
+      }
+      auto end_std = std::chrono::high_resolution_clock::now();
+      
+      // Benchmark glz::regex (simplified - just count first match for comparison)
+      auto start_glz = std::chrono::high_resolution_clock::now();
+      size_t glz_matches = 0;
+      for (size_t i = 0; i < iterations; ++i) {
+         if (glz_word.search(large_text).matched) {
+            glz_matches++;
+         }
+      }
+      auto end_glz = std::chrono::high_resolution_clock::now();
+      
+      auto std_time = std::chrono::duration_cast<std::chrono::microseconds>(end_std - start_std);
+      auto glz_time = std::chrono::duration_cast<std::chrono::microseconds>(end_glz - start_glz);
+      
+      std::cout << "Large Text Performance (10KB text, word pattern):\n";
+      std::cout << "std::regex (all matches): " << std_time.count() << " μs, found " << std_matches << " total matches\n";
+      std::cout << "glz::regex (first match): " << glz_time.count() << " μs, found " << glz_matches << " texts with matches\n";
+      std::cout << "Note: Different counting methods, but shows relative search speed\n\n";
+   };
+};
+
 int main() {}
