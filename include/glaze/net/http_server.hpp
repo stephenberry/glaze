@@ -182,11 +182,11 @@ namespace glz
       inline http_router& get(std::string_view path, handler handle) { return root_router.get(path, handle); }
 
       inline http_router& post(std::string_view path, handler handle) { return root_router.post(path, handle); }
-      
+
       inline http_router& put(std::string_view path, handler handle) { return root_router.put(path, handle); }
-      
+
       inline http_router& del(std::string_view path, handler handle) { return root_router.del(path, handle); }
-      
+
       inline http_router& patch(std::string_view path, handler handle) { return root_router.patch(path, handle); }
 
       inline http_server& on_error(error_handler handle)
@@ -608,43 +608,59 @@ namespace glz
 
       inline void send_response(std::shared_ptr<asio::ip::tcp::socket> socket, const response& response)
       {
-         // Format the response
-         std::ostringstream oss;
-         oss << "HTTP/1.1 " << response.status_code << " " << get_status_message(response.status_code) << "\r\n";
+         // Pre-calculate response size to avoid reallocations
+         size_t estimated_size = 64; // Base size for status line
 
-         // Add headers
          for (const auto& [name, value] : response.response_headers) {
-            oss << name << ": " << value << "\r\n";
+            estimated_size += name.size() + value.size() + 4; // ": " + "\r\n"
          }
 
-         // Add Content-Length header if not present
+         estimated_size += response.response_body.size() + 128; // Extra buffer for default headers
+
+         // Use a single string with reserved capacity
+         std::string response_str;
+         response_str.reserve(estimated_size);
+
+         // Direct string building without streams
+         response_str.append("HTTP/1.1 ");
+         response_str.append(std::to_string(response.status_code));
+         response_str.append(" ");
+         response_str.append(get_status_message(response.status_code));
+         response_str.append("\r\n");
+
+         for (const auto& [name, value] : response.response_headers) {
+            response_str.append(name);
+            response_str.append(": ");
+            response_str.append(value);
+            response_str.append("\r\n");
+         }
+
+         // Add default headers if not present (using find is faster than streams)
          if (response.response_headers.find("Content-Length") == response.response_headers.end()) {
-            oss << "Content-Length: " << response.response_body.size() << "\r\n";
+            response_str.append("Content-Length: ");
+            response_str.append(std::to_string(response.response_body.size()));
+            response_str.append("\r\n");
          }
 
-         // Add Date header if not present
          if (response.response_headers.find("Date") == response.response_headers.end()) {
-            oss << "Date: " << get_current_date() << "\r\n";
+            response_str.append("Date: ");
+            response_str.append(get_current_date());
+            response_str.append("\r\n");
          }
 
-         // Add Server header if not present
          if (response.response_headers.find("Server") == response.response_headers.end()) {
-            oss << "Server: Glaze/1.0\r\n";
+            response_str.append("Server: Glaze/1.0\r\n");
          }
 
-         // End of headers
-         oss << "\r\n";
-
-         // Add body
-         oss << response.response_body;
-
-         // Get the string
-         std::string response_str = oss.str();
+         // End headers and add body
+         response_str.append("\r\n");
+         response_str.append(response.response_body);
 
          // Send the response asynchronously
          asio::async_write(*socket, asio::buffer(response_str),
-                           [socket](std::error_code /*ec*/, std::size_t /*bytes_transferred*/) {
-                              // The socket will be closed when it goes out of scope
+                           [socket, response_str = std::move(response_str)](std::error_code /*ec*/, std::size_t /*bytes_transferred*/) {
+                              // response_str is captured to stay alive
+                              // Socket cleanup handled by shared_ptr
                            });
       }
 
