@@ -199,12 +199,13 @@ namespace glz
       std::expected<response, std::error_code> get(std::string_view url,
                                                    const std::unordered_map<std::string, std::string>& headers = {})
       {
-         auto promise = std::make_shared<std::promise<std::expected<response, std::error_code>>>();
-         auto future = promise->get_future();
+         std::promise<std::expected<response, std::error_code>> promise;
+         auto future = promise.get_future();
 
-         get_async(url, headers, [promise](std::expected<response, std::error_code> result) {
-            promise->set_value(std::move(result));
-         });
+         get_async(url, headers,
+                   [promise = std::move(promise)](std::expected<response, std::error_code> result) mutable {
+                      promise.set_value(std::move(result));
+                   });
 
          return future.get();
       }
@@ -213,12 +214,13 @@ namespace glz
       std::expected<response, std::error_code> post(std::string_view url, std::string_view body,
                                                     const std::unordered_map<std::string, std::string>& headers = {})
       {
-         auto promise = std::make_shared<std::promise<std::expected<response, std::error_code>>>();
-         auto future = promise->get_future();
+         std::promise<std::expected<response, std::error_code>> promise;
+         auto future = promise.get_future();
 
-         post_async(url, body, headers, [promise](std::expected<response, std::error_code> result) {
-            promise->set_value(std::move(result));
-         });
+         post_async(url, body, headers,
+                    [promise = std::move(promise)](std::expected<response, std::error_code> result) mutable {
+                       promise.set_value(std::move(result));
+                    });
 
          return future.get();
       }
@@ -230,7 +232,7 @@ namespace glz
       {
          auto url_result = parse_url(url);
          if (!url_result) {
-            asio::post(*io_context, [handler = std::forward<CompletionHandler>(handler), error = url_result.error()]() {
+            asio::post(*io_context, [handler = std::forward<CompletionHandler>(handler), error = url_result.error()] mutable {
                handler(std::unexpected(error));
             });
             return;
@@ -243,12 +245,13 @@ namespace glz
       std::future<std::expected<response, std::error_code>> get_async(
          std::string_view url, const std::unordered_map<std::string, std::string>& headers = {})
       {
-         auto promise = std::make_shared<std::promise<std::expected<response, std::error_code>>>();
-         auto future = promise->get_future();
+         std::promise<std::expected<response, std::error_code>> promise;
+         auto future = promise.get_future();
 
-         get_async(url, headers, [promise](std::expected<response, std::error_code> result) {
-            promise->set_value(std::move(result));
-         });
+         get_async(url, headers,
+                   [promise = std::move(promise)](std::expected<response, std::error_code> result) mutable {
+                      promise.set_value(std::move(result));
+                   });
 
          return future;
       }
@@ -260,7 +263,7 @@ namespace glz
       {
          auto url_result = parse_url(url);
          if (!url_result) {
-            asio::post(*io_context, [handler = std::forward<CompletionHandler>(handler), error = url_result.error()]() {
+            asio::post(*io_context, [handler = std::forward<CompletionHandler>(handler), error = url_result.error()] mutable {
                handler(std::unexpected(error));
             });
             return;
@@ -274,12 +277,13 @@ namespace glz
       std::future<std::expected<response, std::error_code>> post_async(
          std::string_view url, std::string_view body, const std::unordered_map<std::string, std::string>& headers = {})
       {
-         auto promise = std::make_shared<std::promise<std::expected<response, std::error_code>>>();
-         auto future = promise->get_future();
+         std::promise<std::expected<response, std::error_code>> promise;
+         auto future = promise.get_future();
 
-         post_async(url, body, headers, [promise](std::expected<response, std::error_code> result) {
-            promise->set_value(std::move(result));
-         });
+         post_async(url, body, headers,
+                    [promise = std::move(promise)](std::expected<response, std::error_code> result) mutable {
+                       promise.set_value(std::move(result));
+                    });
 
          return future;
       }
@@ -326,12 +330,13 @@ namespace glz
       std::future<std::expected<response, std::error_code>> post_json_async(
          std::string_view url, const T& data, const std::unordered_map<std::string, std::string>& headers = {})
       {
-         auto promise = std::make_shared<std::promise<std::expected<response, std::error_code>>>();
-         auto future = promise->get_future();
+         std::promise<std::expected<response, std::error_code>> promise;
+         auto future = promise.get_future();
 
-         post_json_async(url, data, headers, [promise](std::expected<response, std::error_code> result) {
-            promise->set_value(std::move(result));
-         });
+         post_json_async(url, data, headers,
+                         [promise = std::move(promise)](std::expected<response, std::error_code> result) mutable {
+                            promise.set_value(std::move(result));
+                         });
 
          return future;
       }
@@ -427,34 +432,37 @@ namespace glz
                         CompletionHandler&& handler)
       {
          // Build HTTP request
-         auto request_str = std::make_shared<std::string>();
-         request_str->append(method);
-         request_str->append(" ");
-         request_str->append(url.path);
-         request_str->append(" HTTP/1.1\r\n");
-         request_str->append("Host: ");
-         request_str->append(url.host);
-         request_str->append("\r\n");
-         request_str->append("Connection: keep-alive\r\n");
+         std::string request_str;
+         request_str.append(method);
+         request_str.append(" ");
+         request_str.append(url.path);
+         request_str.append(" HTTP/1.1\r\n");
+         request_str.append("Host: ");
+         request_str.append(url.host);
+         request_str.append("\r\n");
+         request_str.append("Connection: keep-alive\r\n");
 
          if (!body.empty()) {
-            request_str->append("Content-Length: ");
-            request_str->append(std::to_string(body.size()));
-            request_str->append("\r\n");
+            request_str.append("Content-Length: ");
+            request_str.append(std::to_string(body.size()));
+            request_str.append("\r\n");
          }
 
          for (const auto& [name, value] : headers) {
-            request_str->append(name);
-            request_str->append(": ");
-            request_str->append(value);
-            request_str->append("\r\n");
+            request_str.append(name);
+            request_str.append(": ");
+            request_str.append(value);
+            request_str.append("\r\n");
          }
 
-         request_str->append("\r\n");
-         request_str->append(body);
+         request_str.append("\r\n");
+         request_str.append(body);
 
-         asio::async_write(*socket, asio::buffer(*request_str),
-                           [this, socket, request_str, url, handler = std::forward<CompletionHandler>(handler)](
+         // Use shared_ptr to keep request string alive during async operation
+         // We can't use move capture here because asio::buffer() needs the string before lambda creation
+         auto request_str_ptr = std::make_shared<std::string>(std::move(request_str));
+         asio::async_write(*socket, asio::buffer(*request_str_ptr),
+                           [this, socket, request_str_ptr, url, handler = std::forward<CompletionHandler>(handler)](
                               std::error_code ec, std::size_t) mutable {
                               if (ec) {
                                  handler(std::unexpected(ec));
@@ -521,7 +529,8 @@ namespace glz
          // Read response body
          asio::async_read(
             *socket, *buffer, asio::transfer_all(),
-            [this, socket, buffer, url, status_code = parsed_status->status_code, response_headers,
+            [this, socket, buffer, url, status_code = parsed_status->status_code,
+             response_headers = std::move(response_headers),
              handler = std::forward<CompletionHandler>(handler)](std::error_code ec, std::size_t) mutable {
                // EOF is expected for HTTP/1.1 with Connection: close
                if (ec && ec != asio::error::eof) {
@@ -533,12 +542,12 @@ namespace glz
 
                response resp;
                resp.status_code = status_code;
-               resp.response_headers = response_headers;
+               resp.response_headers = std::move(response_headers);
                resp.response_body = std::move(body);
 
                // Return connection to pool if it's still usable
-               auto connection_header = response_headers.find("Connection");
-               if (connection_header == response_headers.end() || connection_header->second != "close") {
+               auto connection_header = resp.response_headers.find("Connection");
+               if (connection_header == resp.response_headers.end() || connection_header->second != "close") {
                   connection_pool->return_connection(url.host, url.port, socket);
                }
 
