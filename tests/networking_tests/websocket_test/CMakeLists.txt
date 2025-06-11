@@ -7,3 +7,5 @@ target_link_libraries(${PROJECT_NAME} PRIVATE glz_test_exceptions)
 
 target_compile_definitions(${PROJECT_NAME} PRIVATE 
     SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+
+target_code_coverage(${PROJECT_NAME} AUTO ALL)

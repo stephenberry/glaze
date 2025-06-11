@@ -253,33 +253,11 @@ suite http_server_api_tests = [] {
         };
         
         // Test all route registration methods return server reference
-        auto& get_ref = server.get("/get", handler);
-        auto& post_ref = server.post("/post", handler);
-        //auto& put_ref = server.put("/put", handler);
-        //auto& del_ref = server.del("/del", handler);
-        //auto& patch_ref = server.patch("/patch", handler);
-        
-        //expect(&get_ref == &server) << "get() should return server reference\n";
-        //expect(&post_ref == &server) << "post() should return server reference\n";
-        //expect(&put_ref == &server) << "put() should return server reference\n";
-        //expect(&del_ref == &server) << "del() should return server reference\n";
-        //expect(&patch_ref == &server) << "patch() should return server reference\n";
-    };
-    
-    "middleware_registration"_test = [] {
-        glz::http_server server;
-        std::vector<std::string> middleware_order;
-        
-        /*server.use([&middleware_order](const glz::request&, glz::response&) {
-            middleware_order.push_back("first");
-        });
-        
-        server.use([&middleware_order](const glz::request&, glz::response&) {
-            middleware_order.push_back("second");
-        });
-        
-        // Middleware should be stored in registration order
-        expect(server.root_router.middlewares.size() == 2) << "Should register 2 middleware functions\n";*/
+        [[maybe_unused]] auto& get_ref = server.get("/get", handler);
+        [[maybe_unused]] auto& post_ref = server.post("/post", handler);
+        [[maybe_unused]] auto& put_ref = server.put("/put", handler);
+        [[maybe_unused]] auto& del_ref = server.del("/del", handler);
+        [[maybe_unused]] auto& patch_ref = server.patch("/patch", handler);
     };
     
     "cors_configuration"_test = [] {

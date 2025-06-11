@@ -182,6 +182,12 @@ namespace glz
       inline http_router& get(std::string_view path, handler handle) { return root_router.get(path, handle); }
 
       inline http_router& post(std::string_view path, handler handle) { return root_router.post(path, handle); }
+      
+      inline http_router& put(std::string_view path, handler handle) { return root_router.put(path, handle); }
+      
+      inline http_router& del(std::string_view path, handler handle) { return root_router.del(path, handle); }
+      
+      inline http_router& patch(std::string_view path, handler handle) { return root_router.patch(path, handle); }
 
       inline http_server& on_error(error_handler handle)
       {
