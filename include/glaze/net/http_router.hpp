@@ -243,7 +243,7 @@ namespace glz
        */
       static bool match_pattern(std::string_view value, std::string_view pattern)
       {
-         enum struct State { Literal, Escape, CharClass, NegateCharClass };
+         enum struct State { Literal, Escape, CharClass };
 
          if (pattern.empty()) return true; // Empty pattern matches anything
 
