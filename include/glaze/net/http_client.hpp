@@ -247,11 +247,11 @@ namespace glz
    // Stream request parameters struct
    struct stream_request_params
    {
-      std::string_view url;
+      std::string url;
       http_data_handler on_data;
       http_error_handler on_error;
-      std::string_view method{};
-      std::string_view body{};
+      std::string method{};
+      std::string body{};
       std::unordered_map<std::string, std::string> headers{};
       http_connect_handler on_connect{};
       http_disconnect_handler on_disconnect{};
@@ -283,7 +283,7 @@ namespace glz
       }
 
       // Synchronous POST request - truly synchronous, no promises/futures
-      std::expected<response, std::error_code> post(std::string_view url, std::string_view body,
+      std::expected<response, std::error_code> post(std::string_view url, const std::string& body,
                                                     const std::unordered_map<std::string, std::string>& headers = {})
       {
          auto url_result = parse_url(url);
@@ -291,7 +291,7 @@ namespace glz
             return std::unexpected(url_result.error());
          }
 
-         return perform_sync_request("POST", *url_result, std::string(body), headers);
+         return perform_sync_request("POST", *url_result, body, headers);
       }
 
       // Synchronous JSON POST request
@@ -321,9 +321,9 @@ namespace glz
             return nullptr;
          }
 
-         std::string method = params.method.empty() ? "GET" : std::string(params.method);
+         std::string method = params.method.empty() ? "GET" : params.method;
 
-         return perform_stream_request(method, *url_result, std::string(params.body), params.headers, params.timeout,
+         return perform_stream_request(method, *url_result, params.body, params.headers, params.timeout,
                                        params.strategy, params.on_data, params.on_error, params.on_connect,
                                        params.on_disconnect);
       }
@@ -360,7 +360,7 @@ namespace glz
 
       // Asynchronous POST request
       template <typename CompletionHandler>
-      void post_async(std::string_view url, std::string_view body,
+      void post_async(std::string_view url, const std::string& body,
                       const std::unordered_map<std::string, std::string>& headers, CompletionHandler&& handler)
       {
          auto url_result = parse_url(url);
@@ -370,13 +370,13 @@ namespace glz
             return;
          }
 
-         perform_request_async("POST", *url_result, std::string(body), headers,
+         perform_request_async("POST", *url_result, body, headers,
                                std::forward<CompletionHandler>(handler));
       }
 
       // Overload for post_async without completion handler (returns future)
       std::future<std::expected<response, std::error_code>> post_async(
-         std::string_view url, std::string_view body, const std::unordered_map<std::string, std::string>& headers = {})
+         std::string_view url, const std::string& body, const std::unordered_map<std::string, std::string>& headers = {})
       {
          std::promise<std::expected<response, std::error_code>> promise;
          auto future = promise.get_future();
