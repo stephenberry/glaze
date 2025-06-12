@@ -88,13 +88,12 @@ suite http_router_async_tests = [] {
       bool route_executed = false;
 
       // Register async route
-      router.get_async("/async-test",
-                       [&route_executed](const glz::request&, glz::response& res) -> std::future<void> {
-                          return std::async(std::launch::async, [&route_executed, &res]() {
-                             route_executed = true;
-                             res.json({{"async", true}, {"message", "Success"}});
-                          });
-                       });
+      router.get_async("/async-test", [&route_executed](const glz::request&, glz::response& res) -> std::future<void> {
+         return std::async(std::launch::async, [&route_executed, &res]() {
+            route_executed = true;
+            res.json({{"async", true}, {"message", "Success"}});
+         });
+      });
 
       // Test route matching
       auto [handler, params] = router.match(glz::http_method::GET, "/async-test");

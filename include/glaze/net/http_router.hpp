@@ -214,7 +214,7 @@ namespace glz
          {
             std::string result;
             result.reserve(80 + segment.size() + full_path.size());
-            
+
             result.append("Node[");
             result.append(is_parameter ? "PARAM:" : (is_wildcard ? "WILD:" : ""));
             result.append(segment);
