@@ -385,8 +385,9 @@ namespace glz
       {
          // Validate WebSocket upgrade request
          auto it = req.headers.find("upgrade");
+         constexpr std::string_view websocket_str = "websocket";
          if (it == req.headers.end() ||
-             !std::equal(it->second.begin(), it->second.end(), "websocket", "websocket" + 9,
+             !std::equal(it->second.begin(), it->second.end(), websocket_str.begin(), websocket_str.end(),
                          [](char a, char b) { return std::tolower(a) == std::tolower(b); })) {
             do_close();
             return;
@@ -429,7 +430,7 @@ namespace glz
          std::string response_str = response.str();
          auto self = shared_from_this();
 
-         asio::async_write(socket_, asio::buffer(response_str), [self, req](std::error_code ec, std::size_t) {
+         asio::async_write(socket_, asio::buffer(response_str), [self, req, response_str = std::move(response_str)](std::error_code ec, std::size_t) {
             if (ec) {
                if (self->server_) {
                   self->server_->notify_error(self, ec);

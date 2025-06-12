@@ -79,7 +79,7 @@ namespace glz
       inline response& content_type(std::string_view type) { return header("Content-Type", type); }
 
       // JSON response helper using Glaze
-      template <class T>
+      template <class T = json_t>
       response& json(T&& value)
       {
          content_type("application/json");
@@ -243,7 +243,7 @@ namespace glz
        */
       static bool match_pattern(std::string_view value, std::string_view pattern)
       {
-         enum struct State { Literal, Escape, CharClass, NegateCharClass };
+         enum struct State { Literal, Escape, CharClass };
 
          if (pattern.empty()) return true; // Empty pattern matches anything
 
@@ -552,9 +552,9 @@ namespace glz
          return route(
             method, path,
             [handle](const request& req, response& res) {
-               // Create a future and wait for it
+               // Create a future and get the result, which will propagate any exceptions
                auto future = handle(req, res);
-               future.wait();
+               future.get(); // This will throw if the async operation threw
             },
             constraints);
       }

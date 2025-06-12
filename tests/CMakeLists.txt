@@ -55,7 +55,6 @@ elseif(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
     target_compile_options(glz_test_exceptions INTERFACE /W4 /wd4459 /wd4805)
 endif()
 
-add_subdirectory(asio_repe)
 add_subdirectory(api_test)
 add_subdirectory(beve_test)
 add_subdirectory(cli_menu_test)
@@ -82,11 +81,7 @@ add_subdirectory(json_performance)
 add_subdirectory(json_reflection_test)
 add_subdirectory(json_test)
 
-# Networking Tests
-add_subdirectory(https_test)
-add_subdirectory(repe_test)
-add_subdirectory(rest_test)
-add_subdirectory(websocket_test)
+add_subdirectory(networking_tests)
 
 if(glaze_EETF_FORMAT)
     add_subdirectory(eetf_test)
