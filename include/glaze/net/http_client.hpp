@@ -629,24 +629,31 @@ namespace glz
                                 http_error_handler on_error, http_connect_handler on_connect,
                                 http_disconnect_handler on_disconnect)
       {
-         // Use the connection's unified buffer instead of a local one
+         // Use the connection's unified buffer
          asio::async_read_until(
             *connection->socket, *connection->buffer, "\r\n\r\n",
             [this, connection, on_data = std::move(on_data), on_error = std::move(on_error),
              on_connect = std::move(on_connect),
-             on_disconnect = std::move(on_disconnect)](std::error_code ec, std::size_t) mutable {
+             on_disconnect = std::move(on_disconnect)](std::error_code ec, std::size_t bytes_transferred) mutable {
                if (ec || connection->should_stop) {
                   on_error(ec);
-                  if (on_disconnect) on_disconnect(); // Cleanup on header read error
+                  if (on_disconnect) on_disconnect();
                   return;
                }
 
-               std::istream response_stream(connection->buffer.get());
-               std::string status_line;
-               std::getline(response_stream, status_line);
-               if (!status_line.empty() && status_line.back() == '\r') {
-                  status_line.pop_back();
+               // Create a zero-copy string_view of the received headers
+               std::string_view header_data{asio::buffer_cast<const char*>(connection->buffer->data()),
+                                            bytes_transferred};
+
+               // Parse status line
+               auto line_end = header_data.find("\r\n");
+               if (line_end == std::string_view::npos) {
+                  on_error(std::make_error_code(std::errc::protocol_error));
+                  if (on_disconnect) on_disconnect();
+                  return;
                }
+               std::string_view status_line = header_data.substr(0, line_end);
+               header_data.remove_prefix(line_end + 2);
 
                auto parsed_status = parse_http_status_line(status_line);
                if (!parsed_status) {
@@ -658,19 +665,32 @@ namespace glz
                response response_headers;
                response_headers.status_code = parsed_status->status_code;
 
-               std::string header_line;
-               while (std::getline(response_stream, header_line) && header_line != "\r") {
-                  if (header_line.back() == '\r') {
-                     header_line.pop_back();
+               // Parse header fields
+               while (!header_data.starts_with("\r\n")) {
+                  line_end = header_data.find("\r\n");
+                  if (line_end == std::string_view::npos) {
+                     on_error(std::make_error_code(std::errc::protocol_error));
+                     if (on_disconnect) on_disconnect();
+                     return;
                   }
+
+                  std::string_view header_line = header_data.substr(0, line_end);
+                  header_data.remove_prefix(line_end + 2);
+
                   auto colon_pos = header_line.find(':');
                   if (colon_pos != std::string::npos) {
-                     std::string name = header_line.substr(0, colon_pos);
-                     std::string value = header_line.substr(colon_pos + 1);
-                     value.erase(0, value.find_first_not_of(" \t"));
-                     response_headers.response_headers[name] = value;
+                     std::string_view name = header_line.substr(0, colon_pos);
+                     // Skip past ':' and any whitespace
+                     size_t value_start = header_line.find_first_not_of(" \t", colon_pos + 1);
+                     std::string_view value = (value_start != std::string::npos) ? header_line.substr(value_start) : "";
+
+                     // Create strings only when inserting into the map
+                     response_headers.response_headers[std::string(name)] = std::string(value);
                   }
                }
+
+               // Consume all processed header data from the streambuf
+               connection->buffer->consume(bytes_transferred);
 
                connection->is_connected = true;
                connection->timer->cancel();
