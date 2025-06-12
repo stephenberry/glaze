@@ -656,10 +656,12 @@ namespace glz
          response_str.append("\r\n");
          response_str.append(response.response_body);
 
+         auto response_buffer = std::make_shared<std::string>(std::move(response_str));
+
          // Send the response asynchronously
-         asio::async_write(*socket, asio::buffer(response_str),
-                           [socket, response_str = std::move(response_str)](std::error_code /*ec*/, std::size_t /*bytes_transferred*/) {
-                              // response_str is captured to stay alive
+         asio::async_write(*socket, asio::buffer(*response_buffer),
+                           [socket, response_buffer](std::error_code /*ec*/, std::size_t /*bytes_transferred*/) {
+                              // response_buffer keeps the string alive for the duration of the async operation
                               // Socket cleanup handled by shared_ptr
                            });
       }
