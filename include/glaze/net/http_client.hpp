@@ -1236,7 +1236,6 @@ namespace glz
                }
 
                // Directly construct the string from the buffer's contiguous memory.
-               // This is significantly faster than using std::istreambuf_iterator.
                std::string body(asio::buffer_cast<const char*>(buffer->data()), buffer->size());
 
                response resp;
