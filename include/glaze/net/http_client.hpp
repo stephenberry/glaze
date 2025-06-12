@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include <asio.hpp>
 #include <atomic>
 #include <chrono>
 #include <expected>
@@ -19,10 +20,14 @@
 
 #include "glaze/net/http_router.hpp"
 
-#include <asio.hpp>
-
 namespace glz
 {
+   // Streaming strategy options
+   enum class stream_read_strategy {
+      bulk_transfer, // Deliver larger chunks, better throughput (default)
+      immediate_delivery // Deliver smaller chunks immediately, lower latency
+   };
+
    struct url_parts
    {
       std::string protocol;
@@ -191,9 +196,16 @@ namespace glz
    {
       std::shared_ptr<asio::ip::tcp::socket> socket;
       std::shared_ptr<asio::steady_timer> timer;
-      std::array<uint8_t, 8192> buffer;
+      std::shared_ptr<asio::streambuf> buffer; // Use unified streambuf for all reads
       bool is_connected{false};
       std::atomic<bool> should_stop{false};
+      stream_read_strategy strategy{stream_read_strategy::bulk_transfer}; // Default strategy
+
+      // Constructor with optional buffer size limit and strategy
+      http_stream_connection(size_t max_buffer_size = 1024 * 1024,
+                             stream_read_strategy read_strategy = stream_read_strategy::bulk_transfer)
+         : buffer(std::make_shared<asio::streambuf>(max_buffer_size)), strategy(read_strategy)
+      {}
 
       // User-facing disconnect. Signals the internal loops to stop.
       // The actual socket closing/pooling is handled by the internal disconnect handler.
@@ -272,7 +284,8 @@ namespace glz
       std::shared_ptr<http_stream_connection> get_stream(
          std::string_view url, http_data_handler on_data, http_error_handler on_error,
          const std::unordered_map<std::string, std::string>& headers = {}, http_connect_handler on_connect = {},
-         http_disconnect_handler on_disconnect = {}, std::chrono::seconds timeout = std::chrono::seconds{30})
+         http_disconnect_handler on_disconnect = {}, std::chrono::seconds timeout = std::chrono::seconds{30},
+         stream_read_strategy strategy = stream_read_strategy::bulk_transfer)
       {
          auto url_result = parse_url(url);
          if (!url_result) {
@@ -280,7 +293,7 @@ namespace glz
             return nullptr;
          }
 
-         return perform_stream_request("GET", *url_result, "", headers, timeout, std::move(on_data),
+         return perform_stream_request("GET", *url_result, "", headers, timeout, strategy, std::move(on_data),
                                        std::move(on_error), std::move(on_connect), std::move(on_disconnect));
       }
 
@@ -288,7 +301,8 @@ namespace glz
       std::shared_ptr<http_stream_connection> post_stream(
          std::string_view url, std::string_view body, http_data_handler on_data, http_error_handler on_error,
          const std::unordered_map<std::string, std::string>& headers = {}, http_connect_handler on_connect = {},
-         http_disconnect_handler on_disconnect = {}, std::chrono::seconds timeout = std::chrono::seconds{30})
+         http_disconnect_handler on_disconnect = {}, std::chrono::seconds timeout = std::chrono::seconds{30},
+         stream_read_strategy strategy = stream_read_strategy::bulk_transfer)
       {
          auto url_result = parse_url(url);
          if (!url_result) {
@@ -296,8 +310,9 @@ namespace glz
             return nullptr;
          }
 
-         return perform_stream_request("POST", *url_result, std::string(body), headers, timeout, std::move(on_data),
-                                       std::move(on_error), std::move(on_connect), std::move(on_disconnect));
+         return perform_stream_request("POST", *url_result, std::string(body), headers, timeout, strategy,
+                                       std::move(on_data), std::move(on_error), std::move(on_connect),
+                                       std::move(on_disconnect));
       }
 
       // Generic streaming request
@@ -305,7 +320,8 @@ namespace glz
          std::string_view method, std::string_view url, std::string_view body, http_data_handler on_data,
          http_error_handler on_error, const std::unordered_map<std::string, std::string>& headers = {},
          http_connect_handler on_connect = {}, http_disconnect_handler on_disconnect = {},
-         std::chrono::seconds timeout = std::chrono::seconds{30})
+         std::chrono::seconds timeout = std::chrono::seconds{30},
+         stream_read_strategy strategy = stream_read_strategy::bulk_transfer)
       {
          auto url_result = parse_url(url);
          if (!url_result) {
@@ -313,9 +329,31 @@ namespace glz
             return nullptr;
          }
 
-         return perform_stream_request(std::string(method), *url_result, std::string(body), headers, timeout,
+         return perform_stream_request(std::string(method), *url_result, std::string(body), headers, timeout, strategy,
                                        std::move(on_data), std::move(on_error), std::move(on_connect),
                                        std::move(on_disconnect));
+      }
+
+      // Method to set default strategy for the client
+      void set_default_stream_strategy(stream_read_strategy strategy) { default_stream_strategy = strategy; }
+
+      // Convenience methods that use the client's default strategy
+      std::shared_ptr<http_stream_connection> get_stream_default(
+         std::string_view url, http_data_handler on_data, http_error_handler on_error,
+         const std::unordered_map<std::string, std::string>& headers = {}, http_connect_handler on_connect = {},
+         http_disconnect_handler on_disconnect = {}, std::chrono::seconds timeout = std::chrono::seconds{30})
+      {
+         return get_stream(url, std::move(on_data), std::move(on_error), headers, std::move(on_connect),
+                           std::move(on_disconnect), timeout, default_stream_strategy);
+      }
+
+      std::shared_ptr<http_stream_connection> post_stream_default(
+         std::string_view url, std::string_view body, http_data_handler on_data, http_error_handler on_error,
+         const std::unordered_map<std::string, std::string>& headers = {}, http_connect_handler on_connect = {},
+         http_disconnect_handler on_disconnect = {}, std::chrono::seconds timeout = std::chrono::seconds{30})
+      {
+         return post_stream(url, body, std::move(on_data), std::move(on_error), headers, std::move(on_connect),
+                            std::move(on_disconnect), timeout, default_stream_strategy);
       }
 
       // Asynchronous GET request
@@ -420,6 +458,7 @@ namespace glz
       std::shared_ptr<http_connection_pool> connection_pool;
       std::vector<std::thread> worker_threads;
       std::atomic<bool> running{true};
+      stream_read_strategy default_stream_strategy{stream_read_strategy::bulk_transfer};
 
       void start_workers()
       {
@@ -459,10 +498,10 @@ namespace glz
       std::shared_ptr<http_stream_connection> perform_stream_request(
          const std::string& method, const url_parts& url, const std::string& body,
          const std::unordered_map<std::string, std::string>& headers, std::chrono::seconds timeout,
-         http_data_handler on_data, http_error_handler on_error, http_connect_handler on_connect,
-         http_disconnect_handler on_disconnect)
+         stream_read_strategy strategy, http_data_handler on_data, http_error_handler on_error,
+         http_connect_handler on_connect, http_disconnect_handler on_disconnect)
       {
-         auto connection = std::make_shared<http_stream_connection>();
+         auto connection = std::make_shared<http_stream_connection>(1024 * 1024, strategy);
          connection->socket = connection_pool->get_connection(url.host, url.port);
          connection->timer = std::make_shared<asio::steady_timer>(*async_io_context);
 
@@ -590,11 +629,10 @@ namespace glz
                                 http_error_handler on_error, http_connect_handler on_connect,
                                 http_disconnect_handler on_disconnect)
       {
-         auto buffer = std::make_shared<asio::streambuf>();
-
+         // Use the connection's unified buffer instead of a local one
          asio::async_read_until(
-            *connection->socket, *buffer, "\r\n\r\n",
-            [this, connection, buffer, on_data = std::move(on_data), on_error = std::move(on_error),
+            *connection->socket, *connection->buffer, "\r\n\r\n",
+            [this, connection, on_data = std::move(on_data), on_error = std::move(on_error),
              on_connect = std::move(on_connect),
              on_disconnect = std::move(on_disconnect)](std::error_code ec, std::size_t) mutable {
                if (ec || connection->should_stop) {
@@ -603,7 +641,7 @@ namespace glz
                   return;
                }
 
-               std::istream response_stream(buffer.get());
+               std::istream response_stream(connection->buffer.get());
                std::string status_line;
                std::getline(response_stream, status_line);
                if (!status_line.empty() && status_line.back() == '\r') {
@@ -648,14 +686,7 @@ namespace glz
                   return;
                }
 
-               if (buffer->in_avail() > 0) {
-                  std::string initial_data{std::istreambuf_iterator<char>(buffer.get()),
-                                           std::istreambuf_iterator<char>()};
-                  if (!initial_data.empty()) {
-                     on_data(initial_data);
-                  }
-               }
-
+               // The logic to start the read loop is now unified
                start_stream_reading(connection, std::move(on_data), std::move(on_error), std::move(on_disconnect));
             });
       }
@@ -663,29 +694,89 @@ namespace glz
       void start_stream_reading(std::shared_ptr<http_stream_connection> connection, http_data_handler on_data,
                                 http_error_handler on_error, http_disconnect_handler on_disconnect)
       {
+         // Dispatch to the appropriate strategy
+         switch (connection->strategy) {
+         case stream_read_strategy::bulk_transfer:
+            start_stream_reading_bulk(connection, std::move(on_data), std::move(on_error), std::move(on_disconnect));
+            break;
+         case stream_read_strategy::immediate_delivery:
+            start_stream_reading_immediate(connection, std::move(on_data), std::move(on_error),
+                                           std::move(on_disconnect));
+            break;
+         }
+      }
+
+      void start_stream_reading_bulk(std::shared_ptr<http_stream_connection> connection, http_data_handler on_data,
+                                     http_error_handler on_error, http_disconnect_handler on_disconnect)
+      {
+         // Process any existing data in buffer first
+         if (connection->buffer->size() > 0) {
+            std::string_view data{asio::buffer_cast<const char*>(connection->buffer->data()),
+                                  connection->buffer->size()};
+            on_data(data);
+            connection->buffer->consume(connection->buffer->size());
+         }
+
          if (connection->should_stop) {
             if (on_disconnect) on_disconnect();
             return;
          }
 
+         // Use async_read with transfer_at_least(1) - may read more data for efficiency
+         asio::async_read(
+            *connection->socket, *connection->buffer, asio::transfer_at_least(1),
+            [this, connection, on_data, on_error, on_disconnect](std::error_code ec, std::size_t /*bytes_transferred*/) {
+               if (ec || connection->should_stop) {
+                  if (ec != asio::error::eof && ec != asio::error::operation_aborted && !connection->should_stop) {
+                     on_error(ec);
+                  }
+                  if (on_disconnect) on_disconnect();
+                  return;
+               }
+
+               // Recurse to process the new data
+               start_stream_reading_bulk(connection, on_data, on_error, on_disconnect);
+            });
+      }
+
+      void start_stream_reading_immediate(std::shared_ptr<http_stream_connection> connection, http_data_handler on_data,
+                                          http_error_handler on_error, http_disconnect_handler on_disconnect)
+      {
+         // Process existing buffer content first
+         if (connection->buffer->size() > 0) {
+            std::string_view data{asio::buffer_cast<const char*>(connection->buffer->data()),
+                                  connection->buffer->size()};
+            on_data(data);
+            connection->buffer->consume(connection->buffer->size());
+         }
+
+         if (connection->should_stop) {
+            if (on_disconnect) on_disconnect();
+            return;
+         }
+
+         // Use async_read_some for immediate delivery of available data
+         constexpr size_t read_size = 8192;
          connection->socket->async_read_some(
-            asio::buffer(connection->buffer),
+            connection->buffer->prepare(read_size),
             [this, connection, on_data, on_error, on_disconnect](std::error_code ec, std::size_t bytes_transferred) {
                if (ec || connection->should_stop) {
                   if (ec != asio::error::eof && ec != asio::error::operation_aborted && !connection->should_stop) {
                      on_error(ec);
                   }
-                  // This is the primary exit point for a stream; always call disconnect here.
                   if (on_disconnect) on_disconnect();
                   return;
                }
 
-               // Call data handler with received data
-               std::string_view data(reinterpret_cast<const char*>(connection->buffer.data()), bytes_transferred);
+               // Commit the received data and deliver immediately
+               connection->buffer->commit(bytes_transferred);
+
+               std::string_view data{asio::buffer_cast<const char*>(connection->buffer->data()), bytes_transferred};
                on_data(data);
+               connection->buffer->consume(bytes_transferred);
 
                // Continue reading
-               start_stream_reading(connection, on_data, on_error, on_disconnect);
+               start_stream_reading_immediate(connection, on_data, on_error, on_disconnect);
             });
       }
 
