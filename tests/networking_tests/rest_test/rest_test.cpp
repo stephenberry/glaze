@@ -3,7 +3,6 @@
 
 #include <fstream>
 #include <iostream>
-#include <sstream>
 
 #include "glaze/glaze.hpp"
 #include "glaze/net/http_server.hpp"
@@ -22,18 +21,6 @@ struct ErrorResponse
 {
    std::string error{};
 };
-
-// Helper function to read a file into a string
-std::string read_file(const std::string& path)
-{
-   std::ifstream file(path);
-   if (!file.is_open()) {
-      return "";
-   }
-   std::stringstream buffer;
-   buffer << file.rdbuf();
-   return buffer.str();
-}
 
 int main()
 {
