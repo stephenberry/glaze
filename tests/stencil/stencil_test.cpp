@@ -23,6 +23,18 @@ suite stencil_tests = [] {
       auto result = glz::stencil(layout, p);
       expect(result == "Henry Foster 34");
    };
+   
+   "person formatted error"_test = [] {
+      std::string_view layout = R"({{bad_key}} {{last_name}} {{age}})";
+      
+      person p{"Henry", "Foster", 34};
+      auto result = glz::stencil(layout, p);
+      expect(result.error());
+      auto error_msg = glz::format_error(result, layout);
+      expect(error_msg == R"(1:10: unknown_key
+   {{bad_key}} {{last_name}} {{age}}
+            ^)") << error_msg;
+   };
 
    "person"_test = [] {
       std::string_view layout = R"({{first_name}} {{last_name}}, age: {{age}})";
