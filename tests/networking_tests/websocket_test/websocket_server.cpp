@@ -142,15 +142,15 @@ int main()
    server.get("/api/status", [&clients, &clients_mutex](const request&, response& res) {
       std::lock_guard<std::mutex> lock(clients_mutex);
       res.json({{"server", "Glaze WebSocket + HTTP Server"},
-                      {"websocket_clients", clients.size()},
-                      {"implementation",
+                {"websocket_clients", clients.size()},
+                {"implementation",
 #if defined(GLZ_ENABLE_OPENSSL) && defined(GLZ_HAS_OPENSSL)
-                       "OpenSSL"
+                 "OpenSSL"
 #else
             "fallback_sha1"
 #endif
-                      },
-                      {"status", "running"}});
+                },
+                {"status", "running"}});
    });
 
    server.get("/api/broadcast", [&clients, &clients_mutex](const request& req, response& res) {
