@@ -27,7 +27,7 @@
 #endif
 #include <boost/asio.hpp>
 #else
-static_assert(false, "standalone or boost asio must be included to use glaze/ext/glaze_asio.hpp");
+static_assert(false, "asio not included");
 #endif
 
 namespace glz
@@ -182,6 +182,38 @@ namespace glz
       }
    };
 
+   // Forward declaration for streaming connection
+   struct http_stream_connection;
+
+   // Handler function types for streaming
+   using http_data_handler = std::function<void(std::string_view data)>;
+   using http_error_handler = std::function<void(std::error_code ec)>;
+   using http_connect_handler = std::function<void(const response& headers)>;
+   using http_disconnect_handler = std::function<void()>;
+
+   // Streaming HTTP connection handle
+   struct http_stream_connection
+   {
+      std::shared_ptr<asio::ip::tcp::socket> socket;
+      std::shared_ptr<asio::steady_timer> timer;
+      std::array<uint8_t, 8192> buffer;
+      bool is_connected{false};
+      bool should_stop{false};
+
+      void disconnect()
+      {
+         should_stop = true;
+         if (socket && socket->is_open()) {
+            std::error_code ec;
+            socket->close(ec);
+         }
+         if (timer) {
+            timer->cancel();
+         }
+         is_connected = false;
+      }
+   };
+
    // Client implementation using connection pooling and async operations
    struct http_client
    {
@@ -234,6 +266,56 @@ namespace glz
          merged_headers["Content-Type"] = "application/json";
 
          return post(url, json_str, merged_headers);
+      }
+
+      // Streaming GET request
+      std::shared_ptr<http_stream_connection> get_stream(
+         std::string_view url, http_data_handler on_data, http_error_handler on_error,
+         const std::unordered_map<std::string, std::string>& headers = {}, http_connect_handler on_connect = {},
+         http_disconnect_handler on_disconnect = {}, std::chrono::seconds timeout = std::chrono::seconds{30})
+      {
+         auto url_result = parse_url(url);
+         if (!url_result) {
+            asio::post(*async_io_context, [on_error, error = url_result.error()]() { on_error(error); });
+            return nullptr;
+         }
+
+         return perform_stream_request("GET", *url_result, "", headers, timeout, std::move(on_data),
+                                       std::move(on_error), std::move(on_connect), std::move(on_disconnect));
+      }
+
+      // Streaming POST request
+      std::shared_ptr<http_stream_connection> post_stream(
+         std::string_view url, std::string_view body, http_data_handler on_data, http_error_handler on_error,
+         const std::unordered_map<std::string, std::string>& headers = {}, http_connect_handler on_connect = {},
+         http_disconnect_handler on_disconnect = {}, std::chrono::seconds timeout = std::chrono::seconds{30})
+      {
+         auto url_result = parse_url(url);
+         if (!url_result) {
+            asio::post(*async_io_context, [on_error, error = url_result.error()]() { on_error(error); });
+            return nullptr;
+         }
+
+         return perform_stream_request("POST", *url_result, std::string(body), headers, timeout, std::move(on_data),
+                                       std::move(on_error), std::move(on_connect), std::move(on_disconnect));
+      }
+
+      // Generic streaming request
+      std::shared_ptr<http_stream_connection> request_stream(
+         std::string_view method, std::string_view url, std::string_view body, http_data_handler on_data,
+         http_error_handler on_error, const std::unordered_map<std::string, std::string>& headers = {},
+         http_connect_handler on_connect = {}, http_disconnect_handler on_disconnect = {},
+         std::chrono::seconds timeout = std::chrono::seconds{30})
+      {
+         auto url_result = parse_url(url);
+         if (!url_result) {
+            asio::post(*async_io_context, [on_error, error = url_result.error()]() { on_error(error); });
+            return nullptr;
+         }
+
+         return perform_stream_request(std::string(method), *url_result, std::string(body), headers, timeout,
+                                       std::move(on_data), std::move(on_error), std::move(on_connect),
+                                       std::move(on_disconnect));
       }
 
       // Asynchronous GET request
@@ -370,6 +452,223 @@ namespace glz
                thread.join();
             }
          }
+      }
+
+      std::shared_ptr<http_stream_connection> perform_stream_request(
+         const std::string& method, const url_parts& url, const std::string& body,
+         const std::unordered_map<std::string, std::string>& headers, std::chrono::seconds timeout,
+         http_data_handler on_data, http_error_handler on_error, http_connect_handler on_connect,
+         http_disconnect_handler on_disconnect)
+      {
+         auto connection = std::make_shared<http_stream_connection>();
+         connection->socket = std::make_shared<asio::ip::tcp::socket>(*async_io_context);
+         connection->timer = std::make_shared<asio::steady_timer>(*async_io_context);
+
+         auto resolver = std::make_shared<asio::ip::tcp::resolver>(*async_io_context);
+
+         // Set connection timeout
+         connection->timer->expires_after(timeout);
+         connection->timer->async_wait([connection, on_error](std::error_code ec) {
+            if (!ec && !connection->is_connected) {
+               connection->disconnect();
+               on_error(std::make_error_code(std::errc::timed_out));
+            }
+         });
+
+         resolver->async_resolve(url.host, std::to_string(url.port),
+                                 [this, url, method, body, headers, connection, resolver, on_data = std::move(on_data),
+                                  on_error = std::move(on_error), on_connect = std::move(on_connect),
+                                  on_disconnect = std::move(on_disconnect)](
+                                    std::error_code ec, asio::ip::tcp::resolver::results_type results) mutable {
+                                    if (ec || connection->should_stop) {
+                                       on_error(ec);
+                                       return;
+                                    }
+
+                                    asio::async_connect(
+                                       *connection->socket, results,
+                                       [this, url, method, body, headers, connection, on_data = std::move(on_data),
+                                        on_error = std::move(on_error), on_connect = std::move(on_connect),
+                                        on_disconnect = std::move(on_disconnect)](
+                                          std::error_code ec, const asio::ip::tcp::endpoint&) mutable {
+                                          if (ec || connection->should_stop) {
+                                             on_error(ec);
+                                             return;
+                                          }
+
+                                          send_stream_request(url, method, body, headers, connection,
+                                                              std::move(on_data), std::move(on_error),
+                                                              std::move(on_connect), std::move(on_disconnect));
+                                       });
+                                 });
+
+         return connection;
+      }
+
+      void send_stream_request(const url_parts& url, const std::string& method, const std::string& body,
+                               const std::unordered_map<std::string, std::string>& headers,
+                               std::shared_ptr<http_stream_connection> connection, http_data_handler on_data,
+                               http_error_handler on_error, http_connect_handler on_connect,
+                               http_disconnect_handler on_disconnect)
+      {
+         // Build HTTP request
+         std::string request_str;
+         request_str.reserve(512 + body.size());
+
+         request_str.append(method);
+         request_str.append(" ");
+         request_str.append(url.path);
+         request_str.append(" HTTP/1.1\r\n");
+         request_str.append("Host: ");
+         request_str.append(url.host);
+         request_str.append("\r\n");
+         request_str.append("Connection: close\r\n"); // Keep simple for streaming
+
+         if (!body.empty()) {
+            request_str.append("Content-Length: ");
+            request_str.append(std::to_string(body.size()));
+            request_str.append("\r\n");
+         }
+
+         for (const auto& [name, value] : headers) {
+            request_str.append(name);
+            request_str.append(": ");
+            request_str.append(value);
+            request_str.append("\r\n");
+         }
+
+         request_str.append("\r\n");
+         request_str.append(body);
+
+         auto request_buffer = std::make_shared<std::string>(std::move(request_str));
+
+         asio::async_write(*connection->socket, asio::buffer(*request_buffer),
+                           [this, connection, request_buffer, on_data = std::move(on_data),
+                            on_error = std::move(on_error), on_connect = std::move(on_connect),
+                            on_disconnect = std::move(on_disconnect)](std::error_code ec, std::size_t) mutable {
+                              if (ec || connection->should_stop) {
+                                 on_error(ec);
+                                 return;
+                              }
+
+                              read_stream_response(connection, std::move(on_data), std::move(on_error),
+                                                   std::move(on_connect), std::move(on_disconnect));
+                           });
+      }
+
+      void read_stream_response(std::shared_ptr<http_stream_connection> connection, http_data_handler on_data,
+                                http_error_handler on_error, http_connect_handler on_connect,
+                                http_disconnect_handler on_disconnect)
+      {
+         auto buffer = std::make_shared<asio::streambuf>();
+
+         asio::async_read_until(*connection->socket, *buffer, "\r\n\r\n",
+                                [this, connection, buffer, on_data = std::move(on_data), on_error = std::move(on_error),
+                                 on_connect = std::move(on_connect),
+                                 on_disconnect = std::move(on_disconnect)](std::error_code ec, std::size_t) mutable {
+                                   if (ec || connection->should_stop) {
+                                      on_error(ec);
+                                      return;
+                                   }
+
+                                   // Parse HTTP response headers
+                                   std::istream response_stream(buffer.get());
+                                   std::string status_line;
+                                   std::getline(response_stream, status_line);
+
+                                   if (!status_line.empty() && status_line.back() == '\r') {
+                                      status_line.pop_back();
+                                   }
+
+                                   auto parsed_status = parse_http_status_line(status_line);
+                                   if (!parsed_status) {
+                                      on_error(parsed_status.error());
+                                      return;
+                                   }
+
+                                   // Parse headers
+                                   response response_headers;
+                                   response_headers.status_code = parsed_status->status_code;
+
+                                   std::string header_line;
+                                   while (std::getline(response_stream, header_line) && header_line != "\r") {
+                                      if (header_line.back() == '\r') {
+                                         header_line.pop_back();
+                                      }
+
+                                      auto colon_pos = header_line.find(':');
+                                      if (colon_pos != std::string::npos) {
+                                         std::string name = header_line.substr(0, colon_pos);
+                                         std::string value = header_line.substr(colon_pos + 1);
+                                         value.erase(0, value.find_first_not_of(" \t"));
+                                         response_headers.response_headers[name] = value;
+                                      }
+                                   }
+
+                                   connection->is_connected = true;
+                                   connection->timer->cancel(); // Cancel connection timeout
+
+                                   // Notify successful connection
+                                   if (on_connect) {
+                                      on_connect(response_headers);
+                                   }
+
+                                   // Check for error status codes
+                                   if (parsed_status->status_code >= 400) {
+                                      if (parsed_status->status_code == 401) {
+                                         on_error(std::make_error_code(std::errc::permission_denied));
+                                      }
+                                      else if (parsed_status->status_code == 404) {
+                                         on_error(std::make_error_code(std::errc::no_such_file_or_directory));
+                                      }
+                                      else {
+                                         on_error(std::make_error_code(std::errc::connection_refused));
+                                      }
+                                      return;
+                                   }
+
+                                   // Process any data already in buffer
+                                   if (buffer->in_avail() > 0) {
+                                      std::string initial_data{std::istreambuf_iterator<char>(buffer.get()),
+                                                               std::istreambuf_iterator<char>()};
+                                      if (!initial_data.empty()) {
+                                         on_data(initial_data);
+                                      }
+                                   }
+
+                                   // Start continuous data streaming
+                                   start_stream_reading(connection, std::move(on_data), std::move(on_error),
+                                                        std::move(on_disconnect));
+                                });
+      }
+
+      void start_stream_reading(std::shared_ptr<http_stream_connection> connection, http_data_handler on_data,
+                                http_error_handler on_error, http_disconnect_handler on_disconnect)
+      {
+         if (connection->should_stop) {
+            if (on_disconnect) on_disconnect();
+            return;
+         }
+
+         connection->socket->async_read_some(
+            asio::buffer(connection->buffer),
+            [this, connection, on_data, on_error, on_disconnect](std::error_code ec, std::size_t bytes_transferred) {
+               if (ec || connection->should_stop) {
+                  connection->is_connected = false;
+                  if (ec != asio::error::eof && ec != asio::error::operation_aborted && !connection->should_stop) {
+                     on_error(ec);
+                  }
+                  if (on_disconnect) on_disconnect();
+                  return;
+               }
+
+               // Call data handler with received data
+               std::string_view data(reinterpret_cast<const char*>(connection->buffer.data()), bytes_transferred);
+               on_data(data);
+
+               // Continue reading
+               start_stream_reading(connection, on_data, on_error, on_disconnect);
+            });
       }
 
       std::expected<response, std::error_code> perform_sync_request(
