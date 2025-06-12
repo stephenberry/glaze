@@ -174,6 +174,11 @@ class working_test_server
          };
          timer->async_wait(send_data);
       });
+
+      // Endpoint that immediately returns an error
+      server_.stream_get("/stream-error", [](request&, streaming_response& res) {
+         res.start_stream(403).close(); // e.g. Forbidden
+      });
    }
 
    bool is_server_ready()
@@ -556,6 +561,47 @@ suite glz_http_client_tests = [] {
       // We should have received some data, but not all 10 chunks
       int chunks = data_chunks_received.load();
       expect(chunks > 0 && chunks < 10) << "Should receive some but not all data chunks. Received: " << chunks << "\n";
+
+      server.stop();
+      std::this_thread::sleep_for(std::chrono::milliseconds(50));
+   };
+
+   "streaming_request_with_http_error"_test = [] {
+      working_test_server server;
+      expect(server.start()) << "Server should start\n";
+
+      glz::http_client client;
+
+      std::atomic<bool> connected = false;
+      std::atomic<bool> data_received = false;
+      std::atomic<bool> error_received = false;
+      std::promise<void> disconnect_promise;
+      auto disconnect_future = disconnect_promise.get_future();
+
+      auto on_data = [&](std::string_view) { data_received = true; };
+      auto on_error = [&](std::error_code ec) {
+         // The client should translate the 4xx/5xx status into this error.
+         expect(ec == std::errc::connection_refused);
+         error_received = true;
+      };
+      auto on_connect = [&](const response& headers) {
+         // on_connect is called as soon as headers are parsed, even error ones.
+         expect(headers.status_code == 403);
+         connected = true;
+      };
+      auto on_disconnect = [&]() { disconnect_promise.set_value(); };
+
+      auto conn =
+         client.get_stream(server.base_url() + "/stream-error", on_data, on_error, {}, on_connect, on_disconnect);
+      expect(conn != nullptr);
+
+      // Wait for the interaction to complete
+      auto status = disconnect_future.wait_for(std::chrono::seconds(2));
+      expect(status == std::future_status::ready) << "Disconnect was not called on error\n";
+
+      expect(connected == true) << "on_connect should be called with error headers\n";
+      expect(error_received == true) << "on_error was not called for HTTP error status\n";
+      expect(data_received == false) << "on_data should not be called on error\n";
 
       server.stop();
       std::this_thread::sleep_for(std::chrono::milliseconds(50));
