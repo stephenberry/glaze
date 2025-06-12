@@ -370,13 +370,13 @@ namespace glz
             return;
          }
 
-         perform_request_async("POST", *url_result, body, headers,
-                               std::forward<CompletionHandler>(handler));
+         perform_request_async("POST", *url_result, body, headers, std::forward<CompletionHandler>(handler));
       }
 
       // Overload for post_async without completion handler (returns future)
       std::future<std::expected<response, std::error_code>> post_async(
-         std::string_view url, const std::string& body, const std::unordered_map<std::string, std::string>& headers = {})
+         std::string_view url, const std::string& body,
+         const std::unordered_map<std::string, std::string>& headers = {})
       {
          std::promise<std::expected<response, std::error_code>> promise;
          auto future = promise.get_future();
