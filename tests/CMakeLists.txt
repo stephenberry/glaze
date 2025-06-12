@@ -3,7 +3,7 @@ include(FetchContent)
 FetchContent_Declare(
   ut
   GIT_REPOSITORY https://github.com/openalgz/ut
-  GIT_TAG v0.0.5
+  GIT_TAG v1.0.0
   GIT_SHALLOW TRUE
 )
 
