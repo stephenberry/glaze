@@ -19,16 +19,7 @@
 
 #include "glaze/net/http_router.hpp"
 
-#if __has_include(<asio.hpp>) && !defined(GLZ_USE_BOOST_ASIO)
 #include <asio.hpp>
-#elif __has_include(<boost/asio.hpp>)
-#ifndef GLZ_USING_BOOST_ASIO
-#define GLZ_USING_BOOST_ASIO
-#endif
-#include <boost/asio.hpp>
-#else
-static_assert(false, "asio not included");
-#endif
 
 namespace glz
 {

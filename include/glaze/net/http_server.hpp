@@ -19,24 +19,11 @@
 #include "glaze/net/http_router.hpp"
 #include "glaze/net/websocket_connection.hpp"
 
-#if __has_include(<asio.hpp>) && !defined(GLZ_USE_BOOST_ASIO)
 #include <asio.hpp>
-#elif __has_include(<boost/asio.hpp>)
-#ifndef GLZ_USING_BOOST_ASIO
-#define GLZ_USING_BOOST_ASIO
-#endif
-#include <boost/asio.hpp>
-#else
-static_assert(false, "standalone or boost asio must be included to use glaze/ext/glaze_asio.hpp");
-#endif
 
 // Conditionally include SSL headers only when needed
 #ifdef GLZ_ENABLE_SSL
-#if __has_include(<asio.hpp>) && !defined(GLZ_USE_BOOST_ASIO)
 #include <asio/ssl.hpp>
-#elif __has_include(<boost/asio.hpp>)
-#include <boost/asio/ssl.hpp>
-#endif
 #endif
 
 namespace glz
