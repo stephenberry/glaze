@@ -5,7 +5,7 @@ Glaze also supports:
 
 - [BEVE](https://github.com/beve-org/beve) (binary efficient versatile encoding)
 - [CSV](./docs/csv.md) (comma separated value)
-- [Stencil/Mustache](./docs/stencil.md) (string interpolation)
+- [Stencil/Mustache](./docs/stencil-mustache.md) (string interpolation)
 - [EETF](./docs/EETF/erlang-external-term-format.md) (Erlang External Term Format) [optionally included]
 
 > [!NOTE]
