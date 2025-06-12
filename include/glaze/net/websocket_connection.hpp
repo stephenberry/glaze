@@ -10,7 +10,6 @@
 #include <cstring>
 #include <functional>
 #include <memory>
-#include <sstream>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -413,13 +412,14 @@ namespace glz
          std::string accept_key = ws_util::generate_accept_key(it->second);
 
          // Send handshake response
-         std::ostringstream response;
-         response << "HTTP/1.1 101 Switching Protocols\r\n"
-                  << "Upgrade: websocket\r\n"
-                  << "Connection: Upgrade\r\n"
-                  << "Sec-WebSocket-Accept: " << accept_key << "\r\n\r\n";
+         std::string response_str =
+            "HTTP/1.1 101 Switching Protocols\r\n"
+            "Upgrade: websocket\r\n"
+            "Connection: Upgrade\r\n"
+            "Sec-WebSocket-Accept: ";
+         response_str.append(accept_key);
+         response_str.append("\r\n\r\n");
 
-         std::string response_str = response.str();
          auto self = shared_from_this();
 
          asio::async_write(socket_, asio::buffer(response_str),
