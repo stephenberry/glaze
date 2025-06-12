@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <array>
+#include <asio.hpp>
 #include <chrono>
 #include <cstring>
 #include <functional>
@@ -14,8 +15,6 @@
 #include <string_view>
 #include <unordered_map>
 #include <vector>
-
-#include <asio.hpp>
 
 // Optional OpenSSL support - detected at compile time
 #if defined(GLZ_ENABLE_OPENSSL) && __has_include(<openssl/sha.h>)
