@@ -686,8 +686,119 @@ namespace glz
                   return;
                }
 
-               // The logic to start the read loop is now unified
-               start_stream_reading(connection, std::move(on_data), std::move(on_error), std::move(on_disconnect));
+               bool is_chunked = false;
+               auto it = response_headers.response_headers.find("Transfer-Encoding");
+               if (it != response_headers.response_headers.end()) {
+                  if (it->second.find("chunked") != std::string::npos) {
+                     is_chunked = true;
+                  }
+               }
+
+               if (is_chunked) {
+                  start_chunked_reading(connection, std::move(on_data), std::move(on_error), std::move(on_disconnect));
+               }
+               else {
+                  start_stream_reading(connection, std::move(on_data), std::move(on_error), std::move(on_disconnect));
+               }
+            });
+      }
+
+      void start_chunked_reading(std::shared_ptr<http_stream_connection> connection, http_data_handler on_data,
+                                 http_error_handler on_error, http_disconnect_handler on_disconnect)
+      {
+         // Begin the chunk parsing loop.
+         // The buffer may already contain the first chunk size line or more data.
+         read_chunk_size(connection, std::move(on_data), std::move(on_error), std::move(on_disconnect));
+      }
+
+      void read_chunk_size(std::shared_ptr<http_stream_connection> connection, http_data_handler on_data,
+                           http_error_handler on_error, http_disconnect_handler on_disconnect)
+      {
+         asio::async_read_until(
+            *connection->socket, *connection->buffer, "\r\n",
+            [this, connection, on_data = std::move(on_data), on_error = std::move(on_error),
+             on_disconnect = std::move(on_disconnect)](std::error_code ec, std::size_t) mutable {
+               if (ec || connection->should_stop) {
+                  if (ec != asio::error::eof && ec != asio::error::operation_aborted && !connection->should_stop)
+                     on_error(ec);
+                  if (on_disconnect) on_disconnect();
+                  return;
+               }
+
+               std::istream is(connection->buffer.get());
+               std::string line;
+               std::getline(is, line);
+               if (!line.empty() && line.back() == '\r') {
+                  line.pop_back();
+               }
+
+               size_t chunk_size;
+               try {
+                  // Ignore chunk extensions for now (e.g., "7;ext=foo")
+                  size_t semi_pos = line.find(';');
+                  if (semi_pos != std::string::npos) {
+                     line = line.substr(0, semi_pos);
+                  }
+                  chunk_size = std::stoull(line, nullptr, 16);
+               }
+               catch (const std::exception&) {
+                  on_error(std::make_error_code(std::errc::protocol_error));
+                  if (on_disconnect) on_disconnect();
+                  return;
+               }
+
+               if (chunk_size == 0) {
+                  // This is the last chunk. The stream ends.
+                  // We should consume any trailer headers here, but for now we'll just end.
+                  if (on_disconnect) on_disconnect();
+                  return;
+               }
+
+               read_chunk_body(connection, chunk_size, std::move(on_data), std::move(on_error),
+                               std::move(on_disconnect));
+            });
+      }
+
+      void read_chunk_body(std::shared_ptr<http_stream_connection> connection, size_t chunk_size,
+                           http_data_handler on_data, http_error_handler on_error,
+                           http_disconnect_handler on_disconnect)
+      {
+         // We need to read 'chunk_size' bytes of data, plus 2 bytes for the trailing CRLF.
+         size_t total_to_read = chunk_size + 2;
+
+         // Check if we have enough data in the buffer already.
+         if (connection->buffer->size() >= total_to_read) {
+            std::string_view data{asio::buffer_cast<const char*>(connection->buffer->data()), chunk_size};
+            on_data(data);
+            connection->buffer->consume(total_to_read);
+
+            // Post the next read to avoid deep recursion
+            asio::post(connection->socket->get_executor(), [this, connection, on_data = std::move(on_data),
+                                                            on_error = std::move(on_error),
+                                                            on_disconnect = std::move(on_disconnect)]() mutable {
+               read_chunk_size(connection, std::move(on_data), std::move(on_error), std::move(on_disconnect));
+            });
+            return;
+         }
+
+         // We need to read more from the socket.
+         asio::async_read(
+            *connection->socket, *connection->buffer,
+            asio::transfer_exactly(total_to_read - connection->buffer->size()),
+            [this, connection, chunk_size, on_data = std::move(on_data), on_error = std::move(on_error),
+             on_disconnect = std::move(on_disconnect)](std::error_code ec, std::size_t) mutable {
+               if (ec || connection->should_stop) {
+                  if (ec != asio::error::eof && ec != asio::error::operation_aborted && !connection->should_stop)
+                     on_error(ec);
+                  if (on_disconnect) on_disconnect();
+                  return;
+               }
+
+               std::string_view data{asio::buffer_cast<const char*>(connection->buffer->data()), chunk_size};
+               on_data(data);
+               connection->buffer->consume(chunk_size + 2); // Consume data + trailing CRLF
+
+               read_chunk_size(connection, std::move(on_data), std::move(on_error), std::move(on_disconnect));
             });
       }
 
@@ -725,7 +836,8 @@ namespace glz
          // Use async_read with transfer_at_least(1) - may read more data for efficiency
          asio::async_read(
             *connection->socket, *connection->buffer, asio::transfer_at_least(1),
-            [this, connection, on_data, on_error, on_disconnect](std::error_code ec, std::size_t /*bytes_transferred*/) {
+            [this, connection, on_data, on_error, on_disconnect](std::error_code ec,
+                                                                 std::size_t /*bytes_transferred*/) {
                if (ec || connection->should_stop) {
                   if (ec != asio::error::eof && ec != asio::error::operation_aborted && !connection->should_stop) {
                      on_error(ec);
