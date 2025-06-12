@@ -3,15 +3,15 @@
 
 #pragma once
 
+#include <asio.hpp>
 #include <atomic>
+#include <charconv>
 #include <chrono>
 #include <expected>
 #include <functional>
 #include <future>
 #include <glaze/glaze.hpp>
-#include <iostream>
 #include <source_location>
-#include <sstream>
 #include <thread>
 #include <unordered_map>
 
@@ -19,28 +19,336 @@
 #include "glaze/net/http_router.hpp"
 #include "glaze/net/websocket_connection.hpp"
 
-#if __has_include(<asio.hpp>) && !defined(GLZ_USE_BOOST_ASIO)
-#include <asio.hpp>
-#elif __has_include(<boost/asio.hpp>)
-#ifndef GLZ_USING_BOOST_ASIO
-#define GLZ_USING_BOOST_ASIO
-#endif
-#include <boost/asio.hpp>
-#else
-static_assert(false, "standalone or boost asio must be included to use glaze/ext/glaze_asio.hpp");
-#endif
-
 // Conditionally include SSL headers only when needed
 #ifdef GLZ_ENABLE_SSL
-#if __has_include(<asio.hpp>) && !defined(GLZ_USE_BOOST_ASIO)
 #include <asio/ssl.hpp>
-#elif __has_include(<boost/asio.hpp>)
-#include <boost/asio/ssl.hpp>
-#endif
 #endif
 
 namespace glz
 {
+   // Streaming connection handle for server-side streaming
+   struct streaming_connection : public std::enable_shared_from_this<streaming_connection>
+   {
+      using data_sent_handler = std::function<void(std::error_code)>;
+      using disconnect_handler = std::function<void()>;
+
+      streaming_connection(std::shared_ptr<asio::ip::tcp::socket> socket)
+         : socket_(socket), is_headers_sent_(false), is_closed_(false)
+      {}
+
+      // Send initial headers for streaming response
+      void send_headers(int status_code, const std::unordered_map<std::string, std::string>& headers = {},
+                        data_sent_handler handler = {})
+      {
+         if (is_headers_sent_) return;
+         is_headers_sent_ = true;
+
+         std::string response_str;
+         response_str.reserve(512);
+
+         response_str.append("HTTP/1.1 ");
+         response_str.append(std::to_string(status_code));
+         response_str.append(" ");
+         response_str.append(get_status_message(status_code));
+         response_str.append("\r\n");
+
+         // Add custom headers
+         for (const auto& [name, value] : headers) {
+            response_str.append(name);
+            response_str.append(": ");
+            response_str.append(value);
+            response_str.append("\r\n");
+         }
+
+         // Default headers for streaming
+         if (headers.find("Transfer-Encoding") == headers.end()) {
+            response_str.append("Transfer-Encoding: chunked\r\n");
+            chunked_encoding_ = true;
+         }
+         if (headers.find("Connection") == headers.end()) {
+            response_str.append("Connection: keep-alive\r\n");
+         }
+         if (headers.find("Cache-Control") == headers.end()) {
+            response_str.append("Cache-Control: no-cache\r\n");
+         }
+
+         response_str.append("\r\n");
+
+         auto buffer = std::make_shared<std::string>(std::move(response_str));
+         auto self = shared_from_this();
+
+         asio::async_write(*socket_, asio::buffer(*buffer), [self, buffer, handler](std::error_code ec, std::size_t) {
+            if (handler) handler(ec);
+         });
+      }
+
+      // Send a chunk of data
+      void send_chunk(std::string_view data, data_sent_handler handler = {})
+      {
+         if (is_closed_) return;
+
+         auto self = shared_from_this();
+
+         if (chunked_encoding_) {
+            // Format as HTTP chunk
+            std::string chunk;
+            chunk.reserve(data.size() + 20); // 20 is a good estimate for hex size + CRLFs
+
+            // Chunk size in hex, converted efficiently with std::to_chars
+            std::array<char, 16> size_buf{}; // 64-bit size_t in hex is at most 16 chars
+            if (auto [ptr, ec] = std::to_chars(size_buf.data(), size_buf.data() + size_buf.size(), data.size(), 16);
+                ec == std::errc()) {
+               chunk.append(std::string_view(size_buf.data(), ptr - size_buf.data()));
+            }
+            chunk.append("\r\n");
+            chunk.append(data);
+            chunk.append("\r\n");
+
+            auto buffer = std::make_shared<std::string>(std::move(chunk));
+            asio::async_write(*socket_, asio::buffer(*buffer),
+                              [self, buffer, handler](std::error_code ec, std::size_t) {
+                                 if (handler) handler(ec);
+                              });
+         }
+         else {
+            // Send raw data
+            auto buffer = std::make_shared<std::string>(data);
+            asio::async_write(*socket_, asio::buffer(*buffer),
+                              [self, buffer, handler](std::error_code ec, std::size_t) {
+                                 if (handler) handler(ec);
+                              });
+         }
+      }
+
+      // Send Server-Sent Event
+      void send_event(std::string_view event_type, std::string_view data, std::string_view id = {},
+                      data_sent_handler handler = {})
+      {
+         std::string sse_data;
+         sse_data.reserve(data.size() + 50);
+
+         if (!id.empty()) {
+            sse_data.append("id: ");
+            sse_data.append(id);
+            sse_data.append("\n");
+         }
+
+         if (!event_type.empty()) {
+            sse_data.append("event: ");
+            sse_data.append(event_type);
+            sse_data.append("\n");
+         }
+
+         sse_data.append("data: ");
+         sse_data.append(data);
+         sse_data.append("\n\n");
+
+         send_chunk(sse_data, handler);
+      }
+
+      // Send JSON as Server-Sent Event
+      template <class T>
+      void send_json_event(const T& data, std::string_view event_type = "message", std::string_view id = {},
+                           data_sent_handler handler = {})
+      {
+         std::string json_str;
+         auto ec = glz::write_json(data, json_str);
+         if (!ec) {
+            send_event(event_type, json_str, id, handler);
+         }
+         else if (handler) {
+            handler(std::make_error_code(std::errc::invalid_argument));
+         }
+      }
+
+      // Close the streaming connection
+      void close(disconnect_handler handler = {})
+      {
+         if (is_closed_) return;
+         is_closed_ = true;
+
+         auto self = shared_from_this();
+
+         if (chunked_encoding_) {
+            // Send final chunk
+            std::string final_chunk = "0\r\n\r\n";
+            auto buffer = std::make_shared<std::string>(std::move(final_chunk));
+
+            asio::async_write(*socket_, asio::buffer(*buffer), [self, buffer, handler](std::error_code, std::size_t) {
+               if (handler) handler();
+               std::error_code close_ec;
+               self->socket_->close(close_ec);
+            });
+         }
+         else {
+            if (handler) handler();
+            std::error_code ec;
+            socket_->close(ec);
+         }
+      }
+
+      // Set disconnect handler for client disconnection
+      void on_disconnect(disconnect_handler handler)
+      {
+         disconnect_handler_ = handler;
+         start_disconnect_detection();
+      }
+
+      // Check if connection is still alive
+      bool is_open() const { return socket_ && socket_->is_open() && !is_closed_; }
+
+      // Get remote endpoint info
+      std::string remote_address() const
+      {
+         if (socket_) {
+            try {
+               return socket_->remote_endpoint().address().to_string();
+            }
+            catch (...) {
+            }
+         }
+         return "";
+      }
+
+      uint16_t remote_port() const
+      {
+         if (socket_) {
+            try {
+               return socket_->remote_endpoint().port();
+            }
+            catch (...) {
+            }
+         }
+         return 0;
+      }
+
+      bool is_headers_sent() const { return is_headers_sent_; }
+
+      std::shared_ptr<asio::ip::tcp::socket> socket_;
+
+     private:
+      disconnect_handler disconnect_handler_;
+      bool is_headers_sent_;
+      bool is_closed_;
+      bool chunked_encoding_ = false;
+
+      void start_disconnect_detection()
+      {
+         if (!socket_ || is_closed_) return;
+
+         auto self = shared_from_this();
+         auto buffer = std::make_shared<std::array<uint8_t, 1>>();
+
+         // Try to read - will fail when client disconnects
+         socket_->async_receive(
+            asio::buffer(*buffer), asio::socket_base::message_peek, [self, buffer](std::error_code ec, std::size_t) {
+               if (ec && self->disconnect_handler_) {
+                  self->is_closed_ = true;
+                  self->disconnect_handler_();
+               }
+               else if (!ec && !self->is_closed_) {
+                  // Continue monitoring
+                  auto timer = std::make_shared<asio::steady_timer>(self->socket_->get_executor());
+                  timer->expires_after(std::chrono::seconds(1));
+                  timer->async_wait([self, timer](std::error_code) { self->start_disconnect_detection(); });
+               }
+            });
+      }
+
+      std::string_view get_status_message(int status_code)
+      {
+         switch (status_code) {
+         case 200:
+            return "OK";
+         case 201:
+            return "Created";
+         case 204:
+            return "No Content";
+         case 400:
+            return "Bad Request";
+         case 401:
+            return "Unauthorized";
+         case 403:
+            return "Forbidden";
+         case 404:
+            return "Not Found";
+         case 500:
+            return "Internal Server Error";
+         default:
+            return "Unknown";
+         }
+      }
+   };
+
+   // Enhanced response class with streaming support
+   struct streaming_response
+   {
+      std::shared_ptr<streaming_connection> stream;
+
+      streaming_response(std::shared_ptr<streaming_connection> conn) : stream(conn) {}
+
+      // Send headers and start streaming
+      streaming_response& start_stream(int status_code = 200,
+                                       const std::unordered_map<std::string, std::string>& headers = {})
+      {
+         if (stream) {
+            stream->send_headers(status_code, headers);
+         }
+         return *this;
+      }
+
+      // Send a chunk of data
+      streaming_response& send(std::string_view data)
+      {
+         if (stream) {
+            stream->send_chunk(data);
+         }
+         return *this;
+      }
+
+      // Send JSON data
+      template <class T>
+      streaming_response& send_json(const T& data)
+      {
+         if (stream) {
+            std::string json_str;
+            auto ec = glz::write_json(data, json_str);
+            if (!ec) {
+               stream->send_chunk(json_str);
+            }
+         }
+         return *this;
+      }
+
+      // Send Server-Sent Event
+      streaming_response& send_event(std::string_view event_type, std::string_view data, std::string_view id = {})
+      {
+         if (stream) {
+            stream->send_event(event_type, data, id);
+         }
+         return *this;
+      }
+
+      // Helper for SSE setup
+      streaming_response& as_event_stream()
+      {
+         return start_stream(200, {{"Content-Type", "text/event-stream"},
+                                   {"Cache-Control", "no-cache"},
+                                   {"Access-Control-Allow-Origin", "*"}});
+      }
+
+      // Close the stream
+      void close()
+      {
+         if (stream) {
+            stream->close();
+         }
+      }
+   };
+
+   // Handler types for streaming
+   using streaming_handler = std::function<void(request&, streaming_response&)>;
+
    // Server implementation using non-blocking asio with WebSocket support
    template <bool EnableTLS = false>
    struct http_server
@@ -189,6 +497,24 @@ namespace glz
 
       inline http_router& patch(std::string_view path, handler handle) { return root_router.patch(path, handle); }
 
+      // Register streaming route
+      inline http_server& stream(http_method method, std::string_view path, streaming_handler handle)
+      {
+         streaming_handlers_[std::string(path)][method] = std::move(handle);
+         return *this;
+      }
+
+      // Convenience methods for streaming
+      inline http_server& stream_get(std::string_view path, streaming_handler handle)
+      {
+         return stream(http_method::GET, path, std::move(handle));
+      }
+
+      inline http_server& stream_post(std::string_view path, streaming_handler handle)
+      {
+         return stream(http_method::POST, path, std::move(handle));
+      }
+
       inline http_server& on_error(error_handler handle)
       {
          error_handler = std::move(handle);
@@ -295,6 +621,7 @@ namespace glz
       bool running = false;
       glz::error_handler error_handler;
       std::unordered_map<std::string, std::shared_ptr<websocket_server>> websocket_handlers_;
+      std::unordered_map<std::string, std::unordered_map<http_method, streaming_handler>> streaming_handlers_;
 
 #ifdef GLZ_ENABLE_SSL
       std::conditional_t<EnableTLS, std::unique_ptr<asio::ssl::context>, std::monostate> ssl_context;
@@ -304,7 +631,7 @@ namespace glz
       {
          acceptor->async_accept([this](std::error_code ec, asio::ip::tcp::socket socket) {
             if (!ec) {
-               // Process the connection in a separate coroutine
+               // Process the connection
                process_request(std::move(socket));
             }
             else {
@@ -323,135 +650,124 @@ namespace glz
          // Capture socket in a shared_ptr for async operations
          auto socket_ptr = std::make_shared<asio::ip::tcp::socket>(std::move(socket));
          auto remote_endpoint = socket_ptr->remote_endpoint();
-
-         // Buffer for the request
          auto buffer = std::make_shared<asio::streambuf>();
 
-         // Read the request asynchronously
          asio::async_read_until(
             *socket_ptr, *buffer, "\r\n\r\n",
             [this, socket_ptr, buffer, remote_endpoint](std::error_code ec, std::size_t /*bytes_transferred*/) {
                if (ec) {
-                  error_handler(ec, std::source_location::current());
+                  // EOF is a normal disconnect, not a server error
+                  if (ec != asio::error::eof) {
+                     error_handler(ec, std::source_location::current());
+                  }
                   return;
                }
 
-               // Parse the request headers
-               std::istream request_stream(buffer.get());
-               std::string request_line;
-               std::getline(request_stream, request_line);
+               const auto data_size = buffer->size();
+               const char* data_ptr = asio::buffer_cast<const char*>(buffer->data());
+               std::string_view request_view(data_ptr, data_size);
 
-               // Remove carriage return if present
-               if (!request_line.empty() && request_line.back() == '\r') {
-                  request_line.pop_back();
-               }
-
-               // Parse method, target, and HTTP version using manual parsing
-               if (request_line.empty()) {
+               size_t headers_end_pos = request_view.find("\r\n\r\n");
+               if (headers_end_pos == std::string_view::npos) {
                   send_error_response(socket_ptr, 400, "Bad Request");
                   return;
                }
+               std::string_view headers_part = request_view.substr(0, headers_end_pos);
+               size_t body_start_offset = headers_end_pos + 4;
 
-               // Find the first space to separate method from target
+               // Parse request line
+               size_t request_line_end_pos = headers_part.find("\r\n");
+               if (request_line_end_pos == std::string_view::npos) {
+                  request_line_end_pos = headers_part.length();
+               }
+               std::string_view request_line = headers_part.substr(0, request_line_end_pos);
+               headers_part.remove_prefix(request_line_end_pos + 2); // +2 for \r\n
+
+               // Parse method, target, and HTTP version from the request line
                size_t first_space = request_line.find(' ');
-               if (first_space == std::string::npos) {
+               if (first_space == std::string_view::npos) {
+                  send_error_response(socket_ptr, 400, "Bad Request");
+                  return;
+               }
+               std::string_view method_sv = request_line.substr(0, first_space);
+               if (method_sv.empty() || !std::all_of(method_sv.begin(), method_sv.end(),
+                                                     [](char c) { return std::isalnum(c) || c == '_'; })) {
                   send_error_response(socket_ptr, 400, "Bad Request");
                   return;
                }
 
-               // Extract method
-               std::string method_str = request_line.substr(0, first_space);
-               // Validate method (must be only word characters: [a-zA-Z0-9_])
-               if (method_str.empty() || !std::all_of(method_str.begin(), method_str.end(),
-                                                      [](char c) { return std::isalnum(c) || c == '_'; })) {
-                  send_error_response(socket_ptr, 400, "Bad Request");
-                  return;
-               }
-
-               // Find the second space to separate target from HTTP version
                size_t second_space = request_line.find(' ', first_space + 1);
-               if (second_space == std::string::npos) {
+               if (second_space == std::string_view::npos) {
+                  send_error_response(socket_ptr, 400, "Bad Request");
+                  return;
+               }
+               std::string_view target_sv = request_line.substr(first_space + 1, second_space - first_space - 1);
+               if (target_sv.empty() || target_sv.find(' ') != std::string_view::npos) {
                   send_error_response(socket_ptr, 400, "Bad Request");
                   return;
                }
 
-               // Extract target
-               std::string target = request_line.substr(first_space + 1, second_space - first_space - 1);
-               if (target.empty() || target.find(' ') != std::string::npos) {
+               std::string_view http_version_part = request_line.substr(second_space + 1);
+               if (http_version_part.size() > 0 && http_version_part.back() == '\r') {
+                  http_version_part.remove_suffix(1);
+               }
+               if (http_version_part.size() < 7 || http_version_part.rfind("HTTP/", 0) != 0) {
+                  send_error_response(socket_ptr, 400, "Bad Request");
+                  return;
+               }
+               std::string_view version_number = http_version_part.substr(5);
+               size_t dot_pos = version_number.find('.');
+               if (dot_pos == std::string_view::npos || dot_pos == 0 || dot_pos == version_number.length() - 1) {
+                  send_error_response(socket_ptr, 400, "Bad Request");
+                  return;
+               }
+               std::string_view major_v = version_number.substr(0, dot_pos);
+               std::string_view minor_v = version_number.substr(dot_pos + 1);
+               if (major_v.empty() || !std::all_of(major_v.begin(), major_v.end(), ::isdigit) || minor_v.empty() ||
+                   !std::all_of(minor_v.begin(), minor_v.end(), ::isdigit)) {
                   send_error_response(socket_ptr, 400, "Bad Request");
                   return;
                }
 
-               // Extract HTTP version
-               std::string http_version_part = request_line.substr(second_space + 1);
-
-               // Validate HTTP version format
-               if (http_version_part.size() < 7 || http_version_part.substr(0, 5) != "HTTP/") {
-                  send_error_response(socket_ptr, 400, "Bad Request");
-                  return;
-               }
-
-               // Extract version number and verify format (must be digit.digit)
-               std::string version_number = http_version_part.substr(5);
-               size_t decimal_point = version_number.find('.');
-               if (decimal_point == std::string::npos || decimal_point == 0 ||
-                   decimal_point == version_number.length() - 1) {
-                  send_error_response(socket_ptr, 400, "Bad Request");
-                  return;
-               }
-
-               // Verify major and minor version numbers are digits
-               std::string major_version = version_number.substr(0, decimal_point);
-               std::string minor_version = version_number.substr(decimal_point + 1);
-
-               if (major_version.empty() || !std::all_of(major_version.begin(), major_version.end(), ::isdigit) ||
-                   minor_version.empty() || !std::all_of(minor_version.begin(), minor_version.end(), ::isdigit)) {
-                  send_error_response(socket_ptr, 400, "Bad Request");
-                  return;
-               }
-
-               auto method_opt = from_string(method_str);
+               auto method_opt = from_string(std::string(method_sv));
                if (!method_opt) {
-                  // Unsupported method
                   send_error_response(socket_ptr, 501, "Not Implemented");
                   return;
                }
+               std::string target{target_sv};
 
                // Parse headers
                std::unordered_map<std::string, std::string> headers;
-               std::string header_line;
-               while (std::getline(request_stream, header_line) && header_line != "\r") {
-                  if (header_line.back() == '\r') {
-                     header_line.pop_back();
-                  }
+               while (!headers_part.empty()) {
+                  size_t line_end = headers_part.find("\r\n");
+                  std::string_view line = headers_part.substr(0, line_end);
 
-                  auto colon_pos = header_line.find(':');
-                  if (colon_pos != std::string::npos) {
-                     std::string name = header_line.substr(0, colon_pos);
-                     std::string value = header_line.substr(colon_pos + 1);
-
-                     // Trim leading whitespace from value
-                     value.erase(0, value.find_first_not_of(" \t"));
-
-                     // Convert header name to lowercase for easier matching
+                  auto colon_pos = line.find(':');
+                  if (colon_pos != std::string_view::npos) {
+                     std::string_view name_sv = line.substr(0, colon_pos);
+                     std::string_view value_sv = line.substr(colon_pos + 1);
+                     value_sv.remove_prefix(std::min(value_sv.find_first_not_of(" \t"), value_sv.size()));
+                     std::string name(name_sv);
                      std::transform(name.begin(), name.end(), name.begin(), ::tolower);
-
-                     headers[name] = value;
+                     headers[name] = std::string(value_sv);
                   }
+
+                  if (line_end == std::string_view::npos) break;
+                  headers_part.remove_prefix(line_end + 2);
                }
 
-               // Check if this is a WebSocket upgrade request
+               // Consume the parsed headers from the buffer
+               buffer->consume(body_start_offset);
+
                if (is_websocket_upgrade(headers)) {
                   handle_websocket_upgrade(socket_ptr, *method_opt, target, headers, remote_endpoint);
                   return;
                }
 
-               // Check if there's a Content-Length header
                std::size_t content_length = 0;
-               auto content_length_it = headers.find("content-length");
-               if (content_length_it != headers.end()) {
+               if (auto it = headers.find("content-length"); it != headers.end()) {
                   try {
-                     content_length = std::stoul(content_length_it->second);
+                     content_length = std::stoul(it->second);
                   }
                   catch (const std::exception&) {
                      send_error_response(socket_ptr, 400, "Bad Request");
@@ -459,52 +775,34 @@ namespace glz
                   }
                }
 
-               // Read the request body if needed
                if (content_length > 0) {
-                  // Create a string for the body with proper capacity
                   std::string body;
                   body.reserve(content_length);
+                  // Append what's already in the buffer
+                  const size_t initial_body_size = std::min(content_length, buffer->size());
+                  body.append(asio::buffer_cast<const char*>(buffer->data()), initial_body_size);
+                  buffer->consume(initial_body_size);
 
-                  // Create a stream for reading from the buffer
-                  std::istream request_stream(buffer.get());
-
-                  // Calculate how much of the body we've already read
-                  std::size_t available = buffer->in_avail();
-                  std::size_t to_read = std::min(available, content_length);
-
-                  if (to_read > 0) {
-                     // Read what's already in the buffer
-                     body.resize(to_read);
-                     request_stream.read(&body[0], to_read);
-                  }
-
-                  if (to_read < content_length) {
-                     // Need to read more data
-                     asio::async_read(*socket_ptr, *buffer, asio::transfer_exactly(content_length - to_read),
+                  if (body.length() < content_length) {
+                     asio::async_read(*socket_ptr, *buffer, asio::transfer_exactly(content_length - body.length()),
                                       [this, socket_ptr, buffer, method_opt, target, headers, remote_endpoint,
-                                       content_length, body = std::move(body),
-                                       to_read](std::error_code ec, std::size_t /*bytes_transferred*/) mutable {
+                                       body = std::move(body)](std::error_code ec, size_t) mutable {
                                          if (ec) {
                                             error_handler(ec, std::source_location::current());
                                             return;
                                          }
-
-                                         // Read the remaining data
-                                         std::istream request_stream(buffer.get());
-                                         body.resize(content_length);
-                                         request_stream.read(&body[to_read], content_length - to_read);
-
+                                         // Append newly read data
+                                         body.append(asio::buffer_cast<const char*>(buffer->data()), buffer->size());
+                                         buffer->consume(buffer->size());
                                          process_full_request(socket_ptr, *method_opt, target, headers, std::move(body),
                                                               remote_endpoint);
                                       });
                   }
                   else {
-                     // We already have the full body
                      process_full_request(socket_ptr, *method_opt, target, headers, std::move(body), remote_endpoint);
                   }
                }
                else {
-                  // No body, process the request immediately
                   process_full_request(socket_ptr, *method_opt, target, headers, "", remote_endpoint);
                }
             });
@@ -555,11 +853,60 @@ namespace glz
          ws_conn->start(req);
       }
 
+      inline void handle_streaming_request(std::shared_ptr<asio::ip::tcp::socket> socket, http_method method,
+                                           const std::string& target,
+                                           const std::unordered_map<std::string, std::string>& headers,
+                                           std::string body, asio::ip::tcp::endpoint remote_endpoint,
+                                           const streaming_handler& handler)
+      {
+         // Create request object
+         request req;
+         req.method = method;
+         req.target = target;
+         req.headers = headers;
+         req.body = std::move(body);
+         req.remote_ip = remote_endpoint.address().to_string();
+         req.remote_port = remote_endpoint.port();
+
+         // Create streaming connection
+         auto stream_conn = std::make_shared<streaming_connection>(socket);
+         streaming_response stream_res(stream_conn);
+
+         try {
+            // Call the streaming handler
+            handler(req, stream_res);
+         }
+         catch (const std::exception& e) {
+            // If handler throws immediately, try to send an error response.
+            if (!stream_conn->is_headers_sent()) {
+               stream_conn->send_headers(500, {{"Content-Type", "text/plain"}});
+               stream_conn->send_chunk("Internal Server Error");
+            }
+            stream_conn->close();
+            // Log the error
+            error_handler(std::make_error_code(std::errc::invalid_argument), std::source_location::current());
+         }
+      }
+
       inline void process_full_request(std::shared_ptr<asio::ip::tcp::socket> socket, http_method method,
                                        const std::string& target,
                                        const std::unordered_map<std::string, std::string>& headers, std::string body,
                                        asio::ip::tcp::endpoint remote_endpoint)
       {
+         // Check for a streaming handler first. This performs an exact match on the path,
+         // so parameterized streaming routes are not supported, which is consistent
+         // with the WebSocket implementation.
+         auto handler_it = streaming_handlers_.find(target);
+         if (handler_it != streaming_handlers_.end()) {
+            auto method_it = handler_it->second.find(method);
+            if (method_it != handler_it->second.end()) {
+               // Found a streaming handler, delegate to it and exit.
+               handle_streaming_request(socket, method, target, headers, std::move(body), remote_endpoint,
+                                        method_it->second);
+               return;
+            }
+         }
+
          // Create the request object
          request request;
          request.method = method;
@@ -720,6 +1067,77 @@ namespace glz
          return buf;
       }
    };
+
+   // Utility functions for common streaming patterns
+   namespace streaming_utils
+   {
+      // Create a periodic data sender
+      template <typename T>
+      void send_periodic_data(std::shared_ptr<streaming_connection> conn, std::function<T()> data_generator,
+                              std::chrono::milliseconds interval, size_t max_events = 0)
+      {
+         auto counter = std::make_shared<size_t>(0);
+         if (!conn || !conn->is_open()) return;
+         auto timer = std::make_shared<asio::steady_timer>(conn->socket_->get_executor());
+
+         std::function<void()> send_next = [=]() mutable {
+            if (!conn->is_open() || (max_events > 0 && *counter >= max_events)) {
+               conn->close();
+               return;
+            }
+
+            try {
+               T data = data_generator();
+               conn->send_json_event(data, "data", std::to_string(*counter), [=](std::error_code ec) mutable {
+                  if (!ec) {
+                     (*counter)++;
+                     timer->expires_after(interval);
+                     timer->async_wait([=](std::error_code) { send_next(); });
+                  }
+                  else {
+                     conn->close();
+                  }
+               });
+            }
+            catch (const std::exception&) {
+               conn->close();
+            }
+         };
+
+         send_next();
+      }
+
+      // Create a data stream from a collection
+      template <typename Container>
+      void stream_collection(std::shared_ptr<streaming_connection> conn, const Container& data,
+                             std::chrono::milliseconds delay_between_items = std::chrono::milliseconds(10))
+      {
+         auto it = std::make_shared<typename Container::const_iterator>(data.begin());
+         auto end_it = data.end();
+         if (!conn || !conn->is_open()) return;
+         auto timer = std::make_shared<asio::steady_timer>(conn->socket_->get_executor());
+
+         std::function<void()> send_next = [=]() mutable {
+            if (!conn->is_open() || *it == end_it) {
+               conn->close();
+               return;
+            }
+
+            conn->send_json_event(**it, "item", "", [=](std::error_code ec) mutable {
+               if (!ec) {
+                  ++(*it);
+                  timer->expires_after(delay_between_items);
+                  timer->async_wait([=](std::error_code) { send_next(); });
+               }
+               else {
+                  conn->close();
+               }
+            });
+         };
+
+         send_next();
+      }
+   } // namespace streaming_utils
 
    // Alias for HTTPS server
    using https_server = http_server<true>;

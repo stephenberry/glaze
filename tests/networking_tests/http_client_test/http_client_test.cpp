@@ -135,6 +135,50 @@ class working_test_server
          std::this_thread::sleep_for(std::chrono::milliseconds(50));
          res.status(200).body("Slow response");
       });
+
+      // Add a streaming endpoint for testing the client
+      server_.stream_get("/stream-test", [](request&, streaming_response& res) {
+         res.start_stream(200, {{"Content-Type", "text/plain"}});
+         // The `send` calls are async, so they don't block.
+         // They queue writes that the client will receive as a stream.
+         res.send("Hello, ");
+         res.send("Streaming ");
+         res.send("World!");
+         res.close();
+      });
+
+      // Endpoint that sends data periodically, for testing client disconnect
+      server_.stream_get("/slow-stream", [](request&, streaming_response& res) {
+         res.start_stream(200, {{"Content-Type", "text/plain"}});
+         auto conn = res.stream;
+
+         auto timer = std::make_shared<asio::steady_timer>(conn->socket_->get_executor());
+         auto counter = std::make_shared<int>(0);
+
+         std::function<void(const std::error_code&)> send_data;
+         send_data = [conn, timer, counter, send_data](const std::error_code& ec) {
+            if (ec || !conn->is_open() || *counter >= 10) {
+               if (conn->is_open()) conn->close();
+               return;
+            }
+
+            conn->send_chunk("chunk" + std::to_string((*counter)++) + ";",
+                             [conn, timer, send_data](std::error_code write_ec) {
+                                if (write_ec || !conn->is_open()) {
+                                   if (conn->is_open()) conn->close();
+                                   return;
+                                }
+                                timer->expires_after(std::chrono::milliseconds(50));
+                                timer->async_wait(send_data);
+                             });
+         };
+         timer->async_wait(send_data);
+      });
+
+      // Endpoint that immediately returns an error
+      server_.stream_get("/stream-error", [](request&, streaming_response& res) {
+         res.start_stream(403).close(); // e.g. Forbidden
+      });
    }
 
    bool is_server_ready()
@@ -407,6 +451,172 @@ suite working_http_tests = [] {
 
       server.stop();
       std::this_thread::sleep_for(std::chrono::milliseconds(100)); // Extra time for concurrent cleanup
+   };
+};
+
+// Test suite for the main glz::http_client, including streaming
+suite glz_http_client_tests = [] {
+   "basic_streaming_get"_test = [] {
+      working_test_server server;
+      expect(server.start()) << "Server should start\n";
+
+      glz::http_client client;
+
+      std::string received_data;
+      std::mutex data_mutex;
+      std::atomic<bool> connected = false;
+      std::atomic<int> error_count = 0;
+      std::promise<void> disconnect_promise;
+      auto disconnect_future = disconnect_promise.get_future();
+
+      auto on_data = [&](std::string_view data) {
+         std::lock_guard lock(data_mutex);
+         received_data.append(data);
+      };
+      auto on_error = [&](std::error_code ec) {
+         if (ec && ec != asio::error::eof && ec != asio::error::operation_aborted) {
+            error_count++;
+         }
+      };
+      auto on_connect = [&](const response& headers) {
+         expect(headers.status_code == 200);
+         connected = true;
+      };
+      auto on_disconnect = [&]() { disconnect_promise.set_value(); };
+
+      auto conn = client.stream_request({.url = server.base_url() + "/stream-test",
+                                         .on_data = on_data,
+                                         .on_error = on_error,
+                                         .method = "GET",
+                                         .on_connect = on_connect,
+                                         .on_disconnect = on_disconnect});
+      expect(conn != nullptr) << "Connection handle should not be null\n";
+
+      // Wait for the stream to complete
+      auto status = disconnect_future.wait_for(std::chrono::seconds(2));
+      expect(status == std::future_status::ready) << "Stream did not disconnect in time\n";
+
+      expect(connected == true) << "on_connect was not called";
+      expect(error_count == 0) << "on_error was called unexpectedly";
+
+      std::string final_data;
+      {
+         std::lock_guard lock(data_mutex);
+         final_data = received_data;
+      }
+      expect(final_data == "Hello, Streaming World!") << "Received data mismatch. Got: " << final_data;
+
+      server.stop();
+      std::this_thread::sleep_for(std::chrono::milliseconds(50));
+   };
+
+   "client_disconnects_stream"_test = [] {
+      working_test_server server;
+      expect(server.start()) << "Server should start\n";
+
+      glz::http_client client;
+
+      std::string received_data;
+      std::mutex data_mutex;
+      std::atomic<bool> connected = false;
+      std::atomic<int> error_count = 0;
+      std::promise<void> disconnect_promise;
+      auto disconnect_future = disconnect_promise.get_future();
+      std::atomic<int> data_chunks_received = 0;
+
+      auto on_data = [&](std::string_view data) {
+         std::lock_guard lock(data_mutex);
+         received_data.append(data);
+         data_chunks_received++;
+      };
+      auto on_error = [&](std::error_code ec) {
+         if (ec && ec != asio::error::eof && ec != asio::error::operation_aborted) {
+            error_count++;
+         }
+      };
+      auto on_connect = [&](const response& headers) {
+         expect(headers.status_code == 200);
+         connected = true;
+      };
+      auto on_disconnect = [&]() { disconnect_promise.set_value(); };
+
+      auto conn = client.stream_request({.url = server.base_url() + "/slow-stream",
+                                         .on_data = on_data,
+                                         .on_error = on_error,
+                                         .method = "GET",
+                                         .on_connect = on_connect,
+                                         .on_disconnect = on_disconnect});
+      expect(conn != nullptr) << "Connection handle should not be null\n";
+
+      // Wait until we have received at least one chunk to ensure the stream is active
+      while (data_chunks_received.load() < 2) {
+         std::this_thread::sleep_for(std::chrono::milliseconds(10));
+         if (disconnect_future.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
+            break; // Exit if disconnected prematurely
+         }
+      }
+
+      // Now, disconnect the stream from the client-side
+      conn->disconnect();
+
+      // Wait for the on_disconnect handler to be called
+      auto status = disconnect_future.wait_for(std::chrono::seconds(2));
+      expect(status == std::future_status::ready) << "Stream did not disconnect in time\n";
+
+      expect(connected == true) << "on_connect was not called";
+      expect(error_count == 0) << "on_error was called unexpectedly";
+
+      // We should have received some data, but not all 10 chunks
+      int chunks = data_chunks_received.load();
+      expect(chunks > 0 && chunks < 10) << "Should receive some but not all data chunks. Received: " << chunks << "\n";
+
+      server.stop();
+      std::this_thread::sleep_for(std::chrono::milliseconds(50));
+   };
+
+   "streaming_request_with_http_error"_test = [] {
+      working_test_server server;
+      expect(server.start()) << "Server should start\n";
+
+      glz::http_client client;
+
+      std::atomic<bool> connected = false;
+      std::atomic<bool> data_received = false;
+      std::atomic<bool> error_received = false;
+      std::promise<void> disconnect_promise;
+      auto disconnect_future = disconnect_promise.get_future();
+
+      auto on_data = [&](std::string_view) { data_received = true; };
+      auto on_error = [&](std::error_code ec) {
+         // The client should translate the 4xx/5xx status into this error.
+         expect(ec == std::errc::connection_refused);
+         error_received = true;
+      };
+      auto on_connect = [&](const response& headers) {
+         // on_connect is called as soon as headers are parsed, even error ones.
+         expect(headers.status_code == 403);
+         connected = true;
+      };
+      auto on_disconnect = [&]() { disconnect_promise.set_value(); };
+
+      auto conn = client.stream_request({.url = server.base_url() + "/stream-error",
+                                         .on_data = on_data,
+                                         .on_error = on_error,
+                                         .method = "GET",
+                                         .on_connect = on_connect,
+                                         .on_disconnect = on_disconnect});
+      expect(conn != nullptr);
+
+      // Wait for the interaction to complete
+      auto status = disconnect_future.wait_for(std::chrono::seconds(2));
+      expect(status == std::future_status::ready) << "Disconnect was not called on error\n";
+
+      expect(connected == true) << "on_connect should be called with error headers\n";
+      expect(error_received == true) << "on_error was not called for HTTP error status\n";
+      expect(data_received == false) << "on_data should not be called on error\n";
+
+      server.stop();
+      std::this_thread::sleep_for(std::chrono::milliseconds(50));
    };
 };
 

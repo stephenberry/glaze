@@ -137,6 +137,39 @@ void post_json_async(
 );
 ```
 
+## Streaming Requests
+
+The HTTP client supports streaming requests, which allow you to receive data in chunks.
+
+```cpp
+template<typename OnData, typename OnError, typename OnConnect, typename OnDisconnect>
+stream_connection::pointer stream_request(stream_options options);
+```
+
+The `stream_options` struct contains the following fields:
+
+```cpp
+struct stream_options {
+    std::string url;
+    std::string method = "GET";
+    std::unordered_map<std::string, std::string> headers;
+    OnData on_data;
+    OnError on_error;
+    OnConnect on_connect;
+    OnDisconnect on_disconnect;
+};
+```
+
+-   `url`: The URL to request.
+-   `method`: The HTTP method to use (default: "GET").
+-   `headers`: The HTTP headers to send.
+-   `on_data`: A callback that's called when data is received.
+-   `on_error`: A callback that's called when an error occurs.
+-   `on_connect`: A callback that's called when the connection is established and the headers are received.
+-   `on_disconnect`: A callback that's called when the connection is closed.
+
+The `stream_connection::pointer` object contains a `disconnect()` method that can be used to close the connection.
+
 ## Response Structure
 
 The `response` object contains:
@@ -151,7 +184,7 @@ struct response {
 
 ## Error Handling
 
-The HTTP client returns a `std::expected` object, which contains either the response or an error code. You can check for errors using the `has_value()` method or by accessing the `error()` method.
+The HTTP client returns a `std::expected` object for synchronous and asynchronous requests, which contains either the response or an error code. You can check for errors using the `has_value()` method or by accessing the `error()` method.
 
 ```cpp
 auto response = client.get("https://example.com");
@@ -164,6 +197,8 @@ if (response) {
     std::cerr << "Error: " << ec.message() << std::endl;
 }
 ```
+
+For streaming requests, errors are reported via the `on_error` callback in the `stream_options` struct. The client translates HTTP error statuses (4xx/5xx) into `std::errc::connection_refused` errors.
 
 ## Examples
 
@@ -336,5 +371,5 @@ if (url_parts) {
 
 - The client automatically pools connections for better performance when making multiple requests to the same host
 - Multiple worker threads are used internally to handle concurrent requests
-- The connection pool has a configurable limit (default: 10 connections per host)
+- The connection pool has a configurable limit (default: 10 connections per host), which can be adjusted using the `http_client::options::max_connections` option.
 - Connections are automatically returned to the pool when requests complete successfully
