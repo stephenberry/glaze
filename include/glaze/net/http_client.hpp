@@ -22,6 +22,21 @@
 
 namespace glz
 {
+   inline int strncasecmp(const char* s1, const char* s2, size_t n) {
+      for (size_t i = 0; i < n; ++i) {
+         unsigned char c1 = static_cast<unsigned char>(s1[i]);
+         unsigned char c2 = static_cast<unsigned char>(s2[i]);
+         if (c1 == '\0' || c2 == '\0') {
+            return c1 - c2;
+         }
+         int diff = std::tolower(c1) - std::tolower(c2);
+         if (diff != 0) {
+            return diff;
+         }
+      }
+      return 0;
+   }
+   
    // Streaming strategy options
    enum class stream_read_strategy {
       bulk_transfer, // Deliver larger chunks, better throughput (default)
@@ -1136,29 +1151,33 @@ namespace glz
       {
          auto buffer = std::make_shared<asio::streambuf>();
 
-         asio::async_read_until(*socket, *buffer, "\r\n\r\n",
-                                [this, socket, buffer, url, handler = std::forward<CompletionHandler>(handler)](
-                                   std::error_code ec, std::size_t) mutable {
-                                   if (ec) {
-                                      handler(std::unexpected(ec));
-                                      return;
-                                   }
-
-                                   parse_and_read_body(socket, buffer, url, std::move(handler));
-                                });
+         asio::async_read_until(
+            *socket, *buffer, "\r\n\r\n",
+            [this, socket, buffer, url, handler = std::forward<CompletionHandler>(handler)](std::error_code ec, std::size_t bytes_transferred) mutable {
+               if (ec) {
+                  handler(std::unexpected(ec));
+                  return;
+               }
+               // Pass the known header size to the parsing function
+               parse_and_read_body(socket, buffer, bytes_transferred, url, std::move(handler));
+            });
       }
 
       template <typename CompletionHandler>
       void parse_and_read_body(std::shared_ptr<asio::ip::tcp::socket> socket, std::shared_ptr<asio::streambuf> buffer,
+                               size_t header_size, // <-- NEW: The size of the header block from async_read_until
                                const url_parts& url, CompletionHandler&& handler)
       {
-         std::istream response_stream(buffer.get());
-         std::string status_line;
-         std::getline(response_stream, status_line);
+         std::string_view header_section{asio::buffer_cast<const char*>(buffer->data()), header_size};
 
-         if (!status_line.empty() && status_line.back() == '\r') {
-            status_line.pop_back();
+         // Parse the status line from the view.
+         auto line_end = header_section.find("\r\n");
+         if (line_end == std::string_view::npos) {
+            handler(std::unexpected(std::make_error_code(std::errc::protocol_error)));
+            return;
          }
+         std::string_view status_line = header_section.substr(0, line_end);
+         header_section.remove_prefix(line_end + 2); // Move the view past the status line and its CRLF
 
          auto parsed_status = parse_http_status_line(status_line);
          if (!parsed_status) {
@@ -1166,28 +1185,41 @@ namespace glz
             return;
          }
 
-         // Parse headers
+         // Parse all header fields from the view.
          std::unordered_map<std::string, std::string> response_headers;
-         std::string header_line;
          size_t content_length = 0;
-         while (std::getline(response_stream, header_line) && header_line != "\r") {
-            if (header_line.back() == '\r') {
-               header_line.pop_back();
+         // The header section ends with an empty line ("\r\n"), which means our view will start with it.
+         while (!header_section.starts_with("\r\n")) {
+            line_end = header_section.find("\r\n");
+            if (line_end == std::string_view::npos) {
+               handler(std::unexpected(std::make_error_code(std::errc::protocol_error)));
+               return;
             }
+            std::string_view header_line = header_section.substr(0, line_end);
+            header_section.remove_prefix(line_end + 2);
 
             auto colon_pos = header_line.find(':');
             if (colon_pos != std::string::npos) {
-               std::string name = header_line.substr(0, colon_pos);
-               std::string value = header_line.substr(colon_pos + 1);
-               value.erase(0, value.find_first_not_of(" \t"));
-               if (name == "Content-Length") {
-                  content_length = std::stoull(value);
+               std::string_view name = header_line.substr(0, colon_pos);
+               // Skip past ':' and any leading whitespace on the value.
+               size_t value_start = header_line.find_first_not_of(" \t", colon_pos + 1);
+               std::string_view value = (value_start != std::string::npos) ? header_line.substr(value_start) : "";
+
+               // A case-insensitive comparison is more robust for header names.
+               if (name.size() == 14 && (name[0] == 'C' || name[0] == 'c') &&
+                   glz::strncasecmp(name.data(), "Content-Length", 14) == 0) {
+                  std::from_chars(value.data(), value.data() + value.size(), content_length);
                }
-               response_headers[name] = value;
+               // Store the header, creating strings only at the last moment.
+               response_headers.emplace(name, value);
             }
          }
 
-         // Read response body
+         // Consume the entire header block from the streambuf.
+         // This efficiently discards the header data we've just parsed, leaving only body data.
+         buffer->consume(header_size);
+
+         // Read the rest of the body, if any is still needed.
          size_t body_already_in_buffer = buffer->size();
          size_t remaining_to_read =
             (content_length > body_already_in_buffer) ? (content_length - body_already_in_buffer) : 0;
@@ -1197,13 +1229,15 @@ namespace glz
             [this, socket, buffer, url, status_code = parsed_status->status_code,
              response_headers = std::move(response_headers),
              handler = std::forward<CompletionHandler>(handler)](std::error_code ec, std::size_t) mutable {
-               // EOF is expected for HTTP/1.1 with Connection: close
+               // EOF is expected if the server closes the connection.
                if (ec && ec != asio::error::eof) {
                   handler(std::unexpected(ec));
                   return;
                }
 
-               std::string body{std::istreambuf_iterator<char>(buffer.get()), std::istreambuf_iterator<char>()};
+               // Directly construct the string from the buffer's contiguous memory.
+               // This is significantly faster than using std::istreambuf_iterator.
+               std::string body(asio::buffer_cast<const char*>(buffer->data()), buffer->size());
 
                response resp;
                resp.status_code = status_code;
@@ -1212,7 +1246,8 @@ namespace glz
 
                // Return connection to pool if it's still usable
                auto connection_header = resp.response_headers.find("Connection");
-               if (connection_header == resp.response_headers.end() || connection_header->second != "close") {
+               if (connection_header == resp.response_headers.end() ||
+                   connection_header->second.find("close") == std::string::npos) {
                   connection_pool->return_connection(url.host, url.port, socket);
                }
 
