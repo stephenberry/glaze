@@ -89,7 +89,7 @@ suite http_router_async_tests = [] {
 
       // Register async route
       router.get_async("/async-test",
-                       [&route_executed](const glz::request& req, glz::response& res) -> std::future<void> {
+                       [&route_executed](const glz::request&, glz::response& res) -> std::future<void> {
                           return std::async(std::launch::async, [&route_executed, &res]() {
                              route_executed = true;
                              res.json({{"async", true}, {"message", "Success"}});

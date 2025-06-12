@@ -3,7 +3,6 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
-#include <sstream>
 
 #include "glaze/glaze.hpp"
 #include "glaze/net/http_server.hpp"
@@ -176,19 +175,26 @@ struct glz::meta<PostService>
    static constexpr auto value = object(&T::getAllPosts, &T::createPost);
 };
 
-// Helper function to read files
 std::string read_file(const std::string& path)
 {
    std::string full_path = std::string{SOURCE_DIR} + "/" + path;
-   std::ifstream file(full_path);
+   std::ifstream file(full_path, std::ios::ate | std::ios::binary);
+   
    if (!file.is_open()) {
       std::cerr << "Failed to open " << full_path << ", current directory: " << std::filesystem::current_path().string()
-                << "\n";
+      << "\n";
       return "";
    }
-   std::stringstream buffer;
-   buffer << file.rdbuf();
-   return buffer.str();
+   // Get the file size from the current position (since we used std::ios::ate)
+   std::streamsize size = file.tellg();
+   file.seekg(0, std::ios::beg);
+   
+   std::string buffer;
+   buffer.resize(size);
+   if (file.read(buffer.data(), size)) {
+      return buffer;
+   }
+   return "";
 }
 
 // Helper function to check if file exists

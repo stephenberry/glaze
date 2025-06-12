@@ -111,14 +111,14 @@ class working_test_server
          }
       });
 
-      server_.get("/hello", [](const request& req, response& res) {
+      server_.get("/hello", [](const request&, response& res) {
          res.status(200).content_type("text/plain").body("Hello, World!");
       });
 
       server_.post(
          "/echo", [](const request& req, response& res) { res.status(200).content_type("text/plain").body(req.body); });
 
-      server_.get("/json", [](const request& req, response& res) {
+      server_.get("/json", [](const request&, response& res) {
          res.status(200).content_type("application/json").body(R"({"message": "test", "value": 42})");
       });
 
@@ -131,7 +131,7 @@ class working_test_server
          }
       });
 
-      server_.get("/slow", [](const request& req, response& res) {
+      server_.get("/slow", [](const request&, response& res) {
          std::this_thread::sleep_for(std::chrono::milliseconds(50));
          res.status(200).body("Slow response");
       });

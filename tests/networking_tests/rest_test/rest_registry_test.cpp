@@ -3,7 +3,6 @@
 
 #include <fstream>
 #include <iostream>
-#include <sstream>
 
 #include "glaze/glaze.hpp"
 #include "glaze/net/http_server.hpp"
@@ -76,18 +75,6 @@ struct glz::meta<UserService>
    using T = UserService;
    static constexpr auto value = object(&T::getAllUsers, &T::getUserById, &T::createUser);
 };
-
-// Helper function to read a file into a string
-std::string read_file(const std::string& path)
-{
-   std::ifstream file(path);
-   if (!file.is_open()) {
-      return "";
-   }
-   std::stringstream buffer;
-   buffer << file.rdbuf();
-   return buffer.str();
-}
 
 int main()
 {

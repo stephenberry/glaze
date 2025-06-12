@@ -10,7 +10,6 @@
 #include <memory>
 #include <optional>
 #include <source_location>
-#include <sstream>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -213,12 +212,22 @@ namespace glz
           */
          std::string to_string() const
          {
-            std::stringstream ss;
-            ss << "Node[" << (is_parameter ? "PARAM:" : (is_wildcard ? "WILD:" : "")) << segment
-               << ", endpoint=" << (is_endpoint ? "true" : "false") << ", children=" << static_children.size()
-               << (parameter_child ? "+param" : "") << (wildcard_child ? "+wild" : "") << ", full_path=" << full_path
-               << "]";
-            return ss.str();
+            std::string result;
+            result.reserve(80 + segment.size() + full_path.size());
+            
+            result.append("Node[");
+            result.append(is_parameter ? "PARAM:" : (is_wildcard ? "WILD:" : ""));
+            result.append(segment);
+            result.append(", endpoint=");
+            result.append(is_endpoint ? "true" : "false");
+            result.append(", children=");
+            result.append(std::to_string(static_children.size()));
+            result.append(parameter_child ? "+param" : "");
+            result.append(wildcard_child ? "+wild" : "");
+            result.append(", full_path=");
+            result.append(full_path);
+            result.append("]");
+            return result;
          }
       };
 
