@@ -157,12 +157,15 @@ namespace glz
 
                // Check if socket is still connected
                if (socket && socket->is_open()) {
+                  // A simple check might not be enough for stale connections.
+                  // A more robust implementation might send a probe or check for readability.
+                  // For now, we assume is_open() is sufficient.
                   return socket;
                }
             }
          }
 
-         // Create new connection
+         // Create new connection if none are available or they are closed
          return std::make_shared<asio::ip::tcp::socket>(*io_context);
       }
 
@@ -179,6 +182,7 @@ namespace glz
          if (connections.size() < 10) { // Limit pool size per host
             connections.push_back(socket);
          }
+         // else, the socket is just closed when the shared_ptr goes out of scope.
       }
    };
 
@@ -198,30 +202,35 @@ namespace glz
       std::shared_ptr<asio::steady_timer> timer;
       std::array<uint8_t, 8192> buffer;
       bool is_connected{false};
-      bool should_stop{false};
+      std::atomic<bool> should_stop{false};
 
+      // User-facing disconnect. Signals the internal loops to stop.
+      // The actual socket closing/pooling is handled by the internal disconnect handler.
       void disconnect()
       {
-         should_stop = true;
-         if (socket && socket->is_open()) {
-            std::error_code ec;
-            socket->close(ec);
+         bool expected = false;
+         if (should_stop.compare_exchange_strong(expected, true)) {
+            if (socket && socket->is_open()) {
+               std::error_code ec;
+               // This cancels pending async operations on the socket, triggering their handlers
+               // with asio::error::operation_aborted.
+               socket->cancel(ec);
+            }
+            if (timer) {
+               timer->cancel();
+            }
          }
-         if (timer) {
-            timer->cancel();
-         }
-         is_connected = false;
       }
+
+      ~http_stream_connection() { disconnect(); }
    };
 
-   // Client implementation using connection pooling and async operations
    struct http_client
    {
       http_client()
          : async_io_context(std::make_shared<asio::io_context>()),
            connection_pool(std::make_shared<http_connection_pool>(async_io_context))
       {
-         // Start worker threads for async operations only
          start_workers();
       }
 
@@ -431,10 +440,12 @@ namespace glz
                while (running) {
                   try {
                      async_io_context->run();
-                     break; // Normal exit
+                     // Reset context to allow it to be run again after being stopped
+                     if (async_io_context->stopped()) {
+                        async_io_context->restart();
+                     }
                   }
                   catch (const std::exception& e) {
-                     // Log error and continue
                      std::cerr << "HTTP client worker error: " << e.what() << std::endl;
                   }
                }
@@ -461,57 +472,84 @@ namespace glz
          http_disconnect_handler on_disconnect)
       {
          auto connection = std::make_shared<http_stream_connection>();
-         connection->socket = std::make_shared<asio::ip::tcp::socket>(*async_io_context);
+         connection->socket = connection_pool->get_connection(url.host, url.port);
          connection->timer = std::make_shared<asio::steady_timer>(*async_io_context);
 
-         auto resolver = std::make_shared<asio::ip::tcp::resolver>(*async_io_context);
+         // Wrap the disconnect handler to return the socket to the pool
+         auto internal_on_disconnect = [this, user_on_disconnect = std::move(on_disconnect), connection, url]() {
+            connection->is_connected = false;
+            // Call the user's handler if provided
+            if (user_on_disconnect) {
+               user_on_disconnect();
+            }
+            // Return the connection to the pool for reuse
+            connection_pool->return_connection(url.host, url.port, connection->socket);
+         };
 
          // Set connection timeout
          connection->timer->expires_after(timeout);
-         connection->timer->async_wait([connection, on_error](std::error_code ec) {
-            if (!ec && !connection->is_connected) {
+         connection->timer->async_wait([connection, on_error, internal_on_disconnect](std::error_code ec) {
+            if (!ec && !connection->is_connected && !connection->should_stop) {
+               // Mark for stop to prevent race conditions
                connection->disconnect();
                on_error(std::make_error_code(std::errc::timed_out));
+               internal_on_disconnect();
             }
          });
 
-         resolver->async_resolve(url.host, std::to_string(url.port),
-                                 [this, url, method, body, headers, connection, resolver, on_data = std::move(on_data),
-                                  on_error = std::move(on_error), on_connect = std::move(on_connect),
-                                  on_disconnect = std::move(on_disconnect)](
-                                    std::error_code ec, asio::ip::tcp::resolver::results_type results) mutable {
-                                    if (ec || connection->should_stop) {
-                                       on_error(ec);
-                                       return;
-                                    }
+         // Check if the socket is already open
+         if (connection->socket->is_open()) {
+            // If already connected, skip resolve and connect, and just send the request
+            asio::post(*async_io_context, [this, url, method, body, headers, connection, on_data = std::move(on_data),
+                                           on_error = std::move(on_error), on_connect = std::move(on_connect),
+                                           internal_on_disconnect = std::move(internal_on_disconnect)]() mutable {
+               send_stream_request(url, method, body, headers, connection, std::move(on_data), std::move(on_error),
+                                   std::move(on_connect), std::move(internal_on_disconnect));
+            });
+         }
+         else {
+            // If not connected, resolve and connect as before
+            auto resolver = std::make_shared<asio::ip::tcp::resolver>(*async_io_context);
+            resolver->async_resolve(
+               url.host, std::to_string(url.port),
+               [this, url, method, body, headers, connection, resolver, on_data = std::move(on_data),
+                on_error = std::move(on_error), on_connect = std::move(on_connect),
+                internal_on_disconnect = std::move(internal_on_disconnect)](
+                  std::error_code ec, asio::ip::tcp::resolver::results_type results) mutable {
+                  if (ec || connection->should_stop) {
+                     on_error(ec);
+                     internal_on_disconnect(); // Ensure cleanup on resolve error
+                     return;
+                  }
 
-                                    asio::async_connect(
-                                       *connection->socket, results,
-                                       [this, url, method, body, headers, connection, on_data = std::move(on_data),
-                                        on_error = std::move(on_error), on_connect = std::move(on_connect),
-                                        on_disconnect = std::move(on_disconnect)](
-                                          std::error_code ec, const asio::ip::tcp::endpoint&) mutable {
-                                          if (ec || connection->should_stop) {
-                                             on_error(ec);
-                                             return;
-                                          }
+                  asio::async_connect(*connection->socket, results,
+                                      [this, url, method, body, headers, connection, on_data = std::move(on_data),
+                                       on_error = std::move(on_error), on_connect = std::move(on_connect),
+                                       internal_on_disconnect = std::move(internal_on_disconnect)](
+                                         std::error_code ec, const asio::ip::tcp::endpoint&) mutable {
+                                         if (ec || connection->should_stop) {
+                                            on_error(ec);
+                                            internal_on_disconnect(); // Ensure cleanup on connect error
+                                            return;
+                                         }
 
-                                          send_stream_request(url, method, body, headers, connection,
-                                                              std::move(on_data), std::move(on_error),
-                                                              std::move(on_connect), std::move(on_disconnect));
-                                       });
-                                 });
+                                         send_stream_request(url, method, body, headers, connection, std::move(on_data),
+                                                             std::move(on_error), std::move(on_connect),
+                                                             std::move(internal_on_disconnect));
+                                      });
+               });
+         }
 
          return connection;
       }
 
+      // Needs to take the wrapped disconnect handler and use keep-alive
       void send_stream_request(const url_parts& url, const std::string& method, const std::string& body,
                                const std::unordered_map<std::string, std::string>& headers,
                                std::shared_ptr<http_stream_connection> connection, http_data_handler on_data,
                                http_error_handler on_error, http_connect_handler on_connect,
                                http_disconnect_handler on_disconnect)
       {
-         // Build HTTP request
          std::string request_str;
          request_str.reserve(512 + body.size());
 
@@ -522,7 +560,8 @@ namespace glz
          request_str.append("Host: ");
          request_str.append(url.host);
          request_str.append("\r\n");
-         request_str.append("Connection: close\r\n"); // Keep simple for streaming
+         // Use keep-alive to allow the connection to be pooled
+         request_str.append("Connection: keep-alive\r\n");
 
          if (!body.empty()) {
             request_str.append("Content-Length: ");
@@ -536,7 +575,6 @@ namespace glz
             request_str.append(value);
             request_str.append("\r\n");
          }
-
          request_str.append("\r\n");
          request_str.append(body);
 
@@ -548,6 +586,7 @@ namespace glz
                             on_disconnect = std::move(on_disconnect)](std::error_code ec, std::size_t) mutable {
                               if (ec || connection->should_stop) {
                                  on_error(ec);
+                                 if (on_disconnect) on_disconnect();
                                  return;
                               }
 
@@ -562,84 +601,72 @@ namespace glz
       {
          auto buffer = std::make_shared<asio::streambuf>();
 
-         asio::async_read_until(*connection->socket, *buffer, "\r\n\r\n",
-                                [this, connection, buffer, on_data = std::move(on_data), on_error = std::move(on_error),
-                                 on_connect = std::move(on_connect),
-                                 on_disconnect = std::move(on_disconnect)](std::error_code ec, std::size_t) mutable {
-                                   if (ec || connection->should_stop) {
-                                      on_error(ec);
-                                      return;
-                                   }
+         asio::async_read_until(
+            *connection->socket, *buffer, "\r\n\r\n",
+            [this, connection, buffer, on_data = std::move(on_data), on_error = std::move(on_error),
+             on_connect = std::move(on_connect),
+             on_disconnect = std::move(on_disconnect)](std::error_code ec, std::size_t) mutable {
+               if (ec || connection->should_stop) {
+                  on_error(ec);
+                  if (on_disconnect) on_disconnect(); // Cleanup on header read error
+                  return;
+               }
 
-                                   // Parse HTTP response headers
-                                   std::istream response_stream(buffer.get());
-                                   std::string status_line;
-                                   std::getline(response_stream, status_line);
+               std::istream response_stream(buffer.get());
+               std::string status_line;
+               std::getline(response_stream, status_line);
+               if (!status_line.empty() && status_line.back() == '\r') {
+                  status_line.pop_back();
+               }
 
-                                   if (!status_line.empty() && status_line.back() == '\r') {
-                                      status_line.pop_back();
-                                   }
+               auto parsed_status = parse_http_status_line(status_line);
+               if (!parsed_status) {
+                  on_error(parsed_status.error());
+                  if (on_disconnect) on_disconnect();
+                  return;
+               }
 
-                                   auto parsed_status = parse_http_status_line(status_line);
-                                   if (!parsed_status) {
-                                      on_error(parsed_status.error());
-                                      return;
-                                   }
+               response response_headers;
+               response_headers.status_code = parsed_status->status_code;
 
-                                   // Parse headers
-                                   response response_headers;
-                                   response_headers.status_code = parsed_status->status_code;
+               std::string header_line;
+               while (std::getline(response_stream, header_line) && header_line != "\r") {
+                  if (header_line.back() == '\r') {
+                     header_line.pop_back();
+                  }
+                  auto colon_pos = header_line.find(':');
+                  if (colon_pos != std::string::npos) {
+                     std::string name = header_line.substr(0, colon_pos);
+                     std::string value = header_line.substr(colon_pos + 1);
+                     value.erase(0, value.find_first_not_of(" \t"));
+                     response_headers.response_headers[name] = value;
+                  }
+               }
 
-                                   std::string header_line;
-                                   while (std::getline(response_stream, header_line) && header_line != "\r") {
-                                      if (header_line.back() == '\r') {
-                                         header_line.pop_back();
-                                      }
+               connection->is_connected = true;
+               connection->timer->cancel();
 
-                                      auto colon_pos = header_line.find(':');
-                                      if (colon_pos != std::string::npos) {
-                                         std::string name = header_line.substr(0, colon_pos);
-                                         std::string value = header_line.substr(colon_pos + 1);
-                                         value.erase(0, value.find_first_not_of(" \t"));
-                                         response_headers.response_headers[name] = value;
-                                      }
-                                   }
+               if (on_connect) {
+                  on_connect(response_headers);
+               }
 
-                                   connection->is_connected = true;
-                                   connection->timer->cancel(); // Cancel connection timeout
+               if (parsed_status->status_code >= 400) {
+                  // Status code indicates an error, so we report it and end the stream.
+                  on_error(std::make_error_code(std::errc::connection_refused)); // Generic error for now
+                  if (on_disconnect) on_disconnect();
+                  return;
+               }
 
-                                   // Notify successful connection
-                                   if (on_connect) {
-                                      on_connect(response_headers);
-                                   }
+               if (buffer->in_avail() > 0) {
+                  std::string initial_data{std::istreambuf_iterator<char>(buffer.get()),
+                                           std::istreambuf_iterator<char>()};
+                  if (!initial_data.empty()) {
+                     on_data(initial_data);
+                  }
+               }
 
-                                   // Check for error status codes
-                                   if (parsed_status->status_code >= 400) {
-                                      if (parsed_status->status_code == 401) {
-                                         on_error(std::make_error_code(std::errc::permission_denied));
-                                      }
-                                      else if (parsed_status->status_code == 404) {
-                                         on_error(std::make_error_code(std::errc::no_such_file_or_directory));
-                                      }
-                                      else {
-                                         on_error(std::make_error_code(std::errc::connection_refused));
-                                      }
-                                      return;
-                                   }
-
-                                   // Process any data already in buffer
-                                   if (buffer->in_avail() > 0) {
-                                      std::string initial_data{std::istreambuf_iterator<char>(buffer.get()),
-                                                               std::istreambuf_iterator<char>()};
-                                      if (!initial_data.empty()) {
-                                         on_data(initial_data);
-                                      }
-                                   }
-
-                                   // Start continuous data streaming
-                                   start_stream_reading(connection, std::move(on_data), std::move(on_error),
-                                                        std::move(on_disconnect));
-                                });
+               start_stream_reading(connection, std::move(on_data), std::move(on_error), std::move(on_disconnect));
+            });
       }
 
       void start_stream_reading(std::shared_ptr<http_stream_connection> connection, http_data_handler on_data,
@@ -654,10 +681,10 @@ namespace glz
             asio::buffer(connection->buffer),
             [this, connection, on_data, on_error, on_disconnect](std::error_code ec, std::size_t bytes_transferred) {
                if (ec || connection->should_stop) {
-                  connection->is_connected = false;
                   if (ec != asio::error::eof && ec != asio::error::operation_aborted && !connection->should_stop) {
                      on_error(ec);
                   }
+                  // This is the primary exit point for a stream; always call disconnect here.
                   if (on_disconnect) on_disconnect();
                   return;
                }
@@ -750,16 +777,32 @@ namespace glz
                }
             }
 
-            // Read response body synchronously
-            std::error_code ec;
-            asio::read(*socket, response_buffer, asio::transfer_all(), ec);
-            // EOF is expected for some responses
-            if (ec && ec != asio::error::eof) {
-               return std::unexpected(ec);
+            size_t content_length = 0;
+            auto it = response_headers.find("Content-Length");
+            if (it != response_headers.end()) {
+               content_length = std::stoull(it->second);
             }
 
-            std::string response_body{std::istreambuf_iterator<char>(&response_buffer),
-                                      std::istreambuf_iterator<char>()};
+            std::string response_body;
+            response_body.reserve(content_length);
+
+            // Copy what's already in the buffer
+            if (response_buffer.size() > 0) {
+               response_body.append(asio::buffers_begin(response_buffer.data()),
+                                    asio::buffers_end(response_buffer.data()));
+            }
+
+            // Read remaining body if necessary
+            if (response_body.length() < content_length) {
+               std::error_code ec;
+               asio::read(*socket, response_buffer, asio::transfer_exactly(content_length - response_body.length()),
+                          ec);
+               if (ec && ec != asio::error::eof) {
+                  return std::unexpected(ec);
+               }
+               response_body.append(asio::buffers_begin(response_buffer.data()),
+                                    asio::buffers_end(response_buffer.data()));
+            }
 
             response resp;
             resp.status_code = parsed_status->status_code;
@@ -771,6 +814,7 @@ namespace glz
             if (connection_header == resp.response_headers.end() || connection_header->second != "close") {
                connection_pool->return_connection(url.host, url.port, socket);
             }
+            // else the server will close it, so we don't return it.
 
             return resp;
          }
@@ -788,19 +832,24 @@ namespace glz
                                  CompletionHandler&& handler)
       {
          auto socket = connection_pool->get_connection(url.host, url.port);
-         auto resolver = std::make_shared<asio::ip::tcp::resolver>(*async_io_context);
 
-         resolver->async_resolve(
-            url.host, std::to_string(url.port),
-            [this, socket, resolver, method, url, body, headers, handler = std::forward<CompletionHandler>(handler)](
-               std::error_code ec, asio::ip::tcp::resolver::results_type results) mutable {
-               if (ec) {
-                  handler(std::unexpected(ec));
-                  return;
-               }
+         if (socket->is_open()) {
+            send_request(socket, method, url, body, headers, std::forward<CompletionHandler>(handler));
+         }
+         else {
+            auto resolver = std::make_shared<asio::ip::tcp::resolver>(*async_io_context);
+            resolver->async_resolve(
+               url.host, std::to_string(url.port),
+               [this, socket, resolver, method, url, body, headers, handler = std::forward<CompletionHandler>(handler)](
+                  std::error_code ec, asio::ip::tcp::resolver::results_type results) mutable {
+                  if (ec) {
+                     handler(std::unexpected(ec));
+                     return;
+                  }
 
-               connect_and_send(socket, results, method, url, body, headers, std::move(handler));
-            });
+                  connect_and_send(socket, results, method, url, body, headers, std::move(handler));
+               });
+         }
       }
 
       template <typename CompletionHandler>
@@ -809,12 +858,6 @@ namespace glz
                             const url_parts& url, const std::string& body,
                             const std::unordered_map<std::string, std::string>& headers, CompletionHandler&& handler)
       {
-         // Check if socket is already connected
-         if (socket->is_open()) {
-            send_request(socket, method, url, body, headers, std::forward<CompletionHandler>(handler));
-            return;
-         }
-
          asio::async_connect(
             *socket, results,
             [this, socket, method, url, body, headers, handler = std::forward<CompletionHandler>(handler)](
@@ -913,6 +956,7 @@ namespace glz
          // Parse headers
          std::unordered_map<std::string, std::string> response_headers;
          std::string header_line;
+         size_t content_length = 0;
          while (std::getline(response_stream, header_line) && header_line != "\r") {
             if (header_line.back() == '\r') {
                header_line.pop_back();
@@ -923,13 +967,20 @@ namespace glz
                std::string name = header_line.substr(0, colon_pos);
                std::string value = header_line.substr(colon_pos + 1);
                value.erase(0, value.find_first_not_of(" \t"));
+               if (name == "Content-Length") {
+                  content_length = std::stoull(value);
+               }
                response_headers[name] = value;
             }
          }
 
          // Read response body
+         size_t body_already_in_buffer = buffer->size();
+         size_t remaining_to_read =
+            (content_length > body_already_in_buffer) ? (content_length - body_already_in_buffer) : 0;
+
          asio::async_read(
-            *socket, *buffer, asio::transfer_all(),
+            *socket, *buffer, asio::transfer_exactly(remaining_to_read),
             [this, socket, buffer, url, status_code = parsed_status->status_code,
              response_headers = std::move(response_headers),
              handler = std::forward<CompletionHandler>(handler)](std::error_code ec, std::size_t) mutable {
