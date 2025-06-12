@@ -6,6 +6,7 @@
 #include <iostream>
 #include <mutex>
 #include <set>
+#include <sstream>
 
 #include "glaze/net/http_server.hpp"
 #include "glaze/net/websocket_connection.hpp"
