@@ -146,6 +146,34 @@ class working_test_server
          res.send("World!");
          res.close();
       });
+
+      // Endpoint that sends data periodically, for testing client disconnect
+      server_.stream_get("/slow-stream", [](request&, streaming_response& res) {
+         res.start_stream(200, {{"Content-Type", "text/plain"}});
+         auto conn = res.stream;
+
+         auto timer = std::make_shared<asio::steady_timer>(conn->socket_->get_executor());
+         auto counter = std::make_shared<int>(0);
+
+         std::function<void(const std::error_code&)> send_data;
+         send_data = [conn, timer, counter, send_data](const std::error_code& ec) {
+            if (ec || !conn->is_open() || *counter >= 10) {
+               if (conn->is_open()) conn->close();
+               return;
+            }
+
+            conn->send_chunk("chunk" + std::to_string((*counter)++) + ";",
+                             [conn, timer, send_data](std::error_code write_ec) {
+                                if (write_ec || !conn->is_open()) {
+                                   if (conn->is_open()) conn->close();
+                                   return;
+                                }
+                                timer->expires_after(std::chrono::milliseconds(50));
+                                timer->async_wait(send_data);
+                             });
+         };
+         timer->async_wait(send_data);
+      });
    }
 
    bool is_server_ready()
@@ -441,20 +469,16 @@ suite glz_http_client_tests = [] {
          received_data.append(data);
       };
       auto on_error = [&](std::error_code ec) {
-         // eof is expected. operation_aborted can happen on clean disconnect.
-         // Only count other errors.
          if (ec && ec != asio::error::eof && ec != asio::error::operation_aborted) {
             error_count++;
          }
       };
       auto on_connect = [&](const response& headers) {
-         // FIX 1: Removed _i literal
          expect(headers.status_code == 200);
          connected = true;
       };
       auto on_disconnect = [&]() { disconnect_promise.set_value(); };
 
-      // FIX 2: Added empty map {} for the headers argument
       auto conn =
          client.get_stream(server.base_url() + "/stream-test", on_data, on_error, {}, on_connect, on_disconnect);
       expect(conn != nullptr) << "Connection handle should not be null\n";
@@ -472,6 +496,66 @@ suite glz_http_client_tests = [] {
          final_data = received_data;
       }
       expect(final_data == "Hello, Streaming World!") << "Received data mismatch. Got: " << final_data;
+
+      server.stop();
+      std::this_thread::sleep_for(std::chrono::milliseconds(50));
+   };
+
+   "client_disconnects_stream"_test = [] {
+      working_test_server server;
+      expect(server.start()) << "Server should start\n";
+
+      glz::http_client client;
+
+      std::string received_data;
+      std::mutex data_mutex;
+      std::atomic<bool> connected = false;
+      std::atomic<int> error_count = 0;
+      std::promise<void> disconnect_promise;
+      auto disconnect_future = disconnect_promise.get_future();
+      std::atomic<int> data_chunks_received = 0;
+
+      auto on_data = [&](std::string_view data) {
+         std::lock_guard lock(data_mutex);
+         received_data.append(data);
+         data_chunks_received++;
+      };
+      auto on_error = [&](std::error_code ec) {
+         if (ec && ec != asio::error::eof && ec != asio::error::operation_aborted) {
+            error_count++;
+         }
+      };
+      auto on_connect = [&](const response& headers) {
+         expect(headers.status_code == 200);
+         connected = true;
+      };
+      auto on_disconnect = [&]() { disconnect_promise.set_value(); };
+
+      auto conn =
+         client.get_stream(server.base_url() + "/slow-stream", on_data, on_error, {}, on_connect, on_disconnect);
+      expect(conn != nullptr) << "Connection handle should not be null\n";
+
+      // Wait until we have received at least one chunk to ensure the stream is active
+      while (data_chunks_received.load() < 2) {
+         std::this_thread::sleep_for(std::chrono::milliseconds(10));
+         if (disconnect_future.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
+            break; // Exit if disconnected prematurely
+         }
+      }
+
+      // Now, disconnect the stream from the client-side
+      conn->disconnect();
+
+      // Wait for the on_disconnect handler to be called
+      auto status = disconnect_future.wait_for(std::chrono::seconds(2));
+      expect(status == std::future_status::ready) << "Stream did not disconnect in time\n";
+
+      expect(connected == true) << "on_connect was not called";
+      expect(error_count == 0) << "on_error was called unexpectedly";
+
+      // We should have received some data, but not all 10 chunks
+      int chunks = data_chunks_received.load();
+      expect(chunks > 0 && chunks < 10) << "Should receive some but not all data chunks. Received: " << chunks << "\n";
 
       server.stop();
       std::this_thread::sleep_for(std::chrono::milliseconds(50));
