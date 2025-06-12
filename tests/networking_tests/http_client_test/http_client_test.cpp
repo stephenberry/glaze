@@ -484,8 +484,12 @@ suite glz_http_client_tests = [] {
       };
       auto on_disconnect = [&]() { disconnect_promise.set_value(); };
 
-      auto conn =
-         client.get_stream(server.base_url() + "/stream-test", on_data, on_error, {}, on_connect, on_disconnect);
+      auto conn = client.stream_request({.url = server.base_url() + "/stream-test",
+                                         .on_data = on_data,
+                                         .on_error = on_error,
+                                         .method = "GET",
+                                         .on_connect = on_connect,
+                                         .on_disconnect = on_disconnect});
       expect(conn != nullptr) << "Connection handle should not be null\n";
 
       // Wait for the stream to complete
@@ -536,8 +540,12 @@ suite glz_http_client_tests = [] {
       };
       auto on_disconnect = [&]() { disconnect_promise.set_value(); };
 
-      auto conn =
-         client.get_stream(server.base_url() + "/slow-stream", on_data, on_error, {}, on_connect, on_disconnect);
+      auto conn = client.stream_request({.url = server.base_url() + "/slow-stream",
+                                         .on_data = on_data,
+                                         .on_error = on_error,
+                                         .method = "GET",
+                                         .on_connect = on_connect,
+                                         .on_disconnect = on_disconnect});
       expect(conn != nullptr) << "Connection handle should not be null\n";
 
       // Wait until we have received at least one chunk to ensure the stream is active
@@ -591,8 +599,12 @@ suite glz_http_client_tests = [] {
       };
       auto on_disconnect = [&]() { disconnect_promise.set_value(); };
 
-      auto conn =
-         client.get_stream(server.base_url() + "/stream-error", on_data, on_error, {}, on_connect, on_disconnect);
+      auto conn = client.stream_request({.url = server.base_url() + "/stream-error",
+                                         .on_data = on_data,
+                                         .on_error = on_error,
+                                         .method = "GET",
+                                         .on_connect = on_connect,
+                                         .on_disconnect = on_disconnect});
       expect(conn != nullptr);
 
       // Wait for the interaction to complete

@@ -244,6 +244,21 @@ namespace glz
       ~http_stream_connection() { disconnect(); }
    };
 
+   // Stream request parameters struct
+   struct stream_request_params
+   {
+      std::string_view url;
+      http_data_handler on_data;
+      http_error_handler on_error;
+      std::string_view method{};
+      std::string_view body{};
+      std::unordered_map<std::string, std::string> headers{};
+      http_connect_handler on_connect{};
+      http_disconnect_handler on_disconnect{};
+      std::chrono::seconds timeout{std::chrono::seconds{30}};
+      stream_read_strategy strategy{stream_read_strategy::bulk_transfer};
+   };
+
    struct http_client
    {
       http_client()
@@ -296,80 +311,21 @@ namespace glz
          return post(url, json_str, merged_headers);
       }
 
-      // Streaming GET request
-      std::shared_ptr<http_stream_connection> get_stream(
-         std::string_view url, http_data_handler on_data, http_error_handler on_error,
-         const std::unordered_map<std::string, std::string>& headers = {}, http_connect_handler on_connect = {},
-         http_disconnect_handler on_disconnect = {}, std::chrono::seconds timeout = std::chrono::seconds{30},
-         stream_read_strategy strategy = stream_read_strategy::bulk_transfer)
+      // New unified streaming request method
+      std::shared_ptr<http_stream_connection> stream_request(const stream_request_params& params)
       {
-         auto url_result = parse_url(url);
+         auto url_result = parse_url(params.url);
          if (!url_result) {
-            asio::post(*async_io_context, [on_error, error = url_result.error()]() { on_error(error); });
+            asio::post(*async_io_context,
+                       [on_error = params.on_error, error = url_result.error()]() { on_error(error); });
             return nullptr;
          }
 
-         return perform_stream_request("GET", *url_result, "", headers, timeout, strategy, std::move(on_data),
-                                       std::move(on_error), std::move(on_connect), std::move(on_disconnect));
-      }
+         std::string method = params.method.empty() ? "GET" : std::string(params.method);
 
-      // Streaming POST request
-      std::shared_ptr<http_stream_connection> post_stream(
-         std::string_view url, std::string_view body, http_data_handler on_data, http_error_handler on_error,
-         const std::unordered_map<std::string, std::string>& headers = {}, http_connect_handler on_connect = {},
-         http_disconnect_handler on_disconnect = {}, std::chrono::seconds timeout = std::chrono::seconds{30},
-         stream_read_strategy strategy = stream_read_strategy::bulk_transfer)
-      {
-         auto url_result = parse_url(url);
-         if (!url_result) {
-            asio::post(*async_io_context, [on_error, error = url_result.error()]() { on_error(error); });
-            return nullptr;
-         }
-
-         return perform_stream_request("POST", *url_result, std::string(body), headers, timeout, strategy,
-                                       std::move(on_data), std::move(on_error), std::move(on_connect),
-                                       std::move(on_disconnect));
-      }
-
-      // Generic streaming request
-      std::shared_ptr<http_stream_connection> request_stream(
-         std::string_view method, std::string_view url, std::string_view body, http_data_handler on_data,
-         http_error_handler on_error, const std::unordered_map<std::string, std::string>& headers = {},
-         http_connect_handler on_connect = {}, http_disconnect_handler on_disconnect = {},
-         std::chrono::seconds timeout = std::chrono::seconds{30},
-         stream_read_strategy strategy = stream_read_strategy::bulk_transfer)
-      {
-         auto url_result = parse_url(url);
-         if (!url_result) {
-            asio::post(*async_io_context, [on_error, error = url_result.error()]() { on_error(error); });
-            return nullptr;
-         }
-
-         return perform_stream_request(std::string(method), *url_result, std::string(body), headers, timeout, strategy,
-                                       std::move(on_data), std::move(on_error), std::move(on_connect),
-                                       std::move(on_disconnect));
-      }
-
-      // Method to set default strategy for the client
-      void set_default_stream_strategy(stream_read_strategy strategy) { default_stream_strategy = strategy; }
-
-      // Convenience methods that use the client's default strategy
-      std::shared_ptr<http_stream_connection> get_stream_default(
-         std::string_view url, http_data_handler on_data, http_error_handler on_error,
-         const std::unordered_map<std::string, std::string>& headers = {}, http_connect_handler on_connect = {},
-         http_disconnect_handler on_disconnect = {}, std::chrono::seconds timeout = std::chrono::seconds{30})
-      {
-         return get_stream(url, std::move(on_data), std::move(on_error), headers, std::move(on_connect),
-                           std::move(on_disconnect), timeout, default_stream_strategy);
-      }
-
-      std::shared_ptr<http_stream_connection> post_stream_default(
-         std::string_view url, std::string_view body, http_data_handler on_data, http_error_handler on_error,
-         const std::unordered_map<std::string, std::string>& headers = {}, http_connect_handler on_connect = {},
-         http_disconnect_handler on_disconnect = {}, std::chrono::seconds timeout = std::chrono::seconds{30})
-      {
-         return post_stream(url, body, std::move(on_data), std::move(on_error), headers, std::move(on_connect),
-                            std::move(on_disconnect), timeout, default_stream_strategy);
+         return perform_stream_request(method, *url_result, std::string(params.body), params.headers, params.timeout,
+                                       params.strategy, params.on_data, params.on_error, params.on_connect,
+                                       params.on_disconnect);
       }
 
       // Asynchronous GET request
@@ -474,7 +430,6 @@ namespace glz
       std::shared_ptr<http_connection_pool> connection_pool;
       std::vector<std::thread> worker_threads;
       std::atomic<bool> running{true};
-      stream_read_strategy default_stream_strategy{stream_read_strategy::bulk_transfer};
 
       void start_workers()
       {
