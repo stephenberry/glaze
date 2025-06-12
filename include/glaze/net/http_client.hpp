@@ -737,7 +737,7 @@ namespace glz
          asio::async_read_until(
             *connection->socket, *connection->buffer, "\r\n",
             [this, connection, on_data = std::move(on_data), on_error = std::move(on_error),
-             on_disconnect = std::move(on_disconnect)](std::error_code ec, std::size_t) mutable {
+             on_disconnect = std::move(on_disconnect)](std::error_code ec, std::size_t bytes_transferred) mutable {
                if (ec || connection->should_stop) {
                   if (ec != asio::error::eof && ec != asio::error::operation_aborted && !connection->should_stop)
                      on_error(ec);
@@ -745,31 +745,30 @@ namespace glz
                   return;
                }
 
-               std::istream is(connection->buffer.get());
-               std::string line;
-               std::getline(is, line);
-               if (!line.empty() && line.back() == '\r') {
-                  line.pop_back();
+               std::string_view line_view{asio::buffer_cast<const char*>(connection->buffer->data()),
+                                          bytes_transferred - 2}; // -2 to exclude CRLF
+
+               // Ignore chunk extensions
+               auto semi_pos = line_view.find(';');
+               if (semi_pos != std::string_view::npos) {
+                  line_view = line_view.substr(0, semi_pos);
                }
 
                size_t chunk_size;
-               try {
-                  // Ignore chunk extensions for now (e.g., "7;ext=foo")
-                  size_t semi_pos = line.find(';');
-                  if (semi_pos != std::string::npos) {
-                     line = line.substr(0, semi_pos);
-                  }
-                  chunk_size = std::stoull(line, nullptr, 16);
-               }
-               catch (const std::exception&) {
+               auto [ptr, parse_ec] =
+                  std::from_chars(line_view.data(), line_view.data() + line_view.size(), chunk_size, 16);
+
+               if (parse_ec != std::errc{}) {
                   on_error(std::make_error_code(std::errc::protocol_error));
                   if (on_disconnect) on_disconnect();
                   return;
                }
 
+               // Consume the size line and CRLF from the buffer
+               connection->buffer->consume(bytes_transferred);
+
                if (chunk_size == 0) {
-                  // This is the last chunk. The stream ends.
-                  // We should consume any trailer headers here, but for now we'll just end.
+                  // Last chunk
                   if (on_disconnect) on_disconnect();
                   return;
                }
