@@ -135,54 +135,6 @@ class working_test_server
          std::this_thread::sleep_for(std::chrono::milliseconds(50));
          res.status(200).body("Slow response");
       });
-      
-      // Simple streaming endpoint that sends data in chunks
-      server_.get("/stream", [](const request& req, response& res) {
-         res.status(200).content_type("text/plain");
-         std::string data = "chunk1\nchunk2\nchunk3\nEND";
-         res.body(data);
-      });
-      
-      // Streaming endpoint that simulates real-time data
-      server_.get("/stream-slow", [](const request& req, response& res) {
-         res.status(200).content_type("text/plain");
-         // Simulate a response that would come in chunks over time
-         std::string data = "data1,data2,data3,data4,data5";
-         res.body(data);
-      });
-      
-      // Server-sent events style endpoint
-      server_.get("/events", [](const request& req, response& res) {
-         res.status(200)
-            .content_type("text/event-stream")
-            .header("Cache-Control", "no-cache")
-            .header("Connection", "keep-alive");
-         
-         std::string sse_data = "data: event1\n\ndata: event2\n\ndata: event3\n\n";
-         res.body(sse_data);
-      });
-      
-      // Streaming POST endpoint that echoes back chunks
-      server_.post("/stream-echo", [](const request& req, response& res) {
-         res.status(200).content_type("text/plain");
-         res.body("Echo: " + req.body);
-      });
-      
-      // Endpoint that returns large data for testing
-      server_.get("/large-stream", [](const request& req, response& res) {
-         res.status(200).content_type("text/plain");
-         std::string large_data;
-         large_data.reserve(10000);
-         for (int i = 0; i < 1000; ++i) {
-            large_data += "This is line " + std::to_string(i) + " of streaming data\n";
-         }
-         res.body(large_data);
-      });
-      
-      // Error endpoint for testing error handling
-      server_.get("/stream-error", [](const request& req, response& res) {
-         res.status(500).content_type("text/plain").body("Stream error occurred");
-      });
    }
 
    bool is_server_ready()
