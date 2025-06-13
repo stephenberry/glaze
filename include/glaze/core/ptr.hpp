@@ -16,8 +16,7 @@ namespace glz
    [[nodiscard]] error_ctx read_as(T&& root_value, const sv json_ptr, B&& buffer)
    {
       error_ctx pe{};
-      bool b =
-         seek([&](auto&& val) { pe = read<Opts>(val, buffer); }, std::forward<T>(root_value), json_ptr);
+      bool b = seek([&](auto&& val) { pe = read<Opts>(val, buffer); }, std::forward<T>(root_value), json_ptr);
       if (b) {
          return pe;
       }

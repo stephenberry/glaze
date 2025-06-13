@@ -415,13 +415,13 @@ namespace glz
             std::visit([&func](auto&& variant_value) { func(variant_value); }, value.data);
             return true;
          }
-         
+
          if (json_ptr[0] != '/' || json_ptr.size() < 2) return false;
-         
+
          // Handle object access
          if (value.is_object()) {
             auto& obj = value.get_object();
-            
+
             // Parse the key (with JSON Pointer escaping)
             std::string key;
             size_t i = 1;
@@ -441,28 +441,28 @@ namespace glz
                }
                key.push_back(c);
             }
-            
+
             auto it = obj.find(key);
             if (it == obj.end()) return false;
-            
+
             sv remaining_ptr = json_ptr.substr(i);
             return seek(std::forward<F>(func), it->second, remaining_ptr);
          }
          // Handle array access
          else if (value.is_array()) {
             auto& arr = value.get_array();
-            
+
             // Parse the index
             size_t index{};
             auto [p, ec] = std::from_chars(&json_ptr[1], json_ptr.data() + json_ptr.size(), index);
             if (ec != std::errc{}) return false;
-            
+
             if (index >= arr.size()) return false;
-            
+
             sv remaining_ptr = json_ptr.substr(p - json_ptr.data());
             return seek(std::forward<F>(func), arr[index], remaining_ptr);
          }
-         
+
          return false;
       }
    };

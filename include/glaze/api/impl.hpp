@@ -48,8 +48,7 @@ namespace glz
             success = seek([&](auto&& val) { pe = glz::read<opts{}>(val, data); }, user, path);
          }
          else {
-            success =
-               seek([&](auto&& val) { pe = glz::read<opts{.format = BEVE}>(val, data); }, user, path);
+            success = seek([&](auto&& val) { pe = glz::read<opts{.format = BEVE}>(val, data); }, user, path);
          }
 
          if (success) {
