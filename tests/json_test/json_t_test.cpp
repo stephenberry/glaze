@@ -505,8 +505,7 @@ suite json_pointer_extraction_tests = [] {
       expect(not wrong_primitive.has_value()) << "Should fail when requesting object as primitive\n";
    };
    
-   // TODO: Get const access working
-   /*"const_json_access"_test = [] {
+   "const_json_access"_test = [] {
       const auto json = create_test_json();
       
       // Test const access
@@ -517,7 +516,7 @@ suite json_pointer_extraction_tests = [] {
       auto age = glz::get<double>(json, "/user/age");
       expect(age.has_value()) << "Should get number from const json\n";
       expect(age->get() == 30.0) << "Should get correct age from const json\n";
-   };*/
+   };
    
    "simple_usage_example"_test = [] {
       glz::json_t json{{"test", true}};

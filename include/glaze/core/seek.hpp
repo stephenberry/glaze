@@ -16,7 +16,7 @@ namespace glz
 {
    template <class T>
    struct seek_op;
-   
+
    // Call a function on an value at the location of a json_ptr
    template <class F, class T>
    bool seek(F&& func, T&& value, sv json_ptr)
@@ -85,9 +85,8 @@ namespace glz
          else if constexpr (tuple_t<T> || is_std_tuple<T>) {
             if (index >= glz::tuple_size_v<T>) return false;
             auto tuple_element_ptr = detail::get_runtime(value, index);
-            return std::visit(
-               [&](auto&& element_ptr) { return seek(std::forward<F>(func), *element_ptr, json_ptr); },
-               tuple_element_ptr);
+            return std::visit([&](auto&& element_ptr) { return seek(std::forward<F>(func), *element_ptr, json_ptr); },
+                              tuple_element_ptr);
          }
          else {
             return seek(std::forward<F>(func), *std::next(value.begin(), index), json_ptr);
@@ -189,8 +188,7 @@ namespace glz
                            ret = seek(std::forward<F>(func), get_member(value, get<I>(to_tie(value))), json_ptr);
                         }
                         else {
-                           ret =
-                              seek(std::forward<F>(func), get_member(value, get<I>(reflect<T>::values)), json_ptr);
+                           ret = seek(std::forward<F>(func), get_member(value, get<I>(reflect<T>::values)), json_ptr);
                         }
                      }
                   },
@@ -207,12 +205,27 @@ namespace glz
       }
    };
 
-   // Get a refrence to a value at the location of a json_ptr. Will error if
+   // Helper to transfer cv-qualifiers from source type to target type
+   template <class Source, class Target>
+   using copy_cv_t = std::conditional_t<
+      std::is_const_v<Source>,
+      std::conditional_t<std::is_volatile_v<Source>, std::add_cv_t<Target>, std::add_const_t<Target>>,
+      std::conditional_t<std::is_volatile_v<Source>, std::add_volatile_t<Target>, Target>>;
+
+   // Helper to determine the correct pointer type based on value type
+   template <class V, class T>
+   using get_pointer_type = copy_cv_t<std::remove_reference_t<T>, V>*;
+
+   // Helper to determine the correct reference wrapper type
+   template <class V, class T>
+   using get_reference_type = std::reference_wrapper<copy_cv_t<std::remove_reference_t<T>, V>>;
+
+   // Get a reference to a value at the location of a json_ptr. Will error if
    // value doesnt exist or is wrong type
    template <class V, class T>
-   expected<std::reference_wrapper<V>, error_ctx> get(T&& root_value, sv json_ptr)
+   expected<get_reference_type<V, T>, error_ctx> get(T&& root_value, sv json_ptr)
    {
-      V* result{};
+      get_pointer_type<V, T> result{};
       error_code ec{};
       seek(
          [&](auto&& val) {
@@ -239,9 +252,9 @@ namespace glz
    // Get a pointer to a value at the location of a json_ptr. Will return
    // nullptr if value doesnt exist or is wrong type
    template <class V, class T>
-   V* get_if(T&& root_value, sv json_ptr) noexcept
+   get_pointer_type<V, T> get_if(T&& root_value, sv json_ptr) noexcept
    {
-      V* result{};
+      get_pointer_type<V, T> result{};
       seek(
          [&](auto&& val) {
             if constexpr (std::same_as<V, std::decay_t<decltype(val)>>) {
