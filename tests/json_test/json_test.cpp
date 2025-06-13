@@ -10765,6 +10765,100 @@ suite integer_id_variant_tests = [] {
    };
 };
 
+suite glaze_error_category_tests = [] {
+   "error_category_name"_test = [] {
+      const auto& category = glz::error_category;
+      expect(std::string_view(category.name()) == "glaze");
+   };
+   
+   "make_error_code_function"_test = [] {
+      auto ec = glz::make_error_code(glz::error_code::parse_error);
+      
+      expect(ec.category() == glz::error_category);
+      expect(ec.value() == static_cast<int>(glz::error_code::parse_error));
+      expect(ec.message() == "parse_error");
+      expect(bool(ec) == true); // non-zero error codes are truthy
+   };
+   
+   "make_error_code_none"_test = [] {
+      auto ec = glz::make_error_code(glz::error_code::none);
+      
+      expect(ec.category() == glz::error_category);
+      expect(ec.value() == static_cast<int>(glz::error_code::none));
+      expect(ec.message() == "none");
+      expect(bool(ec) == false); // error_code::none should be falsy
+   };
+   
+   "error_code_enum_compatibility"_test = [] {
+      // Test that glz::error_code can be implicitly converted to std::error_code
+      std::error_code ec = glz::error_code::expected_brace;
+      
+      expect(ec.category() == glz::error_category);
+      expect(ec.value() == static_cast<int>(glz::error_code::expected_brace));
+      expect(ec.message() == "expected_brace");
+   };
+   
+   "error_code_comparison"_test = [] {
+      auto ec1 = glz::make_error_code(glz::error_code::syntax_error);
+      auto ec2 = glz::make_error_code(glz::error_code::syntax_error);
+      auto ec3 = glz::make_error_code(glz::error_code::parse_error);
+      
+      expect(ec1 == ec2);
+      expect(ec1 != ec3);
+      expect(ec1.value() == ec2.value());
+      expect(ec1.value() != ec3.value());
+   };
+   
+   "error_code_direct_comparison"_test = [] {
+      std::error_code ec = glz::error_code::unknown_key;
+      
+      // Test direct comparison with glz::error_code
+      expect(ec == glz::error_code::unknown_key);
+      expect(ec != glz::error_code::missing_key);
+   };
+   
+   "error_code_boolean_conversion"_test = [] {
+      std::error_code none_ec = glz::error_code::none;
+      std::error_code error_ec = glz::error_code::parse_error;
+      
+      expect(!none_ec);      // none should be falsy
+      expect(bool(error_ec)); // any non-none error should be truthy
+   };
+   
+   "error_code_message_consistency"_test = [] {
+      // Test that the message from error_code and error_category are consistent
+      
+      using enum glz::error_code;
+      for (auto err : {
+         none,
+         parse_error,
+         expected_brace,
+         expected_bracket,
+         expected_quote,
+         syntax_error,
+         unknown_key,
+         missing_key,
+         constraint_violated
+      }) {
+         std::error_code ec = err;
+         expect(ec.message() == glz::error_category.message(static_cast<int>(err)));
+      }
+   };
+   
+   "error_ctx_compatibility"_test = [] {
+      glz::error_ctx ctx{};
+      ctx.ec = glz::error_code::expected_comma;
+      ctx.custom_error_message = "custom message";
+      
+      // Test that error_ctx works with the error category
+      std::error_code ec = ctx.ec;
+      expect(ec.category() == glz::error_category);
+      expect(ec.message() == "expected_comma");
+      expect(bool(ctx) == true); // ctx should be truthy when error is set
+      expect(ctx == glz::error_code::expected_comma);
+   };
+};
+
 int main()
 {
    trace.end("json_test");
