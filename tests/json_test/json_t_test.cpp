@@ -418,10 +418,9 @@ suite json_pointer_extraction_tests = [] {
       expect(name_copy.has_value()) << "Should successfully copy string value\n";
       expect(*name_copy == "John Doe") << "Should get correct copied name\n";
       
-      // TODO: Get this test working
-      //auto age_copy = glz::get_value<double>(json, "/user/age");
-      //expect(age_copy.has_value()) << "Should successfully copy number value\n";
-      //expect(*age_copy == 30.0) << "Should get correct copied age\n";
+      auto age_copy = glz::get_value<double>(json, "/user/age");
+      expect(age_copy.has_value()) << "Should successfully copy number value\n";
+      expect(*age_copy == 30.0) << "Should get correct copied age\n";
    };
    
    "set_string_value"_test = [] {
