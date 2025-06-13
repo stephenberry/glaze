@@ -266,7 +266,7 @@ namespace glz
    }
 
    // Get a value at the location of a json_ptr. Will error if
-   // value doesnt exist or is not convertible or is a narrowing conversion.
+   // value doesnt exist or is not assignable or is a narrowing conversion.
    template <class V, class T>
    expected<V, error_code> get_value(T&& root_value, sv json_ptr) noexcept
    {
@@ -275,7 +275,7 @@ namespace glz
       error_code ec{};
       seek(
          [&](auto&& val) {
-            if constexpr (std::is_convertible_v<decltype(val), V> &&
+            if constexpr (std::is_assignable_v<V&, decltype(val)> &&
                           non_narrowing_convertable<std::decay_t<decltype(val)>, V>) {
                found = true;
                result = val;
