@@ -108,11 +108,14 @@ namespace glz::detail
             bool ret{};
             visit<N>(
                [&]<size_t I>() {
-                  if constexpr (reflectable<T>) {
-                     ret = seek_impl(std::forward<F>(func), get_member(value, get<I>(to_tie(value))), json_ptr);
-                  }
-                  else {
-                     ret = seek_impl(std::forward<F>(func), get_member(value, get<I>(reflect<T>::values)), json_ptr);
+                  static constexpr auto TargetKey = get<I>(reflect<T>::keys);
+                  if (key == TargetKey) {
+                     if constexpr (reflectable<T>) {
+                        ret = seek_impl(std::forward<F>(func), get_member(value, get<I>(to_tie(value))), json_ptr);
+                     }
+                     else {
+                        ret = seek_impl(std::forward<F>(func), get_member(value, get<I>(reflect<T>::values)), json_ptr);
+                     }
                   }
                },
                index);
