@@ -13,7 +13,7 @@ namespace glz
    inline std::string html_escape(const std::string& input)
    {
       std::string result;
-      result.reserve(input.size() * 1.1); // Reserve some extra space
+      result.reserve(static_cast<size_t>(input.size() * 1.1)); // Reserve some extra space
 
       for (char c : input) {
          switch (c) {
