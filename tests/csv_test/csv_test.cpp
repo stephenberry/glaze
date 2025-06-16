@@ -1353,4 +1353,21 @@ suite odd_csv_test = [] {
    };
 };
 
+struct overflow_struct
+{
+   std::vector<int> num1{};
+   std::deque<float> num2{};
+   std::vector<bool> maybe{};
+   std::vector<std::array<int, 3>> v3s{};
+};
+
+suite fuzzfailures = [] {
+   "colwise_write_overflow"_test = [] {
+      std::string_view csv_data{"6  [5\n0"};
+
+      overflow_struct obj{};
+      [[maybe_unused]] auto parsed = glz::read_csv<glz::colwise>(obj, csv_data);
+   };
+};
+
 int main() { return 0; }
