@@ -41,6 +41,7 @@ macro(create_fuzztest testname)
 endmacro()
 
 create_fuzztest(binary_reflection)
+create_fuzztest(csv_parsing)
 create_fuzztest(json_generic)
 create_fuzztest(json_minify)
 create_fuzztest(json_prettify)

@@ -788,10 +788,24 @@ namespace glz
                               if constexpr (fixed_array_value_t<M> && emplace_backable<M>) {
                                  const auto index = keys[i].second;
                                  if (row < member.size()) [[likely]] {
-                                    parse<CSV>::op<Opts>(member[row][index], ctx, it, end);
+                                    auto& element = member[row];
+                                    if (index < element.size()) {
+                                       parse<CSV>::op<Opts>(element[index], ctx, it, end);
+                                    }
+                                    else {
+                                       ctx.error = error_code::syntax_error;
+                                       return;
+                                    }
                                  }
                                  else [[unlikely]] {
-                                    parse<CSV>::op<Opts>(member.emplace_back()[index], ctx, it, end);
+                                    auto& element = member.emplace_back();
+                                    if (index < element.size()) {
+                                       parse<CSV>::op<Opts>(element[index], ctx, it, end);
+                                    }
+                                    else {
+                                       ctx.error = error_code::syntax_error;
+                                       return;
+                                    }
                                  }
                               }
                               else {
