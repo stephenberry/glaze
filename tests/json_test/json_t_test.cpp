@@ -537,4 +537,15 @@ suite json_pointer_extraction_tests = [] {
    };
 };
 
+suite fuzz_tests = [] {
+   "fuzz1"_test = [] {
+      std::string_view s = "[true,true,tur";
+      std::vector<char> buffer{s.data(), s.data() + s.size()};
+      buffer.push_back('\0');
+      glz::json_t json{};
+      auto ec = glz::read_json(json, buffer);
+      expect(bool(ec));
+   };
+};
+
 int main() { return 0; }
