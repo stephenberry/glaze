@@ -205,4 +205,15 @@ suite gcc_maybe_uninitialized_tests = [] {
    };
 };
 
+suite fuzz_findings_tests = [] {
+   "out_of_bounds_read"_test = [] {
+      Person child{};
+      std::vector<char> path(1, '\xff');
+      std::vector<char> buffer{0x7b, 0x22, 0x22, 0x22, 0x22};
+      static constexpr glz::opts options{.null_terminated = false};
+      [[maybe_unused]] auto result = glz::read_jmespath<options>(std::string_view(path.data(), path.size()), child,
+                                                                 std::string_view(buffer.data(), buffer.size()));
+   };
+};
+
 int main() { return 0; }
