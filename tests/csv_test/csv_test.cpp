@@ -1393,6 +1393,14 @@ suite fuzzfailures = [] {
       my_struct obj;
       expect(glz::read_csv<glz::colwise>(obj, s));
    };
+
+   "fuzz4"_test = [] {
+      std::string_view b64 = "MCAgWzQsNA==";
+      const auto input = glz::read_base64(b64);
+      std::vector<uint8_t> s(begin(input), end(input));
+      my_struct obj;
+      expect(!glz::read_csv<glz::rowwise>(obj, s));
+   };
 };
 
 int main() { return 0; }
