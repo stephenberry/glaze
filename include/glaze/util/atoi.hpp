@@ -772,7 +772,8 @@ namespace glz
       return false;
    }
 
-   inline constexpr std::array<size_t, 4> int_buffer_lengths{8, 8, 16, 24};
+   // Increase by 8 to support exponentials
+   inline constexpr std::array<size_t, 4> int_buffer_lengths{16, 16, 24, 32};
 
    template <std::integral T, class Char>
    GLZ_ALWAYS_INLINE constexpr bool atoi(T& v, const Char*& it, const Char* end) noexcept
