@@ -2,10 +2,10 @@
 #include <map>
 #include <unordered_map>
 
+#include "glaze/base64/base64.hpp"
 #include "glaze/csv/read.hpp"
 #include "glaze/csv/write.hpp"
 #include "glaze/record/recorder.hpp"
-#include "glaze/base64/base64.hpp"
 #include "ut/ut.hpp"
 
 // Specification: https://datatracker.ietf.org/doc/html/rfc4180
@@ -1369,10 +1369,11 @@ suite fuzzfailures = [] {
       overflow_struct obj{};
       [[maybe_unused]] auto parsed = glz::read_csv<glz::colwise>(obj, csv_data);
    };
-   
+
    "fuzz2"_test = [] {
-      std::string_view b64 = "IBCPAAoxMDY3ODg4NDUyMTMyMTA4Njk5NmUrMTEzNzI0NzEyMDQ5NDIzLjE0NTIxNTJCMzIxMDg2OTk2ZS05MTEKMzIANLaztqfgDQ==";
-      
+      std::string_view b64 =
+         "IBCPAAoxMDY3ODg4NDUyMTMyMTA4Njk5NmUrMTEzNzI0NzEyMDQ5NDIzLjE0NTIxNTJCMzIxMDg2OTk2ZS05MTEKMzIANLaztqfgDQ==";
+
       auto input = glz::read_base64(b64);
       std::vector<uint8_t> s;
       s.resize(input.size());
@@ -1380,10 +1381,11 @@ suite fuzzfailures = [] {
       my_struct obj;
       expect(glz::read_csv<glz::colwise>(obj, s));
    };
-   
+
    "fuzz3"_test = [] {
-      std::string_view b64 = "/BAACjY0OQo0OTk5OTk5MjkwMDAwODQ4MzY1M0UrMDAyNDk5OTk5OTk5Nwo5NAo5NDQ0NDQ0NDQ0NDQ0Cjk0CjkyCjYyAAAAAAA4OA==";
-      
+      std::string_view b64 =
+         "/BAACjY0OQo0OTk5OTk5MjkwMDAwODQ4MzY1M0UrMDAyNDk5OTk5OTk5Nwo5NAo5NDQ0NDQ0NDQ0NDQ0Cjk0CjkyCjYyAAAAAAA4OA==";
+
       auto input = glz::read_base64(b64);
       std::vector<uint8_t> s;
       s.resize(input.size());
