@@ -89,6 +89,7 @@ namespace glz
                               tuple_element_ptr);
          }
          else {
+            if (index >= value.size()) return false;
             return seek(std::forward<F>(func), *std::next(value.begin(), index), json_ptr);
          }
       }
