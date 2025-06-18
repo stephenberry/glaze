@@ -14,9 +14,20 @@ struct my_struct
 
 extern "C" int LLVMFuzzerTestOneInput(const uint8_t* Data, size_t Size)
 {
+   if (Size < 1) return 0;
+
+   const bool colwise = Data[0] & 0x1;
+   Size -= 1;
+   Data += 1;
+
    my_struct obj{};
-   std::string_view input_col{(const char*)Data, Size};
-   [[maybe_unused]] auto parsed = glz::read_csv<glz::colwise>(obj, input_col);
+   std::string_view input{(const char*)Data, Size};
+   if (colwise) {
+      [[maybe_unused]] auto parsed = glz::read_csv<glz::colwise>(obj, input);
+   }
+   else {
+      [[maybe_unused]] auto parsed = glz::read_csv<glz::rowwise>(obj, input);
+   }
 
    return 0;
 }
