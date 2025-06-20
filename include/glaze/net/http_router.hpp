@@ -16,6 +16,7 @@
 #include <vector>
 
 #include "glaze/net/http.hpp"
+#include "glaze/json/json_t.hpp"
 
 namespace glz
 {
@@ -120,24 +121,23 @@ namespace glz
       /**
        * @brief Parameter constraint for route validation
        *
-       * Defines validation rules for route parameters using pattern matching.
+       * Defines validation rules for route parameters using a validation function.
        */
       struct param_constraint
       {
-         /**
-          * @brief Pattern to validate parameter values against
-          *
-          * The pattern supports wildcards (*), character classes ([a-z]), and more.
-          * If empty, any non-empty value is considered valid.
-          */
-         std::string pattern{};
-
          /**
           * @brief Human-readable description of the constraint
           *
           * Used for error reporting and debugging.
           */
          std::string description{};
+
+         /**
+          * @brief Validation function for parameter values
+          *
+          * This function is used to validate parameter values. It should return true if the parameter value is valid, false otherwise.
+          */
+         std::function<bool(std::string_view)> validation = [](std::string_view) { return true; };
       };
 
       /**
@@ -854,10 +854,8 @@ namespace glz
             if (node->is_endpoint) {
                auto it = node->handlers.find(method);
                if (it != node->handlers.end()) {
-                  // Found a handler
-                  result = it->second;
-
-                  // Validate constraints if any
+                  // Validate constraints if any before setting the handler
+                  bool constraints_passed = true;
                   auto constraints_it = node->constraints.find(method);
                   if (constraints_it != node->constraints.end()) {
                      for (const auto& [param_name, constraint] : constraints_it->second) {
@@ -865,19 +863,21 @@ namespace glz
                         if (param_it != params.end()) {
                            const std::string& value = param_it->second;
 
-                           // If pattern is empty, any non-empty value is valid
-                           if (constraint.pattern.empty() && value.empty()) {
-                              return false; // Empty value fails for empty pattern
-                           }
-                           // Otherwise, match against the pattern
-                           else if (!constraint.pattern.empty() && !match_pattern(value, constraint.pattern)) {
-                              return false; // Pattern match failed
+                           // Use the validation function
+                           if (!constraint.validation(value)) {
+                              constraints_passed = false;
+                              break; // Validation failed
                            }
                         }
                      }
                   }
 
-                  return true;
+                  if (constraints_passed) {
+                     // Only set the handler if constraints pass
+                     result = it->second;
+                     return true;
+                  }
+                  return false;
                }
             }
             return false;
@@ -922,9 +922,8 @@ namespace glz
             if (node->wildcard_child->is_endpoint) {
                auto it = node->wildcard_child->handlers.find(method);
                if (it != node->wildcard_child->handlers.end()) {
-                  result = it->second;
-
-                  // Validate constraints for the wildcard
+                  // Validate constraints for the wildcard before setting the handler
+                  bool constraints_passed = true;
                   auto constraints_it = node->wildcard_child->constraints.find(method);
                   if (constraints_it != node->wildcard_child->constraints.end()) {
                      for (const auto& [param_name, constraint] : constraints_it->second) {
@@ -932,19 +931,21 @@ namespace glz
                         if (param_it != params.end()) {
                            const std::string& value = param_it->second;
 
-                           // If pattern is empty, any non-empty value is valid
-                           if (constraint.pattern.empty() && value.empty()) {
-                              return false; // Empty value fails for empty pattern
-                           }
-                           // Otherwise, match against the pattern
-                           else if (!constraint.pattern.empty() && !match_pattern(value, constraint.pattern)) {
-                              return false; // Pattern match failed
+                           // Use the validation function
+                           if (!constraint.validation(value)) {
+                              constraints_passed = false;
+                              break; // Validation failed
                            }
                         }
                      }
                   }
 
-                  return true;
+                  if (constraints_passed) {
+                     // Only set the handler if constraints pass
+                     result = it->second;
+                     return true;
+                  }
+                  return false;
                }
             }
          }
@@ -977,8 +978,7 @@ namespace glz
             for (const auto& [method, method_constraints] : node->constraints) {
                std::cout << indent << "  Constraints for " << to_string(method) << ":\n";
                for (const auto& [param, constraint] : method_constraints) {
-                  std::cout << indent << "    " << param << ": " << constraint.pattern << " (" << constraint.description
-                            << ")\n";
+                  std::cout << indent << "    " << param << ": (" << constraint.description << ")\n";
                }
             }
          }
