@@ -393,7 +393,7 @@ namespace glz
             asio::ip::tcp::endpoint endpoint(asio::ip::make_address(address), port);
             acceptor = std::make_unique<asio::ip::tcp::acceptor>(*io_context, endpoint);
          }
-         catch (const std::exception& e) {
+         catch (...) {
             error_handler(std::make_error_code(std::errc::address_in_use), std::source_location::current());
          }
          return *this;
