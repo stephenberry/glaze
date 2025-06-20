@@ -15,8 +15,8 @@
 #include <unordered_map>
 #include <vector>
 
-#include "glaze/net/http.hpp"
 #include "glaze/json/json_t.hpp"
+#include "glaze/net/http.hpp"
 
 namespace glz
 {
@@ -135,7 +135,8 @@ namespace glz
          /**
           * @brief Validation function for parameter values
           *
-          * This function is used to validate parameter values. It should return true if the parameter value is valid, false otherwise.
+          * This function is used to validate parameter values. It should return true if the parameter value is valid,
+          * false otherwise.
           */
          std::function<bool(std::string_view)> validation = [](std::string_view) { return true; };
       };
