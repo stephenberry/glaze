@@ -134,16 +134,25 @@ server.get("/files/*path", [](const glz::request& req, glz::response& res) {
 ```cpp
 // Numeric ID constraint
 glz::http_router::param_constraint id_constraint{
-    .pattern = "[0-9]+",
-    .description = "User ID must be numeric"
+    .description = "User ID must be numeric",
+    .validation = [](std::string_view value) {
+        if (value.empty()) return false;
+        for (char c : value) {
+            if (!std::isdigit(c)) return false;
+        }
+        return true;
+    }
 };
 
 server.get("/users/:id", handler, {{"id", id_constraint}});
 
 // Email constraint
 glz::http_router::param_constraint email_constraint{
-    .pattern = "[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}",
-    .description = "Valid email address required"
+    .description = "Valid email address required",
+    .validation = [](std::string_view value) {
+        std::regex email_regex(R"([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})");
+        return std::regex_match(std::string(value), email_regex);
+    }
 };
 ```
 
