@@ -54,6 +54,18 @@ option(glaze_DISABLE_SIMD_WHEN_SUPPORTED
        "disable SIMD optimizations even when targets support it (e.g. AVX2)" OFF)
 if(glaze_DISABLE_SIMD_WHEN_SUPPORTED)
   target_compile_definitions(glaze_glaze INTERFACE GLZ_DISABLE_SIMD)
+else ()
+  if(CMAKE_HOST_SYSTEM_NAME MATCHES "Darwin")
+    if (CMAKE_HOST_SYSTEM_PROCESSOR MATCHES "arm64")
+      list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+      find_package(simde REQUIRED)
+      target_link_libraries(
+              glaze_glaze ${warning_guard}
+              INTERFACE
+              simde
+      )
+    endif ()
+  endif ()
 endif()
 
 option(glaze_BUILD_EXAMPLES "Build GLAZE examples" OFF)

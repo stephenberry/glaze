@@ -20,6 +20,12 @@
 #endif
 #endif
 
+
+#if !defined(GLZ_DISABLE_SIMD) && defined(__aarch64__) || defined(_M_ARM64)
+#define GLZ_USE_AVX2
+#include <simde/x86/avx2.h>
+#endif
+
 #include "glaze/core/opts.hpp"
 #include "glaze/core/reflect.hpp"
 #include "glaze/core/to.hpp"
@@ -684,7 +690,6 @@ namespace glz
                      }
                   }
 #endif
-
                   if (n > 7) {
                      for (const auto end_m7 = e - 7; c < end_m7;) {
                         std::memcpy(data, c, 8);
