@@ -23,7 +23,7 @@
 
 #if !defined(GLZ_DISABLE_SIMD) && defined(__aarch64__) || defined(_M_ARM64)
 #define GLZ_USE_AVX2
-#include <simde/x86/avx2.h>
+#include "simde/x86/avx2.h"
 #endif
 
 #include "glaze/core/opts.hpp"
