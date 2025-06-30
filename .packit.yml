@@ -1,10 +1,10 @@
 # https://packit.dev/docs/configuration/
 
-specfile_path: contrib/util/glaze.spec
+specfile_path: util/glaze.spec
 
 notifications:
-  pull_request:
-    successful_build: true
+  failure_comment:
+    message: "One of the tests failed for {commit_sha}. @admin check logs {logs_url}, packit dashboard {packit_dashboard_url} and external service dashboard {external_dashboard_url}"
 
 jobs:
 - job: copr_build

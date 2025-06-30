@@ -4,7 +4,7 @@ include(cmake/prelude.cmake)
 
 project(
     glaze
-    VERSION 5.4.0
+    VERSION 5.5.2
     LANGUAGES CXX
 )
 
@@ -75,3 +75,16 @@ if(glaze_EETF_FORMAT)
   )
   target_compile_definitions(glaze_glaze INTERFACE GLZ_ENABLE_EETF)
 endif(glaze_EETF_FORMAT)
+
+option(glaze_ENABLE_SSL "Enable SSL/TLS support for HTTPS servers" OFF)
+
+if(glaze_ENABLE_SSL)
+  find_package(OpenSSL REQUIRED)
+  target_link_libraries(
+    glaze_glaze ${warning_guard}
+    INTERFACE
+      OpenSSL::SSL
+      OpenSSL::Crypto
+  )
+  target_compile_definitions(glaze_glaze INTERFACE GLZ_ENABLE_SSL)
+endif(glaze_ENABLE_SSL)

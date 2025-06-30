@@ -159,28 +159,52 @@ namespace glz
          if (*it == '"') {
             // Quoted field
             ++it; // Skip the opening quote
-            while (it != end) {
-               if (*it == '"') {
-                  ++it; // Skip the quote
-                  if (it == end) {
-                     // End of input after closing quote
-                     break;
-                  }
+
+            if constexpr (check_raw_string(Opts)) {
+               // Raw string mode: don't process escape sequences
+               while (it != end) {
                   if (*it == '"') {
-                     // Escaped quote
+                     ++it; // Skip the quote
+                     if (it == end || *it != '"') {
+                        // Single quote - end of field
+                        break;
+                     }
+                     // Double quote - add one quote and continue
                      value.push_back('"');
                      ++it;
                   }
                   else {
-                     // Closing quote
-                     break;
+                     value.push_back(*it);
+                     ++it;
                   }
                }
-               else {
-                  value.push_back(*it);
-                  ++it;
+            }
+            else {
+               // Normal mode: process escape sequences properly
+               while (it != end) {
+                  if (*it == '"') {
+                     ++it; // Skip the quote
+                     if (it == end) {
+                        // End of input after closing quote
+                        break;
+                     }
+                     if (*it == '"') {
+                        // Escaped quote
+                        value.push_back('"');
+                        ++it;
+                     }
+                     else {
+                        // Closing quote
+                        break;
+                     }
+                  }
+                  else {
+                     value.push_back(*it);
+                     ++it;
+                  }
                }
             }
+
             // After closing quote, expect comma, newline, or end of input
             if (it != end && *it != ',' && *it != '\n' && *it != '\r') {
                // Invalid character after closing quote
@@ -272,6 +296,7 @@ namespace glz
             start = it;
          }
          else if (*it == '\r' || *it == '\n') {
+            auto line_end = it; // Position before incrementing
             if (*it == '\r') {
                ++it;
                if (it != end && *it != '\n') [[unlikely]] {
@@ -280,11 +305,11 @@ namespace glz
                }
             }
 
-            if (start == it) {
+            if (start == line_end) {
                // trailing comma or empty
             }
             else {
-               read_key(start, it);
+               read_key(start, line_end); // Use original line ending position
             }
             break;
          }
@@ -763,10 +788,24 @@ namespace glz
                               if constexpr (fixed_array_value_t<M> && emplace_backable<M>) {
                                  const auto index = keys[i].second;
                                  if (row < member.size()) [[likely]] {
-                                    parse<CSV>::op<Opts>(member[row][index], ctx, it, end);
+                                    auto& element = member[row];
+                                    if (index < element.size()) {
+                                       parse<CSV>::op<Opts>(element[index], ctx, it, end);
+                                    }
+                                    else {
+                                       ctx.error = error_code::syntax_error;
+                                       return;
+                                    }
                                  }
                                  else [[unlikely]] {
-                                    parse<CSV>::op<Opts>(member.emplace_back()[index], ctx, it, end);
+                                    auto& element = member.emplace_back();
+                                    if (index < element.size()) {
+                                       parse<CSV>::op<Opts>(element[index], ctx, it, end);
+                                    }
+                                    else {
+                                       ctx.error = error_code::syntax_error;
+                                       return;
+                                    }
                                  }
                               }
                               else {

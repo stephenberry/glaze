@@ -533,48 +533,26 @@ namespace glz
                }
             }
 
-            uint64_t c{};
-            static constexpr uint64_t u_true =
-               0b00000000'00000000'00000000'00000000'01100101'01110101'01110010'01110100;
-            static constexpr uint64_t u_false =
-               0b00000000'00000000'00000000'01100101'01110011'01101100'01100001'01100110;
-            if constexpr (Opts.null_terminated) {
-               // Note that because our buffer must be null terminated, we can read one more index without checking:
-               std::memcpy(&c, it, 5);
-               // We have to wipe the 5th character for true testing
-               if ((c & 0xFF'FF'FF'00'FF'FF'FF'FF) == u_true) {
-                  value = true;
-                  it += 4;
-               }
-               else {
-                  if (c != u_false) [[unlikely]] {
-                     ctx.error = error_code::expected_true_or_false;
-                     return;
-                  }
-                  value = false;
-                  it += 5;
-               }
+            uint32_t c;
+            static constexpr uint32_t u_true = 0b01100101'01110101'01110010'01110100;
+            static constexpr uint32_t u_fals = 0b01110011'01101100'01100001'01100110;
+            std::memcpy(&c, it, 4);
+            it += 4;
+            if (c == u_true) {
+               value = true;
+            }
+            else if (it == end) [[unlikely]] {
+               ctx.error = error_code::unexpected_end;
+               return;
             }
             else {
-               std::memcpy(&c, it, 4);
-               if (c == u_true) {
-                  value = true;
-                  it += 4;
+               if (c == u_fals && (*it == 'e')) [[likely]] {
+                  value = false;
+                  ++it;
                }
-               else if (size_t(end - it) < 5) [[unlikely]] {
-                  ctx.error = error_code::unexpected_end;
+               else [[unlikely]] {
+                  ctx.error = error_code::expected_true_or_false;
                   return;
-               }
-               else {
-                  std::memcpy(&c, it, 5);
-                  if (c == u_false) [[likely]] {
-                     value = false;
-                     it += 5;
-                  }
-                  else [[unlikely]] {
-                     ctx.error = error_code::expected_true_or_false;
-                     return;
-                  }
                }
             }
          }
@@ -2248,7 +2226,6 @@ namespace glz
                      return;
                   }
                   else {
-                     ++it;
                      if constexpr ((glaze_object_t<T> || reflectable<T>) && Opts.error_on_missing_keys) {
                         constexpr auto req_fields = required_fields<T, Opts>();
                         if ((req_fields & fields) != req_fields) {
@@ -2264,6 +2241,7 @@ namespace glz
                            return;
                         }
                      }
+                     ++it; // Increment after checking for mising keys so errors are within buffer bounds
                      if constexpr (not Opts.null_terminated) {
                         if (it == end) {
                            ctx.error = error_code::end_reached;

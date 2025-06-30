@@ -3,7 +3,7 @@ include(FetchContent)
 FetchContent_Declare(
   ut
   GIT_REPOSITORY https://github.com/openalgz/ut
-  GIT_TAG v0.0.5
+  GIT_TAG v1.0.0
   GIT_SHALLOW TRUE
 )
 
@@ -55,7 +55,6 @@ elseif(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
     target_compile_options(glz_test_exceptions INTERFACE /W4 /wd4459 /wd4805)
 endif()
 
-add_subdirectory(asio_repe)
 add_subdirectory(api_test)
 add_subdirectory(beve_test)
 add_subdirectory(cli_menu_test)
@@ -67,20 +66,24 @@ add_subdirectory(exceptions_test)
 add_subdirectory(inplace_vector)
 add_subdirectory(int_parsing)
 add_subdirectory(jmespath)
-add_subdirectory(json_conformance)
-add_subdirectory(json_performance)
-add_subdirectory(json_reflection_test)
-add_subdirectory(json_test)
 add_subdirectory(jsonrpc_test)
 add_subdirectory(lib_test)
 add_subdirectory(mock_json_test)
-add_subdirectory(repe_test)
 add_subdirectory(reflection)
 add_subdirectory(roundtrip)
 add_subdirectory(stencil)
 add_subdirectory(threading_test)
 add_subdirectory(toml_test)
 add_subdirectory(utility_formats)
+
+# JSON Tests
+add_subdirectory(json_conformance)
+add_subdirectory(json_performance)
+add_subdirectory(json_reflection_test)
+add_subdirectory(json_test)
+
+add_subdirectory(networking_tests)
+
 if(glaze_EETF_FORMAT)
     add_subdirectory(eetf_test)
 endif(glaze_EETF_FORMAT)
