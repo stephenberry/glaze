@@ -338,7 +338,7 @@ suite schema_tests = [] {
       std::string schema_str = glz::write_json_schema<std::monostate>().value_or("error");
       // reading null will of course leave the std::optional as empty, therefore check if
       // null is actually written in the schema
-      expect(schema_str == R"({"type":["null"],"$defs":{},"const":null})");
+      expect(schema_str == R"({"type":["null"],"$defs":{},"title":"std::monostate","const":null})");
    };
 
    "enum oneOf has title and constant"_test = [] {
