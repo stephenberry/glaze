@@ -613,6 +613,7 @@ namespace glz
 
             static constexpr auto N = reflect<T>::size;
             static constexpr auto json_schema_size = reflect<json_schema_type<T>>::size;
+            auto req = s.required.value_or(std::vector<std::string_view>{});
 
             s.properties = std::map<sv, schema, std::less<>>();
             for_each<N>([&]<auto I>() {
@@ -621,6 +622,9 @@ namespace glz
                auto& def = defs[name_v<val_t>];
 
                static constexpr sv key = reflect<T>::keys[I];
+               if constexpr (Opts.error_on_missing_keys && !nullable_like<val_t>) {
+                  req.emplace_back(key);
+               }
 
                schema ref_val{};
                if constexpr (N > 0 && json_schema_size > 0) {
@@ -660,6 +664,9 @@ namespace glz
 
                (*s.properties)[key] = ref_val;
             });
+            if (!req.empty()) {
+               s.required = std::move(req);
+            }
             s.additionalProperties = false;
          }
       };
