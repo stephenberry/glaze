@@ -2,6 +2,7 @@
 #include <map>
 #include <unordered_map>
 
+#include "glaze/base64/base64.hpp"
 #include "glaze/csv/read.hpp"
 #include "glaze/csv/write.hpp"
 #include "glaze/record/recorder.hpp"
@@ -644,6 +645,117 @@ suite currency_csv_test = [] {
    };
 };
 
+suite quoted_fields_csv_test = [] {
+   "quoted_fields_with_commas_and_brackets"_test = [] {
+      std::string csv_data = R"(Entity,Currency,AlphabeticCode,NumericCode,MinorUnit,WithdrawalDate
+"MOLDOVA, REPUBLIC OF",Russian Ruble,RUR,810,,1993-12
+"FALKLAND ISLANDS (THE) [MALVINAS]",Falkland Islands Pound,FKP,238,2,
+"BONAIRE, SINT EUSTATIUS AND SABA",US Dollar,USD,840,2,)";
+
+      CurrencyCSV obj{};
+      auto ec = glz::read<glz::opts_csv{.layout = glz::colwise}>(obj, csv_data);
+      expect(!ec) << "Should parse quoted fields with commas and brackets\n";
+
+      expect(obj.Entity.size() == 3) << "Should have 3 entities\n";
+      expect(obj.Entity[0] == "MOLDOVA, REPUBLIC OF") << "First entity should preserve comma\n";
+      expect(obj.Entity[1] == "FALKLAND ISLANDS (THE) [MALVINAS]") << "Second entity should preserve brackets\n";
+      expect(obj.Entity[2] == "BONAIRE, SINT EUSTATIUS AND SABA") << "Third entity should preserve comma\n";
+
+      expect(obj.Currency[0] == "Russian Ruble") << "First currency should be 'Russian Ruble'\n";
+      expect(obj.Currency[1] == "Falkland Islands Pound") << "Second currency should be 'Falkland Islands Pound'\n";
+      expect(obj.Currency[2] == "US Dollar") << "Third currency should be 'US Dollar'\n";
+
+      expect(obj.AlphabeticCode[0] == "RUR") << "First code should be 'RUR'\n";
+      expect(obj.AlphabeticCode[1] == "FKP") << "Second code should be 'FKP'\n";
+      expect(obj.AlphabeticCode[2] == "USD") << "Third code should be 'USD'\n";
+   };
+
+   "quoted_fields_with_escaped_quotes"_test = [] {
+      std::string csv_data = R"(Entity,Currency,AlphabeticCode
+"Country with ""quotes""",Some Currency,ABC
+"Another ""quoted"" country",Other Currency,DEF)";
+
+      CurrencyCSV obj{};
+      auto ec = glz::read<glz::opts_csv{.layout = glz::colwise}>(obj, csv_data);
+      expect(!ec) << "Should parse quoted fields with escaped quotes\n";
+
+      expect(obj.Entity.size() == 2) << "Should have 2 entities\n";
+      expect(obj.Entity[0] == "Country with \"quotes\"") << "First entity should have unescaped quotes\n";
+      expect(obj.Entity[1] == "Another \"quoted\" country") << "Second entity should have unescaped quotes\n";
+   };
+
+   "mixed_quoted_and_unquoted_fields"_test = [] {
+      std::string csv_data = R"(Entity,Currency,AlphabeticCode
+"QUOTED, FIELD",Unquoted Currency,ABC
+Unquoted Field,"QUOTED, CURRENCY",DEF
+"BOTH, QUOTED","CURRENCY, TOO",GHI)";
+
+      CurrencyCSV obj{};
+      auto ec = glz::read<glz::opts_csv{.layout = glz::colwise}>(obj, csv_data);
+      expect(!ec) << "Should parse mixed quoted and unquoted fields\n";
+
+      expect(obj.Entity.size() == 3) << "Should have 3 entities\n";
+      expect(obj.Entity[0] == "QUOTED, FIELD") << "First entity should preserve comma\n";
+      expect(obj.Entity[1] == "Unquoted Field") << "Second entity should be unquoted\n";
+      expect(obj.Entity[2] == "BOTH, QUOTED") << "Third entity should preserve comma\n";
+
+      expect(obj.Currency[0] == "Unquoted Currency") << "First currency should be unquoted\n";
+      expect(obj.Currency[1] == "QUOTED, CURRENCY") << "Second currency should preserve comma\n";
+      expect(obj.Currency[2] == "CURRENCY, TOO") << "Third currency should preserve comma\n";
+   };
+
+   "raw_string_option_test"_test = [] {
+      // Test with raw_string = true - should still work but handle escapes differently
+      std::string csv_data = R"(Entity,Currency
+"MOLDOVA, REPUBLIC OF",Russian Ruble
+"Country with ""quotes""",Some Currency)";
+
+      CurrencyCSV obj{};
+      auto ec = glz::read<glz::opts_csv{.layout = glz::colwise, .raw_string = true}>(obj, csv_data);
+      expect(!ec) << "Should parse with raw_string = true\n";
+
+      expect(obj.Entity.size() == 2) << "Should have 2 entities\n";
+      expect(obj.Entity[0] == "MOLDOVA, REPUBLIC OF") << "First entity should preserve comma\n";
+      expect(obj.Entity[1] == "Country with \"quotes\"") << "Second entity should handle quotes with raw_string\n";
+   };
+
+   "empty_quoted_fields"_test = [] {
+      std::string csv_data = R"(Entity,Currency,AlphabeticCode
+"",Non-empty,ABC
+"Non-empty","",DEF
+"","",GHI)";
+
+      CurrencyCSV obj{};
+      auto ec = glz::read<glz::opts_csv{.layout = glz::colwise}>(obj, csv_data);
+      expect(!ec) << "Should parse empty quoted fields\n";
+
+      expect(obj.Entity.size() == 3) << "Should have 3 entities\n";
+      expect(obj.Entity[0] == "") << "First entity should be empty\n";
+      expect(obj.Entity[1] == "Non-empty") << "Second entity should be non-empty\n";
+      expect(obj.Entity[2] == "") << "Third entity should be empty\n";
+
+      expect(obj.Currency[0] == "Non-empty") << "First currency should be non-empty\n";
+      expect(obj.Currency[1] == "") << "Second currency should be empty\n";
+      expect(obj.Currency[2] == "") << "Third currency should be empty\n";
+   };
+
+   "complex_quoted_content"_test = [] {
+      std::string csv_data = R"(Entity,Currency,AlphabeticCode
+"COUNTRY (WITH) [BRACKETS], COMMAS, AND ""QUOTES""",Complex Currency,ABC
+"Line 1
+Line 2",Multi-line Currency,DEF)";
+
+      CurrencyCSV obj{};
+      auto ec = glz::read<glz::opts_csv{.layout = glz::colwise}>(obj, csv_data);
+      expect(!ec) << "Should parse complex quoted content\n";
+
+      expect(obj.Entity.size() == 2) << "Should have 2 entities\n";
+      expect(obj.Entity[0] == "COUNTRY (WITH) [BRACKETS], COMMAS, AND \"QUOTES\"")
+         << "First entity should preserve all special characters\n";
+      expect(obj.Entity[1] == "Line 1\nLine 2") << "Second entity should preserve newlines\n";
+   };
+};
+
 struct csv_headers_struct
 {
    std::vector<int> num1{1, 2, 3};
@@ -1209,6 +1321,77 @@ v3s[2],1,2,3,4)";
       expect(obj.b.size() == 3) << "Should have 3 'b' values\n";
       expect(obj.a[0] == 1 && obj.b[0] == 2) << "First row should be 1,2\n";
       expect(obj.a[2] == 5 && obj.b[2] == 6) << "Third row should be 5,6\n";
+   };
+};
+
+struct KeyframeData
+{
+   std::vector<int> start_ind;
+   std::vector<int> duration;
+   std::vector<int> delay;
+   std::vector<std::string> renderHandle;
+   std::vector<int> renderArgument_1;
+   std::vector<int> renderArgument_2;
+};
+
+suite odd_csv_test = [] {
+   "odd_string"_test = [] {
+      KeyframeData obj{};
+      std::string buffer{};
+      std::string csv_data = R"(start_ind,duration,delay,renderHandle,renderArgument_1,renderArgument_2
+0,400,30,gray::SimplePushPull,0,0
+400,250,40,gray::SimplePushPull,1,0
+650,300,80,gray::SimplePushPull,2,0)";
+      auto ec = glz::read<glz::opts_csv{.layout = glz::colwise}>(obj, csv_data);
+      expect(not ec) << glz::format_error(ec, buffer) << '\n';
+      // this passed.
+   };
+   "odd_files"_test = [] {
+      KeyframeData obj{};
+      std::string buffer{};
+      auto ec = glz::read_file_csv<glz::colwise>(obj, GLZ_TEST_DIRECTORY "/kf-data.csv", buffer);
+      expect(not ec) << glz::format_error(ec, buffer) << '\n';
+   };
+};
+
+struct overflow_struct
+{
+   std::vector<int> num1{};
+   std::deque<float> num2{};
+   std::vector<bool> maybe{};
+   std::vector<std::array<int, 3>> v3s{};
+};
+
+suite fuzzfailures = [] {
+   "fuzz1"_test = [] {
+      std::string_view csv_data{"6  [5\n0"};
+
+      overflow_struct obj{};
+      [[maybe_unused]] auto parsed = glz::read_csv<glz::colwise>(obj, csv_data);
+   };
+
+   "fuzz2"_test = [] {
+      std::string_view b64 =
+         "IBCPAAoxMDY3ODg4NDUyMTMyMTA4Njk5NmUrMTEzNzI0NzEyMDQ5NDIzLjE0NTIxNTJCMzIxMDg2OTk2ZS05MTEKMzIANLaztqfgDQ==";
+
+      auto input = glz::read_base64(b64);
+      std::vector<uint8_t> s;
+      s.resize(input.size());
+      std::memcpy(s.data(), input.data(), s.size());
+      my_struct obj;
+      expect(glz::read_csv<glz::colwise>(obj, s));
+   };
+
+   "fuzz3"_test = [] {
+      std::string_view b64 =
+         "/BAACjY0OQo0OTk5OTk5MjkwMDAwODQ4MzY1M0UrMDAyNDk5OTk5OTk5Nwo5NAo5NDQ0NDQ0NDQ0NDQ0Cjk0CjkyCjYyAAAAAAA4OA==";
+
+      auto input = glz::read_base64(b64);
+      std::vector<uint8_t> s;
+      s.resize(input.size());
+      std::memcpy(s.data(), input.data(), s.size());
+      my_struct obj;
+      expect(glz::read_csv<glz::colwise>(obj, s));
    };
 };
 

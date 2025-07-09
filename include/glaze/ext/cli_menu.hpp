@@ -52,9 +52,16 @@ namespace glz
       }
    }
 
-   template <auto Opts = opts{.prettify = true}, class T>
+   // When running with exceptions enabled we allow the user to provide an exceptions callback, which will be invoked
+   // when an exception is thrown from running a menu item. The exception callback must take a `const std::exception&`
+
+   template <auto Opts = opts{.prettify = true}, class T, cli_menu_boolean ShowMenu = std::atomic<bool>>
       requires(glaze_object_t<T> || reflectable<T>)
-   inline void run_cli_menu(T& value, cli_menu_boolean auto& show_menu)
+#if __cpp_exceptions
+   inline void run_cli_menu(T& value, ShowMenu&& show_menu, auto&& exception_callback)
+#else
+   inline void run_cli_menu(T& value, ShowMenu&& show_menu = true)
+#endif
    {
       using namespace detail;
 
@@ -204,11 +211,19 @@ namespace glz
                   else if constexpr (glaze_object_t<E> || reflectable<E>) {
                      std::atomic<bool> menu_boolean = true;
                      if constexpr (reflectable<T>) {
+#if __cpp_exceptions
+                        run_cli_menu<Opts>(get<I>(t), menu_boolean, exception_callback);
+#else
                         run_cli_menu<Opts>(get<I>(t), menu_boolean);
+#endif
                      }
                      else {
                         decltype(auto) v = get_member(value, get<I>(reflect<T>::values));
+#if __cpp_exceptions
+                        run_cli_menu<Opts>(v, menu_boolean, exception_callback);
+#else
                         run_cli_menu<Opts>(v, menu_boolean);
+#endif
                      }
                   }
                   else if constexpr (check_hide_non_invocable(Opts)) {
@@ -301,7 +316,21 @@ namespace glz
             errno = 0; // reset error number
             cmd = std::strtol(buf, &endptr, 10);
             if ((errno != ERANGE) && (endptr != buf) && (*endptr == '\0' || *endptr == '\n')) {
+#if __cpp_exceptions
+               if constexpr (std::invocable<decltype(exception_callback), const std::exception&>) {
+                  try {
+                     execute_menu_item(cmd);
+                  }
+                  catch (const std::exception& e) {
+                     exception_callback(e);
+                  }
+               }
+               else {
+                  execute_menu_item(cmd);
+               }
+#else
                execute_menu_item(cmd);
+#endif
                continue;
             }
          }
@@ -310,11 +339,13 @@ namespace glz
       }
    }
 
-   template <auto Opts = opts{.prettify = true}, class T>
+#if __cpp_exceptions
+   // Version without exception callback for platforms with exceptions enabled
+   template <auto Opts = opts{.prettify = true}, class T, cli_menu_boolean ShowMenu = std::atomic<bool>>
       requires(glaze_object_t<T> || reflectable<T>)
-   inline void run_cli_menu(T& value)
+   inline void run_cli_menu(T& value, ShowMenu&& show_menu = true)
    {
-      std::atomic<bool> menu_boolean = true;
-      run_cli_menu<Opts>(value, menu_boolean);
+      run_cli_menu<Opts>(value, show_menu, nullptr);
    }
+#endif
 }

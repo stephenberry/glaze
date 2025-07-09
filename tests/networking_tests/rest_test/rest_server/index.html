@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mithril.js Glaze Demo</title>
+
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@1.0.4/css/bulma.min.css">
+    <script src="https://unpkg.com/mithril/mithril.js"></script>
+
+    <style>
+        .loading {
+            opacity: 0.7;
+            pointer-events: none;
+            position: relative;
+        }
+
+        .loading::after {
+            content: "";
+            box-sizing: border-box;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 20px;
+            height: 20px;
+            margin-top: -10px;
+            margin-left: -10px;
+            border-radius: 50%;
+            border: 2px solid #dbdbdb;
+            border-top-color: #3273dc;
+            animation: spin 0.6s linear infinite;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .hero-gradient {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        .user-avatar {
+            font-size: 2rem;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+        }
+
+        .error-display {
+            margin-top: 1rem;
+        }
+
+        .error-content.notification {
+            margin-bottom: 0;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="app"></div>
+
+    <script>
+        // Global State
+        const State = {
+            users: [],
+            posts: [],
+            requestCount: 0,
+            loading: {
+                users: false,
+                posts: false,
+                addUser: false,
+                findUser: false,
+                addPost: false
+            },
+            errors: {
+                users: null,
+                addUser: null,
+                findUser: null,
+                posts: null,
+                addPost: null
+            },
+            foundUser: null,
+            performance: {}
+        };
+
+        // Utility functions
+        const incrementRequestCount = () => {
+            State.requestCount++;
+        };
+
+        const setLoading = (key, value) => {
+            State.loading[key] = value;
+            m.redraw();
+        };
+
+        const setError = (key, error) => {
+            State.errors[key] = error;
+            m.redraw();
+        };
+
+        const clearError = (key) => {
+            State.errors[key] = null;
+        };
+
+        // API functions
+        const api = {
+            getAllUsers: () => {
+                setLoading('users', true);
+                clearError('users');
+                return m.request({
+                    method: 'GET',
+                    url: '/api/getAllUsers'
+                }).then(data => {
+                    State.users = data;
+                    incrementRequestCount();
+                    setLoading('users', false);
+                    return data;
+                }).catch(error => {
+                    setError('users', 'Failed to load users');
+                    setLoading('users', false);
+                    incrementRequestCount();
+                    throw error;
+                });
+            },
+
+            createUser: (userData) => {
+                setLoading('addUser', true);
+                clearError('addUser');
+                return m.request({
+                    method: 'POST',
+                    url: '/api/createUser',
+                    body: userData
+                }).then(newUser => {
+                    State.users.unshift(newUser);
+                    incrementRequestCount();
+                    setLoading('addUser', false);
+                    return newUser;
+                }).catch(error => {
+                    setError('addUser', 'Could not add user. Please check inputs.');
+                    setLoading('addUser', false);
+                    incrementRequestCount();
+                    throw error;
+                });
+            },
+
+            getUserById: (id) => {
+                setLoading('findUser', true);
+                clearError('findUser');
+                return m.request({
+                    method: 'POST',
+                    url: '/api/getUserById',
+                    body: { id: parseInt(id) }
+                }).then(user => {
+                    State.foundUser = user;
+                    incrementRequestCount();
+                    setLoading('findUser', false);
+                    return user;
+                }).catch(error => {
+                    setError('findUser', 'Error finding user.');
+                    State.foundUser = null;
+                    setLoading('findUser', false);
+                    incrementRequestCount();
+                    throw error;
+                });
+            },
+
+            updateUser: (userId, updates) => {
+                return m.request({
+                    method: 'POST',
+                    url: '/api/updateUser',
+                    body: {
+                        id: parseInt(userId),
+                        ...updates  // Spread the updates into the body
+                    }
+                }).then(updatedUser => {
+                    const index = State.users.findIndex(u => u.id == userId);
+                    if (index !== -1) {
+                        State.users[index] = updatedUser;
+                    }
+                    incrementRequestCount();
+                    return updatedUser;
+                }).catch(error => {
+                    incrementRequestCount();
+                    throw error;
+                });
+            },
+
+            deleteUser: (userId) => {
+                return m.request({
+                    method: 'POST',
+                    url: '/api/deleteUser',
+                    body: { id: parseInt(userId) }
+                }).then(() => {
+                    State.users = State.users.filter(u => u.id != userId);
+                    incrementRequestCount();
+                }).catch(error => {
+                    incrementRequestCount();
+                    throw error;
+                });
+            },
+
+            getAllPosts: () => {
+                setLoading('posts', true);
+                clearError('posts');
+                return m.request({
+                    method: 'GET',
+                    url: '/api/getAllPosts'
+                }).then(data => {
+                    State.posts = data;
+                    incrementRequestCount();
+                    setLoading('posts', false);
+                    return data;
+                }).catch(error => {
+                    setError('posts', 'Could not load posts initially.');
+                    setLoading('posts', false);
+                    incrementRequestCount();
+                    throw error;
+                });
+            },
+
+            createPost: (postData) => {
+                setLoading('addPost', true);
+                clearError('addPost');
+                return m.request({
+                    method: 'POST',
+                    url: '/api/createPost',
+                    body: postData
+                }).then(newPost => {
+                    State.posts.unshift(newPost);
+                    incrementRequestCount();
+                    setLoading('addPost', false);
+                    return newPost;
+                }).catch(error => {
+                    setError('addPost', 'Failed to publish post.');
+                    setLoading('addPost', false);
+                    incrementRequestCount();
+                    throw error;
+                });
+            }
+        };
+
+        // Components
+        const HeroSection = {
+            view: () => m('section.hero.is-primary.hero-gradient',
+                m('.hero-body',
+                    m('.container',
+                        m('h1.title.is-1', '🚀 Mithril.js Demo'),
+                        m('p.subtitle.is-4', 'Interactive demo showcasing Mithril.js frontend with Glaze C++ REST backend')
+                    )
+                )
+            )
+        };
+
+        const StatsSection = {
+            view: () => m('section.section',
+                m('.container',
+                    m('.stats-grid', [
+                        m('.box.has-text-centered', [
+                            m('p.title.is-2', State.users.length || '-'),
+                            m('p.subtitle', 'Users')
+                        ]),
+                        m('.box.has-text-centered', [
+                            m('p.title.is-2', State.posts.length || '-'),
+                            m('p.subtitle', 'Posts')
+                        ]),
+                        m('.box.has-text-centered', [
+                            m('p.title.is-2', State.requestCount),
+                            m('p.subtitle', 'Requests')
+                        ])
+                    ])
+                )
+            )
+        };
+
+        const UserCard = {
+            view: (vnode) => {
+                const user = vnode.attrs.user;
+                return m('.box.mb-3.user-card-item', [
+                    m('.level', [
+                        m('.level-left', [
+                            m('.level-item', m('span.user-avatar', user.avatar || '👤')),
+                            m('.level-item',
+                                m('div', [
+                                    m('p.title.is-6', user.name || 'N/A'),
+                                    m('p.subtitle.is-7', user.email || 'N/A'),
+                                    m('p.is-size-7.has-text-grey', `ID: ${user.id || 'New'}`)
+                                ])
+                            )
+                        ]),
+                        user.id ? m('.level-right',
+                            m('.level-item',
+                                m('.buttons', [
+                                    m('button.button.is-small.is-warning', {
+                                        onclick: () => {
+                                            api.updateUser(user.id, { avatar: '🎭', id: user.id })
+                                                .catch(() => { }); // Error handling could be added here
+                                        }
+                                    }, 'Update Avatar'),
+                                    m('button.button.is-small.is-danger', {
+                                        onclick: () => {
+                                            api.deleteUser(user.id)
+                                                .catch(() => { }); // Error handling could be added here
+                                        }
+                                    }, 'Delete')
+                                ])
+                            )
+                        ) : null
+                    ])
+                ]);
+            }
+        };
+
+        const UsersSection = {
+            view: () => m('.column.is-half',
+                m('.box', [
+                    m('h2.title.is-4', '👥 Users Management'),
+                    m('button.button.is-primary.mb-4', {
+                        class: State.loading.users ? 'loading' : '',
+                        onclick: () => api.getAllUsers()
+                    }, 'Load Users'),
+                    m('#usersList.content',
+                        State.users.length > 0
+                            ? State.users.map(user => m(UserCard, { user, key: user.id }))
+                            : m('p.has-text-grey', 'Users will load automatically...')
+                    ),
+                    State.errors.users ? m('.error-display',
+                        m('.error-content.notification.is-danger', State.errors.users)
+                    ) : null
+                ])
+            )
+        };
+
+        const AddUserSection = {
+            view: () => {
+                let formData = { name: '', email: '', avatar: '👤' };
+
+                return m('.column.is-half',
+                    m('.box', [
+                        m('h2.title.is-4', '➕ Add New User'),
+                        m('form', {
+                            onsubmit: (e) => {
+                                e.preventDefault();
+                                const form = e.target;
+                                const data = {
+                                    name: form.name.value,
+                                    email: form.email.value,
+                                    avatar: form.avatar.value
+                                };
+                                api.createUser(data).then(() => {
+                                    form.reset();
+                                });
+                            },
+                            class: State.loading.addUser ? 'loading' : ''
+                        }, [
+                            m('.field', [
+                                m('label.label[for=newUserName]', 'Name:'),
+                                m('.control',
+                                    m('input.input[type=text][name=name][required]')
+                                )
+                            ]),
+                            m('.field', [
+                                m('label.label[for=newUserEmail]', 'Email:'),
+                                m('.control',
+                                    m('input.input[type=email][name=email][required]')
+                                )
+                            ]),
+                            m('.field', [
+                                m('label.label[for=newUserAvatar]', 'Avatar:'),
+                                m('.control',
+                                    m('.select.is-fullwidth',
+                                        m('select[name=avatar]', [
+                                            m('option[value=👤]', '👤 Default'),
+                                            m('option[value=👨‍💻]', '👨‍💻 Developer'),
+                                            m('option[value=👩‍💻]', '👩‍💻 Developer'),
+                                            m('option[value=👨‍💼]', '👨‍💼 Business'),
+                                            m('option[value=👩‍💼]', '👩‍💼 Business'),
+                                            m('option[value=👨‍🎨]', '👨‍🎨 Artist'),
+                                            m('option[value=👩‍🎨]', '👩‍🎨 Artist'),
+                                            m('option[value=🧑‍🚀]', '🧑‍🚀 Astronaut')
+                                        ])
+                                    )
+                                )
+                            ]),
+                            m('.field',
+                                m('.control',
+                                    m('button.button.is-success.is-fullwidth[type=submit]', 'Add User')
+                                )
+                            )
+                        ]),
+                        State.errors.addUser ? m('.error-display',
+                            m('.error-content.notification.is-danger', State.errors.addUser)
+                        ) : null
+                    ])
+                );
+            }
+        };
+
+        const FindUserSection = {
+            view: () => m('.column.is-half',
+                m('.box', [
+                    m('h2.title.is-4', '🔍 Find User by ID'),
+                    m('form', {
+                        onsubmit: (e) => {
+                            e.preventDefault();
+                            const id = e.target.id.value;
+                            if (id) {
+                                api.getUserById(id);
+                            }
+                        }
+                    }, [
+                        m('.field', [
+                            m('label.label[for=searchUserId]', 'User ID:'),
+                            m('.control',
+                                m('input.input[type=number][name=id][placeholder="Enter user ID (1, 2, 3...)"][required]')
+                            )
+                        ]),
+                        m('.field',
+                            m('.control',
+                                m('button.button.is-info.is-fullwidth[type=submit]', {
+                                    class: State.loading.findUser ? 'loading' : ''
+                                }, 'Search User')
+                            )
+                        )
+                    ]),
+                    m('#userResult.mt-2',
+                        State.foundUser && State.foundUser.id ?
+                            m('.box.mt-3',
+                                m('.level', [
+                                    m('.level-left', [
+                                        m('.level-item', m('span.user-avatar', State.foundUser.avatar || '👤')),
+                                        m('.level-item',
+                                            m('div', [
+                                                m('p.title.is-6', State.foundUser.name),
+                                                m('p.subtitle.is-7', State.foundUser.email),
+                                                m('p.is-size-7.has-text-grey', `ID: ${State.foundUser.id}`)
+                                            ])
+                                        )
+                                    ])
+                                ])
+                            ) :
+                            State.foundUser && State.foundUser.message ?
+                                m('.notification.is-warning.mt-3', State.foundUser.message) :
+                                State.foundUser === null && !State.loading.findUser ?
+                                    m('.notification.is-light.mt-3', 'User details will appear here if found.') : null
+                    ),
+                    State.errors.findUser ? m('.error-display',
+                        m('.error-content.notification.is-danger', State.errors.findUser)
+                    ) : null
+                ])
+            )
+        };
+
+        const PostCard = {
+            view: (vnode) => {
+                const post = vnode.attrs.post;
+                return m('article.box.mb-3.post-card-item',
+                    m('.content', [
+                        m('p.is-size-7.has-text-grey.mb-2', [
+                            'By ', m('strong', post.author || 'Unknown'), ' • ',
+                            m('em', post.createdAt || 'some time ago')
+                        ]),
+                        m('h4.title.is-5', post.title || 'Untitled Post'),
+                        m('p', post.body || '[No content]')
+                    ])
+                );
+            }
+        };
+
+        const PostsSection = {
+            view: () => m('.column.is-half',
+                m('.box', [
+                    m('h2.title.is-4', '📝 Blog Posts'),
+                    m('button.button.is-primary.mb-4', {
+                        class: State.loading.posts ? 'loading' : '',
+                        onclick: () => api.getAllPosts()
+                    }, 'Load Posts'),
+                    m('#postsList.content',
+                        State.posts.length > 0
+                            ? State.posts.map(post => m(PostCard, { post, key: post.id }))
+                            : m('p.has-text-grey', 'Posts will load automatically...')
+                    ),
+                    State.errors.posts ? m('.error-display',
+                        m('.error-content.notification.is-danger', State.errors.posts)
+                    ) : null
+                ])
+            )
+        };
+
+        const AddPostSection = {
+            view: () => m('.column.is-half',
+                m('.box', [
+                    m('h2.title.is-4', '✍️ Write New Post'),
+                    m('form', {
+                        onsubmit: (e) => {
+                            e.preventDefault();
+                            const form = e.target;
+                            const data = {
+                                title: form.title.value,
+                                body: form.body.value,
+                                author: form.author.value
+                            };
+                            api.createPost(data).then(() => {
+                                form.reset();
+                            });
+                        },
+                        class: State.loading.addPost ? 'loading' : ''
+                    }, [
+                        m('.field', [
+                            m('label.label[for=postTitle]', 'Title:'),
+                            m('.control',
+                                m('input.input[type=text][name=title][required]')
+                            )
+                        ]),
+                        m('.field', [
+                            m('label.label[for=postBody]', 'Content:'),
+                            m('.control',
+                                m('textarea.textarea[name=body][required]')
+                            )
+                        ]),
+                        m('.field', [
+                            m('label.label[for=postAuthor]', 'Author:'),
+                            m('.control',
+                                m('input.input[type=text][name=author][required]')
+                            )
+                        ]),
+                        m('.field',
+                            m('.control',
+                                m('button.button.is-success.is-fullwidth[type=submit]', 'Publish Post')
+                            )
+                        )
+                    ]),
+                    State.errors.addPost ? m('.error-display',
+                        m('.error-content.notification.is-danger', State.errors.addPost)
+                    ) : null
+                ])
+            )
+        };
+
+        const PerformanceSection = {
+            view: () => m('.column.is-full',
+                m('.box', [
+                    m('h2.title.is-4', '📊 Performance Metrics'),
+                    m('button.button.is-link', {
+                        onclick: () => {
+                            // Simple performance display
+                            const results = document.getElementById('performanceResults');
+                            if (results) {
+                                results.innerHTML = `
+                                    <div class="content has-text-left">
+                                        <h4 class="subtitle is-6">Request Statistics:</h4>
+                                        <p>Total Requests Made: ${State.requestCount}</p>
+                                        <p>Users Loaded: ${State.users.length}</p>
+                                        <p>Posts Loaded: ${State.posts.length}</p>
+                                        <p class="has-text-grey">Detailed performance metrics would be implemented with actual timing measurements.</p>
+                                    </div>
+                                `;
+                            }
+                        }
+                    }, 'Show Performance'),
+                    m('#performanceResults.mt-3')
+                ])
+            )
+        };
+
+        const MainSection = {
+            view: () => m('section.section',
+                m('.container',
+                    m('.columns.is-multiline', [
+                        m(UsersSection),
+                        m(AddUserSection),
+                        m(FindUserSection),
+                        m(PostsSection),
+                        m(AddPostSection),
+                        m(PerformanceSection)
+                    ])
+                )
+            )
+        };
+
+        const App = {
+            oninit: () => {
+                // Auto-load data on app initialization
+                setTimeout(() => api.getAllUsers(), 200);
+                setTimeout(() => api.getAllPosts(), 500);
+            },
+            view: () => [
+                m(HeroSection),
+                m(StatsSection),
+                m(MainSection)
+            ]
+        };
+
+        // Mount the app
+        m.mount(document.getElementById('app'), App);
+    </script>
+</body>
+
+</html>

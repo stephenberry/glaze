@@ -1,0 +1,39 @@
+name: Clang Tidy Include Cleaner
+
+on:
+  pull_request:
+    branches: [ main ]
+  push:
+    branches: [ main ]
+
+jobs:
+  clang-tidy-include-cleaner:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0 # Fetch all history for git diff
+        token: ${{ secrets.GITHUB_TOKEN }} # Use GITHUB_TOKEN for pushing changes
+
+    - name: Install Clang-Tidy
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y clang-tools-19
+
+    - name: Run Clang-Tidy Include Cleaner
+      run: |
+        echo "Running clang-tidy on .hpp files"
+        git diff --diff-filter=d --name-only origin/main | grep -E "\.hpp$" | xargs -r -t -n 1 -P 8 -- /usr/bin/clang-tidy-19 --fix --checks="-*,misc-include-cleaner" || true
+
+        echo "Running clang-tidy on .cpp files"
+        git diff --diff-filter=d --name-only origin/main | grep -E "\.cpp$" | xargs -r -t -n 1 -P 8 -- /usr/bin/clang-tidy-19 --fix --checks="-*,misc-include-cleaner" || true
+
+    - name: Commit changes
+      uses: EndBug/add-and-commit@v9
+      with:
+        author_name: Clang Tidy Bot
+        author_email: actions@github.com
+        message: 'Apply clang-tidy include cleaner fixes'
+        add: '*.hpp *.cpp' # Add only the changed C++ files

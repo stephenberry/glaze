@@ -18,7 +18,7 @@ static_assert(false, "standalone or boost asio must be included to use glaze/ext
 #include <coroutine>
 #include <iostream>
 
-#include "glaze/rpc/repe/registry.hpp"
+#include "glaze/rpc/registry.hpp"
 #include "glaze/util/memory_pool.hpp"
 
 namespace glz
@@ -43,10 +43,7 @@ namespace glz
          }
          const auto error_size = 4 + error_message.size(); // 4 bytes for message length
          msg.header.body_length = error_size;
-         msg.body.resize(error_size);
-         const uint32_t n = uint32_t(error_message.size());
-         std::memcpy(msg.body.data(), &n, 4);
-         std::memcpy(msg.body.data() + 4, error_message.data(), n);
+         msg.body = error_message;
       }
 
       template <class ErrorMessage>
@@ -62,9 +59,7 @@ namespace glz
          if (bool(msg.error())) {
             const auto ec = msg.header.ec;
             if (msg.header.body_length >= 4) {
-               uint32_t error_length{};
-               std::memcpy(&error_length, msg.body.data(), 4);
-               const std::string_view error_message{msg.body.data() + 4, error_length};
+               const std::string_view error_message = msg.body;
                std::string ret = "REPE error: ";
                ret.append(format_error(ec));
                ret.append(" | ");
@@ -86,9 +81,7 @@ namespace glz
          if (bool(msg.header.ec)) {
             const auto ec = msg.header.ec;
             if (msg.header.body_length >= 4) {
-               uint32_t error_length{};
-               std::memcpy(&error_length, msg.body.data(), 4);
-               const std::string_view error_message{msg.body.data() + 4, error_length};
+               const std::string_view error_message = msg.body;
                std::string ret = "REPE error: ";
                ret.append(format_error(ec));
                ret.append(" | ");
@@ -382,16 +375,12 @@ namespace glz
          send_buffer(*socket, *request);
 
          if (bool(request->error())) {
-            socket.ptr.reset();
-            (*is_connected) = false;
             return;
          }
 
          if (not header.notify) {
             receive_buffer(*socket, response);
             if (bool(response.error())) {
-               socket.ptr.reset();
-               (*is_connected) = false;
                return;
             }
          }
@@ -431,16 +420,17 @@ namespace glz
          send_buffer(*socket, *request);
 
          if (bool(request->error())) {
-            socket.ptr.reset();
-            (*is_connected) = false;
             throw std::runtime_error(glz::format_error(request->error()));
          }
 
          receive_buffer(*socket, response);
          if (bool(response.error())) {
-            socket.ptr.reset();
-            (*is_connected) = false;
-            throw std::runtime_error(glz::format_error(response.error()));
+            std::string error_message = glz::format_error(response.error());
+            if (response.body.size()) {
+               error_message.append(": ");
+               error_message.append(response.body);
+            }
+            throw std::runtime_error(error_message);
          }
       }
 
@@ -468,16 +458,17 @@ namespace glz
          send_buffer(*socket, *request);
 
          if (bool(request->error())) {
-            socket.ptr.reset();
-            (*is_connected) = false;
             throw std::runtime_error(glz::format_error(request->error()));
          }
 
          receive_buffer(*socket, response);
          if (bool(response.error())) {
-            socket.ptr.reset();
-            (*is_connected) = false;
-            throw std::runtime_error(glz::format_error(response.error()));
+            std::string error_message = glz::format_error(response.error());
+            if (response.body.size()) {
+               error_message.append(": ");
+               error_message.append(response.body);
+            }
+            throw std::runtime_error(error_message);
          }
 
          auto ec = read<Opts>(output, response.body);
@@ -519,16 +510,17 @@ namespace glz
          send_buffer(*socket, *request);
 
          if (bool(request->error())) {
-            socket.ptr.reset();
-            (*is_connected) = false;
             throw std::runtime_error(glz::format_error(request->error()));
          }
 
          receive_buffer(*socket, response);
          if (bool(response.error())) {
-            socket.ptr.reset();
-            (*is_connected) = false;
-            throw std::runtime_error(glz::format_error(response.error()));
+            std::string error_message = glz::format_error(response.error());
+            if (response.body.size()) {
+               error_message.append(": ");
+               error_message.append(response.body);
+            }
+            throw std::runtime_error(error_message);
          }
 
          auto ec = read<Opts>(output, response.body);
@@ -562,12 +554,12 @@ namespace glz
       std::shared_ptr<asio::signal_set> signals{};
       std::shared_ptr<std::vector<std::thread>> threads{};
 
-      repe::registry<Opts> registry{};
+      glz::registry<Opts> registry{};
 
       void clear_registry() { registry.clear(); }
 
-      template <const std::string_view& Root = repe::detail::empty_path, class T>
-         requires(glz::glaze_object_t<T> || glz::reflectable<T>)
+      template <const std::string_view& Root = detail::empty_path, class T>
+         requires(glaze_object_t<T> || reflectable<T>)
       void on(T& value)
       {
          registry.template on<Root>(value);
@@ -640,12 +632,15 @@ namespace glz
       asio::awaitable<void> run_instance(asio::ip::tcp::socket socket)
       {
          socket.set_option(asio::ip::tcp::no_delay(true));
+
+         // Allocate once and reuse memory
          repe::message request{};
          repe::message response{};
 
          try {
             while (true) {
                co_await co_receive_buffer(socket, request);
+               response.header.ec = {}; // clear error code, as we use this field to determine if a new error occured
                registry.call(request, response);
                if (not request.header.notify()) {
                   co_await co_send_buffer(socket, response);

@@ -16,8 +16,7 @@ namespace glz
    [[nodiscard]] error_ctx read_as(T&& root_value, const sv json_ptr, B&& buffer)
    {
       error_ctx pe{};
-      bool b =
-         detail::seek_impl([&](auto&& val) { pe = read<Opts>(val, buffer); }, std::forward<T>(root_value), json_ptr);
+      bool b = seek([&](auto&& val) { pe = read<Opts>(val, buffer); }, std::forward<T>(root_value), json_ptr);
       if (b) {
          return pe;
       }
@@ -29,7 +28,7 @@ namespace glz
    template <auto Opts, class T, class B>
    [[nodiscard]] bool write_as(T&& root_value, const sv json_ptr, B&& buffer)
    {
-      return detail::seek_impl(
+      return seek(
          [&](auto&& val) {
             if constexpr (raw_buffer<B>) {
                std::ignore = write<Opts>(
