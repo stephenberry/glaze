@@ -685,6 +685,7 @@ namespace glz
       detail::schematic s{};
       s.defs.emplace();
       detail::to_json_schema<std::decay_t<T>>::template op<Opts>(s, *s.defs);
+      s.attributes.title = name_v<T>;
       // Making this static constexpr options to fix MSVC bug
       static constexpr opts options = opts_write_type_info_off<decltype(Opts)>{{Opts}};
       return write<options>(std::move(s), std::forward<Buffer>(buffer));
