@@ -9104,6 +9104,68 @@ suite skip_tests = [] {
    };
 };
 
+struct specify_only_skip_obj
+{
+   int i{1};
+   int j{2};
+   int k{3};
+};
+
+template <>
+struct glz::meta<specify_only_skip_obj>
+{
+   static constexpr bool skip(const std::string_view key) { return key == "j"; }
+};
+
+suite specify_only_skip_obj_tests = [] {
+   "skip_only_one"_test = [] {
+      specify_only_skip_obj obj{};
+      expect(glz::write_json(obj) == R"({"i":1,"k":3})") << glz::write_json(obj).value();
+   };
+};
+
+struct skip_hidden_elements
+{
+   int i{1};
+   int hidden_j{2};
+   int hidden_k{3};
+   int l{4};
+};
+
+template <>
+struct glz::meta<skip_hidden_elements>
+{
+   static constexpr bool skip(const std::string_view key) { return key.starts_with(std::string_view{"hidden"}); }
+};
+
+suite skip_hidden_elements_tests = [] {
+   "skip_hidden_elements"_test = [] {
+      skip_hidden_elements obj{};
+      expect(glz::write_json(obj) == R"({"i":1,"l":4})") << glz::write_json(obj).value();
+   };
+};
+
+struct skip_first_and_last
+{
+   int i{1};
+   int hidden_j{2};
+   int hidden_k{3};
+   int l{4};
+};
+
+template <>
+struct glz::meta<skip_first_and_last>
+{
+   static constexpr bool skip(const std::string_view key) { return key == "i" || key == "l"; }
+};
+
+suite skip_first_and_last_tests = [] {
+   "skip_first_and_last_tests"_test = [] {
+      skip_first_and_last obj{};
+      expect(glz::write_json(obj) == R"({"hidden_j":2,"hidden_k":3})") << glz::write_json(obj).value();
+   };
+};
+
 template <size_t N>
 struct FixedName
 {

@@ -1812,6 +1812,10 @@ namespace glz
                for_each<N>([&]<size_t I>() {
                   using val_t = field_t<T, I>;
 
+                  if constexpr (meta_has_skip<T>) {
+                     if constexpr (meta<T>::skip(reflect<T>::keys[I])) return;
+                  }
+                  
                   if constexpr (always_skipped<val_t>) {
                      return;
                   }
@@ -1855,7 +1859,7 @@ namespace glz
                         first = false;
                      }
                      else {
-                        // Null members may be skipped so we cant just write it out for all but the last member
+                        // Null members may be skipped so we can't just write it out for all but the last member
                         if constexpr (Opts.prettify) {
                            std::memcpy(&b[ix], ",\n", 2);
                            ix += 2;
