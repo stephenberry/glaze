@@ -3,7 +3,6 @@
 #include <unordered_map>
 
 #include "glaze/glaze.hpp"
-#include "glaze/reflection/get_name.hpp"
 #include "ut/ut.hpp"
 
 using namespace ut;
