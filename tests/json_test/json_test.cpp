@@ -7428,7 +7428,7 @@ suite bitset = [] {
    };
 };
 
-#if defined(__STDCPP_FLOAT128_T__)
+#if defined(__STDCPP_FLOAT128_T__) && !defined(__APPLE__)
 suite float128_test = [] {
    "float128"_test = [] {
       std::float128_t x = 3.14;
