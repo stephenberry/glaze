@@ -219,7 +219,11 @@ namespace glz
    inline constexpr bool maybe_skipped = [] {
       if constexpr (reflect<T>::size > 0) {
          constexpr auto N = reflect<T>::size;
-         if constexpr (Opts.skip_null_members) {
+         if constexpr (meta_has_skip<T>) {
+            // If the glz::meta provides a skip method, we assume the user wants to skip fields
+            return true;
+         }
+         else if constexpr (Opts.skip_null_members) {
             // if any type could be null then we might skip
             return []<size_t... I>(std::index_sequence<I...>) {
                return ((always_skipped<field_t<T, I>> || null_t<field_t<T, I>>) || ...);

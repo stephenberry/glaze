@@ -1812,9 +1812,10 @@ namespace glz
                for_each<N>([&]<size_t I>() {
                   using val_t = field_t<T, I>;
 
-                  if constexpr (meta_has_skip<T>)
-                     if constexpr (meta<T>::skip(member_nameof<I, T>)) return;
-
+                  if constexpr (meta_has_skip<T>) {
+                     if constexpr (meta<T>::skip(reflect<T>::keys[I])) return;
+                  }
+                  
                   if constexpr (always_skipped<val_t>) {
                      return;
                   }
@@ -1858,7 +1859,7 @@ namespace glz
                         first = false;
                      }
                      else {
-                        // Null members may be skipped so we cant just write it out for all but the last member
+                        // Null members may be skipped so we can't just write it out for all but the last member
                         if constexpr (Opts.prettify) {
                            std::memcpy(&b[ix], ",\n", 2);
                            ix += 2;
@@ -1895,11 +1896,7 @@ namespace glz
                   maybe_pad<fixed_max_size>(b, ix);
                }
 
-               bool wrote_element = false;
                for_each<N>([&]<size_t I>() {
-                  if constexpr (meta_has_skip<T>)
-                     if constexpr (meta<T>::skip(member_nameof<I, T>)) return;
-
                   if constexpr (not fixed_max_size) {
                      if constexpr (Opts.prettify) {
                         maybe_pad(padding + ctx.indentation_level, b, ix);
@@ -1927,14 +1924,8 @@ namespace glz
                         std::memcpy(&b[ix], quoted_key.data(), n);
                         ix += n;
                      }
-                     else if (wrote_element) {
-                        static constexpr auto quoted_key = join_v<chars<",">, quoted_key_v<key>, chars<"null">>;
-                        static constexpr auto n = quoted_key.size();
-                        std::memcpy(&b[ix], quoted_key.data(), n);
-                        ix += n;
-                     }
                      else {
-                        static constexpr auto quoted_key = join_v<quoted_key_v<key>, chars<"null">>;
+                        static constexpr auto quoted_key = join_v<chars<",">, quoted_key_v<key>, chars<"null">>;
                         static constexpr auto n = quoted_key.size();
                         std::memcpy(&b[ix], quoted_key.data(), n);
                         ix += n;
@@ -1947,14 +1938,8 @@ namespace glz
                         std::memcpy(&b[ix], quoted_key.data(), n);
                         ix += n;
                      }
-                     else if (wrote_element) {
-                        static constexpr auto quoted_key = join_v<chars<",">, quoted_key_v<key>>;
-                        static constexpr auto n = quoted_key.size();
-                        std::memcpy(&b[ix], quoted_key.data(), n);
-                        ix += n;
-                     }
                      else {
-                        static constexpr auto quoted_key = quoted_key_v<key>;
+                        static constexpr auto quoted_key = join_v<chars<",">, quoted_key_v<key>>;
                         static constexpr auto n = quoted_key.size();
                         std::memcpy(&b[ix], quoted_key.data(), n);
                         ix += n;
@@ -1969,8 +1954,6 @@ namespace glz
                                                                  ix);
                      }
                   }
-
-                  wrote_element = true;
                });
             }
 
