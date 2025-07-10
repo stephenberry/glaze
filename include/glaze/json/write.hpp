@@ -1815,7 +1815,7 @@ namespace glz
                   if constexpr (meta_has_skip<T>) {
                      if constexpr (meta<T>::skip(reflect<T>::keys[I])) return;
                   }
-                  
+
                   if constexpr (always_skipped<val_t>) {
                      return;
                   }

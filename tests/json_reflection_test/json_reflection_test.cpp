@@ -22,15 +22,13 @@ static_assert(glz::name_v<my_struct> == "my_struct");
 static_assert(glz::meta_has_skip<my_struct> == false);
 
 struct test_skip
-{
-};
+{};
 
 template <>
-   struct glz::meta<test_skip>
-   {
-      static constexpr bool skip(const std::string_view) { return true; }
-   };
-
+struct glz::meta<test_skip>
+{
+   static constexpr bool skip(const std::string_view) { return true; }
+};
 
 static_assert(glz::meta_has_skip<test_skip>);
 
