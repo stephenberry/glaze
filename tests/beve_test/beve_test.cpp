@@ -2225,6 +2225,50 @@ suite early_end = [] {
    };
 };
 
+struct empty_string_test_struct {
+   std::string empty_field = "";
+   int num = 42;
+};
+
+suite empty_string_test = [] {
+   "empty string at buffer boundary"_test = [] {
+      // Test case for the issue where ix == b.size() and str.size() == 0 
+      // causes an assert inside std::vector::operator[]
+      std::string empty_str = "";
+      std::string buffer;
+      expect(not glz::write_beve(empty_str, buffer));
+      
+      // Test reading back
+      std::string result;
+      expect(!glz::read_beve(result, buffer));
+      expect(result == empty_str);
+   };
+
+   "empty string in struct"_test = [] {
+      empty_string_test_struct obj;
+      std::string buffer;
+      expect(not glz::write_beve(obj, buffer));
+      
+      empty_string_test_struct result;
+      expect(!glz::read_beve(result, buffer));
+      expect(result.empty_field == "");
+      expect(result.num == 42);
+   };
+
+   "multiple empty strings"_test = [] {
+      std::vector<std::string> empty_strings = {"", "", ""};
+      std::string buffer;
+      expect(not glz::write_beve(empty_strings, buffer));
+      
+      std::vector<std::string> result;
+      expect(!glz::read_beve(result, buffer));
+      expect(result.size() == 3);
+      expect(result[0] == "");
+      expect(result[1] == "");
+      expect(result[2] == "");
+   };
+};
+
 suite past_fuzzing_issues = [] {
    "fuzz0"_test = [] {
       std::string_view base64 =

@@ -461,8 +461,10 @@ namespace glz
             b.resize(2 * k);
          }
 
-         std::memcpy(&b[ix], str.data(), n);
-         ix += n;
+         if (n) {
+            std::memcpy(&b[ix], str.data(), n);
+            ix += n;
+         }
       }
 
       template <auto Opts>
@@ -475,8 +477,10 @@ namespace glz
             b.resize(2 * k);
          }
 
-         std::memcpy(&b[ix], value.data(), n);
-         ix += n;
+         if (n) {
+            std::memcpy(&b[ix], value.data(), n);
+            ix += n;
+         }
       }
    };
 
@@ -577,8 +581,10 @@ namespace glz
                      b.resize(2 * k);
                   }
 
-                  std::memcpy(&b[ix], x.data(), n);
-                  ix += n;
+                  if (n) {
+                     std::memcpy(&b[ix], x.data(), n);
+                     ix += n;
+                  }
                };
 
                dump_array(args...);
