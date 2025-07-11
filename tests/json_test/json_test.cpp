@@ -7428,7 +7428,7 @@ suite bitset = [] {
    };
 };
 
-#if defined(__STDCPP_FLOAT128_T__)
+#if defined(__STDCPP_FLOAT128_T__) && !defined(__APPLE__)
 suite float128_test = [] {
    "float128"_test = [] {
       std::float128_t x = 3.14;
@@ -9104,6 +9104,71 @@ suite skip_tests = [] {
    };
 };
 
+struct specify_only_skip_obj
+{
+   int i{1};
+   int j{2};
+   int k{3};
+};
+
+template <>
+struct glz::meta<specify_only_skip_obj>
+{
+   static constexpr bool skip(const std::string_view key, const meta_context&) { return key == "j"; }
+};
+
+suite specify_only_skip_obj_tests = [] {
+   "skip_only_one"_test = [] {
+      specify_only_skip_obj obj{};
+      expect(glz::write_json(obj) == R"({"i":1,"k":3})") << glz::write_json(obj).value();
+   };
+};
+
+struct skip_hidden_elements
+{
+   int i{1};
+   int hidden_j{2};
+   int hidden_k{3};
+   int l{4};
+};
+
+template <>
+struct glz::meta<skip_hidden_elements>
+{
+   static constexpr bool skip(const std::string_view key, const meta_context&)
+   {
+      return key.starts_with(std::string_view{"hidden"});
+   }
+};
+
+suite skip_hidden_elements_tests = [] {
+   "skip_hidden_elements"_test = [] {
+      skip_hidden_elements obj{};
+      expect(glz::write_json(obj) == R"({"i":1,"l":4})") << glz::write_json(obj).value();
+   };
+};
+
+struct skip_first_and_last
+{
+   int i{1};
+   int hidden_j{2};
+   int hidden_k{3};
+   int l{4};
+};
+
+template <>
+struct glz::meta<skip_first_and_last>
+{
+   static constexpr bool skip(const std::string_view key, const meta_context&) { return key == "i" || key == "l"; }
+};
+
+suite skip_first_and_last_tests = [] {
+   "skip_first_and_last_tests"_test = [] {
+      skip_first_and_last obj{};
+      expect(glz::write_json(obj) == R"({"hidden_j":2,"hidden_k":3})") << glz::write_json(obj).value();
+   };
+};
+
 template <size_t N>
 struct FixedName
 {
@@ -10762,6 +10827,52 @@ suite integer_id_variant_tests = [] {
       ]
    }
 ])") << out;
+   };
+};
+
+struct versioned_data_t
+{
+   std::string name{};
+   int version{};
+   std::string computed_field{};
+   std::string input_only_field{};
+};
+
+template <>
+struct glz::meta<versioned_data_t>
+{
+   static constexpr bool skip(const std::string_view key, const meta_context& ctx)
+   {
+      // Skip computed_field during parsing (reading) - it should only be written
+      if (key == "computed_field" && ctx.op == glz::operation::parse) {
+         return true;
+      }
+
+      // Skip input_only_field during serialization (writing) - it should only be read
+      if (key == "input_only_field" && ctx.op == glz::operation::serialize) {
+         return true;
+      }
+
+      return false;
+   }
+};
+
+suite operation_specific_skipping_tests = [] {
+   "operation_specific_skipping"_test = [] {
+      versioned_data_t obj{"TestData", 1, "computed_value", "input_value"};
+      std::string buffer{};
+
+      // Writing JSON - skips input_only_field
+      expect(not glz::write_json(obj, buffer));
+      expect(buffer == R"({"name":"TestData","version":1,"computed_field":"computed_value"})") << buffer;
+
+      // Reading JSON - skips computed_field
+      const char* json = R"({"name":"NewData","version":2,"computed_field":"ignored","input_only_field":"new_input"})";
+      expect(glz::read_json(obj, json) == glz::error_code::none);
+      expect(obj.name == "NewData");
+      expect(obj.version == 2);
+      expect(obj.computed_field == "computed_value"); // Should retain original value
+      expect(obj.input_only_field == "new_input");
    };
 };
 

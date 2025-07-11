@@ -174,6 +174,19 @@ namespace glz
             return;
          }
 
+         // Check for operation-specific skipping
+         if constexpr (meta_has_skip<std::remove_cvref_t<T>>) {
+            if constexpr (meta<std::remove_cvref_t<T>>::skip(Key, {glz::operation::parse})) {
+               skip_value<JSON>::op<Opts>(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]]
+                  return; // Propagate error from skip_value
+               if constexpr (Opts.error_on_missing_keys || Opts.partial_read) {
+                  ((selected_index = I), ...); // Mark as handled even if skipped
+               }
+               return;
+            }
+         }
+
          using V = refl_t<T, I>;
 
          if constexpr (const_value_v<V>) {

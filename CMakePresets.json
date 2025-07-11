@@ -68,6 +68,18 @@
                 "CMAKE_CXX_COMPILER": "/usr/bin/clang++",
                 "CMAKE_BUILD_TYPE": "Debug"
             }
+        },
+        {
+            "name": "GCC",
+            "displayName": "GCC 15.1.0 aarch64-apple-darwin24",
+            "description": "Using compilers: C = /opt/homebrew/bin/aarch64-apple-darwin24-gcc-15, CXX = /opt/homebrew/bin/aarch64-apple-darwin24-g++-15",
+            "binaryDir": "${sourceDir}/out/build/${presetName}",
+            "cacheVariables": {
+                "CMAKE_INSTALL_PREFIX": "${sourceDir}/out/install/${presetName}",
+                "CMAKE_C_COMPILER": "/opt/homebrew/bin/aarch64-apple-darwin24-gcc-15",
+                "CMAKE_CXX_COMPILER": "/opt/homebrew/bin/aarch64-apple-darwin24-g++-15",
+                "CMAKE_BUILD_TYPE": "Debug"
+            }
         }
     ],
     "testPresets": [

@@ -71,6 +71,7 @@ nav:
    - Compile Time Options: options.md
    - Optimizing Performance: optimizing-performance.md
    - Rename Keys: rename-keys.md
+   - Skip Keys: skip-keys.md
    - Generic JSON: generic-json.md
  - Reflection:
    - Pure Reflection: pure-reflection.md
