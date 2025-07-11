@@ -27,7 +27,7 @@ struct test_skip
 template <>
 struct glz::meta<test_skip>
 {
-   static constexpr bool skip(const std::string_view) { return true; }
+   static constexpr bool skip(const std::string_view, const meta_context&) { return true; }
 };
 
 static_assert(glz::meta_has_skip<test_skip>);
