@@ -10830,28 +10830,31 @@ suite integer_id_variant_tests = [] {
    };
 };
 
-struct versioned_data_t {
-    std::string name{};
-    int version{};
-    std::string computed_field{};
-    std::string input_only_field{};
+struct versioned_data_t
+{
+   std::string name{};
+   int version{};
+   std::string computed_field{};
+   std::string input_only_field{};
 };
 
 template <>
-struct glz::meta<versioned_data_t> {
-    static constexpr bool skip(const std::string_view key, const meta_context& ctx) {
-        // Skip computed_field during parsing (reading) - it should only be written
-        if (key == "computed_field" && ctx.op == glz::operation::parse) {
-            return true;
-        }
-        
-        // Skip input_only_field during serialization (writing) - it should only be read
-        if (key == "input_only_field" && ctx.op == glz::operation::serialize) {
-            return true;
-        }
-        
-        return false;
-    }
+struct glz::meta<versioned_data_t>
+{
+   static constexpr bool skip(const std::string_view key, const meta_context& ctx)
+   {
+      // Skip computed_field during parsing (reading) - it should only be written
+      if (key == "computed_field" && ctx.op == glz::operation::parse) {
+         return true;
+      }
+
+      // Skip input_only_field during serialization (writing) - it should only be read
+      if (key == "input_only_field" && ctx.op == glz::operation::serialize) {
+         return true;
+      }
+
+      return false;
+   }
 };
 
 suite operation_specific_skipping_tests = [] {

@@ -15,11 +15,7 @@
 
 namespace glz
 {
-   enum struct operation
-   {
-      serialize,
-      parse
-   };
+   enum struct operation { serialize, parse };
 
    // The meta_context provides compile time data about the serialization context.
    // This include whether we are serializing or parsing.
