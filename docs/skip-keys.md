@@ -18,7 +18,7 @@ struct my_struct_t {
 
 template <>
 struct glz::meta<my_struct_t> {
-    static constexpr bool skip(const std::string_view key) {
+    static constexpr bool skip(const std::string_view key, const meta_context&) {
         // Return true to skip the key, false to include it
         return key == "internal_member";
     }
@@ -38,7 +38,7 @@ struct skipped_t {
 
 template <>
 struct glz::meta<skipped_t> {
-    static constexpr bool skip(const std::string_view key) {
+    static constexpr bool skip(const std::string_view key, const meta_context&) {
         if (key == "secret_info") {
             return true; // Skip this field
         }
@@ -78,7 +78,7 @@ struct prefixed_skipped_t {
 
 template <>
 struct glz::meta<prefixed_skipped_t> {
-    static constexpr bool skip(const std::string_view key) { 
+    static constexpr bool skip(const std::string_view key, const meta_context&) { 
         return key.starts_with("temp_"); // Skip keys starting with "temp_"
     }
 };

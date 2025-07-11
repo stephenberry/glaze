@@ -15,6 +15,19 @@
 
 namespace glz
 {
+   enum struct operation
+   {
+      serialize,
+      parse
+   };
+
+   // The meta_context provides compile time data about the serialization context.
+   // This include whether we are serializing or parsing.
+   struct meta_context
+   {
+      operation op = operation::serialize;
+   };
+
    template <class T>
    struct meta;
 

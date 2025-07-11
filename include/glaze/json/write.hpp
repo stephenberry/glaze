@@ -1813,7 +1813,8 @@ namespace glz
                   using val_t = field_t<T, I>;
 
                   if constexpr (meta_has_skip<T>) {
-                     if constexpr (meta<T>::skip(reflect<T>::keys[I])) return;
+                     static constexpr meta_context mctx{.op = operation::serialize};
+                     if constexpr (meta<T>::skip(reflect<T>::keys[I], mctx)) return;
                   }
 
                   if constexpr (always_skipped<val_t>) {

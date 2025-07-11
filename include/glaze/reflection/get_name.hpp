@@ -123,10 +123,12 @@ namespace glz
    template <class T>
    struct meta;
 
+   struct meta_context;
+
    // Concept when skip is specified for the type
    template <class T>
-   concept meta_has_skip = requires(T t, const std::string_view s) {
-      { glz::meta<std::remove_cvref_t<T>>::skip(s) } -> std::same_as<bool>;
+   concept meta_has_skip = requires(T t, const std::string_view s, const meta_context& mctx) {
+      { glz::meta<std::remove_cvref_t<T>>::skip(s, mctx) } -> std::same_as<bool>;
    };
 
    // Concept for when rename_key returns exactly std::string (allocates)

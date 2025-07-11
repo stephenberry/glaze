@@ -9114,7 +9114,7 @@ struct specify_only_skip_obj
 template <>
 struct glz::meta<specify_only_skip_obj>
 {
-   static constexpr bool skip(const std::string_view key) { return key == "j"; }
+   static constexpr bool skip(const std::string_view key, const meta_context&) { return key == "j"; }
 };
 
 suite specify_only_skip_obj_tests = [] {
@@ -9135,7 +9135,10 @@ struct skip_hidden_elements
 template <>
 struct glz::meta<skip_hidden_elements>
 {
-   static constexpr bool skip(const std::string_view key) { return key.starts_with(std::string_view{"hidden"}); }
+   static constexpr bool skip(const std::string_view key, const meta_context&)
+   {
+      return key.starts_with(std::string_view{"hidden"});
+   }
 };
 
 suite skip_hidden_elements_tests = [] {
@@ -9156,7 +9159,7 @@ struct skip_first_and_last
 template <>
 struct glz::meta<skip_first_and_last>
 {
-   static constexpr bool skip(const std::string_view key) { return key == "i" || key == "l"; }
+   static constexpr bool skip(const std::string_view key, const meta_context&) { return key == "i" || key == "l"; }
 };
 
 suite skip_first_and_last_tests = [] {
