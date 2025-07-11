@@ -2,6 +2,9 @@
 
 The `skip` functionality in Glaze allows you to conditionally skip struct members during JSON serialization at compile time. This feature operates at compile time.
 
+> [!NOTE]
+> Currently the `glz::meta::skip` function only works for skipping on serialization, but support for skipping when reading will be added in the future.
+
 ## Overview
 
 By default, Glaze serializes all public C++ struct members to JSON. However, you may need to omit certain fields from your JSON output.
@@ -56,13 +59,6 @@ std::string buffer{};
 // Writing JSON
 glz::write_json(obj, buffer);
 // Output: {"name":"John Doe","age":30}
-
-// Reading JSON (skipped fields are ignored if present in input)
-buffer = R"({"name":"Jane Doe","age":25,"secret_info":"Should be ignored"})";
-glz::read_json(obj, buffer);
-// obj.name == "Jane Doe"
-// obj.age == 25
-// obj.secret_info == "My Top Secret" (original value, not overwritten)
 ```
 
 ## Example 2: Skipping Based on Prefix/Suffix
