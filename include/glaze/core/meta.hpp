@@ -257,6 +257,12 @@ namespace glz
    template <class T>
    concept ided = requires { meta<std::decay_t<T>>::ids; } || requires { std::decay_t<T>::glaze::ids; };
 
+   // Concept when skip is specified for the type
+   template <class T>
+   concept meta_has_skip = requires(T t, const std::string_view s, const meta_context& mctx) {
+      { glz::meta<std::remove_cvref_t<T>>::skip(s, mctx) } -> std::same_as<bool>;
+   };
+
    template <class T>
    inline constexpr std::string_view tag_v = [] {
       if constexpr (tagged<T>) {

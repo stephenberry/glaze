@@ -10830,6 +10830,49 @@ suite integer_id_variant_tests = [] {
    };
 };
 
+struct versioned_data_t {
+    std::string name{};
+    int version{};
+    std::string computed_field{};
+    std::string input_only_field{};
+};
+
+template <>
+struct glz::meta<versioned_data_t> {
+    static constexpr bool skip(const std::string_view key, const meta_context& ctx) {
+        // Skip computed_field during parsing (reading) - it should only be written
+        if (key == "computed_field" && ctx.op == glz::operation::parse) {
+            return true;
+        }
+        
+        // Skip input_only_field during serialization (writing) - it should only be read
+        if (key == "input_only_field" && ctx.op == glz::operation::serialize) {
+            return true;
+        }
+        
+        return false;
+    }
+};
+
+suite operation_specific_skipping_tests = [] {
+   "operation_specific_skipping"_test = [] {
+      versioned_data_t obj{"TestData", 1, "computed_value", "input_value"};
+      std::string buffer{};
+
+      // Writing JSON - skips input_only_field
+      expect(not glz::write_json(obj, buffer));
+      expect(buffer == R"({"name":"TestData","version":1,"computed_field":"computed_value"})") << buffer;
+
+      // Reading JSON - skips computed_field
+      const char* json = R"({"name":"NewData","version":2,"computed_field":"ignored","input_only_field":"new_input"})";
+      expect(glz::read_json(obj, json) == glz::error_code::none);
+      expect(obj.name == "NewData");
+      expect(obj.version == 2);
+      expect(obj.computed_field == "computed_value"); // Should retain original value
+      expect(obj.input_only_field == "new_input");
+   };
+};
+
 suite glaze_error_category_tests = [] {
    "error_category_name"_test = [] {
       const auto& category = glz::error_category;
