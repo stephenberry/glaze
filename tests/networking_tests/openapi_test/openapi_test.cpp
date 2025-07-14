@@ -11,8 +11,8 @@ int main()
       "/users/:id",
       [](const glz::request& req, glz::response& res) {
          res.body("Fetching profile for user ID: " + req.params.at("id"));
-      }
-   );
+      },
+      {.description = "Get a user by ID"});
 
    // Define another route for context
    server.post(

@@ -470,8 +470,7 @@ namespace glz
             full_path += path;
 
             for (const auto& [method, route_entry] : method_handlers) {
-               root_router.route(method, full_path, route_entry.handle, route_entry.constraints,
-                                 route_entry.description, route_entry.tags);
+               root_router.route(method, full_path, route_entry.handle, route_entry.spec);
             }
          }
 
@@ -483,20 +482,36 @@ namespace glz
          return *this;
       }
 
-      inline http_router& route(http_method method, std::string_view path, handler handle)
+      inline http_router& route(http_method method, std::string_view path, handler handle,
+                                const http_router::route_spec& spec = {})
       {
-         return root_router.route(method, path, handle);
+         return root_router.route(method, path, handle, spec);
       }
 
-      inline http_router& get(std::string_view path, handler handle) { return root_router.get(path, handle); }
+      inline http_router& get(std::string_view path, handler handle, const http_router::route_spec& spec = {})
+      {
+         return root_router.get(path, handle, spec);
+      }
 
-      inline http_router& post(std::string_view path, handler handle) { return root_router.post(path, handle); }
+      inline http_router& post(std::string_view path, handler handle, const http_router::route_spec& spec = {})
+      {
+         return root_router.post(path, handle, spec);
+      }
 
-      inline http_router& put(std::string_view path, handler handle) { return root_router.put(path, handle); }
+      inline http_router& put(std::string_view path, handler handle, const http_router::route_spec& spec = {})
+      {
+         return root_router.put(path, handle, spec);
+      }
 
-      inline http_router& del(std::string_view path, handler handle) { return root_router.del(path, handle); }
+      inline http_router& del(std::string_view path, handler handle, const http_router::route_spec& spec = {})
+      {
+         return root_router.del(path, handle, spec);
+      }
 
-      inline http_router& patch(std::string_view path, handler handle) { return root_router.patch(path, handle); }
+      inline http_router& patch(std::string_view path, handler handle, const http_router::route_spec& spec = {})
+      {
+         return root_router.patch(path, handle, spec);
+      }
 
       // Register streaming route
       inline http_server& stream(http_method method, std::string_view path, streaming_handler handle)
@@ -533,11 +548,9 @@ namespace glz
        * @return Reference to this server for method chaining.
        */
       http_server& enable_openapi_spec(std::string_view path = "/openapi.json",
-                                       std::string_view title = "API Specification",
-                                       std::string_view version = "1.0.0")
+                                       std::string_view title = "API Specification", std::string_view version = "1.0.0")
       {
-         get(path, [this, title = std::string(title), version = std::string(version)](const request&,
-                                                                                      response& res) {
+         get(path, [this, title = std::string(title), version = std::string(version)](const request&, response& res) {
             open_api spec{};
             spec.info.title = title;
             spec.info.version = version;
@@ -561,9 +574,9 @@ namespace glz
 
                for (const auto& [method, route_entry] : method_handlers) {
                   openapi_operation op;
-                  op.summary = route_entry.description;
-                  if (!route_entry.tags.empty()) {
-                     op.tags = route_entry.tags;
+                  op.summary = route_entry.spec.description;
+                  if (!route_entry.spec.tags.empty()) {
+                     op.tags = route_entry.spec.tags;
                   }
                   op.operationId = std::string(to_string(method)) + route_path;
                   op.responses["200"].description = "OK";
@@ -577,20 +590,31 @@ namespace glz
                         param.name = segment.substr(1);
                         param.in = "path";
                         param.required = true;
-                        if (auto it = route_entry.constraints.find(param.name);
-                            it != route_entry.constraints.end()) {
+                        if (auto it = route_entry.spec.constraints.find(param.name);
+                            it != route_entry.spec.constraints.end()) {
                            param.description = it->second.description;
                         }
                      }
                   }
 
                   switch (method) {
-                  case http_method::GET: path_item.get = op; break;
-                  case http_method::POST: path_item.post = op; break;
-                  case http_method::PUT: path_item.put = op; break;
-                  case http_method::DELETE: path_item.del = op; break;
-                  case http_method::PATCH: path_item.patch = op; break;
-                  default: break;
+                  case http_method::GET:
+                     path_item.get = op;
+                     break;
+                  case http_method::POST:
+                     path_item.post = op;
+                     break;
+                  case http_method::PUT:
+                     path_item.put = op;
+                     break;
+                  case http_method::DELETE:
+                     path_item.del = op;
+                     break;
+                  case http_method::PATCH:
+                     path_item.patch = op;
+                     break;
+                  default:
+                     break;
                   }
                }
             }
