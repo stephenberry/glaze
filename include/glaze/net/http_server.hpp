@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include <asio.hpp>
 #include <atomic>
 #include <charconv>
 #include <chrono>
@@ -17,6 +16,7 @@
 
 #include "glaze/net/cors.hpp"
 #include "glaze/net/http_router.hpp"
+#include "glaze/net/openapi.hpp"
 #include "glaze/net/websocket_connection.hpp"
 
 // Conditionally include SSL headers only when needed
@@ -469,8 +469,9 @@ namespace glz
             }
             full_path += path;
 
-            for (const auto& [method, handle] : method_handlers) {
-               root_router.route(method, full_path, handle);
+            for (const auto& [method, route_entry] : method_handlers) {
+               root_router.route(method, full_path, route_entry.handle, route_entry.constraints,
+                                 route_entry.description, route_entry.tags);
             }
          }
 
@@ -518,6 +519,83 @@ namespace glz
       inline http_server& on_error(error_handler handle)
       {
          error_handler = std::move(handle);
+         return *this;
+      }
+
+      /**
+       * @brief Enable API inspection by exposing an OpenAPI 3.0 specification.
+       *
+       * This provides a standard, machine-readable way for clients to discover the API.
+       *
+       * @param path The path to expose the OpenAPI JSON specification on.
+       * @param title The title of the API.
+       * @param version The version of the API.
+       * @return Reference to this server for method chaining.
+       */
+      http_server& enable_openapi_spec(std::string_view path = "/openapi.json",
+                                       std::string_view title = "API Specification",
+                                       std::string_view version = "1.0.0")
+      {
+         get(path, [this, title = std::string(title), version = std::string(version)](const request&,
+                                                                                      response& res) {
+            open_api spec{};
+            spec.info.title = title;
+            spec.info.version = version;
+
+            for (const auto& [route_path, method_handlers] : root_router.routes) {
+               // Convert router path /:param to OpenAPI path /{param}
+               std::string openapi_path = route_path;
+               size_t pos = 0;
+               while ((pos = openapi_path.find(':', pos)) != std::string::npos) {
+                  openapi_path.replace(pos, 1, "{");
+                  size_t end_pos = openapi_path.find('/', pos);
+                  if (end_pos == std::string::npos) {
+                     openapi_path.push_back('}');
+                  }
+                  else {
+                     openapi_path.insert(end_pos, "}");
+                  }
+               }
+
+               auto& path_item = spec.paths[openapi_path];
+
+               for (const auto& [method, route_entry] : method_handlers) {
+                  openapi_operation op;
+                  op.summary = route_entry.description;
+                  if (!route_entry.tags.empty()) {
+                     op.tags = route_entry.tags;
+                  }
+                  op.operationId = std::string(to_string(method)) + route_path;
+                  op.responses["200"].description = "OK";
+
+                  // Extract path parameters
+                  auto segments = http_router::split_path(route_path);
+                  for (const auto& segment : segments) {
+                     if (!segment.empty() && segment.front() == ':') {
+                        if (!op.parameters) op.parameters.emplace();
+                        auto& param = op.parameters->emplace_back();
+                        param.name = segment.substr(1);
+                        param.in = "path";
+                        param.required = true;
+                        if (auto it = route_entry.constraints.find(param.name);
+                            it != route_entry.constraints.end()) {
+                           param.description = it->second.description;
+                        }
+                     }
+                  }
+
+                  switch (method) {
+                  case http_method::GET: path_item.get = op; break;
+                  case http_method::POST: path_item.post = op; break;
+                  case http_method::PUT: path_item.put = op; break;
+                  case http_method::DELETE: path_item.del = op; break;
+                  case http_method::PATCH: path_item.patch = op; break;
+                  default: break;
+                  }
+               }
+            }
+            res.json(spec);
+         });
          return *this;
       }
 
