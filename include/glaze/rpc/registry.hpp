@@ -143,7 +143,8 @@ namespace glz
                }
                else {
                   // this is a variable and not a function, so we build RPC read/write calls
-                  impl::template register_variable_endpoint<std::remove_cvref_t<Func>>(full_key, func, *this);
+                  // We can't remove const here, because const fields need to be able to be written
+                  impl::template register_variable_endpoint<std::remove_reference_t<Func>>(full_key, func, *this);
                }
             }
          });
