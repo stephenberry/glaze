@@ -483,32 +483,32 @@ namespace glz
       }
 
       inline http_router& route(http_method method, std::string_view path, handler handle,
-                                const http_router::route_spec& spec = {})
+                                const route_spec& spec = {})
       {
          return root_router.route(method, path, handle, spec);
       }
 
-      inline http_router& get(std::string_view path, handler handle, const http_router::route_spec& spec = {})
+      inline http_router& get(std::string_view path, handler handle, const route_spec& spec = {})
       {
          return root_router.get(path, handle, spec);
       }
 
-      inline http_router& post(std::string_view path, handler handle, const http_router::route_spec& spec = {})
+      inline http_router& post(std::string_view path, handler handle, const route_spec& spec = {})
       {
          return root_router.post(path, handle, spec);
       }
 
-      inline http_router& put(std::string_view path, handler handle, const http_router::route_spec& spec = {})
+      inline http_router& put(std::string_view path, handler handle, const route_spec& spec = {})
       {
          return root_router.put(path, handle, spec);
       }
 
-      inline http_router& del(std::string_view path, handler handle, const http_router::route_spec& spec = {})
+      inline http_router& del(std::string_view path, handler handle, const route_spec& spec = {})
       {
          return root_router.del(path, handle, spec);
       }
 
-      inline http_router& patch(std::string_view path, handler handle, const http_router::route_spec& spec = {})
+      inline http_router& patch(std::string_view path, handler handle, const route_spec& spec = {})
       {
          return root_router.patch(path, handle, spec);
       }

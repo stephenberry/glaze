@@ -13,9 +13,9 @@ using namespace ut;
 suite http_router_constraints_tests = [] {
    "numeric_id_validation"_test = [] {
       glz::http_router router;
-      std::unordered_map<std::string, glz::http_router::param_constraint> constraints;
+      std::unordered_map<std::string, glz::param_constraint> constraints;
       constraints["id"] =
-         glz::http_router::param_constraint{.description = "numeric ID", .validation = [](std::string_view value) {
+         glz::param_constraint{.description = "numeric ID", .validation = [](std::string_view value) {
                                                if (value.empty()) return false;
                                                for (char c : value) {
                                                   if (!std::isdigit(c)) return false;
@@ -37,7 +37,7 @@ suite http_router_constraints_tests = [] {
                res.status(400);
             }
          },
-         constraints);
+         {.constraints = constraints});
 
       // Test with valid ID
       auto [handler_valid, params_valid] = router.match(glz::http_method::GET, "/users/123");
@@ -58,8 +58,8 @@ suite http_router_constraints_tests = [] {
 
    "email_validation_with_regex"_test = [] {
       glz::http_router router;
-      std::unordered_map<std::string, glz::http_router::param_constraint> constraints;
-      constraints["email"] = glz::http_router::param_constraint{
+      std::unordered_map<std::string, glz::param_constraint> constraints;
+      constraints["email"] = glz::param_constraint{
          .description = "valid email address", .validation = [](std::string_view value) {
             std::regex email_regex(R"(^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$)");
             return std::regex_match(std::string(value), email_regex);
@@ -79,7 +79,7 @@ suite http_router_constraints_tests = [] {
                res.status(400);
             }
          },
-         constraints);
+         {.constraints = constraints});
 
       // Test with valid email
       auto [handler_valid, params_valid] = router.match(glz::http_method::GET, "/contacts/test@example.com");
@@ -101,9 +101,9 @@ suite http_router_constraints_tests = [] {
 
    "four_digit_code_validation"_test = [] {
       glz::http_router router;
-      std::unordered_map<std::string, glz::http_router::param_constraint> constraints;
+      std::unordered_map<std::string, glz::param_constraint> constraints;
       constraints["code"] =
-         glz::http_router::param_constraint{.description = "4-digit code", .validation = [](std::string_view value) {
+         glz::param_constraint{.description = "4-digit code", .validation = [](std::string_view value) {
                                                if (value.size() != 4) return false;
                                                for (char c : value) {
                                                   if (!std::isdigit(c)) return false;
@@ -125,7 +125,7 @@ suite http_router_constraints_tests = [] {
                res.status(400);
             }
          },
-         constraints);
+         {.constraints = constraints});
 
       // Test with valid code
       auto [handler_valid, params_valid] = router.match(glz::http_method::GET, "/verify/1234");
@@ -154,7 +154,7 @@ suite http_router_functionality_tests = [] {
    "basic_route_matching"_test = [] {
       glz::http_router router;
       bool get_handler_called = false;
-      router.get("/hello", [&](const glz::request& req, glz::response& res) {
+      router.get("/hello", [&](const glz::request&, glz::response& res) {
          get_handler_called = true;
          res.body("Hello, World!");
       });
@@ -181,19 +181,19 @@ suite http_router_functionality_tests = [] {
       bool put_handler_called = false;
       bool delete_handler_called = false;
 
-      router.get("/resource", [&](const glz::request& req, glz::response& res) {
+      router.get("/resource", [&](const glz::request&, glz::response& res) {
          get_handler_called = true;
          res.body("GET Resource");
       });
-      router.post("/resource", [&](const glz::request& req, glz::response& res) {
+      router.post("/resource", [&](const glz::request&, glz::response& res) {
          post_handler_called = true;
          res.body("POST Resource");
       });
-      router.put("/resource", [&](const glz::request& req, glz::response& res) {
+      router.put("/resource", [&](const glz::request&, glz::response& res) {
          put_handler_called = true;
          res.body("PUT Resource");
       });
-      router.del("/resource", [&](const glz::request& req, glz::response& res) {
+      router.del("/resource", [&](const glz::request&, glz::response& res) {
          delete_handler_called = true;
          res.body("DELETE Resource");
       });
@@ -286,7 +286,7 @@ suite http_router_functionality_tests = [] {
       bool general_handler_called = false;
 
       // More specific route
-      router.get("/users/admin", [&](const glz::request& req, glz::response& res) {
+      router.get("/users/admin", [&](const glz::request&, glz::response& res) {
          specific_handler_called = true;
          res.body("Admin User");
       });
