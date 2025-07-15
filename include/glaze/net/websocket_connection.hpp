@@ -422,25 +422,24 @@ namespace glz
 
          auto self = shared_from_this();
 
-         asio::async_write(socket_, asio::buffer(response_str),
-                           [self, req, response_str = std::move(response_str)](std::error_code ec, std::size_t) {
-                              if (ec) {
-                                 if (self->server_) {
-                                    self->server_->notify_error(self, ec);
-                                 }
-                                 return;
-                              }
+         asio::async_write(socket_, asio::buffer(response_str), [self, req](std::error_code ec, std::size_t) {
+            if (ec) {
+               if (self->server_) {
+                  self->server_->notify_error(self, ec);
+               }
+               return;
+            }
 
-                              self->handshake_complete_ = true;
+            self->handshake_complete_ = true;
 
-                              // Notify server of successful connection
-                              if (self->server_) {
-                                 self->server_->notify_open(self, req);
-                              }
+            // Notify server of successful connection
+            if (self->server_) {
+               self->server_->notify_open(self, req);
+            }
 
-                              // Start reading frames
-                              self->start_read();
-                           });
+            // Start reading frames
+            self->start_read();
+         });
       }
 
       inline void start_read()
