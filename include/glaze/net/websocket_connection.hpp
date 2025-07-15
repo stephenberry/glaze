@@ -422,7 +422,9 @@ namespace glz
 
          auto self = shared_from_this();
 
-         asio::async_write(socket_, asio::buffer(response_str), [self, req](std::error_code ec, std::size_t) {
+         // Use shared_ptr to keep request string alive during async operation
+         auto request_buffer = std::make_shared<std::string>(std::move(request_str));
+         asio::async_write(socket_, asio::buffer(*request_buffer), [self, req, request_buffer](std::error_code ec, std::size_t) {
             if (ec) {
                if (self->server_) {
                   self->server_->notify_error(self, ec);
@@ -653,7 +655,10 @@ namespace glz
          std::copy(payload.begin(), payload.end(), frame.begin() + header_size);
 
          auto self = shared_from_this();
-         asio::async_write(socket_, asio::buffer(frame), [self](std::error_code ec, std::size_t) {
+
+         // Use shared_ptr to keep the frame alive during async operation
+         auto frame_buffer = std::make_shared<std::vector<uint8_t>>(std::move(frame));
+         asio::async_write(socket_, asio::buffer(*frame_buffer), [self, frame_buffer](std::error_code ec, std::size_t) {
             if (ec && self->server_) {
                self->server_->notify_error(self, ec);
             }
