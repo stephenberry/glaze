@@ -422,9 +422,9 @@ namespace glz
 
          auto self = shared_from_this();
 
-         // Use shared_ptr to keep request string alive during async operation
-         auto request_buffer = std::make_shared<std::string>(std::move(request_str));
-         asio::async_write(socket_, asio::buffer(*request_buffer), [self, req, request_buffer](std::error_code ec, std::size_t) {
+         // Use shared_ptr to keep response string alive during async operation
+         auto response_buffer = std::make_shared<std::string>(std::move(response_str));
+         asio::async_write(socket_, asio::buffer(*response_buffer), [self, req, response_buffer](std::error_code ec, std::size_t) {
             if (ec) {
                if (self->server_) {
                   self->server_->notify_error(self, ec);
