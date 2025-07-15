@@ -422,25 +422,26 @@ namespace glz
 
          auto self = shared_from_this();
 
-         asio::async_write(socket_, asio::buffer(response_str),
-                           [self, req, response_str = std::move(response_str)](std::error_code ec, std::size_t) {
-                              if (ec) {
-                                 if (self->server_) {
-                                    self->server_->notify_error(self, ec);
-                                 }
-                                 return;
-                              }
+         // Use shared_ptr to keep response string alive during async operation
+         auto response_buffer = std::make_shared<std::string>(std::move(response_str));
+         asio::async_write(socket_, asio::buffer(*response_buffer), [self, req, response_buffer](std::error_code ec, std::size_t) {
+            if (ec) {
+               if (self->server_) {
+                  self->server_->notify_error(self, ec);
+               }
+               return;
+            }
 
-                              self->handshake_complete_ = true;
+            self->handshake_complete_ = true;
 
-                              // Notify server of successful connection
-                              if (self->server_) {
-                                 self->server_->notify_open(self, req);
-                              }
+            // Notify server of successful connection
+            if (self->server_) {
+               self->server_->notify_open(self, req);
+            }
 
-                              // Start reading frames
-                              self->start_read();
-                           });
+            // Start reading frames
+            self->start_read();
+         });
       }
 
       inline void start_read()
@@ -654,7 +655,10 @@ namespace glz
          std::copy(payload.begin(), payload.end(), frame.begin() + header_size);
 
          auto self = shared_from_this();
-         asio::async_write(socket_, asio::buffer(frame), [self](std::error_code ec, std::size_t) {
+
+         // Use shared_ptr to keep the frame alive during async operation
+         auto frame_buffer = std::make_shared<std::vector<uint8_t>>(std::move(frame));
+         asio::async_write(socket_, asio::buffer(*frame_buffer), [self, frame_buffer](std::error_code ec, std::size_t) {
             if (ec && self->server_) {
                self->server_->notify_error(self, ec);
             }
