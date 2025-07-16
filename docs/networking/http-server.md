@@ -133,7 +133,7 @@ server.get("/files/*path", [](const glz::request& req, glz::response& res) {
 
 ```cpp
 // Numeric ID constraint
-glz::http_router::param_constraint id_constraint{
+glz::param_constraint id_constraint{
     .description = "User ID must be numeric",
     .validation = [](std::string_view value) {
         if (value.empty()) return false;
@@ -147,7 +147,7 @@ glz::http_router::param_constraint id_constraint{
 server.get("/users/:id", handler, {{"id", id_constraint}});
 
 // Email constraint
-glz::http_router::param_constraint email_constraint{
+glz::param_constraint email_constraint{
     .description = "Valid email address required",
     .validation = [](std::string_view value) {
         std::regex email_regex(R"([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})");
