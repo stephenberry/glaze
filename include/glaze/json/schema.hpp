@@ -622,7 +622,7 @@ namespace glz
                auto& def = defs[name_v<val_t>];
 
                static constexpr sv key = reflect<T>::keys[I];
-               if constexpr (Opts.error_on_missing_keys && !nullable_like<val_t>) {
+               if constexpr (requires_key<T, val_t, Opts>(key)) {
                   req.emplace_back(key);
                }
 
