@@ -961,7 +961,7 @@ namespace glz
    }
 
    template <write_supported<BEVE> T>
-   [[nodiscard]] error_ctx write_beve_untagged(T&& value)
+   [[nodiscard]] glz::expected<std::string, error_ctx> write_beve_untagged(T&& value)
    {
       return write<opts{.format = BEVE, .structs_as_arrays = true}>(std::forward<T>(value));
    }
