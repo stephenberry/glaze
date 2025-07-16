@@ -113,6 +113,29 @@ int main()
       // Mount the registry endpoints to the server
       server.mount("/api", registry.endpoints);
 
+      // Add some custom GET endpoints
+      server.get("/health", [](const glz::request&, glz::response& res) {
+         res.content_type("application/json").body(R"({"status": "healthy", "timestamp": "2025-01-01T00:00:00Z"})");
+      });
+
+      server.get("/version", [](const glz::request&, glz::response& res) {
+         res.content_type("application/json").body(R"({"version": "1.0.0", "service": "user-management", "build": "dev"})");
+      });
+
+      // Add some custom PUT endpoints
+      server.put("/settings", [](const glz::request&, glz::response& res) {
+         res.content_type("application/json").body(R"({"message": "Settings updated successfully"})");
+      });
+
+      server.put("/config/database", [](const glz::request&, glz::response& res) {
+         res.content_type("application/json").body(R"({"message": "Database configuration updated", "applied": true})");
+      });
+
+      // Add a custom POST endpoint as well
+      server.post("/auth/login", [](const glz::request&, glz::response& res) {
+         res.content_type("application/json").body(R"({"token": "abc123", "expires_in": 3600, "user_id": 1})");
+      });
+
       // Enable the OpenAPI specification endpoint
       server.enable_openapi_spec(
          "/openapi.json", // The path for the spec
@@ -160,7 +183,7 @@ int main()
             std::cout << "\n" << std::string(80, '=') << std::endl;
             std::cout << "OpenAPI Specification from /openapi.json:" << std::endl;
             std::cout << std::string(80, '=') << std::endl;
-            std::cout << response.response_body << std::endl;
+            std::cout << glz::prettify_json(response.response_body) << std::endl;
             std::cout << std::string(80, '=') << std::endl;
             
             // Basic validation that we got a valid OpenAPI response
