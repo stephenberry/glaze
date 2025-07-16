@@ -5,6 +5,9 @@
 
 #include "glaze/glaze.hpp"
 #include "glaze/net/http_router.hpp"
+#include "glaze/json/schema.hpp"
+#include "glaze/rpc/repe/repe.hpp"  // For protocol_storage template
+#include "glaze/core/opts.hpp"     // For REST constant
 
 namespace glz
 {
@@ -18,7 +21,7 @@ namespace glz
       using type = http_router;
    };
 
-   // Implementation for REST protocol
+   // Implementation for REST protocol  
    template <auto Opts>
    struct registry_impl<Opts, REST>
    {
@@ -38,16 +41,76 @@ namespace glz
          return rest_path;
       }
 
+      // Helper to generate JSON schema for a type
+      template <class T>
+      static std::string generate_schema_for_type()
+      {
+         std::string schema_str;
+         auto ec = write_json_schema<T>(schema_str);
+         if (ec) {
+            return "{}";
+         }
+         return schema_str;
+      }
+
+      template <class T>
+      static std::string get_type_name()
+      {
+         if constexpr (string_t<T>) {
+            return "string";
+         }
+         else if constexpr (num_t<T>) {
+            return "number";
+         }
+         else if constexpr (readable_array_t<T> || tuple_t<T> || is_std_tuple<T>) {
+            return "array";
+         }
+         else if constexpr (boolean_like<T>) {
+            return "boolean";
+         }
+         else if constexpr (glaze_object_t<T> || reflectable<T> || writable_map_t<T>) {
+            return "object";
+         }
+         else {
+            return "";
+         }
+      }
+
+      // Helper to create route spec with type information
+      template <class RequestType = void, class ResponseType = void>
+      static route_spec create_route_spec_with_types(const std::string& description = "", 
+                                                     const std::vector<std::string>& tags = {})
+      {
+         route_spec spec;
+         spec.description = description;
+         spec.tags = tags;
+         
+         if constexpr (!std::same_as<RequestType, void>) {
+            spec.request_body_schema = generate_schema_for_type<RequestType>();
+            spec.request_body_type_name = get_type_name<RequestType>();
+         }
+         
+         if constexpr (!std::same_as<ResponseType, void>) {
+            spec.response_schema = generate_schema_for_type<ResponseType>();
+            spec.response_type_name = get_type_name<ResponseType>();
+         }
+         
+         return spec;
+      }
+
       template <class T, class RegistryType>
       static void register_endpoint(const sv path, T& value, RegistryType& reg)
       {
          std::string rest_path = convert_to_rest_path(path);
 
          // GET handler for the entire object
+         auto get_spec = create_route_spec_with_types<void, T>("Get " + get_type_name<T>(), {"data"});
          reg.endpoints.route(GET, rest_path,
-                             [&value](const request& /*req*/, response& res) { res.body<Opts>(value); });
+                             [&value](const request& /*req*/, response& res) { res.template body<Opts>(value); },
+                             get_spec);
 
          // PUT handler for updating the entire object
+         auto put_spec = create_route_spec_with_types<T, void>("Update " + get_type_name<T>(), {"data"});
          reg.endpoints.route(PUT, rest_path, [&value](const request& req, response& res) {
             // Parse the JSON request body
             auto ec = read<Opts>(value, req.body);
@@ -57,7 +120,7 @@ namespace glz
             }
 
             res.status(204); // No Content
-         });
+         }, put_spec);
       }
 
       template <class Func, class Result, class RegistryType>
@@ -140,7 +203,7 @@ namespace glz
          reg.endpoints.route(PUT, rest_path, [&value](const request& req, response& res) {
             // Parse the JSON request body
             auto ec = read<Opts>(value, req.body);
-            if (!ec) {
+            if (ec) {
                res.status(400).body("Invalid request body: " + format_error(ec, req.body));
                return;
             }
@@ -161,7 +224,7 @@ namespace glz
          reg.endpoints.route(PUT, rest_path, [&var](const request& req, response& res) {
             // Parse the JSON request body
             auto ec = read<Opts>(var, req.body);
-            if (!ec) {
+            if (ec) {
                res.status(400).body("Invalid request body: " + format_error(ec, req.body));
                return;
             }
