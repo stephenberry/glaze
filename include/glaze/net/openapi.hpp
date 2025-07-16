@@ -2,6 +2,7 @@
 #pragma once
 
 #include <unordered_map>
+
 #include "glaze/json.hpp"
 
 namespace glz
@@ -56,6 +57,5 @@ template <>
 struct glz::meta<glz::openapi_path_item>
 {
    using T = glz::openapi_path_item;
-   static constexpr auto value = glz::object(&T::get, &T::put,&T::post,
-                                         "delete", &T::del, &T::patch);
+   static constexpr auto value = glz::object(&T::get, &T::put, &T::post, "delete", &T::del, &T::patch);
 };

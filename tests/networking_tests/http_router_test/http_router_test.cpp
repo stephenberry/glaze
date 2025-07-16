@@ -14,30 +14,28 @@ suite http_router_constraints_tests = [] {
    "numeric_id_validation"_test = [] {
       glz::http_router router;
       std::unordered_map<std::string, glz::param_constraint> constraints;
-      constraints["id"] =
-         glz::param_constraint{.description = "numeric ID", .validation = [](std::string_view value) {
-                                               if (value.empty()) return false;
-                                               for (char c : value) {
-                                                  if (!std::isdigit(c)) return false;
-                                               }
-                                               return true;
-                                            }};
+      constraints["id"] = glz::param_constraint{.description = "numeric ID", .validation = [](std::string_view value) {
+                                                   if (value.empty()) return false;
+                                                   for (char c : value) {
+                                                      if (!std::isdigit(c)) return false;
+                                                   }
+                                                   return true;
+                                                }};
 
       bool handler_called = false;
-      router.get(
-         "/users/:id",
-         [&](const glz::request& req, glz::response& res) {
-            handler_called = true;
-            auto it = req.params.find("id");
-            if (it != req.params.end()) {
-               res.body("User ID: " + it->second);
-            }
-            else {
-               res.body("Error: ID not found");
-               res.status(400);
-            }
-         },
-         {.constraints = constraints});
+      router.get("/users/:id",
+                 [&](const glz::request& req, glz::response& res) {
+                    handler_called = true;
+                    auto it = req.params.find("id");
+                    if (it != req.params.end()) {
+                       res.body("User ID: " + it->second);
+                    }
+                    else {
+                       res.body("Error: ID not found");
+                       res.status(400);
+                    }
+                 },
+                 {.constraints = constraints});
 
       // Test with valid ID
       auto [handler_valid, params_valid] = router.match(glz::http_method::GET, "/users/123");
@@ -59,27 +57,26 @@ suite http_router_constraints_tests = [] {
    "email_validation_with_regex"_test = [] {
       glz::http_router router;
       std::unordered_map<std::string, glz::param_constraint> constraints;
-      constraints["email"] = glz::param_constraint{
-         .description = "valid email address", .validation = [](std::string_view value) {
-            std::regex email_regex(R"(^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$)");
-            return std::regex_match(std::string(value), email_regex);
-         }};
+      constraints["email"] =
+         glz::param_constraint{.description = "valid email address", .validation = [](std::string_view value) {
+                                  std::regex email_regex(R"(^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$)");
+                                  return std::regex_match(std::string(value), email_regex);
+                               }};
 
       bool handler_called = false;
-      router.get(
-         "/contacts/:email",
-         [&](const glz::request& req, glz::response& res) {
-            handler_called = true;
-            auto it = req.params.find("email");
-            if (it != req.params.end()) {
-               res.body("Contact Email: " + it->second);
-            }
-            else {
-               res.body("Error: Email not found");
-               res.status(400);
-            }
-         },
-         {.constraints = constraints});
+      router.get("/contacts/:email",
+                 [&](const glz::request& req, glz::response& res) {
+                    handler_called = true;
+                    auto it = req.params.find("email");
+                    if (it != req.params.end()) {
+                       res.body("Contact Email: " + it->second);
+                    }
+                    else {
+                       res.body("Error: Email not found");
+                       res.status(400);
+                    }
+                 },
+                 {.constraints = constraints});
 
       // Test with valid email
       auto [handler_valid, params_valid] = router.match(glz::http_method::GET, "/contacts/test@example.com");
@@ -104,28 +101,27 @@ suite http_router_constraints_tests = [] {
       std::unordered_map<std::string, glz::param_constraint> constraints;
       constraints["code"] =
          glz::param_constraint{.description = "4-digit code", .validation = [](std::string_view value) {
-                                               if (value.size() != 4) return false;
-                                               for (char c : value) {
-                                                  if (!std::isdigit(c)) return false;
-                                               }
-                                               return true;
-                                            }};
+                                  if (value.size() != 4) return false;
+                                  for (char c : value) {
+                                     if (!std::isdigit(c)) return false;
+                                  }
+                                  return true;
+                               }};
 
       bool handler_called = false;
-      router.get(
-         "/verify/:code",
-         [&](const glz::request& req, glz::response& res) {
-            handler_called = true;
-            auto it = req.params.find("code");
-            if (it != req.params.end()) {
-               res.body("Verification Code: " + it->second);
-            }
-            else {
-               res.body("Error: Code not found");
-               res.status(400);
-            }
-         },
-         {.constraints = constraints});
+      router.get("/verify/:code",
+                 [&](const glz::request& req, glz::response& res) {
+                    handler_called = true;
+                    auto it = req.params.find("code");
+                    if (it != req.params.end()) {
+                       res.body("Verification Code: " + it->second);
+                    }
+                    else {
+                       res.body("Error: Code not found");
+                       res.status(400);
+                    }
+                 },
+                 {.constraints = constraints});
 
       // Test with valid code
       auto [handler_valid, params_valid] = router.match(glz::http_method::GET, "/verify/1234");

@@ -1,10 +1,11 @@
+#include <chrono>
+#include <thread>
+
 #include "glaze/glaze.hpp"
-#include "glaze/net/http_server.hpp"
 #include "glaze/net/http_client.hpp"
+#include "glaze/net/http_server.hpp"
 #include "glaze/rpc/registry.hpp"
 #include "ut/ut.hpp"
-#include <thread>
-#include <chrono>
 
 using namespace ut;
 
@@ -72,7 +73,6 @@ struct UserService
       return user;
    }
 
-
    // Delete a user
    bool deleteUser(const UserIdRequest& request)
    {
@@ -89,12 +89,7 @@ template <>
 struct glz::meta<UserService>
 {
    using T = UserService;
-   static constexpr auto value = object(
-      &T::getAllUsers,
-      &T::getUserById,
-      &T::createUser,
-      &T::deleteUser
-   );
+   static constexpr auto value = object(&T::getAllUsers, &T::getUserById, &T::createUser, &T::deleteUser);
 };
 
 int main()
@@ -119,7 +114,8 @@ int main()
       });
 
       server.get("/version", [](const glz::request&, glz::response& res) {
-         res.content_type("application/json").body(R"({"version": "1.0.0", "service": "user-management", "build": "dev"})");
+         res.content_type("application/json")
+            .body(R"({"version": "1.0.0", "service": "user-management", "build": "dev"})");
       });
 
       // Add some custom PUT endpoints
@@ -137,10 +133,9 @@ int main()
       });
 
       // Enable the OpenAPI specification endpoint
-      server.enable_openapi_spec(
-         "/openapi.json", // The path for the spec
-         "User Management API",   // The title of the API
-         "1.0.0"          // The version of the API
+      server.enable_openapi_spec("/openapi.json", // The path for the spec
+                                 "User Management API", // The title of the API
+                                 "1.0.0" // The version of the API
       );
 
       // Test that the registry has registered the endpoints
@@ -155,7 +150,7 @@ int main()
 
       std::cout << "OpenAPI test completed successfully!" << std::endl;
       std::cout << "Registry has " << registry.endpoints.routes.size() << " endpoints registered" << std::endl;
-      
+
       // Print registered endpoints for inspection
       for (const auto& [path, methods] : registry.endpoints.routes) {
          for (const auto& [method, entry] : methods) {
@@ -176,16 +171,16 @@ int main()
       try {
          glz::http_client client{};
          auto response_result = client.get("http://127.0.0.1:8080/openapi.json");
-         
+
          if (response_result.has_value()) {
             const auto& response = response_result.value();
-            
+
             std::cout << "\n" << std::string(80, '=') << std::endl;
             std::cout << "OpenAPI Specification from /openapi.json:" << std::endl;
             std::cout << std::string(80, '=') << std::endl;
             std::cout << glz::prettify_json(response.response_body) << std::endl;
             std::cout << std::string(80, '=') << std::endl;
-            
+
             // Basic validation that we got a valid OpenAPI response
             expect(response.status_code == 200);
             expect(response.response_body.find("openapi") != std::string::npos);
