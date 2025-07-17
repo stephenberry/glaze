@@ -104,7 +104,8 @@ namespace glz
    }
 
 #if defined(GLZ_USING_BOOST_ASIO)
-   namespace asio {
+   namespace asio
+   {
       using namespace boost::asio;
       using error_code = boost::system::error_code;
    }
