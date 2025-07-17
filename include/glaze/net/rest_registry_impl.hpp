@@ -128,6 +128,7 @@ namespace glz
       {
          std::string rest_path = convert_to_rest_path(path);
 
+         auto get_spec = create_route_spec_with_types<void, Result>("Get " + get_type_name<Result>(), {"data"});
          // GET handler for functions
          reg.endpoints.route(GET, rest_path, [&func](const request& /*req*/, response& res) {
             if constexpr (std::same_as<Result, void>) {
@@ -138,7 +139,7 @@ namespace glz
                auto result = func();
                res.body<Opts>(result);
             }
-         });
+         }, get_spec);
       }
 
       template <class Func, class Params, class RegistryType>
@@ -146,6 +147,8 @@ namespace glz
       {
          std::string rest_path = convert_to_rest_path(path);
 
+         using Result = std::invoke_result_t<decltype(func), Params>;
+         auto post_spec = create_route_spec_with_types<Params, Result>("Create " + get_type_name<Result>(), {"data"});
          // POST handler for functions with parameters
          reg.endpoints.route(POST, rest_path, [&func](const request& req, response& res) {
             // Parse the JSON request body
@@ -156,8 +159,6 @@ namespace glz
                return;
             }
 
-            using Result = std::invoke_result_t<decltype(func), Params>;
-
             if constexpr (std::same_as<Result, void>) {
                func(std::move(params_result));
                res.status(204); // No Content
@@ -166,7 +167,7 @@ namespace glz
                auto result = func(std::move(params_result));
                res.body<Opts>(result);
             }
-         });
+         }, post_spec);
       }
 
       template <class Obj, class RegistryType>
@@ -174,9 +175,11 @@ namespace glz
       {
          std::string rest_path = convert_to_rest_path(path);
 
+         auto get_spec = create_route_spec_with_types<void, Obj>("Get " + get_type_name<Obj>(), {"data"});
          // GET handler for nested objects
-         reg.endpoints.route(GET, rest_path, [&obj](const request& /*req*/, response& res) { res.body<Opts>(obj); });
+         reg.endpoints.route(GET, rest_path, [&obj](const request& /*req*/, response& res) { res.body<Opts>(obj); }, get_spec);
 
+         auto put_spec = create_route_spec_with_types<Obj, void>("Update " + get_type_name<Obj>(), {"data"});
          // PUT handler for updating nested objects
          reg.endpoints.route(PUT, rest_path, [&obj](const request& req, response& res) {
             // Parse the JSON request body
@@ -187,7 +190,7 @@ namespace glz
             }
 
             res.status(204); // No Content
-         });
+         }, put_spec);
       }
 
       template <class Value, class RegistryType>
@@ -195,10 +198,12 @@ namespace glz
       {
          std::string rest_path = convert_to_rest_path(path);
 
+         auto get_spec = create_route_spec_with_types<void, Value>("Get " + get_type_name<Value>(), {"data"});
          // GET handler for values
          reg.endpoints.route(GET, rest_path,
-                             [&value](const request& /*req*/, response& res) { res.body<Opts>(value); });
+                             [&value](const request& /*req*/, response& res) { res.body<Opts>(value); }, get_spec);
 
+         auto put_spec = create_route_spec_with_types<Value, void>("Update " + get_type_name<Value>(), {"data"});
          // PUT handler for updating values
          reg.endpoints.route(PUT, rest_path, [&value](const request& req, response& res) {
             // Parse the JSON request body
@@ -209,7 +214,7 @@ namespace glz
             }
 
             res.status(204); // No Content
-         });
+         }, put_spec);
       }
 
       template <class Var, class RegistryType>
@@ -217,9 +222,11 @@ namespace glz
       {
          std::string rest_path = convert_to_rest_path(path);
 
+         auto get_spec = create_route_spec_with_types<void, Var>("Get " + get_type_name<Var>(), {"data"});
          // GET handler for variables
-         reg.endpoints.route(GET, rest_path, [&var](const request& /*req*/, response& res) { res.body<Opts>(var); });
+         reg.endpoints.route(GET, rest_path, [&var](const request& /*req*/, response& res) { res.body<Opts>(var); }, get_spec);
 
+         auto put_spec = create_route_spec_with_types<Var, void>("Update " + get_type_name<Var>(), {"data"});
          // PUT handler for updating variables
          reg.endpoints.route(PUT, rest_path, [&var](const request& req, response& res) {
             // Parse the JSON request body
@@ -230,7 +237,7 @@ namespace glz
             }
 
             res.status(204); // No Content
-         });
+         }, put_spec);
       }
 
       template <class T, class F, class Ret, class RegistryType>
@@ -238,6 +245,7 @@ namespace glz
       {
          std::string rest_path = convert_to_rest_path(path);
 
+         auto get_spec = create_route_spec_with_types<void, Ret>("Get " + get_type_name<Ret>(), {"data"});
          // GET handler for member functions with no args
          reg.endpoints.route(GET, rest_path, [&value, func](const request& /*req*/, response& res) {
             if constexpr (std::same_as<Ret, void>) {
@@ -248,7 +256,7 @@ namespace glz
                auto result = (value.*func)();
                res.body<Opts>(result);
             }
-         });
+         }, get_spec);
       }
 
       template <class T, class F, class Input, class Ret, class RegistryType>
@@ -256,6 +264,7 @@ namespace glz
       {
          std::string rest_path = convert_to_rest_path(path);
 
+         auto post_spec = create_route_spec_with_types<Input, Ret>("Create " + get_type_name<Ret>(), {"data"});
          // POST handler for member functions with args
          reg.endpoints.route(POST, rest_path, [&value, func](const request& req, response& res) {
             // Parse the JSON request body
@@ -274,7 +283,7 @@ namespace glz
                auto result = (value.*func)(std::move(params_result));
                res.body<Opts>(result);
             }
-         });
+         }, post_spec);
       }
    };
 }
