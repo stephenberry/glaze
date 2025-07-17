@@ -765,7 +765,7 @@ namespace glz
                }
 
                const auto data_size = buffer->size();
-               const char* data_ptr = asio::buffer_cast<const char*>(buffer->data());
+               const char* data_ptr = static_cast<const char*>(buffer->data().data());
                std::string_view request_view(data_ptr, data_size);
 
                size_t headers_end_pos = request_view.find("\r\n\r\n");
@@ -881,7 +881,7 @@ namespace glz
                   body.reserve(content_length);
                   // Append what's already in the buffer
                   const size_t initial_body_size = std::min(content_length, buffer->size());
-                  body.append(asio::buffer_cast<const char*>(buffer->data()), initial_body_size);
+                  body.append(static_cast<const char*>(buffer->data().data()), initial_body_size);
                   buffer->consume(initial_body_size);
 
                   if (body.length() < content_length) {
@@ -893,7 +893,7 @@ namespace glz
                                             return;
                                          }
                                          // Append newly read data
-                                         body.append(asio::buffer_cast<const char*>(buffer->data()), buffer->size());
+                                         body.append(static_cast<const char*>(buffer->data().data()), buffer->size());
                                          buffer->consume(buffer->size());
                                          process_full_request(socket_ptr, *method_opt, target, headers, std::move(body),
                                                               remote_endpoint);
