@@ -104,7 +104,11 @@ namespace glz
    }
 
 #if defined(GLZ_USING_BOOST_ASIO)
-   namespace asio = boost::asio;
+   namespace asio
+   {
+      using namespace boost::asio;
+      using error_code = boost::system::error_code;
+   }
 #endif
    inline void send_buffer(asio::ip::tcp::socket& socket, repe::message& msg)
    {

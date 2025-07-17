@@ -174,15 +174,15 @@ namespace glz
             std::string final_chunk = "0\r\n\r\n";
             auto buffer = std::make_shared<std::string>(std::move(final_chunk));
 
-            asio::async_write(*socket_, asio::buffer(*buffer), [self, buffer, handler](std::error_code, std::size_t) {
+            asio::async_write(*socket_, asio::buffer(*buffer), [self, buffer, handler](asio::error_code, std::size_t) {
                if (handler) handler();
-               std::error_code close_ec;
+               asio::error_code close_ec;
                self->socket_->close(close_ec);
             });
          }
          else {
             if (handler) handler();
-            std::error_code ec;
+            asio::error_code ec;
             socket_->close(ec);
          }
       }
@@ -482,8 +482,7 @@ namespace glz
          return *this;
       }
 
-      inline http_router& route(http_method method, std::string_view path, handler handle,
-                                const route_spec& spec = {})
+      inline http_router& route(http_method method, std::string_view path, handler handle, const route_spec& spec = {})
       {
          return root_router.route(method, path, handle, spec);
       }
@@ -756,7 +755,7 @@ namespace glz
 
          asio::async_read_until(
             *socket_ptr, *buffer, "\r\n\r\n",
-            [this, socket_ptr, buffer, remote_endpoint](std::error_code ec, std::size_t /*bytes_transferred*/) {
+            [this, socket_ptr, buffer, remote_endpoint](asio::error_code ec, std::size_t /*bytes_transferred*/) {
                if (ec) {
                   // EOF is a normal disconnect, not a server error
                   if (ec != asio::error::eof) {
@@ -766,7 +765,7 @@ namespace glz
                }
 
                const auto data_size = buffer->size();
-               const char* data_ptr = asio::buffer_cast<const char*>(buffer->data());
+               const char* data_ptr = static_cast<const char*>(buffer->data().data());
                std::string_view request_view(data_ptr, data_size);
 
                size_t headers_end_pos = request_view.find("\r\n\r\n");
@@ -882,7 +881,7 @@ namespace glz
                   body.reserve(content_length);
                   // Append what's already in the buffer
                   const size_t initial_body_size = std::min(content_length, buffer->size());
-                  body.append(asio::buffer_cast<const char*>(buffer->data()), initial_body_size);
+                  body.append(static_cast<const char*>(buffer->data().data()), initial_body_size);
                   buffer->consume(initial_body_size);
 
                   if (body.length() < content_length) {
@@ -894,7 +893,7 @@ namespace glz
                                             return;
                                          }
                                          // Append newly read data
-                                         body.append(asio::buffer_cast<const char*>(buffer->data()), buffer->size());
+                                         body.append(static_cast<const char*>(buffer->data().data()), buffer->size());
                                          buffer->consume(buffer->size());
                                          process_full_request(socket_ptr, *method_opt, target, headers, std::move(body),
                                                               remote_endpoint);
