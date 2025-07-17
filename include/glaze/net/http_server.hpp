@@ -26,6 +26,10 @@
 
 namespace glz
 {
+   // Forward declaration for registry template
+   template <auto Opts, uint32_t Proto>
+   struct registry;
+
    // Streaming connection handle for server-side streaming
    struct streaming_connection : public std::enable_shared_from_this<streaming_connection>
    {

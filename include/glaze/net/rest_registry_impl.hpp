@@ -5,6 +5,8 @@
 
 #include "glaze/glaze.hpp"
 #include "glaze/net/http_router.hpp"
+#include "glaze/net/openapi.hpp"
+#include "glaze/json/schema.hpp"
 
 namespace glz
 {
@@ -37,6 +39,81 @@ namespace glz
 
          return rest_path;
       }
+
+      // Helper function to generate OpenAPI schema using glz::detail::schematic directly
+      template <class T>
+      static openapi_schema generate_openapi_schema()
+      {
+         detail::schematic schema;
+         schema.defs.emplace();
+         detail::to_json_schema<std::decay_t<T>>::template op<opts{}>(schema, *schema.defs);
+         return schema;
+      }
+
+      // Helper function to create OpenAPI operation for GET endpoint
+      template <class T>
+      static openapi_operation create_get_operation(const std::string& summary = "")
+      {
+         openapi_operation operation;
+         operation.summary = summary.empty() ? "Get resource" : summary;
+         
+         // Response schema
+         openapi_response response;
+         response.description = "Successful response";
+         
+         openapi_media_type media_type;
+         media_type.schema = generate_openapi_schema<T>();
+         
+         response.content = std::map<std::string, openapi_media_type>();
+         (*response.content)["application/json"] = media_type;
+         
+         operation.responses["200"] = response;
+         
+         return operation;
+      }
+
+      // Helper function to create OpenAPI operation for PUT endpoint
+      template <class T>
+      static openapi_operation create_put_operation(const std::string& summary = "")
+      {
+         openapi_operation operation;
+         operation.summary = summary.empty() ? "Update resource" : summary;
+         
+         // Response
+         openapi_response response;
+         response.description = "Resource updated successfully";
+         operation.responses["204"] = response;
+         
+         return operation;
+      }
+
+      // Helper function to create OpenAPI operation for POST endpoint
+      template <class InputType, class OutputType = void>
+      static openapi_operation create_post_operation(const std::string& summary = "")
+      {
+         openapi_operation operation;
+         operation.summary = summary.empty() ? "Execute operation" : summary;
+         
+         // Response
+         openapi_response response;
+         if constexpr (std::is_same_v<OutputType, void>) {
+            response.description = "Operation completed successfully";
+            operation.responses["204"] = response;
+         } else {
+            response.description = "Successful response";
+            
+            openapi_media_type media_type;
+            media_type.schema = generate_openapi_schema<OutputType>();
+            
+            response.content = std::map<std::string, openapi_media_type>();
+            (*response.content)["application/json"] = media_type;
+            
+            operation.responses["200"] = response;
+         }
+         
+         return operation;
+      }
+
 
       template <class T, class RegistryType>
       static void register_endpoint(const sv path, T& value, RegistryType& reg)
@@ -104,6 +181,7 @@ namespace glz
                res.body<Opts>(result);
             }
          });
+
       }
 
       template <class Obj, class RegistryType>
