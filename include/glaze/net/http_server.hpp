@@ -174,15 +174,15 @@ namespace glz
             std::string final_chunk = "0\r\n\r\n";
             auto buffer = std::make_shared<std::string>(std::move(final_chunk));
 
-            asio::async_write(*socket_, asio::buffer(*buffer), [self, buffer, handler](std::error_code, std::size_t) {
+            asio::async_write(*socket_, asio::buffer(*buffer), [self, buffer, handler](asio::error_code, std::size_t) {
                if (handler) handler();
-               std::error_code close_ec;
+               asio::error_code close_ec;
                self->socket_->close(close_ec);
             });
          }
          else {
             if (handler) handler();
-            std::error_code ec;
+            asio::error_code ec;
             socket_->close(ec);
          }
       }
@@ -755,7 +755,7 @@ namespace glz
 
          asio::async_read_until(
             *socket_ptr, *buffer, "\r\n\r\n",
-            [this, socket_ptr, buffer, remote_endpoint](std::error_code ec, std::size_t /*bytes_transferred*/) {
+            [this, socket_ptr, buffer, remote_endpoint](asio::error_code ec, std::size_t /*bytes_transferred*/) {
                if (ec) {
                   // EOF is a normal disconnect, not a server error
                   if (ec != asio::error::eof) {

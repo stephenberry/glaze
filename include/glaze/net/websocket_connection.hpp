@@ -5,7 +5,6 @@
 
 #include <algorithm>
 #include <array>
-#include <asio.hpp>
 #include <chrono>
 #include <cstring>
 #include <functional>
@@ -22,6 +21,7 @@
 #endif
 
 #include "glaze/base64/base64.hpp"
+#include "glaze/ext/glaze_asio.hpp"
 #include "glaze/net/http_router.hpp"
 
 namespace glz
@@ -766,7 +766,7 @@ namespace glz
             server_->notify_close(shared_from_this());
          }
 
-         std::error_code ec;
+         asio::error_code ec;
          socket_.close(ec);
       }
 
