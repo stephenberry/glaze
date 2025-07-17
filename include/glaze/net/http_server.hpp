@@ -580,6 +580,41 @@ namespace glz
                   op.operationId = std::string(to_string(method)) + route_path;
                   op.responses["200"].description = "OK";
 
+                  // Add request body schema
+                  if (route_entry.spec.request_body_schema) {
+                     openapi_request_body req_body;
+                     req_body.required = true;
+                     if (auto schema_val = glz::read_json<glz::detail::schematic>(*route_entry.spec.request_body_schema)) {
+                        req_body.content["application/json"].schema = *schema_val;
+                     }
+                     op.requestBody = req_body;
+
+                     // Add schema to components
+                     if (!spec.components) spec.components.emplace();
+                     if (!spec.components->schemas) spec.components->schemas.emplace();
+                     if (auto schema_val = glz::read_json<glz::detail::schematic>(*route_entry.spec.request_body_schema)) {
+                        spec.components->schemas->operator[](*route_entry.spec.request_body_type_name) = *schema_val;
+                     }
+                  }
+
+                  // Add response schema
+                  if (route_entry.spec.response_schema) {
+                     openapi_response res_obj;
+                     res_obj.description = "Successful response";
+                     res_obj.content.emplace(); // Emplace the unordered_map
+                     if (auto schema_val = glz::read_json<glz::detail::schematic>(*route_entry.spec.response_schema)) {
+                        res_obj.content.value()["application/json"].schema = *schema_val;
+                     }
+                     op.responses["200"] = res_obj;
+
+                     // Add schema to components
+                     if (!spec.components) spec.components.emplace();
+                     if (!spec.components->schemas) spec.components->schemas.emplace();
+                     if (auto schema_val = glz::read_json<glz::detail::schematic>(*route_entry.spec.response_schema)) {
+                        spec.components->schemas->operator[](*route_entry.spec.response_type_name) = *schema_val;
+                     }
+                  }
+
                   // Extract path parameters
                   auto segments = http_router::split_path(route_path);
                   for (const auto& segment : segments) {
