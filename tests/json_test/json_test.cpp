@@ -63,6 +63,16 @@ struct glz::meta<my_struct>
 static_assert(glz::write_supported<my_struct, glz::JSON>);
 static_assert(glz::read_supported<my_struct, glz::JSON>);
 
+struct Issue1866
+{
+   std::string uniqueName;
+   std::string name{};
+   std::string description{};
+   bool codexSecret{};
+   std::optional<bool> excludeFromCodex{};
+   std::string parentName{};
+};
+
 suite starter = [] {
    "example"_test = [] {
       my_struct s{};
@@ -5841,6 +5851,22 @@ suite required_keys = [] {
    [{"i":287,"d":0.0,"arr":[1,2,3]}]
                                   ^ hello)")
          << err_msg;
+   };
+
+   "required_keys_format_error_issue1866"_test = [] {
+      std::vector<Issue1866> exports;
+      std::vector<Issue1866> gen;
+      std::string buffer{
+         R"([{"uniqueName": "/Lotus/Characters/TwinQueens","name": "Twin Queens","description": "Rulers of the Grineer with their own banner.","codexSecret": false,"parentName": "/Lotus/Characters"}])"};
+
+      std::string buffer1{
+         R"([{"uniqueName": "/Lotus/Characters/TwinQueens","name": "Twin Queens","description": "Rulers of the Grineer with their own banner.","codexSecret": false}])"};
+      auto er = glz::read<glz::opts{.error_on_missing_keys = true}>(exports, buffer);
+      expect(!er);
+
+      auto er1 = glz::read<glz::opts{.error_on_missing_keys = true}>(gen, buffer1);
+      expect(er1);
+      expect(er1.custom_error_message == "parentName");
    };
 };
 
