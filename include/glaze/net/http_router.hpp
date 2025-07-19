@@ -126,6 +126,12 @@ namespace glz
       std::string description{};
       std::vector<std::string> tags{};
       std::unordered_map<std::string, param_constraint> constraints{};
+      
+      // Type information for schema generation
+      std::optional<std::string> request_body_schema{};
+      std::optional<std::string> response_schema{};
+      std::optional<std::string> request_body_type_name{};
+      std::optional<std::string> response_type_name{};
    };
 
    /**
