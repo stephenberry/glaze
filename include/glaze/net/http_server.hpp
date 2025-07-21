@@ -584,7 +584,8 @@ namespace glz
                   if (route_entry.spec.request_body_schema) {
                      openapi_request_body req_body;
                      req_body.required = true;
-                     if (auto schema_val = glz::read_json<glz::detail::schematic>(*route_entry.spec.request_body_schema)) {
+                     if (auto schema_val =
+                            glz::read_json<glz::detail::schematic>(*route_entry.spec.request_body_schema)) {
                         req_body.content["application/json"].schema = *schema_val;
                      }
                      op.requestBody = req_body;
@@ -592,7 +593,8 @@ namespace glz
                      // Add schema to components
                      if (!spec.components) spec.components.emplace();
                      if (!spec.components->schemas) spec.components->schemas.emplace();
-                     if (auto schema_val = glz::read_json<glz::detail::schematic>(*route_entry.spec.request_body_schema)) {
+                     if (auto schema_val =
+                            glz::read_json<glz::detail::schematic>(*route_entry.spec.request_body_schema)) {
                         spec.components->schemas->operator[](*route_entry.spec.request_body_type_name) = *schema_val;
                      }
                   }
