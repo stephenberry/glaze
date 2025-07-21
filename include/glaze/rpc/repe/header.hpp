@@ -18,8 +18,8 @@ namespace glz::repe
       //
       uint16_t spec{0x1507}; // (5383) Magic two bytes to denote the REPE specification
       uint8_t version = 1; // REPE version
-      uint8_t reserved{}; // Must be zero
       uint8_t notify{}; // Action to take, multiple actions may be bit-packed together
+      uint32_t reserved{}; // Must be zero
       //
       uint64_t id{}; // Identifier
       //
