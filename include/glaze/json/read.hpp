@@ -2243,7 +2243,7 @@ namespace glz
                         constexpr auto req_fields = required_fields<T, Opts>();
                         if ((req_fields & fields) != req_fields) {
                            for (size_t i = 0; i < num_members; ++i) {
-                              if (not fields[i]) {
+                              if (not fields[i] && req_fields[i]) {
                                  ctx.custom_error_message = reflect<T>::keys[i];
                                  // We just return the first missing key in order to avoid heap allocations
                                  break;
