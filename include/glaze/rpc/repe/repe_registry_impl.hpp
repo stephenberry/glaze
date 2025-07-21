@@ -26,7 +26,7 @@ namespace glz
       static void register_endpoint(const sv path, T& value, RegistryType& reg)
       {
          reg.endpoints[path] = [&value](repe::state&& state) mutable {
-            if (state.write()) {
+            if (state.has_body()) {
                if (read_params<Opts>(value, state) == 0) {
                   return;
                }
@@ -36,7 +36,7 @@ namespace glz
                return;
             }
 
-            if (state.read()) {
+            if (not state.has_body()) {
                write_response<Opts>(value, state);
             }
             else {
@@ -52,7 +52,7 @@ namespace glz
             reg.endpoints[path] = [&func](repe::state&& state) mutable {
                func();
                if (state.notify()) {
-                  state.out.header.notify(true);
+                  state.out.header.notify = true;
                   return;
                }
                write_response<Opts>(state);
@@ -62,7 +62,7 @@ namespace glz
             reg.endpoints[path] = [&func](repe::state&& state) mutable {
                if (state.notify()) {
                   std::ignore = func();
-                  state.out.header.notify(true);
+                  state.out.header.notify = true;
                   return;
                }
                write_response<Opts>(func(), state);
@@ -88,7 +88,7 @@ namespace glz
                else {
                   std::ignore = func(params);
                }
-               state.out.header.notify(true);
+               state.out.header.notify = true;
                return;
             }
             if constexpr (std::same_as<Result, void>) {
@@ -106,7 +106,7 @@ namespace glz
       static void register_object_endpoint(const sv path, Obj& obj, RegistryType& reg)
       {
          reg.endpoints[path] = [&obj](repe::state&& state) mutable {
-            if (state.write()) {
+            if (state.has_body()) {
                if (read_params<Opts>(obj, state) == 0) {
                   return;
                }
@@ -116,7 +116,7 @@ namespace glz
                return;
             }
 
-            if (state.read()) {
+            if (not state.has_body()) {
                write_response<Opts>(obj, state);
             }
             else {
@@ -129,18 +129,18 @@ namespace glz
       static void register_value_endpoint(const sv path, Value& value, RegistryType& reg)
       {
          reg.endpoints[path] = [value](repe::state&& state) mutable {
-            if (state.write()) {
+            if (state.has_body()) {
                if (read_params<Opts>(value, state) == 0) {
                   return;
                }
             }
 
             if (state.notify()) {
-               state.out.header.notify(true);
+               state.out.header.notify = true;
                return;
             }
 
-            if (state.read()) {
+            if (not state.has_body()) {
                write_response<Opts>(value, state);
             }
             else {
@@ -153,18 +153,18 @@ namespace glz
       static void register_variable_endpoint(const sv path, Var& var, RegistryType& reg)
       {
          reg.endpoints[path] = [&var](repe::state&& state) mutable {
-            if (state.write()) {
+            if (state.has_body()) {
                if (read_params<Opts>(var, state) == 0) {
                   return;
                }
             }
 
             if (state.notify()) {
-               state.out.header.notify(true);
+               state.out.header.notify = true;
                return;
             }
 
-            if (state.read()) {
+            if (not state.has_body()) {
                write_response<Opts>(var, state);
             }
             else {
@@ -181,7 +181,7 @@ namespace glz
                (value.*func)();
 
                if (state.notify()) {
-                  state.out.header.notify(true);
+                  state.out.header.notify = true;
                   return;
                }
 
@@ -190,7 +190,7 @@ namespace glz
             else {
                if (state.notify()) {
                   std::ignore = (value.*func)();
-                  state.out.header.notify(true);
+                  state.out.header.notify = true;
                   return;
                }
 
@@ -204,7 +204,7 @@ namespace glz
       {
          reg.endpoints[path] = [&value, func](repe::state&& state) mutable {
             static thread_local Input input{};
-            if (state.write()) {
+            if (state.has_body()) {
                if (read_params<Opts>(input, state) == 0) {
                   return;
                }
@@ -214,7 +214,7 @@ namespace glz
                (value.*func)(input);
 
                if (state.notify()) {
-                  state.out.header.notify(true);
+                  state.out.header.notify = true;
                   return;
                }
 
@@ -223,7 +223,7 @@ namespace glz
             else {
                if (state.notify()) {
                   std::ignore = (value.*func)(input);
-                  state.out.header.notify(true);
+                  state.out.header.notify = true;
                   return;
                }
 

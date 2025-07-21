@@ -62,14 +62,6 @@ struct example_functions_t
    };
 };
 
-suite header_tests = [] {
-   "header"_test = [] {
-      glz::repe::header h{.action = glz::repe::action::read};
-      expect(not h.notify());
-      expect(h.read());
-   };
-};
-
 suite structs_of_functions = [] {
    "structs_of_functions"_test = [] {
       glz::registry server{};
@@ -125,7 +117,7 @@ suite structs_of_functions = [] {
       server.call(request, response);
       expect(response.body == "null");
 
-      repe::request_json({"/my_string"}, request);
+      request = repe::request_json({"/my_string"});
       server.call(request, response);
       expect(response.body == R"("Howdy!")") << response.body;
 
@@ -140,7 +132,7 @@ suite structs_of_functions = [] {
       server.call(request, response);
       expect(response.body == R"(3.3)") << response.body;
 
-      repe::request_json({"/my_functions"}, request);
+      request = repe::request_json({"/my_functions"});
       server.call(request, response);
       expect(
          response.body ==
@@ -262,14 +254,14 @@ suite structs_of_functions_beve = [] {
       expect(!glz::beve_to_json(response.body, res));
       expect(res == "null");
 
-      repe::request_beve({"/my_string"}, request);
+      request = repe::request_beve({"/my_string"});
       server.call(request, response);
       expect(!glz::beve_to_json(response.body, res));
       expect(res == R"("Howdy!")") << res;
 
       obj.my_string.clear();
 
-      repe::request_beve({"/my_string"}, request);
+      request = repe::request_beve({"/my_string"});
       server.call(request, response);
       expect(!glz::beve_to_json(response.body, res));
       // we expect an empty string returned because we cleared it
@@ -280,7 +272,7 @@ suite structs_of_functions_beve = [] {
       expect(!glz::beve_to_json(response.body, res));
       expect(res == R"(3.3)") << res;
 
-      repe::request_beve({"/my_functions"}, request);
+      request = repe::request_beve({"/my_functions"});
       server.call(request, response);
       expect(!glz::beve_to_json(response.body, res));
       expect(
