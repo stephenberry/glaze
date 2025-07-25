@@ -112,7 +112,7 @@ namespace glz
 #endif
    inline void send_buffer(asio::ip::tcp::socket& socket, repe::message& msg)
    {
-      if (msg.header.length == repe::no_length_provided) {
+      if (msg.header.length == 0) {
          encode_error(error_code::invalid_header, msg);
          return;
       }
@@ -136,16 +136,8 @@ namespace glz
          encode_error(error_code::connection_failure, msg, e.message());
          return;
       }
-      if (msg.header.query_length == repe::no_length_provided) {
-         encode_error(error_code::invalid_query, msg);
-         return;
-      }
       msg.query.resize(msg.header.query_length);
       asio::read(socket, asio::buffer(msg.query), asio::transfer_exactly(msg.header.query_length));
-      if (msg.header.body_length == repe::no_length_provided) {
-         encode_error(error_code::invalid_body, msg);
-         return;
-      }
       msg.body.resize(msg.header.body_length);
       asio::read(socket, asio::buffer(msg.body), asio::transfer_exactly(msg.header.body_length), e);
       if (e) {
@@ -156,7 +148,7 @@ namespace glz
 
    inline asio::awaitable<void> co_send_buffer(asio::ip::tcp::socket& socket, const repe::message& msg)
    {
-      if (msg.header.length == repe::no_length_provided) {
+      if (msg.header.length == 0) {
          throw std::runtime_error("No length provided in REPE header");
       }
       if (msg.header.query_length != msg.query.size()) {
@@ -184,17 +176,11 @@ namespace glz
                                 asio::transfer_exactly(sizeof(msg.header)), asio::use_awaitable);
 
       // Validate and read the query
-      if (msg.header.query_length == repe::no_length_provided) {
-         throw std::runtime_error("No query_length provided in REPE header");
-      }
       msg.query.resize(msg.header.query_length);
       co_await asio::async_read(socket, asio::buffer(msg.query), asio::transfer_exactly(msg.header.query_length),
                                 asio::use_awaitable);
 
       // Validate and read the body
-      if (msg.header.body_length == repe::no_length_provided) {
-         throw std::runtime_error("No body_length provided in REPE header");
-      }
       msg.body.resize(msg.header.body_length);
       co_await asio::async_read(socket, asio::buffer(msg.body), asio::transfer_exactly(msg.header.body_length),
                                 asio::use_awaitable);
@@ -358,6 +344,7 @@ namespace glz
       void call(Header&& header, repe::message& response, Params&&... params)
       {
          auto request = message_pool->borrow();
+         request->body.clear();
          if (not connected()) {
             encode_error(request->error(), response, "call failure: NOT CONNECTED");
             return;
@@ -409,6 +396,7 @@ namespace glz
 
          repe::message response{};
          auto request = message_pool->borrow();
+         request->body.clear();
          repe::request<Opts>(repe::user_header{.query = query}, *request, std::forward<Params>(params)...);
          if (bool(request->error())) {
             throw std::runtime_error("bad request");
@@ -447,6 +435,7 @@ namespace glz
 
          repe::message response{};
          auto request = message_pool->borrow();
+         request->body.clear();
          repe::request<Opts>(repe::user_header{.query = query}, *request);
          if (bool(request->error())) {
             throw std::runtime_error("bad request");
@@ -499,6 +488,7 @@ namespace glz
 
          repe::message response{};
          auto request = message_pool->borrow();
+         request->body.clear();
          repe::request<Opts>(repe::user_header{.query = query}, *request, std::forward<Input>(input));
          if (bool(request->error())) {
             throw std::runtime_error("bad request");
@@ -646,7 +636,7 @@ namespace glz
                co_await co_receive_buffer(socket, request);
                response.header.ec = {}; // clear error code, as we use this field to determine if a new error occured
                registry.call(request, response);
-               if (not request.header.notify()) {
+               if (not request.header.notify) {
                   co_await co_send_buffer(socket, response);
                }
             }

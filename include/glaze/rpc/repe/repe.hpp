@@ -4,6 +4,7 @@
 #pragma once
 
 #include "glaze/rpc/repe/header.hpp"
+#include "glaze/core/opts.hpp"
 
 namespace glz
 {
@@ -31,11 +32,9 @@ namespace glz::repe
       repe::message& in;
       repe::message& out;
 
-      bool notify() const { return in.header.notify(); }
+      bool notify() const { return bool(in.header.notify); }
 
-      bool read() const { return in.header.read(); }
-
-      bool write() const { return in.header.write(); }
+      bool has_body() const { return bool(in.header.body_length); }
    };
 
    template <class T>
@@ -129,7 +128,6 @@ namespace glz::repe
          {
             message msg{};
             msg.header = encode(h);
-            msg.header.read(true); // because no value provided
             msg.query = std::string{h.query};
             msg.header.body_length = msg.body.size();
             msg.header.length = sizeof(repe::header) + msg.query.size() + msg.body.size();
@@ -142,7 +140,6 @@ namespace glz::repe
             message msg{};
             msg.header = encode(h);
             msg.query = std::string{h.query};
-            msg.header.write(true);
             // TODO: Handle potential write errors and put in msg
             std::ignore = glz::write<Opts>(std::forward<Value>(value), msg.body);
             msg.header.body_length = msg.body.size();
@@ -153,7 +150,6 @@ namespace glz::repe
          void operator()(const user_header& h, message& msg) const
          {
             msg.header = encode(h);
-            msg.header.read(true); // because no value provided
             msg.query = std::string{h.query};
             msg.header.body_length = msg.body.size();
             msg.header.length = sizeof(repe::header) + msg.query.size() + msg.body.size();
@@ -164,7 +160,6 @@ namespace glz::repe
          {
             msg.header = encode(h);
             msg.query = std::string{h.query};
-            msg.header.write(true);
             // TODO: Handle potential write errors and put in msg
             std::ignore = glz::write<Opts>(std::forward<Value>(value), msg.body);
             msg.header.body_length = msg.body.size();
