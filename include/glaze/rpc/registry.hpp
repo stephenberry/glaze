@@ -176,8 +176,8 @@ namespace glz
          if (in.header.length != expected_length) {
             out.header.ec = error_code::invalid_header;
             out.header.id = in.header.id; // Echo back the original ID
-            write_error("REPE length mismatch: expected " + std::to_string(expected_length) + 
-                       ", got " + std::to_string(in.header.length));
+            write_error("REPE length mismatch: expected " + std::to_string(expected_length) + ", got " +
+                        std::to_string(in.header.length));
             return;
          }
 
@@ -185,8 +185,7 @@ namespace glz
          if (in.header.spec != 0x1507) {
             out.header.ec = error_code::invalid_header;
             out.header.id = in.header.id; // Echo back the original ID
-            write_error("REPE magic number mismatch: expected 0x1507, got 0x" + 
-                       std::to_string(in.header.spec));
+            write_error("REPE magic number mismatch: expected 0x1507, got 0x" + std::to_string(in.header.spec));
             return;
          }
 

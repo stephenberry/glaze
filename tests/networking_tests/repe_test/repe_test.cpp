@@ -551,9 +551,9 @@ suite validation_tests = [] {
       // Create a request with invalid version
       repe::request_json({"/hello"}, request);
       request.header.version = 2; // Invalid version
-      
+
       server.call(request, response);
-      
+
       expect(response.header.ec == glz::error_code::version_mismatch);
       expect(response.body.find("version mismatch") != std::string::npos);
    };
@@ -569,9 +569,9 @@ suite validation_tests = [] {
       // Create a request with invalid length
       repe::request_json({"/hello"}, request);
       request.header.length = 100; // Wrong length
-      
+
       server.call(request, response);
-      
+
       expect(response.header.ec == glz::error_code::invalid_header);
       expect(response.body.find("length mismatch") != std::string::npos);
    };
@@ -587,9 +587,9 @@ suite validation_tests = [] {
       // Create a request with invalid magic number
       repe::request_json({"/hello"}, request);
       request.header.spec = 0x1234; // Wrong magic number
-      
+
       server.call(request, response);
-      
+
       expect(response.header.ec == glz::error_code::invalid_header);
       expect(response.body.find("magic number mismatch") != std::string::npos);
    };
@@ -602,12 +602,12 @@ suite validation_tests = [] {
       repe::message request{};
       repe::message response{};
 
-      // Create a valid request 
+      // Create a valid request
       repe::request_json({"/hello"}, request);
       // All validation fields should be correct by default
-      
+
       server.call(request, response);
-      
+
       // Should succeed and not have validation errors
       expect(response.header.ec == glz::error_code::none);
       expect(response.body == R"("Hello")");

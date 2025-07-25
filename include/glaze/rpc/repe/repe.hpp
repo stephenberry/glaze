@@ -3,8 +3,8 @@
 
 #pragma once
 
-#include "glaze/rpc/repe/header.hpp"
 #include "glaze/core/opts.hpp"
+#include "glaze/rpc/repe/header.hpp"
 
 namespace glz
 {
