@@ -2537,8 +2537,9 @@ namespace glz
             glaze_enum_t<Ts>,
          tuple<Ts>, tuple < >> {}...));
       using object_types = decltype(tuplet::tuple_cat(std::conditional_t<json_object<Ts>, tuple<Ts>, tuple<>>{}...));
-      using array_types = decltype(tuplet::tuple_cat(
-         std::conditional_t < array_t<remove_meta_wrapper_t<Ts>> || glaze_array_t<Ts>, tuple<Ts>, tuple < >> {}...));
+      using array_types = decltype(tuplet::tuple_cat(std::conditional_t < array_t<remove_meta_wrapper_t<Ts>> ||
+                                                        glaze_array_t<Ts> || tuple_t<Ts> || is_std_tuple<Ts>,
+                                                     tuple<Ts>, tuple < >> {}...));
       using nullable_types = decltype(tuplet::tuple_cat(std::conditional_t<null_t<Ts>, tuple<Ts>, tuple<>>{}...));
       using nullable_objects =
          decltype(tuplet::tuple_cat(std::conditional_t<is_memory_object<Ts>, tuple<Ts>, tuple<>>{}...));
