@@ -34,6 +34,21 @@ struct advanced_container
    double value = 5.5;
 };
 
+struct level_one
+{
+   int value{0};
+};
+
+struct level_two
+{
+   level_one l1{};
+};
+
+struct dotted_access_struct
+{
+   level_two l2{};
+};
+
 struct optional_struct
 {
    std::optional<int> maybe = 99;
@@ -286,6 +301,13 @@ y = "test2"
       expect(ac.inner_two.x == 12);
       expect(ac.inner_two.y == "test2");
       expect(ac.value == 5.6);
+   };
+
+   "read_advanced_nested_struct"_test = [] {
+      dotted_access_struct dac{};
+      std::string buffer{R"(l2.l1.value = 1)"};
+      expect(not glz::read_toml(dac, buffer));
+      expect(dac.l2.l1.value == 1);
    };
 
    // Test writing a boolean value.
