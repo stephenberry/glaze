@@ -5,12 +5,14 @@
 
 #include <cctype>
 #include <charconv>
+#include <iostream>
 
 #include "glaze/core/common.hpp"
-#include "glaze/core/opts.hpp"
+// #include "glaze/core/opts.hpp"
 #include "glaze/core/read.hpp"
 #include "glaze/core/reflect.hpp"
 #include "glaze/file/file_ops.hpp"
+#include "glaze/toml/opts.hpp"
 #include "glaze/util/glaze_fast_float.hpp"
 #include "glaze/util/parse.hpp"
 #include "glaze/util/type_traits.hpp"
@@ -456,11 +458,13 @@ namespace glz
             return;
          }
 
-         if (it + 4 <= end && std::string_view(it, 4) == "true") {
+         if (it + 4 <= end &&
+             std::string_view(it, 4) == "true") { // TODO: Maybe we can use the bool_true from header.hpp
             value = true;
             it += 4;
          }
-         else if (it + 5 <= end && std::string_view(it, 5) == "false") {
+         else if (it + 5 <= end &&
+                  std::string_view(it, 5) == "false") { // TODO: Maybe we can use the bool_false from header.hpp
             value = false;
             it += 5;
          }
@@ -549,6 +553,9 @@ namespace glz
       {
          static constexpr auto N = reflect<std::decay_t<T>>::size;
          static constexpr auto HashInfo = hash_info<std::decay_t<T>>;
+         // TODO: Think if we should make inline table a constexpr to reduce runtime checks
+         // TODO: Think if it's feasible to write a function to find out the deepest nested structure
+         // and use it instead of vector
 
          while (it != end) {
             skip_ws_and_comments(it, end);
@@ -569,6 +576,10 @@ namespace glz
                continue;
             }
 
+            std::string key_str;
+            // std::vector<std::string> key_str; // TODO: std::string is used temporarily, we may swap it to view later
+            // on or as said before completely switch to array
+
             // Handle section headers [section] (only if not in an inline table)
             if (!is_inline_table && *it == '[') {
                // For now, skip section headers - we'll implement nested object support later
@@ -579,7 +590,6 @@ namespace glz
                continue;
             }
 
-            std::string key_str;
             if (!parse_toml_key(key_str, ctx, it, end)) {
                return;
             }
@@ -680,6 +690,14 @@ namespace glz
       }
    }
 
+   template <auto Opts, class T>
+   bool resolve_nested(T& root, std::span<std::string> path, auto& ctx, auto& it, auto& end)
+   {}
+
+   template <auto Opts, class T>
+   bool resolve_nested(T& root, std::span<std::string> path, auto& ctx, auto& it, auto& end)
+   {}
+
    template <class T>
       requires((glaze_object_t<T> || reflectable<T>) && not custom_read<T>)
    struct from<TOML, T>
@@ -687,11 +705,13 @@ namespace glz
       template <auto Opts, class It>
       static void op(auto&& value, is_context auto&& ctx, It&& it, auto&& end)
       {
+         // TODO: Introduce OPTS here
          skip_ws_and_comments(it, end);
          if (it == end) { // Empty input for an object is valid (empty object)
             return;
          }
 
+         // TODO: We probably should reorder that so that we dont check against less used inline table more often
          if (*it == '{') { // Check if it's an inline table
             ++it; // Consume '{'
             skip_ws_and_comments(it, end);
@@ -699,12 +719,53 @@ namespace glz
                ++it;
                return;
             }
+            // TODO: Rewrite logic here, for now it works just fine so we leave it.
             detail::parse_toml_object_members<Opts>(value, it, end, ctx, true); // true for is_inline_table
             // The parse_toml_object_members should consume the final '}' if successful
          }
          else {
+            std::vector<std::string> path;
+
+            if (*it == '[') { // Normal table
+               if constexpr (toml::check_is_internal(Opts)) {
+                  std::cout << "we are in internal [" << std::endl;
+                  return; // is it's internal we return to root.
+               }
+               else {
+                  ++it;
+                  if (*it == '[') { // Array of tables
+                     ++it; // skip the second bracket
+                  }
+
+                  skip_ws_and_comments(it, end);
+
+                  // if (!parse_toml_key(path, ctx, it, end)) {
+                  //    return;
+                  // }
+
+                  if (it == end || *it != '=') {
+                     ctx.error = error_code::syntax_error;
+                     return;
+                  }
+
+                  ++it; // Skip '='
+                  skip_ws_and_comments(it, end);
+
+                  if (it == end) {
+                     ctx.error = error_code::unexpected_end; // Value expected
+                     return;
+                  }
+
+                  if (!resolve_nested<Opts>(value, std::span{path}, ctx, it, end)) {
+                     return;
+                  }
+               }
+            }
+            else { // Just plain key
+            }
             // Standard table (key-value pairs possibly spanning multiple lines, or top-level object)
-            detail::parse_toml_object_members<Opts>(value, it, end, ctx, false); // false for is_inline_table
+            // Most files do not use functions and just manually inline the logic here, so we won't too
+            // detail::parse_toml_object_members<Opts>(value, it, end, ctx, false); // false for is_inline_table
          }
       }
    };

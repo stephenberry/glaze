@@ -222,7 +222,7 @@ b = 2)");
    };
 
    // Test writing a nested structure.
-   "nested_struct"_test = [] {
+   "write_nested_struct"_test = [] {
       container c{};
       std::string buffer{};
       expect(not glz::write_toml(c, buffer));
@@ -230,7 +230,35 @@ b = 2)");
 x = 10
 y = "test"
 
-value = 5.5)");
+value = 5.5)"); // TODO: This is not the right format, we need to refactor the output to match TOML syntax.
+                // For now, I'll leave it as is, but it should be fixed in the future.
+   };
+
+   "read_wrong_format_nested"_test = [] {
+      container c{};
+      std::string buffer{R"([inner]
+x = 10
+y = "test"
+
+value = 5.5)"};
+      auto error = glz::read_toml(c, buffer);
+      expect(error); // Expect an error because the format is not correct for TOML. root value should be before nested
+                     // table.
+      expect(error == glz::error_code::syntax_error);
+   };
+
+   "read_nested_struct"_test = [] {
+      container c{};
+      std::string buffer{R"(value = 5.6
+
+[inner]
+x = 11
+y = "test1"
+)"};
+      expect(not glz::read_toml(c, buffer));
+      expect(c.inner.x == 11);
+      expect(c.inner.y == "test1");
+      expect(c.value == 5.6);
    };
 
    // Test writing a boolean value.
