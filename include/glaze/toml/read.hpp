@@ -147,6 +147,100 @@ namespace glz
       return true;
    }
 
+   template <class Ctx, class It, class End>
+   GLZ_ALWAYS_INLINE bool parse_toml_key(std::vector<std::string>& keys, Ctx& ctx, It& it, End end) noexcept
+   {
+      keys.clear();
+      skip_ws_and_comments(it, end);
+
+      if (it == end) {
+         ctx.error = error_code::unexpected_end;
+         return false;
+      }
+
+      while (true) {
+         std::string key;
+
+         if (it == end) {
+            ctx.error = error_code::unexpected_end;
+            return false;
+         }
+
+         if (*it == '"') {
+            ++it;
+            while (it != end && *it != '"') {
+               if (*it == '\\') {
+                  ++it;
+                  if (it == end) {
+                     ctx.error = error_code::unexpected_end;
+                     return false;
+                  }
+                  switch (*it) {
+                  case '"':
+                     key.push_back('"');
+                     break;
+                  case '\\':
+                     key.push_back('\\');
+                     break;
+                  case 'n':
+                     key.push_back('\n');
+                     break;
+                  case 't':
+                     key.push_back('\t');
+                     break;
+                  case 'r':
+                     key.push_back('\r');
+                     break;
+                  default:
+                     key.push_back('\\');
+                     key.push_back(*it);
+                     break;
+                  }
+               }
+               else {
+                  key.push_back(*it);
+               }
+               ++it;
+            }
+
+            if (it == end || *it != '"') {
+               ctx.error = error_code::syntax_error;
+               return false;
+            }
+            ++it; // skip closing quote
+         }
+         else {
+            while (it != end && (std::isalnum(*it) || *it == '_' || *it == '-')) {
+               key.push_back(*it);
+               ++it;
+            }
+
+            if (key.empty()) {
+               ctx.error = error_code::syntax_error;
+               return false;
+            }
+         }
+
+         keys.push_back(std::move(key));
+
+         skip_ws_and_comments(it, end);
+
+         if (it == end || *it != '.') {
+            break;
+         }
+
+         ++it; // skip '.', We know it's '.' because we've checked before
+         skip_ws_and_comments(it, end);
+
+         if (it == end) {
+            ctx.error = error_code::unexpected_end;
+            return false;
+         }
+      }
+
+      return true;
+   }
+
    template <glaze_value_t T>
    struct from<TOML, T>
    {
@@ -691,12 +785,44 @@ namespace glz
    }
 
    template <auto Opts, class T>
-   bool resolve_nested(T& root, std::span<std::string> path, auto& ctx, auto& it, auto& end)
-   {}
+   GLZ_ALWAYS_INLINE bool resolve_nested(T& root, std::span<std::string> path, auto& ctx, auto& it, auto& end)
+   {
+      if constexpr (!(glz::reflectable<T> || glz::glaze_object_t<T>)) {
+         return true;
+      }
+      else {
+         static constexpr auto N = reflect<std::decay_t<T>>::size;
+         static constexpr auto HashInfo = hash_info<std::decay_t<T>>;
+         const auto index = decode_hash_with_size<TOML, std::decay_t<T>, HashInfo, HashInfo.type>::op(
+            path.front().data(), path.front().data() + path.front().size(), path.front().size());
+         if (index < N) [[likely]] {
+            visit<N>(
+               [&]<size_t I>() {
+                  if (I == index) {
+                     decltype(auto) member_obj = [&]() -> decltype(auto) {
+                        if constexpr (reflectable<std::decay_t<T>>) {
+                           return get<I>(to_tie(root));
+                        }
+                        else {
+                           return get_member(root, get<I>(reflect<std::decay_t<T>>::values));
+                        }
+                     }();
 
-   template <auto Opts, class T>
-   bool resolve_nested(T& root, std::span<std::string> path, auto& ctx, auto& it, auto& end)
-   {}
+                     if (!(path.size() - 1)) {
+                        using member_type = std::decay_t<decltype(member_obj)>;
+                        from<TOML, member_type>::template op<toml::is_internal_on<Opts>()>(member_obj, ctx, it, end);
+                     }
+                     else {
+                        return resolve_nested<Opts>(member_obj, path.subspan(1), ctx, it, end);
+                     }
+                  }
+                  return !bool(ctx.error);
+               },
+               index);
+         }
+         return !bool(ctx.error);
+      }
+   }
 
    template <class T>
       requires((glaze_object_t<T> || reflectable<T>) && not custom_read<T>)
@@ -705,67 +831,85 @@ namespace glz
       template <auto Opts, class It>
       static void op(auto&& value, is_context auto&& ctx, It&& it, auto&& end)
       {
-         // TODO: Introduce OPTS here
-         skip_ws_and_comments(it, end);
-         if (it == end) { // Empty input for an object is valid (empty object)
-            return;
-         }
-
-         // TODO: We probably should reorder that so that we dont check against less used inline table more often
-         if (*it == '{') { // Check if it's an inline table
-            ++it; // Consume '{'
+         while (it != end) {
+            // TODO: Introduce OPTS here
             skip_ws_and_comments(it, end);
-            if (it != end && *it == '}') { // Empty inline table {}
-               ++it;
+            if (it == end) { // Empty input for an object is valid (empty object)
                return;
             }
-            // TODO: Rewrite logic here, for now it works just fine so we leave it.
-            detail::parse_toml_object_members<Opts>(value, it, end, ctx, true); // true for is_inline_table
-            // The parse_toml_object_members should consume the final '}' if successful
-         }
-         else {
-            std::vector<std::string> path;
+            if (*it == '\n' || *it == '\r') {
+               skip_to_next_line(ctx, it, end);
+               continue;
+            }
 
-            if (*it == '[') { // Normal table
+            // TODO: We probably should reorder that so that we dont check against less used inline table more often
+            if (*it == '{') { // Check if it's an inline table
+               ++it; // Consume '{'
+               skip_ws_and_comments(it, end);
+               if (it != end && *it == '}') { // Empty inline table {}
+                  ++it;
+                  return;
+               }
+               // TODO: Rewrite logic here, for now it works just fine so we leave it.
+               detail::parse_toml_object_members<Opts>(value, it, end, ctx, true); // true for is_inline_table
+               // The parse_toml_object_members should consume the final '}' if successful
+            }
+            else if (*it == '[') { // Normal table
+               std::vector<std::string> path;
+
                if constexpr (toml::check_is_internal(Opts)) {
-                  std::cout << "we are in internal [" << std::endl;
                   return; // is it's internal we return to root.
                }
                else {
                   ++it;
                   if (*it == '[') { // Array of tables
-                     ++it; // skip the second bracket
-                  }
 
+                     ++it; // skip the second bracket
+                     ctx.error = error_code::feature_not_supported;
+                     return;
+                     // TODO: the logic should ideally branch here, because arrays should ignore multiple defenition
+                     // errors And should also use push back version but for now we just error out, will support
+                     // later
+                  }
                   skip_ws_and_comments(it, end);
 
-                  // if (!parse_toml_key(path, ctx, it, end)) {
-                  //    return;
-                  // }
-
-                  if (it == end || *it != '=') {
+                  if (!parse_toml_key(path, ctx, it, end)) {
+                     return;
+                  }
+                  if (it == end || *it != ']') {
                      ctx.error = error_code::syntax_error;
                      return;
                   }
-
-                  ++it; // Skip '='
-                  skip_ws_and_comments(it, end);
-
-                  if (it == end) {
-                     ctx.error = error_code::unexpected_end; // Value expected
-                     return;
-                  }
-
+                  it++; // skip ']'
                   if (!resolve_nested<Opts>(value, std::span{path}, ctx, it, end)) {
                      return;
                   }
                }
             }
-            else { // Just plain key
+            else {
+               std::vector<std::string> path;
+               skip_ws_and_comments(it, end);
+
+               if (!parse_toml_key(path, ctx, it, end)) {
+                  return;
+               }
+
+               if (it == end || *it != '=') {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
+
+               ++it; // Skip '='
+               skip_ws_and_comments(it, end);
+
+               if (it == end) {
+                  ctx.error = error_code::unexpected_end; // Value expected
+                  return;
+               }
+               if (!resolve_nested<Opts>(value, std::span{path}, ctx, it, end)) {
+                  return;
+               }
             }
-            // Standard table (key-value pairs possibly spanning multiple lines, or top-level object)
-            // Most files do not use functions and just manually inline the logic here, so we won't too
-            // detail::parse_toml_object_members<Opts>(value, it, end, ctx, false); // false for is_inline_table
          }
       }
    };

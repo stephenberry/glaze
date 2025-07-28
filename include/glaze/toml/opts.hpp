@@ -24,7 +24,7 @@ namespace glz::toml
    constexpr auto is_internal_on()
    {
       auto ret = Opts;
-      ret.internal &= ~uint32_t(opts_internal::internal_struct);
+      ret.internal |= uint32_t(opts_internal::internal_struct);
       return ret;
    }
 

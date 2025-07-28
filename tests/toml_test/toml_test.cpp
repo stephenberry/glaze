@@ -21,9 +21,16 @@ struct nested
    std::string y = "test";
 };
 
-struct container
+struct simple_container
 {
    nested inner{};
+   double value = 5.5;
+};
+
+struct advanced_container
+{
+   nested inner{};
+   nested inner_two{};
    double value = 5.5;
 };
 
@@ -223,7 +230,7 @@ b = 2)");
 
    // Test writing a nested structure.
    "write_nested_struct"_test = [] {
-      container c{};
+      simple_container c{};
       std::string buffer{};
       expect(not glz::write_toml(c, buffer));
       expect(buffer == R"([inner]
@@ -235,30 +242,50 @@ value = 5.5)"); // TODO: This is not the right format, we need to refactor the o
    };
 
    "read_wrong_format_nested"_test = [] {
-      container c{};
+      advanced_container sc{};
       std::string buffer{R"([inner]
 x = 10
 y = "test"
 
 value = 5.5)"};
-      auto error = glz::read_toml(c, buffer);
+      auto error = glz::read_toml(sc, buffer);
       expect(error); // Expect an error because the format is not correct for TOML. root value should be before nested
                      // table.
       expect(error == glz::error_code::syntax_error);
    };
 
    "read_nested_struct"_test = [] {
-      container c{};
+      simple_container sc{};
       std::string buffer{R"(value = 5.6
 
 [inner]
 x = 11
 y = "test1"
 )"};
-      expect(not glz::read_toml(c, buffer));
-      expect(c.inner.x == 11);
-      expect(c.inner.y == "test1");
-      expect(c.value == 5.6);
+      expect(not glz::read_toml(sc, buffer));
+      expect(sc.inner.x == 11);
+      expect(sc.inner.y == "test1");
+      expect(sc.value == 5.6);
+   };
+
+   "read_advanced_nested_struct"_test = [] {
+      advanced_container ac{};
+      std::string buffer{R"(value = 5.6
+
+[inner]
+x = 11
+y = "test1"
+
+[inner_two]
+x = 12
+y = "test2"
+)"};
+      expect(not glz::read_toml(ac, buffer));
+      expect(ac.inner.x == 11);
+      expect(ac.inner.y == "test1");
+      expect(ac.inner_two.x == 12);
+      expect(ac.inner_two.y == "test2");
+      expect(ac.value == 5.6);
    };
 
    // Test writing a boolean value.
