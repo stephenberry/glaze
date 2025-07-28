@@ -3569,6 +3569,20 @@ suite variant_tests = [] {
       expect(std::holds_alternative<Color>(read.value()));
       expect(std::get<Color>(read.value()) == Color::Red);
    };
+
+   "variant read tuple"_test = [] {
+      using int_int_tuple_t = std::tuple<int, int>;
+      std::variant<int, int_int_tuple_t, std::string> var;
+
+      expect(glz::read_json(var, R"(1)") == glz::error_code::none);
+      expect(std::get<int>(var) == 1);
+
+      expect(glz::read_json(var, R"("str")") == glz::error_code::none);
+      expect(std::get<std::string>(var) == "str");
+
+      expect(glz::read_json(var, R"([2, 3])") == glz::error_code::none);
+      expect(std::get<int_int_tuple_t>(var) == int_int_tuple_t{2, 3});
+   };
 };
 
 struct holder0_t
