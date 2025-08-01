@@ -22,6 +22,11 @@
 // Conditionally include SSL headers only when needed
 #ifdef GLZ_ENABLE_SSL
 #include <asio/ssl.hpp>
+
+// To deconflict Windows.h
+#ifdef DELETE
+#undef DELETE
+#endif
 #endif
 
 namespace glz
