@@ -29,6 +29,10 @@
 #include <openssl/x509.h>
 #include <openssl/x509v3.h>
 
+#ifdef DELETE
+#undef DELETE
+#endif
+
 #include <asio.hpp>
 
 using namespace ut;

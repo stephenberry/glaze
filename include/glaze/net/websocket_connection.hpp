@@ -18,6 +18,11 @@
 #if defined(GLZ_ENABLE_OPENSSL) && __has_include(<openssl/sha.h>)
 #include <openssl/sha.h>
 #define GLZ_HAS_OPENSSL
+
+// To deconflict Windows.h
+#ifdef DELETE
+#undef DELETE
+#endif
 #endif
 
 #include "glaze/base64/base64.hpp"
