@@ -12,7 +12,8 @@
 #if defined(_MSC_VER)
 #include <intrin.h>
 #pragma warning(push)
-#pragma warning(disable:4702) // disable "unreachable code" warnings, which are often invalid due to constexpr branching
+#pragma warning( \
+   disable : 4702) // disable "unreachable code" warnings, which are often invalid due to constexpr branching
 #else
 #include <immintrin.h>
 #endif
