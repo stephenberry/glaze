@@ -1906,7 +1906,7 @@ suite bench = [] {
       trace.begin("json_ptr_bench");
       tstart = std::chrono::high_resolution_clock::now();
       for (size_t i{}; i < repeat; ++i) {
-         glz::get<std::string>(thing, "/thing_ptr/b");
+         std::ignore = glz::get<std::string>(thing, "/thing_ptr/b");
       }
       tend = std::chrono::high_resolution_clock::now();
       trace.end("json_ptr_bench", "JSON pointer benchmark");
