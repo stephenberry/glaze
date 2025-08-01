@@ -147,7 +147,7 @@ namespace glz
             size_t i = 0;
             size_t j = (context->count[0] >> 3) & 63;
 
-            if ((context->count[0] += len << 3) < (len << 3)) context->count[1]++;
+            if ((context->count[0] += uint32_t(len << 3)) < (len << 3)) context->count[1]++;
             context->count[1] += (len >> 29);
 
             if ((j + len) > 63) {
