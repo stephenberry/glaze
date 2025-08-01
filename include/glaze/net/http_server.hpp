@@ -24,6 +24,11 @@
 #include <asio/ssl.hpp>
 #endif
 
+// To deconflict Windows.h
+#ifdef DELETE
+#undef DELETE
+#endif
+
 namespace glz
 {
    // Streaming connection handle for server-side streaming
@@ -1014,7 +1019,7 @@ namespace glz
             // Call the streaming handler
             handler(req, stream_res);
          }
-         catch (const std::exception& e) {
+         catch (const std::exception&) {
             // If handler throws immediately, try to send an error response.
             if (!stream_conn->is_headers_sent()) {
                stream_conn->send_headers(500, {{"Content-Type", "text/plain"}});
