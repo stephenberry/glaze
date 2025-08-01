@@ -18,6 +18,9 @@
 #if defined(__AVX2__)
 #define GLZ_USE_AVX2
 #endif
+
+#pragma warning(push)
+#pragma warning(disable:4702) // disable "unreachable code" warnings, which are often invalid due to constexpr branching
 #endif
 
 #include "glaze/core/opts.hpp"
@@ -2034,3 +2037,7 @@ namespace glz
       return {buffer_to_file(buffer, file_name)};
    }
 }
+
+#if defined(_MSC_VER)
+#pragma warning(pop)
+#endif
