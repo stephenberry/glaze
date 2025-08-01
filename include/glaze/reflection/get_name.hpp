@@ -6,6 +6,7 @@
 // TODO: Use std::source_location when deprecating clang 14
 // #include <source_location>
 #include <array>
+#include <string>
 #include <string_view>
 
 #include "glaze/reflection/to_tuple.hpp"
