@@ -156,14 +156,16 @@ class working_test_server
          auto counter = std::make_shared<int>(0);
 
          std::function<void(const std::error_code&)> send_data;
-         send_data = [conn, timer, counter, send_data](const std::error_code& ec) {
+         // Capture send_data by reference to avoid std::bad_function_call from capturing uninitialized function
+         send_data = [conn, timer, counter, &send_data](const std::error_code& ec) {
             if (ec || !conn->is_open() || *counter >= 10) {
                if (conn->is_open()) conn->close();
                return;
             }
 
             conn->send_chunk("chunk" + std::to_string((*counter)++) + ";",
-                             [conn, timer, send_data](std::error_code write_ec) {
+                             // Capture send_data by reference to avoid std::bad_function_call
+                             [conn, timer, &send_data](std::error_code write_ec) {
                                 if (write_ec || !conn->is_open()) {
                                    if (conn->is_open()) conn->close();
                                    return;
