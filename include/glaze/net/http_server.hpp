@@ -6,13 +6,18 @@
 #include <atomic>
 #include <charconv>
 #include <chrono>
+#include <condition_variable>
 #include <expected>
 #include <functional>
 #include <future>
+#include <iostream>
 #include <glaze/glaze.hpp>
+#include <mutex>
+#include <set>
 #include <source_location>
 #include <thread>
 #include <unordered_map>
+#include <asio/signal_set.hpp>
 
 #include "glaze/net/cors.hpp"
 #include "glaze/net/http_router.hpp"
@@ -390,6 +395,13 @@ namespace glz
          if (running) {
             stop();
          }
+         // Clean up any remaining threads
+         for (auto& thread : threads) {
+            if (thread.joinable()) {
+               thread.join();
+            }
+         }
+         threads.clear();
       }
 
       inline http_server& bind(std::string_view address, uint16_t port)
@@ -426,42 +438,59 @@ namespace glz
          threads.reserve(num_threads);
          for (size_t i = 0; i < num_threads; ++i) {
             threads.emplace_back([this] {
-               try {
-                  io_context->run();
-               }
-               catch (const std::exception& e) {
-                  error_handler(std::make_error_code(std::errc::operation_canceled), std::source_location::current());
-               }
+               std::error_code ec;
+               io_context->run(ec);
+               // Don't report errors during shutdown
             });
          }
       }
 
       inline void stop()
       {
-         if (!running) {
-            return;
+         {
+            std::lock_guard<std::mutex> lock(shutdown_mutex);
+            if (!running) {
+               return;
+            }
+            running = false;
          }
-
-         running = false;
 
          // Stop accepting new connections
          if (acceptor) {
-            acceptor->close();
+            std::error_code ec;
+            acceptor->close(ec);
          }
 
-         // Stop the io_context and join all threads
+         // Cancel the signal handler
+         if (signals_) {
+            std::error_code ec;
+            signals_->cancel(ec);
+         }
+
+         // Stop the io_context
          io_context->stop();
 
-         for (auto& thread : threads) {
-            if (thread.joinable()) {
-               thread.join();
+         // Only join threads if we're not in one of the worker threads
+         auto current_thread_id = std::this_thread::get_id();
+         bool is_worker_thread = false;
+         for (const auto& thread : threads) {
+            if (thread.get_id() == current_thread_id) {
+               is_worker_thread = true;
+               break;
             }
          }
 
-         threads.clear();
+         if (!is_worker_thread) {
+            for (auto& thread : threads) {
+               if (thread.joinable()) {
+                  thread.join();
+               }
+            }
+            threads.clear();
+         }
 
-         // Reset for potential restart
-         io_context = std::make_unique<asio::io_context>();
+         // Notify any threads waiting for shutdown
+         shutdown_cv.notify_all();
       }
 
       inline http_server& mount(std::string_view base_path, const http_router& router)
@@ -755,6 +784,56 @@ namespace glz
          }
          return *this;
       }
+      
+      /**
+       * @brief Enable signal handling for graceful shutdown
+       *
+       * Registers signal handlers for SIGINT (Ctrl+C) and SIGTERM.
+       * When these signals are received, the server will stop gracefully.
+       *
+       * @return Reference to this server for method chaining
+       */
+      inline http_server& with_signals()
+      {
+         signal_handling_enabled = true;
+         
+         // Create signal_set that will handle SIGINT and SIGTERM
+         signals_ = std::make_unique<asio::signal_set>(*io_context, SIGINT, SIGTERM);
+         
+         // Set up async handler - this properly captures 'this' and integrates with ASIO
+         signals_->async_wait([this](std::error_code ec, int signal_number) {
+            if (!ec) {
+               std::cout << "\nReceived signal " << signal_number << ", shutting down..." << std::endl;
+               std::cout.flush();
+               this->stop();
+            }
+         });
+         
+         return *this;
+      }
+      
+      /**
+       * @brief Wait for a shutdown signal
+       *
+       * This method blocks until the server is stopped, either by calling stop()
+       * or by receiving a signal if signal handling is enabled with with_signals().
+       *
+       * @return void
+       */
+      inline void wait_for_signal()
+      {
+         std::unique_lock<std::mutex> lock(shutdown_mutex);
+         shutdown_cv.wait(lock, [this]{ return !running; });
+         
+         // After shutdown is signaled, wait for all threads to finish
+         lock.unlock();
+         for (auto& thread : threads) {
+            if (thread.joinable()) {
+               thread.join();
+            }
+         }
+         threads.clear();
+      }
 
      private:
       std::unique_ptr<asio::io_context> io_context;
@@ -765,6 +844,12 @@ namespace glz
       glz::error_handler error_handler;
       std::unordered_map<std::string, std::shared_ptr<websocket_server>> websocket_handlers_;
       std::unordered_map<std::string, std::unordered_map<http_method, streaming_handler>> streaming_handlers_;
+      
+      // Signal handling members
+      bool signal_handling_enabled = false;
+      std::unique_ptr<asio::signal_set> signals_;
+      std::condition_variable shutdown_cv;
+      std::mutex shutdown_mutex;
 
 #ifdef GLZ_ENABLE_SSL
       std::conditional_t<EnableTLS, std::unique_ptr<asio::ssl::context>, std::monostate> ssl_context;
@@ -777,7 +862,8 @@ namespace glz
                // Process the connection
                process_request(std::move(socket));
             }
-            else {
+            else if (running) {
+               // Only report errors if we're still running (not shutting down)
                error_handler(ec, std::source_location::current());
             }
 
