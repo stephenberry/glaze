@@ -1323,7 +1323,7 @@ namespace glz
                   if (!ec) {
                      (*counter)++;
                      timer->expires_after(interval);
-                     timer->async_wait([=, send_next](std::error_code) { (*send_next)(); });
+                     timer->async_wait([send_next, timer, counter](std::error_code) { (*send_next)(); });
                   }
                   else {
                      conn->close();
@@ -1360,7 +1360,7 @@ namespace glz
                if (!ec) {
                   ++(*it);
                   timer->expires_after(delay_between_items);
-                  timer->async_wait([=, send_next](std::error_code) { (*send_next)(); });
+                  timer->async_wait([send_next, timer, it](std::error_code) { (*send_next)(); });
                }
                else {
                   conn->close();
