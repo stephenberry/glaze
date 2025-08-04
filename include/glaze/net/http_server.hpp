@@ -537,7 +537,7 @@ namespace glz
 
       inline http_server& on_error(error_handler handle)
       {
-         error_handler = std::move(handle);
+         this->error_handler = std::move(handle);
          return *this;
       }
 
@@ -1223,7 +1223,9 @@ namespace glz
          if (!conn || !conn->is_open()) return;
          auto timer = std::make_shared<asio::steady_timer>(conn->socket_->get_executor());
 
-         std::function<void()> send_next = [=]() mutable {
+         std::function<void()> send_next;
+         // Capture send_next by reference to avoid std::bad_function_call from capturing uninitialized function
+         send_next = [conn, timer, counter, data_generator, interval, max_events, &send_next]() mutable {
             if (!conn->is_open() || (max_events > 0 && *counter >= max_events)) {
                conn->close();
                return;
@@ -1235,7 +1237,8 @@ namespace glz
                   if (!ec) {
                      (*counter)++;
                      timer->expires_after(interval);
-                     timer->async_wait([=](std::error_code) { send_next(); });
+                     // Capture send_next by reference to avoid std::bad_function_call
+                     timer->async_wait([=, &send_next](std::error_code) { send_next(); });
                   }
                   else {
                      conn->close();
@@ -1260,7 +1263,9 @@ namespace glz
          if (!conn || !conn->is_open()) return;
          auto timer = std::make_shared<asio::steady_timer>(conn->socket_->get_executor());
 
-         std::function<void()> send_next = [=]() mutable {
+         std::function<void()> send_next;
+         // Capture send_next by reference to avoid std::bad_function_call from capturing uninitialized function
+         send_next = [conn, timer, it, end_it, delay_between_items, &send_next]() mutable {
             if (!conn->is_open() || *it == end_it) {
                conn->close();
                return;
@@ -1270,7 +1275,8 @@ namespace glz
                if (!ec) {
                   ++(*it);
                   timer->expires_after(delay_between_items);
-                  timer->async_wait([=](std::error_code) { send_next(); });
+                  // Capture send_next by reference to avoid std::bad_function_call
+                  timer->async_wait([=, &send_next](std::error_code) { send_next(); });
                }
                else {
                   conn->close();
