@@ -317,20 +317,44 @@ server.get("/static/*path", [](const glz::request& req, glz::response& res) {
 ### Starting and Stopping
 
 ```cpp
+// Simple server with signal handling
+int main() {
+    glz::http_server server;
+    
+    // Configure routes
+    server.get("/api/hello", [](const glz::request&, glz::response& res) {
+        res.json({{"message", "Hello, World!"}});
+    });
+    
+    // Bind and enable signal handling
+    server.bind(8080)
+          .with_signals();
+    
+    // Start server
+    server.start();
+    
+    // Wait for shutdown signal
+    server.wait_for_signal();
+    
+    return 0;
+}
+```
+
+For integration into larger applications:
+
+```cpp
 class APIServer {
     glz::http_server server_;
-    std::future<void> server_future_;
     
 public:
     bool start(uint16_t port) {
         try {
             configure_routes();
-            server_.bind(port);
+            server_.bind(port)
+                   .with_signals();  // Enable signal handling
             
-            // Start in background thread
-            server_future_ = std::async(std::launch::async, [this]() {
-                server_.start();
-            });
+            // Start server (non-blocking)
+            server_.start();
             
             return true;
         } catch (const std::exception& e) {
@@ -339,11 +363,12 @@ public:
         }
     }
     
+    void wait_for_shutdown() {
+        server_.wait_for_signal();
+    }
+    
     void stop() {
         server_.stop();
-        if (server_future_.valid()) {
-            server_future_.wait();
-        }
     }
     
 private:
@@ -356,6 +381,34 @@ private:
 ```
 
 ### Graceful Shutdown
+
+```cpp
+// Built-in signal handling (recommended approach)
+int main() {
+    glz::http_server server;
+    
+    // Configure routes
+    setup_routes(server);
+    
+    // Enable signal handling for graceful shutdown (handles SIGINT/SIGTERM)
+    server.bind(8080)
+          .with_signals();
+    
+    std::cout << "Server running on http://localhost:8080" << std::endl;
+    std::cout << "Press Ctrl+C to gracefully shut down the server" << std::endl;
+    
+    // Start server
+    server.start();
+    
+    // Wait for shutdown signal (blocks until server stops)
+    server.wait_for_signal();
+    
+    std::cout << "Server shut down successfully" << std::endl;
+    return 0;
+}
+```
+
+For more control, you can still implement custom signal handling:
 
 ```cpp
 #include <csignal>
