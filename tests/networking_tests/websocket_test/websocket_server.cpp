@@ -182,8 +182,7 @@ int main()
 
    try {
       // Start server
-      server.bind(8080)
-            .with_signals();  // Enable signal handling for graceful shutdown
+      server.bind(8080).with_signals(); // Enable signal handling for graceful shutdown
 
       std::cout << "\nServer running on http://localhost:8080\n";
       std::cout << "WebSocket endpoint: ws://localhost:8080/ws\n";

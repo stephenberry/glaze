@@ -337,17 +337,16 @@ int main()
    });
 
    // Start the server
-   server.bind("127.0.0.1", 8080)
-         .with_signals();  // Enable built-in signal handling
-   
+   server.bind("127.0.0.1", 8080).with_signals(); // Enable built-in signal handling
+
    std::cout << "Server listening on http://127.0.0.1:8080" << std::endl;
    std::cout << "Press Ctrl+C to gracefully shut down the server" << std::endl;
-   
+
    server.start();
-   
+
    // Wait for shutdown signal (blocks until server stops)
    server.wait_for_signal();
-   
+
    std::cout << "Server shut down successfully" << std::endl;
 
    return 0;

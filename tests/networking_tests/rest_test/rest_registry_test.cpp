@@ -342,12 +342,11 @@ int main()
    });
 
    // Start the server
-   server.bind("127.0.0.1", 8080)
-         .with_signals();  // Enable signal handling for graceful shutdown
-   
+   server.bind("127.0.0.1", 8080).with_signals(); // Enable signal handling for graceful shutdown
+
    std::cout << "Server listening on http://127.0.0.1:8080\n";
    std::cout << "Press Ctrl+C to gracefully shut down the server\n";
-   
+
    server.start();
 
    // Wait for shutdown signal (blocks until server stops)

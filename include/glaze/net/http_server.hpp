@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include <asio/signal_set.hpp>
 #include <atomic>
 #include <charconv>
 #include <chrono>
@@ -10,14 +11,13 @@
 #include <expected>
 #include <functional>
 #include <future>
-#include <iostream>
 #include <glaze/glaze.hpp>
+#include <iostream>
 #include <mutex>
 #include <set>
 #include <source_location>
 #include <thread>
 #include <unordered_map>
-#include <asio/signal_set.hpp>
 
 #include "glaze/net/cors.hpp"
 #include "glaze/net/http_router.hpp"
@@ -784,7 +784,7 @@ namespace glz
          }
          return *this;
       }
-      
+
       /**
        * @brief Enable signal handling for graceful shutdown
        *
@@ -796,10 +796,10 @@ namespace glz
       inline http_server& with_signals()
       {
          signal_handling_enabled = true;
-         
+
          // Create signal_set that will handle SIGINT and SIGTERM
          signals_ = std::make_unique<asio::signal_set>(*io_context, SIGINT, SIGTERM);
-         
+
          // Set up async handler - this properly captures 'this' and integrates with ASIO
          signals_->async_wait([this](std::error_code ec, int signal_number) {
             if (!ec) {
@@ -808,10 +808,10 @@ namespace glz
                this->stop();
             }
          });
-         
+
          return *this;
       }
-      
+
       /**
        * @brief Wait for a shutdown signal
        *
@@ -823,8 +823,8 @@ namespace glz
       inline void wait_for_signal()
       {
          std::unique_lock<std::mutex> lock(shutdown_mutex);
-         shutdown_cv.wait(lock, [this]{ return !running; });
-         
+         shutdown_cv.wait(lock, [this] { return !running; });
+
          // After shutdown is signaled, wait for all threads to finish
          lock.unlock();
          for (auto& thread : threads) {
@@ -844,7 +844,7 @@ namespace glz
       glz::error_handler error_handler;
       std::unordered_map<std::string, std::shared_ptr<websocket_server>> websocket_handlers_;
       std::unordered_map<std::string, std::unordered_map<http_method, streaming_handler>> streaming_handlers_;
-      
+
       // Signal handling members
       bool signal_handling_enabled = false;
       std::unique_ptr<asio::signal_set> signals_;
