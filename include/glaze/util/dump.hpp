@@ -17,6 +17,11 @@ namespace glz
 {
    template <class T, class V = std::remove_cvref_t<T>>
    concept byte_sized = sizeof(T) == 1 && (std::same_as<V, char> || std::same_as<V, std::byte>);
+   
+   // Concept for buffers that have a fixed size (like span)
+   template <class B>
+   concept fixed_size_buffer = has_size<std::remove_cvref_t<B>> && !resizable<std::remove_cvref_t<B>>;
+
 
    template <uint32_t N, class B>
    GLZ_ALWAYS_INLINE void maybe_pad(B& b, size_t ix) noexcept(not vector_like<B>)
@@ -66,9 +71,36 @@ namespace glz
    template <bool Checked = true, class B>
    GLZ_ALWAYS_INLINE void dump(const byte_sized auto c, B& b, size_t& ix) noexcept(not vector_like<B>)
    {
-      if constexpr (Checked && vector_like<B>) {
-         if (ix == b.size()) [[unlikely]] {
-            b.resize(b.size() == 0 ? 128 : b.size() * 2);
+      if constexpr (Checked) {
+         if constexpr (vector_like<B>) {
+            if (ix == b.size()) [[unlikely]] {
+               b.resize(b.size() == 0 ? 128 : b.size() * 2);
+            }
+         }
+         else if constexpr (fixed_size_buffer<B>) {
+            if (ix >= b.size()) [[unlikely]] {
+               return; // Prevent buffer overflow
+            }
+         }
+      }
+      assign_maybe_cast(c, b, ix);
+      ++ix;
+   }
+
+   template <bool Checked = true, class B, class Ctx>
+   GLZ_ALWAYS_INLINE void dump(const byte_sized auto c, B& b, size_t& ix, Ctx& ctx) noexcept(not vector_like<B>)
+   {
+      if constexpr (Checked) {
+         if constexpr (vector_like<B>) {
+            if (ix == b.size()) [[unlikely]] {
+               b.resize(b.size() == 0 ? 128 : b.size() * 2);
+            }
+         }
+         else if constexpr (fixed_size_buffer<B>) {
+            if (ix >= b.size()) [[unlikely]] {
+               ctx.error = error_code::unexpected_end;
+               return;
+            }
          }
       }
       assign_maybe_cast(c, b, ix);
@@ -78,9 +110,36 @@ namespace glz
    template <auto c, bool Checked = true, class B>
    GLZ_ALWAYS_INLINE void dump(B& b, size_t& ix) noexcept(not vector_like<B>)
    {
-      if constexpr (Checked && vector_like<B>) {
-         if (ix == b.size()) [[unlikely]] {
-            b.resize(b.size() == 0 ? 128 : b.size() * 2);
+      if constexpr (Checked) {
+         if constexpr (vector_like<B>) {
+            if (ix == b.size()) [[unlikely]] {
+               b.resize(b.size() == 0 ? 128 : b.size() * 2);
+            }
+         }
+         else if constexpr (fixed_size_buffer<B>) {
+            if (ix >= b.size()) [[unlikely]] {
+               return; // Prevent buffer overflow
+            }
+         }
+      }
+      assign_maybe_cast<c>(b, ix);
+      ++ix;
+   }
+
+   template <auto c, bool Checked = true, class B, class Ctx>
+   GLZ_ALWAYS_INLINE void dump(B& b, size_t& ix, Ctx& ctx) noexcept(not vector_like<B>)
+   {
+      if constexpr (Checked) {
+         if constexpr (vector_like<B>) {
+            if (ix == b.size()) [[unlikely]] {
+               b.resize(b.size() == 0 ? 128 : b.size() * 2);
+            }
+         }
+         else if constexpr (fixed_size_buffer<B>) {
+            if (ix >= b.size()) [[unlikely]] {
+               ctx.error = error_code::unexpected_end;
+               return;
+            }
          }
       }
       assign_maybe_cast<c>(b, ix);
@@ -93,11 +152,40 @@ namespace glz
       static constexpr auto s = str.sv();
       static constexpr auto n = s.size();
 
-      if constexpr (vector_like<B>) {
-         if constexpr (Checked) {
+      if constexpr (Checked) {
+         if constexpr (vector_like<B>) {
             const auto k = ix + n;
             if (k > b.size()) [[unlikely]] {
                b.resize(2 * k);
+            }
+         }
+         else if constexpr (fixed_size_buffer<B>) {
+            if (ix + n > b.size()) [[unlikely]] {
+               return; // Prevent buffer overflow
+            }
+         }
+      }
+      std::memcpy(&b[ix], s.data(), n);
+      ix += n;
+   }
+
+   template <string_literal str, bool Checked = true, class B, class Ctx>
+   GLZ_ALWAYS_INLINE void dump(B& b, size_t& ix, Ctx& ctx) noexcept(not vector_like<B>)
+   {
+      static constexpr auto s = str.sv();
+      static constexpr auto n = s.size();
+
+      if constexpr (Checked) {
+         if constexpr (vector_like<B>) {
+            const auto k = ix + n;
+            if (k > b.size()) [[unlikely]] {
+               b.resize(2 * k);
+            }
+         }
+         else if constexpr (fixed_size_buffer<B>) {
+            if (ix + n > b.size()) [[unlikely]] {
+               ctx.error = error_code::unexpected_end;
+               return;
             }
          }
       }
@@ -109,11 +197,38 @@ namespace glz
    GLZ_ALWAYS_INLINE void dump(const sv str, B& b, size_t& ix) noexcept(not vector_like<B>)
    {
       const auto n = str.size();
-      if constexpr (vector_like<B>) {
-         if constexpr (Checked) {
+      if constexpr (Checked) {
+         if constexpr (vector_like<B>) {
             const auto k = ix + n;
             if (ix + n > b.size()) [[unlikely]] {
                b.resize(2 * k);
+            }
+         }
+         else if constexpr (fixed_size_buffer<B>) {
+            if (ix + n > b.size()) [[unlikely]] {
+               return; // Prevent buffer overflow
+            }
+         }
+      }
+      std::memcpy(&b[ix], str.data(), n);
+      ix += n;
+   }
+
+   template <bool Checked = true, class B, class Ctx>
+   GLZ_ALWAYS_INLINE void dump(const sv str, B& b, size_t& ix, Ctx& ctx) noexcept(not vector_like<B>)
+   {
+      const auto n = str.size();
+      if constexpr (Checked) {
+         if constexpr (vector_like<B>) {
+            const auto k = ix + n;
+            if (ix + n > b.size()) [[unlikely]] {
+               b.resize(2 * k);
+            }
+         }
+         else if constexpr (fixed_size_buffer<B>) {
+            if (ix + n > b.size()) [[unlikely]] {
+               ctx.error = error_code::unexpected_end;
+               return;
             }
          }
       }
@@ -128,6 +243,30 @@ namespace glz
          const auto k = ix + n;
          if (k > b.size()) [[unlikely]] {
             b.resize(2 * k);
+         }
+      }
+      else if constexpr (fixed_size_buffer<B>) {
+         if (ix + n > b.size()) [[unlikely]] {
+            return; // Prevent buffer overflow
+         }
+      }
+      std::memset(&b[ix], c, n);
+      ix += n;
+   }
+
+   template <auto c, class B, class Ctx>
+   GLZ_ALWAYS_INLINE void dumpn(size_t n, B& b, size_t& ix, Ctx& ctx) noexcept(not vector_like<B>)
+   {
+      if constexpr (vector_like<B>) {
+         const auto k = ix + n;
+         if (k > b.size()) [[unlikely]] {
+            b.resize(2 * k);
+         }
+      }
+      else if constexpr (fixed_size_buffer<B>) {
+         if (ix + n > b.size()) [[unlikely]] {
+            ctx.error = error_code::unexpected_end;
+            return;
          }
       }
       std::memset(&b[ix], c, n);
@@ -149,6 +288,32 @@ namespace glz
             b.resize(2 * k);
          }
       }
+      else if constexpr (fixed_size_buffer<B>) {
+         if (ix + n + 1 > b.size()) [[unlikely]] { // +1 for newline
+            return; // Prevent buffer overflow
+         }
+      }
+
+      assign_maybe_cast<'\n'>(b, ix);
+      ++ix;
+      std::memset(&b[ix], IndentChar, n);
+      ix += n;
+   }
+
+   template <char IndentChar, class B, class Ctx>
+   GLZ_ALWAYS_INLINE void dump_newline_indent(size_t n, B& b, size_t& ix, Ctx& ctx) noexcept(not vector_like<B>)
+   {
+      if constexpr (vector_like<B>) {
+         if (const auto k = ix + n + write_padding_bytes; k > b.size()) [[unlikely]] {
+            b.resize(2 * k);
+         }
+      }
+      else if constexpr (fixed_size_buffer<B>) {
+         if (ix + n + 1 > b.size()) [[unlikely]] { // +1 for newline
+            ctx.error = error_code::unexpected_end;
+            return;
+         }
+      }
 
       assign_maybe_cast<'\n'>(b, ix);
       ++ix;
@@ -162,11 +327,40 @@ namespace glz
       static constexpr auto s = str;
       static constexpr auto n = s.size();
 
-      if constexpr (vector_like<B>) {
-         if constexpr (Checked) {
+      if constexpr (Checked) {
+         if constexpr (vector_like<B>) {
             const auto k = ix + n;
             if (k > b.size()) [[unlikely]] {
                b.resize(2 * k);
+            }
+         }
+         else if constexpr (fixed_size_buffer<B>) {
+            if (ix + n > b.size()) [[unlikely]] {
+               return; // Prevent buffer overflow
+            }
+         }
+      }
+      std::memcpy(&b[ix], s.data(), n);
+      ix += n;
+   }
+
+   template <const sv& str, bool Checked = true, class B, class Ctx>
+   GLZ_ALWAYS_INLINE void dump(B& b, size_t& ix, Ctx& ctx) noexcept(not vector_like<B> && not Checked)
+   {
+      static constexpr auto s = str;
+      static constexpr auto n = s.size();
+
+      if constexpr (Checked) {
+         if constexpr (vector_like<B>) {
+            const auto k = ix + n;
+            if (k > b.size()) [[unlikely]] {
+               b.resize(2 * k);
+            }
+         }
+         else if constexpr (fixed_size_buffer<B>) {
+            if (ix + n > b.size()) [[unlikely]] {
+               ctx.error = error_code::unexpected_end;
+               return;
             }
          }
       }
@@ -178,11 +372,38 @@ namespace glz
    GLZ_ALWAYS_INLINE void dump_not_empty(const sv str, B& b, size_t& ix) noexcept(not vector_like<B> && not Checked)
    {
       const auto n = str.size();
-      if constexpr (vector_like<B>) {
-         if constexpr (Checked) {
+      if constexpr (Checked) {
+         if constexpr (vector_like<B>) {
             const auto k = ix + n;
             if (k > b.size()) [[unlikely]] {
                b.resize(2 * k);
+            }
+         }
+         else if constexpr (fixed_size_buffer<B>) {
+            if (ix + n > b.size()) [[unlikely]] {
+               return; // Prevent buffer overflow
+            }
+         }
+      }
+      std::memcpy(&b[ix], str.data(), n);
+      ix += n;
+   }
+
+   template <bool Checked = true, class B, class Ctx>
+   GLZ_ALWAYS_INLINE void dump_not_empty(const sv str, B& b, size_t& ix, Ctx& ctx) noexcept(not vector_like<B> && not Checked)
+   {
+      const auto n = str.size();
+      if constexpr (Checked) {
+         if constexpr (vector_like<B>) {
+            const auto k = ix + n;
+            if (k > b.size()) [[unlikely]] {
+               b.resize(2 * k);
+            }
+         }
+         else if constexpr (fixed_size_buffer<B>) {
+            if (ix + n > b.size()) [[unlikely]] {
+               ctx.error = error_code::unexpected_end;
+               return;
             }
          }
       }
@@ -195,11 +416,40 @@ namespace glz
    {
       const auto n = str.size();
       if (n) {
-         if constexpr (vector_like<B>) {
-            if constexpr (Checked) {
+         if constexpr (Checked) {
+            if constexpr (vector_like<B>) {
                const auto k = ix + n;
                if (k > b.size()) [[unlikely]] {
                   b.resize(2 * k);
+               }
+            }
+            else if constexpr (fixed_size_buffer<B>) {
+               if (ix + n > b.size()) [[unlikely]] {
+                  return; // Prevent buffer overflow
+               }
+            }
+         }
+         std::memcpy(&b[ix], str.data(), n);
+         ix += n;
+      }
+   }
+
+   template <bool Checked = true, class B, class Ctx>
+   GLZ_ALWAYS_INLINE void dump_maybe_empty(const sv str, B& b, size_t& ix, Ctx& ctx) noexcept(not vector_like<B> && not Checked)
+   {
+      const auto n = str.size();
+      if (n) {
+         if constexpr (Checked) {
+            if constexpr (vector_like<B>) {
+               const auto k = ix + n;
+               if (k > b.size()) [[unlikely]] {
+                  b.resize(2 * k);
+               }
+            }
+            else if constexpr (fixed_size_buffer<B>) {
+               if (ix + n > b.size()) [[unlikely]] {
+                  ctx.error = error_code::unexpected_end;
+                  return;
                }
             }
          }
@@ -218,6 +468,31 @@ namespace glz
             b.resize(2 * k);
          }
       }
+      else if constexpr (fixed_size_buffer<B>) {
+         if (ix + n > b.size()) [[unlikely]] {
+            return; // Prevent buffer overflow
+         }
+      }
+      std::memcpy(&b[ix], bytes.data(), n);
+      ix += n;
+   }
+
+   template <class B, class Ctx>
+   GLZ_ALWAYS_INLINE void dump(const vector_like auto& bytes, B& b, size_t& ix, Ctx& ctx) noexcept(not vector_like<B>)
+   {
+      const auto n = bytes.size();
+      if constexpr (vector_like<B>) {
+         const auto k = ix + n;
+         if (k > b.size()) [[unlikely]] {
+            b.resize(2 * k);
+         }
+      }
+      else if constexpr (fixed_size_buffer<B>) {
+         if (ix + n > b.size()) [[unlikely]] {
+            ctx.error = error_code::unexpected_end;
+            return;
+         }
+      }
       std::memcpy(&b[ix], bytes.data(), n);
       ix += n;
    }
@@ -229,6 +504,30 @@ namespace glz
          const auto k = ix + N;
          if (k > b.size()) [[unlikely]] {
             b.resize(2 * k);
+         }
+      }
+      else if constexpr (fixed_size_buffer<B>) {
+         if (ix + N > b.size()) [[unlikely]] {
+            return; // Prevent buffer overflow
+         }
+      }
+      std::memcpy(&b[ix], bytes.data(), N);
+      ix += N;
+   }
+
+   template <size_t N, class B, class Ctx>
+   GLZ_ALWAYS_INLINE void dump(const std::array<uint8_t, N>& bytes, B& b, size_t& ix, Ctx& ctx) noexcept(not vector_like<B>)
+   {
+      if constexpr (vector_like<B>) {
+         const auto k = ix + N;
+         if (k > b.size()) [[unlikely]] {
+            b.resize(2 * k);
+         }
+      }
+      else if constexpr (fixed_size_buffer<B>) {
+         if (ix + N > b.size()) [[unlikely]] {
+            ctx.error = error_code::unexpected_end;
+            return;
          }
       }
       std::memcpy(&b[ix], bytes.data(), N);

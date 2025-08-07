@@ -102,15 +102,43 @@ namespace glz
             }
          }
          else if constexpr (is_any_of<V, int32_t, uint32_t, int64_t, uint64_t>) {
-            const auto start = reinterpret_cast<char*>(&b[ix]);
-            const auto end = glz::to_chars(start, value);
-            ix += size_t(end - start);
+            if constexpr (fixed_size_buffer<std::decay_t<B>>) {
+               // For fixed-size buffers, calculate exact length needed first
+               char temp_buf[24]; // Sufficient for any 64-bit integer
+               const auto temp_end = glz::to_chars(temp_buf, value);
+               const auto chars_needed = size_t(temp_end - temp_buf);
+               if (ix + chars_needed > b.size()) [[unlikely]] {
+                  ctx.error = error_code::unexpected_end;
+                  return;
+               }
+               // Copy the result to the actual buffer
+               std::memcpy(&b[ix], temp_buf, chars_needed);
+               ix += chars_needed;
+            } else {
+               const auto start = reinterpret_cast<char*>(&b[ix]);
+               const auto end = glz::to_chars(start, value);
+               ix += size_t(end - start);
+            }
          }
          else if constexpr (std::integral<V>) {
             using X = std::decay_t<decltype(sized_integer_conversion<V>())>;
-            const auto start = reinterpret_cast<char*>(&b[ix]);
-            const auto end = glz::to_chars(start, static_cast<X>(value));
-            ix += size_t(end - start);
+            if constexpr (fixed_size_buffer<std::decay_t<B>>) {
+               // For fixed-size buffers, calculate exact length needed first
+               char temp_buf[24]; // Sufficient for any 64-bit integer
+               const auto temp_end = glz::to_chars(temp_buf, static_cast<X>(value));
+               const auto chars_needed = size_t(temp_end - temp_buf);
+               if (ix + chars_needed > b.size()) [[unlikely]] {
+                  ctx.error = error_code::unexpected_end;
+                  return;
+               }
+               // Copy the result to the actual buffer
+               std::memcpy(&b[ix], temp_buf, chars_needed);
+               ix += chars_needed;
+            } else {
+               const auto start = reinterpret_cast<char*>(&b[ix]);
+               const auto end = glz::to_chars(start, static_cast<X>(value));
+               ix += size_t(end - start);
+            }
          }
          else {
             static_assert(false_v<V>, "type is not supported");

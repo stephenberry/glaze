@@ -3,7 +3,9 @@
 
 #pragma once
 
+#include <cstdint>
 #include <fstream>
+#include <span>
 
 #include "glaze/core/common.hpp"
 #include "glaze/core/opts.hpp"
@@ -101,6 +103,44 @@ namespace glz
    {
       context ctx{};
       return write<Opts>(std::forward<T>(value), std::forward<Buffer>(buffer), ctx);
+   }
+
+   // Concept for byte-like types that can be used in buffers
+   template <class T>
+   concept byte_like = std::same_as<T, char> || std::same_as<T, unsigned char> || 
+                       std::same_as<T, uint8_t> || std::same_as<T, std::byte>;
+
+   // Overload for std::span of byte-like types to return size information  
+   template <auto Opts, class T, byte_like ByteType, size_t Extent>
+      requires write_supported<T, Opts.format>
+   [[nodiscard]] glz::expected<size_t, error_ctx> write(T&& value, std::span<ByteType, Extent> buffer, is_context auto&& ctx)
+   {
+      size_t ix = 0;
+      
+      // Use the existing serialization but check for overflow after
+      to<Opts.format, std::remove_cvref_t<T>>::template op<Opts>(std::forward<T>(value), ctx, buffer, ix);
+      
+      // Check if serialization failed
+      if (bool(ctx.error)) [[unlikely]] {
+         return glz::unexpected(error_ctx{.ec = ctx.error, .custom_error_message = ctx.custom_error_message});
+      }
+      
+      // Check if we wrote beyond the buffer (this indicates the dump functions failed to prevent overflow)
+      if (ix > buffer.size()) [[unlikely]] {
+         // This should not happen if dump functions work correctly, but let's be safe
+         ctx.error = error_code::unexpected_end;
+         return glz::unexpected(error_ctx{.ec = error_code::unexpected_end});
+      }
+      
+      return {ix};
+   }
+
+   template <auto Opts, class T, byte_like ByteType, size_t Extent>
+      requires write_supported<T, Opts.format>
+   [[nodiscard]] glz::expected<size_t, error_ctx> write(T&& value, std::span<ByteType, Extent> buffer)
+   {
+      context ctx{};
+      return write<Opts>(std::forward<T>(value), buffer, ctx);
    }
 
    // requires file_name to be null terminated

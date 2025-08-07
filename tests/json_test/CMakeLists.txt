@@ -44,3 +44,11 @@ target_link_libraries(jsonschema_test PRIVATE glz_test_common)
 
 add_test(NAME jsonschema_test COMMAND jsonschema_test)
 
+## std::span integration test (complete feature verification)
+
+add_executable(final_span_integration_test final_span_integration_test.cpp)
+
+target_link_libraries(final_span_integration_test PRIVATE glz_test_common)
+
+add_test(NAME final_span_integration_test COMMAND final_span_integration_test)
+

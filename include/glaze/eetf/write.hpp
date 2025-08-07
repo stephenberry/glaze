@@ -1,5 +1,7 @@
 #pragma once
 
+#include <span>
+
 #include <glaze/core/reflect.hpp>
 #include <glaze/core/write.hpp>
 
@@ -294,6 +296,12 @@ namespace glz
    [[nodiscard]] expected<std::string, error_ctx> write_term(T&& value) noexcept
    {
       return write<eetf::eetf_opts{.format = EETF}>(std::forward<T>(value));
+   }
+
+   template <uint8_t layout = glz::eetf::map_layout, write_supported<EETF> T, byte_like ByteType, size_t Extent = std::dynamic_extent>
+   [[nodiscard]] expected<size_t, error_ctx> write_term(T&& value, std::span<ByteType, Extent> buffer) noexcept
+   {
+      return write<eetf::eetf_opts{.format = EETF, .layout = layout}>(std::forward<T>(value), buffer);
    }
 
 } // namespace glz

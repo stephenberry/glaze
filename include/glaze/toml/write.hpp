@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include <span>
+
 #include "glaze/core/opts.hpp"
 #include "glaze/core/reflect.hpp"
 #include "glaze/core/to.hpp"
@@ -567,6 +569,12 @@ namespace glz
    [[nodiscard]] glz::expected<std::string, error_ctx> write_toml(T&& value)
    {
       return write<opts{.format = TOML}>(std::forward<T>(value));
+   }
+
+   template <write_supported<TOML> T, byte_like ByteType, size_t Extent = std::dynamic_extent>
+   [[nodiscard]] glz::expected<size_t, error_ctx> write_toml(T&& value, std::span<ByteType, Extent> buffer)
+   {
+      return write<opts{.format = TOML}>(std::forward<T>(value), buffer);
    }
 
    template <auto Opts = opts{.format = TOML}, write_supported<TOML> T>
