@@ -29,9 +29,9 @@ namespace glz
    struct from<JSON, date>
    {
       template <auto Opts>
-      static void op(date& value, auto&&... args)
+      static void op(date& value, is_context auto&& ctx, auto&& it, auto&& end)
       {
-         parse<JSON>::op<Opts>(value.human_readable, args...);
+         parse<JSON>::op<Opts>(value.human_readable, ctx, it, end);
          value.data = std::stoi(value.human_readable);
       }
    };
@@ -40,10 +40,10 @@ namespace glz
    struct to<JSON, date>
    {
       template <auto Opts>
-      static void op(date& value, auto&&... args) noexcept
+      static void op(date& value, is_context auto&& ctx, auto&& b, auto&& ix) noexcept
       {
          value.human_readable = std::to_string(value.data);
-         serialize<JSON>::op<Opts>(value.human_readable, args...);
+         serialize<JSON>::op<Opts>(value.human_readable, ctx, b, ix);
       }
    };
 }
@@ -65,7 +65,19 @@ void example() {
 
 Notes:
 
-The templated `Opts` parameter contains the compile time options. The `args...` can be broken out into the runtime context (runtime options), iterators, and the buffer index when reading.
+The templated `Opts` parameter contains the compile time options. 
+
+For reading (`from` specializations), the parameters are:
+- `value`: The object being parsed into
+- `ctx`: The context containing runtime options (use `is_context auto&&`)
+- `it`: Iterator to the current position in the input buffer
+- `end`: Iterator to the end of the input buffer
+
+For writing (`to` specializations), the parameters are:
+- `value`: The object being serialized
+- `ctx`: The context containing runtime options (use `is_context auto&&`)
+- `b`: The output buffer to write to
+- `ix`: The current index in the output buffer
 
 ## UUID Example
 
@@ -78,12 +90,12 @@ namespace glz
    struct from<JSON, uuid_t>
    {
       template <auto Opts>
-      static void op(uuid_t& uuid, auto&&... args)
+      static void op(uuid_t& uuid, is_context auto&& ctx, auto&& it, auto&& end)
       {
          // Initialize a string_view with the appropriately lengthed buffer
          // Alternatively, use a std::string for any size (but this will allocate)
          std::string_view str = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX";
-         parse<JSON>::op<Opts>(str, args...);
+         parse<JSON>::op<Opts>(str, ctx, it, end);
          uuid = uuid_lib::uuid_from_string_view(str);
       }
    };
@@ -92,10 +104,10 @@ namespace glz
    struct to<JSON, uuid_t>
    {
       template <auto Opts>
-      static void op(const uuid_t& uuid, auto&&... args) noexcept
+      static void op(const uuid_t& uuid, is_context auto&& ctx, auto&& b, auto&& ix) noexcept
       {
          std::string str = uuid_lib::uuid_to_string(uuid);
-         serialize<JSON>::op<Opts>(str, args...);
+         serialize<JSON>::op<Opts>(str, ctx, b, ix);
       }
    };
 }
