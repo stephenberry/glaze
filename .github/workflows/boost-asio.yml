@@ -1,28 +1,68 @@
 name: boost-asio
 
 on:
-   push:
-      branches: ["main"]
-   pull_request:
-      branches: ["main"]
+  push:
+    branches:
+      - main
+      - feature/*
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+  pull_request:
+    branches:
+      - main
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+  workflow_dispatch:
 
 jobs:
-   build:
-      runs-on: ubuntu-latest
+  build:
+    runs-on: ubuntu-latest
 
-      steps:
-         - uses: actions/checkout@v3
+    env:
+      CC: clang-20
+      CXX: clang++-20
+      LLVM_VERSION: 20
 
-         - name: Install Boost
-           uses: MarkusJx/install-boost@v2
-           with:
-              boost_version: 1.83.0
+    steps:
+      - uses: actions/checkout@v4
 
-         - name: Configure CMake
-           run: cmake -B build -DUSE_BOOST_ASIO=ON -Dglaze_BUILD_TESTS=ON -Dglaze_ENABLE_SSL=ON
+      - name: Install latest clang
+        run: |
+          wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
+          echo "deb http://apt.llvm.org/noble/ llvm-toolchain-noble-20 main" | sudo tee /etc/apt/sources.list.d/llvm.list
+          sudo apt-get clean
+          sudo apt-get update
+          sudo apt-get install -y --fix-missing clang-20 libc++-20-dev libc++abi-20-dev
 
-         - name: Build
-           run: cmake --build build
+      - name: Set path for clang
+        run: |
+          echo "PATH=/usr/lib/llvm-20/bin:$PATH" >> $GITHUB_ENV
+          clang-20 --version
+          clang++-20 --version
 
-         - name: Test
-           run: ctest --test-dir build
+      - name: Install Boost
+        uses: MarkusJx/install-boost@v2
+        with:
+          boost_version: 1.88.0
+
+      - name: Configure CMake
+        run: cmake -B build -Dglaze_BUILD_TESTS=ON -Dglaze_ENABLE_SSL=ON
+
+      - name: Configure CMake
+        run: |
+          cmake -B ${{github.workspace}}/build \
+          -DCMAKE_BUILD_TYPE=Debug \
+          -DCMAKE_CXX_STANDARD=23 \
+          -DCMAKE_C_COMPILER=${{env.CC}} \
+          -DCMAKE_CXX_COMPILER=${{env.CXX}} \
+          -DCMAKE_CXX_FLAGS="-stdlib=libc++" \
+          -DCMAKE_EXE_LINKER_FLAGS="-stdlib=libc++ -lc++abi"
+
+      - name: Build
+        run: cmake --build build -j $(nproc)
+
+      - name: Test
+        working-directory: build
+        run: ctest -j $(nproc) --output-on-failure
