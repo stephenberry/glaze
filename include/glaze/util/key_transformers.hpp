@@ -9,35 +9,32 @@
 
 namespace glz
 {
-   namespace detail
-   {
-      static constexpr char ascii_toupper(char c) noexcept {
-         return (c >= 'a' && c <= 'z') ? static_cast<char>(c - 'a' + 'A') : c;
-      }
-      
-      static constexpr char ascii_tolower(char c) noexcept {
-         return (c >= 'A' && c <= 'Z') ? static_cast<char>(c - 'A' + 'a') : c;
-      }
-      
-      static constexpr bool is_upper(char c) noexcept {
-         return c >= 'A' && c <= 'Z';
-      }
-      
-      static constexpr bool is_lower(char c) noexcept {
-         return c >= 'a' && c <= 'z';
-      }
-      
-      static constexpr bool is_digit(char c) noexcept {
-         return c >= '0' && c <= '9';
-      }
-      
-      static constexpr bool is_alpha(char c) noexcept {
-         return is_upper(c) || is_lower(c);
-      }
-      
-      static constexpr bool is_alnum(char c) noexcept {
-         return is_alpha(c) || is_digit(c);
-      }
+   static constexpr char ascii_toupper(char c) noexcept {
+      return (c >= 'a' && c <= 'z') ? static_cast<char>(c - 'a' + 'A') : c;
+   }
+   
+   static constexpr char ascii_tolower(char c) noexcept {
+      return (c >= 'A' && c <= 'Z') ? static_cast<char>(c - 'A' + 'a') : c;
+   }
+   
+   static constexpr bool is_upper(char c) noexcept {
+      return c >= 'A' && c <= 'Z';
+   }
+   
+   static constexpr bool is_lower(char c) noexcept {
+      return c >= 'a' && c <= 'z';
+   }
+   
+   static constexpr bool is_digit(char c) noexcept {
+      return c >= '0' && c <= '9';
+   }
+   
+   static constexpr bool is_alpha(char c) noexcept {
+      return is_upper(c) || is_lower(c);
+   }
+   
+   static constexpr bool is_alnum(char c) noexcept {
+      return is_alpha(c) || is_digit(c);
    }
    
    // Convert snake_case to camelCase
@@ -55,7 +52,7 @@ namespace glz
          }
          else {
             if (upper_next) {
-               out.push_back(detail::ascii_toupper(c));
+               out.push_back(ascii_toupper(c));
                upper_next = false;
             }
             else {
@@ -78,7 +75,7 @@ namespace glz
          }
          else {
             if (upper_next) {
-               out.push_back(detail::ascii_toupper(c));
+               out.push_back(ascii_toupper(c));
                upper_next = false;
             }
             else {
@@ -97,13 +94,13 @@ namespace glz
       for (size_t i = 0; i < sv.size(); ++i) {
          char c = sv[i];
          
-         if (detail::is_upper(c)) {
+         if (is_upper(c)) {
             // Don't add underscore at the beginning
             if (i > 0) {
                // Check if we should add underscore
-               bool prev_is_lower_or_digit = detail::is_lower(sv[i-1]) || detail::is_digit(sv[i-1]);
-               bool next_is_lower = i + 1 < sv.size() && detail::is_lower(sv[i+1]);
-               bool prev_is_upper = i > 0 && detail::is_upper(sv[i-1]);
+               bool prev_is_lower_or_digit = is_lower(sv[i-1]) || is_digit(sv[i-1]);
+               bool next_is_lower = i + 1 < sv.size() && is_lower(sv[i+1]);
+               bool prev_is_upper = i > 0 && is_upper(sv[i-1]);
                
                // Add underscore if:
                // 1. Previous char is lowercase or digit
@@ -112,7 +109,7 @@ namespace glz
                   out.push_back('_');
                }
             }
-            out.push_back(detail::ascii_tolower(c));
+            out.push_back(ascii_tolower(c));
          }
          else {
             out.push_back(c);
@@ -133,13 +130,13 @@ namespace glz
          if (c == '_') {
             out.push_back('_');
          }
-         else if (detail::is_upper(c)) {
+         else if (is_upper(c)) {
             // Don't add underscore at the beginning
             if (i > 0 && sv[i-1] != '_') {
                // Check if we should add underscore
-               bool prev_is_lower_or_digit = detail::is_lower(sv[i-1]) || detail::is_digit(sv[i-1]);
-               bool next_is_lower = i + 1 < sv.size() && detail::is_lower(sv[i+1]);
-               bool prev_is_upper = i > 0 && detail::is_upper(sv[i-1]);
+               bool prev_is_lower_or_digit = is_lower(sv[i-1]) || is_digit(sv[i-1]);
+               bool next_is_lower = i + 1 < sv.size() && is_lower(sv[i+1]);
+               bool prev_is_upper = i > 0 && is_upper(sv[i-1]);
                
                // Add underscore if:
                // 1. Previous char is lowercase or digit
@@ -151,7 +148,7 @@ namespace glz
             out.push_back(c);
          }
          else {
-            out.push_back(detail::ascii_toupper(c));
+            out.push_back(ascii_toupper(c));
          }
       }
       
@@ -171,18 +168,18 @@ namespace glz
          if (c == '_') {
             out.push_back('-');
          }
-         else if (detail::is_upper(c)) {
+         else if (is_upper(c)) {
             // Add dash before uppercase if previous was lowercase/digit
             if (i > 0 && prev != '_' && prev != '-' && 
-                (detail::is_lower(prev) || detail::is_digit(prev))) {
+                (is_lower(prev) || is_digit(prev))) {
                out.push_back('-');
             }
             // Also add dash if this starts a new word in acronym
             else if (i > 0 && i + 1 < sv.size() && 
-                     detail::is_upper(prev) && detail::is_lower(sv[i+1])) {
+                     is_upper(prev) && is_lower(sv[i+1])) {
                out.push_back('-');
             }
-            out.push_back(detail::ascii_tolower(c));
+            out.push_back(ascii_tolower(c));
          }
          else {
             out.push_back(c);
@@ -204,13 +201,13 @@ namespace glz
          if (c == '_') {
             out.push_back('-');
          }
-         else if (detail::is_upper(c)) {
+         else if (is_upper(c)) {
             // Don't add dash at the beginning
             if (i > 0 && sv[i-1] != '_') {
                // Check if we should add dash
-               bool prev_is_lower_or_digit = detail::is_lower(sv[i-1]) || detail::is_digit(sv[i-1]);
-               bool next_is_lower = i + 1 < sv.size() && detail::is_lower(sv[i+1]);
-               bool prev_is_upper = i > 0 && detail::is_upper(sv[i-1]);
+               bool prev_is_lower_or_digit = is_lower(sv[i-1]) || is_digit(sv[i-1]);
+               bool next_is_lower = i + 1 < sv.size() && is_lower(sv[i+1]);
+               bool prev_is_upper = i > 0 && is_upper(sv[i-1]);
                
                // Add dash if:
                // 1. Previous char is lowercase or digit
@@ -222,7 +219,7 @@ namespace glz
             out.push_back(c);
          }
          else {
-            out.push_back(detail::ascii_toupper(c));
+            out.push_back(ascii_toupper(c));
          }
       }
       
@@ -234,7 +231,7 @@ namespace glz
       std::string out;
       out.reserve(sv.size());
       for (char c : sv) {
-         out.push_back(detail::ascii_tolower(c));
+         out.push_back(ascii_tolower(c));
       }
       return out;
    }
@@ -244,7 +241,7 @@ namespace glz
       std::string out;
       out.reserve(sv.size());
       for (char c : sv) {
-         out.push_back(detail::ascii_toupper(c));
+         out.push_back(ascii_toupper(c));
       }
       return out;
    }
