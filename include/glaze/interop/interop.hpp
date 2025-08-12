@@ -213,13 +213,40 @@ template<> struct primitive_type_index<uint32_t> { static constexpr uint8_t valu
 template<> struct primitive_type_index<uint64_t> { static constexpr uint8_t value = 9; };
 template<> struct primitive_type_index<float> { static constexpr uint8_t value = 10; };
 template<> struct primitive_type_index<double> { static constexpr uint8_t value = 11; };
-// Handle size_t and other common aliases
-template<> struct primitive_type_index<unsigned long> { static constexpr uint8_t value = 9; }; // Usually uint64_t
-template<> struct primitive_type_index<long> { static constexpr uint8_t value = 5; }; // Usually int64_t
 
-// Helper variable template
+// Helper to normalize types - maps platform-specific types to fixed-width types
 template<typename T>
-inline constexpr uint8_t primitive_type_index_v = primitive_type_index<T>::value;
+struct normalize_type {
+    using type = T;
+};
+
+// Map long/unsigned long to their fixed-width equivalents based on size
+template<>
+struct normalize_type<long> {
+    using type = std::conditional_t<sizeof(long) == 8, int64_t, int32_t>;
+};
+
+template<>
+struct normalize_type<unsigned long> {
+    using type = std::conditional_t<sizeof(unsigned long) == 8, uint64_t, uint32_t>;
+};
+
+template<>
+struct normalize_type<long long> {
+    using type = int64_t;
+};
+
+template<>
+struct normalize_type<unsigned long long> {
+    using type = uint64_t;
+};
+
+template<typename T>
+using normalize_type_t = typename normalize_type<T>::type;
+
+// Helper variable template - now uses normalized types
+template<typename T>
+inline constexpr uint8_t primitive_type_index_v = primitive_type_index<normalize_type_t<T>>::value;
 
 // Concept to check if a type is a primitive
 template<typename T>
