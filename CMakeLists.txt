@@ -93,8 +93,8 @@ if(glaze_ENABLE_SSL)
   target_compile_definitions(glaze_glaze INTERFACE GLZ_ENABLE_SSL)
 endif(glaze_ENABLE_SSL)
 
-option(BUILD_INTEROP "Build language interoperability library" OFF)
+option(glaze_BUILD_INTEROP "Build language interoperability library" OFF)
 
-if(BUILD_INTEROP)
+if(glaze_BUILD_INTEROP)
   add_subdirectory(src/interop)
 endif()
