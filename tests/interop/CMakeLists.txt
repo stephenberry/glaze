@@ -17,20 +17,20 @@ set_target_properties(complex_structures_plugin PROPERTIES
 
 # Basic interop functionality test
 project(interop_basic_test)
-add_executable(${PROJECT_NAME} test_interop_basic.cpp)
+add_executable(${PROJECT_NAME} ${PROJECT_NAME}.cpp)
 target_link_libraries(${PROJECT_NAME} PRIVATE glz_test_common)
 add_test(NAME ${PROJECT_NAME} COMMAND ${PROJECT_NAME})
 
 # Plugin functionality test
 project(interop_plugins_test)
-add_executable(${PROJECT_NAME} test_interop_plugins.cpp)
+add_executable(${PROJECT_NAME} ${PROJECT_NAME}.cpp)
 target_link_libraries(${PROJECT_NAME} PRIVATE glz_test_common)
 add_dependencies(${PROJECT_NAME} simple_plugin)
 add_test(NAME ${PROJECT_NAME} COMMAND ${PROJECT_NAME})
 
 # Cross-library structures test
 project(interop_structures_test)
-add_executable(${PROJECT_NAME} test_interop_structures.cpp)
+add_executable(${PROJECT_NAME} ${PROJECT_NAME}.cpp)
 target_link_libraries(${PROJECT_NAME} PRIVATE glaze_interop glaze_interop_client glz_test_common)
 add_dependencies(${PROJECT_NAME} complex_structures_plugin)
 add_test(NAME ${PROJECT_NAME} COMMAND ${PROJECT_NAME})
