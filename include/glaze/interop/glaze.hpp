@@ -24,11 +24,9 @@ class itype;
 class iinstance;
 class ifield;
 class imethod;
-class ivalue;
 
 // Dynamic value type that can hold references to any Glaze-supported type
-class ivalue {
-public:
+struct ivalue {
     // Store pointers for direct memory access, with type information
     using value_type = std::variant<
         std::monostate,  // null/nothing
