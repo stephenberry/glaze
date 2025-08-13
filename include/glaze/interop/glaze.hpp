@@ -64,14 +64,11 @@ public:
     // Constructor for references (non-owning)
     template<typename T>
     explicit ivalue(T* ptr) : owned_(false) {
-        if constexpr (bool_t<T>) value_ = static_cast<T*>(ptr);
-        else if constexpr (int_t<T>) value_ = static_cast<T*>(ptr);
-        else if constexpr (std::floating_point<T>) value_ = static_cast<T*>(ptr);
+        if constexpr (bool_t<T> || int_t<T> || std::floating_point<T> || complex_t<T>) value_ = static_cast<T*>(ptr);
         else if constexpr (std::same_as<T, std::string>) value_ = static_cast<std::string*>(ptr);
         else if constexpr (std::is_same_v<T, std::vector<ivalue>>) value_ = static_cast<std::vector<ivalue>*>(ptr);
         else if constexpr (std::is_same_v<T, std::unordered_map<std::string, ivalue>>) 
             value_ = static_cast<std::unordered_map<std::string, ivalue>*>(ptr);
-        else if constexpr (complex_t<T>) value_ = static_cast<T*>(ptr);
         else {
             // For other types, store as owned std::any
             make_owned(std::move(*ptr));
