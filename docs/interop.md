@@ -48,7 +48,11 @@ int main() {
     
     // Create an instance
     Person alice{"Alice", 30, {"reading", "hiking"}};
-    glz::register_instance("alice", "Person", alice);
+    
+    // Register with error handling
+    if (!glz::register_instance("alice", alice)) {
+        std::cerr << "Error: " << glz::get_last_error_message() << std::endl;
+    }
 }
 ```
 
@@ -104,11 +108,9 @@ Register a C++ type for interop. The type must have a `glz::meta` specialization
 
 ```cpp
 template<typename T>
-void glz::register_instance(std::string_view instance_name, 
-                           std::string_view type_name, 
-                           T& instance);
+void glz::register_instance(std::string_view instance_name, T& instance);
 ```
-Register a global instance that can be accessed from other languages.
+Register a global instance that can be accessed from other languages. The type must be registered first using `register_type`.
 
 ### C API Functions
 
@@ -150,6 +152,61 @@ enum glz_type_kind : uint8_t {
     GLZ_TYPE_SHARED_FUTURE  // std::shared_future<T>
 };
 ```
+
+## Error Handling
+
+The interop system provides FFI-safe error handling using thread-local error state:
+
+### C++ API
+```cpp
+// Returns false on error, true on success
+if (!glz::register_instance("alice", alice)) {
+    // Access error information
+    auto error_code = glz::last_error.code;
+    auto error_msg = glz::last_error.message;
+    std::cerr << "Error " << error_code << ": " << error_msg << std::endl;
+}
+
+// Clear error state
+glz::clear_error();
+```
+
+### C API
+```c
+// All C API functions now use error handling
+glz_type_info* info = glz_get_type_info("Person");
+if (!info) {
+    const char* msg = glz_get_last_error_message();
+    printf("Error: %s\n", msg);
+}
+
+// Create instance with error checking
+void* instance = glz_create_instance("Person");
+if (!instance) {
+    printf("Failed to create: %s\n", glz_get_last_error_message());
+}
+
+// Register instance
+if (!glz_register_instance("alice", "Person", alice_ptr)) {
+    glz_error_code code = glz_get_last_error();
+    const char* msg = glz_get_last_error_message();
+    printf("Error %d: %s\n", code, msg);
+}
+
+// Clear error state
+glz_clear_error();
+```
+
+### Error Codes
+- `GLZ_ERROR_NONE` (0) - No error
+- `GLZ_ERROR_TYPE_NOT_REGISTERED` (1) - Type must be registered before use
+- `GLZ_ERROR_INSTANCE_ALREADY_EXISTS` (2) - Instance name already in use
+- `GLZ_ERROR_INSTANCE_NOT_FOUND` (3) - Instance not found
+- `GLZ_ERROR_INVALID_PARAMETER` (4) - Invalid parameter (null pointer, etc.)
+- `GLZ_ERROR_ALLOCATION_FAILED` (5) - Memory allocation failed
+- `GLZ_ERROR_TYPE_MISMATCH` (6) - Type mismatch in operation
+- `GLZ_ERROR_MEMBER_NOT_FOUND` (7) - Member not found in type
+- `GLZ_ERROR_INTERNAL` (99) - Internal error
 
 ## Member Functions
 

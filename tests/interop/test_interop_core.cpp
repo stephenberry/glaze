@@ -221,14 +221,14 @@ int main() {
     };
 
     "interop instance registration"_test = [] {
-        // Test instance registration
-        try {
-            glz::register_instance("test_sensor", "SensorData", global_sensor);
-            glz::register_instance("origin_point", "Point", global_origin);
-            std::cout << "✅ Instance registration API available\n";
-        } catch (...) {
-            std::cout << "⚠️ Instance registration requires full implementation\n";
-        }
+        // Test instance registration with error handling
+        bool success = glz::register_instance("test_sensor", global_sensor);
+        expect(success == true) << "Failed to register test_sensor: " << glz::last_error.message;
+        
+        success = glz::register_instance("origin_point", global_origin);
+        expect(success == true) << "Failed to register origin_point: " << glz::last_error.message;
+        
+        std::cout << "✅ Instance registration API available with error handling\n";
     };
 
     //=========================================================================

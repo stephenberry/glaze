@@ -312,6 +312,13 @@ void* invoke_member_function_impl(void* obj_ptr, void* func_ptr, void** args, vo
 extern "C" {
 
 GLZ_API glz_type_info* glz_get_type_info(const char* type_name) {
+    glz::clear_error();
+    
+    if (!type_name) {
+        glz::set_error(GLZ_ERROR_INVALID_PARAMETER, "Type name is null");
+        return nullptr;
+    }
+    
     auto it = glz::type_info_cache.find(type_name);  // Transparent lookup with string_view
     if (it != glz::type_info_cache.end()) {
         return &it->second.info;
@@ -352,29 +359,54 @@ GLZ_API glz_type_info* glz_get_type_info(const char* type_name) {
         }
     }
     
+    glz::set_error(GLZ_ERROR_TYPE_NOT_REGISTERED, "Type '" + std::string(type_name) + "' not found");
     return nullptr;
 }
 
 GLZ_API glz_type_info* glz_get_type_info_by_hash(size_t type_hash) {
+    glz::clear_error();
     auto hash_it = glz::type_hash_to_name.find(type_hash);
     if (hash_it != glz::type_hash_to_name.end()) {
         return glz_get_type_info(hash_it->second.data());
     }
+    glz::set_error(GLZ_ERROR_TYPE_NOT_REGISTERED, "Type with hash " + std::to_string(type_hash) + " not registered");
     return nullptr;
 }
 
 GLZ_API void* glz_create_instance(const char* type_name) {
+    glz::clear_error();
+    if (!type_name) {
+        glz::set_error(GLZ_ERROR_INVALID_PARAMETER, "Type name is null");
+        return nullptr;
+    }
     auto it = glz::constructors.find(type_name);  // Transparent lookup with string_view
     if (it != glz::constructors.end()) {
-        return it->second();
+        try {
+            return it->second();
+        } catch (const std::exception& e) {
+            glz::set_error(GLZ_ERROR_ALLOCATION_FAILED, "Failed to create instance: " + std::string(e.what()));
+            return nullptr;
+        }
     }
+    glz::set_error(GLZ_ERROR_TYPE_NOT_REGISTERED, "Type '" + std::string(type_name) + "' not registered");
     return nullptr;
 }
 
 GLZ_API void glz_destroy_instance(const char* type_name, void* instance) {
+    glz::clear_error();
+    if (!type_name || !instance) {
+        glz::set_error(GLZ_ERROR_INVALID_PARAMETER, "Type name or instance is null");
+        return;
+    }
     auto it = glz::destructors.find(type_name);  // Transparent lookup with string_view
     if (it != glz::destructors.end()) {
-        it->second(instance);
+        try {
+            it->second(instance);
+        } catch (const std::exception& e) {
+            glz::set_error(GLZ_ERROR_INTERNAL, "Failed to destroy instance: " + std::string(e.what()));
+        }
+    } else {
+        glz::set_error(GLZ_ERROR_TYPE_NOT_REGISTERED, "Type '" + std::string(type_name) + "' not registered");
     }
 }
 
@@ -1056,6 +1088,42 @@ GLZ_API const glz_type_descriptor* glz_shared_future_get_value_type(void* future
     
     auto* wrapper = static_cast<SharedFutureBase*>(future_ptr);
     return wrapper->get_type_descriptor();
+}
+
+// Error handling functions
+GLZ_API glz_error_code glz_get_last_error() {
+    return glz::last_error.code;
+}
+
+GLZ_API const char* glz_get_last_error_message() {
+    if (glz::last_error.code == GLZ_ERROR_NONE) {
+        return nullptr;
+    }
+    return glz::last_error.message.c_str();
+}
+
+GLZ_API void glz_clear_error() {
+    glz::clear_error();
+}
+
+// Instance registration
+GLZ_API bool glz_register_instance(const char* instance_name, 
+                                   const char* type_name, 
+                                   void* instance) {
+    glz::clear_error();
+    
+    if (!instance_name || !type_name || !instance) {
+        glz::set_error(GLZ_ERROR_INVALID_PARAMETER, "Invalid parameter: null pointer provided");
+        return false;
+    }
+    
+    try {
+        glz::interop_registry.add_instance(instance_name, type_name, instance);
+        return true;
+    } catch (const std::exception& e) {
+        glz::set_error(GLZ_ERROR_INTERNAL, e.what());
+        return false;
+    }
 }
 
 // Pure C FFI functions for dynamic type registration

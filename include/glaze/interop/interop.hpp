@@ -27,6 +27,19 @@
 
 // C-compatible type descriptor structures (outside namespace)
 
+// Error codes for FFI operations
+enum glz_error_code : int32_t {
+    GLZ_ERROR_NONE = 0,
+    GLZ_ERROR_TYPE_NOT_REGISTERED = 1,
+    GLZ_ERROR_INSTANCE_ALREADY_EXISTS = 2,
+    GLZ_ERROR_INSTANCE_NOT_FOUND = 3,
+    GLZ_ERROR_INVALID_PARAMETER = 4,
+    GLZ_ERROR_ALLOCATION_FAILED = 5,
+    GLZ_ERROR_TYPE_MISMATCH = 6,
+    GLZ_ERROR_MEMBER_NOT_FOUND = 7,
+    GLZ_ERROR_INTERNAL = 99
+};
+
 // Ensure consistent struct packing between C++ and Julia
 #pragma pack(push, 1)
 
@@ -114,6 +127,27 @@ struct glz_type_descriptor {
 #pragma pack(pop)
 
 namespace glz {
+
+// Error state management for FFI
+struct ErrorState {
+    glz_error_code code = GLZ_ERROR_NONE;
+    std::string message;
+};
+
+// Thread-local storage for last error
+inline thread_local ErrorState last_error;
+
+// Helper to set error
+inline void set_error(glz_error_code code, const std::string& msg) {
+    last_error.code = code;
+    last_error.message = msg;
+}
+
+// Helper to clear error
+inline void clear_error() {
+    last_error.code = GLZ_ERROR_NONE;
+    last_error.message.clear();
+}
 
 // Compile-time FNV-1a hash function
 template<size_t N>
@@ -853,8 +887,30 @@ void register_type(std::string_view name) {
 
 // Function to register an instance - requires type to be registered first
 template<typename T>
-void register_instance(std::string_view instance_name, std::string_view type_name, T& instance) {
-    interop_registry.add_instance(instance_name, type_name, static_cast<void*>(&instance));
+bool register_instance(std::string_view instance_name, T& instance) {
+    clear_error();
+    
+    // Calculate compile-time hash for the type
+    constexpr size_t hash = type_hash<T>();
+    
+    // Look up the registered type name
+    auto it = type_hash_to_name.find(hash);
+    if (it == type_hash_to_name.end()) {
+        set_error(GLZ_ERROR_TYPE_NOT_REGISTERED,
+                 "Type not registered. Call glz::register_type<" + 
+                 std::string(glz::name_v<T>) + 
+                 ">() before registering instances.");
+        return false;
+    }
+    
+    try {
+        // Use the found type name for registration
+        interop_registry.add_instance(instance_name, it->second, static_cast<void*>(&instance));
+        return true;
+    } catch (const std::exception& e) {
+        set_error(GLZ_ERROR_INTERNAL, e.what());
+        return false;
+    }
 }
 
 // Meta specialization for std::pair - treat it as a struct with first/second members
@@ -983,6 +1039,16 @@ GLZ_API void* glz_shared_future_get(void* future_ptr, const glz_type_descriptor*
 GLZ_API bool glz_shared_future_valid(void* future_ptr);
 GLZ_API void glz_shared_future_destroy(void* future_ptr, const glz_type_descriptor* value_type);
 GLZ_API const glz_type_descriptor* glz_shared_future_get_value_type(void* future_ptr);
+
+// Error handling functions
+GLZ_API glz_error_code glz_get_last_error();
+GLZ_API const char* glz_get_last_error_message();
+GLZ_API void glz_clear_error();
+
+// Instance registration
+GLZ_API bool glz_register_instance(const char* instance_name, 
+                                   const char* type_name, 
+                                   void* instance);
 
 // Pure C FFI functions for dynamic type registration (Julia/Rust compatible)
 GLZ_API bool glz_register_type_dynamic(

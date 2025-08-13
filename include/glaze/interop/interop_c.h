@@ -9,6 +9,25 @@
 extern "C" {
 #endif
 
+// Error code type (actual enum defined in interop.hpp for C++ or here for pure C)
+#ifndef __cplusplus
+// Only define for pure C compilation
+typedef enum {
+    GLZ_ERROR_NONE = 0,
+    GLZ_ERROR_TYPE_NOT_REGISTERED = 1,
+    GLZ_ERROR_INSTANCE_ALREADY_EXISTS = 2,
+    GLZ_ERROR_INSTANCE_NOT_FOUND = 3,
+    GLZ_ERROR_INVALID_PARAMETER = 4,
+    GLZ_ERROR_ALLOCATION_FAILED = 5,
+    GLZ_ERROR_TYPE_MISMATCH = 6,
+    GLZ_ERROR_MEMBER_NOT_FOUND = 7,
+    GLZ_ERROR_INTERNAL = 99
+} glz_error_code;
+#else
+// For C++, use the definition from interop.hpp
+typedef enum glz_error_code glz_error_code;
+#endif
+
 // GLZ_API definition for C
 #ifndef GLZ_API
     #ifdef _WIN32
@@ -48,6 +67,16 @@ struct glz_member_info {
 GLZ_API glz_type_info* glz_get_type_info(const char* type_name);
 GLZ_API void* glz_create_instance(const char* type_name);
 GLZ_API void glz_destroy_instance(const char* type_name, void* instance);
+
+// Error handling functions
+GLZ_API glz_error_code glz_get_last_error(void);
+GLZ_API const char* glz_get_last_error_message(void);
+GLZ_API void glz_clear_error(void);
+
+// Instance registration
+GLZ_API bool glz_register_instance(const char* instance_name, 
+                                   const char* type_name, 
+                                   void* instance);
 
 // Pure C FFI functions for dynamic type registration
 GLZ_API bool glz_register_type_dynamic(
