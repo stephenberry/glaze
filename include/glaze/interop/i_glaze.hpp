@@ -1,32 +1,26 @@
 #pragma once
 
-// High-level C++ interface that mirrors Julia's Glaze.jl module
-// Provides a clean, intuitive API for working with Glaze types dynamically
+// High-level C++ interface for the FFI Glaze interop
+// Provides a clean, intuitive API for working with Glaze types across a C shared library dynamically
 
 #include "glaze/interop/interop.hpp"
 #include "glaze/interop/client.hpp"
 #include <any>
 #include <typeindex>
-#include <variant>
-#include <functional>
-#include <memory>
-#include <string>
 #include <vector>
 #include <unordered_map>
-#include <optional>
-#include <complex>
 #include <future>
 
 namespace glz {
 
 // Forward declarations
-class itype;
-class iinstance;
-class ifield;
-class imethod;
+class i_type;
+class i_instance;
+class i_field;
+class i_method;
 
 // Dynamic value type that can hold references to any Glaze-supported type
-struct ivalue {
+struct i_value {
     // Store pointers for direct memory access, with type information
     using value_type = std::variant<
         std::monostate,  // null/nothing
@@ -35,11 +29,11 @@ struct ivalue {
         uint8_t*, uint16_t*, uint32_t*, uint64_t*,
         float*, double*,
         std::string*,
-        std::vector<ivalue>*,  // Arrays of values
-        std::unordered_map<std::string, ivalue>*,  // Objects
+        std::vector<i_value>*,  // Arrays of values
+        std::unordered_map<std::string, i_value>*,  // Objects
         std::complex<float>*, std::complex<double>*,
-        std::shared_ptr<iinstance>,  // Reference to an instance
-        std::shared_future<ivalue>*,  // Async results
+        std::shared_ptr<i_instance>,  // Reference to an instance
+        std::shared_future<i_value>*,  // Async results
         // For owning temporary values (e.g., computed results)
         std::shared_ptr<std::any>  // Owned value with type erasure
     >;
@@ -57,16 +51,16 @@ private:
     }
     
 public:
-    ivalue() : value_(std::monostate{}) {}
+    i_value() : value_(std::monostate{}) {}
     
     // Constructor for references (non-owning)
     template<typename T>
-    explicit ivalue(T* ptr) : owned_(false) {
+    explicit i_value(T* ptr) : owned_(false) {
         if constexpr (bool_t<T> || int_t<T> || std::floating_point<T> || complex_t<T>) value_ = static_cast<T*>(ptr);
         else if constexpr (std::same_as<T, std::string>) value_ = static_cast<std::string*>(ptr);
-        else if constexpr (std::is_same_v<T, std::vector<ivalue>>) value_ = static_cast<std::vector<ivalue>*>(ptr);
-        else if constexpr (std::is_same_v<T, std::unordered_map<std::string, ivalue>>) 
-            value_ = static_cast<std::unordered_map<std::string, ivalue>*>(ptr);
+        else if constexpr (std::is_same_v<T, std::vector<i_value>>) value_ = static_cast<std::vector<i_value>*>(ptr);
+        else if constexpr (std::is_same_v<T, std::unordered_map<std::string, i_value>>) 
+            value_ = static_cast<std::unordered_map<std::string, i_value>*>(ptr);
         else {
             // For other types, store as owned std::any
             make_owned(std::move(*ptr));
@@ -75,18 +69,18 @@ public:
     
     // Constructor for owned values (makes a copy)
     template<typename T>
-    static ivalue make_owned_value(T&& val) {
-        ivalue v;
+    static i_value make_owned_value(T&& val) {
+        i_value v;
         v.make_owned(std::forward<T>(val));
         return v;
     }
     
     // Reference wrapper constructor for safer reference semantics
     template<typename T>
-    explicit ivalue(std::reference_wrapper<T> ref) : ivalue(&ref.get()) {}
+    explicit i_value(std::reference_wrapper<T> ref) : i_value(&ref.get()) {}
     
     // Instance wrapper constructor
-    explicit ivalue(std::shared_ptr<iinstance> instance) : value_(instance) {}
+    explicit i_value(std::shared_ptr<i_instance> instance) : value_(instance) {}
     
     // Type checking
     bool is_null() const { return std::holds_alternative<std::monostate>(value_); }
@@ -106,15 +100,15 @@ public:
                std::holds_alternative<double*>(value_);
     }
     bool is_string() const { return std::holds_alternative<std::string*>(value_); }
-    bool is_array() const { return std::holds_alternative<std::vector<ivalue>*>(value_); }
+    bool is_array() const { return std::holds_alternative<std::vector<i_value>*>(value_); }
     bool is_object() const { 
-        return std::holds_alternative<std::unordered_map<std::string, ivalue>*>(value_);
+        return std::holds_alternative<std::unordered_map<std::string, i_value>*>(value_);
     }
     bool is_instance() const { 
-        return std::holds_alternative<std::shared_ptr<iinstance>>(value_);
+        return std::holds_alternative<std::shared_ptr<i_instance>>(value_);
     }
     bool is_future() const { 
-        return std::holds_alternative<std::shared_future<ivalue>*>(value_);
+        return std::holds_alternative<std::shared_future<i_value>*>(value_);
     }
     bool is_owned() const { return owned_; }
     
@@ -132,7 +126,7 @@ public:
     
     template<typename T>
     const T* get_ptr() const {
-        return const_cast<ivalue*>(this)->get_ptr<T>();
+        return const_cast<i_value*>(this)->get_ptr<T>();
     }
     
     // Get reference to the value (throws if wrong type or null pointer)
@@ -155,77 +149,77 @@ public:
     int64_t as_int() const;
     double as_float() const;
     std::string as_string() const;
-    std::vector<ivalue>& as_array();
-    const std::vector<ivalue>& as_array() const;
+    std::vector<i_value>& as_array();
+    const std::vector<i_value>& as_array() const;
     
     // Object field access (like Julia's dot notation)
-    ivalue& operator[](const std::string& key);
-    const ivalue& operator[](const std::string& key) const;
+    i_value& operator[](const std::string& key);
+    const i_value& operator[](const std::string& key) const;
     
     // Array element access
-    ivalue& operator[](size_t index);
-    const ivalue& operator[](size_t index) const;
+    i_value& operator[](size_t index);
+    const i_value& operator[](size_t index) const;
     
     // JSON serialization
     std::string to_json() const;
-    static ivalue from_json(const std::string& json);
+    static i_value from_json(const std::string& json);
 };
 
 // Represents a field in a type
-class ifield {
-    friend class itype;
-    friend class iinstance;
+class i_field {
+    friend class i_type;
+    friend class i_instance;
     
 private:
     std::string name_;
     const glz_member_info* info_;
-    std::shared_ptr<itype> type_;
+    std::shared_ptr<i_type> type_;
     
 public:
-    ifield() : name_(), info_(nullptr), type_(nullptr) {}
-    ifield(std::string_view name, const glz_member_info* info, std::shared_ptr<itype> type = nullptr)
+    i_field() : name_(), info_(nullptr), type_(nullptr) {}
+    i_field(std::string_view name, const glz_member_info* info, std::shared_ptr<i_type> type = nullptr)
         : name_(name), info_(info), type_(type) {}
     const std::string& name() const { return name_; }
     bool is_function() const { return info_ && info_->kind == 1; }
-    std::shared_ptr<itype> get_type() const { return type_; }
+    std::shared_ptr<i_type> get_type() const { return type_; }
 };
 
 // Represents a method in a type
-class imethod {
-    friend class itype;
-    friend class iinstance;
+class i_method {
+    friend class i_type;
+    friend class i_instance;
     
 private:
     std::string name_;
     const glz_member_info* info_;
-    std::vector<std::shared_ptr<itype>> param_types_;
-    std::shared_ptr<itype> return_type_;
+    std::vector<std::shared_ptr<i_type>> param_types_;
+    std::shared_ptr<i_type> return_type_;
     
 public:
-    imethod() : name_(), info_(nullptr) {}
-    imethod(std::string_view name, const glz_member_info* info = nullptr)
+    i_method() : name_(), info_(nullptr) {}
+    i_method(std::string_view name, const glz_member_info* info = nullptr)
         : name_(name), info_(info) {}
     const std::string& name() const { return name_; }
     size_t param_count() const { return param_types_.size(); }
-    const std::vector<std::shared_ptr<itype>>& param_types() const { return param_types_; }
-    std::shared_ptr<itype> return_type() const { return return_type_; }
+    const std::vector<std::shared_ptr<i_type>>& param_types() const { return param_types_; }
+    std::shared_ptr<i_type> return_type() const { return return_type_; }
 };
 
 // Represents a Glaze type
-class itype : public std::enable_shared_from_this<itype> {
-    friend class iinstance;
-    friend class iglaze;
+class i_type : public std::enable_shared_from_this<i_type> {
+    friend class i_instance;
+    friend class i_glaze;
     
 private:
     std::string name_;
     size_t size_;
-    std::unordered_map<std::string, ifield> fields_;
-    std::unordered_map<std::string, imethod> methods_;
+    std::unordered_map<std::string, i_field> fields_;
+    std::unordered_map<std::string, i_method> methods_;
     const glz_type_info* info_;
     
 public:
-    // Constructor - types are created through iglaze class
-    itype(const glz_type_info* info);
+    // Constructor - types are created through i_glaze class
+    i_type(const glz_type_info* info);
     const std::string& name() const { return name_; }
     size_t size() const { return size_; }
     
@@ -234,7 +228,7 @@ public:
         return fields_.find(name) != fields_.end();
     }
     
-    const ifield& get_field(const std::string& name) const {
+    const i_field& get_field(const std::string& name) const {
         auto it = fields_.find(name);
         if (it == fields_.end()) {
             throw std::runtime_error("field not found: " + name);
@@ -242,14 +236,14 @@ public:
         return it->second;
     }
     
-    const std::unordered_map<std::string, ifield>& fields() const { return fields_; }
+    const std::unordered_map<std::string, i_field>& fields() const { return fields_; }
     
     // method access
     bool has_method(const std::string& name) const {
         return methods_.find(name) != methods_.end();
     }
     
-    const imethod& get_method(const std::string& name) const {
+    const i_method& get_method(const std::string& name) const {
         auto it = methods_.find(name);
         if (it == methods_.end()) {
             throw std::runtime_error("method not found: " + name);
@@ -257,77 +251,77 @@ public:
         return it->second;
     }
     
-    const std::unordered_map<std::string, imethod>& methods() const { return methods_; }
+    const std::unordered_map<std::string, i_method>& methods() const { return methods_; }
     
     // Create an instance of this type
-    std::shared_ptr<iinstance> create_instance();
+    std::shared_ptr<i_instance> create_instance();
 };
 
 // Represents an instance of a Glaze type
-class iinstance : public std::enable_shared_from_this<iinstance> {
-    friend class itype;
-    friend class iglaze;
+class i_instance : public std::enable_shared_from_this<i_instance> {
+    friend class i_type;
+    friend class i_glaze;
     
 private:
     void* ptr_;
-    std::shared_ptr<itype> type_;
+    std::shared_ptr<i_type> type_;
     bool owned_;
     
 public:
-    iinstance(void* ptr, std::shared_ptr<itype> type, bool owned = true)
+    i_instance(void* ptr, std::shared_ptr<i_type> type, bool owned = true)
         : ptr_(ptr), type_(type), owned_(owned) {}
-    ~iinstance();
+    ~i_instance();
     
-    std::shared_ptr<itype> get_type() const { return type_; }
+    std::shared_ptr<i_type> get_type() const { return type_; }
     void* ptr() { return ptr_; }
     const void* ptr() const { return ptr_; }
     
     // field access - primary interface using operator[]
     // Usage: instance["field_name"] returns a value pointing to the field
-    ivalue operator[](const std::string& field_name) {
+    i_value operator[](const std::string& field_name) {
         return getfield(field_name);
     }
     
-    ivalue operator[](const std::string& field_name) const {
+    i_value operator[](const std::string& field_name) const {
         return getfield(field_name);
     }
     
     // Helper class to enable arrow operator for shared_ptr<iinstance>
     class field_accessor {
-        iinstance* instance_;
+        i_instance* instance_;
     public:
-        explicit field_accessor(iinstance* inst) : instance_(inst) {}
-        ivalue operator[](const std::string& field_name) {
+        explicit field_accessor(i_instance* inst) : instance_(inst) {}
+        i_value operator[](const std::string& field_name) {
             return instance_->getfield(field_name);
         }
     };
     
-    // Enable direct field access on shared_ptr<iinstance>
+    // Enable direct field access on shared_ptr<i_instance>
     field_accessor fields() { return field_accessor(this); }
     
     // Lower-level field access (used by operator[])
-    ivalue getfield(const std::string& field_name) const;
-    void setfield(const std::string& field_name, const ivalue& val);
+    i_value getfield(const std::string& field_name) const;
+    void setfield(const std::string& field_name, const i_value& val);
     
     // method invocation (like Julia's method calls)
     template<typename... Args>
-    ivalue call(const std::string& method_name, Args&&... args);
+    i_value call(const std::string& method_name, Args&&... args);
     
     // Convert to JSON
     std::string to_json() const;
     
     // Create from JSON
-    static std::shared_ptr<iinstance> from_json(const std::string& json, std::shared_ptr<itype> type);
+    static std::shared_ptr<i_instance> from_json(const std::string& json, std::shared_ptr<i_type> type);
 };
 
 // Main Glaze interop class (similar to Julia's Glaze module)
-class iglaze {
+class i_glaze {
 private:
     // type registry
-    static std::unordered_map<std::string, std::shared_ptr<itype>> type_registry_;
+    static std::unordered_map<std::string, std::shared_ptr<i_type>> type_registry_;
     
     // instance registry for global instances
-    static std::unordered_map<std::string, std::shared_ptr<iinstance>> instance_registry_;
+    static std::unordered_map<std::string, std::shared_ptr<i_instance>> instance_registry_;
     
     // Library handles for dynamically loaded libraries
     static std::vector<std::unique_ptr<interop::interop_library>> loaded_libraries_;
@@ -335,13 +329,13 @@ private:
 public:
     // Register a C++ type (like Julia's register_type)
     template<typename T>
-    static std::shared_ptr<itype> register_type(const std::string& name) {
+    static std::shared_ptr<i_type> register_type(const std::string& name) {
         glz::register_type<T>(name);
         return get_type(name);
     }
     
     // Get a registered type
-    static std::shared_ptr<itype> get_type(const std::string& name);
+    static std::shared_ptr<i_type> get_type(const std::string& name);
     
     // Check if a type is registered
     static bool has_type(const std::string& name) {
@@ -352,7 +346,7 @@ public:
     static std::vector<std::string> list_types();
     
     // Create an instance of a type
-    static std::shared_ptr<iinstance> create_instance(const std::string& type_name);
+    static std::shared_ptr<i_instance> create_instance(const std::string& type_name);
     
     // Register a global instance
     template<typename T>
@@ -360,11 +354,11 @@ public:
         glz::register_instance(name, type_name, inst);
         void* ptr = glz_get_instance(name.c_str());
         auto t = get_type(type_name);
-        instance_registry_[name] = std::make_shared<iinstance>(ptr, t, false);
+        instance_registry_[name] = std::make_shared<i_instance>(ptr, t, false);
     }
     
     // Get a global instance
-    static std::shared_ptr<iinstance> get_instance(const std::string& name);
+    static std::shared_ptr<i_instance> get_instance(const std::string& name);
     
     // List all global instances
     static std::vector<std::string> list_instances();
@@ -415,7 +409,7 @@ public:
 // Implementation of template methods
 
 template<typename... Args>
-ivalue iinstance::call(const std::string& method_name, Args&&... args) {
+i_value i_instance::call(const std::string& method_name, Args&&... args) {
     if (!type_->has_method(method_name)) {
         throw std::runtime_error("method not found: " + method_name);
     }
@@ -430,7 +424,7 @@ ivalue iinstance::call(const std::string& method_name, Args&&... args) {
     // Determine return type and allocate result buffer
     // This is simplified - real implementation would handle all types
     void* result_buffer = nullptr;
-    ivalue result;
+    i_value result;
     
     // Call the function through the C API
     void* raw_result = glz_call_member_function_with_type(
@@ -446,14 +440,14 @@ ivalue iinstance::call(const std::string& method_name, Args&&... args) {
     if (raw_result) {
         // Handle different return types
         // For now, simplified
-        result = ivalue();  // Placeholder
+        result = i_value();  // Placeholder
     }
     
     return result;
 }
 
 template<typename T, typename R>
-R iglaze::getfield(T& obj, const std::string& field_name) {
+R i_glaze::getfield(T& obj, const std::string& field_name) {
     // Use compile-time reflection to get field
     R result{};
     bool found = false;
@@ -478,7 +472,7 @@ R iglaze::getfield(T& obj, const std::string& field_name) {
 }
 
 template<typename T, typename V>
-void iglaze::setfield(T& obj, const std::string& field_name, V&& val) {
+void i_glaze::setfield(T& obj, const std::string& field_name, V&& val) {
     bool found = false;
     
     constexpr auto names = glz::reflect<T>::keys;
@@ -499,7 +493,7 @@ void iglaze::setfield(T& obj, const std::string& field_name, V&& val) {
 }
 
 template<typename T, typename... Args>
-auto iglaze::call_method(T& obj, const std::string& method_name, Args&&... args) {
+auto i_glaze::call_method(T& obj, const std::string& method_name, Args&&... args) {
     // This would use compile-time reflection to find and call the method
     // Implementation would be similar to getfield/setfield but for methods
     // For now, this is a placeholder
@@ -509,5 +503,5 @@ auto iglaze::call_method(T& obj, const std::string& method_name, Args&&... args)
 } // namespace glz
 
 // Convenience macros (similar to Julia's @register_type)
-#define GLZ_REGISTER_TYPE(Type) glz::iglaze::register_type<Type>(#Type)
-#define GLZ_REGISTER_INSTANCE(name, Type, instance) glz::iglaze::register_instance(name, #Type, instance)
+#define GLZ_REGISTER_TYPE(Type) glz::i_glaze::register_type<Type>(#Type)
+#define GLZ_REGISTER_INSTANCE(name, Type, instance) glz::i_glaze::register_instance(name, #Type, instance)

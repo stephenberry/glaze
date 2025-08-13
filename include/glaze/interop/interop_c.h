@@ -1,3 +1,6 @@
+// Glaze Library
+// For the license information refer to glaze.hpp
+
 #ifndef GLAZE_INTEROP_C_H
 #define GLAZE_INTEROP_C_H
 
