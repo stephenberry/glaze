@@ -84,9 +84,9 @@ ccall((:glz_call_member_function_with_type, lib), Ptr{Cvoid},
 Add to your CMakeLists.txt:
 
 ```cmake
-option(BUILD_INTEROP "Build language interoperability library" ON)
+option(glaze_BUILD_INTEROP "Build language interoperability library" ON)
 
-if(BUILD_INTEROP)
+if(glaze_BUILD_INTEROP)
     add_library(glaze_interop SHARED
         src/interop/interop.cpp
     )
@@ -263,7 +263,7 @@ The interop interface includes a C++ client library for consuming Glaze-enabled 
 #include "glaze/interop/client.hpp"
 
 // Load a shared library with Glaze interop
-glz::interop::interop_library lib("./my_plugin.so");
+glz::interop::interop_library lib("./my_plugin.so");  // .dll on Windows, .dylib on macOS
 
 // Get type information
 auto type_info = lib.get_type("MyPluginClass");
@@ -311,6 +311,9 @@ public:
 ### Building C++ Clients
 
 ```cmake
+# Enable interop in your project
+option(glaze_BUILD_INTEROP "Build language interoperability library" ON)
+
 # Client application
 add_executable(my_app main.cpp)
 target_link_libraries(my_app PRIVATE glaze_interop_client)
@@ -336,19 +339,20 @@ target_link_libraries(my_plugin PRIVATE glaze_interop)
 
 ## Examples
 
-See `examples/interop/` for complete examples including:
-- Basic type registration and access
-- Container manipulation
-- Member function calls
-- Async operations
-- Complex nested structures
+See `tests/interop/` for complete examples including:
+- Basic type registration and access (`interop_basic_test.cpp`)
+- Container manipulation and member function calls
+- Plugin architecture (`interop_plugins_test.cpp`)
+- Complex nested structures (`interop_structures_test.cpp`)
+- C FFI compatibility (`test_c_ffi.c`)
+- Performance benchmarks (`interop_performance_test.cpp`)
 
 ## Language Bindings
 
 Currently available:
 - **Julia**: Full support via glaze.jl
-- **Python**: (Coming soon)
-- **Rust**: (Coming soon)
+- **Python**: In development
+- **Rust**: In development
 
 ## Limitations
 
