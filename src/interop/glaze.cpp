@@ -198,7 +198,7 @@ i_instance::~i_instance() {
     }
 }
 
-i_value i_instance::getfield(const std::string& field_name) const {
+i_value i_instance::get_field(const std::string& field_name) const {
     const auto& f = type_->get_field(field_name);
     
     if (f.info_ && f.info_->getter) {
@@ -248,7 +248,7 @@ i_value i_instance::getfield(const std::string& field_name) const {
     return i_value();  // null value
 }
 
-void i_instance::setfield(const std::string& field_name, const i_value& val) {
+void i_instance::set_field(const std::string& field_name, const i_value& val) {
     const auto& f = type_->get_field(field_name);
     
     if (f.info_ && f.info_->setter) {
@@ -296,7 +296,7 @@ std::string i_instance::to_json() const {
         if (!first) oss << ",";
         oss << std::quoted(name) << ":";
         try {
-            oss << getfield(name).to_json();
+            oss << get_field(name).to_json();
         } catch (...) {
             oss << "null";
         }

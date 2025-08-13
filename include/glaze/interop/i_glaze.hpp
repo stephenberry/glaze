@@ -279,11 +279,11 @@ public:
     // field access - primary interface using operator[]
     // Usage: instance["field_name"] returns a value pointing to the field
     i_value operator[](const std::string& field_name) {
-        return getfield(field_name);
+        return get_field(field_name);
     }
     
     i_value operator[](const std::string& field_name) const {
-        return getfield(field_name);
+        return get_field(field_name);
     }
     
     // Helper class to enable arrow operator for shared_ptr<iinstance>
@@ -292,7 +292,7 @@ public:
     public:
         explicit field_accessor(i_instance* inst) : instance_(inst) {}
         i_value operator[](const std::string& field_name) {
-            return instance_->getfield(field_name);
+            return instance_->get_field(field_name);
         }
     };
     
@@ -300,8 +300,8 @@ public:
     field_accessor fields() { return field_accessor(this); }
     
     // Lower-level field access (used by operator[])
-    i_value getfield(const std::string& field_name) const;
-    void setfield(const std::string& field_name, const i_value& val);
+    i_value get_field(const std::string& field_name) const;
+    void set_field(const std::string& field_name, const i_value& val);
     
     // method invocation (like Julia's method calls)
     template<typename... Args>
@@ -395,11 +395,11 @@ public:
     
     // Get field value by name (compile-time known type)
     template<typename T, typename R>
-    static R getfield(T& obj, const std::string& field_name);
+    static R get_field(T& obj, const std::string& field_name);
     
     // Set field value by name (compile-time known type)
     template<typename T, typename V>
-    static void setfield(T& obj, const std::string& field_name, V&& val);
+    static void set_field(T& obj, const std::string& field_name, V&& val);
     
     // Call method by name (compile-time known type)
     template<typename T, typename... Args>
@@ -447,7 +447,7 @@ i_value i_instance::call(const std::string& method_name, Args&&... args) {
 }
 
 template<typename T, typename R>
-R i_glaze::getfield(T& obj, const std::string& field_name) {
+R i_glaze::get_field(T& obj, const std::string& field_name) {
     // Use compile-time reflection to get field
     R result{};
     bool found = false;
@@ -472,7 +472,7 @@ R i_glaze::getfield(T& obj, const std::string& field_name) {
 }
 
 template<typename T, typename V>
-void i_glaze::setfield(T& obj, const std::string& field_name, V&& val) {
+void i_glaze::set_field(T& obj, const std::string& field_name, V&& val) {
     bool found = false;
     
     constexpr auto names = glz::reflect<T>::keys;
@@ -495,7 +495,7 @@ void i_glaze::setfield(T& obj, const std::string& field_name, V&& val) {
 template<typename T, typename... Args>
 auto i_glaze::call_method(T& obj, const std::string& method_name, Args&&... args) {
     // This would use compile-time reflection to find and call the method
-    // Implementation would be similar to getfield/setfield but for methods
+    // Implementation would be similar to get_field/set_field but for methods
     // For now, this is a placeholder
     throw std::runtime_error("method calling not yet implemented for compile-time types");
 }
