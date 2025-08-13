@@ -7,7 +7,7 @@ namespace glz {
 // Static member definitions
 std::unordered_map<std::string, std::shared_ptr<itype>> iglaze::type_registry_;
 std::unordered_map<std::string, std::shared_ptr<iinstance>> iglaze::instance_registry_;
-std::vector<std::unique_ptr<interop::InteropLibrary>> iglaze::loaded_libraries_;
+std::vector<std::unique_ptr<interop::interop_library>> iglaze::loaded_libraries_;
 
 // ivalue implementation
 bool ivalue::as_bool() const {
@@ -379,7 +379,7 @@ std::vector<std::string> iglaze::list_instances() {
 }
 
 void iglaze::load_library(const std::string& path) {
-    auto lib = std::make_unique<interop::InteropLibrary>(path);
+    auto lib = std::make_unique<interop::interop_library>(path);
     loaded_libraries_.push_back(std::move(lib));
     
     // The library should self-register its types

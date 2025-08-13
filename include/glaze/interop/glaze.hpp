@@ -344,7 +344,7 @@ private:
     static std::unordered_map<std::string, std::shared_ptr<iinstance>> instance_registry_;
     
     // Library handles for dynamically loaded libraries
-    static std::vector<std::unique_ptr<interop::InteropLibrary>> loaded_libraries_;
+    static std::vector<std::unique_ptr<interop::interop_library>> loaded_libraries_;
     
 public:
     // Register a C++ type (like Julia's register_type)

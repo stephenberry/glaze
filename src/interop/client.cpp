@@ -5,16 +5,16 @@
 namespace glz::interop {
 
 // MemberInfo implementation
-bool MemberInfo::is_function() const {
+bool member_info::is_function() const {
     return info_ && info_->kind == 1;
 }
 
-const glz_type_descriptor* MemberInfo::type_descriptor() const {
+const glz_type_descriptor* member_info::type_descriptor() const {
     return info_ ? info_->type : nullptr;
 }
 
 // TypeInfo implementation
-TypeInfo::TypeInfo(const glz_type_info* info, InteropLibrary* lib) 
+type_info::type_info(const glz_type_info* info, interop_library* lib) 
     : info_(info), library_(lib) {
     if (info_) {
         members_.reserve(info_->member_count);
@@ -24,34 +24,34 @@ TypeInfo::TypeInfo(const glz_type_info* info, InteropLibrary* lib)
     }
 }
 
-std::string_view TypeInfo::name() const {
+std::string_view type_info::name() const {
     return info_ ? std::string_view(info_->name) : std::string_view{};
 }
 
-size_t TypeInfo::size() const {
+size_t type_info::size() const {
     return info_ ? info_->size : 0;
 }
 
-size_t TypeInfo::member_count() const {
+size_t type_info::member_count() const {
     return info_ ? info_->member_count : 0;
 }
 
 // Instance implementation
-Instance::~Instance() {
+instance::~instance() {
     if (owned_ && ptr_ && library_ && library_->funcs_.destroy_instance) {
         library_->funcs_.destroy_instance(type_->name().data(), ptr_);
     }
 }
 
-void* Instance::get_member_ptr(const MemberInfo& member) {
+void* instance::get_member_ptr(const member_info& member) {
     if (!library_->funcs_.get_member_ptr) {
-        throw InteropException("get_member_ptr function not available");
+        throw interop_exception("get_member_ptr function not available");
     }
     return library_->funcs_.get_member_ptr(ptr_, member.info_);
 }
 
 // InteropLibrary implementation
-void InteropLibrary::load(const std::string& library_path) {
+void interop_library::load(const std::string& library_path) {
     if (handle_) {
         close();
     }
@@ -64,10 +64,10 @@ void InteropLibrary::load(const std::string& library_path) {
         DWORD error = GetLastError();
         char buffer[256];
         FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM, nullptr, error, 0, buffer, sizeof(buffer), nullptr);
-        throw InteropException("Failed to load library: " + library_path + " - " + buffer);
+        throw interop_exception("Failed to load library: " + library_path + " - " + buffer);
 #else
         const char* error = dlerror();
-        throw InteropException("Failed to load library: " + library_path + " - " + (error ? error : "unknown error"));
+        throw interop_exception("Failed to load library: " + library_path + " - " + (error ? error : "unknown error"));
 #endif
     }
     
@@ -126,7 +126,7 @@ void InteropLibrary::load(const std::string& library_path) {
     }
 }
 
-void InteropLibrary::close() {
+void interop_library::close() {
     if (handle_) {
         // Clear type cache first
         type_cache_.clear();
@@ -138,9 +138,9 @@ void InteropLibrary::close() {
     }
 }
 
-std::shared_ptr<TypeInfo> InteropLibrary::get_type(std::string_view type_name) {
+std::shared_ptr<type_info> interop_library::get_type(std::string_view type_name) {
     if (!funcs_.get_type_info) {
-        throw InteropException("Library not loaded or get_type_info not available");
+        throw interop_exception("Library not loaded or get_type_info not available");
     }
     
     // Check cache first
@@ -152,64 +152,64 @@ std::shared_ptr<TypeInfo> InteropLibrary::get_type(std::string_view type_name) {
     // Get type info from library
     auto* info = funcs_.get_type_info(std::string(type_name).c_str());
     if (!info) {
-        throw InteropException("Type not found: " + std::string(type_name));
+        throw interop_exception("Type not found: " + std::string(type_name));
     }
     
     // Create and cache TypeInfo wrapper
-    auto type_info = std::make_shared<TypeInfo>(info, this);
-    type_cache_[std::string(type_name)] = type_info;
-    return type_info;
+    auto type_info_ptr = std::make_shared<type_info>(info, this);
+    type_cache_[std::string(type_name)] = type_info_ptr;
+    return type_info_ptr;
 }
 
-std::unique_ptr<Instance> InteropLibrary::create_instance(std::string_view type_name) {
+std::unique_ptr<instance> interop_library::create_instance(std::string_view type_name) {
     if (!funcs_.create_instance) {
-        throw InteropException("Library not loaded or create_instance not available");
+        throw interop_exception("Library not loaded or create_instance not available");
     }
     
     // Get type info first
-    auto type_info = get_type(type_name);
+    auto type_info_obj = get_type(type_name);
     
     // Create instance
     void* ptr = funcs_.create_instance(std::string(type_name).c_str());
     if (!ptr) {
-        throw InteropException("Failed to create instance of type: " + std::string(type_name));
+        throw interop_exception("Failed to create instance of type: " + std::string(type_name));
     }
     
-    return std::make_unique<Instance>(ptr, type_info, this, true);
+    return std::make_unique<instance>(ptr, type_info_obj, this, true);
 }
 
-std::unique_ptr<Instance> InteropLibrary::get_instance(std::string_view instance_name) {
+std::unique_ptr<instance> interop_library::get_instance(std::string_view instance_name) {
     if (!funcs_.get_instance || !funcs_.get_instance_type) {
-        throw InteropException("Library not loaded or instance functions not available");
+        throw interop_exception("Library not loaded or instance functions not available");
     }
     
     // Get the instance pointer
     void* ptr = funcs_.get_instance(std::string(instance_name).c_str());
     if (!ptr) {
-        throw InteropException("Instance not found: " + std::string(instance_name));
+        throw interop_exception("Instance not found: " + std::string(instance_name));
     }
     
     // Get the type name
     const char* type_name = funcs_.get_instance_type(std::string(instance_name).c_str());
     if (!type_name) {
-        throw InteropException("Could not get type for instance: " + std::string(instance_name));
+        throw interop_exception("Could not get type for instance: " + std::string(instance_name));
     }
     
     // Get type info
-    auto type_info = get_type(type_name);
+    auto type_info_obj = get_type(type_name);
     
     // Return non-owning instance wrapper
-    return std::make_unique<Instance>(ptr, type_info, this, false);
+    return std::make_unique<instance>(ptr, type_info_obj, this, false);
 }
 
-std::vector<std::string> InteropLibrary::list_types() const {
+std::vector<std::string> interop_library::list_types() const {
     // This would require an additional C API function to enumerate types
     // For now, return empty vector
     // TODO: Add glz_list_types() to C API
     return {};
 }
 
-std::vector<std::string> InteropLibrary::list_instances() const {
+std::vector<std::string> interop_library::list_instances() const {
     // This would require an additional C API function to enumerate instances
     // For now, return empty vector
     // TODO: Add glz_list_instances() to C API

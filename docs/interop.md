@@ -108,9 +108,9 @@ Register a C++ type for interop. The type must have a `glz::meta` specialization
 
 ```cpp
 template<typename T>
-void glz::register_instance(std::string_view instance_name, T& instance);
+bool glz::register_instance(std::string_view instance_name, T& instance);
 ```
-Register a global instance that can be accessed from other languages. The type must be registered first using `register_type`.
+Register a global instance that can be accessed from other languages. The type must be registered first using `register_type`. Returns true on success, false on error.
 
 ### C API Functions
 
@@ -162,8 +162,8 @@ The interop system provides FFI-safe error handling using thread-local error sta
 // Returns false on error, true on success
 if (!glz::register_instance("alice", alice)) {
     // Access error information
-    auto error_code = glz::last_error.code;
-    auto error_msg = glz::last_error.message;
+    auto error_code = glz::get_last_error();
+    auto error_msg = glz::get_last_error_message();
     std::cerr << "Error " << error_code << ": " << error_msg << std::endl;
 }
 
@@ -186,8 +186,8 @@ if (!instance) {
     printf("Failed to create: %s\n", glz_get_last_error_message());
 }
 
-// Register instance
-if (!glz_register_instance("alice", "Person", alice_ptr)) {
+// Register instance (note: type name no longer needed)
+if (!glz_register_instance("alice", alice_ptr)) {
     glz_error_code code = glz_get_last_error();
     const char* msg = glz_get_last_error_message();
     printf("Error %d: %s\n", code, msg);
@@ -263,7 +263,7 @@ The interop interface includes a C++ client library for consuming Glaze-enabled 
 #include "glaze/interop/client.hpp"
 
 // Load a shared library with Glaze interop
-glz::interop::InteropLibrary lib("./my_plugin.so");
+glz::interop::interop_library lib("./my_plugin.so");
 
 // Get type information
 auto type_info = lib.get_type("MyPluginClass");
@@ -294,7 +294,7 @@ struct PluginInterface {
 
 // Load plugins dynamically
 class PluginManager {
-    std::vector<glz::interop::InteropLibrary> plugins;
+    std::vector<glz::interop::interop_library> plugins;
     
 public:
     void load_plugin(const std::string& path) {

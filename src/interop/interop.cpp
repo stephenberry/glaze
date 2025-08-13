@@ -36,16 +36,16 @@ using type_from_index = decltype(type_for_index<I>());
 inline std::unordered_map<std::string_view, std::function<void*()>> constructors;
 inline std::unordered_map<std::string_view, std::function<void(void*)>> destructors;
 
-struct TypeInfoCacheEntry {
+struct type_info_cache_entry {
     glz_type_info info;
     std::vector<glz_member_info> members;
     // No need to store member names - they have static lifetime from glz::reflect
 };
 
-inline std::unordered_map<std::string_view, TypeInfoCacheEntry> type_info_cache;
+inline std::unordered_map<std::string_view, type_info_cache_entry> type_info_cache;
 
 // Type descriptor pool implementation
-::glz_type_descriptor* TypeDescriptorPool::allocate_primitive(uint8_t kind) {
+::glz_type_descriptor* type_descriptor_pool::allocate_primitive(uint8_t kind) {
     auto desc = std::make_unique<::glz_type_descriptor>();
     desc->index = GLZ_TYPE_PRIMITIVE;
     desc->data.primitive.kind = kind;
@@ -55,7 +55,7 @@ inline std::unordered_map<std::string_view, TypeInfoCacheEntry> type_info_cache;
     return ptr;
 }
 
-::glz_type_descriptor* TypeDescriptorPool::allocate_string(bool is_view) {
+::glz_type_descriptor* type_descriptor_pool::allocate_string(bool is_view) {
     auto desc = std::make_unique<::glz_type_descriptor>();
     desc->index = GLZ_TYPE_STRING;
     desc->data.string.is_view = is_view ? 1 : 0;
@@ -65,7 +65,7 @@ inline std::unordered_map<std::string_view, TypeInfoCacheEntry> type_info_cache;
     return ptr;
 }
 
-::glz_type_descriptor* TypeDescriptorPool::allocate_vector(::glz_type_descriptor* element) {
+::glz_type_descriptor* type_descriptor_pool::allocate_vector(::glz_type_descriptor* element) {
     auto desc = std::make_unique<::glz_type_descriptor>();
     desc->index = GLZ_TYPE_VECTOR;
     desc->data.vector.element_type = element;
@@ -75,7 +75,7 @@ inline std::unordered_map<std::string_view, TypeInfoCacheEntry> type_info_cache;
     return ptr;
 }
 
-::glz_type_descriptor* TypeDescriptorPool::allocate_map(::glz_type_descriptor* key, ::glz_type_descriptor* value) {
+::glz_type_descriptor* type_descriptor_pool::allocate_map(::glz_type_descriptor* key, ::glz_type_descriptor* value) {
     auto desc = std::make_unique<::glz_type_descriptor>();
     desc->index = GLZ_TYPE_MAP;
     desc->data.map.key_type = key;
@@ -86,7 +86,7 @@ inline std::unordered_map<std::string_view, TypeInfoCacheEntry> type_info_cache;
     return ptr;
 }
 
-::glz_type_descriptor* TypeDescriptorPool::allocate_complex(uint8_t kind) {
+::glz_type_descriptor* type_descriptor_pool::allocate_complex(uint8_t kind) {
     auto desc = std::make_unique<::glz_type_descriptor>();
     desc->index = GLZ_TYPE_COMPLEX;
     desc->data.complex.kind = kind;
@@ -96,7 +96,7 @@ inline std::unordered_map<std::string_view, TypeInfoCacheEntry> type_info_cache;
     return ptr;
 }
 
-::glz_type_descriptor* TypeDescriptorPool::allocate_struct(const char* type_name, const ::glz_type_info* info, size_t type_hash) {
+::glz_type_descriptor* type_descriptor_pool::allocate_struct(const char* type_name, const ::glz_type_info* info, size_t type_hash) {
     auto desc = std::make_unique<::glz_type_descriptor>();
     desc->index = GLZ_TYPE_STRUCT;
     desc->data.struct_type.type_name = type_name;
@@ -108,7 +108,7 @@ inline std::unordered_map<std::string_view, TypeInfoCacheEntry> type_info_cache;
     return ptr;
 }
 
-::glz_type_descriptor* TypeDescriptorPool::allocate_optional(::glz_type_descriptor* element) {
+::glz_type_descriptor* type_descriptor_pool::allocate_optional(::glz_type_descriptor* element) {
     auto desc = std::make_unique<::glz_type_descriptor>();
     desc->index = GLZ_TYPE_OPTIONAL;
     desc->data.optional.element_type = element;
@@ -118,7 +118,7 @@ inline std::unordered_map<std::string_view, TypeInfoCacheEntry> type_info_cache;
     return ptr;
 }
 
-::glz_type_descriptor* TypeDescriptorPool::allocate_function(::glz_type_descriptor* return_type, uint8_t param_count, 
+::glz_type_descriptor* type_descriptor_pool::allocate_function(::glz_type_descriptor* return_type, uint8_t param_count, 
                                                            ::glz_type_descriptor** param_types, bool is_const, void* function_ptr) {
     auto desc = std::make_unique<::glz_type_descriptor>();
     desc->index = GLZ_TYPE_FUNCTION;
@@ -147,7 +147,7 @@ inline std::unordered_map<std::string_view, TypeInfoCacheEntry> type_info_cache;
     return ptr;
 }
 
-::glz_type_descriptor* TypeDescriptorPool::allocate_shared_future(::glz_type_descriptor* value_type) {
+::glz_type_descriptor* type_descriptor_pool::allocate_shared_future(::glz_type_descriptor* value_type) {
     auto desc = std::make_unique<::glz_type_descriptor>();
     desc->index = GLZ_TYPE_SHARED_FUTURE;
     desc->data.shared_future.value_type = value_type;
@@ -326,12 +326,12 @@ GLZ_API glz_type_info* glz_get_type_info(const char* type_name) {
     
     for (const auto& type : glz::interop_registry.get_types()) {
         if (type->name == type_name) {  // Compare as C strings
-            glz::TypeInfoCacheEntry entry;
+            glz::type_info_cache_entry entry;
             entry.info.name = type->name.data();  // Null-terminated from string literal
             entry.info.size = type->size;
             entry.info.member_count = type->members.size();
             
-            // Convert MemberInfo to glz_member_info
+            // Convert member_info to glz_member_info
             entry.members.reserve(type->members.size());
             
             for (const auto& member : type->members) {
@@ -961,8 +961,8 @@ GLZ_API void glz_destroy_string(void* str_ptr) {
 } // extern "C"
 
 // Type-erased interface for shared_future
-struct SharedFutureBase {
-    virtual ~SharedFutureBase() = default;
+struct shared_future_base {
+    virtual ~shared_future_base() = default;
     virtual bool is_ready() const = 0;
     virtual void wait() = 0;
     virtual bool valid() const = 0;
@@ -1046,17 +1046,17 @@ void* dispatch_shared_future_op(void* future_ptr, const glz_type_descriptor* val
 extern "C" {
 
 GLZ_API bool glz_shared_future_is_ready(void* future_ptr) {
-    auto* wrapper = static_cast<SharedFutureBase*>(future_ptr);
+    auto* wrapper = static_cast<shared_future_base*>(future_ptr);
     return wrapper->is_ready();
 }
 
 GLZ_API void glz_shared_future_wait(void* future_ptr) {
-    auto* wrapper = static_cast<SharedFutureBase*>(future_ptr);
+    auto* wrapper = static_cast<shared_future_base*>(future_ptr);
     wrapper->wait();
 }
 
 GLZ_API bool glz_shared_future_valid(void* future_ptr) {
-    auto* wrapper = static_cast<SharedFutureBase*>(future_ptr);
+    auto* wrapper = static_cast<shared_future_base*>(future_ptr);
     return wrapper->valid();
 }
 
@@ -1074,19 +1074,19 @@ extern "C" {
 GLZ_API void* glz_shared_future_get(void* future_ptr, const glz_type_descriptor* value_type) {
     if (!future_ptr) return nullptr;
     
-    auto* wrapper = static_cast<SharedFutureBase*>(future_ptr);
+    auto* wrapper = static_cast<shared_future_base*>(future_ptr);
     return wrapper->get_value();
 }
 
 GLZ_API void glz_shared_future_destroy(void* future_ptr, const glz_type_descriptor* value_type) {
-    delete static_cast<SharedFutureBase*>(future_ptr);
+    delete static_cast<shared_future_base*>(future_ptr);
 }
 
 
 GLZ_API const glz_type_descriptor* glz_shared_future_get_value_type(void* future_ptr) {
     if (!future_ptr) return nullptr;
     
-    auto* wrapper = static_cast<SharedFutureBase*>(future_ptr);
+    auto* wrapper = static_cast<shared_future_base*>(future_ptr);
     return wrapper->get_type_descriptor();
 }
 
@@ -1140,12 +1140,12 @@ GLZ_API bool glz_register_type_dynamic(
     glz::register_constructor(name, constructor, destructor);
     
     // Create a minimal type entry in the existing registry
-    auto type_info = std::make_unique<glz::TypeInfo>();
-    type_info->name = name;
-    type_info->size = size;
+    auto type_info_ptr = std::make_unique<glz::type_info>();
+    type_info_ptr->name = name;
+    type_info_ptr->size = size;
     // Leave members empty - can be populated later
     
-    glz::interop_registry.add_type(std::move(type_info));
+    glz::interop_registry.add_type(std::move(type_info_ptr));
     return true;
 }
 
@@ -1160,12 +1160,12 @@ GLZ_API bool glz_register_member_data(
     // Find the existing type in the registry
     for (auto& type : glz::interop_registry.types) {
         if (type->name == type_name) {
-            glz::MemberInfo member;
+            glz::member_info member;
             member.name = member_name;  // Assumes static lifetime
             member.type = nullptr;      // Type descriptor not required for basic FFI
             member.getter = reinterpret_cast<void*(*)(void*)>(getter);
             member.setter = reinterpret_cast<void(*)(void*, void*)>(setter);
-            member.kind = glz::MemberKind::DATA_MEMBER;
+            member.kind = glz::member_kind::DATA_MEMBER;
             member.function_ptr = nullptr;
             
             type->members.push_back(member);

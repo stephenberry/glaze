@@ -129,13 +129,13 @@ struct glz_type_descriptor {
 namespace glz {
 
 // Error state management for FFI
-struct ErrorState {
+struct error_state {
     glz_error_code code = GLZ_ERROR_NONE;
     std::string message;
 };
 
 // Thread-local storage for last error
-inline thread_local ErrorState last_error;
+inline thread_local error_state last_error;
 
 // Helper to set error
 inline void set_error(glz_error_code code, const std::string& msg) {
@@ -177,29 +177,29 @@ GLZ_API void register_constructor(std::string_view type_name, std::function<void
 // Map to store type hash to name mapping for runtime type resolution
 inline std::unordered_map<size_t, std::string_view> type_hash_to_name;
 
-enum class MemberKind : uint8_t {
+enum class member_kind : uint8_t {
     DATA_MEMBER = 0,
     MEMBER_FUNCTION = 1
 };
 
-struct MemberInfo {
+struct member_info {
     const char* name;  // Keep as const char* for C compatibility
     ::glz_type_descriptor* type;  // Replaces the three enum fields
     void* (*getter)(void* obj);
     void (*setter)(void* obj, void* value);
-    MemberKind kind = MemberKind::DATA_MEMBER;
+    member_kind kind = member_kind::DATA_MEMBER;
     void* function_ptr = nullptr;  // For storing member function pointers
 };
 
-struct TypeInfo {
+struct type_info {
     std::string_view name;  // Type names are string literals with static lifetime
     size_t size;
-    std::vector<MemberInfo> members;
+    std::vector<member_info> members;
     std::vector<std::string_view> member_names;  // Store member name views (static constexpr lifetime)
 };
 
 // Type descriptor pool for managing descriptor lifetime
-struct TypeDescriptorPool {
+struct type_descriptor_pool {
     std::vector<std::unique_ptr<::glz_type_descriptor>> descriptors;
     // Track allocated parameter arrays to prevent memory leaks
     std::vector<std::unique_ptr<::glz_type_descriptor*[]>> param_arrays;
@@ -221,7 +221,7 @@ struct TypeDescriptorPool {
     }
 };
 
-inline TypeDescriptorPool type_descriptor_pool;
+inline type_descriptor_pool type_descriptor_pool_instance;
 
 // Type to index mapping for primitive types
 template<typename T>
@@ -292,8 +292,8 @@ template<typename T>
 void* create_shared_future_wrapper(std::shared_future<T> future);
 
 // Type-erased interface for shared_future (moved to header for template visibility)
-struct SharedFutureBase {
-    virtual ~SharedFutureBase() = default;
+struct shared_future_base {
+    virtual ~shared_future_base() = default;
     virtual bool is_ready() const = 0;
     virtual void wait() = 0;
     virtual bool valid() const = 0;
@@ -302,16 +302,16 @@ struct SharedFutureBase {
 };
 
 template<typename T>
-struct SharedFutureWrapper : SharedFutureBase {
+struct shared_future_wrapper : shared_future_base {
     std::shared_future<T> future;
     ::glz_type_descriptor* type_desc;
     
-    explicit SharedFutureWrapper(std::shared_future<T> f) : future(std::move(f)) {
+    explicit shared_future_wrapper(std::shared_future<T> f) : future(std::move(f)) {
         type_desc = create_type_descriptor<T>();
         if (!type_desc) {
             // For struct types, create a descriptor with type hash
             constexpr size_t compile_time_hash = type_hash<T>();
-            type_desc = type_descriptor_pool.allocate_struct(nullptr, nullptr, compile_time_hash);
+            type_desc = type_descriptor_pool_instance.allocate_struct(nullptr, nullptr, compile_time_hash);
         }
     }
     
@@ -355,31 +355,31 @@ struct SharedFutureWrapper : SharedFutureBase {
 // Helper to create a heap-allocated shared_future wrapper
 template<typename T>
 void* create_shared_future_wrapper(std::shared_future<T> future) {
-    return new SharedFutureWrapper<T>(std::move(future));
+    return new shared_future_wrapper<T>(std::move(future));
 }
 
 
 // String types
 template<> inline ::glz_type_descriptor* create_type_descriptor<::std::string>() {
-    return type_descriptor_pool.allocate_string(false);
+    return type_descriptor_pool_instance.allocate_string(false);
 }
 template<> inline ::glz_type_descriptor* create_type_descriptor<::std::string_view>() {
-    return type_descriptor_pool.allocate_string(true);
+    return type_descriptor_pool_instance.allocate_string(true);
 }
 
 // Complex types
 template<> inline ::glz_type_descriptor* create_type_descriptor<::std::complex<float>>() {
-    return type_descriptor_pool.allocate_complex(0); // float
+    return type_descriptor_pool_instance.allocate_complex(0); // float
 }
 template<> inline ::glz_type_descriptor* create_type_descriptor<::std::complex<double>>() {
-    return type_descriptor_pool.allocate_complex(1); // double
+    return type_descriptor_pool_instance.allocate_complex(1); // double
 }
 
 // Optional specialization
 template<typename T>
 ::glz_type_descriptor* create_type_descriptor_optional() {
     auto* element = create_type_descriptor<T>();
-    return type_descriptor_pool.allocate_optional(element);
+    return type_descriptor_pool_instance.allocate_optional(element);
 }
 
 // Function specialization
@@ -410,7 +410,7 @@ template<typename F>
     // For now, store nullptr and handle the actual function pointer differently
     void* func_ptr = nullptr;
     
-    return type_descriptor_pool.allocate_function(
+    return type_descriptor_pool_instance.allocate_function(
         return_desc, 
         static_cast<uint8_t>(param_count), 
         param_descs, 
@@ -457,7 +457,7 @@ struct function_traits<R(Class::*)(Args...) const> {
 template<typename T>
 ::glz_type_descriptor* create_type_descriptor_vector() {
     auto* element = create_type_descriptor<T>();
-    return type_descriptor_pool.allocate_vector(element);
+    return type_descriptor_pool_instance.allocate_vector(element);
 }
 
 template<typename T>
@@ -471,7 +471,7 @@ template<typename K, typename V>
 ::glz_type_descriptor* create_type_descriptor_map() {
     auto* key = create_type_descriptor<K>();
     auto* value = create_type_descriptor<V>();
-    return type_descriptor_pool.allocate_map(key, value);
+    return type_descriptor_pool_instance.allocate_map(key, value);
 }
 
 template<typename T>
@@ -500,7 +500,7 @@ struct is_shared_future<::std::shared_future<T>> : ::std::true_type {
 template<typename T>
 ::glz_type_descriptor* create_type_descriptor() {
     if constexpr (is_primitive_type<T>) {
-        return type_descriptor_pool.allocate_primitive(primitive_type_index_v<T>);
+        return type_descriptor_pool_instance.allocate_primitive(primitive_type_index_v<T>);
     }
     else if constexpr (is_vector<T>::value) {
         using element_type = typename T::value_type;
@@ -525,12 +525,12 @@ template<typename T>
         
         // The type is now registered, but we'll let Julia look it up by name
         // when needed rather than trying to get the type info pointer here
-        return type_descriptor_pool.allocate_struct(type_name.c_str(), nullptr, type_hash<T>());
+        return type_descriptor_pool_instance.allocate_struct(type_name.c_str(), nullptr, type_hash<T>());
     }
     else if constexpr (is_shared_future<T>::value) {
         using value_type = typename is_shared_future<T>::value_type;
         auto* value_desc = create_type_descriptor<value_type>();
-        return type_descriptor_pool.allocate_shared_future(value_desc);
+        return type_descriptor_pool_instance.allocate_shared_future(value_desc);
     }
     else {
         // For struct types, this will be handled by the registry
@@ -540,11 +540,11 @@ template<typename T>
 
 // Generic member function accessor that generates type-erased wrappers
 template<typename Class, typename FuncPtr>
-struct MemberFunctionAccessor;
+struct member_function_accessor;
 
 // Specialization for non-const member functions
 template<typename Class, typename R, typename... Args>
-struct MemberFunctionAccessor<Class, R(Class::*)(Args...)> {
+struct member_function_accessor<Class, R(Class::*)(Args...)> {
     using FuncType = R(Class::*)(Args...);
     static constexpr size_t arg_count = sizeof...(Args);
     
@@ -596,7 +596,7 @@ struct MemberFunctionAccessor<Class, R(Class::*)(Args...)> {
 
 // Specialization for const member functions
 template<typename Class, typename R, typename... Args>
-struct MemberFunctionAccessor<Class, R(Class::*)(Args...) const> {
+struct member_function_accessor<Class, R(Class::*)(Args...) const> {
     using FuncType = R(Class::*)(Args...) const;
     static constexpr size_t arg_count = sizeof...(Args);
     
@@ -648,9 +648,9 @@ struct MemberFunctionAccessor<Class, R(Class::*)(Args...) const> {
 
 // Helper to create a member function info at compile time
 template<typename Class, auto MemberFunc>
-struct MemberFunctionInfo {
+struct member_function_info {
     using FuncPtr = decltype(MemberFunc);
-    using Accessor = MemberFunctionAccessor<Class, FuncPtr>;
+    using Accessor = member_function_accessor<Class, FuncPtr>;
     
     static void* (*get_invoker())(void*, void**, void*) {
         return Accessor::template get_invoker<MemberFunc>();
@@ -664,7 +664,7 @@ struct MemberFunctionInfo {
 
 // Generic member accessor using member pointers
 template <typename Class, class Member, size_t I>
-struct MemberAccessor {
+struct member_accessor {
     static decltype(auto) target(void* obj)
     {
         auto& typed_obj = *static_cast<Class*>(obj);
@@ -712,11 +712,11 @@ struct MemberAccessor {
 
 // Helper to extract member info from glz::meta using Glaze's approach
 template<typename T>
-class TypeRegistry {
-    TypeInfo info;
+class type_registry {
+    type_info info;
     
 public:
-    explicit TypeRegistry(std::string_view name) {
+    explicit type_registry(std::string_view name) {
         info.name = name;  // Direct assignment - name has static lifetime
         info.size = sizeof(T);
         
@@ -729,10 +729,10 @@ public:
             // Get the key/name
             static constexpr auto key = glz::reflect<V>::keys[I];
             
-            MemberInfo member_info;
+            member_info member_info_obj;
             // Store the member name view (safe because glz::reflect keys are static constexpr)
             info.member_names.emplace_back(key.data(), key.size());
-            member_info.name = info.member_names.back().data();  // Null-terminated from string literal
+            member_info_obj.name = info.member_names.back().data();  // Null-terminated from string literal
             
             // Get the member pointer value and check its type
             if constexpr (glz::reflectable<V>) {
@@ -741,19 +741,19 @@ public:
                 using MemberTypeRef = glz::refl_t<V, I>;
                 using MemberType = ::std::remove_cvref_t<MemberTypeRef>;
                 
-                member_info.kind = MemberKind::DATA_MEMBER;
-                member_info.type = create_type_descriptor<MemberType>();
+                member_info_obj.kind = member_kind::DATA_MEMBER;
+                member_info_obj.type = create_type_descriptor<MemberType>();
                 
-                if (!member_info.type) {
+                if (!member_info_obj.type) {
                     constexpr size_t compile_time_hash = type_hash<MemberType>();
-                    member_info.type = type_descriptor_pool.allocate_struct(
+                    member_info_obj.type = type_descriptor_pool_instance.allocate_struct(
                         nullptr, nullptr, compile_time_hash
                     );
                 }
                 
-                member_info.getter = &MemberAccessor<T, MemberType, I>::getter;
-                member_info.setter = &MemberAccessor<T, MemberType, I>::setter;
-                member_info.function_ptr = nullptr;
+                member_info_obj.getter = &member_accessor<T, MemberType, I>::getter;
+                member_info_obj.setter = &member_accessor<T, MemberType, I>::setter;
+                member_info_obj.function_ptr = nullptr;
             } else {
                 // For non-reflectable types with explicit glz::meta
                 constexpr auto member_ptr = glz::get<I>(glz::reflect<V>::values);
@@ -761,61 +761,61 @@ public:
                 
                 if constexpr (::std::is_member_function_pointer_v<MemberPtrType>) {
                     // This is a member function
-                    member_info.kind = MemberKind::MEMBER_FUNCTION;
-                    member_info.type = create_type_descriptor_function(member_ptr);
-                    member_info.getter = nullptr;
-                    member_info.setter = nullptr;
+                    member_info_obj.kind = member_kind::MEMBER_FUNCTION;
+                    member_info_obj.type = create_type_descriptor_function(member_ptr);
+                    member_info_obj.getter = nullptr;
+                    member_info_obj.setter = nullptr;
                     
                     // Get the invoker function directly from MemberFunctionAccessor
-                    using Accessor = MemberFunctionAccessor<T, MemberPtrType>;
-                    member_info.function_ptr = reinterpret_cast<void*>(Accessor::template get_invoker<member_ptr>());
+                    using Accessor = member_function_accessor<T, MemberPtrType>;
+                    member_info_obj.function_ptr = reinterpret_cast<void*>(Accessor::template get_invoker<member_ptr>());
                 } else {
                     // This is a data member
                     using MemberTypeRef = glz::refl_t<V, I>;
                     using MemberType = ::std::remove_cvref_t<MemberTypeRef>;
                     
-                    member_info.kind = MemberKind::DATA_MEMBER;
-                    member_info.type = create_type_descriptor<MemberType>();
+                    member_info_obj.kind = member_kind::DATA_MEMBER;
+                    member_info_obj.type = create_type_descriptor<MemberType>();
                     
-                    if (!member_info.type) {
+                    if (!member_info_obj.type) {
                         constexpr size_t compile_time_hash = type_hash<MemberType>();
-                        member_info.type = type_descriptor_pool.allocate_struct(
+                        member_info_obj.type = type_descriptor_pool_instance.allocate_struct(
                             nullptr, nullptr, compile_time_hash
                         );
                     }
                     
-                    member_info.getter = &MemberAccessor<T, MemberType, I>::getter;
-                    member_info.setter = &MemberAccessor<T, MemberType, I>::setter;
-                    member_info.function_ptr = nullptr;
+                    member_info_obj.getter = &member_accessor<T, MemberType, I>::getter;
+                    member_info_obj.setter = &member_accessor<T, MemberType, I>::setter;
+                    member_info_obj.function_ptr = nullptr;
                 }
             }
             
-            info.members.push_back(member_info);
+            info.members.push_back(member_info_obj);
         });
     }
     
-    const TypeInfo& get_info() const { return info; }
+    const type_info& get_info() const { return info; }
 };
 
-struct InstanceInfo {
+struct instance_info {
     std::string name;       // Use string to own the data
     std::string type_name;  // Use string to own the data
     void* ptr;
 };
 
-class Registry {
+class interop_registry_class {
 public:
-    std::vector<std::unique_ptr<TypeInfo>> types;
-    std::vector<std::unique_ptr<InstanceInfo>> instances;
+    std::vector<std::unique_ptr<type_info>> types;
+    std::vector<std::unique_ptr<instance_info>> instances;
     
-    Registry() = default;
+    interop_registry_class() = default;
     
     template<typename T>
-    TypeRegistry<T> register_type(std::string_view name) {
-        return TypeRegistry<T>(name);
+    type_registry<T> register_type(std::string_view name) {
+        return type_registry<T>(name);
     }
     
-    void add_type(std::unique_ptr<TypeInfo> type) {
+    void add_type(std::unique_ptr<type_info> type) {
         types.push_back(std::move(type));
         
         // Fix member name pointers after moving
@@ -825,19 +825,19 @@ public:
         }
     }
     
-    const std::vector<std::unique_ptr<TypeInfo>>& get_types() const {
+    const std::vector<std::unique_ptr<type_info>>& get_types() const {
         return types;
     }
     
     void add_instance(std::string_view name, std::string_view type_name, void* ptr) {
-        auto inst = std::make_unique<InstanceInfo>();
+        auto inst = std::make_unique<instance_info>();
         inst->name = std::string(name);
         inst->type_name = std::string(type_name);
         inst->ptr = ptr;
         instances.push_back(std::move(inst));
     }
     
-    const std::vector<std::unique_ptr<InstanceInfo>>& get_instances() const {
+    const std::vector<std::unique_ptr<instance_info>>& get_instances() const {
         return instances;
     }
     
@@ -860,8 +860,8 @@ public:
     }
 };
 
-// Global inline instance of Registry for FFI
-inline Registry interop_registry;
+// Global inline instance of interop_registry_class for FFI
+inline interop_registry_class interop_registry;
 
 
 // Function to register a type - uses glz::meta automatically
@@ -875,7 +875,7 @@ void register_type(std::string_view name) {
     }
     
     auto reg = interop_registry.register_type<T>(name);
-    interop_registry.add_type(std::make_unique<TypeInfo>(reg.get_info()));
+    interop_registry.add_type(std::make_unique<type_info>(reg.get_info()));
     register_constructor(name,
         []() -> void* { return new T(); },
         [](void* ptr) { delete static_cast<T*>(ptr); }
