@@ -1058,4 +1058,58 @@ GLZ_API const glz_type_descriptor* glz_shared_future_get_value_type(void* future
     return wrapper->get_type_descriptor();
 }
 
+// Pure C FFI functions for dynamic type registration
+GLZ_API bool glz_register_type_dynamic(
+    const char* name,
+    size_t size,
+    size_t alignment,
+    void* (*constructor)(void),
+    void (*destructor)(void*)
+) {
+    if (!name || !constructor || !destructor) return false;
+    
+    // Register constructor and destructor with existing system
+    glz::register_constructor(name, constructor, destructor);
+    
+    // Create a minimal type entry in the existing registry
+    auto type_info = std::make_unique<glz::TypeInfo>();
+    type_info->name = name;
+    type_info->size = size;
+    // Leave members empty - can be populated later
+    
+    glz::interop_registry.add_type(std::move(type_info));
+    return true;
+}
+
+GLZ_API bool glz_register_member_data(
+    const char* type_name,
+    const char* member_name,
+    void* (*getter)(void*),
+    void (*setter)(void*, void*)
+) {
+    if (!type_name || !member_name || !getter) return false;
+    
+    // Find the existing type in the registry
+    for (auto& type : glz::interop_registry.types) {
+        if (type->name == type_name) {
+            glz::MemberInfo member;
+            member.name = member_name;  // Assumes static lifetime
+            member.type = nullptr;      // Type descriptor not required for basic FFI
+            member.getter = reinterpret_cast<void*(*)(void*)>(getter);
+            member.setter = reinterpret_cast<void(*)(void*, void*)>(setter);
+            member.kind = glz::MemberKind::DATA_MEMBER;
+            member.function_ptr = nullptr;
+            
+            type->members.push_back(member);
+            type->member_names.emplace_back(member_name);
+            
+            // Fix member name pointer after adding
+            type->members.back().name = type->member_names.back().data();
+            
+            return true;
+        }
+    }
+    return false;  // Type not found
+}
+
 } // extern "C"

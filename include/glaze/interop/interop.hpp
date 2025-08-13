@@ -826,8 +826,7 @@ public:
     }
 };
 
-// Global inline instance of Registry for Julia-C++ interoperability
-// Named 'interop_registry' to avoid confusion with Glaze's RPC registry template
+// Global inline instance of Registry for FFI
 inline Registry interop_registry;
 
 
@@ -984,5 +983,21 @@ GLZ_API void* glz_shared_future_get(void* future_ptr, const glz_type_descriptor*
 GLZ_API bool glz_shared_future_valid(void* future_ptr);
 GLZ_API void glz_shared_future_destroy(void* future_ptr, const glz_type_descriptor* value_type);
 GLZ_API const glz_type_descriptor* glz_shared_future_get_value_type(void* future_ptr);
+
+// Pure C FFI functions for dynamic type registration (Julia/Rust compatible)
+GLZ_API bool glz_register_type_dynamic(
+    const char* name,
+    size_t size,
+    size_t alignment,
+    void* (*constructor)(void),
+    void (*destructor)(void*)
+);
+
+GLZ_API bool glz_register_member_data(
+    const char* type_name,
+    const char* member_name,
+    void* (*getter)(void*),
+    void (*setter)(void*, void*)
+);
 
 }

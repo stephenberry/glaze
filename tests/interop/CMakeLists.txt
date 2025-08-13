@@ -34,3 +34,10 @@ add_executable(${PROJECT_NAME} ${PROJECT_NAME}.cpp)
 target_link_libraries(${PROJECT_NAME} PRIVATE glaze_interop glaze_interop_client glz_test_common)
 add_dependencies(${PROJECT_NAME} complex_structures_plugin)
 add_test(NAME ${PROJECT_NAME} COMMAND ${PROJECT_NAME})
+
+# Pure C FFI test - demonstrates C interface works without C++ templates
+project(test_c_ffi)
+add_executable(${PROJECT_NAME} test_c_ffi.c)
+set_target_properties(${PROJECT_NAME} PROPERTIES C_STANDARD 11)
+target_link_libraries(${PROJECT_NAME} PRIVATE glaze_interop)
+add_test(NAME ${PROJECT_NAME} COMMAND ${PROJECT_NAME})
