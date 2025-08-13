@@ -280,6 +280,50 @@ inline constexpr uint8_t primitive_type_index_v = primitive_type_index<normalize
 template<typename T>
 concept is_primitive_type = (primitive_type_index_v<T> != 0);
 
+// Interop Type Support Concepts
+template<typename T>
+concept has_interop_support = 
+    is_primitive_type<T> ||           // Primitives work directly
+    string_like<T> ||                 // Strings have special handling
+    vector_like<T> ||                 // Vectors have special handling  
+    optional_like<T> ||               // Optionals have special handling
+    pair_t<T> ||                      // Pairs are supported
+    complex_t<T> ||                   // Complex numbers are supported
+    reflectable<T> ||                 // Reflectable structs via C++ pure reflection
+    glaze_t<T>;                       // Types with glz::meta work through reflection
+
+// For primitive arguments/returns that cross FFI boundaries directly
+template<typename T>
+concept is_ffi_primitive = is_primitive_type<T> || 
+                          std::is_pointer_v<T> ||
+                          std::is_same_v<T, void>;
+
+// Main registration concept - much more permissive
+template<typename T>
+concept is_interop_registerable = glaze_t<T>;  // Only requires Glaze metadata
+
+// Member Function Detection Concepts
+template<typename F, typename R, typename... Args>
+concept is_callable_with_signature = std::is_same_v<F, R(Args...)> ||
+                                     std::is_same_v<F, R(Args...) const> ||
+                                     std::is_same_v<F, R(Args...) noexcept> ||
+                                     std::is_same_v<F, R(Args...) const noexcept>;
+
+template<typename T>
+concept has_member_functions = requires {
+    typename meta<T>::type;
+    requires glaze_t<T>;
+};
+
+template<typename T>
+concept is_shared_future_like = requires(T t) {
+    typename T::value_type;
+    { t.get() };
+    { t.wait() };
+    { t.valid() } -> std::convertible_to<bool>;
+    requires std::is_same_v<T, std::shared_future<typename T::value_type>>;
+};
+
 // Forward declarations
 template<typename T>
 ::glz_type_descriptor* create_type_descriptor();
@@ -866,6 +910,7 @@ inline interop_registry_class interop_registry;
 
 // Function to register a type - uses glz::meta automatically
 template<typename T>
+   requires is_interop_registerable<T>
 void register_type(std::string_view name) {
     // Check if already registered by looking in the interop_registry
     for (const auto& existing : interop_registry.get_types()) {
@@ -887,6 +932,7 @@ void register_type(std::string_view name) {
 
 // Function to register an instance - requires type to be registered first
 template<typename T>
+   requires is_interop_registerable<T>
 bool register_instance(std::string_view instance_name, T& instance) {
     clear_error();
     

@@ -132,14 +132,17 @@ public:
     
     // Get member value
     template<typename T>
+       requires has_interop_support<T>
     T get_member(std::string_view member_name) const;
     
     // Set member value
     template<typename T>
+       requires has_interop_support<T>
     void set_member(std::string_view member_name, const T& value);
     
-    // Call member function
+    // Call member function  
     template<typename R = void, typename... Args>
+       requires (std::is_void_v<R> || has_interop_support<R>) && (has_interop_support<Args> && ...)
     R call_function(std::string_view function_name, Args&&... args);
     
     // Get raw member pointer (for advanced use)
@@ -277,6 +280,7 @@ public:
 // Template implementations
 
 template<typename T>
+   requires has_interop_support<T>
 T instance::get_member(std::string_view member_name) const {
     auto* member = type_->get_member(member_name);
     if (!member) {
@@ -290,7 +294,7 @@ T instance::get_member(std::string_view member_name) const {
     // Get the member pointer and cast to the appropriate type
     void* member_ptr = const_cast<instance*>(this)->get_member_ptr(*member);
     
-    if constexpr (std::is_same_v<T, std::string>) {
+    if constexpr (std::same_as<T, std::string>) {
         // Special handling for strings
         if (library_->funcs_.string_c_str && library_->funcs_.string_size) {
             auto* str_ptr = static_cast<std::string*>(member_ptr);
@@ -304,6 +308,7 @@ T instance::get_member(std::string_view member_name) const {
 }
 
 template<typename T>
+   requires has_interop_support<T>
 void instance::set_member(std::string_view member_name, const T& value) {
     auto* member = type_->get_member(member_name);
     if (!member) {
@@ -326,6 +331,7 @@ void instance::set_member(std::string_view member_name, const T& value) {
 }
 
 template<typename R, typename... Args>
+   requires (std::is_void_v<R> || has_interop_support<R>) && (has_interop_support<Args> && ...)
 R instance::call_function(std::string_view function_name, Args&&... args) {
     auto* member = type_->get_member(function_name);
     if (!member) {
