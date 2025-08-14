@@ -221,16 +221,98 @@ namespace glz
       // Track allocated parameter arrays to prevent memory leaks
       std::vector<std::unique_ptr<::glz_type_descriptor*[]>> param_arrays;
 
-      ::glz_type_descriptor* allocate_primitive(uint8_t kind);
-      ::glz_type_descriptor* allocate_string(bool is_view);
-      ::glz_type_descriptor* allocate_vector(::glz_type_descriptor* element);
-      ::glz_type_descriptor* allocate_map(::glz_type_descriptor* key, ::glz_type_descriptor* value);
-      ::glz_type_descriptor* allocate_complex(uint8_t kind);
-      ::glz_type_descriptor* allocate_struct(const char* type_name, const ::glz_type_info* info, size_t type_hash = 0);
-      ::glz_type_descriptor* allocate_optional(::glz_type_descriptor* element);
+      ::glz_type_descriptor* allocate_primitive(uint8_t kind)
+      {
+         auto& desc = descriptors.emplace_back(std::make_unique<::glz_type_descriptor>());
+         desc->index = GLZ_TYPE_PRIMITIVE;
+         desc->data.primitive.kind = kind;
+         return desc.get();
+      }
+
+      ::glz_type_descriptor* allocate_string(bool is_view)
+      {
+         auto& desc = descriptors.emplace_back(std::make_unique<::glz_type_descriptor>());
+         desc->index = GLZ_TYPE_STRING;
+         desc->data.string.is_view = is_view ? 1 : 0;
+         return desc.get();
+      }
+
+      ::glz_type_descriptor* allocate_vector(::glz_type_descriptor* element)
+      {
+         auto& desc = descriptors.emplace_back(std::make_unique<::glz_type_descriptor>());
+         desc->index = GLZ_TYPE_VECTOR;
+         desc->data.vector.element_type = element;
+         return desc.get();
+      }
+
+      ::glz_type_descriptor* allocate_map(::glz_type_descriptor* key, ::glz_type_descriptor* value)
+      {
+         auto& desc = descriptors.emplace_back(std::make_unique<::glz_type_descriptor>());
+         desc->index = GLZ_TYPE_MAP;
+         desc->data.map.key_type = key;
+         desc->data.map.value_type = value;
+         return desc.get();
+      }
+
+      ::glz_type_descriptor* allocate_complex(uint8_t kind)
+      {
+         auto& desc = descriptors.emplace_back(std::make_unique<::glz_type_descriptor>());
+         desc->index = GLZ_TYPE_COMPLEX;
+         desc->data.complex.kind = kind;
+         return desc.get();
+      }
+
+      ::glz_type_descriptor* allocate_struct(const char* type_name, const ::glz_type_info* info, size_t type_hash = 0)
+      {
+         auto& desc = descriptors.emplace_back(std::make_unique<::glz_type_descriptor>());
+         desc->index = GLZ_TYPE_STRUCT;
+         desc->data.struct_type.type_name = type_name;
+         desc->data.struct_type.info = info;
+         desc->data.struct_type.type_hash = type_hash;
+         return desc.get();
+      }
+
+      ::glz_type_descriptor* allocate_optional(::glz_type_descriptor* element)
+      {
+         auto& desc = descriptors.emplace_back(std::make_unique<::glz_type_descriptor>());
+         desc->index = GLZ_TYPE_OPTIONAL;
+         desc->data.optional.element_type = element;
+         return desc.get();
+      }
+
       ::glz_type_descriptor* allocate_function(::glz_type_descriptor* return_type, uint8_t param_count,
-                                               ::glz_type_descriptor** param_types, bool is_const, void* function_ptr);
-      ::glz_type_descriptor* allocate_shared_future(::glz_type_descriptor* value_type);
+                                               ::glz_type_descriptor** param_types, bool is_const, void* function_ptr)
+      {
+         auto& desc = descriptors.emplace_back(std::make_unique<::glz_type_descriptor>());
+         desc->index = GLZ_TYPE_FUNCTION;
+         desc->data.function.return_type = return_type;
+         desc->data.function.param_count = param_count;
+
+         // Create a persistent copy of the param_types array if it exists
+         if (param_count > 0 && param_types != nullptr) {
+            // Use unique_ptr to manage the array lifetime
+            auto& param_array = param_arrays.emplace_back(std::make_unique<::glz_type_descriptor*[]>(param_count));
+            for (uint8_t i = 0; i < param_count; ++i) {
+               param_array[i] = param_types[i];
+            }
+            desc->data.function.param_types = param_array.get();
+         }
+         else {
+            desc->data.function.param_types = nullptr;
+         }
+
+         desc->data.function.is_const = is_const ? 1 : 0;
+         desc->data.function.function_ptr = function_ptr;
+         return desc.get();
+      }
+
+      ::glz_type_descriptor* allocate_shared_future(::glz_type_descriptor* value_type)
+      {
+         auto& desc = descriptors.emplace_back(std::make_unique<::glz_type_descriptor>());
+         desc->index = GLZ_TYPE_SHARED_FUTURE;
+         desc->data.shared_future.value_type = value_type;
+         return desc.get();
+      }
 
       void clear()
       {
@@ -494,9 +576,11 @@ namespace glz
       return type_descriptor_pool_instance.allocate_optional(element);
    }
 
-   // Function specialization
+   // Function specialization - creates type descriptor for function types
+   // This function only needs type information, not runtime values, since member function
+   // pointers must be known at compile-time to generate invokers.
    template <class F>
-   ::glz_type_descriptor* create_type_descriptor_function(F function_ptr)
+   ::glz_type_descriptor* create_type_descriptor_function()
    {
       using traits = function_traits<F>;
 
@@ -517,9 +601,9 @@ namespace glz
          }(::std::make_index_sequence<param_count>{});
       }
 
-      // Store the function pointer (type-erased)
-      // Note: We need to store it as a union or use a different approach for member function pointers
-      // For now, store nullptr and handle the actual function pointer differently
+      // Function pointer storage: For member functions, the actual invoker is generated
+      // at compile-time where the specific function pointer value is known (see member_function_info).
+      // This descriptor only stores type information, not the runtime function pointer.
       void* func_ptr = nullptr;
 
       return type_descriptor_pool_instance.allocate_function(return_desc, static_cast<uint8_t>(param_count),
@@ -687,7 +771,6 @@ namespace glz
                // For shared_future returns, always allocate on heap
                // Debug: print argument values
                R future_result = (obj->*func)(*static_cast<std::decay_t<Args>*>(args[Is])...);
-               using value_type = typename is_shared_future<R>::value_type;
                return create_shared_future_wrapper(std::move(future_result));
             }
             else {
@@ -746,7 +829,6 @@ namespace glz
                // For shared_future returns, always allocate on heap
                // Debug: print argument values
                R future_result = (obj->*func)(*static_cast<std::decay_t<Args>*>(args[Is])...);
-               using value_type = typename is_shared_future<R>::value_type;
                return create_shared_future_wrapper(std::move(future_result));
             }
             else {
@@ -791,7 +873,7 @@ namespace glz
 
       static void* (*get_invoker())(void*, void**, void*) { return Accessor::template get_invoker<MemberFunc>(); }
 
-      static ::glz_type_descriptor* create_descriptor() { return create_type_descriptor_function(MemberFunc); }
+      static ::glz_type_descriptor* create_descriptor() { return create_type_descriptor_function<decltype(MemberFunc)>(); }
    };
 
    // Generic member accessor using member pointers
@@ -901,7 +983,7 @@ namespace glz
                if constexpr (::std::is_member_function_pointer_v<MemberPtrType>) {
                   // This is a member function
                   member_info_obj.kind = member_kind::MEMBER_FUNCTION;
-                  member_info_obj.type = create_type_descriptor_function(member_ptr);
+                  member_info_obj.type = create_type_descriptor_function<MemberPtrType>();
                   member_info_obj.getter = nullptr;
                   member_info_obj.setter = nullptr;
 
@@ -1043,6 +1125,7 @@ namespace glz
          return false;
       }
 
+#if __cpp_exceptions
       try {
          // Use the found type name for registration
          interop_registry.add_instance(instance_name, it->second, static_cast<void*>(&instance));
@@ -1052,6 +1135,11 @@ namespace glz
          set_error(GLZ_ERROR_INTERNAL, e.what());
          return false;
       }
+#else
+      // Use the found type name for registration
+      interop_registry.add_instance(instance_name, it->second, static_cast<void*>(&instance));
+      return true;
+#endif
    }
 
    // Meta specialization for std::pair - treat it as a struct with first/second members

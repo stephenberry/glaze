@@ -52,107 +52,10 @@ namespace glz
    {
       glz_type_info info;
       std::vector<glz_member_info> members;
-      // No need to store member names - they have static lifetime from glz::reflect
+      // No need to store member names - they have static lifetime from Glaze reflection
    };
 
    inline std::unordered_map<std::string_view, type_info_cache_entry> type_info_cache;
-
-   // Type descriptor pool implementation
-   ::glz_type_descriptor* type_descriptor_pool::allocate_primitive(uint8_t kind)
-   {
-      auto& desc = descriptors.emplace_back(std::make_unique<::glz_type_descriptor>());
-      desc->index = GLZ_TYPE_PRIMITIVE;
-      desc->data.primitive.kind = kind;
-      return desc.get();
-   }
-
-   ::glz_type_descriptor* type_descriptor_pool::allocate_string(bool is_view)
-   {
-      auto& desc = descriptors.emplace_back(std::make_unique<::glz_type_descriptor>());
-      desc->index = GLZ_TYPE_STRING;
-      desc->data.string.is_view = is_view ? 1 : 0;
-      return desc.get();
-   }
-
-   ::glz_type_descriptor* type_descriptor_pool::allocate_vector(::glz_type_descriptor* element)
-   {
-      auto& desc = descriptors.emplace_back(std::make_unique<::glz_type_descriptor>());
-      desc->index = GLZ_TYPE_VECTOR;
-      desc->data.vector.element_type = element;
-      return desc.get();
-   }
-
-   ::glz_type_descriptor* type_descriptor_pool::allocate_map(::glz_type_descriptor* key, ::glz_type_descriptor* value)
-   {
-      auto& desc = descriptors.emplace_back(std::make_unique<::glz_type_descriptor>());
-      desc->index = GLZ_TYPE_MAP;
-      desc->data.map.key_type = key;
-      desc->data.map.value_type = value;
-      return desc.get();
-   }
-
-   ::glz_type_descriptor* type_descriptor_pool::allocate_complex(uint8_t kind)
-   {
-      auto& desc = descriptors.emplace_back(std::make_unique<::glz_type_descriptor>());
-      desc->index = GLZ_TYPE_COMPLEX;
-      desc->data.complex.kind = kind;
-      return desc.get();
-   }
-
-   ::glz_type_descriptor* type_descriptor_pool::allocate_struct(const char* type_name, const ::glz_type_info* info,
-                                                                size_t type_hash)
-   {
-      auto& desc = descriptors.emplace_back(std::make_unique<::glz_type_descriptor>());
-      desc->index = GLZ_TYPE_STRUCT;
-      desc->data.struct_type.type_name = type_name;
-      desc->data.struct_type.info = info;
-      desc->data.struct_type.type_hash = type_hash;
-      return desc.get();
-   }
-
-   ::glz_type_descriptor* type_descriptor_pool::allocate_optional(::glz_type_descriptor* element)
-   {
-      auto& desc = descriptors.emplace_back(std::make_unique<::glz_type_descriptor>());
-      desc->index = GLZ_TYPE_OPTIONAL;
-      desc->data.optional.element_type = element;
-      return desc.get();
-   }
-
-   ::glz_type_descriptor* type_descriptor_pool::allocate_function(::glz_type_descriptor* return_type,
-                                                                  uint8_t param_count,
-                                                                  ::glz_type_descriptor** param_types, bool is_const,
-                                                                  void* function_ptr)
-   {
-      auto& desc = descriptors.emplace_back(std::make_unique<::glz_type_descriptor>());
-      desc->index = GLZ_TYPE_FUNCTION;
-      desc->data.function.return_type = return_type;
-      desc->data.function.param_count = param_count;
-
-      // Create a persistent copy of the param_types array if it exists
-      if (param_count > 0 && param_types != nullptr) {
-         // Use unique_ptr to manage the array lifetime
-         auto& param_array = param_arrays.emplace_back(std::make_unique<::glz_type_descriptor*[]>(param_count));
-         for (uint8_t i = 0; i < param_count; ++i) {
-            param_array[i] = param_types[i];
-         }
-         desc->data.function.param_types = param_array.get();
-      }
-      else {
-         desc->data.function.param_types = nullptr;
-      }
-
-      desc->data.function.is_const = is_const ? 1 : 0;
-      desc->data.function.function_ptr = function_ptr;
-      return desc.get();
-   }
-
-   ::glz_type_descriptor* type_descriptor_pool::allocate_shared_future(::glz_type_descriptor* value_type)
-   {
-      auto& desc = descriptors.emplace_back(std::make_unique<::glz_type_descriptor>());
-      desc->index = GLZ_TYPE_SHARED_FUTURE;
-      desc->data.shared_future.value_type = value_type;
-      return desc.get();
-   }
 
    void register_constructor(std::string_view type_name, std::function<void*()> ctor, std::function<void(void*)> dtor)
    {
@@ -214,11 +117,18 @@ namespace
       static bool initialized = false;
       if (initialized) return;
 
-      // Register operations by primitive kind
-      primitive_optional_ops[1] = make_optional_operations<bool>(); // Bool
-      primitive_optional_ops[4] = make_optional_operations<int32_t>(); // I32
-      primitive_optional_ops[10] = make_optional_operations<float>(); // F32
-      primitive_optional_ops[11] = make_optional_operations<double>(); // F64
+      // Register operations for all primitive types by primitive kind
+      primitive_optional_ops[1] = make_optional_operations<bool>();     // Bool
+      primitive_optional_ops[2] = make_optional_operations<int8_t>();   // I8
+      primitive_optional_ops[3] = make_optional_operations<int16_t>();  // I16
+      primitive_optional_ops[4] = make_optional_operations<int32_t>();  // I32
+      primitive_optional_ops[5] = make_optional_operations<int64_t>();  // I64
+      primitive_optional_ops[6] = make_optional_operations<uint8_t>();  // U8
+      primitive_optional_ops[7] = make_optional_operations<uint16_t>(); // U16
+      primitive_optional_ops[8] = make_optional_operations<uint32_t>(); // U32
+      primitive_optional_ops[9] = make_optional_operations<uint64_t>(); // U64
+      primitive_optional_ops[10] = make_optional_operations<float>();   // F32
+      primitive_optional_ops[11] = make_optional_operations<double>();  // F64
 
       // String operations
       string_optional_ops = make_optional_operations<std::string>();
