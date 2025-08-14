@@ -292,7 +292,7 @@ namespace glz::interop
 
    // Template implementations
 
-   template <typename T>
+   template <class T>
       requires has_interop_support<T>
    T instance::get_member(std::string_view member_name) const
    {
@@ -321,7 +321,7 @@ namespace glz::interop
       return *static_cast<T*>(member_ptr);
    }
 
-   template <typename T>
+   template <class T>
       requires has_interop_support<T>
    void instance::set_member(std::string_view member_name, const T& value)
    {
@@ -346,7 +346,7 @@ namespace glz::interop
       }
    }
 
-   template <typename R, typename... Args>
+   template <class R, class... Args>
       requires(std::is_void_v<R> || has_interop_support<R>) && (has_interop_support<Args> && ...)
    R instance::call_function(std::string_view function_name, Args&&... args)
    {

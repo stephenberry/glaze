@@ -41,7 +41,7 @@ namespace glz
       bool owned_ = false; // Whether this value owns the data
 
       // Helper to create owned values
-      template <typename T>
+      template <class T>
       void make_owned(T&& val)
       {
          auto owned_ptr = std::make_shared<std::any>(std::forward<T>(val));
@@ -53,7 +53,7 @@ namespace glz
       i_value() : value_(std::monostate{}) {}
 
       // Constructor for references (non-owning)
-      template <typename T>
+      template <class T>
       explicit i_value(T* ptr) : owned_(false)
       {
          if constexpr (bool_t<T> || int_t<T> || std::floating_point<T> || complex_t<T>)
@@ -71,7 +71,7 @@ namespace glz
       }
 
       // Constructor for owned values (makes a copy)
-      template <typename T>
+      template <class T>
       static i_value make_owned_value(T&& val)
       {
          i_value v;
@@ -80,7 +80,7 @@ namespace glz
       }
 
       // Reference wrapper constructor for safer reference semantics
-      template <typename T>
+      template <class T>
       explicit i_value(std::reference_wrapper<T> ref) : i_value(&ref.get())
       {}
 
@@ -109,7 +109,7 @@ namespace glz
       bool is_owned() const { return owned_; }
 
       // value extraction - get pointer to the stored type
-      template <typename T>
+      template <class T>
       T* get_ptr()
       {
          if constexpr (std::is_same_v<T, bool>)
@@ -128,14 +128,14 @@ namespace glz
             return nullptr;
       }
 
-      template <typename T>
+      template <class T>
       const T* get_ptr() const
       {
          return const_cast<i_value*>(this)->get_ptr<T>();
       }
 
       // Get reference to the value (throws if wrong type or null pointer)
-      template <typename T>
+      template <class T>
       T& get_ref()
       {
          T* ptr = get_ptr<T>();
@@ -143,7 +143,7 @@ namespace glz
          return *ptr;
       }
 
-      template <typename T>
+      template <class T>
       const T& get_ref() const
       {
          const T* ptr = get_ptr<T>();
@@ -308,7 +308,7 @@ namespace glz
       void set_field(const std::string& field_name, const i_value& val);
 
       // method invocation (like Julia's method calls)
-      template <typename... Args>
+      template <class... Args>
       i_value call(const std::string& method_name, Args&&... args);
 
       // Convert to JSON
@@ -333,7 +333,7 @@ namespace glz
 
      public:
       // Register a C++ type (like Julia's register_type)
-      template <typename T>
+      template <class T>
       static std::shared_ptr<i_type> register_type(const std::string& name)
       {
          glz::register_type<T>(name);
@@ -353,7 +353,7 @@ namespace glz
       static std::shared_ptr<i_instance> create_instance(const std::string& type_name);
 
       // Register a global instance
-      template <typename T>
+      template <class T>
       static void register_instance(const std::string& name, const std::string& type_name, T& inst)
       {
          glz::register_instance(name, type_name, inst);
@@ -375,13 +375,13 @@ namespace glz
       static void unload_all_libraries();
 
       // JSON serialization helpers
-      template <typename T>
+      template <class T>
       static std::string to_json(const T& obj)
       {
          return glz::write_json(obj).value_or("");
       }
 
-      template <typename T>
+      template <class T>
       static T from_json(const std::string& json)
       {
          T obj;
@@ -390,7 +390,7 @@ namespace glz
       }
 
       // Reflection utilities
-      template <typename T>
+      template <class T>
       static std::vector<std::string> field_names()
       {
          constexpr auto names = glz::reflect<T>::keys;
@@ -400,21 +400,21 @@ namespace glz
       }
 
       // Get field value by name (compile-time known type)
-      template <typename T, typename R>
+      template <class T, class R>
       static R get_field(T& obj, const std::string& field_name);
 
       // Set field value by name (compile-time known type)
-      template <typename T, typename V>
+      template <class T, class V>
       static void set_field(T& obj, const std::string& field_name, V&& val);
 
       // Call method by name (compile-time known type)
-      template <typename T, typename... Args>
+      template <class T, class... Args>
       static auto call_method(T& obj, const std::string& method_name, Args&&... args);
    };
 
    // Implementation of template methods
 
-   template <typename... Args>
+   template <class... Args>
    i_value i_instance::call(const std::string& method_name, Args&&... args)
    {
       if (!type_->has_method(method_name)) {
@@ -448,7 +448,7 @@ namespace glz
       return result;
    }
 
-   template <typename T, typename R>
+   template <class T, class R>
    R i_glaze::get_field(T& obj, const std::string& field_name)
    {
       // Use compile-time reflection to get field
@@ -475,7 +475,7 @@ namespace glz
       return result;
    }
 
-   template <typename T, typename V>
+   template <class T, class V>
    void i_glaze::set_field(T& obj, const std::string& field_name, V&& val)
    {
       bool found = false;
@@ -498,7 +498,7 @@ namespace glz
       }
    }
 
-   template <typename T, typename... Args>
+   template <class T, class... Args>
    auto i_glaze::call_method(T& obj, const std::string& method_name, Args&&... args)
    {
       // This would use compile-time reflection to find and call the method
