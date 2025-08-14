@@ -51,7 +51,8 @@ enum glz_type_kind : uint64_t {
    GLZ_TYPE_STRUCT,
    GLZ_TYPE_OPTIONAL,
    GLZ_TYPE_FUNCTION,
-   GLZ_TYPE_SHARED_FUTURE
+   GLZ_TYPE_SHARED_FUTURE,
+   GLZ_TYPE_VARIANT
 };
 
 // Forward declarations
@@ -113,6 +114,13 @@ struct glz_shared_future_desc
    glz_type_descriptor* value_type; // Type of the future's value
 };
 
+struct glz_variant_desc
+{
+   uint64_t count; // Number of alternative types
+   uint64_t current_index; // Currently active alternative (runtime use)
+   glz_type_descriptor** alternatives; // Array of type descriptors for each alternative
+};
+
 // Static assertions to verify struct sizes
 static_assert(sizeof(glz_primitive_desc) == 8, "glz_primitive_desc must be 8 bytes");
 static_assert(sizeof(glz_string_desc) == 8, "glz_string_desc must be 8 bytes");
@@ -127,6 +135,7 @@ static_assert(sizeof(glz_struct_desc) == 24, "glz_struct_desc must be 24 bytes o
 static_assert(sizeof(glz_optional_desc) == 8, "glz_optional_desc must be 8 bytes on 64-bit");
 static_assert(sizeof(glz_function_desc) == 32, "glz_function_desc must be 32 bytes on 64-bit");
 static_assert(sizeof(glz_shared_future_desc) == 8, "glz_shared_future_desc must be 8 bytes on 64-bit");
+static_assert(sizeof(glz_variant_desc) == 24, "glz_variant_desc must be 24 bytes on 64-bit");
 #else
 // 32-bit system
 static_assert(sizeof(glz_vector_desc) == 4, "glz_vector_desc must be 4 bytes on 32-bit");
@@ -135,6 +144,7 @@ static_assert(sizeof(glz_struct_desc) == 12, "glz_struct_desc must be 12 bytes o
 static_assert(sizeof(glz_optional_desc) == 4, "glz_optional_desc must be 4 bytes on 32-bit");
 static_assert(sizeof(glz_function_desc) == 20, "glz_function_desc must be 20 bytes on 32-bit");
 static_assert(sizeof(glz_shared_future_desc) == 4, "glz_shared_future_desc must be 4 bytes on 32-bit");
+static_assert(sizeof(glz_variant_desc) == 20, "glz_variant_desc must be 20 bytes on 32-bit");
 #endif
 
 // The variant-like type descriptor - properly aligned
@@ -152,6 +162,7 @@ struct glz_type_descriptor
       struct glz_optional_desc optional;
       struct glz_function_desc function;
       struct glz_shared_future_desc shared_future;
+      struct glz_variant_desc variant;
    } data;
 };
 
@@ -337,6 +348,30 @@ namespace glz
          auto& desc = descriptors.emplace_back(std::make_unique<::glz_type_descriptor>());
          desc->index = GLZ_TYPE_SHARED_FUTURE;
          desc->data.shared_future.value_type = value_type;
+         return desc.get();
+      }
+
+      ::glz_type_descriptor* allocate_variant(uint64_t count, ::glz_type_descriptor** alternatives, 
+                                              uint64_t current_index = 0)
+      {
+         auto& desc = descriptors.emplace_back(std::make_unique<::glz_type_descriptor>());
+         desc->index = GLZ_TYPE_VARIANT;
+         desc->data.variant.count = count;
+         desc->data.variant.current_index = current_index;
+         
+         // Create a persistent copy of the alternatives array if it exists
+         if (count > 0 && alternatives != nullptr) {
+            // Store the alternatives array similar to how we handle function param_types
+            auto& alt_array = param_arrays.emplace_back(std::make_unique<::glz_type_descriptor*[]>(count));
+            for (uint64_t i = 0; i < count; ++i) {
+               alt_array[i] = alternatives[i];
+            }
+            desc->data.variant.alternatives = alt_array.get();
+         }
+         else {
+            desc->data.variant.alternatives = nullptr;
+         }
+         
          return desc.get();
       }
 
@@ -727,6 +762,48 @@ namespace glz
       using value_type = T;
    };
 
+   // Trait to detect std::variant (renamed to avoid conflict with glz::is_variant concept)
+   template <class T>
+   struct is_variant_type : ::std::false_type
+   {};
+
+   template <class... Ts>
+   struct is_variant_type<::std::variant<Ts...>> : ::std::true_type
+   {
+      static constexpr size_t size = sizeof...(Ts);
+   };
+
+   // Variant specialization
+   template <class... Ts>
+   ::glz_type_descriptor* create_type_descriptor_variant()
+   {
+      constexpr uint64_t count = sizeof...(Ts);
+      
+      // Create type descriptors for each alternative
+      ::glz_type_descriptor** alternatives = nullptr;
+      
+      if constexpr (count > 0) {
+         alternatives = new ::glz_type_descriptor*[count];
+         size_t idx = 0;
+         ([&idx, &alternatives] {
+            auto* desc = create_type_descriptor<Ts>();
+            if (!desc) {
+               // For struct types that aren't recognized, create a struct descriptor with type hash
+               desc = type_descriptor_pool_instance.allocate_struct(nullptr, nullptr, type_hash<Ts>());
+            }
+            alternatives[idx++] = desc;
+         }(), ...);
+      }
+      
+      // Note: current_index is 0 by default, runtime will update this
+      auto* desc = type_descriptor_pool_instance.allocate_variant(count, alternatives, 0);
+      
+      // Clean up the temporary array (allocate_variant makes a copy)
+      delete[] alternatives;
+      
+      return desc;
+   }
+
    // General template that handles vectors, maps, and optionals
    template <class T>
    ::glz_type_descriptor* create_type_descriptor()
@@ -763,6 +840,12 @@ namespace glz
          using value_type = typename is_shared_future<T>::value_type;
          auto* value_desc = create_type_descriptor<value_type>();
          return type_descriptor_pool_instance.allocate_shared_future(value_desc);
+      }
+      else if constexpr (is_variant_type<T>::value) {
+         // Handle std::variant types
+         return []<class... Ts>(::std::variant<Ts...>*) {
+            return create_type_descriptor_variant<Ts...>();
+         }(static_cast<T*>(nullptr));
       }
       else {
          // For struct types, this will be handled by the registry
@@ -1312,6 +1395,15 @@ GLZ_API void* glz_shared_future_get(void* future_ptr, const glz_type_descriptor*
 GLZ_API bool glz_shared_future_valid(void* future_ptr);
 GLZ_API void glz_shared_future_destroy(void* future_ptr, const glz_type_descriptor* value_type);
 GLZ_API const glz_type_descriptor* glz_shared_future_get_value_type(void* future_ptr);
+
+// Variant API functions
+GLZ_API uint64_t glz_variant_index(void* variant_ptr, const glz_type_descriptor* type_desc);
+GLZ_API void* glz_variant_get(void* variant_ptr, const glz_type_descriptor* type_desc);
+GLZ_API bool glz_variant_set(void* variant_ptr, const glz_type_descriptor* type_desc, uint64_t index, const void* value);
+GLZ_API bool glz_variant_holds_alternative(void* variant_ptr, const glz_type_descriptor* type_desc, uint64_t index);
+GLZ_API const glz_type_descriptor* glz_variant_type_at_index(const glz_type_descriptor* type_desc, uint64_t index);
+GLZ_API void* glz_create_variant(const glz_type_descriptor* type_desc, uint64_t initial_index, const void* initial_value);
+GLZ_API void glz_destroy_variant(void* variant_ptr, const glz_type_descriptor* type_desc);
 
 // Error handling functions
 GLZ_API glz_error_code glz_get_last_error();

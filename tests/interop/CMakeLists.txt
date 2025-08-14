@@ -52,3 +52,25 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     target_compile_options(${PROJECT_NAME} PRIVATE -fno-exceptions -fno-rtti -Wall -Wextra -pedantic -Wno-missing-braces)
 endif()
 add_test(NAME ${PROJECT_NAME} COMMAND ${PROJECT_NAME})
+
+# Comprehensive variant types test
+project(interop_variant_test)
+add_executable(${PROJECT_NAME} ${PROJECT_NAME}.cpp)
+target_compile_features(${PROJECT_NAME} PRIVATE cxx_std_23)
+target_link_libraries(${PROJECT_NAME} PRIVATE glaze_interop glaze_interop_client glaze::glaze ut::ut)
+# Set compile options directly without inheriting from glz_test_common
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    target_compile_options(${PROJECT_NAME} PRIVATE -fno-exceptions -fno-rtti -Wall -Wextra -pedantic -Wno-missing-braces)
+endif()
+add_test(NAME ${PROJECT_NAME} COMMAND ${PROJECT_NAME})
+
+# Variant with struct types test
+project(interop_variant_struct_test)
+add_executable(${PROJECT_NAME} ${PROJECT_NAME}.cpp)
+target_compile_features(${PROJECT_NAME} PRIVATE cxx_std_23)
+target_link_libraries(${PROJECT_NAME} PRIVATE glaze_interop glaze_interop_client glaze::glaze ut::ut)
+# Set compile options directly without inheriting from glz_test_common
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    target_compile_options(${PROJECT_NAME} PRIVATE -fno-exceptions -fno-rtti -Wall -Wextra -pedantic -Wno-missing-braces)
+endif()
+add_test(NAME ${PROJECT_NAME} COMMAND ${PROJECT_NAME})

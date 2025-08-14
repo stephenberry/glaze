@@ -1111,3 +1111,281 @@ GLZ_API bool glz_register_member_data(const char* type_name, const char* member_
 }
 
 } // extern "C"
+
+// Helper struct to store variant operations for different types
+struct VariantOperations
+{
+   uint64_t (*get_index)(void* variant_ptr);
+   void* (*get_value)(void* variant_ptr);
+   bool (*set_value)(void* variant_ptr, uint64_t index, const void* value);
+   bool (*holds_alternative)(void* variant_ptr, uint64_t index);
+   void* (*create)(uint64_t initial_index, const void* initial_value);
+   void (*destroy)(void* variant_ptr);
+};
+
+// Template to generate operations for a specific variant type
+template <class... Ts>
+VariantOperations make_variant_operations()
+{
+   using VariantType = std::variant<Ts...>;
+   
+   return VariantOperations{
+      // get_index
+      [](void* variant_ptr) -> uint64_t {
+         auto* var = static_cast<VariantType*>(variant_ptr);
+         return static_cast<uint64_t>(var->index());
+      },
+      // get_value
+      [](void* variant_ptr) -> void* {
+         auto* var = static_cast<VariantType*>(variant_ptr);
+         return std::visit([](auto& value) -> void* {
+            return const_cast<void*>(static_cast<const void*>(&value));
+         }, *var);
+      },
+      // set_value
+      [](void* variant_ptr, uint64_t index, const void* value) -> bool {
+         auto* var = static_cast<VariantType*>(variant_ptr);
+         bool result = false;
+         size_t idx = 0;
+         (void)((index == idx++ ? ((*var = *static_cast<const Ts*>(value)), result = true, true) : false) || ...);
+         return result;
+      },
+      // holds_alternative
+      [](void* variant_ptr, uint64_t index) -> bool {
+         auto* var = static_cast<VariantType*>(variant_ptr);
+         return var->index() == static_cast<size_t>(index);
+      },
+      // create
+      [](uint64_t initial_index, const void* initial_value) -> void* {
+         auto* var = new VariantType();
+         if (initial_value) {
+            size_t idx = 0;
+            (void)((initial_index == idx++ ? ((*var = *static_cast<const Ts*>(initial_value)), true) : false) || ...);
+         }
+         return var;
+      },
+      // destroy
+      [](void* variant_ptr) {
+         delete static_cast<VariantType*>(variant_ptr);
+      }
+   };
+}
+
+// Registry for variant operations - for common simple types
+namespace
+{
+   // Operations for common 2-alternative variants
+   VariantOperations int_string_ops = make_variant_operations<int, std::string>();
+   VariantOperations int_double_ops = make_variant_operations<int, double>();
+   VariantOperations bool_int_ops = make_variant_operations<bool, int>();
+   VariantOperations string_double_ops = make_variant_operations<std::string, double>();
+   
+   // Operations for common 3-alternative variants  
+   VariantOperations int_string_double_ops = make_variant_operations<int, std::string, double>();
+   VariantOperations bool_int_string_ops = make_variant_operations<bool, int, std::string>();
+   
+   // Note: For struct variants, we would need the actual struct definitions here,
+   // which would require including the test headers. In a real implementation,
+   // these would be registered dynamically when the types are registered.
+   
+   // Helper to get operations based on type descriptor
+   // This is a simplified version - a full implementation would need a more robust registry
+   VariantOperations* get_variant_operations(const glz_type_descriptor* type_desc)
+   {
+      if (!type_desc || type_desc->index != GLZ_TYPE_VARIANT) return nullptr;
+      
+      auto count = type_desc->data.variant.count;
+      if (count == 2) {
+         auto* alt0 = type_desc->data.variant.alternatives[0];
+         auto* alt1 = type_desc->data.variant.alternatives[1];
+         
+         // Check for int, string
+         if (alt0->index == GLZ_TYPE_PRIMITIVE && alt0->data.primitive.kind == 4 &&
+             alt1->index == GLZ_TYPE_STRING) {
+            return &int_string_ops;
+         }
+         // Check for int, double
+         if (alt0->index == GLZ_TYPE_PRIMITIVE && alt0->data.primitive.kind == 4 &&
+             alt1->index == GLZ_TYPE_PRIMITIVE && alt1->data.primitive.kind == 11) {
+            return &int_double_ops;
+         }
+         // Check for bool, int
+         if (alt0->index == GLZ_TYPE_PRIMITIVE && alt0->data.primitive.kind == 1 &&
+             alt1->index == GLZ_TYPE_PRIMITIVE && alt1->data.primitive.kind == 4) {
+            return &bool_int_ops;
+         }
+         // Check for string, double
+         if (alt0->index == GLZ_TYPE_STRING &&
+             alt1->index == GLZ_TYPE_PRIMITIVE && alt1->data.primitive.kind == 11) {
+            return &string_double_ops;
+         }
+      }
+      else if (count == 3) {
+         auto* alt0 = type_desc->data.variant.alternatives[0];
+         auto* alt1 = type_desc->data.variant.alternatives[1];
+         auto* alt2 = type_desc->data.variant.alternatives[2];
+         
+         // Check for int, string, double
+         if (alt0->index == GLZ_TYPE_PRIMITIVE && alt0->data.primitive.kind == 4 &&
+             alt1->index == GLZ_TYPE_STRING &&
+             alt2->index == GLZ_TYPE_PRIMITIVE && alt2->data.primitive.kind == 11) {
+            return &int_string_double_ops;
+         }
+         // Check for bool, int, string
+         if (alt0->index == GLZ_TYPE_PRIMITIVE && alt0->data.primitive.kind == 1 &&
+             alt1->index == GLZ_TYPE_PRIMITIVE && alt1->data.primitive.kind == 4 &&
+             alt2->index == GLZ_TYPE_STRING) {
+            return &bool_int_string_ops;
+         }
+      }
+      
+      // For unsupported variant types, return nullptr
+      // A full implementation would dynamically generate operations or use a more comprehensive registry
+      return nullptr;
+   }
+}
+
+extern "C" {
+
+// Variant API implementations
+GLZ_API uint64_t glz_variant_index(void* variant_ptr, const glz_type_descriptor* type_desc)
+{
+   glz::clear_error();
+   
+   if (!variant_ptr || !type_desc || type_desc->index != GLZ_TYPE_VARIANT) {
+      glz::set_error(GLZ_ERROR_INVALID_PARAMETER, "Invalid variant pointer or type descriptor");
+      return static_cast<uint64_t>(-1);
+   }
+   
+   auto* ops = get_variant_operations(type_desc);
+   if (!ops) {
+      glz::set_error(GLZ_ERROR_TYPE_NOT_REGISTERED, "Variant type combination not supported");
+      return static_cast<uint64_t>(-1);
+   }
+   
+   return ops->get_index(variant_ptr);
+}
+
+GLZ_API void* glz_variant_get(void* variant_ptr, const glz_type_descriptor* type_desc)
+{
+   glz::clear_error();
+   
+   if (!variant_ptr || !type_desc || type_desc->index != GLZ_TYPE_VARIANT) {
+      glz::set_error(GLZ_ERROR_INVALID_PARAMETER, "Invalid variant pointer or type descriptor");
+      return nullptr;
+   }
+   
+   auto* ops = get_variant_operations(type_desc);
+   if (!ops) {
+      glz::set_error(GLZ_ERROR_TYPE_NOT_REGISTERED, "Variant type combination not supported");
+      return nullptr;
+   }
+   
+   return ops->get_value(variant_ptr);
+}
+
+GLZ_API bool glz_variant_set(void* variant_ptr, const glz_type_descriptor* type_desc, uint64_t index, const void* value)
+{
+   glz::clear_error();
+   
+   if (!variant_ptr || !type_desc || type_desc->index != GLZ_TYPE_VARIANT || !value) {
+      glz::set_error(GLZ_ERROR_INVALID_PARAMETER, "Invalid parameters for variant set");
+      return false;
+   }
+   
+   if (index >= type_desc->data.variant.count) {
+      glz::set_error(GLZ_ERROR_INVALID_PARAMETER, "Variant index out of bounds");
+      return false;
+   }
+   
+   auto* ops = get_variant_operations(type_desc);
+   if (!ops) {
+      glz::set_error(GLZ_ERROR_TYPE_NOT_REGISTERED, "Variant type combination not supported");
+      return false;
+   }
+   
+   return ops->set_value(variant_ptr, index, value);
+}
+
+GLZ_API bool glz_variant_holds_alternative(void* variant_ptr, const glz_type_descriptor* type_desc, uint64_t index)
+{
+   glz::clear_error();
+   
+   if (!variant_ptr || !type_desc || type_desc->index != GLZ_TYPE_VARIANT) {
+      glz::set_error(GLZ_ERROR_INVALID_PARAMETER, "Invalid variant pointer or type descriptor");
+      return false;
+   }
+   
+   if (index >= type_desc->data.variant.count) {
+      glz::set_error(GLZ_ERROR_INVALID_PARAMETER, "Variant index out of bounds");
+      return false;
+   }
+   
+   auto* ops = get_variant_operations(type_desc);
+   if (!ops) {
+      glz::set_error(GLZ_ERROR_TYPE_NOT_REGISTERED, "Variant type combination not supported");
+      return false;
+   }
+   
+   return ops->holds_alternative(variant_ptr, index);
+}
+
+GLZ_API const glz_type_descriptor* glz_variant_type_at_index(const glz_type_descriptor* type_desc, uint64_t index)
+{
+   glz::clear_error();
+   
+   if (!type_desc || type_desc->index != GLZ_TYPE_VARIANT) {
+      glz::set_error(GLZ_ERROR_INVALID_PARAMETER, "Invalid variant type descriptor");
+      return nullptr;
+   }
+   
+   if (index >= type_desc->data.variant.count) {
+      glz::set_error(GLZ_ERROR_INVALID_PARAMETER, "Variant index out of bounds");
+      return nullptr;
+   }
+   
+   return type_desc->data.variant.alternatives[index];
+}
+
+GLZ_API void* glz_create_variant(const glz_type_descriptor* type_desc, uint64_t initial_index, const void* initial_value)
+{
+   glz::clear_error();
+   
+   if (!type_desc || type_desc->index != GLZ_TYPE_VARIANT) {
+      glz::set_error(GLZ_ERROR_INVALID_PARAMETER, "Invalid variant type descriptor");
+      return nullptr;
+   }
+   
+   if (initial_index >= type_desc->data.variant.count) {
+      glz::set_error(GLZ_ERROR_INVALID_PARAMETER, "Initial index out of bounds");
+      return nullptr;
+   }
+   
+   auto* ops = get_variant_operations(type_desc);
+   if (!ops) {
+      glz::set_error(GLZ_ERROR_TYPE_NOT_REGISTERED, "Variant type combination not supported");
+      return nullptr;
+   }
+   
+   return ops->create(initial_index, initial_value);
+}
+
+GLZ_API void glz_destroy_variant(void* variant_ptr, const glz_type_descriptor* type_desc)
+{
+   glz::clear_error();
+   
+   if (!variant_ptr || !type_desc || type_desc->index != GLZ_TYPE_VARIANT) {
+      glz::set_error(GLZ_ERROR_INVALID_PARAMETER, "Invalid variant pointer or type descriptor");
+      return;
+   }
+   
+   auto* ops = get_variant_operations(type_desc);
+   if (!ops) {
+      glz::set_error(GLZ_ERROR_TYPE_NOT_REGISTERED, "Variant type combination not supported");
+      return;
+   }
+   
+   ops->destroy(variant_ptr);
+}
+
+} // extern "C"
