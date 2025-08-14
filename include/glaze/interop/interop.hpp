@@ -176,7 +176,7 @@ namespace glz
    }
 
    // Helper to hash string_view at compile time
-   template <typename T>
+   template <class T>
    constexpr size_t type_hash()
    {
       constexpr auto name = glz::name_v<T>;
@@ -242,7 +242,7 @@ namespace glz
    inline type_descriptor_pool type_descriptor_pool_instance;
 
    // Type to index mapping for primitive types
-   template <typename T>
+   template <class T>
    struct primitive_type_index
    {
       static constexpr uint8_t value = 0; // Default: not a primitive
@@ -306,7 +306,7 @@ namespace glz
    };
 
    // Helper to normalize types - maps platform-specific types to fixed-width types
-   template <typename T>
+   template <class T>
    struct normalize_type
    {
       using type = T;
@@ -337,19 +337,19 @@ namespace glz
       using type = uint64_t;
    };
 
-   template <typename T>
+   template <class T>
    using normalize_type_t = typename normalize_type<T>::type;
 
    // Helper variable template - now uses normalized types
-   template <typename T>
+   template <class T>
    inline constexpr uint8_t primitive_type_index_v = primitive_type_index<normalize_type_t<T>>::value;
 
    // Concept to check if a type is a primitive
-   template <typename T>
+   template <class T>
    concept is_primitive_type = (primitive_type_index_v<T> != 0);
 
    // Interop Type Support Concepts
-   template <typename T>
+   template <class T>
    concept has_interop_support = is_primitive_type<T> || // Primitives work directly
                                  string_like<T> || // Strings have special handling
                                  vector_like<T> || // Vectors have special handling
@@ -360,26 +360,26 @@ namespace glz
                                  glaze_t<T>; // Types with glz::meta work through reflection
 
    // For primitive arguments/returns that cross FFI boundaries directly
-   template <typename T>
+   template <class T>
    concept is_ffi_primitive = is_primitive_type<T> || std::is_pointer_v<T> || std::is_same_v<T, void>;
 
    // Main registration concept - much more permissive
-   template <typename T>
+   template <class T>
    concept is_interop_registerable = glaze_t<T> || reflectable<T>; // Only requires Glaze metadata
 
    // Member Function Detection Concepts
-   template <typename F, typename R, typename... Args>
+   template <class F, class R, class... Args>
    concept is_callable_with_signature =
       std::is_same_v<F, R(Args...)> || std::is_same_v<F, R(Args...) const> || std::is_same_v<F, R(Args...) noexcept> ||
       std::is_same_v<F, R(Args...) const noexcept>;
 
-   template <typename T>
+   template <class T>
    concept has_member_functions = requires {
       typename meta<T>::type;
       requires glaze_t<T>;
    };
 
-   template <typename T>
+   template <class T>
    concept is_shared_future_like = requires(T t) {
       typename T::value_type;
       { t.get() };
@@ -389,14 +389,14 @@ namespace glz
    };
 
    // Forward declarations
-   template <typename T>
+   template <class T>
    ::glz_type_descriptor* create_type_descriptor();
 
-   template <typename T>
+   template <class T>
    void register_type(std::string_view name);
 
    // Forward declaration for shared_future wrapper creation
-   template <typename T>
+   template <class T>
    void* create_shared_future_wrapper(std::shared_future<T> future);
 
    // Type-erased interface for shared_future (moved to header for template visibility)
@@ -410,7 +410,7 @@ namespace glz
       virtual const ::glz_type_descriptor* get_type_descriptor() const = 0;
    };
 
-   template <typename T>
+   template <class T>
    struct shared_future_wrapper : shared_future_base
    {
       std::shared_future<T> future;
@@ -456,7 +456,7 @@ namespace glz
    };
 
    // Helper to create a heap-allocated shared_future wrapper
-   template <typename T>
+   template <class T>
    void* create_shared_future_wrapper(std::shared_future<T> future)
    {
       return new shared_future_wrapper<T>(std::move(future));
@@ -487,7 +487,7 @@ namespace glz
    }
 
    // Optional specialization
-   template <typename T>
+   template <class T>
    ::glz_type_descriptor* create_type_descriptor_optional()
    {
       auto* element = create_type_descriptor<T>();
@@ -495,7 +495,7 @@ namespace glz
    }
 
    // Function specialization
-   template <typename F>
+   template <class F>
    ::glz_type_descriptor* create_type_descriptor_function(F function_ptr)
    {
       using traits = function_traits<F>;
@@ -526,19 +526,19 @@ namespace glz
                                                              param_descs, traits::is_const, func_ptr);
    }
 
-   template <typename T>
+   template <class T>
    struct is_optional : ::std::false_type
    {};
 
-   template <typename T>
+   template <class T>
    struct is_optional<::std::optional<T>> : ::std::true_type
    {};
 
    // Member function signature detection
-   template <typename T>
+   template <class T>
    struct function_traits;
 
-   template <typename R, typename Class, typename... Args>
+   template <class R, class Class, class... Args>
    struct function_traits<R (Class::*)(Args...)>
    {
       using return_type = R;
@@ -551,7 +551,7 @@ namespace glz
       using arg = ::std::tuple_element_t<I, args_tuple>;
    };
 
-   template <typename R, typename Class, typename... Args>
+   template <class R, class Class, class... Args>
    struct function_traits<R (Class::*)(Args...) const>
    {
       using return_type = R;
@@ -565,23 +565,23 @@ namespace glz
    };
 
    // Vector specialization
-   template <typename T>
+   template <class T>
    ::glz_type_descriptor* create_type_descriptor_vector()
    {
       auto* element = create_type_descriptor<T>();
       return type_descriptor_pool_instance.allocate_vector(element);
    }
 
-   template <typename T>
+   template <class T>
    struct is_vector : ::std::false_type
    {};
 
-   template <typename T>
+   template <class T>
    struct is_vector<::std::vector<T>> : ::std::true_type
    {};
 
    // Map specialization
-   template <typename K, typename V>
+   template <class K, class V>
    ::glz_type_descriptor* create_type_descriptor_map()
    {
       auto* key = create_type_descriptor<K>();
@@ -589,36 +589,36 @@ namespace glz
       return type_descriptor_pool_instance.allocate_map(key, value);
    }
 
-   template <typename T>
+   template <class T>
    struct is_unordered_map : ::std::false_type
    {};
 
-   template <typename K, typename V>
+   template <class K, class V>
    struct is_unordered_map<::std::unordered_map<K, V>> : ::std::true_type
    {};
 
    // Pair trait - we'll still use this to detect pairs for auto-registration
-   template <typename T>
+   template <class T>
    struct is_pair : ::std::false_type
    {};
 
-   template <typename T1, typename T2>
+   template <class T1, class T2>
    struct is_pair<::std::pair<T1, T2>> : ::std::true_type
    {};
 
    // Trait to detect std::shared_future
-   template <typename T>
+   template <class T>
    struct is_shared_future : ::std::false_type
    {};
 
-   template <typename T>
+   template <class T>
    struct is_shared_future<::std::shared_future<T>> : ::std::true_type
    {
       using value_type = T;
    };
 
    // General template that handles vectors, maps, and optionals
-   template <typename T>
+   template <class T>
    ::glz_type_descriptor* create_type_descriptor()
    {
       if constexpr (is_primitive_type<T>) {
@@ -661,11 +661,11 @@ namespace glz
    }
 
    // Generic member function accessor that generates type-erased wrappers
-   template <typename Class, typename FuncPtr>
+   template <class Class, class FuncPtr>
    struct member_function_accessor;
 
    // Specialization for non-const member functions
-   template <typename Class, typename R, typename... Args>
+   template <class Class, class R, class... Args>
    struct member_function_accessor<Class, R (Class::*)(Args...)>
    {
       using FuncType = R (Class::*)(Args...);
@@ -724,7 +724,7 @@ namespace glz
    };
 
    // Specialization for const member functions
-   template <typename Class, typename R, typename... Args>
+   template <class Class, class R, class... Args>
    struct member_function_accessor<Class, R (Class::*)(Args...) const>
    {
       using FuncType = R (Class::*)(Args...) const;
@@ -783,7 +783,7 @@ namespace glz
    };
 
    // Helper to create a member function info at compile time
-   template <typename Class, auto MemberFunc>
+   template <class Class, auto MemberFunc>
    struct member_function_info
    {
       using FuncPtr = decltype(MemberFunc);
@@ -795,7 +795,7 @@ namespace glz
    };
 
    // Generic member accessor using member pointers
-   template <typename Class, class Member, size_t I>
+   template <class Class, class Member, size_t I>
    struct member_accessor
    {
       static decltype(auto) target(void* obj)
@@ -849,7 +849,7 @@ namespace glz
    };
 
    // Helper to extract member info from glz::meta using Glaze's approach
-   template <typename T>
+   template <class T>
    class type_registry
    {
       type_info info;
@@ -951,7 +951,7 @@ namespace glz
 
       interop_registry_class() = default;
 
-      template <typename T>
+      template <class T>
       type_registry<T> register_type(std::string_view name)
       {
          return type_registry<T>(name);
@@ -1006,7 +1006,7 @@ namespace glz
    inline interop_registry_class interop_registry;
 
    // Function to register a type - uses glz::meta automatically
-   template <typename T>
+   template <class T>
       requires is_interop_registerable<T>
    void register_type(std::string_view name)
    {
@@ -1026,7 +1026,7 @@ namespace glz
    }
 
    // Function to register an instance - requires type to be registered first
-   template <typename T>
+   template <class T>
       requires is_interop_registerable<T>
    bool register_instance(std::string_view instance_name, T& instance)
    {
@@ -1055,7 +1055,7 @@ namespace glz
    }
 
    // Meta specialization for std::pair - treat it as a struct with first/second members
-   template <typename T1, typename T2>
+   template <class T1, class T2>
    struct meta<std::pair<T1, T2>>
    {
       using T = std::pair<T1, T2>;
