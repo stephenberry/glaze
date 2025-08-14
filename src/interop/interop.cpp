@@ -60,83 +60,62 @@ namespace glz
    // Type descriptor pool implementation
    ::glz_type_descriptor* type_descriptor_pool::allocate_primitive(uint8_t kind)
    {
-      auto desc = std::make_unique<::glz_type_descriptor>();
+      auto& desc = descriptors.emplace_back(std::make_unique<::glz_type_descriptor>());
       desc->index = GLZ_TYPE_PRIMITIVE;
       desc->data.primitive.kind = kind;
-
-      auto* ptr = desc.get();
-      descriptors.push_back(std::move(desc));
-      return ptr;
+      return desc.get();
    }
 
    ::glz_type_descriptor* type_descriptor_pool::allocate_string(bool is_view)
    {
-      auto desc = std::make_unique<::glz_type_descriptor>();
+      auto& desc = descriptors.emplace_back(std::make_unique<::glz_type_descriptor>());
       desc->index = GLZ_TYPE_STRING;
       desc->data.string.is_view = is_view ? 1 : 0;
-
-      auto* ptr = desc.get();
-      descriptors.push_back(std::move(desc));
-      return ptr;
+      return desc.get();
    }
 
    ::glz_type_descriptor* type_descriptor_pool::allocate_vector(::glz_type_descriptor* element)
    {
-      auto desc = std::make_unique<::glz_type_descriptor>();
+      auto& desc = descriptors.emplace_back(std::make_unique<::glz_type_descriptor>());
       desc->index = GLZ_TYPE_VECTOR;
       desc->data.vector.element_type = element;
-
-      auto* ptr = desc.get();
-      descriptors.push_back(std::move(desc));
-      return ptr;
+      return desc.get();
    }
 
    ::glz_type_descriptor* type_descriptor_pool::allocate_map(::glz_type_descriptor* key, ::glz_type_descriptor* value)
    {
-      auto desc = std::make_unique<::glz_type_descriptor>();
+      auto& desc = descriptors.emplace_back(std::make_unique<::glz_type_descriptor>());
       desc->index = GLZ_TYPE_MAP;
       desc->data.map.key_type = key;
       desc->data.map.value_type = value;
-
-      auto* ptr = desc.get();
-      descriptors.push_back(std::move(desc));
-      return ptr;
+      return desc.get();
    }
 
    ::glz_type_descriptor* type_descriptor_pool::allocate_complex(uint8_t kind)
    {
-      auto desc = std::make_unique<::glz_type_descriptor>();
+      auto& desc = descriptors.emplace_back(std::make_unique<::glz_type_descriptor>());
       desc->index = GLZ_TYPE_COMPLEX;
       desc->data.complex.kind = kind;
-
-      auto* ptr = desc.get();
-      descriptors.push_back(std::move(desc));
-      return ptr;
+      return desc.get();
    }
 
    ::glz_type_descriptor* type_descriptor_pool::allocate_struct(const char* type_name, const ::glz_type_info* info,
                                                                 size_t type_hash)
    {
-      auto desc = std::make_unique<::glz_type_descriptor>();
+      auto& desc = descriptors.emplace_back(std::make_unique<::glz_type_descriptor>());
       desc->index = GLZ_TYPE_STRUCT;
       desc->data.struct_type.type_name = type_name;
       desc->data.struct_type.info = info;
       desc->data.struct_type.type_hash = type_hash;
-
-      auto* ptr = desc.get();
-      descriptors.push_back(std::move(desc));
-      return ptr;
+      return desc.get();
    }
 
    ::glz_type_descriptor* type_descriptor_pool::allocate_optional(::glz_type_descriptor* element)
    {
-      auto desc = std::make_unique<::glz_type_descriptor>();
+      auto& desc = descriptors.emplace_back(std::make_unique<::glz_type_descriptor>());
       desc->index = GLZ_TYPE_OPTIONAL;
       desc->data.optional.element_type = element;
-
-      auto* ptr = desc.get();
-      descriptors.push_back(std::move(desc));
-      return ptr;
+      return desc.get();
    }
 
    ::glz_type_descriptor* type_descriptor_pool::allocate_function(::glz_type_descriptor* return_type,
@@ -144,7 +123,7 @@ namespace glz
                                                                   ::glz_type_descriptor** param_types, bool is_const,
                                                                   void* function_ptr)
    {
-      auto desc = std::make_unique<::glz_type_descriptor>();
+      auto& desc = descriptors.emplace_back(std::make_unique<::glz_type_descriptor>());
       desc->index = GLZ_TYPE_FUNCTION;
       desc->data.function.return_type = return_type;
       desc->data.function.param_count = param_count;
@@ -152,13 +131,11 @@ namespace glz
       // Create a persistent copy of the param_types array if it exists
       if (param_count > 0 && param_types != nullptr) {
          // Use unique_ptr to manage the array lifetime
-         auto param_array = std::make_unique<::glz_type_descriptor*[]>(param_count);
+         auto& param_array = param_arrays.emplace_back(std::make_unique<::glz_type_descriptor*[]>(param_count));
          for (uint8_t i = 0; i < param_count; ++i) {
             param_array[i] = param_types[i];
          }
          desc->data.function.param_types = param_array.get();
-         // Store the unique_ptr to ensure proper cleanup
-         param_arrays.push_back(std::move(param_array));
       }
       else {
          desc->data.function.param_types = nullptr;
@@ -166,21 +143,15 @@ namespace glz
 
       desc->data.function.is_const = is_const ? 1 : 0;
       desc->data.function.function_ptr = function_ptr;
-
-      auto* ptr = desc.get();
-      descriptors.push_back(std::move(desc));
-      return ptr;
+      return desc.get();
    }
 
    ::glz_type_descriptor* type_descriptor_pool::allocate_shared_future(::glz_type_descriptor* value_type)
    {
-      auto desc = std::make_unique<::glz_type_descriptor>();
+      auto& desc = descriptors.emplace_back(std::make_unique<::glz_type_descriptor>());
       desc->index = GLZ_TYPE_SHARED_FUTURE;
       desc->data.shared_future.value_type = value_type;
-
-      auto* ptr = desc.get();
-      descriptors.push_back(std::move(desc));
-      return ptr;
+      return desc.get();
    }
 
    void register_constructor(std::string_view type_name, std::function<void*()> ctor, std::function<void(void*)> dtor)
