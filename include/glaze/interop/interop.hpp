@@ -45,7 +45,7 @@ enum glz_error_code : int32_t {
 #pragma pack(push, 1)
 
 // Type descriptor index - acts like variant::index()
-enum glz_type_kind : uint8_t {
+enum glz_type_kind : uint64_t {
    GLZ_TYPE_PRIMITIVE = 0,
    GLZ_TYPE_STRING,
    GLZ_TYPE_VECTOR,
@@ -120,8 +120,7 @@ struct glz_shared_future_desc
 #pragma pack(push, 8) // 8-byte alignment for the union
 struct glz_type_descriptor
 {
-   uint8_t index; // Which union member is active (glz_type_kind)
-   uint8_t padding[7]; // Explicit padding to align union to 8 bytes
+   uint64_t index; // Which union member is active (glz_type_kind)
 
    union {
       struct glz_primitive_desc primitive;
