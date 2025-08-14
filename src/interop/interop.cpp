@@ -172,7 +172,7 @@ struct OptionalOperations
 };
 
 // Template to generate operations for a specific optional type
-template <typename T>
+template <class T>
 OptionalOperations make_optional_operations()
 {
    return OptionalOperations{// has_value
@@ -246,7 +246,7 @@ namespace
 }
 
 // Generic member function invoker using templates and type erasure
-template <typename R, typename C, typename... Args>
+template <class R, class C, class... Args>
 void* invoke_member_function_impl(void* obj_ptr, void* func_ptr, void** args, void* result_buffer)
 {
    auto* obj = static_cast<C*>(obj_ptr);
@@ -975,28 +975,28 @@ struct shared_future_base
 };
 
 // Helper template to cast shared_future based on type descriptor
-template <typename T>
+template <class T>
 bool shared_future_is_ready_impl(void* future_ptr)
 {
    auto* future = static_cast<std::shared_future<T>*>(future_ptr);
    return future->wait_for(std::chrono::seconds(0)) == std::future_status::ready;
 }
 
-template <typename T>
+template <class T>
 void shared_future_wait_impl(void* future_ptr)
 {
    auto* future = static_cast<std::shared_future<T>*>(future_ptr);
    future->wait();
 }
 
-template <typename T>
+template <class T>
 bool shared_future_valid_impl(void* future_ptr)
 {
    auto* future = static_cast<std::shared_future<T>*>(future_ptr);
    return future->valid();
 }
 
-template <typename T>
+template <class T>
 void* shared_future_get_impl(void* future_ptr)
 {
    auto* future = static_cast<std::shared_future<T>*>(future_ptr);
@@ -1019,7 +1019,7 @@ void* shared_future_get_impl(void* future_ptr)
 // Dispatch based on type descriptor
 using SharedFutureOp = void* (*)(void*);
 
-template <typename Op>
+template <class Op>
 void* dispatch_shared_future_op(void* future_ptr, const glz_type_descriptor* value_type, Op op)
 {
    if (!value_type) return nullptr;
@@ -1090,7 +1090,7 @@ GLZ_API bool glz_shared_future_valid(void* future_ptr)
 
 struct GetOp
 {
-   template <typename T>
+   template <class T>
    void* operator()(void* ptr) const
    {
       return shared_future_get_impl<T>(ptr);
