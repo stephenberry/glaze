@@ -31,23 +31,23 @@ using LibraryHandle = void*;
 namespace glz::interop
 {
    // Exception class for interop errors
-   class interop_exception : public std::runtime_error
+   struct interop_exception : public std::runtime_error
    {
      public:
       explicit interop_exception(const std::string& msg) : std::runtime_error(msg) {}
    };
 
    // Forward declarations
-   class type_info;
-   class member_info;
-   class instance;
-   class interop_library;
+   struct type_info;
+   struct member_info;
+   struct instance;
+   struct interop_library;
 
    // Wrapper for member information
-   class member_info
+   struct member_info
    {
-      friend class type_info;
-      friend class instance;
+      friend struct type_info;
+      friend struct instance;
 
      private:
       const glz_member_info* info_;
@@ -61,9 +61,9 @@ namespace glz::interop
    };
 
    // Wrapper for type information
-   class type_info
+   struct type_info
    {
-      friend class interop_library;
+      friend struct interop_library;
 
      private:
       const glz_type_info* info_;
@@ -90,9 +90,9 @@ namespace glz::interop
    };
 
    // Wrapper for an instance of a type
-   class instance
+   struct instance
    {
-      friend class interop_library;
+      friend struct interop_library;
 
      private:
       void* ptr_;
@@ -157,10 +157,10 @@ namespace glz::interop
    };
 
    // Main library wrapper class
-   class interop_library
+   struct interop_library
    {
-      friend class instance;
-      friend class type_info;
+      friend struct instance;
+      friend struct type_info;
 
      private:
       LibraryHandle handle_ = nullptr;
