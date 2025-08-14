@@ -41,9 +41,6 @@ enum glz_error_code : int32_t {
    GLZ_ERROR_INTERNAL = 99
 };
 
-// Ensure consistent struct packing between C++ and Julia
-#pragma pack(push, 1)
-
 // Type descriptor index - acts like variant::index()
 enum glz_type_kind : uint64_t {
    GLZ_TYPE_PRIMITIVE = 0,
@@ -64,12 +61,13 @@ struct glz_type_info;
 // Individual type descriptors as C structs
 struct glz_primitive_desc
 {
-   uint8_t kind; // Maps to existing ValueType enum values
+   uint64_t kind; // Maps to existing ValueType enum values
 };
 
 struct glz_string_desc
 {
    uint8_t is_view; // 0=string, 1=string_view
+   uint8_t padding[7]; // Padding to 8 bytes for alignment
 };
 
 struct glz_vector_desc
@@ -85,7 +83,7 @@ struct glz_map_desc
 
 struct glz_complex_desc
 {
-   uint8_t kind; // 0=float, 1=double
+   uint64_t kind; // 0=float, 1=double
 };
 
 struct glz_struct_desc
@@ -104,6 +102,7 @@ struct glz_function_desc
 {
    uint8_t is_const; // 1 if const member function, 0 otherwise
    uint8_t param_count; // Number of parameters
+   uint8_t padding[6]; // Padding to align to 8 bytes
    glz_type_descriptor** param_types; // Array of parameter type descriptors
    glz_type_descriptor* return_type; // Return type descriptor
    void* function_ptr; // Type-erased function pointer
@@ -114,10 +113,31 @@ struct glz_shared_future_desc
    glz_type_descriptor* value_type; // Type of the future's value
 };
 
-#pragma pack(pop)
+// Static assertions to verify struct sizes
+static_assert(sizeof(glz_primitive_desc) == 8, "glz_primitive_desc must be 8 bytes");
+static_assert(sizeof(glz_string_desc) == 8, "glz_string_desc must be 8 bytes");
+static_assert(sizeof(glz_complex_desc) == 8, "glz_complex_desc must be 8 bytes");
 
-// The variant-like type descriptor - needs explicit padding for alignment
-#pragma pack(push, 8) // 8-byte alignment for the union
+// Pointer sizes vary between 32-bit and 64-bit systems
+#ifdef __LP64__
+// 64-bit system
+static_assert(sizeof(glz_vector_desc) == 8, "glz_vector_desc must be 8 bytes on 64-bit");
+static_assert(sizeof(glz_map_desc) == 16, "glz_map_desc must be 16 bytes on 64-bit");
+static_assert(sizeof(glz_struct_desc) == 24, "glz_struct_desc must be 24 bytes on 64-bit");
+static_assert(sizeof(glz_optional_desc) == 8, "glz_optional_desc must be 8 bytes on 64-bit");
+static_assert(sizeof(glz_function_desc) == 32, "glz_function_desc must be 32 bytes on 64-bit");
+static_assert(sizeof(glz_shared_future_desc) == 8, "glz_shared_future_desc must be 8 bytes on 64-bit");
+#else
+// 32-bit system
+static_assert(sizeof(glz_vector_desc) == 4, "glz_vector_desc must be 4 bytes on 32-bit");
+static_assert(sizeof(glz_map_desc) == 8, "glz_map_desc must be 8 bytes on 32-bit");
+static_assert(sizeof(glz_struct_desc) == 12, "glz_struct_desc must be 12 bytes on 32-bit");
+static_assert(sizeof(glz_optional_desc) == 4, "glz_optional_desc must be 4 bytes on 32-bit");
+static_assert(sizeof(glz_function_desc) == 20, "glz_function_desc must be 20 bytes on 32-bit");
+static_assert(sizeof(glz_shared_future_desc) == 4, "glz_shared_future_desc must be 4 bytes on 32-bit");
+#endif
+
+// The variant-like type descriptor - properly aligned
 struct glz_type_descriptor
 {
    uint64_t index; // Which union member is active (glz_type_kind)
@@ -134,7 +154,13 @@ struct glz_type_descriptor
       struct glz_shared_future_desc shared_future;
    } data;
 };
-#pragma pack(pop)
+
+// Verify the overall type descriptor size
+#ifdef __LP64__
+static_assert(sizeof(glz_type_descriptor) == 40, "glz_type_descriptor must be 40 bytes on 64-bit");
+#else
+static_assert(sizeof(glz_type_descriptor) == 28, "glz_type_descriptor must be 28 bytes on 32-bit");
+#endif
 
 namespace glz
 {
@@ -1154,8 +1180,6 @@ namespace glz
 
 extern "C" {
 
-#pragma pack(push, 8) // Ensure 8-byte alignment for pointers
-
 // C-compatible version of MemberInfo
 struct glz_member_info
 {
@@ -1164,6 +1188,7 @@ struct glz_member_info
    void* (*getter)(void* obj);
    void (*setter)(void* obj, void* value);
    uint8_t kind; // 0 = data member, 1 = member function
+   uint8_t padding[7]; // Padding to align next pointer
    void* function_ptr; // For member function pointers
 };
 
@@ -1197,7 +1222,22 @@ struct glz_unordered_map
    size_t size;
 };
 
-#pragma pack(pop)
+// Static assertions for the C structs
+#ifdef __LP64__
+// 64-bit system
+static_assert(sizeof(glz_member_info) == 48, "glz_member_info must be 48 bytes on 64-bit");
+static_assert(sizeof(glz_type_info) == 32, "glz_type_info must be 32 bytes on 64-bit");
+static_assert(sizeof(glz_vector) == 24, "glz_vector must be 24 bytes on 64-bit");
+static_assert(sizeof(glz_string) == 24, "glz_string must be 24 bytes on 64-bit");
+static_assert(sizeof(glz_unordered_map) == 16, "glz_unordered_map must be 16 bytes on 64-bit");
+#else
+// 32-bit system
+static_assert(sizeof(glz_member_info) == 28, "glz_member_info must be 28 bytes on 32-bit");
+static_assert(sizeof(glz_type_info) == 16, "glz_type_info must be 16 bytes on 32-bit");
+static_assert(sizeof(glz_vector) == 12, "glz_vector must be 12 bytes on 32-bit");
+static_assert(sizeof(glz_string) == 12, "glz_string must be 12 bytes on 32-bit");
+static_assert(sizeof(glz_unordered_map) == 8, "glz_unordered_map must be 8 bytes on 32-bit");
+#endif
 
 GLZ_API glz_type_info* glz_get_type_info(const char* type_name);
 GLZ_API glz_type_info* glz_get_type_info_by_hash(size_t type_hash);
