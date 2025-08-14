@@ -23,7 +23,7 @@ set_target_properties(glaze_interop PROPERTIES
 # C++ client library for consuming interop interface
 add_library(glaze_interop_client STATIC
     client.cpp
-    glaze.cpp
+    i_glaze.cpp
 )
 
 target_include_directories(glaze_interop_client PUBLIC
@@ -49,6 +49,6 @@ install(TARGETS glaze_interop glaze_interop_client
 install(FILES 
     ${PROJECT_SOURCE_DIR}/include/glaze/interop/interop.hpp
     ${PROJECT_SOURCE_DIR}/include/glaze/interop/client.hpp
-    ${PROJECT_SOURCE_DIR}/include/glaze/interop/glaze.hpp
+    ${PROJECT_SOURCE_DIR}/include/glaze/interop/i_glaze.hpp
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/glaze/interop
 )
