@@ -102,10 +102,10 @@ struct glz_optional_desc
 
 struct glz_function_desc
 {
-   glz_type_descriptor* return_type; // Return type descriptor
+   uint8_t is_const; // 1 if const member function, 0 otherwise
    uint8_t param_count; // Number of parameters
    glz_type_descriptor** param_types; // Array of parameter type descriptors
-   uint8_t is_const; // 1 if const member function, 0 otherwise
+   glz_type_descriptor* return_type; // Return type descriptor
    void* function_ptr; // Type-erased function pointer
 };
 
