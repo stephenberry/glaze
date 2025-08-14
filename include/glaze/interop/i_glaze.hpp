@@ -14,10 +14,10 @@
 namespace glz {
 
 // Forward declarations
-class i_type;
-class i_instance;
-class i_field;
-class i_method;
+struct i_type;
+struct i_instance;
+struct i_field;
+struct i_method;
 
 // Dynamic value type that can hold references to any Glaze-supported type
 struct i_value {
@@ -166,9 +166,9 @@ public:
 };
 
 // Represents a field in a type
-class i_field {
-    friend class i_type;
-    friend class i_instance;
+struct i_field {
+    friend struct i_type;
+    friend struct i_instance;
     
 private:
     std::string name_;
@@ -185,9 +185,9 @@ public:
 };
 
 // Represents a method in a type
-class i_method {
-    friend class i_type;
-    friend class i_instance;
+struct i_method {
+    friend struct i_type;
+    friend struct i_instance;
     
 private:
     std::string name_;
@@ -206,9 +206,9 @@ public:
 };
 
 // Represents a Glaze type
-class i_type : public std::enable_shared_from_this<i_type> {
-    friend class i_instance;
-    friend class i_glaze;
+struct i_type : public std::enable_shared_from_this<i_type> {
+    friend struct i_instance;
+    friend struct i_glaze;
     
 private:
     std::string name_;
@@ -258,9 +258,9 @@ public:
 };
 
 // Represents an instance of a Glaze type
-class i_instance : public std::enable_shared_from_this<i_instance> {
-    friend class i_type;
-    friend class i_glaze;
+struct i_instance : public std::enable_shared_from_this<i_instance> {
+    friend struct i_type;
+    friend struct i_glaze;
     
 private:
     void* ptr_;
@@ -287,7 +287,7 @@ public:
     }
     
     // Helper class to enable arrow operator for shared_ptr<iinstance>
-    class field_accessor {
+    struct field_accessor {
         i_instance* instance_;
     public:
         explicit field_accessor(i_instance* inst) : instance_(inst) {}
@@ -314,8 +314,8 @@ public:
     static std::shared_ptr<i_instance> from_json(const std::string& json, std::shared_ptr<i_type> type);
 };
 
-// Main Glaze interop class (similar to Julia's Glaze module)
-class i_glaze {
+// Main Glaze interop class
+struct i_glaze {
 private:
     // type registry
     static std::unordered_map<std::string, std::shared_ptr<i_type>> type_registry_;
@@ -501,7 +501,3 @@ auto i_glaze::call_method(T& obj, const std::string& method_name, Args&&... args
 }
 
 } // namespace glz
-
-// Convenience macros (similar to Julia's @register_type)
-#define GLZ_REGISTER_TYPE(Type) glz::i_glaze::register_type<Type>(#Type)
-#define GLZ_REGISTER_INSTANCE(name, Type, instance) glz::i_glaze::register_instance(name, #Type, instance)
