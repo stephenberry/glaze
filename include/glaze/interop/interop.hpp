@@ -300,7 +300,7 @@ concept is_ffi_primitive = is_primitive_type<T> ||
 
 // Main registration concept - much more permissive
 template<typename T>
-concept is_interop_registerable = glaze_t<T>;  // Only requires Glaze metadata
+concept is_interop_registerable = glaze_t<T> || reflectable<T>;  // Only requires Glaze metadata
 
 // Member Function Detection Concepts
 template<typename F, typename R, typename... Args>
