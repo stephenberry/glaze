@@ -10,7 +10,7 @@ The interop interface allows:
 - **Instance Management**: Create and destroy C++ objects from other languages
 - **Member Access**: Get/set data members and call member functions
 - **Type Descriptors**: Rich type information for proper marshalling
-- **Container Support**: Work with vectors, maps, optionals, and other STL containers
+- **Container Support**: Work with vectors, maps, optionals, variants, and other STL containers
 - **Async Support**: Handle `std::shared_future` types (Note: `std::future` is not supported as it's move-only)
 
 ## Quick Start
@@ -36,10 +36,10 @@ template <>
 struct glz::meta<Person> {
     using T = Person;
     static constexpr auto value = object(
-        "name", &T::name,
-        "age", &T::age,
-        "hobbies", &T::hobbies,
-        "greet", &T::greet
+        &T::name,
+        &T::age,
+        &T::hobbies,
+        &T::greet
     );
 };
 
@@ -139,6 +139,10 @@ Register a global instance that can be accessed from other languages. The type m
 - `glz_optional_has_value(...)` - Check if optional has value
 - `glz_optional_get_value(...)` - Get optional value
 - `glz_optional_set_value(...)` - Set optional value
+- `glz_variant_index(...)` - Get active variant alternative index
+- `glz_variant_get(...)` - Get active variant value
+- `glz_variant_set(...)` - Set variant alternative
+- `glz_variant_holds_alternative(...)` - Check if variant holds specific type
 
 ## Type Descriptors
 
@@ -154,7 +158,8 @@ enum glz_type_kind : uint8_t {
     GLZ_TYPE_STRUCT,        // User-defined structs
     GLZ_TYPE_OPTIONAL,      // std::optional<T>
     GLZ_TYPE_FUNCTION,      // Member functions
-    GLZ_TYPE_SHARED_FUTURE  // std::shared_future<T>
+    GLZ_TYPE_SHARED_FUTURE, // std::shared_future<T>
+    GLZ_TYPE_VARIANT        // std::variant<Ts...>
 };
 ```
 
@@ -236,6 +241,50 @@ struct glz::meta<Calculator> {
     );
 };
 ```
+
+## Variant Support
+
+The interop interface fully supports `std::variant` types:
+
+```cpp
+struct Configuration {
+    std::variant<int, std::string, std::vector<double>> value;
+    
+    std::string get_type() const {
+        return std::visit([](auto&& arg) -> std::string {
+            using T = std::decay_t<decltype(arg)>;
+            if constexpr (std::is_same_v<T, int>) return "integer";
+            else if constexpr (std::is_same_v<T, std::string>) return "string";
+            else return "array";
+        }, value);
+    }
+};
+
+template <>
+struct glz::meta<Configuration> {
+    using T = Configuration;
+    static constexpr auto value = object(
+        &T::value,
+        &T::get_type
+    );
+};
+
+// Usage from other languages:
+// 1. Check active alternative: glz_variant_index()
+// 2. Get current value: glz_variant_get()
+// 3. Set new alternative: glz_variant_set(index, new_value)
+// 4. Check if holds type: glz_variant_holds_alternative(index)
+```
+
+### Variant API Functions
+
+- `glz_variant_index(void* variant_ptr, const glz_type_descriptor* type_desc)` - Returns the zero-based index of the currently active alternative
+- `glz_variant_get(void* variant_ptr, const glz_type_descriptor* type_desc)` - Returns a pointer to the currently active value
+- `glz_variant_set(void* variant_ptr, const glz_type_descriptor* type_desc, uint64_t index, const void* value)` - Sets the variant to hold the alternative at the given index with the provided value
+- `glz_variant_holds_alternative(void* variant_ptr, const glz_type_descriptor* type_desc, uint64_t index)` - Checks if the variant currently holds the alternative at the given index
+- `glz_variant_type_at_index(const glz_type_descriptor* type_desc, uint64_t index)` - Returns the type descriptor for the alternative at the given index
+- `glz_create_variant(const glz_type_descriptor* type_desc, uint64_t initial_index, const void* initial_value)` - Creates a new variant with the specified initial alternative
+- `glz_destroy_variant(void* variant_ptr, const glz_type_descriptor* type_desc)` - Destroys a variant created with `glz_create_variant`
 
 ## Async Operations
 
@@ -350,6 +399,7 @@ See `tests/interop/` for complete examples including:
 - Container manipulation and member function calls
 - Plugin architecture (`interop_plugins_test.cpp`)
 - Complex nested structures (`interop_structures_test.cpp`)
+- Variant types and type switching (`interop_variant_test.cpp`)
 - C FFI compatibility (`test_c_ffi.c`)
 - Performance benchmarks (`interop_performance_test.cpp`)
 
