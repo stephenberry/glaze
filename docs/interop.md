@@ -359,7 +359,6 @@ See `tests/interop/` for complete examples including:
 
 ## Limitations
 
-- Templates must be explicitly instantiated
 - Virtual functions are not directly supported
 - Move-only types require special handling
 - Maximum function arity depends on implementation
