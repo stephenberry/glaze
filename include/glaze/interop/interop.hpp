@@ -1374,6 +1374,26 @@ GLZ_API void glz_vector_float32_set_data(void* vec_ptr, const float* data, size_
 GLZ_API void glz_vector_float64_set_data(void* vec_ptr, const double* data, size_t size);
 GLZ_API void glz_vector_string_push_back(void* vec_ptr, const char* str, size_t len);
 
+// Additional vector operations for specialized types
+GLZ_API void glz_vector_int32_push_back(void* vec_ptr, int32_t value);
+GLZ_API void glz_vector_int32_resize(void* vec_ptr, size_t new_size);
+GLZ_API void glz_vector_float32_push_back(void* vec_ptr, float value);
+GLZ_API void glz_vector_float32_resize(void* vec_ptr, size_t new_size);
+GLZ_API void glz_vector_float64_push_back(void* vec_ptr, double value);
+GLZ_API void glz_vector_float64_resize(void* vec_ptr, size_t new_size);
+GLZ_API void glz_vector_complexf32_push_back(void* vec_ptr, float real, float imag);
+GLZ_API void glz_vector_complexf32_resize(void* vec_ptr, size_t new_size);
+GLZ_API void glz_vector_complexf64_push_back(void* vec_ptr, double real, double imag);
+GLZ_API void glz_vector_complexf64_resize(void* vec_ptr, size_t new_size);
+
+// Result vector creation and destruction
+GLZ_API void* glz_create_result_vector_int32();
+GLZ_API void* glz_create_result_vector_float32();
+GLZ_API void* glz_create_result_vector_float64();
+GLZ_API void glz_destroy_result_vector_int32(void* vec_ptr);
+GLZ_API void glz_destroy_result_vector_float32(void* vec_ptr);
+GLZ_API void glz_destroy_result_vector_float64(void* vec_ptr);
+
 // Query vector size and alignment for safe allocation
 GLZ_API size_t glz_sizeof_vector_int32();
 GLZ_API size_t glz_sizeof_vector_float32();
@@ -1388,6 +1408,14 @@ GLZ_API size_t glz_alignof_vector_float64();
 GLZ_API size_t glz_alignof_vector_string();
 GLZ_API size_t glz_alignof_vector_complexf32();
 GLZ_API size_t glz_alignof_vector_complexf64();
+
+// Vector view functions for specialized types
+// These provide direct access to vector internals for FFI
+GLZ_API glz_vector glz_vector_float32_view(void* vec_ptr);
+GLZ_API glz_vector glz_vector_float64_view(void* vec_ptr);
+GLZ_API glz_vector glz_vector_int32_view(void* vec_ptr);
+GLZ_API glz_vector glz_vector_complexf32_view(void* vec_ptr);
+GLZ_API glz_vector glz_vector_complexf64_view(void* vec_ptr);
 
 // Temporary string creation/destruction for function calls
 GLZ_API void* glz_create_string(const char* str, size_t len);
