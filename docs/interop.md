@@ -349,10 +349,7 @@ See `tests/interop/` for complete examples including:
 
 ## Language Bindings
 
-Currently available:
-- **Julia**: Full support via glaze.jl
-- **Python**: In development
-- **Rust**: In development
+- **Julia**: Full support via glaze-interop.jl
 
 ## Limitations
 
@@ -360,7 +357,3 @@ Currently available:
 - Virtual functions are not directly supported
 - Move-only types require special handling
 - Maximum function arity depends on implementation
-
-## Contributing
-
-Contributions for additional language bindings are welcome! See the existing Julia implementation as a reference.
