@@ -59,6 +59,10 @@ int main() {
 
 ### From Other Languages (e.g., Julia)
 
+> [!NOTE]
+>
+> Do not actually write code like this unless you're developing a new receiving library. For Julia the [glaze-interop.jl](https://github.com/stephenberry/glaze-interop.jl) library abstracts this away for cleaner and safer usage.
+
 ```julia
 # Load the shared library
 using Libdl
@@ -351,7 +355,7 @@ See `tests/interop/` for complete examples including:
 
 ## Language Bindings
 
-- **Julia**: Full support via glaze-interop.jl
+- **Julia**: Full support via [glaze-interop.jl](https://github.com/stephenberry/glaze-interop.jl)
 
 ## Limitations
 
