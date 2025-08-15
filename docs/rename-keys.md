@@ -164,8 +164,6 @@ template <> struct glz::meta<my_struct> : glz::upper_case {};        // {"USERID
 The transformation functions are also available for direct use:
 
 ```cpp
-#include "glaze/util/key_transformers.hpp"
-
 std::string camel = glz::to_camel_case("hello_world");        // "helloWorld"
 std::string snake = glz::to_snake_case("XMLParser");          // "xml_parser"
 std::string kebab = glz::to_kebab_case("HTTPSConnection");    // "https-connection"
