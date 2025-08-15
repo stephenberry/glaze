@@ -19,7 +19,11 @@
                 "CMAKE_EXPORT_COMPILE_COMMANDS": true,
                 "glaze_DEVELOPER_MODE": true,
                 "BUILD_TESTING": true,
-                "glaze_BUILD_INTEROP": true
+                "glaze_BUILD_INTEROP": true,
+                "CMAKE_CXX_FLAGS": "-stdlib=libc++",
+                "CMAKE_EXE_LINKER_FLAGS": "-stdlib=libc++",
+                "CMAKE_SHARED_LINKER_FLAGS": "-stdlib=libc++",
+                "CMAKE_MODULE_LINKER_FLAGS": "-stdlib=libc++"
             }
         },
         {
@@ -35,7 +39,11 @@
                 "CMAKE_EXPORT_COMPILE_COMMANDS": true,
                 "glaze_DEVELOPER_MODE": true,
                 "BUILD_TESTING": true,
-                "glaze_BUILD_INTEROP": true
+                "glaze_BUILD_INTEROP": true,
+                "CMAKE_CXX_FLAGS": "-stdlib=libc++",
+                "CMAKE_EXE_LINKER_FLAGS": "-stdlib=libc++",
+                "CMAKE_SHARED_LINKER_FLAGS": "-stdlib=libc++",
+                "CMAKE_MODULE_LINKER_FLAGS": "-stdlib=libc++"
             }
         },
         {
