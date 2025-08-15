@@ -59,7 +59,6 @@
          "ms-vscode.cpptools",
          "ms-vscode.cpptools-themes",
          "ms-vscode.cmake-tools",
-         "twxs.cmake",
          "llvm-vs-code-extensions.vscode-clangd",
          "eamodio.gitlens",
          "mhutchie.git-graph",
