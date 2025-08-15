@@ -5,6 +5,7 @@ The Glaze interop interface provides a C-compatible API for accessing C++ types 
 ## Overview
 
 The interop interface allows:
+
 - **Type Registration**: Register C++ types with their member information
 - **Instance Management**: Create and destroy C++ objects from other languages
 - **Member Access**: Get/set data members and call member functions
@@ -340,6 +341,7 @@ target_link_libraries(my_plugin PRIVATE glaze_interop)
 ## Examples
 
 See `tests/interop/` for complete examples including:
+
 - Basic type registration and access (`interop_basic_test.cpp`)
 - Container manipulation and member function calls
 - Plugin architecture (`interop_plugins_test.cpp`)
