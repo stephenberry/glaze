@@ -351,14 +351,14 @@ namespace glz
          return desc.get();
       }
 
-      ::glz_type_descriptor* allocate_variant(uint64_t count, ::glz_type_descriptor** alternatives, 
+      ::glz_type_descriptor* allocate_variant(uint64_t count, ::glz_type_descriptor** alternatives,
                                               uint64_t current_index = 0)
       {
          auto& desc = descriptors.emplace_back(std::make_unique<::glz_type_descriptor>());
          desc->index = GLZ_TYPE_VARIANT;
          desc->data.variant.count = count;
          desc->data.variant.current_index = current_index;
-         
+
          // Create a persistent copy of the alternatives array if it exists
          if (count > 0 && alternatives != nullptr) {
             // Store the alternatives array similar to how we handle function param_types
@@ -371,7 +371,7 @@ namespace glz
          else {
             desc->data.variant.alternatives = nullptr;
          }
-         
+
          return desc.get();
       }
 
@@ -778,29 +778,31 @@ namespace glz
    ::glz_type_descriptor* create_type_descriptor_variant()
    {
       constexpr uint64_t count = sizeof...(Ts);
-      
+
       // Create type descriptors for each alternative
       ::glz_type_descriptor** alternatives = nullptr;
-      
+
       if constexpr (count > 0) {
          alternatives = new ::glz_type_descriptor*[count];
          size_t idx = 0;
-         ([&idx, &alternatives] {
-            auto* desc = create_type_descriptor<Ts>();
-            if (!desc) {
-               // For struct types that aren't recognized, create a struct descriptor with type hash
-               desc = type_descriptor_pool_instance.allocate_struct(nullptr, nullptr, type_hash<Ts>());
-            }
-            alternatives[idx++] = desc;
-         }(), ...);
+         (
+            [&idx, &alternatives] {
+               auto* desc = create_type_descriptor<Ts>();
+               if (!desc) {
+                  // For struct types that aren't recognized, create a struct descriptor with type hash
+                  desc = type_descriptor_pool_instance.allocate_struct(nullptr, nullptr, type_hash<Ts>());
+               }
+               alternatives[idx++] = desc;
+            }(),
+            ...);
       }
-      
+
       // Note: current_index is 0 by default, runtime will update this
       auto* desc = type_descriptor_pool_instance.allocate_variant(count, alternatives, 0);
-      
+
       // Clean up the temporary array (allocate_variant makes a copy)
       delete[] alternatives;
-      
+
       return desc;
    }
 
@@ -982,7 +984,10 @@ namespace glz
 
       static void* (*get_invoker())(void*, void**, void*) { return Accessor::template get_invoker<MemberFunc>(); }
 
-      static ::glz_type_descriptor* create_descriptor() { return create_type_descriptor_function<decltype(MemberFunc)>(); }
+      static ::glz_type_descriptor* create_descriptor()
+      {
+         return create_type_descriptor_function<decltype(MemberFunc)>();
+      }
    };
 
    // Generic member accessor using member pointers
@@ -1399,10 +1404,12 @@ GLZ_API const glz_type_descriptor* glz_shared_future_get_value_type(void* future
 // Variant API functions
 GLZ_API uint64_t glz_variant_index(void* variant_ptr, const glz_type_descriptor* type_desc);
 GLZ_API void* glz_variant_get(void* variant_ptr, const glz_type_descriptor* type_desc);
-GLZ_API bool glz_variant_set(void* variant_ptr, const glz_type_descriptor* type_desc, uint64_t index, const void* value);
+GLZ_API bool glz_variant_set(void* variant_ptr, const glz_type_descriptor* type_desc, uint64_t index,
+                             const void* value);
 GLZ_API bool glz_variant_holds_alternative(void* variant_ptr, const glz_type_descriptor* type_desc, uint64_t index);
 GLZ_API const glz_type_descriptor* glz_variant_type_at_index(const glz_type_descriptor* type_desc, uint64_t index);
-GLZ_API void* glz_create_variant(const glz_type_descriptor* type_desc, uint64_t initial_index, const void* initial_value);
+GLZ_API void* glz_create_variant(const glz_type_descriptor* type_desc, uint64_t initial_index,
+                                 const void* initial_value);
 GLZ_API void glz_destroy_variant(void* variant_ptr, const glz_type_descriptor* type_desc);
 
 // Error handling functions
