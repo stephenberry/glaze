@@ -1,6 +1,6 @@
 # [Choice] bionic (18.04), focal (20.04), jammy (22.04), noble (24.04)
 ARG VARIANT="noble"
-FROM ubuntu:${VARIANT}
+FROM mcr.microsoft.com/devcontainers/cpp:${VARIANT}
 
 # Restate the variant to use it later on in the llvm and cmake installations
 ARG VARIANT
