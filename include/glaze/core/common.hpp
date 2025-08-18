@@ -596,7 +596,7 @@ namespace glz
    ///
    /// template <>
    /// struct glz::meta<person> {
-   ///    static constexpr bool require_key(std::string_view key, bool nullable) {
+   ///    static constexpr bool requires_key(std::string_view key, bool nullable) {
    ///       if (not nullable) {
    ///          return true;
    ///       }
@@ -617,7 +617,7 @@ namespace glz
    constexpr bool requires_key(const std::string_view key)
    {
       if constexpr (meta_has_requires_key<T>) {
-         if (meta<T>::requires_key(key, nullable_like<Val_T>)) return true;
+         if constexpr (meta<T>::requires_key(key, nullable_like<Val_T>)) return true;
       }
       else if constexpr (Opts.error_on_missing_keys && !nullable_like<Val_T>) {
          return true;
