@@ -75,7 +75,7 @@ Examples:
 
 ```cpp
 // Numeric constraint
-glz::http_router::param_constraint numeric{
+glz::param_constraint numeric{
     .description = "Must be a positive integer",
     .validation = [](std::string_view value) {
         if (value.empty()) return false;
@@ -89,7 +89,7 @@ glz::http_router::param_constraint numeric{
 router.get("/users/:id", user_handler, {{"id", numeric}});
 
 // UUID constraint using regex
-glz::http_router::param_constraint uuid{
+glz::param_constraint uuid{
     .description = "Must be a valid UUID",
     .validation = [](std::string_view value) {
         std::regex uuid_regex(R"([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})");
@@ -100,7 +100,7 @@ glz::http_router::param_constraint uuid{
 router.get("/sessions/:session_id", session_handler, {{"session_id", uuid}});
 
 // Alphanumeric constraint
-glz::http_router::param_constraint username{
+glz::param_constraint username{
     .description = "Username: 3-20 alphanumeric characters or underscore",
     .validation = [](std::string_view value) {
         if (value.size() < 3 || value.size() > 20) return false;
@@ -120,7 +120,7 @@ Validation functions provide flexible parameter validation:
 
 ```cpp
 // File extension check
-glz::http_router::param_constraint any_extension{
+glz::param_constraint any_extension{
     .description = "Text files only",
     .validation = [](std::string_view value) {
         return value.ends_with(".txt");
@@ -128,7 +128,7 @@ glz::http_router::param_constraint any_extension{
 };
 
 // Hex color code validation
-glz::http_router::param_constraint hex_color{
+glz::param_constraint hex_color{
     .description = "Valid hex color code",
     .validation = [](std::string_view value) {
         if (value.size() != 7 || value[0] != '#') return false;
@@ -140,7 +140,7 @@ glz::http_router::param_constraint hex_color{
 };
 
 // Exact match validation
-glz::http_router::param_constraint exact_match{
+glz::param_constraint exact_match{
     .description = "Must be exactly 'admin'",
     .validation = [](std::string_view value) {
         return value == "admin";
@@ -148,7 +148,7 @@ glz::http_router::param_constraint exact_match{
 };
 
 // Year range validation
-glz::http_router::param_constraint year{
+glz::param_constraint year{
     .description = "4-digit year starting with 2",
     .validation = [](std::string_view value) {
         if (value.size() != 4 || value[0] != '2') return false;
@@ -184,7 +184,7 @@ router.get("/api/*version", [](const glz::request& req, glz::response& res) {
 
 ```cpp
 // Constrain wildcard content
-glz::http_router::param_constraint safe_path{
+glz::param_constraint safe_path{
     .description = "Safe file path",
     .validation = [](std::string_view value) {
         for (char c : value) {

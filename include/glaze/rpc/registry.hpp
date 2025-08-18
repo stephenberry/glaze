@@ -143,7 +143,8 @@ namespace glz
                }
                else {
                   // this is a variable and not a function, so we build RPC read/write calls
-                  impl::template register_variable_endpoint<std::remove_cvref_t<Func>>(full_key, func, *this);
+                  // We can't remove const here, because const fields need to be able to be written
+                  impl::template register_variable_endpoint<std::remove_reference_t<Func>>(full_key, func, *this);
                }
             }
          });
@@ -159,6 +160,34 @@ namespace glz
             out.header.body_length = body.size();
             out.header.length = sizeof(repe::header) + out.query.size() + out.body.size();
          };
+
+         // REPE Header Validation
+
+         // Version validation - REPE spec requires version 1
+         if (in.header.version != 1) {
+            out.header.ec = error_code::version_mismatch;
+            out.header.id = in.header.id; // Echo back the original ID
+            write_error("REPE version mismatch: expected 1, got " + std::to_string(in.header.version));
+            return;
+         }
+
+         // Length validation - REPE spec requires length = 48 + query_length + body_length
+         const uint64_t expected_length = sizeof(repe::header) + in.header.query_length + in.header.body_length;
+         if (in.header.length != expected_length) {
+            out.header.ec = error_code::invalid_header;
+            out.header.id = in.header.id; // Echo back the original ID
+            write_error("REPE length mismatch: expected " + std::to_string(expected_length) + ", got " +
+                        std::to_string(in.header.length));
+            return;
+         }
+
+         // Magic number validation - REPE spec requires 0x1507
+         if (in.header.spec != 0x1507) {
+            out.header.ec = error_code::invalid_header;
+            out.header.id = in.header.id; // Echo back the original ID
+            write_error("REPE magic number mismatch: expected 0x1507, got 0x" + std::to_string(in.header.spec));
+            return;
+         }
 
          if (auto it = endpoints.find(in.query); it != endpoints.end()) {
             if (bool(in.header.ec)) {

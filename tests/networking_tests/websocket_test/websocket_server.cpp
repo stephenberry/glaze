@@ -182,27 +182,25 @@ int main()
 
    try {
       // Start server
-      server.bind(8080);
+      server.bind(8080).with_signals(); // Enable signal handling for graceful shutdown
 
       std::cout << "\nServer running on http://localhost:8080\n";
       std::cout << "WebSocket endpoint: ws://localhost:8080/ws\n";
       std::cout << "Web interface: http://localhost:8080\n";
       std::cout << "Status API: http://localhost:8080/api/status\n";
-      std::cout << "\nPress Enter to stop the server...\n\n";
+      std::cout << "\nPress Ctrl+C to gracefully shut down the server\n\n";
 
       server.start();
 
-      // Wait for user input to stop
-      std::cin.get();
+      // Wait for shutdown signal (blocks until server stops)
+      server.wait_for_signal();
 
-      std::cout << "🛑 Stopping server...\n";
-      server.stop();
+      std::cout << "👋 Server stopped gracefully\n";
    }
    catch (const std::exception& e) {
       std::cerr << "❌ Server error: " << e.what() << std::endl;
       return 1;
    }
 
-   std::cout << "👋 Server stopped gracefully\n";
    return 0;
 }

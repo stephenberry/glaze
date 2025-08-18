@@ -368,18 +368,172 @@ struct glz::meta<Permissions> {
 // JSON output: ["read", "execute"]
 ```
 
-### Object Merging
+### Dynamic JSON Objects with glz::obj
 
-Combine multiple objects into a single JSON object:
+`glz::obj` is a compile-time, stack-allocated JSON object builder that allows you to create JSON objects on the fly without defining structs. It's perfect for logging, custom serialization, temporary data structures, and rapid prototyping.
+
+#### Basic Usage
 
 ```cpp
-glz::obj metadata{"version", "1.0", "author", "John"};
-std::map<std::string, int> scores = {{"test1", 95}, {"test2", 87}};
+// Create a JSON object with key-value pairs
+auto obj = glz::obj{"name", "Alice", "age", 30, "active", true};
 
-auto merged = glz::merge{metadata, scores};
 std::string buffer{};
-auto ec = glz::write_json(merged, buffer);
-// Results in: {"version":"1.0","author":"John","test1":95,"test2":87}
+auto ec = glz::write_json(obj, buffer);
+// Results in: {"name":"Alice","age":30,"active":true}
+```
+
+#### Key Features
+
+- **Stack-allocated**: No dynamic memory allocation for better performance
+- **Type-safe**: Compile-time type checking
+- **Heterogeneous types**: Mix different value types in the same object
+- **Reference semantics**: Can store references to existing variables
+- **Nested support**: Can contain other `glz::obj` or `glz::arr` instances
+
+#### Advanced Examples
+
+```cpp
+// Nested objects and arrays
+auto nested = glz::obj{
+    "user", glz::obj{"id", 123, "name", "Bob"},
+    "scores", glz::arr{95, 87, 92},
+    "metadata", glz::obj{"version", "1.0", "timestamp", 1234567890}
+};
+
+// Storing references to existing variables
+std::string name = "Charlie";
+int score = 100;
+auto ref_obj = glz::obj{"player", name, "score", score};
+// Changes to 'name' or 'score' will be reflected when serializing ref_obj
+
+// Mixed types in one object
+std::vector<int> vec = {1, 2, 3};
+std::map<std::string, double> map = {{"pi", 3.14}, {"e", 2.71}};
+auto mixed = glz::obj{
+    "numbers", vec,
+    "constants", map,
+    "flag", true,
+    "message", "Hello"
+};
+```
+
+#### glz::obj_copy
+
+When you need value semantics instead of reference semantics, use `glz::obj_copy`:
+
+```cpp
+int x = 5;
+auto obj_ref = glz::obj{"x", x};  // Stores reference to x
+auto obj_val = glz::obj_copy{"x", x};  // Copies the value of x
+
+x = 10;
+// obj_ref will serialize as {"x":10}
+// obj_val will serialize as {"x":5}
+```
+
+### Dynamic JSON Arrays with glz::arr
+
+Similar to `glz::obj`, `glz::arr` creates stack-allocated JSON arrays:
+
+```cpp
+// Basic array
+auto arr = glz::arr{1, 2, 3, 4, 5};
+
+// Mixed types
+auto mixed_arr = glz::arr{"Hello", 42, true, 3.14};
+
+// Nested structures
+auto nested_arr = glz::arr{
+    glz::obj{"id", 1, "name", "Item1"},
+    glz::obj{"id", 2, "name", "Item2"},
+    glz::arr{1, 2, 3}
+};
+
+std::string buffer{};
+auto ec = glz::write_json(nested_arr, buffer);
+// Results in: [{"id":1,"name":"Item1"},{"id":2,"name":"Item2"},[1,2,3]]
+```
+
+#### glz::arr_copy
+
+Just like `glz::obj_copy`, use `glz::arr_copy` for value semantics:
+
+```cpp
+std::string s = "original";
+auto arr_ref = glz::arr{s};  // Reference to s
+auto arr_val = glz::arr_copy{s};  // Copy of s
+```
+
+### Object Merging
+
+`glz::merge` allows you to combine multiple JSON objects into a single object. This is useful for composing objects from different sources:
+
+```cpp
+// Merge glz::obj instances
+glz::obj metadata{"version", "1.0", "author", "John"};
+glz::obj settings{"debug", true, "timeout", 5000};
+auto merged1 = glz::merge{metadata, settings};
+// Results in: {"version":"1.0","author":"John","debug":true,"timeout":5000}
+
+// Merge different object types
+std::map<std::string, int> scores = {{"test1", 95}, {"test2", 87}};
+auto user_data = glz::obj{"user_id", 42, "username", "alice"};
+auto merged2 = glz::merge{user_data, scores};
+// Results in: {"user_id":42,"username":"alice","test1":95,"test2":87}
+
+// Merge with raw_json
+glz::raw_json raw{R"({"extra":"data"})"};
+auto merged3 = glz::merge{metadata, raw};
+// Results in: {"version":"1.0","author":"John","extra":"data"}
+```
+
+#### Key Collision Behavior
+
+When merging objects with duplicate keys, the last value wins:
+
+```cpp
+auto obj1 = glz::obj{"key", "first"};
+auto obj2 = glz::obj{"key", "second"};
+auto merged = glz::merge{obj1, obj2};
+// Results in: {"key":"second"}
+```
+
+### Performance Considerations
+
+- **Stack allocation**: Both `glz::obj` and `glz::arr` are stack-allocated, avoiding heap allocations
+- **Compile-time optimization**: The structure is known at compile time, enabling optimizations
+- **Zero-copy references**: When storing references, no data copying occurs
+- **Efficient serialization**: Direct memory access without intermediate representations
+
+### Use Cases
+
+1. **Logging and Debugging**:
+```cpp
+auto log_entry = glz::obj{
+    "timestamp", std::time(nullptr),
+    "level", "INFO",
+    "message", "User logged in",
+    "user_id", user.id
+};
+glz::write_json(log_entry, log_buffer);
+```
+
+2. **API Responses**:
+```cpp
+auto response = glz::obj{
+    "status", 200,
+    "data", glz::arr{item1, item2, item3},
+    "metadata", glz::obj{"page", 1, "total", 100}
+};
+```
+
+3. **Configuration Objects**:
+```cpp
+auto config = glz::obj{
+    "database", glz::obj{"host", "localhost", "port", 5432},
+    "cache", glz::obj{"enabled", true, "ttl", 3600}
+};
 ```
 
 ## Performance Features

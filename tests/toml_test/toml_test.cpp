@@ -21,10 +21,32 @@ struct nested
    std::string y = "test";
 };
 
-struct container
+struct simple_container
 {
    nested inner{};
    double value = 5.5;
+};
+
+struct advanced_container
+{
+   nested inner{};
+   nested inner_two{};
+   double value = 5.5;
+};
+
+struct level_one
+{
+   int value{0};
+};
+
+struct level_two
+{
+   level_one l1{};
+};
+
+struct dotted_access_struct
+{
+   level_two l2{};
 };
 
 struct optional_struct
@@ -222,15 +244,70 @@ b = 2)");
    };
 
    // Test writing a nested structure.
-   "nested_struct"_test = [] {
-      container c{};
+   "write_nested_struct"_test = [] {
+      simple_container c{};
       std::string buffer{};
       expect(not glz::write_toml(c, buffer));
       expect(buffer == R"([inner]
 x = 10
 y = "test"
 
-value = 5.5)");
+value = 5.5)"); // TODO: This is not the right format, we need to refactor the output to match TOML syntax.
+                // For now, I'll leave it as is, but it should be fixed in the future.
+   };
+
+   "read_wrong_format_nested"_test = [] {
+      advanced_container sc{};
+      std::string buffer{R"([inner]
+x = 10
+y = "test"
+
+value = 5.5)"};
+      auto error = glz::read_toml(sc, buffer);
+      expect(error); // Expect an error because the format is not correct for TOML. root value should be before nested
+                     // table.
+      expect(error == glz::error_code::syntax_error);
+   };
+
+   "read_nested_struct"_test = [] {
+      simple_container sc{};
+      std::string buffer{R"(value = 5.6
+
+[inner]
+x = 11
+y = "test1"
+)"};
+      expect(not glz::read_toml(sc, buffer));
+      expect(sc.inner.x == 11);
+      expect(sc.inner.y == "test1");
+      expect(sc.value == 5.6);
+   };
+
+   "read_advanced_nested_struct"_test = [] {
+      advanced_container ac{};
+      std::string buffer{R"(value = 5.6
+
+[inner]
+x = 11
+y = "test1"
+
+[inner_two]
+x = 12
+y = "test2"
+)"};
+      expect(not glz::read_toml(ac, buffer));
+      expect(ac.inner.x == 11);
+      expect(ac.inner.y == "test1");
+      expect(ac.inner_two.x == 12);
+      expect(ac.inner_two.y == "test2");
+      expect(ac.value == 5.6);
+   };
+
+   "read_advanced_nested_struct"_test = [] {
+      dotted_access_struct dac{};
+      std::string buffer{R"(l2.l1.value = 1)"};
+      expect(not glz::read_toml(dac, buffer));
+      expect(dac.l2.l1.value == 1);
    };
 
    // Test writing a boolean value.

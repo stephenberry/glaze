@@ -174,6 +174,19 @@ namespace glz
             return;
          }
 
+         // Check for operation-specific skipping
+         if constexpr (meta_has_skip<std::remove_cvref_t<T>>) {
+            if constexpr (meta<std::remove_cvref_t<T>>::skip(Key, {glz::operation::parse})) {
+               skip_value<JSON>::op<Opts>(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]]
+                  return; // Propagate error from skip_value
+               if constexpr (Opts.error_on_missing_keys || Opts.partial_read) {
+                  ((selected_index = I), ...); // Mark as handled even if skipped
+               }
+               return;
+            }
+         }
+
          using V = refl_t<T, I>;
 
          if constexpr (const_value_v<V>) {
@@ -2230,7 +2243,7 @@ namespace glz
                         constexpr auto req_fields = required_fields<T, Opts>();
                         if ((req_fields & fields) != req_fields) {
                            for (size_t i = 0; i < num_members; ++i) {
-                              if (not fields[i]) {
+                              if (not fields[i] && req_fields[i]) {
                                  ctx.custom_error_message = reflect<T>::keys[i];
                                  // We just return the first missing key in order to avoid heap allocations
                                  break;
@@ -2524,8 +2537,9 @@ namespace glz
             glaze_enum_t<Ts>,
          tuple<Ts>, tuple < >> {}...));
       using object_types = decltype(tuplet::tuple_cat(std::conditional_t<json_object<Ts>, tuple<Ts>, tuple<>>{}...));
-      using array_types = decltype(tuplet::tuple_cat(
-         std::conditional_t < array_t<remove_meta_wrapper_t<Ts>> || glaze_array_t<Ts>, tuple<Ts>, tuple < >> {}...));
+      using array_types = decltype(tuplet::tuple_cat(std::conditional_t < array_t<remove_meta_wrapper_t<Ts>> ||
+                                                        glaze_array_t<Ts> || tuple_t<Ts> || is_std_tuple<Ts>,
+                                                     tuple<Ts>, tuple < >> {}...));
       using nullable_types = decltype(tuplet::tuple_cat(std::conditional_t<null_t<Ts>, tuple<Ts>, tuple<>>{}...));
       using nullable_objects =
          decltype(tuplet::tuple_cat(std::conditional_t<is_memory_object<Ts>, tuple<Ts>, tuple<>>{}...));

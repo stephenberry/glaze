@@ -63,6 +63,16 @@ struct glz::meta<my_struct>
 static_assert(glz::write_supported<my_struct, glz::JSON>);
 static_assert(glz::read_supported<my_struct, glz::JSON>);
 
+struct Issue1866
+{
+   std::string uniqueName;
+   std::string name{};
+   std::string description{};
+   bool codexSecret{};
+   std::optional<bool> excludeFromCodex{};
+   std::string parentName{};
+};
+
 suite starter = [] {
    "example"_test = [] {
       my_struct s{};
@@ -1896,7 +1906,7 @@ suite bench = [] {
       trace.begin("json_ptr_bench");
       tstart = std::chrono::high_resolution_clock::now();
       for (size_t i{}; i < repeat; ++i) {
-         glz::get<std::string>(thing, "/thing_ptr/b");
+         std::ignore = glz::get<std::string>(thing, "/thing_ptr/b");
       }
       tend = std::chrono::high_resolution_clock::now();
       trace.end("json_ptr_bench", "JSON pointer benchmark");
@@ -3558,6 +3568,229 @@ suite variant_tests = [] {
       expect(read.has_value());
       expect(std::holds_alternative<Color>(read.value()));
       expect(std::get<Color>(read.value()) == Color::Red);
+   };
+
+   "variant read tuple"_test = [] {
+      using int_int_tuple_t = std::tuple<int, int>;
+      std::variant<int, int_int_tuple_t, std::string> var;
+
+      expect(glz::read_json(var, R"(1)") == glz::error_code::none);
+      expect(std::get<int>(var) == 1);
+
+      expect(glz::read_json(var, R"("str")") == glz::error_code::none);
+      expect(std::get<std::string>(var) == "str");
+
+      expect(glz::read_json(var, R"([2, 3])") == glz::error_code::none);
+      expect(std::get<int_int_tuple_t>(var) == int_int_tuple_t{2, 3});
+   };
+};
+
+// Tests for std::vector<std::variant<...>> with purely reflected structs
+struct reflected_person
+{
+   std::string name{};
+   int age{};
+   double height{};
+};
+
+struct reflected_animal
+{
+   std::string species{};
+   std::string name{};
+   int weight{};
+};
+
+struct reflected_vehicle
+{
+   std::string make{};
+   std::string model{};
+   int year{};
+   double price{};
+};
+
+struct reflected_book
+{
+   std::string title{};
+   std::string author{};
+   int pages{};
+   std::string isbn{};
+};
+
+static_assert(glz::reflectable<reflected_person>);
+static_assert(glz::reflectable<reflected_animal>);
+static_assert(glz::reflectable<reflected_vehicle>);
+static_assert(glz::reflectable<reflected_book>);
+
+suite vector_variant_reflection_tests = [] {
+   "vector of variant with two reflected structs"_test = [] {
+      using entity_variant = std::variant<reflected_person, reflected_animal>;
+      std::vector<entity_variant> entities;
+
+      entities.push_back(reflected_person{"Alice", 30, 165.5});
+      entities.push_back(reflected_animal{"Dog", "Buddy", 25});
+      entities.push_back(reflected_person{"Bob", 25, 180.0});
+      entities.push_back(reflected_animal{"Cat", "Whiskers", 4});
+
+      std::string json;
+      expect(!glz::write_json(entities, json));
+
+      std::vector<entity_variant> read_entities;
+      expect(glz::read_json(read_entities, json) == glz::error_code::none);
+
+      expect(read_entities.size() == 4);
+
+      expect(std::holds_alternative<reflected_person>(read_entities[0]));
+      auto& p1 = std::get<reflected_person>(read_entities[0]);
+      expect(p1.name == "Alice");
+      expect(p1.age == 30);
+      expect(p1.height == 165.5);
+
+      expect(std::holds_alternative<reflected_animal>(read_entities[1]));
+      auto& a1 = std::get<reflected_animal>(read_entities[1]);
+      expect(a1.species == "Dog");
+      expect(a1.name == "Buddy");
+      expect(a1.weight == 25);
+
+      expect(std::holds_alternative<reflected_person>(read_entities[2]));
+      auto& p2 = std::get<reflected_person>(read_entities[2]);
+      expect(p2.name == "Bob");
+      expect(p2.age == 25);
+      expect(p2.height == 180.0);
+
+      expect(std::holds_alternative<reflected_animal>(read_entities[3]));
+      auto& a2 = std::get<reflected_animal>(read_entities[3]);
+      expect(a2.species == "Cat");
+      expect(a2.name == "Whiskers");
+      expect(a2.weight == 4);
+   };
+
+   "vector of variant with three reflected structs"_test = [] {
+      using item_variant = std::variant<reflected_person, reflected_vehicle, reflected_book>;
+      std::vector<item_variant> items;
+
+      items.push_back(reflected_person{"Charlie", 35, 175.0});
+      items.push_back(reflected_vehicle{"Toyota", "Camry", 2022, 25000.0});
+      items.push_back(reflected_book{"The Great Gatsby", "F. Scott Fitzgerald", 180, "978-0-7432-7356-5"});
+      items.push_back(reflected_person{"Diana", 28, 160.0});
+
+      std::string json;
+      expect(!glz::write_json(items, json));
+
+      std::vector<item_variant> read_items;
+      expect(glz::read_json(read_items, json) == glz::error_code::none);
+
+      expect(read_items.size() == 4);
+
+      expect(std::holds_alternative<reflected_person>(read_items[0]));
+      expect(std::holds_alternative<reflected_vehicle>(read_items[1]));
+      expect(std::holds_alternative<reflected_book>(read_items[2]));
+      expect(std::holds_alternative<reflected_person>(read_items[3]));
+
+      auto& vehicle = std::get<reflected_vehicle>(read_items[1]);
+      expect(vehicle.make == "Toyota");
+      expect(vehicle.model == "Camry");
+      expect(vehicle.year == 2022);
+      expect(vehicle.price == 25000.0);
+
+      auto& book = std::get<reflected_book>(read_items[2]);
+      expect(book.title == "The Great Gatsby");
+      expect(book.author == "F. Scott Fitzgerald");
+      expect(book.pages == 180);
+      expect(book.isbn == "978-0-7432-7356-5");
+   };
+
+   "empty vector of variant"_test = [] {
+      using entity_variant = std::variant<reflected_person, reflected_animal>;
+      std::vector<entity_variant> entities;
+
+      std::string json;
+      expect(!glz::write_json(entities, json));
+      expect(json == "[]");
+
+      std::vector<entity_variant> read_entities;
+      expect(glz::read_json(read_entities, json) == glz::error_code::none);
+      expect(read_entities.empty());
+   };
+
+   "vector with single variant element"_test = [] {
+      using entity_variant = std::variant<reflected_person, reflected_animal>;
+      std::vector<entity_variant> entities;
+
+      entities.push_back(reflected_person{"Eve", 40, 170.0});
+
+      std::string json;
+      expect(!glz::write_json(entities, json));
+
+      std::vector<entity_variant> read_entities;
+      expect(glz::read_json(read_entities, json) == glz::error_code::none);
+
+      expect(read_entities.size() == 1);
+      expect(std::holds_alternative<reflected_person>(read_entities[0]));
+      auto& person = std::get<reflected_person>(read_entities[0]);
+      expect(person.name == "Eve");
+      expect(person.age == 40);
+      expect(person.height == 170.0);
+   };
+
+   "roundtrip with mixed types"_test = [] {
+      using mixed_variant = std::variant<reflected_person, reflected_animal, reflected_vehicle, reflected_book>;
+      std::vector<mixed_variant> original;
+
+      original.push_back(reflected_book{"1984", "George Orwell", 328, "978-0-452-28423-4"});
+      original.push_back(reflected_animal{"Horse", "Thunder", 500});
+      original.push_back(reflected_vehicle{"Honda", "Accord", 2023, 27000.0});
+      original.push_back(reflected_person{"Frank", 45, 185.0});
+      original.push_back(reflected_book{"To Kill a Mockingbird", "Harper Lee", 281, "978-0-06-112008-4"});
+
+      std::string json;
+      expect(!glz::write_json(original, json));
+
+      std::vector<mixed_variant> decoded;
+      expect(glz::read_json(decoded, json) == glz::error_code::none);
+
+      expect(decoded.size() == original.size());
+
+      for (size_t i = 0; i < original.size(); ++i) {
+         expect(original[i].index() == decoded[i].index());
+      }
+   };
+
+   "prettified json output"_test = [] {
+      using entity_variant = std::variant<reflected_person, reflected_animal>;
+      std::vector<entity_variant> entities;
+
+      entities.push_back(reflected_person{"Grace", 32, 168.0});
+      entities.push_back(reflected_animal{"Bird", "Tweety", 1});
+
+      std::string json;
+      expect(!glz::write<glz::opts{.prettify = true}>(entities, json));
+
+      expect(json.find("\n") != std::string::npos); // Should contain newlines
+      expect(json.find("   ") != std::string::npos); // Should contain indentation
+
+      std::vector<entity_variant> read_entities;
+      expect(glz::read_json(read_entities, json) == glz::error_code::none);
+      expect(read_entities.size() == 2);
+   };
+
+   "vector of variant with structs having overlapping field names"_test = [] {
+      // Both structs have a 'name' field, but different other fields
+      using ambiguous_variant = std::variant<reflected_person, reflected_animal>;
+      std::vector<ambiguous_variant> items;
+
+      // The variant should deduce the correct type based on all fields present
+      items.push_back(reflected_person{"Henry", 50, 175.5});
+      items.push_back(reflected_animal{"Lion", "Simba", 190});
+
+      std::string json;
+      expect(!glz::write_json(items, json));
+
+      std::vector<ambiguous_variant> read_items;
+      expect(glz::read_json(read_items, json) == glz::error_code::none);
+
+      expect(read_items.size() == 2);
+      expect(std::holds_alternative<reflected_person>(read_items[0]));
+      expect(std::holds_alternative<reflected_animal>(read_items[1]));
    };
 };
 
@@ -5842,6 +6075,22 @@ suite required_keys = [] {
                                   ^ hello)")
          << err_msg;
    };
+
+   "required_keys_format_error_issue1866"_test = [] {
+      std::vector<Issue1866> exports;
+      std::vector<Issue1866> gen;
+      std::string buffer{
+         R"([{"uniqueName": "/Lotus/Characters/TwinQueens","name": "Twin Queens","description": "Rulers of the Grineer with their own banner.","codexSecret": false,"parentName": "/Lotus/Characters"}])"};
+
+      std::string buffer1{
+         R"([{"uniqueName": "/Lotus/Characters/TwinQueens","name": "Twin Queens","description": "Rulers of the Grineer with their own banner.","codexSecret": false}])"};
+      auto er = glz::read<glz::opts{.error_on_missing_keys = true}>(exports, buffer);
+      expect(!er);
+
+      auto er1 = glz::read<glz::opts{.error_on_missing_keys = true}>(gen, buffer1);
+      expect(er1);
+      expect(er1.custom_error_message == "parentName");
+   };
 };
 
 struct numbers_as_strings
@@ -7428,7 +7677,7 @@ suite bitset = [] {
    };
 };
 
-#if defined(__STDCPP_FLOAT128_T__)
+#if defined(__STDCPP_FLOAT128_T__) && !defined(__APPLE__)
 suite float128_test = [] {
    "float128"_test = [] {
       std::float128_t x = 3.14;
@@ -9105,6 +9354,71 @@ suite skip_tests = [] {
    };
 };
 
+struct specify_only_skip_obj
+{
+   int i{1};
+   int j{2};
+   int k{3};
+};
+
+template <>
+struct glz::meta<specify_only_skip_obj>
+{
+   static constexpr bool skip(const std::string_view key, const meta_context&) { return key == "j"; }
+};
+
+suite specify_only_skip_obj_tests = [] {
+   "skip_only_one"_test = [] {
+      specify_only_skip_obj obj{};
+      expect(glz::write_json(obj) == R"({"i":1,"k":3})") << glz::write_json(obj).value();
+   };
+};
+
+struct skip_hidden_elements
+{
+   int i{1};
+   int hidden_j{2};
+   int hidden_k{3};
+   int l{4};
+};
+
+template <>
+struct glz::meta<skip_hidden_elements>
+{
+   static constexpr bool skip(const std::string_view key, const meta_context&)
+   {
+      return key.starts_with(std::string_view{"hidden"});
+   }
+};
+
+suite skip_hidden_elements_tests = [] {
+   "skip_hidden_elements"_test = [] {
+      skip_hidden_elements obj{};
+      expect(glz::write_json(obj) == R"({"i":1,"l":4})") << glz::write_json(obj).value();
+   };
+};
+
+struct skip_first_and_last
+{
+   int i{1};
+   int hidden_j{2};
+   int hidden_k{3};
+   int l{4};
+};
+
+template <>
+struct glz::meta<skip_first_and_last>
+{
+   static constexpr bool skip(const std::string_view key, const meta_context&) { return key == "i" || key == "l"; }
+};
+
+suite skip_first_and_last_tests = [] {
+   "skip_first_and_last_tests"_test = [] {
+      skip_first_and_last obj{};
+      expect(glz::write_json(obj) == R"({"hidden_j":2,"hidden_k":3})") << glz::write_json(obj).value();
+   };
+};
+
 template <size_t N>
 struct FixedName
 {
@@ -10763,6 +11077,52 @@ suite integer_id_variant_tests = [] {
       ]
    }
 ])") << out;
+   };
+};
+
+struct versioned_data_t
+{
+   std::string name{};
+   int version{};
+   std::string computed_field{};
+   std::string input_only_field{};
+};
+
+template <>
+struct glz::meta<versioned_data_t>
+{
+   static constexpr bool skip(const std::string_view key, const meta_context& ctx)
+   {
+      // Skip computed_field during parsing (reading) - it should only be written
+      if (key == "computed_field" && ctx.op == glz::operation::parse) {
+         return true;
+      }
+
+      // Skip input_only_field during serialization (writing) - it should only be read
+      if (key == "input_only_field" && ctx.op == glz::operation::serialize) {
+         return true;
+      }
+
+      return false;
+   }
+};
+
+suite operation_specific_skipping_tests = [] {
+   "operation_specific_skipping"_test = [] {
+      versioned_data_t obj{"TestData", 1, "computed_value", "input_value"};
+      std::string buffer{};
+
+      // Writing JSON - skips input_only_field
+      expect(not glz::write_json(obj, buffer));
+      expect(buffer == R"({"name":"TestData","version":1,"computed_field":"computed_value"})") << buffer;
+
+      // Reading JSON - skips computed_field
+      const char* json = R"({"name":"NewData","version":2,"computed_field":"ignored","input_only_field":"new_input"})";
+      expect(glz::read_json(obj, json) == glz::error_code::none);
+      expect(obj.name == "NewData");
+      expect(obj.version == 2);
+      expect(obj.computed_field == "computed_value"); // Should retain original value
+      expect(obj.input_only_field == "new_input");
    };
 };
 

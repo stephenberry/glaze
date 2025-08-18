@@ -175,9 +175,17 @@ int main() {
     });
     
     std::cout << "Starting server on http://localhost:8080" << std::endl;
-    server.bind(8080);
+    std::cout << "Press Ctrl+C to gracefully shut down the server" << std::endl;
+    
+    server.bind(8080)
+          .with_signals();  // Enable signal handling for graceful shutdown
+    
     server.start();
     
+    // Wait for shutdown signal (blocks until server stops)
+    server.wait_for_signal();
+    
+    std::cout << "Server shut down successfully" << std::endl;
     return 0;
 }
 ```
@@ -409,9 +417,17 @@ int main() {
     });
     
     std::cout << "Task API server running on http://localhost:8080" << std::endl;
-    server.bind(8080);
+    std::cout << "Press Ctrl+C to gracefully shut down the server" << std::endl;
+    
+    server.bind(8080)
+          .with_signals();  // Enable signal handling for graceful shutdown
+    
     server.start();
     
+    // Wait for shutdown signal (blocks until server stops)
+    server.wait_for_signal();
+    
+    std::cout << "Server shut down successfully" << std::endl;
     return 0;
 }
 ```
@@ -690,10 +706,17 @@ int main() {
     
     std::cout << "Chat server running on http://localhost:8080" << std::endl;
     std::cout << "WebSocket endpoint: ws://localhost:8080/ws" << std::endl;
+    std::cout << "Press Ctrl+C to gracefully shut down the server" << std::endl;
     
-    server.bind(8080);
+    server.bind(8080)
+          .with_signals();  // Enable signal handling for graceful shutdown
+    
     server.start();
     
+    // Wait for shutdown signal (blocks until server stops)
+    server.wait_for_signal();
+    
+    std::cout << "Server shut down successfully" << std::endl;
     return 0;
 }
 ```
@@ -875,10 +898,17 @@ int main() {
     
     std::cout << "Authentication server running on http://localhost:8080" << std::endl;
     std::cout << "Test credentials: admin/admin123 or user/user123" << std::endl;
+    std::cout << "Press Ctrl+C to gracefully shut down the server" << std::endl;
     
-    server.bind(8080);
+    server.bind(8080)
+          .with_signals();  // Enable signal handling for graceful shutdown
+    
     server.start();
     
+    // Wait for shutdown signal (blocks until server stops)
+    server.wait_for_signal();
+    
+    std::cout << "Server shut down successfully" << std::endl;
     return 0;
 }
 ```
@@ -1148,25 +1178,21 @@ int main() {
         server.enable_cors();
     }
     
-    // Graceful shutdown handling
-    std::atomic<bool> running{true};
-    
-    std::signal(SIGINT, [](int) {
-        std::cout << "\nReceived SIGINT, shutting down gracefully..." << std::endl;
-    });
-    
-    std::signal(SIGTERM, [](int) {
-        std::cout << "\nReceived SIGTERM, shutting down gracefully..." << std::endl;
-    });
-    
     try {
-        server.bind(config.port);
-        
         std::cout << "Product Microservice listening on port " << config.port << std::endl;
         std::cout << "Health check: http://localhost:" << config.port << "/health" << std::endl;
         std::cout << "API docs: http://localhost:" << config.port << "/api/v1" << std::endl;
+        std::cout << "Press Ctrl+C to gracefully shut down the server" << std::endl;
+        
+        server.bind(config.port)
+              .with_signals();  // Enable built-in signal handling for graceful shutdown
         
         server.start();
+        
+        // Wait for shutdown signal (blocks until server stops)
+        server.wait_for_signal();
+        
+        std::cout << "Product Microservice shut down successfully" << std::endl;
     } catch (const std::exception& e) {
         std::cerr << "Failed to start server: " << e.what() << std::endl;
         return 1;
