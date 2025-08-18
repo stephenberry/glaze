@@ -202,6 +202,30 @@ namespace glz
          return *this;
       }
 
+      template <class T>
+         requires(!std::is_same_v<std::decay_t<T>, json_t> && 
+                  !std::is_same_v<std::decay_t<T>, std::nullptr_t> &&
+                  !std::is_same_v<std::decay_t<T>, double> &&
+                  !std::is_same_v<std::decay_t<T>, bool> &&
+                  !std::is_same_v<std::decay_t<T>, std::string> &&
+                  !std::is_same_v<std::decay_t<T>, std::string_view> &&
+                  !std::is_same_v<std::decay_t<T>, const char*> &&
+                  !std::is_same_v<std::decay_t<T>, array_t> &&
+                  !std::is_same_v<std::decay_t<T>, object_t> &&
+                  !int_t<T> &&
+                  requires { write_json(std::declval<T>()); })
+      json_t& operator=(T&& value)
+      {
+         auto json_str = write_json(std::forward<T>(value));
+         if (json_str) {
+            auto result = read_json<json_t>(*json_str);
+            if (result) {
+               *this = std::move(*result);
+            }
+         }
+         return *this;
+      }
+
       [[nodiscard]] json_t& at(std::convertible_to<std::string_view> auto&& key) { return operator[](key); }
 
       [[nodiscard]] const json_t& at(std::convertible_to<std::string_view> auto&& key) const { return operator[](key); }
