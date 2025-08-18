@@ -55,3 +55,63 @@ struct local_schema_t
 };
 ```
 
+## Required Fields
+
+Glaze can automatically mark fields as required in the generated JSON schema based on their nullability and compile options.
+
+### Automatic Required Fields
+
+By default, when using the `error_on_missing_keys` option, non-nullable fields will be marked as required in the schema:
+
+```c++
+struct user_config
+{
+   std::string username{};  // required (non-nullable)
+   std::optional<int> age{}; // optional (nullable)
+   int id{};                 // required (non-nullable)
+};
+
+// Generate schema with required fields
+auto schema = glz::write_json_schema<user_config, glz::opts{.error_on_missing_keys = true}>();
+```
+
+This will generate a schema with `"required": ["username", "id"]`.
+
+### Custom Required Field Logic
+
+You can override the default behavior by providing a custom `requires_key` function in your type's `glz::meta` specialization:
+
+```c++
+struct api_request
+{
+   std::string endpoint{};
+   std::string api_key{};
+   std::optional<std::string> optional_param{};
+   std::string reserved_field{};  // internal use only
+};
+
+template <>
+struct glz::meta<api_request>
+{
+   // Custom logic to determine which fields are required
+   static constexpr bool requires_key(std::string_view key, bool is_nullable)
+   {
+      // Don't require fields starting with "reserved"
+      if (key.starts_with("reserved")) {
+         return false;
+      }
+      // All non-nullable fields are required
+      return !is_nullable;
+   }
+};
+```
+
+The `requires_key` function receives:
+- `key`: The name of the field being checked
+- `is_nullable`: Whether the field type is nullable (e.g., `std::optional`, pointers)
+
+This allows fine-grained control over which fields are marked as required in the generated JSON schema, useful for:
+- Excluding internal/reserved fields from requirements
+- Making certain nullable fields required based on business logic
+- Implementing complex validation rules
+
