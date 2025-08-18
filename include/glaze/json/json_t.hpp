@@ -203,16 +203,11 @@ namespace glz
       }
 
       template <class T>
-         requires(!std::is_same_v<std::decay_t<T>, json_t> && 
-                  !std::is_same_v<std::decay_t<T>, std::nullptr_t> &&
-                  !std::is_same_v<std::decay_t<T>, double> &&
-                  !std::is_same_v<std::decay_t<T>, bool> &&
-                  !std::is_same_v<std::decay_t<T>, std::string> &&
-                  !std::is_same_v<std::decay_t<T>, std::string_view> &&
-                  !std::is_same_v<std::decay_t<T>, const char*> &&
-                  !std::is_same_v<std::decay_t<T>, array_t> &&
-                  !std::is_same_v<std::decay_t<T>, object_t> &&
-                  !int_t<T> &&
+         requires(!std::is_same_v<std::decay_t<T>, json_t> && !std::is_same_v<std::decay_t<T>, std::nullptr_t> &&
+                  !std::is_same_v<std::decay_t<T>, double> && !std::is_same_v<std::decay_t<T>, bool> &&
+                  !std::is_same_v<std::decay_t<T>, std::string> && !std::is_same_v<std::decay_t<T>, std::string_view> &&
+                  !std::is_same_v<std::decay_t<T>, const char*> && !std::is_same_v<std::decay_t<T>, array_t> &&
+                  !std::is_same_v<std::decay_t<T>, object_t> && !int_t<T> &&
                   requires { write_json(std::declval<T>()); })
       json_t& operator=(T&& value)
       {
