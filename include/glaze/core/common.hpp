@@ -580,3 +580,48 @@ namespace glz
       }
    }
 }
+
+namespace glz
+{
+   /// Determine whether the member with the given name is required for type T.
+   ///
+   /// A member is required, if the option error_on_missing_keys is set and the member is not null-able.
+   /// This behaviour can be overridden on a per-type basis via the customization point
+   /// `meta<T>::requires_key(key, is_nullable)`
+   /// @code
+   /// struct person {
+   ///    std::string first_name{};
+   ///    std::string last_name{};
+   /// };
+   ///
+   /// template <>
+   /// struct glz::meta<person> {
+   ///    static constexpr bool requires_key(std::string_view key, bool nullable) {
+   ///       if (not nullable) {
+   ///          return true;
+   ///       }
+   ///       return false;
+   ///    }
+   /// };
+   /// @endcode
+   /// @tparam T      The user‑defined type for which metadata may be provided.
+   /// @tparam Val_T  The value type associated with the key; used to determine nullability.
+   /// @tparam Opts   A policy struct with a boolean member `error_on_missing_keys`.
+   ///
+   /// @param key          The string identifier whose requirement status is being queried.
+   /// @returns `true` if:
+   ///            - `meta<T>::requires_key(key, is_nullable)` exists and returns true, or
+   ///            - `Opts.error_on_missing_keys` is true *and* Val_T is not nullable;
+   ///          otherwise returns `false`.
+   template <typename T, typename Val_T, auto Opts>
+   constexpr bool requires_key(const std::string_view key)
+   {
+      if constexpr (meta_has_requires_key<T>) {
+         if (meta<T>::requires_key(key, nullable_like<Val_T>)) return true;
+      }
+      else if constexpr (Opts.error_on_missing_keys && !nullable_like<Val_T>) {
+         return true;
+      }
+      return false;
+   }
+}
