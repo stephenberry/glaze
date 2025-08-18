@@ -617,7 +617,7 @@ namespace glz
    constexpr bool requires_key(const std::string_view key)
    {
       if constexpr (meta_has_requires_key<T>) {
-         if constexpr (meta<T>::requires_key(key, nullable_like<Val_T>)) return true;
+         if (meta<T>::requires_key(key, nullable_like<Val_T>)) return true;
       }
       else if constexpr (Opts.error_on_missing_keys && !nullable_like<Val_T>) {
          return true;
