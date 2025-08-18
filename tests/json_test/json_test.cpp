@@ -3585,6 +3585,215 @@ suite variant_tests = [] {
    };
 };
 
+// Tests for std::vector<std::variant<...>> with purely reflected structs
+struct reflected_person
+{
+   std::string name{};
+   int age{};
+   double height{};
+};
+
+struct reflected_animal
+{
+   std::string species{};
+   std::string name{};
+   int weight{};
+};
+
+struct reflected_vehicle
+{
+   std::string make{};
+   std::string model{};
+   int year{};
+   double price{};
+};
+
+struct reflected_book
+{
+   std::string title{};
+   std::string author{};
+   int pages{};
+   std::string isbn{};
+};
+
+static_assert(glz::reflectable<reflected_person>);
+static_assert(glz::reflectable<reflected_animal>);
+static_assert(glz::reflectable<reflected_vehicle>);
+static_assert(glz::reflectable<reflected_book>);
+
+suite vector_variant_reflection_tests = [] {
+   "vector of variant with two reflected structs"_test = [] {
+      using entity_variant = std::variant<reflected_person, reflected_animal>;
+      std::vector<entity_variant> entities;
+
+      entities.push_back(reflected_person{"Alice", 30, 165.5});
+      entities.push_back(reflected_animal{"Dog", "Buddy", 25});
+      entities.push_back(reflected_person{"Bob", 25, 180.0});
+      entities.push_back(reflected_animal{"Cat", "Whiskers", 4});
+
+      std::string json;
+      expect(!glz::write_json(entities, json));
+
+      std::vector<entity_variant> read_entities;
+      expect(glz::read_json(read_entities, json) == glz::error_code::none);
+
+      expect(read_entities.size() == 4);
+
+      expect(std::holds_alternative<reflected_person>(read_entities[0]));
+      auto& p1 = std::get<reflected_person>(read_entities[0]);
+      expect(p1.name == "Alice");
+      expect(p1.age == 30);
+      expect(p1.height == 165.5);
+
+      expect(std::holds_alternative<reflected_animal>(read_entities[1]));
+      auto& a1 = std::get<reflected_animal>(read_entities[1]);
+      expect(a1.species == "Dog");
+      expect(a1.name == "Buddy");
+      expect(a1.weight == 25);
+
+      expect(std::holds_alternative<reflected_person>(read_entities[2]));
+      auto& p2 = std::get<reflected_person>(read_entities[2]);
+      expect(p2.name == "Bob");
+      expect(p2.age == 25);
+      expect(p2.height == 180.0);
+
+      expect(std::holds_alternative<reflected_animal>(read_entities[3]));
+      auto& a2 = std::get<reflected_animal>(read_entities[3]);
+      expect(a2.species == "Cat");
+      expect(a2.name == "Whiskers");
+      expect(a2.weight == 4);
+   };
+
+   "vector of variant with three reflected structs"_test = [] {
+      using item_variant = std::variant<reflected_person, reflected_vehicle, reflected_book>;
+      std::vector<item_variant> items;
+
+      items.push_back(reflected_person{"Charlie", 35, 175.0});
+      items.push_back(reflected_vehicle{"Toyota", "Camry", 2022, 25000.0});
+      items.push_back(reflected_book{"The Great Gatsby", "F. Scott Fitzgerald", 180, "978-0-7432-7356-5"});
+      items.push_back(reflected_person{"Diana", 28, 160.0});
+
+      std::string json;
+      expect(!glz::write_json(items, json));
+
+      std::vector<item_variant> read_items;
+      expect(glz::read_json(read_items, json) == glz::error_code::none);
+
+      expect(read_items.size() == 4);
+
+      expect(std::holds_alternative<reflected_person>(read_items[0]));
+      expect(std::holds_alternative<reflected_vehicle>(read_items[1]));
+      expect(std::holds_alternative<reflected_book>(read_items[2]));
+      expect(std::holds_alternative<reflected_person>(read_items[3]));
+
+      auto& vehicle = std::get<reflected_vehicle>(read_items[1]);
+      expect(vehicle.make == "Toyota");
+      expect(vehicle.model == "Camry");
+      expect(vehicle.year == 2022);
+      expect(vehicle.price == 25000.0);
+
+      auto& book = std::get<reflected_book>(read_items[2]);
+      expect(book.title == "The Great Gatsby");
+      expect(book.author == "F. Scott Fitzgerald");
+      expect(book.pages == 180);
+      expect(book.isbn == "978-0-7432-7356-5");
+   };
+
+   "empty vector of variant"_test = [] {
+      using entity_variant = std::variant<reflected_person, reflected_animal>;
+      std::vector<entity_variant> entities;
+
+      std::string json;
+      expect(!glz::write_json(entities, json));
+      expect(json == "[]");
+
+      std::vector<entity_variant> read_entities;
+      expect(glz::read_json(read_entities, json) == glz::error_code::none);
+      expect(read_entities.empty());
+   };
+
+   "vector with single variant element"_test = [] {
+      using entity_variant = std::variant<reflected_person, reflected_animal>;
+      std::vector<entity_variant> entities;
+
+      entities.push_back(reflected_person{"Eve", 40, 170.0});
+
+      std::string json;
+      expect(!glz::write_json(entities, json));
+
+      std::vector<entity_variant> read_entities;
+      expect(glz::read_json(read_entities, json) == glz::error_code::none);
+
+      expect(read_entities.size() == 1);
+      expect(std::holds_alternative<reflected_person>(read_entities[0]));
+      auto& person = std::get<reflected_person>(read_entities[0]);
+      expect(person.name == "Eve");
+      expect(person.age == 40);
+      expect(person.height == 170.0);
+   };
+
+   "roundtrip with mixed types"_test = [] {
+      using mixed_variant = std::variant<reflected_person, reflected_animal, reflected_vehicle, reflected_book>;
+      std::vector<mixed_variant> original;
+
+      original.push_back(reflected_book{"1984", "George Orwell", 328, "978-0-452-28423-4"});
+      original.push_back(reflected_animal{"Horse", "Thunder", 500});
+      original.push_back(reflected_vehicle{"Honda", "Accord", 2023, 27000.0});
+      original.push_back(reflected_person{"Frank", 45, 185.0});
+      original.push_back(reflected_book{"To Kill a Mockingbird", "Harper Lee", 281, "978-0-06-112008-4"});
+
+      std::string json;
+      expect(!glz::write_json(original, json));
+
+      std::vector<mixed_variant> decoded;
+      expect(glz::read_json(decoded, json) == glz::error_code::none);
+
+      expect(decoded.size() == original.size());
+
+      for (size_t i = 0; i < original.size(); ++i) {
+         expect(original[i].index() == decoded[i].index());
+      }
+   };
+
+   "prettified json output"_test = [] {
+      using entity_variant = std::variant<reflected_person, reflected_animal>;
+      std::vector<entity_variant> entities;
+
+      entities.push_back(reflected_person{"Grace", 32, 168.0});
+      entities.push_back(reflected_animal{"Bird", "Tweety", 1});
+
+      std::string json;
+      expect(!glz::write<glz::opts{.prettify = true}>(entities, json));
+
+      expect(json.find("\n") != std::string::npos); // Should contain newlines
+      expect(json.find("   ") != std::string::npos); // Should contain indentation
+
+      std::vector<entity_variant> read_entities;
+      expect(glz::read_json(read_entities, json) == glz::error_code::none);
+      expect(read_entities.size() == 2);
+   };
+
+   "vector of variant with structs having overlapping field names"_test = [] {
+      // Both structs have a 'name' field, but different other fields
+      using ambiguous_variant = std::variant<reflected_person, reflected_animal>;
+      std::vector<ambiguous_variant> items;
+
+      // The variant should deduce the correct type based on all fields present
+      items.push_back(reflected_person{"Henry", 50, 175.5});
+      items.push_back(reflected_animal{"Lion", "Simba", 190});
+
+      std::string json;
+      expect(!glz::write_json(items, json));
+
+      std::vector<ambiguous_variant> read_items;
+      expect(glz::read_json(read_items, json) == glz::error_code::none);
+
+      expect(read_items.size() == 2);
+      expect(std::holds_alternative<reflected_person>(read_items[0]));
+      expect(std::holds_alternative<reflected_animal>(read_items[1]));
+   };
+};
+
 struct holder0_t
 {
    int i{};
