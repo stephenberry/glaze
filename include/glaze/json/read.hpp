@@ -2921,10 +2921,10 @@ namespace glz
                      }
                      else if (final_matching >= 1) {
                         constexpr auto N = std::variant_size_v<T>;
-                        
+
                         // Compile-time array of field counts for each variant type
                         constexpr auto field_counts = []<size_t... I>(std::index_sequence<I...>) {
-                           return std::array<size_t, N>{
+                           return std::array<size_t, N> {
                               ([]<size_t J = I>() -> size_t {
                                  using V = std::decay_t<std::variant_alternative_t<J, T>>;
                                  if constexpr (glaze_object_t<V> || reflectable<V>) {
@@ -2945,22 +2945,21 @@ namespace glz
                               }.template operator()<I>())...
                            };
                         }(std::make_index_sequence<N>{});
-                        
+
                         // Find the type with minimum field count among the possible types
                         size_t min_fields = std::numeric_limits<size_t>::max();
                         size_t chosen_index = N; // Invalid index initially
-                        
+
                         for (size_t i = 0; i < N; ++i) {
                            if (possible_types[i] && field_counts[i] < min_fields) {
                               min_fields = field_counts[i];
                               chosen_index = i;
                            }
                         }
-                        
+
                         if (chosen_index < N) {
                            it = start;
-                           if (value.index() != chosen_index)
-                              value = runtime_variant_map<T>()[chosen_index];
+                           if (value.index() != chosen_index) value = runtime_variant_map<T>()[chosen_index];
                            std::visit(
                               [&](auto&& v) {
                                  using V = std::decay_t<decltype(v)>;
@@ -2990,12 +2989,12 @@ namespace glz
                                           return;
                                        }
                                     }
-                                    from<JSON, memory_type<V>>::template op<opening_handled<Opts>(), tag_literal>(*v, ctx,
-                                                                                                                  it, end);
+                                    from<JSON, memory_type<V>>::template op<opening_handled<Opts>(), tag_literal>(
+                                       *v, ctx, it, end);
                                  }
                               },
                               value);
-                           
+
                            if constexpr (Opts.null_terminated) {
                               --ctx.indentation_level;
                            }
