@@ -54,8 +54,8 @@
             "generator": "Ninja",
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Debug",
-                "CMAKE_C_COMPILER": "/opt/homebrew/bin/gcc",
-                "CMAKE_CXX_COMPILER": "/opt/homebrew/bin/g++",
+                "CMAKE_C_COMPILER": "/usr/bin/gcc",
+                "CMAKE_CXX_COMPILER": "/usr/bin/g++",
                 "CMAKE_EXPORT_COMPILE_COMMANDS": true,
                 "glaze_DEVELOPER_MODE": true,
                 "BUILD_TESTING": true,
@@ -70,8 +70,8 @@
             "generator": "Ninja",
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Release",
-                "CMAKE_C_COMPILER": "/opt/homebrew/bin/gcc",
-                "CMAKE_CXX_COMPILER": "/opt/homebrew/bin/g++",
+                "CMAKE_C_COMPILER": "/usr/bin/gcc",
+                "CMAKE_CXX_COMPILER": "/usr/bin/g++",
                 "CMAKE_EXPORT_COMPILE_COMMANDS": true,
                 "glaze_DEVELOPER_MODE": true,
                 "BUILD_TESTING": true,
