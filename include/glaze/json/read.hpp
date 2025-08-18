@@ -2911,7 +2911,104 @@ namespace glz
                         return;
                      }
                   }
-                  ctx.error = error_code::no_matching_variant_type;
+                  // Only apply ambiguous variant resolution if we have multiple object types
+                  if constexpr ((type_counts::n_object + type_counts::n_nullable_object) > 1) {
+                     // After parsing all keys, check if we have multiple matching types
+                     // If so, choose the one with the fewest fields
+                     auto final_matching = possible_types.popcount();
+                     if (final_matching == 0) {
+                        ctx.error = error_code::no_matching_variant_type;
+                     }
+                     else if (final_matching >= 1) {
+                        constexpr auto N = std::variant_size_v<T>;
+                        
+                        // Compile-time array of field counts for each variant type
+                        constexpr auto field_counts = []<size_t... I>(std::index_sequence<I...>) {
+                           return std::array<size_t, N>{
+                              ([]<size_t J = I>() -> size_t {
+                                 using V = std::decay_t<std::variant_alternative_t<J, T>>;
+                                 if constexpr (glaze_object_t<V> || reflectable<V>) {
+                                    return reflect<V>::size;
+                                 }
+                                 else if constexpr (is_memory_object<V>) {
+                                    using X = memory_type<V>;
+                                    if constexpr (glaze_object_t<X> || reflectable<X>) {
+                                       return reflect<X>::size;
+                                    }
+                                    else {
+                                       return std::numeric_limits<size_t>::max();
+                                    }
+                                 }
+                                 else {
+                                    return std::numeric_limits<size_t>::max();
+                                 }
+                              }.template operator()<I>())...
+                           };
+                        }(std::make_index_sequence<N>{});
+                        
+                        // Find the type with minimum field count among the possible types
+                        size_t min_fields = std::numeric_limits<size_t>::max();
+                        size_t chosen_index = N; // Invalid index initially
+                        
+                        for (size_t i = 0; i < N; ++i) {
+                           if (possible_types[i] && field_counts[i] < min_fields) {
+                              min_fields = field_counts[i];
+                              chosen_index = i;
+                           }
+                        }
+                        
+                        if (chosen_index < N) {
+                           it = start;
+                           if (value.index() != chosen_index)
+                              value = runtime_variant_map<T>()[chosen_index];
+                           std::visit(
+                              [&](auto&& v) {
+                                 using V = std::decay_t<decltype(v)>;
+                                 constexpr bool is_object = glaze_object_t<V> || reflectable<V>;
+                                 if constexpr (is_object) {
+                                    from<JSON, V>::template op<opening_handled<Opts>(), tag_literal>(v, ctx, it, end);
+                                 }
+                                 else if constexpr (is_memory_object<V>) {
+                                    if (!v) {
+                                       if constexpr (is_specialization_v<V, std::optional>) {
+                                          if constexpr (requires { v.emplace(); }) {
+                                             v.emplace();
+                                          }
+                                          else {
+                                             v = typename V::value_type{};
+                                          }
+                                       }
+                                       else if constexpr (is_specialization_v<V, std::unique_ptr>)
+                                          v = std::make_unique<typename V::element_type>();
+                                       else if constexpr (is_specialization_v<V, std::shared_ptr>)
+                                          v = std::make_shared<typename V::element_type>();
+                                       else if constexpr (constructible<V>) {
+                                          v = meta_construct_v<V>();
+                                       }
+                                       else {
+                                          ctx.error = error_code::invalid_nullable_read;
+                                          return;
+                                       }
+                                    }
+                                    from<JSON, memory_type<V>>::template op<opening_handled<Opts>(), tag_literal>(*v, ctx,
+                                                                                                                  it, end);
+                                 }
+                              },
+                              value);
+                           
+                           if constexpr (Opts.null_terminated) {
+                              --ctx.indentation_level;
+                           }
+                        }
+                        else {
+                           ctx.error = error_code::no_matching_variant_type;
+                        }
+                     }
+                  }
+                  else {
+                     // For variants with 0 or 1 object types, use the original error handling
+                     ctx.error = error_code::no_matching_variant_type;
+                  }
                }
                break;
             case '[':

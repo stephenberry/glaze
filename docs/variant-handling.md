@@ -1,6 +1,6 @@
 # Variant Handling
 
-Glaze has full support `std::variant` when writing, and read support when either the type of the underlying JSON is deducible or the current type stored in the variant is the correct type. 
+Glaze has full support for `std::variant` when writing, and comprehensive read support with automatic type deduction. When reading JSON into a variant, Glaze can automatically determine the correct type based on the JSON structure, field presence, or explicit type tags. 
 
 ## Basic Types
 
@@ -22,8 +22,10 @@ expect(std::get<int32_t>(x) == 33);
 
 ## Object Types
 
-### Auto Deduction of Object Types
-Objects can be auto deduced based on the presence of unique key combinations.
+Glaze provides multiple strategies for deducing which variant type to use when reading JSON objects:
+
+### Auto Deduction with Unique Keys
+Objects can be auto deduced when they have unique key combinations that distinguish them from other types in the variant.
 ```c++
 struct xy_t
 {
@@ -88,8 +90,80 @@ suite metaobject_variant_auto_deduction = [] {
    };
 };
 ```
+
+In the example above, each type has a unique combination of keys (xy, yz, xz), making deduction straightforward based on which keys are present in the JSON.
+
+### Ambiguous Variant Resolution
+
+When multiple object types in a variant could match the input JSON (all required fields are present), Glaze automatically resolves the ambiguity by selecting the type with the **fewest fields**. This "smallest object wins" strategy ensures the most specific type is chosen.
+
+**Example:**
+```cpp
+struct SwitchBlock {
+   int value{};  // 1 field
+};
+
+struct PDataBlock {
+   std::string p_id{};  // 2 fields  
+   int value{};
+};
+
+using var_t = std::variant<SwitchBlock, PDataBlock>;
+
+// JSON: {"value": 42}
+// Both types could match, but SwitchBlock is chosen (1 field < 2 fields)
+var_t v1;
+glz::read_json(v1, R"({"value": 42})");
+// v1 holds SwitchBlock
+
+// JSON: {"p_id": "test", "value": 99}  
+// Only PDataBlock matches (has all required fields)
+var_t v2;
+glz::read_json(v2, R"({"p_id": "test", "value": 99})");
+// v2 holds PDataBlock
+```
+
+This resolution applies when:
+- The variant contains 2 or more object types
+- Multiple types have all their fields present in the JSON
+- The type with the minimum field count is automatically selected
+
+Common use cases include:
+- **Progressive detail levels**: Types that represent the same concept with increasing levels of detail
+- **Optional field patterns**: Where simpler types are subsets of more complex types
+- **API versioning**: Where newer types extend older ones with additional fields
+
+**Complete Example with Multiple Levels:**
+```cpp
+struct PersonBasic {
+   std::string name{};
+};
+
+struct PersonWithAge {
+   std::string name{};
+   int age{};
+};
+
+struct PersonFull {
+   std::string name{};
+   int age{};
+   double height{};
+};
+
+using person_variant = std::variant<PersonBasic, PersonWithAge, PersonFull>;
+
+// Automatically selects the most specific type based on fields present:
+person_variant p1;
+glz::read_json(p1, R"({"name": "Alice"})");           // → PersonBasic
+glz::read_json(p1, R"({"name": "Bob", "age": 30})");  // → PersonWithAge  
+glz::read_json(p1, R"({"name": "Charlie", "age": 25, "height": 175.5})"); // → PersonFull
+```
+
 ### Deduction of Tagged Object Types
-If you don't want auto deduction, or if you need to deduce the type based on the value associated with a key, Glaze supports custom tags.
+If you don't want auto deduction, need explicit type control, or need to deduce the type based on the value associated with a key, Glaze supports custom tags. This is particularly useful when:
+- You want explicit control over type selection regardless of field presence
+- The automatic deduction might be ambiguous or unpredictable
+- You need to support types with identical field structures
 
 ```c++
 struct put_action
