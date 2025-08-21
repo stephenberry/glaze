@@ -13,20 +13,10 @@
 namespace glz::repe
 {
    // REPE Reserved Query Formats (0-4095 are reserved)
-   enum class query_format : uint16_t
-   {
-      RAW_BINARY = 0,
-      JSON_POINTER = 1
-   };
+   enum class query_format : uint16_t { RAW_BINARY = 0, JSON_POINTER = 1 };
 
    // REPE Reserved Body Formats (0-4095 are reserved)
-   enum class body_format : uint16_t
-   {
-      RAW_BINARY = 0,
-      BEVE = 1,
-      JSON = 2,
-      UTF8 = 3
-   };
+   enum class body_format : uint16_t { RAW_BINARY = 0, BEVE = 1, JSON = 2, UTF8 = 3 };
    struct header
    {
       uint64_t length{}; // Total length of [header, query, body]
