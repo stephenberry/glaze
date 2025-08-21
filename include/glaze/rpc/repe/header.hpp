@@ -42,8 +42,8 @@ namespace glz::repe
       //
       uint64_t body_length{}; // The total length of the body
       //
-      query_format query_format{};
-      body_format body_format{};
+      repe::query_format query_format{};
+      repe::body_format body_format{};
       error_code ec{};
    };
 
