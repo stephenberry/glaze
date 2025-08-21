@@ -158,6 +158,7 @@ namespace glz
          auto write_error = [&](const std::string& body) {
             out.body = body;
             out.header.body_length = body.size();
+            out.header.body_format = repe::body_format::UTF8; // Error messages are UTF-8
             out.header.length = sizeof(repe::header) + out.query.size() + out.body.size();
          };
 

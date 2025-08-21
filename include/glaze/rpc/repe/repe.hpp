@@ -49,12 +49,22 @@ namespace glz::repe
       if (bool(out.header.ec)) {
          out.header.query_length = out.query.size();
          out.header.body_length = out.body.size();
+         out.header.body_format = repe::body_format::UTF8; // Error messages are UTF-8
          out.header.length = sizeof(repe::header) + out.query.size() + out.body.size();
       }
       else {
          const auto ec = write<Opts>(std::forward<Value>(value), out.body);
          if (bool(ec)) [[unlikely]] {
             out.header.ec = ec.ec;
+            out.header.body_format = repe::body_format::UTF8; // Error messages are UTF-8
+         }
+         else {
+            if constexpr (Opts.format == JSON) {
+               out.header.body_format = repe::body_format::JSON;
+            }
+            else if constexpr (Opts.format == BEVE) {
+               out.header.body_format = repe::body_format::BEVE;
+            }
          }
          out.header.query_length = out.query.size();
          out.header.body_length = out.body.size();
@@ -71,12 +81,22 @@ namespace glz::repe
       if (bool(out.header.ec)) {
          out.header.query_length = out.query.size();
          out.header.body_length = out.body.size();
+         out.header.body_format = repe::body_format::UTF8; // Error messages are UTF-8
          out.header.length = sizeof(repe::header) + out.query.size() + out.body.size();
       }
       else {
          const auto ec = write<Opts>(nullptr, out.body);
          if (bool(ec)) [[unlikely]] {
             out.header.ec = ec.ec;
+            out.header.body_format = repe::body_format::UTF8; // Error messages are UTF-8
+         }
+         else {
+            if constexpr (Opts.format == JSON) {
+               out.header.body_format = repe::body_format::JSON;
+            }
+            else if constexpr (Opts.format == BEVE) {
+               out.header.body_format = repe::body_format::BEVE;
+            }
          }
          out.query.clear();
          out.header.query_length = out.query.size();
@@ -110,6 +130,7 @@ namespace glz::repe
 
          std::string error_message = format_error(ec, in.body);
          out.header.body_length = uint32_t(error_message.size());
+         out.header.body_format = repe::body_format::UTF8; // Error messages are UTF-8
          out.body = error_message;
 
          write_response<Opts>(state);
@@ -129,6 +150,7 @@ namespace glz::repe
             message msg{};
             msg.header = encode(h);
             msg.query = std::string{h.query};
+            msg.header.query_format = repe::query_format::JSON_POINTER;
             msg.header.body_length = msg.body.size();
             msg.header.length = sizeof(repe::header) + msg.query.size() + msg.body.size();
             return msg;
@@ -140,9 +162,16 @@ namespace glz::repe
             message msg{};
             msg.header = encode(h);
             msg.query = std::string{h.query};
+            msg.header.query_format = repe::query_format::JSON_POINTER;
             // TODO: Handle potential write errors and put in msg
             std::ignore = glz::write<Opts>(std::forward<Value>(value), msg.body);
             msg.header.body_length = msg.body.size();
+            if constexpr (Opts.format == JSON) {
+               msg.header.body_format = repe::body_format::JSON;
+            }
+            else if constexpr (Opts.format == BEVE) {
+               msg.header.body_format = repe::body_format::BEVE;
+            }
             msg.header.length = sizeof(repe::header) + msg.query.size() + msg.body.size();
             return msg;
          }
@@ -151,6 +180,7 @@ namespace glz::repe
          {
             msg.header = encode(h);
             msg.query = std::string{h.query};
+            msg.header.query_format = repe::query_format::JSON_POINTER;
             msg.header.body_length = msg.body.size();
             msg.header.length = sizeof(repe::header) + msg.query.size() + msg.body.size();
          }
@@ -160,9 +190,16 @@ namespace glz::repe
          {
             msg.header = encode(h);
             msg.query = std::string{h.query};
+            msg.header.query_format = repe::query_format::JSON_POINTER;
             // TODO: Handle potential write errors and put in msg
             std::ignore = glz::write<Opts>(std::forward<Value>(value), msg.body);
             msg.header.body_length = msg.body.size();
+            if constexpr (Opts.format == JSON) {
+               msg.header.body_format = repe::body_format::JSON;
+            }
+            else if constexpr (Opts.format == BEVE) {
+               msg.header.body_format = repe::body_format::BEVE;
+            }
             msg.header.length = sizeof(repe::header) + msg.query.size() + msg.body.size();
          }
       };

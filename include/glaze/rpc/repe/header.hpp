@@ -12,23 +12,38 @@
 
 namespace glz::repe
 {
+   // REPE Reserved Query Formats (0-4095 are reserved)
+   enum class query_format : uint16_t
+   {
+      RAW_BINARY = 0,
+      JSON_POINTER = 1
+   };
+
+   // REPE Reserved Body Formats (0-4095 are reserved)
+   enum class body_format : uint16_t
+   {
+      RAW_BINARY = 0,
+      BEVE = 1,
+      JSON = 2,
+      UTF8 = 3
+   };
    struct header
    {
       uint64_t length{}; // Total length of [header, query, body]
       //
       uint16_t spec{0x1507}; // (5383) Magic two bytes to denote the REPE specification
       uint8_t version = 1; // REPE version
-      uint8_t notify{}; // Action to take, multiple actions may be bit-packed together
-      uint32_t reserved{}; // Must be zero
+      uint8_t notify{}; // 1 (true) for no response from server
+      uint32_t reserved{}; // Must be zero, receivers must ignore this field
       //
       uint64_t id{}; // Identifier
       //
-      uint64_t query_length{}; // The total length of the query (-1 denotes no size given)
+      uint64_t query_length{}; // The total length of the query
       //
-      uint64_t body_length{}; // The total length of the body (-1 denotes no size given)
+      uint64_t body_length{}; // The total length of the body
       //
-      uint16_t query_format{};
-      uint16_t body_format{};
+      query_format query_format{};
+      body_format body_format{};
       error_code ec{};
    };
 
