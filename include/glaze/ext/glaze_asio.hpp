@@ -136,6 +136,19 @@ namespace glz
          encode_error(error_code::connection_failure, msg, e.message());
          return;
       }
+      
+      // Validate REPE spec magic bytes
+      if (msg.header.spec != 0x1507) {
+         encode_error(error_code::invalid_header, msg, "Invalid REPE spec magic bytes");
+         return;
+      }
+      
+      // Validate version
+      if (msg.header.version != 1) {
+         encode_error(error_code::version_mismatch, msg, "Unsupported REPE version");
+         return;
+      }
+      
       msg.query.resize(msg.header.query_length);
       asio::read(socket, asio::buffer(msg.query), asio::transfer_exactly(msg.header.query_length));
       msg.body.resize(msg.header.body_length);
@@ -174,6 +187,16 @@ namespace glz
       // Asynchronously read the header
       co_await asio::async_read(socket, asio::buffer(&msg.header, sizeof(msg.header)),
                                 asio::transfer_exactly(sizeof(msg.header)), asio::use_awaitable);
+
+      // Validate REPE spec magic bytes
+      if (msg.header.spec != 0x1507) {
+         throw std::runtime_error("Invalid REPE spec magic bytes");
+      }
+      
+      // Validate version
+      if (msg.header.version != 1) {
+         throw std::runtime_error("Unsupported REPE version");
+      }
 
       // Validate and read the query
       msg.query.resize(msg.header.query_length);
