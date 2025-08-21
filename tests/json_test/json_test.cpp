@@ -10986,6 +10986,21 @@ struct glz::meta<cast_obj>
                                         "indirect", cast<[](T& s) -> auto& { return s.integer; }, double>);
 };
 
+struct cast_nullable_obj {
+   std::optional<int> a;
+   std::string b;
+};
+
+template <>
+struct glz::meta<cast_nullable_obj>
+{
+   using T = cast_nullable_obj;
+   static constexpr auto value = object(
+      "a", cast<&T::a, std::optional<double>>,
+      "b", &T::b
+   );
+};
+
 suite cast_tests = [] {
    "cast"_test = [] {
       cast_obj obj{};
@@ -11006,6 +11021,35 @@ suite cast_tests = [] {
       obj.integer = 77;
       expect(not glz::write_json(obj, buffer));
       expect(buffer == R"({"integer":77,"indirect":77})");
+   };
+
+   "cast nullable with error_on_missing_keys"_test = [] {
+      constexpr auto opts = glz::opts {
+         .format = glz::JSON,
+         .skip_null_members = true,
+         .error_on_missing_keys = true,
+      };
+      
+      std::string_view data = R"({"b":"hello"})";
+      cast_nullable_obj obj{};
+      
+      auto ec = glz::read<opts>(obj, data);
+      expect(!ec) << glz::format_error(ec, data);
+      expect(!obj.a.has_value());
+      expect(obj.b == "hello");
+      
+      // Test with value present
+      data = R"({"a":42.5,"b":"world"})";
+      ec = glz::read<opts>(obj, data);
+      expect(!ec) << glz::format_error(ec, data);
+      expect(obj.a.has_value());
+      expect(obj.a.value() == 42);
+      expect(obj.b == "world");
+      
+      // Test missing required field
+      data = R"({"a":null})";
+      ec = glz::read<opts>(obj, data);
+      expect(ec == glz::error_code::missing_key);
    };
 };
 

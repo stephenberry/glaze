@@ -321,6 +321,11 @@ namespace glz
 
                fields[I] = !Opts.skip_null_members || !(std::same_as<From, skip> || nullable_in_custom);
             }
+            else if constexpr (is_cast<V>) {
+               // Handle cast_t by checking if the cast type is nullable
+               using CastType = typename V::cast_type;
+               fields[I] = !Opts.skip_null_members || !null_t<CastType>;
+            }
             else {
                fields[I] = !Opts.skip_null_members || !null_t<V>;
             }
