@@ -74,3 +74,43 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     target_compile_options(${PROJECT_NAME} PRIVATE -fno-exceptions -fno-rtti -Wall -Wextra -pedantic -Wno-missing-braces)
 endif()
 add_test(NAME ${PROJECT_NAME} COMMAND ${PROJECT_NAME})
+
+# Complex types interop test
+project(interop_complex_test)
+add_executable(${PROJECT_NAME} ${PROJECT_NAME}.cpp)
+target_compile_features(${PROJECT_NAME} PRIVATE cxx_std_23)
+target_link_libraries(${PROJECT_NAME} PRIVATE glaze_interop glaze_interop_client glaze::glaze ut::ut)
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    target_compile_options(${PROJECT_NAME} PRIVATE -fno-exceptions -fno-rtti -Wall -Wextra -pedantic -Wno-missing-braces)
+endif()
+add_test(NAME ${PROJECT_NAME} COMMAND ${PROJECT_NAME})
+
+# Member function interop test
+project(interop_member_function_test)
+add_executable(${PROJECT_NAME} ${PROJECT_NAME}.cpp)
+target_compile_features(${PROJECT_NAME} PRIVATE cxx_std_23)
+target_link_libraries(${PROJECT_NAME} PRIVATE glaze_interop glaze_interop_client glaze::glaze ut::ut)
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    target_compile_options(${PROJECT_NAME} PRIVATE -fno-exceptions -fno-rtti -Wall -Wextra -pedantic -Wno-missing-braces)
+endif()
+add_test(NAME ${PROJECT_NAME} COMMAND ${PROJECT_NAME})
+
+# Zero copy interop test
+project(interop_zero_copy_test)
+add_executable(${PROJECT_NAME} ${PROJECT_NAME}.cpp)
+target_compile_features(${PROJECT_NAME} PRIVATE cxx_std_23)
+target_link_libraries(${PROJECT_NAME} PRIVATE glaze_interop glaze_interop_client glaze::glaze ut::ut)
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    target_compile_options(${PROJECT_NAME} PRIVATE -fno-exceptions -fno-rtti -Wall -Wextra -pedantic -Wno-missing-braces)
+endif()
+add_test(NAME ${PROJECT_NAME} COMMAND ${PROJECT_NAME})
+
+# Core interop functionality test
+project(test_interop_core)
+add_executable(${PROJECT_NAME} ${PROJECT_NAME}.cpp)
+target_compile_features(${PROJECT_NAME} PRIVATE cxx_std_23)
+target_link_libraries(${PROJECT_NAME} PRIVATE glaze_interop glaze_interop_client glaze::glaze ut::ut)
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    target_compile_options(${PROJECT_NAME} PRIVATE -fno-exceptions -fno-rtti -Wall -Wextra -pedantic -Wno-missing-braces)
+endif()
+add_test(NAME ${PROJECT_NAME} COMMAND ${PROJECT_NAME})
