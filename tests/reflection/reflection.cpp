@@ -137,7 +137,7 @@ struct glz::meta<ReflectableVariant> {
    static constexpr auto ids = std::array{"person", "animal", "vehicle"};
 };
 
-suite variant_tagging_reflection = [] {
+suite variant_tagging_reflectable = [] {
    "variant tagging with reflectable structs"_test = [] {
       // Test serialization with tagging
       ReflectableVariant variant = Person{"Alice", 30};
@@ -185,6 +185,41 @@ suite variant_tagging_reflection = [] {
       expect(vehicle != nullptr);
       expect(vehicle->type == "Truck");
       expect(vehicle->wheels == 6);
+   };
+};
+
+// Test structs with a field that matches the tag name (shouldn't get double-tagged)
+struct CommandA {
+   int code;
+   std::string data;
+};
+
+struct CommandB {
+   int code;
+   float value;
+};
+
+using CommandVariant = std::variant<CommandA, CommandB>;
+
+template <>
+struct glz::meta<CommandVariant> {
+   static constexpr std::string_view tag = "code";  // Same as struct field name
+   static constexpr auto ids = std::array{100, 200};
+};
+
+suite variant_no_double_tagging = [] {
+   "no double tagging when field matches tag name"_test = [] {
+      // Structs with 'code' field should NOT get an additional 'code' tag
+      CommandVariant cmd = CommandA{100, "test"};
+      auto json = glz::write_json(cmd);
+      expect(json.has_value());
+      // Should not have duplicate "code" fields
+      expect(json.value() == R"({"code":100,"data":"test"})") << json.value();
+      
+      cmd = CommandB{200, 3.14f};
+      json = glz::write_json(cmd);
+      expect(json.has_value());
+      expect(json.value() == R"({"code":200,"value":3.14})") << json.value();
    };
 };
 
