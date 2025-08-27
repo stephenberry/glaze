@@ -4,6 +4,8 @@
 #include <ut/ut.hpp>
 
 #include "glaze/core/convert_struct.hpp"
+#include "glaze/glaze.hpp"
+#include <variant>
 
 using namespace ut;
 
@@ -107,6 +109,110 @@ suite convert_tests = [] {
       expect(out.fluff == 3.3f);
       expect(out.goo == 3);
       expect(out.stub == "c");
+   };
+};
+
+// Tests for variant tagging with reflectable structs (no explicit meta)
+struct Person {
+   std::string name;
+   int age;
+};
+
+struct Animal {
+   std::string species;
+   float weight;
+};
+
+struct Vehicle {
+   std::string type;
+   int wheels;
+};
+
+// Define variant with tag and IDs
+using ReflectableVariant = std::variant<Person, Animal, Vehicle>;
+
+template <>
+struct glz::meta<ReflectableVariant> {
+   static constexpr std::string_view tag = "type";
+   static constexpr auto ids = std::array{"person", "animal", "vehicle"};
+};
+
+suite variant_tagging_reflection = [] {
+   "variant tagging with reflectable structs"_test = [] {
+      // Test serialization with tagging
+      ReflectableVariant variant = Person{"Alice", 30};
+      auto json = glz::write_json(variant);
+      expect(json.has_value());
+      expect(json.value() == R"({"type":"person","name":"Alice","age":30})") << json.value();
+      
+      variant = Animal{"Lion", 190.5f};
+      json = glz::write_json(variant);
+      expect(json.has_value());
+      expect(json.value() == R"({"type":"animal","species":"Lion","weight":190.5})") << json.value();
+      
+      variant = Vehicle{"Car", 4};
+      json = glz::write_json(variant);
+      expect(json.has_value());
+      expect(json.value() == R"({"type":"vehicle","type":"Car","wheels":4})") << json.value();
+   };
+   
+   "variant parsing with reflectable structs"_test = [] {
+      // Test deserialization with tagging
+      std::string json = R"({"type":"person","name":"Bob","age":25})";
+      ReflectableVariant variant;
+      auto ec = glz::read_json(variant, json);
+      expect(!ec);
+      
+      auto* person = std::get_if<Person>(&variant);
+      expect(person != nullptr);
+      expect(person->name == "Bob");
+      expect(person->age == 25);
+      
+      json = R"({"type":"animal","species":"Tiger","weight":220.5})";
+      ec = glz::read_json(variant, json);
+      expect(!ec);
+      
+      auto* animal = std::get_if<Animal>(&variant);
+      expect(animal != nullptr);
+      expect(animal->species == "Tiger");
+      expect(animal->weight == 220.5f);
+      
+      json = R"({"type":"vehicle","type":"Truck","wheels":6})";
+      ec = glz::read_json(variant, json);
+      expect(!ec);
+      
+      auto* vehicle = std::get_if<Vehicle>(&variant);
+      expect(vehicle != nullptr);
+      expect(vehicle->type == "Truck");
+      expect(vehicle->wheels == 6);
+   };
+};
+
+// Test that primitive types in variants still work without object tagging
+using PrimitiveVariant = std::variant<int, std::string, double>;
+
+template <>
+struct glz::meta<PrimitiveVariant> {
+   static constexpr std::string_view tag = "type";
+   static constexpr auto ids = std::array{"integer", "string", "double"};
+};
+
+suite variant_primitive_types = [] {
+   "variant with primitive types (no object tagging)"_test = [] {
+      PrimitiveVariant variant = 42;
+      auto json = glz::write_json(variant);
+      expect(json.has_value());
+      expect(json.value() == "42") << json.value();
+      
+      variant = std::string("hello");
+      json = glz::write_json(variant);
+      expect(json.has_value());
+      expect(json.value() == R"("hello")") << json.value();
+      
+      variant = 3.14;
+      json = glz::write_json(variant);
+      expect(json.has_value());
+      expect(json.value() == "3.14") << json.value();
    };
 };
 
