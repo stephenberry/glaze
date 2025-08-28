@@ -655,7 +655,7 @@ suite nested_array_variant_tests = [] {
       expect(vec[1] == 2.0);
       expect(vec[2] == 3.0);
    };
-   
+
    "nested array variant - vector<vector<double>>"_test = [] {
       using NestedArrayVariant = std::variant<std::vector<double>, std::vector<std::vector<double>>>;
       NestedArrayVariant var;
@@ -671,7 +671,7 @@ suite nested_array_variant_tests = [] {
       expect(vec[1][0] == 2.0);
       expect(vec[1][1] == 2.0);
    };
-   
+
    "nested array variant - integer vectors"_test = [] {
       // Test with integers that should work as doubles too
       using NestedArrayVariant = std::variant<std::vector<double>, std::vector<std::vector<double>>>;
@@ -685,16 +685,16 @@ suite nested_array_variant_tests = [] {
       expect(vec[0][0] == 1.0);
       expect(vec[1][1] == 2.0);
    };
-   
+
    "nested array variant - round trip"_test = [] {
       using NestedArrayVariant = std::variant<std::vector<double>, std::vector<std::vector<double>>>;
-      
+
       // Test vector<double> round trip
       {
          NestedArrayVariant original = std::vector<double>{1.5, 2.5, 3.5};
          auto json = glz::write_json(original);
          expect(json.has_value());
-         
+
          NestedArrayVariant restored;
          auto ec = glz::read_json(restored, json.value());
          expect(!ec);
@@ -703,13 +703,13 @@ suite nested_array_variant_tests = [] {
          expect(vec.size() == 3);
          expect(vec[0] == 1.5);
       }
-      
+
       // Test vector<vector<double>> round trip
       {
          NestedArrayVariant original = std::vector<std::vector<double>>{{1.5, 2.5}, {3.5, 4.5}};
          auto json = glz::write_json(original);
          expect(json.has_value());
-         
+
          NestedArrayVariant restored;
          auto ec = glz::read_json(restored, json.value());
          expect(!ec);
@@ -720,10 +720,10 @@ suite nested_array_variant_tests = [] {
          expect(vec[1][1] == 4.5);
       }
    };
-   
+
    "nested array variant - empty arrays"_test = [] {
       using NestedArrayVariant = std::variant<std::vector<double>, std::vector<std::vector<double>>>;
-      
+
       // Empty outer array should parse as vector<double>
       NestedArrayVariant var;
       std::string json = "[]";
@@ -731,7 +731,7 @@ suite nested_array_variant_tests = [] {
       expect(!ec) << glz::format_error(ec, json);
       expect(std::holds_alternative<std::vector<double>>(var));
       expect(std::get<std::vector<double>>(var).empty());
-      
+
       // Array with empty inner arrays should parse as vector<vector<double>>
       json = "[[], []]";
       ec = glz::read_json(var, json);

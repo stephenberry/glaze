@@ -2635,9 +2635,9 @@ namespace glz
                   else if constexpr (not Options.null_terminated) {
                      // Special handling for types that can validly end at buffer boundary in non-null-terminated mode
                      // Use Glaze concepts to allow user-defined types
-                     constexpr bool is_complete_type = num_t<V> || bool_t<V> || string_t<V> || 
-                                                      std::is_enum_v<V> || tuple_t<V> || is_std_tuple<V>;
-                     
+                     constexpr bool is_complete_type =
+                        num_t<V> || bool_t<V> || string_t<V> || std::is_enum_v<V> || tuple_t<V> || is_std_tuple<V>;
+
                      if constexpr (is_complete_type) {
                         // For these types, end_reached after parsing is OK
                         if (ctx.error == error_code::end_reached && it > copy_it) {
@@ -3121,19 +3121,19 @@ namespace glz
             // For non-auto-deducible variants, try each type until one succeeds
             constexpr auto N = std::variant_size_v<T>;
             bool parsed = false;
-            
+
             for_each<N>([&]<size_t I>() {
                if (parsed) return;
-               
+
                auto copy_it = it;
-               
+
                // Try parsing as this type
                if (value.index() != I) {
                   value = runtime_variant_map<T>()[I];
                }
-               
+
                std::visit([&](auto&& v) { parse<JSON>::op<Options>(v, ctx, it, end); }, value);
-               
+
                if (!bool(ctx.error)) {
                   parsed = true;
                }
@@ -3149,7 +3149,7 @@ namespace glz
                      // Reset for next attempt (unless this is the last type)
                      it = copy_it;
                      if constexpr (I + 1 < N) {
-                        ctx.error = error_code::none;  // Clear error for next attempt
+                        ctx.error = error_code::none; // Clear error for next attempt
                      }
                   }
                }
@@ -3157,7 +3157,7 @@ namespace glz
                   // Reset for next attempt (unless this is the last type)
                   it = copy_it;
                   if constexpr (I + 1 < N) {
-                     ctx.error = error_code::none;  // Clear error for next attempt
+                     ctx.error = error_code::none; // Clear error for next attempt
                   }
                }
             });
