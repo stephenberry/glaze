@@ -260,20 +260,20 @@ suite variant_no_double_tagging = [] {
 };
 
 // Test that primitive types in variants still work without object tagging
-using PrimitiveVariant = std::variant<int, std::string, double>;
+using PrimitiveVariant = std::variant<bool, std::string, double>;
 
 template <>
 struct glz::meta<PrimitiveVariant> {
    static constexpr std::string_view tag = "type";
-   static constexpr auto ids = std::array{"integer", "string", "double"};
+   static constexpr auto ids = std::array{"boolean", "string", "double"};
 };
 
 suite variant_primitive_types = [] {
    "variant with primitive types (no object tagging)"_test = [] {
-      PrimitiveVariant variant = 42;
+      PrimitiveVariant variant = true;
       auto json = glz::write_json(variant);
       expect(json.has_value());
-      expect(json.value() == "42") << json.value();
+      expect(json.value() == "true") << json.value();
       
       variant = std::string("hello");
       json = glz::write_json(variant);
@@ -291,12 +291,12 @@ suite variant_primitive_types = [] {
       
       // Even with tag defined, primitive types should read directly without object wrapping
       
-      // Test reading integer directly
-      std::string json = "42";
+      // Test reading boolean directly
+      std::string json = "true";
       auto ec = glz::read_json(variant, json);
       expect(!ec) << glz::format_error(ec, json);
-      expect(std::holds_alternative<int>(variant));
-      expect(std::get<int>(variant) == 42);
+      expect(std::holds_alternative<bool>(variant));
+      expect(std::get<bool>(variant) == true);
       
       // Test reading string directly
       json = R"("hello world")";
