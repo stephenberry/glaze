@@ -745,78 +745,96 @@ suite nested_array_variant_tests = [] {
 };
 
 // Define structs and variant for tag validation tests
-namespace tag_validation {
-   struct Person {
+namespace tag_validation
+{
+   struct Person
+   {
       std::string name;
       int age;
    };
-   
-   struct Animal {
+
+   struct Animal
+   {
       std::string species;
       float weight;
    };
-   
-   struct Vehicle {
+
+   struct Vehicle
+   {
       std::string model;
       int wheels;
    };
-   
+
    using EntityVariant = std::variant<Person, Animal, Vehicle>;
 }
 
 template <>
-struct glz::meta<tag_validation::EntityVariant> {
+struct glz::meta<tag_validation::EntityVariant>
+{
    static constexpr std::string_view tag = "type";
    static constexpr auto ids = std::array{"person", "animal", "vehicle"};
 };
 
-namespace tag_validation2 {
-   struct Person {
+namespace tag_validation2
+{
+   struct Person
+   {
       std::string name;
       int age;
    };
-   
-   struct Animal {
+
+   struct Animal
+   {
       std::string species;
       float weight;
    };
-   
+
    using TaggedVariant = std::variant<Person, Animal>;
 }
 
 template <>
-struct glz::meta<tag_validation2::TaggedVariant> {
+struct glz::meta<tag_validation2::TaggedVariant>
+{
    static constexpr std::string_view tag = "type";
    static constexpr auto ids = std::array{"person", "animal"};
 };
 
-namespace edge_case_tests {
-   struct Empty {};
-   struct SingleField {
+namespace edge_case_tests
+{
+   struct Empty
+   {};
+   struct SingleField
+   {
       int value;
    };
-   struct TwoFields {
+   struct TwoFields
+   {
       int a;
       int b;
    };
-   
-   struct Car {
+
+   struct Car
+   {
       std::string brand;
       int year;
    };
-   
-   struct Bike {
+
+   struct Bike
+   {
       std::string model;
       int gears;
    };
 }
 
-namespace perf_test {
-   struct SimpleA {
+namespace perf_test
+{
+   struct SimpleA
+   {
       int unique_a_field;
    };
-   
-   struct SimpleB {
+
+   struct SimpleB
+   {
       int unique_b_field;
    };
 }
@@ -824,10 +842,10 @@ namespace perf_test {
 suite variant_tag_validation = [] {
    "tagged variant - tag/field mismatch detection"_test = [] {
       using namespace tag_validation;
-      
+
       // Verify tag metadata is defined
       static_assert(glz::meta<EntityVariant>::tag == "type");
-      
+
       // Test 1: Tag at beginning with correct fields (should work)
       {
          EntityVariant e;
@@ -839,7 +857,7 @@ suite variant_tag_validation = [] {
          expect(animal.species == "Lion");
          expect(animal.weight == 190.5f);
       }
-      
+
       // Test 2: Tag in middle says person but fields are for animal (should error)
       {
          EntityVariant e;
@@ -847,7 +865,7 @@ suite variant_tag_validation = [] {
          auto ec = glz::read_json(e, json);
          expect(ec == glz::error_code::no_matching_variant_type);
       }
-      
+
       // Test 3: Tag at end says vehicle but fields are for animal (should error)
       {
          EntityVariant e;
@@ -855,7 +873,7 @@ suite variant_tag_validation = [] {
          auto ec = glz::read_json(e, json);
          expect(ec == glz::error_code::no_matching_variant_type);
       }
-      
+
       // Test 4: Person fields but tag says animal (should error)
       {
          EntityVariant e;
@@ -863,7 +881,7 @@ suite variant_tag_validation = [] {
          auto ec = glz::read_json(e, json);
          expect(ec == glz::error_code::no_matching_variant_type);
       }
-      
+
       // Test 5: No tag present, rely on field deduction (should work)
       {
          EntityVariant e;
@@ -875,7 +893,7 @@ suite variant_tag_validation = [] {
          expect(animal.species == "Elephant");
          expect(animal.weight == 5000.0f);
       }
-      
+
       // Test 6: Tag matches fields (should work)
       {
          EntityVariant e;
@@ -887,7 +905,7 @@ suite variant_tag_validation = [] {
          expect(animal.species == "Cat");
          expect(animal.weight == 4.5f);
       }
-      
+
       // Test 7: Invalid tag value (should error)
       {
          EntityVariant e;
@@ -895,7 +913,7 @@ suite variant_tag_validation = [] {
          auto ec = glz::read_json(e, json);
          expect(ec == glz::error_code::no_matching_variant_type);
       }
-      
+
       // Test 8: Tag first with mismatched fields (should error due to unknown keys)
       {
          EntityVariant e;
@@ -904,11 +922,11 @@ suite variant_tag_validation = [] {
          expect(ec == glz::error_code::unknown_key);
       }
    };
-   
+
    "tagged variant - edge cases"_test = [] {
       using namespace edge_case_tests;
       using TestVariant = std::variant<Empty, SingleField, TwoFields>;
-      
+
       // Test with empty object
       {
          TestVariant v;
@@ -917,7 +935,7 @@ suite variant_tag_validation = [] {
          expect(!ec) << glz::format_error(ec, json);
          expect(v.index() == 0); // Should select Empty
       }
-      
+
       // Test with partial field match
       {
          TestVariant v;
@@ -927,7 +945,7 @@ suite variant_tag_validation = [] {
          expect(v.index() == 1); // Should select SingleField
          expect(std::get<SingleField>(v).value == 42);
       }
-      
+
       // Test with ambiguous fields that match multiple types
       {
          TestVariant v;
@@ -937,17 +955,17 @@ suite variant_tag_validation = [] {
          expect(v.index() == 2); // Should select TwoFields (has field 'a')
       }
    };
-   
+
    "tagged variant - minified option"_test = [] {
       using namespace tag_validation2;
-      
+
       // Test with minified option and tag mismatch
       {
          TaggedVariant v;
          auto ec = glz::read<glz::opts{.minified = true}>(v, R"({"species":"Lion","type":"person","weight":190.5})");
          expect(ec == glz::error_code::no_matching_variant_type);
       }
-      
+
       // Test with minified option and matching tag
       {
          TaggedVariant v;
@@ -956,12 +974,12 @@ suite variant_tag_validation = [] {
          expect(v.index() == 1);
       }
    };
-   
+
    "untagged variant - field deduction only"_test = [] {
       using namespace edge_case_tests;
       // Variant without tag metadata
       using UntaggedVariant = std::variant<Car, Bike>;
-      
+
       // Should use field deduction
       {
          UntaggedVariant v;
@@ -973,7 +991,7 @@ suite variant_tag_validation = [] {
          expect(car.brand == "Toyota");
          expect(car.year == 2022);
       }
-      
+
       {
          UntaggedVariant v;
          std::string json = R"({"model":"Mountain","gears":21})";
@@ -985,11 +1003,11 @@ suite variant_tag_validation = [] {
          expect(bike.gears == 21);
       }
    };
-   
+
    // Test that untagged variants still short-circuit for performance
    "performance_short_circuit"_test = [] {
       using PerfVariant = std::variant<perf_test::SimpleA, perf_test::SimpleB>;
-      
+
       // Test immediate selection when field narrows to single type
       {
          PerfVariant v;
@@ -1000,7 +1018,7 @@ suite variant_tag_validation = [] {
          expect(v.index() == 0);
          expect(std::get<perf_test::SimpleA>(v).unique_a_field == 42);
       }
-      
+
       {
          PerfVariant v;
          // Only unique_b_field matches SimpleB, should select immediately

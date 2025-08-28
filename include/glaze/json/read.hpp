@@ -2747,10 +2747,10 @@ namespace glz
                   auto possible_types = bit_array<std::variant_size_v<T>>{}.flip();
                   static constexpr auto deduction_map = make_variant_deduction_map<T>();
                   static constexpr auto tag_literal = string_literal_from_view<tag_v<T>.size()>(tag_v<T>);
-                  
+
                   // Track if we've encountered a tag and what value it had
                   std::optional<size_t> tag_specified_index{};
-                  
+
                   if (skip_ws<Opts>(ctx, it, end)) {
                      return;
                   }
@@ -2810,19 +2810,19 @@ namespace glz
                               auto id_it = id_map.find(type_id);
                               if (id_it != id_map.end()) [[likely]] {
                                  const auto type_index = id_it->second;
-                                 
+
                                  // Check if the deduced types include the tag-specified type
                                  // If not, the tag doesn't match the fields
-                                 // We're already inside if constexpr (deduction_map.size()), so we know deduction is happening
-                                 // At this point, possible_types has been narrowed by field deduction
-                                 // Check if the tag-specified type is still possible
+                                 // We're already inside if constexpr (deduction_map.size()), so we know deduction is
+                                 // happening At this point, possible_types has been narrowed by field deduction Check
+                                 // if the tag-specified type is still possible
                                  const bool type_is_possible = possible_types[type_index];
                                  if (!type_is_possible) {
                                     // Tag specifies a type that doesn't match the fields seen so far
                                     ctx.error = error_code::no_matching_variant_type;
                                     return;
                                  }
-                                 
+
                                  it = start; // we restart our object parsing now that we know the target type
                                  tag_specified_index = type_index; // Store the tag-specified type
                                  if (value.index() != type_index) value = runtime_variant_map<T>()[type_index];
@@ -2936,7 +2936,7 @@ namespace glz
                         if (matching_types == 1) {
                            it = start;
                            const auto type_index = possible_types.countr_zero();
-                           
+
                            if (value.index() != static_cast<size_t>(type_index))
                               value = runtime_variant_map<T>()[type_index];
                            std::visit(
@@ -2970,8 +2970,8 @@ namespace glz
                                           // std::unique_ptr, or std::shared_ptr
                                        }
                                     }
-                                    from<JSON, memory_type<V>>::template op<opening_handled<Opts>(), tag_literal>(*v, ctx,
-                                                                                                                  it, end);
+                                    from<JSON, memory_type<V>>::template op<opening_handled<Opts>(), tag_literal>(
+                                       *v, ctx, it, end);
                                  }
                               },
                               value);
@@ -3007,15 +3007,16 @@ namespace glz
                      else if (final_matching == 1) {
                         // Single type remains after field deduction
                         const auto type_index = possible_types.countr_zero();
-                        
+
                         // Validate against tag if one was specified
-                        if (tag_specified_index.has_value() && tag_specified_index.value() != static_cast<size_t>(type_index)) {
+                        if (tag_specified_index.has_value() &&
+                            tag_specified_index.value() != static_cast<size_t>(type_index)) {
                            ctx.error = error_code::no_matching_variant_type;
                            return;
                         }
-                        
+
                         it = start;
-                        if (value.index() != static_cast<size_t>(type_index)) 
+                        if (value.index() != static_cast<size_t>(type_index))
                            value = runtime_variant_map<T>()[type_index];
                         std::visit(
                            [&](auto&& v) {
@@ -3046,11 +3047,12 @@ namespace glz
                                        return;
                                     }
                                  }
-                                 from<JSON, memory_type<V>>::template op<opening_handled<Opts>(), tag_literal>(*v, ctx, it, end);
+                                 from<JSON, memory_type<V>>::template op<opening_handled<Opts>(), tag_literal>(*v, ctx,
+                                                                                                               it, end);
                               }
                            },
                            value);
-                        
+
                         if constexpr (Opts.null_terminated) {
                            --ctx.indentation_level;
                         }
@@ -3099,7 +3101,7 @@ namespace glz
                               ctx.error = error_code::no_matching_variant_type;
                               return;
                            }
-                           
+
                            it = start;
                            if (value.index() != chosen_index) value = runtime_variant_map<T>()[chosen_index];
                            std::visit(
