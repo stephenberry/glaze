@@ -4,7 +4,10 @@ Glaze has full support for `std::variant` when writing, and comprehensive read s
 
 ## Basic Types
 
-Types can be auto-deduced if the variant contains at most one type matching each of the fundamental JSON types of [string, number, object, array boolean] or multiple object types. `std::variant<double, std::string>` could be auto deduced but `std::variant<double, float>` cannot be.
+Types can be auto-deduced if the variant contains at most one type matching each of the fundamental JSON types of [string, number, object, array, boolean]. For auto-deduction to work:
+- `std::variant<double, std::string>` ✅ (one number type, one string type)
+- `std::variant<double, float>` ❌ (two number types - requires explicit handling)
+- `std::variant<bool, std::string, double>` ✅ (one of each type)
 
 Write example:
 ```c++
@@ -20,12 +23,71 @@ glz::read_json(x, "33");
 expect(std::get<int32_t>(x) == 33);
 ```
 
+### Multiple Types of Same Category
+
+Glaze can handle variants with multiple types of the same JSON category (e.g., multiple array types or multiple number types). When auto-deduction isn't possible, Glaze will try each alternative in order until one successfully parses:
+
+```c++
+// Multiple array types - now supported!
+using NestedArrayVariant = std::variant<std::vector<double>, std::vector<std::vector<double>>>;
+
+NestedArrayVariant var;
+glz::read_json(var, "[1.0, 2.0, 3.0]");  // → std::vector<double>
+glz::read_json(var, "[[1.0, 2.0], [3.0, 4.0]]");  // → std::vector<std::vector<double>>
+```
+
+This works for any combination of types:
+```c++
+// Multiple number types
+using NumberVariant = std::variant<int, float, double>;
+NumberVariant n;
+glz::read_json(n, "42");     // Tries int first, succeeds
+glz::read_json(n, "3.14");   // Tries int (fails), then float (succeeds)
+```
+
 ## Object Types
 
 Glaze provides multiple strategies for deducing which variant type to use when reading JSON objects:
 
-### Auto Deduction with Unique Keys
-Objects can be auto deduced when they have unique key combinations that distinguish them from other types in the variant.
+### Auto Deduction with Reflectable Structs
+
+Simple aggregate structs can be used in variants without requiring explicit `glz::meta` specializations. Glaze automatically uses reflection to deduce the type based on field names:
+
+```c++
+// No glz::meta needed for these simple structs!
+struct Book {
+   std::string title;
+   std::string author;
+   int pages;
+};
+
+struct Movie {
+   std::string director;
+   int duration;
+   float rating;
+};
+
+struct Song {
+   std::string artist;
+   std::string album;
+   int year;
+};
+
+// Automatic deduction based on unique field names
+using MediaVariant = std::variant<Book, Movie, Song>;
+
+MediaVariant media;
+glz::read_json(media, R"({"title":"1984","author":"Orwell","pages":328})");  // → Book
+glz::read_json(media, R"({"director":"Nolan","duration":148,"rating":8.8})"); // → Movie
+glz::read_json(media, R"({"artist":"Beatles","album":"Abbey Road","year":1969})"); // → Song
+
+// Even partial fields work for deduction
+glz::read_json(media, R"({"title":"Partial Book"})");  // → Book (unique field)
+glz::read_json(media, R"({"director":"Unknown"})");    // → Movie (unique field)
+```
+
+### Auto Deduction with Meta Objects
+For more complex types or when you need custom serialization, you can still use explicit `glz::meta` specializations. Objects can be auto deduced when they have unique key combinations that distinguish them from other types in the variant.
 ```c++
 struct xy_t
 {
@@ -37,7 +99,7 @@ template <>
 struct glz::meta<xy_t>
 {
    using T = xy_t;
-   static constexpr auto value = object("x", &T::x, "y", &T::y);
+   static constexpr auto value = object(&T::x, &T::y);
 };
 
 struct yz_t
@@ -50,7 +112,7 @@ template <>
 struct glz::meta<yz_t>
 {
    using T = yz_t;
-   static constexpr auto value = object("y", &T::y, "z", &T::z);
+   static constexpr auto value = object(&T::y, &T::z);
 };
 
 struct xz_t
@@ -63,7 +125,7 @@ template <>
 struct glz::meta<xz_t>
 {
    using T = xz_t;
-   static constexpr auto value = object("x", &T::x, "z", &T::z);
+   static constexpr auto value = object(&T::x, &T::z);
 };
 
 suite metaobject_variant_auto_deduction = [] {
@@ -175,7 +237,7 @@ template <>
 struct glz::meta<put_action>
 {
    using T = put_action;
-   static constexpr auto value = object("data", &T::data);
+   static constexpr auto value = object(&T::data);
 };
 
 struct delete_action
@@ -187,7 +249,7 @@ template <>
 struct glz::meta<delete_action>
 {
    using T = delete_action;
-   static constexpr auto value = object("data", &T::data);
+   static constexpr auto value = object(&T::data);
 };
 
 using tagged_variant = std::variant<put_action, delete_action>;
@@ -213,6 +275,139 @@ suite tagged_variant_tests = [] {
       expect(std::get<delete_action>(var).data == "the_internet");
    };
 };
+```
+
+### Tagged Variants with Embedded Tags (New!)
+
+Recent improvements allow variant tags to be embedded within the structs themselves, making the discriminator accessible at runtime without using `std::visit`. This provides cleaner, more maintainable code:
+
+```c++
+// String-based embedded tags
+struct CreateAction {
+   std::string action{"CREATE"};  // Embedded tag field
+   std::string resource;
+   std::map<std::string, std::string> attributes;
+};
+
+struct UpdateAction {
+   std::string action{"UPDATE"};  // Embedded tag field
+   std::string id;
+   std::map<std::string, std::string> changes;
+};
+
+struct DeleteAction {
+   std::string action{"DELETE"};  // Embedded tag field
+   std::string id;
+};
+
+using ActionVariant = std::variant<CreateAction, UpdateAction, DeleteAction>;
+
+template <>
+struct glz::meta<ActionVariant> {
+   static constexpr std::string_view tag = "action";  // Field name that serves as tag
+   static constexpr auto ids = std::array{"CREATE", "UPDATE", "DELETE"};
+};
+
+// Writing - no double tagging, single "action" field
+ActionVariant v = UpdateAction{"UPDATE", "123", {{"status", "active"}}};
+auto json = glz::write_json(v);
+// Result: {"action":"UPDATE","id":"123","changes":{"status":"active"}}
+
+// Reading - tag field is populated automatically
+ActionVariant v2;
+glz::read_json(v2, json.value());
+if (std::holds_alternative<UpdateAction>(v2)) {
+   auto& update = std::get<UpdateAction>(v2);
+   // Direct access to discriminator without std::visit!
+   assert(update.action == "UPDATE");  
+}
+```
+
+#### Enum-based Embedded Tags
+
+For type safety, you can use enums as embedded tags:
+
+```c++
+enum class OperationType { GET, POST, PUT, DELETE };
+
+// Define string mapping for the enum
+template <>
+struct glz::meta<OperationType> {
+   using enum OperationType;
+   static constexpr auto value = enumerate(GET, POST, PUT, DELETE);
+};
+
+struct GetRequest {
+   OperationType operation{OperationType::GET};  // Embedded enum tag
+   std::string path;
+   std::map<std::string, std::string> params;
+};
+
+struct PostRequest {
+   OperationType operation{OperationType::POST};  // Embedded enum tag
+   std::string path;
+   std::string body;
+};
+
+using RequestVariant = std::variant<GetRequest, PostRequest>;
+
+template <>
+struct glz::meta<RequestVariant> {
+   static constexpr std::string_view tag = "operation";
+   static constexpr auto ids = std::array{"GET", "POST"};
+};
+
+// The enum is serialized as a string in JSON
+RequestVariant req = PostRequest{OperationType::POST, "/api/users", R"({"name":"Alice"})"};
+auto json = glz::write_json(req);
+// Result: {"operation":"POST","path":"/api/users","body":"{\"name\":\"Alice\"}"}
+```
+
+Benefits of embedded tags:
+- **Runtime access**: The tag value is directly accessible without `std::visit`
+- **No duplication**: JSON contains the tag field only once
+- **Type safety**: Using enums provides compile-time checking
+- **Cleaner code**: Keeps discriminator with the data it describes
+
+### Tagged Variants with Reflectable Structs
+
+You can also use tagged variants with simple reflectable structs without explicit `glz::meta` for the struct types:
+
+```c++
+// Simple structs - no glz::meta needed!
+struct Person {
+   std::string name;
+   int age;
+};
+
+struct Animal {
+   std::string species;
+   float weight;
+};
+
+struct Vehicle {
+   std::string model;
+   int wheels;
+};
+
+using EntityVariant = std::variant<Person, Animal, Vehicle>;
+
+// Only the variant needs meta for tagging
+template <>
+struct glz::meta<EntityVariant> {
+   static constexpr std::string_view tag = "type";
+   static constexpr auto ids = std::array{"person", "animal", "vehicle"};
+};
+
+// Writing includes the type tag
+EntityVariant e = Person{"Alice", 30};
+auto json = glz::write_json(e);
+// Result: {"type":"person","name":"Alice","age":30}
+
+// Reading uses the tag for type selection
+EntityVariant e2;
+glz::read_json(e2, R"({"type":"animal","species":"Lion","weight":190.5})");
+// e2 now holds Animal{"Lion", 190.5f}
 ```
 
 ## BEVE to JSON

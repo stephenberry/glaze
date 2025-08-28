@@ -2575,7 +2575,7 @@ namespace glz
    };
 
    template <class Tuple>
-   struct process_arithmetic_boolean_string_or_array
+   struct process_variant_alternatives
    {
       template <auto Options>
       static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
@@ -2617,10 +2617,71 @@ namespace glz
             }
 
             using non_const_types = typename tuple_types<Tuple>::glaze_non_const_types;
-            if constexpr (glz::tuple_size_v < non_const_types >> 0) {
-               using V = glz::tuple_element_t<0, non_const_types>;
-               if (!std::holds_alternative<V>(value)) value = V{};
-               parse<JSON>::op<ws_handled<Options>()>(std::get<V>(value), ctx, it, end);
+            if constexpr (glz::tuple_size_v<non_const_types> > 0) {
+               bool found_match{};
+               for_each<glz::tuple_size_v<non_const_types>>([&]<size_t I>() {
+                  if (found_match) {
+                     return;
+                  }
+                  using V = glz::tuple_element_t<I, non_const_types>;
+                  auto copy_it{it};
+                  if (!std::holds_alternative<V>(value)) {
+                     value = V{};
+                  }
+                  parse<JSON>::op<ws_handled<Options>()>(std::get<V>(value), ctx, it, end);
+                  if (!bool(ctx.error)) {
+                     found_match = true;
+                  }
+                  else if constexpr (not Options.null_terminated) {
+                     // Special handling for types that can validly end at buffer boundary in non-null-terminated mode
+                     // Use Glaze concepts to allow user-defined types
+                     constexpr bool is_complete_type = num_t<V> || bool_t<V> || string_t<V> || 
+                                                      std::is_enum_v<V> || tuple_t<V> || is_std_tuple<V>;
+                     
+                     if constexpr (is_complete_type) {
+                        // For these types, end_reached after parsing is OK
+                        if (ctx.error == error_code::end_reached && it > copy_it) {
+                           found_match = true;
+                           ctx.error = error_code::none;
+                        }
+                        else {
+                           // Reset iterator for next attempt
+                           it = copy_it;
+                           // Reset error to try next type (unless we're at the last type)
+                           if constexpr (I + 1 < glz::tuple_size_v<non_const_types>) {
+                              ctx.error = error_code::none;
+                           }
+                        }
+                     }
+                     else {
+                        // For container types, end_reached is a real error
+                        // Reset iterator for next attempt
+                        it = copy_it;
+                        // Reset error to try next type (unless we're at the last type)
+                        if constexpr (I + 1 < glz::tuple_size_v<non_const_types>) {
+                           ctx.error = error_code::none;
+                        }
+                     }
+                  }
+                  else {
+                     // Reset iterator for next attempt
+                     it = copy_it;
+                     // Reset error to try next type (unless we're at the last type)
+                     if constexpr (I + 1 < glz::tuple_size_v<non_const_types>) {
+                        ctx.error = error_code::none;
+                     }
+                  }
+               });
+               if (!found_match) {
+                  // If we only tried one type and it failed with a specific error, preserve that error
+                  // Otherwise, use the generic no_matching_variant_type
+                  if constexpr (glz::tuple_size_v<non_const_types> == 1) {
+                     // Keep the specific error from the single type we tried
+                  }
+                  else {
+                     ctx.error = error_code::no_matching_variant_type;
+                  }
+               }
             }
             else {
                ctx.error = error_code::no_matching_variant_type;
@@ -3022,20 +3083,20 @@ namespace glz
                   // Depth counting is done at the object level when not null terminated
                   ++ctx.indentation_level;
                }
-               process_arithmetic_boolean_string_or_array<array_types>::template op<Opts>(value, ctx, it, end);
+               process_variant_alternatives<array_types>::template op<Opts>(value, ctx, it, end);
                if constexpr (Opts.null_terminated) {
                   --ctx.indentation_level;
                }
                break;
             case '"': {
                using string_types = typename variant_types<T>::string_types;
-               process_arithmetic_boolean_string_or_array<string_types>::template op<Opts>(value, ctx, it, end);
+               process_variant_alternatives<string_types>::template op<Opts>(value, ctx, it, end);
                break;
             }
             case 't':
             case 'f': {
                using bool_types = typename variant_types<T>::bool_types;
-               process_arithmetic_boolean_string_or_array<bool_types>::template op<Opts>(value, ctx, it, end);
+               process_variant_alternatives<bool_types>::template op<Opts>(value, ctx, it, end);
                break;
             }
             case 'n':
@@ -3052,12 +3113,54 @@ namespace glz
             default: {
                // Not bool, string, object, or array so must be number or null
                using number_types = typename variant_types<T>::number_types;
-               process_arithmetic_boolean_string_or_array<number_types>::template op<Opts>(value, ctx, it, end);
+               process_variant_alternatives<number_types>::template op<Opts>(value, ctx, it, end);
             }
             }
          }
          else {
-            std::visit([&](auto&& v) { parse<JSON>::op<Options>(v, ctx, it, end); }, value);
+            // For non-auto-deducible variants, try each type until one succeeds
+            constexpr auto N = std::variant_size_v<T>;
+            bool parsed = false;
+            
+            for_each<N>([&]<size_t I>() {
+               if (parsed) return;
+               
+               auto copy_it = it;
+               
+               // Try parsing as this type
+               if (value.index() != I) {
+                  value = runtime_variant_map<T>()[I];
+               }
+               
+               std::visit([&](auto&& v) { parse<JSON>::op<Options>(v, ctx, it, end); }, value);
+               
+               if (!bool(ctx.error)) {
+                  parsed = true;
+               }
+               else if constexpr (not Options.null_terminated) {
+                  // In non-null-terminated mode, if we hit end_reached after advancing the iterator,
+                  // it means we successfully parsed the value but couldn't skip trailing whitespace
+                  if (ctx.error == error_code::end_reached && it > copy_it) {
+                     // We advanced the iterator, so we did parse something
+                     parsed = true;
+                     ctx.error = error_code::none;
+                  }
+                  else {
+                     // Reset for next attempt (unless this is the last type)
+                     it = copy_it;
+                     if constexpr (I + 1 < N) {
+                        ctx.error = error_code::none;  // Clear error for next attempt
+                     }
+                  }
+               }
+               else {
+                  // Reset for next attempt (unless this is the last type)
+                  it = copy_it;
+                  if constexpr (I + 1 < N) {
+                     ctx.error = error_code::none;  // Clear error for next attempt
+                  }
+               }
+            });
          }
       }
    };
