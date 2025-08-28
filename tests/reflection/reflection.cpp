@@ -355,21 +355,21 @@ suite variant_auto_deduction = [] {
       expect(json.has_value());
       // No type tag should be present
       expect(json.value() == R"({"title":"1984","author":"George Orwell","pages":328})") << json.value();
-      
+
       variant = Movie{"Christopher Nolan", 148, 8.8f};
       json = glz::write_json(variant);
       expect(json.has_value());
       expect(json.value() == R"({"director":"Christopher Nolan","duration":148,"rating":8.8})") << json.value();
-      
+
       variant = Song{"The Beatles", "Abbey Road", 1969};
       json = glz::write_json(variant);
       expect(json.has_value());
       expect(json.value() == R"({"artist":"The Beatles","album":"Abbey Road","year":1969})") << json.value();
    };
-   
+
    "variant auto-deduction reading"_test = [] {
       AutoDeducedVariant variant;
-      
+
       // Test reading Book - should deduce from field names
       std::string json = R"({"title":"The Hobbit","author":"J.R.R. Tolkien","pages":310})";
       auto ec = glz::read_json(variant, json);
@@ -379,7 +379,7 @@ suite variant_auto_deduction = [] {
       expect(book.title == "The Hobbit");
       expect(book.author == "J.R.R. Tolkien");
       expect(book.pages == 310);
-      
+
       // Test reading Movie - should deduce from field names
       json = R"({"director":"Steven Spielberg","duration":127,"rating":9.0})";
       ec = glz::read_json(variant, json);
@@ -389,7 +389,7 @@ suite variant_auto_deduction = [] {
       expect(movie.director == "Steven Spielberg");
       expect(movie.duration == 127);
       expect(movie.rating == 9.0f);
-      
+
       // Test reading Song - should deduce from field names
       json = R"({"artist":"Queen","album":"A Night at the Opera","year":1975})";
       ec = glz::read_json(variant, json);
@@ -400,10 +400,10 @@ suite variant_auto_deduction = [] {
       expect(song.album == "A Night at the Opera");
       expect(song.year == 1975);
    };
-   
+
    "variant auto-deduction with partial fields"_test = [] {
       AutoDeducedVariant variant;
-      
+
       // Test with only unique fields - should still deduce correctly
       // Book has unique "title" field
       std::string json = R"({"title":"Partial Book"})";
@@ -411,14 +411,14 @@ suite variant_auto_deduction = [] {
       expect(!ec) << glz::format_error(ec, json);
       expect(std::holds_alternative<Book>(variant));
       expect(std::get<Book>(variant).title == "Partial Book");
-      
+
       // Movie has unique "director" field
       json = R"({"director":"Unknown Director"})";
       ec = glz::read_json(variant, json);
       expect(!ec) << glz::format_error(ec, json);
       expect(std::holds_alternative<Movie>(variant));
       expect(std::get<Movie>(variant).director == "Unknown Director");
-      
+
       // Song has unique "artist" field
       json = R"({"artist":"Unknown Artist"})";
       ec = glz::read_json(variant, json);
@@ -426,10 +426,10 @@ suite variant_auto_deduction = [] {
       expect(std::holds_alternative<Song>(variant));
       expect(std::get<Song>(variant).artist == "Unknown Artist");
    };
-   
+
    "variant auto-deduction field order independence"_test = [] {
       AutoDeducedVariant variant;
-      
+
       // Test that field order doesn't matter for deduction
       std::string json = R"({"pages":500,"author":"Test Author","title":"Test Book"})";
       auto ec = glz::read_json(variant, json);
@@ -439,7 +439,7 @@ suite variant_auto_deduction = [] {
       expect(book.title == "Test Book");
       expect(book.author == "Test Author");
       expect(book.pages == 500);
-      
+
       // Different order for Movie
       json = R"({"rating":7.5,"director":"Test Director","duration":120})";
       ec = glz::read_json(variant, json);
