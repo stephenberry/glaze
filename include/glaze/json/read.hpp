@@ -2673,7 +2673,14 @@ namespace glz
                   }
                });
                if (!found_match) {
-                  ctx.error = error_code::no_matching_variant_type;
+                  // If we only tried one type and it failed with a specific error, preserve that error
+                  // Otherwise, use the generic no_matching_variant_type
+                  if constexpr (glz::tuple_size_v<non_const_types> == 1) {
+                     // Keep the specific error from the single type we tried
+                  }
+                  else {
+                     ctx.error = error_code::no_matching_variant_type;
+                  }
                }
             }
             else {
