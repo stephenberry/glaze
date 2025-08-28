@@ -2632,6 +2632,37 @@ namespace glz
                   if (!bool(ctx.error)) {
                      found_match = true;
                   }
+                  else if constexpr (not Options.null_terminated) {
+                     // Special handling for types that can validly end at buffer boundary in non-null-terminated mode
+                     // Use Glaze concepts to allow user-defined types
+                     constexpr bool is_complete_type = num_t<V> || bool_t<V> || string_t<V> || 
+                                                      std::is_enum_v<V> || tuple_t<V> || is_std_tuple<V>;
+                     
+                     if constexpr (is_complete_type) {
+                        // For these types, end_reached after parsing is OK
+                        if (ctx.error == error_code::end_reached && it > copy_it) {
+                           found_match = true;
+                           ctx.error = error_code::none;
+                        }
+                        else {
+                           // Reset iterator for next attempt
+                           it = copy_it;
+                           // Reset error to try next type (unless we're at the last type)
+                           if constexpr (I + 1 < glz::tuple_size_v<non_const_types>) {
+                              ctx.error = error_code::none;
+                           }
+                        }
+                     }
+                     else {
+                        // For container types, end_reached is a real error
+                        // Reset iterator for next attempt
+                        it = copy_it;
+                        // Reset error to try next type (unless we're at the last type)
+                        if constexpr (I + 1 < glz::tuple_size_v<non_const_types>) {
+                           ctx.error = error_code::none;
+                        }
+                     }
+                  }
                   else {
                      // Reset iterator for next attempt
                      it = copy_it;
@@ -3088,7 +3119,6 @@ namespace glz
                if (parsed) return;
                
                auto copy_it = it;
-               auto saved_error = ctx.error;
                
                // Try parsing as this type
                if (value.index() != I) {
@@ -3100,11 +3130,27 @@ namespace glz
                if (!bool(ctx.error)) {
                   parsed = true;
                }
+               else if constexpr (not Options.null_terminated) {
+                  // In non-null-terminated mode, if we hit end_reached after advancing the iterator,
+                  // it means we successfully parsed the value but couldn't skip trailing whitespace
+                  if (ctx.error == error_code::end_reached && it > copy_it) {
+                     // We advanced the iterator, so we did parse something
+                     parsed = true;
+                     ctx.error = error_code::none;
+                  }
+                  else {
+                     // Reset for next attempt (unless this is the last type)
+                     it = copy_it;
+                     if constexpr (I + 1 < N) {
+                        ctx.error = error_code::none;  // Clear error for next attempt
+                     }
+                  }
+               }
                else {
                   // Reset for next attempt (unless this is the last type)
                   it = copy_it;
                   if constexpr (I + 1 < N) {
-                     ctx.error = saved_error;
+                     ctx.error = error_code::none;  // Clear error for next attempt
                   }
                }
             });
