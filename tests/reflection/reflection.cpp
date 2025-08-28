@@ -221,6 +221,42 @@ suite variant_no_double_tagging = [] {
       expect(json.has_value());
       expect(json.value() == R"({"code":200,"value":3.14})") << json.value();
    };
+   
+   "reading when field matches tag name"_test = [] {
+      CommandVariant cmd;
+      
+      // Test reading CommandA - the 'code' field serves as both data and discriminator
+      std::string json = R"({"code":100,"data":"test"})";
+      auto ec = glz::read_json(cmd, json);
+      expect(!ec) << glz::format_error(ec, json);
+      expect(std::holds_alternative<CommandA>(cmd));
+      auto& cmdA = std::get<CommandA>(cmd);
+      expect(cmdA.code == 100);
+      expect(cmdA.data == "test");
+      
+      // Test reading CommandB
+      json = R"({"code":200,"value":3.14})";
+      ec = glz::read_json(cmd, json);
+      expect(!ec) << glz::format_error(ec, json);
+      expect(std::holds_alternative<CommandB>(cmd));
+      auto& cmdB = std::get<CommandB>(cmd);
+      expect(cmdB.code == 200);
+      expect(cmdB.value == 3.14f);
+      
+      // Test with different order of fields
+      json = R"({"data":"hello","code":100})";
+      ec = glz::read_json(cmd, json);
+      expect(!ec) << glz::format_error(ec, json);
+      expect(std::holds_alternative<CommandA>(cmd));
+      auto& cmdA2 = std::get<CommandA>(cmd);
+      expect(cmdA2.code == 100);
+      expect(cmdA2.data == "hello");
+      
+      // Test invalid code value (should fail)
+      json = R"({"code":999,"data":"invalid"})";
+      ec = glz::read_json(cmd, json);
+      expect(ec) << "Should fail with invalid discriminator value";
+   };
 };
 
 // Test that primitive types in variants still work without object tagging
@@ -248,6 +284,33 @@ suite variant_primitive_types = [] {
       json = glz::write_json(variant);
       expect(json.has_value());
       expect(json.value() == "3.14") << json.value();
+   };
+   
+   "variant with primitive types reading"_test = [] {
+      PrimitiveVariant variant;
+      
+      // Even with tag defined, primitive types should read directly without object wrapping
+      
+      // Test reading integer directly
+      std::string json = "42";
+      auto ec = glz::read_json(variant, json);
+      expect(!ec) << glz::format_error(ec, json);
+      expect(std::holds_alternative<int>(variant));
+      expect(std::get<int>(variant) == 42);
+      
+      // Test reading string directly
+      json = R"("hello world")";
+      ec = glz::read_json(variant, json);
+      expect(!ec) << glz::format_error(ec, json);
+      expect(std::holds_alternative<std::string>(variant));
+      expect(std::get<std::string>(variant) == "hello world");
+      
+      // Test reading double directly
+      json = "3.14159";
+      ec = glz::read_json(variant, json);
+      expect(!ec) << glz::format_error(ec, json);
+      expect(std::holds_alternative<double>(variant));
+      expect(std::get<double>(variant) == 3.14159);
    };
 };
 
