@@ -408,6 +408,11 @@ auto json = glz::write_json(e);
 EntityVariant e2;
 glz::read_json(e2, R"({"type":"animal","species":"Lion","weight":190.5})");
 // e2 now holds Animal{"Lion", 190.5f}
+
+// Tag/field validation: If a tag value doesn't match the fields, an error is reported
+EntityVariant e3;
+auto error = glz::read_json(e3, R"({"species":"Lion","type":"person","weight":190.5})");
+// Error: no_matching_variant_type (tag says "person" but fields match Animal)
 ```
 
 ## BEVE to JSON

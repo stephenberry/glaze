@@ -2747,6 +2747,10 @@ namespace glz
                   auto possible_types = bit_array<std::variant_size_v<T>>{}.flip();
                   static constexpr auto deduction_map = make_variant_deduction_map<T>();
                   static constexpr auto tag_literal = string_literal_from_view<tag_v<T>.size()>(tag_v<T>);
+                  
+                  // Track if we've encountered a tag and what value it had
+                  std::optional<size_t> tag_specified_index{};
+                  
                   if (skip_ws<Opts>(ctx, it, end)) {
                      return;
                   }
@@ -2805,8 +2809,22 @@ namespace glz
                               static constexpr auto id_map = make_variant_id_map<T>();
                               auto id_it = id_map.find(type_id);
                               if (id_it != id_map.end()) [[likely]] {
-                                 it = start; // we restart our object parsing now that we know the target type
                                  const auto type_index = id_it->second;
+                                 
+                                 // Check if the deduced types include the tag-specified type
+                                 // If not, the tag doesn't match the fields
+                                 // We're already inside if constexpr (deduction_map.size()), so we know deduction is happening
+                                 // At this point, possible_types has been narrowed by field deduction
+                                 // Check if the tag-specified type is still possible
+                                 const bool type_is_possible = possible_types[type_index];
+                                 if (!type_is_possible) {
+                                    // Tag specifies a type that doesn't match the fields seen so far
+                                    ctx.error = error_code::no_matching_variant_type;
+                                    return;
+                                 }
+                                 
+                                 it = start; // we restart our object parsing now that we know the target type
+                                 tag_specified_index = type_index; // Store the tag-specified type
                                  if (value.index() != type_index) value = runtime_variant_map<T>()[type_index];
                                  std::visit(
                                     [&](auto&& v) {
@@ -2889,6 +2907,7 @@ namespace glz
                            if (id_it != id_map.end()) [[likely]] {
                               it = start;
                               const auto type_index = id_it->second;
+                              tag_specified_index = type_index; // Store the tag-specified type
                               if (value.index() != type_index) value = runtime_variant_map<T>()[type_index];
                               return;
                            }
@@ -2912,10 +2931,91 @@ namespace glz
                         ctx.error = error_code::no_matching_variant_type;
                         return;
                      }
-                     else if (matching_types == 1) {
-                        it = start;
+                     // Only short-circuit for variants without tags
+                     else if constexpr (tag_v<T>.empty()) {
+                        if (matching_types == 1) {
+                           it = start;
+                           const auto type_index = possible_types.countr_zero();
+                           
+                           if (value.index() != static_cast<size_t>(type_index))
+                              value = runtime_variant_map<T>()[type_index];
+                           std::visit(
+                              [&](auto&& v) {
+                                 using V = std::decay_t<decltype(v)>;
+                                 constexpr bool is_object = glaze_object_t<V> || reflectable<V>;
+                                 if constexpr (is_object) {
+                                    from<JSON, V>::template op<opening_handled<Opts>(), tag_literal>(v, ctx, it, end);
+                                 }
+                                 else if constexpr (is_memory_object<V>) {
+                                    if (!v) {
+                                       if constexpr (is_specialization_v<V, std::optional>) {
+                                          if constexpr (requires { v.emplace(); }) {
+                                             v.emplace();
+                                          }
+                                          else {
+                                             v = typename V::value_type{};
+                                          }
+                                       }
+                                       else if constexpr (is_specialization_v<V, std::unique_ptr>)
+                                          v = std::make_unique<typename V::element_type>();
+                                       else if constexpr (is_specialization_v<V, std::shared_ptr>)
+                                          v = std::make_shared<typename V::element_type>();
+                                       else if constexpr (constructible<V>) {
+                                          v = meta_construct_v<V>();
+                                       }
+                                       else {
+                                          ctx.error = error_code::invalid_nullable_read;
+                                          return;
+                                          // Cannot read into unset nullable that is not std::optional,
+                                          // std::unique_ptr, or std::shared_ptr
+                                       }
+                                    }
+                                    from<JSON, memory_type<V>>::template op<opening_handled<Opts>(), tag_literal>(*v, ctx,
+                                                                                                                  it, end);
+                                 }
+                              },
+                              value);
+
+                           if constexpr (Opts.null_terminated) {
+                              // In the null terminated case this guards for stack overflow
+                              // Depth counting is done at the object level when not null terminated
+                              --ctx.indentation_level;
+                           }
+                           return; // we've decoded our target type
+                        }
+                     }
+                     // For tagged variants, continue processing to validate tags
+                     if (parse_ws_colon<Opts>(ctx, it, end)) {
+                        return;
+                     }
+
+                     skip_value<JSON>::op<Opts>(ctx, it, end);
+                     if (bool(ctx.error)) [[unlikely]]
+                        return;
+                     if (skip_ws<Opts>(ctx, it, end)) {
+                        return;
+                     }
+                  }
+                  // Only apply ambiguous variant resolution if we have multiple object types
+                  if constexpr ((type_counts::n_object + type_counts::n_nullable_object) > 1) {
+                     // After parsing all keys, check if we have multiple matching types
+                     // If so, choose the one with the fewest fields
+                     auto final_matching = possible_types.popcount();
+                     if (final_matching == 0) {
+                        ctx.error = error_code::no_matching_variant_type;
+                     }
+                     else if (final_matching == 1) {
+                        // Single type remains after field deduction
                         const auto type_index = possible_types.countr_zero();
-                        if (value.index() != static_cast<size_t>(type_index))
+                        
+                        // Validate against tag if one was specified
+                        if (tag_specified_index.has_value() && tag_specified_index.value() != static_cast<size_t>(type_index)) {
+                           ctx.error = error_code::no_matching_variant_type;
+                           return;
+                        }
+                        
+                        it = start;
+                        if (value.index() != static_cast<size_t>(type_index)) 
                            value = runtime_variant_map<T>()[type_index];
                         std::visit(
                            [&](auto&& v) {
@@ -2944,43 +3044,18 @@ namespace glz
                                     else {
                                        ctx.error = error_code::invalid_nullable_read;
                                        return;
-                                       // Cannot read into unset nullable that is not std::optional,
-                                       // std::unique_ptr, or std::shared_ptr
                                     }
                                  }
-                                 from<JSON, memory_type<V>>::template op<opening_handled<Opts>(), tag_literal>(*v, ctx,
-                                                                                                               it, end);
+                                 from<JSON, memory_type<V>>::template op<opening_handled<Opts>(), tag_literal>(*v, ctx, it, end);
                               }
                            },
                            value);
-
+                        
                         if constexpr (Opts.null_terminated) {
-                           // In the null terminated case this guards for stack overflow
-                           // Depth counting is done at the object level when not null terminated
                            --ctx.indentation_level;
                         }
-                        return; // we've decoded our target type
                      }
-                     if (parse_ws_colon<Opts>(ctx, it, end)) {
-                        return;
-                     }
-
-                     skip_value<JSON>::op<Opts>(ctx, it, end);
-                     if (bool(ctx.error)) [[unlikely]]
-                        return;
-                     if (skip_ws<Opts>(ctx, it, end)) {
-                        return;
-                     }
-                  }
-                  // Only apply ambiguous variant resolution if we have multiple object types
-                  if constexpr ((type_counts::n_object + type_counts::n_nullable_object) > 1) {
-                     // After parsing all keys, check if we have multiple matching types
-                     // If so, choose the one with the fewest fields
-                     auto final_matching = possible_types.popcount();
-                     if (final_matching == 0) {
-                        ctx.error = error_code::no_matching_variant_type;
-                     }
-                     else if (final_matching >= 1) {
+                     else if (final_matching > 1) {
                         constexpr auto N = std::variant_size_v<T>;
 
                         // Compile-time array of field counts for each variant type
@@ -3019,6 +3094,12 @@ namespace glz
                         }
 
                         if (chosen_index < N) {
+                           // Validate against tag if one was specified
+                           if (tag_specified_index.has_value() && tag_specified_index.value() != chosen_index) {
+                              ctx.error = error_code::no_matching_variant_type;
+                              return;
+                           }
+                           
                            it = start;
                            if (value.index() != chosen_index) value = runtime_variant_map<T>()[chosen_index];
                            std::visit(
