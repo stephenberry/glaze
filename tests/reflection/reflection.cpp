@@ -124,7 +124,7 @@ struct Animal {
 };
 
 struct Vehicle {
-   std::string type;
+   std::string model;
    int wheels;
 };
 
@@ -153,7 +153,7 @@ suite variant_tagging_reflectable = [] {
       variant = Vehicle{"Car", 4};
       json = glz::write_json(variant);
       expect(json.has_value());
-      expect(json.value() == R"({"type":"vehicle","type":"Car","wheels":4})") << json.value();
+      expect(json.value() == R"({"type":"vehicle","model":"Car","wheels":4})") << json.value();
    };
    
    "variant parsing with reflectable structs"_test = [] {
@@ -177,13 +177,13 @@ suite variant_tagging_reflectable = [] {
       expect(animal->species == "Tiger");
       expect(animal->weight == 220.5f);
       
-      json = R"({"type":"vehicle","type":"Truck","wheels":6})";
+      json = R"({"type":"vehicle","model":"Truck","wheels":6})";
       ec = glz::read_json(variant, json);
       expect(!ec);
       
       auto* vehicle = std::get_if<Vehicle>(&variant);
       expect(vehicle != nullptr);
-      expect(vehicle->type == "Truck");
+      expect(vehicle->model == "Truck");
       expect(vehicle->wheels == 6);
    };
 };
