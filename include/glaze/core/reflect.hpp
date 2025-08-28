@@ -2071,7 +2071,7 @@ namespace glz
          }(std::make_index_sequence<N>{});
       }
    }
-   
+
    // Check if a type has a member with a specific name
    template <class T>
    consteval bool has_member_with_name(const sv& name) noexcept

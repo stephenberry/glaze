@@ -1357,8 +1357,8 @@ namespace glz
             [&](auto&& val) {
                using V = std::decay_t<decltype(val)>;
 
-               if constexpr (check_write_type_info(Opts) && not tag_v<T>.empty() && 
-                            (glaze_object_t<V> || (reflectable<V> && !has_member_with_name<V>(tag_v<T>)))) {
+               if constexpr (check_write_type_info(Opts) && not tag_v<T>.empty() &&
+                             (glaze_object_t<V> || (reflectable<V> && !has_member_with_name<V>(tag_v<T>)))) {
                   constexpr auto N = reflect<V>::size;
 
                   // must first write out type

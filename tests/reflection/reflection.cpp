@@ -2,10 +2,10 @@
 // For the license information refer to glaze.hpp
 
 #include <ut/ut.hpp>
+#include <variant>
 
 #include "glaze/core/convert_struct.hpp"
 #include "glaze/glaze.hpp"
-#include <variant>
 
 using namespace ut;
 
@@ -113,17 +113,20 @@ suite convert_tests = [] {
 };
 
 // Tests for variant tagging with reflectable structs (no explicit meta)
-struct Person {
+struct Person
+{
    std::string name;
    int age;
 };
 
-struct Animal {
+struct Animal
+{
    std::string species;
    float weight;
 };
 
-struct Vehicle {
+struct Vehicle
+{
    std::string model;
    int wheels;
 };
@@ -132,7 +135,8 @@ struct Vehicle {
 using ReflectableVariant = std::variant<Person, Animal, Vehicle>;
 
 template <>
-struct glz::meta<ReflectableVariant> {
+struct glz::meta<ReflectableVariant>
+{
    static constexpr std::string_view tag = "type";
    static constexpr auto ids = std::array{"person", "animal", "vehicle"};
 };
@@ -144,43 +148,43 @@ suite variant_tagging_reflectable = [] {
       auto json = glz::write_json(variant);
       expect(json.has_value());
       expect(json.value() == R"({"type":"person","name":"Alice","age":30})") << json.value();
-      
+
       variant = Animal{"Lion", 190.5f};
       json = glz::write_json(variant);
       expect(json.has_value());
       expect(json.value() == R"({"type":"animal","species":"Lion","weight":190.5})") << json.value();
-      
+
       variant = Vehicle{"Car", 4};
       json = glz::write_json(variant);
       expect(json.has_value());
       expect(json.value() == R"({"type":"vehicle","model":"Car","wheels":4})") << json.value();
    };
-   
+
    "variant parsing with reflectable structs"_test = [] {
       // Test deserialization with tagging
       std::string json = R"({"type":"person","name":"Bob","age":25})";
       ReflectableVariant variant;
       auto ec = glz::read_json(variant, json);
       expect(!ec);
-      
+
       auto* person = std::get_if<Person>(&variant);
       expect(person != nullptr);
       expect(person->name == "Bob");
       expect(person->age == 25);
-      
+
       json = R"({"type":"animal","species":"Tiger","weight":220.5})";
       ec = glz::read_json(variant, json);
       expect(!ec);
-      
+
       auto* animal = std::get_if<Animal>(&variant);
       expect(animal != nullptr);
       expect(animal->species == "Tiger");
       expect(animal->weight == 220.5f);
-      
+
       json = R"({"type":"vehicle","model":"Truck","wheels":6})";
       ec = glz::read_json(variant, json);
       expect(!ec);
-      
+
       auto* vehicle = std::get_if<Vehicle>(&variant);
       expect(vehicle != nullptr);
       expect(vehicle->model == "Truck");
@@ -189,12 +193,14 @@ suite variant_tagging_reflectable = [] {
 };
 
 // Test structs with a field that matches the tag name (shouldn't get double-tagged)
-struct CommandA {
+struct CommandA
+{
    int code;
    std::string data;
 };
 
-struct CommandB {
+struct CommandB
+{
    int code;
    float value;
 };
@@ -202,8 +208,9 @@ struct CommandB {
 using CommandVariant = std::variant<CommandA, CommandB>;
 
 template <>
-struct glz::meta<CommandVariant> {
-   static constexpr std::string_view tag = "code";  // Same as struct field name
+struct glz::meta<CommandVariant>
+{
+   static constexpr std::string_view tag = "code"; // Same as struct field name
    static constexpr auto ids = std::array{100, 200};
 };
 
@@ -215,16 +222,16 @@ suite variant_no_double_tagging = [] {
       expect(json.has_value());
       // Should not have duplicate "code" fields
       expect(json.value() == R"({"code":100,"data":"test"})") << json.value();
-      
+
       cmd = CommandB{200, 3.14f};
       json = glz::write_json(cmd);
       expect(json.has_value());
       expect(json.value() == R"({"code":200,"value":3.14})") << json.value();
    };
-   
+
    "reading when field matches tag name"_test = [] {
       CommandVariant cmd;
-      
+
       // Test reading CommandA - the 'code' field serves as both data and discriminator
       std::string json = R"({"code":100,"data":"test"})";
       auto ec = glz::read_json(cmd, json);
@@ -233,7 +240,7 @@ suite variant_no_double_tagging = [] {
       auto& cmdA = std::get<CommandA>(cmd);
       expect(cmdA.code == 100);
       expect(cmdA.data == "test");
-      
+
       // Test reading CommandB
       json = R"({"code":200,"value":3.14})";
       ec = glz::read_json(cmd, json);
@@ -242,7 +249,7 @@ suite variant_no_double_tagging = [] {
       auto& cmdB = std::get<CommandB>(cmd);
       expect(cmdB.code == 200);
       expect(cmdB.value == 3.14f);
-      
+
       // Test with different order of fields
       json = R"({"data":"hello","code":100})";
       ec = glz::read_json(cmd, json);
@@ -251,7 +258,7 @@ suite variant_no_double_tagging = [] {
       auto& cmdA2 = std::get<CommandA>(cmd);
       expect(cmdA2.code == 100);
       expect(cmdA2.data == "hello");
-      
+
       // Test invalid code value (should fail)
       json = R"({"code":999,"data":"invalid"})";
       ec = glz::read_json(cmd, json);
@@ -263,7 +270,8 @@ suite variant_no_double_tagging = [] {
 using PrimitiveVariant = std::variant<bool, std::string, double>;
 
 template <>
-struct glz::meta<PrimitiveVariant> {
+struct glz::meta<PrimitiveVariant>
+{
    static constexpr std::string_view tag = "type";
    static constexpr auto ids = std::array{"boolean", "string", "double"};
 };
@@ -274,37 +282,37 @@ suite variant_primitive_types = [] {
       auto json = glz::write_json(variant);
       expect(json.has_value());
       expect(json.value() == "true") << json.value();
-      
+
       variant = std::string("hello");
       json = glz::write_json(variant);
       expect(json.has_value());
       expect(json.value() == R"("hello")") << json.value();
-      
+
       variant = 3.14;
       json = glz::write_json(variant);
       expect(json.has_value());
       expect(json.value() == "3.14") << json.value();
    };
-   
+
    "variant with primitive types reading"_test = [] {
       PrimitiveVariant variant;
-      
+
       // Even with tag defined, primitive types should read directly without object wrapping
-      
+
       // Test reading boolean directly
       std::string json = "true";
       auto ec = glz::read_json(variant, json);
       expect(!ec) << glz::format_error(ec, json);
       expect(std::holds_alternative<bool>(variant));
       expect(std::get<bool>(variant) == true);
-      
+
       // Test reading string directly
       json = R"("hello world")";
       ec = glz::read_json(variant, json);
       expect(!ec) << glz::format_error(ec, json);
       expect(std::holds_alternative<std::string>(variant));
       expect(std::get<std::string>(variant) == "hello world");
-      
+
       // Test reading double directly
       json = "3.14159";
       ec = glz::read_json(variant, json);
