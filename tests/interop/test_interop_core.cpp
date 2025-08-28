@@ -7,7 +7,7 @@
 #include <vector>
 
 #include "glaze/interop/client.hpp"
-#include "glaze/interop/glaze.hpp"
+#include "glaze/interop/i_glaze.hpp"
 #include "glaze/interop/interop.hpp"
 #include "ut/ut.hpp"
 

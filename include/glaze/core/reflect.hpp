@@ -2071,6 +2071,21 @@ namespace glz
          }(std::make_index_sequence<N>{});
       }
    }
+   
+   // Check if a type has a member with a specific name
+   template <class T>
+   consteval bool has_member_with_name(const sv& name) noexcept
+   {
+      if constexpr (reflectable<T> || glaze_object_t<T>) {
+         constexpr auto N = reflect<T>::size;
+         for (size_t i = 0; i < N; ++i) {
+            if (reflect<T>::keys[i] == name) {
+               return true;
+            }
+         }
+      }
+      return false;
+   }
 }
 
 #ifdef _MSC_VER
