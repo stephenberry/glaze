@@ -476,11 +476,7 @@ struct glz::meta<EmbeddedStringTagVariant>
 };
 
 // Enum-based embedded tags
-enum class ActionType
-{
-   PUT,
-   DELETE
-};
+enum class ActionType { PUT, DELETE };
 
 template <>
 struct glz::meta<ActionType>
@@ -510,34 +506,34 @@ suite embedded_tag_variants = [] {
       expect(json.has_value());
       // Should have single "action" field, not duplicated
       expect(json.value() == R"({"action":"PUT","data":"test_data"})") << json.value();
-      
+
       variant = DeleteActionStr{"DELETE", "test_target"};
       json = glz::write_json(variant);
       expect(json.has_value());
       expect(json.value() == R"({"action":"DELETE","target":"test_target"})") << json.value();
    };
-   
+
    "embedded string tag reading"_test = [] {
       EmbeddedStringTagVariant variant;
-      
+
       // Test reading PutActionStr
       std::string json = R"({"action":"PUT","data":"restored_data"})";
       auto ec = glz::read_json(variant, json);
       expect(!ec) << glz::format_error(ec, json);
       expect(std::holds_alternative<PutActionStr>(variant));
       auto& put = std::get<PutActionStr>(variant);
-      expect(put.action == "PUT");  // Verify the embedded tag is populated
+      expect(put.action == "PUT"); // Verify the embedded tag is populated
       expect(put.data == "restored_data");
-      
+
       // Test reading DeleteActionStr
       json = R"({"action":"DELETE","target":"removed_item"})";
       ec = glz::read_json(variant, json);
       expect(!ec) << glz::format_error(ec, json);
       expect(std::holds_alternative<DeleteActionStr>(variant));
       auto& del = std::get<DeleteActionStr>(variant);
-      expect(del.action == "DELETE");  // Verify the embedded tag is populated
+      expect(del.action == "DELETE"); // Verify the embedded tag is populated
       expect(del.target == "removed_item");
-      
+
       // Test with fields in different order
       json = R"({"data":"more_data","action":"PUT"})";
       ec = glz::read_json(variant, json);
@@ -546,51 +542,51 @@ suite embedded_tag_variants = [] {
       expect(std::get<PutActionStr>(variant).action == "PUT");
       expect(std::get<PutActionStr>(variant).data == "more_data");
    };
-   
+
    "embedded enum tag writing"_test = [] {
       // Test that enums are properly serialized as strings
       EmbeddedEnumTagVariant variant = PutActionEnum{ActionType::PUT, "enum_data"};
       auto json = glz::write_json(variant);
       expect(json.has_value());
       expect(json.value() == R"({"action":"PUT","data":"enum_data"})") << json.value();
-      
+
       variant = DeleteActionEnum{ActionType::DELETE, "enum_target"};
       json = glz::write_json(variant);
       expect(json.has_value());
       expect(json.value() == R"({"action":"DELETE","target":"enum_target"})") << json.value();
    };
-   
+
    "embedded enum tag reading"_test = [] {
       EmbeddedEnumTagVariant variant;
-      
+
       // Test reading PutActionEnum
       std::string json = R"({"action":"PUT","data":"enum_restored"})";
       auto ec = glz::read_json(variant, json);
       expect(!ec) << glz::format_error(ec, json);
       expect(std::holds_alternative<PutActionEnum>(variant));
       auto& put = std::get<PutActionEnum>(variant);
-      expect(put.action == ActionType::PUT);  // Verify the embedded enum tag is populated
+      expect(put.action == ActionType::PUT); // Verify the embedded enum tag is populated
       expect(put.data == "enum_restored");
-      
+
       // Test reading DeleteActionEnum
       json = R"({"action":"DELETE","target":"enum_removed"})";
       ec = glz::read_json(variant, json);
       expect(!ec) << glz::format_error(ec, json);
       expect(std::holds_alternative<DeleteActionEnum>(variant));
       auto& del = std::get<DeleteActionEnum>(variant);
-      expect(del.action == ActionType::DELETE);  // Verify the embedded enum tag is populated
+      expect(del.action == ActionType::DELETE); // Verify the embedded enum tag is populated
       expect(del.target == "enum_removed");
    };
-   
+
    "embedded tag round-trip"_test = [] {
       // Test complete round-trip serialization
-      
+
       // String-based
       {
          EmbeddedStringTagVariant original = PutActionStr{"PUT", "round_trip_data"};
          auto json = glz::write_json(original);
          expect(json.has_value());
-         
+
          EmbeddedStringTagVariant restored;
          auto ec = glz::read_json(restored, json.value());
          expect(!ec);
@@ -599,13 +595,13 @@ suite embedded_tag_variants = [] {
          expect(put.action == "PUT");
          expect(put.data == "round_trip_data");
       }
-      
+
       // Enum-based
       {
          EmbeddedEnumTagVariant original = DeleteActionEnum{ActionType::DELETE, "round_trip_target"};
          auto json = glz::write_json(original);
          expect(json.has_value());
-         
+
          EmbeddedEnumTagVariant restored;
          auto ec = glz::read_json(restored, json.value());
          expect(!ec);
@@ -615,31 +611,31 @@ suite embedded_tag_variants = [] {
          expect(del.target == "round_trip_target");
       }
    };
-   
+
    "embedded tag runtime access"_test = [] {
       // Demonstrate that embedded tags are accessible at runtime without std::visit
       EmbeddedStringTagVariant str_variant = PutActionStr{"PUT", "test"};
-      
+
       // Direct access to the action field after deserialization
       std::string json = R"({"action":"DELETE","target":"xyz"})";
       auto ec = glz::read_json(str_variant, json);
       expect(!ec);
-      
+
       // Can check the type directly via the embedded field
       if (std::holds_alternative<DeleteActionStr>(str_variant)) {
          auto& del = std::get<DeleteActionStr>(str_variant);
-         expect(del.action == "DELETE");  // Direct runtime access to discriminator
+         expect(del.action == "DELETE"); // Direct runtime access to discriminator
       }
-      
+
       // Same for enum variant
       EmbeddedEnumTagVariant enum_variant;
       json = R"({"action":"PUT","data":"abc"})";
       ec = glz::read_json(enum_variant, json);
       expect(!ec);
-      
+
       if (std::holds_alternative<PutActionEnum>(enum_variant)) {
          auto& put = std::get<PutActionEnum>(enum_variant);
-         expect(put.action == ActionType::PUT);  // Direct runtime access to discriminator
+         expect(put.action == ActionType::PUT); // Direct runtime access to discriminator
       }
    };
 };
