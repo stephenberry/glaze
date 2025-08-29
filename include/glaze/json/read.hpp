@@ -2233,33 +2233,26 @@ namespace glz
                   if constexpr (not Opts.null_terminated) {
                      --ctx.indentation_level;
                   }
-                  if constexpr ((glaze_object_t<T> || reflectable<T>) &&
-                                (Opts.partial_read && Opts.error_on_missing_keys)) {
-                     ctx.error = error_code::missing_key;
-                     return;
-                  }
-                  else {
-                     if constexpr ((glaze_object_t<T> || reflectable<T>) && Opts.error_on_missing_keys) {
-                        constexpr auto req_fields = required_fields<T, Opts>();
-                        if ((req_fields & fields) != req_fields) {
-                           for (size_t i = 0; i < num_members; ++i) {
-                              if (not fields[i] && req_fields[i]) {
-                                 ctx.custom_error_message = reflect<T>::keys[i];
-                                 // We just return the first missing key in order to avoid heap allocations
-                                 break;
-                              }
+                  if constexpr ((glaze_object_t<T> || reflectable<T>) && Opts.error_on_missing_keys) {
+                     constexpr auto req_fields = required_fields<T, Opts>();
+                     if ((req_fields & fields) != req_fields) {
+                        for (size_t i = 0; i < num_members; ++i) {
+                           if (not fields[i] && req_fields[i]) {
+                              ctx.custom_error_message = reflect<T>::keys[i];
+                              // We just return the first missing key in order to avoid heap allocations
+                              break;
                            }
+                        }
 
-                           ctx.error = error_code::missing_key;
-                           return;
-                        }
+                        ctx.error = error_code::missing_key;
+                        return;
                      }
-                     ++it; // Increment after checking for mising keys so errors are within buffer bounds
-                     if constexpr (not Opts.null_terminated) {
-                        if (it == end) {
-                           ctx.error = error_code::end_reached;
-                           return;
-                        }
+                  }
+                  ++it; // Increment after checking for mising keys so errors are within buffer bounds
+                  if constexpr (not Opts.null_terminated) {
+                     if (it == end) {
+                        ctx.error = error_code::end_reached;
+                        return;
                      }
                   }
                   return;
