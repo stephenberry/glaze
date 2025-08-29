@@ -904,21 +904,24 @@ suite variant_ambiguous_tests = [] {
 // ============================================================================
 
 // Test structs for default variant functionality
-struct CreateAction {
-   std::string action{"CREATE"};  // Embedded tag field
+struct CreateAction
+{
+   std::string action{"CREATE"}; // Embedded tag field
    std::string resource{};
    std::map<std::string, std::string> attributes{};
 };
 
-struct UpdateAction {
-   std::string action{"UPDATE"};  // Embedded tag field
+struct UpdateAction
+{
+   std::string action{"UPDATE"}; // Embedded tag field
    std::string id{};
    std::map<std::string, std::string> changes{};
 };
 
 // Default handler for unknown action types
-struct UnknownAction {
-   std::string action{};  // Will be populated with the actual tag value
+struct UnknownAction
+{
+   std::string action{}; // Will be populated with the actual tag value
    std::optional<std::string> id{};
    std::optional<std::string> resource{};
    std::optional<std::string> target{};
@@ -928,24 +931,28 @@ struct UnknownAction {
 using ActionVariant = std::variant<CreateAction, UpdateAction, UnknownAction>;
 
 template <>
-struct glz::meta<ActionVariant> {
+struct glz::meta<ActionVariant>
+{
    static constexpr std::string_view tag = "action";
    // Note: Only 2 IDs for 3 variant types - UnknownAction becomes the default
    static constexpr auto ids = std::array{"CREATE", "UPDATE"};
 };
 
 // Test with numeric IDs
-struct TypeNumA {
+struct TypeNumA
+{
    int type{1};
    std::string data{};
 };
 
-struct TypeNumB {
+struct TypeNumB
+{
    int type{2};
    double value{};
 };
 
-struct TypeNumUnknown {
+struct TypeNumUnknown
+{
    int type{};
    std::optional<std::string> data{};
    std::optional<double> value{};
@@ -954,9 +961,10 @@ struct TypeNumUnknown {
 using NumericVariant = std::variant<TypeNumA, TypeNumB, TypeNumUnknown>;
 
 template <>
-struct glz::meta<NumericVariant> {
+struct glz::meta<NumericVariant>
+{
    static constexpr std::string_view tag = "type";
-   static constexpr auto ids = std::array{1, 2};  // TypeNumUnknown handles all other values
+   static constexpr auto ids = std::array{1, 2}; // TypeNumUnknown handles all other values
 };
 
 suite variant_default_tests = [] {
@@ -966,28 +974,28 @@ suite variant_default_tests = [] {
       auto ec = glz::read_json(av, json);
       expect(!ec) << glz::format_error(ec, json);
       expect(std::holds_alternative<CreateAction>(av));
-      
+
       auto& create = std::get<CreateAction>(av);
       expect(create.action == "CREATE");
       expect(create.resource == "user");
       expect(create.attributes["name"] == "Alice");
       expect(create.attributes["role"] == "admin");
    };
-   
+
    "default variant - known UPDATE action"_test = [] {
       std::string_view json = R"({"action":"UPDATE","id":"123","changes":{"status":"active","priority":"high"}})";
       ActionVariant av{};
       auto ec = glz::read_json(av, json);
       expect(!ec) << glz::format_error(ec, json);
       expect(std::holds_alternative<UpdateAction>(av));
-      
+
       auto& update = std::get<UpdateAction>(av);
       expect(update.action == "UPDATE");
       expect(update.id == "123");
       expect(update.changes["status"] == "active");
       expect(update.changes["priority"] == "high");
    };
-   
+
    "default variant - unknown DELETE action"_test = [] {
       // DELETE is not in the ids array, should route to UnknownAction
       std::string_view json = R"({"action":"DELETE","id":"456","target":"resource"})";
@@ -995,7 +1003,7 @@ suite variant_default_tests = [] {
       auto ec = glz::read_json(av, json);
       expect(!ec) << glz::format_error(ec, json);
       expect(std::holds_alternative<UnknownAction>(av));
-      
+
       auto& unknown = std::get<UnknownAction>(av);
       expect(unknown.action == "DELETE");
       expect(unknown.id.has_value());
@@ -1003,7 +1011,7 @@ suite variant_default_tests = [] {
       expect(unknown.target.has_value());
       expect(unknown.target.value() == "resource");
    };
-   
+
    "default variant - unknown PATCH action"_test = [] {
       // PATCH is not in the ids array, should route to UnknownAction
       std::string_view json = R"({"action":"PATCH","data":"some_data","resource":"item"})";
@@ -1011,7 +1019,7 @@ suite variant_default_tests = [] {
       auto ec = glz::read_json(av, json);
       expect(!ec) << glz::format_error(ec, json);
       expect(std::holds_alternative<UnknownAction>(av));
-      
+
       auto& unknown = std::get<UnknownAction>(av);
       expect(unknown.action == "PATCH");
       expect(unknown.data.has_value());
@@ -1019,7 +1027,7 @@ suite variant_default_tests = [] {
       expect(unknown.resource.has_value());
       expect(unknown.resource.value() == "item");
    };
-   
+
    "default variant - unknown custom action"_test = [] {
       // Custom action type not in the ids array
       std::string_view json = R"({"action":"ARCHIVE","id":"789"})";
@@ -1027,13 +1035,13 @@ suite variant_default_tests = [] {
       auto ec = glz::read_json(av, json);
       expect(!ec) << glz::format_error(ec, json);
       expect(std::holds_alternative<UnknownAction>(av));
-      
+
       auto& unknown = std::get<UnknownAction>(av);
       expect(unknown.action == "ARCHIVE");
       expect(unknown.id.has_value());
       expect(unknown.id.value() == "789");
    };
-   
+
    "default variant - fields order with known action"_test = [] {
       // Test with fields in different order
       std::string_view json = R"({"resource":"product","action":"CREATE","attributes":{"price":"99.99"}})";
@@ -1041,13 +1049,13 @@ suite variant_default_tests = [] {
       auto ec = glz::read_json(av, json);
       expect(!ec) << glz::format_error(ec, json);
       expect(std::holds_alternative<CreateAction>(av));
-      
+
       auto& create = std::get<CreateAction>(av);
       expect(create.action == "CREATE");
       expect(create.resource == "product");
       expect(create.attributes["price"] == "99.99");
    };
-   
+
    "default variant - fields order with unknown action"_test = [] {
       // Test unknown action with fields before action tag
       std::string_view json = R"({"id":"111","target":"db","action":"PURGE"})";
@@ -1055,7 +1063,7 @@ suite variant_default_tests = [] {
       auto ec = glz::read_json(av, json);
       expect(!ec) << glz::format_error(ec, json);
       expect(std::holds_alternative<UnknownAction>(av));
-      
+
       auto& unknown = std::get<UnknownAction>(av);
       expect(unknown.action == "PURGE");
       expect(unknown.id.has_value());
@@ -1070,19 +1078,19 @@ suite variant_default_tests = [] {
       auto ec = glz::read_json(nv, json);
       expect(!ec) << glz::format_error(ec, json);
       expect(std::holds_alternative<TypeNumA>(nv));
-      
+
       auto& a = std::get<TypeNumA>(nv);
       expect(a.type == 1);
       expect(a.data == "test");
    };
-   
+
    "default variant - numeric unknown type"_test = [] {
       std::string_view json = R"({"type":99,"data":"unknown","value":3.14})";
       NumericVariant nv{};
       auto ec = glz::read_json(nv, json);
       expect(!ec) << glz::format_error(ec, json);
       expect(std::holds_alternative<TypeNumUnknown>(nv));
-      
+
       auto& unknown = std::get<TypeNumUnknown>(nv);
       expect(unknown.type == 99);
       expect(unknown.data.has_value());

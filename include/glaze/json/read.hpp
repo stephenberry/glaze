@@ -2878,7 +2878,7 @@ namespace glz
                                  if constexpr (ids_size < variant_size) {
                                     // Use the first unlabeled type as the default
                                     const auto type_index = ids_size;
-                                    
+
                                     it = start; // we restart our object parsing now that we know the target type
                                     tag_specified_index = type_index; // Store the default type index
                                     if (value.index() != type_index) value = runtime_variant_map<T>()[type_index];
@@ -2911,7 +2911,8 @@ namespace glz
                                                    return;
                                                 }
                                              }
-                                             from<JSON, memory_type<V>>::template op<opening_handled<Opts>()>(*v, ctx, it, end);
+                                             from<JSON, memory_type<V>>::template op<opening_handled<Opts>()>(*v, ctx,
+                                                                                                              it, end);
                                           }
                                        },
                                        value);
