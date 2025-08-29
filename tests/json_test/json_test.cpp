@@ -8501,12 +8501,14 @@ suite partial_read_tests = [] {
 };
 
 // Test structs for optional/required field tests
-struct OptionalFieldTest {
+struct OptionalFieldTest
+{
    std::optional<int> optional_field;
    std::string required_field;
 };
 
-struct RequiredFieldTest {
+struct RequiredFieldTest
+{
    int required_field1;
    std::string required_field2;
 };
@@ -8539,37 +8541,29 @@ suite nested_partial_read_tests = [] {
       expect(n.header.type == "message_type");
       expect(n.number == 0);
    };
-   
+
    // Test for optional fields with partial_read and error_on_missing_keys
    "optional field with partial_read and error_on_missing_keys"_test = [] {
       OptionalFieldTest obj{};
       std::string buf = R"({"required_field":"test"})";
-      
+
       // Both partial_read and error_on_missing_keys are true
-      constexpr auto opts = glz::opts{
-         .skip_null_members = true,
-         .error_on_missing_keys = true,
-         .partial_read = true
-      };
-      
+      constexpr auto opts = glz::opts{.skip_null_members = true, .error_on_missing_keys = true, .partial_read = true};
+
       // Should not error on missing optional field
       auto ec = glz::read<opts>(obj, buf);
       expect(not ec) << glz::format_error(ec, buf);
       expect(not obj.optional_field.has_value());
       expect(obj.required_field == "test");
    };
-   
+
    // Test that required fields still trigger errors
    "required field with partial_read and error_on_missing_keys"_test = [] {
       RequiredFieldTest obj{};
       std::string buf = R"({"required_field1":42})";
-      
-      constexpr auto opts = glz::opts{
-         .skip_null_members = true,
-         .error_on_missing_keys = true,
-         .partial_read = true
-      };
-      
+
+      constexpr auto opts = glz::opts{.skip_null_members = true, .error_on_missing_keys = true, .partial_read = true};
+
       // Should error on missing required field
       auto ec = glz::read<opts>(obj, buf);
       expect(ec == glz::error_code::missing_key);
