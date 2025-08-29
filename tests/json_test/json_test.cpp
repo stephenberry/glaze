@@ -8547,8 +8547,8 @@ suite nested_partial_read_tests = [] {
       
       // Both partial_read and error_on_missing_keys are true
       constexpr auto opts = glz::opts{
-         .error_on_missing_keys = true,
          .skip_null_members = true,
+         .error_on_missing_keys = true,
          .partial_read = true
       };
       
@@ -8565,8 +8565,8 @@ suite nested_partial_read_tests = [] {
       std::string buf = R"({"required_field1":42})";
       
       constexpr auto opts = glz::opts{
-         .error_on_missing_keys = true,
          .skip_null_members = true,
+         .error_on_missing_keys = true,
          .partial_read = true
       };
       
