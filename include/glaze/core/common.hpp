@@ -412,20 +412,24 @@ namespace glz
    template <is_variant T, size_t... I>
    constexpr auto make_variant_sv_id_map_impl(std::index_sequence<I...>, auto&& variant_ids)
    {
-      return normal_map<sv, size_t, std::variant_size_v<T>>(std::array{pair<sv, size_t>{sv(variant_ids[I]), I}...});
+      // Use the actual size of the ids array, not the variant size
+      return normal_map<sv, size_t, sizeof...(I)>(std::array{pair<sv, size_t>{sv(variant_ids[I]), I}...});
    }
 
    template <is_variant T, size_t... I>
    constexpr auto make_variant_id_map_impl(std::index_sequence<I...>, auto&& variant_ids)
    {
       using id_type = std::decay_t<decltype(ids_v<T>[0])>;
-      return normal_map<id_type, size_t, std::variant_size_v<T>>(std::array{pair{variant_ids[I], I}...});
+      // Use the actual size of the ids array, not the variant size
+      return normal_map<id_type, size_t, sizeof...(I)>(std::array{pair{variant_ids[I], I}...});
    }
 
    template <is_variant T>
    constexpr auto make_variant_id_map()
    {
-      constexpr auto indices = std::make_index_sequence<std::variant_size_v<T>>{};
+      // Use the size of the ids array, not the variant size
+      // This allows unlabeled variant types to serve as defaults
+      constexpr auto indices = std::make_index_sequence<ids_v<T>.size()>{};
 
       using id_type = std::decay_t<decltype(ids_v<T>[0])>;
 
