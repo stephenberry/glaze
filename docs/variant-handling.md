@@ -277,9 +277,9 @@ suite tagged_variant_tests = [] {
 };
 ```
 
-### Tagged Variants with Embedded Tags (New!)
+### Tagged Variants with Embedded Tags
 
-Recent improvements allow variant tags to be embedded within the structs themselves, making the discriminator accessible at runtime without using `std::visit`. This provides cleaner, more maintainable code:
+Variant tags may be embedded within the structs themselves, making the discriminator accessible at runtime without using `std::visit`. This provides cleaner, more maintainable code:
 
 ```c++
 // String-based embedded tags
