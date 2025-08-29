@@ -2865,8 +2865,60 @@ namespace glz
                                  return; // we've decoded our target type
                               }
                               else [[unlikely]] {
-                                 ctx.error = error_code::no_matching_variant_type;
-                                 return;
+                                 // Check if we have a default type (ids array shorter than variant)
+                                 constexpr auto ids_size = ids_v<T>.size();
+                                 constexpr auto variant_size = std::variant_size_v<T>;
+                                 if constexpr (ids_size < variant_size) {
+                                    // Use the first unlabeled type as the default
+                                    const auto type_index = ids_size;
+
+                                    it = start; // we restart our object parsing now that we know the target type
+                                    tag_specified_index = type_index; // Store the default type index
+                                    if (value.index() != type_index) value = runtime_variant_map<T>()[type_index];
+                                    std::visit(
+                                       [&](auto&& v) {
+                                          using V = std::decay_t<decltype(v)>;
+                                          constexpr bool is_object = glaze_object_t<V> || reflectable<V>;
+                                          if constexpr (is_object) {
+                                             from<JSON, V>::template op<opening_handled<Opts>()>(v, ctx, it, end);
+                                          }
+                                          else if constexpr (is_memory_object<V>) {
+                                             if (!v) {
+                                                if constexpr (is_specialization_v<V, std::optional>) {
+                                                   if constexpr (requires { v.emplace(); }) {
+                                                      v.emplace();
+                                                   }
+                                                   else {
+                                                      v = typename V::value_type{};
+                                                   }
+                                                }
+                                                else if constexpr (is_specialization_v<V, std::unique_ptr>)
+                                                   v = std::make_unique<typename V::element_type>();
+                                                else if constexpr (is_specialization_v<V, std::shared_ptr>)
+                                                   v = std::make_shared<typename V::element_type>();
+                                                else if constexpr (constructible<V>) {
+                                                   v = meta_construct_v<V>();
+                                                }
+                                                else {
+                                                   ctx.error = error_code::invalid_nullable_read;
+                                                   return;
+                                                }
+                                             }
+                                             from<JSON, memory_type<V>>::template op<opening_handled<Opts>()>(*v, ctx,
+                                                                                                              it, end);
+                                          }
+                                       },
+                                       value);
+
+                                    if constexpr (Opts.null_terminated) {
+                                       --ctx.indentation_level;
+                                    }
+                                    return;
+                                 }
+                                 else {
+                                    ctx.error = error_code::no_matching_variant_type;
+                                    return;
+                                 }
                               }
                            }
                         }
@@ -2905,8 +2957,21 @@ namespace glz
                               return;
                            }
                            else {
-                              ctx.error = error_code::no_matching_variant_type;
-                              return;
+                              // Check if we have a default type (ids array shorter than variant)
+                              constexpr auto ids_size = ids_v<T>.size();
+                              constexpr auto variant_size = std::variant_size_v<T>;
+                              if constexpr (ids_size < variant_size) {
+                                 // Use the first unlabeled type as the default
+                                 it = start;
+                                 const auto type_index = ids_size;
+                                 tag_specified_index = type_index; // Store the default type index
+                                 if (value.index() != type_index) value = runtime_variant_map<T>()[type_index];
+                                 return;
+                              }
+                              else {
+                                 ctx.error = error_code::no_matching_variant_type;
+                                 return;
+                              }
                            }
                         }
                         else if constexpr (Opts.error_on_unknown_keys) {
