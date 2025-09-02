@@ -39,6 +39,23 @@ using namespace ut;
 glz::trace trace{};
 suite start_trace = [] { trace.begin("json_test", "Full test suite duration."); };
 
+// Test structs for pointer tests (using pure reflection, no glz::meta)
+struct ptr_struct {
+   int* val{};
+};
+
+struct multi_ptr_struct {
+   int* ptr1{};
+   double* ptr2{};
+   std::string* ptr3{};
+};
+
+struct ptr_opt_struct {
+   int* ptr{};
+   std::optional<int> opt{};
+   int value{42};
+};
+
 struct my_struct
 {
    int i = 287;
@@ -1110,6 +1127,95 @@ suite nullable_types = [] {
       expect(not glz::write_json(ptr, buffer));
       expect(buffer == "null");
    };
+   "raw_pointer"_test = [] {
+      int* ptr = nullptr;
+      std::string buffer{};
+      expect(not glz::write_json(ptr, buffer));
+      expect(buffer == "null");
+
+      int value = 42;
+      ptr = &value;
+      buffer.clear();
+      expect(not glz::write_json(ptr, buffer));
+      expect(buffer == "42");
+
+      ptr = nullptr;
+      buffer.clear();
+      expect(not glz::write_json(ptr, buffer));
+      expect(buffer == "null");
+   };
+   "raw_pointer_in_struct"_test = [] {
+      ptr_struct obj;
+      std::string buffer{};
+      expect(not glz::write_json(obj, buffer));
+      expect(buffer == "{}");
+      
+      int value = 99;
+      obj.val = &value;
+      buffer.clear();
+      expect(not glz::write_json(obj, buffer));
+      expect(buffer == R"({"val":99})");
+      
+      obj.val = nullptr;
+      buffer.clear();
+      expect(not glz::write_json(obj, buffer));
+      expect(buffer == "{}");
+   };
+   "multiple_pointers_in_struct"_test = [] {
+      multi_ptr_struct obj;
+      std::string buffer{};
+      expect(not glz::write_json(obj, buffer));
+      expect(buffer == "{}");
+      
+      int i = 123;
+      double d = 3.14;
+      std::string s = "hello";
+      obj.ptr1 = &i;
+      obj.ptr2 = &d;
+      obj.ptr3 = &s;
+      buffer.clear();
+      expect(not glz::write_json(obj, buffer));
+      expect(buffer == R"({"ptr1":123,"ptr2":3.14,"ptr3":"hello"})");
+      
+      obj.ptr2 = nullptr;
+      buffer.clear();
+      expect(not glz::write_json(obj, buffer));
+      expect(buffer == R"({"ptr1":123,"ptr3":"hello"})");
+   };
+   "pointer_skip_null_members_false"_test = [] {
+      constexpr auto opts = glz::opts{.skip_null_members = false};
+      ptr_opt_struct obj;
+      std::string buffer{};
+      
+      // Both pointer and optional should write null when skip_null_members = false
+      expect(not glz::write<opts>(obj, buffer));
+      expect(buffer == R"({"ptr":null,"opt":null,"value":42})");
+      
+      // Set values and verify they're written
+      int val = 99;
+      obj.ptr = &val;
+      obj.opt = 88;
+      buffer.clear();
+      expect(not glz::write<opts>(obj, buffer));
+      expect(buffer == R"({"ptr":99,"opt":88,"value":42})");
+   };
+   "pointer_skip_null_members_true"_test = [] {
+      // Default is skip_null_members = true
+      ptr_opt_struct obj;
+      std::string buffer{};
+      
+      // Both pointer and optional should be omitted when null
+      expect(not glz::write_json(obj, buffer));
+      expect(buffer == R"({"value":42})");
+      
+      // Set values and verify they're written
+      int val = 99;
+      obj.ptr = &val;
+      obj.opt = 88;
+      buffer.clear();
+      expect(not glz::write_json(obj, buffer));
+      expect(buffer == R"({"ptr":99,"opt":88,"value":42})");
+   };
 };
 
 suite enum_types = [] {
@@ -1606,7 +1712,7 @@ suite user_types = [] {
              "glz::tuple<sub_thing,std::array<sub_thing2,1>,V3,std::list<int32_t>,std::deque<double>,std::"
              "vector<V3>,int32_t,double,bool,char,std::variant<var1_t,var2_t>,Color,std::vector<bool>,std::shared_ptr<"
              "sub_thing>,std::optional<V3>,std::array<std::string,4>,std::map<std::string,int32_t>,std::map<int32_t,"
-             "double>,sub_thing>");
+             "double>,sub_thing*>");
    };
 };
 
