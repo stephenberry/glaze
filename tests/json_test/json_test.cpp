@@ -40,17 +40,20 @@ glz::trace trace{};
 suite start_trace = [] { trace.begin("json_test", "Full test suite duration."); };
 
 // Test structs for pointer tests (using pure reflection, no glz::meta)
-struct ptr_struct {
+struct ptr_struct
+{
    int* val{};
 };
 
-struct multi_ptr_struct {
+struct multi_ptr_struct
+{
    int* ptr1{};
    double* ptr2{};
    std::string* ptr3{};
 };
 
-struct ptr_opt_struct {
+struct ptr_opt_struct
+{
    int* ptr{};
    std::optional<int> opt{};
    int value{42};
@@ -1149,13 +1152,13 @@ suite nullable_types = [] {
       std::string buffer{};
       expect(not glz::write_json(obj, buffer));
       expect(buffer == "{}");
-      
+
       int value = 99;
       obj.val = &value;
       buffer.clear();
       expect(not glz::write_json(obj, buffer));
       expect(buffer == R"({"val":99})");
-      
+
       obj.val = nullptr;
       buffer.clear();
       expect(not glz::write_json(obj, buffer));
@@ -1166,7 +1169,7 @@ suite nullable_types = [] {
       std::string buffer{};
       expect(not glz::write_json(obj, buffer));
       expect(buffer == "{}");
-      
+
       int i = 123;
       double d = 3.14;
       std::string s = "hello";
@@ -1176,7 +1179,7 @@ suite nullable_types = [] {
       buffer.clear();
       expect(not glz::write_json(obj, buffer));
       expect(buffer == R"({"ptr1":123,"ptr2":3.14,"ptr3":"hello"})");
-      
+
       obj.ptr2 = nullptr;
       buffer.clear();
       expect(not glz::write_json(obj, buffer));
@@ -1186,11 +1189,11 @@ suite nullable_types = [] {
       constexpr auto opts = glz::opts{.skip_null_members = false};
       ptr_opt_struct obj;
       std::string buffer{};
-      
+
       // Both pointer and optional should write null when skip_null_members = false
       expect(not glz::write<opts>(obj, buffer));
       expect(buffer == R"({"ptr":null,"opt":null,"value":42})");
-      
+
       // Set values and verify they're written
       int val = 99;
       obj.ptr = &val;
@@ -1203,11 +1206,11 @@ suite nullable_types = [] {
       // Default is skip_null_members = true
       ptr_opt_struct obj;
       std::string buffer{};
-      
+
       // Both pointer and optional should be omitted when null
       expect(not glz::write_json(obj, buffer));
       expect(buffer == R"({"value":42})");
-      
+
       // Set values and verify they're written
       int val = 99;
       obj.ptr = &val;

@@ -96,13 +96,14 @@ namespace glz
 
                impl::template register_param_function_endpoint<Func, Params>(full_key, func, *this);
             }
-            else if constexpr (std::is_pointer_v<std::remove_cvref_t<Func>> && 
-                              (glaze_object_t<std::remove_pointer_t<std::remove_cvref_t<Func>>> || 
-                               reflectable<std::remove_pointer_t<std::remove_cvref_t<Func>>>)) {
+            else if constexpr (std::is_pointer_v<std::remove_cvref_t<Func>> &&
+                               (glaze_object_t<std::remove_pointer_t<std::remove_cvref_t<Func>>> ||
+                                reflectable<std::remove_pointer_t<std::remove_cvref_t<Func>>>)) {
                // Handle pointer members explicitly for RPC traversal
-               if (func) {  // Only traverse if pointer is valid
+               if (func) { // Only traverse if pointer is valid
                   on<root, std::remove_pointer_t<std::remove_cvref_t<Func>>, full_key>(*func);
-                  impl::template register_object_endpoint<std::remove_pointer_t<std::remove_cvref_t<Func>>>(full_key, *func, *this);
+                  impl::template register_object_endpoint<std::remove_pointer_t<std::remove_cvref_t<Func>>>(
+                     full_key, *func, *this);
                }
                // else: skip registration for null pointers - no endpoints created
             }
