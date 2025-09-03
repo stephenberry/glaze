@@ -1058,7 +1058,7 @@ namespace has_reflect_test {
    
    struct PrivateMember {
    private:
-      int x;
+      [[maybe_unused]] int x;
    public:
       int y;
    };
