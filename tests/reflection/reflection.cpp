@@ -1032,55 +1032,66 @@ suite variant_tag_validation = [] {
 };
 
 // Types for has_reflect concept testing (defined outside suite for template specializations)
-namespace has_reflect_test {
-   struct SimpleAggregate { 
-      int x; 
-      double y; 
-   };
-   
-   struct WithObjectMeta { 
-      int a; 
-      double b; 
-   };
-   
-   struct WithArrayMeta {
+namespace has_reflect_test
+{
+   struct SimpleAggregate
+   {
       int x;
-      int y; 
+      double y;
+   };
+
+   struct WithObjectMeta
+   {
+      int a;
+      double b;
+   };
+
+   struct WithArrayMeta
+   {
+      int x;
+      int y;
       int z;
    };
-   
+
    enum class TestEnumMeta { A, B, C };
-   
-   struct NonAggregate { 
+
+   struct NonAggregate
+   {
       NonAggregate() {} // Has constructor, so not aggregate
-      int x; 
+      int x;
    };
-   
-   struct PrivateMember {
-   private:
+
+   struct PrivateMember
+   {
+     private:
       [[maybe_unused]] int x;
-   public:
+
+     public:
       int y;
    };
-   
-   struct EmptyStruct {};
+
+   struct EmptyStruct
+   {};
 }
 
 // Add meta specializations for testing
 template <>
-struct glz::meta<has_reflect_test::WithObjectMeta> {
+struct glz::meta<has_reflect_test::WithObjectMeta>
+{
    using T = has_reflect_test::WithObjectMeta;
    static constexpr auto value = object(&T::a, &T::b);
 };
 
 template <>
-struct glz::meta<has_reflect_test::WithArrayMeta> {
+struct glz::meta<has_reflect_test::WithArrayMeta>
+{
    using T = has_reflect_test::WithArrayMeta;
    static constexpr auto value = array(&T::x, &T::y, &T::z);
 };
 
 template <>
-struct glz::meta<has_reflect_test::TestEnumMeta> {
+struct glz::meta<has_reflect_test::TestEnumMeta>
+{
    using enum has_reflect_test::TestEnumMeta;
    static constexpr auto value = enumerate(A, B, C);
 };
@@ -1088,11 +1099,11 @@ struct glz::meta<has_reflect_test::TestEnumMeta> {
 // Test suite for has_reflect concept
 suite has_reflect_concept_tests = [] {
    using namespace has_reflect_test;
-   
+
    // Test aggregate types (should satisfy both reflectable and has_reflect)
    static_assert(glz::reflectable<SimpleAggregate>);
    static_assert(glz::has_reflect<SimpleAggregate>);
-   
+
    // Test types with glz::meta (should satisfy has_reflect but not reflectable)
    static_assert(!glz::reflectable<WithObjectMeta>);
    static_assert(glz::has_reflect<WithObjectMeta>);
@@ -1100,13 +1111,13 @@ suite has_reflect_concept_tests = [] {
    static_assert(glz::has_reflect<WithArrayMeta>);
    static_assert(!glz::reflectable<TestEnumMeta>);
    static_assert(glz::has_reflect<TestEnumMeta>);
-   
+
    // Test non-reflectable types
    static_assert(!glz::reflectable<NonAggregate>);
    static_assert(!glz::has_reflect<NonAggregate>);
    static_assert(!glz::reflectable<PrivateMember>);
    static_assert(!glz::has_reflect<PrivateMember>);
-   
+
    // Test map types (have reflect specialization with size = 0)
    using TestMap = std::map<std::string, int>;
    using TestUnorderedMap = std::unordered_map<std::string, double>;
@@ -1114,7 +1125,7 @@ suite has_reflect_concept_tests = [] {
    static_assert(glz::has_reflect<TestMap>);
    static_assert(!glz::reflectable<TestUnorderedMap>);
    static_assert(glz::has_reflect<TestUnorderedMap>);
-   
+
    // Test primitive and standard types (no reflect)
    static_assert(!glz::reflectable<int>);
    static_assert(!glz::has_reflect<int>);
@@ -1124,29 +1135,29 @@ suite has_reflect_concept_tests = [] {
    static_assert(!glz::has_reflect<std::string>);
    static_assert(!glz::reflectable<std::vector<int>>);
    static_assert(!glz::has_reflect<std::vector<int>>);
-   
+
    // Test empty struct
    static_assert(glz::reflectable<EmptyStruct>);
    static_assert(glz::has_reflect<EmptyStruct>);
-   
+
    "has_reflect with aggregate types"_test = [] {
       // Test that we can use reflect<T>::size for aggregate types
       constexpr auto aggregate_size = glz::reflect<SimpleAggregate>::size;
       expect(aggregate_size == 2);
-      
+
       constexpr auto empty_size = glz::reflect<EmptyStruct>::size;
       expect(empty_size == 0);
    };
-   
+
    "has_reflect with map types"_test = [] {
       // Maps have reflect specialization with size = 0
       constexpr auto map_size = glz::reflect<TestMap>::size;
       expect(map_size == 0);
-      
+
       constexpr auto umap_size = glz::reflect<TestUnorderedMap>::size;
       expect(umap_size == 0);
    };
-   
+
    "has_reflect with existing test types"_test = [] {
       // Test with types already defined in this file
       static_assert(glz::has_reflect<test_type>);
@@ -1154,10 +1165,10 @@ suite has_reflect_concept_tests = [] {
       static_assert(glz::has_reflect<a_type>);
       static_assert(glz::has_reflect<b_type>);
       static_assert(glz::has_reflect<c_type>);
-      
+
       constexpr auto test_type_size = glz::reflect<test_type>::size;
       expect(test_type_size == 2);
-      
+
       constexpr auto a_type_size = glz::reflect<a_type>::size;
       expect(a_type_size == 3);
    };
@@ -1165,26 +1176,26 @@ suite has_reflect_concept_tests = [] {
 
 suite has_reflect_meta_types_tests = [] {
    using namespace has_reflect_test;
-   
+
    "has_reflect with glaze_object_t"_test = [] {
       constexpr auto meta_size = glz::reflect<WithObjectMeta>::size;
       expect(meta_size == 2);
-      
+
       // Verify keys are properly set
       constexpr auto keys = glz::reflect<WithObjectMeta>::keys;
       expect(keys[0] == "a");
       expect(keys[1] == "b");
    };
-   
+
    "has_reflect with glaze_array_t"_test = [] {
       constexpr auto array_size = glz::reflect<WithArrayMeta>::size;
       expect(array_size == 3);
    };
-   
+
    "has_reflect with glaze_enum_t"_test = [] {
       constexpr auto enum_size = glz::reflect<TestEnumMeta>::size;
       expect(enum_size == 3);
-      
+
       // Verify enum keys
       constexpr auto keys = glz::reflect<TestEnumMeta>::keys;
       expect(keys[0] == "A");
