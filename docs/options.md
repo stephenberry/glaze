@@ -57,6 +57,7 @@ struct opts
 
    bool skip_null_members = true;
    // Skip writing out params in an object if the value is null
+   // This applies to nullable types like std::optional, std::shared_ptr, and raw pointers (T*)
 
    bool prettify = false;
    // Write out prettified JSON

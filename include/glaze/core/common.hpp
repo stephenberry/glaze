@@ -470,7 +470,7 @@ namespace glz
          // Eigen ought to put the check in the `enable_if` for operator()()
          return std::invoke(std::forward<Element>(element), std::forward<Value>(value));
       }
-      else if constexpr (std::is_pointer_v<V>) {
+      else if constexpr (std::is_pointer_v<V> && !std::is_reference_v<Element>) {
          if constexpr (std::invocable<decltype(*element), Value>) {
             return std::invoke(*element, std::forward<Value>(value));
          }
