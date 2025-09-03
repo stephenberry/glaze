@@ -36,9 +36,78 @@ consteval bool check_validate_trailing_whitespace(auto&& Opts) {
 }
 ```
 
-## Available Options Outside of glz::opts
+## Default `glz::opts` Options
 
-In `glaze/core/opts.hpp` you can see the default provided fields in `glz::opts`.
+These are the default options provided by `glz::opts` in `include/glaze/core/opts.hpp`. You can inherit from `glz::opts` to create custom option structs and override these defaults or add new options.
+
+```c++
+struct opts
+{
+   uint32_t format = JSON;
+   // The default format for reading/writing (JSON)
+
+   bool null_terminated = true;
+   // Whether the input buffer is null terminated
+   
+   bool comments = false;
+   // Support reading in JSONC style comments
+
+   bool error_on_unknown_keys = true;
+   // Error when an unknown key is encountered
+
+   bool skip_null_members = true;
+   // Skip writing out params in an object if the value is null
+   // This applies to nullable types like std::optional, std::shared_ptr, and raw pointers (T*)
+
+   bool prettify = false;
+   // Write out prettified JSON
+
+   bool minified = false;
+   // Require minified input for JSON, which results in faster read performance
+
+   char indentation_char = ' ';
+   // Prettified JSON indentation char
+
+   uint8_t indentation_width = 3;
+   // Prettified JSON indentation size
+
+   bool new_lines_in_arrays = true;
+   // Whether prettified arrays should have new lines for each element
+
+   bool append_arrays = false;
+   // When reading into an array the data will be appended if the type supports it
+
+   bool error_on_missing_keys = false;
+   // Require all non nullable keys to be present in the object.
+   // Use skip_null_members = false to require nullable members
+
+   bool error_on_const_read = false;
+   // Error if attempt is made to read into a const value, by default the value is skipped without error
+   
+   bool bools_as_numbers = false;
+   // Read and write booleans with 1's and 0's
+   
+   bool quoted_num = false;
+   // Treat numbers as quoted or array-like types as having quoted numbers
+   
+   bool number = false;
+   // Treats all types like std::string as numbers: read/write these quoted numbers
+   
+   bool raw = false;
+   // write out string like values without quotes
+   
+   bool raw_string = false;
+   // Do not decode/encode escaped characters for strings (improves read/write performance)
+   
+   bool structs_as_arrays = false;
+   // Handle structs (reading/writing) without keys, which applies
+
+   bool partial_read = false;
+   // Reads into the deepest structural object and then exits without parsing the rest of the input
+};
+```
+
+## Available Options Outside of `glz::opts`
 
 The supported, but not default provided options are listed after `glz::opts` and include:
 
@@ -74,4 +143,3 @@ bool escape_control_characters = false;
 float_precision float_max_write_precision{};
 // The maximum precision type used for writing floats, higher precision floats will be cast down to this precision
 ```
-

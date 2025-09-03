@@ -33,8 +33,12 @@ See [Variant Handling](./docs/variant-handling.md) for more information.
 - `std::unique_ptr`
 - `std::shared_ptr`
 - `std::optional`
+- Raw pointers (`T*`)
 
 Nullable types may be allocated by valid input or nullified by the `null` keyword.
+
+> [!NOTE]
+> Raw pointers work with automatic reflection and respect the `skip_null_members` option. See [Nullable Types](./nullable-types.md) for detailed information about pointer handling.
 
 ## String Types
 

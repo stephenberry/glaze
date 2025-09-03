@@ -3,7 +3,7 @@ include(FetchContent)
 FetchContent_Declare(
   ut
   GIT_REPOSITORY https://github.com/openalgz/ut
-  GIT_TAG v0.0.5
+  GIT_TAG v1.0.0
   GIT_SHALLOW TRUE
 )
 
@@ -55,7 +55,6 @@ elseif(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
     target_compile_options(glz_test_exceptions INTERFACE /W4 /wd4459 /wd4805)
 endif()
 
-add_subdirectory(asio_repe)
 add_subdirectory(api_test)
 add_subdirectory(beve_test)
 add_subdirectory(cli_menu_test)
@@ -64,9 +63,11 @@ add_subdirectory(csv_test)
 add_subdirectory(eigen_test)
 add_subdirectory(example_json)
 add_subdirectory(exceptions_test)
+add_subdirectory(inplace_vector)
 add_subdirectory(int_parsing)
 add_subdirectory(jmespath)
 add_subdirectory(jsonrpc_test)
+add_subdirectory(key_transformers_test)
 add_subdirectory(lib_test)
 add_subdirectory(mock_json_test)
 add_subdirectory(reflection)
@@ -82,15 +83,15 @@ add_subdirectory(json_performance)
 add_subdirectory(json_reflection_test)
 add_subdirectory(json_test)
 
-# Networking Tests
-add_subdirectory(https_test)
-add_subdirectory(repe_test)
-add_subdirectory(rest_test)
-add_subdirectory(websocket_test)
+add_subdirectory(networking_tests)
 
 if(glaze_EETF_FORMAT)
     add_subdirectory(eetf_test)
 endif(glaze_EETF_FORMAT)
+
+if(glaze_BUILD_INTEROP)
+    add_subdirectory(interop)
+endif(glaze_BUILD_INTEROP)
 
 # We don't run find_package_test or glaze-install_test with MSVC/Windows, because the Github action runner often chokes
 # Don't run find_package on Clang, because Linux runs with Clang try to use GCC standard library and have errors before Clang 18

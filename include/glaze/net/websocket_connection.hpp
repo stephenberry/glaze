@@ -9,28 +9,24 @@
 #include <cstring>
 #include <functional>
 #include <memory>
-#include <sstream>
 #include <string>
 #include <string_view>
 #include <unordered_map>
 #include <vector>
 
-#if __has_include(<asio.hpp>) && !defined(GLZ_USE_BOOST_ASIO)
-#include <asio.hpp>
-#elif __has_include(<boost/asio.hpp>)
-#ifndef GLZ_USING_BOOST_ASIO
-#define GLZ_USING_BOOST_ASIO
-#endif
-#include <boost/asio.hpp>
-#endif
-
 // Optional OpenSSL support - detected at compile time
 #if defined(GLZ_ENABLE_OPENSSL) && __has_include(<openssl/sha.h>)
 #include <openssl/sha.h>
 #define GLZ_HAS_OPENSSL
+
+// To deconflict Windows.h
+#ifdef DELETE
+#undef DELETE
+#endif
 #endif
 
 #include "glaze/base64/base64.hpp"
+#include "glaze/ext/glaze_asio.hpp"
 #include "glaze/net/http_router.hpp"
 
 namespace glz
@@ -151,7 +147,7 @@ namespace glz
             size_t i = 0;
             size_t j = (context->count[0] >> 3) & 63;
 
-            if ((context->count[0] += len << 3) < (len << 3)) context->count[1]++;
+            if ((context->count[0] += uint32_t(len << 3)) < (len << 3)) context->count[1]++;
             context->count[1] += (len >> 29);
 
             if ((j + len) > 63) {
@@ -385,8 +381,9 @@ namespace glz
       {
          // Validate WebSocket upgrade request
          auto it = req.headers.find("upgrade");
+         constexpr std::string_view websocket_str = "websocket";
          if (it == req.headers.end() ||
-             !std::equal(it->second.begin(), it->second.end(), "websocket", "websocket" + 9,
+             !std::equal(it->second.begin(), it->second.end(), websocket_str.begin(), websocket_str.end(),
                          [](char a, char b) { return std::tolower(a) == std::tolower(b); })) {
             do_close();
             return;
@@ -420,33 +417,37 @@ namespace glz
          std::string accept_key = ws_util::generate_accept_key(it->second);
 
          // Send handshake response
-         std::ostringstream response;
-         response << "HTTP/1.1 101 Switching Protocols\r\n"
-                  << "Upgrade: websocket\r\n"
-                  << "Connection: Upgrade\r\n"
-                  << "Sec-WebSocket-Accept: " << accept_key << "\r\n\r\n";
+         std::string response_str =
+            "HTTP/1.1 101 Switching Protocols\r\n"
+            "Upgrade: websocket\r\n"
+            "Connection: Upgrade\r\n"
+            "Sec-WebSocket-Accept: ";
+         response_str.append(accept_key);
+         response_str.append("\r\n\r\n");
 
-         std::string response_str = response.str();
          auto self = shared_from_this();
 
-         asio::async_write(socket_, asio::buffer(response_str), [self, req](std::error_code ec, std::size_t) {
-            if (ec) {
-               if (self->server_) {
-                  self->server_->notify_error(self, ec);
-               }
-               return;
-            }
+         // Use shared_ptr to keep response string alive during async operation
+         auto response_buffer = std::make_shared<std::string>(std::move(response_str));
+         asio::async_write(socket_, asio::buffer(*response_buffer),
+                           [self, req, response_buffer](std::error_code ec, std::size_t) {
+                              if (ec) {
+                                 if (self->server_) {
+                                    self->server_->notify_error(self, ec);
+                                 }
+                                 return;
+                              }
 
-            self->handshake_complete_ = true;
+                              self->handshake_complete_ = true;
 
-            // Notify server of successful connection
-            if (self->server_) {
-               self->server_->notify_open(self, req);
-            }
+                              // Notify server of successful connection
+                              if (self->server_) {
+                                 self->server_->notify_open(self, req);
+                              }
 
-            // Start reading frames
-            self->start_read();
-         });
+                              // Start reading frames
+                              self->start_read();
+                           });
       }
 
       inline void start_read()
@@ -660,7 +661,10 @@ namespace glz
          std::copy(payload.begin(), payload.end(), frame.begin() + header_size);
 
          auto self = shared_from_this();
-         asio::async_write(socket_, asio::buffer(frame), [self](std::error_code ec, std::size_t) {
+
+         // Use shared_ptr to keep the frame alive during async operation
+         auto frame_buffer = std::make_shared<std::vector<uint8_t>>(std::move(frame));
+         asio::async_write(socket_, asio::buffer(*frame_buffer), [self, frame_buffer](std::error_code ec, std::size_t) {
             if (ec && self->server_) {
                self->server_->notify_error(self, ec);
             }
@@ -767,7 +771,7 @@ namespace glz
             server_->notify_close(shared_from_this());
          }
 
-         std::error_code ec;
+         asio::error_code ec;
          socket_.close(ec);
       }
 

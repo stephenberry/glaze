@@ -7,74 +7,110 @@
     },
     "configurePresets": [
         {
-            "name": "dev",
-            "displayName": "Developer Mode",
-            "description": "Builds Glaze w/ tests and downloaded test dependencies",
-            "binaryDir": "${sourceDir}/build",
+            "name": "clang-debug",
+            "displayName": "Clang Debug",
+            "description": "Debug build using Clang compiler",
+            "binaryDir": "${sourceDir}/build/debug",
             "generator": "Ninja",
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Debug",
+                "CMAKE_C_COMPILER": "/usr/bin/clang",
+                "CMAKE_CXX_COMPILER": "/usr/bin/clang++",
+                "CMAKE_EXPORT_COMPILE_COMMANDS": true,
                 "glaze_DEVELOPER_MODE": true,
                 "BUILD_TESTING": true,
-                "CMAKE_EXPORT_COMPILE_COMMANDS": true
+                "glaze_BUILD_INTEROP": true,
+                "CMAKE_CXX_FLAGS": "-stdlib=libc++",
+                "CMAKE_EXE_LINKER_FLAGS": "-stdlib=libc++",
+                "CMAKE_SHARED_LINKER_FLAGS": "-stdlib=libc++",
+                "CMAKE_MODULE_LINKER_FLAGS": "-stdlib=libc++"
             }
         },
         {
-            "name": "release",
-            "displayName": "Release",
-            "description": "Optimized library build of exclusively library",
-            "binaryDir": "${sourceDir}/build-release",
+            "name": "clang-release",
+            "displayName": "Clang Release",
+            "description": "Release build using Clang compiler",
+            "binaryDir": "${sourceDir}/build/release",
             "generator": "Ninja",
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Release",
-                "glaze_DEVELOPER_MODE": false,
-                "BUILD_TESTING": false,
-                "CMAKE_EXPORT_COMPILE_COMMANDS": true
-            }
-        },
-        {
-            "name": "clang_latest",
-            "displayName": "Clang 17.0.3 x86_64-pc-linux-gnu",
-            "description": "Using compilers: C = /usr/bin/clang-17, CXX = /usr/bin/clang++-17",
-            "binaryDir": "${sourceDir}/out/build/${presetName}",
-            "cacheVariables": {
-                "CMAKE_INSTALL_PREFIX": "${sourceDir}/out/install/${presetName}",
-                "CMAKE_C_COMPILER": "/usr/bin/clang-17",
-                "CMAKE_CXX_COMPILER": "/usr/bin/clang++-17",
-                "CMAKE_BUILD_TYPE": "Debug",
-                "CMAKE_EXPORT_COMPILE_COMMANDS": true
-            }
-        },
-        {
-            "name": "gcc",
-            "displayName": "GCC 13.1.0 x86_64-linux-gnu",
-            "description": "Using compilers: C = /usr/bin/gcc, CXX = /usr/bin/g++",
-            "binaryDir": "${sourceDir}/out/build/${presetName}",
-            "cacheVariables": {
-                "CMAKE_INSTALL_PREFIX": "${sourceDir}/out/install/${presetName}",
-                "CMAKE_C_COMPILER": "/usr/bin/gcc",
-                "CMAKE_CXX_COMPILER": "/usr/bin/g++",
-                "CMAKE_BUILD_TYPE": "Debug"
-            }
-        },
-        {
-            "name": "Clang",
-            "displayName": "Clang 17.0.0 arm64-apple-darwin24.5.0",
-            "description": "Using compilers: C = /usr/bin/clang, CXX = /usr/bin/clang++",
-            "binaryDir": "${sourceDir}/out/build/${presetName}",
-            "cacheVariables": {
-                "CMAKE_INSTALL_PREFIX": "${sourceDir}/out/install/${presetName}",
                 "CMAKE_C_COMPILER": "/usr/bin/clang",
                 "CMAKE_CXX_COMPILER": "/usr/bin/clang++",
-                "CMAKE_BUILD_TYPE": "Debug"
+                "CMAKE_EXPORT_COMPILE_COMMANDS": true,
+                "glaze_DEVELOPER_MODE": true,
+                "BUILD_TESTING": true,
+                "glaze_BUILD_INTEROP": true,
+                "CMAKE_CXX_FLAGS": "-stdlib=libc++",
+                "CMAKE_EXE_LINKER_FLAGS": "-stdlib=libc++",
+                "CMAKE_SHARED_LINKER_FLAGS": "-stdlib=libc++",
+                "CMAKE_MODULE_LINKER_FLAGS": "-stdlib=libc++"
             }
+        },
+        {
+            "name": "gcc-debug",
+            "displayName": "GCC Debug",
+            "description": "Debug build using GCC compiler",
+            "binaryDir": "${sourceDir}/build/debug-gcc",
+            "generator": "Ninja",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "CMAKE_C_COMPILER": "/usr/bin/gcc",
+                "CMAKE_CXX_COMPILER": "/usr/bin/g++",
+                "CMAKE_EXPORT_COMPILE_COMMANDS": true,
+                "glaze_DEVELOPER_MODE": true,
+                "BUILD_TESTING": true,
+                "glaze_BUILD_INTEROP": true
+            }
+        },
+        {
+            "name": "gcc-release",
+            "displayName": "GCC Release",
+            "description": "Release build using GCC compiler",
+            "binaryDir": "${sourceDir}/build/release-gcc",
+            "generator": "Ninja",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "CMAKE_C_COMPILER": "/usr/bin/gcc",
+                "CMAKE_CXX_COMPILER": "/usr/bin/g++",
+                "CMAKE_EXPORT_COMPILE_COMMANDS": true,
+                "glaze_DEVELOPER_MODE": true,
+                "BUILD_TESTING": true,
+                "glaze_BUILD_INTEROP": true
+            }
+        }
+    ],
+    "buildPresets": [
+        {
+            "name": "clang-debug",
+            "configurePreset": "clang-debug"
+        },
+        {
+            "name": "clang-release",
+            "configurePreset": "clang-release"
+        },
+        {
+            "name": "gcc-debug",
+            "configurePreset": "gcc-debug"
+        },
+        {
+            "name": "gcc-release",
+            "configurePreset": "gcc-release"
         }
     ],
     "testPresets": [
         {
-            "name": "all",
-            "displayName": "Automated Tests",
-            "configurePreset": "dev",
+            "name": "clang-debug",
+            "displayName": "Test Clang Debug",
+            "configurePreset": "clang-debug",
+            "output": {
+                "verbosity": "verbose",
+                "outputOnFailure": true
+            }
+        },
+        {
+            "name": "gcc-debug",
+            "displayName": "Test GCC Debug",
+            "configurePreset": "gcc-debug",
             "output": {
                 "verbosity": "verbose",
                 "outputOnFailure": true

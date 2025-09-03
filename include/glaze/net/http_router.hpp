@@ -10,12 +10,12 @@
 #include <memory>
 #include <optional>
 #include <source_location>
-#include <sstream>
 #include <string>
 #include <string_view>
 #include <unordered_map>
 #include <vector>
 
+#include "glaze/json/json_t.hpp"
 #include "glaze/net/http.hpp"
 
 namespace glz
@@ -79,7 +79,7 @@ namespace glz
       inline response& content_type(std::string_view type) { return header("Content-Type", type); }
 
       // JSON response helper using Glaze
-      template <class T>
+      template <class T = json_t>
       response& json(T&& value)
       {
          content_type("application/json");
@@ -94,6 +94,45 @@ namespace glz
    using handler = std::function<void(const request&, response&)>;
    using async_handler = std::function<std::future<void>(const request&, response&)>;
    using error_handler = std::function<void(std::error_code, std::source_location)>;
+
+   /**
+    * @brief Parameter constraint for route validation
+    *
+    * Defines validation rules for route parameters using a validation function.
+    */
+   struct param_constraint
+   {
+      /**
+       * @brief Human-readable description of the constraint
+       *
+       * Used for error reporting and debugging.
+       */
+      std::string description{};
+
+      /**
+       * @brief Validation function for parameter values
+       *
+       * This function is used to validate parameter values. It should return true if the parameter value is valid,
+       * false otherwise.
+       */
+      std::function<bool(std::string_view)> validation = [](std::string_view) { return true; };
+   };
+
+   /**
+    * @brief An entry for a registered route.
+    */
+   struct route_spec
+   {
+      std::string description{};
+      std::vector<std::string> tags{};
+      std::unordered_map<std::string, param_constraint> constraints{};
+
+      // Type information for schema generation
+      std::optional<std::string> request_body_schema{};
+      std::optional<std::string> response_schema{};
+      std::optional<std::string> request_body_type_name{};
+      std::optional<std::string> response_type_name{};
+   };
 
    /**
     * @brief HTTP router based on a radix tree for efficient path matching
@@ -119,26 +158,12 @@ namespace glz
       using async_handler = std::function<std::future<void>(const request&, response&)>;
 
       /**
-       * @brief Parameter constraint for route validation
-       *
-       * Defines validation rules for route parameters using pattern matching.
+       * @brief An entry for a registered route.
        */
-      struct param_constraint
+      struct route_entry
       {
-         /**
-          * @brief Pattern to validate parameter values against
-          *
-          * The pattern supports wildcards (*), character classes ([a-z]), and more.
-          * If empty, any non-empty value is considered valid.
-          */
-         std::string pattern{};
-
-         /**
-          * @brief Human-readable description of the constraint
-          *
-          * Used for error reporting and debugging.
-          */
-         std::string description{};
+         handler handle{};
+         route_spec spec{};
       };
 
       /**
@@ -213,12 +238,22 @@ namespace glz
           */
          std::string to_string() const
          {
-            std::stringstream ss;
-            ss << "Node[" << (is_parameter ? "PARAM:" : (is_wildcard ? "WILD:" : "")) << segment
-               << ", endpoint=" << (is_endpoint ? "true" : "false") << ", children=" << static_children.size()
-               << (parameter_child ? "+param" : "") << (wildcard_child ? "+wild" : "") << ", full_path=" << full_path
-               << "]";
-            return ss.str();
+            std::string result;
+            result.reserve(80 + segment.size() + full_path.size());
+
+            result.append("Node[");
+            result.append(is_parameter ? "PARAM:" : (is_wildcard ? "WILD:" : ""));
+            result.append(segment);
+            result.append(", endpoint=");
+            result.append(is_endpoint ? "true" : "false");
+            result.append(", children=");
+            result.append(std::to_string(static_children.size()));
+            result.append(parameter_child ? "+param" : "");
+            result.append(wildcard_child ? "+wild" : "");
+            result.append(", full_path=");
+            result.append(full_path);
+            result.append("]");
+            return result;
          }
       };
 
@@ -243,7 +278,7 @@ namespace glz
        */
       static bool match_pattern(std::string_view value, std::string_view pattern)
       {
-         enum struct State { Literal, Escape, CharClass, NegateCharClass };
+         enum struct State { Literal, Escape, CharClass };
 
          if (pattern.empty()) return true; // Empty pattern matches anything
 
@@ -444,19 +479,21 @@ namespace glz
        * @param method The HTTP method (GET, POST, etc.)
        * @param path The route path, can include parameters (":param") and wildcards ("*param")
        * @param handle The handler function to call when this route matches
-       * @param constraints Optional constraints for parameter validation
+       * @param spec Optional spec for the route.
        * @return Reference to this router for method chaining
        * @throws std::runtime_error if there's a route conflict
        */
-      inline http_router& route(http_method method, std::string_view path, handler handle,
-                                const std::unordered_map<std::string, param_constraint>& constraints = {})
+      inline http_router& route(http_method method, std::string_view path, handler handle, const route_spec& spec = {})
       {
+         std::string path_str(path);
          try {
-            // Store in the routes map for compatibility with mount
-            routes[std::string(path)][method] = handle;
+            // Store in the routes map
+            auto& entry = routes[path_str][method];
+            entry.handle = std::move(handle);
+            entry.spec = spec;
 
             // Also add to the radix tree
-            add_route(method, path, handle, constraints);
+            add_route(method, path, entry.handle, spec.constraints);
          }
          catch (const std::exception& e) {
             // Log the error instead of propagating it
@@ -468,165 +505,99 @@ namespace glz
 
       /**
        * @brief Register a GET route
-       *
-       * @param path The route path
-       * @param handle The handler function
-       * @param constraints Optional parameter constraints
-       * @return Reference to this router for method chaining
        */
-      inline http_router& get(std::string_view path, handler handle,
-                              const std::unordered_map<std::string, param_constraint>& constraints = {})
+      inline http_router& get(std::string_view path, handler handle, const route_spec& spec = {})
       {
-         return route(http_method::GET, path, std::move(handle), constraints);
+         return route(http_method::GET, path, std::move(handle), spec);
       }
 
       /**
        * @brief Register a POST route
-       *
-       * @param path The route path
-       * @param handle The handler function
-       * @param constraints Optional parameter constraints
-       * @return Reference to this router for method chaining
        */
-      inline http_router& post(std::string_view path, handler handle,
-                               const std::unordered_map<std::string, param_constraint>& constraints = {})
+      inline http_router& post(std::string_view path, handler handle, const route_spec& spec = {})
       {
-         return route(http_method::POST, path, std::move(handle), constraints);
+         return route(http_method::POST, path, std::move(handle), spec);
       }
 
       /**
        * @brief Register a PUT route
-       *
-       * @param path The route path
-       * @param handle The handler function
-       * @param constraints Optional parameter constraints
-       * @return Reference to this router for method chaining
        */
-      inline http_router& put(std::string_view path, handler handle,
-                              const std::unordered_map<std::string, param_constraint>& constraints = {})
+      inline http_router& put(std::string_view path, handler handle, const route_spec& spec = {})
       {
-         return route(http_method::PUT, path, std::move(handle), constraints);
+         return route(http_method::PUT, path, std::move(handle), spec);
       }
 
       /**
        * @brief Register a DELETE route
-       *
-       * @param path The route path
-       * @param handle The handler function
-       * @param constraints Optional parameter constraints
-       * @return Reference to this router for method chaining
        */
-      inline http_router& del(std::string_view path, handler handle,
-                              const std::unordered_map<std::string, param_constraint>& constraints = {})
+      inline http_router& del(std::string_view path, handler handle, const route_spec& spec = {})
       {
-         return route(http_method::DELETE, path, std::move(handle), constraints);
+         return route(http_method::DELETE, path, std::move(handle), spec);
       }
 
       /**
        * @brief Register a PATCH route
-       *
-       * @param path The route path
-       * @param handle The handler function
-       * @param constraints Optional parameter constraints
-       * @return Reference to this router for method chaining
        */
-      inline http_router& patch(std::string_view path, handler handle,
-                                const std::unordered_map<std::string, param_constraint>& constraints = {})
+      inline http_router& patch(std::string_view path, handler handle, const route_spec& spec = {})
       {
-         return route(http_method::PATCH, path, std::move(handle), constraints);
+         return route(http_method::PATCH, path, std::move(handle), spec);
       }
 
       /**
        * @brief Register an asynchronous route
-       *
-       * @param method The HTTP method
-       * @param path The route path
-       * @param handle The async handler function
-       * @param constraints Optional parameter constraints
-       * @return Reference to this router for method chaining
        */
       inline http_router& route_async(http_method method, std::string_view path, async_handler handle,
-                                      const std::unordered_map<std::string, param_constraint>& constraints = {})
+                                      const route_spec& spec = {})
       {
          // Convert async handle to sync handle
          return route(
             method, path,
             [handle](const request& req, response& res) {
-               // Create a future and wait for it
+               // Create a future and get the result, which will propagate any exceptions
                auto future = handle(req, res);
-               future.wait();
+               future.get(); // This will throw if the async operation threw
             },
-            constraints);
+            spec);
       }
 
       /**
        * @brief Register an asynchronous GET route
-       *
-       * @param path The route path
-       * @param handle The async handler function
-       * @param constraints Optional parameter constraints
-       * @return Reference to this router for method chaining
        */
-      inline http_router& get_async(std::string_view path, async_handler handle,
-                                    const std::unordered_map<std::string, param_constraint>& constraints = {})
+      inline http_router& get_async(std::string_view path, async_handler handle, const route_spec& spec = {})
       {
-         return route_async(http_method::GET, path, std::move(handle), constraints);
+         return route_async(http_method::GET, path, std::move(handle), spec);
       }
 
       /**
        * @brief Register an asynchronous POST route
-       *
-       * @param path The route path
-       * @param handle The async handler function
-       * @param constraints Optional parameter constraints
-       * @return Reference to this router for method chaining
        */
-      inline http_router& post_async(std::string_view path, async_handler handle,
-                                     const std::unordered_map<std::string, param_constraint>& constraints = {})
+      inline http_router& post_async(std::string_view path, async_handler handle, const route_spec& spec = {})
       {
-         return route_async(http_method::POST, path, std::move(handle), constraints);
+         return route_async(http_method::POST, path, std::move(handle), spec);
       }
 
       /**
        * @brief Register an asynchronous PUT route
-       *
-       * @param path The route path
-       * @param handle The async handler function
-       * @param constraints Optional parameter constraints
-       * @return Reference to this router for method chaining
        */
-      inline http_router& put_async(std::string_view path, async_handler handle,
-                                    const std::unordered_map<std::string, param_constraint>& constraints = {})
+      inline http_router& put_async(std::string_view path, async_handler handle, const route_spec& spec = {})
       {
-         return route_async(http_method::PUT, path, std::move(handle), constraints);
+         return route_async(http_method::PUT, path, std::move(handle), spec);
       }
 
       /**
        * @brief Register an asynchronous DELETE route
-       *
-       * @param path The route path
-       * @param handle The async handler function
-       * @param constraints Optional parameter constraints
-       * @return Reference to this router for method chaining
        */
-      inline http_router& del_async(std::string_view path, async_handler handle,
-                                    const std::unordered_map<std::string, param_constraint>& constraints = {})
+      inline http_router& del_async(std::string_view path, async_handler handle, const route_spec& spec = {})
       {
-         return route_async(http_method::DELETE, path, std::move(handle), constraints);
+         return route_async(http_method::DELETE, path, std::move(handle), spec);
       }
 
       /**
        * @brief Register an asynchronous PATCH route
-       *
-       * @param path The route path
-       * @param handle The async handler function
-       * @param constraints Optional parameter constraints
-       * @return Reference to this router for method chaining
        */
-      inline http_router& patch_async(std::string_view path, async_handler handle,
-                                      const std::unordered_map<std::string, param_constraint>& constraints = {})
+      inline http_router& patch_async(std::string_view path, async_handler handle, const route_spec& spec = {})
       {
-         return route_async(http_method::PATCH, path, std::move(handle), constraints);
+         return route_async(http_method::PATCH, path, std::move(handle), spec);
       }
 
       /**
@@ -688,7 +659,7 @@ namespace glz
        *
        * Used for compatibility with mount functionality.
        */
-      std::unordered_map<std::string, std::unordered_map<http_method, handler>> routes;
+      std::unordered_map<std::string, std::unordered_map<http_method, route_entry>> routes;
 
       /**
        * @brief Vector of middleware handlers
@@ -845,10 +816,8 @@ namespace glz
             if (node->is_endpoint) {
                auto it = node->handlers.find(method);
                if (it != node->handlers.end()) {
-                  // Found a handler
-                  result = it->second;
-
-                  // Validate constraints if any
+                  // Validate constraints if any before setting the handler
+                  bool constraints_passed = true;
                   auto constraints_it = node->constraints.find(method);
                   if (constraints_it != node->constraints.end()) {
                      for (const auto& [param_name, constraint] : constraints_it->second) {
@@ -856,19 +825,21 @@ namespace glz
                         if (param_it != params.end()) {
                            const std::string& value = param_it->second;
 
-                           // If pattern is empty, any non-empty value is valid
-                           if (constraint.pattern.empty() && value.empty()) {
-                              return false; // Empty value fails for empty pattern
-                           }
-                           // Otherwise, match against the pattern
-                           else if (!constraint.pattern.empty() && !match_pattern(value, constraint.pattern)) {
-                              return false; // Pattern match failed
+                           // Use the validation function
+                           if (!constraint.validation(value)) {
+                              constraints_passed = false;
+                              break; // Validation failed
                            }
                         }
                      }
                   }
 
-                  return true;
+                  if (constraints_passed) {
+                     // Only set the handler if constraints pass
+                     result = it->second;
+                     return true;
+                  }
+                  return false;
                }
             }
             return false;
@@ -913,9 +884,8 @@ namespace glz
             if (node->wildcard_child->is_endpoint) {
                auto it = node->wildcard_child->handlers.find(method);
                if (it != node->wildcard_child->handlers.end()) {
-                  result = it->second;
-
-                  // Validate constraints for the wildcard
+                  // Validate constraints for the wildcard before setting the handler
+                  bool constraints_passed = true;
                   auto constraints_it = node->wildcard_child->constraints.find(method);
                   if (constraints_it != node->wildcard_child->constraints.end()) {
                      for (const auto& [param_name, constraint] : constraints_it->second) {
@@ -923,19 +893,21 @@ namespace glz
                         if (param_it != params.end()) {
                            const std::string& value = param_it->second;
 
-                           // If pattern is empty, any non-empty value is valid
-                           if (constraint.pattern.empty() && value.empty()) {
-                              return false; // Empty value fails for empty pattern
-                           }
-                           // Otherwise, match against the pattern
-                           else if (!constraint.pattern.empty() && !match_pattern(value, constraint.pattern)) {
-                              return false; // Pattern match failed
+                           // Use the validation function
+                           if (!constraint.validation(value)) {
+                              constraints_passed = false;
+                              break; // Validation failed
                            }
                         }
                      }
                   }
 
-                  return true;
+                  if (constraints_passed) {
+                     // Only set the handler if constraints pass
+                     result = it->second;
+                     return true;
+                  }
+                  return false;
                }
             }
          }
@@ -968,8 +940,7 @@ namespace glz
             for (const auto& [method, method_constraints] : node->constraints) {
                std::cout << indent << "  Constraints for " << to_string(method) << ":\n";
                for (const auto& [param, constraint] : method_constraints) {
-                  std::cout << indent << "    " << param << ": " << constraint.pattern << " (" << constraint.description
-                            << ")\n";
+                  std::cout << indent << "    " << param << ": (" << constraint.description << ")\n";
                }
             }
          }

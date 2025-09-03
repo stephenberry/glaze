@@ -1272,8 +1272,28 @@ namespace glz
       static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
       {
          if constexpr (reflectable<T>) {
-            auto t = to_tie(value);
-            parse<BEVE>::op<Opts>(t, ctx, it, end);
+            constexpr auto N = detail::count_members<T>;
+            if constexpr (N == 0) {
+               // Handle empty structs by just reading and validating the generic_array header
+               const auto tag = uint8_t(*it);
+               if (tag != tag::generic_array) [[unlikely]] {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
+               ++it;
+               const auto n = int_from_compressed(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
+               if (n != 0) {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
+            }
+            else {
+               auto t = to_tie(value);
+               parse<BEVE>::op<Opts>(t, ctx, it, end);
+            }
          }
          else {
             const auto tag = uint8_t(*it);

@@ -2,6 +2,7 @@
 #include <map>
 #include <unordered_map>
 
+#include "glaze/base64/base64.hpp"
 #include "glaze/csv/read.hpp"
 #include "glaze/csv/write.hpp"
 #include "glaze/record/recorder.hpp"
@@ -1350,6 +1351,47 @@ suite odd_csv_test = [] {
       std::string buffer{};
       auto ec = glz::read_file_csv<glz::colwise>(obj, GLZ_TEST_DIRECTORY "/kf-data.csv", buffer);
       expect(not ec) << glz::format_error(ec, buffer) << '\n';
+   };
+};
+
+struct overflow_struct
+{
+   std::vector<int> num1{};
+   std::deque<float> num2{};
+   std::vector<bool> maybe{};
+   std::vector<std::array<int, 3>> v3s{};
+};
+
+suite fuzzfailures = [] {
+   "fuzz1"_test = [] {
+      std::string_view csv_data{"6  [5\n0"};
+
+      overflow_struct obj{};
+      [[maybe_unused]] auto parsed = glz::read_csv<glz::colwise>(obj, csv_data);
+   };
+
+   "fuzz2"_test = [] {
+      std::string_view b64 =
+         "IBCPAAoxMDY3ODg4NDUyMTMyMTA4Njk5NmUrMTEzNzI0NzEyMDQ5NDIzLjE0NTIxNTJCMzIxMDg2OTk2ZS05MTEKMzIANLaztqfgDQ==";
+
+      auto input = glz::read_base64(b64);
+      std::vector<uint8_t> s;
+      s.resize(input.size());
+      std::memcpy(s.data(), input.data(), s.size());
+      my_struct obj;
+      expect(glz::read_csv<glz::colwise>(obj, s));
+   };
+
+   "fuzz3"_test = [] {
+      std::string_view b64 =
+         "/BAACjY0OQo0OTk5OTk5MjkwMDAwODQ4MzY1M0UrMDAyNDk5OTk5OTk5Nwo5NAo5NDQ0NDQ0NDQ0NDQ0Cjk0CjkyCjYyAAAAAAA4OA==";
+
+      auto input = glz::read_base64(b64);
+      std::vector<uint8_t> s;
+      s.resize(input.size());
+      std::memcpy(s.data(), input.data(), s.size());
+      my_struct obj;
+      expect(glz::read_csv<glz::colwise>(obj, s));
    };
 };
 

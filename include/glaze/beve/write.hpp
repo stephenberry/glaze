@@ -461,8 +461,10 @@ namespace glz
             b.resize(2 * k);
          }
 
-         std::memcpy(&b[ix], str.data(), n);
-         ix += n;
+         if (n) {
+            std::memcpy(&b[ix], str.data(), n);
+            ix += n;
+         }
       }
 
       template <auto Opts>
@@ -475,8 +477,10 @@ namespace glz
             b.resize(2 * k);
          }
 
-         std::memcpy(&b[ix], value.data(), n);
-         ix += n;
+         if (n) {
+            std::memcpy(&b[ix], value.data(), n);
+            ix += n;
+         }
       }
    };
 
@@ -487,15 +491,15 @@ namespace glz
 
       template <auto Opts>
          requires(map_like_array ? check_concatenate(Opts) == false : true)
-      static void op(auto&& value, is_context auto&& ctx, auto&&... args)
+      static void op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix)
       {
          using V = range_value_t<std::decay_t<T>>;
 
          if constexpr (boolean_like<V>) {
             constexpr uint8_t type = uint8_t(3) << 3;
             constexpr uint8_t tag = tag::typed_array | type;
-            dump_type(tag, args...);
-            dump_compressed_int<Opts>(value.size(), args...);
+            dump_type(tag, b, ix);
+            dump_compressed_int<Opts>(value.size(), b, ix);
 
             // booleans must be dumped using single bits
             if constexpr (has_static_size<T>) {
@@ -506,7 +510,7 @@ namespace glz
                      bytes[byte_i] |= uint8_t(value[i]) << uint8_t(bit_i);
                   }
                }
-               dump(bytes, args...);
+               dump(bytes, b, ix);
             }
             else if constexpr (accessible<T>) {
                const auto num_bytes = (value.size() + 7) / 8;
@@ -515,7 +519,7 @@ namespace glz
                   for (size_t bit_i = 7; bit_i < 8 && i < value.size(); --bit_i, ++i) {
                      byte |= uint8_t(value[i]) << uint8_t(bit_i);
                   }
-                  dump_type(byte, args...);
+                  dump_type(byte, b, ix);
                }
             }
             else {
@@ -525,8 +529,8 @@ namespace glz
          else if constexpr (num_t<V>) {
             constexpr uint8_t type = std::floating_point<V> ? 0 : (std::is_signed_v<V> ? 0b000'01'000 : 0b000'10'000);
             constexpr uint8_t tag = tag::typed_array | type | (byte_count<V> << 5);
-            dump_type(tag, args...);
-            dump_compressed_int<Opts>(value.size(), args...);
+            dump_type(tag, b, ix);
+            dump_compressed_int<Opts>(value.size(), b, ix);
 
             if constexpr (contiguous<T>) {
                constexpr auto is_volatile =
@@ -553,11 +557,11 @@ namespace glz
                   }
                };
 
-               dump_array(args...);
+               dump_array(b, ix);
             }
             else {
                for (auto& x : value) {
-                  dump_type(x, args...);
+                  dump_type(x, b, ix);
                }
             }
          }
@@ -565,11 +569,11 @@ namespace glz
             constexpr uint8_t type = uint8_t(3) << 3;
             constexpr uint8_t string_indicator = uint8_t(1) << 5;
             constexpr uint8_t tag = tag::typed_array | type | string_indicator;
-            dump_type(tag, args...);
-            dump_compressed_int<Opts>(value.size(), args...);
+            dump_type(tag, b, ix);
+            dump_compressed_int<Opts>(value.size(), b, ix);
 
             for (auto& x : value) {
-               dump_compressed_int<Opts>(x.size(), args...);
+               dump_compressed_int<Opts>(x.size(), b, ix);
 
                auto dump_array = [&](auto&& b, auto&& ix) {
                   const auto n = x.size();
@@ -577,36 +581,51 @@ namespace glz
                      b.resize(2 * k);
                   }
 
-                  std::memcpy(&b[ix], x.data(), n);
-                  ix += n;
+                  if (n) {
+                     std::memcpy(&b[ix], x.data(), n);
+                     ix += n;
+                  }
                };
 
-               dump_array(args...);
+               dump_array(b, ix);
             }
          }
          else if constexpr (complex_t<V>) {
             constexpr uint8_t tag = tag::extensions | 0b00011'000;
-            dump_type(tag, args...);
+            dump_type(tag, b, ix);
 
             using X = typename V::value_type;
             constexpr uint8_t complex_array = 1;
             constexpr uint8_t type = std::floating_point<X> ? 0 : (std::is_signed_v<X> ? 0b000'01'000 : 0b000'10'000);
             constexpr uint8_t complex_header = complex_array | type | (byte_count<X> << 5);
-            dump_type(complex_header, args...);
+            dump_type(complex_header, b, ix);
 
-            dump_compressed_int<Opts>(value.size(), args...);
+            dump_compressed_int<Opts>(value.size(), b, ix);
 
-            for (auto&& x : value) {
-               serialize<BEVE>::no_header<Opts>(x, ctx, args...);
+            if constexpr (contiguous<T>) {
+               const auto n = value.size() * sizeof(V);
+               if (const auto k = ix + n; k > b.size()) [[unlikely]] {
+                  b.resize(2 * k);
+               }
+
+               if (n) {
+                  std::memcpy(&b[ix], value.data(), n);
+                  ix += n;
+               }
+            }
+            else {
+               for (auto&& x : value) {
+                  serialize<BEVE>::no_header<Opts>(x, ctx, b, ix);
+               }
             }
          }
          else {
             constexpr uint8_t tag = tag::generic_array;
-            dump_type(tag, args...);
-            dump_compressed_int<Opts>(value.size(), args...);
+            dump_type(tag, b, ix);
+            dump_compressed_int<Opts>(value.size(), b, ix);
 
             for (auto&& x : value) {
-               serialize<BEVE>::op<Opts>(x, ctx, args...);
+               serialize<BEVE>::op<Opts>(x, ctx, b, ix);
             }
          }
       }
@@ -955,7 +974,7 @@ namespace glz
    }
 
    template <write_supported<BEVE> T>
-   [[nodiscard]] error_ctx write_beve_untagged(T&& value)
+   [[nodiscard]] glz::expected<std::string, error_ctx> write_beve_untagged(T&& value)
    {
       return write<opts{.format = BEVE, .structs_as_arrays = true}>(std::forward<T>(value));
    }

@@ -16,6 +16,7 @@
 #include "glaze/core/cast.hpp"
 #include "glaze/core/constraint.hpp"
 #include "glaze/core/context.hpp"
+#include "glaze/core/error_category.hpp"
 #include "glaze/core/feature_test.hpp"
 #include "glaze/core/meta.hpp"
 #include "glaze/util/bit_array.hpp"
@@ -411,20 +412,24 @@ namespace glz
    template <is_variant T, size_t... I>
    constexpr auto make_variant_sv_id_map_impl(std::index_sequence<I...>, auto&& variant_ids)
    {
-      return normal_map<sv, size_t, std::variant_size_v<T>>(std::array{pair<sv, size_t>{sv(variant_ids[I]), I}...});
+      // Use the actual size of the ids array, not the variant size
+      return normal_map<sv, size_t, sizeof...(I)>(std::array{pair<sv, size_t>{sv(variant_ids[I]), I}...});
    }
 
    template <is_variant T, size_t... I>
    constexpr auto make_variant_id_map_impl(std::index_sequence<I...>, auto&& variant_ids)
    {
       using id_type = std::decay_t<decltype(ids_v<T>[0])>;
-      return normal_map<id_type, size_t, std::variant_size_v<T>>(std::array{pair{variant_ids[I], I}...});
+      // Use the actual size of the ids array, not the variant size
+      return normal_map<id_type, size_t, sizeof...(I)>(std::array{pair{variant_ids[I], I}...});
    }
 
    template <is_variant T>
    constexpr auto make_variant_id_map()
    {
-      constexpr auto indices = std::make_index_sequence<std::variant_size_v<T>>{};
+      // Use the size of the ids array, not the variant size
+      // This allows unlabeled variant types to serve as defaults
+      constexpr auto indices = std::make_index_sequence<ids_v<T>.size()>{};
 
       using id_type = std::decay_t<decltype(ids_v<T>[0])>;
 
@@ -465,7 +470,7 @@ namespace glz
          // Eigen ought to put the check in the `enable_if` for operator()()
          return std::invoke(std::forward<Element>(element), std::forward<Value>(value));
       }
-      else if constexpr (std::is_pointer_v<V>) {
+      else if constexpr (std::is_pointer_v<V> && !std::is_reference_v<Element>) {
          if constexpr (std::invocable<decltype(*element), Value>) {
             return std::invoke(*element, std::forward<Value>(value));
          }
@@ -580,144 +585,47 @@ namespace glz
    }
 }
 
-template <>
-struct glz::meta<glz::error_code>
+namespace glz
 {
-   static constexpr sv name = "glz::error_code";
-   using enum glz::error_code;
-   static constexpr std::array keys{"none",
-                                    "version_mismatch",
-                                    "invalid_header",
-                                    "invalid_query",
-                                    "invalid_body",
-                                    "parse_error",
-                                    "method_not_found",
-                                    "timeout",
-                                    "send_error",
-                                    "connection_failure",
-                                    "end_reached",
-                                    "partial_read_complete",
-                                    "no_read_input",
-                                    "data_must_be_null_terminated",
-                                    "parse_number_failure",
-                                    "expected_brace",
-                                    "expected_bracket",
-                                    "expected_quote",
-                                    "expected_comma",
-                                    "expected_colon",
-                                    "exceeded_static_array_size",
-                                    "exceeded_max_recursive_depth",
-                                    "unexpected_end",
-                                    "expected_end_comment",
-                                    "syntax_error",
-                                    "unexpected_enum",
-                                    "attempt_const_read",
-                                    "attempt_member_func_read",
-                                    "attempt_read_hidden",
-                                    "invalid_nullable_read",
-                                    "invalid_variant_object",
-                                    "invalid_variant_array",
-                                    "invalid_variant_string",
-                                    "no_matching_variant_type",
-                                    "expected_true_or_false",
-                                    "constraint_violated",
-                                    "key_not_found",
-                                    "unknown_key",
-                                    "missing_key",
-                                    "invalid_flag_input",
-                                    "invalid_escape",
-                                    "u_requires_hex_digits",
-                                    "unicode_escape_conversion_failure",
-                                    "dump_int_error",
-                                    "file_open_failure",
-                                    "file_close_failure",
-                                    "file_include_error",
-                                    "file_extension_not_supported",
-                                    "could_not_determine_extension",
-                                    "get_nonexistent_json_ptr",
-                                    "get_wrong_type",
-                                    "seek_failure",
-                                    "cannot_be_referenced",
-                                    "invalid_get",
-                                    "invalid_get_fn",
-                                    "invalid_call",
-                                    "invalid_partial_key",
-                                    "name_mismatch",
-                                    "array_element_not_found",
-                                    "elements_not_convertible_to_design",
-                                    "unknown_distribution",
-                                    "invalid_distribution_elements",
-                                    "hostname_failure",
-                                    "includer_error",
-                                    "feature_not_supported"};
-   static constexpr std::array value{none, //
-                                     version_mismatch, //
-                                     invalid_header, //
-                                     invalid_query, //
-                                     invalid_body, //
-                                     parse_error, //
-                                     method_not_found, //
-                                     timeout, //
-                                     send_error, //
-                                     connection_failure, //
-                                     end_reached, // A non-error code for non-null terminated input buffers
-                                     partial_read_complete,
-                                     no_read_input, //
-                                     data_must_be_null_terminated, //
-                                     parse_number_failure, //
-                                     expected_brace, //
-                                     expected_bracket, //
-                                     expected_quote, //
-                                     expected_comma, //
-                                     expected_colon, //
-                                     exceeded_static_array_size, //
-                                     exceeded_max_recursive_depth, //
-                                     unexpected_end, //
-                                     expected_end_comment, //
-                                     syntax_error, //
-                                     unexpected_enum, //
-                                     attempt_const_read, //
-                                     attempt_member_func_read, //
-                                     attempt_read_hidden, //
-                                     invalid_nullable_read, //
-                                     invalid_variant_object, //
-                                     invalid_variant_array, //
-                                     invalid_variant_string, //
-                                     no_matching_variant_type, //
-                                     expected_true_or_false, //
-                                     constraint_violated, //
-                                     // Key errors
-                                     key_not_found, //
-                                     unknown_key, //
-                                     missing_key, //
-                                     // Other errors
-                                     invalid_flag_input, //
-                                     invalid_escape, //
-                                     u_requires_hex_digits, //
-                                     unicode_escape_conversion_failure, //
-                                     dump_int_error, //
-                                     // File errors
-                                     file_open_failure, //
-                                     file_close_failure, //
-                                     file_include_error, //
-                                     file_extension_not_supported, //
-                                     could_not_determine_extension, //
-                                     // JSON pointer access errors
-                                     get_nonexistent_json_ptr, //
-                                     get_wrong_type, //
-                                     seek_failure, //
-                                     // Other errors
-                                     cannot_be_referenced, //
-                                     invalid_get, //
-                                     invalid_get_fn, //
-                                     invalid_call, //
-                                     invalid_partial_key, //
-                                     name_mismatch, //
-                                     array_element_not_found, //
-                                     elements_not_convertible_to_design, //
-                                     unknown_distribution, //
-                                     invalid_distribution_elements, //
-                                     hostname_failure, //
-                                     includer_error, //
-                                     feature_not_supported};
-};
+   /// Determine whether the member with the given name is required for type T.
+   ///
+   /// A member is required, if the option error_on_missing_keys is set and the member is not null-able.
+   /// This behaviour can be overridden on a per-type basis via the customization point
+   /// `meta<T>::requires_key(key, is_nullable)`
+   /// @code
+   /// struct person {
+   ///    std::string first_name{};
+   ///    std::string last_name{};
+   /// };
+   ///
+   /// template <>
+   /// struct glz::meta<person> {
+   ///    static constexpr bool requires_key(std::string_view key, bool nullable) {
+   ///       if (not nullable) {
+   ///          return true;
+   ///       }
+   ///       return false;
+   ///    }
+   /// };
+   /// @endcode
+   /// @tparam T      The user‑defined type for which metadata may be provided.
+   /// @tparam Val_T  The value type associated with the key; used to determine nullability.
+   /// @tparam Opts   A policy struct with a boolean member `error_on_missing_keys`.
+   ///
+   /// @param key          The string identifier whose requirement status is being queried.
+   /// @returns `true` if:
+   ///            - `meta<T>::requires_key(key, is_nullable)` exists and returns true, or
+   ///            - `Opts.error_on_missing_keys` is true *and* Val_T is not nullable;
+   ///          otherwise returns `false`.
+   template <typename T, typename Val_T, auto Opts>
+   constexpr bool requires_key(const std::string_view key)
+   {
+      if constexpr (meta_has_requires_key<T>) {
+         if (meta<T>::requires_key(key, nullable_like<Val_T>)) return true;
+      }
+      else if constexpr (Opts.error_on_missing_keys && !nullable_like<Val_T>) {
+         return true;
+      }
+      return false;
+   }
+}

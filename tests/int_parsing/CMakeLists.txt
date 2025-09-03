@@ -9,5 +9,3 @@ if (MINGW)
 endif ()
 
 add_test(NAME ${PROJECT_NAME} COMMAND ${PROJECT_NAME})
-
-target_code_coverage(${PROJECT_NAME} AUTO ALL)

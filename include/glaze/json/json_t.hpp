@@ -202,6 +202,25 @@ namespace glz
          return *this;
       }
 
+      template <class T>
+         requires(!std::is_same_v<std::decay_t<T>, json_t> && !std::is_same_v<std::decay_t<T>, std::nullptr_t> &&
+                  !std::is_same_v<std::decay_t<T>, double> && !std::is_same_v<std::decay_t<T>, bool> &&
+                  !std::is_same_v<std::decay_t<T>, std::string> && !std::is_same_v<std::decay_t<T>, std::string_view> &&
+                  !std::is_same_v<std::decay_t<T>, const char*> && !std::is_same_v<std::decay_t<T>, array_t> &&
+                  !std::is_same_v<std::decay_t<T>, object_t> && !int_t<T> &&
+                  requires { write_json(std::declval<T>()); })
+      json_t& operator=(T&& value)
+      {
+         auto json_str = write_json(std::forward<T>(value));
+         if (json_str) {
+            auto result = read_json<json_t>(*json_str);
+            if (result) {
+               *this = std::move(*result);
+            }
+         }
+         return *this;
+      }
+
       [[nodiscard]] json_t& at(std::convertible_to<std::string_view> auto&& key) { return operator[](key); }
 
       [[nodiscard]] const json_t& at(std::convertible_to<std::string_view> auto&& key) const { return operator[](key); }
@@ -398,3 +417,72 @@ namespace glz
 // restore disabled warning
 #pragma warning(pop)
 #endif
+
+#include "glaze/core/seek.hpp"
+
+namespace glz
+{
+   // Specialization for glz::json_t
+   template <>
+   struct seek_op<glz::json_t>
+   {
+      template <class F>
+      static bool op(F&& func, auto&& value, sv json_ptr)
+      {
+         if (json_ptr.empty()) {
+            // At target - call func with the actual variant data, not the json_t wrapper
+            std::visit([&func](auto&& variant_value) { func(variant_value); }, value.data);
+            return true;
+         }
+
+         if (json_ptr[0] != '/' || json_ptr.size() < 2) return false;
+
+         // Handle object access
+         if (value.is_object()) {
+            auto& obj = value.get_object();
+
+            // Parse the key (with JSON Pointer escaping)
+            std::string key;
+            size_t i = 1;
+            for (; i < json_ptr.size(); ++i) {
+               auto c = json_ptr[i];
+               if (c == '/')
+                  break;
+               else if (c == '~') {
+                  if (++i == json_ptr.size()) return false;
+                  c = json_ptr[i];
+                  if (c == '0')
+                     c = '~';
+                  else if (c == '1')
+                     c = '/';
+                  else
+                     return false;
+               }
+               key.push_back(c);
+            }
+
+            auto it = obj.find(key);
+            if (it == obj.end()) return false;
+
+            sv remaining_ptr = json_ptr.substr(i);
+            return seek(std::forward<F>(func), it->second, remaining_ptr);
+         }
+         // Handle array access
+         else if (value.is_array()) {
+            auto& arr = value.get_array();
+
+            // Parse the index
+            size_t index{};
+            auto [p, ec] = std::from_chars(&json_ptr[1], json_ptr.data() + json_ptr.size(), index);
+            if (ec != std::errc{}) return false;
+
+            if (index >= arr.size()) return false;
+
+            sv remaining_ptr = json_ptr.substr(p - json_ptr.data());
+            return seek(std::forward<F>(func), arr[index], remaining_ptr);
+         }
+
+         return false;
+      }
+   };
+}

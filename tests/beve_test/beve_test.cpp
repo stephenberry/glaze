@@ -2225,6 +2225,51 @@ suite early_end = [] {
    };
 };
 
+struct empty_string_test_struct
+{
+   std::string empty_field = "";
+   int num = 42;
+};
+
+suite empty_string_test = [] {
+   "empty string at buffer boundary"_test = [] {
+      // Test case for the issue where ix == b.size() and str.size() == 0
+      // causes an assert inside std::vector::operator[]
+      std::string empty_str = "";
+      std::string buffer;
+      expect(not glz::write_beve(empty_str, buffer));
+
+      // Test reading back
+      std::string result;
+      expect(!glz::read_beve(result, buffer));
+      expect(result == empty_str);
+   };
+
+   "empty string in struct"_test = [] {
+      empty_string_test_struct obj;
+      std::string buffer;
+      expect(not glz::write_beve(obj, buffer));
+
+      empty_string_test_struct result;
+      expect(!glz::read_beve(result, buffer));
+      expect(result.empty_field == "");
+      expect(result.num == 42);
+   };
+
+   "multiple empty strings"_test = [] {
+      std::vector<std::string> empty_strings = {"", "", ""};
+      std::string buffer;
+      expect(not glz::write_beve(empty_strings, buffer));
+
+      std::vector<std::string> result;
+      expect(!glz::read_beve(result, buffer));
+      expect(result.size() == 3);
+      expect(result[0] == "");
+      expect(result[1] == "");
+      expect(result[2] == "");
+   };
+};
+
 suite past_fuzzing_issues = [] {
    "fuzz0"_test = [] {
       std::string_view base64 =
@@ -2350,6 +2395,79 @@ suite past_fuzzing_issues = [] {
    "fuzz14"_test = test_base64("A5AAaGgAbg==");
 
    "fuzz15"_test = test_base64("AzEyAA==");
+
+   "fuzz16"_test = [] {
+      std::string_view base64 =
+         "YAVNTU1NTU1NTU1NTU1NTU1NTUlNTTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1"
+         "NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTUxMTBNTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU01"
+         "NTU1NTExME1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1N"
+         "TU1NTU1NTTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1"
+         "NTU1NTVgNTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTVlADU1NTU1NTU1NTExME1NTU1NTU1N"
+         "TU1NTU01NTU1NTU1NTU1NTU1NTU1NWA1NTU1NU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1N"
+         "TU1NTU1NTU1NTU1NTU1NTU1NTU01NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1"
+         "NTU1NTU1NTU1NTU1NTU1NTU1YDU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1"
+         "NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTExME1NTU1NTU1NTU1NTU1NTU1N"
+         "TU1NTU1NTU01NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1"
+         "NTU1NTU1YDU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTUxMTBNTU1NTU1N"
+         "TU1NTU1NTU1NTU1NTTU1NTU1MTEwTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1N"
+         "TU1NTU1NTU1NTU1NTU1NTU01NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1"
+         "NTU1NTU1NTU1NTU1NTU1YDU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTUx"
+         "MTBNTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1"
+         "NTU1NTU1MTEwTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1"
+         "NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTVgNTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1"
+         "NTU1NTU1NTU1NTU1NTU1NTExME1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU06TU1NTU1NTU1NTU1N"
+         "TU1NTU1NTU1NTU1NTU1NTU1NTU01NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1"
+         "NTU1NTU1NTU1NTU1NTU1NTVgNTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1"
+         "NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1MTEwTU1NTU1NTU1NTU1NTU1NTU1N"
+         "TU1NTU1NTTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1"
+         "NTU1NTVgNTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTExME1NTU1NTU1N"
+         "TU1NTU1NTU1NTU1NNTU1NTUxMTBNTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1N"
+         "TU1NTU1NTU1NTU1NTU1NTTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1"
+         "NTU1NTU1NTU1NTU1NTVgNTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTEx"
+         "ME1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NNTU1NTUxMTBNTU1NTU1NTU1NTU1NTU1NTU1NTU1N"
+         "TU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU01NTU1NTU1NTU1NTU1NTU1NTU1NTU1"
+         "NTU1NTU1NTU1TU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NNTU1NTU1"
+         "NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NWA1NTU1NTU1"
+         "NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1MTEwTU1NTU1NTU1NTU1NTU1NTU1NTU1N"
+         "TU1NTU1NNTU1NTUxMTBNTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1N"
+         "TU1NTU1NTU1NTU1NTU01NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1"
+         "NTU1NTU1NTU1NTU1YDU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTVgNTU1NTU1NTU1NTU1"
+         "NTU1NTU1NTU1NTU1NTU1NTVlADU1NTU1NTU1NTExME1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU01"
+         "NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1YDU1"
+         "NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1YDU1NTU1"
+         "TU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTTU1NTU1"
+         "NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTVgNTU1NTU1"
+         "NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1"
+         "NTU1NTU1NTU1NTU1MTEwTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTTU1NTU1NTU1NTU1NTU1NTU1"
+         "NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTVgNTU1NTU1NTU1NTU1NTU1NTU1NTU1"
+         "NTU1NTU1NTU1NTU1NTU1NTU1NTExME1NTU1NTU1NTU1NTU1NTU1NTU1NNTU1NTUxMTBNTU1NTU1N"
+         "TU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NNTU1NTU1NTU1NTU1"
+         "NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NWA1NTU1NTU1NTU1NTU1NTU1"
+         "NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1MTEwTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU01NTU1"
+         "NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTExME1NTU1NTU1NTU1NTU1NTU1NTU1NTU1N"
+         "TU01NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NWA1"
+         "NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1MTEwTU1NTU1NTU1NTU1NTU1N"
+         "TU1NTU1NTU1NTTpNTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTTU1NTU1NTU1NTU1NTU1"
+         "NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTVgNTU1NTU1NTU1NTU1NTU1"
+         "NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1"
+         "NTU1MTEwTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1"
+         "NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTVgNTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1"
+         "NTU1NTU1NTU1NTExME1NTU1NTU1NTU1NTU1NTU1NTU1NNTU1NTUxMTBNTU1NTU1NTU1NTU1NTU1N"
+         "TU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTTU1NTU1NTU1NTU1NTU1NTU1NTU1"
+         "NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTVgNTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1"
+         "NTU1NTU1NTU1NTU1NTU1NTExME1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTTU1NTU1MTEwTU1N"
+         "TU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1"
+         "NTU1NTU1NTU1NTU1NTU1NTU1NWA1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NWUANTU1NTU1"
+         "NTU1MTEwTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1"
+         "NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTVgNTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1"
+         "NTU1NTU1NTU1NTU1NTExME1NNTUxMTBNTU1NTU1NTU1NTU1NTU1NTU1NTU1NJwA=";
+
+      const auto input = glz::read_base64(base64);
+      expect(glz::read_beve<my_struct>(input).error());
+      std::string json{};
+      auto ec = glz::beve_to_json(input, json);
+      expect(ec == glz::error_code::exceeded_max_recursive_depth);
+   };
 };
 
 struct custom_load_t
@@ -2404,6 +2522,94 @@ suite pair_ranges_tests = [] {
       std::vector<std::pair<int, int>> x;
       expect(!glz::read_beve(x, s));
       expect(x == v);
+   };
+};
+
+// Test for static variant tags with empty structs
+namespace static_tag_test
+{
+   enum class MsgTypeEmpty { A, B };
+
+   struct MsgAEmpty
+   {
+      static constexpr auto type = MsgTypeEmpty::A;
+   };
+
+   struct MsgBEmpty
+   {
+      static constexpr auto type = MsgTypeEmpty::B;
+   };
+
+   using MsgEmpty = std::variant<MsgAEmpty, MsgBEmpty>;
+
+   enum class MsgType { A, B };
+
+   struct MsgA
+   {
+      static constexpr auto type = MsgType::A;
+      int value = 42;
+   };
+
+   struct MsgB
+   {
+      static constexpr auto type = MsgType::B;
+      std::string text = "hello";
+   };
+
+   using Msg = std::variant<MsgA, MsgB>;
+}
+
+suite static_variant_tags = [] {
+   "static variant tags with empty structs"_test = [] {
+      using namespace static_tag_test;
+
+      // Test untagged BEVE with empty structs having static tags
+      {
+         MsgEmpty original{MsgAEmpty{}};
+         auto encoded = glz::write_beve_untagged(original);
+         expect(encoded.has_value());
+
+         auto decoded = glz::read_binary_untagged<MsgEmpty>(*encoded);
+         expect(decoded.has_value());
+         expect(decoded->index() == 0);
+      }
+
+      {
+         MsgEmpty original{MsgBEmpty{}};
+         auto encoded = glz::write_beve_untagged(original);
+         expect(encoded.has_value());
+
+         auto decoded = glz::read_binary_untagged<MsgEmpty>(*encoded);
+         expect(decoded.has_value());
+         expect(decoded->index() == 1);
+      }
+   };
+
+   "static variant tags with non-empty structs"_test = [] {
+      using namespace static_tag_test;
+
+      // Test untagged BEVE with non-empty structs having static tags
+      {
+         Msg original{MsgA{}};
+         auto encoded = glz::write_beve_untagged(original);
+         expect(encoded.has_value());
+
+         auto decoded = glz::read_binary_untagged<Msg>(*encoded);
+         expect(decoded.has_value());
+         expect(decoded->index() == 0);
+         expect(std::get<0>(*decoded).value == 42);
+      }
+
+      {
+         Msg original{MsgB{}};
+         auto encoded = glz::write_beve_untagged(original);
+         expect(encoded.has_value());
+
+         auto decoded = glz::read_binary_untagged<Msg>(*encoded);
+         expect(decoded.has_value());
+         expect(decoded->index() == 1);
+         expect(std::get<1>(*decoded).text == "hello");
+      }
    };
 };
 

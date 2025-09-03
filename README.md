@@ -5,7 +5,12 @@ Glaze also supports:
 
 - [BEVE](https://github.com/beve-org/beve) (binary efficient versatile encoding)
 - [CSV](./docs/csv.md) (comma separated value)
+- [Stencil/Mustache](./docs/stencil-mustache.md) (string interpolation)
 - [EETF](./docs/EETF/erlang-external-term-format.md) (Erlang External Term Format) [optionally included]
+
+> [!NOTE]
+>
+> Glaze is getting HTTP support with REST servers, clients, websockets, and more. The networking side of Glaze is under active development, and while it is usable and feedback is desired, the API is likely to be changing and improving.
 
 ## With compile time reflection for MSVC, Clang, and GCC!
 

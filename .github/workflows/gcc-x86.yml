@@ -42,7 +42,7 @@ jobs:
          - name: Remove HTTPS test (requires OpenSSL)
            run: |
               # Remove the https_test from tests CMakeLists.txt for this build
-              sed -i '/add_subdirectory(https_test)/d' tests/CMakeLists.txt
+              sed -i '/add_subdirectory(https_test)/d' tests/networking_tests/CMakeLists.txt
               
          - name: Configure CMake
            run: |

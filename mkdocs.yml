@@ -71,6 +71,7 @@ nav:
    - Compile Time Options: options.md
    - Optimizing Performance: optimizing-performance.md
    - Rename Keys: rename-keys.md
+   - Skip Keys: skip-keys.md
    - Generic JSON: generic-json.md
  - Reflection:
    - Pure Reflection: pure-reflection.md
@@ -78,7 +79,7 @@ nav:
    - JSON: json.md
    - CSV: csv.md
    - BEVE (binary): binary.md
-   - Stencil/Mustache: stencil.md
+   - Stencil/Mustache: stencil-mustache.md
    - EETF: EETF/erlang-external-term-format.md
  - Serialization/Parsing:
    - Exceptions: exceptions.md
@@ -95,10 +96,20 @@ nav:
      - Partial Write: partial-write.md
    - Max Float Precision: max-float-precision.md
    - Ranges: ranges.md
+ - Networking:
+   - networking/http-rest-support.md
+   - networking/http-server.md
+   - networking/http-router.md
+   - networking/rest-registry.md
+   - networking/tls-support.md
+   - networking/http-client.md
+   - networking/advanced-networking.md
+   - networking/http-examples.md
  - Interface Utilities:
    - JSON Include: json-include.md
    - CLI Menu: cli-menu.md
    - Glaze Interfaces: glaze-interfaces.md
+   - FFI Shared Library (Interop): interop.md
  - Data Recording/Logging:
    - Time Trace Profiles: time-trace.md
    - Data Recorder: recorder.md
