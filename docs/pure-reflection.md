@@ -12,6 +12,8 @@ Glaze supports pure reflection for [aggregate initializable](https://en.cpprefer
 There's no need to write any `glz::meta` structures or use any macros. The reflection is hidden from
 the user and computed at compile time.
 
+Types that support pure reflection satisfy the `glz::reflectable<T>` concept. To check if any type (including those with `glz::meta` specializations) can use the reflection API, use the `glz::has_reflect<T>` concept.
+
 - You can still write a `glz::meta` to customize your serialization, which will override the default reflection.
 
 > CUSTOMIZATION NOTE:
