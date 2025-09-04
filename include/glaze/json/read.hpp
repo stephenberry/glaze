@@ -15,6 +15,7 @@
 #include "glaze/core/opts.hpp"
 #include "glaze/core/read.hpp"
 #include "glaze/core/reflect.hpp"
+#include "glaze/reflection/enum_reflect.hpp"
 #include "glaze/file/file_ops.hpp"
 #include "glaze/json/json_concepts.hpp"
 #include "glaze/json/skip.hpp"
@@ -1297,6 +1298,7 @@ namespace glz
       }
    };
 
+   // Support both string and numeric parsing for enums with reflection
    template <class T>
       requires(std::is_enum_v<T> && !glaze_enum_t<T> && !meta_keys<T> && !custom_read<T>)
    struct from<JSON, T>
@@ -1304,10 +1306,70 @@ namespace glz
       template <auto Opts>
       static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
       {
-         // TODO: use std::bit_cast???
-         std::underlying_type_t<std::decay_t<T>> x{};
+         using E = std::decay_t<T>;
+         
+         // Skip whitespace first
+         if constexpr (!check_ws_handled(Opts)) {
+            if (skip_ws<Opts>(ctx, it, end)) {
+               return;
+            }
+         }
+         
+         // Check if it's a string (starts with quote)
+         if (it != end && *it == '"') {
+            // Try to parse as string if enum reflection is available
+            if constexpr (glz::enum_count<E> > 0) {
+               ++it; // Skip opening quote
+               const auto start = it;
+               
+               // Find closing quote
+               while (it != end && *it != '"') {
+                  ++it;
+               }
+               
+               if (it == end) [[unlikely]] {
+                  ctx.error = error_code::unexpected_end;
+                  return;
+               }
+               
+               // Extract string 
+               const std::string_view name{start, static_cast<size_t>(it - start)};
+               
+               // Try bitflag parsing first if it's a bitflag enum
+               if constexpr (bit_flag_enum<E>) {
+                  const auto bitflag_result = glz::enum_cast_bitflag<E>(name);
+                  if (bitflag_result.has_value()) {
+                     value = *bitflag_result;
+                     ++it; // Skip closing quote
+                     return;
+                  }
+               }
+               
+               // Try regular enum parsing
+               const auto result = glz::enum_cast<E>(name);
+               
+               if (result.has_value()) {
+                  value = *result;
+                  ++it; // Skip closing quote
+                  return;
+               }
+               else {
+                  // Fall through to error
+                  ctx.error = error_code::unknown_key;
+                  return;
+               }
+            }
+            else {
+               // No reflection available, can't parse string as enum
+               ctx.error = error_code::syntax_error;
+               return;
+            }
+         }
+         
+         // Parse as number (original behavior)
+         std::underlying_type_t<E> x{};
          parse<JSON>::op<Opts>(x, ctx, it, end);
-         value = static_cast<std::decay_t<T>>(x);
+         value = static_cast<E>(x);
       }
    };
 

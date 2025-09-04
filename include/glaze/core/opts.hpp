@@ -104,6 +104,8 @@ namespace glz
       bool partial_read =
          false; // Reads into the deepest structural object and then exits without parsing the rest of the input
 
+      bool enum_as_string = false; // Serialize enums as strings when they have reflection support
+
       // INTERNAL OPTIONS
       uint32_t internal{}; // default should be 0
 
@@ -207,6 +209,16 @@ namespace glz
       }
       else {
          return true;
+      }
+   }
+
+   consteval bool check_enum_as_string(auto&& Opts)
+   {
+      if constexpr (requires { Opts.enum_as_string; }) {
+         return Opts.enum_as_string;
+      }
+      else {
+         return false;
       }
    }
 

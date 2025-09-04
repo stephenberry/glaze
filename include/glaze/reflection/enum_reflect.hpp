@@ -8,12 +8,14 @@
 #pragma once
 
 #include <array>
+#include <bitset>
 #include <cassert>
-#include <climits>
+#include <cctype>
 #include <concepts>
 #include <cstddef>
 #include <limits>
 #include <optional>
+#include <string>
 #include <string_view>
 #include <type_traits>
 #include <utility>
@@ -43,6 +45,28 @@ namespace glz
 
    template <class T>
    concept enum_fixed_underlying = is_enum<T> && requires { T{0}; };
+   
+   // Bitflag support
+   template<typename E, typename = void>
+   inline constexpr bool is_bitflag = false;
+
+   template<typename E>
+   inline constexpr bool is_bitflag<E, 
+      std::void_t<
+      decltype(E{} & E{}),
+      decltype(~E{}), 
+      decltype(E{} | E{}), 
+      decltype(std::declval<E&>() &= E{}), 
+      decltype(std::declval<E&>() |= E{})
+      >> = std::is_enum_v<E>
+      && (std::is_same_v<decltype(E{} & E{}),bool> || std::is_same_v<decltype(E{} & E{}), E>) 
+      && std::is_same_v<decltype(~E{}), E> 
+      && std::is_same_v<decltype(E{} | E{}), E>
+      && std::is_same_v<decltype(std::declval<E&>() &= E{}), E&>
+      && std::is_same_v<decltype(std::declval<E&>() |= E{}), E&>;
+
+   template <class T>
+   concept bit_flag_enum = is_enum<T> && is_bitflag<T>;
 
    template <class T>
    struct enum_traits;
@@ -256,17 +280,16 @@ namespace glz
       constexpr auto var_name() noexcept
       {
          // "auto glz::detail::var_name() [Vs = <(A)0, a, b, c, e, d, (A)6>]"
-#define SZC(x) (sizeof(x) - 1)
-         constexpr auto funcsig_off = SZC("auto glz::detail::var_name() [Vs = <");
-         return std::string_view(__PRETTY_FUNCTION__ + funcsig_off, SZC(__PRETTY_FUNCTION__) - funcsig_off - SZC(">]"));
-#undef SZC
+         constexpr auto funcsig_off = sizeof("auto glz::detail::var_name() [Vs = <") - 1;
+         return std::string_view(__PRETTY_FUNCTION__ + funcsig_off, 
+                                (sizeof(__PRETTY_FUNCTION__) - 1) - funcsig_off - (sizeof(">]") - 1));
       }
 
       template <auto Copy>
       inline constexpr auto static_storage_for = Copy;
 
       template <class E, class Pair, bool ShouldNullTerminate>
-      constexpr auto reflect() noexcept
+      constexpr auto build_enum_data() noexcept
       {
          constexpr auto Min = enum_traits<E>::min;
          constexpr auto Max = enum_traits<E>::max;
@@ -435,17 +458,16 @@ namespace glz
       constexpr auto var_name() noexcept
       {
          // constexpr auto f() [with auto _ = std::array<E, 6>{std::__array_traits<E, 6>::_Type{a, b, c, e, d, (E)6}}]
-#define SZC(x) (sizeof(x) - 1)
-         constexpr std::size_t funcsig_off = SZC("constexpr auto glz::detail::var_name() [with auto ...Vs = {");
+         constexpr std::size_t funcsig_off = sizeof("constexpr auto glz::detail::var_name() [with auto ...Vs = {") - 1;
          return std::std::string_view(__PRETTY_FUNCTION__ + funcsig_off,
-                                      SZC(__PRETTY_FUNCTION__) - funcsig_off - SZC("}]"));
+                                      (sizeof(__PRETTY_FUNCTION__) - 1) - funcsig_off - (sizeof("}]") - 1));
       }
 
       template <auto Copy>
       inline constexpr auto static_storage_for = Copy;
 
       template <class E, class Pair, bool ShouldNullTerminate>
-      constexpr auto reflect() noexcept
+      constexpr auto build_enum_data() noexcept
       {
          constexpr auto Min = enum_traits<E>::min;
          constexpr auto Max = enum_traits<E>::max;
@@ -529,12 +551,11 @@ namespace glz
 {
    namespace detail
    {
-#define SZC(x) (sizeof(x) - 1)
       template <class>
       constexpr auto type_name_func_size() noexcept
       {
          // (sizeof("auto __cdecl glz::detail::type_name_func<") - 1)
-         return SZC(__FUNCSIG__) - SZC("auto __cdecl glz::detail::type_name_func_size<enum ") - SZC(">(void) noexcept");
+         return (sizeof(__FUNCSIG__) - 1) - (sizeof("auto __cdecl glz::detail::type_name_func_size<enum ") - 1) - (sizeof(">(void) noexcept") - 1);
       }
 
       template <auto Enum>
@@ -568,10 +589,9 @@ namespace glz
          // `anonymous-namespace'::UnscopedAnon
 
          using T = typename decltype(Array)::value_type;
-#define SZC(x) (sizeof(x) - 1)
-         std::size_t funcsig_off = SZC("auto __cdecl glz::detail::var_name<class std::array<enum ");
+         std::size_t funcsig_off = sizeof("auto __cdecl glz::detail::var_name<class std::array<enum ") - 1;
          constexpr auto type_name_len = glz::detail::type_name_func_size<T>();
-         funcsig_off += type_name_len + SZC(",");
+         funcsig_off += type_name_len + (sizeof(",") - 1);
          constexpr auto Size = Array.size();
          // clang-format off
          funcsig_off += Size < 10 ? 1
@@ -585,11 +605,10 @@ namespace glz
          : Size < 1000000000 ? 9
          : 10;
          // clang-format on
-         funcsig_off += SZC(">{enum ") + type_name_len;
+         funcsig_off += (sizeof(">{enum ") - 1) + type_name_len;
          return std::string_view(__FUNCSIG__ + funcsig_off,
-                                 SZC(__FUNCSIG__) - funcsig_off - (sizeof("}>(void) noexcept") - 1));
+                                 (sizeof(__FUNCSIG__) - 1) - funcsig_off - (sizeof("}>(void) noexcept") - 1));
       }
-#undef SZC
 
       template <auto Copy>
       inline constexpr auto static_storage_for = Copy;
@@ -636,7 +655,7 @@ namespace glz
       }
 
       template <class E, class Pair, bool ShouldNullTerminate>
-      constexpr auto reflect() noexcept
+      constexpr auto build_enum_data() noexcept
       {
          constexpr auto Min = enum_traits<E>::min;
          constexpr auto Max = enum_traits<E>::max;
@@ -680,7 +699,7 @@ namespace glz
 #ifdef __cpp_lib_to_underlying
    using ::std::to_underlying;
 #else
-   template <Enum E>
+   template <is_enum E>
    [[nodiscard]] constexpr auto to_underlying(const E e) noexcept
    {
       return static_cast<std::underlying_type_t<E>>(e);
@@ -688,10 +707,10 @@ namespace glz
 #endif
 
    template <is_enum E, class Pair = std::pair<E, std::string_view>, bool ShouldNullTerminate = true>
-   inline constexpr auto enums = detail::reflect<std::remove_cv_t<E>, Pair, ShouldNullTerminate>();
+   inline constexpr auto enums = detail::build_enum_data<std::remove_cv_t<E>, Pair, ShouldNullTerminate>();
 
    template <is_enum E>
-   inline constexpr auto values = []() {
+   inline constexpr auto enum_values = []() {
       constexpr auto& values = enums<E>;
       std::array<E, values.size()> ret;
       for (std::size_t i = 0; i < ret.size(); ++i) ret[i] = values[i].first;
@@ -699,7 +718,7 @@ namespace glz
    }();
 
    template <is_enum E, class String = std::string_view, bool NullTerminated = true>
-   inline constexpr auto names = []() {
+   inline constexpr auto enum_names = []() {
       constexpr auto& values = enums<E, std::pair<E, String>, NullTerminated>;
       std::array<String, values.size()> ret;
       for (std::size_t i = 0; i < ret.size(); ++i) ret[i] = values[i].second;
@@ -707,41 +726,41 @@ namespace glz
    }();
 
    template <is_enum E>
-   inline constexpr auto min = enums<E>.front().first;
+   inline constexpr auto enum_min = enums<E>.front().first;
 
    template <is_enum E>
-   inline constexpr auto max = enums<E>.back().first;
+   inline constexpr auto enum_max = enums<E>.back().first;
 
    template <is_enum E>
-   inline constexpr std::size_t count = enums<E>.size();
+   inline constexpr std::size_t enum_count = enums<E>.size();
 }
 
 namespace glz
 {
    template <class>
-   inline constexpr bool is_contiguous = false;
+   inline constexpr bool enum_is_contiguous = false;
 
    template <is_enum E>
-   inline constexpr bool is_contiguous<E> = []() {
+   inline constexpr bool enum_is_contiguous<E> = []() {
       using T = std::underlying_type_t<E>;
       if constexpr (std::is_same_v<T, bool>) {
          return true;
       }
+      else if constexpr (enum_count<E> == 0) {
+         return false;
+      }
       else {
-         constexpr auto& values = enums<E>;
-         for (std::size_t i = 0; i < values.size() - 1; ++i)
-            if (T(values[i].first) + 1 != T(values[i + 1].first)) return false;
-         return true;
+         return to_underlying(enum_max<E>) - to_underlying(enum_min<E>) + 1 == enum_count<E>;
       }
    }();
 
    template <class E>
-   concept ContiguousEnum = is_enum<E> && is_contiguous<E>;
+   concept ContiguousEnum = is_enum<E> && enum_is_contiguous<E>;
 
    template <is_enum E>
    [[nodiscard]] constexpr bool contains(const E value) noexcept
    {
-      for (const auto v : values<E>) {
+      for (const auto v : enum_values<E>) {
          if (v == value) {
             return true;
          }
@@ -758,7 +777,7 @@ namespace glz
    template <is_enum E>
    [[nodiscard]] constexpr bool contains(const std::string_view name) noexcept
    {
-      for (const auto& s : names<E>)
+      for (const auto& s : enum_names<E>)
          if (s == name) return true;
       return false;
    }
@@ -766,7 +785,7 @@ namespace glz
    template <is_enum E, std::predicate<std::string_view, std::string_view> BinaryPredicate>
    [[nodiscard]] constexpr bool contains(const std::string_view name, const BinaryPredicate binary_predicate) noexcept
    {
-      for (const auto& s : names<E>)
+      for (const auto& s : enum_names<E>)
          if (binary_predicate(name, s)) return true;
       return false;
    }
@@ -775,7 +794,7 @@ namespace glz
    [[nodiscard]] constexpr bool contains(const E value) noexcept
    {
       using T = std::underlying_type_t<E>;
-      return T(value) <= T(max<E>) && T(value) >= T(min<E>);
+      return T(value) <= T(enum_max<E>) && T(value) >= T(enum_min<E>);
    }
 
    namespace detail
@@ -786,7 +805,7 @@ namespace glz
          [[nodiscard]] constexpr std::optional<E> operator()(const std::size_t index) const noexcept
          {
             std::optional<E> ret;
-            if (index < values<E>.size()) ret.emplace(values<E>[index]);
+            if (index < enum_values<E>.size()) ret.emplace(enum_values<E>[index]);
             return ret;
          }
       };
@@ -798,11 +817,11 @@ namespace glz
          {
             if constexpr (ContiguousEnum<E>) {
                using T = std::underlying_type_t<E>;
-               if (glz::contains(e)) return std::optional<std::size_t>(std::size_t(T(e) - T(min<E>)));
+               if (glz::contains(e)) return std::optional<std::size_t>(std::size_t(T(e) - T(enum_min<E>)));
             }
             else {
-               for (std::size_t i = 0; i < values<E>.size(); ++i)
-                  if (values<E>[i] == e) return std::optional<std::size_t>(i);
+               for (std::size_t i = 0; i < enum_values<E>.size(); ++i)
+                  if (enum_values<E>[i] == e) return std::optional<std::size_t>(i);
             }
             return std::optional<std::size_t>();
          }
@@ -854,12 +873,409 @@ namespace glz
    inline constexpr detail::enum_to_index_functor enum_to_index{};
 
    template <is_enum E>
-   inline constexpr detail::cast_functor<E> cast_enum{};
+   inline constexpr detail::cast_functor<E> enum_cast{};
 
    inline constexpr auto enum_name = []<is_enum E>(const E value) noexcept -> std::string_view {
       if (const auto i = glz::enum_to_index(value)) {
-         return names<E>[*i];
+         return enum_names<E>[*i];
       }
       return {};
    };
+   
+   // Get next enum value
+   template <is_enum E>
+   [[nodiscard]] constexpr std::optional<E> enum_next_value(const E value) noexcept
+   {
+      if (const auto index = enum_to_index(value)) {
+         if (*index + 1 < enum_count<E>) {
+            return enum_values<E>[*index + 1];
+         }
+      }
+      return std::nullopt;
+   }
+   
+   // Get previous enum value
+   template <is_enum E>
+   [[nodiscard]] constexpr std::optional<E> enum_prev_value(const E value) noexcept
+   {
+      if (const auto index = enum_to_index(value)) {
+         if (*index > 0) {
+            return enum_values<E>[*index - 1];
+         }
+      }
+      return std::nullopt;
+   }
+   
+   // Get next enum value (circular)
+   template <is_enum E>
+   [[nodiscard]] constexpr E enum_next_value_circular(const E value) noexcept
+   {
+      if (const auto index = enum_to_index(value)) {
+         return enum_values<E>[(*index + 1) % enum_count<E>];
+      }
+      return value;
+   }
+   
+   // Get previous enum value (circular)
+   template <is_enum E>
+   [[nodiscard]] constexpr E enum_prev_value_circular(const E value) noexcept
+   {
+      if (const auto index = enum_to_index(value)) {
+         return enum_values<E>[(*index == 0) ? (enum_count<E> - 1) : (*index - 1)];
+      }
+      return value;
+   }
+   
+   // For each enum value - useful for metaprogramming
+   template <is_enum E, typename Func>
+   constexpr void enum_for_each(Func&& func) noexcept(noexcept(func(E{})))
+   {
+      for (const auto value : enum_values<E>) {
+         func(value);
+      }
+   }
+   
+   // Bitflag utilities
+   template <bit_flag_enum E>
+   [[nodiscard]] constexpr bool contains_bitflag(const E flags, const E flag) noexcept
+   {
+      using T = std::underlying_type_t<E>;
+      return (T(flags) & T(flag)) == T(flag);
+   }
+   
+   template <bit_flag_enum E>
+   [[nodiscard]] inline std::string enum_to_string_bitflag(const E flags)
+   {
+      std::string result;
+      bool first = true;
+      
+      using T = std::underlying_type_t<E>;
+      const auto flags_val = T(flags);
+      
+      if (flags_val == 0) {
+         // Check if there's a zero value
+         for (const auto& [value, name] : enums<E>) {
+            if (T(value) == 0) {
+               return std::string(name);
+            }
+         }
+         return "0";
+      }
+      
+      for (const auto& [value, name] : enums<E>) {
+         const auto val = T(value);
+         if (val != 0 && (flags_val & val) == val) {
+            if (!first) result += " | ";
+            result += name;
+            first = false;
+         }
+      }
+      
+      return result.empty() ? std::to_string(flags_val) : result;
+   }
+   
+   // Static assert helper for better error messages
+   template <is_enum E>
+   constexpr void validate_enum_reflection()
+   {
+      static_assert(enum_count<E> > 0, 
+         "Glaze failed to reflect this enum. This may be due to:\n"
+         "  - Enum values outside the supported range (enum_min_range to enum_max_range)\n"
+         "  - Non-standard enum definitions that cannot be reflected\n"
+         "  - Compiler limitations\n"
+         "Consider providing a custom enum_traits specialization.");
+   }
+   
+   // ============== Container Wrappers ==============
+   
+   // Type-safe array indexed by enum values
+   template<is_enum E, typename V, typename Container = std::array<V, enum_count<E>>>
+   class enum_array : private Container
+   {
+   public:
+      using enum_type = E;
+      using value_type = V;
+      using size_type = std::size_t;
+      using reference = typename Container::reference;
+      using const_reference = typename Container::const_reference;
+      using iterator = typename Container::iterator;
+      using const_iterator = typename Container::const_iterator;
+      
+      // Inherit most functionality from Container
+      using Container::begin;
+      using Container::end;
+      using Container::cbegin;
+      using Container::cend;
+      using Container::rbegin;
+      using Container::rend;
+      using Container::size;
+      using Container::empty;
+      using Container::data;
+      using Container::fill;
+      using Container::swap;
+      
+      // Constructors
+      constexpr enum_array() = default;
+      constexpr enum_array(const V& value) { fill(value); }
+      
+      // Enum-based access
+      [[nodiscard]] constexpr reference operator[](E e) noexcept
+      {
+         const auto idx = enum_to_index(e);
+         return Container::operator[](*idx);
+      }
+      
+      [[nodiscard]] constexpr const_reference operator[](E e) const noexcept
+      {
+         const auto idx = enum_to_index(e);
+         return Container::operator[](*idx);
+      }
+      
+      [[nodiscard]] constexpr reference at(E e)
+      {
+         const auto idx = enum_to_index(e);
+#ifdef __cpp_exceptions
+         if (!idx) {
+            throw std::out_of_range("Invalid enum value for enum_array::at");
+         }
+#endif
+         return Container::at(idx ? *idx : 0);
+      }
+      
+      [[nodiscard]] constexpr const_reference at(E e) const
+      {
+         const auto idx = enum_to_index(e);
+#ifdef __cpp_exceptions
+         if (!idx) {
+            throw std::out_of_range("Invalid enum value for enum_array::at");
+         }
+#endif
+         return Container::at(idx ? *idx : 0);
+      }
+   };
+   
+   // Specialized bitset for enum flags
+   template<is_enum E>
+   class enum_bitset : private std::bitset<enum_count<E>>
+   {
+      using Base = std::bitset<enum_count<E>>;
+   public:
+      using enum_type = E;
+      
+      // Inherit most functionality
+      using Base::all;
+      using Base::any;
+      using Base::none;
+      using Base::count;
+      using Base::size;
+      using Base::to_string;
+      using Base::to_ulong;
+      using Base::to_ullong;
+      
+      // Constructors
+      constexpr enum_bitset() noexcept = default;
+      constexpr enum_bitset(unsigned long long val) noexcept : Base(val) {}
+      constexpr enum_bitset(std::initializer_list<E> values) noexcept
+      {
+         for (auto e : values) {
+            set(e);
+         }
+      }
+      
+      // Enum-based operations
+      constexpr enum_bitset& set(E e, bool value = true)
+      {
+         if (const auto idx = enum_to_index(e)) {
+            Base::set(*idx, value);
+         }
+         return *this;
+      }
+      
+      constexpr enum_bitset& reset(E e)
+      {
+         if (const auto idx = enum_to_index(e)) {
+            Base::reset(*idx);
+         }
+         return *this;
+      }
+      
+      constexpr enum_bitset& flip(E e)
+      {
+         if (const auto idx = enum_to_index(e)) {
+            Base::flip(*idx);
+         }
+         return *this;
+      }
+      
+      [[nodiscard]] constexpr bool test(E e) const
+      {
+         if (const auto idx = enum_to_index(e)) {
+            return Base::test(*idx);
+         }
+         return false;
+      }
+      
+      [[nodiscard]] constexpr bool operator[](E e) const noexcept
+      {
+         if (const auto idx = enum_to_index(e)) {
+            return Base::operator[](*idx);
+         }
+         return false;
+      }
+      
+      // Convert to string with enum names
+      [[nodiscard]] std::string to_enum_string(char separator = '|') const
+      {
+         std::string result;
+         bool first = true;
+         for (std::size_t i = 0; i < size(); ++i) {
+            if (Base::test(i)) {
+               if (!first) {
+                  result += separator;
+               }
+               result += enum_names<E>[i];
+               first = false;
+            }
+         }
+         return result;
+      }
+   };
+   
+   // ============== Advanced Bitflag Support ==============
+   
+   // Parse bitflag string like "Read|Write|Execute"
+   template <bit_flag_enum E>
+   [[nodiscard]] constexpr std::optional<E> enum_cast_bitflag(std::string_view str, char separator = '|')
+   {
+      using T = std::underlying_type_t<E>;
+      T result = 0;
+      
+      if (str.empty()) {
+         return std::nullopt;
+      }
+      
+      // Handle single value
+      if (str.find(separator) == std::string_view::npos) {
+         // Try to parse as single enum name
+         for (const auto& [value, name] : enums<E>) {
+            if (name == str) {
+               return value;
+            }
+         }
+         // Try to parse as number
+         if (std::all_of(str.begin(), str.end(), ::isdigit)) {
+            return static_cast<E>(std::stoi(std::string(str)));
+         }
+         return std::nullopt;
+      }
+      
+      // Parse multiple flags
+      std::size_t start = 0;
+      while (start < str.size()) {
+         auto end = str.find(separator, start);
+         if (end == std::string_view::npos) {
+            end = str.size();
+         }
+         
+         auto flag = str.substr(start, end - start);
+         // Trim whitespace
+         while (!flag.empty() && std::isspace(flag.front())) flag.remove_prefix(1);
+         while (!flag.empty() && std::isspace(flag.back())) flag.remove_suffix(1);
+         
+         bool found = false;
+         for (const auto& [value, name] : enums<E>) {
+            if (name == flag) {
+               result |= T(value);
+               found = true;
+               break;
+            }
+         }
+         
+         if (!found) {
+            return std::nullopt;
+         }
+         
+         start = (end == str.size()) ? str.size() : end + 1;
+      }
+      
+      return static_cast<E>(result);
+   }
+   
+   // ============== Extended Navigation ==============
+   
+   // Get enum value n steps away
+   template <is_enum E>
+   [[nodiscard]] constexpr std::optional<E> enum_next_value(const E value, std::ptrdiff_t n) noexcept
+   {
+      if (const auto index = enum_to_index(value)) {
+         const auto new_index = static_cast<std::ptrdiff_t>(*index) + n;
+         if (new_index >= 0 && new_index < static_cast<std::ptrdiff_t>(enum_count<E>)) {
+            return enum_values<E>[static_cast<std::size_t>(new_index)];
+         }
+      }
+      return std::nullopt;
+   }
+   
+   // Get distance between two enum values
+   template <is_enum E>
+   [[nodiscard]] constexpr std::optional<std::ptrdiff_t> distance(const E from, const E to) noexcept
+   {
+      const auto from_idx = enum_to_index(from);
+      const auto to_idx = enum_to_index(to);
+      
+      if (from_idx && to_idx) {
+         return static_cast<std::ptrdiff_t>(*to_idx) - static_cast<std::ptrdiff_t>(*from_idx);
+      }
+      return std::nullopt;
+   }
+   
+   // ============== Additional Utilities ==============
+   
+   // Get the minimum number of bits needed to represent all enum values
+   template <is_enum E>
+   inline constexpr std::size_t enum_size_bits = []() -> std::size_t {
+      if constexpr (enum_count<E> == 0) return 0;
+      std::size_t bits = 0;
+      auto n = enum_count<E> - 1;
+      while (n > 0) {
+         bits++;
+         n >>= 1;
+      }
+      return bits;
+   }();
+   
+   // Case-insensitive enum name matching
+   template <is_enum E>
+   [[nodiscard]] constexpr std::optional<E> from_string_nocase(std::string_view name) noexcept
+   {
+      for (const auto& [value, enum_name] : enums<E>) {
+         if (name.size() == enum_name.size()) {
+            bool match = true;
+            for (std::size_t i = 0; i < name.size(); ++i) {
+               if (std::tolower(name[i]) != std::tolower(enum_name[i])) {
+                  match = false;
+                  break;
+               }
+            }
+            if (match) return value;
+         }
+      }
+      return std::nullopt;
+   }
 }
+
+// ============== Format Library Support ==============
+
+#ifdef __cpp_lib_format
+#include <format>
+
+template<glz::is_enum E>
+struct std::formatter<E> : std::formatter<std::string_view>
+{
+   template<typename FormatContext>
+   auto format(E e, FormatContext& ctx) const
+   {
+      return std::formatter<std::string_view>::format(glz::enum_name(e), ctx);
+   }
+};
+#endif
