@@ -313,7 +313,18 @@ for (const auto& [value, name] : states) {
 ### Limitations
 
 1. **Value range**: Works best with enums in range [-128, 127], configurable via `glz::enum_traits`
-2. **Duplicate values**: Enums with duplicate values may not reflect all names correctly
+2. **Duplicate values (aliases)**: Enums with duplicate values are not fully supported. Only the first occurrence of each value is preserved during reflection; all aliases are discarded. For example:
+   ```cpp
+   enum class Example {
+       Original = 2,
+       Alias = 2,     // This will be discarded
+       Another = 2    // This will also be discarded
+   };
+   // enum_count<Example> == 1 (not 3)
+   // enum_name(Example::Alias) returns "Original" (not "Alias")
+   // enum_cast<Example>("Alias") returns empty (fails)
+   ```
+   If you need alias support, use manual `glz::meta` specialization with `enumerate()`.
 3. **Template enums**: Cannot reflect enums defined inside template classes
 
 ### Customization
