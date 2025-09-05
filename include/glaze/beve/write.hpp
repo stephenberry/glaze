@@ -161,11 +161,11 @@ namespace glz
 
                if constexpr (glaze_object_t<T>) {
                   static constexpr auto member = get<index>(reflect<T>::values);
-                  serialize<BEVE>::no_header<Opts>(key, ctx, b, ix);
+                  to<BEVE, std::remove_cvref_t<decltype(key)>>::template no_header_cx<key.size()>(key, ctx, b, ix);
                   serialize_partial<BEVE>::op<sub_partial, Opts>(get_member(value, member), ctx, b, ix);
                }
                else {
-                  serialize<BEVE>::no_header<Opts>(key, ctx, b, ix);
+                  to<BEVE, std::remove_cvref_t<decltype(key)>>::template no_header_cx<key.size()>(key, ctx, b, ix);
                   serialize_partial<BEVE>::op<sub_partial, Opts>(get_member(value, get<index>(to_tie(value))), ctx, b,
                                                                  ix);
                }
@@ -182,7 +182,7 @@ namespace glz
                static constexpr auto key_value = get<0>(group);
                static constexpr auto sub_partial = get<1>(group);
                if constexpr (findable<std::decay_t<T>, decltype(key_value)>) {
-                  serialize<BEVE>::no_header<Opts>(key_value, ctx, b, ix);
+                  to<BEVE, std::remove_cvref_t<decltype(key_value)>>::template no_header_cx<key_value.size()>(key_value, ctx, b, ix);
                   auto it = value.find(key_value);
                   if (it != value.end()) {
                      serialize_partial<BEVE>::op<sub_partial, Opts>(it->second, ctx, b, ix);
@@ -480,6 +480,22 @@ namespace glz
          if (n) {
             std::memcpy(&b[ix], value.data(), n);
             ix += n;
+         }
+      }
+
+      // Compile-time optimized version for known string sizes
+      template <uint64_t N>
+      GLZ_ALWAYS_INLINE static void no_header_cx(auto&& value, is_context auto&&, auto&& b, auto&& ix)
+      {
+         dump_compressed_int<N>(b, ix);
+
+         if (const auto k = ix + N; k > b.size()) [[unlikely]] {
+            b.resize(2 * k);
+         }
+
+         if constexpr (N > 0) {
+            std::memcpy(&b[ix], value.data(), N);
+            ix += N;
          }
       }
    };
@@ -865,7 +881,7 @@ namespace glz
             }
             else {
                static constexpr sv key = reflect<T>::keys[I];
-               serialize<BEVE>::no_header<Opts>(key, ctx, args...);
+               to<BEVE, std::remove_cvref_t<decltype(key)>>::template no_header_cx<key.size()>(key, ctx, args...);
 
                decltype(auto) member = [&]() -> decltype(auto) {
                   if constexpr (reflectable<T>) {
