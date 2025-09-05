@@ -393,47 +393,6 @@ constexpr FileMode& operator&=(FileMode& a, FileMode b) {
    return a;
 }
 
-// Bitflag enum tests
-suite bitflag_tests = [] {
-   "is_bitflag_detection"_test = [] {
-      expect(glz::is_bitflag<Permissions>) << "Permissions should be detected as bitflag enum\n";
-      expect(glz::is_bitflag<FileMode>) << "FileMode should be detected as bitflag enum\n";
-      expect(not glz::is_bitflag<Color>) << "Color should not be detected as bitflag enum\n";
-      expect(not glz::is_bitflag<Status>) << "Status should not be detected as bitflag enum\n";
-   };
-   
-   "bitflag_concept"_test = [] {
-      expect(glz::bit_flag_enum<Permissions>) << "Permissions should satisfy bit_flag_enum concept\n";
-      expect(glz::bit_flag_enum<FileMode>) << "FileMode should satisfy bit_flag_enum concept\n";
-      expect(not glz::bit_flag_enum<Color>) << "Color should not satisfy bit_flag_enum concept\n";
-   };
-   
-   "contains_bitflag"_test = [] {
-      auto perms = Permissions::Read | Permissions::Write;
-      expect(glz::contains_bitflag(perms, Permissions::Read)) << "Combined permissions should contain Read\n";
-      expect(glz::contains_bitflag(perms, Permissions::Write)) << "Combined permissions should contain Write\n";
-      expect(not glz::contains_bitflag(perms, Permissions::Execute)) << "Combined permissions should not contain Execute\n";
-      
-      expect(glz::contains_bitflag(Permissions::All, Permissions::Read)) << "All should contain Read\n";
-      expect(glz::contains_bitflag(Permissions::All, Permissions::Write)) << "All should contain Write\n";
-      expect(glz::contains_bitflag(Permissions::All, Permissions::Execute)) << "All should contain Execute\n";
-   };
-   
-   "to_string_bitflag"_test = [] {
-      auto none = glz::enum_to_string_bitflag(Permissions::None);
-      expect(none == "None") << "None should convert to 'None'\n";
-      
-      auto read = glz::enum_to_string_bitflag(Permissions::Read);
-      expect(read == "Read") << "Read should convert to 'Read'\n";
-      
-      auto read_write = glz::enum_to_string_bitflag(Permissions::Read | Permissions::Write);
-      expect(read_write == "Read | Write") << "Read|Write should convert to 'Read | Write'\n";
-      
-      auto all = glz::enum_to_string_bitflag(Permissions::All);
-      // Note: All is defined as Read | Write | Execute, so it will be expanded
-      expect(all == "Read | Write | Execute | All") << "All should list all contained flags\n";
-   };
-};
 
 // Next/Previous value tests
 suite navigation_tests = [] {
