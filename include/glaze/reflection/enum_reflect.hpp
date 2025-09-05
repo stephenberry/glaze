@@ -758,7 +758,7 @@ namespace glz
    concept ContiguousEnum = is_enum<E> && enum_is_contiguous<E>;
 
    template <is_enum E>
-   [[nodiscard]] constexpr bool contains(const E value) noexcept
+   [[nodiscard]] inline constexpr bool contains(const E value) noexcept
    {
       for (const auto v : enum_values<E>) {
          if (v == value) {
@@ -769,13 +769,13 @@ namespace glz
    }
 
    template <is_enum E>
-   [[nodiscard]] constexpr bool contains(const std::underlying_type_t<E> value) noexcept
+   [[nodiscard]] inline constexpr bool contains(const std::underlying_type_t<E> value) noexcept
    {
       return glz::contains(static_cast<E>(value));
    }
 
    template <is_enum E>
-   [[nodiscard]] constexpr bool contains(const std::string_view name) noexcept
+   [[nodiscard]] inline constexpr bool contains(const std::string_view name) noexcept
    {
       for (const auto& s : enum_names<E>)
          if (s == name) return true;
@@ -783,7 +783,7 @@ namespace glz
    }
 
    template <is_enum E, std::predicate<std::string_view, std::string_view> BinaryPredicate>
-   [[nodiscard]] constexpr bool contains(const std::string_view name, const BinaryPredicate binary_predicate) noexcept
+   [[nodiscard]] inline constexpr bool contains(const std::string_view name, const BinaryPredicate binary_predicate) noexcept
    {
       for (const auto& s : enum_names<E>)
          if (binary_predicate(name, s)) return true;
@@ -791,7 +791,7 @@ namespace glz
    }
 
    template <ContiguousEnum E>
-   [[nodiscard]] constexpr bool contains(const E value) noexcept
+   [[nodiscard]] inline constexpr bool contains(const E value) noexcept
    {
       using T = std::underlying_type_t<E>;
       return T(value) <= T(enum_max<E>) && T(value) >= T(enum_min<E>);
