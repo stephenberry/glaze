@@ -22,7 +22,8 @@ namespace glz::detail
       Bool = 't',
       Object_Start = '{',
       Object_End = '}',
-      Comment = '/'
+      Comment = '/',
+      Whitespace = ' '
    };
 
    inline constexpr std::array<json_type, 256> json_types = [] {
@@ -50,6 +51,10 @@ namespace glz::detail
       t['{'] = Object_Start;
       t['}'] = Object_End;
       t['/'] = Comment;
+      t[' '] = Whitespace;
+      t['\t'] = Whitespace;
+      t['\n'] = Whitespace;
+      t['\r'] = Whitespace;
       return t;
    }();
 
