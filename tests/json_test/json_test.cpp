@@ -3337,11 +3337,10 @@ struct Properties
 };
 
 template <>
-struct glz::meta<Properties> {
+struct glz::meta<Properties>
+{
    using T = Properties;
-   static constexpr auto value = object(
-      "type", &T::type
-   );
+   static constexpr auto value = object("type", &T::type);
 
    static constexpr auto unknown_write{&T::properties};
    static constexpr auto unknown_read{&T::properties};
@@ -3355,11 +3354,10 @@ struct PropertiesJsonT
 };
 
 template <>
-struct glz::meta<PropertiesJsonT> {
+struct glz::meta<PropertiesJsonT>
+{
    using T = PropertiesJsonT;
-   static constexpr auto value = object(
-      "type", &T::type
-   );
+   static constexpr auto value = object("type", &T::type);
 
    static constexpr auto unknown_write{&T::properties};
    static constexpr auto unknown_read{&T::properties};
@@ -3379,32 +3377,32 @@ suite raw_json_whitespace_tests = [] {
       glz::context ctx;
       auto ec = glz::read<glz::opts{.error_on_unknown_keys = false}>(props, input_json, ctx);
       expect(not ec) << glz::format_error(ec, input_json);
-      
+
       // Verify the data was read correctly
       expect(props.type == "mytype");
       expect(props.properties.size() == 1);
       expect(props.properties.contains("ident"));
-      
+
       // Verify the raw_json content contains the formatted JSON
       auto& ident_raw = props.properties["ident"];
       expect(ident_raw.str.contains("aaa77fd3-2df3-4366-ae08-183b6233cefd"));
       expect(ident_raw.str.contains("id"));
-      
+
       // Test writing back - this should not truncate
       std::string output_json;
       ec = glz::write_json(props, output_json);
       expect(not ec);
-      
+
       // Test prettification - the main issue from the bug report
       std::string prettified = glz::prettify_json(output_json);
       expect(prettified.contains("mytype"));
       expect(prettified.contains("ident"));
       expect(prettified.contains("aaa77fd3-2df3-4366-ae08-183b6233cefd"));
       expect(prettified.contains("id"));
-      
+
       // Ensure prettified output is not truncated (should end with closing brace)
       expect(prettified.back() == '}');
-      
+
       // The prettified output should be parseable back
       Properties props2;
       ec = glz::read<glz::opts{.error_on_unknown_keys = false}>(props2, prettified);
@@ -3412,7 +3410,7 @@ suite raw_json_whitespace_tests = [] {
       expect(props2.type == "mytype");
       expect(props2.properties.size() == 1);
    };
-   
+
    "raw_json_vs_json_t_comparison"_test = [] {
       // Test that both raw_json and json_t work correctly with formatted content
       std::string input_json = R"({
@@ -3424,42 +3422,42 @@ suite raw_json_whitespace_tests = [] {
                     "array": [1, 2, 3]
                 }
             })";
-      
+
       // Test with raw_json
       Properties props_raw;
       auto ec1 = glz::read<glz::opts{.error_on_unknown_keys = false}>(props_raw, input_json);
       expect(not ec1);
-      
+
       std::string output_raw;
       ec1 = glz::write_json(props_raw, output_raw);
       expect(not ec1);
-      
+
       std::string prettified_raw = glz::prettify_json(output_raw);
       expect(prettified_raw.contains("formatted_field"));
       expect(prettified_raw.contains("nested"));
       expect(prettified_raw.back() == '}'); // Should not be truncated
-      
+
       // Test with json_t
       PropertiesJsonT props_jsonf;
       auto ec2 = glz::read<glz::opts{.error_on_unknown_keys = false}>(props_jsonf, input_json);
       expect(not ec2);
-      
+
       std::string output_jsonf;
       ec2 = glz::write_json(props_jsonf, output_jsonf);
       expect(not ec2);
-      
+
       std::string prettified_jsonf = glz::prettify_json(output_jsonf);
       expect(prettified_jsonf.contains("formatted_field"));
       expect(prettified_jsonf.contains("nested"));
       expect(prettified_jsonf.back() == '}'); // Should not be truncated
-      
+
       // Both should produce valid JSON that can be read back
       Properties test_raw;
       PropertiesJsonT test_jsonf;
       expect(not glz::read<glz::opts{.error_on_unknown_keys = false}>(test_raw, prettified_raw));
       expect(not glz::read<glz::opts{.error_on_unknown_keys = false}>(test_jsonf, prettified_jsonf));
    };
-   
+
    "raw_json_minify_with_whitespace"_test = [] {
       // Test that minification also works correctly with raw_json containing whitespace
       std::string input_json = R"({
@@ -3471,29 +3469,29 @@ suite raw_json_whitespace_tests = [] {
                     }
                 }
             })";
-      
+
       Properties props;
       auto ec = glz::read<glz::opts{.error_on_unknown_keys = false}>(props, input_json);
       expect(not ec);
-      
+
       std::string output_json;
       ec = glz::write_json(props, output_json);
       expect(not ec);
-      
+
       // Test minification
       std::string minified = glz::minify_json(output_json);
       expect(minified.contains("test"));
       expect(minified.contains("data"));
       expect(minified.contains("formatted"));
       expect(minified.contains("nested"));
-      
+
       // Minified should be valid JSON
       Properties props_minified;
       ec = glz::read<glz::opts{.error_on_unknown_keys = false}>(props_minified, minified);
       expect(not ec) << "Minified output should be valid JSON";
       expect(props_minified.type == "test");
    };
-   
+
    "raw_json_whitespace_edge_cases"_test = [] {
       // Test various whitespace scenarios that could cause issues
       std::string input_with_tabs = R"({
@@ -3502,28 +3500,28 @@ suite raw_json_whitespace_tests = [] {
 		"indented": "with_tabs"
 	}
 })";
-      
+
       Properties props_tabs;
       auto ec = glz::read<glz::opts{.error_on_unknown_keys = false}>(props_tabs, input_with_tabs);
       expect(not ec);
-      
+
       std::string output_tabs;
       expect(not glz::write_json(props_tabs, output_tabs));
-      
+
       std::string prettified_tabs = glz::prettify_json(output_tabs);
       expect(prettified_tabs.contains("tab_content"));
       expect(prettified_tabs.back() == '}');
-      
+
       // Test with mixed whitespace
       std::string input_mixed = "{\r\n    \"type\": \"mixed\",\n\t\"field\": {\r\n        \"value\": 42\r\n    }\r\n}";
-      
+
       Properties props_mixed;
       ec = glz::read<glz::opts{.error_on_unknown_keys = false}>(props_mixed, input_mixed);
       expect(not ec);
-      
+
       std::string output_mixed;
       expect(not glz::write_json(props_mixed, output_mixed));
-      
+
       std::string prettified_mixed = glz::prettify_json(output_mixed);
       expect(prettified_mixed.contains("field"));
       expect(prettified_mixed.back() == '}');
