@@ -125,12 +125,12 @@ namespace glz::detail
       static_assert(Min < Max, "enum_traits::min must be less than enum_traits::max");
       std::array<Enum, (Max - Min) + 1> array;
       for (std::size_t i = 0; i < array.size(); ++i) {
-#if defined(__clang__) && __clang_major__ >= 16
+#if defined(__clang__) && __clang_major__ >= 16 && __clang_major__ < 20
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wenum-constexpr-conversion"
 #endif
          array[i] = static_cast<Enum>(static_cast<decltype(Min)>(i) + Min);
-#if defined(__clang__) && __clang_major__ >= 16
+#if defined(__clang__) && __clang_major__ >= 16 && __clang_major__ < 20
 #pragma clang diagnostic pop
 #endif
       }
