@@ -182,7 +182,8 @@ namespace glz
                static constexpr auto key_value = get<0>(group);
                static constexpr auto sub_partial = get<1>(group);
                if constexpr (findable<std::decay_t<T>, decltype(key_value)>) {
-                  to<BEVE, std::remove_cvref_t<decltype(key_value)>>::template no_header_cx<key_value.size()>(key_value, ctx, b, ix);
+                  to<BEVE, std::remove_cvref_t<decltype(key_value)>>::template no_header_cx<key_value.size()>(
+                     key_value, ctx, b, ix);
                   auto it = value.find(key_value);
                   if (it != value.end()) {
                      serialize_partial<BEVE>::op<sub_partial, Opts>(it->second, ctx, b, ix);
