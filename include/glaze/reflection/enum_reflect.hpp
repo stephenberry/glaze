@@ -754,18 +754,23 @@ namespace glz
       }
    }();
 
-   template <class E>
-   concept ContiguousEnum = is_enum<E> && enum_is_contiguous<E>;
-
    template <is_enum E>
    [[nodiscard]] inline constexpr bool contains(const E value) noexcept
    {
-      for (const auto v : enum_values<E>) {
-         if (v == value) {
-            return true;
-         }
+      if constexpr (enum_is_contiguous<E>) {
+         // Contiguous enum: use range check
+         using T = std::underlying_type_t<E>;
+         return T(value) <= T(enum_max<E>) && T(value) >= T(enum_min<E>);
       }
-      return false;
+      else {
+         // Non-contiguous enum: iterate through values
+         for (const auto v : enum_values<E>) {
+            if (v == value) {
+               return true;
+            }
+         }
+         return false;
+      }
    }
 
    template <is_enum E>
@@ -790,13 +795,6 @@ namespace glz
       return false;
    }
 
-   template <ContiguousEnum E>
-   [[nodiscard]] inline constexpr bool contains(const E value) noexcept
-   {
-      using T = std::underlying_type_t<E>;
-      return T(value) <= T(enum_max<E>) && T(value) >= T(enum_min<E>);
-   }
-
    namespace detail
    {
       template <class E>
@@ -815,7 +813,7 @@ namespace glz
          template <is_enum E>
          [[nodiscard]] constexpr std::optional<std::size_t> operator()(const E e) const noexcept
          {
-            if constexpr (ContiguousEnum<E>) {
+            if constexpr (enum_is_contiguous<E>) {
                using T = std::underlying_type_t<E>;
                if (glz::contains(e)) return std::optional<std::size_t>(std::size_t(T(e) - T(enum_min<E>)));
             }

@@ -102,10 +102,10 @@ suite contiguous_tests = [] {
       expect(glz::enum_is_contiguous<Boolean>) << "Boolean should be contiguous\n";
    };
    
-   "contiguous_enum_concept"_test = [] {
-      expect(glz::ContiguousEnum<Color>) << "Color should satisfy ContiguousEnum concept\n";
-      expect(glz::ContiguousEnum<TrafficLight>) << "TrafficLight should satisfy ContiguousEnum concept\n";
-      expect(not glz::ContiguousEnum<Sparse>) << "Sparse should not satisfy ContiguousEnum concept\n";
+   "contiguous_enum_check"_test = [] {
+      expect(glz::enum_is_contiguous<Color>) << "Color should be contiguous enum\n";
+      expect(glz::enum_is_contiguous<TrafficLight>) << "TrafficLight should be contiguous enum\n";
+      expect(not glz::enum_is_contiguous<Sparse>) << "Sparse should not be contiguous enum\n";
    };
 };
 
