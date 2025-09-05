@@ -915,7 +915,8 @@ suite struct_enum_tests = [] {
       s.value = 100;
       
       std::string json;
-      glz::write_json(s, json);
+      constexpr glz::opts opts{.enum_as_string = true};
+      expect(not glz::write<opts>(s, json));
       expect(json == R"({"color":"Blue","status":"Complete","value":100})") << "Simple struct should serialize enums as strings\n";
       
       SimpleEnumStruct parsed;
@@ -933,7 +934,8 @@ suite struct_enum_tests = [] {
       v.name = "test";
       
       std::string json;
-      glz::write_json(v, json);
+      constexpr glz::opts opts{.enum_as_string = true};
+      expect(not glz::write<opts>(v, json));
       expect(json == R"({"colors":["Red","Green","Blue"],"statuses":["Pending","Running","Complete"],"name":"test"})") 
          << "Vector of enums should serialize as array of strings\n";
       
@@ -955,7 +957,7 @@ suite struct_enum_tests = [] {
       m.status_messages = {{Status::Pending, "Waiting"}, {Status::Complete, "Done"}};
       
       std::string json;
-      glz::write_json(m, json);
+      expect(not glz::write_json(m, json));
       
       // Parse it back
       MapEnumStruct parsed;
@@ -979,7 +981,7 @@ suite struct_enum_tests = [] {
       n.optional_status = Status::Complete;
       
       std::string json;
-      glz::write_json(n, json);
+      expect(not glz::write_json(n, json));
       
       NestedEnumStruct parsed;
       auto ec = glz::read_json(parsed, json);
@@ -997,7 +999,8 @@ suite struct_enum_tests = [] {
       ArrayEnumStruct a;
       
       std::string json;
-      glz::write_json(a, json);
+      constexpr glz::opts opts{.enum_as_string = true};
+      expect(not glz::write<opts>(a, json));
       expect(json == R"({"color_array":["Red","Green","Blue"],"status_array":["Pending","Running"],"direction":"North"})") 
          << "Array of enums should serialize correctly\n";
       
@@ -1023,7 +1026,7 @@ suite struct_enum_tests = [] {
       c.flags = TestFlags::Flag1 | TestFlags::Flag3;
       
       std::string json;
-      glz::write_json(c, json);
+      expect(not glz::write_json(c, json));
       
       ComplexEnumStruct parsed;
       auto ec = glz::read_json(parsed, json);
@@ -1044,7 +1047,7 @@ suite struct_enum_tests = [] {
       v.name = "empty";
       
       std::string json;
-      glz::write_json(v, json);
+      expect(not glz::write_json(v, json));
       expect(json == R"({"colors":[],"statuses":[],"name":"empty"})") << "Empty vectors should serialize as empty arrays\n";
       
       VectorEnumStruct parsed;
@@ -1062,7 +1065,7 @@ suite struct_enum_tests = [] {
       // optional_status is not set (null)
       
       std::string json;
-      glz::write_json(n, json);
+      expect(not glz::write_json(n, json));
       
       // Parse it back to check round-trip works
       NestedEnumStruct parsed;
@@ -1072,7 +1075,7 @@ suite struct_enum_tests = [] {
       
       // Now test with a value
       n.optional_status = Status::Running;
-      glz::write_json(n, json);
+      expect(not glz::write_json(n, json));
       ec = glz::read_json(parsed, json);
       expect(!ec) << "Should parse successfully with value\n";
       expect(parsed.optional_status.has_value()) << "Optional status should have value\n";
@@ -1170,7 +1173,8 @@ suite pure_reflection_enum_tests = [] {
       obj.value = 2.718;
       
       std::string json;
-      glz::write_json(obj, json);
+      constexpr glz::opts opts{.enum_as_string = true};
+      expect(not glz::write<opts>(obj, json));
       
       // Verify the JSON contains enum names, not numbers
       expect(json.find("\"Green\"") != std::string::npos) << "Should serialize enum as 'Green'\n";
@@ -1195,7 +1199,8 @@ suite pure_reflection_enum_tests = [] {
       obj.optional_status = Status::Running;
       
       std::string json;
-      glz::write_json(obj, json);
+      constexpr glz::opts opts{.enum_as_string = true};
+      expect(not glz::write<opts>(obj, json));
       
       // Check nested structure serialization
       expect(json.find("\"Go\"") != std::string::npos) << "Should serialize TrafficLight as 'Go'\n";
@@ -1221,7 +1226,8 @@ suite pure_reflection_enum_tests = [] {
       obj.flags = TestFlags::Flag2 | TestFlags::Flag3;
       
       std::string json;
-      glz::write_json(obj, json);
+      constexpr glz::opts opts{.enum_as_string = true};
+      expect(not glz::write<opts>(obj, json));
       
       // Verify container serialization
       expect(json.find("[\"Red\",\"Green\",\"Blue\"]") != std::string::npos) 
@@ -1250,7 +1256,8 @@ suite pure_reflection_enum_tests = [] {
       obj.sparse_value = Sparse::Second;
       
       std::string json;
-      glz::write_json(obj, json);
+      constexpr glz::opts opts{.enum_as_string = true};
+      expect(not glz::write<opts>(obj, json));
       
       PureReflectComplex parsed;
       auto ec = glz::read_json(parsed, json);
@@ -1280,7 +1287,8 @@ suite pure_reflection_enum_tests = [] {
       obj.enabled = false;
       
       std::string json;
-      glz::write_json(obj, json);
+      constexpr glz::opts opts{.enum_as_string = true};
+      expect(not glz::write<opts>(obj, json));
       
       // Verify mixed type serialization
       expect(json.find("\"reflection_test\"") != std::string::npos) << "Should contain name\n";
@@ -1309,7 +1317,8 @@ suite pure_reflection_enum_tests = [] {
       // flags is not set (null optional)
       
       std::string json;
-      glz::write_json(obj, json);
+      constexpr glz::opts opts{.enum_as_string = true};
+      expect(not glz::write<opts>(obj, json));
       
       PureReflectContainers parsed;
       auto ec = glz::read_json(parsed, json);
@@ -1336,7 +1345,8 @@ suite pure_reflection_enum_tests = [] {
       // Verify that field names are automatically derived
       PureReflectSimple obj;
       std::string json;
-      glz::write_json(obj, json);
+      constexpr glz::opts opts{.enum_as_string = true};
+      expect(not glz::write<opts>(obj, json));
       
       // Check that the automatically derived field names are present
       expect(json.find("\"color\"") != std::string::npos) << "Should have 'color' field\n";
@@ -1357,7 +1367,8 @@ suite pure_reflection_enum_tests = [] {
       obj.sparse_value = Sparse::Third;
       
       std::string json;
-      glz::write_json(obj, json);
+      constexpr glz::opts opts{.enum_as_string = true};
+      expect(not glz::write<opts>(obj, json));
       
       PureReflectComplex parsed;
       auto ec = glz::read_json(parsed, json);

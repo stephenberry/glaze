@@ -87,7 +87,7 @@ suite variant_with_enum_tests = [] {
       // Test how enums serialize in single-type variants
       std::variant<Status> v = Status::Running;
       std::string json;
-      glz::write_json(v, json);
+      expect(not glz::write_json(v, json));
       // Single-type variants with enums may serialize as string or number depending on implementation
       expect(json == R"("Running")" || json == "1") << "Got: " << json;
    };
@@ -95,11 +95,12 @@ suite variant_with_enum_tests = [] {
    "struct_variant_with_enums"_test = [] {
       StructVariant v = Task{"Build", Status::Running, Priority::High};
       std::string json;
-      glz::write_json(v, json);
+      constexpr glz::opts opts{.enum_as_string = true};
+      expect(not glz::write<opts>(v, json));
       expect(json == R"({"name":"Build","status":"Running","priority":"High"})") << "Got: " << json;
       
       StructVariant parsed;
-      glz::read_json(parsed, json);
+      expect(not glz::read_json(parsed, json));
       expect(std::holds_alternative<Task>(parsed));
       auto& task = std::get<Task>(parsed);
       expect(task.name == "Build");
@@ -113,11 +114,12 @@ suite variant_with_enum_tests = [] {
       Permission p = Permission::Read | Permission::Write;
       std::variant<Permission> v = p;
       std::string json;
-      glz::write_json(v, json);
+      expect(not glz::write_json(v, json));
       expect(json == "3") << "Got: " << json; // Read(1) | Write(2) = 3
       
       v = Permission::All;
-      glz::write_json(v, json);
+      constexpr glz::opts opts{.enum_as_string = true};
+      expect(not glz::write<opts>(v, json));
       expect(json == R"("All")") << "Got: " << json; // All is a defined value in the enum
    };
 };
@@ -126,11 +128,12 @@ suite tagged_variant_tests = [] {
    "create_action_serialization"_test = [] {
       TaggedVariant v = CreateAction{Status::Pending, "new item"};
       std::string json;
-      glz::write_json(v, json);
+      constexpr glz::opts opts{.enum_as_string = true};
+      expect(not glz::write<opts>(v, json));
       expect(json == R"({"action":"Pending","data":"new item"})") << "Got: " << json;
       
       TaggedVariant parsed;
-      glz::read_json(parsed, json);
+      expect(not glz::read_json(parsed, json));
       expect(std::holds_alternative<CreateAction>(parsed));
       auto& action = std::get<CreateAction>(parsed);
       expect(action.action == Status::Pending);
@@ -140,11 +143,12 @@ suite tagged_variant_tests = [] {
    "update_action_serialization"_test = [] {
       TaggedVariant v = UpdateAction{Status::Running, "target.txt", 5};
       std::string json;
-      glz::write_json(v, json);
+      constexpr glz::opts opts{.enum_as_string = true};
+      expect(not glz::write<opts>(v, json));
       expect(json == R"({"action":"Running","target":"target.txt","version":5})") << "Got: " << json;
       
       TaggedVariant parsed;
-      glz::read_json(parsed, json);
+      expect(not glz::read_json(parsed, json));
       expect(std::holds_alternative<UpdateAction>(parsed));
       auto& action = std::get<UpdateAction>(parsed);
       expect(action.action == Status::Running);
@@ -155,11 +159,12 @@ suite tagged_variant_tests = [] {
    "delete_action_serialization"_test = [] {
       TaggedVariant v = DeleteAction{Status::Complete, 123};
       std::string json;
-      glz::write_json(v, json);
+      constexpr glz::opts opts{.enum_as_string = true};
+      expect(not glz::write<opts>(v, json));
       expect(json == R"({"action":"Complete","id":123})") << "Got: " << json;
       
       TaggedVariant parsed;
-      glz::read_json(parsed, json);
+      expect(not glz::read_json(parsed, json));
       expect(std::holds_alternative<DeleteAction>(parsed));
       auto& action = std::get<DeleteAction>(parsed);
       expect(action.action == Status::Complete);
@@ -171,11 +176,12 @@ suite enum_in_struct_tests = [] {
    "task_with_enums_roundtrip"_test = [] {
       Task t{"Important Task", Status::Running, Priority::Critical};
       std::string json;
-      glz::write_json(t, json);
+      constexpr glz::opts opts{.enum_as_string = true};
+      expect(not glz::write<opts>(t, json));
       expect(json == R"({"name":"Important Task","status":"Running","priority":"Critical"})");
       
       Task parsed;
-      glz::read_json(parsed, json);
+      expect(not glz::read_json(parsed, json));
       expect(parsed.name == "Important Task");
       expect(parsed.status == Status::Running);
       expect(parsed.priority == Priority::Critical);
@@ -184,11 +190,12 @@ suite enum_in_struct_tests = [] {
    "user_with_bitflag_permissions"_test = [] {
       User u{"admin", Permission::All};
       std::string json;
-      glz::write_json(u, json);
+      constexpr glz::opts opts{.enum_as_string = true};
+      expect(not glz::write<opts>(u, json));
       expect(json == R"({"username":"admin","permissions":"All"})"); // All is a defined value
       
       User parsed;
-      glz::read_json(parsed, json);
+      expect(not glz::read_json(parsed, json));
       expect(parsed.username == "admin");
       expect(parsed.permissions == Permission::All);
    };
@@ -196,22 +203,23 @@ suite enum_in_struct_tests = [] {
    "system_with_optional_enum"_test = [] {
       System s{true, Status::Failed};
       std::string json;
-      glz::write_json(s, json);
+      constexpr glz::opts opts{.enum_as_string = true};
+      expect(not glz::write<opts>(s, json));
       expect(json == R"({"active":true,"lastStatus":"Failed"})");
       
       System parsed;
-      glz::read_json(parsed, json);
+      expect(not glz::read_json(parsed, json));
       expect(parsed.active == true);
       expect(parsed.lastStatus.has_value());
       expect(*parsed.lastStatus == Status::Failed);
       
       // Test with nullopt
       s.lastStatus = std::nullopt;
-      glz::write_json(s, json);
+      expect(not glz::write_json(s, json));
       expect(json == R"({"active":true})"); // Glaze skips null optionals by default
       
       // Parse JSON with explicit null
-      glz::read_json(parsed, R"({"active":true,"lastStatus":null})");
+      expect(not glz::read_json(parsed, R"({"active":true,"lastStatus":null})"));
       expect(!parsed.lastStatus.has_value());
    };
 };
@@ -238,22 +246,23 @@ suite optional_and_nested_tests = [] {
       cfg.setting = std::nullopt;
       
       std::string json;
-      glz::write_json(cfg, json);
+      expect(not glz::write_json(cfg, json));
       expect(json == R"({})") << "Got: " << json; // Glaze skips null optionals
       
       Config parsed;
-      glz::read_json(parsed, json);
+      expect(not glz::read_json(parsed, json));
       expect(!parsed.setting.has_value());
    };
    
    "action_variant_with_same_enum_field"_test = [] {
       ActionVariant v = Action1{Status::Failed, 42};
       std::string json;
-      glz::write_json(v, json);
+      constexpr glz::opts opts{.enum_as_string = true};
+      expect(not glz::write<opts>(v, json));
       expect(json == R"({"type":"Failed","data":42})") << "Got: " << json;
       
       ActionVariant parsed;
-      glz::read_json(parsed, json);
+      expect(not glz::read_json(parsed, json));
       expect(std::holds_alternative<Action1>(parsed));
       auto& action = std::get<Action1>(parsed);
       expect(action.type == Status::Failed);
@@ -261,10 +270,10 @@ suite optional_and_nested_tests = [] {
       
       // Test Action2
       v = Action2{Status::Complete, "done"};
-      glz::write_json(v, json);
+      expect(not glz::write<opts>(v, json));
       expect(json == R"({"type":"Complete","info":"done"})") << "Got: " << json;
       
-      glz::read_json(parsed, json);
+      expect(not glz::read_json(parsed, json));
       expect(std::holds_alternative<Action2>(parsed));
       auto& action2 = std::get<Action2>(parsed);
       expect(action2.type == Status::Complete);
@@ -276,11 +285,12 @@ suite vector_tests = [] {
    "vector_of_enums"_test = [] {
       std::vector<Status> vec{Status::Pending, Status::Running, Status::Complete};
       std::string json;
-      glz::write_json(vec, json);
+      constexpr glz::opts opts{.enum_as_string = true};
+      expect(not glz::write<opts>(vec, json));
       expect(json == R"(["Pending","Running","Complete"])");
       
       std::vector<Status> parsed;
-      glz::read_json(parsed, json);
+      expect(not glz::read_json(parsed, json));
       expect(parsed.size() == 3);
       expect(parsed[0] == Status::Pending);
       expect(parsed[1] == Status::Running);
@@ -294,10 +304,11 @@ suite vector_tests = [] {
       vec.push_back(System{true, Status::Complete});
       
       std::string json;
-      glz::write_json(vec, json);
+      constexpr glz::opts opts{.enum_as_string = true};
+      expect(not glz::write<opts>(vec, json));
       
       std::vector<StructVariant> parsed;
-      glz::read_json(parsed, json);
+      expect(not glz::read_json(parsed, json));
       expect(parsed.size() == 3);
       
       expect(std::holds_alternative<Task>(parsed[0]));
@@ -322,26 +333,26 @@ suite variant_with_monostate = [] {
       
       MonoVariant v = std::monostate{};
       std::string json;
-      glz::write_json(v, json);
+      expect(not glz::write_json(v, json));
       expect(json == "null") << "Got: " << json;
       
       v = 42;
-      glz::write_json(v, json);
+      expect(not glz::write_json(v, json));
       expect(json == "42") << "Got: " << json;
       
       v = "hello";
-      glz::write_json(v, json);
+      expect(not glz::write_json(v, json));
       expect(json == R"("hello")") << "Got: " << json;
       
       MonoVariant parsed;
-      glz::read_json(parsed, "null");
+      expect(not glz::read_json(parsed, "null"));
       expect(std::holds_alternative<std::monostate>(parsed));
       
-      glz::read_json(parsed, "42");
+      expect(not glz::read_json(parsed, "42"));
       expect(std::holds_alternative<int>(parsed));
       expect(std::get<int>(parsed) == 42);
       
-      glz::read_json(parsed, R"("hello")");
+      expect(not glz::read_json(parsed, R"("hello")"));
       expect(std::holds_alternative<std::string>(parsed));
       expect(std::get<std::string>(parsed) == "hello");
    };
@@ -351,10 +362,10 @@ suite beve_variant_enum_tests = [] {
    "beve_enum_in_struct"_test = [] {
       Task t{"Test", Status::Running, Priority::High};
       std::vector<uint8_t> beve;
-      glz::write_beve(t, beve);
+      expect(not glz::write_beve(t, beve));
       
       Task parsed;
-      glz::read_beve(parsed, beve);
+      expect(not glz::read_beve(parsed, beve));
       expect(parsed.name == "Test");
       expect(parsed.status == Status::Running);
       expect(parsed.priority == Priority::High);
@@ -363,10 +374,10 @@ suite beve_variant_enum_tests = [] {
    "beve_struct_variant"_test = [] {
       StructVariant v = User{"bob", Permission::All};
       std::vector<uint8_t> beve;
-      glz::write_beve(v, beve);
+      expect(not glz::write_beve(v, beve));
       
       StructVariant parsed;
-      glz::read_beve(parsed, beve);
+      expect(not glz::read_beve(parsed, beve));
       expect(std::holds_alternative<User>(parsed));
       auto& user = std::get<User>(parsed);
       expect(user.username == "bob");
@@ -376,10 +387,10 @@ suite beve_variant_enum_tests = [] {
    "beve_vector_of_enums"_test = [] {
       std::vector<Status> vec{Status::Pending, Status::Running, Status::Failed};
       std::vector<uint8_t> beve;
-      glz::write_beve(vec, beve);
+      expect(not glz::write_beve(vec, beve));
       
       std::vector<Status> parsed;
-      glz::read_beve(parsed, beve);
+      expect(not glz::read_beve(parsed, beve));
       expect(parsed.size() == 3);
       expect(parsed[0] == Status::Pending);
       expect(parsed[1] == Status::Running);
