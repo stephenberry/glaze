@@ -459,7 +459,7 @@ namespace glz
       {
          // constexpr auto f() [with auto _ = std::array<E, 6>{std::__array_traits<E, 6>::_Type{a, b, c, e, d, (E)6}}]
          constexpr std::size_t funcsig_off = sizeof("constexpr auto glz::detail::var_name() [with auto ...Vs = {") - 1;
-         return std::std::string_view(__PRETTY_FUNCTION__ + funcsig_off,
+         return std::string_view(__PRETTY_FUNCTION__ + funcsig_off,
                                       (sizeof(__PRETTY_FUNCTION__) - 1) - funcsig_off - (sizeof("}]") - 1));
       }
 
