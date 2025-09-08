@@ -84,6 +84,9 @@ namespace glz
       invalid_distribution_elements, //
       hostname_failure, //
       includer_error, //
+      // CSV specific errors
+      non_rectangular_csv, // Rows have different column counts
+      empty_csv_data, // No data found in CSV
       // Feature support
       feature_not_supported //
    };
