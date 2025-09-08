@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include <asio/signal_set.hpp>
 #include <atomic>
 #include <charconv>
 #include <chrono>
@@ -19,6 +18,7 @@
 #include <thread>
 #include <unordered_map>
 
+#include "glaze/ext/glaze_asio.hpp"
 #include "glaze/net/cors.hpp"
 #include "glaze/net/http_router.hpp"
 #include "glaze/net/openapi.hpp"
@@ -438,8 +438,7 @@ namespace glz
          threads.reserve(num_threads);
          for (size_t i = 0; i < num_threads; ++i) {
             threads.emplace_back([this] {
-               std::error_code ec;
-               io_context->run(ec);
+               io_context->run();
                // Don't report errors during shutdown
             });
          }
@@ -457,14 +456,22 @@ namespace glz
 
          // Stop accepting new connections
          if (acceptor) {
-            std::error_code ec;
-            acceptor->close(ec);
+            try {
+               acceptor->close();
+            }
+            catch (...) {
+               // Ignore errors on close
+            }
          }
 
          // Cancel the signal handler
          if (signals_) {
-            std::error_code ec;
-            signals_->cancel(ec);
+            try {
+               signals_->cancel();
+            }
+            catch (...) {
+               // Ignore errors on cancel
+            }
          }
 
          // Stop the io_context
