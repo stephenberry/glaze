@@ -19,6 +19,7 @@
 #include <vector>
 
 #include "glaze/net/http_router.hpp"
+#include "glaze/util/key_transformers.hpp"
 
 namespace glz
 {
@@ -656,9 +657,7 @@ namespace glz
                      std::string_view value = (value_start != std::string::npos) ? header_line.substr(value_start) : "";
 
                      // Convert header name to lowercase for case-insensitive lookups (RFC 7230)
-                     std::string name_lower(name);
-                     std::transform(name_lower.begin(), name_lower.end(), name_lower.begin(), ::tolower);
-                     response_headers.response_headers[name_lower] = std::string(value);
+                     response_headers.response_headers[to_lower_case(name)] = std::string(value);
                   }
                }
 
@@ -982,9 +981,7 @@ namespace glz
                   }
 
                   // Convert header name to lowercase for case-insensitive lookups (RFC 7230)
-                  std::string name_lower(name);
-                  std::transform(name_lower.begin(), name_lower.end(), name_lower.begin(), ::tolower);
-                  response_headers.emplace(name_lower, value);
+                  response_headers.emplace(to_lower_case(name), value);
                }
             }
 
@@ -1186,9 +1183,7 @@ namespace glz
                   std::from_chars(value.data(), value.data() + value.size(), content_length);
                }
                // Convert header name to lowercase for case-insensitive lookups (RFC 7230)
-               std::string name_lower(name);
-               std::transform(name_lower.begin(), name_lower.end(), name_lower.begin(), ::tolower);
-               response_headers.emplace(name_lower, value);
+               response_headers.emplace(to_lower_case(name), value);
             }
          }
 

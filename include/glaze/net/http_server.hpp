@@ -23,6 +23,7 @@
 #include "glaze/net/http_router.hpp"
 #include "glaze/net/openapi.hpp"
 #include "glaze/net/websocket_connection.hpp"
+#include "glaze/util/key_transformers.hpp"
 
 // Conditionally include SSL headers only when needed
 #ifdef GLZ_ENABLE_SSL
@@ -976,9 +977,7 @@ namespace glz
                      std::string_view name_sv = line.substr(0, colon_pos);
                      std::string_view value_sv = line.substr(colon_pos + 1);
                      value_sv.remove_prefix(std::min(value_sv.find_first_not_of(" \t"), value_sv.size()));
-                     std::string name(name_sv);
-                     std::transform(name.begin(), name.end(), name.begin(), ::tolower);
-                     headers[name] = std::string(value_sv);
+                     headers[to_lower_case(name_sv)] = std::string(value_sv);
                   }
 
                   if (line_end == std::string_view::npos) break;
@@ -1046,13 +1045,11 @@ namespace glz
          if (connection_it == headers.end()) return false;
 
          // Check if upgrade header contains "websocket" (case-insensitive)
-         std::string upgrade_value = upgrade_it->second;
-         std::transform(upgrade_value.begin(), upgrade_value.end(), upgrade_value.begin(), ::tolower);
+         auto upgrade_value = to_lower_case(upgrade_it->second);
          if (upgrade_value.find("websocket") == std::string::npos) return false;
 
          // Check if connection header contains "upgrade" (case-insensitive)
-         std::string connection_value = connection_it->second;
-         std::transform(connection_value.begin(), connection_value.end(), connection_value.begin(), ::tolower);
+         auto connection_value = to_lower_case(connection_it->second);
          return connection_value.find("upgrade") != std::string::npos;
       }
 
