@@ -71,14 +71,14 @@ namespace glz
          }
 
          // Default headers for streaming
-         if (headers.find("Transfer-Encoding") == headers.end()) {
+         if (headers.find("transfer-encoding") == headers.end()) {
             response_str.append("Transfer-Encoding: chunked\r\n");
             chunked_encoding_ = true;
          }
-         if (headers.find("Connection") == headers.end()) {
+         if (headers.find("connection") == headers.end()) {
             response_str.append("Connection: keep-alive\r\n");
          }
-         if (headers.find("Cache-Control") == headers.end()) {
+         if (headers.find("cache-control") == headers.end()) {
             response_str.append("Cache-Control: no-cache\r\n");
          }
 
@@ -1212,19 +1212,19 @@ namespace glz
          }
 
          // Add default headers if not present (using find is faster than streams)
-         if (response.response_headers.find("Content-Length") == response.response_headers.end()) {
+         if (response.response_headers.find("content-length") == response.response_headers.end()) {
             response_str.append("Content-Length: ");
             response_str.append(std::to_string(response.response_body.size()));
             response_str.append("\r\n");
          }
 
-         if (response.response_headers.find("Date") == response.response_headers.end()) {
+         if (response.response_headers.find("date") == response.response_headers.end()) {
             response_str.append("Date: ");
             response_str.append(get_current_date());
             response_str.append("\r\n");
          }
 
-         if (response.response_headers.find("Server") == response.response_headers.end()) {
+         if (response.response_headers.find("server") == response.response_headers.end()) {
             response_str.append("Server: Glaze/1.0\r\n");
          }
 

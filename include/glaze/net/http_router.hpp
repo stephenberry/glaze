@@ -47,7 +47,10 @@ namespace glz
 
       inline response& header(std::string_view name, std::string_view value)
       {
-         response_headers[std::string(name)] = std::string(value);
+         // Convert header name to lowercase for case-insensitive lookups (RFC 7230)
+         std::string name_lower(name);
+         std::transform(name_lower.begin(), name_lower.end(), name_lower.begin(), ::tolower);
+         response_headers[name_lower] = std::string(value);
          return *this;
       }
 
@@ -76,7 +79,7 @@ namespace glz
          return *this;
       }
 
-      inline response& content_type(std::string_view type) { return header("Content-Type", type); }
+      inline response& content_type(std::string_view type) { return header("content-type", type); }
 
       // JSON response helper using Glaze
       template <class T = json_t>
