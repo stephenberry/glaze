@@ -2525,6 +2525,94 @@ suite pair_ranges_tests = [] {
    };
 };
 
+// Test for static variant tags with empty structs
+namespace static_tag_test
+{
+   enum class MsgTypeEmpty { A, B };
+
+   struct MsgAEmpty
+   {
+      static constexpr auto type = MsgTypeEmpty::A;
+   };
+
+   struct MsgBEmpty
+   {
+      static constexpr auto type = MsgTypeEmpty::B;
+   };
+
+   using MsgEmpty = std::variant<MsgAEmpty, MsgBEmpty>;
+
+   enum class MsgType { A, B };
+
+   struct MsgA
+   {
+      static constexpr auto type = MsgType::A;
+      int value = 42;
+   };
+
+   struct MsgB
+   {
+      static constexpr auto type = MsgType::B;
+      std::string text = "hello";
+   };
+
+   using Msg = std::variant<MsgA, MsgB>;
+}
+
+suite static_variant_tags = [] {
+   "static variant tags with empty structs"_test = [] {
+      using namespace static_tag_test;
+
+      // Test untagged BEVE with empty structs having static tags
+      {
+         MsgEmpty original{MsgAEmpty{}};
+         auto encoded = glz::write_beve_untagged(original);
+         expect(encoded.has_value());
+
+         auto decoded = glz::read_binary_untagged<MsgEmpty>(*encoded);
+         expect(decoded.has_value());
+         expect(decoded->index() == 0);
+      }
+
+      {
+         MsgEmpty original{MsgBEmpty{}};
+         auto encoded = glz::write_beve_untagged(original);
+         expect(encoded.has_value());
+
+         auto decoded = glz::read_binary_untagged<MsgEmpty>(*encoded);
+         expect(decoded.has_value());
+         expect(decoded->index() == 1);
+      }
+   };
+
+   "static variant tags with non-empty structs"_test = [] {
+      using namespace static_tag_test;
+
+      // Test untagged BEVE with non-empty structs having static tags
+      {
+         Msg original{MsgA{}};
+         auto encoded = glz::write_beve_untagged(original);
+         expect(encoded.has_value());
+
+         auto decoded = glz::read_binary_untagged<Msg>(*encoded);
+         expect(decoded.has_value());
+         expect(decoded->index() == 0);
+         expect(std::get<0>(*decoded).value == 42);
+      }
+
+      {
+         Msg original{MsgB{}};
+         auto encoded = glz::write_beve_untagged(original);
+         expect(encoded.has_value());
+
+         auto decoded = glz::read_binary_untagged<Msg>(*encoded);
+         expect(decoded.has_value());
+         expect(decoded->index() == 1);
+         expect(std::get<1>(*decoded).text == "hello");
+      }
+   };
+};
+
 int main()
 {
    trace.begin("binary_test");

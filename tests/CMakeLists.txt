@@ -67,6 +67,7 @@ add_subdirectory(inplace_vector)
 add_subdirectory(int_parsing)
 add_subdirectory(jmespath)
 add_subdirectory(jsonrpc_test)
+add_subdirectory(key_transformers_test)
 add_subdirectory(lib_test)
 add_subdirectory(mock_json_test)
 add_subdirectory(reflection)
@@ -87,6 +88,10 @@ add_subdirectory(networking_tests)
 if(glaze_EETF_FORMAT)
     add_subdirectory(eetf_test)
 endif(glaze_EETF_FORMAT)
+
+if(glaze_BUILD_INTEROP)
+    add_subdirectory(interop)
+endif(glaze_BUILD_INTEROP)
 
 # We don't run find_package_test or glaze-install_test with MSVC/Windows, because the Github action runner often chokes
 # Don't run find_package on Clang, because Linux runs with Clang try to use GCC standard library and have errors before Clang 18

@@ -609,8 +609,8 @@ suite response_building_tests = [] {
 
       expect(&chained_res == &res) << "Response methods should return reference for chaining\n";
       expect(res.status_code == 201) << "Status should be set correctly\n";
-      expect(res.response_headers.at("X-Custom") == "value") << "Custom header should be set\n";
-      expect(res.response_headers.at("Content-Type") == "application/json") << "Content-Type should be set\n";
+      expect(res.response_headers.at("x-custom") == "value") << "Custom header should be set\n";
+      expect(res.response_headers.at("content-type") == "application/json") << "Content-Type should be set\n";
       expect(res.response_body == "test body") << "Body should be set correctly\n";
    };
 
@@ -621,7 +621,7 @@ suite response_building_tests = [] {
       res.json(data);
 
       expect(!res.response_body.empty()) << "JSON serialization should produce content\n";
-      expect(res.response_headers.at("Content-Type") == "application/json") << "Should set JSON content type\n";
+      expect(res.response_headers.at("content-type") == "application/json") << "Should set JSON content type\n";
 
       // Verify serialization worked
       TestData deserialized;

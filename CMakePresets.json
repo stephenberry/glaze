@@ -18,7 +18,12 @@
                 "CMAKE_CXX_COMPILER": "/usr/bin/clang++",
                 "CMAKE_EXPORT_COMPILE_COMMANDS": true,
                 "glaze_DEVELOPER_MODE": true,
-                "BUILD_TESTING": true
+                "BUILD_TESTING": true,
+                "glaze_BUILD_INTEROP": true,
+                "CMAKE_CXX_FLAGS": "-stdlib=libc++",
+                "CMAKE_EXE_LINKER_FLAGS": "-stdlib=libc++",
+                "CMAKE_SHARED_LINKER_FLAGS": "-stdlib=libc++",
+                "CMAKE_MODULE_LINKER_FLAGS": "-stdlib=libc++"
             }
         },
         {
@@ -33,7 +38,12 @@
                 "CMAKE_CXX_COMPILER": "/usr/bin/clang++",
                 "CMAKE_EXPORT_COMPILE_COMMANDS": true,
                 "glaze_DEVELOPER_MODE": true,
-                "BUILD_TESTING": true
+                "BUILD_TESTING": true,
+                "glaze_BUILD_INTEROP": true,
+                "CMAKE_CXX_FLAGS": "-stdlib=libc++",
+                "CMAKE_EXE_LINKER_FLAGS": "-stdlib=libc++",
+                "CMAKE_SHARED_LINKER_FLAGS": "-stdlib=libc++",
+                "CMAKE_MODULE_LINKER_FLAGS": "-stdlib=libc++"
             }
         },
         {
@@ -44,11 +54,12 @@
             "generator": "Ninja",
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Debug",
-                "CMAKE_C_COMPILER": "/opt/homebrew/bin/gcc",
-                "CMAKE_CXX_COMPILER": "/opt/homebrew/bin/g++",
+                "CMAKE_C_COMPILER": "/usr/bin/gcc",
+                "CMAKE_CXX_COMPILER": "/usr/bin/g++",
                 "CMAKE_EXPORT_COMPILE_COMMANDS": true,
                 "glaze_DEVELOPER_MODE": true,
-                "BUILD_TESTING": true
+                "BUILD_TESTING": true,
+                "glaze_BUILD_INTEROP": true
             }
         },
         {
@@ -59,11 +70,12 @@
             "generator": "Ninja",
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Release",
-                "CMAKE_C_COMPILER": "/opt/homebrew/bin/gcc",
-                "CMAKE_CXX_COMPILER": "/opt/homebrew/bin/g++",
+                "CMAKE_C_COMPILER": "/usr/bin/gcc",
+                "CMAKE_CXX_COMPILER": "/usr/bin/g++",
                 "CMAKE_EXPORT_COMPILE_COMMANDS": true,
                 "glaze_DEVELOPER_MODE": true,
-                "BUILD_TESTING": true
+                "BUILD_TESTING": true,
+                "glaze_BUILD_INTEROP": true
             }
         }
     ],

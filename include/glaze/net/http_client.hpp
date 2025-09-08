@@ -19,6 +19,7 @@
 #include <vector>
 
 #include "glaze/net/http_router.hpp"
+#include "glaze/util/key_transformers.hpp"
 
 namespace glz
 {
@@ -306,7 +307,7 @@ namespace glz
          }
 
          auto merged_headers = headers;
-         merged_headers["Content-Type"] = "application/json";
+         merged_headers["content-type"] = "application/json";
 
          return post(url, json_str, merged_headers);
       }
@@ -404,7 +405,7 @@ namespace glz
          }
 
          auto merged_headers = headers;
-         merged_headers["Content-Type"] = "application/json";
+         merged_headers["content-type"] = "application/json";
 
          post_async(url, json_str, merged_headers, std::forward<CompletionHandler>(handler));
       }
@@ -655,8 +656,8 @@ namespace glz
                      size_t value_start = header_line.find_first_not_of(" \t", colon_pos + 1);
                      std::string_view value = (value_start != std::string::npos) ? header_line.substr(value_start) : "";
 
-                     // Create strings only when inserting into the map
-                     response_headers.response_headers[std::string(name)] = std::string(value);
+                     // Convert header name to lowercase for case-insensitive lookups (RFC 7230)
+                     response_headers.response_headers[to_lower_case(name)] = std::string(value);
                   }
                }
 
@@ -678,7 +679,7 @@ namespace glz
                }
 
                bool is_chunked = false;
-               auto it = response_headers.response_headers.find("Transfer-Encoding");
+               auto it = response_headers.response_headers.find("transfer-encoding");
                if (it != response_headers.response_headers.end()) {
                   if (it->second.find("chunked") != std::string::npos) {
                      is_chunked = true;
@@ -979,7 +980,8 @@ namespace glz
                      }
                   }
 
-                  response_headers.emplace(name, value);
+                  // Convert header name to lowercase for case-insensitive lookups (RFC 7230)
+                  response_headers.emplace(to_lower_case(name), value);
                }
             }
 
@@ -1180,8 +1182,8 @@ namespace glz
                    glz::strncasecmp(name.data(), "Content-Length", 14) == 0) {
                   std::from_chars(value.data(), value.data() + value.size(), content_length);
                }
-               // Store the header, creating strings only at the last moment.
-               response_headers.emplace(name, value);
+               // Convert header name to lowercase for case-insensitive lookups (RFC 7230)
+               response_headers.emplace(to_lower_case(name), value);
             }
          }
 
@@ -1214,7 +1216,7 @@ namespace glz
                resp.response_body = std::move(body);
 
                // Return connection to pool if it's still usable
-               auto connection_header = resp.response_headers.find("Connection");
+               auto connection_header = resp.response_headers.find("connection");
                if (connection_header == resp.response_headers.end() ||
                    connection_header->second.find("close") == std::string::npos) {
                   connection_pool->return_connection(url.host, url.port, socket);

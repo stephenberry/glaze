@@ -170,6 +170,11 @@ namespace glz
                   [[fallthrough]];
                }
             }
+            case Whitespace: {
+               // Skip whitespace characters that are part of raw JSON content
+               ++it;
+               break;
+            }
             [[unlikely]] default: {
                ctx.error = error_code::syntax_error;
                return;

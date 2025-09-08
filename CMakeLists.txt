@@ -4,7 +4,7 @@ include(cmake/prelude.cmake)
 
 project(
     glaze
-    VERSION 5.5.5
+    VERSION 5.7.0
     LANGUAGES CXX
 )
 
@@ -92,3 +92,9 @@ if(glaze_ENABLE_SSL)
   )
   target_compile_definitions(glaze_glaze INTERFACE GLZ_ENABLE_SSL)
 endif(glaze_ENABLE_SSL)
+
+option(glaze_BUILD_INTEROP "Build language interoperability library" OFF)
+
+if(glaze_BUILD_INTEROP)
+  add_subdirectory(src/interop)
+endif()
