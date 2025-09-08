@@ -23,6 +23,7 @@
 #include "glaze/net/http_router.hpp"
 #include "glaze/net/openapi.hpp"
 #include "glaze/net/websocket_connection.hpp"
+#include "glaze/util/key_transformers.hpp"
 
 // Conditionally include SSL headers only when needed
 #ifdef GLZ_ENABLE_SSL
@@ -71,14 +72,14 @@ namespace glz
          }
 
          // Default headers for streaming
-         if (headers.find("Transfer-Encoding") == headers.end()) {
+         if (headers.find("transfer-encoding") == headers.end()) {
             response_str.append("Transfer-Encoding: chunked\r\n");
             chunked_encoding_ = true;
          }
-         if (headers.find("Connection") == headers.end()) {
+         if (headers.find("connection") == headers.end()) {
             response_str.append("Connection: keep-alive\r\n");
          }
-         if (headers.find("Cache-Control") == headers.end()) {
+         if (headers.find("cache-control") == headers.end()) {
             response_str.append("Cache-Control: no-cache\r\n");
          }
 
@@ -976,9 +977,7 @@ namespace glz
                      std::string_view name_sv = line.substr(0, colon_pos);
                      std::string_view value_sv = line.substr(colon_pos + 1);
                      value_sv.remove_prefix(std::min(value_sv.find_first_not_of(" \t"), value_sv.size()));
-                     std::string name(name_sv);
-                     std::transform(name.begin(), name.end(), name.begin(), ::tolower);
-                     headers[name] = std::string(value_sv);
+                     headers[to_lower_case(name_sv)] = std::string(value_sv);
                   }
 
                   if (line_end == std::string_view::npos) break;
@@ -1046,13 +1045,11 @@ namespace glz
          if (connection_it == headers.end()) return false;
 
          // Check if upgrade header contains "websocket" (case-insensitive)
-         std::string upgrade_value = upgrade_it->second;
-         std::transform(upgrade_value.begin(), upgrade_value.end(), upgrade_value.begin(), ::tolower);
+         auto upgrade_value = to_lower_case(upgrade_it->second);
          if (upgrade_value.find("websocket") == std::string::npos) return false;
 
          // Check if connection header contains "upgrade" (case-insensitive)
-         std::string connection_value = connection_it->second;
-         std::transform(connection_value.begin(), connection_value.end(), connection_value.begin(), ::tolower);
+         auto connection_value = to_lower_case(connection_it->second);
          return connection_value.find("upgrade") != std::string::npos;
       }
 
@@ -1212,19 +1209,19 @@ namespace glz
          }
 
          // Add default headers if not present (using find is faster than streams)
-         if (response.response_headers.find("Content-Length") == response.response_headers.end()) {
+         if (response.response_headers.find("content-length") == response.response_headers.end()) {
             response_str.append("Content-Length: ");
             response_str.append(std::to_string(response.response_body.size()));
             response_str.append("\r\n");
          }
 
-         if (response.response_headers.find("Date") == response.response_headers.end()) {
+         if (response.response_headers.find("date") == response.response_headers.end()) {
             response_str.append("Date: ");
             response_str.append(get_current_date());
             response_str.append("\r\n");
          }
 
-         if (response.response_headers.find("Server") == response.response_headers.end()) {
+         if (response.response_headers.find("server") == response.response_headers.end()) {
             response_str.append("Server: Glaze/1.0\r\n");
          }
 

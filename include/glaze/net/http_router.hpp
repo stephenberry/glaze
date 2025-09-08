@@ -4,6 +4,7 @@
 #pragma once
 
 #include <algorithm>
+#include "glaze/util/key_transformers.hpp"
 #include <functional>
 #include <future>
 #include <iostream>
@@ -47,7 +48,8 @@ namespace glz
 
       inline response& header(std::string_view name, std::string_view value)
       {
-         response_headers[std::string(name)] = std::string(value);
+         // Convert header name to lowercase for case-insensitive lookups (RFC 7230)
+         response_headers[to_lower_case(name)] = std::string(value);
          return *this;
       }
 
@@ -76,7 +78,7 @@ namespace glz
          return *this;
       }
 
-      inline response& content_type(std::string_view type) { return header("Content-Type", type); }
+      inline response& content_type(std::string_view type) { return header("content-type", type); }
 
       // JSON response helper using Glaze
       template <class T = json_t>
