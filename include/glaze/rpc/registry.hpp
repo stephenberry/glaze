@@ -211,6 +211,7 @@ namespace glz
                }
                catch (const std::exception& e) {
                   out = repe::message{}; // reset the output message because it could have been modified
+                  out.header.id = in.header.id; // Preserve the ID from the input message
                   out.header.query_length = 0;
                   std::string body = "registry error for `" + in.query + "`: ";
                   body.append(e.what());
@@ -222,6 +223,7 @@ namespace glz
          else {
             std::string body = "invalid_query: " + in.query;
             out.header.ec = error_code::method_not_found;
+            out.header.id = in.header.id; // Preserve the ID from the input message
             write_error(body);
          }
       }
