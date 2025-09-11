@@ -19,46 +19,60 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        boost_version: [1.88.0, 1.73.0]
+        include:
+          - compiler: clang
+            version: 17
+          - compiler: clang
+            version: 18
+          - compiler: clang
+            version: 20
+          - compiler: gcc
+            version: 12
+          - compiler: gcc
+            version: 13
+          - compiler: gcc
+            version: 14
 
     env:
-      CC: clang-20
-      CXX: clang++-20
-      LLVM_VERSION: 20
+      CC: ${{matrix.compiler}}-${{matrix.version}}
+      CXX: ${{matrix.compiler}}++-${{matrix.version}}
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install latest clang
+      - name: Install clang
+        if: matrix.compiler == 'clang'
         run: |
           wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
-          echo "deb http://apt.llvm.org/noble/ llvm-toolchain-noble-20 main" | sudo tee /etc/apt/sources.list.d/llvm.list
-          sudo apt-get clean
+          echo "deb http://apt.llvm.org/noble/ llvm-toolchain-noble-${{ matrix.version }} main" | sudo tee /etc/apt/sources.list.d/llvm.list
           sudo apt-get update
-          sudo apt-get install -y --fix-missing clang-20 libc++-20-dev libc++abi-20-dev
-
-      - name: Set path for clang
-        run: |
-          echo "PATH=/usr/lib/llvm-20/bin:$PATH" >> $GITHUB_ENV
-          clang-20 --version
-          clang++-20 --version
+          sudo apt-get install -y --fix-missing clang-${{ matrix.version }} libc++-${{ matrix.version }}-dev libc++abi-${{ matrix.version }}-dev
+          echo "PATH=/usr/lib/llvm-${{ matrix.version }}/bin:$PATH" >> $GITHUB_ENV
 
       - name: Install Boost
         uses: MarkusJx/install-boost@v2
         with:
-          boost_version: 1.88.0
-
-      - name: Configure CMake
-        run: cmake -B build -Dglaze_BUILD_TESTS=ON -Dglaze_ENABLE_SSL=ON
+          boost_version: ${{ matrix.boost_version }}
 
       - name: Configure CMake
         run: |
+          CMAKE_CXX_FLAGS=""
+          CMAKE_EXE_LINKER_FLAGS=""
+          if [ "${{ matrix.compiler }}" = "clang" ]; then
+            CMAKE_CXX_FLAGS="-stdlib=libc++"
+            CMAKE_EXE_LINKER_FLAGS="-stdlib=libc++ -lc++abi"
+          fi
           cmake -B ${{github.workspace}}/build \
-          -DCMAKE_BUILD_TYPE=Debug \
-          -DCMAKE_CXX_STANDARD=23 \
-          -DCMAKE_C_COMPILER=${{env.CC}} \
-          -DCMAKE_CXX_COMPILER=${{env.CXX}} \
-          -DCMAKE_CXX_FLAGS="-stdlib=libc++" \
-          -DCMAKE_EXE_LINKER_FLAGS="-stdlib=libc++ -lc++abi"
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_CXX_STANDARD=23 \
+            -DCMAKE_C_COMPILER=${{ env.CC }} \
+            -DCMAKE_CXX_COMPILER=${{ env.CXX }} \
+            -DCMAKE_CXX_FLAGS="$CMAKE_CXX_FLAGS" \
+            -DCMAKE_EXE_LINKER_FLAGS="$CMAKE_EXE_LINKER_FLAGS"
 
       - name: Build
         run: cmake --build build -j $(nproc)
