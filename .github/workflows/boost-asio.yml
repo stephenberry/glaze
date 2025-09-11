@@ -22,36 +22,30 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        compiler:
+          - { name: clang, version: 17 }
+          - { name: clang, version: 18 }
+          - { name: clang, version: 20 }
+          - { name: gcc, version: 12 }
+          - { name: gcc, version: 13 }
+          - { name: gcc, version: 14 }
         boost_version: [1.88.0, 1.73.0]
-        include:
-          - compiler: clang
-            version: 17
-          - compiler: clang
-            version: 18
-          - compiler: clang
-            version: 20
-          - compiler: gcc
-            version: 12
-          - compiler: gcc
-            version: 13
-          - compiler: gcc
-            version: 14
 
     env:
-      CC: ${{matrix.compiler}}-${{matrix.version}}
-      CXX: ${{ matrix.compiler == 'gcc' && 'g++' || 'clang++' }}-${{matrix.version}}
+      CC: ${{matrix.compiler.name}}-${{matrix.compiler.version}}
+      CXX: ${{ matrix.compiler.name == 'gcc' && 'g++' || 'clang++' }}-${{matrix.compiler.version}}
 
     steps:
       - uses: actions/checkout@v4
 
       - name: Install clang
-        if: matrix.compiler == 'clang'
+        if: matrix.compiler.name == 'clang'
         run: |
           wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
-          echo "deb http://apt.llvm.org/noble/ llvm-toolchain-noble-${{ matrix.version }} main" | sudo tee /etc/apt/sources.list.d/llvm.list
+          echo "deb http://apt.llvm.org/noble/ llvm-toolchain-noble-${{ matrix.compiler.version }} main" | sudo tee /etc/apt/sources.list.d/llvm.list
           sudo apt-get update
-          sudo apt-get install -y --fix-missing clang-${{ matrix.version }} libc++-${{ matrix.version }}-dev libc++abi-${{ matrix.version }}-dev
-          echo "PATH=/usr/lib/llvm-${{ matrix.version }}/bin:$PATH" >> $GITHUB_ENV
+          sudo apt-get install -y --fix-missing clang-${{ matrix.compiler.version }} libc++-${{ matrix.compiler.version }}-dev libc++abi-${{ matrix.compiler.version }}-dev
+          echo "PATH=/usr/lib/llvm-${{ matrix.compiler.version }}/bin:$PATH" >> $GITHUB_ENV
 
       - name: Install Boost
         uses: MarkusJx/install-boost@v2
@@ -62,7 +56,7 @@ jobs:
         run: |
           CMAKE_CXX_FLAGS=""
           CMAKE_EXE_LINKER_FLAGS=""
-          if [ "${{ matrix.compiler }}" = "clang" ]; then
+          if [ "${{ matrix.compiler.name }}" = "clang" ]; then
             CMAKE_CXX_FLAGS="-stdlib=libc++"
             CMAKE_EXE_LINKER_FLAGS="-stdlib=libc++ -lc++abi"
           fi
