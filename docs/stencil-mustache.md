@@ -202,8 +202,17 @@ In this example `error_msg` will look like:
 
 ## StencilCount
 
-Glaze also provides `glz::stencilcount` for automatic numbering in documents:
+Glaze also provides `glz::stencilcount` for automatic numbering in documents.
 
+> [!NOTE]
+>
+> To use `glz::stencilcount`, you must explicitly include its header:
+>
+> ```c++
+> #include "glaze/stencil/stencilcount.hpp"
+> ```
+
+Example usage:
 ```cpp
 std::string_view layout = R"(# About
 ## {{+}} {{first_name}} {{last_name}}
