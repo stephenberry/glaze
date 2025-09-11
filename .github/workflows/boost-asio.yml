@@ -39,7 +39,7 @@ jobs:
 
     env:
       CC: ${{matrix.compiler}}-${{matrix.version}}
-      CXX: ${{matrix.compiler}}++-${{matrix.version}}
+      CXX: ${{ matrix.compiler == 'gcc' && 'g++' || 'clang++' }}-${{matrix.version}}
 
     steps:
       - uses: actions/checkout@v4
@@ -69,8 +69,6 @@ jobs:
           cmake -B ${{github.workspace}}/build \
             -DCMAKE_BUILD_TYPE=Debug \
             -DCMAKE_CXX_STANDARD=23 \
-            -DCMAKE_C_COMPILER=${{ env.CC }} \
-            -DCMAKE_CXX_COMPILER=${{ env.CXX }} \
             -DCMAKE_CXX_FLAGS="$CMAKE_CXX_FLAGS" \
             -DCMAKE_EXE_LINKER_FLAGS="$CMAKE_EXE_LINKER_FLAGS"
 
