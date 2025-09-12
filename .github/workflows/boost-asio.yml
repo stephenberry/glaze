@@ -44,7 +44,12 @@ jobs:
           wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
           echo "deb http://apt.llvm.org/noble/ llvm-toolchain-noble-${{ matrix.compiler.version }} main" | sudo tee /etc/apt/sources.list.d/llvm.list
           sudo apt-get update
-          sudo apt-get install -y --fix-missing clang-${{ matrix.compiler.version }} libc++-${{ matrix.compiler.version }}-dev libc++abi-${{ matrix.compiler.version }}-dev
+          # Clang 17's libc++ does not compile, so we use the default libc++-dev and libc++abi-dev
+          if [ "${{ matrix.compiler.version }}" = "17" ]; then
+            sudo apt-get install -y --fix-missing clang-${{ matrix.compiler.version }} libc++-dev libc++abi-dev
+          else
+            sudo apt-get install -y --fix-missing clang-${{ matrix.compiler.version }} libc++-${{ matrix.compiler.version }}-dev libc++abi-${{ matrix.compiler.version }}-dev
+          fi
           echo "PATH=/usr/lib/llvm-${{ matrix.compiler.version }}/bin:$PATH" >> $GITHUB_ENV
 
       - name: Install Boost
