@@ -41,5 +41,6 @@
 #include "glaze/file/write_directory.hpp"
 #include "glaze/json.hpp"
 #include "glaze/record/recorder.hpp"
+#include "glaze/reflection/enum_reflect.hpp"
 #include "glaze/stencil/stencil.hpp"
 #include "glaze/util/key_transformers.hpp"
