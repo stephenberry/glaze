@@ -1734,7 +1734,7 @@ suite csv_2d_array_tests = [] {
       }>(matrix, csv_data);
 
       expect(bool(ec)) << "Should fail validation";
-      expect(ec == glz::error_code::non_rectangular_csv) << "Should be non_rectangular_csv error";
+      expect(ec == glz::error_code::constraint_violated) << "Should be rectangular constraint violation";
    };
 
    "2d_array_trailing_comma"_test = [] {
@@ -1868,7 +1868,7 @@ Bob,Manager,Sales)";
       }>(matrix, csv_data);
 
       expect(bool(ec)) << "Should fail validation";
-      expect(ec == glz::error_code::non_rectangular_csv) << "Should be non_rectangular_csv error";
+      expect(ec == glz::error_code::constraint_violated) << "Should be rectangular constraint violation";
    };
 
    "2d_array_combined_options"_test = [] {

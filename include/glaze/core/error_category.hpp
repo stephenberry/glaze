@@ -75,7 +75,6 @@ struct glz::meta<glz::error_code>
                                     "invalid_distribution_elements",
                                     "hostname_failure",
                                     "includer_error",
-                                    "non_rectangular_csv",
                                     "feature_not_supported"};
    static constexpr std::array value{none, //
                                      version_mismatch, //
@@ -146,7 +145,6 @@ struct glz::meta<glz::error_code>
                                      invalid_distribution_elements, //
                                      hostname_failure, //
                                      includer_error, //
-                                     non_rectangular_csv, //
                                      feature_not_supported};
 };
 

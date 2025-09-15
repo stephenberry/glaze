@@ -611,7 +611,8 @@ namespace glz
                const auto expected_cols = value[0].size();
                for (size_t i = 1; i < value.size(); ++i) {
                   if (value[i].size() != expected_cols) {
-                     ctx.error = error_code::non_rectangular_csv;
+                     ctx.error = error_code::constraint_violated;
+                     ctx.custom_error_message = "non-rectangular CSV rows";
                      return;
                   }
                }
