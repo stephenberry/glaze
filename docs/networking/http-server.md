@@ -8,17 +8,24 @@ The Glaze HTTP server provides a high-performance, async HTTP server implementat
 
 ```cpp
 #include "glaze/net/http_server.hpp"
+#include <iostream>
 
 glz::http_server server;
 
 // Configure routes
-server.get("/hello", [](const glz::request& req, glz::response& res) {
+server.get("/hello", [](const glz::request& /*req*/, glz::response& res) {
     res.body("Hello, World!");
 });
 
-// Start server
-server.bind("127.0.0.1", 8080);
+// Note: start() is non-blocking; block main until shutdown
+server.bind("127.0.0.1", 8080)
+      .with_signals(); // handle Ctrl+C (SIGINT)
+
+std::cout << "Server running on http://127.0.0.1:8080\n";
+std::cout << "Press Ctrl+C to stop\n";
+
 server.start();
+server.wait_for_signal();
 ```
 
 ### HTTPS Server
@@ -133,17 +140,26 @@ server.get("/files/*path", [](const glz::request& req, glz::response& res) {
 
 ```cpp
 // Numeric ID constraint
-glz::http_router::param_constraint id_constraint{
-    .pattern = "[0-9]+",
-    .description = "User ID must be numeric"
+glz::param_constraint id_constraint{
+    .description = "User ID must be numeric",
+    .validation = [](std::string_view value) {
+        if (value.empty()) return false;
+        for (char c : value) {
+            if (!std::isdigit(c)) return false;
+        }
+        return true;
+    }
 };
 
 server.get("/users/:id", handler, {{"id", id_constraint}});
 
 // Email constraint
-glz::http_router::param_constraint email_constraint{
-    .pattern = "[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}",
-    .description = "Valid email address required"
+glz::param_constraint email_constraint{
+    .description = "Valid email address required",
+    .validation = [](std::string_view value) {
+        std::regex email_regex(R"([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})");
+        return std::regex_match(std::string(value), email_regex);
+    }
 };
 ```
 
@@ -224,7 +240,8 @@ server.use([](const glz::request& req, glz::response& res) {
 
 // Authentication middleware
 server.use([](const glz::request& req, glz::response& res) {
-    if (req.headers.find("Authorization") == req.headers.end()) {
+    // Note: Header names are case-insensitive (RFC 7230)
+    if (req.headers.find("authorization") == req.headers.end()) {
         res.status(401).json({{"error", "Authorization required"}});
         return;
     }
@@ -308,20 +325,44 @@ server.get("/static/*path", [](const glz::request& req, glz::response& res) {
 ### Starting and Stopping
 
 ```cpp
+// Simple server with signal handling
+int main() {
+    glz::http_server server;
+    
+    // Configure routes
+    server.get("/api/hello", [](const glz::request&, glz::response& res) {
+        res.json({{"message", "Hello, World!"}});
+    });
+    
+    // Bind and enable signal handling
+    server.bind(8080)
+          .with_signals();
+    
+    // Start server
+    server.start();
+    
+    // Wait for shutdown signal
+    server.wait_for_signal();
+    
+    return 0;
+}
+```
+
+For integration into larger applications:
+
+```cpp
 class APIServer {
     glz::http_server server_;
-    std::future<void> server_future_;
     
 public:
     bool start(uint16_t port) {
         try {
             configure_routes();
-            server_.bind(port);
+            server_.bind(port)
+                   .with_signals();  // Enable signal handling
             
-            // Start in background thread
-            server_future_ = std::async(std::launch::async, [this]() {
-                server_.start();
-            });
+            // Start server (non-blocking)
+            server_.start();
             
             return true;
         } catch (const std::exception& e) {
@@ -330,11 +371,12 @@ public:
         }
     }
     
+    void wait_for_shutdown() {
+        server_.wait_for_signal();
+    }
+    
     void stop() {
         server_.stop();
-        if (server_future_.valid()) {
-            server_future_.wait();
-        }
     }
     
 private:
@@ -347,6 +389,34 @@ private:
 ```
 
 ### Graceful Shutdown
+
+```cpp
+// Built-in signal handling (recommended approach)
+int main() {
+    glz::http_server server;
+    
+    // Configure routes
+    setup_routes(server);
+    
+    // Enable signal handling for graceful shutdown (handles SIGINT/SIGTERM)
+    server.bind(8080)
+          .with_signals();
+    
+    std::cout << "Server running on http://localhost:8080" << std::endl;
+    std::cout << "Press Ctrl+C to gracefully shut down the server" << std::endl;
+    
+    // Start server
+    server.start();
+    
+    // Wait for shutdown signal (blocks until server stops)
+    server.wait_for_signal();
+    
+    std::cout << "Server shut down successfully" << std::endl;
+    return 0;
+}
+```
+
+For more control, you can still implement custom signal handling:
 
 ```cpp
 #include <csignal>

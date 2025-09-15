@@ -268,7 +268,10 @@ namespace glz
                      }
                      // Container iteration for regular sections was already handled above
 
-                     skip_whitespace();
+                     while (it < end && whitespace_table[uint8_t(*it)]) {
+                        buffer.push_back(*it);
+                        ++it;
+                     }
                      continue;
                   }
 

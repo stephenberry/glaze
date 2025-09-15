@@ -111,14 +111,14 @@ namespace glz
       return [config](const request& req, response& res) {
          // Get the origin from the request headers
          std::string origin;
-         auto origin_it = req.headers.find("Origin");
+         auto origin_it = req.headers.find("origin");
          if (origin_it != req.headers.end()) {
             origin = origin_it->second;
          }
 
          // Check if this is a preflight request (OPTIONS method with specific headers)
          bool is_preflight = (req.method == http_method::OPTIONS) &&
-                             (req.headers.find("Access-Control-Request-Method") != req.headers.end());
+                             (req.headers.find("access-control-request-method") != req.headers.end());
 
          // Always add CORS headers if origin is allowed
          if (!origin.empty() && is_origin_allowed(config, origin)) {

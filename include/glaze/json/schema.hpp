@@ -613,6 +613,7 @@ namespace glz
 
             static constexpr auto N = reflect<T>::size;
             static constexpr auto json_schema_size = reflect<json_schema_type<T>>::size;
+            auto req = s.required.value_or(std::vector<std::string_view>{});
 
             s.properties = std::map<sv, schema, std::less<>>();
             for_each<N>([&]<auto I>() {
@@ -621,6 +622,9 @@ namespace glz
                auto& def = defs[name_v<val_t>];
 
                static constexpr sv key = reflect<T>::keys[I];
+               if constexpr (requires_key<T, val_t, Opts>(key)) {
+                  req.emplace_back(key);
+               }
 
                schema ref_val{};
                if constexpr (N > 0 && json_schema_size > 0) {
@@ -660,6 +664,9 @@ namespace glz
 
                (*s.properties)[key] = ref_val;
             });
+            if (!req.empty()) {
+               s.required = std::move(req);
+            }
             s.additionalProperties = false;
          }
       };
@@ -678,6 +685,7 @@ namespace glz
       detail::schematic s{};
       s.defs.emplace();
       detail::to_json_schema<std::decay_t<T>>::template op<Opts>(s, *s.defs);
+      s.attributes.title = name_v<T>;
       // Making this static constexpr options to fix MSVC bug
       static constexpr opts options = opts_write_type_info_off<decltype(Opts)>{{Opts}};
       return write<options>(std::move(s), std::forward<Buffer>(buffer));

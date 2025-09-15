@@ -19,6 +19,7 @@
 #include <vector>
 
 #include "glaze/net/http_router.hpp"
+#include "glaze/util/key_transformers.hpp"
 
 namespace glz
 {
@@ -306,7 +307,7 @@ namespace glz
          }
 
          auto merged_headers = headers;
-         merged_headers["Content-Type"] = "application/json";
+         merged_headers["content-type"] = "application/json";
 
          return post(url, json_str, merged_headers);
       }
@@ -404,7 +405,7 @@ namespace glz
          }
 
          auto merged_headers = headers;
-         merged_headers["Content-Type"] = "application/json";
+         merged_headers["content-type"] = "application/json";
 
          post_async(url, json_str, merged_headers, std::forward<CompletionHandler>(handler));
       }
@@ -613,7 +614,7 @@ namespace glz
                }
 
                // Create a zero-copy string_view of the received headers
-               std::string_view header_data{asio::buffer_cast<const char*>(connection->buffer->data()),
+               std::string_view header_data{static_cast<const char*>(connection->buffer->data().data()),
                                             bytes_transferred};
 
                // Parse status line
@@ -655,8 +656,8 @@ namespace glz
                      size_t value_start = header_line.find_first_not_of(" \t", colon_pos + 1);
                      std::string_view value = (value_start != std::string::npos) ? header_line.substr(value_start) : "";
 
-                     // Create strings only when inserting into the map
-                     response_headers.response_headers[std::string(name)] = std::string(value);
+                     // Convert header name to lowercase for case-insensitive lookups (RFC 7230)
+                     response_headers.response_headers[to_lower_case(name)] = std::string(value);
                   }
                }
 
@@ -678,7 +679,7 @@ namespace glz
                }
 
                bool is_chunked = false;
-               auto it = response_headers.response_headers.find("Transfer-Encoding");
+               auto it = response_headers.response_headers.find("transfer-encoding");
                if (it != response_headers.response_headers.end()) {
                   if (it->second.find("chunked") != std::string::npos) {
                      is_chunked = true;
@@ -716,7 +717,7 @@ namespace glz
                   return;
                }
 
-               std::string_view line_view{asio::buffer_cast<const char*>(connection->buffer->data()),
+               std::string_view line_view{static_cast<const char*>(connection->buffer->data().data()),
                                           bytes_transferred - 2}; // -2 to exclude CRLF
 
                // Ignore chunk extensions
@@ -758,7 +759,7 @@ namespace glz
 
          // Check if we have enough data in the buffer already.
          if (connection->buffer->size() >= total_to_read) {
-            std::string_view data{asio::buffer_cast<const char*>(connection->buffer->data()), chunk_size};
+            std::string_view data{static_cast<const char*>(connection->buffer->data().data()), chunk_size};
             on_data(data);
             connection->buffer->consume(total_to_read);
 
@@ -784,7 +785,7 @@ namespace glz
                   return;
                }
 
-               std::string_view data{asio::buffer_cast<const char*>(connection->buffer->data()), chunk_size};
+               std::string_view data{static_cast<const char*>(connection->buffer->data().data()), chunk_size};
                on_data(data);
                connection->buffer->consume(chunk_size + 2); // Consume data + trailing CRLF
 
@@ -812,7 +813,7 @@ namespace glz
       {
          // Process any existing data in buffer first
          if (connection->buffer->size() > 0) {
-            std::string_view data{asio::buffer_cast<const char*>(connection->buffer->data()),
+            std::string_view data{static_cast<const char*>(connection->buffer->data().data()),
                                   connection->buffer->size()};
             on_data(data);
             connection->buffer->consume(connection->buffer->size());
@@ -846,7 +847,7 @@ namespace glz
       {
          // Process existing buffer content first
          if (connection->buffer->size() > 0) {
-            std::string_view data{asio::buffer_cast<const char*>(connection->buffer->data()),
+            std::string_view data{static_cast<const char*>(connection->buffer->data().data()),
                                   connection->buffer->size()};
             on_data(data);
             connection->buffer->consume(connection->buffer->size());
@@ -873,7 +874,7 @@ namespace glz
                // Commit the received data and deliver immediately
                connection->buffer->commit(bytes_transferred);
 
-               std::string_view data{asio::buffer_cast<const char*>(connection->buffer->data()), bytes_transferred};
+               std::string_view data{static_cast<const char*>(connection->buffer->data().data()), bytes_transferred};
                on_data(data);
                connection->buffer->consume(bytes_transferred);
 
@@ -936,7 +937,7 @@ namespace glz
             }
 
             // Create a zero-copy view of the header data
-            std::string_view header_data{asio::buffer_cast<const char*>(response_buffer.data()), header_bytes};
+            std::string_view header_data{static_cast<const char*>(response_buffer.data().data()), header_bytes};
 
             // Parse status line from the view
             auto line_end = header_data.find("\r\n");
@@ -979,7 +980,8 @@ namespace glz
                      }
                   }
 
-                  response_headers.emplace(name, value);
+                  // Convert header name to lowercase for case-insensitive lookups (RFC 7230)
+                  response_headers.emplace(to_lower_case(name), value);
                }
             }
 
@@ -999,7 +1001,7 @@ namespace glz
             }
 
             // Create the body string from the buffer, respecting content_length.
-            std::string response_body(asio::buffer_cast<const char*>(response_buffer.data()),
+            std::string response_body(static_cast<const char*>(response_buffer.data().data()),
                                       std::min(content_length, response_buffer.size()));
 
             response resp;
@@ -1138,7 +1140,7 @@ namespace glz
                                size_t header_size, // <-- NEW: The size of the header block from async_read_until
                                const url_parts& url, CompletionHandler&& handler)
       {
-         std::string_view header_section{asio::buffer_cast<const char*>(buffer->data()), header_size};
+         std::string_view header_section{static_cast<const char*>(buffer->data().data()), header_size};
 
          // Parse the status line from the view.
          auto line_end = header_section.find("\r\n");
@@ -1180,8 +1182,8 @@ namespace glz
                    glz::strncasecmp(name.data(), "Content-Length", 14) == 0) {
                   std::from_chars(value.data(), value.data() + value.size(), content_length);
                }
-               // Store the header, creating strings only at the last moment.
-               response_headers.emplace(name, value);
+               // Convert header name to lowercase for case-insensitive lookups (RFC 7230)
+               response_headers.emplace(to_lower_case(name), value);
             }
          }
 
@@ -1206,7 +1208,7 @@ namespace glz
                }
 
                // Directly construct the string from the buffer's contiguous memory.
-               std::string body(asio::buffer_cast<const char*>(buffer->data()), buffer->size());
+               std::string body(static_cast<const char*>(buffer->data().data()), buffer->size());
 
                response resp;
                resp.status_code = status_code;
@@ -1214,7 +1216,7 @@ namespace glz
                resp.response_body = std::move(body);
 
                // Return connection to pool if it's still usable
-               auto connection_header = resp.response_headers.find("Connection");
+               auto connection_header = resp.response_headers.find("connection");
                if (connection_header == resp.response_headers.end() ||
                    connection_header->second.find("close") == std::string::npos) {
                   connection_pool->return_connection(url.host, url.port, socket);

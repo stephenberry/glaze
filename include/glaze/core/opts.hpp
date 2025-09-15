@@ -121,6 +121,11 @@ namespace glz
       bool append_arrays = false; // When reading into an array the data will be appended if the type supports it
       bool raw_string = false; // do not decode/encode escaped characters for strings (improves read/write performance)
 
+      // New options for headerless CSV support
+      bool skip_header_row =
+         false; // Skip first row when reading (useful for CSV with headers when reading into 2D arrays)
+      bool validate_rectangular = false; // Ensure all rows have the same column count when reading 2D arrays
+
       // INTERNAL OPTIONS
       uint32_t internal{}; // default should be 0
 

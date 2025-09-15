@@ -62,14 +62,6 @@ struct example_functions_t
    };
 };
 
-suite header_tests = [] {
-   "header"_test = [] {
-      glz::repe::header h{.action = glz::repe::action::read};
-      expect(not h.notify());
-      expect(h.read());
-   };
-};
-
 suite structs_of_functions = [] {
    "structs_of_functions"_test = [] {
       glz::registry server{};
@@ -125,7 +117,7 @@ suite structs_of_functions = [] {
       server.call(request, response);
       expect(response.body == "null");
 
-      repe::request_json({"/my_string"}, request);
+      request = repe::request_json({"/my_string"});
       server.call(request, response);
       expect(response.body == R"("Howdy!")") << response.body;
 
@@ -140,7 +132,7 @@ suite structs_of_functions = [] {
       server.call(request, response);
       expect(response.body == R"(3.3)") << response.body;
 
-      repe::request_json({"/my_functions"}, request);
+      request = repe::request_json({"/my_functions"});
       server.call(request, response);
       expect(
          response.body ==
@@ -262,14 +254,14 @@ suite structs_of_functions_beve = [] {
       expect(!glz::beve_to_json(response.body, res));
       expect(res == "null");
 
-      repe::request_beve({"/my_string"}, request);
+      request = repe::request_beve({"/my_string"});
       server.call(request, response);
       expect(!glz::beve_to_json(response.body, res));
       expect(res == R"("Howdy!")") << res;
 
       obj.my_string.clear();
 
-      repe::request_beve({"/my_string"}, request);
+      request = repe::request_beve({"/my_string"});
       server.call(request, response);
       expect(!glz::beve_to_json(response.body, res));
       // we expect an empty string returned because we cleared it
@@ -280,7 +272,7 @@ suite structs_of_functions_beve = [] {
       expect(!glz::beve_to_json(response.body, res));
       expect(res == R"(3.3)") << res;
 
-      repe::request_beve({"/my_functions"}, request);
+      request = repe::request_beve({"/my_functions"});
       server.call(request, response);
       expect(!glz::beve_to_json(response.body, res));
       expect(
@@ -544,6 +536,192 @@ suite glaze_types_test = [] {
 
       glz::registry<> registry{};
       registry.on(obj);
+   };
+};
+
+suite validation_tests = [] {
+   "version_validation"_test = [] {
+      glz::registry server{};
+      my_functions_t obj{};
+      server.on(obj);
+
+      repe::message request{};
+      repe::message response{};
+
+      // Create a request with invalid version
+      repe::request_json({"/hello"}, request);
+      request.header.version = 2; // Invalid version
+
+      server.call(request, response);
+
+      expect(response.header.ec == glz::error_code::version_mismatch);
+      expect(response.body.find("version mismatch") != std::string::npos);
+   };
+
+   "length_validation"_test = [] {
+      glz::registry server{};
+      my_functions_t obj{};
+      server.on(obj);
+
+      repe::message request{};
+      repe::message response{};
+
+      // Create a request with invalid length
+      repe::request_json({"/hello"}, request);
+      request.header.length = 100; // Wrong length
+
+      server.call(request, response);
+
+      expect(response.header.ec == glz::error_code::invalid_header);
+      expect(response.body.find("length mismatch") != std::string::npos);
+   };
+
+   "magic_number_validation"_test = [] {
+      glz::registry server{};
+      my_functions_t obj{};
+      server.on(obj);
+
+      repe::message request{};
+      repe::message response{};
+
+      // Create a request with invalid magic number
+      repe::request_json({"/hello"}, request);
+      request.header.spec = 0x1234; // Wrong magic number
+
+      server.call(request, response);
+
+      expect(response.header.ec == glz::error_code::invalid_header);
+      expect(response.body.find("magic number mismatch") != std::string::npos);
+   };
+
+   "valid_message_passes"_test = [] {
+      glz::registry server{};
+      my_functions_t obj{};
+      server.on(obj);
+
+      repe::message request{};
+      repe::message response{};
+
+      // Create a valid request
+      repe::request_json({"/hello"}, request);
+      // All validation fields should be correct by default
+
+      server.call(request, response);
+
+      // Should succeed and not have validation errors
+      expect(response.header.ec == glz::error_code::none);
+      expect(response.body == R"("Hello")");
+   };
+};
+
+// Define throwing_functions_t at namespace scope for proper linkage
+struct throwing_functions_t
+{
+   std::function<int()> throw_func = []() -> int { throw std::runtime_error("Test exception"); };
+};
+
+suite id_preservation_tests = [] {
+   "method_not_found_preserves_id"_test = [] {
+      glz::registry server{};
+
+      my_functions_t obj{};
+      server.on(obj);
+
+      repe::message request{};
+      repe::message response{};
+
+      // Create a request with a specific ID for a non-existent endpoint
+      repe::request_json({"/non_existent_endpoint"}, request);
+      request.header.id = 12345; // Set a specific ID
+
+      server.call(request, response);
+
+      // Verify error is set and ID is preserved
+      expect(response.header.ec == glz::error_code::method_not_found);
+      expect(response.header.id == 12345) << "ID should be preserved in method_not_found error";
+      expect(response.body.find("invalid_query") != std::string::npos);
+   };
+
+   "exception_error_preserves_id"_test = [] {
+      glz::registry server{};
+
+      throwing_functions_t obj{};
+      server.on(obj);
+
+      repe::message request{};
+      repe::message response{};
+
+      // Create a request with a specific ID
+      repe::request_json({"/throw_func"}, request);
+      request.header.id = 67890; // Set a specific ID
+
+      server.call(request, response);
+
+      // Verify error is set and ID is preserved
+      expect(response.header.ec == glz::error_code::parse_error);
+      expect(response.header.id == 67890) << "ID should be preserved in exception error";
+      expect(response.body.find("Test exception") != std::string::npos);
+   };
+
+   "header_validation_errors_preserve_id"_test = [] {
+      glz::registry server{};
+
+      my_functions_t obj{};
+      server.on(obj);
+
+      repe::message request{};
+      repe::message response{};
+
+      // Test version mismatch
+      repe::request_json({"/hello"}, request);
+      request.header.id = 11111;
+      request.header.version = 2; // Invalid version
+
+      server.call(request, response);
+
+      expect(response.header.ec == glz::error_code::version_mismatch);
+      expect(response.header.id == 11111) << "ID should be preserved in version_mismatch error";
+
+      // Test invalid length
+      repe::request_json({"/hello"}, request);
+      request.header.id = 22222;
+      request.header.length = 100; // Wrong length
+
+      server.call(request, response);
+
+      expect(response.header.ec == glz::error_code::invalid_header);
+      expect(response.header.id == 22222) << "ID should be preserved in length mismatch error";
+
+      // Test invalid magic number
+      repe::request_json({"/hello"}, request);
+      request.header.id = 33333;
+      request.header.spec = 0x1234; // Wrong magic number
+
+      server.call(request, response);
+
+      expect(response.header.ec == glz::error_code::invalid_header);
+      expect(response.header.id == 33333) << "ID should be preserved in magic number error";
+   };
+
+   "successful_request_preserves_id"_test = [] {
+      glz::registry server{};
+
+      my_functions_t obj{};
+      server.on(obj);
+
+      repe::message request{};
+      repe::message response{};
+
+      // Create a valid request with a specific ID
+      repe::request_json({"/get_number"}, request);
+      request.header.id = 99999;
+
+      server.call(request, response);
+
+      // Verify success and ID is preserved
+      expect(response.header.ec == glz::error_code::none);
+      expect(response.header.id == 99999) << "ID should be preserved in successful response";
+      expect(response.body == R"(42)");
    };
 };
 

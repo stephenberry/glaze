@@ -41,9 +41,12 @@ jobs:
     - name: Install latest clang
       run: |
         wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
-        echo "deb http://apt.llvm.org/jammy/ llvm-toolchain-jammy-${{matrix.clang}} main" | sudo tee /etc/apt/sources.list.d/llvm.list
+        # Use the 'noble' repository for Ubuntu 24.04
+        echo "deb http://apt.llvm.org/noble/ llvm-toolchain-noble-${{matrix.clang}} main" | sudo tee /etc/apt/sources.list.d/llvm.list
+        # Clean apt cache and update before installing
+        sudo apt-get clean
         sudo apt-get update
-        sudo apt-get install -y clang-${{matrix.clang}} libc++-${{matrix.clang}}-dev libc++abi-${{matrix.clang}}-dev
+        sudo apt-get install -y --fix-missing clang-${{matrix.clang}} libc++-${{matrix.clang}}-dev libc++abi-${{matrix.clang}}-dev
 
     - name: Set path for clang
       run: |

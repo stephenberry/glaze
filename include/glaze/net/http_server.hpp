@@ -3,25 +3,36 @@
 
 #pragma once
 
-#include <asio.hpp>
 #include <atomic>
 #include <charconv>
 #include <chrono>
+#include <condition_variable>
 #include <expected>
 #include <functional>
 #include <future>
 #include <glaze/glaze.hpp>
+#include <iostream>
+#include <mutex>
+#include <set>
 #include <source_location>
 #include <thread>
 #include <unordered_map>
 
+#include "glaze/ext/glaze_asio.hpp"
 #include "glaze/net/cors.hpp"
 #include "glaze/net/http_router.hpp"
+#include "glaze/net/openapi.hpp"
 #include "glaze/net/websocket_connection.hpp"
+#include "glaze/util/key_transformers.hpp"
 
 // Conditionally include SSL headers only when needed
 #ifdef GLZ_ENABLE_SSL
 #include <asio/ssl.hpp>
+#endif
+
+// To deconflict Windows.h
+#ifdef DELETE
+#undef DELETE
 #endif
 
 namespace glz
@@ -61,14 +72,14 @@ namespace glz
          }
 
          // Default headers for streaming
-         if (headers.find("Transfer-Encoding") == headers.end()) {
+         if (headers.find("transfer-encoding") == headers.end()) {
             response_str.append("Transfer-Encoding: chunked\r\n");
             chunked_encoding_ = true;
          }
-         if (headers.find("Connection") == headers.end()) {
+         if (headers.find("connection") == headers.end()) {
             response_str.append("Connection: keep-alive\r\n");
          }
-         if (headers.find("Cache-Control") == headers.end()) {
+         if (headers.find("cache-control") == headers.end()) {
             response_str.append("Cache-Control: no-cache\r\n");
          }
 
@@ -174,15 +185,15 @@ namespace glz
             std::string final_chunk = "0\r\n\r\n";
             auto buffer = std::make_shared<std::string>(std::move(final_chunk));
 
-            asio::async_write(*socket_, asio::buffer(*buffer), [self, buffer, handler](std::error_code, std::size_t) {
+            asio::async_write(*socket_, asio::buffer(*buffer), [self, buffer, handler](asio::error_code, std::size_t) {
                if (handler) handler();
-               std::error_code close_ec;
+               asio::error_code close_ec;
                self->socket_->close(close_ec);
             });
          }
          else {
             if (handler) handler();
-            std::error_code ec;
+            asio::error_code ec;
             socket_->close(ec);
          }
       }
@@ -385,6 +396,13 @@ namespace glz
          if (running) {
             stop();
          }
+         // Clean up any remaining threads
+         for (auto& thread : threads) {
+            if (thread.joinable()) {
+               thread.join();
+            }
+         }
+         threads.clear();
       }
 
       inline http_server& bind(std::string_view address, uint16_t port)
@@ -393,7 +411,7 @@ namespace glz
             asio::ip::tcp::endpoint endpoint(asio::ip::make_address(address), port);
             acceptor = std::make_unique<asio::ip::tcp::acceptor>(*io_context, endpoint);
          }
-         catch (const std::exception& e) {
+         catch (...) {
             error_handler(std::make_error_code(std::errc::address_in_use), std::source_location::current());
          }
          return *this;
@@ -421,42 +439,66 @@ namespace glz
          threads.reserve(num_threads);
          for (size_t i = 0; i < num_threads; ++i) {
             threads.emplace_back([this] {
-               try {
-                  io_context->run();
-               }
-               catch (const std::exception& e) {
-                  error_handler(std::make_error_code(std::errc::operation_canceled), std::source_location::current());
-               }
+               io_context->run();
+               // Don't report errors during shutdown
             });
          }
       }
 
       inline void stop()
       {
-         if (!running) {
-            return;
+         {
+            std::lock_guard<std::mutex> lock(shutdown_mutex);
+            if (!running) {
+               return;
+            }
+            running = false;
          }
-
-         running = false;
 
          // Stop accepting new connections
          if (acceptor) {
-            acceptor->close();
-         }
-
-         // Stop the io_context and join all threads
-         io_context->stop();
-
-         for (auto& thread : threads) {
-            if (thread.joinable()) {
-               thread.join();
+            try {
+               acceptor->close();
+            }
+            catch (...) {
+               // Ignore errors on close
             }
          }
 
-         threads.clear();
+         // Cancel the signal handler
+         if (signals_) {
+            try {
+               signals_->cancel();
+            }
+            catch (...) {
+               // Ignore errors on cancel
+            }
+         }
 
-         // Reset for potential restart
-         io_context = std::make_unique<asio::io_context>();
+         // Stop the io_context
+         io_context->stop();
+
+         // Only join threads if we're not in one of the worker threads
+         auto current_thread_id = std::this_thread::get_id();
+         bool is_worker_thread = false;
+         for (const auto& thread : threads) {
+            if (thread.get_id() == current_thread_id) {
+               is_worker_thread = true;
+               break;
+            }
+         }
+
+         if (!is_worker_thread) {
+            for (auto& thread : threads) {
+               if (thread.joinable()) {
+                  thread.join();
+               }
+            }
+            threads.clear();
+         }
+
+         // Notify any threads waiting for shutdown
+         shutdown_cv.notify_all();
       }
 
       inline http_server& mount(std::string_view base_path, const http_router& router)
@@ -469,8 +511,8 @@ namespace glz
             }
             full_path += path;
 
-            for (const auto& [method, handle] : method_handlers) {
-               root_router.route(method, full_path, handle);
+            for (const auto& [method, route_entry] : method_handlers) {
+               root_router.route(method, full_path, route_entry.handle, route_entry.spec);
             }
          }
 
@@ -482,20 +524,35 @@ namespace glz
          return *this;
       }
 
-      inline http_router& route(http_method method, std::string_view path, handler handle)
+      inline http_router& route(http_method method, std::string_view path, handler handle, const route_spec& spec = {})
       {
-         return root_router.route(method, path, handle);
+         return root_router.route(method, path, handle, spec);
       }
 
-      inline http_router& get(std::string_view path, handler handle) { return root_router.get(path, handle); }
+      inline http_router& get(std::string_view path, handler handle, const route_spec& spec = {})
+      {
+         return root_router.get(path, handle, spec);
+      }
 
-      inline http_router& post(std::string_view path, handler handle) { return root_router.post(path, handle); }
+      inline http_router& post(std::string_view path, handler handle, const route_spec& spec = {})
+      {
+         return root_router.post(path, handle, spec);
+      }
 
-      inline http_router& put(std::string_view path, handler handle) { return root_router.put(path, handle); }
+      inline http_router& put(std::string_view path, handler handle, const route_spec& spec = {})
+      {
+         return root_router.put(path, handle, spec);
+      }
 
-      inline http_router& del(std::string_view path, handler handle) { return root_router.del(path, handle); }
+      inline http_router& del(std::string_view path, handler handle, const route_spec& spec = {})
+      {
+         return root_router.del(path, handle, spec);
+      }
 
-      inline http_router& patch(std::string_view path, handler handle) { return root_router.patch(path, handle); }
+      inline http_router& patch(std::string_view path, handler handle, const route_spec& spec = {})
+      {
+         return root_router.patch(path, handle, spec);
+      }
 
       // Register streaming route
       inline http_server& stream(http_method method, std::string_view path, streaming_handler handle)
@@ -517,7 +574,130 @@ namespace glz
 
       inline http_server& on_error(error_handler handle)
       {
-         error_handler = std::move(handle);
+         this->error_handler = std::move(handle);
+         return *this;
+      }
+
+      /**
+       * @brief Enable API inspection by exposing an OpenAPI 3.0 specification.
+       *
+       * This provides a standard, machine-readable way for clients to discover the API.
+       *
+       * @param path The path to expose the OpenAPI JSON specification on.
+       * @param title The title of the API.
+       * @param version The version of the API.
+       * @return Reference to this server for method chaining.
+       */
+      http_server& enable_openapi_spec(std::string_view path = "/openapi.json",
+                                       std::string_view title = "API Specification", std::string_view version = "1.0.0")
+      {
+         get(path, [this, title = std::string(title), version = std::string(version)](const request&, response& res) {
+            open_api spec{};
+            spec.info.title = title;
+            spec.info.version = version;
+
+            for (const auto& [route_path, method_handlers] : root_router.routes) {
+               // Convert router path /:param to OpenAPI path /{param}
+               std::string openapi_path = route_path;
+               size_t pos = 0;
+               while ((pos = openapi_path.find(':', pos)) != std::string::npos) {
+                  openapi_path.replace(pos, 1, "{");
+                  size_t end_pos = openapi_path.find('/', pos);
+                  if (end_pos == std::string::npos) {
+                     openapi_path.push_back('}');
+                  }
+                  else {
+                     openapi_path.insert(end_pos, "}");
+                  }
+               }
+
+               auto& path_item = spec.paths[openapi_path];
+
+               for (const auto& [method, route_entry] : method_handlers) {
+                  openapi_operation op;
+                  op.summary = route_entry.spec.description;
+                  if (!route_entry.spec.tags.empty()) {
+                     op.tags = route_entry.spec.tags;
+                  }
+                  op.operationId = std::string(to_string(method)) + route_path;
+                  op.responses["200"].description = "OK";
+
+                  // Add request body schema
+                  if (route_entry.spec.request_body_schema) {
+                     openapi_request_body req_body;
+                     req_body.required = true;
+                     if (auto schema_val =
+                            glz::read_json<glz::detail::schematic>(*route_entry.spec.request_body_schema)) {
+                        req_body.content["application/json"].schema = *schema_val;
+                     }
+                     op.requestBody = req_body;
+
+                     // Add schema to components
+                     if (!spec.components) spec.components.emplace();
+                     if (!spec.components->schemas) spec.components->schemas.emplace();
+                     if (auto schema_val =
+                            glz::read_json<glz::detail::schematic>(*route_entry.spec.request_body_schema)) {
+                        spec.components->schemas->operator[](*route_entry.spec.request_body_type_name) = *schema_val;
+                     }
+                  }
+
+                  // Add response schema
+                  if (route_entry.spec.response_schema) {
+                     openapi_response res_obj;
+                     res_obj.description = "Successful response";
+                     res_obj.content.emplace(); // Emplace the unordered_map
+                     if (auto schema_val = glz::read_json<glz::detail::schematic>(*route_entry.spec.response_schema)) {
+                        res_obj.content.value()["application/json"].schema = *schema_val;
+                     }
+                     op.responses["200"] = res_obj;
+
+                     // Add schema to components
+                     if (!spec.components) spec.components.emplace();
+                     if (!spec.components->schemas) spec.components->schemas.emplace();
+                     if (auto schema_val = glz::read_json<glz::detail::schematic>(*route_entry.spec.response_schema)) {
+                        spec.components->schemas->operator[](*route_entry.spec.response_type_name) = *schema_val;
+                     }
+                  }
+
+                  // Extract path parameters
+                  auto segments = http_router::split_path(route_path);
+                  for (const auto& segment : segments) {
+                     if (!segment.empty() && segment.front() == ':') {
+                        if (!op.parameters) op.parameters.emplace();
+                        auto& param = op.parameters->emplace_back();
+                        param.name = segment.substr(1);
+                        param.in = "path";
+                        param.required = true;
+                        if (auto it = route_entry.spec.constraints.find(param.name);
+                            it != route_entry.spec.constraints.end()) {
+                           param.description = it->second.description;
+                        }
+                     }
+                  }
+
+                  switch (method) {
+                  case http_method::GET:
+                     path_item.get = op;
+                     break;
+                  case http_method::POST:
+                     path_item.post = op;
+                     break;
+                  case http_method::PUT:
+                     path_item.put = op;
+                     break;
+                  case http_method::DELETE:
+                     path_item.del = op;
+                     break;
+                  case http_method::PATCH:
+                     path_item.patch = op;
+                     break;
+                  default:
+                     break;
+                  }
+               }
+            }
+            res.json(spec);
+         });
          return *this;
       }
 
@@ -613,6 +793,56 @@ namespace glz
          return *this;
       }
 
+      /**
+       * @brief Enable signal handling for graceful shutdown
+       *
+       * Registers signal handlers for SIGINT (Ctrl+C) and SIGTERM.
+       * When these signals are received, the server will stop gracefully.
+       *
+       * @return Reference to this server for method chaining
+       */
+      inline http_server& with_signals()
+      {
+         signal_handling_enabled = true;
+
+         // Create signal_set that will handle SIGINT and SIGTERM
+         signals_ = std::make_unique<asio::signal_set>(*io_context, SIGINT, SIGTERM);
+
+         // Set up async handler - this properly captures 'this' and integrates with ASIO
+         signals_->async_wait([this](std::error_code ec, int signal_number) {
+            if (!ec) {
+               std::cout << "\nReceived signal " << signal_number << ", shutting down..." << std::endl;
+               std::cout.flush();
+               this->stop();
+            }
+         });
+
+         return *this;
+      }
+
+      /**
+       * @brief Wait for a shutdown signal
+       *
+       * This method blocks until the server is stopped, either by calling stop()
+       * or by receiving a signal if signal handling is enabled with with_signals().
+       *
+       * @return void
+       */
+      inline void wait_for_signal()
+      {
+         std::unique_lock<std::mutex> lock(shutdown_mutex);
+         shutdown_cv.wait(lock, [this] { return !running; });
+
+         // After shutdown is signaled, wait for all threads to finish
+         lock.unlock();
+         for (auto& thread : threads) {
+            if (thread.joinable()) {
+               thread.join();
+            }
+         }
+         threads.clear();
+      }
+
      private:
       std::unique_ptr<asio::io_context> io_context;
       std::unique_ptr<asio::ip::tcp::acceptor> acceptor;
@@ -622,6 +852,12 @@ namespace glz
       glz::error_handler error_handler;
       std::unordered_map<std::string, std::shared_ptr<websocket_server>> websocket_handlers_;
       std::unordered_map<std::string, std::unordered_map<http_method, streaming_handler>> streaming_handlers_;
+
+      // Signal handling members
+      bool signal_handling_enabled = false;
+      std::unique_ptr<asio::signal_set> signals_;
+      std::condition_variable shutdown_cv;
+      std::mutex shutdown_mutex;
 
 #ifdef GLZ_ENABLE_SSL
       std::conditional_t<EnableTLS, std::unique_ptr<asio::ssl::context>, std::monostate> ssl_context;
@@ -634,7 +870,8 @@ namespace glz
                // Process the connection
                process_request(std::move(socket));
             }
-            else {
+            else if (running) {
+               // Only report errors if we're still running (not shutting down)
                error_handler(ec, std::source_location::current());
             }
 
@@ -654,7 +891,7 @@ namespace glz
 
          asio::async_read_until(
             *socket_ptr, *buffer, "\r\n\r\n",
-            [this, socket_ptr, buffer, remote_endpoint](std::error_code ec, std::size_t /*bytes_transferred*/) {
+            [this, socket_ptr, buffer, remote_endpoint](asio::error_code ec, std::size_t /*bytes_transferred*/) {
                if (ec) {
                   // EOF is a normal disconnect, not a server error
                   if (ec != asio::error::eof) {
@@ -664,7 +901,7 @@ namespace glz
                }
 
                const auto data_size = buffer->size();
-               const char* data_ptr = asio::buffer_cast<const char*>(buffer->data());
+               const char* data_ptr = static_cast<const char*>(buffer->data().data());
                std::string_view request_view(data_ptr, data_size);
 
                size_t headers_end_pos = request_view.find("\r\n\r\n");
@@ -747,9 +984,7 @@ namespace glz
                      std::string_view name_sv = line.substr(0, colon_pos);
                      std::string_view value_sv = line.substr(colon_pos + 1);
                      value_sv.remove_prefix(std::min(value_sv.find_first_not_of(" \t"), value_sv.size()));
-                     std::string name(name_sv);
-                     std::transform(name.begin(), name.end(), name.begin(), ::tolower);
-                     headers[name] = std::string(value_sv);
+                     headers[to_lower_case(name_sv)] = std::string(value_sv);
                   }
 
                   if (line_end == std::string_view::npos) break;
@@ -780,7 +1015,7 @@ namespace glz
                   body.reserve(content_length);
                   // Append what's already in the buffer
                   const size_t initial_body_size = std::min(content_length, buffer->size());
-                  body.append(asio::buffer_cast<const char*>(buffer->data()), initial_body_size);
+                  body.append(static_cast<const char*>(buffer->data().data()), initial_body_size);
                   buffer->consume(initial_body_size);
 
                   if (body.length() < content_length) {
@@ -792,7 +1027,7 @@ namespace glz
                                             return;
                                          }
                                          // Append newly read data
-                                         body.append(asio::buffer_cast<const char*>(buffer->data()), buffer->size());
+                                         body.append(static_cast<const char*>(buffer->data().data()), buffer->size());
                                          buffer->consume(buffer->size());
                                          process_full_request(socket_ptr, *method_opt, target, headers, std::move(body),
                                                               remote_endpoint);
@@ -817,13 +1052,11 @@ namespace glz
          if (connection_it == headers.end()) return false;
 
          // Check if upgrade header contains "websocket" (case-insensitive)
-         std::string upgrade_value = upgrade_it->second;
-         std::transform(upgrade_value.begin(), upgrade_value.end(), upgrade_value.begin(), ::tolower);
+         auto upgrade_value = to_lower_case(upgrade_it->second);
          if (upgrade_value.find("websocket") == std::string::npos) return false;
 
          // Check if connection header contains "upgrade" (case-insensitive)
-         std::string connection_value = connection_it->second;
-         std::transform(connection_value.begin(), connection_value.end(), connection_value.begin(), ::tolower);
+         auto connection_value = to_lower_case(connection_it->second);
          return connection_value.find("upgrade") != std::string::npos;
       }
 
@@ -876,7 +1109,7 @@ namespace glz
             // Call the streaming handler
             handler(req, stream_res);
          }
-         catch (const std::exception& e) {
+         catch (const std::exception&) {
             // If handler throws immediately, try to send an error response.
             if (!stream_conn->is_headers_sent()) {
                stream_conn->send_headers(500, {{"Content-Type", "text/plain"}});
@@ -983,19 +1216,19 @@ namespace glz
          }
 
          // Add default headers if not present (using find is faster than streams)
-         if (response.response_headers.find("Content-Length") == response.response_headers.end()) {
+         if (response.response_headers.find("content-length") == response.response_headers.end()) {
             response_str.append("Content-Length: ");
             response_str.append(std::to_string(response.response_body.size()));
             response_str.append("\r\n");
          }
 
-         if (response.response_headers.find("Date") == response.response_headers.end()) {
+         if (response.response_headers.find("date") == response.response_headers.end()) {
             response_str.append("Date: ");
             response_str.append(get_current_date());
             response_str.append("\r\n");
          }
 
-         if (response.response_headers.find("Server") == response.response_headers.end()) {
+         if (response.response_headers.find("server") == response.response_headers.end()) {
             response_str.append("Server: Glaze/1.0\r\n");
          }
 
@@ -1080,7 +1313,9 @@ namespace glz
          if (!conn || !conn->is_open()) return;
          auto timer = std::make_shared<asio::steady_timer>(conn->socket_->get_executor());
 
-         std::function<void()> send_next = [=]() mutable {
+         // Use shared_ptr to safely handle recursive lambda calls and avoid compiler-specific segfaults
+         auto send_next = std::make_shared<std::function<void()>>();
+         *send_next = [conn, timer, counter, data_generator, interval, max_events, send_next]() mutable {
             if (!conn->is_open() || (max_events > 0 && *counter >= max_events)) {
                conn->close();
                return;
@@ -1092,7 +1327,7 @@ namespace glz
                   if (!ec) {
                      (*counter)++;
                      timer->expires_after(interval);
-                     timer->async_wait([=](std::error_code) { send_next(); });
+                     timer->async_wait([send_next, timer, counter](std::error_code) { (*send_next)(); });
                   }
                   else {
                      conn->close();
@@ -1104,7 +1339,7 @@ namespace glz
             }
          };
 
-         send_next();
+         (*send_next)();
       }
 
       // Create a data stream from a collection
@@ -1117,7 +1352,9 @@ namespace glz
          if (!conn || !conn->is_open()) return;
          auto timer = std::make_shared<asio::steady_timer>(conn->socket_->get_executor());
 
-         std::function<void()> send_next = [=]() mutable {
+         // Use shared_ptr to safely handle recursive lambda calls and avoid compiler-specific segfaults
+         auto send_next = std::make_shared<std::function<void()>>();
+         *send_next = [conn, timer, it, end_it, delay_between_items, send_next]() mutable {
             if (!conn->is_open() || *it == end_it) {
                conn->close();
                return;
@@ -1127,7 +1364,7 @@ namespace glz
                if (!ec) {
                   ++(*it);
                   timer->expires_after(delay_between_items);
-                  timer->async_wait([=](std::error_code) { send_next(); });
+                  timer->async_wait([send_next, timer, it](std::error_code) { (*send_next)(); });
                }
                else {
                   conn->close();
@@ -1135,7 +1372,7 @@ namespace glz
             });
          };
 
-         send_next();
+         (*send_next)();
       }
    } // namespace streaming_utils
 

@@ -6,6 +6,7 @@
 #include <array>
 
 #include "glaze/reflection/get_name.hpp"
+#include "glaze/reflection/requires_key.hpp"
 #include "glaze/tuplet/tuple.hpp"
 #include "glaze/util/for_each.hpp"
 #include "glaze/util/string_literal.hpp"
@@ -15,6 +16,15 @@
 
 namespace glz
 {
+   enum struct operation { serialize, parse };
+
+   // The meta_context provides compile time data about the serialization context.
+   // This include whether we are serializing or parsing.
+   struct meta_context
+   {
+      operation op = operation::serialize;
+   };
+
    template <class T>
    struct meta;
 
@@ -243,6 +253,12 @@ namespace glz
 
    template <class T>
    concept ided = requires { meta<std::decay_t<T>>::ids; } || requires { std::decay_t<T>::glaze::ids; };
+
+   // Concept when skip is specified for the type
+   template <class T>
+   concept meta_has_skip = requires(T t, const std::string_view s, const meta_context& mctx) {
+      { glz::meta<std::remove_cvref_t<T>>::skip(s, mctx) } -> std::same_as<bool>;
+   };
 
    template <class T>
    inline constexpr std::string_view tag_v = [] {

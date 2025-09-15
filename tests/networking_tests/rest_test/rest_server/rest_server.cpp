@@ -277,19 +277,21 @@ int main()
    server.get("/test-cors", [](const glz::request& req, glz::response& res) {
       // The CORS middleware will automatically add the appropriate headers
       res.json({{"message", "CORS test endpoint"},
-                {"origin", req.headers.count("Origin") ? req.headers.at("Origin") : "none"},
+                {"origin", req.headers.count("origin") ? req.headers.at("origin") : "none"},
                 {"method", glz::to_string(req.method)}});
    });
 
    // Start the server
-   server.bind("127.0.0.1", 8080);
+   server.bind("127.0.0.1", 8080).with_signals(); // Enable signal handling for graceful shutdown
+
    std::cout << "Glaze Demo Server running on http://127.0.0.1:8080\n";
-   std::cout << "🛑 Press Enter to stop the server...\n\n";
+   std::cout << "Press Ctrl+C to gracefully shut down the server\n\n";
 
    server.start();
 
-   // Keep server running until user presses Enter
-   std::cin.get();
+   // Wait for shutdown signal (blocks until server stops)
+   server.wait_for_signal();
 
+   std::cout << "Server shut down successfully\n";
    return 0;
 }

@@ -265,6 +265,32 @@ auto read_json_ignore_unknown(auto&& value, auto&& buffer)
    return read<glz::opts{.error_on_unknown_keys = false}>(value, std::forward<decltype(buffer)>(buffer), ctx);
 }
 
+struct required_meta
+{
+   int a{};
+   int reserved_1{};
+   int reserved_2{};
+   int b{};
+};
+
+template <>
+struct glz::meta<required_meta>
+{
+   static constexpr bool requires_key(const std::string_view key, const bool is_nullable)
+   {
+      if (key.starts_with("reserved")) {
+         return false;
+      }
+      return !is_nullable;
+   }
+};
+
+struct error_on_missing_keys_test
+{
+   std::optional<int> unimportant{};
+   int important{};
+};
+
 #if 0
 struct invalid_name
 {
@@ -338,7 +364,7 @@ suite schema_tests = [] {
       std::string schema_str = glz::write_json_schema<std::monostate>().value_or("error");
       // reading null will of course leave the std::optional as empty, therefore check if
       // null is actually written in the schema
-      expect(schema_str == R"({"type":["null"],"$defs":{},"const":null})");
+      expect(schema_str == R"({"type":["null"],"$defs":{},"title":"std::monostate","const":null})");
    };
 
    "enum oneOf has title and constant"_test = [] {
@@ -376,6 +402,29 @@ suite schema_tests = [] {
       expect(obj.attributes.minItems.value() == 42);
       expect[(obj.attributes.maxItems.has_value())];
       expect(obj.attributes.maxItems.value() == 42);
+   };
+
+   "required_key meta is correctly used"_test = [] {
+      std::string schema_str = glz::write_json_schema<required_meta>().value_or("error");
+      expect(
+         schema_str ==
+         R"({"type":["object"],"properties":{"a":{"$ref":"#/$defs/int32_t"},"b":{"$ref":"#/$defs/int32_t"},"reserved_1":{"$ref":"#/$defs/int32_t"},"reserved_2":{"$ref":"#/$defs/int32_t"}},"additionalProperties":false,"$defs":{"int32_t":{"type":["integer"],"minimum":-2147483648,"maximum":2147483647}},"required":["a","b"],"title":"required_meta"})");
+   };
+
+   "Opts.error_on_missing_keys as fallback"_test = [] {
+      using T = error_on_missing_keys_test;
+      std::string schema_str_req =
+         glz::write_json_schema<T, glz::opts{.error_on_missing_keys = true}>().value_or("error");
+      std::string schema_str_nreq =
+         glz::write_json_schema<T, glz::opts{.error_on_missing_keys = false}>().value_or("error");
+
+      expect(
+         schema_str_req ==
+         R"({"type":["object"],"properties":{"important":{"$ref":"#/$defs/int32_t"},"unimportant":{"$ref":"#/$defs/std::optional<int32_t>"}},"additionalProperties":false,"$defs":{"int32_t":{"type":["integer"],"minimum":-2147483648,"maximum":2147483647},"std::optional<int32_t>":{"type":["integer","null"],"minimum":-2147483648,"maximum":2147483647}},"required":["important"],"title":"error_on_missing_keys_test"})");
+
+      expect(
+         schema_str_nreq ==
+         R"({"type":["object"],"properties":{"important":{"$ref":"#/$defs/int32_t"},"unimportant":{"$ref":"#/$defs/std::optional<int32_t>"}},"additionalProperties":false,"$defs":{"int32_t":{"type":["integer"],"minimum":-2147483648,"maximum":2147483647},"std::optional<int32_t>":{"type":["integer","null"],"minimum":-2147483648,"maximum":2147483647}},"title":"error_on_missing_keys_test"})");
    };
 };
 

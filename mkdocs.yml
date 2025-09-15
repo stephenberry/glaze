@@ -71,6 +71,7 @@ nav:
    - Compile Time Options: options.md
    - Optimizing Performance: optimizing-performance.md
    - Rename Keys: rename-keys.md
+   - Skip Keys: skip-keys.md
    - Generic JSON: generic-json.md
  - Reflection:
    - Pure Reflection: pure-reflection.md
@@ -108,6 +109,7 @@ nav:
    - JSON Include: json-include.md
    - CLI Menu: cli-menu.md
    - Glaze Interfaces: glaze-interfaces.md
+   - FFI Shared Library (Interop): interop.md
  - Data Recording/Logging:
    - Time Trace Profiles: time-trace.md
    - Data Recorder: recorder.md
