@@ -734,10 +734,24 @@ namespace glz
                   size_t col = 0;
                   while (it != end) {
                      if (col < member.size()) [[likely]] {
-                        parse<CSV>::op<Opts>(member[col][csv_index], ctx, it, end);
+                        auto& element = member[col];
+                        if (csv_index < element.size()) [[likely]] {
+                           parse<CSV>::op<Opts>(element[csv_index], ctx, it, end);
+                        }
+                        else [[unlikely]] {
+                           ctx.error = error_code::syntax_error;
+                           return;
+                        }
                      }
                      else [[unlikely]] {
-                        parse<CSV>::op<Opts>(member.emplace_back()[csv_index], ctx, it, end);
+                        auto& element = member.emplace_back();
+                        if (csv_index < element.size()) [[likely]] {
+                           parse<CSV>::op<Opts>(element[csv_index], ctx, it, end);
+                        }
+                        else [[unlikely]] {
+                           ctx.error = error_code::syntax_error;
+                           return;
+                        }
                      }
 
                      if (it == end) break;
@@ -818,10 +832,24 @@ namespace glz
                   if constexpr (fixed_array_value_t<M> && emplace_backable<M>) {
                      const auto index = keys[i].second;
                      if (row < member.size()) [[likely]] {
-                        parse<CSV>::op<Opts>(member[row][index], ctx, it, end);
+                        auto& element = member[row];
+                        if (index < element.size()) [[likely]] {
+                           parse<CSV>::op<Opts>(element[index], ctx, it, end);
+                        }
+                        else [[unlikely]] {
+                           ctx.error = error_code::syntax_error;
+                           return;
+                        }
                      }
                      else [[unlikely]] {
-                        parse<CSV>::op<Opts>(member.emplace_back()[index], ctx, it, end);
+                        auto& element = member.emplace_back();
+                        if (index < element.size()) [[likely]] {
+                           parse<CSV>::op<Opts>(element[index], ctx, it, end);
+                        }
+                        else [[unlikely]] {
+                           ctx.error = error_code::syntax_error;
+                           return;
+                        }
                      }
                   }
                   else {
@@ -1137,10 +1165,24 @@ namespace glz
                            size_t col = 0;
                            while (it != end) {
                               if (col < member.size()) [[likely]] {
-                                 parse<CSV>::op<Opts>(member[col][csv_index], ctx, it, end);
+                                 auto& element = member[col];
+                                 if (csv_index < element.size()) [[likely]] {
+                                    parse<CSV>::op<Opts>(element[csv_index], ctx, it, end);
+                                 }
+                                 else [[unlikely]] {
+                                    ctx.error = error_code::syntax_error;
+                                    return;
+                                 }
                               }
                               else [[unlikely]] {
-                                 parse<CSV>::op<Opts>(member.emplace_back()[csv_index], ctx, it, end);
+                                 auto& element = member.emplace_back();
+                                 if (csv_index < element.size()) [[likely]] {
+                                    parse<CSV>::op<Opts>(element[csv_index], ctx, it, end);
+                                 }
+                                 else [[unlikely]] {
+                                    ctx.error = error_code::syntax_error;
+                                    return;
+                                 }
                               }
 
                               if (it == end) break;
