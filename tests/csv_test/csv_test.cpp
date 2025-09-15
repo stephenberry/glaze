@@ -1920,7 +1920,7 @@ Bob,Manager,Sales)";
 7,8,9)";
       
       std::vector<std::vector<int>> matrix;
-      expect(!glz::read<glz::opts_csv{.use_headers = false, .layout = glz::colwise}>(matrix, csv_data));
+      expect(!glz::read<glz::opts_csv{.layout = glz::colwise, .use_headers = false}>(matrix, csv_data));
       
       // With column-wise reading, the data should be transposed
       // Original row 1: [1,2,3] becomes column 1: [1,4,7]
@@ -1939,7 +1939,7 @@ Bob,Manager,Sales)";
       };
       
       std::string buffer;
-      expect(!glz::write<glz::opts_csv{.use_headers = false, .layout = glz::colwise}>(matrix, buffer));
+      expect(!glz::write<glz::opts_csv{.layout = glz::colwise, .use_headers = false}>(matrix, buffer));
       
       // Column-wise write should transpose: columns become rows
       expect(buffer == "1,2,3\n4,5,6\n7,8,9\n") << "Column-wise write should transpose";
@@ -1954,10 +1954,10 @@ Bob,Manager,Sales)";
       };
       
       std::string buffer;
-      expect(!glz::write<glz::opts_csv{.use_headers = false, .layout = glz::colwise}>(original, buffer));
+      expect(!glz::write<glz::opts_csv{.layout = glz::colwise, .use_headers = false}>(original, buffer));
       
       std::vector<std::vector<double>> result;
-      expect(!glz::read<glz::opts_csv{.use_headers = false, .layout = glz::colwise}>(result, buffer));
+      expect(!glz::read<glz::opts_csv{.layout = glz::colwise, .use_headers = false}>(result, buffer));
       
       expect(result.size() == original.size()) << "Same number of columns";
       for (size_t i = 0; i < original.size(); ++i) {
@@ -1971,7 +1971,7 @@ Bob,Manager,Sales)";
 5,6,7,8)";
       
       std::vector<std::vector<int>> matrix;
-      expect(!glz::read<glz::opts_csv{.use_headers = false, .layout = glz::colwise}>(matrix, csv_data));
+      expect(!glz::read<glz::opts_csv{.layout = glz::colwise, .use_headers = false}>(matrix, csv_data));
       
       // After transpose: 4 columns with 2 elements each
       expect(matrix.size() == 4) << "Should have 4 columns";
@@ -1986,7 +1986,7 @@ Bob,Manager,Sales)";
 "d","e","f")";
       
       std::vector<std::vector<std::string>> matrix;
-      expect(!glz::read<glz::opts_csv{.use_headers = false, .layout = glz::colwise}>(matrix, csv_data));
+      expect(!glz::read<glz::opts_csv{.layout = glz::colwise, .use_headers = false}>(matrix, csv_data));
       
       expect(matrix.size() == 3) << "Should have 3 columns";
       expect(matrix[0] == std::vector<std::string>{"a", "d"}) << "First column";
@@ -2001,8 +2001,8 @@ Bob,Manager,Sales)";
       std::vector<std::vector<int>> row_wise;
       std::vector<std::vector<int>> col_wise;
       
-      expect(!glz::read<glz::opts_csv{.use_headers = false, .layout = glz::rowwise}>(row_wise, csv_data));
-      expect(!glz::read<glz::opts_csv{.use_headers = false, .layout = glz::colwise}>(col_wise, csv_data));
+      expect(!glz::read<glz::opts_csv{.layout = glz::rowwise, .use_headers = false}>(row_wise, csv_data));
+      expect(!glz::read<glz::opts_csv{.layout = glz::colwise, .use_headers = false}>(col_wise, csv_data));
       
       // Row-wise: 2x3 matrix
       expect(row_wise.size() == 2) << "Row-wise should have 2 rows";
