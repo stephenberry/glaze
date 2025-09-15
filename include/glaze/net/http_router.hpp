@@ -146,7 +146,7 @@ namespace glz
     */
    template <class Handler = std::function<void(const request&, response&)>>
       requires std::invocable<Handler, const request&, response&>
-   struct http_router
+   struct basic_http_router
    {
       /**
        * @brief Function type for request handlers
@@ -272,7 +272,7 @@ namespace glz
       /**
        * @brief Default constructor
        */
-      http_router() = default;
+      basic_http_router() = default;
 
       /**
        * @brief Match a value against a pattern with advanced pattern matching features
@@ -495,7 +495,7 @@ namespace glz
        * @return Reference to this router for method chaining
        * @throws std::runtime_error if there's a route conflict
        */
-      inline http_router<handler>& route(http_method method, std::string_view path, handler handle, const route_spec& spec = {})
+      inline basic_http_router& route(http_method method, std::string_view path, handler handle, const route_spec& spec = {})
       {
          std::string path_str(path);
          try {
@@ -518,7 +518,7 @@ namespace glz
       /**
        * @brief Register a GET route
        */
-      inline http_router<handler>& get(std::string_view path, handler handle, const route_spec& spec = {})
+      inline basic_http_router& get(std::string_view path, handler handle, const route_spec& spec = {})
       {
          return route(http_method::GET, path, std::move(handle), spec);
       }
@@ -526,7 +526,7 @@ namespace glz
       /**
        * @brief Register a POST route
        */
-      inline http_router<handler>& post(std::string_view path, handler handle, const route_spec& spec = {})
+      inline basic_http_router& post(std::string_view path, handler handle, const route_spec& spec = {})
       {
          return route(http_method::POST, path, std::move(handle), spec);
       }
@@ -534,7 +534,7 @@ namespace glz
       /**
        * @brief Register a PUT route
        */
-      inline http_router<handler>& put(std::string_view path, handler handle, const route_spec& spec = {})
+      inline basic_http_router& put(std::string_view path, handler handle, const route_spec& spec = {})
       {
          return route(http_method::PUT, path, std::move(handle), spec);
       }
@@ -542,7 +542,7 @@ namespace glz
       /**
        * @brief Register a DELETE route
        */
-      inline http_router<handler>& del(std::string_view path, handler handle, const route_spec& spec = {})
+      inline basic_http_router& del(std::string_view path, handler handle, const route_spec& spec = {})
       {
          return route(http_method::DELETE, path, std::move(handle), spec);
       }
@@ -550,7 +550,7 @@ namespace glz
       /**
        * @brief Register a PATCH route
        */
-      inline http_router<handler>& patch(std::string_view path, handler handle, const route_spec& spec = {})
+      inline basic_http_router& patch(std::string_view path, handler handle, const route_spec& spec = {})
       {
          return route(http_method::PATCH, path, std::move(handle), spec);
       }
@@ -558,7 +558,7 @@ namespace glz
       /**
        * @brief Register an asynchronous route
        */
-      inline http_router<handler>& route_async(http_method method, std::string_view path, async_handler handle,
+      inline basic_http_router& route_async(http_method method, std::string_view path, async_handler handle,
                                       const route_spec& spec = {})
          requires is_async_enabled
       {
@@ -576,7 +576,7 @@ namespace glz
       /**
        * @brief Register an asynchronous GET route
        */
-      inline http_router<handler>& get_async(std::string_view path, async_handler handle, const route_spec& spec = {})
+      inline basic_http_router& get_async(std::string_view path, async_handler handle, const route_spec& spec = {})
          requires is_async_enabled
       {
          return route_async(http_method::GET, path, std::move(handle), spec);
@@ -585,7 +585,7 @@ namespace glz
       /**
        * @brief Register an asynchronous POST route
        */
-      inline http_router<handler>& post_async(std::string_view path, async_handler handle, const route_spec& spec = {})
+      inline basic_http_router& post_async(std::string_view path, async_handler handle, const route_spec& spec = {})
          requires is_async_enabled
       {
          return route_async(http_method::POST, path, std::move(handle), spec);
@@ -594,7 +594,7 @@ namespace glz
       /**
        * @brief Register an asynchronous PUT route
        */
-      inline http_router<handler>& put_async(std::string_view path, async_handler handle, const route_spec& spec = {})
+      inline basic_http_router& put_async(std::string_view path, async_handler handle, const route_spec& spec = {})
          requires is_async_enabled
       {
          return route_async(http_method::PUT, path, std::move(handle), spec);
@@ -603,7 +603,7 @@ namespace glz
       /**
        * @brief Register an asynchronous DELETE route
        */
-      inline http_router<handler>& del_async(std::string_view path, async_handler handle, const route_spec& spec = {})
+      inline basic_http_router& del_async(std::string_view path, async_handler handle, const route_spec& spec = {})
          requires is_async_enabled
       {
          return route_async(http_method::DELETE, path, std::move(handle), spec);
@@ -612,7 +612,7 @@ namespace glz
       /**
        * @brief Register an asynchronous PATCH route
        */
-      inline http_router<handler>& patch_async(std::string_view path, async_handler handle, const route_spec& spec = {})
+      inline basic_http_router& patch_async(std::string_view path, async_handler handle, const route_spec& spec = {})
          requires is_async_enabled
       {
          return route_async(http_method::PATCH, path, std::move(handle), spec);
@@ -626,7 +626,7 @@ namespace glz
        * @param middleware The middleware function
        * @return Reference to this router for method chaining
        */
-      inline http_router<handler>& use(handler middleware)
+      inline basic_http_router& use(handler middleware)
       {
          middlewares.push_back(std::move(middleware));
          return *this;
@@ -977,4 +977,6 @@ namespace glz
          }
       }
    };
+
+   using http_router = basic_http_router<std::function<void(const request&, response&)>>;
 }
