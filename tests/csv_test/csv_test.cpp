@@ -1611,7 +1611,8 @@ suite fuzzfailures = [] {
       const auto input = glz::read_base64(b64);
       std::vector<uint8_t> s(begin(input), end(input));
       my_struct obj;
-      expect(!glz::read_csv<glz::rowwise>(obj, s));
+      auto ec = glz::read_csv<glz::rowwise>(obj, s);
+      expect(ec == glz::error_code::unknown_key);
    };
 };
 
