@@ -1,6 +1,7 @@
 // Glaze Library
 // For the license information refer to glaze.hpp
 
+#include <cstdint>
 #include <random>
 #include <thread>
 
@@ -1580,11 +1581,11 @@ suite additional_async_vector_tests = [] {
       threads.emplace_back([&]() {
          while (!stop) {
             try {
-               int sum = 0;
+               int64_t sum = 0; // use wider type to avoid overflow on fast machines
                {
                   auto proxy = vec.read();
                   for (auto it = proxy.begin(); it != proxy.end(); ++it) {
-                     sum += *it;
+                     sum += static_cast<int64_t>(*it);
                   }
                }
 
@@ -1642,7 +1643,10 @@ suite additional_async_vector_tests = [] {
             for (int i = 0; i < 100 && !stop; ++i) {
                try {
                   // Pick a random position
-                  size_t pos = std::rand() % (vec.size() + 1);
+                  thread_local std::mt19937 rng(std::random_device{}());
+                  size_t upper = vec.size();
+                  std::uniform_int_distribution<size_t> pos_dist(0, upper);
+                  size_t pos = pos_dist(rng);
                   {
                      auto proxy = vec.write();
                      auto insert_pos = proxy.begin();
@@ -1658,11 +1662,14 @@ suite additional_async_vector_tests = [] {
                   }
 
                   // Small delay to increase chance of contention
-                  std::this_thread::sleep_for(std::chrono::microseconds(std::rand() % 100));
+                  std::uniform_int_distribution<int> us_dist(0, 99);
+                  std::this_thread::sleep_for(std::chrono::microseconds(us_dist(rng)));
 
                   // Pick another random position for erasure
                   if (vec.size() > 0) {
-                     size_t erase_pos = std::rand() % vec.size();
+                     size_t cur = vec.size();
+                     std::uniform_int_distribution<size_t> erase_dist(0, cur - 1);
+                     size_t erase_pos = erase_dist(rng);
                      auto proxy = vec.write();
                      auto erase_iter = proxy.begin();
                      std::advance(erase_iter, erase_pos);
@@ -1700,7 +1707,10 @@ suite additional_async_vector_tests = [] {
             for (int i = 0; i < 100 && !stop; ++i) {
                try {
                   // Pick a random position
-                  size_t pos = std::rand() % (vec.size() + 1);
+                  thread_local std::mt19937 rng(std::random_device{}());
+                  size_t upper = vec.size();
+                  std::uniform_int_distribution<size_t> pos_dist(0, upper);
+                  size_t pos = pos_dist(rng);
                   {
                      auto proxy = vec.write();
                      auto insert_pos = proxy.begin();
@@ -1723,7 +1733,8 @@ suite additional_async_vector_tests = [] {
                   }
 
                   // Small delay to increase chance of contention
-                  std::this_thread::sleep_for(std::chrono::microseconds(std::rand() % 100));
+                  std::uniform_int_distribution<int> us_dist(0, 99);
+                  std::this_thread::sleep_for(std::chrono::microseconds(us_dist(rng)));
                }
                catch (const std::exception&) {
                   errors++;
@@ -1825,7 +1836,9 @@ suite additional_async_vector_tests = [] {
          auto it = proxy.begin();
          while (!stop) {
             try {
-               int jump = std::rand() % 20 - 10; // Random jump forward or backward
+               thread_local std::mt19937 rng(std::random_device{}());
+               std::uniform_int_distribution<int> jump_dist(-10, 9);
+               int jump = jump_dist(rng); // Random jump forward or backward
                if (it + jump >= proxy.begin() && it + jump < proxy.end()) {
                   it += jump;
                   it->access(); // Access the object to increment counter
@@ -1919,7 +1932,7 @@ suite additional_async_vector_tests = [] {
       });
 
       // Threads that read the vector during resizing
-      std::atomic<int> sum = 0;
+      std::atomic<uint64_t> sum = 0;
       for (int t = 0; t < 3; ++t) {
          threads.emplace_back([&]() {
             while (!stop) {
@@ -1927,7 +1940,7 @@ suite additional_async_vector_tests = [] {
                   size_t current_size = vec.size();
                   auto proxy = vec.read();
                   for (size_t i = 0; i < current_size && i < proxy.size(); ++i) {
-                     sum += proxy[i];
+                     sum.fetch_add(static_cast<uint64_t>(proxy[i]), std::memory_order_relaxed);
                   }
                }
                catch (const std::exception&) {
