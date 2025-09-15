@@ -7,9 +7,9 @@
 #include <vector>
 
 #include "glaze/interop/interop.hpp"
-#include "ut/ut.hpp"
+#include "boost/ut.hpp"
 
-using namespace ut;
+using namespace boost::ut;
 
 // Calculator with various function signatures
 struct Calculator
@@ -95,7 +95,7 @@ const glz_member_info* find_member(const glz_type_info* info, const std::string&
 
 int main()
 {
-   using namespace ut;
+   using namespace boost::ut;
 
    // Register the type
    glz::register_type<Calculator>("Calculator");

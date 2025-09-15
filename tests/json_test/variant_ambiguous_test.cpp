@@ -4,9 +4,9 @@
 #include <map>
 
 #include "glaze/glaze.hpp"
-#include "ut/ut.hpp"
+#include "boost/ut.hpp"
 
-using namespace ut;
+using namespace boost::ut;
 
 // ============================================================================
 // Basic ambiguous variant test cases

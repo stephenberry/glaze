@@ -8,9 +8,9 @@
 
 #include "glaze/glaze.hpp"
 #include "glaze/interop/interop.hpp"
-#include "ut/ut.hpp"
+#include "boost/ut.hpp"
 
-using namespace ut;
+using namespace boost::ut;
 
 // Test struct with various optional fields
 struct OptionalTestStruct
@@ -81,7 +81,7 @@ NestedOptionalStruct global_nested_test;
 
 int main()
 {
-   using namespace ut;
+   using namespace boost::ut;
 
    // Register types with interop
    glz::register_type<OptionalTestStruct>("OptionalTestStruct");

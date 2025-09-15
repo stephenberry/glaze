@@ -1,9 +1,9 @@
 // Glaze Library
 // For the license information refer to glaze.hpp
 
-#include "ut/ut.hpp"
+#include "boost/ut.hpp"
 
-using namespace ut;
+using namespace boost::ut;
 
 #include <iostream>
 #include <thread>

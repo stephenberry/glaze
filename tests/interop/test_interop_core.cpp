@@ -9,9 +9,9 @@
 #include "glaze/interop/client.hpp"
 #include "glaze/interop/i_glaze.hpp"
 #include "glaze/interop/interop.hpp"
-#include "ut/ut.hpp"
+#include "boost/ut.hpp"
 
-using namespace ut;
+using namespace boost::ut;
 
 //=============================================================================
 // BASIC FUNCTIONALITY TESTS (from test_basic_functionality.cpp)
@@ -146,7 +146,7 @@ SensorData global_sensor{
 
 int main()
 {
-   using namespace ut;
+   using namespace boost::ut;
 
    //=========================================================================
    // BASIC FUNCTIONALITY TESTS

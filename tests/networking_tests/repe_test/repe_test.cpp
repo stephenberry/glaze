@@ -7,9 +7,9 @@
 #include "glaze/glaze.hpp"
 #include "glaze/rpc/registry.hpp"
 #include "glaze/thread/async_string.hpp"
-#include "ut/ut.hpp"
+#include "boost/ut.hpp"
 
-using namespace ut;
+using namespace boost::ut;
 
 namespace repe = glz::repe;
 

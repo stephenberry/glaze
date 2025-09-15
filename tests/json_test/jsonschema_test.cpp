@@ -2,9 +2,9 @@
 #include <glaze/json.hpp>
 #include <glaze/json/schema.hpp>
 #include <string>
-#include <ut/ut.hpp>
+#include "boost/ut.hpp"
 
-using namespace ut;
+using namespace boost::ut;
 
 struct schema_obj
 {
@@ -60,14 +60,14 @@ template <auto Member, typename Value>
 auto expect_property(const test_case& test, std::string_view key, Value value)
 {
    auto schematic = test.obj;
-   expect[schematic.has_value()];
-   expect[schematic->properties->contains(key)];
+   expect(schematic.has_value());
+   expect(schematic->properties->contains(key));
    glz::schema prop = schematic->properties->at(key);
    auto prop_value = glz::get_member(prop, Member);
-   expect[prop_value.has_value()];
+   expect(prop_value.has_value());
    using prop_value_t = std::decay_t<decltype(prop_value)>;
    if constexpr (is_optional<prop_value_t> && glz::is_variant<typename prop_value_t::value_type>) {
-      expect[std::holds_alternative<Value>(prop_value.value())];
+      expect(std::holds_alternative<Value>(prop_value.value()));
       expect(std::get<Value>(prop_value.value()) == value);
    }
    else if constexpr (is_optional<prop_value_t> && glz::is_span<typename prop_value_t::value_type>) {
@@ -86,7 +86,7 @@ suite schema_attributes = [] {
       const test_case test{};
       expect(test.obj.has_value()) << format_error(!test.obj.has_value() ? test.obj.error() : glz::error_ctx{},
                                                    test.schema_str);
-      expect[test.obj.has_value()];
+      expect(test.obj.has_value());
    };
    "description"_test = [] {
       const test_case test{};
@@ -330,9 +330,9 @@ suite schema_tests = [] {
       schematic_substitute obj{};
       auto err = read_json_ignore_unknown(obj, schema_str);
       expect(!err) << format_error(err, schema_str);
-      expect[obj.attributes.constant.has_value()];
-      expect[std::holds_alternative<std::int64_t>(obj.attributes.constant.value())];
-      expect[std::get<std::int64_t>(obj.attributes.constant.value()) == const_one_number::some_var];
+      expect(obj.attributes.constant.has_value());
+      expect(std::holds_alternative<std::int64_t>(obj.attributes.constant.value()));
+      expect(std::get<std::int64_t>(obj.attributes.constant.value()) == const_one_number::some_var);
    };
 
    "Constexpr enum is constant"_test = [] {
@@ -340,8 +340,8 @@ suite schema_tests = [] {
       schematic_substitute obj{};
       auto err = read_json_ignore_unknown(obj, schema_str);
       expect(!err) << format_error(err, schema_str);
-      expect[(obj.attributes.constant.has_value())];
-      expect[(std::holds_alternative<std::string_view>(obj.attributes.constant.value()))];
+      expect((obj.attributes.constant.has_value()));
+      expect((std::holds_alternative<std::string_view>(obj.attributes.constant.value())));
       expect(std::get<std::string_view>(obj.attributes.constant.value()) == "green");
    };
 
@@ -351,8 +351,8 @@ suite schema_tests = [] {
          schematic_substitute obj{};
          auto err = read_json_ignore_unknown(obj, schema_str);
          expect(!err) << format_error(err, schema_str);
-         expect[(obj.attributes.minimum.has_value())];
-         expect[(std::holds_alternative<std::int64_t>(obj.attributes.minimum.value()))];
+         expect((obj.attributes.minimum.has_value()));
+         expect((std::holds_alternative<std::int64_t>(obj.attributes.minimum.value())));
          expect(std::get<std::int64_t>(obj.attributes.minimum.value()) == std::numeric_limits<number_t>::lowest());
       };
       test(std::int64_t{});
@@ -372,11 +372,11 @@ suite schema_tests = [] {
       schematic_substitute obj{};
       auto err = read_json_ignore_unknown(obj, schema_str);
       expect(!err) << format_error(err, schema_str);
-      expect[(obj.oneOf.has_value())];
+      expect((obj.oneOf.has_value()));
       for (const auto& oneOf : obj.oneOf.value()) {
-         expect[(oneOf.attributes.title.has_value())];
-         expect[(oneOf.attributes.constant.has_value())];
-         expect[(std::holds_alternative<std::string_view>(oneOf.attributes.constant.value()))];
+         expect((oneOf.attributes.title.has_value()));
+         expect((oneOf.attributes.constant.has_value()));
+         expect((std::holds_alternative<std::string_view>(oneOf.attributes.constant.value())));
          expect(std::get<std::string_view>(oneOf.attributes.constant.value()) == oneOf.attributes.title.value());
       }
    };
@@ -386,7 +386,7 @@ suite schema_tests = [] {
       schematic_substitute obj{};
       auto err = read_json_ignore_unknown(obj, schema_str);
       expect(!err) << format_error(err, schema_str);
-      expect[(obj.oneOf.has_value())];
+      expect((obj.oneOf.has_value()));
    };
 
    "fixed array has fixed size"_test = [] {
@@ -394,13 +394,13 @@ suite schema_tests = [] {
       schematic_substitute obj{};
       auto err = read_json_ignore_unknown(obj, schema_str);
       expect(!err) << format_error(err, schema_str);
-      expect[(obj.type.has_value())];
+      expect((obj.type.has_value()));
       expect(obj.type->size() == 1);
       expect(obj.type->at(0) == "array");
       // check minItems and maxItems
-      expect[(obj.attributes.minItems.has_value())];
+      expect((obj.attributes.minItems.has_value()));
       expect(obj.attributes.minItems.value() == 42);
-      expect[(obj.attributes.maxItems.has_value())];
+      expect((obj.attributes.maxItems.has_value()));
       expect(obj.attributes.maxItems.value() == 42);
    };
 

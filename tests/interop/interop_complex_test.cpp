@@ -5,9 +5,9 @@
 #include <vector>
 
 #include "glaze/interop/interop.hpp"
-#include "ut/ut.hpp"
+#include "boost/ut.hpp"
 
-using namespace ut;
+using namespace boost::ut;
 
 // Test structure with complex number fields
 struct ComplexTestStruct
@@ -46,7 +46,7 @@ struct glz::meta<ComplexTestStruct>
 
 int main()
 {
-   using namespace ut;
+   using namespace boost::ut;
 
    // Register the type
    glz::register_type<ComplexTestStruct>("ComplexTestStruct");

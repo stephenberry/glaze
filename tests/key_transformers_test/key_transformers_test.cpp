@@ -7,9 +7,9 @@
 #include <string>
 
 #include "glaze/glaze.hpp"
-#include "ut/ut.hpp"
+#include "boost/ut.hpp"
 
-using namespace ut;
+using namespace boost::ut;
 
 // Test renaming functions directly
 suite key_transformer_functions = [] {

@@ -8,7 +8,7 @@
 #include "glaze/api/std/deque.hpp"
 #include "glaze/api/std/span.hpp"
 #include "glaze/api/std/unordered_set.hpp"
-#include "ut/ut.hpp"
+#include "boost/ut.hpp"
 
 struct my_struct
 {
@@ -97,7 +97,7 @@ glz::iface_fn glz_iface() noexcept { return glz::make_iface<my_api, my_api2>(); 
 
 void tests()
 {
-   using namespace ut;
+   using namespace boost::ut;
 
    std::shared_ptr<glz::iface> iface{glz_iface()()};
    auto io = (*iface)["my_api"]();

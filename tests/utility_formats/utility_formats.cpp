@@ -1,12 +1,12 @@
 // Glaze Library
 // For the license information refer to glaze.hpp
 
-#include <ut/ut.hpp>
+#include "boost/ut.hpp"
 
 #include "glaze/base64/base64.hpp"
 #include "glaze/util/progress_bar.hpp"
 
-using namespace ut;
+using namespace boost::ut;
 
 suite base64_read_tests = [] {
    "hello world"_test = [] {

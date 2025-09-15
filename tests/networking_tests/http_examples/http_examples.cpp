@@ -10,9 +10,9 @@
 #include "glaze/net/http_router.hpp"
 #include "glaze/net/http_server.hpp"
 #include "glaze/rpc/registry.hpp"
-#include "ut/ut.hpp"
+#include "boost/ut.hpp"
 
-using namespace ut;
+using namespace boost::ut;
 
 // Test structures from Basic REST API Server example
 struct User

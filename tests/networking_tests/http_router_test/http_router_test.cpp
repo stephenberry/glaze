@@ -4,15 +4,55 @@
 #include "glaze/net/http_router.hpp"
 
 #include <cassert>
+#include <concepts>
+#include <cstddef>
 #include <functional>
 #include <tuple>
+#include <regex>
 
-#include "ut/ut.hpp"
+#include "boost/ut.hpp"
 
-using namespace ut;
+using namespace boost::ut;
+
+struct alt_handler {
+   std::function<void(const glz::request&, glz::response&)> m_fn;
+
+   alt_handler() noexcept {}
+
+   alt_handler(const alt_handler& other) noexcept : m_fn{other.m_fn} {}
+
+   alt_handler& operator=(const alt_handler& other) noexcept {
+      m_fn = other.m_fn;
+      return *this;
+   }
+
+   alt_handler(alt_handler&& other) noexcept : m_fn{std::move(other.m_fn)} {}
+
+   alt_handler& operator=(alt_handler&& other) noexcept {
+      if(this != &other) {
+         m_fn = std::move(other.m_fn);
+      }
+      return *this;
+   }
+
+   ~alt_handler() noexcept = default;
+
+   alt_handler(std::nullptr_t) noexcept : alt_handler{} {}
+
+   template <class F> requires std::invocable<F, const glz::request&, glz::response&>
+   alt_handler(F&& f) noexcept : m_fn{std::forward<F>(f)} {}
+
+   void operator()(const glz::request& req, glz::response& res) {
+      m_fn(req, res);
+   }
+
+   bool operator==(std::nullptr_t) noexcept {
+      return m_fn == nullptr;
+   }
+};
 
 using handlers = std::tuple<std::function<void(const glz::request&, glz::response&)>,
-                            std::move_only_function<void(const glz::request&, glz::response&)>>;
+                            alt_handler>;
 
 suite http_router_constraints_tests = [] {
    "numeric_id_validation"_test = []<class Handler> {

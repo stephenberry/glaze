@@ -167,7 +167,7 @@ namespace glz
        * Async handler is of type void when asynchronous request handlers are disabled.
        */
       using async_handler =
-         std::conditional_t<is_async_enabled, std::function<std::future<void>(const request&, response&)>, void>;
+         std::conditional_t<is_async_enabled, std::function<std::future<void>(const request&, response&)>, std::tuple<>>;
 
       /**
        * @brief An entry for a registered route.

@@ -3,9 +3,9 @@
 #include <string>
 #include <vector>
 
-#include "ut/ut.hpp"
+#include "boost/ut.hpp"
 
-using namespace ut;
+using namespace boost::ut;
 
 // Simple test structure for basic C++ testing
 struct BasicTestStruct
@@ -23,7 +23,7 @@ BasicTestStruct global_basic_test{42, "test_struct", true};
 
 int main()
 {
-   using namespace ut;
+   using namespace boost::ut;
 
    "basic C++ struct functionality"_test = [] {
       BasicTestStruct local_test{10, "local", false};

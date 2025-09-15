@@ -2,9 +2,9 @@
 // For the license information refer to glaze.hpp
 
 #include "glaze/glaze.hpp" // Glaze main header (most Glaze headers are included)
-#include "ut/ut.hpp"
+#include "boost/ut.hpp"
 
-using namespace ut;
+using namespace boost::ut;
 
 //------------------------------------
 // Basic Struct with Reflection

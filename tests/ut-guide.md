@@ -7,15 +7,15 @@ The `ut` library is a lightweight, header-only C++ testing framework that uses a
 The general structure for writing tests with the `ut` library looks like this:
 
 ```cpp
-#include "ut/ut.hpp"
-using namespace ut;
+#include "boost/ut.hpp"
+using namespace boost::ut;
 
 suite my_test_suite = [] {
     "test_name"_test = [] {
         // Test code goes here
         // Use expect() to verify conditions
     };
-    
+
     "another_test"_test = [] {
         // Another test case
     };
@@ -96,11 +96,11 @@ class Counter {
 public:
     Counter() = default;
     explicit Counter(int initial) : count(initial) {}
-    
+
     void increment() { ++count; }
     void decrement() { --count; }
     int get() const { return count; }
-    
+
 private:
     int count = 0;
 };
@@ -110,18 +110,18 @@ suite counter_tests = [] {
         Counter c;
         expect(c.get() == 0) << "Default constructor should initialize to 0\n";
     };
-    
+
     "value_constructor"_test = [] {
         Counter c(42);
         expect(c.get() == 42) << "Value constructor should initialize to given value\n";
     };
-    
+
     "increment"_test = [] {
         Counter c(10);
         c.increment();
         expect(c.get() == 11) << "Increment should add 1 to count\n";
     };
-    
+
     "decrement"_test = [] {
         Counter c(10);
         c.decrement();
@@ -137,21 +137,21 @@ suite complex_behavior_tests = [] {
     "string_operations"_test = [] {
         std::string s = "Hello";
         s.append(", World!");
-        
+
         expect(s == "Hello, World!") << "String append should work correctly\n";
         expect(s.length() == 13) << "String length should be updated after append\n";
         expect(s.find("World") == 7) << "find() should return correct position\n";
     };
-    
+
     "vector_operations"_test = [] {
         std::vector<int> vec;
-        
+
         expect(vec.empty()) << "New vector should be empty\n";
-        
+
         vec.push_back(42);
         expect(vec.size() == 1) << "Size should be 1 after adding an element\n";
         expect(vec[0] == 42) << "Element should be accessible by index\n";
-        
+
         vec.clear();
         expect(vec.empty()) << "Vector should be empty after clear\n";
     };
@@ -164,7 +164,7 @@ suite complex_behavior_tests = [] {
 suite thread_safety_tests = [] {
     "concurrent_increment"_test = []() mutable {
         std::atomic<int> counter{0};
-        
+
         std::deque<std::thread> threads;
         for (int i = 0; i < 10; ++i) {
             threads.emplace_back([&counter]() {
@@ -173,11 +173,11 @@ suite thread_safety_tests = [] {
                 }
             });
         }
-        
+
         for (auto& t : threads) {
             t.join();
         }
-        
+
         expect(counter.load() == 10000) << "Concurrent increments should result in correct count\n";
     };
 };

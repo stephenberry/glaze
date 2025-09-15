@@ -4,9 +4,9 @@
 #include "glaze/compare/compare.hpp"
 
 #include "glaze/compare/approx.hpp"
-#include "ut/ut.hpp"
+#include "boost/ut.hpp"
 
-using namespace ut;
+using namespace boost::ut;
 
 struct float_compare_t
 {

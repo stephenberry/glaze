@@ -16,9 +16,9 @@
 #include "glaze/json/ptr.hpp"
 #include "glaze/json/read.hpp"
 #include "glaze/json/write.hpp"
-#include "ut/ut.hpp"
+#include "boost/ut.hpp"
 
-using namespace ut;
+using namespace boost::ut;
 
 struct test_struct
 {

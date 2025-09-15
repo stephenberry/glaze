@@ -8,9 +8,9 @@
 #include "glaze/thread/async_string.hpp"
 #include "glaze/thread/async_vector.hpp"
 #include "glaze/thread/guard.hpp"
-#include "ut/ut.hpp"
+#include "boost/ut.hpp"
 
-using namespace ut;
+using namespace boost::ut;
 
 static_assert(glz::is_atomic<glz::guard<int>>);
 static_assert(glz::read_supported<glz::guard<int>, glz::JSON>);
