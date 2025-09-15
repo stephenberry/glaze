@@ -1,8 +1,8 @@
 // Glaze Library
 // For the license information refer to glaze.hpp
 
-#include <random>
 #include <cstdint>
+#include <random>
 #include <thread>
 
 #include "glaze/glaze_exceptions.hpp"
