@@ -138,17 +138,17 @@ namespace glz
 
    /**
     * @brief HTTP router based on a radix tree for efficient path matching
+    * @tparam The type of the handler that gets invoked upon a route match
     *
     * The http_router class provides fast route matching for HTTP requests using a radix tree
     * data structure. It supports static routes, parameterized routes (e.g., "/users/:id"),
     * wildcard routes, and parameter validation via constraints.
     */
-   template <class Handler = std::function<void(const request&, response&)>>
+   template <class Handler = std::function<void(const request&, response&)>> requires std::invocable<Handler, const request&, response&>
    struct http_router
    {
       /**
        * @brief Function type for request handlers
-       * @tparam The type of the handler that gets invoked upon a route match
        *
        * Handlers are called when a route matches the incoming request.
        */
