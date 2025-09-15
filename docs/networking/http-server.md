@@ -8,17 +8,24 @@ The Glaze HTTP server provides a high-performance, async HTTP server implementat
 
 ```cpp
 #include "glaze/net/http_server.hpp"
+#include <iostream>
 
 glz::http_server server;
 
 // Configure routes
-server.get("/hello", [](const glz::request& req, glz::response& res) {
+server.get("/hello", [](const glz::request& /*req*/, glz::response& res) {
     res.body("Hello, World!");
 });
 
-// Start server
-server.bind("127.0.0.1", 8080);
+// Note: start() is non-blocking; block main until shutdown
+server.bind("127.0.0.1", 8080)
+      .with_signals(); // handle Ctrl+C (SIGINT)
+
+std::cout << "Server running on http://127.0.0.1:8080\n";
+std::cout << "Press Ctrl+C to stop\n";
+
 server.start();
+server.wait_for_signal();
 ```
 
 ### HTTPS Server
