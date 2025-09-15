@@ -21,16 +21,24 @@ The Glaze HTTP library offers:
 
 ```cpp
 #include "glaze/net/http_server.hpp"
+#include <iostream>
 
 int main() {
     glz::http_server server;
     
-    server.get("/hello", [](const glz::request& req, glz::response& res) {
+    server.get("/hello", [](const glz::request& /*req*/, glz::response& res) {
         res.body("Hello, World!");
     });
     
-    server.bind("127.0.0.1", 8080);
+    // Note: start() is non-blocking; block the main thread until shutdown
+    server.bind("127.0.0.1", 8080)
+          .with_signals(); // enable Ctrl+C (SIGINT) handling
+
+    std::cout << "Server running on http://127.0.0.1:8080\n";
+    std::cout << "Press Ctrl+C to stop\n";
+
     server.start();
+    server.wait_for_signal();
     return 0;
 }
 ```
@@ -56,8 +64,9 @@ int main() {
     registry.on(userService);
     
     server.mount("/api", registry.endpoints);
-    server.bind(8080);
+    server.bind(8080).with_signals();
     server.start();
+    server.wait_for_signal();
     return 0;
 }
 ```
@@ -139,7 +148,7 @@ Glaze is a header-only library. Include the necessary headers:
 
 ## Examples
 
-See the [examples directory](examples/) for complete working examples:
+See the [HTTP Examples](http-examples.md) page for complete working examples:
 
 - **Basic Server** - Simple HTTP server with manual routes
 - **REST API** - Auto-generated REST API from C++ classes  
