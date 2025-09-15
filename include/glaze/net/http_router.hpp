@@ -144,7 +144,8 @@ namespace glz
     * data structure. It supports static routes, parameterized routes (e.g., "/users/:id"),
     * wildcard routes, and parameter validation via constraints.
     */
-   template <class Handler = std::function<void(const request&, response&)>> requires std::invocable<Handler, const request&, response&>
+   template <class Handler = std::function<void(const request&, response&)>>
+      requires std::invocable<Handler, const request&, response&>
    struct http_router
    {
       /**
@@ -157,7 +158,7 @@ namespace glz
       /**
        * @brief A compile-time boolean indicating whether asynchronous request handlers are enabled
        */
-       constexpr static bool is_async_enabled = std::is_same_v<handler, std::function<void(const request&, response&)>>;
+      constexpr static bool is_async_enabled = std::is_same_v<handler, std::function<void(const request&, response&)>>;
 
       /**
        * @brief Function type for asynchronous request handlers
@@ -165,7 +166,8 @@ namespace glz
        * Async handlers return a future that completes when the request is processed.
        * Async handler is of type void when asynchronous request handlers are disabled.
        */
-      using async_handler = std::conditional_t<is_async_enabled, std::function<std::future<void>(const request&, response&)>, void>;
+      using async_handler =
+         std::conditional_t<is_async_enabled, std::function<std::future<void>(const request&, response&)>, void>;
 
       /**
        * @brief An entry for a registered route.
@@ -557,7 +559,8 @@ namespace glz
        * @brief Register an asynchronous route
        */
       inline http_router& route_async(http_method method, std::string_view path, async_handler handle,
-                                      const route_spec& spec = {}) requires is_async_enabled
+                                      const route_spec& spec = {})
+         requires is_async_enabled
       {
          // Convert async handle to sync handle
          return route(
@@ -573,7 +576,8 @@ namespace glz
       /**
        * @brief Register an asynchronous GET route
        */
-      inline http_router& get_async(std::string_view path, async_handler handle, const route_spec& spec = {}) requires is_async_enabled
+      inline http_router& get_async(std::string_view path, async_handler handle, const route_spec& spec = {})
+         requires is_async_enabled
       {
          return route_async(http_method::GET, path, std::move(handle), spec);
       }
@@ -581,7 +585,8 @@ namespace glz
       /**
        * @brief Register an asynchronous POST route
        */
-      inline http_router& post_async(std::string_view path, async_handler handle, const route_spec& spec = {}) requires is_async_enabled
+      inline http_router& post_async(std::string_view path, async_handler handle, const route_spec& spec = {})
+         requires is_async_enabled
       {
          return route_async(http_method::POST, path, std::move(handle), spec);
       }
@@ -589,7 +594,8 @@ namespace glz
       /**
        * @brief Register an asynchronous PUT route
        */
-      inline http_router& put_async(std::string_view path, async_handler handle, const route_spec& spec = {}) requires is_async_enabled
+      inline http_router& put_async(std::string_view path, async_handler handle, const route_spec& spec = {})
+         requires is_async_enabled
       {
          return route_async(http_method::PUT, path, std::move(handle), spec);
       }
@@ -597,7 +603,8 @@ namespace glz
       /**
        * @brief Register an asynchronous DELETE route
        */
-      inline http_router& del_async(std::string_view path, async_handler handle, const route_spec& spec = {}) requires is_async_enabled
+      inline http_router& del_async(std::string_view path, async_handler handle, const route_spec& spec = {})
+         requires is_async_enabled
       {
          return route_async(http_method::DELETE, path, std::move(handle), spec);
       }
@@ -605,7 +612,8 @@ namespace glz
       /**
        * @brief Register an asynchronous PATCH route
        */
-      inline http_router& patch_async(std::string_view path, async_handler handle, const route_spec& spec = {}) requires is_async_enabled
+      inline http_router& patch_async(std::string_view path, async_handler handle, const route_spec& spec = {})
+         requires is_async_enabled
       {
          return route_async(http_method::PATCH, path, std::move(handle), spec);
       }
