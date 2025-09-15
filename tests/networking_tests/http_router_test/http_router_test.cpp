@@ -4,15 +4,19 @@
 #include "glaze/net/http_router.hpp"
 
 #include <cassert>
-#include <regex>
+#include <functional>
+#include <tuple>
 
 #include "ut/ut.hpp"
 
 using namespace ut;
 
+using handlers = std::tuple<std::function<void(const glz::request&, glz::response&)>,
+                            std::move_only_function<void(const glz::request&, glz::response&)>>;
+
 suite http_router_constraints_tests = [] {
-   "numeric_id_validation"_test = [] {
-      glz::http_router router;
+   "numeric_id_validation"_test = []<class Handler> {
+      glz::http_router<Handler> router;
       std::unordered_map<std::string, glz::param_constraint> constraints;
       constraints["id"] = glz::param_constraint{.description = "numeric ID", .validation = [](std::string_view value) {
                                                    if (value.empty()) return false;
@@ -52,10 +56,10 @@ suite http_router_constraints_tests = [] {
       // Test with invalid ID
       auto [handler_invalid, params_invalid] = router.match(glz::http_method::GET, "/users/abc");
       expect(handler_invalid == nullptr) << "Handler should not match for non-numeric ID\n";
-   };
+   } | handlers{};
 
-   "email_validation_with_regex"_test = [] {
-      glz::http_router router;
+   "email_validation_with_regex"_test = []<class Handler> {
+      glz::http_router<Handler> router;
       std::unordered_map<std::string, glz::param_constraint> constraints;
       constraints["email"] =
          glz::param_constraint{.description = "valid email address", .validation = [](std::string_view value) {
@@ -94,10 +98,10 @@ suite http_router_constraints_tests = [] {
       // Test with invalid email
       auto [handler_invalid, params_invalid] = router.match(glz::http_method::GET, "/contacts/invalid-email");
       expect(handler_invalid == nullptr) << "Handler should not match for invalid email\n";
-   };
+   } | handlers{};
 
-   "four_digit_code_validation"_test = [] {
-      glz::http_router router;
+   "four_digit_code_validation"_test = []<class Handler> {
+      glz::http_router<Handler> router;
       std::unordered_map<std::string, glz::param_constraint> constraints;
       constraints["code"] =
          glz::param_constraint{.description = "4-digit code", .validation = [](std::string_view value) {
@@ -143,12 +147,12 @@ suite http_router_constraints_tests = [] {
       // Test with invalid code (non-numeric)
       auto [handler_invalid2, params_invalid2] = router.match(glz::http_method::GET, "/verify/abcd");
       expect(handler_invalid2 == nullptr) << "Handler should not match for non-numeric code\n";
-   };
+   } | handlers{};
 };
 
 suite http_router_functionality_tests = [] {
-   "basic_route_matching"_test = [] {
-      glz::http_router router;
+   "basic_route_matching"_test = []<class Handler> {
+      glz::http_router<Handler> router;
       bool get_handler_called = false;
       router.get("/hello", [&](const glz::request&, glz::response& res) {
          get_handler_called = true;
@@ -168,10 +172,10 @@ suite http_router_functionality_tests = [] {
       // Test unmatched route
       auto [handler_unmatched, params_unmatched] = router.match(glz::http_method::GET, "/not-found");
       expect(handler_unmatched == nullptr) << "Handler should not match for unmatched route\n";
-   };
+   } | handlers{};
 
-   "different_http_methods"_test = [] {
-      glz::http_router router;
+   "different_http_methods"_test = []<class Handler> {
+      glz::http_router<Handler> router;
       bool get_handler_called = false;
       bool post_handler_called = false;
       bool put_handler_called = false;
@@ -237,10 +241,10 @@ suite http_router_functionality_tests = [] {
       // Test unmatched method
       auto [handler_patch, params_patch] = router.match(glz::http_method::PATCH, "/resource");
       expect(handler_patch == nullptr) << "PATCH handler should not match as it was not defined\n";
-   };
+   } | handlers{};
 
-   "wildcard_route_matching"_test = [] {
-      glz::http_router router;
+   "wildcard_route_matching"_test = []<class Handler> {
+      glz::http_router<Handler> router;
       bool wildcard_handler_called = false;
       router.get("/files/*path", [&](const glz::request& req, glz::response& res) {
          wildcard_handler_called = true;
@@ -274,10 +278,10 @@ suite http_router_functionality_tests = [] {
       expect(params_minimal.find("path") != params_minimal.end())
          << "Path parameter should be present for minimal path\n";
       expect(params_minimal.at("path") == "doc") << "Path parameter should capture minimal path\n";
-   };
+   } | handlers{};
 
-   "route_precedence"_test = [] {
-      glz::http_router router;
+   "route_precedence"_test = []<class Handler> {
+      glz::http_router<Handler> router;
       bool specific_handler_called = false;
       bool general_handler_called = false;
 
@@ -316,7 +320,7 @@ suite http_router_functionality_tests = [] {
       handler_general(req_general, res_general);
       expect(general_handler_called) << "General handler should be called\n";
       expect(res_general.response_body == "User ID: 123") << "General route response should be correct\n";
-   };
+   } | handlers{};
 };
 
 int main() {}
