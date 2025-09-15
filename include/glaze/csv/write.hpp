@@ -99,7 +99,7 @@ namespace glz
    struct to<CSV, T>
    {
       using Row = typename T::value_type;
-      
+
       template <auto Opts, class B>
       static void op(auto&& value, is_context auto&& ctx, B&& b, auto&& ix)
       {
@@ -109,24 +109,24 @@ namespace glz
             for (size_t r = 0; r < n_rows; ++r) {
                const auto& row = value[r];
                const auto n_cols = row.size();
-               
+
                for (size_t c = 0; c < n_cols; ++c) {
                   serialize<CSV>::op<Opts>(row[c], ctx, b, ix);
-                  
+
                   if (bool(ctx.error)) [[unlikely]] {
                      return;
                   }
-                  
+
                   if (c < n_cols - 1) {
                      dump<','>(b, ix);
                   }
                }
-               
+
                if (r < n_rows - 1) {
                   dump<'\n'>(b, ix);
                }
             }
-            
+
             // Always add a trailing newline for consistency
             if (n_rows > 0) {
                dump<'\n'>(b, ix);
@@ -137,35 +137,35 @@ namespace glz
             if (value.empty()) {
                return;
             }
-            
+
             // Find maximum column count
             size_t max_cols = 0;
             for (const auto& row : value) {
                max_cols = std::max(max_cols, row.size());
             }
-            
+
             // Write transposed data
             for (size_t c = 0; c < max_cols; ++c) {
                for (size_t r = 0; r < value.size(); ++r) {
                   if (c < value[r].size()) {
                      serialize<CSV>::op<Opts>(value[r][c], ctx, b, ix);
-                     
+
                      if (bool(ctx.error)) [[unlikely]] {
                         return;
                      }
                   }
                   // else write empty cell (nothing to write)
-                  
+
                   if (r < value.size() - 1) {
                      dump<','>(b, ix);
                   }
                }
-               
+
                if (c < max_cols - 1) {
                   dump<'\n'>(b, ix);
                }
             }
-            
+
             // Add trailing newline for consistency
             if (max_cols > 0) {
                dump<'\n'>(b, ix);
@@ -176,7 +176,8 @@ namespace glz
 
    // Helper function to check if a string needs CSV quoting
    template <class Str>
-   inline bool needs_csv_quoting(const Str& str) {
+   inline bool needs_csv_quoting(const Str& str)
+   {
       for (const auto c : str) {
          if (c == ',' || c == '"' || c == '\n' || c == '\r') {
             return true;
@@ -184,7 +185,7 @@ namespace glz
       }
       return false;
    }
-   
+
    // Dump a CSV string with proper quoting and escaping
    template <class B>
    inline void dump_csv_string(const sv str, B& b, size_t& ix)
@@ -192,7 +193,7 @@ namespace glz
       if (needs_csv_quoting(str)) {
          // Need to quote this string
          dump<'"'>(b, ix);
-         
+
          // Write the string, escaping quotes by doubling them
          for (const auto c : str) {
             if (c == '"') {
@@ -209,7 +210,7 @@ namespace glz
                ++ix;
             }
          }
-         
+
          dump<'"'>(b, ix);
       }
       else {
@@ -217,7 +218,7 @@ namespace glz
          dump_maybe_empty(str, b, ix);
       }
    }
-   
+
    // Dump a single character with CSV quoting if needed
    template <class B>
    inline void dump_csv_char(const char c, B& b, size_t& ix)

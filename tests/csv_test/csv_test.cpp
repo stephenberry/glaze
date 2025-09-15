@@ -1030,15 +1030,11 @@ suite vector_struct_direct_read_tests = [] {
 // Test suite for vector<data_point> without headers
 suite vector_data_point_no_headers_tests = [] {
    "write_vector_data_point_no_headers"_test = [] {
-      std::vector<data_point> data = {
-         {1, 10.5f, "Point A"},
-         {2, 20.3f, "Point B"}, 
-         {3, 15.7f, "Point C"}
-      };
+      std::vector<data_point> data = {{1, 10.5f, "Point A"}, {2, 20.3f, "Point B"}, {3, 15.7f, "Point C"}};
 
       std::string output;
       expect(!glz::write<glz::opts_csv{.use_headers = false}>(data, output));
-      
+
       expect(output == R"(1,10.5,Point A
 2,20.3,Point B
 3,15.7,Point C
@@ -1052,7 +1048,7 @@ suite vector_data_point_no_headers_tests = [] {
 
       std::vector<data_point> data;
       expect(!glz::read<glz::opts_csv{.use_headers = false}>(data, csv_data));
-      
+
       expect(data.size() == 3) << "Should read 3 data points";
       expect(data[0].id == 4) << "First point id should be 4";
       expect(data[0].value == 25.5f) << "First point value should be 25.5";
@@ -1063,18 +1059,14 @@ suite vector_data_point_no_headers_tests = [] {
 
    "roundtrip_vector_data_point_no_headers"_test = [] {
       std::vector<data_point> original = {
-         {10, 100.5f, "Alpha"},
-         {20, 200.3f, "Beta"},
-         {30, 300.7f, "Gamma"},
-         {40, 400.1f, "Delta"}
-      };
+         {10, 100.5f, "Alpha"}, {20, 200.3f, "Beta"}, {30, 300.7f, "Gamma"}, {40, 400.1f, "Delta"}};
 
       std::string buffer;
       expect(!glz::write<glz::opts_csv{.use_headers = false}>(original, buffer));
-      
+
       std::vector<data_point> result;
       expect(!glz::read<glz::opts_csv{.use_headers = false}>(result, buffer));
-      
+
       expect(result.size() == original.size()) << "Sizes should match after roundtrip";
       for (size_t i = 0; i < original.size(); ++i) {
          expect(result[i].id == original[i].id) << "IDs should match";
@@ -1091,11 +1083,8 @@ suite vector_data_point_no_headers_tests = [] {
 300,3000.7,Header Test C)";
 
       std::vector<data_point> data;
-      expect(!glz::read<glz::opts_csv{
-         .use_headers = false,
-         .skip_header_row = true
-      }>(data, csv_with_header));
-      
+      expect(!glz::read<glz::opts_csv{.use_headers = false, .skip_header_row = true}>(data, csv_with_header));
+
       expect(data.size() == 3) << "Should read 3 data points after skipping header";
       expect(data[0].id == 100) << "First id should be 100";
       expect(data[0].name == "Header Test A") << "First name should be correct";
@@ -1105,13 +1094,13 @@ suite vector_data_point_no_headers_tests = [] {
    "empty_vector_data_point_no_headers"_test = [] {
       std::vector<data_point> data;
       std::string output;
-      
+
       expect(!glz::write<glz::opts_csv{.use_headers = false}>(data, output));
       expect(output == "") << "Empty vector should produce empty output";
-      
+
       // For structs/objects, empty CSV is an error (unlike whitespace-only which is valid)
       std::vector<data_point> result;
-      std::string test_input = "";  // Explicitly using empty string
+      std::string test_input = ""; // Explicitly using empty string
       auto ec = glz::read<glz::opts_csv{.use_headers = false}>(result, test_input);
       expect(bool(ec)) << "Empty CSV should be an error for struct types";
       expect(static_cast<int>(ec.ec) == 12) << "Should be no_read_input error";
@@ -1119,11 +1108,11 @@ suite vector_data_point_no_headers_tests = [] {
 
    "single_element_vector_data_point"_test = [] {
       std::vector<data_point> data = {{42, 42.42f, "Single"}};
-      
+
       std::string output;
       expect(!glz::write<glz::opts_csv{.use_headers = false}>(data, output));
       expect(output == "42,42.42,Single\n") << "Single element should write correctly";
-      
+
       std::vector<data_point> result;
       expect(!glz::read<glz::opts_csv{.use_headers = false}>(result, output));
       expect(result.size() == 1) << "Should read single element";
@@ -1134,24 +1123,20 @@ suite vector_data_point_no_headers_tests = [] {
 
    "quoted_strings_vector_data_point"_test = [] {
       std::vector<data_point> data = {
-         {1, 1.1f, "Name, with comma"},
-         {2, 2.2f, "Name \"with\" quotes"},
-         {3, 3.3f, "Multi\nline\nname"}
-      };
+         {1, 1.1f, "Name, with comma"}, {2, 2.2f, "Name \"with\" quotes"}, {3, 3.3f, "Multi\nline\nname"}};
 
       std::string output;
       expect(!glz::write<glz::opts_csv{.use_headers = false}>(data, output));
-      
+
       // Verify the output has proper quoting
-      expect(output.find("\"Name, with comma\"") != std::string::npos) 
-         << "Should quote strings with commas";
-      expect(output.find("\"Name \"\"with\"\" quotes\"") != std::string::npos) 
+      expect(output.find("\"Name, with comma\"") != std::string::npos) << "Should quote strings with commas";
+      expect(output.find("\"Name \"\"with\"\" quotes\"") != std::string::npos)
          << "Should escape quotes in quoted strings";
-      
+
       // Read it back
       std::vector<data_point> result;
       expect(!glz::read<glz::opts_csv{.use_headers = false}>(result, output));
-      
+
       expect(result.size() == 3) << "Should read all elements";
       expect(result[0].name == "Name, with comma") << "Should preserve comma in string";
       expect(result[1].name == "Name \"with\" quotes") << "Should preserve quotes";
@@ -1165,45 +1150,40 @@ suite vector_data_point_no_headers_tests = [] {
          std::string output;
          expect(!glz::write<glz::opts_csv{.use_headers = false}>(data, output));
          expect(output == "1,1,\n") << "Empty string should not be quoted";
-         
+
          std::vector<data_point> result;
          expect(!glz::read<glz::opts_csv{.use_headers = false}>(result, output));
          expect(result[0].name == "") << "Should preserve empty string";
       }
-      
+
       // Test strings with only quotes
       {
          std::vector<data_point> data = {{2, 2.0f, "\"\"\""}};
          std::string output;
          expect(!glz::write<glz::opts_csv{.use_headers = false}>(data, output));
-         expect(output.find("\"\"\"\"\"\"\"") != std::string::npos) 
+         expect(output.find("\"\"\"\"\"\"\"") != std::string::npos)
             << "Three quotes should become six quotes inside quotes";
       }
-      
+
       // Test strings without special characters (should not be quoted)
       {
          std::vector<data_point> data = {{3, 3.0f, "NormalString"}};
          std::string output;
          expect(!glz::write<glz::opts_csv{.use_headers = false}>(data, output));
-         expect(output == "3,3,NormalString\n") 
-            << "Normal strings should not be quoted";
+         expect(output == "3,3,NormalString\n") << "Normal strings should not be quoted";
       }
-      
+
       // Test roundtrip with mixed strings
       {
          std::vector<data_point> data = {
-            {1, 1.0f, "Normal"},
-            {2, 2.0f, "Has,comma"},
-            {3, 3.0f, ""},
-            {4, 4.0f, "Has\r\nCRLF"}
-         };
-         
+            {1, 1.0f, "Normal"}, {2, 2.0f, "Has,comma"}, {3, 3.0f, ""}, {4, 4.0f, "Has\r\nCRLF"}};
+
          std::string output;
          expect(!glz::write<glz::opts_csv{.use_headers = false}>(data, output));
-         
+
          std::vector<data_point> result;
          expect(!glz::read<glz::opts_csv{.use_headers = false}>(result, output));
-         
+
          expect(result.size() == 4) << "Should read all items";
          expect(result[0].name == "Normal");
          expect(result[1].name == "Has,comma");
@@ -1214,15 +1194,12 @@ suite vector_data_point_no_headers_tests = [] {
 
    "append_mode_vector_data_point"_test = [] {
       std::vector<data_point> initial = {{1, 1.0f, "First"}};
-      
+
       std::string more_data = R"(2,2.0,Second
 3,3.0,Third)";
-      
-      expect(!glz::read<glz::opts_csv{
-         .use_headers = false,
-         .append_arrays = true
-      }>(initial, more_data));
-      
+
+      expect(!glz::read<glz::opts_csv{.use_headers = false, .append_arrays = true}>(initial, more_data));
+
       expect(initial.size() == 3) << "Should have 3 elements after appending";
       expect(initial[0].id == 1) << "Original data preserved";
       expect(initial[1].id == 2) << "First appended element";
@@ -1237,7 +1214,7 @@ suite vector_data_point_no_headers_tests = [] {
 
       std::vector<data_point> data;
       expect(!glz::read<glz::opts_csv{.use_headers = false}>(data, csv_data));
-      
+
       expect(data.size() == 4) << "Should read all numeric formats";
       expect(data[0].value == 100.0f) << "Should parse scientific notation";
       expect(data[1].value == -3.14f) << "Should parse negative numbers";
@@ -1253,7 +1230,7 @@ suite vector_data_point_no_headers_tests = [] {
 
       std::vector<data_point> data;
       auto error = glz::read<glz::opts_csv{.use_headers = false}>(data, csv_with_trailing);
-      
+
       // This should either parse successfully (ignoring extra field)
       // or fail gracefully - but shouldn't crash
       if (!error) {
@@ -1728,10 +1705,7 @@ suite csv_2d_array_tests = [] {
 6,7,8)";
 
       std::vector<std::vector<int>> matrix;
-      auto ec = glz::read<glz::opts_csv{
-         .use_headers = false,
-         .validate_rectangular = true
-      }>(matrix, csv_data);
+      auto ec = glz::read<glz::opts_csv{.use_headers = false, .validate_rectangular = true}>(matrix, csv_data);
 
       expect(bool(ec)) << "Should fail validation";
       expect(ec == glz::error_code::constraint_violated) << "Should be rectangular constraint violation";
@@ -1812,10 +1786,7 @@ Multi-line","Text")";
 7,8,9)";
 
       std::vector<std::vector<int>> matrix;
-      expect(!glz::read<glz::opts_csv{
-         .use_headers = false,
-         .skip_header_row = true
-      }>(matrix, csv_data));
+      expect(!glz::read<glz::opts_csv{.use_headers = false, .skip_header_row = true}>(matrix, csv_data));
 
       expect(matrix.size() == 3) << "Should have 3 rows (header skipped)";
       expect(matrix[0] == std::vector<int>{1, 2, 3}) << "First data row";
@@ -1829,10 +1800,7 @@ Alice,Engineer,Tech
 Bob,Manager,Sales)";
 
       std::vector<std::vector<std::string>> matrix;
-      expect(!glz::read<glz::opts_csv{
-         .use_headers = false,
-         .skip_header_row = true
-      }>(matrix, csv_data));
+      expect(!glz::read<glz::opts_csv{.use_headers = false, .skip_header_row = true}>(matrix, csv_data));
 
       expect(matrix.size() == 2) << "Should have 2 rows (header skipped)";
       expect(matrix[0] == std::vector<std::string>{"Alice", "Engineer", "Tech"}) << "First data row";
@@ -1845,10 +1813,7 @@ Bob,Manager,Sales)";
 7,8,9)";
 
       std::vector<std::vector<int>> matrix;
-      expect(!glz::read<glz::opts_csv{
-         .use_headers = false,
-         .validate_rectangular = true
-      }>(matrix, csv_data));
+      expect(!glz::read<glz::opts_csv{.use_headers = false, .validate_rectangular = true}>(matrix, csv_data));
 
       expect(matrix.size() == 3) << "Should have 3 rows";
       expect(matrix[0].size() == 3) << "All rows should have 3 columns";
@@ -1862,10 +1827,7 @@ Bob,Manager,Sales)";
 6,7,8,9)";
 
       std::vector<std::vector<int>> matrix;
-      auto ec = glz::read<glz::opts_csv{
-         .use_headers = false,
-         .validate_rectangular = true
-      }>(matrix, csv_data);
+      auto ec = glz::read<glz::opts_csv{.use_headers = false, .validate_rectangular = true}>(matrix, csv_data);
 
       expect(bool(ec)) << "Should fail validation";
       expect(ec == glz::error_code::constraint_violated) << "Should be rectangular constraint violation";
@@ -1878,11 +1840,8 @@ Bob,Manager,Sales)";
 7,8,9)";
 
       std::vector<std::vector<int>> matrix;
-      expect(!glz::read<glz::opts_csv{
-         .use_headers = false,
-         .skip_header_row = true,
-         .validate_rectangular = true
-      }>(matrix, csv_data));
+      expect(!glz::read<glz::opts_csv{.use_headers = false, .skip_header_row = true, .validate_rectangular = true}>(
+         matrix, csv_data));
 
       expect(matrix.size() == 3) << "Should have 3 rows after skipping header";
       expect(matrix[0].size() == 3) << "All rows should have same column count";
@@ -1918,10 +1877,10 @@ Bob,Manager,Sales)";
       std::string csv_data = R"(1,2,3
 4,5,6
 7,8,9)";
-      
+
       std::vector<std::vector<int>> matrix;
       expect(!glz::read<glz::opts_csv{.layout = glz::colwise, .use_headers = false}>(matrix, csv_data));
-      
+
       // With column-wise reading, the data should be transposed
       // Original row 1: [1,2,3] becomes column 1: [1,4,7]
       expect(matrix.size() == 3) << "Should have 3 columns (was 3 rows)";
@@ -1929,50 +1888,50 @@ Bob,Manager,Sales)";
       expect(matrix[1] == std::vector<int>{2, 5, 8}) << "Second column";
       expect(matrix[2] == std::vector<int>{3, 6, 9}) << "Third column";
    };
-   
+
    "2d_array_column_wise_write"_test = [] {
       // Data organized by columns
       std::vector<std::vector<int>> matrix = {
-         {1, 4, 7},  // Column 1
-         {2, 5, 8},  // Column 2  
-         {3, 6, 9}   // Column 3
+         {1, 4, 7}, // Column 1
+         {2, 5, 8}, // Column 2
+         {3, 6, 9} // Column 3
       };
-      
+
       std::string buffer;
       expect(!glz::write<glz::opts_csv{.layout = glz::colwise, .use_headers = false}>(matrix, buffer));
-      
+
       // Column-wise write should transpose: columns become rows
       expect(buffer == "1,2,3\n4,5,6\n7,8,9\n") << "Column-wise write should transpose";
    };
-   
+
    "2d_array_column_wise_roundtrip"_test = [] {
       // Original data in column format
       std::vector<std::vector<double>> original = {
-         {1.1, 2.2, 3.3},  // Column 1
-         {4.4, 5.5, 6.6},  // Column 2
-         {7.7, 8.8, 9.9}   // Column 3
+         {1.1, 2.2, 3.3}, // Column 1
+         {4.4, 5.5, 6.6}, // Column 2
+         {7.7, 8.8, 9.9} // Column 3
       };
-      
+
       std::string buffer;
       expect(!glz::write<glz::opts_csv{.layout = glz::colwise, .use_headers = false}>(original, buffer));
-      
+
       std::vector<std::vector<double>> result;
       expect(!glz::read<glz::opts_csv{.layout = glz::colwise, .use_headers = false}>(result, buffer));
-      
+
       expect(result.size() == original.size()) << "Same number of columns";
       for (size_t i = 0; i < original.size(); ++i) {
          expect(result[i] == original[i]) << "Column " << i << " should match";
       }
    };
-   
+
    "2d_array_column_wise_non_square"_test = [] {
       // Non-square matrix (2x4)
       std::string csv_data = R"(1,2,3,4
 5,6,7,8)";
-      
+
       std::vector<std::vector<int>> matrix;
       expect(!glz::read<glz::opts_csv{.layout = glz::colwise, .use_headers = false}>(matrix, csv_data));
-      
+
       // After transpose: 4 columns with 2 elements each
       expect(matrix.size() == 4) << "Should have 4 columns";
       expect(matrix[0] == std::vector<int>{1, 5}) << "First column";
@@ -1980,42 +1939,43 @@ Bob,Manager,Sales)";
       expect(matrix[2] == std::vector<int>{3, 7}) << "Third column";
       expect(matrix[3] == std::vector<int>{4, 8}) << "Fourth column";
    };
-   
+
    "2d_array_column_wise_string_data"_test = [] {
       std::string csv_data = R"("a","b","c"
 "d","e","f")";
-      
+
       std::vector<std::vector<std::string>> matrix;
       expect(!glz::read<glz::opts_csv{.layout = glz::colwise, .use_headers = false}>(matrix, csv_data));
-      
+
       expect(matrix.size() == 3) << "Should have 3 columns";
       expect(matrix[0] == std::vector<std::string>{"a", "d"}) << "First column";
       expect(matrix[1] == std::vector<std::string>{"b", "e"}) << "Second column";
       expect(matrix[2] == std::vector<std::string>{"c", "f"}) << "Third column";
    };
-   
+
    "2d_array_row_vs_column_comparison"_test = [] {
       std::string csv_data = R"(1,2,3
 4,5,6)";
-      
+
       std::vector<std::vector<int>> row_wise;
       std::vector<std::vector<int>> col_wise;
-      
+
       expect(!glz::read<glz::opts_csv{.layout = glz::rowwise, .use_headers = false}>(row_wise, csv_data));
       expect(!glz::read<glz::opts_csv{.layout = glz::colwise, .use_headers = false}>(col_wise, csv_data));
-      
+
       // Row-wise: 2x3 matrix
       expect(row_wise.size() == 2) << "Row-wise should have 2 rows";
       expect(row_wise[0].size() == 3) << "Each row should have 3 elements";
-      
+
       // Column-wise: 3x2 matrix (transposed)
       expect(col_wise.size() == 3) << "Column-wise should have 3 columns";
       expect(col_wise[0].size() == 2) << "Each column should have 2 elements";
-      
+
       // Verify transpose relationship
       for (size_t i = 0; i < row_wise.size(); ++i) {
          for (size_t j = 0; j < row_wise[i].size(); ++j) {
-            expect(row_wise[i][j] == col_wise[j][i]) << "Element at [" << i << "][" << j << "] should match transposed position";
+            expect(row_wise[i][j] == col_wise[j][i])
+               << "Element at [" << i << "][" << j << "] should match transposed position";
          }
       }
    };
@@ -2086,7 +2046,6 @@ Bob,Manager,Sales)";
       expect(matrix.size() == 3) << "Should handle mixed line endings";
    };
 
-
    // Memory Management Tests
    "2d_array_memory_efficiency"_test = [] {
       // Test that containers are properly resized and not over-allocated
@@ -2101,17 +2060,14 @@ Bob,Manager,Sales)";
       expect(buffer.find("100,200,300") != std::string::npos) << "Should contain second dataset";
    };
 
-   // Append Arrays Tests  
+   // Append Arrays Tests
    "2d_array_append_arrays"_test = [] {
       std::vector<std::vector<int>> initial = {{1, 2}, {3, 4}};
-      
+
       std::string csv_data = R"(5,6
 7,8)";
 
-      expect(!glz::read<glz::opts_csv{
-         .use_headers = false,
-         .append_arrays = true
-      }>(initial, csv_data));
+      expect(!glz::read<glz::opts_csv{.use_headers = false, .append_arrays = true}>(initial, csv_data));
 
       expect(initial.size() == 4) << "Should have 4 rows after append";
       expect(initial[0] == std::vector<int>{1, 2}) << "Original first row preserved";
