@@ -39,7 +39,7 @@ struct alt_handler {
 
    alt_handler(std::nullptr_t) noexcept : alt_handler{} {}
 
-   template <class F> requires std::invocable<F, const glz::request&, glz::response&>
+   template <class F> requires (std::invocable<F, const glz::request&, glz::response&> && !std::is_same_v<alt_handler, std::remove_cvref_t<F>>)
    alt_handler(F&& f) noexcept : m_fn{std::forward<F>(f)} {}
 
    void operator()(const glz::request& req, glz::response& res) {
