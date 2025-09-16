@@ -1185,6 +1185,19 @@ namespace glz
             }
          }
 
+         // Handle empty string: "" should map to null character '\0'
+         if (*it == '"') {
+            value = '\0';
+            ++it; // consume closing quote
+            if constexpr (not Opts.null_terminated) {
+               if (it == end) {
+                  ctx.error = error_code::end_reached;
+                  return;
+               }
+            }
+            return;
+         }
+
          if (*it == '\\') [[unlikely]] {
             ++it;
             switch (*it) {
