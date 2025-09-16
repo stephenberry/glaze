@@ -1148,7 +1148,9 @@ namespace glz
                const auto index = decode_hash_with_size<CSV, T, HashInfo, HashInfo.type>::op(
                   key.data(), key.data() + key.size(), key.size());
 
-               if (index < N) [[likely]] {
+               // Verify that the decoded index actually matches the key string to avoid
+               // accidental matches from non-member inputs (e.g., fuzzed data).
+               if (index < N && reflect<T>::keys[index] == key) [[likely]] {
                   visit<N>(
                      [&]<size_t I>() {
                         decltype(auto) member = [&]() -> decltype(auto) {
