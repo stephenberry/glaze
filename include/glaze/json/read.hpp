@@ -68,7 +68,23 @@ namespace glz
             if constexpr (std::is_member_object_pointer_v<ReaderType>) {
                using MemberType = typename member_value<ReaderType>::type;
                if constexpr (map_subscriptable<MemberType>) {
-                  parse<JSON>::op<Opts>((value.*reader)[key], ctx, it, end);
+                  // Convert the `sv` key to the map's key_type when needed
+                  using Key = typename MemberType::key_type;
+                  if constexpr (std::is_same_v<Key, sv>) {
+                     parse<JSON>::op<Opts>((value.*reader)[key], ctx, it, end);
+                  }
+                  else if constexpr (std::is_constructible_v<Key, sv>) {
+                     parse<JSON>::op<Opts>((value.*reader)[Key{key}], ctx, it, end);
+                  }
+                  else if constexpr (std::is_constructible_v<Key, const char*, size_t>) {
+                     parse<JSON>::op<Opts>((value.*reader)[Key{key.data(), key.size()}], ctx, it, end);
+                  }
+                  else if constexpr (std::is_constructible_v<Key, std::string_view>) {
+                     parse<JSON>::op<Opts>((value.*reader)[Key{std::string_view{key}}], ctx, it, end);
+                  }
+                  else {
+                     static_assert(false_v<T>, "unknown_read key type not handled");
+                  }
                }
                else {
                   static_assert(false_v<T>, "target must have subscript operator");
@@ -83,7 +99,23 @@ namespace glz
                      parse<JSON>::op<Opts>(input, ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
-                     (value.*reader)(key, input);
+                     // Convert `sv` key to the method's first parameter type when needed
+                     using KeyParam = std::decay_t<glz::tuple_element_t<0, TupleType>>;
+                     if constexpr (std::is_same_v<KeyParam, sv>) {
+                        (value.*reader)(key, input);
+                     }
+                     else if constexpr (std::is_constructible_v<KeyParam, sv>) {
+                        (value.*reader)(KeyParam{key}, input);
+                     }
+                     else if constexpr (std::is_constructible_v<KeyParam, const char*, size_t>) {
+                        (value.*reader)(KeyParam{key.data(), key.size()}, input);
+                     }
+                     else if constexpr (std::is_constructible_v<KeyParam, std::string_view>) {
+                        (value.*reader)(KeyParam{std::string_view{key}}, input);
+                     }
+                     else {
+                        static_assert(false_v<T>, "unknown_read key parameter type not handled");
+                     }
                   }
                   else {
                      static_assert(false_v<T>, "method must have 2 args");

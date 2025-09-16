@@ -8217,6 +8217,48 @@ suite unknown_fields_known_type_test = [] {
    };
 };
 
+struct unknown_fields_string_key
+{
+   std::string a;
+   std::string end;
+   // Use std::string for keys and raw_json for values
+   std::map<std::string, glz::raw_json> extra;
+};
+
+template <>
+struct glz::meta<unknown_fields_string_key>
+{
+   using T = unknown_fields_string_key;
+   static constexpr auto value = object("a", &T::a, "end", &T::end);
+   static constexpr auto unknown_write{&T::extra};
+   static constexpr auto unknown_read{&T::extra};
+};
+
+suite unknown_fields_string_key_test = [] {
+   "decode_unknown_string_key_map"_test = [] {
+      unknown_fields_string_key obj{};
+      std::string buffer = R"({"a":"aaa","unk":"zzz", "unk2":{"sub":3,"sub2":[{"a":"b"}]},"unk3":[], "end":"end"})";
+      auto ec = glz::read<glz::opts{.error_on_unknown_keys = false}>(obj, buffer);
+      expect(not ec) << glz::format_error(ec, buffer);
+      expect(obj.extra["unk"].str == R"("zzz")");
+      expect(obj.extra["unk2"].str == R"({"sub":3,"sub2":[{"a":"b"}]})");
+      expect(obj.extra["unk3"].str == R"([])");
+   };
+
+   "encode_unknown_string_key_map"_test = [] {
+      unknown_fields_string_key obj{};
+      obj.a = "aaa";
+      obj.end = "end";
+      obj.extra["unk"] = R"("zzz")";
+      obj.extra["unk2"] = R"({"sub":3,"sub2":[{"a":"b"}]})";
+      obj.extra["unk3"] = R"([])";
+      std::string out{};
+      auto ec = glz::write_json(obj, out);
+      expect(not ec) << glz::format_error(ec, out);
+      expect(out == R"({"a":"aaa","end":"end","unk":"zzz","unk2":{"sub":3,"sub2":[{"a":"b"}]},"unk3":[]})") << out;
+   };
+};
+
 struct key_reflection
 {
    int i = 287;
