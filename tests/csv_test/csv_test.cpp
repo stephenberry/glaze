@@ -1647,7 +1647,7 @@ suite csv_2d_array_tests = [] {
       expect(!glz::read<glz::opts_csv{.use_headers = false}>(result, buffer));
 
       expect(result.size() == original.size()) << "Same number of rows";
-      expect(result == original) << "Roundtrip should preserve data";
+      expect(std::ranges::equal(result, original)) << "Roundtrip should preserve data";
    };
 
    "2d_array_float_values"_test = [] {
@@ -2093,7 +2093,7 @@ suite csv_2d_array_edge_cases = [] {
    };
 
    "2d_array_whitespace_handling"_test = [] {
-      std::string csv_data = R"( 1 , 2 , 3 
+      std::string csv_data = R"( 1 , 2 , 3
  4 , 5 , 6 )";
 
       std::vector<std::vector<std::string>> matrix;
