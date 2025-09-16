@@ -49,12 +49,12 @@ struct CharRoundtrip
 
 namespace glz
 {
-template <>
-struct meta<CharRoundtrip>
-{
-   using T = CharRoundtrip;
-   static constexpr auto value = object(&T::char_val, &T::uchar_val, &T::int_val);
-};
+   template <>
+   struct meta<CharRoundtrip>
+   {
+      using T = CharRoundtrip;
+      static constexpr auto value = object(&T::char_val, &T::uchar_val, &T::int_val);
+   };
 } // namespace glz
 
 suite char_empty_string = [] {
