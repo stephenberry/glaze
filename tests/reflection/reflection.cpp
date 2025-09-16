@@ -1,13 +1,13 @@
 // Glaze Library
 // For the license information refer to glaze.hpp
 
-#include <ut/ut.hpp>
+#include "boost/ut.hpp"
 #include <variant>
 
 #include "glaze/core/convert_struct.hpp"
 #include "glaze/glaze.hpp"
 
-using namespace ut;
+using namespace boost::ut;
 
 struct test_type
 {

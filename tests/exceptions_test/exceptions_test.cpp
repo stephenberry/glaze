@@ -7,9 +7,9 @@
 #include "glaze/thread/shared_async_map.hpp"
 #include "glaze/thread/shared_async_vector.hpp"
 #include "glaze/thread/threadpool.hpp"
-#include "ut/ut.hpp"
+#include "boost/ut.hpp"
 
-using namespace ut;
+using namespace boost::ut;
 
 struct my_struct
 {
@@ -69,7 +69,7 @@ suite starter = [] {
 };
 
 suite basic_types = [] {
-   using namespace ut;
+   using namespace boost::ut;
 
    "double write"_test = [] {
       std::string buffer{};

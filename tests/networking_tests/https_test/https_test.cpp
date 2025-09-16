@@ -17,7 +17,7 @@
 #include "glaze/glaze.hpp"
 #include "glaze/net/http_client.hpp"
 #include "glaze/net/http_server.hpp"
-#include "ut/ut.hpp"
+#include "boost/ut.hpp"
 
 // OpenSSL includes for certificate generation
 #include <openssl/bio.h>
@@ -35,7 +35,7 @@
 
 #include <asio.hpp>
 
-using namespace ut;
+using namespace boost::ut;
 
 // Certificate generation class (unchanged)
 class CertificateGenerator

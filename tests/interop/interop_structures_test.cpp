@@ -7,9 +7,9 @@
 #include <string>
 #include <vector>
 
-#include "ut/ut.hpp"
+#include "boost/ut.hpp"
 
-using namespace ut;
+using namespace boost::ut;
 
 // Platform-specific dynamic library loading
 #ifdef _WIN32
@@ -187,7 +187,7 @@ class ComplexStructuresPlugin
 
 int main()
 {
-   using namespace ut;
+   using namespace boost::ut;
 
    //=========================================================================
    // JSON SERIALIZATION TESTS (from test_json_serialization.cpp)

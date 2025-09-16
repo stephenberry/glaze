@@ -1,11 +1,11 @@
 // Glaze Library
 // For the license information refer to glaze.hpp
 
-#include <ut/ut.hpp>
+#include "boost/ut.hpp"
 
 #include "glaze/glaze.hpp"
 
-using namespace ut;
+using namespace boost::ut;
 
 // These tests only do roundtrip testing so that the tests can be format agnostic.
 // By changing the GLZ_TEST_FORMAT macro we are able to change what format is
