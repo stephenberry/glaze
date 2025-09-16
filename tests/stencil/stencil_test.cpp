@@ -15,7 +15,36 @@ struct person
    bool employed{};
 };
 
+struct TodoItem
+{
+   std::string text;
+   bool completed;
+   std::string priority;
+   std::string category;
+   size_t id;
+   size_t index;
+};
+
+struct TodoList
+{
+   std::string title;
+   std::vector<TodoItem> items;
+   bool has_items;
+   size_t total_count;
+};
+
 suite stencil_tests = [] {
+   "todo_list"_test = [] {
+      std::string_view layout =
+         R"({{#items}} {{text}} {{#completed}}✓ {{/completed}}{{^completed}}○ {{/completed}} {{/items}})";
+
+      TodoList list{
+         "Mixed Tasks", {{"Task 1", false, "high", "home", 1, 0}, {"Task 2", true, "low", "home", 1, 0}}, true, 2};
+
+      auto result = glz::stencil(layout, list);
+      expect(result == " Task 1 ○   Task 2 ✓  ");
+   };
+
    "person"_test = [] {
       std::string_view layout = R"({{first_name}} {{last_name}} {{age}})";
 
@@ -351,24 +380,6 @@ suite mustache_example_tests = [] {
    };
 };
 
-struct TodoItem
-{
-   std::string text;
-   bool completed;
-   std::string priority;
-   std::string category;
-   size_t id;
-   size_t index;
-};
-
-struct TodoList
-{
-   std::string title;
-   std::vector<TodoItem> items;
-   bool has_items;
-   size_t total_count;
-};
-
 struct Person
 {
    std::string name;
@@ -450,7 +461,7 @@ suite mustache_container_iteration_tests = [] {
                     3};
 
       auto result = glz::mustache(layout, list).value_or("error");
-      expect(result == "Task 1 ○Task 2 ✓Task 3 ○") << result;
+      expect(result == "Task 1 ○ Task 2 ✓ Task 3 ○ ") << result;
    };
 
    "inverted_container_section_empty"_test = [] {
@@ -479,7 +490,7 @@ suite mustache_container_iteration_tests = [] {
          "Active List", {{"Task 1", true, "high", "work", 1, 0}, {"Task 2", false, "low", "personal", 2, 1}}, true, 2};
 
       auto result1 = glz::mustache(layout, list_with_items).value_or("error");
-      expect(result1 == "Active List (2 items): Task 1 ✓| Task 2| ") << result1;
+      expect(result1 == "Active List (2 items): Task 1 ✓ | Task 2 | ") << result1;
 
       TodoList empty_list{"Empty List", {}, false, 0};
       auto result2 = glz::mustache(layout, empty_list).value_or("error");
@@ -501,7 +512,7 @@ suite mustache_container_iteration_tests = [] {
       Team team{"Engineering", {{"Alice", 30, true}, {"Bob", 25, false}, {"Charlie", 35, true}}, true};
 
       auto result = glz::mustache(layout, team).value_or("error");
-      expect(result == "Engineering: Alice (30) *| Bob (25)| Charlie (35) *| ") << result;
+      expect(result == "Engineering: Alice (30) * | Bob (25) | Charlie (35) * | ") << result;
    };
 };
 

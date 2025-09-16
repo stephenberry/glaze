@@ -11,6 +11,11 @@
 #include <string_view>
 #include <system_error>
 
+// To deconflict Windows.h
+#ifdef DELETE
+#undef DELETE
+#endif
+
 namespace glz
 {
    enum struct http_method { GET, POST, PUT, DELETE, PATCH, HEAD, OPTIONS };

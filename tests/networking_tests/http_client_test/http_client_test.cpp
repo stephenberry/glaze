@@ -155,8 +155,9 @@ class working_test_server
          auto timer = std::make_shared<asio::steady_timer>(conn->socket_->get_executor());
          auto counter = std::make_shared<int>(0);
 
-         std::function<void(const std::error_code&)> send_data;
-         send_data = [conn, timer, counter, send_data](const std::error_code& ec) {
+         // Use shared_ptr to safely handle recursive lambda calls and avoid compiler-specific segfaults
+         auto send_data = std::make_shared<std::function<void(const std::error_code&)>>();
+         *send_data = [conn, timer, counter, send_data](const std::error_code& ec) {
             if (ec || !conn->is_open() || *counter >= 10) {
                if (conn->is_open()) conn->close();
                return;
@@ -169,10 +170,10 @@ class working_test_server
                                    return;
                                 }
                                 timer->expires_after(std::chrono::milliseconds(50));
-                                timer->async_wait(send_data);
+                                timer->async_wait(*send_data);
                              });
          };
-         timer->async_wait(send_data);
+         timer->async_wait(*send_data);
       });
 
       // Endpoint that immediately returns an error

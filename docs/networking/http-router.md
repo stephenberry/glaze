@@ -69,59 +69,94 @@ router.get("/api/v1/users/:id/profile", profile_handler);
 
 ### Parameter Constraints
 
+Glaze provides a `validation` function, which allows users to implement high performance validation logic using regex libraries or custom parsing.
+
+Examples:
+
 ```cpp
 // Numeric constraint
-glz::http_router::param_constraint numeric{
-    .pattern = "[0-9]+",
-    .description = "Must be a positive integer"
+glz::param_constraint numeric{
+    .description = "Must be a positive integer",
+    .validation = [](std::string_view value) {
+        if (value.empty()) return false;
+        for (char c : value) {
+            if (!std::isdigit(c)) return false;
+        }
+        return true;
+    }
 };
 
 router.get("/users/:id", user_handler, {{"id", numeric}});
 
-// UUID constraint
-glz::http_router::param_constraint uuid{
-    .pattern = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",
-    .description = "Must be a valid UUID"
+// UUID constraint using regex
+glz::param_constraint uuid{
+    .description = "Must be a valid UUID",
+    .validation = [](std::string_view value) {
+        std::regex uuid_regex(R"([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})");
+        return std::regex_match(std::string(value), uuid_regex);
+    }
 };
 
 router.get("/sessions/:session_id", session_handler, {{"session_id", uuid}});
 
 // Alphanumeric constraint
-glz::http_router::param_constraint username{
-    .pattern = "[a-zA-Z0-9_]{3,20}",
-    .description = "Username: 3-20 alphanumeric characters or underscore"
+glz::param_constraint username{
+    .description = "Username: 3-20 alphanumeric characters or underscore",
+    .validation = [](std::string_view value) {
+        if (value.size() < 3 || value.size() > 20) return false;
+        for (char c : value) {
+            if (!std::isalnum(c) && c != '_') return false;
+        }
+        return true;
+    }
 };
 
 router.get("/profile/:username", profile_handler, {{"username", username}});
 ```
 
-### Advanced Pattern Matching
+### Advanced Validation Functions
 
-The constraint pattern support includes:
+Validation functions provide flexible parameter validation:
 
 ```cpp
-// Wildcards
-glz::http_router::param_constraint any_extension{
-    .pattern = "*.txt",  // Files ending in .txt
-    .description = "Text files only"
+// File extension check
+glz::param_constraint any_extension{
+    .description = "Text files only",
+    .validation = [](std::string_view value) {
+        return value.ends_with(".txt");
+    }
 };
 
-// Character classes
-glz::http_router::param_constraint hex_color{
-    .pattern = "#[0-9a-fA-F]{6}",  // Hex color codes
-    .description = "Valid hex color code"
+// Hex color code validation
+glz::param_constraint hex_color{
+    .description = "Valid hex color code",
+    .validation = [](std::string_view value) {
+        if (value.size() != 7 || value[0] != '#') return false;
+        for (size_t i = 1; i < value.size(); ++i) {
+            if (!std::isxdigit(value[i])) return false;
+        }
+        return true;
+    }
 };
 
-// Anchors
-glz::http_router::param_constraint exact_match{
-    .pattern = "^admin$",  // Exact match for "admin"
-    .description = "Must be exactly 'admin'"
+// Exact match validation
+glz::param_constraint exact_match{
+    .description = "Must be exactly 'admin'",
+    .validation = [](std::string_view value) {
+        return value == "admin";
+    }
 };
 
-// Ranges
-glz::http_router::param_constraint year{
-    .pattern = "[2][0-9][0-9][0-9]",  // Years starting with 2
-    .description = "4-digit year starting with 2"
+// Year range validation
+glz::param_constraint year{
+    .description = "4-digit year starting with 2",
+    .validation = [](std::string_view value) {
+        if (value.size() != 4 || value[0] != '2') return false;
+        for (char c : value) {
+            if (!std::isdigit(c)) return false;
+        }
+        return true;
+    }
 };
 ```
 
@@ -149,9 +184,14 @@ router.get("/api/*version", [](const glz::request& req, glz::response& res) {
 
 ```cpp
 // Constrain wildcard content
-glz::http_router::param_constraint safe_path{
-    .pattern = "[a-zA-Z0-9/._-]+",  // Safe file path characters
-    .description = "Safe file path"
+glz::param_constraint safe_path{
+    .description = "Safe file path",
+    .validation = [](std::string_view value) {
+        for (char c : value) {
+            if (!(std::isalnum(c) || c == '/' || c == '.' || c == '_' || c == '-')) return false;
+        }
+        return true;
+    }
 };
 
 router.get("/files/*path", file_handler, {{"path", safe_path}});

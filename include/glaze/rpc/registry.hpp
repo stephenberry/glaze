@@ -96,6 +96,17 @@ namespace glz
 
                impl::template register_param_function_endpoint<Func, Params>(full_key, func, *this);
             }
+            else if constexpr (std::is_pointer_v<std::remove_cvref_t<Func>> &&
+                               (glaze_object_t<std::remove_pointer_t<std::remove_cvref_t<Func>>> ||
+                                reflectable<std::remove_pointer_t<std::remove_cvref_t<Func>>>)) {
+               // Handle pointer members explicitly for RPC traversal
+               if (func) { // Only traverse if pointer is valid
+                  on<root, std::remove_pointer_t<std::remove_cvref_t<Func>>, full_key>(*func);
+                  impl::template register_object_endpoint<std::remove_pointer_t<std::remove_cvref_t<Func>>>(
+                     full_key, *func, *this);
+               }
+               // else: skip registration for null pointers - no endpoints created
+            }
             else if constexpr (glaze_object_t<std::remove_cvref_t<Func>> || reflectable<std::remove_cvref_t<Func>>) {
                on<root, std::remove_cvref_t<Func>, full_key>(func);
 
@@ -143,7 +154,8 @@ namespace glz
                }
                else {
                   // this is a variable and not a function, so we build RPC read/write calls
-                  impl::template register_variable_endpoint<std::remove_cvref_t<Func>>(full_key, func, *this);
+                  // We can't remove const here, because const fields need to be able to be written
+                  impl::template register_variable_endpoint<std::remove_reference_t<Func>>(full_key, func, *this);
                }
             }
          });
@@ -157,8 +169,37 @@ namespace glz
          auto write_error = [&](const std::string& body) {
             out.body = body;
             out.header.body_length = body.size();
+            out.header.body_format = repe::body_format::UTF8; // Error messages are UTF-8
             out.header.length = sizeof(repe::header) + out.query.size() + out.body.size();
          };
+
+         // REPE Header Validation
+
+         // Version validation - REPE spec requires version 1
+         if (in.header.version != 1) {
+            out.header.ec = error_code::version_mismatch;
+            out.header.id = in.header.id; // Echo back the original ID
+            write_error("REPE version mismatch: expected 1, got " + std::to_string(in.header.version));
+            return;
+         }
+
+         // Length validation - REPE spec requires length = 48 + query_length + body_length
+         const uint64_t expected_length = sizeof(repe::header) + in.header.query_length + in.header.body_length;
+         if (in.header.length != expected_length) {
+            out.header.ec = error_code::invalid_header;
+            out.header.id = in.header.id; // Echo back the original ID
+            write_error("REPE length mismatch: expected " + std::to_string(expected_length) + ", got " +
+                        std::to_string(in.header.length));
+            return;
+         }
+
+         // Magic number validation - REPE spec requires 0x1507
+         if (in.header.spec != 0x1507) {
+            out.header.ec = error_code::invalid_header;
+            out.header.id = in.header.id; // Echo back the original ID
+            write_error("REPE magic number mismatch: expected 0x1507, got 0x" + std::to_string(in.header.spec));
+            return;
+         }
 
          if (auto it = endpoints.find(in.query); it != endpoints.end()) {
             if (bool(in.header.ec)) {
@@ -170,6 +211,7 @@ namespace glz
                }
                catch (const std::exception& e) {
                   out = repe::message{}; // reset the output message because it could have been modified
+                  out.header.id = in.header.id; // Preserve the ID from the input message
                   out.header.query_length = 0;
                   std::string body = "registry error for `" + in.query + "`: ";
                   body.append(e.what());
@@ -181,6 +223,7 @@ namespace glz
          else {
             std::string body = "invalid_query: " + in.query;
             out.header.ec = error_code::method_not_found;
+            out.header.id = in.header.id; // Preserve the ID from the input message
             write_error(body);
          }
       }

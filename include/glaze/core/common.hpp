@@ -412,20 +412,24 @@ namespace glz
    template <is_variant T, size_t... I>
    constexpr auto make_variant_sv_id_map_impl(std::index_sequence<I...>, auto&& variant_ids)
    {
-      return normal_map<sv, size_t, std::variant_size_v<T>>(std::array{pair<sv, size_t>{sv(variant_ids[I]), I}...});
+      // Use the actual size of the ids array, not the variant size
+      return normal_map<sv, size_t, sizeof...(I)>(std::array{pair<sv, size_t>{sv(variant_ids[I]), I}...});
    }
 
    template <is_variant T, size_t... I>
    constexpr auto make_variant_id_map_impl(std::index_sequence<I...>, auto&& variant_ids)
    {
       using id_type = std::decay_t<decltype(ids_v<T>[0])>;
-      return normal_map<id_type, size_t, std::variant_size_v<T>>(std::array{pair{variant_ids[I], I}...});
+      // Use the actual size of the ids array, not the variant size
+      return normal_map<id_type, size_t, sizeof...(I)>(std::array{pair{variant_ids[I], I}...});
    }
 
    template <is_variant T>
    constexpr auto make_variant_id_map()
    {
-      constexpr auto indices = std::make_index_sequence<std::variant_size_v<T>>{};
+      // Use the size of the ids array, not the variant size
+      // This allows unlabeled variant types to serve as defaults
+      constexpr auto indices = std::make_index_sequence<ids_v<T>.size()>{};
 
       using id_type = std::decay_t<decltype(ids_v<T>[0])>;
 
@@ -466,7 +470,7 @@ namespace glz
          // Eigen ought to put the check in the `enable_if` for operator()()
          return std::invoke(std::forward<Element>(element), std::forward<Value>(value));
       }
-      else if constexpr (std::is_pointer_v<V>) {
+      else if constexpr (std::is_pointer_v<V> && !std::is_reference_v<Element>) {
          if constexpr (std::invocable<decltype(*element), Value>) {
             return std::invoke(*element, std::forward<Value>(value));
          }
@@ -578,5 +582,50 @@ namespace glz
       else {
          return false;
       }
+   }
+}
+
+namespace glz
+{
+   /// Determine whether the member with the given name is required for type T.
+   ///
+   /// A member is required, if the option error_on_missing_keys is set and the member is not null-able.
+   /// This behaviour can be overridden on a per-type basis via the customization point
+   /// `meta<T>::requires_key(key, is_nullable)`
+   /// @code
+   /// struct person {
+   ///    std::string first_name{};
+   ///    std::string last_name{};
+   /// };
+   ///
+   /// template <>
+   /// struct glz::meta<person> {
+   ///    static constexpr bool requires_key(std::string_view key, bool nullable) {
+   ///       if (not nullable) {
+   ///          return true;
+   ///       }
+   ///       return false;
+   ///    }
+   /// };
+   /// @endcode
+   /// @tparam T      The user‑defined type for which metadata may be provided.
+   /// @tparam Val_T  The value type associated with the key; used to determine nullability.
+   /// @tparam Opts   A policy struct with a boolean member `error_on_missing_keys`.
+   ///
+   /// @param key          The string identifier whose requirement status is being queried.
+   /// @returns `true` if:
+   ///            - `meta<T>::requires_key(key, is_nullable)` exists and returns true, or
+   ///            - `Opts.error_on_missing_keys` is true *and* Val_T is not nullable;
+   ///          otherwise returns `false`.
+   template <typename T, typename Val_T, auto Opts>
+   constexpr bool requires_key(const std::string_view key)
+   {
+      if constexpr (meta_has_requires_key<T>) {
+         if (meta<T>::requires_key(key, nullable_like<Val_T>)) return true;
+      }
+      else if constexpr (Opts.error_on_missing_keys && !nullable_like<Val_T>) {
+         return true;
+      }
+      return false;
    }
 }

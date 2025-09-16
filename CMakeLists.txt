@@ -4,12 +4,16 @@ include(cmake/prelude.cmake)
 
 project(
     glaze
-    VERSION 5.5.0
+    VERSION 5.7.1
     LANGUAGES CXX
 )
 
 include(cmake/project-is-top-level.cmake)
 include(cmake/variables.cmake)
+
+if (PROJECT_IS_TOP_LEVEL)
+  set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+endif()
 
 add_library(glaze_glaze INTERFACE)
 add_library(glaze::glaze ALIAS glaze_glaze)
@@ -88,3 +92,9 @@ if(glaze_ENABLE_SSL)
   )
   target_compile_definitions(glaze_glaze INTERFACE GLZ_ENABLE_SSL)
 endif(glaze_ENABLE_SSL)
+
+option(glaze_BUILD_INTEROP "Build language interoperability library" OFF)
+
+if(glaze_BUILD_INTEROP)
+  add_subdirectory(src/interop)
+endif()
