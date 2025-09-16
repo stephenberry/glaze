@@ -39,6 +39,39 @@ using namespace ut;
 glz::trace trace{};
 suite start_trace = [] { trace.begin("json_test", "Full test suite duration."); };
 
+// Regression test: empty JSON string to char should yield '\0'
+struct CharRoundtrip
+{
+   char char_val{};
+   unsigned char uchar_val{};
+   int int_val{};
+};
+
+namespace glz
+{
+template <>
+struct meta<CharRoundtrip>
+{
+   using T = CharRoundtrip;
+   static constexpr auto value = object(&T::char_val, &T::uchar_val, &T::int_val);
+};
+} // namespace glz
+
+suite char_empty_string = [] {
+   "char empty string deserializes to null char"_test = [] {
+      CharRoundtrip original{};
+      std::string buffer{};
+      expect(not glz::write_json(original, buffer));
+
+      CharRoundtrip deserialized{'a', 'b', 1};
+      auto ec = glz::read_json(deserialized, buffer);
+      expect(ec == glz::error_code::none) << glz::format_error(ec, buffer);
+      expect(deserialized.char_val == 0);
+      expect(deserialized.uchar_val == 0);
+      expect(deserialized.int_val == 0);
+   };
+};
+
 // Test structs for pointer tests (using pure reflection, no glz::meta)
 struct ptr_struct
 {
