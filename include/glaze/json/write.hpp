@@ -25,6 +25,7 @@
 
 #include "glaze/core/opts.hpp"
 #include "glaze/core/reflect.hpp"
+#include "glaze/reflection/enum_reflect.hpp"
 #include "glaze/core/to.hpp"
 #include "glaze/core/write.hpp"
 #include "glaze/core/write_chars.hpp"
@@ -789,15 +790,58 @@ namespace glz
       }
    };
 
+   // Bitflag enum specialization - serialize as pipe-separated string
    template <class T>
-      requires(!meta_keys<T> && std::is_enum_v<std::decay_t<T>> && !glaze_enum_t<T> && !custom_write<T>)
+      requires(!meta_keys<T> && bit_flag_enum<std::decay_t<T>> && !glaze_enum_t<T> && !custom_write<T>)
+   struct to<JSON, T>
+   {
+      template <auto Opts, class... Args>
+      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&&, Args&&... args)
+      {
+         // Use bitflag string representation
+         const auto str = glz::enum_to_string_bitflag(value);
+         
+         if constexpr (!Opts.raw) {
+            dump<'"'>(args...);
+         }
+         dump_maybe_empty(str, args...);
+         if constexpr (!Opts.raw) {
+            dump<'"'>(args...);
+         }
+      }
+   };
+
+   // Enums without meta specializations - serialize based on opts.enum_as_string
+   template <class T>
+      requires(!meta_keys<T> && std::is_enum_v<std::decay_t<T>> && !bit_flag_enum<std::decay_t<T>> && 
+               !glaze_enum_t<T> && !custom_write<T>)
    struct to<JSON, T>
    {
       template <auto Opts, class... Args>
       GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args)
       {
-         // serialize as underlying number
-         serialize<JSON>::op<Opts>(static_cast<std::underlying_type_t<std::decay_t<T>>>(value), ctx,
+         using E = std::decay_t<T>;
+         
+         if constexpr (check_enum_as_string(Opts)) {
+            // Try to use enum reflection if available
+            if constexpr (glz::enum_count<E> > 0) {
+               const auto name = glz::enum_name(value);
+               if (!name.empty()) {
+                  if constexpr (!Opts.raw) {
+                     dump<'"'>(args...);
+                  }
+                  dump_maybe_empty(name, args...);
+                  if constexpr (!Opts.raw) {
+                     dump<'"'>(args...);
+                  }
+                  return;
+               }
+            }
+            // Fall back to numeric if no reflection available
+         }
+         
+         // Serialize as numeric value
+         serialize<JSON>::op<Opts>(static_cast<std::underlying_type_t<E>>(value), ctx,
                                    std::forward<Args>(args)...);
       }
    };

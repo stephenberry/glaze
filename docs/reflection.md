@@ -148,3 +148,240 @@ suite convert_tests = [] {
 };
 ```
 
+## Enum Reflection
+
+Glaze provides compile-time enum reflection that extracts enum names and values without requiring manual registration or macros.
+
+### Overview
+
+Enum reflection in Glaze works with:
+- Scoped enums (`enum class`)
+- Unscoped enums (`enum`)
+- Enums with custom underlying types
+- Sparse enums (non-consecutive values)
+
+The reflection happens entirely at compile time using compiler intrinsics, with zero runtime overhead.
+
+### Basic Usage
+
+```c++
+#include "glaze/reflection/enum_reflect.hpp"
+
+enum class Color { Red, Green, Blue };
+enum class Status : int { Pending = -1, Running = 0, Complete = 1 };
+
+// Get enum count
+static_assert(glz::enum_count<Color> == 3);
+static_assert(glz::enum_count<Status> == 3);
+
+// Get enum names
+static_assert(glz::enum_names<Color>[0] == "Red");
+static_assert(glz::enum_names<Color>[1] == "Green");
+static_assert(glz::enum_names<Color>[2] == "Blue");
+
+// Get enum values
+static_assert(glz::enum_values<Color>[0] == Color::Red);
+static_assert(glz::enum_values<Color>[1] == Color::Green);
+static_assert(glz::enum_values<Color>[2] == Color::Blue);
+
+// Get min/max values
+static_assert(glz::enum_min<Status> == Status::Pending);
+static_assert(glz::enum_max<Status> == Status::Complete);
+```
+
+### Runtime Utilities
+
+#### enum_name - Convert enum value to string
+
+```c++
+Color c = Color::Green;
+std::string_view name = glz::enum_name(c);  // "Green"
+
+// Returns empty string for invalid values
+auto invalid = static_cast<Color>(100);
+std::string_view invalid_name = glz::enum_name(invalid);  // ""
+```
+
+#### enum_value - Convert string to enum value
+
+```c++
+std::optional<Color> c = glz::enum_value<Color>("Blue");  // Color::Blue
+std::optional<Color> invalid = glz::enum_value<Color>("Yellow");  // std::nullopt
+
+// Case-insensitive search
+std::optional<Color> c2 = glz::enum_value<Color>("blue", 
+    [](auto a, auto b) { return glz::ieq(a, b); });  // Color::Blue
+```
+
+#### contains - Check if value/name exists
+
+```c++
+// Check by value
+bool has_red = glz::contains<Color>(Color::Red);  // true
+bool has_invalid = glz::contains<Color>(static_cast<Color>(10));  // false
+
+// Check by underlying value
+bool has_zero = glz::contains<Color>(0);  // true (Red = 0)
+
+// Check by name
+bool has_green = glz::contains<Color>("Green");  // true
+bool has_yellow = glz::contains<Color>("Yellow");  // false
+```
+
+#### index_of - Get index of enum value
+
+```c++
+std::optional<size_t> idx = glz::index_of<Color>(Color::Blue);  // 2
+std::optional<size_t> invalid = glz::index_of<Color>(static_cast<Color>(100));  // nullopt
+```
+
+### Concepts and Type Traits
+
+```c++
+// Check if type is an enum
+static_assert(glz::is_enum<Color>);
+static_assert(!glz::is_enum<int>);
+
+// Check if enum is scoped
+static_assert(glz::scoped_enum<Color>);  // enum class
+static_assert(!glz::unscoped_enum<Color>);
+
+// Check if enum is contiguous (consecutive values)
+static_assert(glz::enum_is_contiguous<Color>);  // 0, 1, 2
+static_assert(!glz::enum_is_contiguous<Sparse>);  // 1, 5, 10
+
+// Check underlying type
+static_assert(glz::signed_enum<Status>);
+static_assert(glz::unsigned_enum<Color>);
+```
+
+### JSON Serialization with Enums
+
+Enum reflection integrates seamlessly with Glaze's JSON serialization:
+
+```c++
+enum class Priority { Low, Medium, High };
+
+struct Task {
+   std::string name;
+   Priority priority{Priority::Medium};
+};
+
+Task t{"Important Task", Priority::High};
+
+// Default: serialize as numbers
+std::string json;
+glz::write_json(t, json);  // {"name":"Important Task","priority":2}
+
+// Option: serialize as strings
+constexpr glz::opts opts{.enum_as_string = true};
+glz::write<opts>(t, json);  // {"name":"Important Task","priority":"High"}
+
+// Reading works with both formats
+Task parsed;
+glz::read_json(parsed, R"({"name":"Task","priority":"Low"})");  // Works
+glz::read_json(parsed, R"({"name":"Task","priority":0})");  // Also works
+```
+
+
+### Advanced: enumerate() Function
+
+The `enumerate()` function leverages enum reflection to iterate over values:
+
+```c++
+enum class State { Init, Running, Done };
+
+// Automatically uses enum reflection - no string names needed!
+constexpr auto states = glz::enumerate<State>();
+
+for (const auto& [value, name] : states) {
+   // value is State enum value
+   // name is string_view of the enum name
+   std::cout << "State::" << name << " = " 
+             << static_cast<int>(value) << "\n";
+}
+```
+
+### Performance Considerations
+
+- **Compile-time extraction**: Enum names and values are extracted at compile time
+- **Zero overhead**: No runtime registration or initialization
+- **Constexpr support**: Most operations can be used in constexpr contexts
+- **Efficient storage**: Names are stored as `string_view` with static lifetime
+- **Contiguous optimization**: Consecutive enums use optimized range checks
+
+### Limitations
+
+1. **Value range**: Works best with enums in range [-128, 127], configurable via `glz::enum_traits`
+2. **Duplicate values (aliases)**: Enums with duplicate values are not fully supported. Only the first occurrence of each value is preserved during reflection; all aliases are discarded. For example:
+   ```cpp
+   enum class Example {
+       Original = 2,
+       Alias = 2,     // This will be discarded
+       Another = 2    // This will also be discarded
+   };
+   // enum_count<Example> == 1 (not 3)
+   // enum_name(Example::Alias) returns "Original" (not "Alias")
+   // enum_cast<Example>("Alias") returns empty (fails)
+   ```
+   If you need alias support, use manual `glz::meta` specialization with `enumerate()`.
+3. **Template enums**: Cannot reflect enums defined inside template classes
+
+### Customization
+
+For enums outside the default range, specialize `glz::enum_traits`:
+
+```c++
+enum class BigEnum { 
+   Min = 1000, 
+   Max = 2000 
+};
+
+template <>
+struct glz::enum_traits<BigEnum> {
+   static constexpr auto min = 1000;
+   static constexpr auto max = 2000;
+};
+```
+
+### Complete Example
+
+```c++
+#include "glaze/glaze.hpp"
+#include "glaze/reflection/enum_reflect.hpp"
+
+enum class LogLevel { Debug, Info, Warning, Error, Fatal };
+
+struct LogEntry {
+   LogLevel level;
+   std::string message;
+   int64_t timestamp;
+};
+
+void example() {
+   // Create log entry
+   LogEntry entry{LogLevel::Error, "Database connection failed", 1234567890};
+   
+   // Serialize with enum as string
+   std::string json;
+   constexpr glz::opts opts{.enum_as_string = true};
+   glz::write<opts>(entry, json);
+   // {"level":"Error","message":"Database connection failed","timestamp":1234567890}
+   
+   // Get human-readable level name
+   std::string_view level_name = glz::enum_name(entry.level);  // "Error"
+   
+   // Check severity
+   if (glz::index_of<LogLevel>(entry.level) >= 
+       glz::index_of<LogLevel>(LogLevel::Error)) {
+      // Handle critical log levels
+   }
+   
+   // Parse log level from string
+   auto parsed_level = glz::enum_value<LogLevel>("Warning");
+   if (parsed_level) {
+      entry.level = *parsed_level;
+   }
+}
+```
+
