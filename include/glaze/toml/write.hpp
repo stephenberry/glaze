@@ -305,6 +305,108 @@ namespace glz
          static constexpr auto padding = round_up_to_nearest_16(maximum_key_size<T> + write_padding_bytes);
          bool first = true;
 
+         // We need to write basic types as key/value pairs first, and only then go to nested
+         // objects.
+         for_each<N>([&]<size_t I>() {
+            using val_t = field_t<T, I>;
+
+            // Null checks here, maybe separate function to avoid code duplication
+            if constexpr (always_skipped<val_t>)
+               return;
+            else {
+               if constexpr (null_t<val_t>) {
+                  if constexpr (always_null_t<val_t>)
+                     return;
+                  else {
+                     const auto is_null = [&]() {
+                        decltype(auto) element = [&]() -> decltype(auto) {
+                           if constexpr (reflectable<T>) {
+                              return get<I>(t);
+                           }
+                           else {
+                              return get<I>(reflect<T>::values);
+                           }
+                        };
+
+                        if constexpr (nullable_wrapper<val_t>)
+                           return !bool(element()(value).val);
+                        else if constexpr (nullable_value_t<val_t>)
+                           return !get_member(value, element()).has_value();
+                        else
+                           return !bool(get_member(value, element()));
+                     }();
+                     if (is_null) return;
+                  }
+               }
+
+               maybe_pad<padding>(b, ix);
+
+               // --- Check if this field is a nested object ---
+               if constexpr (glaze_object_t<val_t> || reflectable<val_t>) {
+                  // TODO: Skip nested objects, introduce opts to write them as inline tables if needed (inner = {...})
+
+                  return;
+               }
+               else if constexpr (glz::is_specialization_v<val_t, std::vector> || glz::is_std_array<val_t>) {
+                  using elem_t = typename val_t::value_type;
+                  if constexpr (glaze_object_t<elem_t> || reflectable<elem_t>) {
+                     // Skip arrays of objects, introduce opts to write them as array of inline tables if needed
+                     return;
+                  }
+                  else if constexpr (glz::is_specialization_v<elem_t, std::vector> || glz::is_std_array<elem_t>) {
+                     // Skip nested arrays of basic types for now we will fix it in array writer
+                     return;
+                  }
+                  else { // handle arrays of basic types
+                     if (!first) {
+                        std::memcpy(&b[ix], "\n", 1);
+                        ++ix;
+                     }
+                     else {
+                        first = false;
+                     }
+                     static constexpr auto key = glz::get<I>(reflect<T>::keys);
+                     std::memcpy(&b[ix], key.data(), key.size());
+                     ix += key.size();
+
+                     std::memcpy(&b[ix], " = ", 3);
+                     ix += 3;
+
+                     if constexpr (reflectable<T>) {
+                        to<TOML, val_t>::template op<Options>(get_member(value, get<I>(t)), ctx, b, ix);
+                     }
+                     else {
+                        to<TOML, val_t>::template op<Options>(get_member(value, get<I>(reflect<T>::values)), ctx, b,
+                                                              ix);
+                     }
+                  }
+               }
+               else {
+                  if (!first) {
+                     std::memcpy(&b[ix], "\n", 1);
+                     ++ix;
+                  }
+                  else {
+                     first = false;
+                  }
+                  static constexpr auto key = glz::get<I>(reflect<T>::keys);
+                  std::memcpy(&b[ix], key.data(), key.size());
+                  ix += key.size();
+
+                  std::memcpy(&b[ix], " = ", 3);
+                  ix += 3;
+
+                  if constexpr (reflectable<T>) {
+                     to<TOML, val_t>::template op<Options>(get_member(value, get<I>(t)), ctx, b, ix);
+                  }
+                  else {
+                     to<TOML, val_t>::template op<Options>(get_member(value, get<I>(reflect<T>::values)), ctx, b, ix);
+                  }
+               }
+            }
+         });
+         // End of write fix
+
          for_each<N>([&]<size_t I>() {
             using val_t = field_t<T, I>;
 
@@ -367,28 +469,47 @@ namespace glz
                   std::memcpy(&b[ix], "\n", 1);
                   ++ix;
                }
+               else if constexpr (glz::is_specialization_v<val_t, std::vector> || glz::is_std_array<val_t>) {
+                  using elem_t = typename val_t::value_type;
+                  if constexpr (glaze_object_t<elem_t> || reflectable<elem_t>) {
+                     if (!first) {
+                        std::memcpy(&b[ix], "\n", 1);
+                        ++ix;
+                     }
+                     else {
+                        first = false;
+                     }
+                     static constexpr auto key = glz::get<I>(reflect<T>::keys);
+
+                     auto&& member_obj = [&]() -> decltype(auto) {
+                        if constexpr (reflectable<T>) {
+                           return get_member(value, get<I>(t));
+                        }
+                        else {
+                           return get_member(value, get<I>(reflect<T>::values));
+                        }
+                     }();
+                     for (auto&& elem : member_obj) {
+                        std::memcpy(&b[ix], "[[", 2);
+                        ix += 2;
+                        std::memcpy(&b[ix], key.data(), key.size());
+                        ix += key.size();
+                        std::memcpy(&b[ix], "]]\n", 3);
+                        ix += 3;
+
+                        if constexpr (reflectable<T>) {
+                           to<TOML, elem_t>::template op<Options>(elem, ctx, b, ix);
+                        }
+                        else {
+                           to<TOML, val_t>::template op<Options>(elem, ctx, b, ix);
+                        }
+                        std::memcpy(&b[ix], "\n", 1);
+                        ++ix;
+                     }
+                  }
+               }
                else {
-                  // --- Field is not an object, so output a key/value pair ---
-                  if (!first) {
-                     std::memcpy(&b[ix], "\n", 1);
-                     ++ix;
-                  }
-                  else {
-                     first = false;
-                  }
-                  static constexpr auto key = glz::get<I>(reflect<T>::keys);
-                  std::memcpy(&b[ix], key.data(), key.size());
-                  ix += key.size();
-
-                  std::memcpy(&b[ix], " = ", 3);
-                  ix += 3;
-
-                  if constexpr (reflectable<T>) {
-                     to<TOML, val_t>::template op<Options>(get_member(value, get<I>(t)), ctx, b, ix);
-                  }
-                  else {
-                     to<TOML, val_t>::template op<Options>(get_member(value, get<I>(reflect<T>::values)), ctx, b, ix);
-                  }
+                  return;
                }
             }
          });

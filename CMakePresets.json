@@ -77,6 +77,20 @@
                 "BUILD_TESTING": true,
                 "glaze_BUILD_INTEROP": true
             }
+        },
+        {
+            "name": "Visual Studio Build Tools 2022 Release - amd64",
+            "displayName": "Visual Studio Build Tools 2022 Release - amd64",
+            "description": "Using compilers for Visual Studio 17 2022 (x64 architecture)",
+            "generator": "Visual Studio 17 2022",
+            "toolset": "host=x64",
+            "architecture": "x64",
+            "binaryDir": "${sourceDir}/out/build/${presetName}",
+            "cacheVariables": {
+                "CMAKE_INSTALL_PREFIX": "${sourceDir}/out/install/${presetName}",
+                "CMAKE_C_COMPILER": "cl.exe",
+                "CMAKE_CXX_COMPILER": "cl.exe"
+            }
         }
     ],
     "buildPresets": [
@@ -95,6 +109,12 @@
         {
             "name": "gcc-release",
             "configurePreset": "gcc-release"
+        },
+        {
+            "name": "Visual Studio Build Tools 2022 Release - amd64-debug",
+            "displayName": "Visual Studio Build Tools 2022 Release - amd64 - Debug",
+            "configurePreset": "Visual Studio Build Tools 2022 Release - amd64",
+            "configuration": "Debug"
         }
     ],
     "testPresets": [

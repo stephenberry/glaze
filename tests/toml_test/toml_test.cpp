@@ -27,6 +27,12 @@ struct simple_container
    double value = 5.5;
 };
 
+struct vector_struct_container
+{
+   std::vector<nested> inners{{10, "test"}, {20, "test2"}};
+   double value = 5.5;
+};
+
 struct advanced_container
 {
    nested inner{};
@@ -248,12 +254,38 @@ b = 2)");
       simple_container c{};
       std::string buffer{};
       expect(not glz::write_toml(c, buffer));
-      expect(buffer == R"([inner]
+      expect(buffer == R"(value = 5.5
+[inner]
 x = 10
 y = "test"
-
-value = 5.5)"); // TODO: This is not the right format, we need to refactor the output to match TOML syntax.
-                // For now, I'll leave it as is, but it should be fixed in the future.
+)"); // Now propperly formatted with root value first.
+   };
+#include <iostream>
+   // Test writing a nested structure.
+   "vectorized_struct"_test = [] {
+      vector_struct_container c{{{11, "test1"}, {21, "test21"}}, 5.5};
+      std::string buffer{};
+      expect(not glz::write_toml(c, buffer));
+      expect(buffer == R"(value = 5.5
+[[inners]]
+x = 11
+y = "test1"
+[[inners]]
+x = 21
+y = "test21"
+)"); // TODO: This is not the right format, we need to refactor the output to match TOML syntax.
+      // For now, I'll leave it as is, but it should be fixed in the future.
+      // https://github.com/stephenberry/glaze/discussions/1834#discussioncomment-13581950
+      vector_struct_container c2{};
+      c2.inners.clear();
+      expect(not glz::read_toml(c2, buffer));
+      // std::cout << glz::format_error(glz::read_toml(c2, buffer), buffer) << std::endl;
+      expect(c2.value == 5.5);
+      expect(c2.inners.size() == 2);
+      expect(c2.inners[0].x == 11);
+      expect(c2.inners[0].y == "test1");
+      expect(c2.inners[1].x == 21);
+      expect(c2.inners[1].y == "test21");
    };
 
    "read_wrong_format_nested"_test = [] {
