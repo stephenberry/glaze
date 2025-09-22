@@ -4,12 +4,34 @@
 #include <chrono>
 #include <future>
 #include <thread>
+#include <unordered_map>
 
+#include "glaze/json/write.hpp"
 #include "glaze/net/http_server.hpp"
 #include "ut/ut.hpp"
 
 using namespace ut;
 using namespace glz;
+
+namespace test_http_client
+{
+   struct put_payload
+   {
+      int value{};
+      std::string message{};
+   };
+}
+
+namespace glz
+{
+   template <> struct meta<test_http_client::put_payload>
+   {
+      using T = test_http_client::put_payload;
+      static constexpr auto value = glz::object(
+         "value", &T::value,
+         "message", &T::message);
+   };
+}
 
 // Simplified test server that actually works
 class working_test_server
@@ -129,6 +151,30 @@ class working_test_server
          else {
             res.status(400).body("Invalid JSON");
          }
+      });
+
+      server_.put("/update", [](const request& req, response& res) {
+         std::string response_body = "PUT:";
+         response_body.append(req.body);
+         if (auto it = req.headers.find("x-test-header"); it != req.headers.end()) {
+            response_body.append(":");
+            response_body.append(it->second);
+         }
+         res.status(200).content_type("text/plain").body(response_body);
+      });
+
+      server_.put("/json", [](const request& req, response& res) {
+         auto content_type = req.headers.find("content-type");
+         if (content_type == req.headers.end()) {
+            res.status(415).body("missing content-type");
+            return;
+         }
+
+         std::string response_body = "CT=";
+         response_body.append(content_type->second);
+         response_body.append(";BODY=");
+         response_body.append(req.body);
+         res.status(200).content_type("text/plain").body(response_body);
       });
 
       server_.get("/slow", [](const request&, response& res) {
@@ -457,6 +503,51 @@ suite working_http_tests = [] {
 
 // Test suite for the main glz::http_client, including streaming
 suite glz_http_client_tests = [] {
+   "synchronous_put_request"_test = [] {
+      working_test_server server;
+      expect(server.start());
+
+      glz::http_client client;
+
+      std::unordered_map<std::string, std::string> headers{{"x-test-header", "header-value"}};
+      auto result = client.put(server.base_url() + "/update", "payload", headers);
+
+      expect(result.has_value()) << "PUT request should succeed";
+      if (result.has_value()) {
+         expect(result->status_code == 200) << "PUT status should be 200";
+         expect(result->response_body == "PUT:payload:header-value") << "Response body should echo payload and header";
+      }
+
+      server.stop();
+   };
+
+   "put_json_sets_content_type"_test = [] {
+      working_test_server server;
+      expect(server.start());
+
+      glz::http_client client;
+
+      test_http_client::put_payload payload{.value = 42, .message = "update"};
+
+      std::string expected_json;
+      auto ec = glz::write_json(payload, expected_json);
+      expect(!ec) << "Serializing payload should succeed";
+
+      std::unordered_map<std::string, std::string> extra_headers{{"x-extra", "value"}};
+      auto result = client.put_json(server.base_url() + "/json", payload, extra_headers);
+
+      expect(result.has_value()) << "PUT JSON request should succeed";
+      if (result.has_value()) {
+         expect(result->status_code == 200) << "PUT JSON status should be 200";
+         expect(result->response_body.find("CT=application/json") != std::string::npos)
+            << "Content-Type header should be forwarded";
+         expect(result->response_body.find("BODY=" + expected_json) != std::string::npos)
+            << "JSON body should be forwarded";
+      }
+
+      server.stop();
+   };
+
    "basic_streaming_get"_test = [] {
       working_test_server server;
       expect(server.start()) << "Server should start\n";
