@@ -11676,6 +11676,29 @@ suite glaze_error_category_tests = [] {
    };
 };
 
+suite explicit_string_view_support = [] {
+   "write json from explicit string_view"_test = [] {
+      struct explicit_string_view_type
+      {
+         std::string storage{};
+
+         explicit explicit_string_view_type(std::string_view s) : storage(s) {}
+
+         explicit operator std::string_view() const noexcept { return storage; }
+      };
+
+      explicit_string_view_type value{std::string_view{"explicit"}};
+
+      std::string buffer{};
+      expect(not glz::write_json(value, buffer));
+      expect(buffer == R"("explicit")");
+
+      buffer.clear();
+      expect(not glz::write<glz::opts{.raw_string = true}>(value, buffer));
+      expect(buffer == R"("explicit")");
+   };
+};
+
 int main()
 {
    trace.end("json_test");

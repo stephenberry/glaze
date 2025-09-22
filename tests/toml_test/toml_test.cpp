@@ -179,6 +179,27 @@ arr = [4, 5, 6])";
       expect(value == "Hello TOML");
    };
 
+   "write_explicit_string_view"_test = [] {
+      struct explicit_string_view_type
+      {
+         std::string storage{};
+
+         explicit explicit_string_view_type(std::string_view s) : storage(s) {}
+
+         explicit operator std::string_view() const noexcept { return storage; }
+      };
+
+      explicit_string_view_type value{std::string_view{"explicit"}};
+
+      std::string buffer{};
+      expect(not glz::write_toml(value, buffer));
+      expect(buffer == R"("explicit")");
+
+      buffer.clear();
+      expect(not glz::write<glz::opts{.format = glz::TOML, .raw_string = true}>(value, buffer));
+      expect(buffer == R"("explicit")");
+   };
+
    "read_boolean_true"_test = [] {
       std::string toml_input = "true";
       bool value{};

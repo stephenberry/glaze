@@ -24,6 +24,8 @@
 #include "glaze/trace/trace.hpp"
 #include "ut/ut.hpp"
 
+using namespace ut;
+
 inline glz::trace trace{};
 
 struct my_struct
@@ -2610,6 +2612,29 @@ suite static_variant_tags = [] {
          expect(decoded->index() == 1);
          expect(std::get<1>(*decoded).text == "hello");
       }
+   };
+};
+
+suite explicit_string_view_support = [] {
+   "write beve from explicit string_view"_test = [] {
+      struct explicit_string_view_type
+      {
+         std::string storage{};
+
+         explicit explicit_string_view_type(std::string_view s) : storage(s) {}
+
+         explicit operator std::string_view() const noexcept { return storage; }
+      };
+
+      explicit_string_view_type value{std::string_view{"explicit"}};
+
+      std::string buffer{};
+      expect(not glz::write_beve(value, buffer));
+      expect(not buffer.empty());
+
+      std::string decoded{};
+      expect(not glz::read_beve(decoded, buffer));
+      expect(decoded == "explicit");
    };
 };
 

@@ -152,7 +152,7 @@ namespace glz
                      return value ? value : "";
                   }
                   else {
-                     return value;
+                     return sv{value};
                   }
                }();
 
@@ -183,7 +183,7 @@ namespace glz
                      return *value.data() ? sv{value.data()} : "";
                   }
                   else {
-                     return value;
+                     return sv{value};
                   }
                }();
                const auto n = str.size();
