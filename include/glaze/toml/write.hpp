@@ -183,7 +183,7 @@ namespace glz
                      return *value.data() ? sv{value.data()} : "";
                   }
                   else {
-                     return value;
+                     return sv{value};
                   }
                }();
                const auto n = str.size();
