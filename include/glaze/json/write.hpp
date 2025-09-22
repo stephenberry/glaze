@@ -1466,6 +1466,42 @@ namespace glz
       }
    };
 
+   // Specialization for byte_array wrapper to treat character arrays as fixed-size byte arrays
+   template <class T>
+      requires(is_byte_array<T> && !glaze_object_t<T> && !reflectable<T>)
+   struct to<JSON, T>
+   {
+      template <auto Opts, class... Args>
+      static void op(auto&& wrapper, is_context auto&& ctx, Args&&... args)
+      {
+         auto& value = wrapper.val;
+
+         // Treat as fixed-size byte array - serialize all bytes
+         using char_t = std::remove_extent_t<std::remove_reference_t<decltype(value)>>;
+         constexpr size_t N = sizeof(value) / sizeof(char_t);
+
+         std::string_view sv_data{reinterpret_cast<const char*>(&value), N};
+
+         // Create custom options that force control character escaping
+         constexpr auto byte_array_opts = []() {
+            if constexpr (requires { Opts.escape_control_characters; }) {
+               return Opts; // Use existing options if they already have the field
+            }
+            else {
+               // Create new options with escape_control_characters = true
+               struct byte_opts : decltype(Opts)
+               {
+                  bool escape_control_characters = true;
+               };
+               return byte_opts{};
+            }
+         }();
+
+         // Use the same string serialization logic but with control character escaping
+         to<JSON, std::string_view>::template op<byte_array_opts>(sv_data, ctx, args...);
+      }
+   };
+
    template <class T>
       requires is_specialization_v<T, arr>
    struct to<JSON, T>

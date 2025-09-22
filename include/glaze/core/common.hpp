@@ -42,6 +42,23 @@ namespace glz
       T& val;
    };
 
+   // Wrapper to treat character arrays as fixed-size byte arrays instead of null-terminated strings
+   template <class T>
+   struct byte_array final
+   {
+      static constexpr bool glaze_wrapper = true;
+      static constexpr bool glaze_byte_array = true;
+      static constexpr auto glaze_reflect = false; // Exclude from reflection
+      using value_type = T;
+      T& val;
+   };
+
+   template <class T>
+   byte_array(T&) -> byte_array<T>;
+
+   template <class T>
+   concept is_byte_array = requires { requires T::glaze_byte_array == true; };
+
    template <class... T>
    struct obj final
    {
