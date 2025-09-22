@@ -295,6 +295,18 @@ namespace glz
          return perform_sync_request("POST", *url_result, body, headers);
       }
 
+      // Synchronous PUT request - truly synchronous, no promises/futures
+      std::expected<response, std::error_code> put(std::string_view url, const std::string& body,
+                                                   const std::unordered_map<std::string, std::string>& headers = {})
+      {
+         auto url_result = parse_url(url);
+         if (!url_result) {
+            return std::unexpected(url_result.error());
+         }
+
+         return perform_sync_request("PUT", *url_result, body, headers);
+      }
+
       // Synchronous JSON POST request
       template <class T>
       std::expected<response, std::error_code> post_json(
@@ -310,6 +322,23 @@ namespace glz
          merged_headers["content-type"] = "application/json";
 
          return post(url, json_str, merged_headers);
+      }
+
+      // Synchronous JSON PUT request
+      template <class T>
+      std::expected<response, std::error_code> put_json(
+         std::string_view url, const T& data, const std::unordered_map<std::string, std::string>& headers = {})
+      {
+         std::string json_str;
+         auto ec = glz::write_json(data, json_str);
+         if (ec) {
+            return std::unexpected(std::make_error_code(std::errc::invalid_argument));
+         }
+
+         auto merged_headers = headers;
+         merged_headers["content-type"] = "application/json";
+
+         return put(url, json_str, merged_headers);
       }
 
       // New unified streaming request method
