@@ -231,8 +231,8 @@ int main()
    "iglaze type registration"_test = [] {
       try {
          using namespace glz;
-         auto point_type = iglaze::register_type<Point>("Point");
-         auto shape_type = iglaze::register_type<Shape>("Shape");
+         auto point_type = i_glaze::register_type<Point>("Point");
+         auto shape_type = i_glaze::register_type<Shape>("Shape");
 
          if (point_type && shape_type) {
             expect(point_type->name() == "Point");
@@ -257,10 +257,10 @@ int main()
       std::string str_val = "hello";
       bool bool_val = true;
 
-      ivalue v1(&int_val);
-      ivalue v2(&float_val);
-      ivalue v3(&str_val);
-      ivalue v4(&bool_val);
+      i_value v1(&int_val);
+      i_value v2(&float_val);
+      i_value v3(&str_val);
+      i_value v4(&bool_val);
 
       expect(v1.as_int() == 42);
       expect(v2.as_float() == 3.14);
@@ -357,12 +357,12 @@ int main()
    "error handling and edge cases"_test = [] {
       // Test empty string value
       std::string empty = "";
-      glz::ivalue empty_str(&empty);
+      glz::i_value empty_str(&empty);
       expect(empty_str.as_string().empty());
 
       // Test large numbers
       int large = 1000000;
-      glz::ivalue large_int(&large);
+      glz::i_value large_int(&large);
       expect(large_int.as_int() == 1000000);
 
       // Test edge cases with structures
