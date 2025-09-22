@@ -297,7 +297,7 @@ namespace glz
 
       // Synchronous PUT request - truly synchronous, no promises/futures
       std::expected<response, std::error_code> put(std::string_view url, const std::string& body,
-                                                    const std::unordered_map<std::string, std::string>& headers = {})
+                                                   const std::unordered_map<std::string, std::string>& headers = {})
       {
          auto url_result = parse_url(url);
          if (!url_result) {

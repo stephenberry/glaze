@@ -24,12 +24,11 @@ namespace test_http_client
 
 namespace glz
 {
-   template <> struct meta<test_http_client::put_payload>
+   template <>
+   struct meta<test_http_client::put_payload>
    {
       using T = test_http_client::put_payload;
-      static constexpr auto value = glz::object(
-         "value", &T::value,
-         "message", &T::message);
+      static constexpr auto value = glz::object("value", &T::value, "message", &T::message);
    };
 }
 
