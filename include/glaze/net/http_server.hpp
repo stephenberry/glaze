@@ -519,32 +519,74 @@ namespace glz
 
       inline http_router& route(http_method method, std::string_view path, handler handle, const route_spec& spec = {})
       {
-         return root_router.route(method, path, handle, spec);
+         root_router.route(method, path, handle, spec);
+         
+         // Auto-add OPTIONS route if CORS is enabled and no OPTIONS exists
+         if (cors_enabled_ && method != http_method::OPTIONS && !has_options_route(path)) {
+            root_router.options(path, cors_preflight_handler_);
+         }
+         
+         return root_router;
       }
 
       inline http_router& get(std::string_view path, handler handle, const route_spec& spec = {})
       {
-         return root_router.get(path, handle, spec);
+         root_router.get(path, handle, spec);
+         
+         if (cors_enabled_ && !has_options_route(path)) {
+            root_router.options(path, cors_preflight_handler_);
+         }
+         
+         return root_router;
       }
 
       inline http_router& post(std::string_view path, handler handle, const route_spec& spec = {})
       {
-         return root_router.post(path, handle, spec);
+         root_router.post(path, handle, spec);
+         
+         if (cors_enabled_ && !has_options_route(path)) {
+            root_router.options(path, cors_preflight_handler_);
+         }
+         
+         return root_router;
       }
 
       inline http_router& put(std::string_view path, handler handle, const route_spec& spec = {})
       {
-         return root_router.put(path, handle, spec);
+         root_router.put(path, handle, spec);
+         
+         if (cors_enabled_ && !has_options_route(path)) {
+            root_router.options(path, cors_preflight_handler_);
+         }
+         
+         return root_router;
       }
 
       inline http_router& del(std::string_view path, handler handle, const route_spec& spec = {})
       {
-         return root_router.del(path, handle, spec);
+         root_router.del(path, handle, spec);
+         
+         if (cors_enabled_ && !has_options_route(path)) {
+            root_router.options(path, cors_preflight_handler_);
+         }
+         
+         return root_router;
       }
 
       inline http_router& patch(std::string_view path, handler handle, const route_spec& spec = {})
       {
-         return root_router.patch(path, handle, spec);
+         root_router.patch(path, handle, spec);
+         
+         if (cors_enabled_ && !has_options_route(path)) {
+            root_router.options(path, cors_preflight_handler_);
+         }
+         
+         return root_router;
+      }
+
+      inline http_router& options(std::string_view path, handler handle, const route_spec& spec = {})
+      {
+         return root_router.options(path, handle, spec);
       }
 
       // Register streaming route
@@ -703,7 +745,18 @@ namespace glz
        */
       http_server& enable_cors()
       {
+         cors_enabled_ = true;
+         cors_config_ = {}; // Use default config
+         
+         // Create the preflight handler
+         create_preflight_handler();
+         
+         // Add CORS middleware for actual requests
          root_router.use(glz::simple_cors());
+         
+         // Generate OPTIONS routes for existing paths
+         auto_generate_options_routes();
+         
          return *this;
       }
 
@@ -715,7 +768,18 @@ namespace glz
        */
       http_server& enable_cors(const glz::cors_config& config)
       {
+         cors_enabled_ = true;
+         cors_config_ = config;
+         
+         // Create the preflight handler
+         create_preflight_handler();
+         
+         // Add CORS middleware for actual requests
          root_router.use(glz::create_cors_middleware(config));
+         
+         // Generate OPTIONS routes for existing paths
+         auto_generate_options_routes();
+         
          return *this;
       }
 
@@ -731,7 +795,19 @@ namespace glz
        */
       http_server& enable_cors(const std::vector<std::string>& origins, bool allow_credentials = false)
       {
+         cors_enabled_ = true;
+         cors_config_.allowed_origins = origins;
+         cors_config_.allow_credentials = allow_credentials;
+         
+         // Create the preflight handler
+         create_preflight_handler();
+         
+         // Add CORS middleware for actual requests
          root_router.use(glz::restrictive_cors(origins, allow_credentials));
+         
+         // Generate OPTIONS routes for existing paths
+         auto_generate_options_routes();
+         
          return *this;
       }
 
@@ -747,6 +823,14 @@ namespace glz
          websocket_handlers_[std::string(path)] = server;
          return *this;
       }
+      
+      /**
+       * @brief Get access to the internal router (for testing purposes)
+       * 
+       * @return Reference to the internal http_router
+       */
+      inline http_router& get_router() { return root_router; }
+      inline const http_router& get_router() const { return root_router; }
 
       /**
        * @brief Load SSL certificate and private key for HTTPS servers
@@ -845,6 +929,11 @@ namespace glz
       glz::error_handler error_handler;
       std::unordered_map<std::string, std::shared_ptr<websocket_server>> websocket_handlers_;
       std::unordered_map<std::string, std::unordered_map<http_method, streaming_handler>> streaming_handlers_;
+      
+      // CORS-related members
+      bool cors_enabled_ = false;
+      glz::cors_config cors_config_;
+      handler cors_preflight_handler_;
 
       // Signal handling members
       bool signal_handling_enabled = false;
@@ -855,6 +944,72 @@ namespace glz
 #ifdef GLZ_ENABLE_SSL
       std::conditional_t<EnableTLS, std::unique_ptr<asio::ssl::context>, std::monostate> ssl_context;
 #endif
+
+      /**
+       * @brief Create the preflight handler for OPTIONS requests
+       */
+      void create_preflight_handler()
+      {
+         cors_preflight_handler_ = [this](const request& req, response& res) {
+            // Apply CORS headers using stored config
+            auto cors_middleware = glz::create_cors_middleware(cors_config_);
+            cors_middleware(req, res);
+            
+            // Preflight always returns 204 No Content if successful
+            if (res.status_code == 200) {
+               res.status(204);
+            }
+         };
+      }
+      
+      /**
+       * @brief Check if a path has an OPTIONS route
+       */
+      bool has_options_route(std::string_view path) const
+      {
+         // Check direct routes first
+         auto direct_it = root_router.direct_routes.find(std::string(path));
+         if (direct_it != root_router.direct_routes.end()) {
+            return direct_it->second.find(http_method::OPTIONS) != direct_it->second.end();
+         }
+         
+         // Check parameterized routes
+         auto routes_it = root_router.routes.find(std::string(path));
+         if (routes_it != root_router.routes.end()) {
+            return routes_it->second.find(http_method::OPTIONS) != routes_it->second.end();
+         }
+         
+         return false;
+      }
+      
+      /**
+       * @brief Auto-generate OPTIONS routes for existing paths
+       */
+      void auto_generate_options_routes()
+      {
+         std::unordered_set<std::string> paths_with_options;
+         
+         // Collect paths that already have OPTIONS handlers
+         for (const auto& [path, methods] : root_router.routes) {
+            if (methods.find(http_method::OPTIONS) != methods.end()) {
+               paths_with_options.insert(path);
+            }
+         }
+         
+         // Add OPTIONS routes for paths that don't have them
+         for (const auto& [path, methods] : root_router.routes) {
+            if (paths_with_options.find(path) == paths_with_options.end() && !methods.empty()) {
+               root_router.options(path, cors_preflight_handler_);
+            }
+         }
+         
+         // Also handle direct routes (optimization structure)
+         for (const auto& [path, method_handlers] : root_router.direct_routes) {
+            if (method_handlers.find(http_method::OPTIONS) == method_handlers.end()) {
+               root_router.options(path, cors_preflight_handler_);
+            }
+         }
+      }
 
       inline void do_accept()
       {

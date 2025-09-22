@@ -546,6 +546,14 @@ namespace glz
       }
 
       /**
+       * @brief Register an OPTIONS route
+       */
+      inline http_router& options(std::string_view path, handler handle, const route_spec& spec = {})
+      {
+         return route(http_method::OPTIONS, path, std::move(handle), spec);
+      }
+
+      /**
        * @brief Register an asynchronous route
        */
       inline http_router& route_async(http_method method, std::string_view path, async_handler handle,
@@ -600,6 +608,14 @@ namespace glz
       inline http_router& patch_async(std::string_view path, async_handler handle, const route_spec& spec = {})
       {
          return route_async(http_method::PATCH, path, std::move(handle), spec);
+      }
+
+      /**
+       * @brief Register an asynchronous OPTIONS route
+       */
+      inline http_router& options_async(std::string_view path, async_handler handle, const route_spec& spec = {})
+      {
+         return route_async(http_method::OPTIONS, path, std::move(handle), spec);
       }
 
       /**
@@ -668,16 +684,16 @@ namespace glz
        */
       std::vector<handler> middlewares;
 
+      /**
+       * @brief Direct lookup table for non-parameterized routes (optimization)
+       */
+      std::unordered_map<std::string, std::unordered_map<http_method, handler>> direct_routes;
+
      private:
       /**
        * @brief Root node of the radix tree
        */
       mutable RadixNode root;
-
-      /**
-       * @brief Direct lookup table for non-parameterized routes (optimization)
-       */
-      std::unordered_map<std::string, std::unordered_map<http_method, handler>> direct_routes;
 
       /**
        * @brief Add a route to the radix tree

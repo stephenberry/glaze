@@ -241,9 +241,14 @@ server.use([](const glz::request& req, glz::response& res) {
     // Validate token...
 });
 
-// CORS middleware (built-in)
+// CORS middleware (built-in) - automatically handles preflight requests
 server.enable_cors();
+
+// For production with specific origins
+server.enable_cors({"https://app.example.com"}, true);
 ```
+
+> **Note:** When CORS is enabled, OPTIONS routes are automatically generated for all your endpoints to handle preflight requests. See the [CORS documentation](cors.md) for detailed configuration options.
 
 ### Custom Middleware
 

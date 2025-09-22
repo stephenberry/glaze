@@ -10,7 +10,7 @@ The Glaze HTTP library offers:
 - **Automatic REST API generation** from C++ classes using reflection
 - **Advanced routing** with parameters, wildcards, and constraints
 - **Middleware support** for cross-cutting concerns
-- **CORS support** with flexible configuration
+- **[CORS support](cors.md)** with automatic preflight handling
 - **WebSocket support** for real-time communication
 - **SSL/TLS support** for secure connections
 - **HTTP client** for making requests

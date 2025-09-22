@@ -38,11 +38,13 @@ router.post("/users", create_user);        // POST
 router.put("/users/:id", update_user);     // PUT
 router.del("/users/:id", delete_user);     // DELETE
 router.patch("/users/:id", patch_user);    // PATCH
+router.options("/users", options_users);   // OPTIONS (for CORS preflight)
 
-// Generic route method
+// Generic route method for any HTTP method
 router.route(glz::http_method::HEAD, "/users", head_users);
-router.route(glz::http_method::OPTIONS, "/users", options_users);
 ```
+
+> **Note:** The OPTIONS method is commonly used for CORS preflight requests. When CORS is enabled on the server, OPTIONS routes are automatically generated. See the [CORS documentation](cors.md) for details.
 
 ## Parameter Routes
 
@@ -339,7 +341,14 @@ router.get_async("/slow-data", [](const glz::request& req, glz::response& res) -
     });
 });
 
-// Convert regular handler to async
+// All HTTP methods support async variants
+router.post_async("/users", async_create_user);
+router.put_async("/users/:id", async_update_user);
+router.del_async("/users/:id", async_delete_user);
+router.patch_async("/users/:id", async_patch_user);
+router.options_async("/users", async_options_handler);
+
+// Generic async route method
 router.route_async(glz::http_method::POST, "/async-upload", 
     [](const glz::request& req, glz::response& res) -> std::future<void> {
         return std::async([&]() {

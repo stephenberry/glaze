@@ -164,16 +164,33 @@ namespace glz
          {
             std::lock_guard<std::mutex> lock(mtx);
             auto it = available_connections.find(key);
-            if (it != available_connections.end() && !it->second.empty()) {
-               auto socket = it->second.back();
-               it->second.pop_back();
+            if (it != available_connections.end()) {
+               // Try all available connections until we find a good one
+               while (!it->second.empty()) {
+                  auto socket = it->second.back();
+                  it->second.pop_back();
 
-               // Check if socket is still connected
-               if (socket && socket->is_open()) {
-                  // A simple check might not be enough for stale connections.
-                  // A more robust implementation might send a probe or check for readability.
-                  // For now, we assume is_open() is sufficient.
-                  return socket;
+                  // Check if socket is still connected
+                  if (socket && socket->is_open()) {
+                     // Check if the socket has data available (indicating the server closed it)
+                     std::error_code ec;
+                     socket->non_blocking(true, ec);
+                     if (!ec) {
+                        char dummy;
+                        auto bytes = socket->receive(asio::buffer(&dummy, 1), asio::socket_base::message_peek, ec);
+                        socket->non_blocking(false, ec);
+                        
+                        // If we can read 0 bytes or get EOF, the connection was closed
+                        if (bytes == 0 || ec == asio::error::eof) {
+                           socket->close();
+                           continue;  // Try next connection
+                        }
+                        // If would_block, the connection is still good
+                        if (ec == asio::error::would_block) {
+                           return socket;
+                        }
+                     }
+                  }
                }
             }
          }
@@ -310,6 +327,67 @@ namespace glz
          merged_headers["content-type"] = "application/json";
 
          return post(url, json_str, merged_headers);
+      }
+
+      // Synchronous OPTIONS request for CORS preflight
+      std::expected<response, std::error_code> options(std::string_view url,
+                                                      const std::unordered_map<std::string, std::string>& headers = {})
+      {
+         auto url_result = parse_url(url);
+         if (!url_result) {
+            return std::unexpected(url_result.error());
+         }
+
+         return perform_sync_request("OPTIONS", *url_result, "", headers);
+      }
+
+      // Synchronous PUT request
+      std::expected<response, std::error_code> put(std::string_view url, const std::string& body,
+                                                  const std::unordered_map<std::string, std::string>& headers = {})
+      {
+         auto url_result = parse_url(url);
+         if (!url_result) {
+            return std::unexpected(url_result.error());
+         }
+
+         return perform_sync_request("PUT", *url_result, body, headers);
+      }
+
+      // Synchronous DELETE request
+      std::expected<response, std::error_code> del(std::string_view url,
+                                                  const std::unordered_map<std::string, std::string>& headers = {})
+      {
+         auto url_result = parse_url(url);
+         if (!url_result) {
+            return std::unexpected(url_result.error());
+         }
+
+         return perform_sync_request("DELETE", *url_result, "", headers);
+      }
+
+      // Synchronous PATCH request
+      std::expected<response, std::error_code> patch(std::string_view url, const std::string& body,
+                                                    const std::unordered_map<std::string, std::string>& headers = {})
+      {
+         auto url_result = parse_url(url);
+         if (!url_result) {
+            return std::unexpected(url_result.error());
+         }
+
+         return perform_sync_request("PATCH", *url_result, body, headers);
+      }
+
+      // Generic synchronous request method for any HTTP method
+      std::expected<response, std::error_code> request(const std::string& method, std::string_view url,
+                                                      const std::string& body = "",
+                                                      const std::unordered_map<std::string, std::string>& headers = {})
+      {
+         auto url_result = parse_url(url);
+         if (!url_result) {
+            return std::unexpected(url_result.error());
+         }
+
+         return perform_sync_request(method, *url_result, body, headers);
       }
 
       // New unified streaming request method
@@ -956,6 +1034,11 @@ namespace glz
             std::unordered_map<std::string, std::string> response_headers;
             size_t content_length = 0;
             bool connection_close = false;
+            
+            // Handle 204 No Content specially - it never has a body
+            if (parsed_status->status_code == 204) {
+                content_length = 0;
+            }
 
             while (!header_data.starts_with("\r\n")) {
                line_end = header_data.find("\r\n");
@@ -972,7 +1055,10 @@ namespace glz
                   std::string_view value = (value_start != std::string::npos) ? header_line.substr(value_start) : "";
 
                   if (name.length() == 14 && strncasecmp(name.data(), "Content-Length", 14) == 0) {
-                     std::from_chars(value.data(), value.data() + value.size(), content_length);
+                     // Don't override content_length for 204 responses
+                     if (parsed_status->status_code != 204) {
+                        std::from_chars(value.data(), value.data() + value.size(), content_length);
+                     }
                   }
                   else if (name.length() == 10 && strncasecmp(name.data(), "Connection", 10) == 0) {
                      if (value.find("close") != std::string_view::npos) {
