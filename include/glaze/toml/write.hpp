@@ -152,7 +152,7 @@ namespace glz
                      return value ? value : "";
                   }
                   else {
-                     return value;
+                     return sv{value};
                   }
                }();
 
