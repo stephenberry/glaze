@@ -263,9 +263,8 @@ suite http_server_api_tests = [] {
          res.body("ok");
       });
 
-      auto& use_ref = server.use([&execution_order](const glz::request&, glz::response&) {
-         execution_order.push_back("middleware");
-      });
+      auto& use_ref = server.use(
+         [&execution_order](const glz::request&, glz::response&) { execution_order.push_back("middleware"); });
       expect(&use_ref == &server) << "use() should return server reference for chaining\n";
 
       glz::request req;
