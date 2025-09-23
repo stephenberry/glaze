@@ -2638,6 +2638,41 @@ suite explicit_string_view_support = [] {
    };
 };
 
+struct MemberFunctionThingBeve
+{
+   std::string name{};
+   auto get_description() const -> std::string
+   {
+      return "something";
+   }
+};
+
+namespace glz
+{
+   template <>
+   struct meta<MemberFunctionThingBeve>
+   {
+      using T = MemberFunctionThingBeve;
+      static constexpr auto value = object(
+         "name", &T::name,
+         "description", &T::get_description
+      );
+   };
+} // namespace glz
+
+suite member_function_pointer_beve_serialization = [] {
+   "member function pointer skipped in beve write"_test = [] {
+      MemberFunctionThingBeve input{};
+      input.name = "test_item";
+      std::string buffer{};
+      expect(not glz::write_beve(input, buffer));
+
+      MemberFunctionThingBeve output{};
+      expect(not glz::read_beve(output, buffer));
+      expect(output.name == input.name);
+   };
+};
+
 int main()
 {
    trace.begin("binary_test");

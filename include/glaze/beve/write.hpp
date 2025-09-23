@@ -809,7 +809,7 @@ namespace glz
          for_each<N>([&]<size_t I>() {
             using V = field_t<T, I>;
 
-            if constexpr (std::same_as<V, hidden> || std::same_as<V, skip>) {
+            if constexpr (std::same_as<V, hidden> || std::same_as<V, skip> || is_member_function_pointer<V>) {
                // do not serialize
                // not serializing is_includer<V> would be a breaking change
             }
@@ -839,7 +839,8 @@ namespace glz
          for_each<N>([&]<size_t I>() {
             using val_t = field_t<T, I>;
 
-            if constexpr (std::same_as<val_t, hidden> || std::same_as<val_t, skip>) {
+            if constexpr (std::same_as<val_t, hidden> || std::same_as<val_t, skip> ||
+                          is_member_function_pointer<val_t>) {
                return;
             }
             else {
@@ -877,7 +878,8 @@ namespace glz
          for_each<N>([&]<size_t I>() {
             using val_t = field_t<T, I>;
 
-            if constexpr (std::same_as<val_t, hidden> || std::same_as<val_t, skip>) {
+            if constexpr (std::same_as<val_t, hidden> || std::same_as<val_t, skip> ||
+                          is_member_function_pointer<val_t>) {
                return;
             }
             else {
