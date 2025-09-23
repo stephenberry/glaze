@@ -524,6 +524,12 @@ namespace glz
          return *this;
       }
 
+      inline http_server& use(handler middleware)
+      {
+         root_router.use(std::move(middleware));
+         return *this;
+      }
+
       inline http_router& route(http_method method, std::string_view path, handler handle, const route_spec& spec = {})
       {
          return root_router.route(method, path, handle, spec);
