@@ -471,6 +471,15 @@ suite working_http_tests = [] {
       expect(!result.has_value()) << "Connection to closed port should fail\n";
    };
 
+   "http_status_error_category"_test = [] {
+      auto ec = make_http_status_error(502);
+
+      expect(ec.category() == http_status_category());
+      expect(ec.value() == 502);
+      expect(!ec.message().empty());
+      expect(ec.message().find("502") != std::string::npos);
+   };
+
    "concurrent_server_requests"_test = [] {
       working_test_server server;
       expect(server.start()) << "Server should start\n";
@@ -679,8 +688,15 @@ suite glz_http_client_tests = [] {
 
       auto on_data = [&](std::string_view) { data_received = true; };
       auto on_error = [&](std::error_code ec) {
-         // The client should translate the 4xx/5xx status into this error.
-         expect(ec == std::errc::connection_refused);
+         expect(bool(ec)) << "Expected an error code for HTTP failure";
+
+         if (ec.category() == http_status_category()) {
+            expect(ec.value() == 403) << "Unexpected HTTP status propagated: " << ec.message();
+         }
+         else {
+            expect(false) << "Error did not use http_status_category: " << ec.message();
+         }
+
          error_received = true;
       };
       auto on_connect = [&](const response& headers) {

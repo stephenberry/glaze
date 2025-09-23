@@ -170,6 +170,24 @@ struct stream_options {
 
 The `stream_connection::pointer` object contains a `disconnect()` method that can be used to close the connection.
 
+### Handling HTTP Errors During Streaming
+
+When the server responds with an HTTP error (status code ≥ 400) the client immediately invokes `on_error` with an
+`std::error_code` whose category is `glz::http_status_category()`. You can extract the numeric status code by comparing
+the category directly or by using the helper `glz::http_status_from(ec)`:
+
+```cpp
+auto on_error = [](std::error_code ec) {
+    if (auto status = glz::http_status_from(ec)) {
+        std::cerr << "Server failed with HTTP status " << *status << "\n";
+        return;
+    }
+
+    // Fallback for transport errors
+    std::cerr << "Stream error: " << ec.message() << "\n";
+};
+```
+
 ## Response Structure
 
 The `response` object contains:
