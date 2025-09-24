@@ -827,7 +827,7 @@ suite modify_partial_read = [] {
    "partial read modify ignore unknown"_test = [] {
       modify_header header{};
       const std::string json = R"({"id_alias":"xyz","type":"legacy","identifier":"def"})";
-      expect(!glz::read<glz::opts{.partial_read = true, .error_on_unknown_keys = false}>(header, json));
+      expect(!glz::read<glz::opts{.error_on_unknown_keys = false, .partial_read = true}>(header, json));
       expect(header.id == "def") << header.id;
       expect(header.type == "type") << header.type;
    };
