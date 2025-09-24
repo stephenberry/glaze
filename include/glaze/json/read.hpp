@@ -3425,6 +3425,41 @@ namespace glz
       }
    };
 
+   // Specialization for byte_array wrapper to read into fixed-size byte arrays
+   template <class T>
+      requires(is_byte_array<T> && !readable_map_t<T> && !glaze_object_t<T> && !reflectable<T>)
+   struct from<JSON, T>
+   {
+      template <auto Opts, class It, class End>
+      static void op(auto&& wrapper, is_context auto&& ctx, It&& it, End&& end)
+      {
+         auto& value = wrapper.val;
+
+         // Read as string and copy exactly into the fixed-size array
+         std::string temp_str;
+         from<JSON, std::string>::template op<Opts>(temp_str, ctx, it, end);
+
+         if (bool(ctx.error)) {
+            return;
+         }
+
+         // Copy the data into the fixed-size array
+         using char_t = std::remove_extent_t<std::remove_reference_t<decltype(value)>>;
+         constexpr size_t N = sizeof(value) / sizeof(char_t);
+
+         if (temp_str.size() > N) {
+            ctx.error = error_code::unexpected_end; // Too much data
+            return;
+         }
+
+         // Copy data and fill remaining with zeros
+         std::memcpy(&value, temp_str.data(), temp_str.size());
+         if (temp_str.size() < N) {
+            std::memset(reinterpret_cast<char*>(&value) + temp_str.size(), 0, N - temp_str.size());
+         }
+      }
+   };
+
    template <is_expected T>
    struct from<JSON, T>
    {
