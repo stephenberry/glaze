@@ -157,6 +157,7 @@ struct stream_options {
     OnError on_error;
     OnConnect on_connect;
     OnDisconnect on_disconnect;
+    std::function<bool(int)> status_is_error;
 };
 ```
 
@@ -167,6 +168,19 @@ struct stream_options {
 -   `on_error`: A callback that's called when an error occurs.
 -   `on_connect`: A callback that's called when the connection is established and the headers are received.
 -   `on_disconnect`: A callback that's called when the connection is closed.
+-   `status_is_error`: Optional predicate to decide whether a status code should trigger `on_error` (defaults to
+    checking for codes ≥ 400).
+
+To override the default behaviour you can supply a predicate:
+
+```cpp
+auto conn = client.stream_request({
+    .url = "http://localhost/typesense",
+    .on_data = on_data,
+    .on_error = on_error,
+    .status_is_error = [](int status) { return status >= 500; } // Ignore 4xx responses
+});
+```
 
 The `stream_connection::pointer` object contains a `disconnect()` method that can be used to close the connection.
 

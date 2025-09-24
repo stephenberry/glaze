@@ -225,6 +225,14 @@ class working_test_server
       server_.stream_get("/stream-error", [](request&, streaming_response& res) {
          res.start_stream(403).close(); // e.g. Forbidden
       });
+
+      // Endpoint that returns HTTP 200 but includes mixed success payloads (Typesense-style)
+      server_.stream_get("/stream-typesense", [](request&, streaming_response& res) {
+         res.start_stream(200, {{"Content-Type", "application/json"}});
+         res.send(R"({"success":false}\n)");
+         res.send(R"({"success":true}\n)");
+         res.close();
+      });
    }
 
    bool is_server_ready()
@@ -690,11 +698,10 @@ suite glz_http_client_tests = [] {
       auto on_error = [&](std::error_code ec) {
          expect(bool(ec)) << "Expected an error code for HTTP failure";
 
-         if (ec.category() == http_status_category()) {
-            expect(ec.value() == 403) << "Unexpected HTTP status propagated: " << ec.message();
-         }
-         else {
-            expect(false) << "Error did not use http_status_category: " << ec.message();
+         auto status = http_status_from(ec);
+         expect(status.has_value()) << "Error should expose HTTP status";
+         if (status) {
+            expect(*status == 403) << "Unexpected HTTP status propagated: " << ec.message();
          }
 
          error_received = true;
@@ -721,6 +728,86 @@ suite glz_http_client_tests = [] {
       expect(connected == true) << "on_connect should be called with error headers\n";
       expect(error_received == true) << "on_error was not called for HTTP error status\n";
       expect(data_received == false) << "on_data should not be called on error\n";
+
+      server.stop();
+      std::this_thread::sleep_for(std::chrono::milliseconds(50));
+   };
+
+   "streaming_request_with_custom_status_predicate"_test = [] {
+      working_test_server server;
+      expect(server.start()) << "Server should start\n";
+
+      glz::http_client client;
+
+      std::atomic<bool> connected = false;
+      std::atomic<bool> error_received = false;
+      std::promise<void> disconnect_promise;
+      auto disconnect_future = disconnect_promise.get_future();
+
+      auto on_data = [&](std::string_view data) {
+         // Capture any payload for later inspection
+         (void)data;
+      };
+      auto on_error = [&](std::error_code) { error_received = true; };
+      auto on_connect = [&](const response& headers) {
+         expect(headers.status_code == 403);
+         connected = true;
+      };
+      auto on_disconnect = [&]() { disconnect_promise.set_value(); };
+
+      auto conn = client.stream_request({.url = server.base_url() + "/stream-error",
+                                         .on_data = on_data,
+                                         .on_error = on_error,
+                                         .method = "GET",
+                                         .on_connect = on_connect,
+                                         .on_disconnect = on_disconnect,
+                                         .status_is_error = [](int status) { return status >= 500; }});
+      expect(conn != nullptr);
+
+      auto status = disconnect_future.wait_for(std::chrono::seconds(2));
+      expect(status == std::future_status::ready) << "Disconnect was not called\n";
+
+      expect(connected == true) << "on_connect should run";
+      expect(error_received == false) << "Custom predicate should suppress 4xx error";
+
+      server.stop();
+      std::this_thread::sleep_for(std::chrono::milliseconds(50));
+   };
+
+   "streaming_request_custom_predicate_flags_success"_test = [] {
+      working_test_server server;
+      expect(server.start()) << "Server should start\n";
+
+      glz::http_client client;
+
+      std::atomic<bool> error_received = false;
+      std::promise<void> disconnect_promise;
+      auto disconnect_future = disconnect_promise.get_future();
+
+      auto on_data = [&](std::string_view) { /* no-op */ };
+      auto on_error = [&](std::error_code ec) {
+         error_received = true;
+         auto status = http_status_from(ec);
+         expect(status.has_value());
+         if (status) {
+            expect(*status == 200);
+         }
+      };
+      auto on_connect = [&](const response& headers) { expect(headers.status_code == 200); };
+      auto on_disconnect = [&]() { disconnect_promise.set_value(); };
+
+      auto conn = client.stream_request({.url = server.base_url() + "/stream-typesense",
+                                         .on_data = on_data,
+                                         .on_error = on_error,
+                                         .method = "GET",
+                                         .on_connect = on_connect,
+                                         .on_disconnect = on_disconnect,
+                                         .status_is_error = [](int status) { return status == 200; }});
+      expect(conn != nullptr);
+
+      auto status = disconnect_future.wait_for(std::chrono::seconds(2));
+      expect(status == std::future_status::ready);
+      expect(error_received == true);
 
       server.stop();
       std::this_thread::sleep_for(std::chrono::milliseconds(50));
