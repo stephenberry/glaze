@@ -4,8 +4,13 @@
 #pragma once
 
 #include <array>
+#include <concepts>
+#include <initializer_list>
+#include <type_traits>
+#include <utility>
 
 #include "glaze/reflection/get_name.hpp"
+#include "glaze/reflection/to_tuple.hpp"
 #include "glaze/reflection/requires_key.hpp"
 #include "glaze/tuplet/tuple.hpp"
 #include "glaze/util/for_each.hpp"
@@ -99,7 +104,17 @@ namespace glz
    concept global_meta_t = requires { meta<T>::value; };
 
    template <class T>
-   concept glaze_t = requires { meta<std::decay_t<T>>::value; } || local_meta_t<std::decay_t<T>>;
+   concept local_modify_t = requires { std::decay_t<T>::glaze::modify; };
+
+   template <class T>
+   concept global_modify_t = requires { meta<std::decay_t<T>>::modify; };
+
+   template <class T>
+   concept modify_t = local_modify_t<T> || global_modify_t<T>;
+
+   template <class T>
+   concept glaze_t = requires { meta<std::decay_t<T>>::value; } || local_meta_t<std::decay_t<T>> ||
+                     modify_t<std::decay_t<T>>;
 
    template <class T>
    concept meta_keys = requires { meta<std::decay_t<T>>::keys; } || local_keys_t<std::decay_t<T>>;
@@ -124,6 +139,254 @@ namespace glz
       static constexpr glz::tuple<> value{};
    };
 
+   namespace detail
+   {
+      template <class T>
+      concept object_key_like = std::convertible_to<T, std::string_view>;
+
+      template <class Tuple, size_t... I>
+      consteval auto compute_value_indices_impl(std::index_sequence<I...>)
+      {
+         constexpr size_t count = (static_cast<size_t>(!object_key_like<glz::tuple_element_t<I, Tuple>>) + ... + 0);
+         std::array<size_t, count> result{};
+         size_t idx = 0;
+         (void)std::initializer_list<int>{
+            (object_key_like<glz::tuple_element_t<I, Tuple>> ? 0 : (result[idx++] = I, 0))...};
+         return result;
+      }
+
+      template <class Tuple>
+      consteval auto compute_value_indices()
+      {
+         return compute_value_indices_impl<Tuple>(std::make_index_sequence<glz::tuple_size_v<Tuple>>{});
+      }
+
+      inline constexpr size_t modify_npos = static_cast<size_t>(-1);
+
+      template <class T, size_t I>
+      struct aggregate_accessor
+      {
+         template <class V>
+         constexpr decltype(auto) operator()(V&& value) const
+         {
+            return glz::get<I>(to_tie(std::forward<V>(value)));
+         }
+      };
+
+      template <auto Ptr>
+      struct pointer_name_storage
+      {
+         static constexpr auto alias = get_name<Ptr>();
+         static constexpr auto value = join_v<alias>;
+      };
+
+      template <class T>
+      consteval size_t find_member_index(std::string_view name)
+      {
+         constexpr auto names = member_names<T>;
+         for (size_t i = 0; i < names.size(); ++i) {
+            if (names[i] == name) {
+               return i;
+            }
+         }
+         return modify_npos;
+      }
+
+      template <class T>
+      consteval auto get_modify_object()
+      {
+         if constexpr (local_modify_t<T>) {
+            return std::decay_t<T>::glaze::modify;
+         }
+         else {
+            return meta<std::decay_t<T>>::modify;
+         }
+      }
+
+      template <class T, bool HasModify>
+      struct modify_data_impl;
+
+      template <class T>
+      struct modify_data_impl<T, false>
+      {
+         static constexpr size_t value_count = 0;
+      };
+
+      template <class T>
+      struct modify_data_impl<T, true>
+      {
+         using value_type = std::decay_t<T>;
+         static constexpr auto object = get_modify_object<value_type>();
+         static constexpr auto tuple = object.value;
+         using tuple_t = std::remove_cvref_t<decltype(tuple)>;
+         static constexpr auto indices = compute_value_indices<tuple_t>();
+         static constexpr size_t value_count = indices.size();
+
+         template <size_t EntryPos>
+         static constexpr size_t tuple_index_v = indices[EntryPos];
+
+         template <size_t EntryPos>
+         using element_type = glz::tuple_element_t<tuple_index_v<EntryPos>, tuple_t>;
+
+         template <size_t EntryPos>
+         static consteval bool has_key()
+         {
+            constexpr size_t idx = tuple_index_v<EntryPos>;
+            if constexpr (idx == 0) {
+               return false;
+            }
+            else {
+               return object_key_like<glz::tuple_element_t<idx - 1, tuple_t>>;
+            }
+         }
+
+         template <size_t EntryPos>
+         static consteval sv key()
+         {
+            constexpr size_t idx = tuple_index_v<EntryPos>;
+            if constexpr (idx == 0) {
+               return sv{};
+            }
+            else {
+               return sv(glz::get<idx - 1>(tuple));
+            }
+         }
+
+         template <size_t EntryPos>
+         static consteval auto element()
+         {
+            return glz::get<tuple_index_v<EntryPos>>(tuple);
+         }
+
+         template <size_t EntryPos>
+         static consteval sv pointer_name()
+         {
+            return pointer_name_storage<glz::get<tuple_index_v<EntryPos>>(tuple)>::value;
+         }
+
+         template <size_t EntryPos>
+         static consteval size_t base_index()
+         {
+            using elem_t = element_type<EntryPos>;
+            if constexpr (std::is_member_pointer_v<elem_t>) {
+               return find_member_index<value_type>(pointer_name<EntryPos>());
+            }
+            else if constexpr (has_key<EntryPos>()) {
+               return find_member_index<value_type>(key<EntryPos>());
+            }
+            else {
+               return modify_npos;
+            }
+         }
+
+         template <size_t EntryPos>
+         static consteval sv new_name()
+         {
+            using elem_t = element_type<EntryPos>;
+            if constexpr (has_key<EntryPos>()) {
+               return key<EntryPos>();
+            }
+            else if constexpr (std::is_member_pointer_v<elem_t>) {
+               return pointer_name<EntryPos>();
+            }
+            else {
+               static_assert(has_key<EntryPos>(),
+                             "modify entry must provide a key when not referencing a member pointer");
+               return pointer_name<EntryPos>();
+            }
+         }
+      };
+
+      template <class T>
+      using modify_data = modify_data_impl<T, modify_t<T>>;
+
+      template <class T, size_t BaseIndex, size_t Remaining>
+      consteval auto base_entry_tuple_impl()
+      {
+         if constexpr (Remaining == 0) {
+            return glz::tuple{member_nameof<BaseIndex, T>, aggregate_accessor<T, BaseIndex>{}};
+         }
+         else {
+            constexpr size_t entry = Remaining - 1;
+            if constexpr (modify_data<T>::template base_index<entry>() == BaseIndex) {
+               constexpr auto name = modify_data<T>::template new_name<entry>();
+               constexpr auto value = modify_data<T>::template element<entry>();
+               return glz::tuple{name, value};
+            }
+            else {
+               return base_entry_tuple_impl<T, BaseIndex, Remaining - 1>();
+            }
+         }
+      }
+
+      template <class T, size_t BaseIndex>
+      consteval auto base_entry_tuple()
+      {
+         if constexpr (!modify_t<T>) {
+            return glz::tuple{member_nameof<BaseIndex, T>, aggregate_accessor<T, BaseIndex>{}};
+         }
+         else {
+            return base_entry_tuple_impl<T, BaseIndex, modify_data<T>::value_count>();
+         }
+      }
+
+      template <class T, size_t EntryPos>
+      consteval auto extra_entry_tuple()
+      {
+         if constexpr (!modify_t<T>) {
+            return glz::tuple<>{};
+         }
+         else if constexpr (modify_data<T>::template base_index<EntryPos>() == modify_npos) {
+            constexpr auto name = modify_data<T>::template new_name<EntryPos>();
+            constexpr auto value = modify_data<T>::template element<EntryPos>();
+            return glz::tuple{name, value};
+         }
+         else {
+            return glz::tuple<>{};
+         }
+      }
+
+      template <class T, size_t... I>
+      consteval auto make_base_entries_impl(std::index_sequence<I...>)
+      {
+         if constexpr (sizeof...(I) == 0) {
+            return glz::tuple<>();
+         }
+         else {
+            return glz::tuplet::tuple_cat(base_entry_tuple<T, I>()...);
+         }
+      }
+
+      template <class T, size_t... I>
+      consteval auto make_extra_entries_impl(std::index_sequence<I...>)
+      {
+         if constexpr (sizeof...(I) == 0) {
+            return glz::tuple<>();
+         }
+         else {
+            return glz::tuplet::tuple_cat(extra_entry_tuple<T, I>()...);
+         }
+      }
+
+      template <class T>
+      consteval auto make_modified_object()
+      {
+         using decayed_t = std::remove_cvref_t<T>;
+         static_assert(std::is_class_v<decayed_t> && std::is_aggregate_v<decayed_t>,
+                       "glz::meta modify requires aggregate class types");
+         constexpr auto base_entries =
+            make_base_entries_impl<T>(std::make_index_sequence<glz::detail::count_members<T>>{});
+         if constexpr (modify_t<T>) {
+            constexpr auto extras =
+               make_extra_entries_impl<T>(std::make_index_sequence<modify_data<T>::value_count>{});
+            return Object{glz::tuplet::tuple_cat(base_entries, extras)};
+         }
+         else {
+            return Object{base_entries};
+         }
+      }
+   }
+
    template <class T>
    inline constexpr decltype(auto) meta_wrapper_v = [] {
       if constexpr (local_meta_t<T>) {
@@ -131,6 +394,9 @@ namespace glz
       }
       else if constexpr (global_meta_t<T>) {
          return meta<T>::value;
+      }
+      else if constexpr (modify_t<T>) {
+         return detail::make_modified_object<std::decay_t<T>>();
       }
       else {
          return empty{};

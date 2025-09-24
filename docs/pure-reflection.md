@@ -14,6 +14,8 @@ the user and computed at compile time.
 
 Types that support pure reflection satisfy the `glz::reflectable<T>` concept. To check if any type (including those with `glz::meta` specializations) can use the reflection API, use the `glz::has_reflect<T>` concept.
 
+- Need to rename a handful of fields or expose aliases without rewriting the entire metadata? Specialize `glz::meta<T>` with a [`modify`](modify-reflection.md) object—pure reflection stays in place for every field you don't touch.
+
 - You can still write a `glz::meta` to customize your serialization, which will override the default reflection.
 
 > CUSTOMIZATION NOTE:
@@ -54,4 +56,3 @@ struct V2Wrapper
    V2 x{}; // reflection wouldn't work except for adding `V2(glz::make_reflectable) {}`
 };
 ```
-

@@ -75,6 +75,7 @@ nav:
    - Generic JSON: generic-json.md
  - Reflection:
    - Pure Reflection: pure-reflection.md
+   - Modify Reflection: modify-reflection.md
  - Formats:
    - JSON: json.md
    - CSV: csv.md
