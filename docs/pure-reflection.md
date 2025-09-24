@@ -10,13 +10,14 @@ Glaze supports pure reflection for [aggregate initializable](https://en.cpprefer
 > - no [virtual base classes](https://en.cppreference.com/w/cpp/language/derived_class#Virtual_base_classes)
 
 There's no need to write any `glz::meta` structures or use any macros. The reflection is hidden from
-the user and computed at compile time.
+the user and computed at compile time. If you eventually need to rename just a couple of fields or add
+an alias while keeping everything else automatic, specialize `glz::meta<T>` with a
+[`modify`](modify-reflection.md) object. The existing members stay under pure reflection; only the keys you
+mention are altered or appended.
 
 Types that support pure reflection satisfy the `glz::reflectable<T>` concept. To check if any type (including those with `glz::meta` specializations) can use the reflection API, use the `glz::has_reflect<T>` concept.
 
-- Need to rename a handful of fields or expose aliases without rewriting the entire metadata? Specialize `glz::meta<T>` with a [`modify`](modify-reflection.md) object—pure reflection stays in place for every field you don't touch.
-
-- You can still write a `glz::meta` to customize your serialization, which will override the default reflection.
+- You can still write a full `glz::meta` to customize your serialization, which will override the default reflection entirely.
 
 > CUSTOMIZATION NOTE:
 >

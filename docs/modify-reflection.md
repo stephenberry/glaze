@@ -44,6 +44,44 @@ Serializing `point{3, 4}` produces:
 
 Notice that the original member list still participates: only the names you override change. Any members you do not mention retain their automatically generated names and order.
 
+## Override a few keys
+
+Often you just need to tweak a couple of fields while the bulk of the struct continues to rely on pure reflection. You can still do that without touching the entire definition:
+
+```cpp
+struct server_status
+{
+   std::string name;          // pure reflection keeps this key
+   std::string region;        // …and this one
+   uint64_t active_sessions;  // and all the others
+   std::optional<std::string> maintenance;
+   double cpu_percent{};
+};
+
+template <> struct glz::meta<server_status>
+{
+   static constexpr auto modify = glz::object(
+      "maintenance_alias", [](auto& self) -> auto& { return self.maintenance; },
+      "cpuPercent", &server_status::cpu_percent
+   );
+};
+```
+
+Serialising a value keeps the original fields while appending the two tweaks:
+
+```json
+{
+  "name": "edge-01",
+  "region": "us-east",
+  "active_sessions": 2412,
+  "maintenance": "scheduled",
+  "cpuPercent": 73.5,
+  "maintenance_alias": "scheduled"
+}
+```
+
+Only the keys you touched change (`maintenance_alias`, `cpuPercent`). Everything else—`name`, `region`, `active_sessions`, `maintenance`—comes straight from pure reflection, so adding or removing members later still “just works”.
+
 ## Renaming reflected members
 
 Pass a string literal before the member pointer to override the emitted key:
@@ -109,44 +147,6 @@ template <> struct glz::meta<dashboard>
 ```
 
 No additional boilerplate is required—Glaze reuses the existing container serializers for every member you expose.
-
-## Override a few keys
-
-Often you just need to tweak a couple of fields while the bulk of the struct continues to rely on pure reflection. You can still do that without touching the entire definition:
-
-```cpp
-struct server_status
-{
-   std::string name;          // pure reflection keeps this key
-   std::string region;        // …and this one
-   uint64_t active_sessions;  // and all the others
-   std::optional<std::string> maintenance;
-   double cpu_percent{};
-};
-
-template <> struct glz::meta<server_status>
-{
-   static constexpr auto modify = glz::object(
-      "maintenance_alias", [](auto& self) -> auto& { return self.maintenance; },
-      "cpuPercent", &server_status::cpu_percent
-   );
-};
-```
-
-Serialising a value keeps the original fields while appending the two tweaks:
-
-```json
-{
-  "name": "edge-01",
-  "region": "us-east",
-  "active_sessions": 2412,
-  "maintenance": "scheduled",
-  "cpuPercent": 73.5,
-  "maintenance_alias": "scheduled"
-}
-```
-
-Only the keys you touched change (`maintenance_alias`, `cpuPercent`). Everything else—`name`, `region`, `active_sessions`, `maintenance`—comes straight from pure reflection, so adding or removing members later still “just works”.
 
 ## Guidelines and caveats
 
