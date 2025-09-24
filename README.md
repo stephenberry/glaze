@@ -322,6 +322,57 @@ struct glz::meta<my_struct> {
 > - [Wrappers](./docs/wrappers.md)
 > - Lambda functions
 
+### Extending pure reflection with `modify`
+
+If you only need to tweak a couple of fields, you can layer those changes on top of the automatically reflected members with `glz::meta<T>::modify`:
+
+```c++
+struct server_status
+{
+   std::string name;
+   std::string region;
+   uint64_t active_sessions{};
+   std::optional<std::string> maintenance;
+   double cpu_percent{};
+};
+
+template <> struct glz::meta<server_status>
+{
+   static constexpr auto modify = glz::object(
+      "maintenance_alias", [](auto& self) -> auto& { return self.maintenance; },
+      "cpuPercent", &server_status::cpu_percent
+   );
+};
+```
+
+Serialising
+
+```c++
+server_status status{
+   .name = "edge-01",
+   .region = "us-east",
+   .active_sessions = 2412,
+   .maintenance = std::string{"scheduled"},
+   .cpu_percent = 73.5,
+};
+```
+
+produces
+
+```json
+{
+  "name": "edge-01",
+  "region": "us-east",
+  "active_sessions": 2412,
+  "maintenance": "scheduled",
+  "cpu_percent": 73.5,
+  "maintenance_alias": "scheduled",
+  "cpuPercent": 73.5
+}
+```
+
+All the untouched members (`name`, `region`, `active_sessions`, `maintenance`, `cpu_percent`) still come from pure reflection, so adding or removing members later keeps working automatically. Only the extra keys provided in `modify` are layered on top.
+
 # Reflection API
 
 Glaze provides a compile time reflection API that can be modified via `glz::meta` specializations. This reflection API uses pure reflection unless a `glz::meta` specialization is provided, in which case the default behavior is overridden by the developer.
