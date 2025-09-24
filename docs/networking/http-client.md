@@ -157,6 +157,7 @@ struct stream_options {
     OnError on_error;
     OnConnect on_connect;
     OnDisconnect on_disconnect;
+    std::function<bool(int)> status_is_error;
 };
 ```
 
@@ -167,8 +168,39 @@ struct stream_options {
 -   `on_error`: A callback that's called when an error occurs.
 -   `on_connect`: A callback that's called when the connection is established and the headers are received.
 -   `on_disconnect`: A callback that's called when the connection is closed.
+-   `status_is_error`: Optional predicate to decide whether a status code should trigger `on_error` (defaults to
+    checking for codes ≥ 400).
+
+To override the default behaviour you can supply a predicate:
+
+```cpp
+auto conn = client.stream_request({
+    .url = "http://localhost/typesense",
+    .on_data = on_data,
+    .on_error = on_error,
+    .status_is_error = [](int status) { return status >= 500; } // Ignore 4xx responses
+});
+```
 
 The `stream_connection::pointer` object contains a `disconnect()` method that can be used to close the connection.
+
+### Handling HTTP Errors During Streaming
+
+When the server responds with an HTTP error (status code ≥ 400) the client immediately invokes `on_error` with an
+`std::error_code` whose category is `glz::http_status_category()`. You can extract the numeric status code by comparing
+the category directly or by using the helper `glz::http_status_from(ec)`:
+
+```cpp
+auto on_error = [](std::error_code ec) {
+    if (auto status = glz::http_status_from(ec)) {
+        std::cerr << "Server failed with HTTP status " << *status << "\n";
+        return;
+    }
+
+    // Fallback for transport errors
+    std::cerr << "Stream error: " << ec.message() << "\n";
+};
+```
 
 ## Response Structure
 
