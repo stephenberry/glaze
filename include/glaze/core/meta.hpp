@@ -144,21 +144,23 @@ namespace glz
       template <class T>
       concept object_key_like = std::convertible_to<T, std::string_view>;
 
-      template <class Tuple, size_t... I>
-      consteval auto compute_value_indices_impl(std::index_sequence<I...>)
-      {
-         constexpr size_t count = (static_cast<size_t>(!object_key_like<glz::tuple_element_t<I, Tuple>>) + ... + 0);
-         std::array<size_t, count> result{};
-         size_t idx = 0;
-         (void)std::initializer_list<int>{
-            (object_key_like<glz::tuple_element_t<I, Tuple>> ? 0 : (result[idx++] = I, 0))...};
-         return result;
-      }
-
       template <class Tuple>
       consteval auto compute_value_indices()
       {
-         return compute_value_indices_impl<Tuple>(std::make_index_sequence<glz::tuple_size_v<Tuple>>{});
+         return []<size_t... I>(std::index_sequence<I...>)
+         {
+            constexpr size_t count =
+               (static_cast<size_t>(!object_key_like<glz::tuple_element_t<I, Tuple>>) + ... + 0);
+            std::array<size_t, count> result{};
+            size_t idx = 0;
+            (([&] {
+               if constexpr (!object_key_like<glz::tuple_element_t<I, Tuple>>) {
+                  result[idx++] = I;
+               }
+            }()),
+             ...);
+            return result;
+         }(std::make_index_sequence<glz::tuple_size_v<Tuple>>{});
       }
 
       inline constexpr size_t modify_npos = static_cast<size_t>(-1);
