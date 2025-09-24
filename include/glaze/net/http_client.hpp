@@ -204,7 +204,8 @@ namespace glz
 
    // Handler function types for streaming
    using http_data_handler = std::function<void(std::string_view data)>;
-   using http_error_handler = std::function<void(std::error_code ec)>; // May carry HTTP statuses via http_status_category()
+   using http_error_handler =
+      std::function<void(std::error_code ec)>; // May carry HTTP statuses via http_status_category()
    using http_connect_handler = std::function<void(const response& headers)>;
    using http_disconnect_handler = std::function<void()>;
 
@@ -708,8 +709,8 @@ namespace glz
                }
 
                const bool status_is_error = connection->status_is_error
-                                             ? connection->status_is_error(parsed_status->status_code)
-                                             : parsed_status->status_code >= 400;
+                                               ? connection->status_is_error(parsed_status->status_code)
+                                               : parsed_status->status_code >= 400;
 
                if (status_is_error) {
                   // Propagate the precise HTTP status via a dedicated error category.
