@@ -126,6 +126,28 @@ struct Issue1866
    std::string parentName{};
 };
 
+struct MemberFunctionThing
+{
+   std::string name{};
+   auto get_description() const -> std::string
+   {
+      return "something";
+   }
+};
+
+namespace glz
+{
+   template <>
+   struct meta<MemberFunctionThing>
+   {
+      using T = MemberFunctionThing;
+      static constexpr auto value = object(
+         "name", &T::name,
+         "description", &T::get_description
+      );
+   };
+} // namespace glz
+
 suite starter = [] {
    "example"_test = [] {
       my_struct s{};
@@ -11696,6 +11718,30 @@ suite explicit_string_view_support = [] {
       buffer.clear();
       expect(not glz::write<glz::opts{.raw_string = true}>(value, buffer));
       expect(buffer == R"("explicit")");
+   };
+};
+
+suite member_function_pointer_serialization = [] {
+   "member function pointer skipped in json write"_test = [] {
+      MemberFunctionThing thing{};
+      thing.name = "test_item";
+      std::string buffer{};
+      expect(not glz::write_json(thing, buffer));
+      expect(buffer == R"({"name":"test_item"})") << buffer;
+   };
+
+   "member function pointer opt-in write produces legacy output"_test = [] {
+      MemberFunctionThing thing{};
+      thing.name = "test_item";
+
+      struct opts_with_member_functions : glz::opts
+      {
+         bool write_member_functions = true;
+      };
+
+      std::string buffer{};
+      expect(not glz::write<opts_with_member_functions{}>(thing, buffer));
+      expect(buffer == R"({"name":"test_item","description":})") << buffer;
    };
 };
 
