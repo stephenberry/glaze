@@ -230,7 +230,8 @@ namespace glz
             return [&]<size_t... I>(std::index_sequence<I...>) {
                return ((always_skipped<field_t<T, I>> ||
                         (!write_member_functions && is_member_function_pointer<field_t<T, I>>) ||
-                        null_t<field_t<T, I>>) || ...);
+                        null_t<field_t<T, I>>) ||
+                       ...);
             }(std::make_index_sequence<N>{});
          }
          else {
@@ -238,7 +239,8 @@ namespace glz
             constexpr bool write_member_functions = check_write_member_functions(Opts);
             return [&]<size_t... I>(std::index_sequence<I...>) {
                return ((always_skipped<field_t<T, I>> ||
-                        (!write_member_functions && is_member_function_pointer<field_t<T, I>>)) || ...);
+                        (!write_member_functions && is_member_function_pointer<field_t<T, I>>)) ||
+                       ...);
             }(std::make_index_sequence<N>{});
          }
       }

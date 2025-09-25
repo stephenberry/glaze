@@ -1143,8 +1143,7 @@ namespace glz
 
             using val_t = detail::iterator_second_type<T>; // the type of value in each [key, value] pair
             constexpr bool write_member_functions = check_write_member_functions(Opts);
-            if constexpr (!always_skipped<val_t> &&
-                          (write_member_functions || !is_member_function_pointer<val_t>)) {
+            if constexpr (!always_skipped<val_t> && (write_member_functions || !is_member_function_pointer<val_t>)) {
                if constexpr (null_t<val_t> && Opts.skip_null_members) {
                   auto write_first_entry = [&](auto&& it) {
                      auto&& [key, entry_val] = *it;

@@ -129,10 +129,7 @@ struct Issue1866
 struct MemberFunctionThing
 {
    std::string name{};
-   auto get_description() const -> std::string
-   {
-      return "something";
-   }
+   auto get_description() const -> std::string { return "something"; }
 };
 
 namespace glz
@@ -141,10 +138,7 @@ namespace glz
    struct meta<MemberFunctionThing>
    {
       using T = MemberFunctionThing;
-      static constexpr auto value = object(
-         "name", &T::name,
-         "description", &T::get_description
-      );
+      static constexpr auto value = object("name", &T::name, "description", &T::get_description);
    };
 } // namespace glz
 

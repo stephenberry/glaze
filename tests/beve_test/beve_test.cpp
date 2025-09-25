@@ -2641,10 +2641,7 @@ suite explicit_string_view_support = [] {
 struct MemberFunctionThingBeve
 {
    std::string name{};
-   auto get_description() const -> std::string
-   {
-      return "something";
-   }
+   auto get_description() const -> std::string { return "something"; }
 };
 
 namespace glz
@@ -2653,10 +2650,7 @@ namespace glz
    struct meta<MemberFunctionThingBeve>
    {
       using T = MemberFunctionThingBeve;
-      static constexpr auto value = object(
-         "name", &T::name,
-         "description", &T::get_description
-      );
+      static constexpr auto value = object("name", &T::name, "description", &T::get_description);
    };
 } // namespace glz
 
