@@ -57,6 +57,7 @@ struct opts
 
    bool skip_null_members = true;
    // Skip writing out params in an object if the value is null
+   // This applies to nullable types like std::optional, std::shared_ptr, and raw pointers (T*)
 
    bool prettify = false;
    // Write out prettified JSON
@@ -114,6 +115,10 @@ The supported, but not default provided options are listed after `glz::opts` and
 bool validate_skipped = false;
 // If full validation should be performed on skipped values
 
+bool write_member_functions = false;
+// Serialize member function pointers referenced in glz::meta instead of skipping them
+// JSON/BEVE/TOML writers skip member function pointers by default for safety
+
 bool validate_trailing_whitespace = false;
 // If, after parsing a value, we want to validate the trailing whitespace
 
@@ -142,3 +147,29 @@ bool escape_control_characters = false;
 float_precision float_max_write_precision{};
 // The maximum precision type used for writing floats, higher precision floats will be cast down to this precision
 ```
+
+## CSV Options (`glz::opts_csv`)
+
+For CSV, use `glz::opts_csv` to access CSV-specific options and defaults.
+
+```c++
+struct opts_csv {
+  uint32_t format = CSV;                 // CSV format selector
+  static constexpr bool null_terminated = true;
+  uint8_t layout = rowwise;              // rowwise | colwise
+  bool use_headers = true;               // write/read with headers for structs
+  bool append_arrays = false;            // append on read if container supports it
+  bool raw_string = false;               // do not escape/unescape string contents
+  bool skip_header_row = false;          // skip first row on read
+  bool validate_rectangular = false;     // enforce equal column counts on 2D reads
+  uint32_t internal{};                   // internal flags
+};
+```
+
+Notes:
+- `layout`: `rowwise` treats each row as a record; `colwise` uses columns (2D arrays are transposed on IO).
+- `use_headers`: when `false`, vectors of structs read/write without headers in declaration order.
+- `skip_header_row`: skip the first row during read (useful when ingesting headered CSV into headerless targets).
+- `validate_rectangular`: for 2D arrays, fail reads when row lengths differ (`constraint_violated`).
+- `append_arrays`: appends parsed values to existing containers when supported.
+- Use as a template parameter: `glz::read<glz::opts_csv{.layout = glz::colwise, .use_headers = false}>(...)`.

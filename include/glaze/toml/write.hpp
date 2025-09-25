@@ -106,20 +106,6 @@ namespace glz
       }
    };
 
-   constexpr std::array<uint16_t, 256> char_escape_table = [] {
-      auto combine = [](const char chars[2]) -> uint16_t { return uint16_t(chars[0]) | (uint16_t(chars[1]) << 8); };
-
-      std::array<uint16_t, 256> t{};
-      t['\b'] = combine(R"(\b)");
-      t['\t'] = combine(R"(\t)");
-      t['\n'] = combine(R"(\n)");
-      t['\f'] = combine(R"(\f)");
-      t['\r'] = combine(R"(\r)");
-      t['\"'] = combine(R"(\")");
-      t['\\'] = combine(R"(\\)");
-      return t;
-   }();
-
    template <class T>
       requires str_t<T> || char_t<T>
    struct to<TOML, T>
@@ -166,7 +152,7 @@ namespace glz
                      return value ? value : "";
                   }
                   else {
-                     return value;
+                     return sv{value};
                   }
                }();
 
@@ -197,7 +183,7 @@ namespace glz
                      return *value.data() ? sv{value.data()} : "";
                   }
                   else {
-                     return value;
+                     return sv{value};
                   }
                }();
                const auto n = str.size();
@@ -322,7 +308,8 @@ namespace glz
          for_each<N>([&]<size_t I>() {
             using val_t = field_t<T, I>;
 
-            if constexpr (always_skipped<val_t>)
+            constexpr bool write_member_functions = check_write_member_functions(Options);
+            if constexpr (always_skipped<val_t> || (!write_member_functions && is_member_function_pointer<val_t>))
                return;
             else {
                if constexpr (null_t<val_t>) {

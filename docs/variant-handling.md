@@ -277,9 +277,9 @@ suite tagged_variant_tests = [] {
 };
 ```
 
-### Tagged Variants with Embedded Tags (New!)
+### Tagged Variants with Embedded Tags
 
-Recent improvements allow variant tags to be embedded within the structs themselves, making the discriminator accessible at runtime without using `std::visit`. This provides cleaner, more maintainable code:
+Variant tags may be embedded within the structs themselves, making the discriminator accessible at runtime without using `std::visit`. This provides cleaner, more maintainable code:
 
 ```c++
 // String-based embedded tags
@@ -408,7 +408,108 @@ auto json = glz::write_json(e);
 EntityVariant e2;
 glz::read_json(e2, R"({"type":"animal","species":"Lion","weight":190.5})");
 // e2 now holds Animal{"Lion", 190.5f}
+
+// Tag/field validation: If a tag value doesn't match the fields, an error is reported
+EntityVariant e3;
+auto error = glz::read_json(e3, R"({"species":"Lion","type":"person","weight":190.5})");
+// Error: no_matching_variant_type (tag says "person" but fields match Animal)
 ```
+
+### Default Variant Types (Catch-All Handler)
+
+When working with tagged variants, you may encounter unknown tag values that aren't in your predefined list. Glaze supports a default/catch-all variant type by making the `ids` array shorter than the number of variant alternatives. The first unlabeled type (without a corresponding ID) becomes the default handler for unknown tags.
+
+```c++
+struct CreateAction {
+   std::string action{"CREATE"};  // Embedded tag field
+   std::string resource;
+   std::map<std::string, std::string> attributes;
+};
+
+struct UpdateAction {
+   std::string action{"UPDATE"};  // Embedded tag field
+   std::string id;
+   std::map<std::string, std::string> changes;
+};
+
+// Default handler for unknown action types
+struct UnknownAction {
+   std::string action;  // Will be populated with the actual tag value
+   std::optional<std::string> id;
+   std::optional<std::string> resource;
+   std::optional<std::string> target;
+   // Can add more optional fields to handle various unknown formats
+};
+
+using ActionVariant = std::variant<CreateAction, UpdateAction, UnknownAction>;
+
+template <>
+struct glz::meta<ActionVariant> {
+   static constexpr std::string_view tag = "action";
+   // Note: Only 2 IDs for 3 variant types - UnknownAction becomes the default
+   static constexpr auto ids = std::array{"CREATE", "UPDATE"};
+};
+
+// Known actions work as expected
+std::string_view json = R"({"action":"CREATE","resource":"user","attributes":{"name":"Alice"}})";
+ActionVariant av;
+glz::read_json(av, json);
+// av holds CreateAction with action == "CREATE"
+
+// Unknown actions route to the default type
+json = R"({"action":"DELETE","id":"123","target":"resource"})";
+glz::read_json(av, json);
+// av holds UnknownAction with action == "DELETE"
+if (std::holds_alternative<UnknownAction>(av)) {
+   auto& unknown = std::get<UnknownAction>(av);
+   std::cout << "Unknown action: " << unknown.action << std::endl;  // Prints: DELETE
+}
+```
+
+This feature is particularly useful for:
+- **Forward compatibility**: Handle future action types without breaking existing code
+- **API versioning**: Gracefully handle newer message types from updated clients
+- **Error recovery**: Capture and log unknown operations instead of failing
+- **Plugin systems**: Allow extensions to define custom actions
+
+The default type works with both string and numeric tags:
+
+```c++
+struct TypeA {
+   int type{1};
+   std::string data;
+};
+
+struct TypeB {
+   int type{2};
+   double value;
+};
+
+struct TypeDefault {
+   int type;  // Will contain the actual numeric tag value
+   std::optional<std::string> data;
+   std::optional<double> value;
+};
+
+using NumericVariant = std::variant<TypeA, TypeB, TypeDefault>;
+
+template <>
+struct glz::meta<NumericVariant> {
+   static constexpr std::string_view tag = "type";
+   static constexpr auto ids = std::array{1, 2};  // TypeDefault handles all other values
+};
+
+// Type 99 is unknown, routes to TypeDefault
+std::string_view json = R"({"type":99,"data":"unknown"})";
+NumericVariant nv;
+glz::read_json(nv, json);
+// nv holds TypeDefault with type == 99
+```
+
+**Important notes:**
+- The default type must be the last type in the variant that doesn't have a corresponding ID
+- The tag field in the default type will be populated with the actual tag value from the JSON
+- Only the first unlabeled type serves as the default (you can only have one default handler)
 
 ## BEVE to JSON
 

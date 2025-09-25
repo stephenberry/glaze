@@ -121,6 +121,11 @@ namespace glz
       bool append_arrays = false; // When reading into an array the data will be appended if the type supports it
       bool raw_string = false; // do not decode/encode escaped characters for strings (improves read/write performance)
 
+      // New options for headerless CSV support
+      bool skip_header_row =
+         false; // Skip first row when reading (useful for CSV with headers when reading into 2D arrays)
+      bool validate_rectangular = false; // Ensure all rows have the same column count when reading 2D arrays
+
       // INTERNAL OPTIONS
       uint32_t internal{}; // default should be 0
 
@@ -133,6 +138,10 @@ namespace glz
    // ---
    // bool validate_skipped = false;
    // If full validation should be performed on skipped values
+
+   // ---
+   // bool write_member_functions = false;
+   // If member function pointers should be serialized when provided in glz::meta
 
    // ---
    // bool validate_trailing_whitespace = false;
@@ -174,6 +183,16 @@ namespace glz
    {
       if constexpr (requires { Opts.validate_skipped; }) {
          return Opts.validate_skipped;
+      }
+      else {
+         return false;
+      }
+   }
+
+   consteval bool check_write_member_functions(auto&& Opts)
+   {
+      if constexpr (requires { Opts.write_member_functions; }) {
+         return Opts.write_member_functions;
       }
       else {
          return false;

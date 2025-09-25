@@ -15,8 +15,9 @@ glz::http_server server;
 server.enable_cors();
 
 // Good for development, allows all origins and methods
-server.bind(8080);
+server.bind(8080).with_signals();
 server.start();
+server.wait_for_signal(); // Block until Ctrl+C
 ```
 
 ### Production CORS Configuration
@@ -112,8 +113,9 @@ ws_server->on_error([](std::shared_ptr<glz::websocket_connection> conn, std::err
 glz::http_server server;
 server.websocket("/ws", ws_server);
 
-server.bind(8080);
+server.bind(8080).with_signals();
 server.start();
+server.wait_for_signal();
 ```
 
 ### Chat Room Example
@@ -228,8 +230,9 @@ server.get("/secure-data", [](const glz::request& req, glz::response& res) {
     });
 });
 
-server.bind(8443); // Standard HTTPS port
+server.bind(8443).with_signals(); // Standard HTTPS port
 server.start();
+server.wait_for_signal();
 ```
 
 ---

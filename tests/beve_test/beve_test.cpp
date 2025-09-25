@@ -24,6 +24,8 @@
 #include "glaze/trace/trace.hpp"
 #include "ut/ut.hpp"
 
+using namespace ut;
+
 inline glz::trace trace{};
 
 struct my_struct
@@ -2522,6 +2524,164 @@ suite pair_ranges_tests = [] {
       std::vector<std::pair<int, int>> x;
       expect(!glz::read_beve(x, s));
       expect(x == v);
+   };
+};
+
+// Test for static variant tags with empty structs
+namespace static_tag_test
+{
+   enum class MsgTypeEmpty { A, B };
+
+   struct MsgAEmpty
+   {
+      static constexpr auto type = MsgTypeEmpty::A;
+   };
+
+   struct MsgBEmpty
+   {
+      static constexpr auto type = MsgTypeEmpty::B;
+   };
+
+   using MsgEmpty = std::variant<MsgAEmpty, MsgBEmpty>;
+
+   enum class MsgType { A, B };
+
+   struct MsgA
+   {
+      static constexpr auto type = MsgType::A;
+      int value = 42;
+   };
+
+   struct MsgB
+   {
+      static constexpr auto type = MsgType::B;
+      std::string text = "hello";
+   };
+
+   using Msg = std::variant<MsgA, MsgB>;
+}
+
+suite static_variant_tags = [] {
+   "static variant tags with empty structs"_test = [] {
+      using namespace static_tag_test;
+
+      // Test untagged BEVE with empty structs having static tags
+      {
+         MsgEmpty original{MsgAEmpty{}};
+         auto encoded = glz::write_beve_untagged(original);
+         expect(encoded.has_value());
+
+         auto decoded = glz::read_binary_untagged<MsgEmpty>(*encoded);
+         expect(decoded.has_value());
+         expect(decoded->index() == 0);
+      }
+
+      {
+         MsgEmpty original{MsgBEmpty{}};
+         auto encoded = glz::write_beve_untagged(original);
+         expect(encoded.has_value());
+
+         auto decoded = glz::read_binary_untagged<MsgEmpty>(*encoded);
+         expect(decoded.has_value());
+         expect(decoded->index() == 1);
+      }
+   };
+
+   "static variant tags with non-empty structs"_test = [] {
+      using namespace static_tag_test;
+
+      // Test untagged BEVE with non-empty structs having static tags
+      {
+         Msg original{MsgA{}};
+         auto encoded = glz::write_beve_untagged(original);
+         expect(encoded.has_value());
+
+         auto decoded = glz::read_binary_untagged<Msg>(*encoded);
+         expect(decoded.has_value());
+         expect(decoded->index() == 0);
+         expect(std::get<0>(*decoded).value == 42);
+      }
+
+      {
+         Msg original{MsgB{}};
+         auto encoded = glz::write_beve_untagged(original);
+         expect(encoded.has_value());
+
+         auto decoded = glz::read_binary_untagged<Msg>(*encoded);
+         expect(decoded.has_value());
+         expect(decoded->index() == 1);
+         expect(std::get<1>(*decoded).text == "hello");
+      }
+   };
+};
+
+suite explicit_string_view_support = [] {
+   "write beve from explicit string_view"_test = [] {
+      struct explicit_string_view_type
+      {
+         std::string storage{};
+
+         explicit explicit_string_view_type(std::string_view s) : storage(s) {}
+
+         explicit operator std::string_view() const noexcept { return storage; }
+      };
+
+      explicit_string_view_type value{std::string_view{"explicit"}};
+
+      std::string buffer{};
+      expect(not glz::write_beve(value, buffer));
+      expect(not buffer.empty());
+
+      std::string decoded{};
+      expect(not glz::read_beve(decoded, buffer));
+      expect(decoded == "explicit");
+   };
+};
+
+struct MemberFunctionThingBeve
+{
+   std::string name{};
+   auto get_description() const -> std::string { return "something"; }
+};
+
+namespace glz
+{
+   template <>
+   struct meta<MemberFunctionThingBeve>
+   {
+      using T = MemberFunctionThingBeve;
+      static constexpr auto value = object("name", &T::name, "description", &T::get_description);
+   };
+} // namespace glz
+
+suite member_function_pointer_beve_serialization = [] {
+   "member function pointer skipped in beve write"_test = [] {
+      MemberFunctionThingBeve input{};
+      input.name = "test_item";
+      std::string buffer{};
+      expect(not glz::write_beve(input, buffer));
+
+      MemberFunctionThingBeve output{};
+      expect(not glz::read_beve(output, buffer));
+      expect(output.name == input.name);
+   };
+
+   "member function pointer opt-in write encodes description key"_test = [] {
+      MemberFunctionThingBeve input{};
+      input.name = "test_item";
+
+      std::string buffer_default{};
+      expect(not glz::write_beve(input, buffer_default));
+      expect(buffer_default.find("description") == std::string::npos);
+
+      struct opts_with_member_functions : glz::opts
+      {
+         bool write_member_functions = true;
+      };
+
+      std::string buffer_opt_in{};
+      expect(not glz::write<glz::set_beve<opts_with_member_functions{}>()>(input, buffer_opt_in));
+      expect(buffer_opt_in.find("description") != std::string::npos);
    };
 };
 

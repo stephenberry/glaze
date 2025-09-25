@@ -54,8 +54,9 @@ int main() {
     // Mount generated endpoints
     server.mount("/api", registry.endpoints);
     
-    server.bind(8080);
+    server.bind(8080).with_signals();
     server.start();
+    server.wait_for_signal();
 }
 ```
 
@@ -221,8 +222,9 @@ int main() {
     // All endpoints available under /api
     server.mount("/api", registry.endpoints);
     
-    server.bind(8080);
+    server.bind(8080).with_signals();
     server.start();
+    server.wait_for_signal();
 }
 ```
 

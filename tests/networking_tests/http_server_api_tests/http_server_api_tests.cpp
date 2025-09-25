@@ -254,6 +254,38 @@ suite http_server_api_tests = [] {
       [[maybe_unused]] auto& patch_ref = server.patch("/patch", handler);
    };
 
+   "middleware_registration"_test = [] {
+      glz::http_server server;
+      std::vector<std::string> execution_order;
+
+      auto& router = server.get("/ping", [&execution_order](const glz::request&, glz::response& res) {
+         execution_order.push_back("handler");
+         res.body("ok");
+      });
+
+      auto& use_ref = server.use(
+         [&execution_order](const glz::request&, glz::response&) { execution_order.push_back("middleware"); });
+      expect(&use_ref == &server) << "use() should return server reference for chaining\n";
+
+      glz::request req;
+      req.method = glz::http_method::GET;
+      req.target = "/ping";
+
+      glz::response res;
+
+      for (const auto& middleware : router.middlewares) {
+         middleware(req, res);
+      }
+
+      auto [handler, params] = router.match(req.method, req.target);
+      expect(handler != nullptr) << "Route handler should be registered\n";
+      handler(req, res);
+
+      expect(execution_order.size() == 2) << "Middleware and handler should both execute\n";
+      expect(execution_order[0] == "middleware") << "Middleware should execute before handler\n";
+      expect(execution_order[1] == "handler") << "Handler should execute after middleware\n";
+   };
+
    "cors_configuration"_test = [] {
       glz::http_server server;
 
@@ -609,8 +641,8 @@ suite response_building_tests = [] {
 
       expect(&chained_res == &res) << "Response methods should return reference for chaining\n";
       expect(res.status_code == 201) << "Status should be set correctly\n";
-      expect(res.response_headers.at("X-Custom") == "value") << "Custom header should be set\n";
-      expect(res.response_headers.at("Content-Type") == "application/json") << "Content-Type should be set\n";
+      expect(res.response_headers.at("x-custom") == "value") << "Custom header should be set\n";
+      expect(res.response_headers.at("content-type") == "application/json") << "Content-Type should be set\n";
       expect(res.response_body == "test body") << "Body should be set correctly\n";
    };
 
@@ -621,7 +653,7 @@ suite response_building_tests = [] {
       res.json(data);
 
       expect(!res.response_body.empty()) << "JSON serialization should produce content\n";
-      expect(res.response_headers.at("Content-Type") == "application/json") << "Should set JSON content type\n";
+      expect(res.response_headers.at("content-type") == "application/json") << "Should set JSON content type\n";
 
       // Verify serialization worked
       TestData deserialized;

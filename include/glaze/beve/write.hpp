@@ -161,11 +161,11 @@ namespace glz
 
                if constexpr (glaze_object_t<T>) {
                   static constexpr auto member = get<index>(reflect<T>::values);
-                  serialize<BEVE>::no_header<Opts>(key, ctx, b, ix);
+                  to<BEVE, std::remove_cvref_t<decltype(key)>>::template no_header_cx<key.size()>(key, ctx, b, ix);
                   serialize_partial<BEVE>::op<sub_partial, Opts>(get_member(value, member), ctx, b, ix);
                }
                else {
-                  serialize<BEVE>::no_header<Opts>(key, ctx, b, ix);
+                  to<BEVE, std::remove_cvref_t<decltype(key)>>::template no_header_cx<key.size()>(key, ctx, b, ix);
                   serialize_partial<BEVE>::op<sub_partial, Opts>(get_member(value, get<index>(to_tie(value))), ctx, b,
                                                                  ix);
                }
@@ -182,7 +182,8 @@ namespace glz
                static constexpr auto key_value = get<0>(group);
                static constexpr auto sub_partial = get<1>(group);
                if constexpr (findable<std::decay_t<T>, decltype(key_value)>) {
-                  serialize<BEVE>::no_header<Opts>(key_value, ctx, b, ix);
+                  to<BEVE, std::remove_cvref_t<decltype(key_value)>>::template no_header_cx<key_value.size()>(
+                     key_value, ctx, b, ix);
                   auto it = value.find(key_value);
                   if (it != value.end()) {
                      serialize_partial<BEVE>::op<sub_partial, Opts>(it->second, ctx, b, ix);
@@ -447,7 +448,7 @@ namespace glz
                return value ? value : "";
             }
             else {
-               return value;
+               return sv{value};
             }
          }();
 
@@ -480,6 +481,22 @@ namespace glz
          if (n) {
             std::memcpy(&b[ix], value.data(), n);
             ix += n;
+         }
+      }
+
+      // Compile-time optimized version for known string sizes
+      template <uint64_t N>
+      GLZ_ALWAYS_INLINE static void no_header_cx(auto&& value, is_context auto&&, auto&& b, auto&& ix)
+      {
+         dump_compressed_int<N>(b, ix);
+
+         if (const auto k = ix + N; k > b.size()) [[unlikely]] {
+            b.resize(2 * k);
+         }
+
+         if constexpr (N > 0) {
+            std::memcpy(&b[ix], value.data(), N);
+            ix += N;
          }
       }
    };
@@ -787,28 +804,37 @@ namespace glz
    struct to<BEVE, T> final
    {
       static constexpr auto N = reflect<T>::size;
-      static constexpr size_t count_to_write = [] {
-         size_t count{};
-         for_each<N>([&]<size_t I>() {
-            using V = field_t<T, I>;
 
-            if constexpr (std::same_as<V, hidden> || std::same_as<V, skip>) {
-               // do not serialize
-               // not serializing is_includer<V> would be a breaking change
-            }
-            else {
-               ++count;
-            }
-         });
-         return count;
-      }();
+      template <auto Opts, size_t I>
+      static consteval bool should_skip_field()
+      {
+         using V = field_t<T, I>;
+
+         if constexpr (std::same_as<V, hidden> || std::same_as<V, skip>) {
+            return true;
+         }
+         else if constexpr (is_member_function_pointer<V>) {
+            return !check_write_member_functions(Opts);
+         }
+         else {
+            return false;
+         }
+      }
+
+      template <auto Opts>
+      static consteval size_t count_to_write()
+      {
+         return []<size_t... I>(std::index_sequence<I...>) {
+            return (size_t{} + ... + (should_skip_field<Opts, I>() ? size_t{} : size_t{1}));
+         }(std::make_index_sequence<N>{});
+      }
 
       template <auto Opts, class... Args>
          requires(Opts.structs_as_arrays == true)
       static void op(auto&& value, is_context auto&& ctx, Args&&... args)
       {
          dump<tag::generic_array>(args...);
-         dump_compressed_int<count_to_write>(args...);
+         dump_compressed_int<count_to_write<Opts>()>(args...);
 
          [[maybe_unused]] decltype(auto) t = [&]() -> decltype(auto) {
             if constexpr (reflectable<T>) {
@@ -820,9 +846,7 @@ namespace glz
          }();
 
          for_each<N>([&]<size_t I>() {
-            using val_t = field_t<T, I>;
-
-            if constexpr (std::same_as<val_t, hidden> || std::same_as<val_t, skip>) {
+            if constexpr (should_skip_field<Opts, I>()) {
                return;
             }
             else {
@@ -844,7 +868,7 @@ namespace glz
             constexpr uint8_t type = 0; // string key
             constexpr uint8_t tag = tag::object | type;
             dump_type(tag, args...);
-            dump_compressed_int<count_to_write>(args...);
+            dump_compressed_int<count_to_write<Options>()>(args...);
          }
          constexpr auto Opts = opening_handled_off<Options>();
 
@@ -858,14 +882,12 @@ namespace glz
          }();
 
          for_each<N>([&]<size_t I>() {
-            using val_t = field_t<T, I>;
-
-            if constexpr (std::same_as<val_t, hidden> || std::same_as<val_t, skip>) {
+            if constexpr (should_skip_field<Options, I>()) {
                return;
             }
             else {
                static constexpr sv key = reflect<T>::keys[I];
-               serialize<BEVE>::no_header<Opts>(key, ctx, args...);
+               to<BEVE, std::remove_cvref_t<decltype(key)>>::template no_header_cx<key.size()>(key, ctx, args...);
 
                decltype(auto) member = [&]() -> decltype(auto) {
                   if constexpr (reflectable<T>) {

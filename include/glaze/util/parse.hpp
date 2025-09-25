@@ -116,6 +116,20 @@ namespace glz
       return t;
    }();
 
+   inline constexpr std::array<uint16_t, 256> char_escape_table = [] {
+      auto combine = [](const char chars[2]) -> uint16_t { return uint16_t(chars[0]) | (uint16_t(chars[1]) << 8); };
+
+      std::array<uint16_t, 256> t{};
+      t['\b'] = combine(R"(\b)");
+      t['\t'] = combine(R"(\t)");
+      t['\n'] = combine(R"(\n)");
+      t['\f'] = combine(R"(\f)");
+      t['\r'] = combine(R"(\r)");
+      t['\"'] = combine(R"(\")");
+      t['\\'] = combine(R"(\\)");
+      return t;
+   }();
+
    consteval uint32_t repeat_byte4(const auto repeat) { return uint32_t(0x01010101u) * uint8_t(repeat); }
 
    consteval uint64_t repeat_byte8(const uint8_t repeat) { return 0x0101010101010101ull * repeat; }

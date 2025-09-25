@@ -26,7 +26,7 @@ int main() {
     std::string input = R"({"age":25,"name":"Bob","height":6.1})";
     Person new_person{};
     auto error = glz::read_json(new_person, input);
-    if (!error) {
+    if (error) {
        std::string error_msg = glz::format_error(error, input);
        std::cout << error_msg << std::endl;
     }

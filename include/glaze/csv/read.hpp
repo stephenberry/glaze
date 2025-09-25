@@ -237,6 +237,40 @@ namespace glz
             return;
          }
 
+         auto start = it;
+
+         // Skip to end of field (comma, newline, or end)
+         while (it != end && *it != ',' && *it != '\n' && *it != '\r') {
+            ++it;
+         }
+
+         const auto field_size = static_cast<size_t>(it - start);
+
+         if (field_size == 0) {
+            // Empty field defaults to false
+            value = false;
+            return;
+         }
+
+         // Try to parse as string boolean first
+         if (field_size == 4) {
+            if ((start[0] == 't' || start[0] == 'T') && (start[1] == 'r' || start[1] == 'R') &&
+                (start[2] == 'u' || start[2] == 'U') && (start[3] == 'e' || start[3] == 'E')) {
+               value = true;
+               return;
+            }
+         }
+         else if (field_size == 5) {
+            if ((start[0] == 'f' || start[0] == 'F') && (start[1] == 'a' || start[1] == 'A') &&
+                (start[2] == 'l' || start[2] == 'L') && (start[3] == 's' || start[3] == 'S') &&
+                (start[4] == 'e' || start[4] == 'E')) {
+               value = false;
+               return;
+            }
+         }
+
+         // Fall back to numeric parsing (0/1)
+         it = start; // Reset iterator for numeric parsing
          uint64_t temp;
          if (not glz::atoi(temp, it, end)) [[unlikely]] {
             ctx.error = error_code::expected_true_or_false;
@@ -253,6 +287,346 @@ namespace glz
       static void op(auto&& value, is_context auto&& ctx, It&& it, auto&& end)
       {
          parse<CSV>::op<Opts>(value.emplace_back(), ctx, it, end);
+      }
+   };
+
+   // Utility to quickly count cells in a row for pre-allocation
+   template <class It>
+   inline size_t count_csv_cells(It start, It end) noexcept
+   {
+      if (start == end) {
+         return 0;
+      }
+
+      size_t count = 1; // At least one cell if non-empty
+      bool in_quotes = false;
+
+      while (start != end) {
+         if (*start == '"') {
+            in_quotes = !in_quotes;
+         }
+         else if (*start == ',' && !in_quotes) {
+            ++count;
+         }
+         else if ((*start == '\n' || *start == '\r') && !in_quotes) {
+            break;
+         }
+         ++start;
+      }
+
+      return count;
+   }
+
+   // Specialization for 2D arrays (e.g., std::vector<std::vector<T>>)
+   template <readable_array_t T>
+      requires(readable_array_t<typename T::value_type>)
+   struct from<CSV, T>
+   {
+      using Row = typename T::value_type;
+      using Value = typename Row::value_type;
+
+      template <auto Opts, class It>
+      static void op(auto&& value, is_context auto&& ctx, It&& it, auto&& end)
+      {
+         // Clear existing data if not appending (only for resizable containers)
+         if constexpr (!Opts.append_arrays && resizable<T>) {
+            value.clear();
+         }
+
+         // Handle column-wise layout
+         if constexpr (check_layout(Opts) == colwise) {
+            // Column-wise reading: transpose the data as we read
+            // First, read all data into a temporary structure
+            std::vector<std::vector<Value>> temp_cols;
+
+            // Skip header row if configured
+            if constexpr (requires { Opts.skip_header_row; }) {
+               if constexpr (Opts.skip_header_row) {
+                  while (it != end && *it != '\n' && *it != '\r') {
+                     ++it;
+                  }
+                  if (it != end) {
+                     if (*it == '\r') {
+                        ++it;
+                        if (it != end && *it == '\n') {
+                           ++it;
+                        }
+                     }
+                     else if (*it == '\n') {
+                        ++it;
+                     }
+                  }
+               }
+            }
+
+            // Read the CSV data row by row, but store column by column
+            while (it != end) {
+               size_t col_index = 0;
+
+               while (it != end) {
+                  // Ensure we have enough columns
+                  if (col_index >= temp_cols.size()) {
+                     temp_cols.resize(col_index + 1);
+                  }
+
+                  // Parse the value
+                  Value cell_value{};
+                  parse<CSV>::op<Opts>(cell_value, ctx, it, end);
+
+                  if (bool(ctx.error)) [[unlikely]] {
+                     return;
+                  }
+
+                  // Add to the appropriate column
+                  temp_cols[col_index].push_back(std::move(cell_value));
+                  ++col_index;
+
+                  // Check for field separator or end of row
+                  if (it != end) {
+                     if (*it == ',') {
+                        ++it;
+                        // Handle trailing comma
+                        if (it == end || *it == '\n' || *it == '\r') {
+                           // Add empty value for trailing comma
+                           if (col_index >= temp_cols.size()) {
+                              temp_cols.resize(col_index + 1);
+                           }
+                           Value empty_value{};
+                           temp_cols[col_index].push_back(std::move(empty_value));
+                           break;
+                        }
+                     }
+                     else if (*it == '\n' || *it == '\r') {
+                        break;
+                     }
+                  }
+                  else {
+                     break;
+                  }
+               }
+
+               // Handle line endings
+               if (it != end) {
+                  if (*it == '\r') {
+                     ++it;
+                     if (it != end && *it == '\n') {
+                        ++it;
+                     }
+                  }
+                  else if (*it == '\n') {
+                     ++it;
+                  }
+               }
+            }
+
+            // Now transpose temp_cols into value
+            // Each column becomes a row in the output
+            for (auto& col : temp_cols) {
+               Row row{};
+
+               // Resize if it's a fixed-size container
+               if constexpr (requires { row.resize(col.size()); }) {
+                  row.resize(col.size());
+                  for (size_t i = 0; i < col.size(); ++i) {
+                     row[i] = std::move(col[i]);
+                  }
+               }
+               else if constexpr (emplace_backable<Row>) {
+                  for (auto& val : col) {
+                     row.emplace_back(std::move(val));
+                  }
+               }
+               else if constexpr (requires { row.push_back(Value{}); }) {
+                  for (auto& val : col) {
+                     row.push_back(std::move(val));
+                  }
+               }
+               else {
+                  static_assert(false_v<Row>, "Row type must support resizing or pushing");
+               }
+
+               // Add the row to the output
+               if constexpr (emplace_backable<T>) {
+                  value.emplace_back(std::move(row));
+               }
+               else if constexpr (requires { value.push_back(row); }) {
+                  value.push_back(std::move(row));
+               }
+               else if constexpr (resizable<T>) {
+                  // For fixed-size outer containers
+                  if (value.size() <= temp_cols.size()) {
+                     value.resize(temp_cols.size());
+                  }
+                  value[temp_cols.size() - 1] = std::move(row);
+               }
+               else {
+                  static_assert(false_v<T>, "Container must support emplace_back, push_back, or resizing");
+               }
+            }
+
+            return; // Exit early for column-wise
+         }
+
+         // Handle header row if skip_header_row is enabled
+         if constexpr (requires { Opts.skip_header_row; }) {
+            if constexpr (Opts.skip_header_row) {
+               // Skip the first row
+               while (it != end && *it != '\n' && *it != '\r') {
+                  ++it;
+               }
+               if (it != end) {
+                  if (*it == '\r') {
+                     ++it;
+                     if (it != end && *it == '\n') {
+                        ++it;
+                     }
+                  }
+                  else if (*it == '\n') {
+                     ++it;
+                  }
+               }
+            }
+         }
+
+         // Parse data rows
+         while (it != end) {
+            Row row{};
+
+            // Pre-allocate row capacity for better performance
+            if constexpr (resizable<Row>) {
+               auto row_start = it;
+               // Find end of current row to count cells
+               auto row_end = it;
+               while (row_end != end && *row_end != '\n' && *row_end != '\r') {
+                  ++row_end;
+               }
+               const auto estimated_cells = count_csv_cells(row_start, row_end);
+               if (estimated_cells > 0) {
+                  row.reserve(estimated_cells);
+               }
+            }
+
+            // Parse cells in current row
+            size_t cell_index = 0;
+            bool row_has_data = false;
+
+            while (it != end && *it != '\n' && *it != '\r') {
+               Value cell_value{};
+               parse<CSV>::op<Opts>(cell_value, ctx, it, end);
+
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
+
+               // Handle different row container types
+               if constexpr (emplace_backable<Row>) {
+                  // Resizable containers like std::vector
+                  row.emplace_back(std::move(cell_value));
+               }
+               else if constexpr (requires { row.push_back(cell_value); }) {
+                  // Containers with push_back but not emplace_back
+                  row.push_back(std::move(cell_value));
+               }
+               else if constexpr (requires { row[cell_index] = cell_value; }) {
+                  // Fixed-size containers like std::array
+                  if (cell_index < row.size()) {
+                     row[cell_index] = std::move(cell_value);
+                  }
+                  else {
+                     // Index out of bounds for fixed-size container
+                     ctx.error = error_code::syntax_error;
+                     return;
+                  }
+               }
+               else {
+                  // Unsupported row container type
+                  static_assert(
+                     emplace_backable<Row> || requires { row.push_back(cell_value); } ||
+                        requires { row[cell_index] = cell_value; },
+                     "Row container must support emplace_back, push_back, or indexed assignment");
+               }
+
+               ++cell_index;
+               row_has_data = true;
+
+               // Check for end of row or more cells
+               if (it == end) {
+                  break;
+               }
+
+               if (*it == ',') {
+                  ++it;
+                  // Handle trailing comma by adding empty value
+                  if (it == end || *it == '\n' || *it == '\r') {
+                     Value empty_value{};
+                     if constexpr (emplace_backable<Row>) {
+                        row.emplace_back(std::move(empty_value));
+                     }
+                     else if constexpr (requires { row.push_back(empty_value); }) {
+                        row.push_back(std::move(empty_value));
+                     }
+                     else if constexpr (requires { row[cell_index] = empty_value; }) {
+                        if (cell_index < row.size()) {
+                           row[cell_index] = std::move(empty_value);
+                        }
+                        else {
+                           ctx.error = error_code::syntax_error;
+                           return;
+                        }
+                     }
+                     ++cell_index;
+                  }
+                  continue;
+               }
+               else if (*it == '\r' || *it == '\n') {
+                  break;
+               }
+               else [[unlikely]] {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
+            }
+
+            // Only add row if it has data
+            if (row_has_data) {
+               if constexpr (emplace_backable<T>) {
+                  value.emplace_back(std::move(row));
+               }
+               else if constexpr (requires { value.push_back(row); }) {
+                  value.push_back(std::move(row));
+               }
+               else if constexpr (requires { value[value.size()] = row; }) {
+                  // This shouldn't happen for typical 2D containers, but handle it
+                  static_assert(resizable<T>, "Outer container must be resizable for CSV parsing");
+               }
+               else {
+                  static_assert(
+                     emplace_backable<T> || requires { value.push_back(row); },
+                     "Outer container must support emplace_back or push_back");
+               }
+            }
+
+            // Handle line endings
+            if (it != end) {
+               if (csv_new_line(ctx, it, end)) [[unlikely]] {
+                  break;
+               }
+            }
+         }
+
+         // Validate rectangular shape if required
+         if constexpr (requires { Opts.validate_rectangular; } && Opts.validate_rectangular) {
+            if (!value.empty()) {
+               const auto expected_cols = value[0].size();
+               for (size_t i = 1; i < value.size(); ++i) {
+                  if (value[i].size() != expected_cols) {
+                     ctx.error = error_code::constraint_violated;
+                     ctx.custom_error_message = "non-rectangular CSV rows";
+                     return;
+                  }
+               }
+            }
+         }
       }
    };
 
@@ -360,10 +734,24 @@ namespace glz
                   size_t col = 0;
                   while (it != end) {
                      if (col < member.size()) [[likely]] {
-                        parse<CSV>::op<Opts>(member[col][csv_index], ctx, it, end);
+                        auto& element = member[col];
+                        if (csv_index < element.size()) [[likely]] {
+                           parse<CSV>::op<Opts>(element[csv_index], ctx, it, end);
+                        }
+                        else [[unlikely]] {
+                           ctx.error = error_code::syntax_error;
+                           return;
+                        }
                      }
                      else [[unlikely]] {
-                        parse<CSV>::op<Opts>(member.emplace_back()[csv_index], ctx, it, end);
+                        auto& element = member.emplace_back();
+                        if (csv_index < element.size()) [[likely]] {
+                           parse<CSV>::op<Opts>(element[csv_index], ctx, it, end);
+                        }
+                        else [[unlikely]] {
+                           ctx.error = error_code::syntax_error;
+                           return;
+                        }
                      }
 
                      if (it == end) break;
@@ -444,10 +832,24 @@ namespace glz
                   if constexpr (fixed_array_value_t<M> && emplace_backable<M>) {
                      const auto index = keys[i].second;
                      if (row < member.size()) [[likely]] {
-                        parse<CSV>::op<Opts>(member[row][index], ctx, it, end);
+                        auto& element = member[row];
+                        if (index < element.size()) [[likely]] {
+                           parse<CSV>::op<Opts>(element[index], ctx, it, end);
+                        }
+                        else [[unlikely]] {
+                           ctx.error = error_code::syntax_error;
+                           return;
+                        }
                      }
                      else [[unlikely]] {
-                        parse<CSV>::op<Opts>(member.emplace_back()[index], ctx, it, end);
+                        auto& element = member.emplace_back();
+                        if (index < element.size()) [[likely]] {
+                           parse<CSV>::op<Opts>(element[index], ctx, it, end);
+                        }
+                        else [[unlikely]] {
+                           ctx.error = error_code::syntax_error;
+                           return;
+                        }
                      }
                   }
                   else {
@@ -605,10 +1007,104 @@ namespace glz
          }
          else // rowwise layout
          {
-            // Row-wise isn't a typical format for vector of structs in CSV
-            // But we could implement if needed
-            ctx.error = error_code::feature_not_supported;
-            return;
+            // Row-wise: each row is a complete struct
+            // Skip header row if configured
+            if constexpr (Opts.skip_header_row) {
+               while (it != end && *it != '\n' && *it != '\r') {
+                  ++it;
+               }
+               if (it != end) {
+                  if (*it == '\r') {
+                     ++it;
+                     if (it != end && *it == '\n') {
+                        ++it;
+                     }
+                  }
+                  else if (*it == '\n') {
+                     ++it;
+                  }
+               }
+            }
+
+            // When not using headers, we assume fields are in declaration order
+            if constexpr (!check_use_headers(Opts)) {
+               // Skip leading whitespace and empty lines
+               while (it != end && (*it == ' ' || *it == '\t' || *it == '\n' || *it == '\r')) {
+                  ++it;
+               }
+
+               // If we've consumed all input (empty CSV), return successfully
+               if (it == end) {
+                  return;
+               }
+
+               while (it != end) {
+                  U struct_value{};
+
+                  // Parse each field in declaration order
+                  for_each<N>([&]<size_t I>() {
+                     if (bool(ctx.error)) [[unlikely]] {
+                        return;
+                     }
+
+                     decltype(auto) member = [&]() -> decltype(auto) {
+                        if constexpr (reflectable<U>) {
+                           return get_member(struct_value, get<I>(to_tie(struct_value)));
+                        }
+                        else {
+                           return get_member(struct_value, get<I>(reflect<U>::values));
+                        }
+                     }();
+
+                     parse<CSV>::op<Opts>(member, ctx, it, end);
+
+                     if (bool(ctx.error)) [[unlikely]] {
+                        return;
+                     }
+
+                     // Handle field separator
+                     if constexpr (I < N - 1) {
+                        if (it != end && *it == ',') {
+                           ++it;
+                        }
+                        else if (it == end || *it == '\n' || *it == '\r') {
+                           // Row ended early - not enough fields
+                           ctx.error = error_code::syntax_error;
+                           return;
+                        }
+                     }
+                  });
+
+                  if (bool(ctx.error)) [[unlikely]] {
+                     return;
+                  }
+
+                  value.push_back(std::move(struct_value));
+
+                  // Handle row terminator
+                  if (it != end) {
+                     if (*it == '\r') {
+                        ++it;
+                        if (it != end && *it == '\n') {
+                           ++it;
+                        }
+                     }
+                     else if (*it == '\n') {
+                        ++it;
+                     }
+                     else if (*it == ',') {
+                        // Extra fields in row - error
+                        ctx.error = error_code::syntax_error;
+                        return;
+                     }
+                  }
+               }
+            }
+            else {
+               // With headers - not yet implemented for rowwise
+               ctx.error = error_code::feature_not_supported;
+               return;
+            }
          }
       }
    };
@@ -652,7 +1148,9 @@ namespace glz
                const auto index = decode_hash_with_size<CSV, T, HashInfo, HashInfo.type>::op(
                   key.data(), key.data() + key.size(), key.size());
 
-               if (index < N) [[likely]] {
+               // Verify that the decoded index actually matches the key string to avoid
+               // accidental matches from non-member inputs (e.g., fuzzed data).
+               if (index < N && reflect<T>::keys[index] == key) [[likely]] {
                   visit<N>(
                      [&]<size_t I>() {
                         decltype(auto) member = [&]() -> decltype(auto) {
@@ -669,10 +1167,24 @@ namespace glz
                            size_t col = 0;
                            while (it != end) {
                               if (col < member.size()) [[likely]] {
-                                 parse<CSV>::op<Opts>(member[col][csv_index], ctx, it, end);
+                                 auto& element = member[col];
+                                 if (csv_index < element.size()) [[likely]] {
+                                    parse<CSV>::op<Opts>(element[csv_index], ctx, it, end);
+                                 }
+                                 else [[unlikely]] {
+                                    ctx.error = error_code::syntax_error;
+                                    return;
+                                 }
                               }
                               else [[unlikely]] {
-                                 parse<CSV>::op<Opts>(member.emplace_back()[csv_index], ctx, it, end);
+                                 auto& element = member.emplace_back();
+                                 if (csv_index < element.size()) [[likely]] {
+                                    parse<CSV>::op<Opts>(element[csv_index], ctx, it, end);
+                                 }
+                                 else [[unlikely]] {
+                                    ctx.error = error_code::syntax_error;
+                                    return;
+                                 }
                               }
 
                               if (it == end) break;

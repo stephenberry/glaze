@@ -744,4 +744,464 @@ suite nested_array_variant_tests = [] {
    };
 };
 
+// Define structs and variant for tag validation tests
+namespace tag_validation
+{
+   struct Person
+   {
+      std::string name;
+      int age;
+   };
+
+   struct Animal
+   {
+      std::string species;
+      float weight;
+   };
+
+   struct Vehicle
+   {
+      std::string model;
+      int wheels;
+   };
+
+   using EntityVariant = std::variant<Person, Animal, Vehicle>;
+}
+
+template <>
+struct glz::meta<tag_validation::EntityVariant>
+{
+   static constexpr std::string_view tag = "type";
+   static constexpr auto ids = std::array{"person", "animal", "vehicle"};
+};
+
+namespace tag_validation2
+{
+   struct Person
+   {
+      std::string name;
+      int age;
+   };
+
+   struct Animal
+   {
+      std::string species;
+      float weight;
+   };
+
+   using TaggedVariant = std::variant<Person, Animal>;
+}
+
+template <>
+struct glz::meta<tag_validation2::TaggedVariant>
+{
+   static constexpr std::string_view tag = "type";
+   static constexpr auto ids = std::array{"person", "animal"};
+};
+
+namespace edge_case_tests
+{
+   struct Empty
+   {};
+   struct SingleField
+   {
+      int value;
+   };
+   struct TwoFields
+   {
+      int a;
+      int b;
+   };
+
+   struct Car
+   {
+      std::string brand;
+      int year;
+   };
+
+   struct Bike
+   {
+      std::string model;
+      int gears;
+   };
+}
+
+namespace perf_test
+{
+   struct SimpleA
+   {
+      int unique_a_field;
+   };
+
+   struct SimpleB
+   {
+      int unique_b_field;
+   };
+}
+
+suite variant_tag_validation = [] {
+   "tagged variant - tag/field mismatch detection"_test = [] {
+      using namespace tag_validation;
+
+      // Verify tag metadata is defined
+      static_assert(glz::meta<EntityVariant>::tag == "type");
+
+      // Test 1: Tag at beginning with correct fields (should work)
+      {
+         EntityVariant e;
+         std::string json = R"({"type":"animal","species":"Lion","weight":190.5})";
+         auto ec = glz::read_json(e, json);
+         expect(!ec) << glz::format_error(ec, json);
+         expect(e.index() == 1);
+         auto& animal = std::get<tag_validation::Animal>(e);
+         expect(animal.species == "Lion");
+         expect(animal.weight == 190.5f);
+      }
+
+      // Test 2: Tag in middle says person but fields are for animal (should error)
+      {
+         EntityVariant e;
+         std::string json = R"({"species":"Lion","type":"person","weight":190.5})";
+         auto ec = glz::read_json(e, json);
+         expect(ec == glz::error_code::no_matching_variant_type);
+      }
+
+      // Test 3: Tag at end says vehicle but fields are for animal (should error)
+      {
+         EntityVariant e;
+         std::string json = R"({"species":"Tiger","weight":220.0,"type":"vehicle"})";
+         auto ec = glz::read_json(e, json);
+         expect(ec == glz::error_code::no_matching_variant_type);
+      }
+
+      // Test 4: Person fields but tag says animal (should error)
+      {
+         EntityVariant e;
+         std::string json = R"({"name":"John","age":30,"type":"animal"})";
+         auto ec = glz::read_json(e, json);
+         expect(ec == glz::error_code::no_matching_variant_type);
+      }
+
+      // Test 5: No tag present, rely on field deduction (should work)
+      {
+         EntityVariant e;
+         std::string json = R"({"species":"Elephant","weight":5000.0})";
+         auto ec = glz::read_json(e, json);
+         expect(!ec) << glz::format_error(ec, json);
+         expect(e.index() == 1);
+         auto& animal = std::get<tag_validation::Animal>(e);
+         expect(animal.species == "Elephant");
+         expect(animal.weight == 5000.0f);
+      }
+
+      // Test 6: Tag matches fields (should work)
+      {
+         EntityVariant e;
+         std::string json = R"({"species":"Cat","type":"animal","weight":4.5})";
+         auto ec = glz::read_json(e, json);
+         expect(!ec) << glz::format_error(ec, json);
+         expect(e.index() == 1);
+         auto& animal = std::get<tag_validation::Animal>(e);
+         expect(animal.species == "Cat");
+         expect(animal.weight == 4.5f);
+      }
+
+      // Test 7: Invalid tag value (should error)
+      {
+         EntityVariant e;
+         std::string json = R"({"type":"invalid","species":"Dog","weight":25.0})";
+         auto ec = glz::read_json(e, json);
+         expect(ec == glz::error_code::no_matching_variant_type);
+      }
+
+      // Test 8: Tag first with mismatched fields (should error due to unknown keys)
+      {
+         EntityVariant e;
+         std::string json = R"({"type":"person","species":"Lion","weight":190.5})";
+         auto ec = glz::read<glz::opts{.error_on_unknown_keys = true}>(e, json);
+         expect(ec == glz::error_code::unknown_key);
+      }
+   };
+
+   "tagged variant - edge cases"_test = [] {
+      using namespace edge_case_tests;
+      using TestVariant = std::variant<Empty, SingleField, TwoFields>;
+
+      // Test with empty object
+      {
+         TestVariant v;
+         std::string json = R"({})";
+         auto ec = glz::read_json(v, json);
+         expect(!ec) << glz::format_error(ec, json);
+         expect(v.index() == 0); // Should select Empty
+      }
+
+      // Test with partial field match
+      {
+         TestVariant v;
+         std::string json = R"({"value":42})";
+         auto ec = glz::read_json(v, json);
+         expect(!ec) << glz::format_error(ec, json);
+         expect(v.index() == 1); // Should select SingleField
+         expect(std::get<SingleField>(v).value == 42);
+      }
+
+      // Test with ambiguous fields that match multiple types
+      {
+         TestVariant v;
+         std::string json = R"({"a":1})";
+         auto ec = glz::read_json(v, json);
+         expect(!ec) << glz::format_error(ec, json);
+         expect(v.index() == 2); // Should select TwoFields (has field 'a')
+      }
+   };
+
+   "tagged variant - minified option"_test = [] {
+      using namespace tag_validation2;
+
+      // Test with minified option and tag mismatch
+      {
+         TaggedVariant v;
+         auto ec = glz::read<glz::opts{.minified = true}>(v, R"({"species":"Lion","type":"person","weight":190.5})");
+         expect(ec == glz::error_code::no_matching_variant_type);
+      }
+
+      // Test with minified option and matching tag
+      {
+         TaggedVariant v;
+         auto ec = glz::read<glz::opts{.minified = true}>(v, R"({"species":"Lion","type":"animal","weight":190.5})");
+         expect(!ec);
+         expect(v.index() == 1);
+      }
+   };
+
+   "untagged variant - field deduction only"_test = [] {
+      using namespace edge_case_tests;
+      // Variant without tag metadata
+      using UntaggedVariant = std::variant<Car, Bike>;
+
+      // Should use field deduction
+      {
+         UntaggedVariant v;
+         std::string json = R"({"brand":"Toyota","year":2022})";
+         auto ec = glz::read_json(v, json);
+         expect(!ec) << glz::format_error(ec, json);
+         expect(v.index() == 0);
+         auto& car = std::get<Car>(v);
+         expect(car.brand == "Toyota");
+         expect(car.year == 2022);
+      }
+
+      {
+         UntaggedVariant v;
+         std::string json = R"({"model":"Mountain","gears":21})";
+         auto ec = glz::read_json(v, json);
+         expect(!ec) << glz::format_error(ec, json);
+         expect(v.index() == 1);
+         auto& bike = std::get<Bike>(v);
+         expect(bike.model == "Mountain");
+         expect(bike.gears == 21);
+      }
+   };
+
+   // Test that untagged variants still short-circuit for performance
+   "performance_short_circuit"_test = [] {
+      using PerfVariant = std::variant<perf_test::SimpleA, perf_test::SimpleB>;
+
+      // Test immediate selection when field narrows to single type
+      {
+         PerfVariant v;
+         // Only unique_a_field matches SimpleA, should select immediately
+         std::string json = R"({"unique_a_field":42})";
+         auto ec = glz::read_json(v, json);
+         expect(!ec) << glz::format_error(ec, json);
+         expect(v.index() == 0);
+         expect(std::get<perf_test::SimpleA>(v).unique_a_field == 42);
+      }
+
+      {
+         PerfVariant v;
+         // Only unique_b_field matches SimpleB, should select immediately
+         std::string json = R"({"unique_b_field":99})";
+         auto ec = glz::read_json(v, json);
+         expect(!ec) << glz::format_error(ec, json);
+         expect(v.index() == 1);
+         expect(std::get<perf_test::SimpleB>(v).unique_b_field == 99);
+      }
+   };
+};
+
+// Types for has_reflect concept testing (defined outside suite for template specializations)
+namespace has_reflect_test
+{
+   struct SimpleAggregate
+   {
+      int x;
+      double y;
+   };
+
+   struct WithObjectMeta
+   {
+      int a;
+      double b;
+   };
+
+   struct WithArrayMeta
+   {
+      int x;
+      int y;
+      int z;
+   };
+
+   enum class TestEnumMeta { A, B, C };
+
+   struct NonAggregate
+   {
+      NonAggregate() {} // Has constructor, so not aggregate
+      int x;
+   };
+
+   struct PrivateMember
+   {
+     private:
+      [[maybe_unused]] int x;
+
+     public:
+      int y;
+   };
+
+   struct EmptyStruct
+   {};
+}
+
+// Add meta specializations for testing
+template <>
+struct glz::meta<has_reflect_test::WithObjectMeta>
+{
+   using T = has_reflect_test::WithObjectMeta;
+   static constexpr auto value = object(&T::a, &T::b);
+};
+
+template <>
+struct glz::meta<has_reflect_test::WithArrayMeta>
+{
+   using T = has_reflect_test::WithArrayMeta;
+   static constexpr auto value = array(&T::x, &T::y, &T::z);
+};
+
+template <>
+struct glz::meta<has_reflect_test::TestEnumMeta>
+{
+   using enum has_reflect_test::TestEnumMeta;
+   static constexpr auto value = enumerate(A, B, C);
+};
+
+// Test suite for has_reflect concept
+suite has_reflect_concept_tests = [] {
+   using namespace has_reflect_test;
+
+   // Test aggregate types (should satisfy both reflectable and has_reflect)
+   static_assert(glz::reflectable<SimpleAggregate>);
+   static_assert(glz::has_reflect<SimpleAggregate>);
+
+   // Test types with glz::meta (should satisfy has_reflect but not reflectable)
+   static_assert(!glz::reflectable<WithObjectMeta>);
+   static_assert(glz::has_reflect<WithObjectMeta>);
+   static_assert(!glz::reflectable<WithArrayMeta>);
+   static_assert(glz::has_reflect<WithArrayMeta>);
+   static_assert(!glz::reflectable<TestEnumMeta>);
+   static_assert(glz::has_reflect<TestEnumMeta>);
+
+   // Test non-reflectable types
+   static_assert(!glz::reflectable<NonAggregate>);
+   static_assert(!glz::has_reflect<NonAggregate>);
+   static_assert(!glz::reflectable<PrivateMember>);
+   static_assert(!glz::has_reflect<PrivateMember>);
+
+   // Test map types (have reflect specialization with size = 0)
+   using TestMap = std::map<std::string, int>;
+   using TestUnorderedMap = std::unordered_map<std::string, double>;
+   static_assert(!glz::reflectable<TestMap>);
+   static_assert(glz::has_reflect<TestMap>);
+   static_assert(!glz::reflectable<TestUnorderedMap>);
+   static_assert(glz::has_reflect<TestUnorderedMap>);
+
+   // Test primitive and standard types (no reflect)
+   static_assert(!glz::reflectable<int>);
+   static_assert(!glz::has_reflect<int>);
+   static_assert(!glz::reflectable<double>);
+   static_assert(!glz::has_reflect<double>);
+   static_assert(!glz::reflectable<std::string>);
+   static_assert(!glz::has_reflect<std::string>);
+   static_assert(!glz::reflectable<std::vector<int>>);
+   static_assert(!glz::has_reflect<std::vector<int>>);
+
+   // Test empty struct
+   static_assert(glz::reflectable<EmptyStruct>);
+   static_assert(glz::has_reflect<EmptyStruct>);
+
+   "has_reflect with aggregate types"_test = [] {
+      // Test that we can use reflect<T>::size for aggregate types
+      constexpr auto aggregate_size = glz::reflect<SimpleAggregate>::size;
+      expect(aggregate_size == 2);
+
+      constexpr auto empty_size = glz::reflect<EmptyStruct>::size;
+      expect(empty_size == 0);
+   };
+
+   "has_reflect with map types"_test = [] {
+      // Maps have reflect specialization with size = 0
+      constexpr auto map_size = glz::reflect<TestMap>::size;
+      expect(map_size == 0);
+
+      constexpr auto umap_size = glz::reflect<TestUnorderedMap>::size;
+      expect(umap_size == 0);
+   };
+
+   "has_reflect with existing test types"_test = [] {
+      // Test with types already defined in this file
+      static_assert(glz::has_reflect<test_type>);
+      static_assert(glz::has_reflect<test_type_meta>);
+      static_assert(glz::has_reflect<a_type>);
+      static_assert(glz::has_reflect<b_type>);
+      static_assert(glz::has_reflect<c_type>);
+
+      constexpr auto test_type_size = glz::reflect<test_type>::size;
+      expect(test_type_size == 2);
+
+      constexpr auto a_type_size = glz::reflect<a_type>::size;
+      expect(a_type_size == 3);
+   };
+};
+
+suite has_reflect_meta_types_tests = [] {
+   using namespace has_reflect_test;
+
+   "has_reflect with glaze_object_t"_test = [] {
+      constexpr auto meta_size = glz::reflect<WithObjectMeta>::size;
+      expect(meta_size == 2);
+
+      // Verify keys are properly set
+      constexpr auto keys = glz::reflect<WithObjectMeta>::keys;
+      expect(keys[0] == "a");
+      expect(keys[1] == "b");
+   };
+
+   "has_reflect with glaze_array_t"_test = [] {
+      constexpr auto array_size = glz::reflect<WithArrayMeta>::size;
+      expect(array_size == 3);
+   };
+
+   "has_reflect with glaze_enum_t"_test = [] {
+      constexpr auto enum_size = glz::reflect<TestEnumMeta>::size;
+      expect(enum_size == 3);
+
+      // Verify enum keys
+      constexpr auto keys = glz::reflect<TestEnumMeta>::keys;
+      expect(keys[0] == "A");
+      expect(keys[1] == "B");
+      expect(keys[2] == "C");
+   };
+};
+
 int main() { return 0; }
