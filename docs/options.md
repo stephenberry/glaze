@@ -115,6 +115,10 @@ The supported, but not default provided options are listed after `glz::opts` and
 bool validate_skipped = false;
 // If full validation should be performed on skipped values
 
+bool write_member_functions = false;
+// Serialize member function pointers referenced in glz::meta instead of skipping them
+// JSON/BEVE/TOML writers skip member function pointers by default for safety
+
 bool validate_trailing_whitespace = false;
 // If, after parsing a value, we want to validate the trailing whitespace
 
