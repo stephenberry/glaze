@@ -11729,6 +11729,20 @@ suite member_function_pointer_serialization = [] {
       expect(not glz::write_json(thing, buffer));
       expect(buffer == R"({"name":"test_item"})") << buffer;
    };
+
+   "member function pointer opt-in write produces legacy output"_test = [] {
+      MemberFunctionThing thing{};
+      thing.name = "test_item";
+
+      struct opts_with_member_functions : glz::opts
+      {
+         bool write_member_functions = true;
+      };
+
+      std::string buffer{};
+      expect(not glz::write<opts_with_member_functions{}>(thing, buffer));
+      expect(buffer == R"({"name":"test_item","description":})") << buffer;
+   };
 };
 
 int main()

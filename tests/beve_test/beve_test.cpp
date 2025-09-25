@@ -2671,6 +2671,24 @@ suite member_function_pointer_beve_serialization = [] {
       expect(not glz::read_beve(output, buffer));
       expect(output.name == input.name);
    };
+
+   "member function pointer opt-in write encodes description key"_test = [] {
+      MemberFunctionThingBeve input{};
+      input.name = "test_item";
+
+      std::string buffer_default{};
+      expect(not glz::write_beve(input, buffer_default));
+      expect(buffer_default.find("description") == std::string::npos);
+
+      struct opts_with_member_functions : glz::opts
+      {
+         bool write_member_functions = true;
+      };
+
+      std::string buffer_opt_in{};
+      expect(not glz::write<glz::set_beve<opts_with_member_functions{}>()>(input, buffer_opt_in));
+      expect(buffer_opt_in.find("description") != std::string::npos);
+   };
 };
 
 int main()

@@ -804,28 +804,37 @@ namespace glz
    struct to<BEVE, T> final
    {
       static constexpr auto N = reflect<T>::size;
-      static constexpr size_t count_to_write = [] {
-         size_t count{};
-         for_each<N>([&]<size_t I>() {
-            using V = field_t<T, I>;
 
-            if constexpr (std::same_as<V, hidden> || std::same_as<V, skip> || is_member_function_pointer<V>) {
-               // do not serialize
-               // not serializing is_includer<V> would be a breaking change
-            }
-            else {
-               ++count;
-            }
-         });
-         return count;
-      }();
+      template <auto Opts, size_t I>
+      static consteval bool should_skip_field()
+      {
+         using V = field_t<T, I>;
+
+         if constexpr (std::same_as<V, hidden> || std::same_as<V, skip>) {
+            return true;
+         }
+         else if constexpr (is_member_function_pointer<V>) {
+            return !check_write_member_functions(Opts);
+         }
+         else {
+            return false;
+         }
+      }
+
+      template <auto Opts>
+      static consteval size_t count_to_write()
+      {
+         return []<size_t... I>(std::index_sequence<I...>) {
+            return (size_t{} + ... + (should_skip_field<Opts, I>() ? size_t{} : size_t{1}));
+         }(std::make_index_sequence<N>{});
+      }
 
       template <auto Opts, class... Args>
          requires(Opts.structs_as_arrays == true)
       static void op(auto&& value, is_context auto&& ctx, Args&&... args)
       {
          dump<tag::generic_array>(args...);
-         dump_compressed_int<count_to_write>(args...);
+         dump_compressed_int<count_to_write<Opts>()>(args...);
 
          [[maybe_unused]] decltype(auto) t = [&]() -> decltype(auto) {
             if constexpr (reflectable<T>) {
@@ -837,10 +846,7 @@ namespace glz
          }();
 
          for_each<N>([&]<size_t I>() {
-            using val_t = field_t<T, I>;
-
-            if constexpr (std::same_as<val_t, hidden> || std::same_as<val_t, skip> ||
-                          is_member_function_pointer<val_t>) {
+            if constexpr (should_skip_field<Opts, I>()) {
                return;
             }
             else {
@@ -862,7 +868,7 @@ namespace glz
             constexpr uint8_t type = 0; // string key
             constexpr uint8_t tag = tag::object | type;
             dump_type(tag, args...);
-            dump_compressed_int<count_to_write>(args...);
+            dump_compressed_int<count_to_write<Options>()>(args...);
          }
          constexpr auto Opts = opening_handled_off<Options>();
 
@@ -876,10 +882,7 @@ namespace glz
          }();
 
          for_each<N>([&]<size_t I>() {
-            using val_t = field_t<T, I>;
-
-            if constexpr (std::same_as<val_t, hidden> || std::same_as<val_t, skip> ||
-                          is_member_function_pointer<val_t>) {
+            if constexpr (should_skip_field<Options, I>()) {
                return;
             }
             else {

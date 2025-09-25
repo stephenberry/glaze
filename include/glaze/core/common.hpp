@@ -337,8 +337,7 @@ namespace glz
       std::same_as<T, std::nullptr_t> || std::convertible_to<T, std::monostate> || std::same_as<T, std::nullopt_t>;
 
    template <class T>
-   concept always_skipped = is_includer<T> || std::same_as<T, hidden> || std::same_as<T, skip> ||
-      is_member_function_pointer<T>;
+   concept always_skipped = is_includer<T> || std::same_as<T, hidden> || std::same_as<T, skip>;
 
    template <class T>
    concept nullable_t = !meta_value_t<T> && !str_t<T> && requires(T t) {
