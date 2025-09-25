@@ -8,9 +8,9 @@
 
 #include "glaze/json/write.hpp"
 #include "glaze/net/http_server.hpp"
-#include "ut/ut.hpp"
+#include "boost/ut.hpp"
 
-using namespace ut;
+using namespace boost::ut;
 using namespace glz;
 
 namespace test_http_client

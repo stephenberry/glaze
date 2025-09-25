@@ -7,9 +7,9 @@
 #include <string>
 #include <vector>
 
-#include "ut/ut.hpp"
+#include "boost/ut.hpp"
 
-using namespace ut;
+using namespace boost::ut;
 
 // Platform-specific dynamic library loading
 #ifdef _WIN32
@@ -156,7 +156,7 @@ StatisticsPlugin global_stats_plugin;
 
 int main()
 {
-   using namespace ut;
+   using namespace boost::ut;
 
    //=========================================================================
    // SIMPLE DYNAMIC LOADING TESTS

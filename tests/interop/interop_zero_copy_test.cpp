@@ -7,9 +7,9 @@
 #include <vector>
 
 #include "glaze/interop/interop.hpp"
-#include "ut/ut.hpp"
+#include "boost/ut.hpp"
 
-using namespace ut;
+using namespace boost::ut;
 
 // Test structure with various vector types
 struct VectorTestStruct
@@ -41,7 +41,7 @@ struct glz::meta<VectorTestStruct>
 
 int main()
 {
-   using namespace ut;
+   using namespace boost::ut;
 
    "zero-copy vector view"_test = [] {
       VectorTestStruct test_obj;

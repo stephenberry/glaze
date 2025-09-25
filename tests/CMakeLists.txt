@@ -2,10 +2,12 @@ include(FetchContent)
 
 FetchContent_Declare(
   ut
-  GIT_REPOSITORY https://github.com/openalgz/ut
-  GIT_TAG v1.0.0
+  GIT_REPOSITORY https://github.com/boost-ext/ut
+  GIT_TAG v2.3.1
   GIT_SHALLOW TRUE
 )
+
+FetchContent_MakeAvailable(ut)
 
 message(STATUS "Fetching dependencies...")
 set_directory_properties(PROPERTIES EXCLUDE_FROM_ALL TRUE)
@@ -20,7 +22,7 @@ add_code_coverage_all_targets()
 
 add_library(glz_test_common INTERFACE)
 target_compile_features(glz_test_common INTERFACE cxx_std_23)
-target_link_libraries(glz_test_common INTERFACE ut::ut glaze::glaze glz_asio)
+target_link_libraries(glz_test_common INTERFACE Boost::ut glaze::glaze glz_asio)
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     target_compile_options(glz_test_common INTERFACE -fno-exceptions -fno-rtti)
     if(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
@@ -46,7 +48,7 @@ endif()
 
 add_library(glz_test_exceptions INTERFACE)
 target_compile_features(glz_test_exceptions INTERFACE cxx_std_23)
-target_link_libraries(glz_test_exceptions INTERFACE ut::ut glaze::glaze glz_asio)
+target_link_libraries(glz_test_exceptions INTERFACE Boost::ut glaze::glaze glz_asio)
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     target_compile_options(glz_test_exceptions INTERFACE)
     target_compile_options(glz_test_exceptions INTERFACE -Wall -Wextra -pedantic)

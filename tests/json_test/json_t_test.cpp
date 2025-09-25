@@ -2,9 +2,9 @@
 // For the license information refer to glaze.hpp
 
 #include "glaze/json.hpp"
-#include "ut/ut.hpp"
+#include "boost/ut.hpp"
 
-using namespace ut;
+using namespace boost::ut;
 
 suite generic_json_tests = [] {
    "generic_json_write"_test = [] {

@@ -8,13 +8,13 @@
 
 #include "glaze/api/api.hpp"
 #include "interface.hpp"
-#include "ut/ut.hpp"
+#include "boost/ut.hpp"
 
 glz::iface_fn glz_iface() noexcept { return glz::make_iface<>(); }
 
 void tests()
 {
-   using namespace ut;
+   using namespace boost::ut;
    glz::lib_loader lib(GLZ_TEST_DIRECTORY);
    auto io = lib["my_api"]();
 

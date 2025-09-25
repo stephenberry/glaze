@@ -16,9 +16,9 @@
 #include "glaze/net/http_client.hpp"
 #include "glaze/net/http_router.hpp"
 #include "glaze/net/http_server.hpp"
-#include "ut/ut.hpp"
+#include "boost/ut.hpp"
 
-using namespace ut;
+using namespace boost::ut;
 
 // Test data structures
 struct AsyncResult

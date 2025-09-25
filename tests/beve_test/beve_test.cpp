@@ -1,6 +1,7 @@
 // Glaze Library
 // For the license information refer to glaze.hpp
 
+#include <algorithm>
 #include <bit>
 #include <bitset>
 #include <chrono>
@@ -12,7 +13,7 @@
 #include <random>
 #include <set>
 #include <unordered_set>
-
+#include "boost/ut.hpp"
 #include "glaze/api/impl.hpp"
 #include "glaze/base64/base64.hpp"
 #include "glaze/beve/beve_to_json.hpp"
@@ -22,7 +23,6 @@
 #include "glaze/json/json_ptr.hpp"
 #include "glaze/json/read.hpp"
 #include "glaze/trace/trace.hpp"
-#include "ut/ut.hpp"
 
 using namespace ut;
 
@@ -204,7 +204,7 @@ struct glz::meta<Thing>
 
 void write_tests()
 {
-   using namespace ut;
+   using namespace boost::ut;
 
    "round_trip"_test = [] {
       {
@@ -415,7 +415,7 @@ void write_tests()
 
 void bench()
 {
-   using namespace ut;
+   using namespace boost::ut;
    "bench"_test = [] {
       trace.begin("bench");
       std::cout << "\nPerformance regresion test: \n";
@@ -454,7 +454,7 @@ void bench()
    };
 }
 
-using namespace ut;
+using namespace boost::ut;
 
 suite beve_helpers = [] {
    "beve_helpers"_test = [] {
@@ -593,7 +593,7 @@ void file_include_test()
 
 void container_types()
 {
-   using namespace ut;
+   using namespace boost::ut;
    "vector int roundtrip"_test = [] {
       std::vector<int> vec(100);
       for (auto& item : vec) item = rand();
@@ -2177,7 +2177,7 @@ suite json_t_tests = [] {
 };
 
 suite early_end = [] {
-   using namespace ut;
+   using namespace boost::ut;
 
    "early_end"_test = [] {
       Thing obj{};
@@ -2513,7 +2513,7 @@ suite pair_ranges_tests = [] {
       expect(json == R"([{"1":2},{"3":4}])");
       std::vector<std::pair<int, int>> x;
       expect(!glz::read<concatenate_off>(x, s));
-      expect(x == v);
+      expect(std::ranges::equal(x, v));
    };
    "vector pair roundtrip"_test = [] {
       std::vector<std::pair<int, int>> v{{1, 2}, {3, 4}};
@@ -2523,7 +2523,7 @@ suite pair_ranges_tests = [] {
       expect(json == R"({"1":2,"3":4})");
       std::vector<std::pair<int, int>> x;
       expect(!glz::read_beve(x, s));
-      expect(x == v);
+      expect(std::ranges::equal(x, v));
    };
 };
 

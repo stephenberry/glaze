@@ -1,6 +1,7 @@
 // Glaze Library
 // For the license information refer to glaze.hpp
 
+#include <algorithm>
 #include <any>
 #include <atomic>
 #include <bitset>
@@ -32,9 +33,9 @@
 #include "glaze/json/study.hpp"
 #include "glaze/record/recorder.hpp"
 #include "glaze/trace/trace.hpp"
-#include "ut/ut.hpp"
+#include "boost/ut.hpp"
 
-using namespace ut;
+using namespace boost::ut;
 
 glz::trace trace{};
 suite start_trace = [] { trace.begin("json_test", "Full test suite duration."); };
@@ -686,7 +687,7 @@ bool equal(T x, T y)
 }
 
 suite basic_types = [] {
-   using namespace ut;
+   using namespace boost::ut;
 
    "double write"_test = [] {
       std::string buffer{};
@@ -935,7 +936,7 @@ struct opts_concatenate : glz::opts
 };
 
 suite container_types = [] {
-   using namespace ut;
+   using namespace boost::ut;
    "vector int roundtrip"_test = [] {
       std::vector<int> vec(100);
       for (auto& item : vec) item = rand();
@@ -1124,7 +1125,7 @@ suite container_types = [] {
 };
 
 suite nullable_types = [] {
-   using namespace ut;
+   using namespace boost::ut;
    "optional"_test = [] {
       std::optional<int> oint{};
       std::string buffer{};
@@ -1271,7 +1272,7 @@ suite nullable_types = [] {
 };
 
 suite enum_types = [] {
-   using namespace ut;
+   using namespace boost::ut;
    "enum"_test = [] {
       Color color = Color::Red;
       std::string buffer{};
@@ -1293,7 +1294,7 @@ suite enum_types = [] {
 };
 
 suite user_types = [] {
-   using namespace ut;
+   using namespace boost::ut;
 
    "user array"_test = [] {
       V3 v3{9.1, 7.2, 1.9};
@@ -1781,7 +1782,7 @@ struct large_length_range_t
 };
 
 suite large_length_range = [] {
-   using namespace ut;
+   using namespace boost::ut;
 
    "large_length_range"_test = [] {
       large_length_range_t obj{};
@@ -1793,7 +1794,7 @@ suite large_length_range = [] {
 };
 
 suite json_pointer = [] {
-   using namespace ut;
+   using namespace boost::ut;
 
    "seek"_test = [] {
       Thing thing{};
@@ -1897,7 +1898,7 @@ suite json_pointer = [] {
 };
 
 suite early_end = [] {
-   using namespace ut;
+   using namespace boost::ut;
 
    "should error"_test = [] {
       std::string_view buffer =
@@ -1988,7 +1989,7 @@ suite early_end = [] {
 };
 
 suite minified_custom_object = [] {
-   using namespace ut;
+   using namespace boost::ut;
 
    "minified_custom_object"_test = [] {
       Thing obj{};
@@ -2010,7 +2011,7 @@ suite minified_custom_object = [] {
 };
 
 suite prettified_custom_object = [] {
-   using namespace ut;
+   using namespace boost::ut;
 
    "prettified_custom_object"_test = [] {
       Thing obj{};
@@ -2021,7 +2022,7 @@ suite prettified_custom_object = [] {
 };
 
 suite bench = [] {
-   using namespace ut;
+   using namespace boost::ut;
    "bench"_test = [] {
       trace.begin("bench");
       std::cout << "\nPerformance regresion test: \n";
@@ -2115,7 +2116,7 @@ template <typename Pair_key, typename Pair_value>
 Read_pair_test_case(Pair_key, Pair_value, std::string_view) -> Read_pair_test_case<Pair_key, Pair_value>;
 
 suite read_tests = [] {
-   using namespace ut;
+   using namespace boost::ut;
 
    "string read"_test = [] {
       std::string s{"3958713"};
@@ -2766,7 +2767,7 @@ template <typename Pair_key, typename Pair_value>
 Write_pair_test_case(Pair_key, Pair_value, std::string_view) -> Write_pair_test_case<Pair_key, Pair_value>;
 
 suite write_tests = [] {
-   using namespace ut;
+   using namespace boost::ut;
 
    "Write floating point types"_test = [] {
       {
@@ -3463,7 +3464,7 @@ suite raw_json_whitespace_tests = [] {
    "raw_json_vs_json_t_comparison"_test = [] {
       // Test that both raw_json and json_t work correctly with formatted content
       std::string input_json = R"({
-                "type": "mytype", 
+                "type": "mytype",
                 "formatted_field": {
                     "nested": {
                         "value": "test"
@@ -3873,27 +3874,27 @@ suite variant_tests = [] {
       // Auto deduce variant with no conflicting basic types
       std::variant<std::monostate, int, std::string, bool, std::map<std::string, double>, std::vector<std::string>> m{};
       expect(glz::read_json(m, R"("Hello World")") == glz::error_code::none);
-      expect[std::holds_alternative<std::string>(m)];
+      expect(std::holds_alternative<std::string>(m));
       expect(std::get<std::string>(m) == "Hello World");
 
       expect(glz::read_json(m, R"(872)") == glz::error_code::none);
-      expect[std::holds_alternative<int>(m)];
+      expect(std::holds_alternative<int>(m));
       expect(std::get<int>(m) == 872);
 
       expect(glz::read_json(m, R"({"pi":3.14})") == glz::error_code::none);
-      expect[std::holds_alternative<std::map<std::string, double>>(m)];
+      expect(std::holds_alternative<std::map<std::string, double>>(m));
       expect(std::get<std::map<std::string, double>>(m)["pi"] == 3.14);
 
       expect(glz::read_json(m, R"(true)") == glz::error_code::none);
-      expect[std::holds_alternative<bool>(m)];
+      expect(std::holds_alternative<bool>(m));
       expect(std::get<bool>(m) == true);
 
       expect(glz::read_json(m, R"(["a", "b", "c"])") == glz::error_code::none);
-      expect[std::holds_alternative<std::vector<std::string>>(m)];
+      expect(std::holds_alternative<std::vector<std::string>>(m));
       expect(std::get<std::vector<std::string>>(m)[1] == "b");
 
       expect(glz::read_json(m, "null") == glz::error_code::none);
-      expect[std::holds_alternative<std::monostate>(m)];
+      expect(std::holds_alternative<std::monostate>(m));
    };
 
    "variant_read_obj"_test = [] {
@@ -6253,7 +6254,7 @@ struct Arbitrary_key_test_case
 };
 
 suite arbitrary_key_maps = [] {
-   using namespace ut;
+   using namespace boost::ut;
    "arbitrary_key_maps"_test = [] {
       auto tester = [](const auto& test_case) {
          const auto& [name, input, serialized] = test_case;
@@ -6901,7 +6902,7 @@ suite enum_map = [] {
       auto expected = colors;
       colors.clear();
       expect(!glz::read_json(colors, s));
-      expect(colors == expected);
+      expect(std::ranges::equal(colors, expected));
    };
 
    "enum map value"_test = [] {
@@ -6915,7 +6916,7 @@ suite enum_map = [] {
       auto expectedMap = color_map;
       color_map.clear();
       expect(!glz::read_json(color_map, s));
-      expect(expectedMap == color_map);
+      expect(std::ranges::equal(expectedMap, color_map));
    };
 
    "enum map value vector pair concatenate"_test = [] {
@@ -6928,7 +6929,7 @@ suite enum_map = [] {
       auto expected = colors;
       colors.clear();
       expect(!glz::read_json(colors, s));
-      expect(colors == expected);
+      expect(std::ranges::equal(colors, expected));
    };
 };
 
@@ -8801,7 +8802,7 @@ struct NestedPartialRead
 };
 
 suite partial_read_tests = [] {
-   using namespace ut;
+   using namespace boost::ut;
 
    static constexpr glz::opts partial_read{.partial_read = true};
 
@@ -8913,7 +8914,7 @@ struct RequiredFieldTest
 };
 
 suite nested_partial_read_tests = [] {
-   using namespace ut;
+   using namespace boost::ut;
 
    static constexpr glz::opts partial_read{.partial_read = true};
 
@@ -8976,7 +8977,7 @@ struct array_holder_t
 };
 
 suite nested_array_partial_read_tests = [] {
-   using namespace ut;
+   using namespace boost::ut;
 
    static constexpr glz::opts partial_read{.partial_read = true};
 
@@ -10976,7 +10977,7 @@ suite atomics = [] {
 
       std::atomic<bool> b{};
       expect(not glz::read_json(b, R"(true)"));
-      expect(b);
+      expect(static_cast<bool>(b));
 
       expect(not glz::write_json(b, buffer));
       expect(buffer == R"(true)");

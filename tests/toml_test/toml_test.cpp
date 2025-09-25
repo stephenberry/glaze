@@ -3,9 +3,9 @@
 #include <map>
 #include <string_view> // Added for std::string_view
 
-#include "ut/ut.hpp"
+#include "boost/ut.hpp"
 
-using namespace ut;
+using namespace boost::ut;
 
 struct my_struct
 {

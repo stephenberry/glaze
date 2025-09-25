@@ -9,9 +9,9 @@
 
 #include "glaze/glaze.hpp"
 #include "glaze/interop/interop.hpp"
-#include "ut/ut.hpp"
+#include "boost/ut.hpp"
 
-using namespace ut;
+using namespace boost::ut;
 
 // Test struct to use in variants
 struct VariantTestStruct
@@ -85,7 +85,7 @@ ComplexVariant global_complex_variant;
 
 int main()
 {
-   using namespace ut;
+   using namespace boost::ut;
 
    // Register types with interop
    glz::register_type<VariantTestStruct>("VariantTestStruct");

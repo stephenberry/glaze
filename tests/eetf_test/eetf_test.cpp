@@ -11,11 +11,11 @@
 #include "glaze/eetf/wrappers.hpp"
 #include "glaze/eetf/write.hpp"
 #include "glaze/trace/trace.hpp"
-#include "ut/ut.hpp"
+#include "boost/ut.hpp"
 
 using namespace glz::eetf;
 
-using namespace ut;
+using namespace boost::ut;
 
 glz::trace trace{};
 suite start_trace = [] { trace.begin("eetf_test", "Full test suite duration."); };
