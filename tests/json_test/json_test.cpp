@@ -5234,8 +5234,7 @@ suite control_character_tests = [] {
       std::string buffer{};
       expect(not glz::write<opts_escape_control_characters{}>(view, buffer));
 
-      expect(buffer == R"("A\u0000B\u0000C")")
-         << "std::array wrapped in string_view should retain embedded nulls";
+      expect(buffer == R"("A\u0000B\u0000C")") << "std::array wrapped in string_view should retain embedded nulls";
 
       std::string parsed;
       expect(not glz::read_json(parsed, buffer));
