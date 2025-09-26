@@ -293,13 +293,13 @@ struct MyArrayStruct
    uint8_t my_array[MY_ARRAY_MAX]{};
 };
 
-enum UnscopedEnum : uint8_t {
+enum unscoped_enum : uint8_t {
    ENUM_VALUE_0 = 0,
    ENUM_VALUE_1,
 };
 
 template <>
-struct glz::meta<UnscopedEnum>
+struct glz::meta<unscoped_enum>
 {
    static constexpr auto value = enumerate(ENUM_VALUE_0, ENUM_VALUE_1);
 };
@@ -310,7 +310,7 @@ struct glz::meta<MyArrayStruct>
    using T = MyArrayStruct;
    // Mapping enum parsing to a uint8_t array
    static constexpr auto value =
-      object("my_array", [](auto& s) { return std::span{reinterpret_cast<UnscopedEnum*>(s.my_array), MY_ARRAY_MAX}; });
+      object("my_array", [](auto& s) { return std::span{reinterpret_cast<::unscoped_enum*>(s.my_array), MY_ARRAY_MAX}; });
 };
 
 suite unscoped_enum_tests = [] {
@@ -1316,16 +1316,16 @@ suite user_types = [] {
 
       // Should skip invalid keys
       // glaze::read_json(obj,"{/**/ \"b\":\"fox\", \"c\":7.7/**/, \"d\": {\"a\": \"}\"} //\n   /**/, \"a\":322}");
-      expect(glz::read<glz::opts{.comments = true, .error_on_unknown_keys = false}>(
+      expect(!glz::read<glz::opts{.comments = true, .error_on_unknown_keys = false}>(
                 obj,
                 R"({/**/ "b":"fox", "c":7.7/**/, "d": {"a": "}"} //
-/**/, "a":322})") == glz::error_code::none);
+/**/, "a":322})"));
 
       // glaze::read_json(obj,"{/**/ \"b\":\"fox\", \"c\":7.7/**/, \"d\": {\"a\": \"}\"} //\n   /**/, \"a\":322}");
       auto ec = glz::read<glz::opts{.comments = true}>(obj,
                                                        R"({/**/ "b":"fox", "c":7.7/**/, "d": {"a": "}"} //
    /**/, "a":322})");
-      expect(ec != glz::error_code::none);
+      expect(bool(ec));
       expect(obj.a == 322.0 && obj.b == "fox");
    };
 
@@ -6386,7 +6386,7 @@ suite required_keys = [] {
       OKX_OrderBook order_book{};
       auto ec = glz::read<glz::opts{.error_on_unknown_keys = false, .error_on_missing_keys = true}>(order_book,
                                                                                                     order_book_str);
-      expect(ec == glz::error_code::none);
+      expect(!ec);
 
       std::string_view order_book_str_missing = R"(
          {"code":"0","data":[{"alias":"","baseCcy":"BTC","ctMult":"","ctType":"","ctVal":"",
@@ -6398,7 +6398,7 @@ suite required_keys = [] {
       )";
       ec = glz::read<glz::opts{.error_on_unknown_keys = false, .error_on_missing_keys = true}>(order_book,
                                                                                                order_book_str_missing);
-      expect(ec == glz::error_code::missing_key);
+      expect(ec.ec == glz::error_code::missing_key);
    };
 
    "required_keys_format_error"_test = [] {
@@ -6797,6 +6797,28 @@ suite numeric_enum_tests = [] {
       obj.type = my_enum_type::value_0;
       expect(!glz::read_json(obj, s));
       expect(obj.type == my_enum_type::value_1);
+   };
+   
+   "enum_as_string_option"_test = [] {
+      test_enum_struct obj{};
+      obj.type = my_enum_type::value_1;
+      std::string s{};
+      
+      // Test with enum_as_string = true
+      constexpr glz::opts opts{.enum_as_string = true};
+      expect(not glz::write<opts>(obj, s));
+      expect(s == R"({"type":"value_1"})") << "Got: " << s;
+      
+      // Test reading back string format
+      test_enum_struct obj2{};
+      expect(!glz::read_json(obj2, s));
+      expect(obj2.type == my_enum_type::value_1);
+      
+      // Test that numeric format still reads correctly
+      s = R"({"type":0})";
+      test_enum_struct obj3{};
+      expect(!glz::read_json(obj3, s));
+      expect(obj3.type == my_enum_type::value_0);
    };
 };
 

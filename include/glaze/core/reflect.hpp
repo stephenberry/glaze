@@ -7,6 +7,7 @@
 #include "glaze/core/common.hpp"
 #include "glaze/core/opts.hpp"
 #include "glaze/core/wrappers.hpp"
+#include "glaze/reflection/enum_reflect.hpp"
 #include "glaze/util/primes_64.hpp"
 
 #ifdef _MSC_VER
@@ -55,7 +56,16 @@ namespace glz
       template <size_t I, class V>
       struct get_name_alloc
       {
-         static constexpr auto alias = get_name<get<I>(meta_v<V>)>();
+         static constexpr auto alias = []() {
+            constexpr auto v = get<I>(meta_v<V>);
+            if constexpr (std::is_enum_v<decltype(v)>) {
+               // For enum values, use enum reflection to get the name
+               return enum_name(v);
+            } else {
+               // For member pointers, use the existing get_name function
+               return get_name<v>();
+            }
+         }();
          static constexpr auto value = join_v<alias>;
       };
    }
