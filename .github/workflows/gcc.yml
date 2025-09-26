@@ -36,10 +36,10 @@ jobs:
 
     - name: Configure CMake
       run: |
-        CXXFLAGS="-g3" cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{matrix.build_type}} -DCMAKE_CXX_STANDARD=${{matrix.std}}
+        CXXFLAGS="-g3" cmake -S ${{github.workspace}} -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{matrix.build_type}} -DCMAKE_CXX_STANDARD=${{matrix.std}}
 
     - name: Build
-      run: cmake --build build -j $(nproc)
+      run: cmake --build ${{github.workspace}}/build -j $(nproc)
 
     - name: Test
       run: ctest --output-on-failure --test-dir ${{github.workspace}}/build
@@ -80,10 +80,10 @@ jobs:
 
     - name: Configure CMake
       run: |
-        CXXFLAGS="-g3" cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{matrix.build_type}} -DCMAKE_CXX_STANDARD=${{matrix.std}}
+        CXXFLAGS="-g3" cmake -S ${{github.workspace}} -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{matrix.build_type}} -DCMAKE_CXX_STANDARD=${{matrix.std}}
 
     - name: Build
-      run: cmake --build build -j $(nproc)
+      run: cmake --build ${{github.workspace}}/build -j $(nproc)
 
     - name: Test
       run: ctest --output-on-failure --test-dir ${{github.workspace}}/build
