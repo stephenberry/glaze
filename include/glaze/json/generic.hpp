@@ -350,7 +350,7 @@ namespace glz
    };
 
    // Backwards compatibility alias
-   using json_t = generic;
+   using json_t [[deprecated("glz::json_t is deprecated, use glz::generic instead")]] = generic;
 
    [[nodiscard]] inline bool is_array(const generic& value) noexcept { return value.is_array(); }
 

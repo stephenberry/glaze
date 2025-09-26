@@ -15,7 +15,7 @@
 #include <unordered_map>
 #include <vector>
 
-#include "glaze/json/json_t.hpp"
+#include "glaze/json/generic.hpp"
 #include "glaze/net/http.hpp"
 #include "glaze/util/key_transformers.hpp"
 
