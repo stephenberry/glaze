@@ -1,6 +1,6 @@
 # Extending Pure Reflection with `modify`
 
-Glaze now lets you _augment_ pure reflection without replacing it. Specialize `glz::meta<T>` with a `static constexpr auto modify = glz::object(...);` to rename reflected members, add aliases, or append entirely new key-value pairs while the remaining members still come from pure reflection.
+Glaze lets you _augment_ pure reflection without replacing it. Specialize `glz::meta<T>` with a `static constexpr auto modify = glz::object(...);` to rename reflected members, add aliases, or append entirely new key-value pairs while the remaining members still come from pure reflection.
 
 ## When to reach for `modify`
 
@@ -158,9 +158,5 @@ No additional boilerplate is required—Glaze reuses the existing container seri
 
 ## Choosing between `modify` and `value`
 
-Use the following rule of thumb:
-
 - Reach for `modify` when you only need small mutations to the default reflected shape (rename a few fields, add derived values, expose aliases).
 - Fall back to `value` when you want to **remove** members, when the output order is critical, or when you need to interleave unrelated data in the serialized object.
-
-With `modify` you keep automatic reflection as the baseline while layering in just the customisations you need.
