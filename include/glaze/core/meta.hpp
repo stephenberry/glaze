@@ -545,6 +545,24 @@ namespace glz
    using meta_unknown_read_t = std::decay_t<decltype(meta_unknown_read_v<std::decay_t<T>>)>;
 
    template <class T>
+   inline constexpr auto self_constraint_v = [] {
+      using Decayed = std::decay_t<T>;
+      if constexpr (requires { Decayed::glaze::self_constraint; }) {
+         return Decayed::glaze::self_constraint;
+      }
+      else if constexpr (requires { meta<Decayed>::self_constraint; }) {
+         return meta<Decayed>::self_constraint;
+      }
+      else {
+         return empty{};
+      }
+   }();
+
+   template <class T>
+   inline constexpr bool has_self_constraint_v =
+      !std::is_same_v<std::decay_t<decltype(self_constraint_v<std::decay_t<T>>)>, empty>;
+
+   template <class T>
    concept named = requires { meta<T>::name; } || requires { T::glaze::name; };
 
    template <class T>

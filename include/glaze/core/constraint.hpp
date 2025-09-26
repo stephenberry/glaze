@@ -202,4 +202,66 @@ namespace glz
 
    template <auto Target, auto Constraint, string_literal Message>
    constexpr auto read_constraint = read_constraint_impl<Target, Constraint, Message>();
+
+   template <class T, auto Constraint, string_literal Message>
+   struct self_constraint_t
+   {
+      static constexpr auto glaze_reflect = false;
+      static constexpr std::string_view message = Message;
+      using value_type = T;
+      using constraint_t = decltype(Constraint);
+      static constexpr auto constraint = Constraint;
+      T& val;
+   };
+
+   template <class T>
+   concept is_self_constraint = requires(T t) {
+      requires !T::glaze_reflect;
+      typename T::constraint_t;
+      typename T::value_type;
+      t.val;
+   };
+
+   template <uint32_t Format, is_self_constraint T>
+   struct from<Format, T>
+   {
+      template <auto Opts>
+      static void op(auto&& value, is_context auto&& ctx, auto&&, auto&&)
+      {
+         using V = std::decay_t<decltype(value)>;
+         using Value = typename V::value_type;
+         using Constraint = typename V::constraint_t;
+
+         bool success{};
+         if constexpr (std::is_invocable_r_v<bool, Constraint, Value&>) {
+            success = std::invoke(V::constraint, value.val);
+         }
+         else if constexpr (std::is_invocable_r_v<bool, Constraint, const Value&>) {
+            const Value& const_val = value.val;
+            success = std::invoke(V::constraint, const_val);
+         }
+         else {
+            static_assert(false_v<Constraint>,
+                          "self constraint must accept the enclosing type by reference or const reference and return a "
+                          "boolean");
+         }
+
+         if (!success) {
+            ctx.error = error_code::constraint_violated;
+            ctx.custom_error_message = V::message;
+         }
+      }
+   };
+
+   template <auto Constraint, string_literal Message>
+   constexpr auto self_constraint_impl() noexcept
+   {
+      return [](auto&& v) {
+         using Value = std::remove_reference_t<decltype(v)>;
+         return self_constraint_t<Value, Constraint, Message>{v};
+      };
+   }
+
+   template <auto Constraint, string_literal Message>
+   constexpr auto self_constraint = self_constraint_impl<Constraint, Message>();
 }
