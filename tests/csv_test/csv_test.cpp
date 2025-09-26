@@ -1,4 +1,6 @@
+#include <cstdint>
 #include <deque>
+#include <limits>
 #include <map>
 #include <unordered_map>
 
@@ -47,6 +49,44 @@ struct glz::meta<string_elements>
 {
    using T = string_elements;
    static constexpr auto value = glz::object("id", &T::id, &T::udl);
+};
+
+struct signed_min_columns
+{
+   std::vector<std::int8_t> i8{};
+   std::vector<std::int32_t> i32{};
+};
+
+template <>
+struct glz::meta<signed_min_columns>
+{
+   using T = signed_min_columns;
+   static constexpr auto value = glz::object("i8", &T::i8, "i32", &T::i32);
+};
+
+enum struct csv_color : std::uint8_t {
+   red = 0,
+   green = 1,
+   blue = 2,
+};
+
+template <>
+struct glz::meta<csv_color>
+{
+   using enum csv_color;
+   static constexpr auto value = enumerate("rouge", red, "vert", green, "bleu", blue);
+};
+
+struct enum_column_struct
+{
+   std::vector<csv_color> colors{};
+};
+
+template <>
+struct glz::meta<enum_column_struct>
+{
+   using T = enum_column_struct;
+   static constexpr auto value = glz::object("colors", &T::colors);
 };
 
 suite csv_tests = [] {
@@ -147,6 +187,36 @@ suite csv_tests = [] {
 )");
 
       expect(!glz::write_file_csv<glz::colwise>(obj, "csv_test_colwise.csv", std::string{}));
+   };
+
+   "signed minimum integers"_test = [] {
+      std::string input =
+         R"(i8,i32
+-128,-2147483648)";
+
+      signed_min_columns obj{};
+      expect(!glz::read_csv<glz::colwise>(obj, input));
+
+      expect(obj.i8.size() == 1);
+      expect(obj.i32.size() == 1);
+      expect(obj.i8[0] == std::numeric_limits<std::int8_t>::min());
+      expect(obj.i32[0] == std::numeric_limits<std::int32_t>::min());
+   };
+
+   "named enum column wise"_test = [] {
+      std::string input =
+         R"(colors
+rouge
+vert
+bleu)";
+
+      enum_column_struct obj{};
+      expect(!glz::read_csv<glz::colwise>(obj, input));
+
+      expect(obj.colors.size() == 3);
+      expect(obj.colors[0] == csv_color::red);
+      expect(obj.colors[1] == csv_color::green);
+      expect(obj.colors[2] == csv_color::blue);
    };
 
    "read/write row wise"_test = [] {
