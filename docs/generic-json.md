@@ -2,7 +2,7 @@
 
 While Glaze is focused on strongly typed data, there is basic support for completely generic JSON.
 
-If absolutely nothing is known about the JSON structure, then [glz::generic](https://github.com/stephenberry/glaze/blob/main/include/glaze/json/generic.hpp) may be helpful, but it comes at a performance cost due to the use of dynamic memory allocations. The previous `glz::json_t` name remains as an alias for backwards compatibility.
+If absolutely nothing is known about the JSON structure, then [glz::generic](https://github.com/stephenberry/glaze/blob/main/include/glaze/json/generic.hpp) may be helpful, but it comes at a performance cost due to the use of dynamic memory allocations. The previous `glz::json_t` name remains as an alias for backwards compatibility (`glaze_v6_0_0_generic_header` is defined when this deprecation is available).
 
 ```c++
 glz::generic json{};
