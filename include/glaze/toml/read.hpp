@@ -863,26 +863,100 @@ namespace glz
                else {
                   ++it;
                   if (*it == '[') { // Array of tables
+                     it++;
 
-                     ++it; // skip the second bracket
-                     ctx.error = error_code::feature_not_supported;
-                     return;
+                     // ++it; // skip the second bracket
+                     // ctx.error = error_code::feature_not_supported;
+                     // return;
                      // TODO: the logic should ideally branch here, because arrays should ignore multiple defenition
                      // errors And should also use push back version but for now we just error out, will support
                      // later
-                  }
-                  skip_ws_and_comments(it, end);
 
-                  if (!parse_toml_key(path, ctx, it, end)) {
-                     return;
+                     // The latter code can be in a array handling, but its not exactly a array hadnling
+                     // Doing this in array functon would likely require using new opts
+                     skip_ws_and_comments(it, end);
+                     if (!parse_toml_key(path, ctx, it, end)) {
+                        return;
+                     }
+                     if (it == end || *it != ']') {
+                        ctx.error = error_code::syntax_error;
+                        return;
+                     }
+                     it++;
+                     if (it == end || *it != ']') {
+                        ctx.error = error_code::syntax_error;
+                        return;
+                     }
+                     it++;
+
+                     static constexpr auto N = reflect<std::decay_t<T>>::size;
+                     static constexpr auto HashInfo = hash_info<std::decay_t<T>>;
+                     const auto index = decode_hash_with_size<TOML, std::decay_t<T>, HashInfo, HashInfo.type>::op(
+                        path.front().data(), path.front().data() + path.front().size(), path.front().size());
+                     size_t idx = 0;
+                     if (index < N) [[likely]] {
+                        visit<N>(
+                           [&]<size_t I>() {
+                              if (I == index) {
+                                 auto make_member_obj = [&]<size_t J>() -> decltype(auto) {
+                                    if constexpr (reflectable<std::decay_t<T>>) {
+                                       return get<J>(to_tie(value));
+                                    }
+                                    else {
+                                       return get_member(value, get<J>(reflect<std::decay_t<T>>::values));
+                                    }
+                                 }; // WHY The method from the resolve nested doesn't work, im lost...
+
+                                 decltype(auto) member_obj = make_member_obj.template operator()<I>();
+                                 using member_type = std::decay_t<decltype(member_obj)>;
+                                 if constexpr (glz::is_specialization_v<member_type, std::vector> ||
+                                               glz::is_std_array<member_type>) {
+                                    using elem_t = typename member_type::value_type;
+                                    if constexpr (glaze_object_t<elem_t> || reflectable<elem_t>) {
+                                       if constexpr (emplace_backable<member_type>) {
+                                          auto& element = member_obj.emplace_back();
+                                          from<TOML, elem_t>::template op<toml::is_internal_on<Opts>()>(element, ctx,
+                                                                                                        it, end);
+                                       }
+                                       else {
+                                          // For fixed-size arrays like std::array
+                                          if (idx >= member_obj.size()) {
+                                             ctx.error = error_code::exceeded_static_array_size;
+                                             return;
+                                          }
+                                          from<TOML, elem_t>::template op<toml::is_internal_on<Opts>()>(member_obj[idx],
+                                                                                                        ctx, it, end);
+                                          ++idx;
+                                       }
+
+                                       if (bool(ctx.error)) {
+                                          return;
+                                       }
+                                    }
+                                    else {
+                                       ctx.error = error_code::syntax_error;
+                                       return;
+                                    }
+                                 }
+                              }
+                           },
+                           index);
+                     }
                   }
-                  if (it == end || *it != ']') {
-                     ctx.error = error_code::syntax_error;
-                     return;
-                  }
-                  it++; // skip ']'
-                  if (!resolve_nested<Opts>(value, std::span{path}, ctx, it, end)) {
-                     return;
+                  else {
+                     skip_ws_and_comments(it, end);
+
+                     if (!parse_toml_key(path, ctx, it, end)) {
+                        return;
+                     }
+                     if (it == end || *it != ']') {
+                        ctx.error = error_code::syntax_error;
+                        return;
+                     }
+                     it++; // skip ']'
+                     if (!resolve_nested<Opts>(value, std::span{path}, ctx, it, end)) {
+                        return;
+                     }
                   }
                }
             }
