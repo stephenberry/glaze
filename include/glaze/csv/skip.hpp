@@ -15,12 +15,7 @@ namespace glz
       template <auto Opts>
       GLZ_ALWAYS_INLINE static void op(is_context auto&& ctx, auto&& it, auto&& end) noexcept
       {
-         if (it == end) [[unlikely]] {
-            ctx.error = error_code::unexpected_end;
-            return;
-         }
-
-         if (*it == '"') {
+         if (it != end && *it == '"') {
             ++it;
 
             while (true) {
