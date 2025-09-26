@@ -2229,6 +2229,15 @@ namespace glz
                if constexpr (not Opts.null_terminated) {
                   --ctx.indentation_level;
                }
+               if constexpr (glaze_object_t<T> || reflectable<T>) {
+                  if constexpr (has_self_constraint_v<T>) {
+                     auto wrapper = self_constraint_v<T>(value);
+                     from<JSON, decltype(wrapper)>::template op<ws_handled<Opts>()>(wrapper, ctx, it, end);
+                     if (bool(ctx.error)) {
+                        return;
+                     }
+                  }
+               }
                ++it;
                if constexpr (not Opts.null_terminated) {
                   if (it == end) {
@@ -2291,6 +2300,15 @@ namespace glz
 
                         ctx.error = error_code::missing_key;
                         return;
+                     }
+                  }
+                  if constexpr (glaze_object_t<T> || reflectable<T>) {
+                     if constexpr (has_self_constraint_v<T>) {
+                        auto wrapper = self_constraint_v<T>(value);
+                        from<JSON, decltype(wrapper)>::template op<ws_handled<Opts>()>(wrapper, ctx, it, end);
+                        if (bool(ctx.error)) {
+                           return;
+                        }
                      }
                   }
                   ++it; // Increment after checking for mising keys so errors are within buffer bounds
