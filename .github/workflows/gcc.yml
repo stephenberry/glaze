@@ -23,7 +23,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        gcc: [12, 13, 14, 15]
+        gcc: [12, 13, 14]
         build_type: [Debug]
         std: [23]
 
@@ -34,16 +34,44 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    - name: Install GCC ${{ matrix.gcc }}
-      if: ${{ matrix.gcc == 15 }}
-      run: |
-        sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
-        sudo apt-get update
-        sudo apt-get install -y gcc-15 g++-15
-
     - name: Configure CMake
       run: |
         CXXFLAGS="-g3" cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{matrix.build_type}} -DCMAKE_CXX_STANDARD=${{matrix.std}}
+
+    - name: Build
+      run: cmake --build build -j $(nproc)
+
+    - name: Test
+      run: ctest --output-on-failure --test-dir ${{github.workspace}}/build
+
+  build-gcc15:
+    runs-on: ubuntu-24.04
+    container:
+      image: gcc:15
+
+    env:
+      CC: gcc-15
+      CXX: g++-15
+
+    steps:
+    - name: Install build dependencies
+      env:
+        DEBIAN_FRONTEND: noninteractive
+      run: |
+        apt-get update
+        apt-get install -y --no-install-recommends \
+          ca-certificates \
+          cmake \
+          git \
+          libssl-dev \
+          python3
+        update-ca-certificates
+
+    - uses: actions/checkout@v4
+
+    - name: Configure CMake
+      run: |
+        CXXFLAGS="-g3" cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_STANDARD=23
 
     - name: Build
       run: cmake --build build -j $(nproc)
