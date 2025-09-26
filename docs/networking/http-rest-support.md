@@ -111,7 +111,7 @@ struct response {
     response& body(std::string_view content);
     response& content_type(std::string_view type);
   
- 		template <class T = json_t>
+ 		template <class T = generic>
     response& json(T&& value); // Auto-serialize any type T to JSON
   
   	template <auto Opts, class T>

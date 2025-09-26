@@ -20,7 +20,7 @@ It is typically best to match the JSON and C++ object layout. C++ structs should
 
 What you know at compile time should be represented in your C++ data types. So, if you know names at compile time then use a C++ `struct`. If you know an array is a fixed size that can exist on the stack then use a `std::array`. Normal C++ tips for performance apply as Glaze is just an interface layer over your C++ data structures. Prefer `std::unordered_map` over `std::map` for performance if ordering isn't important.
 
-Only use `glz::json_t` if you know nothing about the JSON you are ingesting.
+Only use `glz::generic` if you know nothing about the JSON you are ingesting.
 
 > [!NOTE]
 >

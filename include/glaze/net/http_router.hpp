@@ -81,7 +81,7 @@ namespace glz
       inline response& content_type(std::string_view type) { return header("content-type", type); }
 
       // JSON response helper using Glaze
-      template <class T = json_t>
+      template <class T = generic>
       response& json(T&& value)
       {
          content_type("application/json");
