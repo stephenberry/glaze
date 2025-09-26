@@ -413,7 +413,7 @@ struct glz::meta<cross_constrained>
       return ((v.name.starts_with('A') && v.age > 10) || v.age > 5);
    };
 
-   static constexpr auto value = object("age", &T::age, "name", &T::name);
+   static constexpr auto value = object(&T::age, &T::name);
    static constexpr auto self_constraint = glz::self_constraint<combined, "Age/name combination invalid">;
 };
 ```
@@ -443,10 +443,10 @@ struct glz::meta<registration_request>
    };
 
    static constexpr auto value = object(
-      "username", &T::username,
-      "password", &T::password,
-      "confirm_password", &T::confirm_password,
-      "email", &T::email);
+      &T::username,
+      &T::password,
+      &T::confirm_password,
+      &T::email);
 
    static constexpr auto self_constraint = glz::self_constraint<strong_credentials,
       "Password must be at least 12 characters and match confirmation">;

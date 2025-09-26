@@ -7576,7 +7576,7 @@ struct glz::meta<cross_constrained_object>
       return value.age > 5;
    };
 
-   static constexpr auto value = object("age", &T::age, "name", &T::name);
+   static constexpr auto value = object(&T::age, &T::name);
    static constexpr auto self_constraint = glz::self_constraint<composite_constraint, "Age/name combination invalid">;
 };
 
@@ -7630,10 +7630,10 @@ struct glz::meta<registration_request>
    };
 
    static constexpr auto value = object(
-      "username", &T::username,
-      "password", &T::password,
-      "confirm_password", &T::confirm_password,
-      "email", &T::email);
+      &T::username,
+      &T::password,
+      &T::confirm_password,
+      &T::email);
 
    static constexpr auto self_constraint =
       glz::self_constraint<strong_credentials, "Password must be at least 12 characters and match confirmation">;
@@ -7665,10 +7665,10 @@ struct glz::meta<inventory_request>
    };
 
    static constexpr auto value = object(
-      "customer_tier", &T::customer_tier,
-      "quantity", &T::quantity,
-      "inventory_limit", &T::inventory_limit,
-      "discount_code", &T::discount_code);
+      &T::customer_tier,
+      &T::quantity,
+      &T::inventory_limit,
+      &T::discount_code);
 
    static constexpr auto self_constraint =
       glz::self_constraint<business_rules, "Order violates inventory or discount policy">;
