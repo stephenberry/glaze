@@ -64,8 +64,7 @@ struct glz::meta<signed_min_columns>
    static constexpr auto value = glz::object("i8", &T::i8, "i32", &T::i32);
 };
 
-enum struct csv_color : std::uint8_t
-{
+enum struct csv_color : std::uint8_t {
    red = 0,
    green = 1,
    blue = 2,
