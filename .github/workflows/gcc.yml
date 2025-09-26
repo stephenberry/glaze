@@ -56,8 +56,8 @@ jobs:
         std: [23]
 
     env:
-      CC: gcc-15
-      CXX: g++-15
+      CC: gcc
+      CXX: g++
 
     steps:
     - name: Install build dependencies
