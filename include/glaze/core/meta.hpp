@@ -10,8 +10,8 @@
 #include <utility>
 
 #include "glaze/reflection/get_name.hpp"
-#include "glaze/reflection/to_tuple.hpp"
 #include "glaze/reflection/requires_key.hpp"
+#include "glaze/reflection/to_tuple.hpp"
 #include "glaze/tuplet/tuple.hpp"
 #include "glaze/util/for_each.hpp"
 #include "glaze/util/string_literal.hpp"
@@ -113,8 +113,8 @@ namespace glz
    concept modify_t = local_modify_t<T> || global_modify_t<T>;
 
    template <class T>
-   concept glaze_t = requires { meta<std::decay_t<T>>::value; } || local_meta_t<std::decay_t<T>> ||
-                     modify_t<std::decay_t<T>>;
+   concept glaze_t =
+      requires { meta<std::decay_t<T>>::value; } || local_meta_t<std::decay_t<T>> || modify_t<std::decay_t<T>>;
 
    template <class T>
    concept meta_keys = requires { meta<std::decay_t<T>>::keys; } || local_keys_t<std::decay_t<T>>;
@@ -147,17 +147,15 @@ namespace glz
       template <class Tuple>
       consteval auto compute_value_indices()
       {
-         return []<size_t... I>(std::index_sequence<I...>)
-         {
-            constexpr size_t count =
-               (static_cast<size_t>(!object_key_like<glz::tuple_element_t<I, Tuple>>) + ... + 0);
+         return []<size_t... I>(std::index_sequence<I...>) {
+            constexpr size_t count = (static_cast<size_t>(!object_key_like<glz::tuple_element_t<I, Tuple>>) + ... + 0);
             std::array<size_t, count> result{};
             size_t idx = 0;
             (([&] {
-               if constexpr (!object_key_like<glz::tuple_element_t<I, Tuple>>) {
-                  result[idx++] = I;
-               }
-            }()),
+                if constexpr (!object_key_like<glz::tuple_element_t<I, Tuple>>) {
+                   result[idx++] = I;
+                }
+             }()),
              ...);
             return result;
          }(std::make_index_sequence<glz::tuple_size_v<Tuple>>{});
@@ -333,8 +331,7 @@ namespace glz
             return result;
          }
 
-         static constexpr auto extra_indices =
-            compute_extra_indices_impl(std::make_index_sequence<value_count>{});
+         static constexpr auto extra_indices = compute_extra_indices_impl(std::make_index_sequence<value_count>{});
          static constexpr size_t extra_count = extra_indices.size();
       };
 

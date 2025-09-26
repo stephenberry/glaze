@@ -33,8 +33,8 @@ template <>
 struct glz::meta<modify_demo>
 {
    static constexpr auto modify = glz::object(
-      "renamed_x", &modify_demo::x, "x_alias", [](auto& self) -> auto& { return self.x; },
-      "alias_y", [](auto& self) -> auto& { return self.y; });
+      "renamed_x", &modify_demo::x, "x_alias", [](auto& self) -> auto& { return self.x; }, "alias_y",
+      [](auto& self) -> auto& { return self.y; });
 };
 
 static_assert(glz::glaze_object_t<modify_demo>);
@@ -74,9 +74,8 @@ template <>
 struct glz::meta<schema_modify_sample>
 {
    static constexpr auto modify = glz::object(
-      "primary", &schema_modify_sample::value,
-      "primary_alias", [](auto& self) -> auto& { return self.value; },
-      "note", &schema_modify_sample::note);
+      "primary", &schema_modify_sample::value, "primary_alias", [](auto& self) -> auto& { return self.value; }, "note",
+      &schema_modify_sample::note);
 };
 
 static_assert(glz::glaze_object_t<schema_modify_sample>);
@@ -91,9 +90,8 @@ template <>
 struct glz::meta<modify_header>
 {
    static constexpr auto modify = glz::object(
-      "identifier", &modify_header::id,
-      "id_alias", [](auto& self) -> auto& { return self.id; },
-      "message_type", &modify_header::type);
+      "identifier", &modify_header::id, "id_alias", [](auto& self) -> auto& { return self.id; }, "message_type",
+      &modify_header::type);
 };
 
 static_assert(glz::glaze_object_t<modify_header>);
@@ -114,8 +112,8 @@ template <>
 struct glz::meta<large_reflect_many>
 {
    static constexpr auto modify = glz::object(
-      "alias_optional", [](auto& self) -> auto& { return self.f; },
-      "alias_float", [](auto& self) -> auto& { return self.g; });
+      "alias_optional", [](auto& self) -> auto& { return self.f; }, "alias_float",
+      [](auto& self) -> auto& { return self.g; });
 };
 
 static_assert(glz::glaze_object_t<large_reflect_many>);
@@ -133,8 +131,8 @@ template <>
 struct glz::meta<server_status>
 {
    static constexpr auto modify = glz::object(
-      "maintenance_alias", [](auto& self) -> auto& { return self.maintenance; },
-      "cpuPercent", &server_status::cpu_percent);
+      "maintenance_alias", [](auto& self) -> auto& { return self.maintenance; }, "cpuPercent",
+      &server_status::cpu_percent);
 };
 
 static_assert(glz::glaze_object_t<server_status>);
@@ -283,7 +281,10 @@ suite modify_reflection = [] {
       value.f = 5;
 
       auto json = glz::write_json(value).value_or("error");
-      expect(json == R"({"a":1,"b":2.5,"c":"three","d":true,"e":[1,2,3],"f":5,"g":7.7,"h":8,"alias_optional":5,"alias_float":7.7})") << json;
+      expect(
+         json ==
+         R"({"a":1,"b":2.5,"c":"three","d":true,"e":[1,2,3],"f":5,"g":7.7,"h":8,"alias_optional":5,"alias_float":7.7})")
+         << json;
 
       large_reflect_many roundtrip{};
       expect(!glz::read_json(roundtrip, json));
