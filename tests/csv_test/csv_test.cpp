@@ -1240,10 +1240,11 @@ suite vector_data_point_no_headers_tests = [] {
    };
 
    "vector_of_structs_with_skipped_column"_test = [] {
-      const std::string csv = "id,unused,name\r\n"
-                              "1,foo,Alice\r\n"
-                              "2,\"multi\r\nline\",Bob\r\n"
-                              "3,,Charlie\r\n";
+      const std::string csv =
+         "id,unused,name\r\n"
+         "1,foo,Alice\r\n"
+         "2,\"multi\r\nline\",Bob\r\n"
+         "3,,Charlie\r\n";
 
       std::vector<data_with_skip> parsed;
       expect(!glz::read<glz::opts_csv{.layout = glz::colwise}>(parsed, csv));
@@ -1258,9 +1259,10 @@ suite vector_data_point_no_headers_tests = [] {
    };
 
    "rowwise_object_with_skipped_row"_test = [] {
-      const std::string csv = "id,1,2,3\r\n"
-                              "unused,foo,bar,baz\r\n"
-                              "name,Alice,Bob,Charlie\r\n";
+      const std::string csv =
+         "id,1,2,3\r\n"
+         "unused,foo,bar,baz\r\n"
+         "name,Alice,Bob,Charlie\r\n";
 
       rowwise_data_with_skip parsed;
       expect(!glz::read<glz::opts_csv{.layout = glz::rowwise, .use_headers = false}>(parsed, csv));
