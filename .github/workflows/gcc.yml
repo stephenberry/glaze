@@ -73,10 +73,10 @@ jobs:
           python3
         update-ca-certificates
 
-    - name: Prepare build directory
-      run: mkdir -p ${{ github.workspace }}/build
-
     - uses: actions/checkout@v4
+
+    - name: Prepare build directory
+      run: cmake -E make_directory ${{ github.workspace }}/build
 
     - name: Configure CMake
       run: |
