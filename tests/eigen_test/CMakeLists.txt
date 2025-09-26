@@ -9,10 +9,17 @@ if(NOT Eigen3_FOUND)
     GIT_REPOSITORY https://gitlab.com/libeigen/eigen.git
     GIT_TAG 3.4.0
     GIT_SHALLOW TRUE
+    SOURCE_SUBDIR cmake # no CMakeLists.txt in cmake, so this turns off configure
+    # hack: https://stackoverflow.com/questions/77210209/how-to-prevent-eigen-targets-to-show-up-in-the-main-app-in-a-cmake-project
   )
-  FetchContent_GetProperties(Eigen3)
-  if(NOT eigen3_POPULATED)
-    FetchContent_Populate(Eigen3)
+
+  set(EIGEN_BUILD_DOC OFF CACHE BOOL "Don't build Eigen documentation")
+  set(EIGEN_BUILD_PKGCONFIG OFF CACHE BOOL "Don't build pkg-config files")
+  set(EIGEN_BUILD_TESTING OFF CACHE BOOL "Don't build Eigen tests")
+  
+  FetchContent_MakeAvailable(Eigen3)
+  
+  if(NOT TARGET Eigen3::Eigen)
     add_library(Eigen3 INTERFACE IMPORTED GLOBAL)
     add_library(Eigen3::Eigen ALIAS Eigen3)
     target_include_directories(Eigen3 INTERFACE "${eigen3_SOURCE_DIR}")

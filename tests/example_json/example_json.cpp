@@ -16,7 +16,7 @@ struct BasicStruct
    std::string str{};
    std::array<uint32_t, 3> arr{};
 };
-static_assert(glz::detail::reflectable<BasicStruct>);
+static_assert(glz::reflectable<BasicStruct>);
 
 // Demonstration of reading and writing a basic reflectable struct without `glz::meta`.
 suite basic_reflection = [] {
@@ -75,7 +75,7 @@ struct WithOptional
    std::string required = "default";
    std::optional<double> maybe = {};
 };
-static_assert(glz::detail::reflectable<WithOptional>);
+static_assert(glz::reflectable<WithOptional>);
 
 suite optional_fields = [] {
    "optional_fields_test"_test = [] {
@@ -115,10 +115,21 @@ struct EnumHolder
 {
    Color c{Color::Green};
 };
-static_assert(glz::detail::reflectable<EnumHolder>);
+static_assert(glz::reflectable<EnumHolder>);
 
 suite enum_test = [] {
-   "enum_as_string"_test = [] {
+   "enum_as_string_key"_test = [] {
+      std::map<Color, bool> obj{{Color::Red, true}};
+      std::string json;
+      expect(not glz::write_json(obj, json));
+      expect(json == R"({"Red":true})");
+
+      std::string input = R"({"Green":true})";
+      expect(!glz::read_json(obj, input));
+      expect(obj[Color::Green]);
+   };
+
+   "enum_as_string_value"_test = [] {
       EnumHolder obj{};
       std::string json;
       expect(not glz::write_json(obj, json));
@@ -127,6 +138,20 @@ suite enum_test = [] {
       std::string input = R"({"c":"Blue"})";
       expect(!glz::read_json(obj, input));
       expect(obj.c == Color::Blue);
+   };
+
+   "enum_as_key_vector_pair_concatenate"_test = [] {
+      std::vector<std::pair<Color, int>> obj{{Color::Red, 1}, {Color::Green, 2}};
+      std::string json;
+      expect(not glz::write_json(obj, json));
+      expect(json == R"({"Red":1,"Green":2})");
+
+      std::vector<std::pair<Color, int>> obj2{};
+      std::string input = R"({"Blue":3})";
+      expect(!glz::read_json(obj2, input));
+      expect(obj2.size() == 1);
+      expect(obj2[0].first == Color::Blue);
+      expect(obj2[0].second == 3);
    };
 };
 
@@ -141,7 +166,7 @@ struct ContainerStruct
    std::deque<float> dq{3.14f, 2.71f};
    std::list<int> lis{10, 11, 12};
 };
-static_assert(glz::detail::reflectable<ContainerStruct>);
+static_assert(glz::reflectable<ContainerStruct>);
 
 suite container_test = [] {
    "containers_read_write"_test = [] {
@@ -168,7 +193,7 @@ struct MapStruct
    std::map<std::string, int> str_map{{"one", 1}, {"two", 2}};
    std::unordered_map<int, std::string> umap{{5, "five"}, {7, "seven"}};
 };
-static_assert(glz::detail::reflectable<MapStruct>);
+static_assert(glz::reflectable<MapStruct>);
 
 suite map_test = [] {
    "map_unordered_map"_test = [] {
@@ -271,7 +296,7 @@ struct CommentStruct
 {
    int val{};
 };
-static_assert(glz::detail::reflectable<CommentStruct>);
+static_assert(glz::reflectable<CommentStruct>);
 
 suite comment_parsing = [] {
    "comment_test"_test = [] {
@@ -407,12 +432,17 @@ struct FloatPrecision
    double val{3.141592653589793};
 };
 
+struct float_opts : glz::opts
+{
+   glz::float_precision float_max_write_precision{};
+};
+
 suite float_precision_test = [] {
    "float_precision"_test = [] {
       FloatPrecision fp{};
       std::string json;
       // limit float precision to float32
-      expect(not glz::write<glz::opts{.float_max_write_precision = glz::float_precision::float32}>(fp, json));
+      expect(not glz::write<float_opts{{}, glz::float_precision::float32}>(fp, json));
       // This should produce fewer decimal places.
       expect(json.find("3.1415927") != std::string::npos); // approximate float32 rounding
    };
@@ -441,7 +471,7 @@ suite schema_generation = [] {
       auto schema = glz::write_json_schema<SchemaDemo>().value_or("error");
       expect(
          schema ==
-         R"({"type":["object"],"properties":{"flag":{"$ref":"#/$defs/bool","description":"A boolean flag"},"name":{"$ref":"#/$defs/std::string","description":"A name for something"},"x":{"$ref":"#/$defs/int32_t","description":"An integer x"}},"additionalProperties":false,"$defs":{"bool":{"type":["boolean"]},"int32_t":{"type":["integer"],"minimum":-2147483648,"maximum":2147483647},"std::string":{"type":["string"]}}})")
+         R"({"type":["object"],"properties":{"flag":{"$ref":"#/$defs/bool","description":"A boolean flag"},"name":{"$ref":"#/$defs/std::string","description":"A name for something"},"x":{"$ref":"#/$defs/int32_t","description":"An integer x"}},"additionalProperties":false,"$defs":{"bool":{"type":["boolean"]},"int32_t":{"type":["integer"],"minimum":-2147483648,"maximum":2147483647},"std::string":{"type":["string"]}},"title":"SchemaDemo"})")
          << schema;
    };
 };
@@ -470,7 +500,7 @@ suite local_schema_test = [] {
       auto schema = glz::write_json_schema<LocalSchema>().value_or("error");
       expect(
          schema ==
-         R"({"type":["object"],"properties":{"count":{"$ref":"#/$defs/int32_t","description":"A count"},"file":{"$ref":"#/$defs/std::string","description":"A file path"},"valid":{"$ref":"#/$defs/bool","description":"Validity flag"}},"additionalProperties":false,"$defs":{"bool":{"type":["boolean"]},"int32_t":{"type":["integer"],"minimum":-2147483648,"maximum":2147483647},"std::string":{"type":["string"]}}})")
+         R"({"type":["object"],"properties":{"count":{"$ref":"#/$defs/int32_t","description":"A count"},"file":{"$ref":"#/$defs/std::string","description":"A file path"},"valid":{"$ref":"#/$defs/bool","description":"Validity flag"}},"additionalProperties":false,"$defs":{"bool":{"type":["boolean"]},"int32_t":{"type":["integer"],"minimum":-2147483648,"maximum":2147483647},"std::string":{"type":["string"]}},"title":"LocalSchema"})")
          << schema;
    };
 };

@@ -10,11 +10,11 @@ namespace glz
 {
    namespace detail
    {
-      template <opts Opts>
+      template <auto Opts>
       inline void beve_to_json_number(auto&& tag, auto&& ctx, auto&& it, auto&& end, auto& out, auto&& ix) noexcept
       {
          const auto number_type = (tag & 0b000'11'000) >> 3;
-         const uint8_t byte_count = detail::byte_count_lookup[tag >> 5];
+         const uint8_t byte_count = byte_count_lookup[tag >> 5];
 
          auto write_number = [&]<class T>(T&& value) {
             if ((it + sizeof(T)) > end) [[unlikely]] {
@@ -104,9 +104,16 @@ namespace glz
          }
       }
 
-      template <glz::opts Opts, class Buffer>
-      inline void beve_to_json_value(auto&& ctx, auto&& it, auto&& end, Buffer& out, auto&& ix)
+      template <auto Opts, class Buffer>
+      inline void beve_to_json_value(auto&& ctx, auto&& it, auto&& end, Buffer& out, auto&& ix,
+                                     uint32_t recursive_depth)
       {
+         // Check recursion depth limit
+         if (recursive_depth >= max_recursive_depth_limit) [[unlikely]] {
+            ctx.error = error_code::exceeded_max_recursive_depth;
+            return;
+         }
+
          if (it >= end) [[unlikely]] {
             ctx.error = error_code::syntax_error;
             return;
@@ -137,7 +144,7 @@ namespace glz
          }
          case tag::string: {
             ++it;
-            const auto n = detail::int_from_compressed(ctx, it, end);
+            const auto n = int_from_compressed(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]] {
                return;
             }
@@ -162,24 +169,18 @@ namespace glz
             else {
                ++ctx.indentation_level;
             }
-            // We use indentation_level for recursive depth limit even though this means we have a shorter limit with
-            // prettified output
-            if (ctx.indentation_level >= max_recursive_depth_limit) {
-               ctx.error = error_code::exceeded_max_recursive_depth;
-               return;
-            }
 
             const auto key_type = (tag & 0b000'11'000) >> 3;
             switch (key_type) {
             case 0: {
                // string key
-               const auto n_fields = detail::int_from_compressed(ctx, it, end);
+               const auto n_fields = int_from_compressed(ctx, it, end);
                if (bool(ctx.error)) {
                   return;
                }
                for (size_t i = 0; i < n_fields; ++i) {
                   // convert the key
-                  const auto n = detail::int_from_compressed(ctx, it, end);
+                  const auto n = int_from_compressed(ctx, it, end);
                   if (bool(ctx.error)) [[unlikely]] {
                      return;
                   }
@@ -196,8 +197,10 @@ namespace glz
                      dump<':'>(out, ix);
                   }
                   it += n;
-                  // convert the value
-                  beve_to_json_value<Opts>(ctx, it, end, out, ix);
+                  beve_to_json_value<Opts>(ctx, it, end, out, ix, recursive_depth + 1);
+                  if (bool(ctx.error)) [[unlikely]] {
+                     return;
+                  }
                   if (i != n_fields - 1) {
                      dump<','>(out, ix);
                      if constexpr (Opts.prettify) {
@@ -212,7 +215,7 @@ namespace glz
                [[fallthrough]]; // signed integer key
             case 2: {
                // unsigned integer key
-               const auto n_fields = detail::int_from_compressed(ctx, it, end);
+               const auto n_fields = int_from_compressed(ctx, it, end);
                if (bool(ctx.error)) {
                   return;
                }
@@ -230,8 +233,10 @@ namespace glz
                   else {
                      dump<':'>(out, ix);
                   }
-                  // convert the value
-                  beve_to_json_value<Opts>(ctx, it, end, out, ix);
+                  beve_to_json_value<Opts>(ctx, it, end, out, ix, recursive_depth + 1);
+                  if (bool(ctx.error)) [[unlikely]] {
+                     return;
+                  }
                   if (i != n_fields - 1) {
                      dump<','>(out, ix);
                      if constexpr (Opts.prettify) {
@@ -262,7 +267,7 @@ namespace glz
          case tag::typed_array: {
             ++it;
             const auto value_type = (tag & 0b000'11'000) >> 3;
-            const uint8_t byte_count = detail::byte_count_lookup[tag >> 5];
+            const uint8_t byte_count = byte_count_lookup[tag >> 5];
 
             auto write_array = [&]<class T>(T&& value) {
                const auto n = int_from_compressed(ctx, it, end);
@@ -373,7 +378,7 @@ namespace glz
                      return;
                   }
                   for (size_t i = 0; i < n_strings; ++i) {
-                     const auto n = detail::int_from_compressed(ctx, it, end);
+                     const auto n = int_from_compressed(ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]] {
                         return;
                      }
@@ -415,7 +420,7 @@ namespace glz
             }
             dump<'['>(out, ix);
             for (size_t i = 0; i < n; ++i) {
-               beve_to_json_value<Opts>(ctx, it, end, out, ix);
+               beve_to_json_value<Opts>(ctx, it, end, out, ix, recursive_depth + 1);
                if (bool(ctx.error)) [[unlikely]] {
                   return;
                }
@@ -441,52 +446,10 @@ namespace glz
                skip_compressed_int(ctx, it, end);
                if (bool(ctx.error)) return;
 
-               // IMPORTANT: Code was commented because variants should typically write out the JSON value directly
-               // This makes sense for auto-deducible values, which should be the default behavior.
-               // In the future we may want a compile time option that dumps the index for cases that cannot be
-               // auto-deduced
-               /*const auto index = int_from_compressed(ctx, it, end);
-
-               dump<'{'>(out, ix);
-               if constexpr (Opts.prettify) {
-                  ctx.indentation_level += Opts.indentation_width;
-                  dump<'\n'>(out, ix);
-                  dumpn<Opts.indentation_char>(ctx.indentation_level, out, ix);
-               }
-
-               if constexpr (Opts.prettify) {
-                  dump<R"("index": )">(out, ix);
-               }
-               else {
-                  dump<R"("index":)">(out, ix);
-               }
-
-               to<JSON, std::remove_cvref_t<decltype(index)>>::template op<Opts>(index, ctx, out, ix);
-
-               dump<','>(out, ix);
-               if constexpr (Opts.prettify) {
-                  dump<'\n'>(out, ix);
-                  dumpn<Opts.indentation_char>(ctx.indentation_level, out, ix);
-               }
-
-               if constexpr (Opts.prettify) {
-                  dump<R"("value": )">(out, ix);
-               }
-               else {
-                  dump<R"("value":)">(out, ix);
-               }*/
-
-               beve_to_json_value<Opts>(ctx, it, end, out, ix);
+               beve_to_json_value<Opts>(ctx, it, end, out, ix, recursive_depth + 1);
                if (bool(ctx.error)) [[unlikely]] {
                   return;
                }
-
-               /*if constexpr (Opts.prettify) {
-                  ctx.indentation_level -= Opts.indentation_width;
-                  dump<'\n'>(out, ix);
-                  dumpn<Opts.indentation_char>(ctx.indentation_level, out, ix);
-               }
-               dump<'}'>(out, ix);*/
                break;
             }
             case 2: {
@@ -507,10 +470,6 @@ namespace glz
                }
                else {
                   ++ctx.indentation_level;
-               }
-               if (ctx.indentation_level >= max_recursive_depth_limit) {
-                  ctx.error = error_code::exceeded_max_recursive_depth;
-                  return;
                }
 
                if constexpr (Opts.prettify) {
@@ -536,7 +495,7 @@ namespace glz
                   dump<R"("extents":)">(out, ix);
                }
 
-               beve_to_json_value<Opts>(ctx, it, end, out, ix);
+               beve_to_json_value<Opts>(ctx, it, end, out, ix, recursive_depth + 1);
                if (bool(ctx.error)) [[unlikely]] {
                   return;
                }
@@ -554,7 +513,7 @@ namespace glz
                   dump<R"("value":)">(out, ix);
                }
 
-               beve_to_json_value<Opts>(ctx, it, end, out, ix);
+               beve_to_json_value<Opts>(ctx, it, end, out, ix, recursive_depth + 1);
                if (bool(ctx.error)) [[unlikely]] {
                   return;
                }
@@ -563,6 +522,9 @@ namespace glz
                   ctx.indentation_level -= Opts.indentation_width;
                   dump<'\n'>(out, ix);
                   dumpn<Opts.indentation_char>(ctx.indentation_level, out, ix);
+               }
+               else {
+                  --ctx.indentation_level;
                }
                dump<'}'>(out, ix);
                break;
@@ -637,7 +599,7 @@ namespace glz
       }
    }
 
-   template <glz::opts Opts = glz::opts{}, class BEVEBuffer, class JSONBuffer>
+   template <auto Opts = glz::opts{}, class BEVEBuffer, class JSONBuffer>
    [[nodiscard]] inline error_ctx beve_to_json(const BEVEBuffer& beve, JSONBuffer& out)
    {
       size_t ix{}; // write index
@@ -648,7 +610,7 @@ namespace glz
       context ctx{};
 
       while (it < end) {
-         detail::beve_to_json_value<Opts>(ctx, it, end, out, ix);
+         detail::beve_to_json_value<Opts>(ctx, it, end, out, ix, 0);
          if (bool(ctx.error)) {
             return {ctx.error};
          }

@@ -53,28 +53,28 @@ void test()
    };
 
    const auto nthreads = std::thread::hardware_concurrency();
-   const UT step = std::numeric_limits<UT>::max() / nthreads;
+   const UT step = (std::numeric_limits<UT>::max)() / nthreads;
 
    // can't use jthread, does not exist in all stdlibs.
    std::vector<std::thread> threads;
    threads.reserve(nthreads);
    for (int threadi = 0; threadi < nthreads; ++threadi) {
       const UT start = threadi * step;
-      const UT stop = (threadi == nthreads - 1) ? std::numeric_limits<UT>::max() : start + step;
+      const UT stop = (threadi == nthreads - 1) ? (std::numeric_limits<UT>::max)() : start + step;
       // std::cout << "thread i=" << threadi << " goes from " << start << " to " << stop << '\n';
       threads.emplace_back(testrange, start, stop);
    }
    // test the last value here.
    {
       std::string buf;
-      testone(std::numeric_limits<UT>::max(), buf);
+      testone((std::numeric_limits<UT>::max)(), buf);
    }
 
    std::cout << "started testing in " << nthreads << " threads." << std::endl;
    for (auto& t : threads) {
       t.join();
    }
-   std::cout << "tested " << std::numeric_limits<UT>::max() << " values of " << (std::is_unsigned_v<T> ? "un" : "")
+   std::cout << "tested " << (std::numeric_limits<UT>::max)() << " values of " << (std::is_unsigned_v<T> ? "un" : "")
              << "signed type of size " << sizeof(T) << std::endl;
 }
 

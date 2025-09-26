@@ -10,13 +10,18 @@ Glaze supports pure reflection for [aggregate initializable](https://en.cpprefer
 > - no [virtual base classes](https://en.cppreference.com/w/cpp/language/derived_class#Virtual_base_classes)
 
 There's no need to write any `glz::meta` structures or use any macros. The reflection is hidden from
-the user and computed at compile time.
+the user and computed at compile time. If you eventually need to rename just a couple of fields or add
+an alias while keeping everything else automatic, specialize `glz::meta<T>` with a
+[`modify`](modify-reflection.md) object. The existing members stay under pure reflection; only the keys you
+mention are altered or appended.
 
-- You can still write a `glz::meta` to customize your serialization, which will override the default reflection.
+Types that support pure reflection satisfy the `glz::reflectable<T>` concept. To check if any type (including those with `glz::meta` specializations) can use the reflection API, use the `glz::has_reflect<T>` concept.
+
+- You can still write a full `glz::meta` to customize your serialization, which will override the default reflection entirely.
 
 > CUSTOMIZATION NOTE:
 >
-> When writing custom serializers specializing `to_json` or `from_json`, your concepts for custom types might not take precedence over the reflection engine (when you haven't written a `glz::meta` for your type). The reflection engine tries to discern that no specialization occurs for your type, but this is not always possible.
+> When writing custom serializers specializing `to<JSON>` or `from<JSON>`, your concepts for custom types might not take precedence over the reflection engine (when you haven't written a `glz::meta` for your type). The reflection engine tries to discern that no specialization occurs for your type, but this is not always possible.
 >
 > To solve this problem, you can add `static constexpr auto glaze_reflect = false;` to your class. Or, you can add a `glz::meta` for your type.
 
@@ -52,4 +57,3 @@ struct V2Wrapper
    V2 x{}; // reflection wouldn't work except for adding `V2(glz::make_reflectable) {}`
 };
 ```
-

@@ -36,7 +36,7 @@ namespace glz
 
       [[nodiscard]] bool contains(const sv path) noexcept override
       {
-         return detail::seek_impl([&](auto&&) {}, user, path);
+         return seek([&](auto&&) {}, user, path);
       }
 
       bool read(const uint32_t format, const sv path, const sv data) noexcept override
@@ -45,11 +45,10 @@ namespace glz
          bool success;
 
          if (format == JSON) {
-            success = detail::seek_impl([&](auto&& val) { pe = glz::read<opts{}>(val, data); }, user, path);
+            success = seek([&](auto&& val) { pe = glz::read<opts{}>(val, data); }, user, path);
          }
          else {
-            success =
-               detail::seek_impl([&](auto&& val) { pe = glz::read<opts{.format = BEVE}>(val, data); }, user, path);
+            success = seek([&](auto&& val) { pe = glz::read<opts{.format = BEVE}>(val, data); }, user, path);
          }
 
          if (success) {
@@ -65,10 +64,10 @@ namespace glz
       {
          // TODO: Support write errors when seeking
          if (format == JSON) {
-            return detail::seek_impl([&](auto&& val) { std::ignore = glz::write_json(val, data); }, user, path);
+            return seek([&](auto&& val) { std::ignore = glz::write_json(val, data); }, user, path);
          }
          else {
-            return detail::seek_impl([&](auto&& val) { std::ignore = glz::write_beve(val, data); }, user, path);
+            return seek([&](auto&& val) { std::ignore = glz::write_beve(val, data); }, user, path);
          }
       }
 
@@ -106,11 +105,11 @@ namespace glz
 
          bool found = false;
 
-         detail::seek_impl(
+         seek(
             [&](auto&& parent) {
                using P = std::decay_t<decltype(parent)>;
 
-               detail::seek_impl(
+               seek(
                   [&](auto&& val) {
                      using V = std::decay_t<decltype(val)>;
                      if constexpr (std::is_member_function_pointer_v<V>) {
@@ -174,7 +173,7 @@ namespace glz
       decltype(auto) unwrap(T&& val)
       {
          using V = std::decay_t<T>;
-         if constexpr (detail::nullable_t<V>) {
+         if constexpr (nullable_t<V>) {
             if (val) {
                return unwrap(*val);
             }
@@ -197,7 +196,7 @@ namespace glz
 
          glz::hash_t type_hash{};
 
-         const auto success = detail::seek_impl(
+         const auto success = seek(
             [&](auto&& val) {
                using V = std::decay_t<decltype(*unwrap(val))>;
                if constexpr (std::is_member_function_pointer_v<V>) {
@@ -231,11 +230,11 @@ namespace glz
          const auto parent_ptr = p.first;
          const auto last_ptr = p.second;
 
-         detail::seek_impl(
+         seek(
             [&](auto&& parent) {
                using P = std::decay_t<decltype(parent)>;
 
-               detail::seek_impl(
+               seek(
                   [&](auto&& val) {
                      using V = std::decay_t<decltype(val)>;
                      if constexpr (std::is_member_function_pointer_v<V>) {
@@ -303,7 +302,7 @@ namespace glz
          using T = std::tuple<Args...>;
 
          constexpr auto N = sizeof...(Args);
-         for_each<N>([&](auto I) {
+         for_each<N>([&]<auto I>() {
             using V = glz::tuple_element_t<I, T>;
             ptr->emplace(name_v<V>, make_api<V>);
          });

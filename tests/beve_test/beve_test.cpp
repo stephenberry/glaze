@@ -24,6 +24,10 @@
 #include "glaze/trace/trace.hpp"
 #include "ut/ut.hpp"
 
+using namespace ut;
+
+inline glz::trace trace{};
+
 struct my_struct
 {
    int i = 287;
@@ -44,8 +48,8 @@ struct glz::meta<my_struct>
    );
 };
 
-static_assert(glz::write_beve_supported<my_struct>);
-static_assert(glz::read_beve_supported<my_struct>);
+static_assert(glz::write_supported<my_struct, glz::BEVE>);
+static_assert(glz::read_supported<my_struct, glz::BEVE>);
 
 struct sub_thing
 {
@@ -167,7 +171,7 @@ struct Thing
    std::map<int, double> mapi{{5, 3.14}, {7, 7.42}, {2, 9.63}};
    sub_thing* thing_ptr{};
 
-   Thing() : thing_ptr(&thing){};
+   Thing() : thing_ptr(&thing) {};
 };
 
 template <>
@@ -413,7 +417,7 @@ void bench()
 {
    using namespace ut;
    "bench"_test = [] {
-      glz::trace_begin("bench");
+      trace.begin("bench");
       std::cout << "\nPerformance regresion test: \n";
 #ifdef NDEBUG
       size_t repeat = 100000;
@@ -446,7 +450,7 @@ void bench()
       mbytes_per_sec = repeat * buffer.size() / (duration * 1048576);
       std::cout << "from_beve: " << duration << " s, " << mbytes_per_sec << " MB/s"
                 << "\n";
-      glz::trace_end("bench");
+      trace.end("bench");
    };
 }
 
@@ -529,7 +533,7 @@ void test_partial()
    static constexpr auto groups = glz::group_json_ptrs<sorted>();
 
    static constexpr auto N = glz::tuple_size_v<decltype(groups)>;
-   glz::for_each<N>([&](auto I) {
+   glz::for_each<N>([&]<auto I>() {
       const auto group = glz::get<I>(groups);
       std::cout << glz::get<0>(group) << ": ";
       for (auto& rest : glz::get<1>(group)) {
@@ -1166,7 +1170,7 @@ suite signal_tests = [] {
 
 suite vector_tests = [] {
    "std::vector<uint8_t>"_test = [] {
-      glz::duration_trace trace{"test std::vector<uint8_t>"};
+      auto scoped = trace.scope("test std::vector<uint8_t>");
       std::string s;
       static constexpr auto n = 10000;
       std::vector<uint8_t> v(n);
@@ -1189,7 +1193,7 @@ suite vector_tests = [] {
    };
 
    "std::vector<uint16_t>"_test = [] {
-      glz::duration_trace trace{"test std::vector<uint16_t>"};
+      auto scoped = trace.scope("test std::vector<uint16_t>");
       std::string s;
       static constexpr auto n = 10000;
       std::vector<uint16_t> v(n);
@@ -1213,7 +1217,7 @@ suite vector_tests = [] {
    };
 
    "std::vector<float>"_test = [] {
-      glz::async_trace trace{"test std::vector<float>"};
+      auto scoped = trace.async_scope("test std::vector<float>");
       std::string s;
       static constexpr auto n = 10000;
       std::vector<float> v(n);
@@ -1237,7 +1241,7 @@ suite vector_tests = [] {
    };
 
    "std::vector<double>"_test = [] {
-      glz::async_trace trace{"test std::vector<double>"};
+      auto scoped = trace.async_scope("test std::vector<double>");
       std::string s;
       static constexpr auto n = 10000;
       std::vector<double> v(n);
@@ -1317,7 +1321,7 @@ struct reflectable_t
    constexpr bool operator==(const reflectable_t&) const noexcept = default;
 };
 
-static_assert(glz::detail::reflectable<reflectable_t>);
+static_assert(glz::reflectable<reflectable_t>);
 
 suite reflection_test = [] {
    "reflectable_t"_test = [] {
@@ -2223,6 +2227,51 @@ suite early_end = [] {
    };
 };
 
+struct empty_string_test_struct
+{
+   std::string empty_field = "";
+   int num = 42;
+};
+
+suite empty_string_test = [] {
+   "empty string at buffer boundary"_test = [] {
+      // Test case for the issue where ix == b.size() and str.size() == 0
+      // causes an assert inside std::vector::operator[]
+      std::string empty_str = "";
+      std::string buffer;
+      expect(not glz::write_beve(empty_str, buffer));
+
+      // Test reading back
+      std::string result;
+      expect(!glz::read_beve(result, buffer));
+      expect(result == empty_str);
+   };
+
+   "empty string in struct"_test = [] {
+      empty_string_test_struct obj;
+      std::string buffer;
+      expect(not glz::write_beve(obj, buffer));
+
+      empty_string_test_struct result;
+      expect(!glz::read_beve(result, buffer));
+      expect(result.empty_field == "");
+      expect(result.num == 42);
+   };
+
+   "multiple empty strings"_test = [] {
+      std::vector<std::string> empty_strings = {"", "", ""};
+      std::string buffer;
+      expect(not glz::write_beve(empty_strings, buffer));
+
+      std::vector<std::string> result;
+      expect(!glz::read_beve(result, buffer));
+      expect(result.size() == 3);
+      expect(result[0] == "");
+      expect(result[1] == "");
+      expect(result[2] == "");
+   };
+};
+
 suite past_fuzzing_issues = [] {
    "fuzz0"_test = [] {
       std::string_view base64 =
@@ -2348,6 +2397,79 @@ suite past_fuzzing_issues = [] {
    "fuzz14"_test = test_base64("A5AAaGgAbg==");
 
    "fuzz15"_test = test_base64("AzEyAA==");
+
+   "fuzz16"_test = [] {
+      std::string_view base64 =
+         "YAVNTU1NTU1NTU1NTU1NTU1NTUlNTTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1"
+         "NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTUxMTBNTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU01"
+         "NTU1NTExME1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1N"
+         "TU1NTU1NTTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1"
+         "NTU1NTVgNTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTVlADU1NTU1NTU1NTExME1NTU1NTU1N"
+         "TU1NTU01NTU1NTU1NTU1NTU1NTU1NWA1NTU1NU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1N"
+         "TU1NTU1NTU1NTU1NTU1NTU1NTU01NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1"
+         "NTU1NTU1NTU1NTU1NTU1NTU1YDU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1"
+         "NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTExME1NTU1NTU1NTU1NTU1NTU1N"
+         "TU1NTU1NTU01NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1"
+         "NTU1NTU1YDU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTUxMTBNTU1NTU1N"
+         "TU1NTU1NTU1NTU1NTTU1NTU1MTEwTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1N"
+         "TU1NTU1NTU1NTU1NTU1NTU01NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1"
+         "NTU1NTU1NTU1NTU1NTU1YDU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTUx"
+         "MTBNTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1"
+         "NTU1NTU1MTEwTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1"
+         "NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTVgNTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1"
+         "NTU1NTU1NTU1NTU1NTU1NTExME1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU06TU1NTU1NTU1NTU1N"
+         "TU1NTU1NTU1NTU1NTU1NTU1NTU01NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1"
+         "NTU1NTU1NTU1NTU1NTU1NTVgNTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1"
+         "NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1MTEwTU1NTU1NTU1NTU1NTU1NTU1N"
+         "TU1NTU1NTTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1"
+         "NTU1NTVgNTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTExME1NTU1NTU1N"
+         "TU1NTU1NTU1NTU1NNTU1NTUxMTBNTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1N"
+         "TU1NTU1NTU1NTU1NTU1NTTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1"
+         "NTU1NTU1NTU1NTU1NTVgNTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTEx"
+         "ME1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NNTU1NTUxMTBNTU1NTU1NTU1NTU1NTU1NTU1NTU1N"
+         "TU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU01NTU1NTU1NTU1NTU1NTU1NTU1NTU1"
+         "NTU1NTU1NTU1TU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NNTU1NTU1"
+         "NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NWA1NTU1NTU1"
+         "NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1MTEwTU1NTU1NTU1NTU1NTU1NTU1NTU1N"
+         "TU1NTU1NNTU1NTUxMTBNTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1N"
+         "TU1NTU1NTU1NTU1NTU01NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1"
+         "NTU1NTU1NTU1NTU1YDU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTVgNTU1NTU1NTU1NTU1"
+         "NTU1NTU1NTU1NTU1NTU1NTVlADU1NTU1NTU1NTExME1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU01"
+         "NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1YDU1"
+         "NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1YDU1NTU1"
+         "TU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTTU1NTU1"
+         "NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTVgNTU1NTU1"
+         "NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1"
+         "NTU1NTU1NTU1NTU1MTEwTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTTU1NTU1NTU1NTU1NTU1NTU1"
+         "NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTVgNTU1NTU1NTU1NTU1NTU1NTU1NTU1"
+         "NTU1NTU1NTU1NTU1NTU1NTU1NTExME1NTU1NTU1NTU1NTU1NTU1NTU1NNTU1NTUxMTBNTU1NTU1N"
+         "TU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NNTU1NTU1NTU1NTU1"
+         "NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NWA1NTU1NTU1NTU1NTU1NTU1"
+         "NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1MTEwTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU01NTU1"
+         "NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTExME1NTU1NTU1NTU1NTU1NTU1NTU1NTU1N"
+         "TU01NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NWA1"
+         "NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1MTEwTU1NTU1NTU1NTU1NTU1N"
+         "TU1NTU1NTU1NTTpNTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTTU1NTU1NTU1NTU1NTU1"
+         "NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTVgNTU1NTU1NTU1NTU1NTU1"
+         "NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1"
+         "NTU1MTEwTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1"
+         "NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTVgNTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1"
+         "NTU1NTU1NTU1NTExME1NTU1NTU1NTU1NTU1NTU1NTU1NNTU1NTUxMTBNTU1NTU1NTU1NTU1NTU1N"
+         "TU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTTU1NTU1NTU1NTU1NTU1NTU1NTU1"
+         "NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTVgNTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1"
+         "NTU1NTU1NTU1NTU1NTU1NTExME1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTTU1NTU1MTEwTU1N"
+         "TU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1"
+         "NTU1NTU1NTU1NTU1NTU1NTU1NWA1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NWUANTU1NTU1"
+         "NTU1MTEwTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1"
+         "NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTVgNTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1NTU1"
+         "NTU1NTU1NTU1NTU1NTExME1NNTUxMTBNTU1NTU1NTU1NTU1NTU1NTU1NTU1NJwA=";
+
+      const auto input = glz::read_base64(base64);
+      expect(glz::read_beve<my_struct>(input).error());
+      std::string json{};
+      auto ec = glz::beve_to_json(input, json);
+      expect(ec == glz::error_code::exceeded_max_recursive_depth);
+   };
 };
 
 struct custom_load_t
@@ -2375,8 +2497,13 @@ suite custom_load_test = [] {
    };
 };
 
+struct opts_concatenate : glz::opts
+{
+   bool concatenate = true;
+};
+
 suite pair_ranges_tests = [] {
-   static constexpr glz::opts concatenate_off{.format = glz::BEVE, .concatenate = false};
+   static constexpr opts_concatenate concatenate_off{{glz::BEVE}, false};
 
    "vector pair"_test = [] {
       std::vector<std::pair<int, int>> v{{1, 2}, {3, 4}};
@@ -2400,17 +2527,175 @@ suite pair_ranges_tests = [] {
    };
 };
 
+// Test for static variant tags with empty structs
+namespace static_tag_test
+{
+   enum class MsgTypeEmpty { A, B };
+
+   struct MsgAEmpty
+   {
+      static constexpr auto type = MsgTypeEmpty::A;
+   };
+
+   struct MsgBEmpty
+   {
+      static constexpr auto type = MsgTypeEmpty::B;
+   };
+
+   using MsgEmpty = std::variant<MsgAEmpty, MsgBEmpty>;
+
+   enum class MsgType { A, B };
+
+   struct MsgA
+   {
+      static constexpr auto type = MsgType::A;
+      int value = 42;
+   };
+
+   struct MsgB
+   {
+      static constexpr auto type = MsgType::B;
+      std::string text = "hello";
+   };
+
+   using Msg = std::variant<MsgA, MsgB>;
+}
+
+suite static_variant_tags = [] {
+   "static variant tags with empty structs"_test = [] {
+      using namespace static_tag_test;
+
+      // Test untagged BEVE with empty structs having static tags
+      {
+         MsgEmpty original{MsgAEmpty{}};
+         auto encoded = glz::write_beve_untagged(original);
+         expect(encoded.has_value());
+
+         auto decoded = glz::read_binary_untagged<MsgEmpty>(*encoded);
+         expect(decoded.has_value());
+         expect(decoded->index() == 0);
+      }
+
+      {
+         MsgEmpty original{MsgBEmpty{}};
+         auto encoded = glz::write_beve_untagged(original);
+         expect(encoded.has_value());
+
+         auto decoded = glz::read_binary_untagged<MsgEmpty>(*encoded);
+         expect(decoded.has_value());
+         expect(decoded->index() == 1);
+      }
+   };
+
+   "static variant tags with non-empty structs"_test = [] {
+      using namespace static_tag_test;
+
+      // Test untagged BEVE with non-empty structs having static tags
+      {
+         Msg original{MsgA{}};
+         auto encoded = glz::write_beve_untagged(original);
+         expect(encoded.has_value());
+
+         auto decoded = glz::read_binary_untagged<Msg>(*encoded);
+         expect(decoded.has_value());
+         expect(decoded->index() == 0);
+         expect(std::get<0>(*decoded).value == 42);
+      }
+
+      {
+         Msg original{MsgB{}};
+         auto encoded = glz::write_beve_untagged(original);
+         expect(encoded.has_value());
+
+         auto decoded = glz::read_binary_untagged<Msg>(*encoded);
+         expect(decoded.has_value());
+         expect(decoded->index() == 1);
+         expect(std::get<1>(*decoded).text == "hello");
+      }
+   };
+};
+
+suite explicit_string_view_support = [] {
+   "write beve from explicit string_view"_test = [] {
+      struct explicit_string_view_type
+      {
+         std::string storage{};
+
+         explicit explicit_string_view_type(std::string_view s) : storage(s) {}
+
+         explicit operator std::string_view() const noexcept { return storage; }
+      };
+
+      explicit_string_view_type value{std::string_view{"explicit"}};
+
+      std::string buffer{};
+      expect(not glz::write_beve(value, buffer));
+      expect(not buffer.empty());
+
+      std::string decoded{};
+      expect(not glz::read_beve(decoded, buffer));
+      expect(decoded == "explicit");
+   };
+};
+
+struct MemberFunctionThingBeve
+{
+   std::string name{};
+   auto get_description() const -> std::string { return "something"; }
+};
+
+namespace glz
+{
+   template <>
+   struct meta<MemberFunctionThingBeve>
+   {
+      using T = MemberFunctionThingBeve;
+      static constexpr auto value = object("name", &T::name, "description", &T::get_description);
+   };
+} // namespace glz
+
+suite member_function_pointer_beve_serialization = [] {
+   "member function pointer skipped in beve write"_test = [] {
+      MemberFunctionThingBeve input{};
+      input.name = "test_item";
+      std::string buffer{};
+      expect(not glz::write_beve(input, buffer));
+
+      MemberFunctionThingBeve output{};
+      expect(not glz::read_beve(output, buffer));
+      expect(output.name == input.name);
+   };
+
+   "member function pointer opt-in write encodes description key"_test = [] {
+      MemberFunctionThingBeve input{};
+      input.name = "test_item";
+
+      std::string buffer_default{};
+      expect(not glz::write_beve(input, buffer_default));
+      expect(buffer_default.find("description") == std::string::npos);
+
+      struct opts_with_member_functions : glz::opts
+      {
+         bool write_member_functions = true;
+      };
+
+      std::string buffer_opt_in{};
+      expect(not glz::write<glz::set_beve<opts_with_member_functions{}>()>(input, buffer_opt_in));
+      expect(buffer_opt_in.find("description") != std::string::npos);
+   };
+};
+
 int main()
 {
-   glz::trace_begin("binary_test");
+   trace.begin("binary_test");
    write_tests();
    bench();
    test_partial();
    file_include_test();
    container_types();
 
-   glz::trace_end("binary_test");
-   const auto ec = glz::write_file_trace("binary_test.trace.json", std::string{});
+   trace.end("binary_test");
+   const auto ec = glz::write_file_json(trace, "binary_test.trace.json", std::string{});
    if (ec) {
       std::cerr << "trace output failed\n";
    }

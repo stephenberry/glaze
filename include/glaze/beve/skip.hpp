@@ -9,12 +9,12 @@
 #include "glaze/file/file_ops.hpp"
 #include "glaze/util/dump.hpp"
 
-namespace glz::detail
+namespace glz
 {
    template <>
    struct skip_value<BEVE>
    {
-      template <opts Opts>
+      template <auto Opts>
       inline static void op(is_context auto&& ctx, auto&& it, auto&& end) noexcept;
    };
 
@@ -44,10 +44,12 @@ namespace glz::detail
       it += byte_count;
    }
 
-   template <opts Opts>
+   template <auto Opts>
    inline void skip_object_beve(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
-      GLZ_END_CHECK();
+      if (invalid_end(ctx, it, end)) {
+         return;
+      }
       const auto tag = uint8_t(*it);
       ++it;
 
@@ -99,7 +101,7 @@ namespace glz::detail
       }
    }
 
-   template <opts Opts>
+   template <auto Opts>
    inline void skip_typed_array_beve(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       const auto tag = uint8_t(*it);
@@ -156,7 +158,7 @@ namespace glz::detail
       }
    }
 
-   template <opts Opts>
+   template <auto Opts>
    inline void skip_untyped_array_beve(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       ++it;
@@ -170,7 +172,7 @@ namespace glz::detail
       }
    }
 
-   template <opts Opts>
+   template <auto Opts>
       requires(Opts.format == BEVE)
    void skip_array(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
@@ -188,17 +190,21 @@ namespace glz::detail
       }
    }
 
-   template <opts Opts>
+   template <auto Opts>
    GLZ_ALWAYS_INLINE void skip_additional_beve(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       ++it;
       skip_value<BEVE>::op<Opts>(ctx, it, end);
    }
 
-   template <opts Opts>
+   template <auto Opts>
    inline void skip_value<BEVE>::op(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
-      GLZ_END_CHECK();
+      using namespace glz::detail;
+
+      if (invalid_end(ctx, it, end)) {
+         return;
+      }
       switch (uint8_t(*it) & 0b00000'111) {
       case tag::null: {
          ++it;

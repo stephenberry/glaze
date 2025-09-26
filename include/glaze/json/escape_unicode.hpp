@@ -223,8 +223,8 @@ namespace glz::detail
             else {
                // Supplementary character (needs surrogate pair)
                codepoint -= 0x10000;
-               uint16_t high_surrogate = 0xD800 + (codepoint >> 10);
-               uint16_t low_surrogate = 0xDC00 + (codepoint & 0x3FF);
+               uint16_t high_surrogate = uint16_t(0xD800 + (codepoint >> 10));
+               uint16_t low_surrogate = uint16_t(0xDC00 + (codepoint & 0x3FF));
                append_unicode_escape(output, high_surrogate);
                append_unicode_escape(output, low_surrogate);
             }
@@ -239,16 +239,19 @@ namespace glz
 {
    template <string_literal Str>
    inline constexpr auto escape_unicode = []() constexpr -> std::string_view {
-      static constexpr auto escaped = []() constexpr {
-         constexpr auto output_length = detail::escaped_length(Str.sv());
-         std::array<char, output_length + 1> result; // + 1 for null character
-         const auto escaped = detail::escape_json_string(Str.sv(), output_length);
-         for (size_t i = 0; i < output_length; ++i) {
+      constexpr auto escaped = []() constexpr {
+         constexpr auto len = detail::escaped_length(Str.sv());
+         std::array<char, len + 1> result; // + 1 for null character
+         const auto escaped = detail::escape_json_string(Str.sv(), len);
+         for (size_t i = 0; i < len; ++i) {
             result[i] = escaped[i];
          }
-         result[output_length] = '\0';
+         result[len] = '\0';
          return result;
       }();
-      return {escaped.data(), escaped.size() - 1};
+
+      // make_static here required for GCC 12, in the future just make escaped static
+      auto& arr = detail::make_static<escaped>::value;
+      return {arr.data(), arr.size() - 1};
    }();
 }

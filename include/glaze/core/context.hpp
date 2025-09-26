@@ -10,7 +10,7 @@
 
 namespace glz
 {
-   constexpr size_t max_recursive_depth_limit = 256;
+   inline constexpr size_t max_recursive_depth_limit = 256;
 
    enum struct error_code : uint32_t {
       // REPE compliant error codes
@@ -50,6 +50,7 @@ namespace glz
       invalid_variant_string, //
       no_matching_variant_type, //
       expected_true_or_false, //
+      constraint_violated, //
       // Key errors
       key_not_found, //
       unknown_key, //
@@ -90,6 +91,9 @@ namespace glz
    struct error_ctx final
    {
       error_code ec{};
+      // Glaze uses the custom_error_message for some error reporting
+      // But, since the first error always short-circuits parsing, developers are free to inject
+      // their own errors in the custom_error_message.
       std::string_view custom_error_message{};
       // INTERNAL USE:
       size_t location{};
@@ -119,13 +123,3 @@ namespace glz
    template <class T>
    concept is_context = std::same_as<std::decay_t<T>, context>;
 }
-
-#define GLZ_ADD_LEVEL                        \
-   if constexpr (not Opts.null_terminated) { \
-      ++ctx.indentation_level;               \
-   }
-
-#define GLZ_SUB_LEVEL                        \
-   if constexpr (not Opts.null_terminated) { \
-      --ctx.indentation_level;               \
-   }

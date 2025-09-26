@@ -446,7 +446,7 @@ struct results
    }
 };
 
-template <glz::opts Opts>
+template <auto Opts>
 auto glaze_test()
 {
    std::string buffer{json_minified};
@@ -559,7 +559,7 @@ auto glaze_test()
 
 suite object_performance = [] {
    "object_performance"_test = [] {
-      SKIP;
+      // SKIP;
       glaze_test<glz::opts{}>();
    };
 };
@@ -668,7 +668,7 @@ struct test_generator
 
    double generateDouble()
    {
-      auto newValue = randomizeNumberNormal(double{}, std::numeric_limits<double>::max() / 50000000);
+      auto newValue = randomizeNumberNormal(double{}, (std::numeric_limits<double>::max)() / 50000000);
       return generateBool() ? newValue : -newValue;
    };
 
@@ -676,12 +676,13 @@ struct test_generator
 
    uint64_t generateUint()
    {
-      return randomizeNumberNormal(std::numeric_limits<uint64_t>::max() / 2, std::numeric_limits<uint64_t>::max() / 2);
+      return randomizeNumberNormal((std::numeric_limits<uint64_t>::max)() / 2,
+                                   (std::numeric_limits<uint64_t>::max)() / 2);
    };
 
    int64_t generateInt()
    {
-      auto newValue = randomizeNumberNormal(int64_t{}, std::numeric_limits<int64_t>::max());
+      auto newValue = randomizeNumberNormal(int64_t{}, (std::numeric_limits<int64_t>::max)());
       return generateBool() ? newValue : -newValue;
    };
 
@@ -789,7 +790,7 @@ struct glz::meta<abc_test<test_struct>>
                   &T::o, &T::p, &T::q, &T::r, &T::s, &T::t, &T::u, &T::v, &T::w, &T::x, &T::y, &T::z);
 };
 
-template <glz::opts Opts>
+template <auto Opts>
 auto benchmark_tester()
 {
    std::string buffer{};
@@ -1203,7 +1204,7 @@ struct glz::meta<discord_message>
       object("t", &value_type::t, "d", &value_type::d, "op", &value_type::op, "s", &value_type::s);
 };
 
-template <class T, glz::opts Opts>
+template <class T, auto Opts>
 auto generic_tester()
 {
    T obj{};

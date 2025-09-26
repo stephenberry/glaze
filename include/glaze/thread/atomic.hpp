@@ -7,29 +7,17 @@
 
 // Supports serialization/deserialization of std::atomic
 
-namespace glz::detail
+namespace glz
 {
    template <typename T>
    concept is_atomic = requires(T a, typename std::remove_reference_t<decltype(a.load())>& expected,
                                 const typename std::remove_reference_t<decltype(a.load())>& desired) {
-      {
-         a.is_lock_free()
-      } -> std::convertible_to<bool>;
-      {
-         a.store(desired)
-      } noexcept;
-      {
-         a.load()
-      } -> std::same_as<typename std::remove_reference_t<decltype(a.load())>>;
-      {
-         a.exchange(desired)
-      } -> std::same_as<typename std::remove_reference_t<decltype(a.load())>>;
-      {
-         a.compare_exchange_weak(expected, desired)
-      } -> std::convertible_to<bool>;
-      {
-         a.compare_exchange_strong(expected, desired)
-      } -> std::convertible_to<bool>;
+      { a.is_lock_free() } -> std::convertible_to<bool>;
+      { a.store(desired) } noexcept;
+      { a.load() } -> std::same_as<typename std::remove_reference_t<decltype(a.load())>>;
+      { a.exchange(desired) } -> std::same_as<typename std::remove_reference_t<decltype(a.load())>>;
+      { a.compare_exchange_weak(expected, desired) } -> std::convertible_to<bool>;
+      { a.compare_exchange_strong(expected, desired) } -> std::convertible_to<bool>;
    };
 
    template <uint32_t Format, is_atomic T>
@@ -41,7 +29,7 @@ namespace glz::detail
       {
          using V = typename T::value_type;
          V temp{};
-         read<Format>::template op<Opts>(temp, ctx, it, end);
+         parse<Format>::template op<Opts>(temp, ctx, it, end);
          value.store(temp);
       }
    };
@@ -54,7 +42,7 @@ namespace glz::detail
       static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept
       {
          const auto v = value.load();
-         write<Format>::template op<Opts>(v, ctx, args...);
+         serialize<Format>::template op<Opts>(v, ctx, args...);
       }
    };
 }

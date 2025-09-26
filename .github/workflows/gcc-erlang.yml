@@ -1,0 +1,53 @@
+name: gcc-erlang
+
+on:
+  push:
+    branches:
+      - main
+      - feature/*
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+  pull_request:
+    branches:
+      - main
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+
+    strategy:
+      fail-fast: false
+      matrix:
+        gcc: [12, 13, 14]
+        build_type: [Debug]
+        std: [23]
+
+    env:
+      CC: gcc-${{matrix.gcc}}
+      CXX: g++-${{matrix.gcc}}
+
+    steps:
+    - name: Install Dependencies
+      run: |
+          sudo apt-get update
+          sudo apt-get install erlang-dev
+
+    - uses: actions/checkout@v4
+
+    - name: Configure CMake
+      run: |
+        CXXFLAGS="-g3" cmake -B ${{github.workspace}}/build \
+          -DCMAKE_BUILD_TYPE=${{matrix.build_type}} \
+          -DCMAKE_CXX_STANDARD=${{matrix.std}} \
+          -Dglaze_EETF_FORMAT=ON
+
+    - name: Build
+      run: cmake --build build -j $(nproc) --target eetf_test
+
+    - name: Test
+      run: ctest --output-on-failure --test-dir ${{github.workspace}}/build -R eetf_test

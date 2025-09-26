@@ -15,7 +15,7 @@ glz::iface_fn glz_iface() noexcept { return glz::make_iface<>(); }
 void tests()
 {
    using namespace ut;
-   glz::lib_loader lib(TEST_LIB_INTERFACE_LOCATION);
+   glz::lib_loader lib(GLZ_TEST_DIRECTORY);
    auto io = lib["my_api"]();
 
    "bool type name"_test = [] {
@@ -53,10 +53,6 @@ void tests()
    };
 
    "unordered type name"_test = [] {
-      {
-         std::string_view u = glz::name_v<std::unordered_set<std::vector<std::string>>>;
-         expect(u == "std::unordered_set<std::vector<std::string>>");
-      }
       {
          std::string_view u = glz::name_v<std::unordered_map<uint64_t, std::string_view>>;
          expect(u == "std::unordered_map<uint64_t,std::string_view>");

@@ -5,7 +5,9 @@ Glaze provides a number of wrappers that indicate at compile time how a value sh
 ## Available Wrappers
 
 ```c++
+glz::append_arrays<&T::x> // When reading into an array that is appendable, the new data will be appended rather than overwrite
 glz::bools_as_numbers<&T::x> // Read and write booleans as numbers
+glz::cast<&T::x, CastType> // Casts a value to and from the CastType, which is parsed/serialized
 glz::quoted_num<&T::x> // Read and write numbers as strings
 glz::quoted<&T::x> // Read a value as a string and unescape, to avoid the user having to parse twice
 glz::number<&T::x> // Read a string as a number and writes the string as a number
@@ -13,6 +15,8 @@ glz::raw<&T::x> // Write out string like types without quotes
 glz::raw_string<&T::string> // Do not decode/encode escaped characters for strings (improves read/write performance)
 glz::escaped<&T::string> // Opposite of glz::raw_string, it turns off this behavior
 
+glz::read_constraint<&T::x, constraint_function, "Message"> // Applies a constraint function when reading
+  
 glz::partial_read<&T::x> // Reads into only existing fields and elements and then exits without parsing the rest of the input
 
 glz::invoke<&T::func> // Invoke a std::function, lambda, or member function with n-arguments as an array input
@@ -28,6 +32,40 @@ glz::manage<&T::x, &T::read_x, &T::write_x> // Calls read_x() after reading x an
 ## Associated glz::opts
 
 `glz::opts` is the compile time options struct passed to most of Glaze functions to configure read/write behavior. Often wrappers are associated with compile time options and can also be set via `glz::opts`. For example, the `glz::quoted_num` wrapper is associated with the `quoted_num` boolean in `glz::opts`.
+
+## append_arrays
+
+When reading into an array that is appendable, the new data will be appended rather than overwrite
+
+Associated option: `glz::opts{.append_arrays = true};`
+
+```c++
+struct append_obj
+{
+   std::vector<std::string> names{};
+   std::vector<std::array<int, 2>> arrays{};
+};
+
+template <>
+struct glz::meta<append_obj>
+{
+   using T = append_obj;
+   static constexpr auto value = object("names", append_arrays<&T::names>, "arrays", append_arrays<&T::arrays>);
+};
+```
+
+In use:
+
+```c++
+append_obj obj{};
+expect(not glz::read_json(obj, R"({"names":["Bob"],"arrays":[[0,0]]})"));
+expect(obj.names == std::vector<std::string>{"Bob"});
+expect(obj.arrays == std::vector<std::array<int, 2>>{{0,0}});
+
+expect(not glz::read_json(obj, R"({"names":["Liz"],"arrays":[[1,1]]})"));
+expect(obj.names == std::vector<std::string>{"Bob", "Liz"});
+expect(obj.arrays == std::vector<std::array<int, 2>>{{0,0},{1,1}});
+```
 
 ## bools_as_numbers
 
@@ -71,6 +109,33 @@ std::array<bool, 4> obj{};
 constexpr glz::opts opts{.bools_as_numbers = true};
 expect(!glz::read<opts>(obj, s));
 expect(glz::write<opts>(obj) == s);
+```
+
+## cast
+
+`glz::cast` is a simple wrapper that will serialize and deserialize the cast type rather than underlying type. This enables the user to parse JSON for a floating point value into an integer, or perform similar `static_cast` behaviors.
+
+```c++
+struct cast_obj
+{
+   int integer{};
+};
+
+template <>
+struct glz::meta<cast_obj>
+{
+   using T = cast_obj;
+   static constexpr auto value = object("integer", cast<&T::integer, double>);
+};
+```
+
+In use:
+
+```c++
+cast_obj obj{};
+std::string buffer = R"({"integer":5.7})";
+expect(not glz::read_json(obj, buffer));
+expect(obj.integer == 5);
 ```
 
 ## quoted_num
@@ -290,6 +355,113 @@ glz::write_json(obj, buffer);
 expect(buffer == R"({"a":"Hello\nWorld","b":"","c":""})");
 ```
 
+## read_constraint
+
+Enables complex constraints to be defined within a `glz::meta` or using member functions. Parsing is short circuited upon violating a constraint and a nicely formatted error can be produced with a custom error message.
+
+### Field order and optional members
+
+Object members are visited in the order that the JSON input supplies them. This is an intentional design choice so
+that input streams do not have to be re-ordered to match the declaration order. Because of this, a
+`read_constraint` may only rely on fields that have already appeared in the JSON payload. If you need to validate the
+final state of the entire object, use a `self_constraint` as shown below—those run after every field has been read.
+
+Optional members are parsed lazily: if the JSON payload does not contain the key, the member is left untouched and the
+corresponding `read_constraint` is not evaluated. This guarantees that absent optional data does not trigger
+constraints. Keep in mind that reusing the same C++ object across multiple reads will retain the previous value for any
+field that is omitted in later payloads, so reset or re-initialize the instance when you expect fresh state.
+
+```c++
+struct constrained_object
+{
+   int age{};
+   std::string name{};
+};
+
+template <>
+struct glz::meta<constrained_object>
+{
+   using T = constrained_object;
+   static constexpr auto limit_age = [](const T&, int age) { return (age >= 0 && age <= 120); };
+
+   static constexpr auto limit_name = [](const T&, const std::string& name) { return name.size() <= 8; };
+
+   static constexpr auto value = object("age", read_constraint<&T::age, limit_age, "Age out of range">, //
+                                        "name", read_constraint<&T::name, limit_name, "Name is too long">);
+};
+```
+
+### Object level validation
+
+To validate combinations of fields after the object has been fully deserialized, provide a single
+`self_constraint` entry. This constraint runs once after all object members have been populated and can therefore
+reason about the final state.
+
+```c++
+struct cross_constrained
+{
+   int age{};
+   std::string name{};
+};
+
+template <>
+struct glz::meta<cross_constrained>
+{
+   using T = cross_constrained;
+
+   static constexpr auto combined = [](const T& v) {
+      return ((v.name.starts_with('A') && v.age > 10) || v.age > 5);
+   };
+
+   static constexpr auto value = object(&T::age, &T::name);
+   static constexpr auto self_constraint = glz::self_constraint<combined, "Age/name combination invalid">;
+};
+```
+
+You can perform more elaborate business logic as well, such as validating that user credentials are consistent and
+secure:
+
+```c++
+struct registration_request
+{
+   std::string username{};
+   std::string password{};
+   std::string confirm_password{};
+   std::optional<std::string> email{};
+};
+
+template <>
+struct glz::meta<registration_request>
+{
+   using T = registration_request;
+
+   static constexpr auto strong_credentials = [](const T& value) {
+      const bool strong_length = value.password.size() >= 12;
+      const bool matches = value.password == value.confirm_password;
+      const bool has_username = !value.username.empty();
+      return strong_length && matches && has_username;
+   };
+
+   static constexpr auto value = object(
+      &T::username,
+      &T::password,
+      &T::confirm_password,
+      &T::email);
+
+   static constexpr auto self_constraint = glz::self_constraint<strong_credentials,
+      "Password must be at least 12 characters and match confirmation">;
+};
+```
+
+If a self constraint fails, deserialization stops and `glz::error_code::constraint_violated` is reported with the
+associated message.
+
+When it is important that object memory remains valid after every individual assignment—for example, when other code
+observes the partially constructed object during parsing—prefer `read_constraint` on the specific members. Those
+constraints fire before the member is written, so the in-memory representation never stores an invalid value. In
+contrast, `self_constraint` runs after fields are populated, so it can detect issues that span multiple members but the
+object may hold the problematic data until the constraint handler reports an error.
+
 ## partial_read
 
 Reads into existing object and array elements and then exits without parsing the rest of the input. More documentation concerning `partial_read` can be found in the [Partial Read documentation](./partial-read.md).
@@ -353,11 +525,19 @@ struct write_precision_t
 };
 ```
 
+> [!IMPORTANT]
+>
+> The `glz::float_precision float_max_write_precision` is not a core option in `glz::opts`. You must create an options structure that adds this field to enable float precision control. The example below shows this user defined options struct that inherits from `glz::opts`.
+
 In use:
 
 ```c++
+struct float_opts : glz::opts {
+   glz::float_precision float_max_write_precision{};
+};
+
 write_precision_t obj{};
-std::string json_float = glz::write_json(obj);
+std::string json_float = glz::write<float_opts{}>(obj);
 expect(json_float == R"({"pi":3.1415927})") << json_float;
 ```
 
@@ -563,4 +743,3 @@ expect(s == R"({"x":[1,2,3]})");
 expect(obj.x[0] == 1);
 expect(obj.x[1] == 2);
 ```
-

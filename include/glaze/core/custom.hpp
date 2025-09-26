@@ -3,10 +3,11 @@
 
 #pragma once
 
-#include "glaze/core/seek.hpp"
+#include "glaze/core/read.hpp"
 #include "glaze/core/wrappers.hpp"
+#include "glaze/core/write.hpp"
 
-namespace glz::detail
+namespace glz
 {
    template <uint32_t Format, class T>
       requires(is_specialization_v<T, custom_t>)
@@ -34,10 +35,10 @@ namespace glz::detail
                   }
                   else if constexpr (glz::tuple_size_v<Tuple> == 1) {
                      std::decay_t<glz::tuple_element_t<0, Tuple>> input{};
-                     read<Format>::template op<Opts>(input, ctx, it, end);
+                     parse<Format>::template op<Opts>(input, ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
-                     (value.val.*(value.from))(input);
+                     (value.val.*(value.from))(std::move(input));
                   }
                   else {
                      static_assert(false_v<T>, "function cannot have more than one input");
@@ -63,10 +64,10 @@ namespace glz::detail
                      }
                      else if constexpr (glz::tuple_size_v<Tuple> == 1) {
                         std::decay_t<glz::tuple_element_t<0, Tuple>> input{};
-                        read<Format>::template op<Opts>(input, ctx, it, end);
+                        parse<Format>::template op<Opts>(input, ctx, it, end);
                         if (bool(ctx.error)) [[unlikely]]
                            return;
-                        from(input);
+                        from(std::move(input));
                      }
                      else {
                         static_assert(false_v<T>, "function cannot have more than one input");
@@ -77,7 +78,7 @@ namespace glz::detail
                   }
                }
                else {
-                  read<Format>::template op<Opts>(from, ctx, it, end);
+                  parse<Format>::template op<Opts>(from, ctx, it, end);
                }
             }
             else {
@@ -99,15 +100,18 @@ namespace glz::detail
                         return;
                      value.from(value.val);
                   }
-                  else if constexpr (N == 2) {
+                  else if constexpr (N > 1) {
                      std::decay_t<glz::tuple_element_t<1, Tuple>> input{};
-                     read<Format>::template op<Opts>(input, ctx, it, end);
+                     parse<Format>::template op<Opts>(input, ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
-                     value.from(value.val, input);
-                  }
-                  else {
-                     static_assert(false_v<T>, "lambda cannot have more than two inputs");
+                     if constexpr (N == 2) {
+                        value.from(value.val, std::move(input));
+                     }
+                     else {
+                        // Version that passes the glz::context for custom error handling
+                        value.from(value.val, std::move(input), ctx);
+                     }
                   }
                }
                else {
@@ -115,7 +119,10 @@ namespace glz::detail
                }
             }
             else if constexpr (std::invocable<From, decltype(value.val)>) {
-               read<Format>::template op<Opts>(value.from(value.val), ctx, it, end);
+               parse<Format>::template op<Opts>(value.from(value.val), ctx, it, end);
+            }
+            else if constexpr (std::invocable<From, decltype(value.val), context&>) {
+               parse<Format>::template op<Opts>(value.from(value.val, ctx), ctx, it, end);
             }
             else {
                static_assert(
@@ -143,7 +150,7 @@ namespace glz::detail
             if constexpr (std::is_member_function_pointer_v<To>) {
                using Tuple = typename inputs_as_tuple<To>::type;
                if constexpr (glz::tuple_size_v<Tuple> == 0) {
-                  write<Format>::template op<Opts>((value.val.*(value.to))(), ctx, args...);
+                  serialize<Format>::template op<Opts>((value.val.*(value.to))(), ctx, args...);
                }
                else {
                   static_assert(false_v<T>, "function cannot have inputs");
@@ -161,7 +168,7 @@ namespace glz::detail
                   else {
                      using Tuple = typename function_traits<Func>::arguments;
                      if constexpr (glz::tuple_size_v<Tuple> == 0) {
-                        write<Format>::template op<Opts>(to(), ctx, args...);
+                        serialize<Format>::template op<Opts>(to(), ctx, args...);
                      }
                      else {
                         static_assert(false_v<T>, "std::function cannot have inputs");
@@ -169,7 +176,7 @@ namespace glz::detail
                   }
                }
                else {
-                  write<Format>::template op<Opts>(to, ctx, args...);
+                  serialize<Format>::template op<Opts>(to, ctx, args...);
                }
             }
             else {
@@ -178,7 +185,10 @@ namespace glz::detail
          }
          else {
             if constexpr (std::invocable<To, decltype(value.val)>) {
-               write<Format>::template op<Opts>(std::invoke(value.to, value.val), ctx, args...);
+               serialize<Format>::template op<Opts>(std::invoke(value.to, value.val), ctx, args...);
+            }
+            else if constexpr (std::invocable<To, decltype(value.val), context&>) {
+               serialize<Format>::template op<Opts>(std::invoke(value.to, value.val, ctx), ctx, args...);
             }
             else {
                static_assert(false_v<To>,

@@ -20,9 +20,9 @@
 #include "glaze/util/inline.hpp"
 #include "glaze/util/string_literal.hpp"
 
-namespace glz::detail
+namespace glz
 {
-   constexpr std::array<bool, 256> numeric_table = [] {
+   inline constexpr std::array<bool, 256> numeric_table = [] {
       std::array<bool, 256> t{};
       t['0'] = true;
       t['1'] = true;
@@ -42,7 +42,7 @@ namespace glz::detail
       return t;
    }();
 
-   constexpr std::array<char, 256> char_unescape_table = [] {
+   inline constexpr std::array<char, 256> char_unescape_table = [] {
       std::array<char, 256> t{};
       t['"'] = '"';
       t['/'] = '/';
@@ -55,7 +55,7 @@ namespace glz::detail
       return t;
    }();
 
-   constexpr std::array<bool, 256> valid_escape_table = [] {
+   inline constexpr std::array<bool, 256> valid_escape_table = [] {
       std::array<bool, 256> t{};
       t['"'] = true;
       t['/'] = true;
@@ -69,7 +69,7 @@ namespace glz::detail
       return t;
    }();
 
-   constexpr std::array<bool, 256> whitespace_table = [] {
+   inline constexpr std::array<bool, 256> whitespace_table = [] {
       std::array<bool, 256> t{};
       t['\n'] = true;
       t['\t'] = true;
@@ -78,7 +78,7 @@ namespace glz::detail
       return t;
    }();
 
-   constexpr std::array<bool, 256> whitespace_comment_table = [] {
+   inline constexpr std::array<bool, 256> whitespace_comment_table = [] {
       std::array<bool, 256> t{};
       t['\n'] = true;
       t['\t'] = true;
@@ -88,7 +88,7 @@ namespace glz::detail
       return t;
    }();
 
-   constexpr std::array<uint8_t, 256> digit_hex_table = [] {
+   inline constexpr std::array<uint8_t, 256> digit_hex_table = [] {
       std::array<uint8_t, 256> t;
       std::fill(t.begin(), t.end(), uint8_t(255));
       t['0'] = 0;
@@ -113,6 +113,20 @@ namespace glz::detail
       t['D'] = 0xD;
       t['E'] = 0xE;
       t['F'] = 0xF;
+      return t;
+   }();
+
+   inline constexpr std::array<uint16_t, 256> char_escape_table = [] {
+      auto combine = [](const char chars[2]) -> uint16_t { return uint16_t(chars[0]) | (uint16_t(chars[1]) << 8); };
+
+      std::array<uint16_t, 256> t{};
+      t['\b'] = combine(R"(\b)");
+      t['\t'] = combine(R"(\t)");
+      t['\n'] = combine(R"(\n)");
+      t['\f'] = combine(R"(\f)");
+      t['\r'] = combine(R"(\r)");
+      t['\"'] = combine(R"(\")");
+      t['\\'] = combine(R"(\\)");
       return t;
    }();
 
@@ -318,135 +332,75 @@ namespace glz::detail
       return skip_code_point(code_point) > 0;
    }
 
-   // assumes null terminated
-#define GLZ_MATCH_QUOTE                       \
-   if (*it != '"') [[unlikely]] {             \
-      ctx.error = error_code::expected_quote; \
-      return;                                 \
-   }                                          \
-   else [[likely]] {                          \
-      ++it;                                   \
-   }
-
-#define GLZ_MATCH_COMMA                          \
-   if (*it != ',') [[unlikely]] {                \
-      ctx.error = error_code::expected_comma;    \
-      return;                                    \
-   }                                             \
-   else [[likely]] {                             \
-      ++it;                                      \
-   }                                             \
-   if constexpr (not Opts.null_terminated) {     \
-      if (it == end) [[unlikely]] {              \
-         ctx.error = error_code::unexpected_end; \
-         return;                                 \
-      }                                          \
-   }
-
-#define GLZ_MATCH_COLON(RETURN)                  \
-   if (*it != ':') [[unlikely]] {                \
-      ctx.error = error_code::expected_colon;    \
-      return RETURN;                             \
-   }                                             \
-   else [[likely]] {                             \
-      ++it;                                      \
-   }                                             \
-   if constexpr (not Opts.null_terminated) {     \
-      if (it == end) [[unlikely]] {              \
-         ctx.error = error_code::unexpected_end; \
-         return RETURN;                          \
-      }                                          \
-   }
-
-#define GLZ_MATCH_OPEN_BRACKET                   \
-   if (*it != '[') [[unlikely]] {                \
-      ctx.error = error_code::expected_bracket;  \
-      return;                                    \
-   }                                             \
-   else [[likely]] {                             \
-      ++it;                                      \
-   }                                             \
-   if constexpr (not Opts.null_terminated) {     \
-      if (it == end) [[unlikely]] {              \
-         ctx.error = error_code::unexpected_end; \
-         return;                                 \
-      }                                          \
-   }
-
-#define GLZ_MATCH_CLOSE_BRACKET                 \
-   if (*it != ']') [[unlikely]] {               \
-      ctx.error = error_code::expected_bracket; \
-      return;                                   \
-   }                                            \
-   else [[likely]] {                            \
-      ++it;                                     \
-   }
-
-#define GLZ_MATCH_OPEN_BRACE                     \
-   if (*it != '{') [[unlikely]] {                \
-      ctx.error = error_code::expected_brace;    \
-      return;                                    \
-   }                                             \
-   else [[likely]] {                             \
-      ++it;                                      \
-   }                                             \
-   if constexpr (not Opts.null_terminated) {     \
-      if (it == end) [[unlikely]] {              \
-         ctx.error = error_code::unexpected_end; \
-         return;                                 \
-      }                                          \
-   }
-
-#define GLZ_MATCH_CLOSE_BRACE                 \
-   if (*it != '}') [[unlikely]] {             \
-      ctx.error = error_code::expected_brace; \
-      return;                                 \
-   }                                          \
-   else [[likely]] {                          \
-      ++it;                                   \
-   }
-
-#define GLZ_VALID_END(RETURN)                 \
-   if constexpr (not Opts.null_terminated) {  \
-      if (it == end) {                        \
-         ctx.error = error_code::end_reached; \
-         return RETURN;                       \
-      }                                       \
-   }
-
-#define GLZ_INVALID_END(RETURN)                  \
-   if constexpr (not Opts.null_terminated) {     \
-      if (it == end) [[unlikely]] {              \
-         ctx.error = error_code::unexpected_end; \
-         return RETURN;                          \
-      }                                          \
-   }
-
-   template <char c>
-   GLZ_ALWAYS_INLINE void match(is_context auto&& ctx, auto&& it) noexcept
+   // Checks for a character and validates that we are not at the end (considered an error)
+   template <char C, auto Opts>
+   GLZ_ALWAYS_INLINE bool match_invalid_end(is_context auto& ctx, auto&& it, auto&& end) noexcept
    {
-      if (*it != c) [[unlikely]] {
-         ctx.error = error_code::syntax_error;
+      if (*it != C) [[unlikely]] {
+         if constexpr (C == '"') {
+            ctx.error = error_code::expected_quote;
+         }
+         else if constexpr (C == ',') {
+            ctx.error = error_code::expected_comma;
+         }
+         else if constexpr (C == ':') {
+            ctx.error = error_code::expected_colon;
+         }
+         else if constexpr (C == '[' || C == ']') {
+            ctx.error = error_code::expected_bracket;
+         }
+         else if constexpr (C == '{' || C == '}') {
+            ctx.error = error_code::expected_brace;
+         }
+         else {
+            ctx.error = error_code::syntax_error;
+         }
+         return true;
       }
       else [[likely]] {
          ++it;
       }
+      if constexpr (not Opts.null_terminated) {
+         if (it == end) [[unlikely]] {
+            ctx.error = error_code::unexpected_end;
+            return true;
+         }
+      }
+      return false;
    }
 
-   // assumes null terminated
-   template <char c>
-   GLZ_ALWAYS_INLINE void match(is_context auto&& ctx, auto&& it, auto&&) noexcept
+   template <char C>
+   GLZ_ALWAYS_INLINE bool match(is_context auto& ctx, auto&& it) noexcept
    {
-      if (*it != c) [[unlikely]] {
-         ctx.error = error_code::syntax_error;
+      if (*it != C) [[unlikely]] {
+         if constexpr (C == '"') {
+            ctx.error = error_code::expected_quote;
+         }
+         else if constexpr (C == ',') {
+            ctx.error = error_code::expected_comma;
+         }
+         else if constexpr (C == ':') {
+            ctx.error = error_code::expected_colon;
+         }
+         else if constexpr (C == '[' || C == ']') {
+            ctx.error = error_code::expected_bracket;
+         }
+         else if constexpr (C == '{' || C == '}') {
+            ctx.error = error_code::expected_brace;
+         }
+         else {
+            ctx.error = error_code::syntax_error;
+         }
+         return true;
       }
       else [[likely]] {
          ++it;
+         return false;
       }
    }
 
-   template <string_literal str, opts Opts>
-      requires(has_is_padded(Opts) && str.size() <= padding_bytes)
+   template <string_literal str, auto Opts>
+      requires(check_is_padded(Opts) && str.size() <= padding_bytes)
    GLZ_ALWAYS_INLINE void match(is_context auto&& ctx, auto&& it, auto&&) noexcept
    {
       static constexpr auto S = str.sv();
@@ -458,8 +412,8 @@ namespace glz::detail
       }
    }
 
-   template <string_literal str, opts Opts>
-      requires(!has_is_padded(Opts))
+   template <string_literal str, auto Opts>
+      requires(!check_is_padded(Opts))
    GLZ_ALWAYS_INLINE void match(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       const auto n = size_t(end - it);
@@ -479,8 +433,7 @@ namespace glz::detail
          ctx.error = error_code::unexpected_end;
       }
       else if (*it == '/') {
-         while (++it != end && *it != '\n')
-            ;
+         while (++it != end && *it != '\n');
       }
       else if (*it == '*') {
          while (++it != end) {
@@ -534,63 +487,16 @@ namespace glz::detail
    {
       return (chunk & repeat_byte8(0b11110000u));
    }
+}
 
-#define GLZ_SKIP_WS(RETURN)                                              \
-   if constexpr (!Opts.minified) {                                       \
-      if constexpr (Opts.null_terminated) {                              \
-         if constexpr (Opts.comments) {                                  \
-            while (whitespace_comment_table[uint8_t(*it)]) {             \
-               if (*it == '/') [[unlikely]] {                            \
-                  skip_comment(ctx, it, end);                            \
-                  if (bool(ctx.error)) [[unlikely]] {                    \
-                     return RETURN;                                      \
-                  }                                                      \
-               }                                                         \
-               else [[likely]] {                                         \
-                  ++it;                                                  \
-               }                                                         \
-            }                                                            \
-         }                                                               \
-         else {                                                          \
-            while (whitespace_table[uint8_t(*it)]) {                     \
-               ++it;                                                     \
-            }                                                            \
-         }                                                               \
-      }                                                                  \
-      else {                                                             \
-         if constexpr (Opts.comments) {                                  \
-            while (it < end && whitespace_comment_table[uint8_t(*it)]) { \
-               if (*it == '/') [[unlikely]] {                            \
-                  skip_comment(ctx, it, end);                            \
-                  if (bool(ctx.error)) [[unlikely]] {                    \
-                     return RETURN;                                      \
-                  }                                                      \
-               }                                                         \
-               else [[likely]] {                                         \
-                  ++it;                                                  \
-               }                                                         \
-            }                                                            \
-            if (it == end) [[unlikely]] {                                \
-               ctx.error = error_code::end_reached;                      \
-               return RETURN;                                            \
-            }                                                            \
-         }                                                               \
-         else {                                                          \
-            while (it < end && whitespace_table[uint8_t(*it)]) {         \
-               ++it;                                                     \
-            }                                                            \
-            if (it == end) [[unlikely]] {                                \
-               ctx.error = error_code::end_reached;                      \
-               return RETURN;                                            \
-            }                                                            \
-         }                                                               \
-      }                                                                  \
-   }
-
+namespace glz
+{
    // skip whitespace
-   template <opts Opts>
-   GLZ_ALWAYS_INLINE void skip_ws(is_context auto&& ctx, auto&& it, auto&& end) noexcept
+   template <auto Opts>
+   GLZ_ALWAYS_INLINE bool skip_ws(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
+      using namespace glz::detail;
+
       if constexpr (!Opts.minified) {
          if constexpr (Opts.null_terminated) {
             if constexpr (Opts.comments) {
@@ -598,7 +504,7 @@ namespace glz::detail
                   if (*it == '/') [[unlikely]] {
                      skip_comment(ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]] {
-                        return;
+                        return true;
                      }
                   }
                   else [[likely]] {
@@ -618,7 +524,7 @@ namespace glz::detail
                   if (*it == '/') [[unlikely]] {
                      skip_comment(ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]] {
-                        return;
+                        return true;
                      }
                   }
                   else [[likely]] {
@@ -627,7 +533,7 @@ namespace glz::detail
                }
                if (it == end) [[unlikely]] {
                   ctx.error = error_code::end_reached;
-                  return;
+                  return true;
                }
             }
             else {
@@ -636,11 +542,13 @@ namespace glz::detail
                }
                if (it == end) [[unlikely]] {
                   ctx.error = error_code::end_reached;
-                  return;
+                  return true;
                }
             }
          }
       }
+
+      return false;
    }
 
    GLZ_ALWAYS_INLINE void skip_matching_ws(const auto* ws, auto&& it, uint64_t length) noexcept
@@ -755,7 +663,7 @@ namespace glz::detail
       ctx.error = error_code::expected_quote;
    }
 
-   template <opts Opts>
+   template <auto Opts>
    GLZ_ALWAYS_INLINE void skip_string_view(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       while (it < end) [[likely]] {
@@ -779,15 +687,15 @@ namespace glz::detail
       ctx.error = error_code::expected_quote;
    }
 
-   template <opts Opts>
-      requires(has_is_padded(Opts))
+   template <auto Opts>
+      requires(check_is_padded(Opts))
    GLZ_ALWAYS_INLINE void skip_string(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
-      if constexpr (!has_opening_handled(Opts)) {
+      if constexpr (!check_opening_handled(Opts)) {
          ++it;
       }
 
-      if constexpr (Opts.validate_skipped) {
+      if constexpr (check_validate_skipped(Opts)) {
          while (true) {
             uint64_t swar{};
             std::memcpy(&swar, it, 8);
@@ -869,15 +777,15 @@ namespace glz::detail
       }
    }
 
-   template <opts Opts>
-      requires(not has_is_padded(Opts))
+   template <auto Opts>
+      requires(not check_is_padded(Opts))
    GLZ_ALWAYS_INLINE void skip_string(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
-      if constexpr (!has_opening_handled(Opts)) {
+      if constexpr (!check_opening_handled(Opts)) {
          ++it;
       }
 
-      if constexpr (Opts.validate_skipped) {
+      if constexpr (check_validate_skipped(Opts)) {
          while (true) {
             if ((*it & 0b11100000) == 0) [[unlikely]] {
                ctx.error = error_code::syntax_error;
@@ -921,8 +829,8 @@ namespace glz::detail
       }
    }
 
-   template <opts Opts, char open, char close, size_t Depth = 1>
-      requires(has_is_padded(Opts) && not bool(Opts.comments))
+   template <auto Opts, char open, char close, size_t Depth = 1>
+      requires(check_is_padded(Opts) && not bool(Opts.comments))
    GLZ_ALWAYS_INLINE void skip_until_closed(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       size_t depth = Depth;
@@ -969,8 +877,8 @@ namespace glz::detail
       ctx.error = error_code::unexpected_end;
    }
 
-   template <opts Opts, char open, char close, size_t Depth = 1>
-      requires(has_is_padded(Opts) && bool(Opts.comments))
+   template <auto Opts, char open, char close, size_t Depth = 1>
+      requires(check_is_padded(Opts) && bool(Opts.comments))
    GLZ_ALWAYS_INLINE void skip_until_closed(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       size_t depth = Depth;
@@ -1024,8 +932,8 @@ namespace glz::detail
       ctx.error = error_code::unexpected_end;
    }
 
-   template <opts Opts, char open, char close, size_t Depth = 1>
-      requires(!has_is_padded(Opts) && not bool(Opts.comments))
+   template <auto Opts, char open, char close, size_t Depth = 1>
+      requires(!check_is_padded(Opts) && not bool(Opts.comments))
    GLZ_ALWAYS_INLINE void skip_until_closed(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       size_t depth = Depth;
@@ -1108,8 +1016,8 @@ namespace glz::detail
       ctx.error = error_code::unexpected_end;
    }
 
-   template <opts Opts, char open, char close, size_t Depth = 1>
-      requires(!has_is_padded(Opts) && bool(Opts.comments))
+   template <auto Opts, char open, char close, size_t Depth = 1>
+      requires(!check_is_padded(Opts) && bool(Opts.comments))
    GLZ_ALWAYS_INLINE void skip_until_closed(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       size_t depth = Depth;
@@ -1257,10 +1165,10 @@ namespace glz::detail
       }
    }
 
-   template <opts Opts>
+   template <auto Opts>
    GLZ_ALWAYS_INLINE void skip_number(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
-      if constexpr (!Opts.validate_skipped) {
+      if constexpr (!check_validate_skipped(Opts)) {
          while (numeric_table[uint8_t(*it)]) {
             ++it;
          }
@@ -1277,9 +1185,9 @@ namespace glz::detail
       if (bool(ctx.error)) [[unlikely]]
          return {};
 
-      match<'"'>(ctx, it);
-      if (bool(ctx.error)) [[unlikely]]
+      if (match<'"'>(ctx, it)) {
          return {};
+      }
       auto start = it;
       skip_till_quote(ctx, it, end);
       if (bool(ctx.error)) [[unlikely]]
@@ -1391,7 +1299,7 @@ namespace glz
             using S = std::make_signed_t<U>;
             // The largest magnitude we can represent in a negative value is (max + 1)
             // since -(min()) = max() + 1.
-            U limit = static_cast<U>(std::numeric_limits<I>::max()) + 1U;
+            U limit = static_cast<U>((std::numeric_limits<I>::max)()) + 1U;
             if (negative) {
                if (acc > limit) {
                   result.ec = std::errc::result_out_of_range;
@@ -1401,7 +1309,7 @@ namespace glz
                value = static_cast<I>(0 - static_cast<S>(acc));
             }
             else {
-               if (acc > static_cast<U>(std::numeric_limits<I>::max())) {
+               if (acc > static_cast<U>((std::numeric_limits<I>::max)())) {
                   result.ec = std::errc::result_out_of_range;
                   result.ptr = first;
                   return result;

@@ -7,19 +7,19 @@
 #include <bit>
 #include <limits>
 
-namespace glz::detail
+namespace glz
 {
    // Basicly std::bitset but exposes things normally not availible like the bitscan functions
-   template <size_t N, std::unsigned_integral Chunk_t = uint64_t>
+   template <size_t N, std::unsigned_integral Chunk = uint64_t>
    struct bit_array
    {
-      static constexpr size_t n_chunk_bits = std::numeric_limits<Chunk_t>::digits;
+      static constexpr size_t n_chunk_bits = std::numeric_limits<Chunk>::digits;
       static constexpr size_t n_chunks = (N == 0) ? 0 : (N - 1) / n_chunk_bits + 1;
 
       struct reference
       {
-         Chunk_t* data{};
-         Chunk_t maskbit{};
+         Chunk* data{};
+         Chunk maskbit{};
 
          constexpr reference& operator=(bool other) noexcept
          {
@@ -35,13 +35,13 @@ namespace glz::detail
          constexpr bool operator~() const noexcept { return (*data & maskbit) == 0; }
       };
 
-      std::array<Chunk_t, n_chunks> data{};
+      std::array<Chunk, n_chunks> data{};
 
       constexpr reference operator[](size_t pos)
       {
          const auto chunk = pos / n_chunk_bits;
          const auto offset = pos % n_chunk_bits;
-         const auto maskbit = Chunk_t{1} << offset;
+         const auto maskbit = Chunk{1} << offset;
          return reference{&data[chunk], maskbit};
       }
 
@@ -49,7 +49,7 @@ namespace glz::detail
       {
          const auto chunk = pos / n_chunk_bits;
          const auto offset = pos % n_chunk_bits;
-         const auto maskbit = Chunk_t{1} << offset;
+         const auto maskbit = Chunk{1} << offset;
          return data[chunk] & maskbit;
       }
 

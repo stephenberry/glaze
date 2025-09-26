@@ -12,6 +12,16 @@
 #include "glaze/thread/value_proxy.hpp"
 #include "glaze/util/expected.hpp"
 
+#ifndef GLZ_THROW_OR_ABORT
+#if __cpp_exceptions
+#define GLZ_THROW_OR_ABORT(EXC) (throw(EXC))
+#define GLZ_NOEXCEPT noexcept(false)
+#else
+#define GLZ_THROW_OR_ABORT(EXC) (std::abort())
+#define GLZ_NOEXCEPT noexcept(true)
+#endif
+#endif
+
 // Provides a semi-safe flat map
 // This shared_async_map only provides thread safety when inserting/deletion
 // It is intended to store thread safe types for more efficient access

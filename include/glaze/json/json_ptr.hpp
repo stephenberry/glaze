@@ -59,7 +59,7 @@ namespace glz
 
          result_t ret;
 
-         for_each<N>([&](auto I) {
+         for_each<N>([&]<size_t I>() {
             if (bool(ctx.error)) [[unlikely]] {
                return;
             }
@@ -70,8 +70,12 @@ namespace glz
                case '{': {
                   ++it;
                   while (true) {
-                     GLZ_SKIP_WS();
-                     GLZ_MATCH_QUOTE;
+                     if (skip_ws<Opts>(ctx, it, end)) {
+                        return;
+                     }
+                     if (match<'"'>(ctx, it)) {
+                        return;
+                     }
 
                      auto* start = it;
                      skip_string_view<Opts>(ctx, it, end);
@@ -81,9 +85,15 @@ namespace glz
                      ++it;
 
                      if (key.size() == k.size() && comparitor<key>(k.data())) {
-                        GLZ_SKIP_WS();
-                        GLZ_MATCH_COLON();
-                        GLZ_SKIP_WS();
+                        if (skip_ws<Opts>(ctx, it, end)) {
+                           return;
+                        }
+                        if (match_invalid_end<':', Opts>(ctx, it, end)) {
+                           return;
+                        }
+                        if (skip_ws<Opts>(ctx, it, end)) {
+                           return;
+                        }
 
                         if constexpr (I == (N - 1)) {
                            ret = parse_value<Opts>(ctx, it, end);
@@ -108,7 +118,7 @@ namespace glz
                   // Could optimize by counting commas
                   static constexpr auto n = stoui(key);
                   if constexpr (n) {
-                     for_each<n.value()>([&](auto) {
+                     for_each<n.value()>([&]<size_t>() {
                         skip_value<JSON>::op<Opts>(ctx, it, end);
                         if (bool(ctx.error)) [[unlikely]] {
                            return;
@@ -120,7 +130,9 @@ namespace glz
                         ++it;
                      });
 
-                     GLZ_SKIP_WS();
+                     if (skip_ws<Opts>(ctx, it, end)) {
+                        return;
+                     }
 
                      if constexpr (I == (N - 1)) {
                         ret = parse_value<Opts>(ctx, it, end);
@@ -135,11 +147,17 @@ namespace glz
                }
             }
             else {
-               GLZ_MATCH_OPEN_BRACE;
+               if (match_invalid_end<'{', Opts>(ctx, it, end)) {
+                  return;
+               }
 
                while (it < end) {
-                  GLZ_SKIP_WS();
-                  GLZ_MATCH_QUOTE;
+                  if (skip_ws<Opts>(ctx, it, end)) {
+                     return;
+                  }
+                  if (match<'"'>(ctx, it)) {
+                     return;
+                  }
 
                   auto* start = it;
                   skip_string_view<Opts>(ctx, it, end);
@@ -149,9 +167,15 @@ namespace glz
                   ++it;
 
                   if (key.size() == k.size() && comparitor<key>(k.data())) {
-                     GLZ_SKIP_WS();
-                     GLZ_MATCH_COLON();
-                     GLZ_SKIP_WS();
+                     if (skip_ws<Opts>(ctx, it, end)) {
+                        return;
+                     }
+                     if (match_invalid_end<':', Opts>(ctx, it, end)) {
+                        return;
+                     }
+                     if (skip_ws<Opts>(ctx, it, end)) {
+                        return;
+                     }
 
                      if constexpr (I == (N - 1)) {
                         ret = parse_value<Opts>(ctx, it, end);

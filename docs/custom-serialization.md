@@ -1,10 +1,12 @@
 # Custom Serialization/Deserialization
 
-See [Custom Read/Write](https://github.com/stephenberry/glaze/tree/main#custom-readwrite) in the main README.md for using member functions for custom handling.
+See [Custom Read/Write](https://github.com/stephenberry/glaze/tree/main#custom-readwrite) in the main README.md for using `glz::custom`.
 
-Advanced custom serialization/deserialization is achievable by implementing your own `from` and `to` specializations within the glz::detail namespace.
+Advanced custom serialization/deserialization is achievable by implementing your own `from` and `to` specializations within the `glz` namespace.
 
-> Note that the API within the `detail` namespace is subject to change and is therefore not expected to be as stable.
+> [!NOTE]
+>
+> Glaze provides `parse` and `serialize` helpers that decode the type of the value intended for `from` or `to` specializations. The developer only needs to specialize `from/to` structs, but you can use `parse/serialize` for cleaner syntax (see examples or Glaze's codebase).
 
 Example:
 ```c++
@@ -21,15 +23,15 @@ struct glz::meta<date>
    static constexpr auto value = object("date", &T::human_readable);
 };
 
-namespace glz::detail
+namespace glz
 {
    template <>
    struct from<JSON, date>
    {
       template <auto Opts>
-      static void op(date& value, auto&&... args)
+      static void op(date& value, is_context auto&& ctx, auto&& it, auto&& end)
       {
-         read<JSON>::op<Opts>(value.human_readable, args...);
+         parse<JSON>::op<Opts>(value.human_readable, ctx, it, end);
          value.data = std::stoi(value.human_readable);
       }
    };
@@ -38,10 +40,10 @@ namespace glz::detail
    struct to<JSON, date>
    {
       template <auto Opts>
-      static void op(date& value, auto&&... args) noexcept
+      static void op(date& value, is_context auto&& ctx, auto&& b, auto&& ix) noexcept
       {
          value.human_readable = std::to_string(value.data);
-         write<JSON>::op<Opts>(value.human_readable, args...);
+         serialize<JSON>::op<Opts>(value.human_readable, ctx, b, ix);
       }
    };
 }
@@ -51,37 +53,49 @@ void example() {
   d.data = 55;
 
   std::string s{};
-  glz::write_json(d, s);
+  expect(not glz::write_json(d, s));
 
   expect(s == R"("55")");
 
   d.data = 0;
-  glz::read_json(d, s);
+  expect(not glz::read_json(d, s));
   expect(d.data == 55);
 }
 ```
 
 Notes:
 
-The templated `Opts` parameter contains the compile time options. The `args...` can be broken out into the runtime context (runtime options), iterators, and the buffer index when reading.
+The templated `Opts` parameter contains the compile time options. 
+
+For reading (`from` specializations), the parameters are:
+- `value`: The object being parsed into
+- `ctx`: The context containing runtime options (use `is_context auto&&`)
+- `it`: Iterator to the current position in the input buffer
+- `end`: Iterator to the end of the input buffer
+
+For writing (`to` specializations), the parameters are:
+- `value`: The object being serialized
+- `ctx`: The context containing runtime options (use `is_context auto&&`)
+- `b`: The output buffer to write to
+- `ix`: The current index in the output buffer
 
 ## UUID Example
 
 Say we have a UUID library for converting a `uuid_t` from a `std::string_view` and to a `std::string`.
 
 ```c++
-namespace glz::detail
+namespace glz
 {
    template <>
    struct from<JSON, uuid_t>
    {
       template <auto Opts>
-      static void op(uuid_t& uuid, auto&&... args)
+      static void op(uuid_t& uuid, is_context auto&& ctx, auto&& it, auto&& end)
       {
          // Initialize a string_view with the appropriately lengthed buffer
          // Alternatively, use a std::string for any size (but this will allocate)
          std::string_view str = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX";
-         read<JSON>::op<Opts>(str, args...);
+         parse<JSON>::op<Opts>(str, ctx, it, end);
          uuid = uuid_lib::uuid_from_string_view(str);
       }
    };
@@ -90,10 +104,10 @@ namespace glz::detail
    struct to<JSON, uuid_t>
    {
       template <auto Opts>
-      static void op(const uuid_t& uuid, auto&&... args) noexcept
+      static void op(const uuid_t& uuid, is_context auto&& ctx, auto&& b, auto&& ix) noexcept
       {
          std::string str = uuid_lib::uuid_to_string(uuid);
-         write<JSON>::op<Opts>(str, args...);
+         serialize<JSON>::op<Opts>(str, ctx, b, ix);
       }
    };
 }
@@ -105,14 +119,14 @@ You may want to custom parse a class that matches an underlying glaze partial sp
 
 ```c++
 template <class T> requires readable_array_t<T>
-struct from_json<T>
+struct from<JSON, T>
 ```
 
 If your own parsing function desires partial template specialization, then ambiguity may occur:
 
 ```c++
 template <class T> requires std::derived_from<T, vec_t>
-struct from_json<T>
+struct from<JSON, T>
 ```
 
 To solve this problem, glaze will check for `custom_read` or `custom_write` values within `glz::meta` and remove the ambiguity and use the custom parser.
@@ -124,4 +138,3 @@ struct glz::meta<T>
    static constexpr auto custom_read = true;
 };
 ```
-

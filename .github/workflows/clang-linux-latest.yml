@@ -1,0 +1,72 @@
+name: clang-linux-latest
+# This is for the latest version of Clang that aren't yet
+# supported by default in the Github Action runners
+# and instead need to be installed
+
+on:
+  push:
+    branches:
+      - main
+      - feature/*
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+  pull_request:
+    branches:
+      - main
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        clang: [19, 20]
+        build_type: [Debug]
+        std: [23]
+
+    env:
+      CC: clang-${{matrix.clang}}
+      CXX: clang++-${{matrix.clang}}
+      LLVM_VERSION: ${{matrix.clang}}
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install latest clang
+      run: |
+        wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
+        # Use the 'noble' repository for Ubuntu 24.04
+        echo "deb http://apt.llvm.org/noble/ llvm-toolchain-noble-${{matrix.clang}} main" | sudo tee /etc/apt/sources.list.d/llvm.list
+        # Clean apt cache and update before installing
+        sudo apt-get clean
+        sudo apt-get update
+        sudo apt-get install -y --fix-missing clang-${{matrix.clang}} libc++-${{matrix.clang}}-dev libc++abi-${{matrix.clang}}-dev
+
+    - name: Set path for clang
+      run: |
+        echo "PATH=/usr/lib/llvm-${{matrix.clang}}/bin:$PATH" >> $GITHUB_ENV
+        clang-${{matrix.clang}} --version
+        clang++-${{matrix.clang}} --version
+
+    - name: Configure CMake
+      run: |
+        cmake -B ${{github.workspace}}/build \
+          -DCMAKE_BUILD_TYPE=${{matrix.build_type}} \
+          -DCMAKE_CXX_STANDARD=${{matrix.std}} \
+          -DCMAKE_C_COMPILER=${{env.CC}} \
+          -DCMAKE_CXX_COMPILER=${{env.CXX}} \
+          -DCMAKE_CXX_FLAGS="-stdlib=libc++" \
+          -DCMAKE_EXE_LINKER_FLAGS="-stdlib=libc++ -lc++abi"
+
+    - name: Build
+      run: cmake --build build -j $(nproc)
+
+    - name: Test
+      working-directory: build
+      run: ctest -j $(nproc) --output-on-failure

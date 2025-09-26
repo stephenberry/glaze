@@ -12,7 +12,7 @@
 #include "glaze/util/dump.hpp"
 #include "glaze/util/itoa.hpp"
 
-namespace glz::detail
+namespace glz
 {
    template <class T>
    GLZ_ALWAYS_INLINE constexpr auto sized_integer_conversion() noexcept
@@ -46,7 +46,7 @@ namespace glz::detail
    struct write_chars
    {
       template <auto Opts, class B>
-      inline static void op(num_t auto&& value, is_context auto&&, B&& b, auto&& ix) noexcept
+      inline static void op(num_t auto&& value, is_context auto&& ctx, B&& b, auto&& ix) noexcept
       {
          /*if constexpr (std::same_as<std::decay_t<B>, std::string>) {
             // more efficient strings in C++23:
@@ -55,8 +55,8 @@ namespace glz::detail
 
          // https://stackoverflow.com/questions/1701055/what-is-the-maximum-length-in-chars-needed-to-represent-any-double-value
          // maximum length for a double should be 24 chars, we use 64 to be sufficient for float128_t
-         if constexpr (resizable<B> && not has_write_unchecked(Opts)) {
-            if (const auto k = ix + 64; k > b.size()) [[unlikely]] {
+         if constexpr (resizable<B> && not check_write_unchecked(Opts)) {
+            if (const auto k = ix + 64; k > b.size()) {
                b.resize(2 * k);
             }
          }
@@ -64,16 +64,16 @@ namespace glz::detail
          using V = std::decay_t<decltype(value)>;
 
          if constexpr (std::floating_point<V>) {
-            if constexpr (uint8_t(Opts.float_max_write_precision) > 0 &&
-                          uint8_t(Opts.float_max_write_precision) < sizeof(V)) {
+            if constexpr (uint8_t(check_float_max_write_precision(Opts)) > 0 &&
+                          uint8_t(check_float_max_write_precision(Opts)) < sizeof(V)) {
                // we cast to a lower precision floating point value before writing out
-               if constexpr (uint8_t(Opts.float_max_write_precision) == 8) {
+               if constexpr (uint8_t(check_float_max_write_precision(Opts)) == 8) {
                   const auto reduced = static_cast<double>(value);
                   const auto start = reinterpret_cast<char*>(&b[ix]);
                   const auto end = glz::to_chars(start, reduced);
                   ix += size_t(end - start);
                }
-               else if constexpr (uint8_t(Opts.float_max_write_precision) == 4) {
+               else if constexpr (uint8_t(check_float_max_write_precision(Opts)) == 4) {
                   const auto reduced = static_cast<float>(value);
                   const auto start = reinterpret_cast<char*>(&b[ix]);
                   const auto end = glz::to_chars(start, reduced);
@@ -92,7 +92,8 @@ namespace glz::detail
                const auto start = reinterpret_cast<char*>(&b[ix]);
                const auto [ptr, ec] = std::to_chars(start, &b[0] + b.size(), value, std::chars_format::general);
                if (ec != std::errc()) {
-                  // TODO: Do we need to handle this error state?
+                  ctx.error = error_code::unexpected_end;
+                  return;
                }
                ix += size_t(ptr - start);
             }

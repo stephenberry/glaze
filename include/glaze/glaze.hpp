@@ -32,6 +32,7 @@
 
 #pragma once
 
+#include "glaze/base64/base64.hpp"
 #include "glaze/beve.hpp"
 #include "glaze/beve/beve_to_json.hpp"
 #include "glaze/csv.hpp"
@@ -41,3 +42,4 @@
 #include "glaze/json.hpp"
 #include "glaze/record/recorder.hpp"
 #include "glaze/stencil/stencil.hpp"
+#include "glaze/util/key_transformers.hpp"

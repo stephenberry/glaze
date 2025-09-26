@@ -36,10 +36,54 @@ jobs:
 
     - name: Configure CMake
       run: |
-        CXXFLAGS="-g3" cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{matrix.build_type}} -DCMAKE_CXX_STANDARD=${{matrix.std}}
+        CXXFLAGS="-g3" cmake -S "$GITHUB_WORKSPACE" -B "$GITHUB_WORKSPACE/build" -DCMAKE_BUILD_TYPE=${{matrix.build_type}} -DCMAKE_CXX_STANDARD=${{matrix.std}}
 
     - name: Build
-      run: cmake --build build -j $(nproc)
+      run: cmake --build "$GITHUB_WORKSPACE/build" -j $(nproc)
 
     - name: Test
-      run: ctest --output-on-failure --test-dir ${{github.workspace}}/build
+      run: ctest --output-on-failure --test-dir "$GITHUB_WORKSPACE/build"
+
+  build-gcc15:
+    runs-on: ubuntu-24.04
+    container:
+      image: gcc:15
+
+    strategy:
+      fail-fast: false
+      matrix:
+        build_type: [Debug]
+        std: [23]
+
+    env:
+      CC: gcc
+      CXX: g++
+
+    steps:
+    - name: Install build dependencies
+      env:
+        DEBIAN_FRONTEND: noninteractive
+      run: |
+        apt-get update
+        apt-get install -y --no-install-recommends \
+          ca-certificates \
+          cmake \
+          git \
+          libssl-dev \
+          python3
+        update-ca-certificates
+
+    - uses: actions/checkout@v4
+
+    - name: Prepare build directory
+      run: cmake -E make_directory "$GITHUB_WORKSPACE/build"
+
+    - name: Configure CMake
+      run: |
+        CXXFLAGS="-g3" cmake -S "$GITHUB_WORKSPACE" -B "$GITHUB_WORKSPACE/build" -DCMAKE_BUILD_TYPE=${{matrix.build_type}} -DCMAKE_CXX_STANDARD=${{matrix.std}}
+
+    - name: Build
+      run: cmake --build "$GITHUB_WORKSPACE/build" -j $(nproc)
+
+    - name: Test
+      run: ctest --output-on-failure --test-dir "$GITHUB_WORKSPACE/build"

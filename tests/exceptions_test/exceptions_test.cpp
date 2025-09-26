@@ -2,6 +2,8 @@
 // For the license information refer to glaze.hpp
 
 #include "glaze/glaze_exceptions.hpp"
+#include "glaze/thread/async.hpp"
+#include "glaze/thread/async_string.hpp"
 #include "glaze/thread/shared_async_map.hpp"
 #include "glaze/thread/shared_async_vector.hpp"
 #include "glaze/thread/threadpool.hpp"
@@ -52,7 +54,7 @@ suite starter = [] {
       const std::string schema = glz::ex::write_json_schema<my_struct>();
       expect(
          schema ==
-         R"({"type":["object"],"properties":{"arr":{"$ref":"#/$defs/std::array<uint64_t,3>"},"d":{"$ref":"#/$defs/double"},"hello":{"$ref":"#/$defs/std::string"},"i":{"$ref":"#/$defs/int32_t"}},"additionalProperties":false,"$defs":{"double":{"type":["number"],"minimum":-1.7976931348623157E308,"maximum":1.7976931348623157E308},"int32_t":{"type":["integer"],"minimum":-2147483648,"maximum":2147483647},"std::array<uint64_t,3>":{"type":["array"],"items":{"$ref":"#/$defs/uint64_t"},"minItems":3,"maxItems":3},"std::string":{"type":["string"]},"uint64_t":{"type":["integer"],"minimum":0,"maximum":18446744073709551615}}})")
+         R"({"type":["object"],"properties":{"arr":{"$ref":"#/$defs/std::array<uint64_t,3>"},"d":{"$ref":"#/$defs/double"},"hello":{"$ref":"#/$defs/std::string"},"i":{"$ref":"#/$defs/int32_t"}},"additionalProperties":false,"$defs":{"double":{"type":["number"],"minimum":-1.7976931348623157E308,"maximum":1.7976931348623157E308},"int32_t":{"type":["integer"],"minimum":-2147483648,"maximum":2147483647},"std::array<uint64_t,3>":{"type":["array"],"items":{"$ref":"#/$defs/uint64_t"},"minItems":3,"maxItems":3},"std::string":{"type":["string"]},"uint64_t":{"type":["integer"],"minimum":0,"maximum":18446744073709551615}},"title":"my_struct"})")
          << schema;
    };
 
@@ -61,7 +63,7 @@ suite starter = [] {
       glz::ex::write_json_schema<my_struct>(schema);
       expect(
          schema ==
-         R"({"type":["object"],"properties":{"arr":{"$ref":"#/$defs/std::array<uint64_t,3>"},"d":{"$ref":"#/$defs/double"},"hello":{"$ref":"#/$defs/std::string"},"i":{"$ref":"#/$defs/int32_t"}},"additionalProperties":false,"$defs":{"double":{"type":["number"],"minimum":-1.7976931348623157E308,"maximum":1.7976931348623157E308},"int32_t":{"type":["integer"],"minimum":-2147483648,"maximum":2147483647},"std::array<uint64_t,3>":{"type":["array"],"items":{"$ref":"#/$defs/uint64_t"},"minItems":3,"maxItems":3},"std::string":{"type":["string"]},"uint64_t":{"type":["integer"],"minimum":0,"maximum":18446744073709551615}}})")
+         R"({"type":["object"],"properties":{"arr":{"$ref":"#/$defs/std::array<uint64_t,3>"},"d":{"$ref":"#/$defs/double"},"hello":{"$ref":"#/$defs/std::string"},"i":{"$ref":"#/$defs/int32_t"}},"additionalProperties":false,"$defs":{"double":{"type":["number"],"minimum":-1.7976931348623157E308,"maximum":1.7976931348623157E308},"int32_t":{"type":["integer"],"minimum":-2147483648,"maximum":2147483647},"std::array<uint64_t,3>":{"type":["array"],"items":{"$ref":"#/$defs/uint64_t"},"minItems":3,"maxItems":3},"std::string":{"type":["string"]},"uint64_t":{"type":["integer"],"minimum":0,"maximum":18446744073709551615}},"title":"my_struct"})")
          << schema;
    };
 };
@@ -250,7 +252,7 @@ suite shared_async_map_tests = [] {
       }
    };
 
-   static_assert(glz::detail::readable_map_t<glz::shared_async_map<std::string, std::atomic<int>>>);
+   static_assert(glz::readable_map_t<glz::shared_async_map<std::string, std::atomic<int>>>);
 
    "shared_async_map write_json"_test = [] {
       glz::shared_async_map<std::string, std::atomic<int>> map;
@@ -427,7 +429,7 @@ suite shared_async_vector_tests = [] {
       expect(vec.at(1).value() == 2);
       expect(vec.size() == 2);
 
-      // Iterate over the vector with const_iterator
+      // Iterate over the vector with constterator
       for (const auto& value : vec) {
          expect(value < 3);
       }
@@ -610,6 +612,133 @@ suite shared_async_vector_tests = [] {
       expect(vec.at(0).value() == 100);
       expect(vec.at(1).value() == 300);
    };*/
+};
+
+suite async_tests = [] {
+   "non-void read and write operations"_test = [] {
+      // Initialize with 10.
+      glz::async<int> s{10};
+
+      // Read with a lambda that returns a value.
+      auto doubled = s.read([](const int& x) -> int { return x * 2; });
+      expect(doubled == 20);
+
+      // Write with a lambda that returns a value.
+      auto new_value = s.write([](int& x) -> int {
+         x += 5;
+         return x;
+      });
+      expect(new_value == 15);
+
+      // Confirm the new value via a read lambda (void-returning).
+      s.read([](const int& x) { expect(x == 15); });
+   };
+
+   "void read operation"_test = [] {
+      glz::async<int> s{20};
+      bool flag = false;
+      s.read([&flag](const int& x) {
+         if (x == 20) flag = true;
+      });
+      expect(flag);
+   };
+
+   "void write operation"_test = [] {
+      glz::async<int> s{100};
+      s.write([](int& x) { x = 200; });
+      s.read([](const int& x) { expect(x == 200); });
+   };
+
+   "copy constructor"_test = [] {
+      glz::async<int> original{123};
+      glz::async<int> copy = original;
+      copy.read([](const int& x) { expect(x == 123); });
+   };
+
+   "move constructor"_test = [] {
+      glz::async<std::string> original{"hello"};
+      glz::async<std::string> moved = std::move(original);
+      moved.read([](const std::string& s) { expect(s == "hello"); });
+   };
+
+   "copy assignment."_test = [] {
+      glz::async<int> a{10}, b{20};
+      a = b; // requires T to be copy-assignable
+      a.read([](const int& x) { expect(x == 20); });
+   };
+
+   "move assignment."_test = [] {
+      glz::async<std::string> a{"foo"}, b{"bar"};
+      a = std::move(b); // requires T to be move-assignable
+      a.read([](const std::string& s) { expect(s == "bar"); });
+   };
+
+   "concurrent access."_test = [] {
+      glz::async<int> s{0};
+      const int num_threads = 10;
+      const int increments = 1000;
+      std::vector<std::thread> threads;
+
+      for (int i = 0; i < num_threads; ++i) {
+         threads.emplace_back([&] {
+            for (int j = 0; j < increments; ++j) {
+               s.write([](int& value) { ++value; });
+            }
+         });
+      }
+
+      for (auto& th : threads) {
+         th.join();
+      }
+
+      // Verify that the value is the expected total.
+      s.read([&](const int& value) { expect(value == num_threads * increments); });
+   };
+};
+
+struct times
+{
+   uint64_t time;
+   std::optional<uint64_t> time1;
+
+   void read_time(uint64_t timeValue) { time = timeValue; }
+
+   void read_time1(std::optional<uint64_t> time1Value) { time1 = time1Value; }
+};
+
+struct date
+{
+   times t;
+};
+
+template <>
+struct glz::meta<times>
+{
+   using T = times;
+   static constexpr auto value =
+      object("time", glz::custom<&T::read_time, nullptr>, "time1", glz::custom<&T::read_time1, nullptr>);
+};
+
+template <>
+struct glz::meta<date>
+{
+   using T = date;
+   static constexpr auto value = object("date", &T::t);
+};
+
+suite custom_tests = [] {
+   "glz::custom"_test = [] {
+      constexpr std::string_view onlyTimeJson = R"({"date":{"time":1}})";
+
+      date d{};
+
+      try {
+         glz::ex::read<glz::opts{.error_on_missing_keys = true}>(d, onlyTimeJson);
+      }
+      catch (const std::exception& error) {
+         expect(false) << error.what() << '\n';
+      }
+   };
 };
 
 int main() { return 0; }

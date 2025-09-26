@@ -22,9 +22,9 @@ namespace glz
 
       static constexpr sv type_size_hash = hash128_v<int_to_sv_v<size_t, sizeof(T)>>; // must hash for consistent length
 
-      static constexpr sv major_version = hash128_i_v<version<T>[0]>; // must hash for consistent length
-      static constexpr sv minor_version = hash128_i_v<version<T>[1]>; // must hash for consistent length
-      static constexpr sv revision = hash128_i_v<version<T>[2]>; // must hash for consistent length
+      static constexpr sv major_version = hash128_i_v<version_v<T>.major>; // must hash for consistent length
+      static constexpr sv minor_version = hash128_i_v<version_v<T>.minor>; // must hash for consistent length
+      static constexpr sv revision = hash128_i_v<version_v<T>.patch>; // must hash for consistent length
 
 #define std_trait(x) static constexpr sv x = to_sv<std::x##_v<T>>()
       std_trait(is_trivial);
@@ -51,8 +51,6 @@ namespace glz
       std_trait(is_aggregate);
 #undef std_trait
 
-      // static constexpr sv cplusplus = empty_if<std::is_standard_layout_v<T>>(to_sv<__cplusplus>());
-
 #ifdef __clang__
       static constexpr sv clang = "clang";
 #endif
@@ -66,7 +64,7 @@ namespace glz
       static constexpr sv blank = ""; // to end possible macros
 
       static constexpr sv members = [] {
-         if constexpr (detail::glaze_object_t<T> || detail::reflectable<T>) {
+         if constexpr (glaze_object_t<T> || reflectable<T>) {
             return glz::name_v<detail::member_tuple_t<T>>;
          }
          else {
@@ -114,7 +112,7 @@ namespace glz
 
      public:
       static constexpr sv version_sv = join_v<v, major_version, comma, minor_version, comma, revision>;
-      static constexpr version_t version = ::glz::version<T>;
+      static constexpr version_t version = ::glz::version_v<T>;
 
       static constexpr sv hash = hash128_v<to_hash>;
    };

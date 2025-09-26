@@ -5,6 +5,8 @@
 
 #include "glaze/beve/header.hpp"
 #include "glaze/core/common.hpp"
+#include "glaze/core/opts.hpp"
+#include "glaze/core/wrappers.hpp"
 #include "glaze/util/primes_64.hpp"
 
 #ifdef _MSC_VER
@@ -86,8 +88,7 @@ namespace glz
    // MSVC requires this template specialization for when the tuple size if zero,
    // otherwise MSVC tries to instantiate calls of get<0> in invalid branches
    template <class T>
-      requires((detail::glaze_object_t<T> || detail::glaze_flags_t<T> || detail::glaze_enum_t<T>) &&
-               (tuple_size_v<meta_t<T>> == 0))
+      requires((glaze_object_t<T> || glaze_flags_t<T> || glaze_enum_t<T>) && (tuple_size_v<meta_t<T>> == 0))
    struct reflect<T>
    {
       static constexpr auto size = 0;
@@ -99,8 +100,7 @@ namespace glz
    };
 
    template <class T>
-      requires(!detail::meta_keys<T> &&
-               (detail::glaze_object_t<T> || detail::glaze_flags_t<T> || detail::glaze_enum_t<T>) &&
+      requires(!meta_keys<T> && (glaze_object_t<T> || glaze_flags_t<T> || glaze_enum_t<T>) &&
                (tuple_size_v<meta_t<T>> != 0))
    struct reflect<T>
    {
@@ -130,21 +130,18 @@ namespace glz
       using type = member_t<V, decltype(get<I>(values))>;
    };
 
-   namespace detail
+   template <class T, size_t N>
+   inline constexpr auto c_style_to_sv(const std::array<T, N>& arr)
    {
-      template <class T, size_t N>
-      inline constexpr auto c_style_to_sv(const std::array<T, N>& arr)
-      {
-         std::array<sv, N> ret{};
-         for (size_t i = 0; i < N; ++i) {
-            ret[i] = arr[i];
-         }
-         return ret;
+      std::array<sv, N> ret{};
+      for (size_t i = 0; i < N; ++i) {
+         ret[i] = arr[i];
       }
+      return ret;
    }
 
    template <class T>
-      requires(detail::meta_keys<T> && detail::glaze_t<T>)
+      requires(meta_keys<T> && glaze_t<T>)
    struct reflect<T>
    {
       using V = std::remove_cvref_t<T>;
@@ -152,7 +149,7 @@ namespace glz
 
       static constexpr auto values = meta_wrapper_v<T>;
 
-      static constexpr auto keys = detail::c_style_to_sv(meta_keys_v<T>);
+      static constexpr auto keys = c_style_to_sv(meta_keys_v<T>);
 
       template <size_t I>
       using elem = decltype(get<I>(values));
@@ -162,12 +159,12 @@ namespace glz
    };
 
    template <class T>
-      requires(detail::is_memory_object<T>)
+      requires(is_memory_object<T>)
    struct reflect<T> : reflect<memory_type<T>>
    {};
 
    template <class T>
-      requires(detail::glaze_array_t<T>)
+      requires(glaze_array_t<T>)
    struct reflect<T>
    {
       using V = std::remove_cvref_t<T>;
@@ -184,7 +181,7 @@ namespace glz
    };
 
    template <class T>
-      requires detail::reflectable<T>
+      requires reflectable<T>
    struct reflect<T>
    {
       using V = std::remove_cvref_t<T>;
@@ -201,84 +198,59 @@ namespace glz
    };
 
    template <class T>
-      requires detail::readable_map_t<T>
+      requires readable_map_t<T>
    struct reflect<T>
    {
       static constexpr auto size = 0;
    };
 
+   // The type of the field before get_member is applied
    template <class T, size_t I>
    using elem_t = reflect<T>::template elem<I>;
 
+   // The type of the field after get_member is applied
    template <class T, size_t I>
    using refl_t = reflect<T>::template type<I>;
 
-   // MSVC requires this specialization, otherwise it will try to instatiate dead `if constexpr` branches for N == 0
-   template <opts Opts, class T>
-   struct object_info;
+   // The decayed type after get_member is called
+   template <class T, size_t I>
+   using field_t = std::remove_cvref_t<refl_t<T, I>>;
 
-   template <opts Opts, class T>
-      requires(reflect<T>::size == 0)
-   struct object_info<Opts, T>
-   {
-      static constexpr bool first_will_be_written = false;
-      static constexpr bool maybe_skipped = false;
-   };
-
-   template <opts Opts, class T>
-      requires(reflect<T>::size > 0)
-   struct object_info<Opts, T>
-   {
-      static constexpr auto N = reflect<T>::size;
-
-      // Allows us to remove a branch if the first item will always be written
-      static constexpr bool first_will_be_written = [] {
-         if constexpr (N > 0) {
-            using V = std::remove_cvref_t<refl_t<T, 0>>;
-
-            if constexpr (detail::null_t<V> && Opts.skip_null_members) {
-               return false;
-            }
-
-            if constexpr (is_includer<V> || std::same_as<V, hidden> || std::same_as<V, skip>) {
-               return false;
-            }
-            else {
-               return true;
-            }
+   template <auto Opts, class T>
+   inline constexpr bool maybe_skipped = [] {
+      if constexpr (reflect<T>::size > 0) {
+         constexpr auto N = reflect<T>::size;
+         if constexpr (meta_has_skip<T>) {
+            // If the glz::meta provides a skip method, we assume the user wants to skip fields
+            return true;
+         }
+         else if constexpr (Opts.skip_null_members) {
+            // if any type could be null then we might skip
+            constexpr bool write_member_functions = check_write_member_functions(Opts);
+            return [&]<size_t... I>(std::index_sequence<I...>) {
+               return ((always_skipped<field_t<T, I>> ||
+                        (!write_member_functions && is_member_function_pointer<field_t<T, I>>) ||
+                        null_t<field_t<T, I>>) ||
+                       ...);
+            }(std::make_index_sequence<N>{});
          }
          else {
-            return false;
+            // if we have an always_skipped type then we return true
+            constexpr bool write_member_functions = check_write_member_functions(Opts);
+            return [&]<size_t... I>(std::index_sequence<I...>) {
+               return ((always_skipped<field_t<T, I>> ||
+                        (!write_member_functions && is_member_function_pointer<field_t<T, I>>)) ||
+                       ...);
+            }(std::make_index_sequence<N>{});
          }
-      }();
-
-      static constexpr bool maybe_skipped = [] {
-         if constexpr (N > 0 && Opts.skip_null_members) {
-            bool found_maybe_skipped{};
-            for_each_short_circuit<N>([&](auto I) {
-               using V = std::remove_cvref_t<refl_t<T, I>>;
-
-               if constexpr (Opts.skip_null_members && detail::null_t<V>) {
-                  found_maybe_skipped = true;
-                  return true; // early exit
-               }
-
-               if constexpr (is_includer<V> || std::same_as<V, hidden> || std::same_as<V, skip>) {
-                  found_maybe_skipped = true;
-                  return true; // early exit
-               }
-               return false; // continue
-            });
-            return found_maybe_skipped;
-         }
-         else {
-            return false;
-         }
-      }();
-   };
+      }
+      else {
+         return false;
+      }
+   }();
 }
 
-namespace glz::detail
+namespace glz
 {
    template <size_t I, class T>
    constexpr auto key_name_v = [] {
@@ -290,6 +262,55 @@ namespace glz::detail
       }
    }();
 
+   template <class V, class From>
+   consteval bool custom_type_is_nullable()
+   {
+      if constexpr (std::is_member_pointer_v<From>) {
+         if constexpr (std::is_member_function_pointer_v<From>) {
+            using Ret = typename return_type<From>::type;
+            if constexpr (std::is_void_v<Ret>) {
+               using Tuple = typename inputs_as_tuple<From>::type;
+               if constexpr (glz::tuple_size_v<Tuple> == 1) {
+                  using Input = std::decay_t<glz::tuple_element_t<0, Tuple>>;
+                  return bool(null_t<Input>);
+               }
+            }
+         }
+         else if constexpr (std::is_member_object_pointer_v<From>) {
+            using Value = std::decay_t<decltype(std::declval<V>().val.*(std::declval<V>().from))>;
+            if constexpr (is_specialization_v<Value, std::function>) {
+               using Ret = typename function_traits<Value>::result_type;
+
+               if constexpr (std::is_void_v<Ret>) {
+                  using Tuple = typename function_traits<Value>::arguments;
+                  if constexpr (glz::tuple_size_v<Tuple> == 1) {
+                     using Input = std::decay_t<glz::tuple_element_t<0, Tuple>>;
+                     return bool(null_t<Input>);
+                  }
+               }
+            }
+            else {
+               return bool(null_t<Value>);
+            }
+         }
+      }
+      else {
+         if constexpr (is_invocable_concrete<From>) {
+            using Ret = invocable_result_t<From>;
+            if constexpr (std::is_void_v<Ret>) {
+               using Tuple = invocable_args_t<From>;
+               constexpr auto N = glz::tuple_size_v<Tuple>;
+               if constexpr (N == 2) {
+                  using Input = std::decay_t<glz::tuple_element_t<1, Tuple>>;
+                  return bool(null_t<Input>);
+               }
+            }
+         }
+      }
+
+      return false;
+   }
+
    template <class T, auto Opts>
    constexpr auto required_fields()
    {
@@ -297,8 +318,25 @@ namespace glz::detail
 
       bit_array<N> fields{};
       if constexpr (Opts.error_on_missing_keys) {
-         for_each<N>([&](auto I) constexpr {
-            fields[I] = !bool(Opts.skip_null_members) || !null_t<std::decay_t<refl_t<T, I>>>;
+         for_each<N>([&]<auto I>() constexpr {
+            using V = std::decay_t<refl_t<T, I>>;
+            if constexpr (is_specialization_v<V, custom_t>) {
+               using From = typename V::from_t;
+
+               // If we are reading a glz::custom_t, we must deduce the input argument and not require the key if it is
+               // optional This allows error_on_missing_keys to work properly with glz::custom_t wrapping optional types
+               constexpr bool nullable_in_custom = custom_type_is_nullable<V, From>();
+
+               fields[I] = !Opts.skip_null_members || !(std::same_as<From, skip> || nullable_in_custom);
+            }
+            else if constexpr (is_cast<V>) {
+               // Handle cast_t by checking if the cast type is nullable
+               using CastType = typename V::cast_type;
+               fields[I] = !Opts.skip_null_members || !null_t<CastType>;
+            }
+            else {
+               fields[I] = !Opts.skip_null_members || !null_t<V>;
+            }
          });
       }
       return fields;
@@ -406,7 +444,7 @@ namespace glz
    constexpr sv enum_name_v = []() -> std::string_view {
       using T = std::decay_t<decltype(Enum)>;
 
-      if constexpr (detail::glaze_t<T>) {
+      if constexpr (glaze_t<T>) {
          using U = std::underlying_type_t<T>;
          return reflect<T>::keys[static_cast<U>(Enum)];
       }
@@ -416,7 +454,7 @@ namespace glz
    }();
 }
 
-namespace glz::detail
+namespace glz
 {
    template <class T>
    constexpr auto make_enum_to_string_map()
@@ -440,16 +478,16 @@ namespace glz::detail
 
    // get a std::string_view from an enum value
    template <class T>
-      requires(detail::glaze_t<T> && std::is_enum_v<std::decay_t<T>>)
+      requires(glaze_t<T> && std::is_enum_v<std::decay_t<T>>)
    constexpr auto get_enum_name(T&& enum_value)
    {
       using V = std::decay_t<T>;
       using U = std::underlying_type_t<V>;
-      constexpr auto arr = glz::detail::make_enum_to_string_array<V>();
+      constexpr auto arr = make_enum_to_string_array<V>();
       return arr[static_cast<U>(enum_value)];
    }
 
-   template <detail::glaze_flags_t T>
+   template <glaze_flags_t T>
    consteval auto byte_length() noexcept
    {
       constexpr auto N = reflect<T>::size;
@@ -481,13 +519,13 @@ namespace glz
    using make_reflectable = std::initializer_list<dummy>;
 }
 
-namespace glz::detail
+namespace glz
 {
    // TODO: This is returning the total keys and not the max keys for a particular variant object
    template <class T, size_t N>
    constexpr size_t get_max_keys = [] {
       size_t res{};
-      for_each<N>([&](auto I) {
+      for_each<N>([&]<auto I>() {
          using V = std::decay_t<std::variant_alternative_t<I, T>>;
          if constexpr (glaze_object_t<V> || reflectable<V>) {
             res += reflect<V>::size;
@@ -508,7 +546,7 @@ namespace glz::detail
       // This intermediate pointer is necessary for GCC 13 (otherwise segfaults with reflection logic)
       auto* data_ptr = &keys;
       size_t index = 0;
-      for_each<N>([&](auto I) {
+      for_each<N>([&]<auto I>() {
          using V = std::decay_t<std::variant_alternative_t<I, T>>;
          if constexpr (glaze_object_t<V> || reflectable<V> || is_memory_object<V>) {
             using X = std::conditional_t<is_memory_object<V>, memory_type<V>, V>;
@@ -542,7 +580,7 @@ namespace glz::detail
          make_variant_deduction_base_map<T>(std::make_index_sequence<key_size_pair.second>{}, key_size_pair.first);
 
       constexpr auto N = std::variant_size_v<T>;
-      for_each<N>([&](auto I) {
+      for_each<N>([&]<auto I>() {
          using V = decay_keep_volatile_t<std::variant_alternative_t<I, T>>;
          if constexpr (glaze_object_t<V> || reflectable<V> || is_memory_object<V>) {
             using X = std::conditional_t<is_memory_object<V>, memory_type<V>, V>;
@@ -559,7 +597,7 @@ namespace glz::detail
    }
 }
 
-namespace glz::detail
+namespace glz
 {
    template <class T>
    consteval size_t key_index(const std::string_view key)
@@ -572,7 +610,10 @@ namespace glz::detail
       }
       return n;
    }
+}
 
+namespace glz
+{
    GLZ_ALWAYS_INLINE constexpr uint64_t bitmix(uint64_t h, const uint64_t seed) noexcept
    {
       h *= seed;
@@ -855,7 +896,7 @@ namespace glz::detail
          const auto& s = strings[i];
          // for each character in the string
          for (size_t c = 0; c < min_length; ++c) {
-            const auto k = uint16_t(s[c]) | (uint16_t(s.size()) << 8);
+            const auto k = uint16_t(uint16_t(s[c]) | (uint16_t(s.size()) << 8));
             cols[c].emplace_back(k);
          }
       }
@@ -1942,6 +1983,24 @@ namespace glz::detail
 
 namespace glz
 {
+   [[nodiscard]] inline std::string format_error(const error_code& ec)
+   {
+      return std::string{meta<error_code>::keys[uint32_t(ec)]};
+   }
+
+   [[nodiscard]] inline std::string format_error(const error_ctx& pe)
+   {
+      std::string error_str{meta<error_code>::keys[uint32_t(pe.ec)]};
+      if (pe.includer_error.size()) {
+         error_str.append(pe.includer_error);
+      }
+      if (pe.custom_error_message.size()) {
+         error_str.append(" ");
+         error_str.append(pe.custom_error_message.begin(), pe.custom_error_message.end());
+      }
+      return error_str;
+   }
+
    [[nodiscard]] inline std::string format_error(const error_ctx& pe, const auto& buffer)
    {
       const auto error_type_str = meta<error_code>::keys[uint32_t(pe.ec)];
@@ -1950,6 +2009,10 @@ namespace glz
       auto error_str = detail::generate_error_string(error_type_str, info);
       if (pe.includer_error.size()) {
          error_str.append(pe.includer_error);
+      }
+      if (pe.custom_error_message.size()) {
+         error_str.append(" ");
+         error_str.append(pe.custom_error_message.begin(), pe.custom_error_message.end());
       }
       return error_str;
    }
@@ -1965,11 +2028,6 @@ namespace glz
       }
    }
 
-   [[nodiscard]] inline std::string format_error(const error_ctx& pe)
-   {
-      return std::string{meta<error_code>::keys[uint32_t(pe.ec)]};
-   }
-
    template <class T>
    [[nodiscard]] std::string format_error(const expected<T, error_ctx>& pe)
    {
@@ -1980,13 +2038,27 @@ namespace glz
          return "";
       }
    }
+
+   template <class T>
+   inline constexpr size_t maximum_key_size = [] {
+      constexpr auto N = reflect<T>::size;
+      size_t maximum{};
+      for (size_t i = 0; i < N; ++i) {
+         if (reflect<T>::keys[i].size() > maximum) {
+            maximum = reflect<T>::keys[i].size();
+         }
+      }
+      return maximum + 2; // add quotes for JSON
+   }();
+
+   inline constexpr uint64_t round_up_to_nearest_16(const uint64_t value) noexcept { return (value + 15) & ~15ull; }
 }
 
 namespace glz
 {
    // The Callable comes second as ranges::for_each puts the callable at the end
 
-   template <class Callable, detail::reflectable T>
+   template <class Callable, reflectable T>
    void for_each_field(T&& value, Callable&& callable)
    {
       constexpr auto N = reflect<T>::size;
@@ -1997,7 +2069,7 @@ namespace glz
       }
    }
 
-   template <class Callable, detail::glaze_object_t T>
+   template <class Callable, glaze_object_t T>
    void for_each_field(T&& value, Callable&& callable)
    {
       constexpr auto N = reflect<T>::size;
@@ -2007,6 +2079,29 @@ namespace glz
          }(std::make_index_sequence<N>{});
       }
    }
+
+   // Check if a type has a member with a specific name
+   template <class T>
+   consteval bool has_member_with_name(const sv& name) noexcept
+   {
+      if constexpr (reflectable<T> || glaze_object_t<T>) {
+         constexpr auto N = reflect<T>::size;
+         for (size_t i = 0; i < N; ++i) {
+            if (reflect<T>::keys[i] == name) {
+               return true;
+            }
+         }
+      }
+      return false;
+   }
+
+   // Concept to check if glz::reflect<T> can be instantiated and used
+   // This concept is automatically satisfied by any type that has a valid reflect<T> specialization
+   template <class T>
+   concept has_reflect = requires {
+      sizeof(reflect<T>); // Ensure reflect<T> is complete
+      { reflect<T>::size } -> std::convertible_to<std::size_t>;
+   };
 }
 
 #ifdef _MSC_VER

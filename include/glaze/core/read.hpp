@@ -11,7 +11,7 @@
 
 namespace glz
 {
-   template <opts Opts, bool Padded = false>
+   template <auto Opts, bool Padded = false>
    auto read_iterators(contiguous auto&& buffer) noexcept
    {
       static_assert(sizeof(decltype(*buffer.data())) == 1);
@@ -29,8 +29,8 @@ namespace glz
       return std::pair{it, end};
    }
 
-   template <opts Opts, class T>
-      requires read_supported<Opts.format, T>
+   template <auto Opts, class T>
+      requires read_supported<T, Opts.format>
    [[nodiscard]] error_ctx read(T& value, contiguous auto&& buffer, is_context auto&& ctx)
    {
       static_assert(sizeof(decltype(*buffer.data())) == 1);
@@ -43,7 +43,7 @@ namespace glz
          }
       }
 
-      constexpr bool use_padded = resizable<Buffer> && non_const_buffer<Buffer> && !has_disable_padding(Opts);
+      constexpr bool use_padded = resizable<Buffer> && non_const_buffer<Buffer> && !check_disable_padding(Opts);
 
       if constexpr (use_padded) {
          // Pad the buffer for SWAR
@@ -57,10 +57,10 @@ namespace glz
       }
 
       if constexpr (use_padded) {
-         detail::read<Opts.format>::template op<is_padded_on<Opts>()>(value, ctx, it, end);
+         parse<Opts.format>::template op<is_padded_on<Opts>()>(value, ctx, it, end);
       }
       else {
-         detail::read<Opts.format>::template op<is_padded_off<Opts>()>(value, ctx, it, end);
+         parse<Opts.format>::template op<is_padded_off<Opts>()>(value, ctx, it, end);
       }
 
       if (bool(ctx.error)) [[unlikely]] {
@@ -70,9 +70,9 @@ namespace glz
       // The JSON RFC 8259 defines: JSON-text = ws value ws
       // So, trailing whitespace is permitted and sometimes we want to
       // validate this, even though this memory will not affect Glaze.
-      if constexpr (Opts.validate_trailing_whitespace) {
+      if constexpr (check_validate_trailing_whitespace(Opts)) {
          if (it < end) {
-            detail::skip_ws<Opts>(ctx, it, end);
+            skip_ws<Opts>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]] {
                goto finish;
             }
@@ -84,7 +84,7 @@ namespace glz
 
    finish:
       // We don't do depth validation for partial reading
-      if constexpr (Opts.partial_read) {
+      if constexpr (check_partial_read(Opts)) {
          if (ctx.error == error_code::partial_read_complete) [[likely]] {
             ctx.error = error_code::none;
          }
@@ -106,8 +106,8 @@ namespace glz
       return {ctx.error, ctx.custom_error_message, size_t(it - start), ctx.includer_error};
    }
 
-   template <opts Opts, class T>
-      requires read_supported<Opts.format, T>
+   template <auto Opts, class T>
+      requires read_supported<T, Opts.format>
    [[nodiscard]] error_ctx read(T& value, contiguous auto&& buffer)
    {
       context ctx{};
@@ -121,8 +121,8 @@ namespace glz
    concept is_buffer = c_style_char_buffer<T> || contiguous<T>;
 
    // for char array input
-   template <opts Opts, class T, c_style_char_buffer Buffer>
-      requires read_supported<Opts.format, T>
+   template <auto Opts, class T, c_style_char_buffer Buffer>
+      requires read_supported<T, Opts.format>
    [[nodiscard]] error_ctx read(T& value, Buffer&& buffer, auto&& ctx)
    {
       const auto str = std::string_view{std::forward<Buffer>(buffer)};
@@ -132,8 +132,8 @@ namespace glz
       return read<Opts>(value, str, ctx);
    }
 
-   template <opts Opts, class T, c_style_char_buffer Buffer>
-      requires read_supported<Opts.format, T>
+   template <auto Opts, class T, c_style_char_buffer Buffer>
+      requires read_supported<T, Opts.format>
    [[nodiscard]] error_ctx read(T& value, Buffer&& buffer)
    {
       context ctx{};

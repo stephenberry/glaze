@@ -22,10 +22,11 @@ namespace glz::detail
       Bool = 't',
       Object_Start = '{',
       Object_End = '}',
-      Comment = '/'
+      Comment = '/',
+      Whitespace = ' '
    };
 
-   constexpr std::array<json_type, 256> json_types = [] {
+   inline constexpr std::array<json_type, 256> json_types = [] {
       std::array<json_type, 256> t{};
       using enum json_type;
       t['"'] = String;
@@ -50,6 +51,10 @@ namespace glz::detail
       t['{'] = Object_Start;
       t['}'] = Object_End;
       t['/'] = Comment;
+      t[' '] = Whitespace;
+      t['\t'] = Whitespace;
+      t['\n'] = Whitespace;
+      t['\r'] = Whitespace;
       return t;
    }();
 
@@ -65,8 +70,8 @@ namespace glz::detail
       }
    };
 
-   template <opts Opts>
-      requires(has_is_padded(Opts))
+   template <auto Opts>
+      requires(check_is_padded(Opts))
    sv read_json_string(auto&& it, auto&& end) noexcept
    {
       auto start = it;
@@ -96,8 +101,8 @@ namespace glz::detail
       return {};
    }
 
-   template <opts Opts>
-      requires(!has_is_padded(Opts))
+   template <auto Opts>
+      requires(!check_is_padded(Opts))
    sv read_json_string(auto&& it, auto&& end) noexcept
    {
       auto start = it;

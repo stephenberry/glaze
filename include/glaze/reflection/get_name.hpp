@@ -6,6 +6,7 @@
 // TODO: Use std::source_location when deprecating clang 14
 // #include <source_location>
 #include <array>
+#include <string>
 #include <string_view>
 
 #include "glaze/reflection/to_tuple.hpp"
@@ -21,8 +22,10 @@
 namespace glz::detail
 {
    // Do not const qualify this value to avoid duplicate `to_tie` template instantiations with rest of Glaze
+   // Temporary fix: const qualify it despite. Caused issues with reflect begin/end indices
+   // See https://github.com/stephenberry/glaze/issues/1568
    template <class T>
-   extern T external;
+   extern const T external;
 
    // using const char* simplifies the complier's output and should improve compile times
    template <auto Ptr>
@@ -119,6 +122,80 @@ namespace glz
    }
 
    template <class T>
+   struct meta;
+
+   // Concept for when rename_key returns exactly std::string (allocates)
+   template <class T>
+   concept meta_has_rename_key_string = requires(T t, const std::string_view s) {
+      { glz::meta<std::remove_cvref_t<T>>::rename_key(s) } -> std::same_as<std::string>;
+   };
+
+   template <std::pair V>
+   struct make_static
+   {
+      static constexpr auto value = V;
+   };
+
+   template <meta_has_rename_key_string T, size_t... I>
+   [[nodiscard]] constexpr auto member_names_impl(std::index_sequence<I...>)
+   {
+      if constexpr (sizeof...(I) == 0) {
+         return std::array<sv, 0>{};
+      }
+      else {
+         return std::array{[]() -> sv {
+         // Need to move allocation into a new static buffer
+#ifdef __clang__
+            static constexpr auto arr = [] {
+               constexpr auto str = glz::meta<std::remove_cvref_t<T>>::rename_key(member_nameof<I, T>);
+               constexpr size_t len = str.size();
+               std::array<char, len + 1> arr;
+               for (size_t i = 0; i < len; ++i) {
+                  arr[i] = str[i];
+               }
+               arr[len] = '\0';
+               return arr;
+            }();
+            return {arr.data(), arr.size() - 1};
+#else
+            // GCC does not support constexpr designation on std::string
+            // We therefore limit to a maximum of 64 characters on GCC for key transformations
+            constexpr auto arr_temp = [] {
+               const auto str = glz::meta<std::remove_cvref_t<T>>::rename_key(member_nameof<I, T>);
+               const size_t len = str.size();
+               std::array<char, 65> arr{};
+               for (size_t i = 0; i < len; ++i) {
+                  arr[i] = str[i];
+               }
+               arr[len] = '\0';
+               return std::pair{arr, len};
+            }();
+            // GCC 12 requires this make_static
+            auto& arr = make_static<arr_temp>::value;
+            return {arr.first.data(), arr.second};
+#endif
+         }()...};
+      }
+   }
+
+   // Concept for when rename_key returns anything convertible to std::string_view EXCEPT std::string (non-allocating)
+   template <class T>
+   concept meta_has_rename_key_convertible = requires(T t, const std::string_view s) {
+      { glz::meta<std::remove_cvref_t<T>>::rename_key(s) } -> std::convertible_to<std::string_view>;
+   } && !meta_has_rename_key_string<T>;
+
+   template <meta_has_rename_key_convertible T, size_t... I>
+   [[nodiscard]] constexpr auto member_names_impl(std::index_sequence<I...>)
+   {
+      if constexpr (sizeof...(I) == 0) {
+         return std::array<sv, 0>{};
+      }
+      else {
+         return std::array{glz::meta<std::remove_cvref_t<T>>::rename_key(member_nameof<I, T>)...};
+      }
+   }
+
+   template <class T>
    inline constexpr auto member_names =
       [] { return member_names_impl<T>(std::make_index_sequence<detail::count_members<T>>{}); }();
 }
@@ -193,7 +270,7 @@ namespace glz
    }
 
    template <auto E>
-      requires(std::is_enum_v<decltype(E)>)
+      requires(std::is_enum_v<decltype(E)> && std::is_scoped_enum_v<decltype(E)>)
    consteval auto get_name()
    {
 #if defined(_MSC_VER) && !defined(__clang__)
@@ -203,6 +280,21 @@ namespace glz
 #else
       std::string_view str = GLZ_PRETTY_FUNCTION;
       str = str.substr(str.rfind("::") + 2);
+      return str.substr(0, str.find(']'));
+#endif
+   }
+
+   template <auto E>
+      requires(std::is_enum_v<decltype(E)> && not std::is_scoped_enum_v<decltype(E)>)
+   consteval auto get_name()
+   {
+#if defined(_MSC_VER) && !defined(__clang__)
+      std::string_view str = GLZ_PRETTY_FUNCTION;
+      str = str.substr(str.rfind("= ") + 2);
+      return str.substr(0, str.find('>'));
+#else
+      std::string_view str = GLZ_PRETTY_FUNCTION;
+      str = str.substr(str.rfind("= ") + 2);
       return str.substr(0, str.find(']'));
 #endif
    }
