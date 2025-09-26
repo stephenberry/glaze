@@ -308,7 +308,8 @@ namespace glz
          for_each<N>([&]<size_t I>() {
             using val_t = field_t<T, I>;
 
-            if constexpr (always_skipped<val_t>)
+            constexpr bool write_member_functions = check_write_member_functions(Options);
+            if constexpr (always_skipped<val_t> || (!write_member_functions && is_member_function_pointer<val_t>))
                return;
             else {
                if constexpr (null_t<val_t>) {

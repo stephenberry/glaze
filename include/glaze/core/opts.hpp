@@ -140,6 +140,10 @@ namespace glz
    // If full validation should be performed on skipped values
 
    // ---
+   // bool write_member_functions = false;
+   // If member function pointers should be serialized when provided in glz::meta
+
+   // ---
    // bool validate_trailing_whitespace = false;
    // If, after parsing a value, we want to validate the trailing whitespace
 
@@ -179,6 +183,16 @@ namespace glz
    {
       if constexpr (requires { Opts.validate_skipped; }) {
          return Opts.validate_skipped;
+      }
+      else {
+         return false;
+      }
+   }
+
+   consteval bool check_write_member_functions(auto&& Opts)
+   {
+      if constexpr (requires { Opts.write_member_functions; }) {
+         return Opts.write_member_functions;
       }
       else {
          return false;

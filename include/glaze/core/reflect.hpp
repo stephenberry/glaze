@@ -5,6 +5,7 @@
 
 #include "glaze/beve/header.hpp"
 #include "glaze/core/common.hpp"
+#include "glaze/core/opts.hpp"
 #include "glaze/core/wrappers.hpp"
 #include "glaze/util/primes_64.hpp"
 
@@ -225,14 +226,21 @@ namespace glz
          }
          else if constexpr (Opts.skip_null_members) {
             // if any type could be null then we might skip
-            return []<size_t... I>(std::index_sequence<I...>) {
-               return ((always_skipped<field_t<T, I>> || null_t<field_t<T, I>>) || ...);
+            constexpr bool write_member_functions = check_write_member_functions(Opts);
+            return [&]<size_t... I>(std::index_sequence<I...>) {
+               return ((always_skipped<field_t<T, I>> ||
+                        (!write_member_functions && is_member_function_pointer<field_t<T, I>>) ||
+                        null_t<field_t<T, I>>) ||
+                       ...);
             }(std::make_index_sequence<N>{});
          }
          else {
             // if we have an always_skipped type then we return true
-            return []<size_t... I>(std::index_sequence<I...>) {
-               return ((always_skipped<field_t<T, I>>) || ...);
+            constexpr bool write_member_functions = check_write_member_functions(Opts);
+            return [&]<size_t... I>(std::index_sequence<I...>) {
+               return ((always_skipped<field_t<T, I>> ||
+                        (!write_member_functions && is_member_function_pointer<field_t<T, I>>)) ||
+                       ...);
             }(std::make_index_sequence<N>{});
          }
       }

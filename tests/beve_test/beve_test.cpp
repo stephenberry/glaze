@@ -2638,6 +2638,53 @@ suite explicit_string_view_support = [] {
    };
 };
 
+struct MemberFunctionThingBeve
+{
+   std::string name{};
+   auto get_description() const -> std::string { return "something"; }
+};
+
+namespace glz
+{
+   template <>
+   struct meta<MemberFunctionThingBeve>
+   {
+      using T = MemberFunctionThingBeve;
+      static constexpr auto value = object("name", &T::name, "description", &T::get_description);
+   };
+} // namespace glz
+
+suite member_function_pointer_beve_serialization = [] {
+   "member function pointer skipped in beve write"_test = [] {
+      MemberFunctionThingBeve input{};
+      input.name = "test_item";
+      std::string buffer{};
+      expect(not glz::write_beve(input, buffer));
+
+      MemberFunctionThingBeve output{};
+      expect(not glz::read_beve(output, buffer));
+      expect(output.name == input.name);
+   };
+
+   "member function pointer opt-in write encodes description key"_test = [] {
+      MemberFunctionThingBeve input{};
+      input.name = "test_item";
+
+      std::string buffer_default{};
+      expect(not glz::write_beve(input, buffer_default));
+      expect(buffer_default.find("description") == std::string::npos);
+
+      struct opts_with_member_functions : glz::opts
+      {
+         bool write_member_functions = true;
+      };
+
+      std::string buffer_opt_in{};
+      expect(not glz::write<glz::set_beve<opts_with_member_functions{}>()>(input, buffer_opt_in));
+      expect(buffer_opt_in.find("description") != std::string::npos);
+   };
+};
+
 int main()
 {
    trace.begin("binary_test");
