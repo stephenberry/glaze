@@ -8,6 +8,10 @@ Glaze also supports:
 - [Stencil/Mustache](./docs/stencil-mustache.md) (string interpolation)
 - [EETF](./docs/EETF/erlang-external-term-format.md) (Erlang External Term Format) [optionally included]
 
+> [!IMPORTANT]
+>
+> Pure reflection now supports partial modifications through `glz::meta<T>::modify` so you can alias or wrap just a few members without giving up automatic metadata. Learn more in [Extending pure reflection with `modify`](#extending-pure-reflection-with-modify) and the [modify reflection guide](./docs/modify-reflection.md).
+
 > [!NOTE]
 >
 > Glaze is getting HTTP support with REST servers, clients, websockets, and more. The networking side of Glaze is under active development, and while it is usable and feedback is desired, the API is likely to be changing and improving.
@@ -321,6 +325,57 @@ struct glz::meta<my_struct> {
 > - static constexpr member variables
 > - [Wrappers](./docs/wrappers.md)
 > - Lambda functions
+
+### Extending pure reflection with `modify`
+
+If you only need to tweak a couple of fields, you can layer those changes on top of the automatically reflected members with `glz::meta<T>::modify`:
+
+```c++
+struct server_status
+{
+   std::string name;
+   std::string region;
+   uint64_t active_sessions{};
+   std::optional<std::string> maintenance;
+   double cpu_percent{};
+};
+
+template <> struct glz::meta<server_status>
+{
+   static constexpr auto modify = glz::object(
+      "maintenance_alias", [](auto& self) -> auto& { return self.maintenance; },
+      "cpuPercent", &server_status::cpu_percent
+   );
+};
+```
+
+Serialising
+
+```c++
+server_status status{
+   .name = "edge-01",
+   .region = "us-east",
+   .active_sessions = 2412,
+   .maintenance = std::string{"scheduled"},
+   .cpu_percent = 73.5,
+};
+```
+
+produces
+
+```json
+{
+  "name": "edge-01",
+  "region": "us-east",
+  "active_sessions": 2412,
+  "maintenance": "scheduled",
+  "cpu_percent": 73.5,
+  "maintenance_alias": "scheduled",
+  "cpuPercent": 73.5
+}
+```
+
+All the untouched members (`name`, `region`, `active_sessions`, `maintenance`, `cpu_percent`) still come from pure reflection, so adding or removing members later keeps working automatically. Only the extra keys provided in `modify` are layered on top.
 
 # Reflection API
 

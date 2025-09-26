@@ -1135,6 +1135,15 @@ namespace glz
                         ++it;
                      }
                   }
+
+                  if (!bool(ctx.error)) {
+                     if (it == end) {
+                        ctx.error = error_code::unexpected_end;
+                     }
+                     else {
+                        ctx.error = error_code::key_not_found;
+                     }
+                  }
                }
             }();
          }

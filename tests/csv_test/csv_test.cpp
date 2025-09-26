@@ -1,4 +1,6 @@
+#include <cstdint>
 #include <deque>
+#include <limits>
 #include <map>
 #include <unordered_map>
 
@@ -47,6 +49,44 @@ struct glz::meta<string_elements>
 {
    using T = string_elements;
    static constexpr auto value = glz::object("id", &T::id, &T::udl);
+};
+
+struct signed_min_columns
+{
+   std::vector<std::int8_t> i8{};
+   std::vector<std::int32_t> i32{};
+};
+
+template <>
+struct glz::meta<signed_min_columns>
+{
+   using T = signed_min_columns;
+   static constexpr auto value = glz::object("i8", &T::i8, "i32", &T::i32);
+};
+
+enum struct csv_color : std::uint8_t {
+   red = 0,
+   green = 1,
+   blue = 2,
+};
+
+template <>
+struct glz::meta<csv_color>
+{
+   using enum csv_color;
+   static constexpr auto value = enumerate("rouge", red, "vert", green, "bleu", blue);
+};
+
+struct enum_column_struct
+{
+   std::vector<csv_color> colors{};
+};
+
+template <>
+struct glz::meta<enum_column_struct>
+{
+   using T = enum_column_struct;
+   static constexpr auto value = glz::object("colors", &T::colors);
 };
 
 suite csv_tests = [] {
@@ -147,6 +187,36 @@ suite csv_tests = [] {
 )");
 
       expect(!glz::write_file_csv<glz::colwise>(obj, "csv_test_colwise.csv", std::string{}));
+   };
+
+   "signed minimum integers"_test = [] {
+      std::string input =
+         R"(i8,i32
+-128,-2147483648)";
+
+      signed_min_columns obj{};
+      expect(!glz::read_csv<glz::colwise>(obj, input));
+
+      expect(obj.i8.size() == 1);
+      expect(obj.i32.size() == 1);
+      expect(obj.i8[0] == std::numeric_limits<std::int8_t>::min());
+      expect(obj.i32[0] == std::numeric_limits<std::int32_t>::min());
+   };
+
+   "named enum column wise"_test = [] {
+      std::string input =
+         R"(colors
+rouge
+vert
+bleu)";
+
+      enum_column_struct obj{};
+      expect(!glz::read_csv<glz::colwise>(obj, input));
+
+      expect(obj.colors.size() == 3);
+      expect(obj.colors[0] == csv_color::red);
+      expect(obj.colors[1] == csv_color::green);
+      expect(obj.colors[2] == csv_color::blue);
    };
 
    "read/write row wise"_test = [] {
@@ -784,6 +854,32 @@ struct glz::meta<data_point>
    static constexpr auto value = glz::object(&T::id, &T::value, &T::name);
 };
 
+struct data_with_skip
+{
+   int id{};
+   std::string name{};
+};
+
+template <>
+struct glz::meta<data_with_skip>
+{
+   using T = data_with_skip;
+   static constexpr auto value = glz::object("id", &T::id, "unused", glz::skip{}, "name", &T::name);
+};
+
+struct rowwise_data_with_skip
+{
+   std::vector<int> id{};
+   std::vector<std::string> name{};
+};
+
+template <>
+struct glz::meta<rowwise_data_with_skip>
+{
+   using T = rowwise_data_with_skip;
+   static constexpr auto value = glz::object("id", &T::id, "unused", glz::skip{}, "name", &T::name);
+};
+
 suite csv_headers_control_tests = [] {
    "rowwise_with_headers"_test = [] {
       csv_headers_struct obj{};
@@ -1141,6 +1237,38 @@ suite vector_data_point_no_headers_tests = [] {
       expect(result[0].name == "Name, with comma") << "Should preserve comma in string";
       expect(result[1].name == "Name \"with\" quotes") << "Should preserve quotes";
       expect(result[2].name == "Multi\nline\nname") << "Should preserve newlines";
+   };
+
+   "vector_of_structs_with_skipped_column"_test = [] {
+      const std::string csv =
+         "id,unused,name\r\n"
+         "1,foo,Alice\r\n"
+         "2,\"multi\r\nline\",Bob\r\n"
+         "3,,Charlie\r\n";
+
+      std::vector<data_with_skip> parsed;
+      expect(!glz::read<glz::opts_csv{.layout = glz::colwise}>(parsed, csv));
+
+      expect(parsed.size() == 3);
+      expect(parsed[0].id == 1);
+      expect(parsed[0].name == "Alice");
+      expect(parsed[1].id == 2);
+      expect(parsed[1].name == "Bob");
+      expect(parsed[2].id == 3);
+      expect(parsed[2].name == "Charlie");
+   };
+
+   "rowwise_object_with_skipped_row"_test = [] {
+      const std::string csv =
+         "id,1,2,3\r\n"
+         "unused,foo,bar,baz\r\n"
+         "name,Alice,Bob,Charlie\r\n";
+
+      rowwise_data_with_skip parsed;
+      expect(!glz::read<glz::opts_csv{.layout = glz::rowwise, .use_headers = false}>(parsed, csv));
+
+      expect(parsed.id == std::vector<int>{1, 2, 3});
+      expect(parsed.name == std::vector<std::string>{"Alice", "Bob", "Charlie"});
    };
 
    "csv_string_edge_cases"_test = [] {

@@ -214,6 +214,18 @@ suite fuzz_findings_tests = [] {
       [[maybe_unused]] auto result = glz::read_jmespath<options>(std::string_view(path.data(), path.size()), child,
                                                                  std::string_view(buffer.data(), buffer.size()));
    };
+
+   "unterminated_object_member"_test = [] {
+      Person child{};
+      const std::vector<char> path{char(0x00), char(0x43), char(0x7c), char(0x94),
+                                   char(0x7c), char(0x00), char(0x2b), char(0x7f)};
+      const std::vector<char> buffer{char(0x7b), char(0x22), char(0x00), char(0x22),
+                                     char(0x22), char(0x22), char(0x2c)};
+      static constexpr glz::opts options{.null_terminated = false};
+      auto result = glz::read_jmespath<options>(std::string_view(path.data(), path.size()), child,
+                                                std::string_view(buffer.data(), buffer.size()));
+      expect(result == glz::error_code::unexpected_end);
+   };
 };
 
 int main() { return 0; }
