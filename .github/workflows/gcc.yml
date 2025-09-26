@@ -49,6 +49,12 @@ jobs:
     container:
       image: gcc:15
 
+    strategy:
+      fail-fast: false
+      matrix:
+        build_type: [Debug]
+        std: [23]
+
     env:
       CC: gcc-15
       CXX: g++-15
@@ -71,7 +77,7 @@ jobs:
 
     - name: Configure CMake
       run: |
-        CXXFLAGS="-g3" cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_STANDARD=23
+        CXXFLAGS="-g3" cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{matrix.build_type}} -DCMAKE_CXX_STANDARD=${{matrix.std}}
 
     - name: Build
       run: cmake --build build -j $(nproc)
