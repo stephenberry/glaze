@@ -560,7 +560,7 @@ namespace glz
 
    template <class T>
    inline constexpr bool has_self_constraint_v =
-      !std::is_same_v<std::decay_t<decltype(self_constraint_v<std::decay_t<T>>)> , empty>;
+      !std::is_same_v<std::decay_t<decltype(self_constraint_v<std::decay_t<T>>)>, empty>;
 
    template <class T>
    concept named = requires { meta<T>::name; } || requires { T::glaze::name; };

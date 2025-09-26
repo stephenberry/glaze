@@ -7629,11 +7629,7 @@ struct glz::meta<registration_request>
       return strong_length && matches && has_username;
    };
 
-   static constexpr auto value = object(
-      &T::username,
-      &T::password,
-      &T::confirm_password,
-      &T::email);
+   static constexpr auto value = object(&T::username, &T::password, &T::confirm_password, &T::email);
 
    static constexpr auto self_constraint =
       glz::self_constraint<strong_credentials, "Password must be at least 12 characters and match confirmation">;
@@ -7664,11 +7660,7 @@ struct glz::meta<inventory_request>
       return value.quantity > 0;
    };
 
-   static constexpr auto value = object(
-      &T::customer_tier,
-      &T::quantity,
-      &T::inventory_limit,
-      &T::discount_code);
+   static constexpr auto value = object(&T::customer_tier, &T::quantity, &T::inventory_limit, &T::discount_code);
 
    static constexpr auto self_constraint =
       glz::self_constraint<business_rules, "Order violates inventory or discount policy">;
@@ -7678,26 +7670,27 @@ suite self_constraint_real_world = [] {
    "registration request enforces strong credentials"_test = [] {
       {
          registration_request req{};
-         const auto ok = glz::read_json(req,
-            R"({"username":"coder","password":"longpass123!","confirm_password":"longpass123!"})");
+         const auto ok =
+            glz::read_json(req, R"({"username":"coder","password":"longpass123!","confirm_password":"longpass123!"})");
          expect(ok == glz::error_code::none);
          expect(req.email == std::nullopt);
       }
 
       {
          registration_request req{};
-         const auto mismatch = glz::read_json(req,
-            R"({"username":"coder","password":"longpass123!","confirm_password":"different"})");
+         const auto mismatch =
+            glz::read_json(req, R"({"username":"coder","password":"longpass123!","confirm_password":"different"})");
          expect(mismatch == glz::error_code::constraint_violated);
-         const auto mismatch_message = glz::format_error(mismatch,
-            R"({"username":"coder","password":"longpass123!","confirm_password":"different"})");
-         expect(mismatch_message.find("Password must be at least 12 characters") != std::string::npos) << mismatch_message;
+         const auto mismatch_message = glz::format_error(
+            mismatch, R"({"username":"coder","password":"longpass123!","confirm_password":"different"})");
+         expect(mismatch_message.find("Password must be at least 12 characters") != std::string::npos)
+            << mismatch_message;
       }
 
       {
          registration_request req{};
-         const auto short_pw = glz::read_json(req,
-            R"({"username":"coder","password":"short","confirm_password":"short"})");
+         const auto short_pw =
+            glz::read_json(req, R"({"username":"coder","password":"short","confirm_password":"short"})");
          expect(short_pw == glz::error_code::constraint_violated);
       }
    };
@@ -7705,30 +7698,29 @@ suite self_constraint_real_world = [] {
    "inventory request validates tier and limits"_test = [] {
       {
          inventory_request request{};
-         const auto ok = glz::read_json(request,
-            R"({"customer_tier":"pro","quantity":5,"inventory_limit":10,"discount_code":"SPRING"})");
+         const auto ok = glz::read_json(
+            request, R"({"customer_tier":"pro","quantity":5,"inventory_limit":10,"discount_code":"SPRING"})");
          expect(ok == glz::error_code::none);
          expect(request.discount_code.has_value());
       }
 
       {
          inventory_request request{};
-         const auto exceeds_limit = glz::read_json(request,
-            R"({"customer_tier":"pro","quantity":15,"inventory_limit":10})");
+         const auto exceeds_limit =
+            glz::read_json(request, R"({"customer_tier":"pro","quantity":15,"inventory_limit":10})");
          expect(exceeds_limit == glz::error_code::constraint_violated);
       }
 
       {
          inventory_request request{};
-         const auto guest_discount = glz::read_json(request,
-            R"({"customer_tier":"guest","quantity":1,"discount_code":"WELCOME"})");
+         const auto guest_discount =
+            glz::read_json(request, R"({"customer_tier":"guest","quantity":1,"discount_code":"WELCOME"})");
          expect(guest_discount == glz::error_code::constraint_violated);
       }
 
       {
          inventory_request request{};
-         const auto minimal = glz::read_json(request,
-            R"({"quantity":1,"customer_tier":"guest"})");
+         const auto minimal = glz::read_json(request, R"({"quantity":1,"customer_tier":"guest"})");
          expect(minimal == glz::error_code::none);
          expect(!request.discount_code);
       }
