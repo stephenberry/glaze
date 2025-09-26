@@ -368,7 +368,8 @@ final state of the entire object, use a `self_constraint` as shown below—those
 
 Optional members are parsed lazily: if the JSON payload does not contain the key, the member is left untouched and the
 corresponding `read_constraint` is not evaluated. This guarantees that absent optional data does not trigger
-constraints.
+constraints. Keep in mind that reusing the same C++ object across multiple reads will retain the previous value for any
+field that is omitted in later payloads, so reset or re-initialize the instance when you expect fresh state.
 
 ```c++
 struct constrained_object
