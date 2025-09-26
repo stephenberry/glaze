@@ -359,6 +359,17 @@ expect(buffer == R"({"a":"Hello\nWorld","b":"","c":""})");
 
 Enables complex constraints to be defined within a `glz::meta` or using member functions. Parsing is short circuited upon violating a constraint and a nicely formatted error can be produced with a custom error message.
 
+### Field order and optional members
+
+Object members are visited in the order that the JSON input supplies them. This is an intentional design choice so
+that input streams do not have to be re-ordered to match the declaration order. Because of this, a
+`read_constraint` may only rely on fields that have already appeared in the JSON payload. If you need to validate the
+final state of the entire object, use a `self_constraint` as shown below—those run after every field has been read.
+
+Optional members are parsed lazily: if the JSON payload does not contain the key, the member is left untouched and the
+corresponding `read_constraint` is not evaluated. This guarantees that absent optional data does not trigger
+constraints.
+
 ```c++
 struct constrained_object
 {
@@ -443,6 +454,12 @@ struct glz::meta<registration_request>
 
 If a self constraint fails, deserialization stops and `glz::error_code::constraint_violated` is reported with the
 associated message.
+
+When it is important that object memory remains valid after every individual assignment—for example, when other code
+observes the partially constructed object during parsing—prefer `read_constraint` on the specific members. Those
+constraints fire before the member is written, so the in-memory representation never stores an invalid value. In
+contrast, `self_constraint` runs after fields are populated, so it can detect issues that span multiple members but the
+object may hold the problematic data until the constraint handler reports an error.
 
 ## partial_read
 
