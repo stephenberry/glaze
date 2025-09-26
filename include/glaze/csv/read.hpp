@@ -11,6 +11,7 @@
 #include "glaze/file/file_ops.hpp"
 #include "glaze/util/glaze_fast_float.hpp"
 #include "glaze/util/parse.hpp"
+#include "glaze/csv/skip.hpp"
 
 namespace glz
 {
@@ -315,6 +316,16 @@ namespace glz
             return;
          }
          value = static_cast<bool>(temp);
+      }
+   };
+
+   template <>
+   struct from<CSV, skip>
+   {
+      template <auto Opts, class It0, class It1>
+      GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&& ctx, It0&& it, It1&& end) noexcept
+      {
+         skip_value<CSV>::template op<Opts>(ctx, std::forward<It0>(it), std::forward<It1>(end));
       }
    };
 
