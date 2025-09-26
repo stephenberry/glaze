@@ -1,6 +1,7 @@
 // Glaze Library
 // For the license information refer to glaze.hpp
 
+#include <algorithm>
 #include <any>
 #include <atomic>
 #include <bitset>
@@ -5205,6 +5206,42 @@ suite control_character_tests = [] {
       expect(not glz::read_json(result, buffer)) << "Should successfully read all control characters";
 
       expect(result == str) << "All control characters should roundtrip correctly";
+   };
+
+   "string_view_wrapped_char_array"_test = [] {
+      // Wrap a char array with embedded nulls into a string_view to preserve length information
+      char raw[4] = {0, 0, 1, 0};
+      std::string_view view{raw, sizeof(raw)};
+
+      std::string buffer{};
+      expect(not glz::write<opts_escape_control_characters{}>(view, buffer));
+
+      expect(buffer == R"("\u0000\u0000\u0001\u0000")")
+         << "string_view constructed with explicit length should escape all bytes";
+
+      std::string roundtrip;
+      expect(not glz::read_json(roundtrip, buffer));
+      expect(roundtrip.size() == view.size());
+      expect(std::equal(roundtrip.begin(), roundtrip.end(), view.begin()))
+         << "Roundtripped data should match original byte sequence";
+   };
+
+   "string_view_wrapped_std_array"_test = [] {
+      // Same scenario using std::array documented for structured bindings
+      const std::array<char, 5> arr{{'A', 0, 'B', 0, 'C'}};
+      const std::string_view view{arr.data(), arr.size()};
+
+      std::string buffer{};
+      expect(not glz::write<opts_escape_control_characters{}>(view, buffer));
+
+      expect(buffer == R"("A\u0000B\u0000C")")
+         << "std::array wrapped in string_view should retain embedded nulls";
+
+      std::string parsed;
+      expect(not glz::read_json(parsed, buffer));
+      expect(parsed.size() == view.size());
+      expect(std::equal(parsed.begin(), parsed.end(), view.begin()))
+         << "Parsed content should match the original array contents";
    };
 };
 
