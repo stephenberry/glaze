@@ -359,6 +359,18 @@ expect(buffer == R"({"a":"Hello\nWorld","b":"","c":""})");
 
 Enables complex constraints to be defined within a `glz::meta` or using member functions. Parsing is short circuited upon violating a constraint and a nicely formatted error can be produced with a custom error message.
 
+### Field order and optional members
+
+Object members are visited in the order that the JSON input supplies them. This is an intentional design choice so
+that input streams do not have to be re-ordered to match the declaration order. Because of this, a
+`read_constraint` may only rely on fields that have already appeared in the JSON payload. If you need to validate the
+final state of the entire object, use a `self_constraint` as shown below—those run after every field has been read.
+
+Optional members are parsed lazily: if the JSON payload does not contain the key, the member is left untouched and the
+corresponding `read_constraint` is not evaluated. This guarantees that absent optional data does not trigger
+constraints. Keep in mind that reusing the same C++ object across multiple reads will retain the previous value for any
+field that is omitted in later payloads, so reset or re-initialize the instance when you expect fresh state.
+
 ```c++
 struct constrained_object
 {
@@ -378,6 +390,77 @@ struct glz::meta<constrained_object>
                                         "name", read_constraint<&T::name, limit_name, "Name is too long">);
 };
 ```
+
+### Object level validation
+
+To validate combinations of fields after the object has been fully deserialized, provide a single
+`self_constraint` entry. This constraint runs once after all object members have been populated and can therefore
+reason about the final state.
+
+```c++
+struct cross_constrained
+{
+   int age{};
+   std::string name{};
+};
+
+template <>
+struct glz::meta<cross_constrained>
+{
+   using T = cross_constrained;
+
+   static constexpr auto combined = [](const T& v) {
+      return ((v.name.starts_with('A') && v.age > 10) || v.age > 5);
+   };
+
+   static constexpr auto value = object(&T::age, &T::name);
+   static constexpr auto self_constraint = glz::self_constraint<combined, "Age/name combination invalid">;
+};
+```
+
+You can perform more elaborate business logic as well, such as validating that user credentials are consistent and
+secure:
+
+```c++
+struct registration_request
+{
+   std::string username{};
+   std::string password{};
+   std::string confirm_password{};
+   std::optional<std::string> email{};
+};
+
+template <>
+struct glz::meta<registration_request>
+{
+   using T = registration_request;
+
+   static constexpr auto strong_credentials = [](const T& value) {
+      const bool strong_length = value.password.size() >= 12;
+      const bool matches = value.password == value.confirm_password;
+      const bool has_username = !value.username.empty();
+      return strong_length && matches && has_username;
+   };
+
+   static constexpr auto value = object(
+      &T::username,
+      &T::password,
+      &T::confirm_password,
+      &T::email);
+
+   static constexpr auto self_constraint = glz::self_constraint<strong_credentials,
+      "Password must be at least 12 characters and match confirmation">;
+};
+```
+
+If a self constraint fails, deserialization stops and `glz::error_code::constraint_violated` is reported with the
+associated message.
+
+When it is important that object memory remains valid after every individual assignment—for example, when other code
+observes the partially constructed object during parsing—prefer `read_constraint` on the specific members. Those
+constraints fire before the member is written, so the in-memory representation never stores an invalid value. In
+contrast, `self_constraint` runs after fields are populated, so it can detect issues that span multiple members but the
+object may hold the problematic data until the constraint handler reports an error.
 
 ## partial_read
 
@@ -660,4 +743,3 @@ expect(s == R"({"x":[1,2,3]})");
 expect(obj.x[0] == 1);
 expect(obj.x[1] == 2);
 ```
-
