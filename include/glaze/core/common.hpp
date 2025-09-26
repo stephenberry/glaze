@@ -8,6 +8,8 @@
 #include <iterator>
 #include <optional>
 #include <string>
+#include <string_view>
+#include <numeric>
 #include <type_traits>
 #include <vector>
 
@@ -21,8 +23,8 @@
 #include "glaze/core/meta.hpp"
 #include "glaze/util/bit_array.hpp"
 #include "glaze/util/expected.hpp"
+#include "glaze/util/compare.hpp"
 #include "glaze/util/for_each.hpp"
-#include "glaze/util/hash_map.hpp"
 #include "glaze/util/help.hpp"
 #include "glaze/util/string_literal.hpp"
 #include "glaze/util/tuple.hpp"
@@ -409,37 +411,57 @@ namespace glz
 #endif
    };
 
-   template <is_variant T, size_t... I>
-   constexpr auto make_variant_sv_id_map_impl(std::index_sequence<I...>, auto&& variant_ids)
+   template <size_t I, pair_t T>
+   GLZ_ALWAYS_INLINE constexpr decltype(auto) get(T&& p) noexcept
    {
-      // Use the actual size of the ids array, not the variant size
-      return normal_map<sv, size_t, sizeof...(I)>(std::array{pair<sv, size_t>{sv(variant_ids[I]), I}...});
-   }
-
-   template <is_variant T, size_t... I>
-   constexpr auto make_variant_id_map_impl(std::index_sequence<I...>, auto&& variant_ids)
-   {
-      using id_type = std::decay_t<decltype(ids_v<T>[0])>;
-      // Use the actual size of the ids array, not the variant size
-      return normal_map<id_type, size_t, sizeof...(I)>(std::array{pair{variant_ids[I], I}...});
+      if constexpr (I == 0) {
+         return p.first;
+      }
+      else if constexpr (I == 1) {
+         return p.second;
+      }
+      else {
+         static_assert(false_v<std::decay_t<T>>, "Invalid get for pair");
+      }
    }
 
    template <is_variant T>
-   constexpr auto make_variant_id_map()
+   struct variant_id_lookup
    {
-      // Use the size of the ids array, not the variant size
-      // This allows unlabeled variant types to serve as defaults
-      constexpr auto indices = std::make_index_sequence<ids_v<T>.size()>{};
+      using ids_type = decltype(ids_v<T>);
+      static constexpr auto size = ids_v<T>.size();
 
-      using id_type = std::decay_t<decltype(ids_v<T>[0])>;
+      using id_type = std::conditional_t<size == 0, size_t, std::decay_t<decltype(ids_v<T>[0])>>;
 
-      if constexpr (std::integral<id_type>) {
-         return make_variant_id_map_impl<T>(indices, ids_v<T>);
+      static constexpr size_t npos = size;
+
+      template <class U>
+      GLZ_ALWAYS_INLINE static constexpr size_t index(const U& candidate) noexcept
+      {
+         if constexpr (size == 0) {
+            return 0;
+         }
+         else {
+            if constexpr (std::integral<id_type>) {
+               const auto value = static_cast<id_type>(candidate);
+               for (size_t i = 0; i < size; ++i) {
+                  if (ids_v<T>[i] == value) {
+                     return i;
+                  }
+               }
+            }
+            else {
+               const std::string_view target(candidate);
+               for (size_t i = 0; i < size; ++i) {
+                  if (compare_sv(ids_v<T>[i], target)) {
+                     return i;
+                  }
+               }
+            }
+            return npos;
+         }
       }
-      else {
-         return make_variant_sv_id_map_impl<T>(indices, ids_v<T>);
-      }
-   }
+   };
 
    /**
     * @brief Extracts the underlying member from a struct.

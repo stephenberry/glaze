@@ -456,17 +456,6 @@ namespace glz
 
 namespace glz
 {
-   template <class T>
-   constexpr auto make_enum_to_string_map()
-   {
-      constexpr auto N = reflect<T>::size;
-      return [&]<size_t... I>(std::index_sequence<I...>) {
-         using key_t = std::underlying_type_t<T>;
-         return normal_map<key_t, sv, N>(std::array<pair<key_t, sv>, N>{
-            pair<key_t, sv>{static_cast<key_t>(glz::get<I>(reflect<T>::values)), reflect<T>::keys[I]}...});
-      }(std::make_index_sequence<N>{});
-   }
-
    // TODO: This faster approach can be used if the enum has an integer type base and sequential numbering
    template <class T>
    constexpr auto make_enum_to_string_array() noexcept
@@ -474,6 +463,24 @@ namespace glz
       return []<size_t... I>(std::index_sequence<I...>) {
          return std::array<sv, sizeof...(I)>{reflect<T>::keys[I]...};
       }(std::make_index_sequence<reflect<T>::size>{});
+   }
+
+   template <class T>
+   constexpr size_t enum_value_index(std::underlying_type_t<T> value) noexcept
+   {
+      constexpr auto count = reflect<T>::size;
+      size_t result = count;
+      if constexpr (count > 0) {
+         bool matched = false;
+         for_each<count>([&]<auto I>() {
+            if (!matched &&
+                static_cast<std::underlying_type_t<T>>(glz::get<I>(reflect<T>::values)) == value) {
+               result = I;
+               matched = true;
+            }
+         });
+      }
+      return result;
    }
 
    // get a std::string_view from an enum value
@@ -560,45 +567,69 @@ namespace glz
       const auto end = std::unique(keys.begin(), keys.end());
       const auto size = std::distance(keys.begin(), end);
 
-      return pair{keys, size};
+      return std::pair{keys, size};
    }
 
-   template <class T, size_t... I>
-   consteval auto make_variant_deduction_base_map(std::index_sequence<I...>, auto&& keys)
+   template <const auto& Keys>
+   struct array_keys_reflector final
+   {};
+
+   template <const auto& Keys>
+   struct reflect<array_keys_reflector<Keys>>
    {
-      using V = bit_array<std::variant_size_v<T>>;
-      return normal_map<sv, V, sizeof...(I)>(
-         std::array<pair<sv, V>, sizeof...(I)>{pair<sv, V>{sv(std::get<I>(keys)), V{}}...});
+      static constexpr auto size = Keys.size();
+      static constexpr auto keys = Keys;
+      static constexpr auto values = tuple{};
+   };
+
+   template <size_t N>
+   consteval size_t find_key_index(const std::array<sv, N>& keys, const sv key) noexcept
+   {
+      for (size_t i = 0; i < N; ++i) {
+         if (compare_sv(keys[i], key)) {
+            return i;
+         }
+      }
+      return N;
    }
 
    template <class T>
-   constexpr auto make_variant_deduction_map()
+   consteval auto make_variant_deduction_keys_array()
    {
       constexpr auto key_size_pair = get_combined_keys_from_variant<T>();
+      constexpr auto size = key_size_pair.second;
+      return [&]<size_t... I>(std::index_sequence<I...>) {
+         return std::array<sv, size>{key_size_pair.first[I]...};
+      }(std::make_index_sequence<size>{});
+   }
 
-      auto deduction_map =
-         make_variant_deduction_base_map<T>(std::make_index_sequence<key_size_pair.second>{}, key_size_pair.first);
-
-      constexpr auto N = std::variant_size_v<T>;
-      for_each<N>([&]<auto I>() {
-         using V = decay_keep_volatile_t<std::variant_alternative_t<I, T>>;
-         if constexpr (glaze_object_t<V> || reflectable<V> || is_memory_object<V>) {
-            using X = std::conditional_t<is_memory_object<V>, memory_type<V>, V>;
-            constexpr auto Size = reflect<X>::size;
-            if constexpr (Size > 0) {
-               for (size_t J = 0; J < Size; ++J) {
-                  deduction_map.find(reflect<X>::keys[J])->second[I] = true;
+   template <class T>
+   consteval auto make_variant_deduction_values_array()
+   {
+      constexpr auto keys = make_variant_deduction_keys_array<T>();
+      constexpr auto size = keys.size();
+      using bitset_t = bit_array<std::variant_size_v<T>>;
+      std::array<bitset_t, size> values{};
+      if constexpr (size > 0) {
+         for_each<std::variant_size_v<T>>([&]<auto I>() {
+            using V = decay_keep_volatile_t<std::variant_alternative_t<I, T>>;
+            if constexpr (glaze_object_t<V> || reflectable<V> || is_memory_object<V>) {
+               using X = std::conditional_t<is_memory_object<V>, memory_type<V>, V>;
+               constexpr auto member_count = reflect<X>::size;
+               if constexpr (member_count > 0) {
+                  for (size_t J = 0; J < member_count; ++J) {
+                     const auto idx = find_key_index(keys, reflect<X>::keys[J]);
+                     if (idx < size) {
+                        values[idx][I] = true;
+                     }
+                  }
                }
             }
-         }
-      });
-
-      return deduction_map;
+         });
+      }
+      return values;
    }
-}
 
-namespace glz
-{
    template <class T>
    consteval size_t key_index(const std::string_view key)
    {
@@ -629,6 +660,94 @@ namespace glz
       h *= 0x880355f21e6d1965ULL;
       h ^= h >> 47;
       return h;
+   }
+
+   inline constexpr uint64_t to_uint64_n_below_8(const char* bytes, const size_t N) noexcept
+   {
+      static_assert(std::endian::native == std::endian::little);
+      uint64_t res{};
+      if (std::is_constant_evaluated()) {
+         for (size_t i = 0; i < N; ++i) {
+            res |= (uint64_t(uint8_t(bytes[i])) << (i << 3));
+         }
+      }
+      else {
+         switch (N) {
+         case 1: {
+            std::memcpy(&res, bytes, 1);
+            break;
+         }
+         case 2: {
+            std::memcpy(&res, bytes, 2);
+            break;
+         }
+         case 3: {
+            std::memcpy(&res, bytes, 3);
+            break;
+         }
+         case 4: {
+            std::memcpy(&res, bytes, 4);
+            break;
+         }
+         case 5: {
+            std::memcpy(&res, bytes, 5);
+            break;
+         }
+         case 6: {
+            std::memcpy(&res, bytes, 6);
+            break;
+         }
+         case 7: {
+            std::memcpy(&res, bytes, 7);
+            break;
+         }
+         default: {
+            break;
+         }
+         }
+      }
+      return res;
+   }
+
+   template <size_t N = 8>
+   constexpr uint64_t to_uint64(const char* bytes) noexcept
+   {
+      static_assert(N <= sizeof(uint64_t));
+      static_assert(std::endian::native == std::endian::little);
+      if (std::is_constant_evaluated()) {
+         uint64_t res{};
+         for (size_t i = 0; i < N; ++i) {
+            res |= (uint64_t(uint8_t(bytes[i])) << (i << 3));
+         }
+         return res;
+      }
+      else if constexpr (N == 8) {
+         uint64_t res;
+         std::memcpy(&res, bytes, N);
+         return res;
+      }
+      else {
+         uint64_t res{};
+         std::memcpy(&res, bytes, N);
+         constexpr auto num_bytes = sizeof(uint64_t);
+         constexpr auto shift = (uint64_t(num_bytes - N) << 3);
+         if constexpr (shift == 0) {
+            return res;
+         }
+         else {
+            return (res << shift) >> shift;
+         }
+      }
+   }
+
+   inline constexpr bool contains(const size_t* data, const size_t size, const size_t val) noexcept
+   {
+      for (size_t i = 0; i < size; ++i) {
+         if (data[i] == val) {
+            return true;
+         }
+      }
+      return false;
    }
 
    template <size_t N>
@@ -1792,6 +1911,47 @@ namespace glz
 
    template <uint32_t Format, class T, auto HashInfo, hash_type Type>
    struct decode_hash_with_size;
+
+   template <class T>
+   struct variant_deduction_lookup
+   {
+      inline static constexpr auto keys = make_variant_deduction_keys_array<T>();
+      inline static constexpr auto values = make_variant_deduction_values_array<T>();
+      using keys_reflector = array_keys_reflector<keys>;
+      inline static constexpr auto hash_info_value = hash_info<keys_reflector>;
+      using bitset_t = bit_array<std::variant_size_v<T>>;
+      inline static constexpr size_t size = keys.size();
+
+      GLZ_ALWAYS_INLINE static constexpr const bitset_t* find(std::string_view key) noexcept
+      {
+         if constexpr (size == 0) {
+            return nullptr;
+         }
+         else {
+            if constexpr (hash_info_value.type == hash_type::invalid) {
+               for (size_t i = 0; i < size; ++i) {
+                  if (compare_sv(keys[i], key)) {
+                     return &values[i];
+                  }
+               }
+               return nullptr;
+            }
+            else {
+               const auto* data = key.data();
+               const auto index =
+                  decode_hash_with_size<JSON, keys_reflector, hash_info_value, hash_info_value.type>::op(
+                     data, data + key.size(), key.size());
+               if (index >= size) {
+                  return nullptr;
+               }
+               if (!compare_sv(keys[index], key)) {
+                  return nullptr;
+               }
+               return &values[index];
+            }
+         }
+      }
+   };
 
    template <uint32_t Format, class T, auto HashInfo>
    struct decode_hash_with_size<Format, T, HashInfo, hash_type::single_element>
