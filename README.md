@@ -916,7 +916,7 @@ expect(not glz::write_json(obj, s));
 expect(s == R"({"pi":3.14,"happy":true,"name":"Stephen","arr":["Hello","World",2]})");
 ```
 
-> This approach is significantly faster than `glz::json_t` for generic JSON. But, may not be suitable for all contexts.
+> This approach is significantly faster than `glz::generic` for generic JSON. But, may not be suitable for all contexts.
 
 ## Merge
 
@@ -935,10 +935,10 @@ glz::write_json(merged, s); // will write out a single, merged object
 
 ## Generic JSON
 
-See [Generic JSON](./docs/generic-json.md) for `glz::json_t`.
+See [Generic JSON](./docs/generic-json.md) for `glz::generic`.
 
 ```c++
-glz::json_t json{};
+glz::generic json{};
 std::string buffer = R"([5,"Hello World",{"pi":3.14}])";
 glz::read_json(json, buffer);
 assert(json[2]["pi"].get<double>() == 3.14);

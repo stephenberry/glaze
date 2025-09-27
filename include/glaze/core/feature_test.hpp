@@ -5,6 +5,9 @@
 
 // Glaze Feature Test Macros for breaking changes
 
+// v6.0.0 renames json/json_t.hpp to json/generic.hpp and deprecates glz::json_t alias
+#define glaze_v6_0_0_generic_header
+
 // v5.2.0 Moves `layout` CSV option into glz::opts_csv
 #define glaze_v5_2_0_opts_csv
 

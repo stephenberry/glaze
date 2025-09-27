@@ -8,7 +8,7 @@ using namespace ut;
 
 suite generic_json_tests = [] {
    "generic_json_write"_test = [] {
-      glz::json_t json = {{"pi", 3.141},
+      glz::generic json = {{"pi", 3.141},
                           {"happy", true},
                           {"name", "Niels"},
                           {"nothing", nullptr},
@@ -24,17 +24,17 @@ suite generic_json_tests = [] {
    };
 
    "generic_json_read"_test = [] {
-      glz::json_t json{};
+      glz::generic json{};
       std::string buffer = R"([5,"Hello World",{"pi":3.14},null])";
       expect(glz::read_json(json, buffer) == glz::error_code::none);
       expect(json[0].get<double>() == 5.0);
       expect(json[1].get<std::string>() == "Hello World");
       expect(json[2]["pi"].get<double>() == 3.14);
-      expect(json[3].holds<glz::json_t::null_t>());
+      expect(json[3].holds<glz::generic::null_t>());
    };
 
    "generic_json_roundtrip"_test = [] {
-      glz::json_t json{};
+      glz::generic json{};
       std::string buffer = R"([5,"Hello World",{"pi":3.14},null])";
       expect(glz::read_json(json, buffer) == glz::error_code::none);
       expect(glz::write_json(json) == buffer);
@@ -42,8 +42,8 @@ suite generic_json_tests = [] {
    };
 
    "generic_json_const"_test = [] {
-      auto foo = [](const glz::json_t& json) { return json["s"].get<std::string>(); };
-      glz::json_t json = {{"s", "hello world"}};
+      auto foo = [](const glz::generic& json) { return json["s"].get<std::string>(); };
+      glz::generic json = {{"s", "hello world"}};
       expect(foo(json) == "hello world");
       expect(json.dump().value() == R"({"s":"hello world"})");
 
@@ -54,13 +54,13 @@ suite generic_json_tests = [] {
    };
 
    "generic_json_int"_test = [] {
-      glz::json_t json = {{"i", 1}};
+      glz::generic json = {{"i", 1}};
       expect(json["i"].get<double>() == 1);
       expect(json.dump().value() == R"({"i":1})");
    };
 
    "generic_json_as"_test = [] {
-      glz::json_t json = {{"pi", 3.141},
+      glz::generic json = {{"pi", 3.141},
                           {"happy", true},
                           {"name", "Niels"},
                           {"nothing", nullptr},
@@ -77,7 +77,7 @@ suite generic_json_tests = [] {
    };
 
    "generic_json_nested_initialization"_test = [] {
-      static const glz::json_t messageSchema = {{"type", "struct"},
+      static const glz::generic messageSchema = {{"type", "struct"},
                                                 {"fields",
                                                  {
                                                     {{"field", "branch"}, {"type", "string"}},
@@ -87,8 +87,8 @@ suite generic_json_tests = [] {
       expect(buffer == R"({"fields":[{"field":"branch","type":"string"}],"type":"struct"})") << buffer;
    };
 
-   "json_t_contains"_test = [] {
-      auto json = glz::read_json<glz::json_t>(R"({"foo":"bar"})");
+   "generic_contains"_test = [] {
+      auto json = glz::read_json<glz::generic>(R"({"foo":"bar"})");
       expect(bool(json));
       expect(!json->contains("id"));
       expect(json->contains("foo"));
@@ -100,18 +100,18 @@ suite generic_json_tests = [] {
 
    "buffer underrun"_test = [] {
       std::string buffer{"000000000000000000000"};
-      glz::json_t json{};
+      glz::generic json{};
       expect(glz::read_json(json, buffer) == glz::error_code::parse_number_failure);
    };
 
-   "json_t copy construction"_test = [] {
+   "generic copy construction"_test = [] {
       std::string s{};
-      expect(not glz::write_json(glz::json_t(*(glz::read_json<glz::json_t>("{}"))), s));
+      expect(not glz::write_json(glz::generic(*(glz::read_json<glz::generic>("{}"))), s));
       expect(s == "{}");
    };
 
-   "json_t is_object"_test = [] {
-      glz::json_t json{};
+   "generic is_object"_test = [] {
+      glz::generic json{};
       expect(not glz::read_json(json, "{}"));
       expect(json.is_object());
       expect(glz::is_object(json));
@@ -120,8 +120,8 @@ suite generic_json_tests = [] {
       expect(json.get_object().size() == 0);
    };
 
-   "json_t is_object"_test = [] {
-      glz::json_t json{};
+   "generic is_object"_test = [] {
+      glz::generic json{};
       expect(not glz::read_json(json, R"({"age":"22","name":"Noah"})"));
       expect(json.is_object());
       expect(glz::is_object(json));
@@ -130,8 +130,8 @@ suite generic_json_tests = [] {
       expect(json.get_object().size() == 2);
    };
 
-   "json_t is_array"_test = [] {
-      glz::json_t json{};
+   "generic is_array"_test = [] {
+      glz::generic json{};
       expect(not glz::read_json(json, "[]"));
       expect(json.is_array());
       expect(glz::is_array(json));
@@ -140,8 +140,8 @@ suite generic_json_tests = [] {
       expect(json.get_array().size() == 0);
    };
 
-   "json_t is_array"_test = [] {
-      glz::json_t json{};
+   "generic is_array"_test = [] {
+      glz::generic json{};
       expect(not glz::read_json(json, "[1,2,3]"));
       expect(json.is_array());
       expect(glz::is_array(json));
@@ -153,8 +153,8 @@ suite generic_json_tests = [] {
       expect(v == std::array{1, 2, 3});
    };
 
-   "json_t is_string"_test = [] {
-      glz::json_t json{};
+   "generic is_string"_test = [] {
+      glz::generic json{};
       expect(not glz::read_json(json, R"("")"));
       expect(json.is_string());
       expect(glz::is_string(json));
@@ -163,8 +163,8 @@ suite generic_json_tests = [] {
       expect(json.get_string() == "");
    };
 
-   "json_t is_string"_test = [] {
-      glz::json_t json{};
+   "generic is_string"_test = [] {
+      glz::generic json{};
       expect(not glz::read_json(json, R"("Beautiful beginning")"));
       expect(json.is_string());
       expect(glz::is_string(json));
@@ -176,8 +176,8 @@ suite generic_json_tests = [] {
       expect(v == "Beautiful beginning");
    };
 
-   "json_t is_number"_test = [] {
-      glz::json_t json{};
+   "generic is_number"_test = [] {
+      glz::generic json{};
       expect(not glz::read_json(json, "3.882e2"));
       expect(json.is_number());
       expect(glz::is_number(json));
@@ -189,8 +189,8 @@ suite generic_json_tests = [] {
       expect(v == 3.882e2);
    };
 
-   "json_t is_boolean"_test = [] {
-      glz::json_t json{};
+   "generic is_boolean"_test = [] {
+      glz::generic json{};
       expect(not glz::read_json(json, "true"));
       expect(json.is_boolean());
       expect(glz::is_boolean(json));
@@ -202,8 +202,8 @@ suite generic_json_tests = [] {
       expect(v);
    };
 
-   "json_t is_null"_test = [] {
-      glz::json_t json{};
+   "generic is_null"_test = [] {
+      glz::generic json{};
       expect(not glz::read_json(json, "null"));
       expect(json.is_null());
       expect(glz::is_null(json));
@@ -211,35 +211,35 @@ suite generic_json_tests = [] {
       expect(json.size() == 0);
    };
 
-   "json_t garbage input"_test = [] {
-      glz::json_t json{};
+   "generic garbage input"_test = [] {
+      glz::generic json{};
       expect(glz::read_json(json, "\x22\x5c\x75\xff\x22"));
    };
 
-   "json_t string_view"_test = [] {
-      glz::json_t json = std::string_view{"Hello"};
+   "generic string_view"_test = [] {
+      glz::generic json = std::string_view{"Hello"};
       expect(glz::write_json(json).value() == R"("Hello")");
       json = std::string_view{"World"};
       expect(glz::write_json(json).value() == R"("World")");
    };
 
-   "json_t int"_test = [] {
-      glz::json_t json = 55;
+   "generic int"_test = [] {
+      glz::generic json = 55;
       expect(glz::write_json(json).value() == "55");
       json = 44;
       expect(glz::write_json(json).value() == "44");
    };
 
-   "json_t const char*"_test = [] {
-      glz::json_t j{};
+   "generic const char*"_test = [] {
+      glz::generic j{};
       j["some key"] = "some value";
       expect(j.dump() == R"({"some key":"some value"})");
    };
 };
 
-glz::json_t create_test_json()
+glz::generic create_test_json()
 {
-   glz::json_t root;
+   glz::generic root;
 
    // Create nested object structure
    root["user"]["name"] = "John Doe";
@@ -250,22 +250,22 @@ glz::json_t create_test_json()
    root["user"]["address"]["zip"] = "12345";
 
    // Create array structure
-   root["items"] = glz::json_t::array_t{};
+   root["items"] = glz::generic::array_t{};
    auto& items = root["items"].get_array();
 
-   glz::json_t item1;
+   glz::generic item1;
    item1["id"] = 1.0;
    item1["name"] = "Widget A";
    item1["price"] = 19.99;
    items.push_back(std::move(item1));
 
-   glz::json_t item2;
+   glz::generic item2;
    item2["id"] = 2.0;
    item2["name"] = "Widget B";
    item2["price"] = 29.99;
    items.push_back(std::move(item2));
 
-   glz::json_t item3;
+   glz::generic item3;
    item3["id"] = 3.0;
    item3["name"] = "Widget C";
    item3["price"] = 39.99;
@@ -273,7 +273,7 @@ glz::json_t create_test_json()
 
    // Create mixed nested structure
    root["metadata"]["version"] = "1.0";
-   root["metadata"]["tags"] = glz::json_t::array_t{"production", "stable", "v1"};
+   root["metadata"]["tags"] = glz::generic::array_t{"production", "stable", "v1"};
 
    return root;
 }
@@ -479,7 +479,7 @@ suite json_pointer_extraction_tests = [] {
    };
 
    "json_pointer_escaping"_test = [] {
-      glz::json_t json;
+      glz::generic json;
       json["key~with~tilde"] = "tilde value";
       json["key/with/slash"] = "slash value";
 
@@ -524,7 +524,7 @@ suite json_pointer_extraction_tests = [] {
    };
 
    "simple_usage_example"_test = [] {
-      glz::json_t json{{"test", true}};
+      glz::generic json{{"test", true}};
 
       auto result = glz::get<bool>(json, "/test");
       expect(result.has_value()) << "Should successfully get boolean value\n";
@@ -566,13 +566,13 @@ struct Employee
 };
 
 suite struct_assignment_tests = [] {
-   "struct_to_json_t_assignment"_test = [] {
+   "struct_to_generic_assignment"_test = [] {
       Thing t{42, "hello, world!"};
-      glz::json_t document;
+      glz::generic document;
       document["some"]["nested"]["key"] = t;
 
       auto json_str = document.dump();
-      expect(json_str.has_value()) << "Should successfully dump json_t to string";
+      expect(json_str.has_value()) << "Should successfully dump generic to string";
 
       auto expected = R"({"some":{"nested":{"key":{"value1":42,"value2":"hello, world!"}}}})";
       expect(json_str.value() == expected) << "Should produce correct nested JSON structure";
@@ -584,7 +584,7 @@ suite struct_assignment_tests = [] {
 
    "complex_struct_assignment"_test = [] {
       Person p{"Alice", 30, {"reading", "gaming", "cooking"}};
-      glz::json_t json;
+      glz::generic json;
       json["person"] = p;
 
       auto json_str = json.dump();
@@ -600,7 +600,7 @@ suite struct_assignment_tests = [] {
 
    "nested_struct_assignment"_test = [] {
       Employee e{"Bob", {"123 Main St", "Anytown", 12345}, 75000.50};
-      glz::json_t json;
+      glz::generic json;
       json["employee"] = e;
 
       auto json_str = json.dump();
@@ -620,7 +620,7 @@ suite fuzz_tests = [] {
       std::string_view s = "[true,true,tur";
       std::vector<char> buffer{s.data(), s.data() + s.size()};
       buffer.push_back('\0');
-      glz::json_t json{};
+      glz::generic json{};
       auto ec = glz::read_json(json, buffer);
       expect(bool(ec));
    };
