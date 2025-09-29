@@ -207,6 +207,39 @@ namespace glz
       }
    };
 
+   template <char_t T>
+   struct from<CSV, T>
+   {
+      template <auto Opts, class It>
+      static void op(auto&& value, is_context auto&& ctx, It&& it, auto&& end)
+      {
+         if (bool(ctx.error)) [[unlikely]] {
+            return;
+         }
+
+         std::string field{};
+         parse<CSV>::op<Opts>(field, ctx, it, end);
+
+         if (bool(ctx.error)) [[unlikely]] {
+            return;
+         }
+
+         using storage_t = std::remove_cvref_t<decltype(value)>;
+
+         if (field.empty()) {
+            value = storage_t{};
+            return;
+         }
+
+         if (field.size() == 1) {
+            value = static_cast<storage_t>(field.front());
+            return;
+         }
+
+         ctx.error = error_code::syntax_error;
+      }
+   };
+
    template <class T>
       requires(is_named_enum<T>)
    struct from<CSV, T>
