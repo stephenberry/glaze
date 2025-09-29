@@ -2615,6 +2615,7 @@ suite static_variant_tags = [] {
    };
 };
 
+
 suite explicit_string_view_support = [] {
    "write beve from explicit string_view"_test = [] {
       struct explicit_string_view_type
@@ -2684,6 +2685,48 @@ suite member_function_pointer_beve_serialization = [] {
       expect(buffer_opt_in.find("description") != std::string::npos);
    };
 };
+
+
+struct ModuleID {
+   uint64_t value{};
+
+   bool operator<(const ModuleID& other) const {
+      return value < other.value;
+   }
+
+   bool operator==(const ModuleID& other) const {
+      return value == other.value;
+   }
+};
+
+
+template <>
+struct glz::meta<ModuleID> {
+   static constexpr auto value = &ModuleID::value;
+};
+
+
+suite custom_key_tests = [] {
+   "map<ModuleID, string>"_test = [] {
+      // Test map with custom key type that has glz::meta<T>::value
+      std::map<ModuleID, std::string> original;
+      original[ModuleID{100}] = "Module A";
+      original[ModuleID{200}] = "Module B";
+      original[ModuleID{300}] = "Module C";
+
+      std::string s;
+      expect(not glz::write_beve(original, s));
+
+      std::map<ModuleID, std::string> result;
+      expect(!glz::read_beve(result, s));
+
+      expect(result.size() == 3);
+      expect(result[ModuleID{100}] == "Module A");
+      expect(result[ModuleID{200}] == "Module B");
+      expect(result[ModuleID{300}] == "Module C");
+   };
+};
+
 
 int main()
 {

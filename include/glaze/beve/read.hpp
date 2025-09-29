@@ -73,6 +73,15 @@ namespace glz
          from<BEVE, V>::template op<Opts>(get_member(std::forward<Value>(value), meta_wrapper_v<T>),
                                           std::forward<Ctx>(ctx), std::forward<It0>(it), std::forward<It1>(end));
       }
+
+      template <auto Opts, class Value, is_context Ctx, class It0, class It1>
+         requires(check_no_header(Opts))
+      GLZ_ALWAYS_INLINE static void op(Value&& value, const uint8_t tag, Ctx&& ctx, It0&& it, It1&& end)
+      {
+         using V = std::decay_t<decltype(get_member(std::declval<Value>(), meta_wrapper_v<T>))>;
+         from<BEVE, V>::template op<no_header_on<Opts>()>(get_member(std::forward<Value>(value), meta_wrapper_v<T>),
+                                          tag, std::forward<Ctx>(ctx), std::forward<It0>(it), std::forward<It1>(end));
+      }
    };
 
    template <always_null_t T>
@@ -1105,9 +1114,10 @@ namespace glz
       static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
       {
          using Key = typename T::key_type;
+         using key_t = beve_map_key_t<Key>;
 
-         constexpr uint8_t type = str_t<Key> ? 0 : (std::is_signed_v<Key> ? 0b000'01'000 : 0b000'10'000);
-         constexpr uint8_t byte_cnt = str_t<Key> ? 0 : byte_count<Key>;
+         constexpr uint8_t type = str_t<key_t> ? 0 : (std::is_signed_v<key_t> ? 0b000'01'000 : 0b000'10'000);
+         constexpr uint8_t byte_cnt = str_t<key_t> ? 0 : byte_count<key_t>;
          constexpr uint8_t header = tag::object | type | (byte_cnt << 5);
 
          if (invalid_end(ctx, it, end)) {
@@ -1146,7 +1156,7 @@ namespace glz
             n = value.size();
          }
 
-         if constexpr (std::is_arithmetic_v<std::decay_t<Key>>) {
+         if constexpr (std::is_arithmetic_v<std::decay_t<key_t>>) {
             constexpr uint8_t key_tag = tag::number | type | (byte_cnt << 5);
             Key key;
             for (size_t i = 0; i < n; ++i) {

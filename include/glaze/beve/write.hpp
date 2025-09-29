@@ -222,6 +222,14 @@ namespace glz
          to<BEVE, V>::template op<Opts>(get_member(std::forward<Value>(value), meta_wrapper_v<T>),
                                         std::forward<Ctx>(ctx), std::forward<B>(b), std::forward<IX>(ix));
       }
+
+      template <auto Opts, class Value, is_context Ctx, class B, class IX>
+      GLZ_ALWAYS_INLINE static void no_header(Value&& value, Ctx&& ctx, B&& b, IX&& ix)
+      {
+         using V = std::remove_cvref_t<decltype(get_member(std::declval<Value>(), meta_wrapper_v<T>))>;
+         to<BEVE, V>::template no_header<Opts>(get_member(std::forward<Value>(value), meta_wrapper_v<T>),
+                                        std::forward<Ctx>(ctx), std::forward<B>(b), std::forward<IX>(ix));
+      }
    };
 
    template <always_null_t T>
@@ -674,9 +682,10 @@ namespace glz
       GLZ_ALWAYS_INLINE static auto op(auto&& value, is_context auto&& ctx, Args&&... args)
       {
          using Key = typename T::first_type;
+         using key_t = beve_map_key_t<Key>;
 
-         constexpr uint8_t type = str_t<Key> ? 0 : (std::is_signed_v<Key> ? 0b000'01'000 : 0b000'10'000);
-         constexpr uint8_t byte_cnt = str_t<Key> ? 0 : byte_count<Key>;
+         constexpr uint8_t type = str_t<key_t> ? 0 : (std::is_signed_v<key_t> ? 0b000'01'000 : 0b000'10'000);
+         constexpr uint8_t byte_cnt = str_t<key_t> ? 0 : byte_count<key_t>;
          constexpr uint8_t tag = tag::object | type | (byte_cnt << 5);
          dump_type(tag, args...);
 
@@ -694,9 +703,10 @@ namespace glz
       static auto op(auto&& value, is_context auto&& ctx, Args&&... args)
       {
          using Key = typename T::key_type;
+         using key_t = beve_map_key_t<Key>;
 
-         constexpr uint8_t type = str_t<Key> ? 0 : (std::is_signed_v<Key> ? 0b000'01'000 : 0b000'10'000);
-         constexpr uint8_t byte_cnt = str_t<Key> ? 0 : byte_count<Key>;
+         constexpr uint8_t type = str_t<key_t> ? 0 : (std::is_signed_v<key_t> ? 0b000'01'000 : 0b000'10'000);
+         constexpr uint8_t byte_cnt = str_t<key_t> ? 0 : byte_count<key_t>;
          constexpr uint8_t tag = tag::object | type | (byte_cnt << 5);
          dump_type(tag, args...);
 
