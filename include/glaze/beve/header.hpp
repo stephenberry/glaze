@@ -10,10 +10,10 @@
 #include <cstring>
 #include <iterator>
 
-#include "glaze/core/context.hpp"
-#include "glaze/util/inline.hpp"
 #include "glaze/core/common.hpp"
+#include "glaze/core/context.hpp"
 #include "glaze/core/meta.hpp"
+#include "glaze/util/inline.hpp"
 
 namespace glz
 {
@@ -70,9 +70,8 @@ namespace glz
    inline constexpr std::array<uint8_t, 8> byte_count_lookup{1, 2, 4, 8, 16, 32, 64, 128};
 
    template <typename T>
-   using beve_map_key_t = std::conditional_t<glaze_value_t<T>,
-                                             std::decay_t<decltype(get_member(std::declval<T>(), meta_wrapper_v<T>))>,
-                                             T>;
+   using beve_map_key_t =
+      std::conditional_t<glaze_value_t<T>, std::decay_t<decltype(get_member(std::declval<T>(), meta_wrapper_v<T>))>, T>;
 
    [[nodiscard]] GLZ_ALWAYS_INLINE constexpr size_t int_from_compressed(auto&& ctx, auto&& it, auto&& end) noexcept
    {

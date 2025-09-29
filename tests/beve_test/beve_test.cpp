@@ -2615,7 +2615,6 @@ suite static_variant_tags = [] {
    };
 };
 
-
 suite explicit_string_view_support = [] {
    "write beve from explicit string_view"_test = [] {
       struct explicit_string_view_type
@@ -2686,25 +2685,20 @@ suite member_function_pointer_beve_serialization = [] {
    };
 };
 
-
-struct ModuleID {
+struct ModuleID
+{
    uint64_t value{};
 
-   bool operator<(const ModuleID& other) const {
-      return value < other.value;
-   }
+   bool operator<(const ModuleID& other) const { return value < other.value; }
 
-   bool operator==(const ModuleID& other) const {
-      return value == other.value;
-   }
+   bool operator==(const ModuleID& other) const { return value == other.value; }
 };
-
 
 template <>
-struct glz::meta<ModuleID> {
+struct glz::meta<ModuleID>
+{
    static constexpr auto value = &ModuleID::value;
 };
-
 
 suite custom_key_tests = [] {
    "map<ModuleID, string>"_test = [] {
@@ -2726,7 +2720,6 @@ suite custom_key_tests = [] {
       expect(result[ModuleID{300}] == "Module C");
    };
 };
-
 
 int main()
 {
