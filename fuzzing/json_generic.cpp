@@ -10,7 +10,7 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* Data, size_t Size)
       const std::vector<char> buffer{Data, Data + Size};
 
       static constexpr glz::opts opts{.null_terminated = false};
-      glz::json_t json{};
+      glz::generic json{};
       auto ec = glz::read<opts>(json, buffer);
       if (!ec) {
          [[maybe_unused]] auto s = json.size();
@@ -25,7 +25,7 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* Data, size_t Size)
    // const qualified input buffer
    {
       const auto& input = buffer;
-      glz::json_t json{};
+      glz::generic json{};
       auto ec = glz::read_json(json, input);
       if (!ec) {
          [[maybe_unused]] auto s = json.size();
@@ -34,7 +34,7 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* Data, size_t Size)
 
    // non-const input buffer
    {
-      glz::json_t json{};
+      glz::generic json{};
       auto ec = glz::read_json(json, buffer);
       if (!ec) {
          [[maybe_unused]] auto s = json.size();

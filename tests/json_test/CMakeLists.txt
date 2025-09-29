@@ -28,7 +28,7 @@ endif ()
 
 add_test(NAME ${PROJECT_NAME}_non_null COMMAND ${PROJECT_NAME}_non_null)
 
-## glz::json_t test
+## glz::generic test
 
 add_executable(json_t_test json_t_test.cpp)
 
