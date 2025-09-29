@@ -223,7 +223,10 @@ namespace glz
 
       [[nodiscard]] generic& at(std::convertible_to<std::string_view> auto&& key) { return operator[](key); }
 
-      [[nodiscard]] const generic& at(std::convertible_to<std::string_view> auto&& key) const { return operator[](key); }
+      [[nodiscard]] const generic& at(std::convertible_to<std::string_view> auto&& key) const
+      {
+         return operator[](key);
+      }
 
       [[nodiscard]] bool contains(std::convertible_to<std::string_view> auto&& key) const
       {

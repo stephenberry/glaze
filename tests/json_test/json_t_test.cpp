@@ -9,12 +9,12 @@ using namespace ut;
 suite generic_json_tests = [] {
    "generic_json_write"_test = [] {
       glz::generic json = {{"pi", 3.141},
-                          {"happy", true},
-                          {"name", "Niels"},
-                          {"nothing", nullptr},
-                          {"answer", {{"everything", 42.0}}},
-                          {"list", {1.0, 0.0, 2.0}},
-                          {"object", {{"currency", "USD"}, {"value", 42.99}}}};
+                           {"happy", true},
+                           {"name", "Niels"},
+                           {"nothing", nullptr},
+                           {"answer", {{"everything", 42.0}}},
+                           {"list", {1.0, 0.0, 2.0}},
+                           {"object", {{"currency", "USD"}, {"value", 42.99}}}};
       std::string buffer{};
       expect(not glz::write_json(json, buffer));
       expect(
@@ -61,12 +61,12 @@ suite generic_json_tests = [] {
 
    "generic_json_as"_test = [] {
       glz::generic json = {{"pi", 3.141},
-                          {"happy", true},
-                          {"name", "Niels"},
-                          {"nothing", nullptr},
-                          {"answer", {{"everything", 42.0}}},
-                          {"list", {1.0, 0.0, 2.0}},
-                          {"object", {{"currency", "USD"}, {"value", 42.99}}}};
+                           {"happy", true},
+                           {"name", "Niels"},
+                           {"nothing", nullptr},
+                           {"answer", {{"everything", 42.0}}},
+                           {"list", {1.0, 0.0, 2.0}},
+                           {"object", {{"currency", "USD"}, {"value", 42.99}}}};
       expect(json["list"][2].as<int>() == 2);
       expect(json["pi"].as<double>() == 3.141);
       expect(json["name"].as<std::string_view>() == "Niels");
@@ -78,10 +78,10 @@ suite generic_json_tests = [] {
 
    "generic_json_nested_initialization"_test = [] {
       static const glz::generic messageSchema = {{"type", "struct"},
-                                                {"fields",
-                                                 {
-                                                    {{"field", "branch"}, {"type", "string"}},
-                                                 }}};
+                                                 {"fields",
+                                                  {
+                                                     {{"field", "branch"}, {"type", "string"}},
+                                                  }}};
       std::string buffer{};
       expect(not glz::write_json(messageSchema, buffer));
       expect(buffer == R"({"fields":[{"field":"branch","type":"string"}],"type":"struct"})") << buffer;
