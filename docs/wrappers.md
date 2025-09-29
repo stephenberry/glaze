@@ -27,6 +27,7 @@ glz::write_float_full<&T::x> // Writes out numbers with full precision (turns of
 
 glz::custom<&T::read, &T::write> // Calls custom read and write std::functions, lambdas, or member functions
 glz::manage<&T::x, &T::read_x, &T::write_x> // Calls read_x() after reading x and calls write_x() before writing x
+glz::as_array<&T::member> // Treat a reflected/member-annotated type as a positional array for read and write
 ```
 
 ## Associated glz::opts
@@ -203,6 +204,50 @@ expect(obj.layouts.at("first layout") == std::vector<std::string>{"inner1", "inn
 std::string out{};
 glz::write_json(obj, out);
 expect(out == R"({"id":4848,"layouts":"{\"first layout\":[\"inner1\",\"inner2\"]}"})");
+```
+
+## as_array
+
+Convert a positional JSON array into an existing struct while writing back out as an array. Use `glz::as_array<&T::member>` when declaring the member in `glz::object`. Handy when a service sends compact arrays but your C++ type is a struct in memory.
+
+```c++
+struct Person_details
+{
+   std::string_view name;
+   std::string_view surname;
+   std::string_view city;
+   std::string_view street;
+};
+
+struct Person
+{
+   int id{};
+   Person_details person{};
+};
+
+template <>
+struct glz::meta<Person>
+{
+   using T = Person;
+   static constexpr auto value = glz::object(
+      "id", &T::id,
+      "person", glz::as_array<&T::person>
+   );
+};
+
+std::string payload = R"({
+   "id": 1,
+   "person": ["Joe", "Doe", "London", "Chamber St"]
+})";
+
+Person p{};
+expect(!glz::read_json(p, payload));
+expect(p.person.city == "London");
+
+auto written = glz::write_json(p).value();
+expect(written ==
+       R"({"id":1,"person":["Joe","Doe","London","Chamber St"]})"
+);
 ```
 
 ## number
