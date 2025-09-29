@@ -111,13 +111,16 @@ struct response {
     response& body(std::string_view content);
     response& content_type(std::string_view type);
   
- 		template <class T = generic>
-    response& json(T&& value); // Auto-serialize any type T to JSON
+		template <class T = glz::generic>
+	    response& json(T&& value); // Auto-serialize any type T to JSON
   
   	template <auto Opts, class T>
     response& body(T&& value) // Auto-serialize any type T to any format in Opts
 };
 ```
+
+`glz::generic` is the dynamic JSON-compatible type (formerly `glz::json_t`) and remains the default payload for
+helpers like `response::json` when you need flexible data that can be serialized to JSON or equivalent formats.
 
 ## HTTP Methods
 
