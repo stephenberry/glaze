@@ -128,9 +128,7 @@ suite as_array_wrapper_tests = [] {
       expect(value.person.street == "Chamber St");
 
       auto written = glz::write_json(value).value();
-      expect(written ==
-             R"({"id":1,"person":["Joe","Doe","London","Chamber St"]})"
-             );
+      expect(written == R"({"id":1,"person":["Joe","Doe","London","Chamber St"]})");
    };
 };
 
