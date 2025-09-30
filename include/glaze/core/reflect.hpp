@@ -607,7 +607,7 @@ namespace glz
    consteval auto make_variant_deduction_values_array()
    {
       constexpr auto keys = make_variant_deduction_keys_array<T>();
-      constexpr auto size = keys.size();
+      constexpr size_t size = std::tuple_size_v<decltype(keys)>;
       using bitset_t = bit_array<std::variant_size_v<T>>;
       std::array<bitset_t, size> values{};
       if constexpr (size > 0) {
@@ -617,12 +617,12 @@ namespace glz
                using X = std::conditional_t<is_memory_object<V>, memory_type<V>, V>;
                constexpr auto member_count = reflect<X>::size;
                if constexpr (member_count > 0) {
-                  for (const auto key : reflect<X>::keys) {
-                     const auto idx = find_key_index(keys, key);
-                     if (idx < size) {
+                  for_each<member_count>([&]<auto J>() {
+                     constexpr size_t idx = find_key_index(keys, reflect<X>::keys[J]);
+                     if constexpr (idx < size) {
                         values[idx][I] = true;
                      }
-                  }
+                  });
                }
             }
          });
