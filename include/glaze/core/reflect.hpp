@@ -617,12 +617,12 @@ namespace glz
                using X = std::conditional_t<is_memory_object<V>, memory_type<V>, V>;
                constexpr auto member_count = reflect<X>::size;
                if constexpr (member_count > 0) {
-                  for_each<member_count>([&]<auto J>() {
-                     constexpr auto idx = find_key_index(keys, reflect<X>::keys[J]);
-                     if constexpr (idx < size) {
+                  for (const auto key : reflect<X>::keys) {
+                     const auto idx = find_key_index(keys, key);
+                     if (idx < size) {
                         values[idx][I] = true;
                      }
-                  });
+                  }
                }
             }
          });
