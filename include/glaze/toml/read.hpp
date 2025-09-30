@@ -914,17 +914,22 @@ namespace glz
       }
    };
 
-   template <read_supported<TOML> T, class Buffer>
-   [[nodiscard]] inline auto read_toml(T&& value, Buffer&& buffer)
+   template <read_supported<TOML> T, is_buffer Buffer>
+   [[nodiscard]] inline error_ctx read_toml(T& value, Buffer&& buffer)
    {
-      return read<opts{.format = TOML}>(value, std::forward<Buffer>(buffer));
+      context ctx{};
+      return read<opts{.format = TOML}>(value, std::forward<Buffer>(buffer), ctx);
    }
 
-   template <read_supported<TOML> T, class Buffer>
-   [[nodiscard]] inline auto read_toml(Buffer&& buffer)
+   template <read_supported<TOML> T, is_buffer Buffer>
+   [[nodiscard]] inline expected<T, error_ctx> read_toml(Buffer&& buffer)
    {
       T value{};
-      read<opts{.format = TOML}>(value, std::forward<Buffer>(buffer));
+      context ctx{};
+      const error_ctx ec = read<opts{.format = TOML}>(value, std::forward<Buffer>(buffer), ctx);
+      if (ec) {
+         return unexpected<error_ctx>(ec);
+      }
       return value;
    }
 
