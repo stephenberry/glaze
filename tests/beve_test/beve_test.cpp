@@ -2130,9 +2130,9 @@ suite volatile_tests = [] {
    };
 };
 
-suite json_t_tests = [] {
-   "json_t"_test = [] {
-      glz::json_t json("Hello World");
+suite generic_tests = [] {
+   "generic"_test = [] {
+      glz::generic json("Hello World");
       auto b = glz::write_beve(json).value_or("error");
 
       json = nullptr;
@@ -2141,8 +2141,8 @@ suite json_t_tests = [] {
       expect(json.get_string() == "Hello World");
    };
 
-   "json_t"_test = [] {
-      glz::json_t json{{"i", 42}};
+   "generic"_test = [] {
+      glz::generic json{{"i", 42}};
       auto b = glz::write_beve(json).value_or("error");
 
       json = nullptr;
@@ -2152,8 +2152,8 @@ suite json_t_tests = [] {
       expect(json["i"].get_number() == 42);
    };
 
-   "json_t"_test = [] {
-      glz::json_t json{{"str", "somewhere"}, {"arr", {1, 2, 3}}};
+   "generic"_test = [] {
+      glz::generic json{{"str", "somewhere"}, {"arr", {1, 2, 3}}};
       auto b = glz::write_beve(json).value_or("error");
 
       json = nullptr;
@@ -2164,8 +2164,8 @@ suite json_t_tests = [] {
       expect(json["arr"].get_array().size() == 3);
    };
 
-   "json_t"_test = [] {
-      glz::json_t json{1, 2, 3};
+   "generic"_test = [] {
+      glz::generic json{1, 2, 3};
       auto b = glz::write_beve(json).value_or("error");
 
       json = nullptr;
@@ -2181,7 +2181,7 @@ suite early_end = [] {
 
    "early_end"_test = [] {
       Thing obj{};
-      glz::json_t json{};
+      glz::generic json{};
       glz::skip skip_me{};
       std::string buffer_data = glz::write_beve(obj).value();
       std::string_view buffer = buffer_data;
@@ -2205,7 +2205,7 @@ suite early_end = [] {
       static constexpr glz::opts options{.format = glz::BEVE, .null_terminated = false};
 
       Thing obj{};
-      glz::json_t json{};
+      glz::generic json{};
       glz::skip skip_me{};
       std::string buffer_data = glz::write_beve(obj).value();
       std::vector<char> temp{buffer_data.begin(), buffer_data.end()};

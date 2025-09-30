@@ -15,7 +15,7 @@
 #include <unordered_map>
 #include <vector>
 
-#include "glaze/json/json_t.hpp"
+#include "glaze/json/generic.hpp"
 #include "glaze/net/http.hpp"
 #include "glaze/util/key_transformers.hpp"
 
@@ -81,7 +81,7 @@ namespace glz
       inline response& content_type(std::string_view type) { return header("content-type", type); }
 
       // JSON response helper using Glaze
-      template <class T = json_t>
+      template <class T = glz::generic>
       response& json(T&& value)
       {
          content_type("application/json");

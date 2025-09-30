@@ -548,6 +548,26 @@ namespace glz
    template <class T>
    array_variant(T) -> array_variant<T>; // Only needed on older compilers until we move to template alias deduction
 
+   template <class T>
+   struct as_array_wrapper final
+   {
+      static constexpr auto glaze_reflect = false;
+      T& value;
+   };
+
+   template <auto MemPtr>
+   constexpr auto as_array_impl() noexcept
+   {
+      return [](auto&& value) {
+         using Value = std::decay_t<decltype(value)>;
+         using Member = std::decay_t<member_t<Value, decltype(MemPtr)>>;
+         return as_array_wrapper<Member>{get_member(value, MemPtr)};
+      };
+   }
+
+   template <auto MemPtr>
+   inline constexpr auto as_array = as_array_impl<MemPtr>();
+
    constexpr decltype(auto) conv_sv(auto&& value) noexcept
    {
       using V = std::decay_t<decltype(value)>;

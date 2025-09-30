@@ -93,6 +93,45 @@ struct ptr_opt_struct
    int value{42};
 };
 
+struct as_array_details
+{
+   std::string_view name;
+   std::string_view surname;
+   std::string_view city;
+   std::string_view street;
+};
+
+struct as_array_person
+{
+   int id{};
+   as_array_details person{};
+};
+
+template <>
+struct glz::meta<as_array_person>
+{
+   using T = as_array_person;
+   static constexpr auto value = object("id", &T::id, "person", glz::as_array<&T::person>);
+};
+
+suite as_array_wrapper_tests = [] {
+   "array to struct via as_array"_test = [] {
+      std::string buffer = R"({
+         "id": 1,
+         "person": ["Joe", "Doe", "London", "Chamber St"]
+      })";
+
+      as_array_person value{};
+      expect(!glz::read_json(value, buffer));
+      expect(value.id == 1);
+      expect(value.person.city == "London");
+      expect(value.person.street == "Chamber St");
+
+      auto written = glz::write_json(value).value();
+      expect(written == R"({"id":1,"person":["Joe","Doe","London","Chamber St"]})");
+   };
+};
+
 struct my_struct
 {
    int i = 287;
@@ -1904,7 +1943,7 @@ suite early_end = [] {
       std::string_view buffer =
          R"({"thing":{"a":3.14/*Test comment 1*/,"b":"stuff"/*Test comment 2*/},"thing2array":[{"a":3.14/*Test comment 1*/,"b":"stuff"/*Test comment 2*/,"c":999.342494903,"d":1e-12,"e":203082348402.1,"f":89.089,"g":12380.00000013,)";
 
-      glz::json_t json{};
+      glz::generic json{};
       static constexpr glz::opts options{.comments = true};
       expect(glz::read<options>(json, buffer));
    };
@@ -1914,7 +1953,7 @@ suite early_end = [] {
 
       static constexpr glz::opts options{.comments = true};
       Thing obj{};
-      glz::json_t json{};
+      glz::generic json{};
       glz::skip skip_me{};
       std::string buffer_data =
          R"({"thing":{"a":3.14/*Test comment 1*/,"b":"stuff"/*Test comment 2*/},"thing2array":[{"a":3.14/*Test comment 1*/,"b":"stuff"/*Test comment 2*/,"c":999.342494903,"d":1e-12,"e":203082348402.1,"f":89.089,"g":12380.00000013,"h":1000000.000001}],"vec3":[3.14,2.7,6.5],"list":[6,7,8,2],"deque":[9,6.7,3.1],"vector":[[9,6.7,3.1],[3.14,2.7,6.5]],"i":8,"d":2/*double is the best type*/,"b":false,"c":"W","vb":[true,false,false,true,true,true,true],"sptr":{"a":3.14/*Test comment 1*/,"b":"stuff"/*Test comment 2*/},"optional":null,"array":["as\"df\\ghjkl","pie","42","foo"],"map":{"a":4,"b":12,"f":7},"mapi":{"2":9.63,"5":3.14,"7":7.42},"thing_ptr":{"a":3.14/*Test comment 1*/,"b":"stuff"/*Test comment 2*/}})";
@@ -1938,7 +1977,7 @@ suite early_end = [] {
 
    "early_end"_test = [] {
       Thing obj{};
-      glz::json_t json{};
+      glz::generic json{};
       glz::skip skip_me{};
       std::string buffer_data =
          R"({"thing":{"a":3.14,"b":"stuff"},"thing2array":[{"a":3.14,"b":"stuff","c":999.342494903,"d":1e-12,"e":203082348402.1,"f":89.089,"g":12380.00000013,"h":1000000.000001}],"vec3":[3.14,2.7,6.5],"list":[6,7,8,2],"deque":[9,6.7,3.1],"vector":[[9,6.7,3.1],[3.14,2.7,6.5]],"i":8,"d":2,"b":false,"c":"W","vb":[true,false,false,true,true,true,true],"sptr":{"a":3.14,"b":"stuff"},"optional":null,"array":["as\"df\\ghjkl","pie","42","foo"],"map":{"a":4,"b":12,"f":7},"mapi":{"2":9.63,"5":3.14,"7":7.42},"thing_ptr":{"a":3.14,"b":"stuff"}})";
@@ -1963,7 +2002,7 @@ suite early_end = [] {
       static constexpr glz::opts options{.null_terminated = false};
 
       Thing obj{};
-      glz::json_t json{};
+      glz::generic json{};
       glz::skip skip_me{};
       std::string_view buffer_data =
          R"({"thing":{"a":3.14,"b":"stuff"},"thing2array":[{"a":3.14,"b":"stuff","c":999.342494903,"d":1e-12,"e":203082348402.1,"f":89.089,"g":12380.00000013,"h":1000000.000001}],"vec3":[3.14,2.7,6.5],"list":[6,7,8,2],"deque":[9,6.7,3.1],"vector":[[9,6.7,3.1],[3.14,2.7,6.5]],"i":8,"d":2,"b":false,"c":"W","vb":[true,false,false,true,true,true,true],"sptr":{"a":3.14,"b":"stuff"},"optional":null,"array":["as\"df\\ghjkl","pie","42","foo"],"map":{"a":4,"b":12,"f":7},"mapi":{"2":9.63,"5":3.14,"7":7.42},"thing_ptr":{"a":3.14,"b":"stuff"}})";
@@ -3396,11 +3435,11 @@ struct glz::meta<Properties>
    static constexpr auto unknown_read{&T::properties};
 };
 
-// Same struct but with json_t for comparison
+// Same struct but with generic for comparison
 struct PropertiesJsonT
 {
    std::string type;
-   std::map<glz::sv, glz::json_t> properties;
+   std::map<glz::sv, glz::generic> properties;
 };
 
 template <>
@@ -3461,8 +3500,8 @@ suite raw_json_whitespace_tests = [] {
       expect(props2.properties.size() == 1);
    };
 
-   "raw_json_vs_json_t_comparison"_test = [] {
-      // Test that both raw_json and json_t work correctly with formatted content
+   "raw_json_vs_generic_comparison"_test = [] {
+      // Test that both raw_json and generic work correctly with formatted content
       std::string input_json = R"({
                 "type": "mytype", 
                 "formatted_field": {
@@ -3487,7 +3526,7 @@ suite raw_json_whitespace_tests = [] {
       expect(prettified_raw.contains("nested"));
       expect(prettified_raw.back() == '}'); // Should not be truncated
 
-      // Test with json_t
+      // Test with generic
       PropertiesJsonT props_jsonf;
       auto ec2 = glz::read<glz::opts{.error_on_unknown_keys = false}>(props_jsonf, input_json);
       expect(not ec2);
@@ -4500,11 +4539,11 @@ suite ndjson_test = [] {
       expect(second.b == "stuff");
    };
 
-   "ndjson json_t"_test = [] {
+   "ndjson generic"_test = [] {
       std::string buffer = R"({"arr":[1,2,3],"d":3.14,"hello":"Hello World","i":287}
 {"a":3.14,"b":"stuff"})";
 
-      std::vector<glz::json_t> x{};
+      std::vector<glz::generic> x{};
       expect(not glz::read_ndjson(x, buffer));
 
       auto out = glz::write_ndjson(x).value_or("error");
@@ -5690,7 +5729,7 @@ struct opts_validate_trailing_whitespace : glz::opts
 
 suite validation_tests = [] {
    "validate_json"_test = [] {
-      glz::json_t json{};
+      glz::generic json{};
 
       // Tests are taken from the https://www.json.org/JSON_checker/ test suite
 
@@ -7007,8 +7046,8 @@ suite obj_nested_merge = [] {
       expect(s == R"({"not":"important","map":{"a":1,"b":2,"c":3}})") << s;
    };
 
-   "obj_json_t_merge"_test = [] {
-      glz::json_t json;
+   "obj_generic_merge"_test = [] {
+      glz::generic json;
       expect(
          !glz::read_json(json, "{\"key1\":42,\"key2\":\"hello world\",\"v\":[1,2,3],\"m\":{\"a\":1,\"b\":2,\"c\":3}}"));
       glz::obj obj{"not", "important"};
@@ -7032,11 +7071,11 @@ suite write_to_map = [] {
       expect(s == R"({"arr":[1,2,3],"hello":"world"})") << s;
    };
 
-   "write_json_t_to_map"_test = [] {
+   "write_generic_to_map"_test = [] {
       std::map<std::string, glz::raw_json> map;
 
-      glz::json_t obj{{"arr", {1, 2, 3}}, {"hello", "world"}};
-      auto& o = obj.get<glz::json_t::object_t>();
+      glz::generic obj{{"arr", {1, 2, 3}}, {"hello", "world"}};
+      auto& o = obj.get<glz::generic::object_t>();
       for (auto& [key, value] : o) {
          map[key] = glz::write_json(value).value_or("error");
       }
@@ -8929,20 +8968,20 @@ suite address_sanitizer_test = [] {
       expect(glz::read_json(obj, buffer));
    };
 
-   "invalid json_t read 1"_test = [] {
-      glz::json_t json{};
+   "invalid generic read 1"_test = [] {
+      glz::generic json{};
       auto blah = std::vector<char>{0x22, 0x5c, static_cast<char>(0xff), 0x22, 0x00};
       expect(glz::read_json(json, blah));
    };
 
-   "invalid json_t 2"_test = [] {
-      glz::json_t json{};
+   "invalid generic 2"_test = [] {
+      glz::generic json{};
       auto blah = std::vector<char>{0x22, 0x5c, 0x75, static_cast<char>(0xff), 0x22, 0x00};
       expect(glz::read_json(json, blah));
    };
 
-   "invalid json_t 3"_test = [] {
-      glz::json_t json{};
+   "invalid generic 3"_test = [] {
+      glz::generic json{};
 
       std::vector<unsigned char> udata{
          0x22, 0x5c, 0x75, 0x22, 0x65, 0x65, 0x65, 0x65, 0x65, 0x65, 0x65, 0x65, 0x65, 0x65, 0x65, 0x65,
@@ -8956,15 +8995,15 @@ suite address_sanitizer_test = [] {
       expect(r);
    };
 
-   "json_t 4"_test = []() {
-      glz::json_t json{};
+   "generic 4"_test = []() {
+      glz::generic json{};
       std::string data = "\"\\uDBDD\" DDDD";
       auto r = glz::read_json(json, data);
       expect(r);
    };
 
-   "json_t 5"_test = []() {
-      glz::json_t json{};
+   "generic 5"_test = []() {
+      glz::generic json{};
       auto data = make_vector("\"\\udb0f \"df33 ");
       auto r = glz::read_json(json, data);
       expect(r);
@@ -10749,7 +10788,7 @@ suite depth_limits_test = [] {
    "massive [ depth"_test = [] {
       std::string buffer{};
       buffer.insert(0, 4096, '[');
-      glz::json_t json{};
+      glz::generic json{};
       auto ec = glz::read_json(json, buffer);
       expect(ec);
    };
@@ -10757,7 +10796,7 @@ suite depth_limits_test = [] {
    "massive { depth"_test = [] {
       std::string buffer{};
       buffer.insert(0, 4096, '{');
-      glz::json_t json{};
+      glz::generic json{};
       auto ec = glz::read_json(json, buffer);
       expect(ec);
    };
@@ -10769,7 +10808,7 @@ suite depth_limits_test = [] {
          buffer += "\n";
       }
       buffer += R"({ "key": 1 }]})";
-      glz::json_t json{};
+      glz::generic json{};
       auto ec = glz::read_json(json, buffer);
       expect(not ec) << glz::format_error(ec, buffer);
    };
@@ -10781,7 +10820,7 @@ suite depth_limits_test = [] {
          buffer += "\n";
       }
       buffer += R"([ 1, 2 ]]})";
-      glz::json_t json{};
+      glz::generic json{};
       auto ec = glz::read_json(json, buffer);
       expect(not ec) << glz::format_error(ec, buffer);
    };
@@ -10795,7 +10834,7 @@ suite depth_limits_test = [] {
          buffer += "\n";
       }
       buffer += R"([ 1, 2 ]]})";
-      glz::json_t json{};
+      glz::generic json{};
       auto ec = glz::read_json(json, buffer);
       expect(not ec) << glz::format_error(ec, buffer);
    };

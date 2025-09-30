@@ -45,12 +45,12 @@ namespace glz
 namespace glz
 {
    // Generic json type.
-   struct json_t
+   struct generic
    {
-      virtual ~json_t() {}
+      virtual ~generic() {}
 
-      using array_t = std::vector<json_t>;
-      using object_t = std::map<std::string, json_t, std::less<>>;
+      using array_t = std::vector<generic>;
+      using object_t = std::map<std::string, generic, std::less<>>;
       using null_t = std::nullptr_t;
       using val_t = std::variant<null_t, double, std::string, bool, array_t, object_t>;
       val_t data{};
@@ -119,23 +119,23 @@ namespace glz
          return std::holds_alternative<T>(data);
       }
 
-      json_t& operator[](std::integral auto&& index) { return std::get<array_t>(data)[index]; }
+      generic& operator[](std::integral auto&& index) { return std::get<array_t>(data)[index]; }
 
-      const json_t& operator[](std::integral auto&& index) const { return std::get<array_t>(data)[index]; }
+      const generic& operator[](std::integral auto&& index) const { return std::get<array_t>(data)[index]; }
 
-      json_t& operator[](std::convertible_to<std::string_view> auto&& key)
+      generic& operator[](std::convertible_to<std::string_view> auto&& key)
       {
          //[] operator for maps does not support heterogeneous lookups yet
          if (holds<null_t>()) data = object_t{};
          auto& object = std::get<object_t>(data);
          auto iter = object.find(key);
          if (iter == object.end()) {
-            iter = object.insert(std::make_pair(std::string(key), json_t{})).first;
+            iter = object.insert(std::make_pair(std::string(key), generic{})).first;
          }
          return iter->second;
       }
 
-      const json_t& operator[](std::convertible_to<std::string_view> auto&& key) const
+      const generic& operator[](std::convertible_to<std::string_view> auto&& key) const
       {
          //[] operator for maps does not support heterogeneous lookups yet
          auto& object = std::get<object_t>(data);
@@ -146,13 +146,13 @@ namespace glz
          return iter->second;
       }
 
-      json_t& operator=(const std::nullptr_t value)
+      generic& operator=(const std::nullptr_t value)
       {
          data = value;
          return *this;
       }
 
-      json_t& operator=(const double value)
+      generic& operator=(const double value)
       {
          data = value;
          return *this;
@@ -160,60 +160,60 @@ namespace glz
 
       // for integers
       template <int_t T>
-      json_t& operator=(const T value)
+      generic& operator=(const T value)
       {
          data = static_cast<double>(value);
          return *this;
       }
 
-      json_t& operator=(const std::string& value)
+      generic& operator=(const std::string& value)
       {
          data = value;
          return *this;
       }
 
-      json_t& operator=(const std::string_view value)
+      generic& operator=(const std::string_view value)
       {
          data = std::string(value);
          return *this;
       }
 
-      json_t& operator=(const char* value)
+      generic& operator=(const char* value)
       {
          data = std::string(value);
          return *this;
       }
 
-      json_t& operator=(const bool value)
+      generic& operator=(const bool value)
       {
          data = value;
          return *this;
       }
 
-      json_t& operator=(const array_t& value)
+      generic& operator=(const array_t& value)
       {
          data = value;
          return *this;
       }
 
-      json_t& operator=(const object_t& value)
+      generic& operator=(const object_t& value)
       {
          data = value;
          return *this;
       }
 
       template <class T>
-         requires(!std::is_same_v<std::decay_t<T>, json_t> && !std::is_same_v<std::decay_t<T>, std::nullptr_t> &&
+         requires(!std::is_same_v<std::decay_t<T>, generic> && !std::is_same_v<std::decay_t<T>, std::nullptr_t> &&
                   !std::is_same_v<std::decay_t<T>, double> && !std::is_same_v<std::decay_t<T>, bool> &&
                   !std::is_same_v<std::decay_t<T>, std::string> && !std::is_same_v<std::decay_t<T>, std::string_view> &&
                   !std::is_same_v<std::decay_t<T>, const char*> && !std::is_same_v<std::decay_t<T>, array_t> &&
                   !std::is_same_v<std::decay_t<T>, object_t> && !int_t<T> &&
                   requires { write_json(std::declval<T>()); })
-      json_t& operator=(T&& value)
+      generic& operator=(T&& value)
       {
          auto json_str = write_json(std::forward<T>(value));
          if (json_str) {
-            auto result = read_json<json_t>(*json_str);
+            auto result = read_json<generic>(*json_str);
             if (result) {
                *this = std::move(*result);
             }
@@ -221,9 +221,12 @@ namespace glz
          return *this;
       }
 
-      [[nodiscard]] json_t& at(std::convertible_to<std::string_view> auto&& key) { return operator[](key); }
+      [[nodiscard]] generic& at(std::convertible_to<std::string_view> auto&& key) { return operator[](key); }
 
-      [[nodiscard]] const json_t& at(std::convertible_to<std::string_view> auto&& key) const { return operator[](key); }
+      [[nodiscard]] const generic& at(std::convertible_to<std::string_view> auto&& key) const
+      {
+         return operator[](key);
+      }
 
       [[nodiscard]] bool contains(std::convertible_to<std::string_view> auto&& key) const
       {
@@ -243,30 +246,30 @@ namespace glz
 
       void reset() noexcept { data = null_t{}; }
 
-      json_t() = default;
-      json_t(const json_t&) = default;
-      json_t& operator=(const json_t&) = default;
-      json_t(json_t&&) = default;
-      json_t& operator=(json_t&&) = default;
+      generic() = default;
+      generic(const generic&) = default;
+      generic& operator=(const generic&) = default;
+      generic(generic&&) = default;
+      generic& operator=(generic&&) = default;
 
       template <class T>
-         requires std::convertible_to<T, val_t> && (!std::derived_from<std::decay_t<T>, json_t>)
-      json_t(T&& val)
+         requires std::convertible_to<T, val_t> && (!std::derived_from<std::decay_t<T>, generic>)
+      generic(T&& val)
       {
          data = val;
       }
 
       template <class T>
-         requires std::convertible_to<T, double> && (!std::derived_from<std::decay_t<T>, json_t>) &&
+         requires std::convertible_to<T, double> && (!std::derived_from<std::decay_t<T>, generic>) &&
                   (!std::convertible_to<T, val_t>)
-      json_t(T&& val)
+      generic(T&& val)
       {
          data = static_cast<double>(val);
       }
 
-      json_t(const std::string_view value) { data = std::string(value); }
+      generic(const std::string_view value) { data = std::string(value); }
 
-      json_t(std::initializer_list<std::pair<const char*, json_t>>&& obj)
+      generic(std::initializer_list<std::pair<const char*, generic>>&& obj)
       {
          data.emplace<object_t>();
          auto& data_obj = std::get<object_t>(data);
@@ -278,14 +281,14 @@ namespace glz
 
       // Prevent conflict with object initializer list
       template <bool deprioritize = true>
-      json_t(std::initializer_list<json_t>&& arr)
+      generic(std::initializer_list<generic>&& arr)
       {
          data.emplace<array_t>(std::move(arr));
       }
 
-      [[nodiscard]] bool is_array() const noexcept { return holds<json_t::array_t>(); }
+      [[nodiscard]] bool is_array() const noexcept { return holds<generic::array_t>(); }
 
-      [[nodiscard]] bool is_object() const noexcept { return holds<json_t::object_t>(); }
+      [[nodiscard]] bool is_object() const noexcept { return holds<generic::object_t>(); }
 
       [[nodiscard]] bool is_number() const noexcept { return holds<double>(); }
 
@@ -349,34 +352,37 @@ namespace glz
       }
    };
 
-   [[nodiscard]] inline bool is_array(const json_t& value) noexcept { return value.is_array(); }
+   // Backwards compatibility alias
+   using json_t [[deprecated("glz::json_t is deprecated, use glz::generic instead")]] = generic;
 
-   [[nodiscard]] inline bool is_object(const json_t& value) noexcept { return value.is_object(); }
+   [[nodiscard]] inline bool is_array(const generic& value) noexcept { return value.is_array(); }
 
-   [[nodiscard]] inline bool is_number(const json_t& value) noexcept { return value.is_number(); }
+   [[nodiscard]] inline bool is_object(const generic& value) noexcept { return value.is_object(); }
 
-   [[nodiscard]] inline bool is_string(const json_t& value) noexcept { return value.is_string(); }
+   [[nodiscard]] inline bool is_number(const generic& value) noexcept { return value.is_number(); }
 
-   [[nodiscard]] inline bool is_boolean(const json_t& value) noexcept { return value.is_boolean(); }
+   [[nodiscard]] inline bool is_string(const generic& value) noexcept { return value.is_string(); }
 
-   [[nodiscard]] inline bool is_null(const json_t& value) noexcept { return value.is_null(); }
+   [[nodiscard]] inline bool is_boolean(const generic& value) noexcept { return value.is_boolean(); }
+
+   [[nodiscard]] inline bool is_null(const generic& value) noexcept { return value.is_null(); }
 }
 
 template <>
-struct glz::meta<glz::json_t>
+struct glz::meta<glz::generic>
 {
-   static constexpr std::string_view name = "glz::json_t";
-   using T = glz::json_t;
+   static constexpr std::string_view name = "glz::generic";
+   using T = glz::generic;
    static constexpr auto value = &T::data;
 };
 
 namespace glz
 {
-   // These functions allow a json_t value to be read/written to a C++ struct
+   // These functions allow a generic value to be read/written to a C++ struct
 
    template <auto Opts, class T>
       requires read_supported<T, Opts.format>
-   [[nodiscard]] error_ctx read(T& value, const json_t& source)
+   [[nodiscard]] error_ctx read(T& value, const generic& source)
    {
       auto buffer = source.dump();
       if (buffer) {
@@ -389,7 +395,7 @@ namespace glz
    }
 
    template <read_supported<JSON> T>
-   [[nodiscard]] error_ctx read_json(T& value, const json_t& source)
+   [[nodiscard]] error_ctx read_json(T& value, const generic& source)
    {
       auto buffer = source.dump();
       if (buffer) {
@@ -401,7 +407,7 @@ namespace glz
    }
 
    template <read_supported<JSON> T>
-   [[nodiscard]] expected<T, error_ctx> read_json(const json_t& source)
+   [[nodiscard]] expected<T, error_ctx> read_json(const generic& source)
    {
       auto buffer = source.dump();
       if (buffer) {
@@ -422,15 +428,15 @@ namespace glz
 
 namespace glz
 {
-   // Specialization for glz::json_t
+   // Specialization for glz::generic
    template <>
-   struct seek_op<glz::json_t>
+   struct seek_op<glz::generic>
    {
       template <class F>
       static bool op(F&& func, auto&& value, sv json_ptr)
       {
          if (json_ptr.empty()) {
-            // At target - call func with the actual variant data, not the json_t wrapper
+            // At target - call func with the actual variant data, not the generic wrapper
             std::visit([&func](auto&& variant_value) { func(variant_value); }, value.data);
             return true;
          }

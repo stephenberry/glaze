@@ -10,6 +10,13 @@ Glaze also supports:
 
 > [!IMPORTANT]
 >
+> ## Breaking changes coming in version 6.0.0
+>
+> - `glz::json_t` has been renamed to `glz::generic` and will be deprecated in v6.0.0. Update your code to include `glaze/json/generic.hpp` and prefer `glz::generic` to stay aligned with the upcoming release.
+> - Removed `v5.6.0` Glaze C FFI interop. This was a significant experiment that looked like would take off and be extremely useful, but after attempting to use it in production it became clear that the developers wouldn't use this feature and instead create a low-level C API. Someone could create a third party library with the code, but it has been removed from Glaze to focus on more critical features.
+
+> [!IMPORTANT]
+>
 > Pure reflection now supports partial modifications through `glz::meta<T>::modify` so you can alias or wrap just a few members without giving up automatic metadata. Learn more in [Extending pure reflection with `modify`](#extending-pure-reflection-with-modify) and the [modify reflection guide](./docs/modify-reflection.md).
 
 > [!NOTE]
@@ -916,7 +923,7 @@ expect(not glz::write_json(obj, s));
 expect(s == R"({"pi":3.14,"happy":true,"name":"Stephen","arr":["Hello","World",2]})");
 ```
 
-> This approach is significantly faster than `glz::json_t` for generic JSON. But, may not be suitable for all contexts.
+> This approach is significantly faster than `glz::generic` for generic JSON. But, may not be suitable for all contexts.
 
 ## Merge
 
@@ -935,10 +942,10 @@ glz::write_json(merged, s); // will write out a single, merged object
 
 ## Generic JSON
 
-See [Generic JSON](./docs/generic-json.md) for `glz::json_t`.
+See [Generic JSON](./docs/generic-json.md) for `glz::generic`.
 
 ```c++
-glz::json_t json{};
+glz::generic json{};
 std::string buffer = R"([5,"Hello World",{"pi":3.14}])";
 glz::read_json(json, buffer);
 assert(json[2]["pi"].get<double>() == 3.14);

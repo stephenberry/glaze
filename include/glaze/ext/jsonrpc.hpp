@@ -48,7 +48,7 @@ namespace glz::rpc
 // jsonrpc
 namespace glz::rpc
 {
-   using id_t = std::variant<glz::json_t::null_t, std::string_view, std::int64_t>;
+   using id_t = std::variant<glz::generic::null_t, std::string_view, std::int64_t>;
    inline constexpr std::string_view supported_version{"2.0"};
 
    struct error final
@@ -364,7 +364,7 @@ namespace glz::rpc
                   auto json_result = glz::write_json(result);
                   if (json_result) {
                      return_v = raw_response_t{std::move(req.id), std::move(json_result.value())};
-                     if (std::holds_alternative<glz::json_t::null_t>(req.id)) {
+                     if (std::holds_alternative<glz::generic::null_t>(req.id)) {
                         // rpc notification requires no response
                         return_v = std::nullopt;
                      }
@@ -488,7 +488,7 @@ namespace glz::rpc
 
          rpc::request_t req{std::forward<decltype(id)>(id), Name.sv(), std::forward<decltype(params)>(params)};
 
-         if (std::holds_alternative<glz::json_t::null_t>(id)) {
+         if (std::holds_alternative<glz::generic::null_t>(id)) {
             return {glz::write_json(std::move(req)).value_or(R"("write error")"), false};
          }
 
@@ -513,7 +513,7 @@ namespace glz::rpc
       [[nodiscard]] auto notify(auto&& params) -> std::string
       {
          auto placebo{[](auto&, auto&) {}};
-         return request<Name>(glz::json_t::null_t{}, params, std::move(placebo)).first;
+         return request<Name>(glz::generic::null_t{}, params, std::move(placebo)).first;
       }
 
       template <string_literal Name>
