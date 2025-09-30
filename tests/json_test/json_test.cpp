@@ -93,6 +93,45 @@ struct ptr_opt_struct
    int value{42};
 };
 
+struct as_array_details
+{
+   std::string_view name;
+   std::string_view surname;
+   std::string_view city;
+   std::string_view street;
+};
+
+struct as_array_person
+{
+   int id{};
+   as_array_details person{};
+};
+
+template <>
+struct glz::meta<as_array_person>
+{
+   using T = as_array_person;
+   static constexpr auto value = object("id", &T::id, "person", glz::as_array<&T::person>);
+};
+
+suite as_array_wrapper_tests = [] {
+   "array to struct via as_array"_test = [] {
+      std::string buffer = R"({
+         "id": 1,
+         "person": ["Joe", "Doe", "London", "Chamber St"]
+      })";
+
+      as_array_person value{};
+      expect(!glz::read_json(value, buffer));
+      expect(value.id == 1);
+      expect(value.person.city == "London");
+      expect(value.person.street == "Chamber St");
+
+      auto written = glz::write_json(value).value();
+      expect(written == R"({"id":1,"person":["Joe","Doe","London","Chamber St"]})");
+   };
+};
+
 struct my_struct
 {
    int i = 287;

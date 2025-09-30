@@ -8,4 +8,5 @@
 #include "glaze/beve/read.hpp"
 #include "glaze/beve/wrappers.hpp"
 #include "glaze/beve/write.hpp"
+#include "glaze/core/as_array_wrapper.hpp"
 #include "glaze/thread/atomic.hpp"
