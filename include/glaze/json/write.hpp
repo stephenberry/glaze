@@ -767,24 +767,29 @@ namespace glz
       {
          // TODO: Use new hashing approach for better performance
          // TODO: Check if sequenced and use the value as the index if so
-         using key_t = std::underlying_type_t<T>;
-         static constexpr auto frozen_map = make_enum_to_string_map<T>();
-         const auto& member_it = frozen_map.find(static_cast<key_t>(value));
-         if (member_it != frozen_map.end()) {
-            const sv str = {member_it->second.data(), member_it->second.size()};
-            // TODO: Assumes people dont use strings with chars that need to be escaped for their enum names
-            // TODO: Could create a pre quoted map for better performance
-            if constexpr (not Opts.raw) {
-               dump<'"'>(args...);
+         using enum_t = std::decay_t<T>;
+         using key_t = std::underlying_type_t<enum_t>;
+         constexpr auto enum_size = reflect<enum_t>::size;
+         const auto type_index = enum_value_index<enum_t>(static_cast<key_t>(value));
+         if constexpr (enum_size > 0) {
+            if (type_index < enum_size) {
+               const sv str = reflect<enum_t>::keys[type_index];
+               // TODO: Assumes people dont use strings with chars that need to be escaped for their enum names
+               // TODO: Could create a pre quoted map for better performance
+               if constexpr (not Opts.raw) {
+                  dump<'"'>(args...);
+               }
+               dump_maybe_empty(str, args...);
+               if constexpr (not Opts.raw) {
+                  dump<'"'>(args...);
+               }
             }
-            dump_maybe_empty(str, args...);
-            if constexpr (not Opts.raw) {
-               dump<'"'>(args...);
+            else [[unlikely]] {
+               serialize<JSON>::op<Opts>(static_cast<key_t>(value), ctx, std::forward<Args>(args)...);
             }
          }
-         else [[unlikely]] {
-            // What do we want to happen if the value doesn't have a mapped string
-            serialize<JSON>::op<Opts>(static_cast<std::underlying_type_t<T>>(value), ctx, std::forward<Args>(args)...);
+         else {
+            serialize<JSON>::op<Opts>(static_cast<key_t>(value), ctx, std::forward<Args>(args)...);
          }
       }
    };
