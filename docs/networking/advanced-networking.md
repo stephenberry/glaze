@@ -81,7 +81,7 @@ server.get("/test-cors", [](const glz::request& req, glz::response& res) {
 
 ### Automatic Preflight Handling
 
-Glaze no longer requires empty `OPTIONS` routes. The server inspects sibling handlers, builds the `Allow` header dynamically, and runs middleware (including CORS) before returning a response. If the origin is denied the preflight receives `403`; otherwise the CORS middleware fills in the appropriate `Access-Control-Allow-*` headers.
+Glaze no longer requires empty `OPTIONS` routes. The server inspects sibling handlers, builds the `Allow` header dynamically, and runs middleware (including CORS) before returning a response. If the origin is denied the preflight receives `403`; if the browser asks for a verb that is not implemented the server answers with `405` (after running middleware so diagnostics still flow); otherwise the CORS middleware fills in the appropriate `Access-Control-Allow-*` headers.
 
 ### Extended CORS Configuration
 
