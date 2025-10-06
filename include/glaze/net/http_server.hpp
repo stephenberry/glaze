@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include <algorithm>
 #include <atomic>
 #include <charconv>
 #include <chrono>
@@ -1158,17 +1159,80 @@ namespace glz
          // Find a matching route using http_router::match which handles both exact and parameterized routes
          auto [handle, params] = root_router.match(method, target);
 
-         // Update the request with any extracted parameters
-         request.params = std::move(params);
+         // Create the response object up front so we can reuse it in fallback flows
+         response response;
 
          if (!handle) {
-            // No matching route found
+            if (method == http_method::OPTIONS) {
+               std::vector<http_method> allowed_methods;
+               std::unordered_map<std::string, std::string> preflight_params;
+
+               auto capture_first_params = [&](std::unordered_map<std::string, std::string>&& candidate_params) {
+                  if (preflight_params.empty()) {
+                     preflight_params = std::move(candidate_params);
+                  }
+               };
+
+               auto try_method = [&](http_method candidate) {
+                  if (candidate == http_method::OPTIONS) return;
+                  auto [candidate_handle, candidate_params] = root_router.match(candidate, target);
+                  if (candidate_handle) {
+                     allowed_methods.push_back(candidate);
+                     capture_first_params(std::move(candidate_params));
+                  }
+               };
+
+               try_method(http_method::GET);
+               try_method(http_method::POST);
+               try_method(http_method::PUT);
+               try_method(http_method::DELETE);
+               try_method(http_method::PATCH);
+               try_method(http_method::HEAD);
+
+               if (!allowed_methods.empty()) {
+                  request.params = std::move(preflight_params);
+
+                  if (std::none_of(allowed_methods.begin(), allowed_methods.end(),
+                                   [](http_method m) { return m == http_method::OPTIONS; })) {
+                     allowed_methods.push_back(http_method::OPTIONS);
+                  }
+
+                  std::string allow_header;
+                  allow_header.reserve(allowed_methods.size() * 8);
+                  for (size_t i = 0; i < allowed_methods.size(); ++i) {
+                     if (i > 0) allow_header.append(", ");
+                     allow_header.append(std::string(to_string(allowed_methods[i])));
+                  }
+                  response.header("Allow", allow_header);
+
+                  try {
+                     for (const auto& middleware : root_router.middlewares) {
+                        middleware(request, response);
+                     }
+                  }
+                  catch (const std::exception&) {
+                     error_handler(std::make_error_code(std::errc::invalid_argument),
+                                   std::source_location::current());
+                     send_error_response(socket, 500, "Internal Server Error");
+                     return;
+                  }
+
+                  if (response.status_code == 200 && response.response_body.empty()) {
+                     response.status(204);
+                  }
+
+                  send_response(socket, response);
+                  return;
+               }
+            }
+
+            // No matching route found (path or method)
             send_error_response(socket, 404, "Not Found");
             return;
          }
 
-         // Create the response object
-         response response;
+         // Update the request with any extracted parameters
+         request.params = std::move(params);
 
          try {
             // Apply middleware

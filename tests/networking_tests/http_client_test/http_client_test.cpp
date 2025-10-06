@@ -5,6 +5,8 @@
 #include <future>
 #include <thread>
 #include <unordered_map>
+#include <utility>
+#include <vector>
 
 #include "glaze/json/write.hpp"
 #include "glaze/net/http_server.hpp"
@@ -131,6 +133,8 @@ class working_test_server
                          ec.message().c_str());
          }
       });
+
+      server_.enable_cors();
 
       server_.get("/hello", [](const request&, response& res) {
          res.status(200).content_type("text/plain").body("Hello, World!");
@@ -298,17 +302,30 @@ class simple_test_client
       return perform_request("POST", *url_parts, body);
    }
 
+   std::expected<response, std::error_code> options(
+      const std::string& url, const std::vector<std::pair<std::string, std::string>>& extra_headers)
+   {
+      auto url_parts = parse_url(url);
+      if (!url_parts) {
+         return std::unexpected(url_parts.error());
+      }
+
+      return perform_request("OPTIONS", *url_parts, "", extra_headers);
+   }
+
   private:
    asio::io_context io_context_;
    std::thread worker_thread_;
 
    std::expected<response, std::error_code> perform_request(const std::string& method, const url_parts& url,
-                                                            const std::string& body)
+                                                            const std::string& body,
+                                                            std::vector<std::pair<std::string, std::string>> extra_headers = {})
    {
       std::promise<std::expected<response, std::error_code>> promise;
       auto future = promise.get_future();
 
-      asio::post(io_context_, [this, method, url, body, &promise]() {
+      asio::post(io_context_,
+                 [this, method, url, body, headers = std::move(extra_headers), &promise]() mutable {
          try {
             asio::ip::tcp::socket socket(io_context_);
             asio::ip::tcp::resolver resolver(io_context_);
@@ -321,6 +338,10 @@ class simple_test_client
             std::string request = method + " " + url.path + " HTTP/1.1\r\n";
             request += "Host: " + url.host + "\r\n";
             request += "Connection: close\r\n";
+
+            for (const auto& [name, value] : headers) {
+               request += name + ": " + value + "\r\n";
+            }
 
             if (!body.empty()) {
                request += "Content-Length: " + std::to_string(body.size()) + "\r\n";
@@ -411,6 +432,28 @@ suite working_http_tests = [] {
       if (result.has_value()) {
          expect(result->status_code == 200) << "Status should be 200\n";
          expect(result->response_body == "Hello, World!") << "Body should match\n";
+      }
+
+      server.stop();
+      std::this_thread::sleep_for(std::chrono::milliseconds(50)); // Clean shutdown
+   };
+
+   "cors_preflight_generates_options_response"_test = [] {
+      working_test_server server;
+      expect(server.start()) << "Server should start\n";
+
+      simple_test_client client;
+      std::vector<std::pair<std::string, std::string>> headers = {
+         {"Origin", "http://localhost"},
+         {"Access-Control-Request-Method", "GET"},
+         {"Access-Control-Request-Headers", "X-Test-Header"},
+      };
+
+      auto result = client.options(server.base_url() + "/hello", headers);
+
+      expect(result.has_value()) << "OPTIONS preflight should succeed\n";
+      if (result.has_value()) {
+         expect(result->status_code == 204) << "Preflight should return HTTP 204\n";
       }
 
       server.stop();
