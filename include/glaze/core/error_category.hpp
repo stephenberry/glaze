@@ -75,6 +75,12 @@ struct glz::meta<glz::error_code>
                                     "invalid_distribution_elements",
                                     "hostname_failure",
                                     "includer_error",
+                                    "json_patch_invalid_document",
+                                    "json_patch_invalid_operation",
+                                    "json_patch_invalid_path",
+                                    "json_patch_missing_value",
+                                    "json_patch_invalid_index",
+                                    "json_patch_test_failed",
                                     "feature_not_supported"};
    static constexpr std::array value{none, //
                                      version_mismatch, //
@@ -145,6 +151,12 @@ struct glz::meta<glz::error_code>
                                      invalid_distribution_elements, //
                                      hostname_failure, //
                                      includer_error, //
+                                     json_patch_invalid_document, //
+                                     json_patch_invalid_operation, //
+                                     json_patch_invalid_path, //
+                                     json_patch_missing_value, //
+                                     json_patch_invalid_index, //
+                                     json_patch_test_failed, //
                                      feature_not_supported};
 };
 

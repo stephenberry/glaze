@@ -4,6 +4,22 @@
 #include "glaze/json.hpp"
 #include "ut/ut.hpp"
 
+#include <vector>
+
+struct settings_document
+{
+   int version{};
+   bool fullscreen{};
+   std::vector<std::string> mods{};
+};
+
+template <>
+struct glz::meta<settings_document>
+{
+   using T = settings_document;
+   static constexpr auto value = glz::object("version", &T::version, "fullscreen", &T::fullscreen, "mods", &T::mods);
+};
+
 using namespace ut;
 
 suite generic_json_tests = [] {
@@ -612,6 +628,172 @@ suite struct_assignment_tests = [] {
       expect(json["employee"]["address"]["city"].get<std::string>() == "Anytown");
       expect(json["employee"]["address"]["zip"].get<double>() == 12345.0);
       expect(json["employee"]["salary"].get<double>() == 75000.50);
+   };
+
+   "json_t diff patch roundtrip"_test = [] {
+      glz::json_t source{{"name", "Alice"},
+                         {"age", 30},
+                         {"tags", glz::json_t::array_t{"dev", "cpp"}}};
+
+      glz::json_t target{{"name", "Alice"},
+                         {"level", "senior"},
+                         {"settings", glz::json_t{{"theme", "dark"}}},
+                         {"tags", glz::json_t::array_t{"cpp", "glz"}}};
+
+      auto diff_ops = glz::diff(source, target);
+      expect(diff_ops.is_array());
+
+      const auto& ops = diff_ops.get_array();
+      expect(ops.size() == 5u);
+      expect(ops[0]["op"].get<std::string>() == "remove");
+      expect(ops[0]["path"].get<std::string>() == "/age");
+      expect(ops[1]["op"].get<std::string>() == "replace");
+      expect(ops[1]["path"].get<std::string>() == "/tags/0");
+      expect(ops[1]["value"].get<std::string>() == "cpp");
+      expect(ops[2]["op"].get<std::string>() == "replace");
+      expect(ops[2]["path"].get<std::string>() == "/tags/1");
+      expect(ops[2]["value"].get<std::string>() == "glz");
+      expect(ops[3]["op"].get<std::string>() == "add");
+      expect(ops[3]["path"].get<std::string>() == "/level");
+      expect(ops[3]["value"].get<std::string>() == "senior");
+      expect(ops[4]["op"].get<std::string>() == "add");
+      expect(ops[4]["path"].get<std::string>() == "/settings");
+      expect(ops[4]["value"]["theme"].get<std::string>() == "dark");
+
+      auto patched = glz::patch(source, diff_ops);
+      expect(bool(patched));
+
+      auto patched_json = glz::write_json(*patched);
+      auto target_json = glz::write_json(target);
+      expect(patched_json.has_value());
+      expect(target_json.has_value());
+      expect(patched_json.value() == target_json.value());
+   };
+
+   "typed diff patch roundtrip"_test = [] {
+      settings_document original{.version = 1, .fullscreen = true, .mods = {"base"}};
+      settings_document desired{.version = 2, .fullscreen = false, .mods = {"base", "experimental"}};
+
+      auto diff_expected = glz::diff(original, desired);
+      expect(bool(diff_expected));
+      const auto& patch_doc = diff_expected.value();
+      expect(patch_doc.is_array());
+      expect(patch_doc.get_array().size() == 3u);
+
+      auto patched = glz::patch(original, patch_doc);
+      expect(bool(patched));
+      expect(patched->version == desired.version);
+      expect(patched->fullscreen == desired.fullscreen);
+      expect(patched->mods == desired.mods);
+
+      auto in_place = original;
+      auto ec = glz::patch_inplace(in_place, patch_doc);
+      expect(ec == glz::error_code::none);
+      expect(in_place.version == desired.version);
+      expect(in_place.mods == desired.mods);
+   };
+
+   "json_t patch invalid path"_test = [] {
+      glz::json_t doc{{"value", 1}};
+      glz::json_t patch_doc;
+      patch_doc = glz::json_t::array_t{glz::json_t{{"op", "remove"}, {"path", "/missing"}}};
+
+      auto result = glz::patch(doc, patch_doc);
+      expect(not result);
+      expect(result.error().ec == glz::error_code::json_patch_invalid_path);
+
+      auto inplace_doc = doc;
+      auto ec = glz::patch_inplace(inplace_doc, patch_doc);
+      expect(ec.ec == glz::error_code::json_patch_invalid_path);
+   };
+
+   "json_t diff no changes"_test = [] {
+      glz::json_t baseline{{"active", true},
+                           {"count", 5},
+                           {"nested", glz::json_t{{"k", "v"}}},
+                           {"arr", glz::json_t::array_t{1, 2, 3}}};
+
+      auto diff_ops = glz::diff(baseline, baseline);
+      expect(diff_ops.is_array());
+      expect(diff_ops.get_array().empty());
+   };
+
+   "json_t patch append array tail"_test = [] {
+      glz::json_t doc{{"tags", glz::json_t::array_t{"base"}}};
+
+      glz::json_t patch_doc;
+      patch_doc = glz::json_t::array_t{
+         glz::json_t{{"op", "add"}, {"path", "/tags/-"}, {"value", "extended"}},
+      };
+
+      auto ec = glz::patch_inplace(doc, patch_doc);
+      expect(ec == glz::error_code::none);
+      auto& tags = doc["tags"].get_array();
+      expect(tags.size() == 2u);
+      expect(tags[1].get<std::string>() == "extended");
+   };
+
+   "json_t patch array invalid index"_test = [] {
+      glz::json_t doc{{"tags", glz::json_t::array_t{"base"}}};
+      glz::json_t patch_doc;
+      patch_doc = glz::json_t::array_t{
+         glz::json_t{{"op", "add"}, {"path", "/tags/5"}, {"value", "extended"}},
+      };
+
+      auto ec = glz::patch_inplace(doc, patch_doc);
+      expect(ec.ec == glz::error_code::json_patch_invalid_index);
+   };
+
+   "json_t patch invalid document"_test = [] {
+      glz::json_t doc{{"value", 42}};
+      glz::json_t patch_doc{{"op", "add"}};
+
+      auto ec = glz::patch_inplace(doc, patch_doc);
+      expect(ec.ec == glz::error_code::json_patch_invalid_document);
+   };
+
+   "json_t patch invalid operation"_test = [] {
+      glz::json_t doc{{"value", 42}};
+      glz::json_t patch_doc;
+      patch_doc = glz::json_t::array_t{
+         glz::json_t{{"op", "unknown"}, {"path", "/value"}},
+      };
+
+      auto ec = glz::patch_inplace(doc, patch_doc);
+      expect(ec.ec == glz::error_code::json_patch_invalid_operation);
+   };
+
+   "json_t patch missing value"_test = [] {
+      glz::json_t doc{{"value", 42}};
+      glz::json_t patch_doc;
+      patch_doc = glz::json_t::array_t{
+         glz::json_t{{"op", "replace"}, {"path", "/value"}},
+      };
+
+      auto ec = glz::patch_inplace(doc, patch_doc);
+      expect(ec.ec == glz::error_code::json_patch_missing_value);
+   };
+
+   "json_t patch test operation"_test = [] {
+      glz::json_t doc{{"value", 42}};
+      glz::json_t patch_doc;
+      patch_doc = glz::json_t::array_t{
+         glz::json_t{{"op", "test"}, {"path", "/value"}, {"value", 42}},
+      };
+
+      auto ec = glz::patch_inplace(doc, patch_doc);
+      expect(ec == glz::error_code::none);
+   };
+
+   "json_t patch test failure"_test = [] {
+      glz::json_t doc{{"value", 42}};
+      glz::json_t patch_doc;
+      patch_doc = glz::json_t::array_t{
+         glz::json_t{{"op", "test"}, {"path", "/value"}, {"value", 41}},
+      };
+
+      auto ec = glz::patch_inplace(doc, patch_doc);
+      expect(ec.ec == glz::error_code::json_patch_test_failed);
    };
 };
 

@@ -84,6 +84,13 @@ namespace glz
       invalid_distribution_elements, //
       hostname_failure, //
       includer_error, //
+      // JSON Patch errors
+      json_patch_invalid_document, //
+      json_patch_invalid_operation, //
+      json_patch_invalid_path, //
+      json_patch_missing_value, //
+      json_patch_invalid_index, //
+      json_patch_test_failed, //
       // Feature support
       feature_not_supported //
    };

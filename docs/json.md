@@ -505,6 +505,91 @@ auto merged = glz::merge{obj1, obj2};
 // Results in: {"key":"second"}
 ```
 
+### JSON Diff & Patch
+
+Glaze provides a lightweight JSON Patch implementation that follows the [RFC 6902](https://www.rfc-editor.org/rfc/rfc6902) operations supported by the library (`add`, `remove`, `replace`, and `test`). The entry points live alongside the rest of the JSON utilities:
+
+```cpp
+#include <glaze/json.hpp>
+
+glz::json_t original{{"name", "Alice"}, {"tags", glz::json_t::array_t{"cpp", "glz"}}};
+glz::json_t desired{{"name", "Alice"}, {"tags", glz::json_t::array_t{"cpp", "glz", "json"}}};
+
+auto diff_doc = glz::diff(original, desired);
+
+// diff_doc is a glz::json_t array holding the JSON Patch operations:
+// [
+//   {"op":"add","path":"/tags/-","value":"json"}
+// ]
+
+if (auto patched = glz::patch(original, diff_doc)) {
+   // patched.value() equals `desired`
+}
+
+auto inplace_target = original;
+auto ec = glz::patch_inplace(inplace_target, diff_doc);
+if (!ec) {
+   // inplace_target now matches `desired`
+}
+```
+
+#### Typed Diff / Patch
+
+`glz::diff` and `glz::patch` also work when your JSON maps to reflected C++ types. The library converts the objects to `glz::json_t`, performs the diff/patch, and deserializes the result back into the requested type.
+
+```cpp
+struct settings_document
+{
+   int version{};
+   bool fullscreen{};
+   std::vector<std::string> mods{};
+};
+
+template <>
+struct glz::meta<settings_document>
+{
+   using T = settings_document;
+   static constexpr auto value = glz::object("version", &T::version,
+                                             "fullscreen", &T::fullscreen,
+                                             "mods", &T::mods);
+};
+
+settings_document current{.version = 1, .fullscreen = true, .mods = {"base"}};
+settings_document desired{.version = 2, .fullscreen = false, .mods = {"base", "experimental"}};
+
+auto diff_doc = glz::diff(current, desired);
+if (!diff_doc) {
+   // diff failed (serialization error) — inspect diff_doc.error()
+}
+
+auto maybe_updated = glz::patch(current, diff_doc.value());
+if (maybe_updated) {
+   // maybe_updated->version == 2, etc.
+}
+
+auto ec = glz::patch_inplace(current, diff_doc.value());
+if (!ec) {
+   // current updated in place
+}
+```
+
+The typed overloads return `glz::expected<T, error_ctx>` and propagate serialization or patch errors through the `error_ctx` object.
+
+#### Error Handling
+
+Patch validation failures return one of the dedicated JSON Patch error codes:
+
+| Error code | Meaning |
+| --- | --- |
+| `glz::error_code::json_patch_invalid_document` | The patch document is not an array of objects |
+| `glz::error_code::json_patch_invalid_operation` | `op` is missing or uses an unsupported operation |
+| `glz::error_code::json_patch_invalid_path` | The target path cannot be parsed or resolved |
+| `glz::error_code::json_patch_missing_value` | An operation that requires `value` omits it |
+| `glz::error_code::json_patch_invalid_index` | Array index is not numeric or out of range |
+| `glz::error_code::json_patch_test_failed` | `test` operation compared unequal values |
+
+All APIs return `error_ctx` (or `expected<T, error_ctx>`) so you can inspect the code and optional `custom_error_message` to diagnose invalid patch documents.
+
 ### Performance Considerations
 
 - **Stack allocation**: Both `glz::obj` and `glz::arr` are stack-allocated, avoiding heap allocations
