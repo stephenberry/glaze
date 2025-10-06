@@ -35,12 +35,17 @@ server.enable_cors(allowed_origins, true); // Allow credentials
 // Or use detailed configuration
 glz::cors_config config;
 config.allowed_origins = {"https://myapp.com", "https://app.myapp.com"};
+config.add_allowed_origin_pattern("https://*.partner.myapp.com");
+config.set_origin_validator([](std::string_view origin) {
+    return origin == "https://internal.myapp.local";
+});
 config.allowed_methods = {"GET", "POST", "PUT", "DELETE"};
 config.allowed_headers = {"Content-Type", "Authorization", "X-API-Key"};
 config.exposed_headers = {"X-Total-Count", "X-Page-Info"};
 config.allow_credentials = true;
 config.max_age = 3600; // 1 hour preflight cache
-config.handle_preflight = true;
+config.allow_private_network = true;
+config.options_success_status = 200; // Use legacy-friendly 200 instead of 204
 
 server.enable_cors(config);
 ```
@@ -51,10 +56,11 @@ server.enable_cors(config);
 // Create custom CORS handler
 auto custom_cors = glz::create_cors_middleware({
     .allowed_origins = {"https://trusted-site.com"},
-    .allowed_methods = {"GET", "POST"},
-    .allowed_headers = {"Content-Type", "Authorization"},
+    .allow_all_methods = true,                 // Reflect requested method
+    .allowed_headers = {"Content-Type"},
+    .allow_all_headers = true,                 // Reflect requested headers when allowed
     .allow_credentials = true,
-    .max_age = 86400 // 24 hours
+    .max_age = 86400                           // 24 hours
 });
 
 server.use(custom_cors);
@@ -72,6 +78,19 @@ server.get("/test-cors", [](const glz::request& req, glz::response& res) {
     });
 });
 ```
+
+### Automatic Preflight Handling
+
+Glaze no longer requires empty `OPTIONS` routes. The server inspects sibling handlers, builds the `Allow` header dynamically, and runs middleware (including CORS) before returning a response. If the origin is denied the preflight receives `403`; otherwise the CORS middleware fills in the appropriate `Access-Control-Allow-*` headers.
+
+### Extended CORS Configuration
+
+- **Dynamic origins** – `add_allowed_origin_pattern`, `add_allowed_origin_regex`, and `set_origin_validator` let you accept wildcard domains or perform per-request checks.
+- **Convenience helpers** – `add_allowed_header`, `add_exposed_header`, `add_allowed_method`, and `add_allowed_origin` de-duplicate entries while you build a policy.
+- **Reflective allowances** – enable `allow_all_methods` and `allow_all_headers` to echo the browser's requested method/headers.
+- **Private network support** – set `allow_private_network` to emit `Access-Control-Allow-Private-Network` when the browser asks.
+- **Custom preflight status** – override `options_success_status` if a client expects `200` instead of `204`.
+- **Credential safety** – when credentials are enabled alongside `*`, Glaze automatically echoes the request origin to keep browsers happy.
 
 ## WebSocket Support
 

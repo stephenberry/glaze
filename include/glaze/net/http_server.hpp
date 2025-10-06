@@ -1217,7 +1217,8 @@ namespace glz
                      return;
                   }
 
-                  if (response.status_code == 200 && response.response_body.empty()) {
+                  if (response.status_code == 200 && response.response_body.empty() &&
+                      response.response_headers.empty()) {
                      response.status(204);
                   }
 

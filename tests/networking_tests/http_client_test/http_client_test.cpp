@@ -1,8 +1,12 @@
 #include "glaze/net/http_client.hpp"
 
+#include <algorithm>
 #include <atomic>
+#include <cctype>
 #include <chrono>
 #include <future>
+#include <optional>
+#include <string_view>
 #include <thread>
 #include <unordered_map>
 #include <utility>
@@ -10,6 +14,7 @@
 
 #include "glaze/json/write.hpp"
 #include "glaze/net/http_server.hpp"
+#include "glaze/util/key_transformers.hpp"
 #include "ut/ut.hpp"
 
 using namespace ut;
@@ -38,9 +43,11 @@ namespace glz
 class working_test_server
 {
   public:
-   working_test_server() : port_(0), running_(false) {}
+  working_test_server() : port_(0), running_(false) {}
 
    ~working_test_server() { stop(); }
+
+   void set_cors_config(glz::cors_config config) { cors_config_ = std::move(config); }
 
    bool start()
    {
@@ -122,6 +129,7 @@ class working_test_server
    std::thread server_thread_;
    uint16_t port_;
    std::atomic<bool> running_;
+   std::optional<glz::cors_config> cors_config_;
 
    void setup_routes()
    {
@@ -134,7 +142,12 @@ class working_test_server
          }
       });
 
-      server_.enable_cors();
+      if (cors_config_) {
+         server_.enable_cors(*cors_config_);
+      }
+      else {
+         server_.enable_cors();
+      }
 
       server_.get("/hello", [](const request&, response& res) {
          res.status(200).content_type("text/plain").body("Hello, World!");
@@ -371,10 +384,30 @@ class simple_test_client
                return;
             }
 
-            // Skip headers for simplicity
+            response resp;
+
             std::string header_line;
             while (std::getline(response_stream, header_line) && header_line != "\r") {
-               // Skip headers
+               if (!header_line.empty() && header_line.back() == '\r') {
+                  header_line.pop_back();
+               }
+
+               auto colon_pos = header_line.find(':');
+               if (colon_pos == std::string::npos) continue;
+
+               std::string name = header_line.substr(0, colon_pos);
+               std::string value = header_line.substr(colon_pos + 1);
+
+               value.erase(value.begin(), std::find_if(value.begin(), value.end(), [](unsigned char ch) {
+                              return !std::isspace(ch);
+                           }));
+               value.erase(std::find_if(value.rbegin(), value.rend(), [](unsigned char ch) {
+                              return !std::isspace(ch);
+                           }).base(),
+                           value.end());
+
+               auto lower_name = glz::to_lower_case(name);
+               resp.response_headers[lower_name] = value;
             }
 
             // Read body
@@ -384,7 +417,6 @@ class simple_test_client
             std::string response_body{std::istreambuf_iterator<char>(&response_buffer),
                                       std::istreambuf_iterator<char>()};
 
-            response resp;
             resp.status_code = parsed_status->status_code;
             resp.response_body = response_body;
 
@@ -458,6 +490,206 @@ suite working_http_tests = [] {
 
       server.stop();
       std::this_thread::sleep_for(std::chrono::milliseconds(50)); // Clean shutdown
+   };
+
+   "cors_dynamic_origin_validation"_test = [] {
+      glz::cors_config config;
+      config.allowed_origins.clear();
+      config.add_allowed_origin_pattern("http://*.allowed.local");
+      config.set_origin_validator([](std::string_view origin) { return origin == "http://special.local"; });
+
+      working_test_server server;
+      server.set_cors_config(config);
+      expect(server.start()) << "Server should start\n";
+
+      simple_test_client client;
+      std::vector<std::pair<std::string, std::string>> headers = {
+         {"Origin", "http://app.allowed.local"},
+         {"Access-Control-Request-Method", "GET"},
+      };
+      auto allowed = client.options(server.base_url() + "/hello", headers);
+      expect(allowed.has_value()) << "OPTIONS preflight should succeed\n";
+      if (allowed.has_value()) {
+         expect(allowed->status_code == 204) << "Default status should remain 204\n";
+         auto origin_header = allowed->response_headers.find("access-control-allow-origin");
+         expect(origin_header != allowed->response_headers.end()) << "Allow-Origin header should be present\n";
+         if (origin_header != allowed->response_headers.end()) {
+            expect(origin_header->second == "http://app.allowed.local")
+               << "Origin should be echoed for allowed pattern\n";
+         }
+      }
+
+      headers[0].second = "http://special.local";
+      auto allowed_callback = client.options(server.base_url() + "/hello", headers);
+      expect(allowed_callback.has_value()) << "Dynamic callback origin should succeed\n";
+      if (allowed_callback.has_value()) {
+         expect(allowed_callback->status_code == 204);
+      }
+
+      headers[0].second = "http://denied.local";
+      auto denied = client.options(server.base_url() + "/hello", headers);
+      expect(denied.has_value()) << "Request should return a response even when denied\n";
+      if (denied.has_value()) {
+         expect(denied->status_code == 403) << "Denied origin should return 403\n";
+      }
+
+      server.stop();
+      std::this_thread::sleep_for(std::chrono::milliseconds(50));
+   };
+
+   "cors_reflects_headers_and_private_network"_test = [] {
+      glz::cors_config config;
+      config.allowed_origins = {"http://client.local"};
+      config.allow_all_methods = true;
+      config.allow_all_headers = false;
+      config.allowed_headers.clear();
+      config.allow_private_network = true;
+      config.options_success_status = 200;
+      config.max_age = 123;
+
+      working_test_server server;
+      server.set_cors_config(config);
+      expect(server.start()) << "Server should start\n";
+
+      simple_test_client client;
+      auto result = client.options(server.base_url() + "/hello",
+                                   {{"Origin", "http://client.local"},
+                                    {"Access-Control-Request-Method", "PATCH"},
+                                    {"Access-Control-Request-Headers", "X-Test-Header"},
+                                    {"Access-Control-Request-Private-Network", "true"}});
+
+      expect(result.has_value()) << "OPTIONS preflight should succeed\n";
+      if (result.has_value()) {
+         expect(result->status_code == 200)
+            << "Configured OPTIONS status should be used (got " << result->status_code << ")\n";
+
+         auto methods_it = result->response_headers.find("access-control-allow-methods");
+         expect(methods_it != result->response_headers.end()) << "Allow-Methods header missing\n";
+         if (methods_it != result->response_headers.end()) {
+            expect(methods_it->second == "PATCH");
+         }
+
+         auto headers_it = result->response_headers.find("access-control-allow-headers");
+         expect(headers_it != result->response_headers.end());
+         if (headers_it != result->response_headers.end()) {
+            expect(headers_it->second == "X-Test-Header");
+         }
+
+         auto max_age_it = result->response_headers.find("access-control-max-age");
+         expect(max_age_it != result->response_headers.end());
+         if (max_age_it != result->response_headers.end()) {
+            expect(max_age_it->second == "123");
+         }
+
+         auto private_network_it = result->response_headers.find("access-control-allow-private-network");
+         expect(private_network_it != result->response_headers.end());
+         if (private_network_it != result->response_headers.end()) {
+            expect(private_network_it->second == "true");
+         }
+      }
+
+      server.stop();
+      std::this_thread::sleep_for(std::chrono::milliseconds(50));
+   };
+
+   "cors_allow_all_headers_flag"_test = [] {
+      glz::cors_config config;
+      config.allowed_origins = {"http://client.local"};
+      config.allow_all_headers = true;
+      config.allow_all_methods = true;
+
+      working_test_server server;
+      server.set_cors_config(config);
+      expect(server.start()) << "Server should start\n";
+
+      simple_test_client client;
+      auto result = client.options(server.base_url() + "/hello",
+                                   {{"Origin", "http://client.local"},
+                                    {"Access-Control-Request-Method", "DELETE"},
+                                    {"Access-Control-Request-Headers", "X-One"}});
+
+      expect(result.has_value());
+      if (result.has_value()) {
+         auto headers_it = result->response_headers.find("access-control-allow-headers");
+         expect(headers_it != result->response_headers.end());
+         if (headers_it != result->response_headers.end()) {
+            expect(headers_it->second == "*");
+         }
+      }
+
+      server.stop();
+      std::this_thread::sleep_for(std::chrono::milliseconds(50));
+   };
+
+   "cors_wildcard_with_credentials_echoes_origin"_test = [] {
+      glz::cors_config config;
+      config.allowed_origins = {"*"};
+      config.allow_credentials = true;
+      config.allow_all_methods = true;
+
+      working_test_server server;
+      server.set_cors_config(config);
+      expect(server.start()) << "Server should start\n";
+
+      simple_test_client client;
+      auto result = client.options(server.base_url() + "/hello",
+                                   {{"Origin", "http://auth.local"},
+                                    {"Access-Control-Request-Method", "POST"}});
+
+      expect(result.has_value());
+      if (result.has_value()) {
+         auto origin_it = result->response_headers.find("access-control-allow-origin");
+         expect(origin_it != result->response_headers.end());
+         if (origin_it != result->response_headers.end()) {
+            expect(origin_it->second == "http://auth.local");
+         }
+
+         auto credentials_it = result->response_headers.find("access-control-allow-credentials");
+         expect(credentials_it != result->response_headers.end());
+      }
+
+      server.stop();
+      std::this_thread::sleep_for(std::chrono::milliseconds(50));
+   };
+
+   "cors_private_network_header_only_when_requested"_test = [] {
+      glz::cors_config config;
+      config.allowed_origins = {"http://client.local"};
+      config.allow_private_network = true;
+
+      working_test_server server;
+      server.set_cors_config(config);
+      expect(server.start()) << "Server should start\n";
+
+      simple_test_client client;
+      auto result = client.options(server.base_url() + "/hello",
+                                   {{"Origin", "http://client.local"},
+                                    {"Access-Control-Request-Method", "GET"}});
+
+      expect(result.has_value());
+      if (result.has_value()) {
+          expect(result->response_headers.find("access-control-allow-private-network") ==
+                 result->response_headers.end());
+      }
+
+      auto result_with_header = client.options(
+         server.base_url() + "/hello",
+         {{"Origin", "http://client.local"},
+          {"Access-Control-Request-Method", "GET"},
+          {"Access-Control-Request-Private-Network", "true"}});
+
+      expect(result_with_header.has_value());
+      if (result_with_header.has_value()) {
+         auto private_network_it =
+            result_with_header->response_headers.find("access-control-allow-private-network");
+         expect(private_network_it != result_with_header->response_headers.end());
+         if (private_network_it != result_with_header->response_headers.end()) {
+            expect(private_network_it->second == "true");
+         }
+      }
+
+      server.stop();
+      std::this_thread::sleep_for(std::chrono::milliseconds(50));
    };
 
    "basic_post_request"_test = [] {
@@ -557,6 +789,27 @@ suite working_http_tests = [] {
 
       server.stop();
       std::this_thread::sleep_for(std::chrono::milliseconds(100)); // Extra time for concurrent cleanup
+   };
+
+   "cors_helper_methods_prevent_duplicates"_test = [] {
+      glz::cors_config config;
+      config.allowed_headers.clear();
+      config.exposed_headers.clear();
+      config.allowed_methods.clear();
+      config.allowed_origins.clear();
+
+      config.add_allowed_header("X-Duplicate").add_allowed_header("X-Duplicate");
+      config.add_exposed_header("X-Expose").add_exposed_header("X-Expose");
+      config.add_allowed_method("REPORT").add_allowed_method("REPORT");
+      config.add_allowed_origin("http://example.com").add_allowed_origin("http://example.com");
+      config.add_allowed_origin_pattern("https://*.example.com");
+      config.add_allowed_origin_regex("^https://api\\.\\w+\\.example\\.com$");
+
+      expect(config.allowed_headers.size() == 1);
+      expect(config.exposed_headers.size() == 1);
+      expect(std::count(config.allowed_methods.begin(), config.allowed_methods.end(), "REPORT") == 1);
+      expect(std::count(config.allowed_origins.begin(), config.allowed_origins.end(), "http://example.com") == 1);
+      expect(config.allowed_origin_regexes.size() == 2);
    };
 };
 
