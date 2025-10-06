@@ -554,7 +554,7 @@ suite working_http_tests = [] {
       simple_test_client client;
       auto result = client.options(server.base_url() + "/hello",
                                    {{"Origin", "http://client.local"},
-                                    {"Access-Control-Request-Method", "PATCH"},
+                                    {"Access-Control-Request-Method", "GET"},
                                     {"Access-Control-Request-Headers", "X-Test-Header"},
                                     {"Access-Control-Request-Private-Network", "true"}});
 
@@ -566,7 +566,7 @@ suite working_http_tests = [] {
          auto methods_it = result->response_headers.find("access-control-allow-methods");
          expect(methods_it != result->response_headers.end()) << "Allow-Methods header missing\n";
          if (methods_it != result->response_headers.end()) {
-            expect(methods_it->second == "PATCH");
+            expect(methods_it->second == "GET");
          }
 
          auto headers_it = result->response_headers.find("access-control-allow-headers");
@@ -614,6 +614,33 @@ suite working_http_tests = [] {
          expect(headers_it != result->response_headers.end());
          if (headers_it != result->response_headers.end()) {
             expect(headers_it->second == "*");
+         }
+      }
+
+      server.stop();
+      std::this_thread::sleep_for(std::chrono::milliseconds(50));
+   };
+
+   "cors_preflight_rejects_missing_method"_test = [] {
+      working_test_server server;
+      expect(server.start()) << "Server should start\n";
+
+      simple_test_client client;
+      auto result = client.options(server.base_url() + "/hello",
+                                   {{"Origin", "http://client.local"},
+                                    {"Access-Control-Request-Method", "POST"}});
+
+      expect(result.has_value()) << "Preflight request should yield a response\n";
+      if (result.has_value()) {
+         expect(result->status_code == 405)
+            << "Preflight should return 405 when requested method is not implemented (got "
+            << result->status_code << ")\n";
+
+         auto allow_it = result->response_headers.find("allow");
+         expect(allow_it != result->response_headers.end()) << "Allow header must be present\n";
+         if (allow_it != result->response_headers.end()) {
+            expect(allow_it->second.find("GET") != std::string::npos)
+               << "Allow header should list the implemented method\n";
          }
       }
 

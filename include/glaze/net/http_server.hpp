@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <cctype>
 #include <charconv>
 #include <chrono>
 #include <condition_variable>
@@ -1192,6 +1193,33 @@ namespace glz
                if (!allowed_methods.empty()) {
                   request.params = std::move(preflight_params);
 
+                  bool has_requested_method_header = false;
+                  bool requested_method_known = false;
+                  http_method requested_method{};
+
+                  if (auto requested_it = request.headers.find("access-control-request-method");
+                      requested_it != request.headers.end()) {
+                     has_requested_method_header = true;
+                     std::string method_token = requested_it->second;
+                     auto trim_pos = method_token.find_last_not_of(" \t\r\n");
+                     if (trim_pos != std::string::npos) {
+                        method_token.erase(trim_pos + 1);
+                     }
+                     else {
+                        method_token.clear();
+                     }
+
+                     if (!method_token.empty()) {
+                        std::transform(method_token.begin(), method_token.end(), method_token.begin(),
+                                       [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
+
+                        if (auto parsed = from_string(method_token)) {
+                           requested_method = *parsed;
+                           requested_method_known = true;
+                        }
+                     }
+                  }
+
                   if (std::none_of(allowed_methods.begin(), allowed_methods.end(),
                                    [](http_method m) { return m == http_method::OPTIONS; })) {
                      allowed_methods.push_back(http_method::OPTIONS);
@@ -1205,6 +1233,14 @@ namespace glz
                   }
                   response.header("Allow", allow_header);
 
+                  bool requested_method_allowed = true;
+                  if (has_requested_method_header) {
+                     requested_method_allowed =
+                        requested_method_known &&
+                        std::find(allowed_methods.begin(), allowed_methods.end(), requested_method) !=
+                           allowed_methods.end();
+                  }
+
                   try {
                      for (const auto& middleware : root_router.middlewares) {
                         middleware(request, response);
@@ -1214,6 +1250,12 @@ namespace glz
                      error_handler(std::make_error_code(std::errc::invalid_argument),
                                    std::source_location::current());
                      send_error_response(socket, 500, "Internal Server Error");
+                     return;
+                  }
+
+                  if (!requested_method_allowed) {
+                     response.status(405);
+                     send_response(socket, response);
                      return;
                   }
 
