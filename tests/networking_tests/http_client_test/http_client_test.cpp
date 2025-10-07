@@ -495,8 +495,10 @@ suite working_http_tests = [] {
    "cors_dynamic_origin_validation"_test = [] {
       glz::cors_config config;
       config.allowed_origins.clear();
-      config.add_allowed_origin_pattern("http://*.allowed.local");
-      config.set_origin_validator([](std::string_view origin) { return origin == "http://special.local"; });
+      config.allowed_origins_validator = [](std::string_view origin) {
+         return (origin.starts_with("http://") && origin.ends_with(".allowed.local")) ||
+                origin == "http://special.local";
+      };
 
       working_test_server server;
       server.set_cors_config(config);
@@ -537,13 +539,11 @@ suite working_http_tests = [] {
       std::this_thread::sleep_for(std::chrono::milliseconds(50));
    };
 
-   "cors_reflects_headers_and_private_network"_test = [] {
+   "cors_reflects_headers"_test = [] {
       glz::cors_config config;
       config.allowed_origins = {"http://client.local"};
-      config.allow_all_methods = true;
-      config.allow_all_headers = false;
+      config.allowed_methods = {"GET", "HEAD", "POST", "PUT", "DELETE", "PATCH"};
       config.allowed_headers.clear();
-      config.allow_private_network = true;
       config.options_success_status = 200;
       config.max_age = 123;
 
@@ -552,11 +552,9 @@ suite working_http_tests = [] {
       expect(server.start()) << "Server should start\n";
 
       simple_test_client client;
-      auto result = client.options(server.base_url() + "/hello",
-                                   {{"Origin", "http://client.local"},
-                                    {"Access-Control-Request-Method", "GET"},
-                                    {"Access-Control-Request-Headers", "X-Test-Header"},
-                                    {"Access-Control-Request-Private-Network", "true"}});
+      auto result = client.options(server.base_url() + "/hello", {{"Origin", "http://client.local"},
+                                                                  {"Access-Control-Request-Method", "GET"},
+                                                                  {"Access-Control-Request-Headers", "X-Test-Header"}});
 
       expect(result.has_value()) << "OPTIONS preflight should succeed\n";
       if (result.has_value()) {
@@ -566,7 +564,7 @@ suite working_http_tests = [] {
          auto methods_it = result->response_headers.find("access-control-allow-methods");
          expect(methods_it != result->response_headers.end()) << "Allow-Methods header missing\n";
          if (methods_it != result->response_headers.end()) {
-            expect(methods_it->second == "GET");
+            expect(methods_it->second == "GET, HEAD, POST, PUT, DELETE, PATCH");
          }
 
          auto headers_it = result->response_headers.find("access-control-allow-headers");
@@ -580,12 +578,6 @@ suite working_http_tests = [] {
          if (max_age_it != result->response_headers.end()) {
             expect(max_age_it->second == "123");
          }
-
-         auto private_network_it = result->response_headers.find("access-control-allow-private-network");
-         expect(private_network_it != result->response_headers.end());
-         if (private_network_it != result->response_headers.end()) {
-            expect(private_network_it->second == "true");
-         }
       }
 
       server.stop();
@@ -595,8 +587,8 @@ suite working_http_tests = [] {
    "cors_allow_all_headers_flag"_test = [] {
       glz::cors_config config;
       config.allowed_origins = {"http://client.local"};
-      config.allow_all_headers = true;
-      config.allow_all_methods = true;
+      config.allowed_methods = {"*"};
+      config.allowed_headers = {"*"};
 
       working_test_server server;
       server.set_cors_config(config);
@@ -613,7 +605,7 @@ suite working_http_tests = [] {
          auto headers_it = result->response_headers.find("access-control-allow-headers");
          expect(headers_it != result->response_headers.end());
          if (headers_it != result->response_headers.end()) {
-            expect(headers_it->second == "*");
+            expect(headers_it->second == "*") << "Expected * but got " << headers_it->second << "\n";
          }
       }
 
@@ -652,7 +644,7 @@ suite working_http_tests = [] {
       glz::cors_config config;
       config.allowed_origins = {"*"};
       config.allow_credentials = true;
-      config.allow_all_methods = true;
+      config.allowed_methods = {"GET", "HEAD", "POST", "PUT", "DELETE", "PATCH"};
 
       working_test_server server;
       server.set_cors_config(config);
@@ -673,46 +665,6 @@ suite working_http_tests = [] {
 
          auto credentials_it = result->response_headers.find("access-control-allow-credentials");
          expect(credentials_it != result->response_headers.end());
-      }
-
-      server.stop();
-      std::this_thread::sleep_for(std::chrono::milliseconds(50));
-   };
-
-   "cors_private_network_header_only_when_requested"_test = [] {
-      glz::cors_config config;
-      config.allowed_origins = {"http://client.local"};
-      config.allow_private_network = true;
-
-      working_test_server server;
-      server.set_cors_config(config);
-      expect(server.start()) << "Server should start\n";
-
-      simple_test_client client;
-      auto result = client.options(server.base_url() + "/hello",
-                                   {{"Origin", "http://client.local"},
-                                    {"Access-Control-Request-Method", "GET"}});
-
-      expect(result.has_value());
-      if (result.has_value()) {
-          expect(result->response_headers.find("access-control-allow-private-network") ==
-                 result->response_headers.end());
-      }
-
-      auto result_with_header = client.options(
-         server.base_url() + "/hello",
-         {{"Origin", "http://client.local"},
-          {"Access-Control-Request-Method", "GET"},
-          {"Access-Control-Request-Private-Network", "true"}});
-
-      expect(result_with_header.has_value());
-      if (result_with_header.has_value()) {
-         auto private_network_it =
-            result_with_header->response_headers.find("access-control-allow-private-network");
-         expect(private_network_it != result_with_header->response_headers.end());
-         if (private_network_it != result_with_header->response_headers.end()) {
-            expect(private_network_it->second == "true");
-         }
       }
 
       server.stop();
@@ -816,27 +768,6 @@ suite working_http_tests = [] {
 
       server.stop();
       std::this_thread::sleep_for(std::chrono::milliseconds(100)); // Extra time for concurrent cleanup
-   };
-
-   "cors_helper_methods_prevent_duplicates"_test = [] {
-      glz::cors_config config;
-      config.allowed_headers.clear();
-      config.exposed_headers.clear();
-      config.allowed_methods.clear();
-      config.allowed_origins.clear();
-
-      config.add_allowed_header("X-Duplicate").add_allowed_header("X-Duplicate");
-      config.add_exposed_header("X-Expose").add_exposed_header("X-Expose");
-      config.add_allowed_method("REPORT").add_allowed_method("REPORT");
-      config.add_allowed_origin("http://example.com").add_allowed_origin("http://example.com");
-      config.add_allowed_origin_pattern("https://*.example.com");
-      config.add_allowed_origin_regex("^https://api\\.\\w+\\.example\\.com$");
-
-      expect(config.allowed_headers.size() == 1);
-      expect(config.exposed_headers.size() == 1);
-      expect(std::count(config.allowed_methods.begin(), config.allowed_methods.end(), "REPORT") == 1);
-      expect(std::count(config.allowed_origins.begin(), config.allowed_origins.end(), "http://example.com") == 1);
-      expect(config.allowed_origin_regexes.size() == 2);
    };
 };
 

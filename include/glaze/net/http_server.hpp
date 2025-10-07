@@ -1174,11 +1174,11 @@ namespace glz
                   }
                };
 
-               auto try_method = [&](http_method candidate) {
-                  if (candidate == http_method::OPTIONS) return;
-                  auto [candidate_handle, candidate_params] = root_router.match(candidate, target);
+               auto try_method = [&](http_method method) {
+                  if (method == http_method::OPTIONS) return;
+                  auto [candidate_handle, candidate_params] = root_router.match(method, target);
                   if (candidate_handle) {
-                     allowed_methods.push_back(candidate);
+                     allowed_methods.push_back(method);
                      capture_first_params(std::move(candidate_params));
                   }
                };
@@ -1193,14 +1193,15 @@ namespace glz
                if (!allowed_methods.empty()) {
                   request.params = std::move(preflight_params);
 
-                  bool has_requested_method_header = false;
+                  bool has_request_method_header = false;
                   bool requested_method_known = false;
                   http_method requested_method{};
 
-                  if (auto requested_it = request.headers.find("access-control-request-method");
-                      requested_it != request.headers.end()) {
-                     has_requested_method_header = true;
-                     std::string method_token = requested_it->second;
+                  // Parse and normalize the request method from the Access-Control-Request-Method header
+                  if (auto request_method_it = request.headers.find("access-control-request-method");
+                      request_method_it != request.headers.end()) {
+                     has_request_method_header = true;
+                     std::string method_token = request_method_it->second;
                      auto trim_pos = method_token.find_last_not_of(" \t\r\n");
                      if (trim_pos != std::string::npos) {
                         method_token.erase(trim_pos + 1);
@@ -1225,16 +1226,17 @@ namespace glz
                      allowed_methods.push_back(http_method::OPTIONS);
                   }
 
+                  // Build the Allow header
                   std::string allow_header;
                   allow_header.reserve(allowed_methods.size() * 8);
                   for (size_t i = 0; i < allowed_methods.size(); ++i) {
                      if (i > 0) allow_header.append(", ");
-                     allow_header.append(std::string(to_string(allowed_methods[i])));
+                     allow_header.append(std::string{to_string(allowed_methods[i])});
                   }
                   response.header("Allow", allow_header);
 
                   bool requested_method_allowed = true;
-                  if (has_requested_method_header) {
+                  if (has_request_method_header) {
                      requested_method_allowed =
                         requested_method_known &&
                         std::find(allowed_methods.begin(), allowed_methods.end(), requested_method) !=
@@ -1257,11 +1259,6 @@ namespace glz
                      response.status(405);
                      send_response(socket, response);
                      return;
-                  }
-
-                  if (response.status_code == 200 && response.response_body.empty() &&
-                      response.response_headers.empty()) {
-                     response.status(204);
                   }
 
                   send_response(socket, response);
