@@ -1297,7 +1297,6 @@ struct glz::meta<suffixed_keys_t>
    static constexpr std::string rename_key(const auto key) { return std::string(key) + "_name"; }
 };
 
-
 struct rename_with_modify
 {
    int first{};
@@ -1335,7 +1334,6 @@ suite rename_tests = [] {
       expect(obj.last_name == "Song");
       expect(obj.age == 29);
    };
-
 
    "suffixed keys"_test = [] {
       suffixed_keys_t obj{};
