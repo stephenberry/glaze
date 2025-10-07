@@ -347,7 +347,7 @@ namespace glz
                return modify_data<T>::template new_name<entry>();
             }
          }
-         return member_nameof<BaseIndex, T>;
+         return member_names<T>[BaseIndex];
       }
 
       template <class T, size_t BaseIndex>
