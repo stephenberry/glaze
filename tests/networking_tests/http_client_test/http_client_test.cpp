@@ -43,7 +43,7 @@ namespace glz
 class working_test_server
 {
   public:
-  working_test_server() : port_(0), running_(false) {}
+   working_test_server() : port_(0), running_(false) {}
 
    ~working_test_server() { stop(); }
 
@@ -330,15 +330,14 @@ class simple_test_client
    asio::io_context io_context_;
    std::thread worker_thread_;
 
-   std::expected<response, std::error_code> perform_request(const std::string& method, const url_parts& url,
-                                                            const std::string& body,
-                                                            std::vector<std::pair<std::string, std::string>> extra_headers = {})
+   std::expected<response, std::error_code> perform_request(
+      const std::string& method, const url_parts& url, const std::string& body,
+      std::vector<std::pair<std::string, std::string>> extra_headers = {})
    {
       std::promise<std::expected<response, std::error_code>> promise;
       auto future = promise.get_future();
 
-      asio::post(io_context_,
-                 [this, method, url, body, headers = std::move(extra_headers), &promise]() mutable {
+      asio::post(io_context_, [this, method, url, body, headers = std::move(extra_headers), &promise]() mutable {
          try {
             asio::ip::tcp::socket socket(io_context_);
             asio::ip::tcp::resolver resolver(io_context_);
@@ -398,13 +397,11 @@ class simple_test_client
                std::string name = header_line.substr(0, colon_pos);
                std::string value = header_line.substr(colon_pos + 1);
 
-               value.erase(value.begin(), std::find_if(value.begin(), value.end(), [](unsigned char ch) {
-                              return !std::isspace(ch);
-                           }));
-               value.erase(std::find_if(value.rbegin(), value.rend(), [](unsigned char ch) {
-                              return !std::isspace(ch);
-                           }).base(),
-                           value.end());
+               value.erase(value.begin(), std::find_if(value.begin(), value.end(),
+                                                       [](unsigned char ch) { return !std::isspace(ch); }));
+               value.erase(
+                  std::find_if(value.rbegin(), value.rend(), [](unsigned char ch) { return !std::isspace(ch); }).base(),
+                  value.end());
 
                auto lower_name = glz::to_lower_case(name);
                resp.response_headers[lower_name] = value;
@@ -595,10 +592,9 @@ suite working_http_tests = [] {
       expect(server.start()) << "Server should start\n";
 
       simple_test_client client;
-      auto result = client.options(server.base_url() + "/hello",
-                                   {{"Origin", "http://client.local"},
-                                    {"Access-Control-Request-Method", "DELETE"},
-                                    {"Access-Control-Request-Headers", "X-One"}});
+      auto result = client.options(server.base_url() + "/hello", {{"Origin", "http://client.local"},
+                                                                  {"Access-Control-Request-Method", "DELETE"},
+                                                                  {"Access-Control-Request-Headers", "X-One"}});
 
       expect(result.has_value());
       if (result.has_value()) {
@@ -619,14 +615,13 @@ suite working_http_tests = [] {
 
       simple_test_client client;
       auto result = client.options(server.base_url() + "/hello",
-                                   {{"Origin", "http://client.local"},
-                                    {"Access-Control-Request-Method", "POST"}});
+                                   {{"Origin", "http://client.local"}, {"Access-Control-Request-Method", "POST"}});
 
       expect(result.has_value()) << "Preflight request should yield a response\n";
       if (result.has_value()) {
          expect(result->status_code == 405)
-            << "Preflight should return 405 when requested method is not implemented (got "
-            << result->status_code << ")\n";
+            << "Preflight should return 405 when requested method is not implemented (got " << result->status_code
+            << ")\n";
 
          auto allow_it = result->response_headers.find("allow");
          expect(allow_it != result->response_headers.end()) << "Allow header must be present\n";
@@ -652,8 +647,7 @@ suite working_http_tests = [] {
 
       simple_test_client client;
       auto result = client.options(server.base_url() + "/hello",
-                                   {{"Origin", "http://auth.local"},
-                                    {"Access-Control-Request-Method", "POST"}});
+                                   {{"Origin", "http://auth.local"}, {"Access-Control-Request-Method", "POST"}});
 
       expect(result.has_value());
       if (result.has_value()) {

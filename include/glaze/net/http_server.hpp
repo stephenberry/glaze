@@ -1238,9 +1238,8 @@ namespace glz
                   bool requested_method_allowed = true;
                   if (has_request_method_header) {
                      requested_method_allowed =
-                        requested_method_known &&
-                        std::find(allowed_methods.begin(), allowed_methods.end(), requested_method) !=
-                           allowed_methods.end();
+                        requested_method_known && std::find(allowed_methods.begin(), allowed_methods.end(),
+                                                            requested_method) != allowed_methods.end();
                   }
 
                   try {
@@ -1249,8 +1248,7 @@ namespace glz
                      }
                   }
                   catch (const std::exception&) {
-                     error_handler(std::make_error_code(std::errc::invalid_argument),
-                                   std::source_location::current());
+                     error_handler(std::make_error_code(std::errc::invalid_argument), std::source_location::current());
                      send_error_response(socket, 500, "Internal Server Error");
                      return;
                   }
