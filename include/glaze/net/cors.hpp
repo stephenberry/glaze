@@ -5,7 +5,6 @@
 
 #include <algorithm>
 #include <string>
-#include <unordered_set>
 #include <vector>
 
 #include "glaze/net/http_router.hpp"
@@ -24,6 +23,11 @@ namespace glz
        * For credentials to work, you cannot use "*" - must specify exact origins
        */
       std::vector<std::string> allowed_origins = {"*"};
+
+      /**
+       * @brief Optional callback to dynamically validate origins
+       */
+      std::function<bool(std::string_view)> allowed_origins_validator{};
 
       /**
        * @brief List of allowed HTTP methods
@@ -60,6 +64,11 @@ namespace glz
        * When true, the middleware will respond to OPTIONS requests with appropriate headers
        */
       bool handle_preflight = true;
+
+      /**
+       * @brief HTTP status code to return for successful OPTIONS preflight responses
+       */
+      int options_success_status = 204;
    };
 
    /**
@@ -69,11 +78,27 @@ namespace glz
     * @param origin The origin to check
     * @return true if the origin is allowed, false otherwise
     */
-   inline bool is_origin_allowed(const cors_config& config, const std::string& origin)
+   inline bool is_origin_allowed(const cors_config& config, std::string_view origin)
    {
+      if (origin.empty()) {
+         return false;
+      }
+
+      if (config.allowed_origins_validator) {
+         try {
+            if (config.allowed_origins_validator(origin)) {
+               return true;
+            }
+         }
+         catch (...) {
+            // If the validator throws, treat as not allowed.
+         }
+      }
+
       // If no specific origins are configured or "*" is present, allow all
-      if (config.allowed_origins.empty() || std::find(config.allowed_origins.begin(), config.allowed_origins.end(),
-                                                      "*") != config.allowed_origins.end()) {
+      if ((config.allowed_origins.empty() && !config.allowed_origins_validator) ||
+          std::find(config.allowed_origins.begin(), config.allowed_origins.end(), "*") !=
+             config.allowed_origins.end()) {
          return true;
       }
 
@@ -120,12 +145,18 @@ namespace glz
          bool is_preflight = (req.method == http_method::OPTIONS) &&
                              (req.headers.find("access-control-request-method") != req.headers.end());
 
+         if (is_preflight && config.handle_preflight) {
+            // Origin not allowed, but it's a preflight request - respond with 403
+            res.status(403).body("CORS: Origin not allowed");
+         }
+
          // Always add CORS headers if origin is allowed
          if (!origin.empty() && is_origin_allowed(config, origin)) {
             // Determine which origin to send back
             std::string allowed_origin = "*";
-            if (config.allow_credentials || std::find(config.allowed_origins.begin(), config.allowed_origins.end(),
-                                                      "*") == config.allowed_origins.end()) {
+            const bool contains_wildcard = std::find(config.allowed_origins.begin(), config.allowed_origins.end(),
+                                                     "*") != config.allowed_origins.end();
+            if (config.allow_credentials || !contains_wildcard || config.allowed_origins_validator) {
                allowed_origin = origin;
             }
 
@@ -147,18 +178,20 @@ namespace glz
                res.header("Access-Control-Allow-Methods", join_strings(config.allowed_methods, ", "));
 
                // Add allowed headers
-               res.header("Access-Control-Allow-Headers", join_strings(config.allowed_headers, ", "));
+               if (!config.allowed_headers.empty()) {
+                  res.header("Access-Control-Allow-Headers", join_strings(config.allowed_headers, ", "));
+               }
+               else if (auto requested_headers = req.headers.find("access-control-request-headers");
+                        requested_headers != req.headers.end()) {
+                  res.header("Access-Control-Allow-Headers", requested_headers->second);
+               }
 
                // Add max age
                res.header("Access-Control-Max-Age", std::to_string(config.max_age));
 
                // Set status to 204 (No Content) for preflight response
-               res.status(204);
+               res.status(config.options_success_status);
             }
-         }
-         else if (is_preflight && config.handle_preflight) {
-            // Origin not allowed, but it's a preflight request - respond with 403
-            res.status(403).body("CORS: Origin not allowed");
          }
       };
    }
