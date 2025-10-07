@@ -1297,6 +1297,30 @@ struct glz::meta<suffixed_keys_t>
    static constexpr std::string rename_key(const auto key) { return std::string(key) + "_name"; }
 };
 
+
+struct rename_with_modify
+{
+   int first{};
+   int second{};
+};
+
+template <>
+struct glz::meta<rename_with_modify>
+{
+   static constexpr std::string_view rename_key(const std::string_view key)
+   {
+      if (key == "first") {
+         return "firstRenamed";
+      }
+      else if (key == "second") {
+         return "secondRenamed";
+      }
+      return key;
+   }
+
+   static constexpr auto modify = glz::object("first_alias", &rename_with_modify::first);
+};
+
 suite rename_tests = [] {
    "rename"_test = [] {
       renamed_t obj{};
@@ -1312,6 +1336,7 @@ suite rename_tests = [] {
       expect(obj.age == 29);
    };
 
+
    "suffixed keys"_test = [] {
       suffixed_keys_t obj{};
       std::string buffer{};
@@ -1323,6 +1348,25 @@ suite rename_tests = [] {
       expect(not glz::read_json(obj, buffer));
       expect(obj.first == "Kira");
       expect(obj.last == "Song");
+   };
+
+   "rename with modify"_test = [] {
+      rename_with_modify obj{.first = 7, .second = 8};
+      std::string buffer{};
+      expect(not glz::write_json(obj, buffer));
+      expect(buffer == R"({"firstRenamed":7,"secondRenamed":8,"first_alias":7})") << buffer;
+
+      buffer = R"({"firstRenamed":3,"secondRenamed":4})";
+
+      expect(not glz::read_json(obj, buffer));
+      expect(obj.first == 3);
+      expect(obj.second == 4);
+
+      buffer = R"({"first_alias":11,"secondRenamed":12})";
+
+      expect(not glz::read_json(obj, buffer));
+      expect(obj.first == 11);
+      expect(obj.second == 12);
    };
 };
 
