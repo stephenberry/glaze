@@ -57,7 +57,8 @@ auto custom_cors = glz::create_cors_middleware({
     .allowed_origins_validator = [](std::string_view origin) {
         return origin.ends_with(".trusted-site.com");
     },
-    .allowed_headers = {"Content-Type"},
+    .allowed_methods = {"GET", "POST"},
+    .allowed_headers = {"Content-Type", "Authorization"},
     .allow_credentials = true,
     .max_age = 86400 // 24 hours
 });
