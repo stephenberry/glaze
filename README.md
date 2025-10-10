@@ -10,7 +10,7 @@ Glaze also supports:
 
 > [!IMPORTANT]
 >
-> ## Breaking changes coming in version 6.0.0
+> ## Breaking v6.0.0 changes
 >
 > - `glz::json_t` has been renamed to `glz::generic` and will be deprecated in v6.0.0. Update your code to include `glaze/json/generic.hpp` and prefer `glz::generic` to stay aligned with the upcoming release.
 > - Removed `v5.6.0` Glaze C FFI interop. This was a significant experiment that looked like would take off and be extremely useful, but after attempting to use it in production it became clear that the developers wouldn't use this feature and instead create a low-level C API. Someone could create a third party library with the code, but it has been removed from Glaze to focus on more critical features.
@@ -196,7 +196,7 @@ auto ec = glz::write_file_json(obj, "./obj.json", std::string{});
 - Tested for both 64bit and 32bit
 - Only supports little-endian systems
 
-[Actions](https://github.com/stephenberry/glaze/actions) build and test with [Clang](https://clang.llvm.org) (17+), [MSVC](https://visualstudio.microsoft.com/vs/features/cplusplus/) (2022), and [GCC](https://gcc.gnu.org) (12+) on apple, windows, and linux.
+[Actions](https://github.com/stephenberry/glaze/actions) build and test with [Clang](https://clang.llvm.org) (18+), [MSVC](https://visualstudio.microsoft.com/vs/features/cplusplus/) (2022), and [GCC](https://gcc.gnu.org) (13+) on apple, windows, and linux.
 
 ![clang build](https://github.com/stephenberry/glaze/actions/workflows/clang.yml/badge.svg) ![gcc build](https://github.com/stephenberry/glaze/actions/workflows/gcc.yml/badge.svg) ![msvc build](https://github.com/stephenberry/glaze/actions/workflows/msvc.yml/badge.svg) 
 
