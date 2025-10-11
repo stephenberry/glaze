@@ -207,6 +207,125 @@ namespace glz
       }
    };
 
+   template <char_t T>
+   struct from<CSV, T>
+   {
+      template <auto Opts, class It>
+      static void op(auto&& value, is_context auto&& ctx, It&& it, auto&& end)
+      {
+         using storage_t = std::remove_cvref_t<decltype(value)>;
+
+         if (it == end) {
+            ctx.error = error_code::unexpected_end;
+            return;
+         }
+
+         std::string_view field{};
+         bool quoted = false;
+
+         if (*it == '"') {
+            quoted = true;
+            ++it;
+
+            auto content_begin = it;
+            bool closed = false;
+
+            while (it != end) {
+               if (*it == '"') {
+                  ++it;
+                  if (it == end) {
+                     closed = true;
+                     break;
+                  }
+                  if (*it == '"') {
+                     ++it;
+                  }
+                  else {
+                     closed = true;
+                     break;
+                  }
+               }
+               else {
+                  ++it;
+               }
+            }
+
+            if (!closed) {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
+
+            auto closing = it;
+            --closing;
+            field = std::string_view(content_begin, static_cast<std::size_t>(closing - content_begin));
+
+            if (it != end && *it != ',' && *it != '\n' && *it != '\r') {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
+         }
+         else {
+            auto content_begin = it;
+            while (it != end && *it != ',' && *it != '\n' && *it != '\r') {
+               ++it;
+            }
+            field = std::string_view(content_begin, static_cast<std::size_t>(it - content_begin));
+         }
+
+         if (field.empty()) {
+            value = storage_t{};
+            return;
+         }
+
+         storage_t parsed{};
+         bool has_char = false;
+
+         if (quoted) {
+            std::size_t idx = 0;
+            while (idx < field.size()) {
+               const char c = field[idx];
+               if (c == '"') {
+                  if (idx + 1 >= field.size() || field[idx + 1] != '"') {
+                     ctx.error = error_code::syntax_error;
+                     return;
+                  }
+                  idx += 2;
+                  if (has_char) {
+                     ctx.error = error_code::syntax_error;
+                     return;
+                  }
+                  parsed = static_cast<storage_t>('"');
+                  has_char = true;
+               }
+               else {
+                  ++idx;
+                  if (has_char) {
+                     ctx.error = error_code::syntax_error;
+                     return;
+                  }
+                  parsed = static_cast<storage_t>(c);
+                  has_char = true;
+               }
+            }
+         }
+         else {
+            if (field.size() != 1) {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
+            parsed = static_cast<storage_t>(field.front());
+            has_char = true;
+         }
+
+         if (!has_char) {
+            value = storage_t{};
+            return;
+         }
+
+         value = parsed;
+      }
+   };
+
    template <class T>
       requires(is_named_enum<T>)
    struct from<CSV, T>

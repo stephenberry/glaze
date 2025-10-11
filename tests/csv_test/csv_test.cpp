@@ -64,6 +64,33 @@ struct glz::meta<signed_min_columns>
    static constexpr auto value = glz::object("i8", &T::i8, "i32", &T::i32);
 };
 
+struct csv_char_row
+{
+   bool operator==(const csv_char_row&) const = default;
+
+   char letter{};
+   int count{};
+};
+
+template <>
+struct glz::meta<csv_char_row>
+{
+   using T = csv_char_row;
+   static constexpr auto value = glz::object(&T::letter, &T::count);
+};
+
+constexpr glz::opts_csv rowwise_char_opts{
+   .layout = glz::rowwise,
+   .use_headers = false,
+   .raw_string = true,
+};
+
+constexpr glz::opts_csv rowwise_char_opts_with_escaping{
+   .layout = glz::rowwise,
+   .use_headers = false,
+   .raw_string = false,
+};
+
 enum struct csv_color : std::uint8_t {
    red = 0,
    green = 1,
@@ -201,6 +228,68 @@ suite csv_tests = [] {
       expect(obj.i32.size() == 1);
       expect(obj.i8[0] == std::numeric_limits<std::int8_t>::min());
       expect(obj.i32[0] == std::numeric_limits<std::int32_t>::min());
+   };
+
+   "rowwise char round trip"_test = [] {
+      std::vector<csv_char_row> data{
+         {.letter = 'A', .count = 42},
+         {.letter = ',', .count = -7},
+         {.letter = '"', .count = 0},
+      };
+
+      std::string buffer{};
+      expect(not glz::write<rowwise_char_opts>(data, buffer));
+
+      std::vector<csv_char_row> result{};
+      glz::error_ctx ec{glz::read<rowwise_char_opts>(result, buffer)};
+      expect(!ec) << glz::format_error(ec, buffer) << '\n';
+
+      expect(result.size() == data.size());
+      for (size_t i = 0; i < data.size(); ++i) {
+         expect(result[i] == data[i]);
+      }
+   };
+
+   "rowwise char empty field"_test = [] {
+      std::string csv_data = ",7\n";
+
+      std::vector<csv_char_row> result{};
+      glz::error_ctx ec{glz::read<rowwise_char_opts>(result, csv_data)};
+      expect(!ec) << glz::format_error(ec, csv_data) << '\n';
+
+      expect(result.size() == 1);
+      expect(result.front().letter == char{});
+      expect(result.front().count == 7);
+   };
+
+   "rowwise char quoted input"_test = [] {
+      std::string csv_data = "\"\"\"\",9\n";
+
+      std::vector<csv_char_row> result{};
+      glz::error_ctx ec{glz::read<rowwise_char_opts_with_escaping>(result, csv_data)};
+      expect(!ec) << glz::format_error(ec, csv_data) << '\n';
+
+      expect(result.size() == 1);
+      expect(result.front().letter == '"');
+      expect(result.front().count == 9);
+   };
+
+   "rowwise char multi character error"_test = [] {
+      std::string csv_data = "AB,5\n";
+
+      std::vector<csv_char_row> result{};
+      glz::error_ctx ec{glz::read<rowwise_char_opts>(result, csv_data)};
+      expect(ec);
+      expect(ec == glz::error_code::syntax_error);
+   };
+
+   "rowwise char numeric string error"_test = [] {
+      std::string csv_data = "65,3\n";
+
+      std::vector<csv_char_row> result{};
+      glz::error_ctx ec{glz::read<rowwise_char_opts>(result, csv_data)};
+      expect(ec);
+      expect(ec == glz::error_code::syntax_error);
    };
 
    "named enum column wise"_test = [] {

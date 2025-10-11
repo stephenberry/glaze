@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include "glaze/core/as_array_wrapper.hpp"
 #include "glaze/core/manage.hpp"
 #include "glaze/json/escape_unicode.hpp"
 #include "glaze/json/generic.hpp"
