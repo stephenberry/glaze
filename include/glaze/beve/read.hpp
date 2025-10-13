@@ -4,6 +4,7 @@
 #pragma once
 
 #include "glaze/beve/header.hpp"
+#include "glaze/beve/key_traits.hpp"
 #include "glaze/beve/skip.hpp"
 #include "glaze/core/opts.hpp"
 #include "glaze/core/read.hpp"
@@ -72,6 +73,16 @@ namespace glz
          using V = std::decay_t<decltype(get_member(std::declval<Value>(), meta_wrapper_v<T>))>;
          from<BEVE, V>::template op<Opts>(get_member(std::forward<Value>(value), meta_wrapper_v<T>),
                                           std::forward<Ctx>(ctx), std::forward<It0>(it), std::forward<It1>(end));
+      }
+
+      template <auto Opts, class Value, class Tag, is_context Ctx, class It0, class It1>
+         requires(check_no_header(Opts))
+      GLZ_ALWAYS_INLINE static void op(Value&& value, Tag&& tag, Ctx&& ctx, It0&& it, It1&& end)
+      {
+         using V = std::decay_t<decltype(get_member(std::declval<Value>(), meta_wrapper_v<T>))>;
+         from<BEVE, V>::template op<Opts>(get_member(std::forward<Value>(value), meta_wrapper_v<T>),
+                                          std::forward<Tag>(tag), std::forward<Ctx>(ctx), std::forward<It0>(it),
+                                          std::forward<It1>(end));
       }
    };
 
@@ -1002,9 +1013,7 @@ namespace glz
          using Element = typename T::value_type;
          using Key = typename Element::first_type;
 
-         constexpr uint8_t type = str_t<Key> ? 0 : (std::is_signed_v<Key> ? 0b000'01'000 : 0b000'10'000);
-         constexpr uint8_t byte_cnt = str_t<Key> ? 0 : byte_count<Key>;
-         constexpr uint8_t header = tag::object | type | (byte_cnt << 5);
+         constexpr uint8_t header = beve_key_traits<Key>::header;
 
          if (invalid_end(ctx, it, end)) {
             return;
@@ -1013,7 +1022,7 @@ namespace glz
          if (tag != header) [[unlikely]] {
             if constexpr (check_allow_conversions(Opts)) {
                const auto key_type = tag & 0b000'11'000;
-               if constexpr (str_t<Key>) {
+               if constexpr (beve_key_traits<Key>::as_string) {
                   if (key_type != 0) {
                      ctx.error = error_code::syntax_error;
                      return;
@@ -1040,22 +1049,11 @@ namespace glz
 
          value.clear();
 
-         if constexpr (std::is_arithmetic_v<std::decay_t<Key>>) {
-            constexpr uint8_t key_tag = tag::number | type | (byte_cnt << 5);
-            for (size_t i = 0; i < n; ++i) {
-               // convert the object tag to the key type tag
-               auto& item = value.emplace_back();
-               parse<BEVE>::op<no_header_on<Opts>()>(item.first, key_tag, ctx, it, end);
-               parse<BEVE>::op<Opts>(item.second, ctx, it, end);
-            }
-         }
-         else {
-            constexpr uint8_t key_tag = tag::string;
-            for (size_t i = 0; i < n; ++i) {
-               auto& item = value.emplace_back();
-               parse<BEVE>::op<no_header_on<Opts>()>(item.first, key_tag, ctx, it, end);
-               parse<BEVE>::op<Opts>(item.second, ctx, it, end);
-            }
+         constexpr uint8_t key_tag = beve_key_traits<Key>::key_tag;
+         for (size_t i = 0; i < n; ++i) {
+            auto& item = value.emplace_back();
+            parse<BEVE>::op<no_header_on<Opts>()>(item.first, key_tag, ctx, it, end);
+            parse<BEVE>::op<Opts>(item.second, ctx, it, end);
          }
       }
    };
@@ -1068,9 +1066,7 @@ namespace glz
       {
          using Key = typename T::first_type;
 
-         constexpr uint8_t type = str_t<Key> ? 0 : (std::is_signed_v<Key> ? 0b000'01'000 : 0b000'10'000);
-         constexpr uint8_t byte_cnt = str_t<Key> ? 0 : byte_count<Key>;
-         constexpr uint8_t header = tag::object | type | (byte_cnt << 5);
+         constexpr uint8_t header = beve_key_traits<Key>::header;
 
          if (invalid_end(ctx, it, end)) {
             return;
@@ -1092,7 +1088,7 @@ namespace glz
             return;
          }
 
-         constexpr uint8_t key_tag = type == 0 ? tag::string : (tag::number | type | (byte_cnt << 5));
+         constexpr uint8_t key_tag = beve_key_traits<Key>::key_tag;
          parse<BEVE>::op<no_header_on<Opts>()>(value.first, key_tag, ctx, it, end);
          parse<BEVE>::op<Opts>(value.second, ctx, it, end);
       }
@@ -1106,9 +1102,7 @@ namespace glz
       {
          using Key = typename T::key_type;
 
-         constexpr uint8_t type = str_t<Key> ? 0 : (std::is_signed_v<Key> ? 0b000'01'000 : 0b000'10'000);
-         constexpr uint8_t byte_cnt = str_t<Key> ? 0 : byte_count<Key>;
-         constexpr uint8_t header = tag::object | type | (byte_cnt << 5);
+         constexpr uint8_t header = beve_key_traits<Key>::header;
 
          if (invalid_end(ctx, it, end)) {
             return;
@@ -1117,7 +1111,7 @@ namespace glz
          if (tag != header) [[unlikely]] {
             if constexpr (check_allow_conversions(Opts)) {
                const auto key_type = tag & 0b000'11'000;
-               if constexpr (str_t<Key>) {
+               if constexpr (beve_key_traits<Key>::as_string) {
                   if (key_type != 0) {
                      ctx.error = error_code::syntax_error;
                      return;
@@ -1146,8 +1140,9 @@ namespace glz
             n = value.size();
          }
 
-         if constexpr (std::is_arithmetic_v<std::decay_t<Key>>) {
-            constexpr uint8_t key_tag = tag::number | type | (byte_cnt << 5);
+         constexpr uint8_t key_tag = beve_key_traits<Key>::key_tag;
+
+         if constexpr (beve_key_traits<Key>::as_number) {
             Key key;
             for (size_t i = 0; i < n; ++i) {
                if constexpr (Opts.partial_read) {
@@ -1164,7 +1159,6 @@ namespace glz
             }
          }
          else {
-            constexpr uint8_t key_tag = tag::string;
             static thread_local Key key;
             for (size_t i = 0; i < n; ++i) {
                if constexpr (Opts.partial_read) {

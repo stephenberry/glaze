@@ -11,9 +11,11 @@
 #include <numbers>
 #include <random>
 #include <set>
+#include <unordered_map>
 #include <unordered_set>
 
 #include "glaze/api/impl.hpp"
+#include "glaze/beve/key_traits.hpp"
 #include "glaze/base64/base64.hpp"
 #include "glaze/beve/beve_to_json.hpp"
 #include "glaze/beve/read.hpp"
@@ -27,6 +29,138 @@
 using namespace ut;
 
 inline glz::trace trace{};
+
+struct ModuleID
+{
+   uint64_t value{};
+
+   auto operator<=>(const ModuleID&) const = default;
+};
+
+template <>
+struct glz::meta<ModuleID>
+{
+   static constexpr auto value = &ModuleID::value;
+};
+
+struct CastModuleID
+{
+   uint64_t value{};
+
+   auto operator<=>(const CastModuleID&) const = default;
+};
+
+template <>
+struct glz::meta<CastModuleID>
+{
+   static constexpr auto value = glz::cast<&CastModuleID::value, uint64_t>;
+};
+
+template <>
+struct std::hash<ModuleID>
+{
+   size_t operator()(const ModuleID& id) const noexcept { return std::hash<uint64_t>{}(id.value); }
+};
+
+struct beve_concat_opts : glz::opts
+{
+   bool concatenate = true;
+};
+
+template <>
+struct std::hash<CastModuleID>
+{
+   size_t operator()(const CastModuleID& id) const noexcept { return std::hash<uint64_t>{}(id.value); }
+};
+
+namespace
+{
+   template <class ID>
+   constexpr ID make_id(const uint64_t value)
+   {
+      return ID{value};
+   }
+
+   template <class ID>
+   void verify_map_roundtrip()
+   {
+      const std::map<ID, std::string> src{{make_id<ID>(42), "life"}, {make_id<ID>(9001), "power"}};
+
+      std::string buffer{};
+      expect(not glz::write_beve(src, buffer));
+
+      expect(static_cast<uint8_t>(buffer[0]) == glz::beve_key_traits<ID>::header);
+
+      std::map<ID, std::string> dst{};
+      expect(!glz::read_beve(dst, buffer));
+      expect(dst == src);
+
+      std::string json{};
+      expect(!glz::beve_to_json(buffer, json));
+      expect(json == R"({"42":"life","9001":"power"})") << json;
+   }
+
+   template <class ID>
+   void verify_unordered_map_roundtrip()
+   {
+      const std::unordered_map<ID, int> src{
+         {make_id<ID>(1), 7},
+         {make_id<ID>(2), 11},
+         {make_id<ID>(99), -4},
+      };
+
+      std::string buffer{};
+      expect(not glz::write_beve(src, buffer));
+
+      std::unordered_map<ID, int> dst{};
+      expect(!glz::read_beve(dst, buffer));
+      expect(dst == src);
+
+      std::string json{};
+      expect(!glz::beve_to_json(buffer, json));
+
+      std::map<std::string, int> decoded{};
+      expect(!glz::read_json(decoded, json));
+      expect(decoded == std::map<std::string, int>{{"1", 7}, {"2", 11}, {"99", -4}});
+   }
+
+   template <class ID>
+   void verify_no_header_raw_bytes()
+   {
+      ID id{0x1122334455667788ULL};
+
+      std::string buffer{};
+      size_t ix{};
+      glz::context ctx{};
+
+      glz::serialize<glz::BEVE>::no_header<glz::opts{}>(id, ctx, buffer, ix);
+
+      expect(ix == sizeof(uint64_t));
+      expect(buffer.size() >= ix);
+
+      uint64_t raw{};
+      std::memcpy(&raw, buffer.data(), sizeof(raw));
+      expect(raw == id.value);
+   }
+
+   template <class ID>
+   void verify_vector_pair_roundtrip()
+   {
+      constexpr beve_concat_opts beve_concat{{glz::BEVE}};
+      const std::vector<std::pair<ID, int>> src{{make_id<ID>(5), 13}, {make_id<ID>(7), 17}};
+
+      std::string buffer{};
+      expect(not glz::write<beve_concat>(src, buffer));
+
+      std::vector<std::pair<ID, int>> dst{};
+      expect(!glz::read<beve_concat>(dst, buffer));
+      expect(dst == src);
+
+      std::string json{};
+      expect(!glz::beve_to_json(buffer, json));
+      expect(json == R"({"5":13,"7":17})") << json;
+   }
+}
 
 struct my_struct
 {
@@ -1530,6 +1664,20 @@ suite glz_text_tests = [] {
       expect(!glz::read_beve(text, out));
       expect(text.str == "Hello World");
    };
+};
+
+suite beve_custom_key_tests = [] {
+   "map ModuleID"_test = [] { verify_map_roundtrip<ModuleID>(); };
+   "map CastModuleID"_test = [] { verify_map_roundtrip<CastModuleID>(); };
+
+   "unordered_map ModuleID"_test = [] { verify_unordered_map_roundtrip<ModuleID>(); };
+   "unordered_map CastModuleID"_test = [] { verify_unordered_map_roundtrip<CastModuleID>(); };
+
+   "no_header ModuleID"_test = [] { verify_no_header_raw_bytes<ModuleID>(); };
+   "no_header CastModuleID"_test = [] { verify_no_header_raw_bytes<CastModuleID>(); };
+
+   "vector pair ModuleID"_test = [] { verify_vector_pair_roundtrip<ModuleID>(); };
+   "vector pair CastModuleID"_test = [] { verify_vector_pair_roundtrip<CastModuleID>(); };
 };
 
 suite beve_to_json_tests = [] {

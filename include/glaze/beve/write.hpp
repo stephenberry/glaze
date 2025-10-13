@@ -6,6 +6,7 @@
 #include <utility>
 
 #include "glaze/beve/header.hpp"
+#include "glaze/beve/key_traits.hpp"
 #include "glaze/core/opts.hpp"
 #include "glaze/core/reflect.hpp"
 #include "glaze/core/seek.hpp"
@@ -221,6 +222,14 @@ namespace glz
          using V = std::remove_cvref_t<decltype(get_member(std::declval<Value>(), meta_wrapper_v<T>))>;
          to<BEVE, V>::template op<Opts>(get_member(std::forward<Value>(value), meta_wrapper_v<T>),
                                         std::forward<Ctx>(ctx), std::forward<B>(b), std::forward<IX>(ix));
+      }
+
+      template <auto Opts, class Value, is_context Ctx, class... Args>
+      GLZ_ALWAYS_INLINE static void no_header(Value&& value, Ctx&& ctx, Args&&... args)
+      {
+         using V = std::remove_cvref_t<decltype(get_member(std::declval<Value>(), meta_wrapper_v<T>))>;
+         to<BEVE, V>::template no_header<Opts>(get_member(std::forward<Value>(value), meta_wrapper_v<T>),
+                                               std::forward<Ctx>(ctx), std::forward<Args>(args)...);
       }
    };
 
@@ -654,9 +663,7 @@ namespace glz
          using Element = typename T::value_type;
          using Key = typename Element::first_type;
 
-         constexpr uint8_t type = str_t<Key> ? 0 : (std::is_signed_v<Key> ? 0b000'01'000 : 0b000'10'000);
-         constexpr uint8_t byte_cnt = str_t<Key> ? 0 : byte_count<Key>;
-         constexpr uint8_t tag = tag::object | type | (byte_cnt << 5);
+         constexpr uint8_t tag = beve_key_traits<Key>::header;
          dump_type(tag, args...);
 
          dump_compressed_int<Opts>(value.size(), args...);
@@ -675,9 +682,7 @@ namespace glz
       {
          using Key = typename T::first_type;
 
-         constexpr uint8_t type = str_t<Key> ? 0 : (std::is_signed_v<Key> ? 0b000'01'000 : 0b000'10'000);
-         constexpr uint8_t byte_cnt = str_t<Key> ? 0 : byte_count<Key>;
-         constexpr uint8_t tag = tag::object | type | (byte_cnt << 5);
+         constexpr uint8_t tag = beve_key_traits<Key>::header;
          dump_type(tag, args...);
 
          dump_compressed_int<Opts>(1, args...);
@@ -695,9 +700,7 @@ namespace glz
       {
          using Key = typename T::key_type;
 
-         constexpr uint8_t type = str_t<Key> ? 0 : (std::is_signed_v<Key> ? 0b000'01'000 : 0b000'10'000);
-         constexpr uint8_t byte_cnt = str_t<Key> ? 0 : byte_count<Key>;
-         constexpr uint8_t tag = tag::object | type | (byte_cnt << 5);
+         constexpr uint8_t tag = beve_key_traits<Key>::header;
          dump_type(tag, args...);
 
          dump_compressed_int<Opts>(value.size(), args...);

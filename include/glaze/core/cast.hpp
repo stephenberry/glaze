@@ -19,7 +19,7 @@ namespace glz
       static constexpr auto glaze_reflect = false;
       using target_t = decltype(Target);
       using cast_type = CastType;
-      T& val;
+      T* val;
       static constexpr auto target = Target;
    };
 
@@ -33,11 +33,33 @@ namespace glz
    template <uint32_t Format, is_cast T>
    struct from<Format, T>
    {
+      template <class Value, class Temp>
+      GLZ_ALWAYS_INLINE static void assign(Value&& value, Temp&& temp)
+      {
+         using V = std::decay_t<Value>;
+         using Target = typename V::target_t;
+
+         auto& object = *value.val;
+
+         if constexpr (std::is_member_object_pointer_v<Target>) {
+            auto& field = object.*(value.target);
+            using Field = std::remove_cvref_t<decltype(field)>;
+            field = static_cast<Field>(std::forward<Temp>(temp));
+         }
+         else if constexpr (std::invocable<Target, decltype(object)>) {
+            auto& field = value.target(object);
+            using Field = std::remove_cvref_t<decltype(field)>;
+            field = static_cast<Field>(std::forward<Temp>(temp));
+         }
+         else {
+            static_assert(false_v<Target>, "invalid type for cast_t");
+         }
+      }
+
       template <auto Opts>
       static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
       {
          using V = std::decay_t<decltype(value)>;
-         using Target = typename V::target_t;
          using Cast = typename V::cast_type;
 
          Cast temp{};
@@ -45,19 +67,22 @@ namespace glz
          if (bool(ctx.error)) [[unlikely]]
             return;
 
-         if constexpr (std::is_member_object_pointer_v<Target>) {
-            auto& field = value.val.*(value.target);
-            using Field = std::remove_cvref_t<decltype(field)>;
-            field = static_cast<Field>(temp);
-         }
-         else if constexpr (std::invocable<Target, decltype(value.val)>) {
-            auto& field = value.target(value.val);
-            using Field = std::remove_cvref_t<decltype(field)>;
-            field = static_cast<Field>(temp);
-         }
-         else {
-            static_assert(false_v<Target>, "invalid type for cast_t");
-         }
+         assign(value, temp);
+      }
+
+      template <auto Opts>
+         requires(check_no_header(Opts))
+      static void op(auto&& value, const uint8_t tag, is_context auto&& ctx, auto&& it, auto&& end)
+      {
+         using V = std::decay_t<decltype(value)>;
+         using Cast = typename V::cast_type;
+
+         Cast temp{};
+         parse<Format>::template op<Opts>(temp, tag, ctx, it, end);
+         if (bool(ctx.error)) [[unlikely]]
+            return;
+
+         assign(value, temp);
       }
    };
 
@@ -70,12 +95,36 @@ namespace glz
          using V = std::decay_t<decltype(value)>;
          using Target = typename V::target_t;
          using Cast = typename V::cast_type;
+         auto& object = *value.val;
 
          if constexpr (std::is_member_object_pointer_v<Target>) {
-            serialize<Format>::template op<Opts>(static_cast<Cast>(value.val.*(value.target)), ctx, args...);
+            serialize<Format>::template op<Opts>(static_cast<Cast>(object.*(value.target)), ctx, args...);
          }
-         else if constexpr (std::invocable<Target, decltype(value.val)>) {
-            serialize<Format>::template op<Opts>(static_cast<Cast>(value.target(value.val)), ctx, args...);
+         else if constexpr (std::invocable<Target, decltype(object)>) {
+            serialize<Format>::template op<Opts>(static_cast<Cast>(value.target(object)), ctx, args...);
+         }
+         else {
+            static_assert(false_v<T>, "invalid type for cast_t");
+         }
+      }
+
+      template <auto Opts>
+      static void no_header(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
+      {
+         using V = std::decay_t<decltype(value)>;
+         using Target = typename V::target_t;
+         using Cast = typename V::cast_type;
+         auto& object = *value.val;
+
+         if constexpr (std::is_member_object_pointer_v<Target>) {
+            serialize<Format>::template no_header<Opts>(static_cast<Cast>(object.*(value.target)), ctx,
+                                                        std::forward<decltype(it)>(it),
+                                                        std::forward<decltype(end)>(end));
+         }
+         else if constexpr (std::invocable<Target, decltype(object)>) {
+            serialize<Format>::template no_header<Opts>(static_cast<Cast>(value.target(object)), ctx,
+                                                        std::forward<decltype(it)>(it),
+                                                        std::forward<decltype(end)>(end));
          }
          else {
             static_assert(false_v<T>, "invalid type for cast_t");
@@ -86,7 +135,9 @@ namespace glz
    template <auto Target, class CastType>
    constexpr auto cast_impl() noexcept
    {
-      return [](auto&& v) { return cast_t<std::remove_cvref_t<decltype(v)>, Target, CastType>{v}; };
+      return [](auto&& v) -> cast_t<std::remove_reference_t<decltype(v)>, Target, CastType> {
+         return {std::addressof(v)};
+      };
    }
 
    template <auto Target, class CastType>
