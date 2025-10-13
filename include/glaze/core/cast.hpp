@@ -64,8 +64,14 @@ namespace glz
 
          Cast temp{};
          parse<Format>::template op<Opts>(temp, ctx, it, end);
-         if (bool(ctx.error)) [[unlikely]]
-            return;
+         if (bool(ctx.error)) [[unlikely]] {
+            if constexpr (Opts.null_terminated) {
+               return;
+            }
+            else if (ctx.error != error_code::end_reached) {
+               return;
+            }
+         }
 
          assign(value, temp);
       }
@@ -79,8 +85,14 @@ namespace glz
 
          Cast temp{};
          parse<Format>::template op<Opts>(temp, tag, ctx, it, end);
-         if (bool(ctx.error)) [[unlikely]]
-            return;
+         if (bool(ctx.error)) [[unlikely]] {
+            if constexpr (Opts.null_terminated) {
+               return;
+            }
+            else if (ctx.error != error_code::end_reached) {
+               return;
+            }
+         }
 
          assign(value, temp);
       }
