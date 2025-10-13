@@ -2795,6 +2795,81 @@ struct glz::meta<EmptyObject>
    static constexpr auto value = object();
 };
 
+struct json_module_id
+{
+   uint64_t value{};
+
+   auto operator<=>(const json_module_id&) const = default;
+};
+
+struct json_cast_module_id
+{
+   uint64_t value{};
+
+   auto operator<=>(const json_cast_module_id&) const = default;
+};
+
+template <>
+struct glz::meta<json_module_id>
+{
+   static constexpr auto value = &json_module_id::value;
+};
+
+template <>
+struct glz::meta<json_cast_module_id>
+{
+   static constexpr auto value = glz::cast<&json_cast_module_id::value, uint64_t>;
+};
+
+template <>
+struct std::hash<json_module_id>
+{
+   size_t operator()(const json_module_id& id) const noexcept { return std::hash<uint64_t>{}(id.value); }
+};
+
+template <>
+struct std::hash<json_cast_module_id>
+{
+   size_t operator()(const json_cast_module_id& id) const noexcept { return std::hash<uint64_t>{}(id.value); }
+};
+
+suite strong_id_json_tests = [] {
+   "map json_module_id"_test = [] {
+      const std::map<json_module_id, std::string> src{{json_module_id{42}, "life"}, {json_module_id{9001}, "power"}};
+
+      auto encoded = glz::write_json(src);
+      expect(encoded.has_value());
+      expect(*encoded == R"({"42":"life","9001":"power"})");
+
+      std::map<json_module_id, std::string> dst{};
+      expect(!glz::read_json(dst, *encoded));
+      expect(dst == src);
+   };
+
+   "unordered_map json_module_id"_test = [] {
+      const std::unordered_map<json_module_id, int> src{{json_module_id{1}, 7}, {json_module_id{2}, 11}, {json_module_id{99}, -4}};
+
+      auto encoded = glz::write_json(src);
+      expect(encoded.has_value());
+
+      std::unordered_map<json_module_id, int> dst{};
+      expect(!glz::read_json(dst, *encoded));
+      expect(dst == src);
+   };
+
+   "map json_cast_module_id"_test = [] {
+      const std::map<json_cast_module_id, int> src{{json_cast_module_id{3}, 9}, {json_cast_module_id{5}, 25}};
+
+      auto encoded = glz::write_json(src);
+      expect(encoded.has_value());
+      expect(*encoded == R"({"3":9,"5":25})");
+
+      std::map<json_cast_module_id, int> dst{};
+      expect(!glz::read_json(dst, *encoded));
+      expect(dst == src);
+   };
+};
+
 template <typename Pair_key, typename Pair_value>
 struct Write_pair_test_case
 {
