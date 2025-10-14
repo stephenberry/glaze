@@ -38,6 +38,13 @@
 using namespace ut;
 
 glz::trace trace{};
+
+struct jsonc_comment_config
+{
+   std::vector<int> array_1{};
+   std::vector<int> array_2{};
+};
+
 suite start_trace = [] { trace.begin("json_test", "Full test suite duration."); };
 
 // Regression test: empty JSON string to char should yield '\0'
@@ -2264,6 +2271,18 @@ suite read_tests = [] {
          expect(glz::read_jsonc(a, b) == glz::error_code::none);
          expect(a[0] == 100);
          expect(a[1] == 20);
+      }
+      {
+         std::string json = R"({
+    // Comment 1
+    "array_1": [],
+    // Comment 2
+    "array_2": []
+})";
+         jsonc_comment_config cfg{};
+         expect(glz::read_jsonc(cfg, json) == glz::error_code::none);
+         expect(cfg.array_1.empty());
+         expect(cfg.array_2.empty());
       }
    };
 
