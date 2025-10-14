@@ -1539,7 +1539,7 @@ namespace glz
                if (*it == ',') {
                   ++it;
 
-                  if constexpr (!Opts.minified) {
+                  if constexpr (!Opts.minified && !Opts.comments) {
                      if (ws_size && ws_size < size_t(end - it)) {
                         skip_matching_ws(ws_start, it, ws_size);
                      }
@@ -1596,7 +1596,7 @@ namespace glz
                   if (*it == ',') [[likely]] {
                      ++it;
 
-                     if constexpr (!Opts.minified) {
+                     if constexpr (!Opts.minified && !Opts.comments) {
                         if (ws_size && ws_size < size_t(end - it)) {
                            skip_matching_ws(ws_start, it, ws_size);
                         }
@@ -2334,7 +2334,8 @@ namespace glz
                      }
                   }
 
-                  if constexpr ((not Opts.minified) && (num_members > 1 || not Opts.error_on_unknown_keys)) {
+                  if constexpr ((not Opts.minified) && (num_members > 1 || not Opts.error_on_unknown_keys) &&
+                                (!Opts.comments)) {
                      if (ws_size && ws_size < size_t(end - it)) {
                         skip_matching_ws(ws_start, it, ws_size);
                      }
