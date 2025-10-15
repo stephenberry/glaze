@@ -165,11 +165,38 @@ arr = [4, 5, 6])";
       expect(value == 123);
    };
 
+   "read_wrong_overflow_integer"_test = [] {
+      // Max uint64 value plus one.
+      std::string toml_input = "18446744073709551616";
+      uint64_t value{};
+      auto error = glz::read_toml(value, toml_input);
+      expect(error);
+      expect(error == glz::error_code::parse_number_failure);
+   };
+
+   "read_wrong_underflow_integer"_test = [] {
+      // Min int64 value minus one.
+      std::string toml_input = "-9223372036854775809";
+      int64_t value{};
+      auto error = glz::read_toml(value, toml_input);
+      expect(error);
+      expect(error == glz::error_code::parse_number_failure);
+   };
+
    "read_negative_integer"_test = [] {
       std::string toml_input = "-123";
       int value{};
       expect(not glz::read_toml(value, toml_input));
       expect(value == -123);
+   };
+
+   "read_wrong_negative_integer"_test = [] {
+      std::string toml_input = "-123";
+      // Negative values should not succeed for unsigned types.
+      unsigned int value{};
+      auto error = glz::read_toml(value, toml_input);
+      expect(error);
+      expect(error == glz::error_code::parse_number_failure);
    };
 
    "read_positive_integer"_test = [] {
