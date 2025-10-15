@@ -37,6 +37,38 @@ Objects that expose member function pointers through `glz::meta` are skipped by 
 
 If you want the key present, use `write_member_functions = true`.
 
+## Custom Map Keys
+
+BEVE can serialize map-like containers whose key types expose a value through Glaze metadata. This allows “strong ID” wrappers to keep a user-defined type while the binary payload stores the underlying numeric representation.
+
+```c++
+struct ModuleID {
+   uint64_t value{};
+   auto operator<=>(const ModuleID&) const = default;
+};
+
+template <>
+struct glz::meta<ModuleID> {
+   static constexpr auto value = &ModuleID::value;
+};
+
+std::map<ModuleID, std::string> modules{{ModuleID{42}, "life"}, {ModuleID{9001}, "power"}};
+
+std::string beve{};
+glz::write_beve(modules, beve);
+```
+
+Glaze inspects the metadata, reuses the underlying `uint64_t`, and emits the numeric BEVE map header so the payload decodes as a regular number key. The same behaviour works for `std::unordered_map` and concatenated ranges such as `std::vector<std::pair<ModuleID, T>>`.
+
+If you prefer to keep a custom conversion in your metadata, `glz::cast` works as well:
+
+```c++
+template <>
+struct glz::meta<ModuleID> {
+   static constexpr auto value = glz::cast<&ModuleID::value, uint64_t>;
+};
+```
+
 ## Partial Objects
 
 It is sometimes desirable to write out only a portion of an object. This is permitted via an array of JSON pointers, which indicate which parts of the object should be written out.

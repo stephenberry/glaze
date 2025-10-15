@@ -139,6 +139,8 @@ expect(not glz::read_json(obj, buffer));
 expect(obj.integer == 5);
 ```
 
+When a cast-backed type is used as a key in a map (for example `std::map<MyId, T>`), BEVE now recognises the wrapper and emits the same header as the cast target. This means strong-ID wrappers can be reused across JSON, TOML, and BEVE without specialising custom read/write logic.
+
 ## quoted_num
 
 Read and write numbers as strings.
