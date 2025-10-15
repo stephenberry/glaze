@@ -174,6 +174,14 @@ arr = [4, 5, 6])";
       expect(error == glz::error_code::parse_number_failure);
    };
 
+   "read_nearly_overfow_integer"_test = [] {
+      // Max uint64 value.
+      std::string toml_input = "18446744073709551615";
+      uint64_t value{};
+      expect(not glz::read_toml(value, toml_input));
+      expect(value == 18446744073709551615ull);
+   };
+
    "read_wrong_underflow_integer"_test = [] {
       // Min int64 value minus one.
       std::string toml_input = "-9223372036854775809";
@@ -181,6 +189,14 @@ arr = [4, 5, 6])";
       auto error = glz::read_toml(value, toml_input);
       expect(error);
       expect(error == glz::error_code::parse_number_failure);
+   };
+
+   "read_nearly_underflow_integer"_test = [] {
+      // Min int64 value.
+      std::string toml_input = "-9223372036854775808";
+      int64_t value{};
+      expect(not glz::read_toml(value, toml_input));
+      expect(value == -9223372036854775807ll - 1);
    };
 
    "read_negative_integer"_test = [] {
