@@ -15,9 +15,9 @@
 #include <unordered_set>
 
 #include "glaze/api/impl.hpp"
-#include "glaze/beve/key_traits.hpp"
 #include "glaze/base64/base64.hpp"
 #include "glaze/beve/beve_to_json.hpp"
+#include "glaze/beve/key_traits.hpp"
 #include "glaze/beve/read.hpp"
 #include "glaze/beve/write.hpp"
 #include "glaze/hardware/volatile_array.hpp"

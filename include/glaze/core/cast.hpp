@@ -147,9 +147,8 @@ namespace glz
    template <auto Target, class CastType>
    constexpr auto cast_impl() noexcept
    {
-      return [](auto&& v) -> cast_t<std::remove_reference_t<decltype(v)>, Target, CastType> {
-         return {std::addressof(v)};
-      };
+      return
+         [](auto&& v) -> cast_t<std::remove_reference_t<decltype(v)>, Target, CastType> { return {std::addressof(v)}; };
    }
 
    template <auto Target, class CastType>

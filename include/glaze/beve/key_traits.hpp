@@ -60,14 +60,12 @@ namespace glz
       static constexpr bool as_number = !as_string;
 
       static constexpr uint8_t type =
-         as_string ? uint8_t(0)
-                   : (std::is_signed_v<numeric_type> ? uint8_t(0b000'01'000) : uint8_t(0b000'10'000));
+         as_string ? uint8_t(0) : (std::is_signed_v<numeric_type> ? uint8_t(0b000'01'000) : uint8_t(0b000'10'000));
 
       static constexpr uint8_t width = as_string ? uint8_t(0) : glz::byte_count<numeric_type>;
 
       static constexpr uint8_t header = uint8_t(tag::object | type | (width << 5));
 
-      static constexpr uint8_t key_tag =
-         as_string ? uint8_t(tag::string) : uint8_t(tag::number | type | (width << 5));
+      static constexpr uint8_t key_tag = as_string ? uint8_t(tag::string) : uint8_t(tag::number | type | (width << 5));
    };
 }

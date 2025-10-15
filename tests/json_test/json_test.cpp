@@ -2866,7 +2866,8 @@ suite strong_id_json_tests = [] {
    };
 
    "unordered_map json_module_id"_test = [] {
-      const std::unordered_map<json_module_id, int> src{{json_module_id{1}, 7}, {json_module_id{2}, 11}, {json_module_id{99}, -4}};
+      const std::unordered_map<json_module_id, int> src{
+         {json_module_id{1}, 7}, {json_module_id{2}, 11}, {json_module_id{99}, -4}};
 
       auto encoded = glz::write_json(src);
       expect(encoded.has_value());
