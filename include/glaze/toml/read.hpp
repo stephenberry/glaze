@@ -255,21 +255,17 @@ namespace glz
 
    namespace detail
    {
-      constexpr bool is_toml_base_specifier(char c) noexcept
-      {
-         return (
-            c == 'x' ||
-            c == 'b' ||
-            c == 'o'
-         );
-      }
+      constexpr bool is_toml_base_specifier(char c) noexcept { return (c == 'x' || c == 'b' || c == 'o'); }
 
       constexpr int toml_specified_base(char c) noexcept
       {
          switch (c) {
-            case 'x': return 16;
-            case 'b': return 2;
-            case 'o': return 8;
+         case 'x':
+            return 16;
+         case 'b':
+            return 2;
+         case 'o':
+            return 8;
          }
 
          // Should never reach here, but seems a good default.
@@ -302,23 +298,18 @@ namespace glz
          return is_any_toml_digit(c);
       }
 
-      struct unsigned_accumulator {
+      struct unsigned_accumulator
+      {
         private:
          int base = 10;
 
         public:
-         constexpr void inform_base(int base) noexcept
-         {
-            this->base = base;
-         }
+         constexpr void inform_base(int base) noexcept { this->base = base; }
 
-         constexpr bool is_valid_digit(char c) const noexcept
-         {
-            return is_valid_toml_digit(c, this->base);
-         }
+         constexpr bool is_valid_digit(char c) const noexcept { return is_valid_toml_digit(c, this->base); }
 
-         template<std::unsigned_integral T>
-         constexpr bool try_accumulate(T &v, int digit) const noexcept
+         template <std::unsigned_integral T>
+         constexpr bool try_accumulate(T& v, int digit) const noexcept
          {
             if (digit < 0 || digit >= this->base) [[unlikely]] {
                return false;
@@ -336,29 +327,21 @@ namespace glz
          }
       };
 
-      struct signed_accumulator {
+      struct signed_accumulator
+      {
         private:
          int base = 10;
          bool negated = false;
 
         public:
-         constexpr void inform_negated() noexcept
-         {
-            this->negated = true;
-         }
+         constexpr void inform_negated() noexcept { this->negated = true; }
 
-         constexpr void inform_base(int base) noexcept
-         {
-            this->base = base;
-         }
+         constexpr void inform_base(int base) noexcept { this->base = base; }
 
-         constexpr bool is_valid_digit(char c) const noexcept
-         {
-            return is_valid_toml_digit(c, this->base);
-         }
+         constexpr bool is_valid_digit(char c) const noexcept { return is_valid_toml_digit(c, this->base); }
 
-         template<std::signed_integral T>
-         constexpr bool try_accumulate(T &v, int digit) const noexcept
+         template <std::signed_integral T>
+         constexpr bool try_accumulate(T& v, int digit) const noexcept
          {
             if (digit < 0 || digit >= this->base) [[unlikely]] {
                return false;
@@ -388,7 +371,7 @@ namespace glz
          }
       };
 
-      template<std::integral T>
+      template <std::integral T>
       constexpr bool parse_toml_integer(T& v, auto&& it, auto&& end) noexcept
       {
          // Ensure the caller gave us at least one character.
