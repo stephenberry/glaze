@@ -302,35 +302,6 @@ namespace glz
          return is_any_toml_digit(c);
       }
 
-      constexpr bool is_end_of_toml_decimal_zero(auto&& it, auto&& end) noexcept
-      {
-         // The character before 'it' should be checked to be '0'.
-
-         if (it == end) {
-            return true;
-         }
-
-         // Underscore after the zero indicates either
-         // that the zero was a leading zero, or that
-         // the underscore is a trailing underscore.
-         // Both are disallowed.
-         if (*it == '_') {
-            return false;
-         }
-
-         if (is_toml_base_specifier(*it)) {
-            return false;
-         }
-
-         // The zero was a leading zero, which is disallowed.
-         if (is_any_toml_digit(*it)) {
-            return false;
-         }
-
-         // All other characters end the integer.
-         return true;
-      }
-
       struct unsigned_accumulator {
         private:
          int base = 10;
@@ -420,7 +391,7 @@ namespace glz
       template<std::integral T>
       constexpr bool parse_toml_integer(T& v, auto&& it, auto&& end) noexcept
       {
-         // Should already be handled by the caller, but just in case.
+         // Ensure the caller gave us at least one character.
          if (it == end) [[unlikely]] {
             return false;
          }
@@ -428,143 +399,126 @@ namespace glz
          auto accumulator = [] {
             if constexpr (std::unsigned_integral<T>) {
                return unsigned_accumulator{};
-            } else {
+            }
+            else {
                return signed_accumulator{};
             }
          }();
 
+         bool saw_negative_sign = false;
+         bool saw_sign = false; // Tracks whether +/- was supplied so prefixed bases can reject it.
+
          if (*it == '-') {
+            saw_negative_sign = true;
+            saw_sign = true;
             ++it;
 
             if (it == end) [[unlikely]] {
                return false;
             }
 
-            // In this case, only '-0' should be accepted.
-            if constexpr (std::unsigned_integral<T>) {
-               // No negated value other than zero can fit in an unsigned integer.
-               if (*it != '0') [[unlikely]] {
-                  return false;
-               }
-
-               ++it;
-
-               if (not is_end_of_toml_decimal_zero(it, end)) [[unlikely]] {
-                  return false;
-               }
-
-               // Successfully parsed a zero.
-               v = 0;
-
-               return true;
-            } else {
-               // In this case, only '-0' should be accepted.
-               if (*it == '0') {
-                  ++it;
-
-                  if (not is_end_of_toml_decimal_zero(it, end)) [[unlikely]] {
-                     return false;
-                  }
-
-                  // Successfully parsed a zero.
-                  v = 0;
-
-                  return true;
-               }
-
+            if constexpr (std::signed_integral<T>) {
                accumulator.inform_negated();
             }
          }
 
          if (*it == '+') {
+            // Only a single leading sign is permitted.
+            if (saw_sign) [[unlikely]] {
+               return false;
+            }
+
             ++it;
+            saw_sign = true;
 
             if (it == end) [[unlikely]] {
                return false;
             }
-
-            // In this case, only '+0' should be allowed.
-            if (*it == '0') {
-               ++it;
-
-               if (not is_end_of_toml_decimal_zero(it, end)) [[unlikely]] {
-                  return false;
-               }
-
-               // Successfully parsed a zero.
-               v = 0;
-
-               return true;
-            }
-         } else if (*it == '0') {
-            ++it;
-
-            // Successfully parsed a zero.
-            if (it == end) {
-               v = 0;
-
-               return true;
-            }
-
-            // Either the zero was a leading zero,
-            // or this underscore is trailing.
-            // Both are disallowed.
-            if (*it == '_') [[unlikely]] {
-               return false;
-            }
-
-            if (is_toml_base_specifier(*it)) {
-               accumulator.inform_base(toml_specified_base(*it));
-
-               ++it;
-
-               if (it == end) [[unlikely]] {
-                  return false;
-               }
-            } else if (is_any_toml_digit(*it)) [[unlikely]] {
-               // Leading zero, disallowed.
-               return false;
-            } else {
-               // Any other character ends the integer,
-               // so we successfully parsed a zero.
-
-               v = 0;
-
-               return true;
-            }
          }
 
-         // Leading underscore, disallowed.
+         if (it == end) [[unlikely]] {
+            return false;
+         }
+
          if (*it == '_') [[unlikely]] {
             return false;
          }
 
-         // There must be at least one valid digit.
-         if (not accumulator.is_valid_digit(*it)) [[unlikely]] {
-            return false;
-         }
+         int base = 10;
+         bool base_overridden = false;
 
-         // We will accumulate into the value directly.
-         v = 0;
+         if (*it == '0') {
+            auto next = it;
+            ++next;
 
-         while (true) {
-            if (*it == '_') {
+            if (next == end) {
+               it = next;
+               v = 0;
+               return true;
+            }
+
+            if (*next == '_') [[unlikely]] {
+               return false;
+            }
+
+            if (is_toml_base_specifier(*next)) {
+               // Switching to hexadecimal/octal/binary after 0.
+               base = toml_specified_base(*next);
+               base_overridden = true;
+
+               it = next;
                ++it;
 
-               // Trailing underscore, disallowed.
                if (it == end) [[unlikely]] {
                   return false;
                }
 
-               // Either a trailing or double underscore, disallowed.
+               if (not is_valid_toml_digit(*it, base)) [[unlikely]] {
+                  return false;
+               }
+            }
+            else if (is_any_toml_digit(*next)) [[unlikely]] {
+               // Decimal literals like 0123 are invalid.
+               return false;
+            }
+            else {
+               it = next;
+               v = 0;
+               return true;
+            }
+         }
+
+         if (base_overridden) {
+            accumulator.inform_base(base);
+
+            // Only non-negative values are allowed for prefixed bases.
+            if (saw_sign) [[unlikely]] {
+               return false;
+            }
+         }
+
+         v = 0;
+         bool saw_digit = false;
+
+         // Consume digits (with optional underscores) while respecting overflow limits.
+         while (true) {
+            if (it == end) {
+               break;
+            }
+
+            if (*it == '_') {
+               ++it;
+
+               if (it == end) [[unlikely]] {
+                  return false;
+               }
+
                if (not is_any_toml_digit(*it)) [[unlikely]] {
                   return false;
                }
-            } else {
-               // Integer ended, parsing successful.
-               if (not is_any_toml_digit(*it)) {
-                  return true;
-               }
+            }
+            else if (not is_any_toml_digit(*it)) {
+               break;
             }
 
             const auto digit = char_to_digit(*it);
@@ -573,13 +527,21 @@ namespace glz
                return false;
             }
 
+            saw_digit = true;
             ++it;
+         }
 
-            // Finished parsing.
-            if (it == end) {
-               return true;
+         if (not saw_digit) [[unlikely]] {
+            return false;
+         }
+
+         if constexpr (std::unsigned_integral<T>) {
+            if (saw_negative_sign && v != 0) [[unlikely]] {
+               return false;
             }
          }
+
+         return true;
       }
    }
 

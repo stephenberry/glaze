@@ -1,5 +1,7 @@
 #include "glaze/toml.hpp"
 
+#include <cstdint>
+#include <limits>
 #include <map>
 #include <string_view> // Added for std::string_view
 
@@ -283,6 +285,14 @@ arr = [4, 5, 6])";
       expect(error == glz::error_code::parse_number_failure);
    };
 
+   "read_wrong_hex_negative_unsigned_integer"_test = [] {
+      std::string toml_input = "-0x1";
+      unsigned int value{};
+      auto error = glz::read_toml(value, toml_input);
+      expect(error);
+      expect(error == glz::error_code::parse_number_failure);
+   };
+
    "read_wrong_bad_digits_integer"_test = [] {
       std::string toml_input = "123ABC";
       int value{};
@@ -322,6 +332,14 @@ arr = [4, 5, 6])";
       expect(error == glz::error_code::parse_number_failure);
    };
 
+   "read_wrong_binary_negative_unsigned_integer"_test = [] {
+      std::string toml_input = "-0b1";
+      unsigned int value{};
+      auto error = glz::read_toml(value, toml_input);
+      expect(error);
+      expect(error == glz::error_code::parse_number_failure);
+   };
+
    "read_octal_integer"_test = [] {
       std::string toml_input = "0o01267";
       int value{};
@@ -349,6 +367,14 @@ arr = [4, 5, 6])";
    "read_wrong_octal_positive_integer"_test = [] {
       std::string toml_input = "+0o1267";
       int value{};
+      auto error = glz::read_toml(value, toml_input);
+      expect(error);
+      expect(error == glz::error_code::parse_number_failure);
+   };
+
+   "read_wrong_octal_negative_unsigned_integer"_test = [] {
+      std::string toml_input = "-0o7";
+      unsigned int value{};
       auto error = glz::read_toml(value, toml_input);
       expect(error);
       expect(error == glz::error_code::parse_number_failure);
@@ -456,6 +482,266 @@ arr = [4, 5, 6])";
       auto error = glz::read_toml(value, toml_input);
       expect(error);
       expect(error == glz::error_code::parse_number_failure);
+   };
+
+   "read_decimal_int8_boundaries"_test = [] {
+      {
+         std::string toml_input = "-128";
+         std::int8_t value{};
+         expect(not glz::read_toml(value, toml_input));
+         expect(value == std::numeric_limits<std::int8_t>::min());
+      }
+      {
+         std::string toml_input = "127";
+         std::int8_t value{};
+         expect(not glz::read_toml(value, toml_input));
+         expect(value == std::numeric_limits<std::int8_t>::max());
+      }
+      {
+         std::string toml_input = "-129";
+         std::int8_t value{};
+         auto error = glz::read_toml(value, toml_input);
+         expect(error);
+         expect(error == glz::error_code::parse_number_failure);
+      }
+      {
+         std::string toml_input = "128";
+         std::int8_t value{};
+         auto error = glz::read_toml(value, toml_input);
+         expect(error);
+         expect(error == glz::error_code::parse_number_failure);
+      }
+   };
+
+   "read_decimal_uint8_boundaries"_test = [] {
+      {
+         std::string toml_input = "0";
+         std::uint8_t value{};
+         expect(not glz::read_toml(value, toml_input));
+         expect(value == std::numeric_limits<std::uint8_t>::min());
+      }
+      {
+         std::string toml_input = "255";
+         std::uint8_t value{};
+         expect(not glz::read_toml(value, toml_input));
+         expect(value == std::numeric_limits<std::uint8_t>::max());
+      }
+      {
+         std::string toml_input = "-1";
+         std::uint8_t value{};
+         auto error = glz::read_toml(value, toml_input);
+         expect(error);
+         expect(error == glz::error_code::parse_number_failure);
+      }
+      {
+         std::string toml_input = "256";
+         std::uint8_t value{};
+         auto error = glz::read_toml(value, toml_input);
+         expect(error);
+         expect(error == glz::error_code::parse_number_failure);
+      }
+   };
+
+   "read_decimal_int16_boundaries"_test = [] {
+      {
+         std::string toml_input = "-32768";
+         std::int16_t value{};
+         expect(not glz::read_toml(value, toml_input));
+         expect(value == std::numeric_limits<std::int16_t>::min());
+      }
+      {
+         std::string toml_input = "32767";
+         std::int16_t value{};
+         expect(not glz::read_toml(value, toml_input));
+         expect(value == std::numeric_limits<std::int16_t>::max());
+      }
+      {
+         std::string toml_input = "-32769";
+         std::int16_t value{};
+         auto error = glz::read_toml(value, toml_input);
+         expect(error);
+         expect(error == glz::error_code::parse_number_failure);
+      }
+      {
+         std::string toml_input = "32768";
+         std::int16_t value{};
+         auto error = glz::read_toml(value, toml_input);
+         expect(error);
+         expect(error == glz::error_code::parse_number_failure);
+      }
+   };
+
+   "read_decimal_uint16_boundaries"_test = [] {
+      {
+         std::string toml_input = "0";
+         std::uint16_t value{};
+         expect(not glz::read_toml(value, toml_input));
+         expect(value == std::numeric_limits<std::uint16_t>::min());
+      }
+      {
+         std::string toml_input = "65535";
+         std::uint16_t value{};
+         expect(not glz::read_toml(value, toml_input));
+         expect(value == std::numeric_limits<std::uint16_t>::max());
+      }
+      {
+         std::string toml_input = "-1";
+         std::uint16_t value{};
+         auto error = glz::read_toml(value, toml_input);
+         expect(error);
+         expect(error == glz::error_code::parse_number_failure);
+      }
+      {
+         std::string toml_input = "65536";
+         std::uint16_t value{};
+         auto error = glz::read_toml(value, toml_input);
+         expect(error);
+         expect(error == glz::error_code::parse_number_failure);
+      }
+   };
+
+   "read_decimal_int32_boundaries"_test = [] {
+      {
+         std::string toml_input = "-2147483648";
+         std::int32_t value{};
+         expect(not glz::read_toml(value, toml_input));
+         expect(value == std::numeric_limits<std::int32_t>::min());
+      }
+      {
+         std::string toml_input = "2147483647";
+         std::int32_t value{};
+         expect(not glz::read_toml(value, toml_input));
+         expect(value == std::numeric_limits<std::int32_t>::max());
+      }
+      {
+         std::string toml_input = "-2147483649";
+         std::int32_t value{};
+         auto error = glz::read_toml(value, toml_input);
+         expect(error);
+         expect(error == glz::error_code::parse_number_failure);
+      }
+      {
+         std::string toml_input = "2147483648";
+         std::int32_t value{};
+         auto error = glz::read_toml(value, toml_input);
+         expect(error);
+         expect(error == glz::error_code::parse_number_failure);
+      }
+   };
+
+   "read_decimal_uint32_boundaries"_test = [] {
+      {
+         std::string toml_input = "0";
+         std::uint32_t value{};
+         expect(not glz::read_toml(value, toml_input));
+         expect(value == std::numeric_limits<std::uint32_t>::min());
+      }
+      {
+         std::string toml_input = "4294967295";
+         std::uint32_t value{};
+         expect(not glz::read_toml(value, toml_input));
+         expect(value == std::numeric_limits<std::uint32_t>::max());
+      }
+      {
+         std::string toml_input = "-1";
+         std::uint32_t value{};
+         auto error = glz::read_toml(value, toml_input);
+         expect(error);
+         expect(error == glz::error_code::parse_number_failure);
+      }
+      {
+         std::string toml_input = "4294967296";
+         std::uint32_t value{};
+         auto error = glz::read_toml(value, toml_input);
+         expect(error);
+         expect(error == glz::error_code::parse_number_failure);
+      }
+   };
+
+   "read_decimal_with_underscores_integer"_test = [] {
+      {
+         std::string toml_input = "1_234_567";
+         int value{};
+         expect(not glz::read_toml(value, toml_input));
+         expect(value == 1234567);
+      }
+      {
+         std::string toml_input = "-1_234_567";
+         int value{};
+         expect(not glz::read_toml(value, toml_input));
+         expect(value == -1234567);
+      }
+   };
+
+   "read_hex_with_underscores_integer"_test = [] {
+      std::string toml_input = "0xDEAD_BEEF";
+      std::uint32_t value{};
+      expect(not glz::read_toml(value, toml_input));
+      expect(value == 0xDEADBEEF);
+   };
+
+   "read_binary_with_underscores_integer"_test = [] {
+      std::string toml_input = "0b1010_0101_1111";
+      std::uint32_t value{};
+      expect(not glz::read_toml(value, toml_input));
+      expect(value == 0b101001011111);
+   };
+
+   "read_octal_with_underscores_integer"_test = [] {
+      std::string toml_input = "0o12_34_70";
+      std::uint32_t value{};
+      expect(not glz::read_toml(value, toml_input));
+      expect(value == 0123470);
+   };
+
+   "read_wrong_multiple_signs_integer"_test = [] {
+      for (const auto input : {"+-1", "-+1", "--1", "++1"}) {
+         std::string toml_input = input;
+         int value{};
+         auto error = glz::read_toml(value, toml_input);
+         expect(error);
+         expect(error == glz::error_code::parse_number_failure);
+      }
+   };
+
+   "read_wrong_sign_without_digits_integer"_test = [] {
+      for (const auto input : {"+", "-", "+_", "-_"}) {
+         std::string toml_input = input;
+         int value{};
+         auto error = glz::read_toml(value, toml_input);
+         expect(error);
+         expect(error == glz::error_code::parse_number_failure);
+      }
+   };
+
+   "read_wrong_prefixed_missing_digits_integer"_test = [] {
+      for (const auto input : {"0x", "0b", "0o", "0x_", "0b_", "0o_"}) {
+         std::string toml_input = input;
+         int value{};
+         auto error = glz::read_toml(value, toml_input);
+         expect(error);
+         expect(error == glz::error_code::parse_number_failure);
+      }
+   };
+
+   "read_wrong_prefixed_trailing_underscore_integer"_test = [] {
+      for (const auto input : {"0xAB_", "0b101_", "0o77_"}) {
+         std::string toml_input = input;
+         int value{};
+         auto error = glz::read_toml(value, toml_input);
+         expect(error);
+         expect(error == glz::error_code::parse_number_failure);
+      }
+   };
+
+   "read_wrong_prefixed_double_underscore_integer"_test = [] {
+      for (const auto input : {"0xA__B", "0b10__10", "0o1__2"}) {
+         std::string toml_input = input;
+         int value{};
+         auto error = glz::read_toml(value, toml_input);
+         expect(error);
+         expect(error == glz::error_code::parse_number_failure);
+      }
    };
 
    "read_float"_test = [] {
