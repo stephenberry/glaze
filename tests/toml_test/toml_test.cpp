@@ -165,6 +165,15 @@ arr = [4, 5, 6])";
       expect(value == 123);
    };
 
+   "read_no_valid_digits_integer"_test = [] {
+      // We require at least one valid digit.
+      std::string toml_input = "BAD";
+      int value{};
+      auto error = glz::read_toml(value, toml_input);
+      expect(error);
+      expect(error == glz::error_code::parse_number_failure);
+   };
+
    "read_wrong_overflow_integer"_test = [] {
       // Max uint64 value plus one.
       std::string toml_input = "18446744073709551616";
@@ -222,6 +231,27 @@ arr = [4, 5, 6])";
       expect(value == 123);
    };
 
+   "read_negative_zero_integer"_test = [] {
+      std::string toml_input = "-0";
+      int value{};
+      expect(not glz::read_toml(value, toml_input));
+      expect(value == 0);
+   };
+
+   "read_unsigned_negative_zero_integer"_test = [] {
+      std::string toml_input = "-0";
+      unsigned int value{};
+      expect(not glz::read_toml(value, toml_input));
+      expect(value == 0);
+   };
+
+   "read_positive_zero_integer"_test = [] {
+      std::string toml_input = "+0";
+      int value{};
+      expect(not glz::read_toml(value, toml_input));
+      expect(value == 0);
+   };
+
    "read_hex_integer"_test = [] {
       std::string toml_input = "0x012abCD";
       int value{};
@@ -247,6 +277,14 @@ arr = [4, 5, 6])";
 
    "read_wrong_hex_positive_integer"_test = [] {
       std::string toml_input = "+0x12abCD";
+      int value{};
+      auto error = glz::read_toml(value, toml_input);
+      expect(error);
+      expect(error == glz::error_code::parse_number_failure);
+   };
+
+   "read_wrong_bad_digits_integer"_test = [] {
+      std::string toml_input = "123ABC";
       int value{};
       auto error = glz::read_toml(value, toml_input);
       expect(error);
