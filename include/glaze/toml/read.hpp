@@ -253,6 +253,298 @@ namespace glz
       }
    };
 
+   namespace detail
+   {
+      constexpr bool is_toml_base_specifier(char c) noexcept
+      {
+         return (
+            c == 'x' ||
+            c == 'b' ||
+            c == 'o'
+         );
+      }
+
+      constexpr int toml_specified_base(char c) noexcept
+      {
+         switch (c) {
+            case 'x': return 16;
+            case 'b': return 2;
+            case 'o': return 8;
+         }
+
+         // Should never reach here, but seems a good default.
+         return 10;
+      }
+
+      constexpr bool is_any_toml_digit(char c) noexcept
+      {
+         if (c >= '0' && c <= '9') {
+            return true;
+         }
+
+         if (c >= 'a' && c <= 'f') {
+            return true;
+         }
+
+         if (c >= 'A' && c <= 'F') {
+            return true;
+         }
+
+         return false;
+      }
+
+      constexpr bool is_valid_toml_digit(char c, int base) noexcept
+      {
+         if (base <= 10) {
+            return c >= '0' && c < ('0' + base);
+         }
+
+         return is_any_toml_digit(c);
+      }
+
+      struct unsigned_accumulator {
+        private:
+         int base = 10;
+
+        public:
+         constexpr void inform_base(int base) noexcept
+         {
+            this->base = base;
+         }
+
+         constexpr bool is_valid_digit(char c) const noexcept
+         {
+            return is_valid_toml_digit(c, this->base);
+         }
+
+         template<std::unsigned_integral T>
+         constexpr bool try_accumulate(T &v, int digit) const noexcept
+         {
+            if (digit < 0 || digit >= this->base) [[unlikely]] {
+               return false;
+            }
+
+            // Check overflow.
+            const auto max_without_overflow = ((std::numeric_limits<T>::max)() - digit) / this->base;
+            if (v > max_without_overflow) [[unlikely]] {
+               return false;
+            }
+
+            v = v * this->base + digit;
+
+            return true;
+         }
+      };
+
+      struct signed_accumulator {
+        private:
+         int base = 10;
+         bool negated = false;
+
+        public:
+         constexpr void inform_negated() noexcept
+         {
+            this->negated = true;
+         }
+
+         constexpr void inform_base(int base) noexcept
+         {
+            this->base = base;
+         }
+
+         constexpr bool is_valid_digit(char c) const noexcept
+         {
+            return is_valid_toml_digit(c, this->base);
+         }
+
+         template<std::signed_integral T>
+         constexpr bool try_accumulate(T &v, int digit) const noexcept
+         {
+            if (digit < 0 || digit >= this->base) [[unlikely]] {
+               return false;
+            }
+
+            if (this->negated) {
+               // Check underflow.
+               const auto min_without_underflow = ((std::numeric_limits<T>::min)() + digit) / this->base;
+               if (v < min_without_underflow) [[unlikely]] {
+                  return false;
+               }
+
+               v = v * this->base - digit;
+
+               return true;
+            }
+
+            // Check overflow.
+            const auto max_without_overflow = ((std::numeric_limits<T>::max)() - digit) / this->base;
+            if (v > max_without_overflow) [[unlikely]] {
+               return false;
+            }
+
+            v = v * this->base + digit;
+
+            return true;
+         }
+      };
+
+      template<std::integral T>
+      constexpr bool parse_toml_integer(T& v, auto&& it, auto&& end) noexcept
+      {
+         // Ensure the caller gave us at least one character.
+         if (it == end) [[unlikely]] {
+            return false;
+         }
+
+         auto accumulator = [] {
+            if constexpr (std::unsigned_integral<T>) {
+               return unsigned_accumulator{};
+            }
+            else {
+               return signed_accumulator{};
+            }
+         }();
+
+         bool saw_negative_sign = false;
+         bool saw_sign = false; // Tracks whether +/- was supplied so prefixed bases can reject it.
+
+         if (*it == '-') {
+            saw_negative_sign = true;
+            saw_sign = true;
+            ++it;
+
+            if (it == end) [[unlikely]] {
+               return false;
+            }
+
+            if constexpr (std::signed_integral<T>) {
+               accumulator.inform_negated();
+            }
+         }
+
+         if (*it == '+') {
+            // Only a single leading sign is permitted.
+            if (saw_sign) [[unlikely]] {
+               return false;
+            }
+
+            ++it;
+            saw_sign = true;
+
+            if (it == end) [[unlikely]] {
+               return false;
+            }
+         }
+
+         if (it == end) [[unlikely]] {
+            return false;
+         }
+
+         if (*it == '_') [[unlikely]] {
+            return false;
+         }
+
+         int base = 10;
+         bool base_overridden = false;
+
+         if (*it == '0') {
+            auto next = it;
+            ++next;
+
+            if (next == end) {
+               it = next;
+               v = 0;
+               return true;
+            }
+
+            if (*next == '_') [[unlikely]] {
+               return false;
+            }
+
+            if (is_toml_base_specifier(*next)) {
+               // Switching to hexadecimal/octal/binary after 0.
+               base = toml_specified_base(*next);
+               base_overridden = true;
+
+               it = next;
+               ++it;
+
+               if (it == end) [[unlikely]] {
+                  return false;
+               }
+
+               if (not is_valid_toml_digit(*it, base)) [[unlikely]] {
+                  return false;
+               }
+            }
+            else if (is_any_toml_digit(*next)) [[unlikely]] {
+               // Decimal literals like 0123 are invalid.
+               return false;
+            }
+            else {
+               it = next;
+               v = 0;
+               return true;
+            }
+         }
+
+         if (base_overridden) {
+            accumulator.inform_base(base);
+
+            // Only non-negative values are allowed for prefixed bases.
+            if (saw_sign) [[unlikely]] {
+               return false;
+            }
+         }
+
+         v = 0;
+         bool saw_digit = false;
+
+         // Consume digits (with optional underscores) while respecting overflow limits.
+         while (true) {
+            if (it == end) {
+               break;
+            }
+
+            if (*it == '_') {
+               ++it;
+
+               if (it == end) [[unlikely]] {
+                  return false;
+               }
+
+               if (not is_any_toml_digit(*it)) [[unlikely]] {
+                  return false;
+               }
+            }
+            else if (not is_any_toml_digit(*it)) {
+               break;
+            }
+
+            const auto digit = char_to_digit(*it);
+
+            if (not accumulator.try_accumulate(v, digit)) {
+               return false;
+            }
+
+            saw_digit = true;
+            ++it;
+         }
+
+         if (not saw_digit) [[unlikely]] {
+            return false;
+         }
+
+         if constexpr (std::unsigned_integral<T>) {
+            if (saw_negative_sign && v != 0) [[unlikely]] {
+               return false;
+            }
+         }
+
+         return true;
+      }
+   }
+
    template <num_t T>
    struct from<TOML, T>
    {
@@ -272,45 +564,9 @@ namespace glz
 
          using V = decay_keep_volatile_t<decltype(value)>;
          if constexpr (int_t<V>) {
-            if constexpr (std::is_unsigned_v<V>) {
-               uint64_t i{};
-               if (*it == '-') [[unlikely]] {
-                  ctx.error = error_code::parse_number_failure;
-                  return;
-               }
-
-               if (not glz::atoi(i, it, end)) [[unlikely]] {
-                  ctx.error = error_code::parse_number_failure;
-                  return;
-               }
-
-               if (i > (std::numeric_limits<V>::max)()) [[unlikely]] {
-                  ctx.error = error_code::parse_number_failure;
-                  return;
-               }
-               value = static_cast<V>(i);
-            }
-            else {
-               uint64_t i{};
-               int sign = 1;
-               if (*it == '-') {
-                  sign = -1;
-                  ++it;
-                  if (it == end) [[unlikely]] {
-                     ctx.error = error_code::unexpected_end;
-                     return;
-                  }
-               }
-               if (not glz::atoi(i, it, end)) [[unlikely]] {
-                  ctx.error = error_code::parse_number_failure;
-                  return;
-               }
-
-               if (i > (std::numeric_limits<V>::max)()) [[unlikely]] {
-                  ctx.error = error_code::parse_number_failure;
-                  return;
-               }
-               value = sign * static_cast<V>(i);
+            if (not detail::parse_toml_integer(value, it, end)) [[unlikely]] {
+               ctx.error = error_code::parse_number_failure;
+               return;
             }
          }
          else {
