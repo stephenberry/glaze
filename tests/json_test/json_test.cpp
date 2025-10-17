@@ -7655,7 +7655,34 @@ struct glz::meta<constrained_object>
    static constexpr auto limit_name = [](const T&, const std::string& name) { return name.size() <= 8; };
 
    static constexpr auto value = object("age", read_constraint<&T::age, limit_age, "Age out of range">, //
-                                        "name", read_constraint<&T::name, limit_name, "Name is too long">);
+                                       "name", read_constraint<&T::name, limit_name, "Name is too long">);
+};
+
+struct constrained_optional_object
+{
+   std::string name{};
+   std::optional<std::vector<int>> data{};
+};
+
+template <>
+struct glz::meta<constrained_optional_object>
+{
+   using T = constrained_optional_object;
+
+   static constexpr auto validate_data = [](const T&, const std::optional<std::vector<int>>& values) {
+      if (!values) {
+         return true;
+      }
+      for (const auto v : *values) {
+         if (v < -1) {
+            return false;
+         }
+      }
+      return true;
+   };
+
+   static constexpr auto value = object("name", &T::name, //
+                                        "data", read_constraint<&T::data, validate_data, "invalid data value">);
 };
 
 suite constraint_tests = [] {
@@ -7686,6 +7713,27 @@ suite constraint_tests = [] {
 
       expect(not glz::write_json(obj, buffer));
       expect(buffer == R"({"age":10,"name":"José"})") << buffer;
+   };
+
+   "optional read_constraint respects missing keys"_test = [] {
+      constrained_optional_object obj{};
+      constexpr glz::opts opts{.error_on_missing_keys = true};
+
+      const std::string with_data = R"({"name":"FakeName","data":[1,2,3]})";
+      auto ec = glz::read<opts>(obj, with_data);
+      expect(ec == glz::error_code::none);
+      expect(bool(obj.data));
+      expect(obj.data->size() == 3);
+
+      obj.data.reset();
+      const std::string without_data = R"({"name":"FakeName"})";
+      ec = glz::read<opts>(obj, without_data);
+      expect(ec == glz::error_code::none);
+      expect(not obj.data.has_value());
+
+      const std::string invalid_data = R"({"name":"FakeName","data":[-2]})";
+      ec = glz::read<opts>(obj, invalid_data);
+      expect(ec == glz::error_code::constraint_violated);
    };
 };
 
