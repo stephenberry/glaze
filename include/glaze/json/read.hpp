@@ -556,7 +556,7 @@ namespace glz
             }
          }
 
-         if constexpr (Opts.bools_as_numbers) {
+         if constexpr (check_bools_as_numbers(Opts)) {
             if (*it == '1') {
                value = true;
                ++it;

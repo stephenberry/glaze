@@ -4,6 +4,7 @@
 #pragma once
 
 #include <cstdint>
+#include <type_traits>
 
 #include "glaze/util/type_traits.hpp"
 
@@ -93,8 +94,6 @@ namespace glz
       bool error_on_const_read =
          false; // Error if attempt is made to read into a const value, by default the value is skipped without error
 
-      bool bools_as_numbers = false; // Read and write booleans with 1's and 0's
-
       bool quoted_num = false; // treat numbers as quoted or array-like types as having quoted numbers
       bool number = false; // treats all types like std::string as numbers: read/write these quoted numbers
       bool raw = false; // write out string like values without quotes
@@ -134,6 +133,10 @@ namespace glz
 
    // Add these fields to a custom options struct if you want to use them
    // OTHER AVAILABLE OPTIONS (and default values):
+
+   // ---
+   // bool bools_as_numbers = false;
+   // Read and write booleans with 1's and 0's
 
    // ---
    // bool validate_skipped = false;
@@ -179,6 +182,12 @@ namespace glz
    // float_precision float_max_write_precision{};
    // The maximum precision type used for writing floats, higher precision floats will be cast down to this precision
 
+   struct bools_as_numbers_opt_tag
+   {
+   };
+
+   inline constexpr bools_as_numbers_opt_tag bools_as_numbers_member{};
+
    consteval bool check_validate_skipped(auto&& Opts)
    {
       if constexpr (requires { Opts.validate_skipped; }) {
@@ -193,6 +202,16 @@ namespace glz
    {
       if constexpr (requires { Opts.write_member_functions; }) {
          return Opts.write_member_functions;
+      }
+      else {
+         return false;
+      }
+   }
+
+   consteval bool check_bools_as_numbers(auto&& Opts)
+   {
+      if constexpr (requires { Opts.bools_as_numbers; }) {
+         return Opts.bools_as_numbers;
       }
       else {
          return false;
@@ -453,17 +472,49 @@ namespace glz
    template <auto Opts, auto member_ptr>
    constexpr auto set_opt(auto&& value)
    {
-      auto ret = Opts;
-      ret.*member_ptr = value;
-      return ret;
+      if constexpr (std::is_same_v<std::decay_t<decltype(member_ptr)>, bools_as_numbers_opt_tag>) {
+         if constexpr (requires { Opts.bools_as_numbers; }) {
+            auto ret = Opts;
+            ret.bools_as_numbers = static_cast<bool>(value);
+            return ret;
+         }
+         else {
+            struct opts_bools_as_numbers : std::decay_t<decltype(Opts)>
+            {
+               bool bools_as_numbers{};
+            };
+            return opts_bools_as_numbers{{Opts}, static_cast<bool>(value)};
+         }
+      }
+      else {
+         auto ret = Opts;
+         ret.*member_ptr = value;
+         return ret;
+      }
    }
 
    template <auto Opts, auto member_ptr>
    constexpr auto opt_on()
    {
-      auto ret = Opts;
-      ret.*member_ptr = true;
-      return ret;
+      if constexpr (std::is_same_v<std::decay_t<decltype(member_ptr)>, bools_as_numbers_opt_tag>) {
+         if constexpr (requires { Opts.bools_as_numbers; }) {
+            auto ret = Opts;
+            ret.bools_as_numbers = true;
+            return ret;
+         }
+         else {
+            struct opts_bools_as_numbers : std::decay_t<decltype(Opts)>
+            {
+               bool bools_as_numbers = true;
+            };
+            return opts_bools_as_numbers{{Opts}};
+         }
+      }
+      else {
+         auto ret = Opts;
+         ret.*member_ptr = true;
+         return ret;
+      }
    }
 
    template <auto Opts, auto member_ptr>
@@ -472,9 +523,21 @@ namespace glz
    template <auto Opts, auto member_ptr>
    constexpr auto opt_off()
    {
-      auto ret = Opts;
-      ret.*member_ptr = false;
-      return ret;
+      if constexpr (std::is_same_v<std::decay_t<decltype(member_ptr)>, bools_as_numbers_opt_tag>) {
+         if constexpr (requires { Opts.bools_as_numbers; }) {
+            auto ret = Opts;
+            ret.bools_as_numbers = false;
+            return ret;
+         }
+         else {
+            return Opts;
+         }
+      }
+      else {
+         auto ret = Opts;
+         ret.*member_ptr = false;
+         return ret;
+      }
    }
 
    template <auto Opts, auto member_ptr>
