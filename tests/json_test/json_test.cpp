@@ -7655,7 +7655,7 @@ struct glz::meta<constrained_object>
    static constexpr auto limit_name = [](const T&, const std::string& name) { return name.size() <= 8; };
 
    static constexpr auto value = object("age", read_constraint<&T::age, limit_age, "Age out of range">, //
-                                       "name", read_constraint<&T::name, limit_name, "Name is too long">);
+                                        "name", read_constraint<&T::name, limit_name, "Name is too long">);
 };
 
 struct constrained_optional_object

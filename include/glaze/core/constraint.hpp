@@ -223,7 +223,7 @@ namespace glz
    template <class T>
    concept is_self_constraint = requires(T t) {
       requires !T::glaze_reflect;
-      requires (!is_read_constraint<T>);
+      requires(!is_read_constraint<T>);
       typename T::constraint_t;
       typename T::value_type;
       t.val;
