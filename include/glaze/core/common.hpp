@@ -14,7 +14,6 @@
 #include "glaze/concepts/container_concepts.hpp"
 #include "glaze/core/array_apply.hpp"
 #include "glaze/core/cast.hpp"
-#include "glaze/core/constraint.hpp"
 #include "glaze/core/context.hpp"
 #include "glaze/core/error_category.hpp"
 #include "glaze/core/feature_test.hpp"
