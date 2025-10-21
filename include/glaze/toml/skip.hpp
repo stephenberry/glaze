@@ -15,7 +15,7 @@ namespace glz::toml
    }
 
    template <class It, class End, class Ctx>
-   GLZ_ALWAYS_INLINE void skip_toml_string(It& it, End end, Ctx& ctx) noexcept
+   inline void skip_toml_string(It& it, End end, Ctx& ctx) noexcept
    {
       if (it == end) [[unlikely]] {
          ctx.error = error_code::unexpected_end;
@@ -77,7 +77,7 @@ namespace glz::toml
    }
 
    template <class It, class End, class Ctx>
-   GLZ_ALWAYS_INLINE void skip_literal_string(It& it, End end, Ctx& ctx) noexcept
+   inline void skip_literal_string(It& it, End end, Ctx& ctx) noexcept
    {
       if (it == end) [[unlikely]] {
          ctx.error = error_code::unexpected_end;
@@ -123,7 +123,7 @@ namespace glz::toml
    }
 
    template <class It, class End, class Ctx>
-   GLZ_ALWAYS_INLINE void skip_enclosed(It& it, End end, Ctx& ctx, const char open, const char close) noexcept
+   inline void skip_enclosed(It& it, End end, Ctx& ctx, const char open, const char close) noexcept
    {
       if (it == end || *it != open) [[unlikely]] {
          ctx.error = error_code::syntax_error;
@@ -190,7 +190,7 @@ namespace glz::toml
    }
 
    template <auto Opts, class Ctx, class It, class End>
-   GLZ_ALWAYS_INLINE void skip_value_impl(Ctx& ctx, It& it, End& end) noexcept
+   inline void skip_value_impl(Ctx& ctx, It& it, End& end) noexcept
    {
       skip_ws_and_comments(it, end);
       if (it == end) [[unlikely]] {
