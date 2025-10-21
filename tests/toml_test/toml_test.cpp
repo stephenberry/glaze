@@ -1012,8 +1012,7 @@ key.value = "string")";
       const std::string toml_input = R"(other = { nested = "value", deeper = { inner = 1 } }
 value = "string")";
 
-      const auto error =
-         glz::read<glz::opts{.format = glz::TOML, .error_on_unknown_keys = false}>(result, toml_input);
+      const auto error = glz::read<glz::opts{.format = glz::TOML, .error_on_unknown_keys = false}>(result, toml_input);
 
       expect(not error);
       expect(result.value == "string");

@@ -51,28 +51,28 @@ namespace glz::toml
          }
       }
       else {
-        ++it; // skip opening quote
-        while (it != end) {
-           if (*it == '\\') {
-              ++it;
-              if (it == end) [[unlikely]] {
-                 ctx.error = error_code::unexpected_end;
-                 return;
-              }
-              ++it;
-              continue;
-           }
-           if (*it == '"') {
-              ++it;
-              return;
-           }
-           if (*it == '\n' || *it == '\r') [[unlikely]] {
-              ctx.error = error_code::syntax_error;
-              return;
-           }
-           ++it;
-        }
-        ctx.error = error_code::syntax_error;
+         ++it; // skip opening quote
+         while (it != end) {
+            if (*it == '\\') {
+               ++it;
+               if (it == end) [[unlikely]] {
+                  ctx.error = error_code::unexpected_end;
+                  return;
+               }
+               ++it;
+               continue;
+            }
+            if (*it == '"') {
+               ++it;
+               return;
+            }
+            if (*it == '\n' || *it == '\r') [[unlikely]] {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
+            ++it;
+         }
+         ctx.error = error_code::syntax_error;
       }
    }
 

@@ -50,4 +50,3 @@ namespace glz
       return true;
    }
 } // namespace glz
-
