@@ -3,6 +3,8 @@
 // Glaze Library
 // For the license information refer to glaze.hpp
 
+#include <array>
+#include <bitset>
 #include <compare>
 #include <cstddef>
 #include <deque>
@@ -79,6 +81,30 @@ namespace
 
       bool operator==(const telemetry_batch&) const = default;
    };
+
+   enum class device_mode
+   {
+      standby,
+      active,
+      maintenance
+   };
+
+   struct cast_device_id
+   {
+      uint64_t value{};
+
+      bool operator==(const cast_device_id&) const = default;
+   };
+
+   struct ext_record
+   {
+      std::string id{};
+      glz::msgpack::ext payload{};
+      std::vector<glz::msgpack::ext> history{};
+      device_mode mode{};
+
+      bool operator==(const ext_record&) const = default;
+   };
 } // namespace
 
 template <>
@@ -89,6 +115,27 @@ struct glz::meta<simple_record>
    static constexpr auto value =
       glz::object("name", &T::name, "age", &T::age, "height", &T::height, "scores", &T::scores, "tags", &T::tags,
                   "active", &T::active);
+};
+
+template <>
+struct glz::meta<device_mode>
+{
+   static constexpr auto value =
+      glz::enumerate("standby", device_mode::standby, "active", device_mode::active, "maintenance", device_mode::maintenance);
+};
+
+template <>
+struct glz::meta<cast_device_id>
+{
+   static constexpr auto value = glz::cast<&cast_device_id::value, uint64_t>;
+};
+
+template <>
+struct glz::meta<ext_record>
+{
+   using T = ext_record;
+   static constexpr auto value =
+      glz::object("id", &T::id, "payload", &T::payload, "history", &T::history, "mode", &T::mode);
 };
 
 template <>
@@ -146,6 +193,7 @@ int main()
       expect_roundtrip_equal(std::list<int>{9, 8, 7});
       expect_roundtrip_equal(std::unordered_map<std::string, int>{{"alpha", 1}, {"beta", 2}});
       expect_roundtrip_equal(std::map<int, std::vector<int>>{{1, {1, 1}}, {2, {2, 2, 2}}});
+      expect_roundtrip_equal(std::set<std::string>{"one", "two", "three"});
       expect_roundtrip_equal(std::tuple<int, std::string, bool>{7, "tuple", true});
       expect_roundtrip_equal(std::vector<std::byte>{std::byte{0x00}, std::byte{0x7F}, std::byte{0xFF}});
       expect_roundtrip_equal(std::vector<bool>{true, false, true, true});
@@ -421,6 +469,43 @@ int main()
       }
       expect(decoded_obj.at("alpha") == "one");
       expect(decoded_obj.at("beta") == "two");
+   };
+
+   "msgpack enum roundtrip"_test = [] {
+      expect_roundtrip_equal(device_mode::standby);
+      expect_roundtrip_equal(device_mode::maintenance);
+   };
+
+   "msgpack cast adapter roundtrip"_test = [] {
+      cast_device_id id{0x1122334455667788ULL};
+      expect_roundtrip_equal(id);
+   };
+
+   "msgpack bitset roundtrip"_test = [] {
+      std::bitset<16> mask{0b10101010'01010101};
+      expect_roundtrip_equal(mask);
+   };
+
+   "msgpack ext container roundtrip"_test = [] {
+      std::vector<glz::msgpack::ext> payloads{
+         glz::msgpack::ext{1, {std::byte{0x01}, std::byte{0x02}}},
+         glz::msgpack::ext{2, {std::byte{0xAA}, std::byte{0xBB}, std::byte{0xCC}}},
+      };
+      expect_roundtrip_equal(payloads);
+   };
+
+   "msgpack ext record roundtrip"_test = [] {
+      ext_record original{
+         .id = "plugin",
+         .payload = glz::msgpack::ext{3, {std::byte{0x10}, std::byte{0x20}}},
+         .history =
+            {
+               glz::msgpack::ext{3, {std::byte{0x00}}},
+               glz::msgpack::ext{4, {std::byte{0xFF}, std::byte{0xEE}}},
+            },
+         .mode = device_mode::active,
+      };
+      expect_roundtrip_equal(original);
    };
 
    return 0;
