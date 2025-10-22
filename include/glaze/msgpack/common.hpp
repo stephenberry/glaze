@@ -340,6 +340,7 @@ namespace glz::msgpack
       default:
          ctx.error = error_code::syntax_error;
          return false;
+      }
    }
    template <class Range>
    inline constexpr bool binary_range_v = contiguous_byte_range<std::remove_cvref_t<Range>>;
