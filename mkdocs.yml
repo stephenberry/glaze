@@ -78,6 +78,7 @@ nav:
    - Modify Reflection: modify-reflection.md
  - Formats:
    - JSON: json.md
+   - TOML: toml.md
    - CSV: csv.md
    - BEVE (binary): binary.md
    - Stencil/Mustache: stencil-mustache.md

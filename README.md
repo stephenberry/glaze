@@ -3,8 +3,9 @@ One of the fastest JSON libraries in the world. Glaze reads and writes from obje
 
 Glaze also supports:
 
-- [BEVE](https://github.com/beve-org/beve) (binary efficient versatile encoding)
-- [CSV](./docs/csv.md) (comma separated value)
+- [BEVE](https://github.com/beve-org/beve) (Binary Efficient Versatile Encoding)
+- [CSV](./docs/csv.md) (Comma Separated Value)
+- [TOML](./docs/toml.md) (Tom's Obvious, Minimal Language)
 - [Stencil/Mustache](./docs/stencil-mustache.md) (string interpolation)
 - [EETF](./docs/EETF/erlang-external-term-format.md) (Erlang External Term Format) [optionally included]
 
@@ -57,6 +58,7 @@ See this README, the [Glaze Documentation Page](https://stephenberry.github.io/g
 - Extremely portable, uses carefully optimized SWAR (SIMD Within A Register) for broad compatibility
 - [Partial Read](./docs/partial-read.md) and [Partial Write](./docs/partial-write.md) support
 - [CSV Reading/Writing](./docs/csv.md)
+- [TOML Reading/Writing](./docs/toml.md)
 - [Much more!](#more-features)
 
 ## Performance
