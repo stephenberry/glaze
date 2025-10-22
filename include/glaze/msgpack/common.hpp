@@ -341,10 +341,6 @@ namespace glz::msgpack
          ctx.error = error_code::syntax_error;
          return false;
    }
-}
-
-namespace glz::msgpack
-{
    template <class Range>
    inline constexpr bool binary_range_v = contiguous_byte_range<std::remove_cvref_t<Range>>;
 
@@ -363,7 +359,6 @@ namespace glz::msgpack
 
       bool operator==(const ext&) const = default;
    };
-}
 
    template <class It>
    GLZ_ALWAYS_INLINE bool read_bin_length(is_context auto& ctx, uint8_t tag, It& it, const It& end,

@@ -510,11 +510,11 @@ namespace glz
             static constexpr bit_array<N> tracked_fields = [] {
                bit_array<N> arr{};
                if constexpr (N > 0) {
-                  for (size_t i = 0; i < N; ++i) {
-                     if constexpr (!msgpack::detail::should_skip_field<field_t<T, i>>()) {
-                        arr[i] = true;
+                  for_each<N>([&]<size_t I>() {
+                     if constexpr (!msgpack::detail::should_skip_field<field_t<T, I>>()) {
+                        arr[I] = true;
                      }
-                  }
+                  });
                }
                return arr;
             }();
