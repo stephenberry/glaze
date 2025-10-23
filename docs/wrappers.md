@@ -72,7 +72,8 @@ expect(obj.arrays == std::vector<std::array<int, 2>>{{0,0},{1,1}});
 
 Read and write booleans as numbers
 
-Associated option: `glz::opts{.bools_as_numbers = true};`
+Associated option: add `bool bools_as_numbers = true;` to a custom options struct (for example,
+`struct bools_as_numbers_opts : glz::opts { bool bools_as_numbers = true; };`).
 
 ```c++
 struct bools_as_numbers_struct
@@ -107,7 +108,11 @@ You don't have to use wrappers if you want the global behavior to handle boolean
 ```c++
 std::string s = R"([1,0,1,0])";
 std::array<bool, 4> obj{};
-constexpr glz::opts opts{.bools_as_numbers = true};
+struct bools_as_numbers_opts : glz::opts
+{
+   bool bools_as_numbers = true;
+};
+constexpr bools_as_numbers_opts opts{};
 expect(!glz::read<opts>(obj, s));
 expect(glz::write<opts>(obj) == s);
 ```
