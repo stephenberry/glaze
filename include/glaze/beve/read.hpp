@@ -1230,6 +1230,42 @@ namespace glz
       }
    };
 
+   template <class T>
+      requires(nullable_value_t<T> && not nullable_like<T> && not is_expected<T> && not custom_read<T>)
+   struct from<BEVE, T> final
+   {
+      template <auto Opts>
+      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
+      {
+         if (invalid_end(ctx, it, end)) {
+            return;
+         }
+         const auto tag = uint8_t(*it);
+
+         if (tag == tag::null) {
+            ++it;
+            if constexpr (requires { value.reset(); }) {
+               value.reset();
+            }
+         }
+         else {
+            if (not value.has_value()) {
+               if constexpr (constructible<T>) {
+                  value = meta_construct_v<T>();
+               }
+               else if constexpr (requires { value.emplace(); }) {
+                  value.emplace();
+               }
+               else {
+                  ctx.error = error_code::invalid_nullable_read;
+                  return;
+               }
+            }
+            parse<BEVE>::op<Opts>(value.value(), ctx, it, end);
+         }
+      }
+   };
+
    template <is_includer T>
    struct from<BEVE, T>
    {

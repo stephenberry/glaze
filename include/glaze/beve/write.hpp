@@ -739,6 +739,22 @@ namespace glz
    };
 
    template <class T>
+      requires(nullable_value_t<T> && not nullable_like<T> && not is_expected<T>)
+   struct to<BEVE, T> final
+   {
+      template <auto Opts, class... Args>
+      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args)
+      {
+         if (value.has_value()) {
+            serialize<BEVE>::op<Opts>(value.value(), ctx, args...);
+         }
+         else {
+            dump<tag::null>(args...);
+         }
+      }
+   };
+
+   template <class T>
       requires is_specialization_v<T, glz::obj> || is_specialization_v<T, glz::obj_copy>
    struct to<BEVE, T>
    {
