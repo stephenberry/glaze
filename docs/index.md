@@ -14,6 +14,7 @@ One of the fastest JSON libraries in the world. Glaze reads and writes from obje
 - **Compile time maps** with constant time lookups and perfect hashing
 - **No exceptions** (compiles with `-fno-exceptions`)
 - **No runtime type information** necessary (compiles with `-fno-rtti`)
+- **MessagePack serialization** with binary ext + partial read/write support
 
 ## Quick Example
 
