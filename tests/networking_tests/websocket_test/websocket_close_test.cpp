@@ -210,12 +210,13 @@ suite websocket_close_frame_tests = [] {
       asio::connect(socket, endpoints);
 
       // Send WebSocket handshake
-      std::string handshake = "GET /ws HTTP/1.1\r\n"
-                              "Host: localhost:18081\r\n"
-                              "Upgrade: websocket\r\n"
-                              "Connection: Upgrade\r\n"
-                              "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n"
-                              "Sec-WebSocket-Version: 13\r\n\r\n";
+      std::string handshake =
+         "GET /ws HTTP/1.1\r\n"
+         "Host: localhost:18081\r\n"
+         "Upgrade: websocket\r\n"
+         "Connection: Upgrade\r\n"
+         "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n"
+         "Sec-WebSocket-Version: 13\r\n\r\n";
 
       asio::write(socket, asio::buffer(handshake));
 
@@ -280,12 +281,13 @@ suite websocket_close_frame_tests = [] {
       asio::connect(socket, endpoints);
 
       // Send WebSocket handshake
-      std::string handshake = "GET /ws HTTP/1.1\r\n"
-                              "Host: localhost:18082\r\n"
-                              "Upgrade: websocket\r\n"
-                              "Connection: Upgrade\r\n"
-                              "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n"
-                              "Sec-WebSocket-Version: 13\r\n\r\n";
+      std::string handshake =
+         "GET /ws HTTP/1.1\r\n"
+         "Host: localhost:18082\r\n"
+         "Upgrade: websocket\r\n"
+         "Connection: Upgrade\r\n"
+         "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n"
+         "Sec-WebSocket-Version: 13\r\n\r\n";
 
       asio::write(socket, asio::buffer(handshake));
 
@@ -370,12 +372,13 @@ suite websocket_error_handling_tests = [] {
       asio::connect(socket, endpoints);
 
       // Send WebSocket handshake
-      std::string handshake = "GET /ws HTTP/1.1\r\n"
-                              "Host: localhost:18083\r\n"
-                              "Upgrade: websocket\r\n"
-                              "Connection: Upgrade\r\n"
-                              "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n"
-                              "Sec-WebSocket-Version: 13\r\n\r\n";
+      std::string handshake =
+         "GET /ws HTTP/1.1\r\n"
+         "Host: localhost:18083\r\n"
+         "Upgrade: websocket\r\n"
+         "Connection: Upgrade\r\n"
+         "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n"
+         "Sec-WebSocket-Version: 13\r\n\r\n";
 
       asio::write(socket, asio::buffer(handshake));
 
@@ -439,12 +442,13 @@ suite websocket_error_handling_tests = [] {
       asio::connect(socket, endpoints);
 
       // Send WebSocket handshake
-      std::string handshake = "GET /ws HTTP/1.1\r\n"
-                              "Host: localhost:18084\r\n"
-                              "Upgrade: websocket\r\n"
-                              "Connection: Upgrade\r\n"
-                              "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n"
-                              "Sec-WebSocket-Version: 13\r\n\r\n";
+      std::string handshake =
+         "GET /ws HTTP/1.1\r\n"
+         "Host: localhost:18084\r\n"
+         "Upgrade: websocket\r\n"
+         "Connection: Upgrade\r\n"
+         "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n"
+         "Sec-WebSocket-Version: 13\r\n\r\n";
 
       asio::write(socket, asio::buffer(handshake));
 
@@ -454,7 +458,8 @@ suite websocket_error_handling_tests = [] {
       socket.close();
 
       // Wait for close callback - should be called even for handshake errors
-      expect(wait_for_condition([&] { return on_close_called.load(); })) << "on_close should be called after handshake error";
+      expect(wait_for_condition([&] { return on_close_called.load(); }))
+         << "on_close should be called after handshake error";
 
       server.stop();
       server_thread.join();
@@ -502,12 +507,13 @@ suite websocket_error_handling_tests = [] {
       asio::connect(socket, endpoints);
 
       // Send WebSocket handshake
-      std::string handshake = "GET /ws HTTP/1.1\r\n"
-                              "Host: localhost:18085\r\n"
-                              "Upgrade: websocket\r\n"
-                              "Connection: Upgrade\r\n"
-                              "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n"
-                              "Sec-WebSocket-Version: 13\r\n\r\n";
+      std::string handshake =
+         "GET /ws HTTP/1.1\r\n"
+         "Host: localhost:18085\r\n"
+         "Upgrade: websocket\r\n"
+         "Connection: Upgrade\r\n"
+         "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n"
+         "Sec-WebSocket-Version: 13\r\n\r\n";
 
       asio::write(socket, asio::buffer(handshake));
 

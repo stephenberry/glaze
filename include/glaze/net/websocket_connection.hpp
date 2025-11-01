@@ -691,12 +691,13 @@ namespace glz
 
          if (schedule_socket_close) {
             // Send close frame and schedule socket closure after write completes
-            send_close_frame_with_callback(ws_opcode::close,
-                                            std::string_view(reinterpret_cast<const char*>(payload.data()), payload.size()));
+            send_close_frame_with_callback(
+               ws_opcode::close, std::string_view(reinterpret_cast<const char*>(payload.data()), payload.size()));
          }
          else {
             // Just send the close frame without scheduling closure
-            send_frame(ws_opcode::close, std::string_view(reinterpret_cast<const char*>(payload.data()), payload.size()));
+            send_frame(ws_opcode::close,
+                       std::string_view(reinterpret_cast<const char*>(payload.data()), payload.size()));
          }
       }
 

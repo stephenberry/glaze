@@ -352,7 +352,8 @@ struct custom_nullable_value
    void reset() { val.reset(); }
 };
 
-struct nullable_value_test_struct {
+struct nullable_value_test_struct
+{
    custom_nullable_value x{};
    int y = 42;
 };
