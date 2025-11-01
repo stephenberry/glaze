@@ -3,12 +3,17 @@
 
 // Unit tests for WebSocket close frame and error handling
 
+#include <algorithm>
+#include <array>
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
 #include <memory>
 #include <mutex>
+#include <optional>
+#include <string_view>
 #include <thread>
+#include <vector>
 
 #include "glaze/net/http_server.hpp"
 #include "glaze/net/websocket_connection.hpp"
@@ -29,6 +34,141 @@ bool wait_for_condition(Predicate pred, std::chrono::milliseconds timeout = std:
       std::this_thread::sleep_for(std::chrono::milliseconds(10));
    }
    return true;
+}
+
+struct handshake_result
+{
+   std::string response;
+   std::vector<uint8_t> leftover;
+};
+
+handshake_result read_handshake_response(asio::ip::tcp::socket& socket)
+{
+   constexpr std::string_view terminator = "\r\n\r\n";
+   std::vector<uint8_t> buffer;
+   buffer.reserve(1024);
+   std::array<uint8_t, 1024> chunk{};
+   std::error_code ec;
+
+   while (true) {
+      std::size_t bytes_read = socket.read_some(asio::buffer(chunk), ec);
+
+      if (ec && bytes_read == 0) {
+         break;
+      }
+
+      buffer.insert(buffer.end(), chunk.begin(), chunk.begin() + bytes_read);
+
+      auto it = std::search(buffer.begin(), buffer.end(), terminator.begin(), terminator.end());
+      if (it != buffer.end()) {
+         std::size_t header_bytes = static_cast<std::size_t>(std::distance(buffer.begin(), it)) + terminator.size();
+
+         std::string response(buffer.begin(), buffer.begin() + header_bytes);
+         std::vector<uint8_t> leftover(buffer.begin() + header_bytes, buffer.end());
+         return {std::move(response), std::move(leftover)};
+      }
+   }
+
+   return {std::string(buffer.begin(), buffer.end()), {}};
+}
+
+struct websocket_frame
+{
+   uint8_t opcode{};
+   std::vector<uint8_t> payload;
+};
+
+std::optional<websocket_frame> consume_frame(std::vector<uint8_t>& buffer)
+{
+   if (buffer.size() < 2) {
+      return std::nullopt;
+   }
+
+   std::size_t offset = 0;
+   uint8_t first = buffer[offset++];
+   uint8_t second = buffer[offset++];
+   uint8_t opcode = first & 0x0F;
+   bool masked = (second & 0x80) != 0;
+   uint64_t payload_length = static_cast<uint64_t>(second & 0x7F);
+
+   if (payload_length == 126) {
+      if (buffer.size() < offset + 2) {
+         return std::nullopt;
+      }
+      payload_length = (static_cast<uint64_t>(buffer[offset]) << 8) | buffer[offset + 1];
+      offset += 2;
+   }
+   else if (payload_length == 127) {
+      if (buffer.size() < offset + 8) {
+         return std::nullopt;
+      }
+      payload_length = 0;
+      for (int i = 0; i < 8; ++i) {
+         payload_length = (payload_length << 8) | buffer[offset + i];
+      }
+      offset += 8;
+   }
+
+   std::array<uint8_t, 4> mask_key{};
+   if (masked) {
+      if (buffer.size() < offset + 4) {
+         return std::nullopt;
+      }
+      std::copy_n(buffer.data() + offset, 4, mask_key.data());
+      offset += 4;
+   }
+
+   if (buffer.size() < offset + payload_length) {
+      return std::nullopt;
+   }
+
+   std::vector<uint8_t> payload(static_cast<std::size_t>(payload_length));
+   for (uint64_t i = 0; i < payload_length; ++i) {
+      uint8_t byte = buffer[offset + static_cast<std::size_t>(i)];
+      if (masked) {
+         byte ^= mask_key[static_cast<std::size_t>(i) % 4];
+      }
+      payload[static_cast<std::size_t>(i)] = byte;
+   }
+
+   buffer.erase(buffer.begin(), buffer.begin() + static_cast<std::ptrdiff_t>(offset + payload_length));
+
+   return websocket_frame{opcode, std::move(payload)};
+}
+
+std::optional<websocket_frame> poll_for_frame(asio::ip::tcp::socket& socket, std::vector<uint8_t>& pending,
+                                              std::chrono::milliseconds timeout)
+{
+   if (auto frame = consume_frame(pending)) {
+      return frame;
+   }
+
+   std::array<uint8_t, 1024> buffer{};
+   auto start = std::chrono::steady_clock::now();
+
+   while (std::chrono::steady_clock::now() - start < timeout) {
+      std::error_code ec;
+      std::size_t bytes_read = socket.read_some(asio::buffer(buffer), ec);
+
+      if (ec == asio::error::would_block) {
+         std::this_thread::sleep_for(std::chrono::milliseconds(10));
+         continue;
+      }
+
+      if (bytes_read > 0) {
+         pending.insert(pending.end(), buffer.begin(), buffer.begin() + bytes_read);
+         if (auto frame = consume_frame(pending)) {
+            return frame;
+         }
+         continue;
+      }
+
+      if (ec) {
+         return std::nullopt;
+      }
+   }
+
+   return std::nullopt;
 }
 
 suite websocket_close_frame_tests = [] {
@@ -79,37 +219,24 @@ suite websocket_close_frame_tests = [] {
 
       asio::write(socket, asio::buffer(handshake));
 
-      // Read handshake response
-      std::array<char, 1024> response_buffer;
-      size_t response_len = socket.read_some(asio::buffer(response_buffer));
+      auto handshake_response = read_handshake_response(socket);
+      expect(handshake_response.response.find("101 Switching Protocols") != std::string::npos)
+         << "Handshake should succeed";
 
-      // Verify handshake succeeded
-      std::string response(response_buffer.data(), response_len);
-      expect(response.find("101 Switching Protocols") != std::string::npos) << "Handshake should succeed";
+      socket.non_blocking(true);
+      std::vector<uint8_t> pending = std::move(handshake_response.leftover);
+      auto frame = poll_for_frame(socket, pending, std::chrono::milliseconds(1000));
 
-      // Give the server time to send the close frame
-      std::this_thread::sleep_for(std::chrono::milliseconds(500));
-
-      // Read WebSocket frames - should receive close frame
-      std::array<uint8_t, 1024> frame_buffer;
-      std::error_code ec;
-      size_t frame_len = socket.read_some(asio::buffer(frame_buffer), ec);
-
-      if (frame_len >= 2) {
-         uint8_t opcode = frame_buffer[0] & 0x0F;
-         bool is_close_frame = (opcode == 0x08); // Close opcode
-
-         if (is_close_frame) {
-            close_frame_received = true;
-         }
+      if (frame && frame->opcode == 0x08) {
+         close_frame_received = true;
       }
+
+      expect(close_frame_received.load()) << "Close frame should be received by client";
+      expect(wait_for_condition([&] { return on_close_called.load(); })) << "on_close callback should be called";
 
       socket.close();
       server.stop();
       server_thread.join();
-
-      expect(close_frame_received.load()) << "Close frame should be received by client";
-      expect(on_close_called.load()) << "on_close callback should be called";
 
       // Allow time for port to be released before next test
       std::this_thread::sleep_for(std::chrono::milliseconds(500));
@@ -162,35 +289,25 @@ suite websocket_close_frame_tests = [] {
 
       asio::write(socket, asio::buffer(handshake));
 
-      // Read handshake response
-      std::array<char, 1024> response_buffer;
-      socket.read_some(asio::buffer(response_buffer));
+      auto handshake_response = read_handshake_response(socket);
+      expect(handshake_response.response.find("101 Switching Protocols") != std::string::npos)
+         << "Handshake should succeed";
 
-      // Read close frame
-      std::array<uint8_t, 1024> frame_buffer;
-      std::error_code ec;
-      size_t frame_len = socket.read_some(asio::buffer(frame_buffer), ec);
+      socket.non_blocking(true);
+      std::vector<uint8_t> pending = std::move(handshake_response.leftover);
+      auto frame = poll_for_frame(socket, pending, std::chrono::milliseconds(1000));
 
-      if (frame_len >= 2) {
-         uint8_t opcode = frame_buffer[0] & 0x0F;
-         bool is_close_frame = (opcode == 0x08);
+      if (frame && frame->opcode == 0x08) {
+         close_frame_received = true;
 
-         if (is_close_frame) {
-            close_frame_received = true;
+         if (frame->payload.size() >= 2) {
+            uint16_t code = (static_cast<uint16_t>(frame->payload[0]) << 8) | frame->payload[1];
+            received_close_code = code;
 
-            // Parse close code and reason
-            uint8_t payload_len = frame_buffer[1] & 0x7F;
-            size_t header_size = 2;
-
-            if (payload_len >= 2) {
-               uint16_t code = (frame_buffer[header_size] << 8) | frame_buffer[header_size + 1];
-               received_close_code = code;
-
-               if (payload_len > 2) {
-                  std::lock_guard<std::mutex> lock(reason_mutex);
-                  received_reason = std::string(reinterpret_cast<char*>(&frame_buffer[header_size + 2]),
-                                                 payload_len - 2);
-               }
+            if (frame->payload.size() > 2) {
+               std::lock_guard<std::mutex> lock(reason_mutex);
+               received_reason.assign(reinterpret_cast<const char*>(frame->payload.data() + 2),
+                                      frame->payload.size() - 2);
             }
          }
       }
@@ -394,40 +511,21 @@ suite websocket_error_handling_tests = [] {
 
       asio::write(socket, asio::buffer(handshake));
 
-      // Read handshake response
-      std::array<char, 1024> response_buffer;
-      socket.read_some(asio::buffer(response_buffer));
+      auto handshake_response = read_handshake_response(socket);
+      expect(handshake_response.response.find("101 Switching Protocols") != std::string::npos)
+         << "Handshake should succeed";
 
-      // Give the server time to send frames
-      std::this_thread::sleep_for(std::chrono::milliseconds(500));
+      socket.non_blocking(true);
+      std::vector<uint8_t> pending = std::move(handshake_response.leftover);
 
-      // Read close frame - should only receive one
       int close_frame_count = 0;
-      std::array<uint8_t, 1024> frame_buffer;
-      std::error_code ec;
+      auto frame = poll_for_frame(socket, pending, std::chrono::milliseconds(1000));
 
-      // First, try to read the close frame (blocking read)
-      size_t frame_len = socket.read_some(asio::buffer(frame_buffer), ec);
-
-      if (!ec && frame_len >= 2) {
-         uint8_t opcode = frame_buffer[0] & 0x0F;
-         if (opcode == 0x08) {
+      while (frame) {
+         if (frame->opcode == 0x08) {
             close_frame_count++;
          }
-
-         // Now set non-blocking to check if there are any more frames
-         socket.non_blocking(true);
-
-         // Try to read more frames (there shouldn't be any)
-         for (int i = 0; i < 5; i++) {
-            frame_len = socket.read_some(asio::buffer(frame_buffer), ec);
-            if (ec || frame_len < 2) break;
-
-            opcode = frame_buffer[0] & 0x0F;
-            if (opcode == 0x08) {
-               close_frame_count++;
-            }
-         }
+         frame = poll_for_frame(socket, pending, std::chrono::milliseconds(200));
       }
 
       socket.close();

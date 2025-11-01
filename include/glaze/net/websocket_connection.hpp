@@ -428,6 +428,7 @@ namespace glz
          asio::async_write(socket_, asio::buffer(*response_buffer),
                            [self, req, response_buffer](std::error_code ec, std::size_t) {
                               if (ec) {
+                                 self->is_closing_ = true;
                                  if (self->server_) {
                                     self->server_->notify_error(self, ec);
                                  }
@@ -458,11 +459,11 @@ namespace glz
       inline void on_read(std::error_code ec, std::size_t bytes_transferred)
       {
          if (ec) {
+            is_closing_ = true;
             if (server_) {
                server_->notify_error(shared_from_this(), ec);
             }
             // Close the connection after a read error (connection is likely broken)
-            is_closing_ = true;
             do_close();
             return;
          }
@@ -667,11 +668,12 @@ namespace glz
          auto frame_buffer = std::make_shared<std::vector<uint8_t>>(std::move(frame));
          asio::async_write(socket_, asio::buffer(*frame_buffer), [self, frame_buffer](std::error_code ec, std::size_t) {
             if (ec) {
+               // Mark connection as closing before notifying handlers to avoid re-entrant close attempts
+               self->is_closing_ = true;
                if (self->server_) {
                   self->server_->notify_error(self, ec);
                }
                // Close the connection after a write error (connection is likely broken)
-               self->is_closing_ = true;
                self->do_close();
             }
          });
@@ -712,6 +714,7 @@ namespace glz
          auto frame_buffer = std::make_shared<std::vector<uint8_t>>(std::move(frame));
          asio::async_write(socket_, asio::buffer(*frame_buffer), [self, frame_buffer](std::error_code ec, std::size_t) {
             if (ec) {
+               self->is_closing_ = true;
                if (self->server_) {
                   self->server_->notify_error(self, ec);
                }
