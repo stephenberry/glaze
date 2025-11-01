@@ -5,6 +5,9 @@
 
 // Glaze Feature Test Macros for breaking changes
 
+// v6.1.0 removes bools_as_numbers from default glz::opts
+#define glaze_v6_1_0_bools_as_numbers_opt
+
 // v6.0.0 renames json/json_t.hpp to json/generic.hpp and deprecates glz::json_t alias
 #define glaze_v6_0_0_generic_header
 
