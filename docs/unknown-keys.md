@@ -81,7 +81,7 @@ struct glz::meta<my_struct> {
       "zero", &T::zero
    );
    
-   static constexpr auto unknown_read{&T::extra};
+   static constexpr auto unknown_read{&T::numbers};
 };
 
 // usage
