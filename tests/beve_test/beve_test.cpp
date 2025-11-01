@@ -336,6 +336,27 @@ struct glz::meta<Thing>
    );
 };
 
+// Custom nullable type for testing nullable_value_t support
+struct custom_nullable_value
+{
+   std::optional<double> val{};
+
+   bool has_value() const { return val.has_value(); }
+
+   double& value() { return *val; }
+
+   const double& value() const { return *val; }
+
+   void emplace() { val.emplace(); }
+
+   void reset() { val.reset(); }
+};
+
+struct nullable_value_test_struct {
+   custom_nullable_value x{};
+   int y = 42;
+};
+
 void write_tests()
 {
    using namespace ut;
@@ -460,36 +481,14 @@ void write_tests()
    };
 
    "nullable_value_t"_test = [] {
-      // Test custom nullable type that uses has_value() instead of operator bool()
-      struct custom_nullable_t
-      {
-         std::optional<double> val{};
-
-         bool has_value() const { return val.has_value(); }
-
-         double& value() { return *val; }
-
-         const double& value() const { return *val; }
-
-         template <class... Args>
-         void emplace(Args&&... args) {
-            val.emplace(std::forward<Args>(args)...);
-         }
-      };
-
-      struct test_struct {
-         custom_nullable_t x{};
-         int y = 42;
-      };
-
       std::string out;
 
       // Test with value
-      test_struct obj{};
+      nullable_value_test_struct obj{};
       obj.x.val = 3.14;
       expect(not glz::write_beve(obj, out));
 
-      test_struct obj2{};
+      nullable_value_test_struct obj2{};
       expect(!glz::read_beve(obj2, out));
       expect(obj2.x.has_value());
       expect(obj2.x.value() == 3.14);
@@ -500,7 +499,7 @@ void write_tests()
       obj.x.val = {};
       expect(not glz::write_beve(obj, out));
 
-      test_struct obj3{};
+      nullable_value_test_struct obj3{};
       obj3.x.val = 99.9; // Set a value to ensure it gets reset
       expect(!glz::read_beve(obj3, out));
       expect(!obj3.x.has_value());
@@ -508,11 +507,11 @@ void write_tests()
 
       // Test standalone nullable_value_t
       out.clear();
-      custom_nullable_t standalone{};
+      custom_nullable_value standalone{};
       standalone.val = 2.71;
       expect(not glz::write_beve(standalone, out));
 
-      custom_nullable_t standalone2{};
+      custom_nullable_value standalone2{};
       expect(!glz::read_beve(standalone2, out));
       expect(standalone2.has_value());
       expect(standalone2.value() == 2.71);
