@@ -556,6 +556,10 @@ namespace glz
       }
    }
 
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wmissing-braces"
+#endif
    constexpr auto array(auto&&... args) noexcept { return detail::Array{glz::tuple{conv_sv(args)...}}; }
 
    template <class... Args>
@@ -567,6 +571,9 @@ namespace glz
    constexpr auto enumerate(auto&&... args) noexcept { return detail::Enum{tuple{args...}}; }
 
    constexpr auto flags(auto&&... args) noexcept { return detail::Flags{tuple{args...}}; }
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#endif
 }
 
 namespace glz
