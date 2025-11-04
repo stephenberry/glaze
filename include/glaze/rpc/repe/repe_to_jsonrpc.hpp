@@ -4,8 +4,8 @@
 #pragma once
 
 #include "glaze/ext/jsonrpc.hpp"
-#include "glaze/rpc/repe/header.hpp"
 #include "glaze/glaze.hpp"
+#include "glaze/rpc/repe/header.hpp"
 
 namespace glz::repe
 {
@@ -114,12 +114,18 @@ namespace glz::repe
             result += R"(,"data":")";
             // Escape the body content for JSON string
             for (char c : msg.body) {
-               if (c == '"') result += "\\\"";
-               else if (c == '\\') result += "\\\\";
-               else if (c == '\n') result += "\\n";
-               else if (c == '\r') result += "\\r";
-               else if (c == '\t') result += "\\t";
-               else result += c;
+               if (c == '"')
+                  result += "\\\"";
+               else if (c == '\\')
+                  result += "\\\\";
+               else if (c == '\n')
+                  result += "\\n";
+               else if (c == '\r')
+                  result += "\\r";
+               else if (c == '\t')
+                  result += "\\t";
+               else
+                  result += c;
             }
             result += R"(")";
          }

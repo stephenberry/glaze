@@ -2,6 +2,7 @@
 // For the license information refer to glaze.hpp
 
 #include "glaze/rpc/repe/repe_to_jsonrpc.hpp"
+
 #include "glaze/rpc/repe/repe.hpp"
 #include "ut/ut.hpp"
 
@@ -45,7 +46,8 @@ suite repe_to_jsonrpc_request_tests = [] {
       msg.header.notify = true;
 
       auto jsonrpc_str = repe::to_jsonrpc_request(msg);
-      expect(jsonrpc_str == R"({"jsonrpc":"2.0","method":"notify","params":{"message":"hello"},"id":null})") << jsonrpc_str;
+      expect(jsonrpc_str == R"({"jsonrpc":"2.0","method":"notify","params":{"message":"hello"},"id":null})")
+         << jsonrpc_str;
    };
 
    "empty_params"_test = [] {
@@ -163,7 +165,7 @@ suite jsonrpc_to_repe_request_tests = [] {
 
       auto msg = repe::from_jsonrpc_request(jsonrpc);
       expect(msg.has_value());
-      expect(msg->header.id != 0);  // Should be hashed
+      expect(msg->header.id != 0); // Should be hashed
       expect(msg->header.notify == false);
    };
 
@@ -214,19 +216,19 @@ suite jsonrpc_to_repe_response_tests = [] {
 suite error_code_mapping_tests = [] {
    "all_repe_to_jsonrpc_error_codes"_test = [] {
       // Test all major REPE error codes map correctly
-      struct error_mapping {
+      struct error_mapping
+      {
          glz::error_code repe_code;
          int jsonrpc_code;
          std::string_view message_contains;
       };
 
-      const std::vector<error_mapping> mappings = {
-         {glz::error_code::none, 0, ""},
-         {glz::error_code::parse_error, -32700, "Parse error"},
-         {glz::error_code::syntax_error, -32700, "Parse error"},
-         {glz::error_code::invalid_header, -32600, "Invalid request"},
-         {glz::error_code::version_mismatch, -32600, "Invalid request"},
-         {glz::error_code::method_not_found, -32601, "Method not found"}};
+      const std::vector<error_mapping> mappings = {{glz::error_code::none, 0, ""},
+                                                   {glz::error_code::parse_error, -32700, "Parse error"},
+                                                   {glz::error_code::syntax_error, -32700, "Parse error"},
+                                                   {glz::error_code::invalid_header, -32600, "Invalid request"},
+                                                   {glz::error_code::version_mismatch, -32600, "Invalid request"},
+                                                   {glz::error_code::method_not_found, -32601, "Method not found"}};
 
       for (const auto& mapping : mappings) {
          if (mapping.repe_code == glz::error_code::none) continue;
@@ -247,16 +249,17 @@ suite error_code_mapping_tests = [] {
 
    "jsonrpc_to_repe_error_codes"_test = [] {
       // Test JSON-RPC error codes map to REPE
-      struct error_mapping {
+      struct error_mapping
+      {
          int jsonrpc_code;
          glz::error_code expected_repe;
       };
 
       const std::vector<error_mapping> mappings = {{-32700, glz::error_code::parse_error},
-                                                    {-32600, glz::error_code::invalid_header},
-                                                    {-32601, glz::error_code::method_not_found},
-                                                    {-32602, glz::error_code::parse_error},
-                                                    {-32603, glz::error_code::parse_error}};
+                                                   {-32600, glz::error_code::invalid_header},
+                                                   {-32601, glz::error_code::method_not_found},
+                                                   {-32602, glz::error_code::parse_error},
+                                                   {-32603, glz::error_code::parse_error}};
 
       for (const auto& mapping : mappings) {
          std::string jsonrpc = R"({"jsonrpc":"2.0","error":{"code":)" + std::to_string(mapping.jsonrpc_code) +
@@ -312,7 +315,8 @@ newlines)";
    };
 
    "complex_nested_json_params"_test = [] {
-      std::string complex_json = R"({"jsonrpc":"2.0","method":"process","params":{"nested":{"deeply":{"value":42,"array":[1,2,3],"object":{"key":"value"}}}},"id":1})";
+      std::string complex_json =
+         R"({"jsonrpc":"2.0","method":"process","params":{"nested":{"deeply":{"value":42,"array":[1,2,3],"object":{"key":"value"}}}},"id":1})";
 
       auto msg = repe::from_jsonrpc_request(complex_json);
       expect(msg.has_value());

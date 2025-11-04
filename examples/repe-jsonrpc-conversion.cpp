@@ -1,15 +1,13 @@
 // Example demonstrating REPE to JSON-RPC conversion
 // Compile: g++ -std=c++20 -I../include repe-jsonrpc-conversion.cpp -o repe-jsonrpc-conversion
 
-#include "glaze/rpc/repe/repe_to_jsonrpc.hpp"
 #include <iostream>
+
+#include "glaze/rpc/repe/repe_to_jsonrpc.hpp"
 
 namespace repe = glz::repe;
 
-void print_separator(const std::string& title)
-{
-   std::cout << "\n========== " << title << " ==========\n";
-}
+void print_separator(const std::string& title) { std::cout << "\n========== " << title << " ==========\n"; }
 
 int main()
 {
@@ -124,7 +122,7 @@ int main()
       notification.query = "/log";
       notification.body = R"({"level":"info","message":"System started"})";
       notification.header.notify = true;
-      notification.header.body_format = repe::body_format::JSON;  // Must set format!
+      notification.header.body_format = repe::body_format::JSON; // Must set format!
 
       std::string jsonrpc_notification = repe::to_jsonrpc_request(notification);
 
@@ -161,9 +159,8 @@ int main()
          std::cout << "  Query: " << roundtrip->query << "\n";
          std::cout << "  Body: " << roundtrip->body << "\n";
          std::cout << "  ID: " << roundtrip->header.id << "\n";
-         std::cout << "  Match: " << (original.query == roundtrip->query && original.header.id == roundtrip->header.id
-                                         ? "✓"
-                                         : "✗")
+         std::cout << "  Match: "
+                   << (original.query == roundtrip->query && original.header.id == roundtrip->header.id ? "✓" : "✗")
                    << "\n";
       }
       else {
