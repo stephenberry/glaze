@@ -111,6 +111,8 @@ nav:
    - JSON Include: json-include.md
    - CLI Menu: cli-menu.md
    - Glaze Interfaces: glaze-interfaces.md
+   - Building Shared Libraries: building-shared-libraries.md
+   - Advanced API Usage: advanced-api-usage.md
  - Data Recording/Logging:
    - Time Trace Profiles: time-trace.md
    - Data Recorder: recorder.md
