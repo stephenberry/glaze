@@ -72,6 +72,49 @@ suite value_based_skip_tests = [] {
    };
 };
 
+// Test combining skip and skip_if
+struct CombinedSkip {
+   std::string id{};
+   std::string secret{};
+   int count = 0;
+};
+
+template <>
+struct glz::meta<CombinedSkip> {
+   // Compile-time skip: always exclude secret
+   static constexpr bool skip(const std::string_view key, const glz::meta_context&) {
+      return key == "secret";
+   }
+
+   // Runtime skip: exclude count when it's 0
+   template <class T>
+   static constexpr bool skip_if(T&& value, std::string_view key, const glz::meta_context&) {
+      using V = std::decay_t<T>;
+      if constexpr (std::same_as<V, int>) {
+         return key == "count" && value == 0;
+      }
+      return false;
+   }
+};
+
+suite combined_skip_tests = [] {
+   "skip_and_skip_if_together"_test = [] {
+      CombinedSkip obj1{"123", "my_secret", 0};
+      std::string buffer1{};
+      auto ec = glz::write_json(obj1, buffer1);
+      expect(!ec);
+      // secret skipped by skip(), count skipped by skip_if()
+      expect(buffer1 == R"({"id":"123"})") << buffer1;
+
+      CombinedSkip obj2{"456", "another_secret", 5};
+      std::string buffer2{};
+      ec = glz::write_json(obj2, buffer2);
+      expect(!ec);
+      // secret skipped by skip(), count included (non-zero)
+      expect(buffer2 == R"({"id":"456","count":5})") << buffer2;
+   };
+};
+
 int main() {
    return 0;
 }

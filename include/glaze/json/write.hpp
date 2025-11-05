@@ -1814,7 +1814,7 @@ namespace glz
                      static constexpr meta_context mctx{.op = operation::serialize};
                      if constexpr (meta<T>::skip(reflect<T>::keys[I], mctx)) return;
                   }
-                  else if constexpr (meta_has_skip_if<T>) {
+                  if constexpr (meta_has_skip_if<T>) {
                      static constexpr auto key = glz::get<I>(reflect<T>::keys);
                      static constexpr meta_context mctx{.op = operation::serialize};
                      decltype(auto) field_value = [&]() -> decltype(auto) {
