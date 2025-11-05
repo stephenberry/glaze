@@ -12155,9 +12155,13 @@ suite member_function_pointer_serialization = [] {
       std::string buffer{};
       expect(not glz::write<opts_with_member_functions{}>(thing, buffer));
 #if defined(__GNUC__) && !defined(__clang__)
-      expect(buffer == R"({"name":"test_item","description":"std::__cxx11::basic_string<char> (MemberFunctionThing::*)() const"})") << buffer;
+      expect(
+         buffer ==
+         R"({"name":"test_item","description":"std::__cxx11::basic_string<char> (MemberFunctionThing::*)() const"})")
+         << buffer;
 #else
-      expect(buffer == R"({"name":"test_item","description":"std::string (MemberFunctionThing::*)() const"})") << buffer;
+      expect(buffer == R"({"name":"test_item","description":"std::string (MemberFunctionThing::*)() const"})")
+         << buffer;
 #endif
    };
 
