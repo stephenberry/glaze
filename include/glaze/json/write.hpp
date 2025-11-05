@@ -361,8 +361,15 @@ namespace glz
    struct to<JSON, T>
    {
       template <auto Opts>
-      static void op(auto&&, is_context auto&&, auto&&...) noexcept
-      {}
+      static void op(auto&&, is_context auto&&, auto&& b, auto&& ix) noexcept
+      {
+         if constexpr (check_write_member_functions(Opts)) {
+            constexpr sv type_name = name_v<T>;
+            dump<'"'>(b, ix);
+            dump(type_name, b, ix);
+            dump<'"'>(b, ix);
+         }
+      }
    };
 
    template <is_reference_wrapper T>

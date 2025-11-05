@@ -189,6 +189,21 @@ namespace glz
    };
 } // namespace glz
 
+struct struct_t
+{
+   uint8_t f1_{42};
+   auto f1() const noexcept { return f1_; }
+};
+
+namespace glz
+{
+   template <>
+   struct meta<struct_t>
+   {
+      static constexpr auto value = object("f1", &struct_t::f1);
+   };
+} // namespace glz
+
 suite starter = [] {
    "example"_test = [] {
       my_struct s{};
@@ -12114,7 +12129,21 @@ suite member_function_pointer_serialization = [] {
       expect(buffer == R"({"name":"test_item"})") << buffer;
    };
 
-   "member function pointer opt-in write produces legacy output"_test = [] {
+   "member function pointer explicitly skipped when write_member_functions = false"_test = [] {
+      MemberFunctionThing thing{};
+      thing.name = "test_item";
+
+      struct opts_without_member_functions : glz::opts
+      {
+         bool write_member_functions = false;
+      };
+
+      std::string buffer{};
+      expect(not glz::write<opts_without_member_functions{}>(thing, buffer));
+      expect(buffer == R"({"name":"test_item"})") << buffer;
+   };
+
+   "member function pointer opt-in write produces function signature"_test = [] {
       MemberFunctionThing thing{};
       thing.name = "test_item";
 
@@ -12125,7 +12154,25 @@ suite member_function_pointer_serialization = [] {
 
       std::string buffer{};
       expect(not glz::write<opts_with_member_functions{}>(thing, buffer));
-      expect(buffer == R"({"name":"test_item","description":})") << buffer;
+      expect(buffer == R"({"name":"test_item","description":"std::string (MemberFunctionThing::*)() const"})") << buffer;
+   };
+
+   "member function only serialization"_test = [] {
+      struct_t s{};
+      s.f1_ = 42;
+
+      std::string buffer1{};
+      expect(not glz::write_json(s, buffer1));
+      expect(buffer1 == R"({})") << buffer1;
+
+      struct opts_with_member_functions : glz::opts
+      {
+         bool write_member_functions = true;
+      };
+
+      std::string buffer2{};
+      expect(not glz::write<opts_with_member_functions{}>(s, buffer2));
+      expect(buffer2 == R"({"f1":"unsigned char (struct_t::*)() const noexcept"})") << buffer2;
    };
 };
 
