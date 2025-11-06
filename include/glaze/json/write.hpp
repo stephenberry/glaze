@@ -1814,6 +1814,19 @@ namespace glz
                      static constexpr meta_context mctx{.op = operation::serialize};
                      if constexpr (meta<T>::skip(reflect<T>::keys[I], mctx)) return;
                   }
+                  if constexpr (meta_has_skip_if<T>) {
+                     static constexpr auto key = glz::get<I>(reflect<T>::keys);
+                     static constexpr meta_context mctx{.op = operation::serialize};
+                     decltype(auto) field_value = [&]() -> decltype(auto) {
+                        if constexpr (reflectable<T>) {
+                           return get<I>(t);
+                        }
+                        else {
+                           return get_member(value, glz::get<I>(reflect<T>::values));
+                        }
+                     }();
+                     if (meta<T>::skip_if(field_value, key, mctx)) return;
+                  }
 
                   constexpr bool write_member_functions = check_write_member_functions(Opts);
                   if constexpr (always_skipped<val_t> ||
