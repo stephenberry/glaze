@@ -25,6 +25,11 @@ struct test_struct
    Eigen::Matrix3d d = Eigen::Matrix3d::Identity();
 } test_value;
 
+struct ConstHolder
+{
+   Eigen::Matrix2d m;
+};
+
 suite matrix3d = [] {
    "eigen Matrix3d"_test = [] {
       auto result = glz::write_json(test_value.d).value();
@@ -411,5 +416,128 @@ int main()
       expect(buffer == "[1,0,0,1,0,0]");
       expect(not glz::read_json(c2, buffer));
       expect(c1.matrix() == c2.matrix());
+   };
+
+   "const Matrix4d JSON"_test = [] {
+      const Eigen::Matrix4d m = Eigen::Matrix4d::Identity();
+      std::string json;
+      expect(not glz::write_json(m, json));
+      expect(json == "[1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1]") << json;
+   };
+
+   "const Matrix4d BEVE"_test = [] {
+      const Eigen::Matrix4d m = Eigen::Matrix4d::Identity();
+      std::string b;
+      expect(not glz::write_beve(m, b));
+      expect(!b.empty());
+
+      Eigen::Matrix4d e;
+      expect(not glz::read_beve(e, b));
+      expect(m == e);
+   };
+
+   "const Matrix3d JSON"_test = [] {
+      Eigen::Matrix3d temp;
+      temp << 1, 2, 3, 4, 5, 6, 7, 8, 9;
+      const Eigen::Matrix3d m = temp;
+      std::string json;
+      expect(not glz::write_json(m, json));
+      expect(json == "[1,4,7,2,5,8,3,6,9]") << json;
+   };
+
+   "const Vector4f JSON"_test = [] {
+      const Eigen::Vector4f v{1.5f, 2.5f, 3.5f, 4.5f};
+      std::string json;
+      expect(not glz::write_json(v, json));
+      expect(json == "[1.5,2.5,3.5,4.5]") << json;
+   };
+
+   "const MatrixXd JSON"_test = [] {
+      Eigen::MatrixXd temp(2, 3);
+      temp << 1, 2, 3, 4, 5, 6;
+      const Eigen::MatrixXd m = temp;
+      std::string json;
+      expect(not glz::write_json(m, json));
+      expect(json == "[[2,3],[1,4,2,5,3,6]]") << json;
+   };
+
+   "const MatrixXd BEVE"_test = [] {
+      Eigen::MatrixXd temp(2, 3);
+      temp << 1, 2, 3, 4, 5, 6;
+      const Eigen::MatrixXd m = temp;
+      std::string b;
+      expect(not glz::write_beve(m, b));
+      expect(!b.empty());
+
+      Eigen::MatrixXd e;
+      expect(not glz::read_beve(e, b));
+      expect(m == e);
+   };
+
+   "const RowMajor Matrix JSON"_test = [] {
+      Eigen::Matrix<double, 3, 3, Eigen::RowMajor> temp;
+      temp << 1, 2, 3, 4, 5, 6, 7, 8, 9;
+      const Eigen::Matrix<double, 3, 3, Eigen::RowMajor> m = temp;
+      std::string json;
+      expect(not glz::write_json(m, json));
+      expect(json == "[1,2,3,4,5,6,7,8,9]") << json;
+   };
+
+   "const RowMajor Matrix BEVE"_test = [] {
+      Eigen::Matrix<double, 2, 3, Eigen::RowMajor> temp;
+      temp << 1, 2, 3, 4, 5, 6;
+      const Eigen::Matrix<double, 2, 3, Eigen::RowMajor> m = temp;
+      std::string b;
+      expect(not glz::write_beve(m, b));
+      expect(!b.empty());
+
+      Eigen::Matrix<double, 2, 3, Eigen::RowMajor> e;
+      expect(not glz::read_beve(e, b));
+      expect(m == e);
+   };
+
+   "const Eigen::Isometry3d JSON"_test = [] {
+      Eigen::Isometry3d temp;
+      temp.setIdentity();
+      temp.translation() << 1.0, 2.0, 3.0;
+      const Eigen::Isometry3d pose = temp;
+      std::string json;
+      expect(not glz::write_json(pose, json));
+      expect(json == "[1,0,0,0,0,1,0,0,0,0,1,0,1,2,3,1]") << json;
+   };
+
+   "const VectorXcd JSON"_test = [] {
+      Eigen::VectorXcd temp(3);
+      temp << std::complex<double>(1, 1), std::complex<double>(2, 2), std::complex<double>(3, 3);
+      const Eigen::VectorXcd v = temp;
+      std::string json;
+      expect(not glz::write_json(v, json));
+      expect(!json.empty());
+      expect(json.front() == '[');
+      expect(json.back() == ']');
+   };
+
+   "const struct with Eigen matrix JSON"_test = [] {
+      ConstHolder temp;
+      temp.m << 1, 2, 3, 4;
+      const ConstHolder holder = temp;
+
+      std::string json;
+      expect(not glz::write_json(holder, json));
+      expect(json == R"({"m":[1,3,2,4]})") << json;
+   };
+
+   "const struct with Eigen matrix BEVE"_test = [] {
+      ConstHolder temp;
+      temp.m << 1, 2, 3, 4;
+      const ConstHolder holder = temp;
+
+      std::string b;
+      expect(not glz::write_beve(holder, b));
+      expect(!b.empty());
+
+      ConstHolder restored;
+      expect(not glz::read_beve(restored, b));
+      expect(holder.m == restored.m);
    };
 }
