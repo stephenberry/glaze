@@ -2,21 +2,25 @@
 // Related to GitHub issue #1994
 
 #include <string>
+
 #include "glaze/glaze.hpp"
 #include "ut/ut.hpp"
 
 using namespace ut;
 
-struct MyJson {
+struct MyJson
+{
    std::string name = "John";
    int age = 12;
    std::string city = "New York";
 };
 
 template <>
-struct glz::meta<MyJson> {
+struct glz::meta<MyJson>
+{
    template <class T>
-   static constexpr bool skip_if(T&& value, std::string_view key, const glz::meta_context&) {
+   static constexpr bool skip_if(T&& value, std::string_view key, const glz::meta_context&)
+   {
       using V = std::decay_t<T>;
       if constexpr (std::same_as<V, std::string>) {
          return key == "name" && value == "John";
@@ -31,8 +35,8 @@ struct glz::meta<MyJson> {
 suite value_based_skip_tests = [] {
    "skip_default_values"_test = [] {
       MyJson obj{};
-      obj.name = "John";  // Default value
-      obj.age = 12;       // Default value
+      obj.name = "John"; // Default value
+      obj.age = 12; // Default value
       obj.city = "Boston"; // Non-default value
 
       std::string buffer{};
@@ -45,8 +49,8 @@ suite value_based_skip_tests = [] {
 
    "include_non_default_values"_test = [] {
       MyJson obj{};
-      obj.name = "Jane";  // Non-default value
-      obj.age = 25;       // Non-default value
+      obj.name = "Jane"; // Non-default value
+      obj.age = 25; // Non-default value
       obj.city = "Seattle";
 
       std::string buffer{};
@@ -59,8 +63,8 @@ suite value_based_skip_tests = [] {
 
    "mixed_default_and_non_default"_test = [] {
       MyJson obj{};
-      obj.name = "John";  // Default value - should be skipped
-      obj.age = 30;       // Non-default value - should be included
+      obj.name = "John"; // Default value - should be skipped
+      obj.age = 30; // Non-default value - should be included
       obj.city = "LA";
 
       std::string buffer{};
@@ -73,22 +77,23 @@ suite value_based_skip_tests = [] {
 };
 
 // Test combining skip and skip_if
-struct CombinedSkip {
+struct CombinedSkip
+{
    std::string id{};
    std::string secret{};
    int count = 0;
 };
 
 template <>
-struct glz::meta<CombinedSkip> {
+struct glz::meta<CombinedSkip>
+{
    // Compile-time skip: always exclude secret
-   static constexpr bool skip(const std::string_view key, const glz::meta_context&) {
-      return key == "secret";
-   }
+   static constexpr bool skip(const std::string_view key, const glz::meta_context&) { return key == "secret"; }
 
    // Runtime skip: exclude count when it's 0
    template <class T>
-   static constexpr bool skip_if(T&& value, std::string_view key, const glz::meta_context&) {
+   static constexpr bool skip_if(T&& value, std::string_view key, const glz::meta_context&)
+   {
       using V = std::decay_t<T>;
       if constexpr (std::same_as<V, int>) {
          return key == "count" && value == 0;
@@ -115,6 +120,4 @@ suite combined_skip_tests = [] {
    };
 };
 
-int main() {
-   return 0;
-}
+int main() { return 0; }
