@@ -578,8 +578,10 @@ namespace glz
                      }
                   }
                   else {
-                     std::memcpy(&b[ix], value.data(), n);
-                     ix += n;
+                     if (n) {
+                        std::memcpy(&b[ix], value.data(), n);
+                        ix += n;
+                     }
                   }
                };
 
