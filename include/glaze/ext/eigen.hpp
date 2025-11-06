@@ -92,7 +92,8 @@ namespace glz
          std::array<Eigen::Index, 2> extents{T::RowsAtCompileTime, T::ColsAtCompileTime};
          serialize<BEVE>::op<Opts>(extents, ctx, args...);
 
-         std::span<const typename T::Scalar, T::RowsAtCompileTime * T::ColsAtCompileTime> view(value.data(), value.size());
+         std::span<const typename T::Scalar, T::RowsAtCompileTime * T::ColsAtCompileTime> view(value.data(),
+                                                                                               value.size());
          serialize<BEVE>::op<Opts>(view, ctx, args...);
       }
    };
@@ -139,7 +140,8 @@ namespace glz
       template <auto Opts>
       static void op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix)
       {
-         std::span<const typename T::Scalar, T::RowsAtCompileTime * T::ColsAtCompileTime> view(value.data(), value.size());
+         std::span<const typename T::Scalar, T::RowsAtCompileTime * T::ColsAtCompileTime> view(value.data(),
+                                                                                               value.size());
          using Value = std::remove_cvref_t<decltype(value)>;
          to<JSON, Value>::template op<Opts>(view, ctx, b, ix);
       }
