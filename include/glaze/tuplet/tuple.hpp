@@ -431,11 +431,18 @@ namespace glz
       return static_cast<Tup&&>(tup)[tuplet::tag<I>()];
    }
 
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wmissing-braces"
+#endif
    template <class... T>
    constexpr tuple<T&...> tie(T&... t)
    {
       return {t...};
    }
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#endif
 
    template <class F, tuplet::base_list_tuple Tup>
    constexpr decltype(auto) apply(F&& func, Tup&& tup)
