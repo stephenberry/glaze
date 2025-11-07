@@ -269,6 +269,109 @@ auto rate_limiter = [](const glz::request& req, glz::response& res) {
 server.use(rate_limiter);
 ```
 
+### Wrapping Middleware
+
+Wrapping middleware executes around handlers, allowing code execution both before and after the handler completes.
+
+```cpp
+// Timing and metrics middleware
+server.wrap([](const glz::request& req, glz::response& res, auto next) {
+    auto start = std::chrono::steady_clock::now();
+
+    next(); // Execute next middleware or handler
+
+    auto duration = std::chrono::steady_clock::now() - start;
+    std::cout << req.target << " completed in "
+              << std::chrono::duration_cast<std::chrono::milliseconds>(duration).count()
+              << "ms\n";
+});
+```
+
+#### Use Cases
+
+**Request/Response Timing:**
+```cpp
+struct Metrics {
+    std::atomic<uint64_t> total_requests{0};
+    std::atomic<uint64_t> total_responses{0};
+    std::atomic<double> response_time_sum{0.0};
+};
+
+Metrics metrics;
+
+server.wrap([&metrics](const glz::request&, glz::response& res, auto next) {
+    metrics.total_requests++;
+
+    auto start = std::chrono::steady_clock::now();
+    next();
+    auto duration = std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
+
+    metrics.response_time_sum += duration;
+    metrics.total_responses++;
+});
+```
+
+**Error Handling:**
+```cpp
+server.wrap([](const glz::request&, glz::response& res, auto next) {
+    try {
+        next();
+    } catch (const std::exception& e) {
+        res.status(500).json({{"error", "Internal server error"}});
+        log_error(e.what());
+    }
+});
+```
+
+**Response Transformation:**
+```cpp
+server.wrap([](const glz::request&, glz::response& res, auto next) {
+    next();
+
+    // Add security headers after handler completes
+    res.header("X-Content-Type-Options", "nosniff");
+    res.header("X-Frame-Options", "DENY");
+    res.header("X-XSS-Protection", "1; mode=block");
+});
+```
+
+**Logging with Full Context:**
+```cpp
+server.wrap([](const glz::request& req, glz::response& res, auto next) {
+    auto start = std::chrono::steady_clock::now();
+
+    next();
+
+    auto duration = std::chrono::steady_clock::now() - start;
+    log_request(req.method, req.target, res.status_code, duration);
+});
+```
+
+#### Execution Order
+
+Multiple wrapping middleware execute in the order they are registered:
+
+```cpp
+server.wrap([](const glz::request&, glz::response&, auto next) {
+    std::cout << "Middleware 1 before\n";
+    next();
+    std::cout << "Middleware 1 after\n";
+});
+
+server.wrap([](const glz::request&, glz::response&, auto next) {
+    std::cout << "Middleware 2 before\n";
+    next();
+    std::cout << "Middleware 2 after\n";
+});
+
+// Output order:
+// Middleware 1 before
+// Middleware 2 before
+// Handler executes
+// Middleware 2 after
+// Middleware 1 after
+```
+
 ## Mounting Sub-routers
 
 ```cpp

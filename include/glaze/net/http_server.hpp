@@ -362,6 +362,14 @@ namespace glz
    // Handler types for streaming
    using streaming_handler = std::function<void(request&, streaming_response&)>;
 
+   // Wrapping middleware types
+   using next_handler = std::function<void()>;
+   using wrapping_middleware = std::function<void(const request&, response&, const next_handler&)>;
+
+   // Request/Response lifecycle hooks for metrics and logging
+   using request_hook = std::function<void(const request&, response&)>;
+   using response_hook = std::function<void(const request&, const response&)>;
+
    // Server implementation using non-blocking asio with WebSocket support
    template <bool EnableTLS = false>
    struct http_server
@@ -529,6 +537,38 @@ namespace glz
       inline http_server& use(handler middleware)
       {
          root_router.use(std::move(middleware));
+         return *this;
+      }
+
+      /**
+       * @brief Register wrapping middleware that executes around route handlers
+       *
+       * Wrapping middleware can execute code before AND after the handler by wrapping
+       * the next() function.
+       *
+       * Use cases:
+       * - Request/response timing and metrics
+       * - Logging with full context
+       * - Response transformation (compression, encryption)
+       * - Error handling around handlers
+       * - Any cross-cutting concerns that need both before and after logic
+       *
+       * Example:
+       * ```cpp
+       * server.wrap([](const request& req, response& res, auto next) {
+       *     auto start = std::chrono::steady_clock::now();
+       *     next(); // Call the next middleware or handler
+       *     auto duration = std::chrono::steady_clock::now() - start;
+       *     // Log metrics using duration and res.status_code
+       * });
+       * ```
+       *
+       * @param middleware The wrapping middleware function
+       * @return Reference to this server for method chaining
+       */
+      inline http_server& wrap(wrapping_middleware middleware)
+      {
+         wrapping_middlewares_.push_back(std::move(middleware));
          return *this;
       }
 
@@ -764,6 +804,44 @@ namespace glz
       }
 
       /**
+       * @brief Register a hook to be called when a request is received
+       *
+       * Request hooks are called after the request is fully parsed, before middleware
+       * and route handlers are executed. This is useful for metrics tracking, logging,
+       * or request preprocessing.
+       *
+       * For timing measurements, consider using wrapping middleware instead, which can
+       * naturally measure duration by wrapping the next() function.
+       *
+       * @param hook The function to call for each request
+       * @return Reference to this server for method chaining
+       */
+      inline http_server& on_request(request_hook hook)
+      {
+         request_hooks_.push_back(std::move(hook));
+         return *this;
+      }
+
+      /**
+       * @brief Register a hook to be called before a response is sent
+       *
+       * Response hooks are called after the route handler completes, but before the
+       * response is sent to the client. This is useful for metrics collection,
+       * response logging, or adding final response headers.
+       *
+       * For timing measurements, consider using wrapping middleware instead, which can
+       * naturally measure duration by wrapping the next() function.
+       *
+       * @param hook The function to call before each response
+       * @return Reference to this server for method chaining
+       */
+      inline http_server& on_response(response_hook hook)
+      {
+         response_hooks_.push_back(std::move(hook));
+         return *this;
+      }
+
+      /**
        * @brief Load SSL certificate and private key for HTTPS servers
        *
        * @param cert_file Path to the certificate file (PEM format)
@@ -860,6 +938,26 @@ namespace glz
       glz::error_handler error_handler;
       std::unordered_map<std::string, std::shared_ptr<websocket_server>> websocket_handlers_;
       std::unordered_map<std::string, std::unordered_map<http_method, streaming_handler>> streaming_handlers_;
+
+      // Wrapping middleware (executes around handlers)
+      std::vector<wrapping_middleware> wrapping_middlewares_;
+
+      // Lifecycle hooks for metrics and logging
+      std::vector<request_hook> request_hooks_;
+      std::vector<response_hook> response_hooks_;
+
+      // Helper for executing wrapping middleware chain
+      void execute_middleware_chain(size_t index, request& req, response& res, const handler& h)
+      {
+         if (index >= wrapping_middlewares_.size()) {
+            h(req, res);
+            return;
+         }
+
+         wrapping_middlewares_[index](req, res, [this, index, &req, &res, &h]() {
+            execute_middleware_chain(index + 1, req, res, h);
+         });
+      }
 
       // Signal handling members
       bool signal_handling_enabled = false;
@@ -1163,6 +1261,18 @@ namespace glz
          // Create the response object up front so we can reuse it in fallback flows
          response response;
 
+         // Call request hooks for metrics/logging
+         try {
+            for (const auto& hook : request_hooks_) {
+               hook(request, response);
+            }
+         }
+         catch (const std::exception&) {
+            error_handler(std::make_error_code(std::errc::invalid_argument), std::source_location::current());
+            send_error_response(socket, 500, "Internal Server Error");
+            return;
+         }
+
          if (!handle) {
             if (method == http_method::OPTIONS) {
                std::vector<http_method> allowed_methods;
@@ -1255,10 +1365,29 @@ namespace glz
 
                   if (!requested_method_allowed) {
                      response.status(405);
+                     // Call response hooks before sending
+                     for (const auto& hook : response_hooks_) {
+                        try {
+                           hook(request, response);
+                        }
+                        catch (const std::exception&) {
+                           error_handler(std::make_error_code(std::errc::invalid_argument),
+                                         std::source_location::current());
+                        }
+                     }
                      send_response(socket, response);
                      return;
                   }
 
+                  // Call response hooks before sending
+                  for (const auto& hook : response_hooks_) {
+                     try {
+                        hook(request, response);
+                     }
+                     catch (const std::exception&) {
+                        error_handler(std::make_error_code(std::errc::invalid_argument), std::source_location::current());
+                     }
+                  }
                   send_response(socket, response);
                   return;
                }
@@ -1273,13 +1402,28 @@ namespace glz
          request.params = std::move(params);
 
          try {
-            // Apply middleware
+            // Apply old-style middleware (runs before handler)
             for (const auto& middleware : root_router.middlewares) {
                middleware(request, response);
             }
 
-            // Call the handle
-            handle(request, response);
+            // Execute wrapping middleware chain (index-based, no allocations)
+            if (wrapping_middlewares_.empty()) {
+               handle(request, response);
+            }
+            else {
+               execute_middleware_chain(0, request, response, handle);
+            }
+
+            // Call response hooks for metrics/logging
+            for (const auto& hook : response_hooks_) {
+               try {
+                  hook(request, response);
+               }
+               catch (const std::exception&) {
+                  error_handler(std::make_error_code(std::errc::invalid_argument), std::source_location::current());
+               }
+            }
 
             // Send the response
             send_response(socket, response);
@@ -1296,6 +1440,9 @@ namespace glz
 
       inline void send_response(std::shared_ptr<asio::ip::tcp::socket> socket, const response& response)
       {
+         // Note: We can't call response hooks here because we don't have access to the request object
+         // Response hooks are called in process_full_request before calling this method
+
          // Pre-calculate response size to avoid reallocations
          size_t estimated_size = 64; // Base size for status line
 
