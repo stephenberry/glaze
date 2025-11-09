@@ -1307,7 +1307,7 @@ namespace glz
                }
                // Negate in unsigned arithmetic to avoid signed overflow when acc == limit
                // (e.g., when parsing -2147483648, acc = 2147483648u for int32)
-#ifdef _MSC_VER && !defined(__clang__)
+#if defined(_MSC_VER) && !defined(__clang__)
                // Use subtraction from zero instead of unary minus to avoid MSVC C4146 error
                value = static_cast<I>(U{0} - acc);
 #else
