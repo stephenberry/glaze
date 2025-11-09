@@ -9,7 +9,7 @@
 
 #include "glaze/core/context.hpp"
 
-#ifdef _MSC_VER
+#if defined(_MSC_VER) && !defined(__clang__)
 // Turn off MSVC warning for unsafe fopen
 #pragma warning(push)
 #pragma warning(disable : 4996)
@@ -70,7 +70,7 @@ namespace glz
    }
 }
 
-#ifdef _MSC_VER
+#if defined(_MSC_VER) && !defined(__clang__)
 // restore disabled warning
 #pragma warning(pop)
 #endif

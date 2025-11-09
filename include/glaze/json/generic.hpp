@@ -36,7 +36,7 @@ namespace glz
 #include "glaze/json/write.hpp"
 #include "glaze/util/expected.hpp"
 
-#ifdef _MSC_VER
+#if defined(_MSC_VER) && !defined(__clang__)
 // Turn off broken MSVC warning for "declaration of 'v' hides previous local declaration"
 #pragma warning(push)
 #pragma warning(disable : 4456)
@@ -419,7 +419,7 @@ namespace glz
    }
 }
 
-#ifdef _MSC_VER
+#if defined(_MSC_VER) && !defined(__clang__)
 // restore disabled warning
 #pragma warning(pop)
 #endif

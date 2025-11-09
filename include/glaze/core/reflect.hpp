@@ -9,7 +9,7 @@
 #include "glaze/core/wrappers.hpp"
 #include "glaze/util/primes_64.hpp"
 
-#ifdef _MSC_VER
+#if defined(_MSC_VER) && !defined(__clang__)
 // Turn off MSVC warning for unreferenced formal parameter, which is referenced in a constexpr branch
 #pragma warning(push)
 #pragma warning(disable : 4100 4189)
@@ -2103,7 +2103,7 @@ namespace glz
    };
 }
 
-#ifdef _MSC_VER
+#if defined(_MSC_VER) && !defined(__clang__)
 // restore disabled warnings
 #pragma warning(pop)
 #endif
