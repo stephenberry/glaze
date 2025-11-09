@@ -363,7 +363,30 @@ namespace glz
    using streaming_handler = std::function<void(request&, streaming_response&)>;
 
    // Wrapping middleware types
-   using next_handler = std::function<void()>;
+   // Non-copyable, non-movable wrapper to enforce synchronous execution
+   // This prevents accidental storage and async invocation which would cause dangling references
+   struct next_handler final
+   {
+      explicit next_handler(std::function<void()> fn) : fn_(std::move(fn)) {}
+
+      // Prevent copying and moving to enforce synchronous usage
+      next_handler(const next_handler&) = delete;
+      next_handler(next_handler&&) = delete;
+      next_handler& operator=(const next_handler&) = delete;
+      next_handler& operator=(next_handler&&) = delete;
+
+      void operator()() const { fn_(); }
+
+     private:
+      std::function<void()> fn_;
+   };
+
+   // C++20 concept for wrapping middleware callables
+   template <typename F>
+   concept wrapping_middleware_callable = requires(F&& f, const request& req, response& res, const next_handler& next) {
+      { std::forward<F>(f)(req, res, next) } -> std::same_as<void>;
+   };
+
    using wrapping_middleware = std::function<void(const request&, response&, const next_handler&)>;
 
    // Request/Response lifecycle hooks for metrics and logging
@@ -544,31 +567,88 @@ namespace glz
        * @brief Register wrapping middleware that executes around route handlers
        *
        * Wrapping middleware can execute code before AND after the handler by wrapping
-       * the next() function.
+       * the next() function. This enables natural timing measurements, response
+       * transformation, and comprehensive error handling.
        *
        * Use cases:
        * - Request/response timing and metrics
-       * - Logging with full context
-       * - Response transformation (compression, encryption)
-       * - Error handling around handlers
+       * - Logging with full context (including response status and timing)
+       * - Response transformation (compression, encryption, header injection)
+       * - Error handling around handlers (try-catch wrapping)
        * - Any cross-cutting concerns that need both before and after logic
        *
-       * Example:
+       * CRITICAL SAFETY REQUIREMENT:
+       * ============================
+       * The next() handler MUST be called synchronously within the middleware function.
+       * The next_handler type is intentionally non-copyable and non-movable to prevent
+       * accidental storage and asynchronous invocation.
+       *
+       * Storing next() or calling it asynchronously will result in:
+       * - Compile-time errors (if you try to copy/move it)
+       * - Undefined behavior due to dangling references (if you work around the safety)
+       *
+       * The request, response, and handler objects are only valid during the synchronous
+       * execution of the middleware chain.
+       *
+       * CORRECT Usage:
        * ```cpp
        * server.wrap([](const request& req, response& res, auto next) {
        *     auto start = std::chrono::steady_clock::now();
-       *     next(); // Call the next middleware or handler
+       *     next(); // ✓ Synchronous call - correct
        *     auto duration = std::chrono::steady_clock::now() - start;
-       *     // Log metrics using duration and res.status_code
+       *     std::cout << "Request took " << duration.count() << "ns\n";
        * });
        * ```
        *
+       * INCORRECT Usage (will not compile):
+       * ```cpp
+       * server.wrap([](const request& req, response& res, auto next) {
+       *     // ✗ COMPILE ERROR: next_handler is non-copyable
+       *     std::thread([next]() {
+       *         std::this_thread::sleep_for(std::chrono::seconds(1));
+       *         next(); // Would cause dangling references
+       *     }).detach();
+       * });
+       * ```
+       *
+       * For asynchronous operations, complete them BEFORE or AFTER calling next():
+       * ```cpp
+       * server.wrap([](const request& req, response& res, auto next) {
+       *     // Async work BEFORE handler
+       *     auto data = fetch_from_cache_async().get();
+       *
+       *     next(); // Synchronous handler execution
+       *
+       *     // Async work AFTER handler (fire and forget logging)
+       *     std::async(std::launch::async, [status = res.status_code]() {
+       *         log_to_remote_server(status);
+       *     });
+       * });
+       * ```
+       *
+       * Execution order with multiple middleware:
+       * ```cpp
+       * server.wrap([](auto&, auto&, auto next) {
+       *     std::cout << "A before\n";
+       *     next();
+       *     std::cout << "A after\n";
+       * });
+       * server.wrap([](auto&, auto&, auto next) {
+       *     std::cout << "B before\n";
+       *     next();
+       *     std::cout << "B after\n";
+       * });
+       * // Output: A before -> B before -> handler -> B after -> A after
+       * ```
+       *
+       * @tparam F Callable type (must satisfy wrapping_middleware_callable concept)
        * @param middleware The wrapping middleware function
        * @return Reference to this server for method chaining
        */
-      inline http_server& wrap(wrapping_middleware middleware)
+      template <wrapping_middleware_callable F>
+      inline http_server& wrap(F&& middleware)
       {
-         wrapping_middlewares_.push_back(std::move(middleware));
+         wrapping_middlewares_.push_back(std::forward<F>(middleware));
          return *this;
       }
 
@@ -954,9 +1034,12 @@ namespace glz
             return;
          }
 
-         wrapping_middlewares_[index](req, res, [this, index, &req, &res, &h]() {
+         // Wrap the continuation in next_handler to enforce synchronous execution
+         next_handler next([this, index, &req, &res, &h]() {
             execute_middleware_chain(index + 1, req, res, h);
          });
+
+         wrapping_middlewares_[index](req, res, next);
       }
 
       // Signal handling members

@@ -275,7 +275,7 @@ Wrapping middleware executes around handlers, allowing code execution both befor
 
 ```cpp
 // Timing and metrics middleware
-server.wrap([](const glz::request& req, glz::response& res, auto next) {
+server.wrap([](const glz::request& req, glz::response& res, const auto& next) {
     auto start = std::chrono::steady_clock::now();
 
     next(); // Execute next middleware or handler
@@ -284,6 +284,44 @@ server.wrap([](const glz::request& req, glz::response& res, auto next) {
     std::cout << req.target << " completed in "
               << std::chrono::duration_cast<std::chrono::milliseconds>(duration).count()
               << "ms\n";
+});
+```
+
+#### ⚠️ Safety Requirements
+
+**The `next()` handler MUST be called synchronously.** The `next` parameter is intentionally non-copyable and non-movable to prevent accidental storage and asynchronous invocation, which would cause dangling references.
+
+✅ **Correct - Synchronous execution:**
+```cpp
+server.wrap([](const glz::request& req, glz::response& res, const auto& next) {
+    // Do work before
+    next(); // Call synchronously
+    // Do work after
+});
+```
+
+❌ **Incorrect - Will not compile:**
+```cpp
+server.wrap([](const glz::request& req, glz::response& res, const auto& next) {
+    // ✗ COMPILE ERROR: next is non-copyable
+    std::thread([next]() {
+        next();
+    }).detach();
+});
+```
+
+For asynchronous operations, complete them **before** or **after** calling `next()`:
+```cpp
+server.wrap([](const glz::request& req, glz::response& res, const auto& next) {
+    // Async work BEFORE handler
+    auto data = fetch_data_async().get();
+
+    next(); // Synchronous handler execution
+
+    // Fire-and-forget async work AFTER (using copied values only)
+    std::async([status = res.status_code]() {
+        log_to_remote(status);
+    });
 });
 ```
 
@@ -299,7 +337,7 @@ struct Metrics {
 
 Metrics metrics;
 
-server.wrap([&metrics](const glz::request&, glz::response& res, auto next) {
+server.wrap([&metrics](const glz::request&, glz::response& res, const auto& next) {
     metrics.total_requests++;
 
     auto start = std::chrono::steady_clock::now();
@@ -313,7 +351,7 @@ server.wrap([&metrics](const glz::request&, glz::response& res, auto next) {
 
 **Error Handling:**
 ```cpp
-server.wrap([](const glz::request&, glz::response& res, auto next) {
+server.wrap([](const glz::request&, glz::response& res, const auto& next) {
     try {
         next();
     } catch (const std::exception& e) {
@@ -325,7 +363,7 @@ server.wrap([](const glz::request&, glz::response& res, auto next) {
 
 **Response Transformation:**
 ```cpp
-server.wrap([](const glz::request&, glz::response& res, auto next) {
+server.wrap([](const glz::request&, glz::response& res, const auto& next) {
     next();
 
     // Add security headers after handler completes
@@ -337,7 +375,7 @@ server.wrap([](const glz::request&, glz::response& res, auto next) {
 
 **Logging with Full Context:**
 ```cpp
-server.wrap([](const glz::request& req, glz::response& res, auto next) {
+server.wrap([](const glz::request& req, glz::response& res, const auto& next) {
     auto start = std::chrono::steady_clock::now();
 
     next();
@@ -352,13 +390,13 @@ server.wrap([](const glz::request& req, glz::response& res, auto next) {
 Multiple wrapping middleware execute in the order they are registered:
 
 ```cpp
-server.wrap([](const glz::request&, glz::response&, auto next) {
+server.wrap([](const glz::request&, glz::response&, const auto& next) {
     std::cout << "Middleware 1 before\n";
     next();
     std::cout << "Middleware 1 after\n";
 });
 
-server.wrap([](const glz::request&, glz::response&, auto next) {
+server.wrap([](const glz::request&, glz::response&, const auto& next) {
     std::cout << "Middleware 2 before\n";
     next();
     std::cout << "Middleware 2 after\n";

@@ -51,7 +51,7 @@ int main()
 
    // Wrapping Middleware #1: Logging middleware
    // Logs before and after each request
-   server.wrap([](const glz::request& req, glz::response&, auto next) {
+   server.wrap([](const glz::request& req, glz::response&, const auto& next) {
       std::cout << "→ Request: " << glz::to_string(req.method) << " " << req.target << "\n";
       next(); // Call the next middleware or handler
       std::cout << "← Response sent\n";
@@ -59,7 +59,7 @@ int main()
 
    // Wrapping Middleware #2: Timing and metrics middleware
    // Measures request timing naturally by wrapping
-   server.wrap([&metrics](const glz::request&, glz::response& res, auto next) {
+   server.wrap([&metrics](const glz::request&, glz::response& res, const auto& next) {
       auto start = std::chrono::steady_clock::now();
 
       // Count incoming request
@@ -91,7 +91,7 @@ int main()
 
    // Wrapping Middleware #3: Error handling middleware
    // Catches exceptions and converts them to 500 responses
-   server.wrap([](const glz::request&, glz::response& res, auto next) {
+   server.wrap([](const glz::request&, glz::response& res, const auto& next) {
       try {
          next();
       }
@@ -103,7 +103,7 @@ int main()
 
    // Wrapping Middleware #4: Response transformation
    // Adds a custom header to all responses
-   server.wrap([](const glz::request&, glz::response& res, auto next) {
+   server.wrap([](const glz::request&, glz::response& res, const auto& next) {
       next();
       // After handler completes, we can modify the response
       res.header("X-Powered-By", "Glaze");

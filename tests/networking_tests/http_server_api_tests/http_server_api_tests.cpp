@@ -826,7 +826,7 @@ suite wrapping_middleware_tests = [] {
    "wrap_middleware_registration"_test = [] {
       glz::http_server<> server;
 
-      auto& wrap_ref = server.wrap([](const glz::request&, glz::response&, auto next) { next(); });
+      auto& wrap_ref = server.wrap([](const glz::request&, glz::response&, const auto& next) { next(); });
 
       expect(&wrap_ref == &server) << "wrap() should return server reference for chaining\n";
    };
@@ -847,7 +847,7 @@ suite wrapping_middleware_tests = [] {
       std::chrono::nanoseconds measured_duration{0};
 
       // Simulate wrapping middleware that measures timing
-      auto wrapping_middleware = [&measured_duration](const glz::request&, glz::response&, auto next) {
+      auto wrapping_middleware = [&measured_duration](const glz::request&, glz::response&, const auto& next) {
          auto start = std::chrono::steady_clock::now();
          next();
          measured_duration = std::chrono::steady_clock::now() - start;
@@ -859,7 +859,8 @@ suite wrapping_middleware_tests = [] {
       std::function<void()> chain = [&handler, &req, &res]() { handler(req, res); };
       auto prev_chain = std::move(chain);
       chain = [wrapping_middleware, prev_chain = std::move(prev_chain), &req, &res]() {
-         wrapping_middleware(req, res, prev_chain);
+         glz::next_handler next(prev_chain);
+         wrapping_middleware(req, res, next);
       };
       chain();
 
@@ -871,13 +872,13 @@ suite wrapping_middleware_tests = [] {
    "wrap_middleware_order"_test = [] {
       std::vector<std::string> execution_order;
 
-      auto middleware1 = [&execution_order](const glz::request&, glz::response&, auto next) {
+      auto middleware1 = [&execution_order](const glz::request&, glz::response&, const auto& next) {
          execution_order.push_back("middleware1_before");
          next();
          execution_order.push_back("middleware1_after");
       };
 
-      auto middleware2 = [&execution_order](const glz::request&, glz::response&, auto next) {
+      auto middleware2 = [&execution_order](const glz::request&, glz::response&, const auto& next) {
          execution_order.push_back("middleware2_before");
          next();
          execution_order.push_back("middleware2_after");
@@ -893,7 +894,8 @@ suite wrapping_middleware_tests = [] {
       chain = [middleware2, prev = std::move(prev)]() {
          glz::request req;
          glz::response res;
-         middleware2(req, res, prev);
+         glz::next_handler next(prev);
+         middleware2(req, res, next);
       };
 
       // Wrap with middleware1 (will be innermost after middleware2)
@@ -901,7 +903,8 @@ suite wrapping_middleware_tests = [] {
       chain = [middleware1, prev = std::move(prev)]() {
          glz::request req;
          glz::response res;
-         middleware1(req, res, prev);
+         glz::next_handler next(prev);
+         middleware1(req, res, next);
       };
 
       chain();
@@ -921,7 +924,7 @@ suite wrapping_middleware_tests = [] {
       glz::response res;
       res.body("original");
 
-      auto middleware = [](const glz::request&, glz::response& res, auto next) {
+      auto middleware = [](const glz::request&, glz::response& res, const auto& next) {
          next();
          // Transform response after handler
          res.body(res.response_body + " + transformed");
@@ -930,7 +933,10 @@ suite wrapping_middleware_tests = [] {
       auto handler = [](glz::response& res) { res.body("handler_output"); };
 
       std::function<void()> chain = [&handler, &res]() { handler(res); };
-      chain = [middleware, prev = std::move(chain), &req, &res]() { middleware(req, res, prev); };
+      chain = [middleware, prev = std::move(chain), &req, &res]() {
+         glz::next_handler next(prev);
+         middleware(req, res, next);
+      };
 
       chain();
 
@@ -940,7 +946,7 @@ suite wrapping_middleware_tests = [] {
    "wrap_middleware_error_handling"_test = [] {
       bool error_caught = false;
 
-      auto middleware = [&error_caught](const glz::request&, glz::response&, auto next) {
+      auto middleware = [&error_caught](const glz::request&, glz::response&, const auto& next) {
          try {
             next();
          }
@@ -954,7 +960,10 @@ suite wrapping_middleware_tests = [] {
       std::function<void()> chain = handler;
       glz::request req;
       glz::response res;
-      chain = [middleware, prev = std::move(chain), &req, &res]() { middleware(req, res, prev); };
+      chain = [middleware, prev = std::move(chain), &req, &res]() {
+         glz::next_handler next(prev);
+         middleware(req, res, next);
+      };
 
       chain();
 
@@ -972,7 +981,7 @@ suite wrapping_middleware_tests = [] {
 
       Metrics metrics;
 
-      auto metrics_middleware = [&metrics](const glz::request&, glz::response& res, auto next) {
+      auto metrics_middleware = [&metrics](const glz::request&, glz::response& res, const auto& next) {
          metrics.total_requests++;
          next();
          metrics.total_responses++;
@@ -991,7 +1000,10 @@ suite wrapping_middleware_tests = [] {
          res.status(200);
          auto handler = []() {};
          std::function<void()> chain = handler;
-         chain = [metrics_middleware, prev = std::move(chain), &req, &res]() { metrics_middleware(req, res, prev); };
+         chain = [metrics_middleware, prev = std::move(chain), &req, &res]() {
+            glz::next_handler next(prev);
+            metrics_middleware(req, res, next);
+         };
          chain();
       }
 
@@ -1002,7 +1014,10 @@ suite wrapping_middleware_tests = [] {
          res.status(404);
          auto handler = []() {};
          std::function<void()> chain = handler;
-         chain = [metrics_middleware, prev = std::move(chain), &req, &res]() { metrics_middleware(req, res, prev); };
+         chain = [metrics_middleware, prev = std::move(chain), &req, &res]() {
+            glz::next_handler next(prev);
+            metrics_middleware(req, res, next);
+         };
          chain();
       }
 
