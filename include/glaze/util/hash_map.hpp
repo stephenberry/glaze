@@ -20,7 +20,7 @@
 #include "glaze/concepts/container_concepts.hpp"
 #include "glaze/util/compare.hpp"
 
-#ifdef _MSC_VER
+#if defined(_MSC_VER) && !defined(__clang__)
 // Turn off broken warning from MSVC for << operator precedence
 #pragma warning(push)
 #pragma warning(disable : 4554)
@@ -747,7 +747,7 @@ namespace glz
    };
 }
 
-#ifdef _MSC_VER
+#if defined(_MSC_VER) && !defined(__clang__)
 // restore disabled warning
 #pragma warning(pop)
 #endif
