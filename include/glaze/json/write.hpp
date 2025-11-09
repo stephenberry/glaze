@@ -11,9 +11,6 @@
 #if !defined(GLZ_DISABLE_SIMD) && (defined(__x86_64__) || defined(_M_X64))
 #if defined(_MSC_VER)
 #include <intrin.h>
-#pragma warning(push)
-#pragma warning( \
-   disable : 4702) // disable "unreachable code" warnings, which are often invalid due to constexpr branching
 #else
 #include <immintrin.h>
 #endif
@@ -21,6 +18,12 @@
 #if defined(__AVX2__)
 #define GLZ_USE_AVX2
 #endif
+#endif
+
+#if defined(_MSC_VER) && !defined(__clang__)
+// disable "unreachable code" warnings, which are often invalid due to constexpr branching
+#pragma warning(push)
+#pragma warning(disable : 4702)
 #endif
 
 #include "glaze/core/opts.hpp"
@@ -2048,6 +2051,6 @@ namespace glz
    }
 }
 
-#if defined(_MSC_VER)
+#if defined(_MSC_VER) && !defined(__clang__)
 #pragma warning(pop)
 #endif
