@@ -815,8 +815,8 @@ suite issue_1807_tests = [] {
       }
    };
 
-   "convert_from_generic_direct"_test = [] {
-      // Test the direct convert_from_generic API
+   "convert_from_generic_lowlevel_api"_test = [] {
+      // Test the lower-level convert_from_generic API directly
       glz::generic arr_json{};
       expect(!glz::read_json(arr_json, R"([1, 2, 3, 4, 5])"));
 

@@ -82,6 +82,8 @@ auto obj = glz::read_json<std::map<std::string, std::string>>(json.value());
 // This reads the generic value into a std::map
 ```
 
+**Performance Note**: When reading primitives or containers (vectors, maps, arrays, etc.) from `generic`, Glaze uses an optimized direct-traversal path that avoids JSON serialization. For complex user-defined structs, it falls back to JSON round-trip to handle reflection metadata.
+
 Another example:
 
 ```c++
@@ -91,6 +93,38 @@ std::string v{};
 expect(not glz::read<glz::opts{}>(v, json));
 expect(v == "Beautiful beginning");
 ```
+
+### Optimized Conversion from `generic`
+
+When reading from a `generic` into primitives or containers, `glz::read_json` automatically uses an optimized direct-traversal path:
+
+```c++
+glz::generic json{};
+glz::read_json(json, R"([1, 2, 3, 4, 5])");
+
+// Efficient direct conversion - no JSON serialization overhead
+std::vector<int> vec;
+auto ec = glz::read_json(vec, json);
+if (!ec) {
+  // vec now contains {1, 2, 3, 4, 5}
+}
+```
+
+The optimization automatically applies to:
+- **Primitives**: `bool`, `double`, `int`, and other numeric types
+- **Strings**: `std::string`
+- **Arrays**: `std::vector`, `std::array`, `std::deque`, `std::list`
+- **Maps**: `std::map`, `std::unordered_map`
+- **Nested combinations**: `std::vector<std::vector<int>>`, `std::map<std::string, std::vector<double>>`, etc.
+
+Benefits of the optimized path:
+- **No JSON round-trip**: Converts directly from the internal `generic` representation
+- **Memory reuse**: Existing allocations in the target container are preserved
+- **Recursive efficiency**: Nested containers are converted with zero intermediate serialization
+
+For complex user-defined structs, `glz::read_json` automatically falls back to JSON round-trip to handle reflection metadata.
+
+**Advanced**: If you need explicit control over the conversion process, `glz::convert_from_generic(result, source)` is available as a lower-level API that returns `error_ctx` instead of using the `expected` wrapper.
 
 ## Extracting Containers with JSON Pointers
 
