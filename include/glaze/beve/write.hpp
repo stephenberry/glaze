@@ -80,6 +80,15 @@ namespace glz
       }
    }
 
+   // Returns the number of bytes needed to encode a compressed integer
+   GLZ_ALWAYS_INLINE constexpr size_t compressed_int_size(uint64_t i) noexcept
+   {
+      if (i < 64) return 1;
+      else if (i < 16384) return 2;
+      else if (i < 1073741824) return 4;
+      else return 8;
+   }
+
    template <auto Opts, class... Args>
    GLZ_ALWAYS_INLINE void dump_compressed_int(uint64_t i, Args&&... args)
    {
@@ -881,16 +890,10 @@ namespace glz
          });
       }
 
-      template <auto Options, class... Args>
+      template <auto Options>
          requires(Options.structs_as_arrays == false)
-      static void op(auto&& value, is_context auto&& ctx, Args&&... args)
+      static void op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix)
       {
-         if constexpr (!check_opening_handled(Options)) {
-            constexpr uint8_t type = 0; // string key
-            constexpr uint8_t tag = tag::object | type;
-            dump_type(tag, args...);
-            dump_compressed_int<count_to_write<Options>()>(args...);
-         }
          constexpr auto Opts = opening_handled_off<Options>();
 
          [[maybe_unused]] decltype(auto) t = [&]() -> decltype(auto) {
@@ -902,26 +905,142 @@ namespace glz
             }
          }();
 
-         for_each<N>([&]<size_t I>() {
-            if constexpr (should_skip_field<Options, I>()) {
-               return;
-            }
-            else {
-               static constexpr sv key = reflect<T>::keys[I];
-               to<BEVE, std::remove_cvref_t<decltype(key)>>::template no_header_cx<key.size()>(key, ctx, args...);
+         if constexpr (maybe_skipped<Options, T>) {
+            // Dynamic path: use single-pass with size adjustment to handle skip_null_members
+            constexpr auto full_count = count_to_write<Options>();
+            constexpr auto full_count_bytes = compressed_int_size(full_count);
 
-               decltype(auto) member = [&]() -> decltype(auto) {
-                  if constexpr (reflectable<T>) {
-                     return get<I>(t);
+            // Write header with full count initially
+            auto count_ix = ix; // Remember position for count update
+            if constexpr (!check_opening_handled(Options)) {
+               constexpr uint8_t type = 0; // string key
+               constexpr uint8_t tag = tag::object | type;
+               dump_type(tag, b, ix);
+               dump_compressed_int<full_count>(b, ix);
+            }
+
+            auto data_ix = ix; // Remember where data starts
+            size_t actual_count = 0;
+
+            // Write members, tracking actual count
+            for_each<N>([&]<size_t I>() {
+               if constexpr (should_skip_field<Options, I>()) {
+                  return;
+               }
+               else {
+                  using val_t = field_t<T, I>;
+
+                  if constexpr (null_t<val_t> && Options.skip_null_members) {
+                     if constexpr (always_null_t<val_t>) {
+                        return;
+                     }
+                     else {
+                        const auto is_null = [&]() {
+                           decltype(auto) element = [&]() -> decltype(auto) {
+                              if constexpr (reflectable<T>) {
+                                 return get<I>(t);
+                              }
+                              else {
+                                 return get<I>(reflect<T>::values);
+                              }
+                           };
+
+                           if constexpr (nullable_wrapper<val_t>) {
+                              return !bool(element()(value).val);
+                           }
+                           else if constexpr (nullable_value_t<val_t>) {
+                              return !get_member(value, element()).has_value();
+                           }
+                           else {
+                              return !bool(get_member(value, element()));
+                           }
+                        }();
+                        if (is_null) {
+                           return;
+                        }
+                     }
+                  }
+
+                  static constexpr sv key = reflect<T>::keys[I];
+                  to<BEVE, std::remove_cvref_t<decltype(key)>>::template no_header_cx<key.size()>(key, ctx, b, ix);
+
+                  decltype(auto) member = [&]() -> decltype(auto) {
+                     if constexpr (reflectable<T>) {
+                        return get<I>(t);
+                     }
+                     else {
+                        return get<I>(reflect<T>::values);
+                     }
+                  }();
+
+                  serialize<BEVE>::op<Opts>(get_member(value, member), ctx, b, ix);
+                  ++actual_count;
+               }
+            });
+
+            // Adjust if actual count requires fewer bytes
+            if (actual_count != full_count) {
+               const auto actual_count_bytes = compressed_int_size(actual_count);
+               if (actual_count_bytes < full_count_bytes) {
+                  // Need to move data forward
+                  const auto shift = full_count_bytes - actual_count_bytes;
+                  const auto data_size = ix - data_ix;
+                  std::memmove(&b[data_ix - shift], &b[data_ix], data_size);
+                  ix -= shift;
+               }
+
+               // Rewrite the count with correct value
+               if constexpr (!check_opening_handled(Options)) {
+                  auto temp_ix = count_ix + 1; // Skip the tag byte
+                  if (actual_count < 64) {
+                     const uint8_t c = uint8_t(actual_count) << 2;
+                     std::memcpy(&b[temp_ix], &c, sizeof(c));
+                  }
+                  else if (actual_count < 16384) {
+                     const uint16_t c = uint16_t(1) | (uint16_t(actual_count) << 2);
+                     std::memcpy(&b[temp_ix], &c, sizeof(c));
+                  }
+                  else if (actual_count < 1073741824) {
+                     const uint32_t c = uint32_t(2) | (uint32_t(actual_count) << 2);
+                     std::memcpy(&b[temp_ix], &c, sizeof(c));
                   }
                   else {
-                     return get<I>(reflect<T>::values);
+                     const uint64_t c = uint64_t(3) | (uint64_t(actual_count) << 2);
+                     std::memcpy(&b[temp_ix], &c, sizeof(c));
                   }
-               }();
-
-               serialize<BEVE>::op<Opts>(get_member(value, member), ctx, args...);
+               }
             }
-         });
+         }
+         else {
+            // Static path: use compile-time count for better performance
+            if constexpr (!check_opening_handled(Options)) {
+               constexpr uint8_t type = 0; // string key
+               constexpr uint8_t tag = tag::object | type;
+               dump_type(tag, b, ix);
+               dump_compressed_int<count_to_write<Options>()>(b, ix);
+            }
+
+            for_each<N>([&]<size_t I>() {
+               if constexpr (should_skip_field<Options, I>()) {
+                  return;
+               }
+               else {
+                  static constexpr sv key = reflect<T>::keys[I];
+                  to<BEVE, std::remove_cvref_t<decltype(key)>>::template no_header_cx<key.size()>(key, ctx, b, ix);
+
+                  decltype(auto) member = [&]() -> decltype(auto) {
+                     if constexpr (reflectable<T>) {
+                        return get<I>(t);
+                     }
+                     else {
+                        return get<I>(reflect<T>::values);
+                     }
+                  }();
+
+                  serialize<BEVE>::op<Opts>(get_member(value, member), ctx, b, ix);
+               }
+            });
+         }
       }
    };
 
