@@ -91,3 +91,53 @@ std::string v{};
 expect(not glz::read<glz::opts{}>(v, json));
 expect(v == "Beautiful beginning");
 ```
+
+## Extracting Containers with JSON Pointers
+
+`glz::get` can be used with JSON Pointers to extract values from a `generic` object. For primitive types (bool, double, std::string), `glz::get` returns a reference wrapper to the value stored in the `generic`:
+
+```c++
+glz::generic json{};
+std::string buffer = R"({"name": "Alice", "age": 30, "active": true})";
+glz::read_json(json, buffer);
+
+// Get primitive types - returns expected<reference_wrapper<T>, error_ctx>
+auto name = glz::get<std::string>(json, "/name");
+if (name) {
+  expect(name->get() == "Alice");
+}
+
+auto age = glz::get<double>(json, "/age");
+if (age) {
+  expect(age->get() == 30.0);
+}
+```
+
+For container types (vectors, maps, arrays, lists, etc.), `glz::get` deserializes the value and returns a copy:
+
+```c++
+glz::generic json{};
+std::string buffer = R"({
+  "names": ["Alice", "Bob", "Charlie"],
+  "scores": {"math": 95, "english": 87}
+})";
+glz::read_json(json, buffer);
+
+// Get container types - returns expected<T, error_ctx>
+auto names = glz::get<std::vector<std::string>>(json, "/names");
+if (names) {
+  expect(names->size() == 3);
+  expect((*names)[0] == "Alice");
+}
+
+auto scores = glz::get<std::map<std::string, int>>(json, "/scores");
+if (scores) {
+  expect(scores->at("math") == 95);
+}
+
+// Works with other container types too
+auto names_list = glz::get<std::list<std::string>>(json, "/names");
+auto names_array = glz::get<std::array<std::string, 3>>(json, "/names");
+```
+
+This works because `glz::generic` stores arrays as `std::vector<glz::generic>` and objects as `std::map<std::string, glz::generic>`. When you request a specific container type, Glaze deserializes the generic representation into your desired type.
