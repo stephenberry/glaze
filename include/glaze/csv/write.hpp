@@ -518,7 +518,7 @@ namespace glz
                static constexpr sv key = reflect<U>::keys[I];
                serialize<CSV>::op<Opts>(key, ctx, b, ix);
 
-               if (I < N - 1) {
+               if constexpr (I < N - 1) {
                   dump<','>(b, ix);
                }
             });
