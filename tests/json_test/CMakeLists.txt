@@ -30,7 +30,7 @@ add_test(NAME ${PROJECT_NAME}_non_null COMMAND ${PROJECT_NAME}_non_null)
 
 ## glz::generic test
 
-add_executable(json_t_test json_t_test.cpp)
+add_executable(json_t_test generic_test.cpp)
 
 target_link_libraries(json_t_test PRIVATE glz_test_common)
 
