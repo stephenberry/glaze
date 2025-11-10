@@ -1120,3 +1120,7 @@ suite integer_id_variant_tests = [] {
    };
 };
 
+int main()
+{
+   return 0;
+}
