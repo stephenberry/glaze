@@ -382,8 +382,8 @@ namespace glz
    template <class T>
    concept directly_convertible_from_generic =
       std::same_as<T, bool> || std::same_as<T, double> || std::same_as<T, std::string> ||
-      std::same_as<T, std::string_view> || std::integral<T> ||
-      (readable_array_t<T> && !std::same_as<T, std::string>) || readable_map_t<T>;
+      std::same_as<T, std::string_view> || std::integral<T> || (readable_array_t<T> && !std::same_as<T, std::string>) ||
+      readable_map_t<T>;
 
    // These functions allow a generic value to be read/written to a C++ struct
 
@@ -620,10 +620,7 @@ namespace glz
    }
 
    // Non-const version
-   inline generic* navigate_to(generic* root, sv json_ptr) noexcept
-   {
-      return navigate_to_impl(root, json_ptr);
-   }
+   inline generic* navigate_to(generic* root, sv json_ptr) noexcept { return navigate_to_impl(root, json_ptr); }
 
    // Const version
    inline const generic* navigate_to(const generic* root, sv json_ptr) noexcept
@@ -773,14 +770,9 @@ namespace glz
    // because they're not the exact types stored in generic's variant
    template <class V>
    concept needs_container_deserialization =
-      (readable_array_t<V> || readable_map_t<V>) &&
-      !std::same_as<V, generic> &&
-      !std::same_as<V, generic::array_t> &&
-      !std::same_as<V, generic::object_t> &&
-      !std::same_as<V, std::string> &&
-      !std::same_as<V, double> &&
-      !std::same_as<V, bool> &&
-      !std::same_as<V, std::nullptr_t>;
+      (readable_array_t<V> || readable_map_t<V>) && !std::same_as<V, generic> && !std::same_as<V, generic::array_t> &&
+      !std::same_as<V, generic::object_t> && !std::same_as<V, std::string> && !std::same_as<V, double> &&
+      !std::same_as<V, bool> && !std::same_as<V, std::nullptr_t>;
 
    // Overload of get for glz::generic that deserializes containers
    // This overload is only selected for container types that need deserialization
