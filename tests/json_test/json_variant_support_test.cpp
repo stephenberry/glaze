@@ -542,7 +542,6 @@ suite vector_variant_reflection_tests = [] {
    };
 };
 
-
 struct yz_t
 {
    int y{};
@@ -592,7 +591,6 @@ suite metaobject_variant_auto_deduction = [] {
       expect(std::get<xz_t>(var).x == 4);
    };
 };
-
 
 struct varx
 {
@@ -657,7 +655,6 @@ suite empty_variant_objects = [] {
          << s;
    };
 };
-
 
 struct Obj1
 {
@@ -748,7 +745,6 @@ suite custom_object_variant_test = [] {
    };
 };
 
-
 struct var_a
 {
    int m1;
@@ -798,7 +794,6 @@ suite nested_variants = [] {
       expect(std::get<var_a>(v.m1).m1 == 5);
    };
 };
-
 
 struct hammerhead_t
 {
@@ -870,7 +865,6 @@ suite shark_variant = [] {
    };
 };
 
-
 struct A_empty
 {};
 
@@ -904,7 +898,6 @@ suite empty_variant_testing = [] {
       expect(c.index() == 1);
    };
 };
-
 
 struct A1
 {
@@ -955,7 +948,6 @@ suite variant_tag_tests = [] {
       }
    };
 };
-
 
 struct Number
 {
@@ -1048,7 +1040,6 @@ suite tagged_variant_null_members = [] {
    };
 };
 
-
 struct Command401
 {
    int code{};
@@ -1120,7 +1111,4 @@ suite integer_id_variant_tests = [] {
    };
 };
 
-int main()
-{
-   return 0;
-}
+int main() { return 0; }

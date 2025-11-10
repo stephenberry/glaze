@@ -292,7 +292,6 @@ struct glz::meta<V3>
    static constexpr auto value = array(&V3::x, &V3::y, &V3::z);
 };
 
-
 struct enum_array_t
 {
    Color array[3]{};
@@ -5194,7 +5193,6 @@ suite flag_test = [] {
    };
 };
 
-
 struct bomb_t
 {
    xy_t data{};
@@ -8120,7 +8118,6 @@ suite reader_writer_test = [] {
       expect(s == R"([["1","2","3"]])") << s;
    };
 };
-
 
 struct hostname_include_struct
 {
