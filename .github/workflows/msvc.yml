@@ -32,6 +32,22 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
+    - name: Install VS 2022 preview toolset
+      shell: pwsh
+      run: |
+        Invoke-WebRequest https://aka.ms/vs/17/pre/vs_BuildTools.exe -OutFile vs_BuildTools.exe
+        Start-Process .\vs_BuildTools.exe `
+          -ArgumentList '--quiet --wait --norestart --nocache',
+                        '--installPath C:\\VS2022Preview',
+                        '--add Microsoft.VisualStudio.Workload.VCTools' `
+          -Wait
+
+    - uses: ilammy/msvc-dev-cmd@v1
+      with:
+        vs-install-dir: C:\\VS2022Preview
+        arch: x64
+        toolset: 14.40
+
     - name: Configure CMake
       run: cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -DCMAKE_CXX_STANDARD=${{matrix.cpp_version}}
 
