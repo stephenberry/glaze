@@ -378,10 +378,33 @@ struct glz::meta<glz::generic>
 
 namespace glz
 {
+   // Concept for types that can be directly converted from generic without JSON round-trip
+   template <class T>
+   concept directly_convertible_from_generic =
+      std::same_as<T, bool> || std::same_as<T, double> || std::same_as<T, std::string> ||
+      std::same_as<T, std::string_view> || std::integral<T> ||
+      (readable_array_t<T> && !std::same_as<T, std::string>) || readable_map_t<T>;
+
    // These functions allow a generic value to be read/written to a C++ struct
 
+   // Optimized overload for types that support direct conversion
    template <auto Opts, class T>
-      requires read_supported<T, Opts.format>
+      requires read_supported<T, Opts.format> && directly_convertible_from_generic<T>
+   [[nodiscard]] error_ctx read(T& value, const generic& source)
+   {
+      auto result = convert_from_generic<T>(source);
+      if (result) {
+         value = std::move(*result);
+         return error_ctx{};
+      }
+      else {
+         return result.error();
+      }
+   }
+
+   // General overload for complex types (structs, etc.) that need JSON round-trip
+   template <auto Opts, class T>
+      requires read_supported<T, Opts.format> && (!directly_convertible_from_generic<T>)
    [[nodiscard]] error_ctx read(T& value, const generic& source)
    {
       auto buffer = source.dump();
@@ -394,7 +417,24 @@ namespace glz
       }
    }
 
+   // Optimized overload for types that support direct conversion
    template <read_supported<JSON> T>
+      requires directly_convertible_from_generic<T>
+   [[nodiscard]] error_ctx read_json(T& value, const generic& source)
+   {
+      auto result = convert_from_generic<T>(source);
+      if (result) {
+         value = std::move(*result);
+         return error_ctx{};
+      }
+      else {
+         return result.error();
+      }
+   }
+
+   // General overload for complex types (structs, etc.) that need JSON round-trip
+   template <read_supported<JSON> T>
+      requires(!directly_convertible_from_generic<T>)
    [[nodiscard]] error_ctx read_json(T& value, const generic& source)
    {
       auto buffer = source.dump();
@@ -406,7 +446,17 @@ namespace glz
       }
    }
 
+   // Optimized overload for types that support direct conversion
    template <read_supported<JSON> T>
+      requires directly_convertible_from_generic<T>
+   [[nodiscard]] expected<T, error_ctx> read_json(const generic& source)
+   {
+      return convert_from_generic<T>(source);
+   }
+
+   // General overload for complex types (structs, etc.) that need JSON round-trip
+   template <read_supported<JSON> T>
+      requires(!directly_convertible_from_generic<T>)
    [[nodiscard]] expected<T, error_ctx> read_json(const generic& source)
    {
       auto buffer = source.dump();
