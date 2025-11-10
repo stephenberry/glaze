@@ -98,7 +98,7 @@ namespace glz
       { T(a.real(), a.imag()) } -> std::same_as<T>;
       { a + b } -> std::same_as<T>;
       { a - b } -> std::same_as<T>;
-      { a* b } -> std::same_as<T>;
+      { a * b } -> std::same_as<T>;
       { a / b } -> std::same_as<T>;
    };
 
