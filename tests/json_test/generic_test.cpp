@@ -615,6 +615,346 @@ suite struct_assignment_tests = [] {
    };
 };
 
+// Tests for issue #1807: glz::get<T> with container types
+// https://github.com/stephenberry/glaze/issues/1807
+suite issue_1807_tests = [] {
+   "get_vector_from_generic"_test = [] {
+      std::string buffer = R"({"test0": false, "test1": ["alice", "bob"]})";
+      glz::generic json{};
+      expect(!glz::read_json(json, buffer));
+
+      // These should work
+      auto test0_result = glz::get<bool>(json, "/test0");
+      expect(test0_result.has_value()) << "Should get bool value";
+      expect(*test0_result == false) << "Should get correct bool value";
+
+      // This should work now with the new overload
+      auto test1_result = glz::get<std::vector<std::string>>(json, "/test1");
+      expect(test1_result.has_value()) << "Should get vector<string> value";
+      if (test1_result.has_value()) {
+         auto& vec = *test1_result;
+         expect(vec.size() == 2) << "Vector should have 2 elements";
+         expect(vec[0] == "alice") << "First element should be 'alice'";
+         expect(vec[1] == "bob") << "Second element should be 'bob'";
+      }
+
+      // Individual element access works (returns reference wrapper)
+      auto elem0_result = glz::get<std::string>(json, "/test1/0");
+      expect(elem0_result.has_value()) << "Should get first array element";
+      expect(elem0_result->get() == "alice") << "First element should be 'alice'";
+   };
+
+   "get_map_from_generic"_test = [] {
+      std::string buffer = R"({"test0": false, "test1": {"0": "alice", "1": "bob"}})";
+      glz::generic json{};
+      expect(!glz::read_json(json, buffer));
+
+      auto test0_result = glz::get<bool>(json, "/test0");
+      expect(test0_result.has_value()) << "Should get bool value";
+
+      // This should work now with the new overload
+      auto test1_result = glz::get<std::map<std::string, std::string>>(json, "/test1");
+      expect(test1_result.has_value()) << "Should get map<string, string> value";
+      if (test1_result.has_value()) {
+         auto& map = *test1_result;
+         expect(map.size() == 2) << "Map should have 2 elements";
+         expect(map.at("0") == "alice") << "First element should be 'alice'";
+         expect(map.at("1") == "bob") << "Second element should be 'bob'";
+      }
+
+      // Individual element access works (returns reference wrapper)
+      auto elem0_result = glz::get<std::string>(json, "/test1/0");
+      expect(elem0_result.has_value()) << "Should get map element";
+      expect(elem0_result->get() == "alice") << "Element should be 'alice'";
+   };
+
+   "get_array_from_generic"_test = [] {
+      std::string buffer = R"({"items": [1, 2, 3, 4, 5]})";
+      glz::generic json{};
+      expect(!glz::read_json(json, buffer));
+
+      // This should work now with the new overload
+      auto result = glz::get<std::array<int, 5>>(json, "/items");
+      expect(result.has_value()) << "Should get array<int, 5> value";
+      if (result.has_value()) {
+         auto& arr = *result;
+         expect(arr[0] == 1) << "First element should be 1";
+         expect(arr[4] == 5) << "Last element should be 5";
+      }
+   };
+
+   "get_list_from_generic"_test = [] {
+      std::string buffer = R"({"tags": ["tag1", "tag2", "tag3"]})";
+      glz::generic json{};
+      expect(!glz::read_json(json, buffer));
+
+      // This should work now with the new overload
+      auto result = glz::get<std::list<std::string>>(json, "/tags");
+      expect(result.has_value()) << "Should get list<string> value";
+      if (result.has_value()) {
+         auto& list = *result;
+         expect(list.size() == 3) << "List should have 3 elements";
+         auto it = list.begin();
+         expect(*it == "tag1") << "First element should be 'tag1'";
+      }
+   };
+
+   "get_nested_containers"_test = [] {
+      std::string buffer = R"({
+         "matrix": [[1, 2], [3, 4], [5, 6]],
+         "table": {"row1": [10, 20], "row2": [30, 40]}
+      })";
+      glz::generic json{};
+      expect(!glz::read_json(json, buffer));
+
+      // Test vector of vectors
+      auto matrix = glz::get<std::vector<std::vector<int>>>(json, "/matrix");
+      expect(matrix.has_value()) << "Should get nested vector";
+      if (matrix.has_value()) {
+         expect(matrix->size() == 3) << "Matrix should have 3 rows";
+         expect((*matrix)[0].size() == 2) << "First row should have 2 elements";
+         expect((*matrix)[0][0] == 1) << "First element should be 1";
+         expect((*matrix)[2][1] == 6) << "Last element should be 6";
+      }
+
+      // Test map of vectors
+      auto table = glz::get<std::map<std::string, std::vector<int>>>(json, "/table");
+      expect(table.has_value()) << "Should get map of vectors";
+      if (table.has_value()) {
+         expect(table->size() == 2) << "Table should have 2 rows";
+         expect(table->at("row1").size() == 2) << "Row1 should have 2 elements";
+         expect(table->at("row1")[0] == 10) << "First element of row1 should be 10";
+         expect(table->at("row2")[1] == 40) << "Last element of row2 should be 40";
+      }
+   };
+
+   "get_empty_containers"_test = [] {
+      std::string buffer = R"({
+         "empty_array": [],
+         "empty_object": {}
+      })";
+      glz::generic json{};
+      expect(!glz::read_json(json, buffer));
+
+      // Test empty vector
+      auto empty_vec = glz::get<std::vector<int>>(json, "/empty_array");
+      expect(empty_vec.has_value()) << "Should get empty vector";
+      if (empty_vec.has_value()) {
+         expect(empty_vec->empty()) << "Vector should be empty";
+      }
+
+      // Test empty map
+      auto empty_map = glz::get<std::map<std::string, int>>(json, "/empty_object");
+      expect(empty_map.has_value()) << "Should get empty map";
+      if (empty_map.has_value()) {
+         expect(empty_map->empty()) << "Map should be empty";
+      }
+   };
+
+   "get_integer_conversion"_test = [] {
+      std::string buffer = R"({"numbers": [1.0, 2.5, 3.7, 4.9]})";
+      glz::generic json{};
+      expect(!glz::read_json(json, buffer));
+
+      // Test conversion from double to int
+      auto numbers = glz::get<std::vector<int>>(json, "/numbers");
+      expect(numbers.has_value()) << "Should get vector<int> from doubles";
+      if (numbers.has_value()) {
+         expect(numbers->size() == 4) << "Should have 4 elements";
+         expect((*numbers)[0] == 1) << "First element should be 1";
+         expect((*numbers)[1] == 2) << "Second element should be 2 (truncated)";
+         expect((*numbers)[2] == 3) << "Third element should be 3 (truncated)";
+         expect((*numbers)[3] == 4) << "Fourth element should be 4 (truncated)";
+      }
+   };
+
+   "get_error_wrong_type"_test = [] {
+      std::string buffer = R"({"value": "not a number", "data": {"nested": true}})";
+      glz::generic json{};
+      expect(!glz::read_json(json, buffer));
+
+      // Try to get string as vector
+      auto wrong_vec = glz::get<std::vector<int>>(json, "/value");
+      expect(!wrong_vec.has_value()) << "Should fail to get string as vector";
+
+      // Try to get object as vector
+      auto wrong_vec2 = glz::get<std::vector<int>>(json, "/data");
+      expect(!wrong_vec2.has_value()) << "Should fail to get object as vector";
+
+      // Try to get object as map with wrong value type
+      auto wrong_map = glz::get<std::map<std::string, int>>(json, "/data");
+      expect(!wrong_map.has_value()) << "Should fail to convert boolean to int";
+   };
+
+   "get_error_nonexistent_path"_test = [] {
+      std::string buffer = R"({"data": [1, 2, 3]})";
+      glz::generic json{};
+      expect(!glz::read_json(json, buffer));
+
+      // Try to access non-existent path
+      auto result = glz::get<std::vector<int>>(json, "/nonexistent");
+      expect(!result.has_value()) << "Should fail to get non-existent path";
+
+      // Try to access out of bounds array index
+      auto result2 = glz::get<std::vector<int>>(json, "/data/10");
+      expect(!result2.has_value()) << "Should fail to get out of bounds index";
+   };
+
+   "get_deque_container"_test = [] {
+      std::string buffer = R"({"queue": [10, 20, 30, 40]})";
+      glz::generic json{};
+      expect(!glz::read_json(json, buffer));
+
+      auto result = glz::get<std::deque<int>>(json, "/queue");
+      expect(result.has_value()) << "Should get deque<int> value";
+      if (result.has_value()) {
+         auto& dq = *result;
+         expect(dq.size() == 4) << "Deque should have 4 elements";
+         expect(dq.front() == 10) << "Front should be 10";
+         expect(dq.back() == 40) << "Back should be 40";
+      }
+   };
+
+   "convert_from_generic_lowlevel_api"_test = [] {
+      // Test the lower-level convert_from_generic API directly
+      glz::generic arr_json{};
+      expect(!glz::read_json(arr_json, R"([1, 2, 3, 4, 5])"));
+
+      std::vector<int> vec;
+      auto ec = glz::convert_from_generic(vec, arr_json);
+      expect(!ec) << "Should convert array to vector";
+      expect(vec.size() == 5) << "Vector should have 5 elements";
+      expect(vec[0] == 1 && vec[4] == 5) << "Elements should be correct";
+
+      glz::generic obj_json{};
+      expect(!glz::read_json(obj_json, R"({"a": 1, "b": 2})"));
+
+      std::map<std::string, int> map;
+      ec = glz::convert_from_generic(map, obj_json);
+      expect(!ec) << "Should convert object to map";
+      expect(map.size() == 2) << "Map should have 2 elements";
+      expect(map["a"] == 1 && map["b"] == 2) << "Elements should be correct";
+
+      // Test primitive conversion
+      glz::generic num_json{};
+      expect(!glz::read_json(num_json, "42.5"));
+
+      int num;
+      ec = glz::convert_from_generic(num, num_json);
+      expect(!ec) << "Should convert number to int";
+      expect(num == 42) << "Number should be 42";
+   };
+
+   "large_container_conversion"_test = [] {
+      // Build a large array
+      std::string buffer = "[";
+      for (int i = 0; i < 1000; ++i) {
+         if (i > 0) buffer += ",";
+         buffer += std::to_string(i);
+      }
+      buffer += "]";
+
+      glz::generic json{};
+      expect(!glz::read_json(json, buffer));
+
+      // Convert to vector - tests performance of direct traversal
+      std::vector<int> result;
+      auto ec = glz::convert_from_generic(result, json);
+      expect(!ec) << "Should convert large array";
+      expect(result.size() == 1000) << "Should have 1000 elements";
+      expect(result[0] == 0) << "First element should be 0";
+      expect(result[999] == 999) << "Last element should be 999";
+   };
+};
+
+// Tests for optimized read_json from generic
+suite optimized_read_json_tests = [] {
+   "read_json_vector_optimized"_test = [] {
+      glz::generic json{};
+      expect(!glz::read_json(json, R"([1, 2, 3, 4, 5])"));
+
+      // This should use the optimized direct-traversal path
+      std::vector<int> vec;
+      expect(!glz::read_json(vec, json));
+      expect(vec.size() == 5) << "Vector should have 5 elements";
+      expect(vec[0] == 1 && vec[4] == 5) << "Elements should be correct";
+   };
+
+   "read_json_map_optimized"_test = [] {
+      glz::generic json{};
+      expect(!glz::read_json(json, R"({"a": 10, "b": 20})"));
+
+      // This should use the optimized direct-traversal path
+      std::map<std::string, int> map;
+      expect(!glz::read_json(map, json));
+      expect(map.size() == 2) << "Map should have 2 elements";
+      expect(map["a"] == 10 && map["b"] == 20) << "Elements should be correct";
+   };
+
+   "read_json_primitive_optimized"_test = [] {
+      glz::generic num_json{};
+      expect(!glz::read_json(num_json, "42.5"));
+
+      int num;
+      expect(!glz::read_json(num, num_json));
+      expect(num == 42) << "Should convert double to int";
+
+      glz::generic str_json{};
+      expect(!glz::read_json(str_json, R"("hello world")"));
+
+      std::string str;
+      expect(!glz::read_json(str, str_json));
+      expect(str == "hello world") << "Should get string value";
+   };
+
+   "read_json_expected_form_optimized"_test = [] {
+      glz::generic json{};
+      expect(!glz::read_json(json, R"([10, 20, 30])"));
+
+      // Test the expected<T> form
+      auto vec_result = glz::read_json<std::vector<int>>(json);
+      expect(vec_result.has_value()) << "Should successfully convert";
+      if (vec_result.has_value()) {
+         expect(vec_result->size() == 3) << "Should have 3 elements";
+         expect((*vec_result)[1] == 20) << "Middle element should be 20";
+      }
+   };
+
+   "read_json_nested_containers_optimized"_test = [] {
+      glz::generic json{};
+      expect(!glz::read_json(json, R"([[1, 2], [3, 4], [5, 6]])"));
+
+      std::vector<std::vector<int>> matrix;
+      expect(!glz::read_json(matrix, json));
+      expect(matrix.size() == 3) << "Should have 3 rows";
+      expect(matrix[0].size() == 2) << "Each row should have 2 elements";
+      expect(matrix[2][1] == 6) << "Last element should be 6";
+   };
+
+   "read_json_struct_still_works"_test = [] {
+      // Test that structs still work (using JSON round-trip)
+      glz::generic json{};
+      expect(!glz::read_json(json, R"({"name":"Alice","age":30,"hobbies":["reading","gaming"]})"));
+
+      Person person;
+      expect(!glz::read_json(person, json));
+      expect(person.name == "Alice") << "Name should be correct";
+      expect(person.age == 30) << "Age should be correct";
+      expect(person.hobbies.size() == 2) << "Should have 2 hobbies";
+   };
+
+   "read_with_opts_optimized"_test = [] {
+      glz::generic json{};
+      expect(!glz::read_json(json, R"([1, 2, 3])"));
+
+      // Test the templated read<Opts> function
+      std::vector<int> vec;
+      expect(!glz::read<glz::opts{}>(vec, json));
+      expect(vec.size() == 3) << "Vector should have 3 elements";
+      expect(vec[0] == 1) << "First element should be 1";
+   };
+};
+
 suite fuzz_tests = [] {
    "fuzz1"_test = [] {
       std::string_view s = "[true,true,tur";

@@ -269,8 +269,15 @@ namespace glz
    template <class Buffer>
    concept raw_buffer = std::same_as<std::decay_t<Buffer>, char*> && non_const_buffer<Buffer>;
 
+   // A resizable buffer MUST be vector_like to safely support resize and memcpy operations
+   // vector_like requires: resize(), operator[], data() (for contiguous storage), and reference typedef
+   // This prevents heap corruption from buffers that lack data() (like std::deque) or are missing reference typedef
    template <class Buffer>
-   concept output_buffer = range<Buffer> && (sizeof(range_value_t<Buffer>) == sizeof(char)) && non_const_buffer<Buffer>;
+   concept safe_resizable_buffer = !resizable<Buffer> || vector_like<Buffer>;
+
+   template <class Buffer>
+   concept output_buffer = range<Buffer> && (sizeof(range_value_t<Buffer>) == sizeof(char)) &&
+                           non_const_buffer<Buffer> && safe_resizable_buffer<Buffer>;
 
    template <class T>
    constexpr bool const_value_v = std::is_const_v<std::remove_pointer_t<std::remove_reference_t<T>>>;
