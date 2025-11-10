@@ -512,35 +512,50 @@ namespace glz
          size_t key_end = remaining.find('/');
          sv key = (key_end == sv::npos) ? remaining : remaining.substr(0, key_end);
 
-         // Handle JSON Pointer escaping
-         std::string unescaped_key;
-         for (size_t i = 0; i < key.size(); ++i) {
-            if (key[i] == '~' && i + 1 < key.size()) {
-               if (key[i + 1] == '0')
-                  unescaped_key += '~';
-               else if (key[i + 1] == '1')
-                  unescaped_key += '/';
-               else
-                  return nullptr; // Invalid escape sequence
-               ++i;
-            }
-            else {
-               unescaped_key += key[i];
-            }
-         }
+         // Check if JSON Pointer escaping is needed
+         const bool needs_unescape = key.find('~') != sv::npos;
 
          // Navigate based on current type
          if (current->is_object()) {
             auto& obj = current->get_object();
-            auto it = obj.find(unescaped_key);
-            if (it == obj.end()) return nullptr;
-            current = &(it->second);
+
+            if (needs_unescape) {
+               // Only allocate string when escaping is present
+               std::string unescaped_key;
+               unescaped_key.reserve(key.size());
+
+               for (size_t i = 0; i < key.size(); ++i) {
+                  if (key[i] == '~' && i + 1 < key.size()) {
+                     if (key[i + 1] == '0')
+                        unescaped_key += '~';
+                     else if (key[i + 1] == '1')
+                        unescaped_key += '/';
+                     else
+                        return nullptr; // Invalid escape sequence
+                     ++i;
+                  }
+                  else {
+                     unescaped_key += key[i];
+                  }
+               }
+
+               auto it = obj.find(unescaped_key);
+               if (it == obj.end()) return nullptr;
+               current = &(it->second);
+            }
+            else {
+               // Use heterogeneous lookup with string_view (no allocation)
+               auto it = obj.find(key);
+               if (it == obj.end()) return nullptr;
+               current = &(it->second);
+            }
          }
          else if (current->is_array()) {
-            // Parse index
+            // Array indices must be plain numbers (no escaping applies to indices)
+            // If key contains '~', it's invalid as an array index and will fail to parse
             size_t index = 0;
-            auto [ptr, ec] = std::from_chars(unescaped_key.data(), unescaped_key.data() + unescaped_key.size(), index);
-            if (ec != std::errc{} || ptr != unescaped_key.data() + unescaped_key.size()) {
+            auto [ptr, ec] = std::from_chars(key.data(), key.data() + key.size(), index);
+            if (ec != std::errc{} || ptr != key.data() + key.size()) {
                return nullptr; // Invalid index
             }
             auto& arr = current->get_array();
