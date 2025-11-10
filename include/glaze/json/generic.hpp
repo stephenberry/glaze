@@ -494,13 +494,15 @@ namespace glz
 
    // Helper function to navigate to a specific location in a glz::generic using a JSON pointer
    // Returns a pointer to the generic at that location, or nullptr if not found
-   inline generic* navigate_to(generic* root, sv json_ptr) noexcept
+   // Template implementation to handle both const and non-const cases
+   template <class GenericPtr>
+   inline auto navigate_to_impl(GenericPtr root, sv json_ptr) noexcept -> GenericPtr
    {
       if (!root) return nullptr;
       if (json_ptr.empty()) return root;
       if (json_ptr[0] != '/' || json_ptr.size() < 2) return nullptr;
 
-      generic* current = root;
+      GenericPtr current = root;
       sv remaining = json_ptr;
 
       while (!remaining.empty() && remaining[0] == '/') {
@@ -561,10 +563,16 @@ namespace glz
       return current;
    }
 
+   // Non-const version
+   inline generic* navigate_to(generic* root, sv json_ptr) noexcept
+   {
+      return navigate_to_impl(root, json_ptr);
+   }
+
    // Const version
    inline const generic* navigate_to(const generic* root, sv json_ptr) noexcept
    {
-      return navigate_to(const_cast<generic*>(root), json_ptr);
+      return navigate_to_impl(root, json_ptr);
    }
 
    // Concept to determine if a type needs deserialization from generic
