@@ -820,32 +820,29 @@ suite issue_1807_tests = [] {
       glz::generic arr_json{};
       expect(!glz::read_json(arr_json, R"([1, 2, 3, 4, 5])"));
 
-      auto vec = glz::convert_from_generic<std::vector<int>>(arr_json);
-      expect(vec.has_value()) << "Should convert array to vector";
-      if (vec.has_value()) {
-         expect(vec->size() == 5) << "Vector should have 5 elements";
-         expect((*vec)[0] == 1 && (*vec)[4] == 5) << "Elements should be correct";
-      }
+      std::vector<int> vec;
+      auto ec = glz::convert_from_generic(vec, arr_json);
+      expect(!ec) << "Should convert array to vector";
+      expect(vec.size() == 5) << "Vector should have 5 elements";
+      expect(vec[0] == 1 && vec[4] == 5) << "Elements should be correct";
 
       glz::generic obj_json{};
       expect(!glz::read_json(obj_json, R"({"a": 1, "b": 2})"));
 
-      auto map = glz::convert_from_generic<std::map<std::string, int>>(obj_json);
-      expect(map.has_value()) << "Should convert object to map";
-      if (map.has_value()) {
-         expect(map->size() == 2) << "Map should have 2 elements";
-         expect(map->at("a") == 1 && map->at("b") == 2) << "Elements should be correct";
-      }
+      std::map<std::string, int> map;
+      ec = glz::convert_from_generic(map, obj_json);
+      expect(!ec) << "Should convert object to map";
+      expect(map.size() == 2) << "Map should have 2 elements";
+      expect(map["a"] == 1 && map["b"] == 2) << "Elements should be correct";
 
       // Test primitive conversion
       glz::generic num_json{};
       expect(!glz::read_json(num_json, "42.5"));
 
-      auto num = glz::convert_from_generic<int>(num_json);
-      expect(num.has_value()) << "Should convert number to int";
-      if (num.has_value()) {
-         expect(*num == 42) << "Number should be 42";
-      }
+      int num;
+      ec = glz::convert_from_generic(num, num_json);
+      expect(!ec) << "Should convert number to int";
+      expect(num == 42) << "Number should be 42";
    };
 
    "large_container_conversion"_test = [] {
@@ -861,13 +858,12 @@ suite issue_1807_tests = [] {
       expect(!glz::read_json(json, buffer));
 
       // Convert to vector - tests performance of direct traversal
-      auto result = glz::convert_from_generic<std::vector<int>>(json);
-      expect(result.has_value()) << "Should convert large array";
-      if (result.has_value()) {
-         expect(result->size() == 1000) << "Should have 1000 elements";
-         expect((*result)[0] == 0) << "First element should be 0";
-         expect((*result)[999] == 999) << "Last element should be 999";
-      }
+      std::vector<int> result;
+      auto ec = glz::convert_from_generic(result, json);
+      expect(!ec) << "Should convert large array";
+      expect(result.size() == 1000) << "Should have 1000 elements";
+      expect(result[0] == 0) << "First element should be 0";
+      expect(result[999] == 999) << "Last element should be 999";
    };
 };
 

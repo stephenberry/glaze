@@ -392,14 +392,7 @@ namespace glz
       requires read_supported<T, Opts.format> && directly_convertible_from_generic<T>
    [[nodiscard]] error_ctx read(T& value, const generic& source)
    {
-      auto result = convert_from_generic<T>(source);
-      if (result) {
-         value = std::move(*result);
-         return error_ctx{};
-      }
-      else {
-         return result.error();
-      }
+      return convert_from_generic(value, source);
    }
 
    // General overload for complex types (structs, etc.) that need JSON round-trip
@@ -422,14 +415,7 @@ namespace glz
       requires directly_convertible_from_generic<T>
    [[nodiscard]] error_ctx read_json(T& value, const generic& source)
    {
-      auto result = convert_from_generic<T>(source);
-      if (result) {
-         value = std::move(*result);
-         return error_ctx{};
-      }
-      else {
-         return result.error();
-      }
+      return convert_from_generic(value, source);
    }
 
    // General overload for complex types (structs, etc.) that need JSON round-trip
@@ -451,7 +437,12 @@ namespace glz
       requires directly_convertible_from_generic<T>
    [[nodiscard]] expected<T, error_ctx> read_json(const generic& source)
    {
-      return convert_from_generic<T>(source);
+      T result;
+      auto ec = convert_from_generic(result, source);
+      if (ec) {
+         return unexpected(ec);
+      }
+      return result;
    }
 
    // General overload for complex types (structs, etc.) that need JSON round-trip
@@ -641,63 +632,67 @@ namespace glz
    }
 
    // Direct conversion from generic to target types without JSON serialization
+   // Takes result by reference to allow memory reuse and avoid extra moves
 
    // Forward declaration for recursive conversion
    template <class T>
-   expected<T, error_ctx> convert_from_generic(const generic& source);
+   error_ctx convert_from_generic(T& result, const generic& source);
 
    // Specialization for bool
    template <>
-   inline expected<bool, error_ctx> convert_from_generic<bool>(const generic& source)
+   inline error_ctx convert_from_generic<bool>(bool& result, const generic& source)
    {
       if (!source.is_boolean()) {
-         return unexpected(error_ctx{error_code::syntax_error});
+         return error_ctx{error_code::syntax_error};
       }
-      return source.get<bool>();
+      result = source.get<bool>();
+      return {};
    }
 
    // Specialization for double
    template <>
-   inline expected<double, error_ctx> convert_from_generic<double>(const generic& source)
+   inline error_ctx convert_from_generic<double>(double& result, const generic& source)
    {
       if (!source.is_number()) {
-         return unexpected(error_ctx{error_code::syntax_error});
+         return error_ctx{error_code::syntax_error};
       }
-      return source.get<double>();
+      result = source.get<double>();
+      return {};
    }
 
    // Specialization for string
    template <>
-   inline expected<std::string, error_ctx> convert_from_generic<std::string>(const generic& source)
+   inline error_ctx convert_from_generic<std::string>(std::string& result, const generic& source)
    {
       if (!source.is_string()) {
-         return unexpected(error_ctx{error_code::syntax_error});
+         return error_ctx{error_code::syntax_error};
       }
-      return source.get<std::string>();
+      result = source.get<std::string>();
+      return {};
    }
 
    // Specialization for integer types (convert from double)
    template <class T>
       requires(int_t<T>)
-   expected<T, error_ctx> convert_from_generic(const generic& source)
+   error_ctx convert_from_generic(T& result, const generic& source)
    {
       if (!source.is_number()) {
-         return unexpected(error_ctx{error_code::syntax_error});
+         return error_ctx{error_code::syntax_error};
       }
-      return static_cast<T>(source.get<double>());
+      result = static_cast<T>(source.get<double>());
+      return {};
    }
 
    // Specialization for array-like containers
    template <class T>
       requires(readable_array_t<T> && !std::same_as<T, std::string>)
-   expected<T, error_ctx> convert_from_generic(const generic& source)
+   error_ctx convert_from_generic(T& result, const generic& source)
    {
       if (!source.is_array()) {
-         return unexpected(error_ctx{error_code::syntax_error});
+         return error_ctx{error_code::syntax_error};
       }
 
       const auto& arr = source.get_array();
-      T result;
 
       if constexpr (resizable<T>) {
          result.clear();
@@ -709,67 +704,68 @@ namespace glz
       size_t index = 0;
       for (const auto& elem : arr) {
          using value_type = range_value_t<T>;
-         auto converted = convert_from_generic<value_type>(elem);
-         if (!converted) {
-            return unexpected(converted.error());
+         value_type converted;
+         auto ec = convert_from_generic(converted, elem);
+         if (ec) {
+            return ec;
          }
 
          if constexpr (resizable<T> && push_backable<T>) {
-            result.push_back(std::move(*converted));
+            result.push_back(std::move(converted));
          }
          else if constexpr (resizable<T> && emplace_backable<T>) {
-            result.emplace_back(std::move(*converted));
+            result.emplace_back(std::move(converted));
          }
          else if constexpr (accessible<T>) {
             if (index >= result.size()) {
-               return unexpected(error_ctx{error_code::syntax_error});
+               return error_ctx{error_code::syntax_error};
             }
-            result[index] = std::move(*converted);
+            result[index] = std::move(converted);
          }
          else if constexpr (emplaceable<T>) {
-            result.emplace(std::move(*converted));
+            result.emplace(std::move(converted));
          }
          else {
-            return unexpected(error_ctx{error_code::syntax_error});
+            return error_ctx{error_code::syntax_error};
          }
 
          ++index;
       }
 
-      return result;
+      return {};
    }
 
    // Specialization for map-like containers
    template <class T>
       requires readable_map_t<T>
-   expected<T, error_ctx> convert_from_generic(const generic& source)
+   error_ctx convert_from_generic(T& result, const generic& source)
    {
       if (!source.is_object()) {
-         return unexpected(error_ctx{error_code::syntax_error});
+         return error_ctx{error_code::syntax_error};
       }
 
       const auto& obj = source.get_object();
-      T result;
 
       for (const auto& [key, value] : obj) {
          using mapped_type = typename T::mapped_type;
-         auto converted = convert_from_generic<mapped_type>(value);
-         if (!converted) {
-            return unexpected(converted.error());
+         mapped_type converted;
+         auto ec = convert_from_generic(converted, value);
+         if (ec) {
+            return ec;
          }
 
          if constexpr (map_subscriptable<T>) {
-            result[key] = std::move(*converted);
+            result[key] = std::move(converted);
          }
          else if constexpr (emplaceable<T>) {
-            result.emplace(key, std::move(*converted));
+            result.emplace(key, std::move(converted));
          }
          else {
-            return unexpected(error_ctx{error_code::syntax_error});
+            return error_ctx{error_code::syntax_error};
          }
       }
 
-      return result;
+      return {};
    }
 
    // Concept to determine if a type needs deserialization from generic
@@ -800,7 +796,12 @@ namespace glz
       }
 
       // Direct conversion without JSON serialization round-trip
-      return convert_from_generic<V>(*target);
+      V result;
+      auto ec = convert_from_generic(result, *target);
+      if (ec) {
+         return unexpected(ec);
+      }
+      return result;
    }
 
    // Const version
@@ -814,6 +815,11 @@ namespace glz
       }
 
       // Direct conversion without JSON serialization round-trip
-      return convert_from_generic<V>(*target);
+      V result;
+      auto ec = convert_from_generic(result, *target);
+      if (ec) {
+         return unexpected(ec);
+      }
+      return result;
    }
 }
