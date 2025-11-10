@@ -551,7 +551,7 @@ void write_tests()
 
    // Test for issue #1326: BEVE should skip null members like JSON does
    "issue_1326_skip_null_members"_test = [] {
-      std::vector<test_skip> a{{},{}};
+      std::vector<test_skip> a{{}, {}};
       std::string json_buffer;
       std::vector<char> beve_buffer;
 
