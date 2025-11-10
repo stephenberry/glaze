@@ -615,6 +615,91 @@ suite struct_assignment_tests = [] {
    };
 };
 
+// Tests for issue #1807: glz::get<T> with container types
+// https://github.com/stephenberry/glaze/issues/1807
+suite issue_1807_tests = [] {
+   "get_vector_from_generic"_test = [] {
+      std::string buffer = R"({"test0": false, "test1": ["alice", "bob"]})";
+      glz::generic json{};
+      expect(!glz::read_json(json, buffer));
+
+      // These should work
+      auto test0_result = glz::get<bool>(json, "/test0");
+      expect(test0_result.has_value()) << "Should get bool value";
+      expect(*test0_result == false) << "Should get correct bool value";
+
+      // This should work now with the new overload
+      auto test1_result = glz::get<std::vector<std::string>>(json, "/test1");
+      expect(test1_result.has_value()) << "Should get vector<string> value";
+      if (test1_result.has_value()) {
+         auto& vec = *test1_result;
+         expect(vec.size() == 2) << "Vector should have 2 elements";
+         expect(vec[0] == "alice") << "First element should be 'alice'";
+         expect(vec[1] == "bob") << "Second element should be 'bob'";
+      }
+
+      // Individual element access works (returns reference wrapper)
+      auto elem0_result = glz::get<std::string>(json, "/test1/0");
+      expect(elem0_result.has_value()) << "Should get first array element";
+      expect(elem0_result->get() == "alice") << "First element should be 'alice'";
+   };
+
+   "get_map_from_generic"_test = [] {
+      std::string buffer = R"({"test0": false, "test1": {"0": "alice", "1": "bob"}})";
+      glz::generic json{};
+      expect(!glz::read_json(json, buffer));
+
+      auto test0_result = glz::get<bool>(json, "/test0");
+      expect(test0_result.has_value()) << "Should get bool value";
+
+      // This should work now with the new overload
+      auto test1_result = glz::get<std::map<std::string, std::string>>(json, "/test1");
+      expect(test1_result.has_value()) << "Should get map<string, string> value";
+      if (test1_result.has_value()) {
+         auto& map = *test1_result;
+         expect(map.size() == 2) << "Map should have 2 elements";
+         expect(map.at("0") == "alice") << "First element should be 'alice'";
+         expect(map.at("1") == "bob") << "Second element should be 'bob'";
+      }
+
+      // Individual element access works (returns reference wrapper)
+      auto elem0_result = glz::get<std::string>(json, "/test1/0");
+      expect(elem0_result.has_value()) << "Should get map element";
+      expect(elem0_result->get() == "alice") << "Element should be 'alice'";
+   };
+
+   "get_array_from_generic"_test = [] {
+      std::string buffer = R"({"items": [1, 2, 3, 4, 5]})";
+      glz::generic json{};
+      expect(!glz::read_json(json, buffer));
+
+      // This should work now with the new overload
+      auto result = glz::get<std::array<int, 5>>(json, "/items");
+      expect(result.has_value()) << "Should get array<int, 5> value";
+      if (result.has_value()) {
+         auto& arr = *result;
+         expect(arr[0] == 1) << "First element should be 1";
+         expect(arr[4] == 5) << "Last element should be 5";
+      }
+   };
+
+   "get_list_from_generic"_test = [] {
+      std::string buffer = R"({"tags": ["tag1", "tag2", "tag3"]})";
+      glz::generic json{};
+      expect(!glz::read_json(json, buffer));
+
+      // This should work now with the new overload
+      auto result = glz::get<std::list<std::string>>(json, "/tags");
+      expect(result.has_value()) << "Should get list<string> value";
+      if (result.has_value()) {
+         auto& list = *result;
+         expect(list.size() == 3) << "List should have 3 elements";
+         auto it = list.begin();
+         expect(*it == "tag1") << "First element should be 'tag1'";
+      }
+   };
+};
+
 suite fuzz_tests = [] {
    "fuzz1"_test = [] {
       std::string_view s = "[true,true,tur";

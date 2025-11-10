@@ -491,4 +491,122 @@ namespace glz
          return false;
       }
    };
+
+   // Helper function to navigate to a specific location in a glz::generic using a JSON pointer
+   // Returns a pointer to the generic at that location, or nullptr if not found
+   inline generic* navigate_to(generic* root, sv json_ptr) noexcept
+   {
+      if (!root) return nullptr;
+      if (json_ptr.empty()) return root;
+      if (json_ptr[0] != '/' || json_ptr.size() < 2) return nullptr;
+
+      generic* current = root;
+      sv remaining = json_ptr;
+
+      while (!remaining.empty() && remaining[0] == '/') {
+         remaining.remove_prefix(1); // Remove leading '/'
+
+         // Find the next '/' or end of string
+         size_t key_end = remaining.find('/');
+         sv key = (key_end == sv::npos) ? remaining : remaining.substr(0, key_end);
+
+         // Handle JSON Pointer escaping
+         std::string unescaped_key;
+         for (size_t i = 0; i < key.size(); ++i) {
+            if (key[i] == '~' && i + 1 < key.size()) {
+               if (key[i + 1] == '0')
+                  unescaped_key += '~';
+               else if (key[i + 1] == '1')
+                  unescaped_key += '/';
+               else
+                  return nullptr; // Invalid escape sequence
+               ++i;
+            }
+            else {
+               unescaped_key += key[i];
+            }
+         }
+
+         // Navigate based on current type
+         if (current->is_object()) {
+            auto& obj = current->get_object();
+            auto it = obj.find(unescaped_key);
+            if (it == obj.end()) return nullptr;
+            current = &(it->second);
+         }
+         else if (current->is_array()) {
+            // Parse index
+            size_t index = 0;
+            auto [ptr, ec] = std::from_chars(unescaped_key.data(), unescaped_key.data() + unescaped_key.size(), index);
+            if (ec != std::errc{} || ptr != unescaped_key.data() + unescaped_key.size()) {
+               return nullptr; // Invalid index
+            }
+            auto& arr = current->get_array();
+            if (index >= arr.size()) return nullptr;
+            current = &arr[index];
+         }
+         else {
+            return nullptr; // Can't navigate further
+         }
+
+         // Move to next segment
+         if (key_end == sv::npos) {
+            remaining = sv{};
+         }
+         else {
+            remaining = remaining.substr(key_end);
+         }
+      }
+
+      return current;
+   }
+
+   // Const version
+   inline const generic* navigate_to(const generic* root, sv json_ptr) noexcept
+   {
+      return navigate_to(const_cast<generic*>(root), json_ptr);
+   }
+
+   // Concept to determine if a type needs deserialization from generic
+   // These are container types that can't be directly referenced from glz::generic
+   // because they're not the exact types stored in generic's variant
+   template <class V>
+   concept needs_container_deserialization =
+      (readable_array_t<V> || readable_map_t<V>) &&
+      !std::same_as<V, generic> &&
+      !std::same_as<V, generic::array_t> &&
+      !std::same_as<V, generic::object_t> &&
+      !std::same_as<V, std::string> &&
+      !std::same_as<V, double> &&
+      !std::same_as<V, bool> &&
+      !std::same_as<V, std::nullptr_t>;
+
+   // Overload of get for glz::generic that deserializes containers
+   // This overload is only selected for container types that need deserialization
+   template <class V>
+      requires needs_container_deserialization<V>
+   expected<V, error_ctx> get(generic& root, sv json_ptr)
+   {
+      // Navigate to the target location
+      generic* target = navigate_to(&root, json_ptr);
+      if (!target) {
+         return unexpected(error_ctx{error_code::get_nonexistent_json_ptr});
+      }
+
+      // Deserialize from the generic at this location
+      return read_json<V>(*target);
+   }
+
+   // Const version
+   template <class V>
+      requires needs_container_deserialization<V>
+   expected<V, error_ctx> get(const generic& root, sv json_ptr)
+   {
+      const generic* target = navigate_to(&root, json_ptr);
+      if (!target) {
+         return unexpected(error_ctx{error_code::get_nonexistent_json_ptr});
+      }
+
+      return read_json<V>(*target);
+   }
 }
