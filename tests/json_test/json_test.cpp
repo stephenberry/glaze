@@ -11069,9 +11069,9 @@ suite member_function_pointer_serialization = [] {
 struct requires_key_parsing_test
 {
    int required_field1{};
-   int optional_field{};  // Non-nullable but made optional via requires_key
+   int optional_field{}; // Non-nullable but made optional via requires_key
    int required_field2{};
-   int reserved_internal{};  // Internal field that shouldn't be required
+   int reserved_internal{}; // Internal field that shouldn't be required
 };
 
 template <>
@@ -11126,8 +11126,8 @@ suite requires_key_parsing_tests = [] {
          expect(not ec) << glz::format_error(ec, json);
          expect(obj.required_field1 == 1);
          expect(obj.required_field2 == 2);
-         expect(obj.optional_field == 0);  // Default value
-         expect(obj.reserved_internal == 0);  // Default value
+         expect(obj.optional_field == 0); // Default value
+         expect(obj.reserved_internal == 0); // Default value
       }
 
       // Test 2: Missing a required field should fail
