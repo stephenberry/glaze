@@ -137,10 +137,9 @@ int main()
    server.get("/metrics", [&metrics](const glz::request&, glz::response& res) {
       res.json({{"total_requests", metrics.total_requests.load()},
                 {"total_responses", metrics.total_responses.load()},
-                {"avg_response_time_ms",
-                 metrics.total_responses.load() > 0
-                    ? (metrics.response_time_sum.load() / metrics.total_responses.load() * 1000.0)
-                    : 0.0},
+                {"avg_response_time_ms", metrics.total_responses.load() > 0 ? (metrics.response_time_sum.load() /
+                                                                               metrics.total_responses.load() * 1000.0)
+                                                                            : 0.0},
                 {"status_2xx", metrics.status_2xx.load()},
                 {"status_4xx", metrics.status_4xx.load()},
                 {"status_5xx", metrics.status_5xx.load()}});

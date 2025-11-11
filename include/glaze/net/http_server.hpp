@@ -1035,9 +1035,7 @@ namespace glz
          }
 
          // Wrap the continuation in next_handler to enforce synchronous execution
-         next_handler next([this, index, &req, &res, &h]() {
-            execute_middleware_chain(index + 1, req, res, h);
-         });
+         next_handler next([this, index, &req, &res, &h]() { execute_middleware_chain(index + 1, req, res, h); });
 
          wrapping_middlewares_[index](req, res, next);
       }
@@ -1468,7 +1466,8 @@ namespace glz
                         hook(request, response);
                      }
                      catch (const std::exception&) {
-                        error_handler(std::make_error_code(std::errc::invalid_argument), std::source_location::current());
+                        error_handler(std::make_error_code(std::errc::invalid_argument),
+                                      std::source_location::current());
                      }
                   }
                   send_response(socket, response);
