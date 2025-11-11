@@ -38,6 +38,14 @@ target_link_libraries(json_t_test PRIVATE glz_test_common)
 
 add_test(NAME json_t_test COMMAND json_t_test)
 
+## glz::generic with int64_t test
+
+add_executable(generic_int64_test generic_int64_test.cpp)
+
+target_link_libraries(generic_int64_test PRIVATE glz_test_common)
+
+add_test(NAME generic_int64_test COMMAND generic_int64_test)
+
 ## JSON Schema test
 
 add_executable(jsonschema_test jsonschema_test.cpp)
