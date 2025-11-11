@@ -1100,4 +1100,172 @@ suite variant_default_tests = [] {
    };
 };
 
+// ============================================================================
+// Numeric variant tests - int64_t and double
+// ============================================================================
+
+suite variant_int64_double_tests = [] {
+   "variant<int64_t, double> write int64"_test = [] {
+      std::variant<int64_t, double> var = int64_t{42};
+      std::string s{};
+      expect(not glz::write_json(var, s));
+      expect(s == "42") << s;
+   };
+
+   "variant<int64_t, double> write double"_test = [] {
+      std::variant<int64_t, double> var = 3.14;
+      std::string s{};
+      expect(not glz::write_json(var, s));
+      expect(s == "3.14") << s;
+   };
+
+   "variant<int64_t, double> write large int64"_test = [] {
+      std::variant<int64_t, double> var = int64_t{9223372036854775807}; // max int64_t
+      std::string s{};
+      expect(not glz::write_json(var, s));
+      expect(s == "9223372036854775807") << s;
+   };
+
+   "variant<int64_t, double> write negative int64"_test = [] {
+      std::variant<int64_t, double> var = int64_t{-9223372036854775807};
+      std::string s{};
+      expect(not glz::write_json(var, s));
+      expect(s == "-9223372036854775807") << s;
+   };
+
+   "variant<int64_t, double> write zero"_test = [] {
+      std::variant<int64_t, double> var = int64_t{0};
+      std::string s{};
+      expect(not glz::write_json(var, s));
+      expect(s == "0") << s;
+   };
+
+   "variant<int64_t, double> read integer as int64"_test = [] {
+      std::variant<int64_t, double> var;
+      auto ec = glz::read_json(var, "42");
+      expect(ec == glz::error_code::none);
+      expect(std::holds_alternative<int64_t>(var));
+      expect(std::get<int64_t>(var) == 42);
+   };
+
+   "variant<int64_t, double> read floating point as double"_test = [] {
+      std::variant<int64_t, double> var;
+      auto ec = glz::read_json(var, "3.14");
+      expect(ec == glz::error_code::none);
+      expect(std::holds_alternative<double>(var));
+      expect(std::get<double>(var) == 3.14);
+   };
+
+   "variant<int64_t, double> read negative integer"_test = [] {
+      std::variant<int64_t, double> var;
+      auto ec = glz::read_json(var, "-100");
+      expect(ec == glz::error_code::none);
+      expect(std::holds_alternative<int64_t>(var));
+      expect(std::get<int64_t>(var) == -100);
+   };
+
+   "variant<int64_t, double> read negative double"_test = [] {
+      std::variant<int64_t, double> var;
+      auto ec = glz::read_json(var, "-2.5");
+      expect(ec == glz::error_code::none);
+      expect(std::holds_alternative<double>(var));
+      expect(std::get<double>(var) == -2.5);
+   };
+
+   "variant<int64_t, double> read large int64"_test = [] {
+      std::variant<int64_t, double> var;
+      auto ec = glz::read_json(var, "9223372036854775807");
+      expect(ec == glz::error_code::none);
+      expect(std::holds_alternative<int64_t>(var));
+      expect(std::get<int64_t>(var) == 9223372036854775807);
+   };
+
+   "variant<int64_t, double> read zero"_test = [] {
+      std::variant<int64_t, double> var;
+      auto ec = glz::read_json(var, "0");
+      expect(ec == glz::error_code::none);
+      expect(std::holds_alternative<int64_t>(var));
+      expect(std::get<int64_t>(var) == 0);
+   };
+
+   "variant<int64_t, double> read scientific notation"_test = [] {
+      std::variant<int64_t, double> var;
+      auto ec = glz::read_json(var, "1.5e10");
+      expect(ec == glz::error_code::none);
+      expect(std::holds_alternative<double>(var));
+      expect(std::get<double>(var) == 1.5e10);
+   };
+
+   "variant<int64_t, double> roundtrip int64"_test = [] {
+      std::variant<int64_t, double> original = int64_t{123456789};
+      std::string json;
+      expect(not glz::write_json(original, json));
+
+      std::variant<int64_t, double> decoded;
+      auto ec = glz::read_json(decoded, json);
+      expect(ec == glz::error_code::none);
+      expect(std::holds_alternative<int64_t>(decoded));
+      expect(std::get<int64_t>(decoded) == 123456789);
+   };
+
+   "variant<int64_t, double> roundtrip double"_test = [] {
+      std::variant<int64_t, double> original = 123.456;
+      std::string json;
+      expect(not glz::write_json(original, json));
+
+      std::variant<int64_t, double> decoded;
+      auto ec = glz::read_json(decoded, json);
+      expect(ec == glz::error_code::none);
+      expect(std::holds_alternative<double>(decoded));
+      expect(std::get<double>(decoded) == 123.456);
+   };
+
+   "variant<int64_t, double> in vector"_test = [] {
+      std::vector<std::variant<int64_t, double>> vec;
+      vec.push_back(int64_t{10});
+      vec.push_back(1.5);
+      vec.push_back(int64_t{-20});
+      vec.push_back(3.14159);
+
+      std::string s;
+      expect(not glz::write_json(vec, s));
+      expect(s == "[10,1.5,-20,3.14159]") << s;
+
+      std::vector<std::variant<int64_t, double>> decoded;
+      auto ec = glz::read_json(decoded, s);
+      expect(ec == glz::error_code::none);
+      expect(decoded.size() == 4);
+      expect(std::holds_alternative<int64_t>(decoded[0]));
+      expect(std::get<int64_t>(decoded[0]) == 10);
+      expect(std::holds_alternative<double>(decoded[1]));
+      expect(std::get<double>(decoded[1]) == 1.5);
+      expect(std::holds_alternative<int64_t>(decoded[2]));
+      expect(std::get<int64_t>(decoded[2]) == -20);
+      expect(std::holds_alternative<double>(decoded[3]));
+      expect(std::get<double>(decoded[3]) == 3.14159);
+   };
+
+   "variant<int64_t, double> edge case - whole number double"_test = [] {
+      // Test if a double with .0 is properly handled
+      std::variant<int64_t, double> var = 5.0;
+      std::string s;
+      expect(not glz::write_json(var, s));
+      // When writing 5.0 as double, it should preserve the type
+      expect(std::holds_alternative<double>(var));
+   };
+
+   "variant<int64_t, double> precision test"_test = [] {
+      std::variant<int64_t, double> var = 0.123456789012345;
+      std::string s;
+      expect(not glz::write_json(var, s));
+
+      std::variant<int64_t, double> decoded;
+      auto ec = glz::read_json(decoded, s);
+      expect(ec == glz::error_code::none);
+      expect(std::holds_alternative<double>(decoded));
+      // Check precision is preserved (within reasonable floating point limits)
+      expect(std::abs(std::get<double>(decoded) - 0.123456789012345) < 1e-15);
+   };
+};
+
 int main() { return 0; }
