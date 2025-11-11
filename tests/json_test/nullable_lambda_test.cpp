@@ -109,4 +109,4 @@ suite nullable_lambda_optional_tests = [] {
    };
 };
 
-int main() { }
+int main() {}
