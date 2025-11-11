@@ -61,3 +61,11 @@ add_executable(value_based_skip_test value_based_skip_test.cpp)
 target_link_libraries(value_based_skip_test PRIVATE glz_test_common)
 
 add_test(NAME value_based_skip_test COMMAND value_based_skip_test)
+
+## Nullable lambda test - tests that lambdas returning nullable types can be skipped
+
+add_executable(nullable_lambda_test nullable_lambda_test.cpp)
+
+target_link_libraries(nullable_lambda_test PRIVATE glz_test_common)
+
+add_test(NAME nullable_lambda_test COMMAND nullable_lambda_test)
