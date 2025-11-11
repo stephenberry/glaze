@@ -23,7 +23,7 @@
 #include "glaze/util/type_traits.hpp"
 #include "glaze/util/variant.hpp"
 
-#ifdef _MSC_VER
+#if defined(_MSC_VER) && !defined(__clang__)
 // Turn off MSVC warning for unreachable code due to constexpr branching
 #pragma warning(push)
 #pragma warning(disable : 4702)
@@ -3743,7 +3743,7 @@ namespace glz
    }
 }
 
-#ifdef _MSC_VER
+#if defined(_MSC_VER) && !defined(__clang__)
 // restore disabled warnings
 #pragma warning(pop)
 #endif

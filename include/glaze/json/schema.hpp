@@ -119,6 +119,10 @@ namespace glz
                                           "ExtUnits", //
                                           "ExtAdvanced"};
 
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wmissing-braces"
+#endif
          static constexpr glz::tuple value = {&T::ref, //
                                               &T::title, //
                                               &T::description, //
@@ -149,6 +153,9 @@ namespace glz
                                               &T::enumeration, //
                                               &T::ExtUnits, //
                                               &T::ExtAdvanced};
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#endif
       };
    };
 
@@ -201,6 +208,10 @@ struct glz::meta<glz::detail::defined_formats>
       "hostname",  "idn-hostname",  "ipv4", "ipv6",         "uri",          "uri-reference",
       "iri",       "iri-reference", "uuid", "uri-template", "json-pointer", "relative-json-pointer",
       "regex"};
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wmissing-braces"
+#endif
    static constexpr std::array value{datetime, //
                                      date, //
                                      time, //
@@ -220,6 +231,9 @@ struct glz::meta<glz::detail::defined_formats>
                                      json_pointer, //
                                      relative_json_pointer, //
                                      regex};
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#endif
 };
 
 template <>
@@ -263,6 +277,10 @@ struct glz::meta<glz::detail::schematic>
                                     "ExtUnits", //
                                     "ExtAdvanced"};
 
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wmissing-braces"
+#endif
    [[maybe_unused]] static constexpr glz::tuple value{
       &T::type, //
       &T::properties, //
@@ -299,6 +317,9 @@ struct glz::meta<glz::detail::schematic>
       [](auto&& s) -> auto& { return s.attributes.enumeration; }, //
       [](auto&& s) -> auto& { return s.attributes.ExtUnits; }, //
       [](auto&& s) -> auto& { return s.attributes.ExtAdvanced; }};
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#endif
 };
 
 namespace glz

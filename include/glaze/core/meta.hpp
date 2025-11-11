@@ -595,6 +595,15 @@ namespace glz
       { glz::meta<std::remove_cvref_t<T>>::skip(s, mctx) } -> std::same_as<bool>;
    };
 
+   // Concept when skip_if is specified for the type (value-based, runtime)
+   template <class T>
+   concept meta_has_skip_if = requires {
+      {
+         meta<std::remove_cvref_t<T>>::skip_if(std::declval<int>(), std::declval<std::string_view>(),
+                                               std::declval<meta_context>())
+      } -> std::convertible_to<bool>;
+   };
+
    template <class T>
    inline constexpr std::string_view tag_v = [] {
       if constexpr (tagged<T>) {

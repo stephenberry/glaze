@@ -92,7 +92,8 @@ namespace glz
          std::array<Eigen::Index, 2> extents{T::RowsAtCompileTime, T::ColsAtCompileTime};
          serialize<BEVE>::op<Opts>(extents, ctx, args...);
 
-         std::span<typename T::Scalar, T::RowsAtCompileTime * T::ColsAtCompileTime> view(value.data(), value.size());
+         std::span<const typename T::Scalar, T::RowsAtCompileTime * T::ColsAtCompileTime> view(value.data(),
+                                                                                               value.size());
          serialize<BEVE>::op<Opts>(view, ctx, args...);
       }
    };
@@ -115,7 +116,7 @@ namespace glz
          std::array<Eigen::Index, 2> extents{value.rows(), value.cols()};
          serialize<BEVE>::op<Opts>(extents, ctx, args...);
 
-         std::span<typename T::Scalar> view(value.data(), extents[0] * extents[1]);
+         std::span<const typename T::Scalar> view(value.data(), extents[0] * extents[1]);
          serialize<BEVE>::op<Opts>(view, ctx, args...);
       }
    };
@@ -139,7 +140,8 @@ namespace glz
       template <auto Opts>
       static void op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix)
       {
-         std::span<typename T::Scalar, T::RowsAtCompileTime * T::ColsAtCompileTime> view(value.data(), value.size());
+         std::span<const typename T::Scalar, T::RowsAtCompileTime * T::ColsAtCompileTime> view(value.data(),
+                                                                                               value.size());
          using Value = std::remove_cvref_t<decltype(value)>;
          to<JSON, Value>::template op<Opts>(view, ctx, b, ix);
       }
@@ -159,7 +161,7 @@ namespace glz
          to<JSON, RowColT>::template op<Opts>(extents, ctx, b, ix);
          dump<','>(b, ix);
 
-         std::span<typename T::Scalar> view(value.data(), value.size());
+         std::span<const typename T::Scalar> view(value.data(), value.size());
          using Value = std::remove_cvref_t<decltype(view)>;
          to<JSON, Value>::template op<Opts>(view, ctx, b, ix);
          dump<']'>(b, ix);
@@ -215,7 +217,7 @@ namespace glz
       static void op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix)
       {
          constexpr auto size = Mode == Eigen::TransformTraits::AffineCompact ? (Dim + 1) * Dim : (Dim + 1) * (Dim + 1);
-         std::span<Scalar, size> view(value.data(), size);
+         std::span<const Scalar, size> view(value.data(), size);
          using Value = std::remove_cvref_t<decltype(value)>;
          to<JSON, Value>::template op<Opts>(view, ctx, b, ix);
       }

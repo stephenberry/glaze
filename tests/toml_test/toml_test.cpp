@@ -51,6 +51,42 @@ struct dotted_access_struct
    level_two l2{};
 };
 
+struct dotted_unknown_inner
+{
+   std::string value{"initial"};
+};
+
+struct dotted_unknown_root
+{
+   dotted_unknown_inner key{};
+};
+
+struct simple_value_struct
+{
+   std::string value{"initial"};
+};
+
+template <>
+struct glz::meta<dotted_unknown_inner>
+{
+   using T = dotted_unknown_inner;
+   static constexpr auto value = object("value", &T::value);
+};
+
+template <>
+struct glz::meta<dotted_unknown_root>
+{
+   using T = dotted_unknown_root;
+   static constexpr auto value = object("key", &T::key);
+};
+
+template <>
+struct glz::meta<simple_value_struct>
+{
+   using T = simple_value_struct;
+   static constexpr auto value = object("value", &T::value);
+};
+
 struct optional_struct
 {
    std::optional<int> maybe = 99;
@@ -866,7 +902,7 @@ value = 5.5)"};
       auto error = glz::read_toml(sc, buffer);
       expect(error); // Expect an error because the format is not correct for TOML. root value should be before nested
                      // table.
-      expect(error == glz::error_code::syntax_error);
+      expect(error == glz::error_code::unknown_key);
    };
 
    "read_nested_struct"_test = [] {
@@ -908,6 +944,78 @@ y = "test2"
       std::string buffer{R"(l2.l1.value = 1)"};
       expect(not glz::read_toml(dac, buffer));
       expect(dac.l2.l1.value == 1);
+   };
+
+   "ignore_unknown_dotted_key"_test = [] {
+      dotted_unknown_root result{};
+      result.key.value = "initial";
+      const std::string toml_input = R"(key.other_value = "string")";
+
+      const auto error = glz::read<glz::opts{.format = glz::TOML, .error_on_unknown_keys = false}>(result, toml_input);
+
+      expect(not error);
+      expect(result.key.value == "initial");
+   };
+
+   "ignore_unknown_dotted_key_type_mismatch"_test = [] {
+      dotted_unknown_root result{};
+      result.key.value = "initial";
+      const std::string toml_input = R"(key.other_value = 1
+key.value = "string")";
+
+      const auto error = glz::read<glz::opts{.format = glz::TOML, .error_on_unknown_keys = false}>(result, toml_input);
+
+      expect(not error);
+      expect(result.key.value == "string");
+   };
+
+   "ignore_unknown_multiline_basic_string"_test = [] {
+      dotted_unknown_root result{};
+      result.key.value = "initial";
+      const std::string toml_input = R"(key.other_value = """first
+second"""
+key.value = "string")";
+
+      const auto error = glz::read<glz::opts{.format = glz::TOML, .error_on_unknown_keys = false}>(result, toml_input);
+
+      expect(not error);
+      expect(result.key.value == "string");
+   };
+
+   "ignore_unknown_multiline_literal_string"_test = [] {
+      dotted_unknown_root result{};
+      result.key.value = "initial";
+      const std::string toml_input = R"(key.other_value = '''first
+second'''
+key.value = "string")";
+
+      const auto error = glz::read<glz::opts{.format = glz::TOML, .error_on_unknown_keys = false}>(result, toml_input);
+
+      expect(not error);
+      expect(result.key.value == "string");
+   };
+
+   "ignore_unknown_array_value"_test = [] {
+      dotted_unknown_root result{};
+      result.key.value = "initial";
+      const std::string toml_input = R"(key.other_value = [1, 2, 3]
+key.value = "string")";
+
+      const auto error = glz::read<glz::opts{.format = glz::TOML, .error_on_unknown_keys = false}>(result, toml_input);
+
+      expect(not error);
+      expect(result.key.value == "string");
+   };
+
+   "ignore_unknown_inline_table"_test = [] {
+      simple_value_struct result{};
+      const std::string toml_input = R"(other = { nested = "value", deeper = { inner = 1 } }
+value = "string")";
+
+      const auto error = glz::read<glz::opts{.format = glz::TOML, .error_on_unknown_keys = false}>(result, toml_input);
+
+      expect(not error);
+      expect(result.value == "string");
    };
 
    // Test writing a boolean value.

@@ -36,7 +36,7 @@ namespace glz
 #include "glaze/json/write.hpp"
 #include "glaze/util/expected.hpp"
 
-#ifdef _MSC_VER
+#if defined(_MSC_VER) && !defined(__clang__)
 // Turn off broken MSVC warning for "declaration of 'v' hides previous local declaration"
 #pragma warning(push)
 #pragma warning(disable : 4456)
@@ -378,10 +378,26 @@ struct glz::meta<glz::generic>
 
 namespace glz
 {
+   // Concept for types that can be directly converted from generic without JSON round-trip
+   template <class T>
+   concept directly_convertible_from_generic =
+      std::same_as<T, bool> || std::same_as<T, double> || std::same_as<T, std::string> ||
+      std::same_as<T, std::string_view> || std::integral<T> || (readable_array_t<T> && !std::same_as<T, std::string>) ||
+      readable_map_t<T>;
+
    // These functions allow a generic value to be read/written to a C++ struct
 
+   // Optimized overload for types that support direct conversion
    template <auto Opts, class T>
-      requires read_supported<T, Opts.format>
+      requires read_supported<T, Opts.format> && directly_convertible_from_generic<T>
+   [[nodiscard]] error_ctx read(T& value, const generic& source)
+   {
+      return convert_from_generic(value, source);
+   }
+
+   // General overload for complex types (structs, etc.) that need JSON round-trip
+   template <auto Opts, class T>
+      requires read_supported<T, Opts.format> && (!directly_convertible_from_generic<T>)
    [[nodiscard]] error_ctx read(T& value, const generic& source)
    {
       auto buffer = source.dump();
@@ -394,7 +410,17 @@ namespace glz
       }
    }
 
+   // Optimized overload for types that support direct conversion
    template <read_supported<JSON> T>
+      requires directly_convertible_from_generic<T>
+   [[nodiscard]] error_ctx read_json(T& value, const generic& source)
+   {
+      return convert_from_generic(value, source);
+   }
+
+   // General overload for complex types (structs, etc.) that need JSON round-trip
+   template <read_supported<JSON> T>
+      requires(!directly_convertible_from_generic<T>)
    [[nodiscard]] error_ctx read_json(T& value, const generic& source)
    {
       auto buffer = source.dump();
@@ -406,7 +432,22 @@ namespace glz
       }
    }
 
+   // Optimized overload for types that support direct conversion
    template <read_supported<JSON> T>
+      requires directly_convertible_from_generic<T>
+   [[nodiscard]] expected<T, error_ctx> read_json(const generic& source)
+   {
+      T result;
+      auto ec = convert_from_generic(result, source);
+      if (ec) {
+         return unexpected(ec);
+      }
+      return result;
+   }
+
+   // General overload for complex types (structs, etc.) that need JSON round-trip
+   template <read_supported<JSON> T>
+      requires(!directly_convertible_from_generic<T>)
    [[nodiscard]] expected<T, error_ctx> read_json(const generic& source)
    {
       auto buffer = source.dump();
@@ -419,7 +460,7 @@ namespace glz
    }
 }
 
-#ifdef _MSC_VER
+#if defined(_MSC_VER) && !defined(__clang__)
 // restore disabled warning
 #pragma warning(pop)
 #endif
@@ -491,4 +532,286 @@ namespace glz
          return false;
       }
    };
+
+   // Helper function to navigate to a specific location in a glz::generic using a JSON pointer
+   // Returns a pointer to the generic at that location, or nullptr if not found
+   // Template implementation to handle both const and non-const cases
+   template <class GenericPtr>
+   inline auto navigate_to_impl(GenericPtr root, sv json_ptr) noexcept -> GenericPtr
+   {
+      if (!root) return nullptr;
+      if (json_ptr.empty()) return root;
+      if (json_ptr[0] != '/' || json_ptr.size() < 2) return nullptr;
+
+      GenericPtr current = root;
+      sv remaining = json_ptr;
+
+      while (!remaining.empty() && remaining[0] == '/') {
+         remaining.remove_prefix(1); // Remove leading '/'
+
+         // Find the next '/' or end of string
+         size_t key_end = remaining.find('/');
+         sv key = (key_end == sv::npos) ? remaining : remaining.substr(0, key_end);
+
+         // Check if JSON Pointer escaping is needed
+         const bool needs_unescape = key.find('~') != sv::npos;
+
+         // Navigate based on current type
+         if (current->is_object()) {
+            auto& obj = current->get_object();
+
+            if (needs_unescape) {
+               // Only allocate string when escaping is present
+               std::string unescaped_key;
+               unescaped_key.reserve(key.size());
+
+               for (size_t i = 0; i < key.size(); ++i) {
+                  if (key[i] == '~' && i + 1 < key.size()) {
+                     if (key[i + 1] == '0')
+                        unescaped_key += '~';
+                     else if (key[i + 1] == '1')
+                        unescaped_key += '/';
+                     else
+                        return nullptr; // Invalid escape sequence
+                     ++i;
+                  }
+                  else {
+                     unescaped_key += key[i];
+                  }
+               }
+
+               auto it = obj.find(unescaped_key);
+               if (it == obj.end()) return nullptr;
+               current = &(it->second);
+            }
+            else {
+               // Use heterogeneous lookup with string_view (no allocation)
+               auto it = obj.find(key);
+               if (it == obj.end()) return nullptr;
+               current = &(it->second);
+            }
+         }
+         else if (current->is_array()) {
+            // Array indices must be plain numbers (no escaping applies to indices)
+            // If key contains '~', it's invalid as an array index and will fail to parse
+            size_t index = 0;
+            auto [ptr, ec] = std::from_chars(key.data(), key.data() + key.size(), index);
+            if (ec != std::errc{} || ptr != key.data() + key.size()) {
+               return nullptr; // Invalid index
+            }
+            auto& arr = current->get_array();
+            if (index >= arr.size()) return nullptr;
+            current = &arr[index];
+         }
+         else {
+            return nullptr; // Can't navigate further
+         }
+
+         // Move to next segment
+         if (key_end == sv::npos) {
+            remaining = sv{};
+         }
+         else {
+            remaining = remaining.substr(key_end);
+         }
+      }
+
+      return current;
+   }
+
+   // Non-const version
+   inline generic* navigate_to(generic* root, sv json_ptr) noexcept { return navigate_to_impl(root, json_ptr); }
+
+   // Const version
+   inline const generic* navigate_to(const generic* root, sv json_ptr) noexcept
+   {
+      return navigate_to_impl(root, json_ptr);
+   }
+
+   // Direct conversion from generic to target types without JSON serialization
+   // Takes result by reference to allow memory reuse and avoid extra moves
+
+   // Forward declaration for recursive conversion
+   template <class T>
+   error_ctx convert_from_generic(T& result, const generic& source);
+
+   // Specialization for bool
+   template <>
+   inline error_ctx convert_from_generic<bool>(bool& result, const generic& source)
+   {
+      if (!source.is_boolean()) {
+         return error_ctx{error_code::syntax_error};
+      }
+      result = source.get<bool>();
+      return {};
+   }
+
+   // Specialization for double
+   template <>
+   inline error_ctx convert_from_generic<double>(double& result, const generic& source)
+   {
+      if (!source.is_number()) {
+         return error_ctx{error_code::syntax_error};
+      }
+      result = source.get<double>();
+      return {};
+   }
+
+   // Specialization for string
+   template <>
+   inline error_ctx convert_from_generic<std::string>(std::string& result, const generic& source)
+   {
+      if (!source.is_string()) {
+         return error_ctx{error_code::syntax_error};
+      }
+      result = source.get<std::string>();
+      return {};
+   }
+
+   // Specialization for integer types (convert from double)
+   template <class T>
+      requires(int_t<T>)
+   error_ctx convert_from_generic(T& result, const generic& source)
+   {
+      if (!source.is_number()) {
+         return error_ctx{error_code::syntax_error};
+      }
+      result = static_cast<T>(source.get<double>());
+      return {};
+   }
+
+   // Specialization for array-like containers
+   template <class T>
+      requires(readable_array_t<T> && !std::same_as<T, std::string>)
+   error_ctx convert_from_generic(T& result, const generic& source)
+   {
+      if (!source.is_array()) {
+         return error_ctx{error_code::syntax_error};
+      }
+
+      const auto& arr = source.get_array();
+
+      if constexpr (resizable<T>) {
+         result.clear();
+         if constexpr (has_reserve<T>) {
+            result.reserve(arr.size());
+         }
+      }
+
+      size_t index = 0;
+      for (const auto& elem : arr) {
+         using value_type = range_value_t<T>;
+         value_type converted;
+         auto ec = convert_from_generic(converted, elem);
+         if (ec) {
+            return ec;
+         }
+
+         if constexpr (resizable<T> && push_backable<T>) {
+            result.push_back(std::move(converted));
+         }
+         else if constexpr (resizable<T> && emplace_backable<T>) {
+            result.emplace_back(std::move(converted));
+         }
+         else if constexpr (accessible<T>) {
+            if (index >= result.size()) {
+               return error_ctx{error_code::syntax_error};
+            }
+            result[index] = std::move(converted);
+         }
+         else if constexpr (emplaceable<T>) {
+            result.emplace(std::move(converted));
+         }
+         else {
+            return error_ctx{error_code::syntax_error};
+         }
+
+         ++index;
+      }
+
+      return {};
+   }
+
+   // Specialization for map-like containers
+   template <class T>
+      requires readable_map_t<T>
+   error_ctx convert_from_generic(T& result, const generic& source)
+   {
+      if (!source.is_object()) {
+         return error_ctx{error_code::syntax_error};
+      }
+
+      const auto& obj = source.get_object();
+
+      for (const auto& [key, value] : obj) {
+         using mapped_type = typename T::mapped_type;
+         mapped_type converted;
+         auto ec = convert_from_generic(converted, value);
+         if (ec) {
+            return ec;
+         }
+
+         if constexpr (map_subscriptable<T>) {
+            result[key] = std::move(converted);
+         }
+         else if constexpr (emplaceable<T>) {
+            result.emplace(key, std::move(converted));
+         }
+         else {
+            return error_ctx{error_code::syntax_error};
+         }
+      }
+
+      return {};
+   }
+
+   // Concept to determine if a type needs deserialization from generic
+   // These are container types that can't be directly referenced from glz::generic
+   // because they're not the exact types stored in generic's variant
+   template <class V>
+   concept needs_container_deserialization =
+      (readable_array_t<V> || readable_map_t<V>) && !std::same_as<V, generic> && !std::same_as<V, generic::array_t> &&
+      !std::same_as<V, generic::object_t> && !std::same_as<V, std::string> && !std::same_as<V, double> &&
+      !std::same_as<V, bool> && !std::same_as<V, std::nullptr_t>;
+
+   // Overload of get for glz::generic that deserializes containers
+   // This overload is only selected for container types that need deserialization
+   // Uses direct traversal instead of JSON serialization for better performance
+   template <class V>
+      requires needs_container_deserialization<V>
+   expected<V, error_ctx> get(generic& root, sv json_ptr)
+   {
+      // Navigate to the target location
+      generic* target = navigate_to(&root, json_ptr);
+      if (!target) {
+         return unexpected(error_ctx{error_code::get_nonexistent_json_ptr});
+      }
+
+      // Direct conversion without JSON serialization round-trip
+      V result;
+      auto ec = convert_from_generic(result, *target);
+      if (ec) {
+         return unexpected(ec);
+      }
+      return result;
+   }
+
+   // Const version
+   template <class V>
+      requires needs_container_deserialization<V>
+   expected<V, error_ctx> get(const generic& root, sv json_ptr)
+   {
+      const generic* target = navigate_to(&root, json_ptr);
+      if (!target) {
+         return unexpected(error_ctx{error_code::get_nonexistent_json_ptr});
+      }
+
+      // Direct conversion without JSON serialization round-trip
+      V result;
+      auto ec = convert_from_generic(result, *target);
+      if (ec) {
+         return unexpected(ec);
+      }
+      return result;
+   }
 }

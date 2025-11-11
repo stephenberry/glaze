@@ -79,6 +79,37 @@ For writing (`to` specializations), the parameters are:
 - `b`: The output buffer to write to
 - `ix`: The current index in the output buffer
 
+## Bitfields
+
+C++ bitfields cannot be referenced with a pointer-to-member, so they need `glz::custom` adapters in the `glz::meta` definition. The adapter lets you expose the bitfield as a regular integer while preserving the in-class bit packing.
+
+```c++
+struct bitfield_struct_t {
+   uint8_t f1 : 4{};
+   uint8_t f2 : 4{};
+   uint8_t f3{};
+};
+
+template <>
+struct glz::meta<bitfield_struct_t>
+{
+   using T = bitfield_struct_t;
+
+   static constexpr auto read_f1  = [](T& self, uint8_t v) { self.f1 = v; };
+   static constexpr auto write_f1 = [](const T& self) { return static_cast<uint8_t>(self.f1); };
+   static constexpr auto read_f2  = [](T& self, uint8_t v) { self.f2 = v; };
+   static constexpr auto write_f2 = [](const T& self) { return static_cast<uint8_t>(self.f2); };
+
+   static constexpr auto value = object(
+      "f1", glz::custom<read_f1, write_f1>,
+      "f2", glz::custom<read_f2, write_f2>,
+      "f3", &T::f3
+   );
+};
+```
+
+- Ordinary members such as `f3` can continue to use direct pointers-to-members alongside the custom fields.
+
 ## UUID Example
 
 Say we have a UUID library for converting a `uuid_t` from a `std::string_view` and to a `std::string`.

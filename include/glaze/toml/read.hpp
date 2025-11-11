@@ -12,7 +12,9 @@
 #include "glaze/core/read.hpp"
 #include "glaze/core/reflect.hpp"
 #include "glaze/file/file_ops.hpp"
+#include "glaze/toml/common.hpp"
 #include "glaze/toml/opts.hpp"
+#include "glaze/toml/skip.hpp"
 #include "glaze/util/glaze_fast_float.hpp"
 #include "glaze/util/parse.hpp"
 #include "glaze/util/type_traits.hpp"
@@ -25,55 +27,11 @@ namespace glz
       template <auto Opts, class T, is_context Ctx, class It0, class It1>
       GLZ_ALWAYS_INLINE static void op(T&& value, Ctx&& ctx, It0&& it, It1&& end)
       {
-         from<TOML, std::decay_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
-                                                        std::forward<It0>(it), std::forward<It1>(end));
+         using V = std::remove_cvref_t<T>;
+         from<TOML, V>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx), std::forward<It0>(it),
+                                          std::forward<It1>(end));
       }
    };
-
-   // Skip whitespace and comments
-   template <class It, class End>
-   GLZ_ALWAYS_INLINE void skip_ws_and_comments(It&& it, End&& end) noexcept
-   {
-      while (it != end) {
-         if (*it == ' ' || *it == '\t') {
-            ++it;
-         }
-         else if (*it == '#') {
-            // Skip comment to end of line
-            while (it != end && *it != '\n' && *it != '\r') {
-               ++it;
-            }
-         }
-         else {
-            break;
-         }
-      }
-   }
-
-   // Skip to next line
-   template <class Ctx, class It, class End>
-   GLZ_ALWAYS_INLINE bool skip_to_next_line(Ctx&, It&& it, End&& end) noexcept
-   {
-      while (it != end && *it != '\n' && *it != '\r') {
-         ++it;
-      }
-
-      if (it == end) {
-         return false;
-      }
-
-      if (*it == '\r') {
-         ++it;
-         if (it != end && *it == '\n') {
-            ++it;
-         }
-      }
-      else if (*it == '\n') {
-         ++it;
-      }
-
-      return true;
-   }
 
    // Parse TOML key (bare key or quoted key)
    template <class Ctx, class It, class End>
@@ -836,7 +794,7 @@ namespace glz
 
          size_t index = 0;
          while (it != end) {
-            using value_type = typename std::decay_t<T>::value_type;
+            using value_type = typename std::remove_cvref_t<T>::value_type;
 
             if constexpr (emplace_backable<T>) {
                auto& element = value.emplace_back();
@@ -884,8 +842,9 @@ namespace glz
       template <auto Opts, class T, class It, class End, class Ctx>
       GLZ_ALWAYS_INLINE void parse_toml_object_members(T&& value, It&& it, End&& end, Ctx&& ctx, bool is_inline_table)
       {
-         static constexpr auto N = reflect<std::decay_t<T>>::size;
-         static constexpr auto HashInfo = hash_info<std::decay_t<T>>;
+         using U = std::remove_cvref_t<T>;
+         static constexpr auto N = reflect<U>::size;
+         static constexpr auto HashInfo = hash_info<U>;
          // TODO: Think if we should make inline table a constexpr to reduce runtime checks
          // TODO: Think if it's feasible to write a function to find out the deepest nested structure
          // and use it instead of vector
@@ -942,22 +901,24 @@ namespace glz
                return;
             }
 
-            const auto index = decode_hash_with_size<TOML, std::decay_t<T>, HashInfo, HashInfo.type>::op(
+            const auto index = decode_hash_with_size<TOML, U, HashInfo, HashInfo.type>::op(
                key_str.data(), key_str.data() + key_str.size(), key_str.size());
 
-            if (index < N) [[likely]] {
+            const bool key_matches = index < N && key_str == reflect<U>::keys[index];
+
+            if (key_matches) [[likely]] {
                visit<N>(
                   [&]<size_t I>() {
                      if (I == index) {
                         decltype(auto) member_obj = [&]() -> decltype(auto) {
-                           if constexpr (reflectable<std::decay_t<T>>) {
+                           if constexpr (reflectable<U>) {
                               // For reflectable types, to_tie provides access to members
                               return get<I>(to_tie(value));
                            }
                            else {
                               // For glaze_object_t, reflect<T>::values gives member metadata
                               // and get_member accesses the actual member value
-                              return get_member(value, get<I>(reflect<std::decay_t<T>>::values));
+                              return get_member(value, get<I>(reflect<U>::values));
                            }
                         }();
 
@@ -965,6 +926,7 @@ namespace glz
                         using member_type = std::decay_t<decltype(member_obj)>;
                         from<TOML, member_type>::template op<Opts>(member_obj, ctx, it, end);
                      }
+                     return !bool(ctx.error);
                   },
                   index);
 
@@ -973,16 +935,14 @@ namespace glz
                }
             }
             else {
-               // Unknown key
-               // TODO: Add option to error on unknown keys or ignore them
-               // For now, skip the value associated with the unknown key.
-               // This requires parsing the value to know where it ends.
-               // A simpler skip to next line might not work for inline tables or complex values.
-               // For now, let's try a simple skip to comma or end of line/table.
-               while (it != end) {
-                  if (is_inline_table && (*it == ',' || *it == '}')) break;
-                  if (!is_inline_table && (*it == '\n' || *it == '\r')) break;
-                  ++it;
+               if constexpr (Opts.error_on_unknown_keys) {
+                  ctx.error = error_code::unknown_key;
+                  return;
+               }
+
+               skip_value<TOML>::template op<Opts>(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
                }
             }
 
@@ -1030,20 +990,24 @@ namespace glz
          return true;
       }
       else {
-         static constexpr auto N = reflect<std::decay_t<T>>::size;
-         static constexpr auto HashInfo = hash_info<std::decay_t<T>>;
-         const auto index = decode_hash_with_size<TOML, std::decay_t<T>, HashInfo, HashInfo.type>::op(
+         using U = std::remove_cvref_t<T>;
+         static constexpr auto N = reflect<U>::size;
+         static constexpr auto HashInfo = hash_info<U>;
+         const auto index = decode_hash_with_size<TOML, U, HashInfo, HashInfo.type>::op(
             path.front().data(), path.front().data() + path.front().size(), path.front().size());
-         if (index < N) [[likely]] {
+
+         const bool key_matches = index < N && path.front() == reflect<U>::keys[index];
+
+         if (key_matches) [[likely]] {
             visit<N>(
                [&]<size_t I>() {
                   if (I == index) {
                      decltype(auto) member_obj = [&]() -> decltype(auto) {
-                        if constexpr (reflectable<std::decay_t<T>>) {
+                        if constexpr (reflectable<U>) {
                            return get<I>(to_tie(root));
                         }
                         else {
-                           return get_member(root, get<I>(reflect<std::decay_t<T>>::values));
+                           return get_member(root, get<I>(reflect<U>::values));
                         }
                      }();
 
@@ -1058,6 +1022,15 @@ namespace glz
                   return !bool(ctx.error);
                },
                index);
+         }
+         else {
+            if constexpr (Opts.error_on_unknown_keys) {
+               ctx.error = error_code::unknown_key;
+               return false;
+            }
+
+            skip_value<TOML>::template op<Opts>(ctx, it, end);
+            return !bool(ctx.error);
          }
          return !bool(ctx.error);
       }

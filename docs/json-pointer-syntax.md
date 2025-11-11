@@ -86,6 +86,30 @@ expect(not ec);
 expect(buffer == R"({"str":"hello","number":3.14,"sub":{"target":42}})");
 ```
 
+## Using JSON Pointers with `glz::generic`
+
+When working with `glz::generic`, JSON pointers can extract both primitives and containers:
+
+```c++
+glz::generic json{};
+std::string buffer = R"({"names": ["Alice", "Bob"], "count": 2})";
+glz::read_json(json, buffer);
+
+// Extract container types - returns expected<T, error_ctx>
+auto names = glz::get<std::vector<std::string>>(json, "/names");
+if (names) {
+  // names->size() == 2, efficient direct conversion
+}
+
+// Extract primitives - returns expected<reference_wrapper<T>, error_ctx>
+auto count = glz::get<double>(json, "/count");
+if (count) {
+  // count->get() == 2.0
+}
+```
+
+See [Generic JSON](./generic-json.md) for more details on the optimized conversion from `generic` to containers and primitives.
+
 ## Seek
 
 `glz::seek` allows you to call a lambda on a nested value.

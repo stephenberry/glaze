@@ -1296,17 +1296,23 @@ namespace glz
 
          // If signed and negative, check if result fits
          if constexpr (is_signed) {
-            using S = std::make_signed_t<U>;
             // The largest magnitude we can represent in a negative value is (max + 1)
             // since -(min()) = max() + 1.
-            U limit = static_cast<U>((std::numeric_limits<I>::max)()) + 1U;
+            constexpr U limit = static_cast<U>((std::numeric_limits<I>::max)()) + 1U;
             if (negative) {
                if (acc > limit) {
                   result.ec = std::errc::result_out_of_range;
                   result.ptr = first;
                   return result;
                }
-               value = static_cast<I>(0 - static_cast<S>(acc));
+               // Negate in unsigned arithmetic to avoid signed overflow when acc == limit
+               // (e.g., when parsing -2147483648, acc = 2147483648u for int32)
+#if defined(_MSC_VER) && !defined(__clang__)
+               // Use subtraction from zero instead of unary minus to avoid MSVC C4146 error
+               value = static_cast<I>(U{0} - acc);
+#else
+               value = static_cast<I>(-acc);
+#endif
             }
             else {
                if (acc > static_cast<U>((std::numeric_limits<I>::max)())) {

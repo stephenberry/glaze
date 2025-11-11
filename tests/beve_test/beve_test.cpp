@@ -336,6 +336,50 @@ struct glz::meta<Thing>
    );
 };
 
+// Custom nullable type for testing nullable_value_t support
+struct custom_nullable_value
+{
+   std::optional<double> val{};
+
+   bool has_value() const { return val.has_value(); }
+
+   double& value() { return *val; }
+
+   const double& value() const { return *val; }
+
+   void emplace() { val.emplace(); }
+
+   void reset() { val.reset(); }
+};
+
+struct nullable_value_test_struct
+{
+   custom_nullable_value x{};
+   int y = 42;
+};
+
+// Test struct for issue #1326
+struct test_skip
+{
+   std::optional<char> o_;
+};
+
+// Test structs for nested skip_null_members
+struct inner_skip_struct
+{
+   std::optional<int> inner_opt1{};
+   int inner_value = 100;
+   std::optional<double> inner_opt2{};
+};
+
+struct outer_skip_struct
+{
+   std::optional<std::string> outer_opt1{};
+   inner_skip_struct nested{};
+   int outer_value = 200;
+   std::optional<bool> outer_opt2{};
+};
+
 void write_tests()
 {
    using namespace ut;
@@ -459,6 +503,208 @@ void write_tests()
       expect(*uni_dbl == *out_dbl);
    };
 
+   "nullable_value_t"_test = [] {
+      std::string out;
+
+      // Test with value
+      nullable_value_test_struct obj{};
+      obj.x.val = 3.14;
+      expect(not glz::write_beve(obj, out));
+
+      nullable_value_test_struct obj2{};
+      expect(!glz::read_beve(obj2, out));
+      expect(obj2.x.has_value());
+      expect(obj2.x.value() == 3.14);
+      expect(obj2.y == 42);
+
+      // Test with null (using skip_null_members = false to ensure null is written)
+      out.clear();
+      obj.x.val = {};
+      expect(not glz::write<glz::opts{.format = glz::BEVE, .skip_null_members = false}>(obj, out));
+
+      nullable_value_test_struct obj3{};
+      obj3.x.val = 99.9; // Set a value to ensure it gets reset
+      expect(!glz::read_beve(obj3, out));
+      expect(!obj3.x.has_value());
+      expect(obj3.y == 42);
+
+      // Test standalone nullable_value_t
+      out.clear();
+      custom_nullable_value standalone{};
+      standalone.val = 2.71;
+      expect(not glz::write_beve(standalone, out));
+
+      custom_nullable_value standalone2{};
+      expect(!glz::read_beve(standalone2, out));
+      expect(standalone2.has_value());
+      expect(standalone2.value() == 2.71);
+
+      // Test standalone null
+      out.clear();
+      standalone.val = {};
+      expect(not glz::write_beve(standalone, out));
+
+      standalone2.val = 1.0; // Set a value to ensure it gets reset
+      expect(!glz::read_beve(standalone2, out));
+      expect(!standalone2.has_value());
+   };
+
+   // Test for issue #1326: BEVE should skip null members like JSON does
+   "issue_1326_skip_null_members"_test = [] {
+      std::vector<test_skip> a{{}, {}};
+      std::string json_buffer;
+      std::vector<char> beve_buffer;
+
+      auto json_err = glz::write_json(a, json_buffer);
+      auto beve_err = glz::write_beve(a, beve_buffer);
+      expect(!json_err && !beve_err);
+
+      std::array<test_skip, 2> b{{{false}, {true}}};
+      auto beve_b{b};
+
+      json_err = glz::read_json(b, json_buffer);
+      beve_err = glz::read_beve(beve_b, beve_buffer);
+      expect(!json_err && !beve_err);
+
+      // Both should handle empty optionals the same way
+      expect(b[0].o_ == beve_b[0].o_);
+   };
+
+   "nested_skip_null_members"_test = [] {
+      std::string json_buffer;
+      std::vector<char> beve_buffer;
+
+      // Test 1: All optionals are null (should skip all of them)
+      {
+         outer_skip_struct obj1{};
+         // All optionals are already std::nullopt by default
+
+         auto json_err = glz::write_json(obj1, json_buffer);
+         auto beve_err = glz::write_beve(obj1, beve_buffer);
+         expect(!json_err && !beve_err);
+
+         // Initialize with sentinel values to verify they DON'T change (proving skipping worked)
+         outer_skip_struct json_obj1{};
+         json_obj1.outer_opt1 = "should_not_change";
+         json_obj1.outer_opt2 = true;
+         json_obj1.nested.inner_opt1 = 9999;
+         json_obj1.nested.inner_opt2 = 99.99;
+
+         outer_skip_struct beve_obj1{};
+         beve_obj1.outer_opt1 = "should_not_change";
+         beve_obj1.outer_opt2 = true;
+         beve_obj1.nested.inner_opt1 = 9999;
+         beve_obj1.nested.inner_opt2 = 99.99;
+
+         json_err = glz::read_json(json_obj1, json_buffer);
+         beve_err = glz::read_beve(beve_obj1, beve_buffer);
+         expect(!json_err && !beve_err);
+
+         // Verify both formats skip null members the same way - sentinel values should remain
+         expect(json_obj1.outer_opt1 == beve_obj1.outer_opt1);
+         expect(json_obj1.outer_opt1.value() == "should_not_change");
+         expect(json_obj1.outer_opt2 == beve_obj1.outer_opt2);
+         expect(json_obj1.outer_opt2.value() == true);
+         expect(json_obj1.nested.inner_opt1 == beve_obj1.nested.inner_opt1);
+         expect(json_obj1.nested.inner_opt1.value() == 9999);
+         expect(json_obj1.nested.inner_opt2 == beve_obj1.nested.inner_opt2);
+         expect(json_obj1.nested.inner_opt2.value() == 99.99);
+
+         // Non-optional values should have been updated
+         expect(json_obj1.outer_value == 200);
+         expect(beve_obj1.outer_value == 200);
+         expect(json_obj1.nested.inner_value == 100);
+         expect(beve_obj1.nested.inner_value == 100);
+      }
+
+      // Test 2: Some optionals have values in both inner and outer
+      {
+         json_buffer.clear();
+         beve_buffer.clear();
+
+         outer_skip_struct obj2{};
+         obj2.outer_opt1 = "outer_string";
+         obj2.nested.inner_opt1 = 42;
+         // outer_opt2 and inner_opt2 remain null (will be skipped)
+
+         auto json_err = glz::write_json(obj2, json_buffer);
+         auto beve_err = glz::write_beve(obj2, beve_buffer);
+         expect(!json_err && !beve_err);
+
+         // Initialize all optionals with sentinel values
+         outer_skip_struct json_obj2{};
+         json_obj2.outer_opt1 = "will_be_replaced";
+         json_obj2.outer_opt2 = false; // Sentinel - should not change
+         json_obj2.nested.inner_opt1 = 7777;
+         json_obj2.nested.inner_opt2 = 77.77; // Sentinel - should not change
+
+         outer_skip_struct beve_obj2{};
+         beve_obj2.outer_opt1 = "will_be_replaced";
+         beve_obj2.outer_opt2 = false; // Sentinel - should not change
+         beve_obj2.nested.inner_opt1 = 7777;
+         beve_obj2.nested.inner_opt2 = 77.77; // Sentinel - should not change
+
+         json_err = glz::read_json(json_obj2, json_buffer);
+         beve_err = glz::read_beve(beve_obj2, beve_buffer);
+         expect(!json_err && !beve_err);
+
+         // Verify written values were updated
+         expect(json_obj2.outer_opt1 == beve_obj2.outer_opt1);
+         expect(json_obj2.outer_opt1.value() == "outer_string");
+         expect(json_obj2.nested.inner_opt1 == beve_obj2.nested.inner_opt1);
+         expect(json_obj2.nested.inner_opt1.value() == 42);
+
+         // Verify null fields were skipped - sentinel values should remain
+         expect(json_obj2.outer_opt2 == beve_obj2.outer_opt2);
+         expect(json_obj2.outer_opt2.value() == false);
+         expect(json_obj2.nested.inner_opt2 == beve_obj2.nested.inner_opt2);
+         expect(json_obj2.nested.inner_opt2.value() == 77.77);
+      }
+
+      // Test 3: All optionals have values
+      {
+         json_buffer.clear();
+         beve_buffer.clear();
+
+         outer_skip_struct obj3{};
+         obj3.outer_opt1 = "test";
+         obj3.outer_opt2 = true;
+         obj3.nested.inner_opt1 = 999;
+         obj3.nested.inner_opt2 = 3.14159;
+
+         auto json_err = glz::write_json(obj3, json_buffer);
+         auto beve_err = glz::write_beve(obj3, beve_buffer);
+         expect(!json_err && !beve_err);
+
+         // Initialize with different sentinel values - all should be replaced
+         outer_skip_struct json_obj3{};
+         json_obj3.outer_opt1 = "sentinel1";
+         json_obj3.outer_opt2 = false;
+         json_obj3.nested.inner_opt1 = 5555;
+         json_obj3.nested.inner_opt2 = 55.55;
+
+         outer_skip_struct beve_obj3{};
+         beve_obj3.outer_opt1 = "sentinel1";
+         beve_obj3.outer_opt2 = false;
+         beve_obj3.nested.inner_opt1 = 5555;
+         beve_obj3.nested.inner_opt2 = 55.55;
+
+         json_err = glz::read_json(json_obj3, json_buffer);
+         beve_err = glz::read_beve(beve_obj3, beve_buffer);
+         expect(!json_err && !beve_err);
+
+         // Verify all values were replaced with the serialized values
+         expect(json_obj3.outer_opt1 == beve_obj3.outer_opt1);
+         expect(json_obj3.outer_opt1.value() == "test");
+         expect(json_obj3.outer_opt2 == beve_obj3.outer_opt2);
+         expect(json_obj3.outer_opt2.value() == true);
+         expect(json_obj3.nested.inner_opt1 == beve_obj3.nested.inner_opt1);
+         expect(json_obj3.nested.inner_opt1.value() == 999);
+         expect(json_obj3.nested.inner_opt2 == beve_obj3.nested.inner_opt2);
+         expect(json_obj3.nested.inner_opt2.value() == 3.14159);
+      }
+   };
+
    "map"_test = [] {
       std::string out;
 
@@ -520,7 +766,7 @@ void write_tests()
       obj.map = {{"a", 7}, {"f", 3}, {"b", 4}};
       obj.mapi = {{5, 5.0}, {7, 7.1}, {2, 2.22222}};
 
-      expect(not glz::write_beve(obj, buffer));
+      expect(not glz::write<glz::opts{.format = glz::BEVE, .skip_null_members = false}>(obj, buffer));
 
       Thing obj2{};
       expect(!glz::read_beve(obj2, buffer));

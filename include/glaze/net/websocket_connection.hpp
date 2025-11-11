@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <chrono>
 #include <cstring>
 #include <functional>
@@ -358,13 +359,8 @@ namespace glz
          if (is_closing_) return;
 
          is_closing_ = true;
-         send_close_frame(code, reason);
-
-         // Close after a short delay to allow the close frame to be sent
-         auto self = shared_from_this();
-         auto timer = std::make_shared<asio::steady_timer>(socket_.get_executor());
-         timer->expires_after(std::chrono::milliseconds(100));
-         timer->async_wait([self, timer](std::error_code) { self->do_close(); });
+         // Send close frame and close socket after write completes
+         send_close_frame(code, reason, true);
       }
 
       // Get remote endpoint information
@@ -432,9 +428,11 @@ namespace glz
          asio::async_write(socket_, asio::buffer(*response_buffer),
                            [self, req, response_buffer](std::error_code ec, std::size_t) {
                               if (ec) {
+                                 self->is_closing_ = true;
                                  if (self->server_) {
                                     self->server_->notify_error(self, ec);
                                  }
+                                 self->do_close();
                                  return;
                               }
 
@@ -461,9 +459,12 @@ namespace glz
       inline void on_read(std::error_code ec, std::size_t bytes_transferred)
       {
          if (ec) {
+            is_closing_ = true;
             if (server_) {
                server_->notify_error(shared_from_this(), ec);
             }
+            // Close the connection after a read error (connection is likely broken)
+            do_close();
             return;
          }
 
@@ -652,7 +653,8 @@ namespace glz
 
       inline void send_frame(ws_opcode opcode, std::string_view payload, bool fin = true)
       {
-         if (is_closing_) return;
+         // Allow close frames to be sent even when closing, but block other frame types
+         if (is_closing_ && opcode != ws_opcode::close) return;
 
          std::size_t header_size = get_frame_header_size(payload.size());
          std::vector<uint8_t> frame(header_size + payload.size());
@@ -665,13 +667,19 @@ namespace glz
          // Use shared_ptr to keep the frame alive during async operation
          auto frame_buffer = std::make_shared<std::vector<uint8_t>>(std::move(frame));
          asio::async_write(socket_, asio::buffer(*frame_buffer), [self, frame_buffer](std::error_code ec, std::size_t) {
-            if (ec && self->server_) {
-               self->server_->notify_error(self, ec);
+            if (ec) {
+               // Mark connection as closing before notifying handlers to avoid re-entrant close attempts
+               self->is_closing_ = true;
+               if (self->server_) {
+                  self->server_->notify_error(self, ec);
+               }
+               // Close the connection after a write error (connection is likely broken)
+               self->do_close();
             }
          });
       }
 
-      inline void send_close_frame(ws_close_code code, std::string_view reason)
+      inline void send_close_frame(ws_close_code code, std::string_view reason, bool schedule_socket_close = false)
       {
          std::vector<uint8_t> payload(2 + reason.size());
          payload[0] = static_cast<uint8_t>(static_cast<uint16_t>(code) >> 8);
@@ -681,7 +689,44 @@ namespace glz
             std::copy(reason.begin(), reason.end(), payload.begin() + 2);
          }
 
-         send_frame(ws_opcode::close, std::string_view(reinterpret_cast<const char*>(payload.data()), payload.size()));
+         if (schedule_socket_close) {
+            // Send close frame and schedule socket closure after write completes
+            send_close_frame_with_callback(
+               ws_opcode::close, std::string_view(reinterpret_cast<const char*>(payload.data()), payload.size()));
+         }
+         else {
+            // Just send the close frame without scheduling closure
+            send_frame(ws_opcode::close,
+                       std::string_view(reinterpret_cast<const char*>(payload.data()), payload.size()));
+         }
+      }
+
+      inline void send_close_frame_with_callback(ws_opcode opcode, std::string_view payload)
+      {
+         std::size_t header_size = get_frame_header_size(payload.size());
+         std::vector<uint8_t> frame(header_size + payload.size());
+
+         write_frame_header(opcode, payload.size(), true, frame.data());
+         std::copy(payload.begin(), payload.end(), frame.begin() + header_size);
+
+         auto self = shared_from_this();
+
+         // Use shared_ptr to keep the frame alive during async operation
+         auto frame_buffer = std::make_shared<std::vector<uint8_t>>(std::move(frame));
+         asio::async_write(socket_, asio::buffer(*frame_buffer), [self, frame_buffer](std::error_code ec, std::size_t) {
+            if (ec) {
+               self->is_closing_ = true;
+               if (self->server_) {
+                  self->server_->notify_error(self, ec);
+               }
+               self->do_close();
+               return;
+            }
+            // Give the OS time to transmit the data before closing the socket
+            auto timer = std::make_shared<asio::steady_timer>(self->socket_.get_executor());
+            timer->expires_after(std::chrono::milliseconds(100));
+            timer->async_wait([self, timer](std::error_code) { self->do_close(); });
+         });
       }
 
       inline std::size_t get_frame_header_size(std::size_t payload_length)
@@ -767,6 +812,12 @@ namespace glz
 
       inline void do_close()
       {
+         // Ensure we only close once and call on_close once
+         bool expected = false;
+         if (!closed_.compare_exchange_strong(expected, true)) {
+            return; // Already closed
+         }
+
          if (server_) {
             server_->notify_close(shared_from_this());
          }
@@ -784,6 +835,7 @@ namespace glz
       bool is_reading_frame_{false};
       bool is_closing_{false};
       bool handshake_complete_{false};
+      std::atomic<bool> closed_{false};
       std::shared_ptr<void> user_data_;
       asio::ip::tcp::endpoint remote_endpoint_;
    };

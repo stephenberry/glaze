@@ -3,6 +3,9 @@
 
 #pragma once
 
+#include <utility>
+
+#include "glaze/core/common.hpp"
 #include "glaze/core/context.hpp"
 #include "glaze/core/opts.hpp"
 #include "glaze/tuplet/tuple.hpp"
@@ -16,10 +19,13 @@ namespace glz
    template <class T, auto Target, auto Constraint, string_literal Message>
    struct read_constraint_t
    {
+      static constexpr bool glaze_wrapper = true;
       static constexpr auto glaze_reflect = false;
       static constexpr std::string_view message = Message;
       using target_t = decltype(Target);
       using constraint_t = decltype(Constraint);
+      using value_type = std::remove_cvref_t<member_t<T, target_t>>;
+
       T& val;
       static constexpr auto target = Target;
       static constexpr auto constraint = Constraint;
@@ -217,6 +223,7 @@ namespace glz
    template <class T>
    concept is_self_constraint = requires(T t) {
       requires !T::glaze_reflect;
+      requires(!is_read_constraint<T>);
       typename T::constraint_t;
       typename T::value_type;
       t.val;

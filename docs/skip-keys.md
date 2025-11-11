@@ -152,3 +152,160 @@ const char* json = R"({"name":"NewData","version":2,"computed_field":"ignored","
 glz::read_json(obj, json);
 // obj.computed_field retains "computed_value", obj.input_only_field becomes "new_input"
 ```
+
+## Value-Based Skipping with `skip_if`
+
+While `skip` allows skipping fields based on their key names at compile time, `skip_if` enables runtime skipping based on the actual field values. This is useful for omitting fields with default values or applying conditional logic based on the data.
+
+### Overview
+
+The `skip_if` function is a template method that receives:
+- The field value (with type information preserved)
+- The key name
+- The `meta_context` (operation type)
+
+This allows you to inspect the actual value and decide whether to skip serialization.
+
+### Basic Usage
+
+```cpp
+struct my_struct_t {
+    std::string name = "default";
+    int age = 0;
+    std::string city{};
+};
+
+template <>
+struct glz::meta<my_struct_t> {
+    template <class T>
+    static constexpr bool skip_if(T&& value, std::string_view key, const glz::meta_context&) {
+        using V = std::decay_t<T>;
+        if constexpr (std::same_as<V, std::string>) {
+            return key == "name" && value == "default";
+        }
+        else if constexpr (std::same_as<V, int>) {
+            return key == "age" && value == 0;
+        }
+        return false;
+    }
+};
+```
+
+### Example: Skipping Default Values
+
+A common use case is omitting fields that contain their default values to reduce JSON size:
+
+```cpp
+struct user_settings_t {
+    std::string theme = "light";
+    int volume = 50;
+    bool notifications = true;
+    std::string custom_path{};
+};
+
+template <>
+struct glz::meta<user_settings_t> {
+    template <class T>
+    static constexpr bool skip_if(T&& value, std::string_view key, const glz::meta_context&) {
+        using V = std::decay_t<T>;
+        if constexpr (std::same_as<V, std::string>) {
+            if (key == "theme") return value == "light";
+            if (key == "custom_path") return value.empty();
+        }
+        else if constexpr (std::same_as<V, int>) {
+            if (key == "volume") return value == 50;
+        }
+        else if constexpr (std::same_as<V, bool>) {
+            if (key == "notifications") return value == true;
+        }
+        return false;
+    }
+};
+```
+
+**Usage:**
+
+```cpp
+user_settings_t settings1{"light", 50, true, ""};
+std::string buffer1{};
+glz::write_json(settings1, buffer1);
+// Output: {}  (all fields have default values)
+
+user_settings_t settings2{"dark", 75, false, "/custom/path"};
+std::string buffer2{};
+glz::write_json(settings2, buffer2);
+// Output: {"theme":"dark","volume":75,"notifications":false,"custom_path":"/custom/path"}
+
+user_settings_t settings3{"light", 80, true, ""};
+std::string buffer3{};
+glz::write_json(settings3, buffer3);
+// Output: {"volume":80}  (only non-default field included)
+```
+
+### Important Notes
+
+- `skip_if` is evaluated at **runtime** during serialization, unlike `skip` which is **compile-time**
+- The template method allows type-safe inspection of field values using `if constexpr`
+- `skip_if` is primarily for **serialization** (writing); during parsing, all present fields are read
+- You **can** use both `skip` and `skip_if` together: `skip` is checked first (compile-time), and if a field isn't skipped, `skip_if` is then evaluated (runtime)
+- Use `std::decay_t` to get the underlying type without references and cv-qualifiers
+
+### Combining `skip` and `skip_if`
+
+You can use both methods together for maximum flexibility. `skip` is evaluated first (at compile-time), and if it returns false, `skip_if` is then evaluated (at runtime):
+
+```cpp
+struct api_response_t {
+    std::string id{};
+    std::string secret_key{};  // Never serialize
+    std::string name{};
+    int count = 0;
+};
+
+template <>
+struct glz::meta<api_response_t> {
+    // Compile-time skip: always exclude secret_key
+    static constexpr bool skip(const std::string_view key, const glz::meta_context&) {
+        return key == "secret_key";
+    }
+
+    // Runtime skip: exclude count when it's 0
+    template <class T>
+    static constexpr bool skip_if(T&& value, std::string_view key, const glz::meta_context&) {
+        using V = std::decay_t<T>;
+        if constexpr (std::same_as<V, int>) {
+            return key == "count" && value == 0;
+        }
+        return false;
+    }
+};
+```
+
+**Usage:**
+
+```cpp
+api_response_t resp1{"123", "secret", "Widget", 0};
+std::string buffer1{};
+glz::write_json(resp1, buffer1);
+// Output: {"id":"123","name":"Widget"}
+// secret_key skipped by skip(), count skipped by skip_if()
+
+api_response_t resp2{"456", "secret", "Gadget", 5};
+std::string buffer2{};
+glz::write_json(resp2, buffer2);
+// Output: {"id":"456","name":"Gadget","count":5}
+// secret_key skipped by skip(), count included (non-zero)
+```
+
+### Comparison: `skip` vs `skip_if`
+
+| Feature | `skip` (Key-Based) | `skip_if` (Value-Based) |
+|---------|-------------------|------------------------|
+| Decision time | Compile-time | Runtime |
+| Input | Key name only | Key name + field value |
+| Use case | Always skip certain fields | Skip based on field values |
+| Performance | Zero runtime overhead | Minimal runtime check per field |
+| Template | Not templated | Template method |
+| Combinable | Can be used with `skip_if` | Can be used with `skip` |
+
+Choose `skip` when you want to permanently exclude fields, and `skip_if` when the decision depends on the data. Use both together for maximum control.

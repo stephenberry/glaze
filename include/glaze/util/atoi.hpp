@@ -39,7 +39,7 @@
 // It isn't technically required, because end validation would handle it, but it produces
 // much clearer errors, especially when we don't perform trailing validation.
 
-#ifdef _MSC_VER
+#if defined(_MSC_VER) && !defined(__clang__)
 // Turn off MSVC warning for possible loss of data: we are intentionally allowing well defined unsigned integer
 // overflows
 #pragma warning(push)
@@ -940,7 +940,7 @@ namespace glz::detail
    }
 }
 
-#ifdef _MSC_VER
+#if defined(_MSC_VER) && !defined(__clang__)
 // restore disabled warnings
 #pragma warning(pop)
 #endif

@@ -11,9 +11,6 @@
 #if !defined(GLZ_DISABLE_SIMD) && (defined(__x86_64__) || defined(_M_X64))
 #if defined(_MSC_VER)
 #include <intrin.h>
-#pragma warning(push)
-#pragma warning( \
-   disable : 4702) // disable "unreachable code" warnings, which are often invalid due to constexpr branching
 #else
 #include <immintrin.h>
 #endif
@@ -21,6 +18,12 @@
 #if defined(__AVX2__)
 #define GLZ_USE_AVX2
 #endif
+#endif
+
+#if defined(_MSC_VER) && !defined(__clang__)
+// disable "unreachable code" warnings, which are often invalid due to constexpr branching
+#pragma warning(push)
+#pragma warning(disable : 4702)
 #endif
 
 #include "glaze/core/opts.hpp"
@@ -361,8 +364,15 @@ namespace glz
    struct to<JSON, T>
    {
       template <auto Opts>
-      static void op(auto&&, is_context auto&&, auto&&...) noexcept
-      {}
+      static void op(auto&&, is_context auto&&, auto&& b, auto&& ix) noexcept
+      {
+         if constexpr (check_write_member_functions(Opts)) {
+            constexpr sv type_name = name_v<T>;
+            dump<'"'>(b, ix);
+            dump(type_name, b, ix);
+            dump<'"'>(b, ix);
+         }
+      }
    };
 
    template <is_reference_wrapper T>
@@ -1807,6 +1817,19 @@ namespace glz
                      static constexpr meta_context mctx{.op = operation::serialize};
                      if constexpr (meta<T>::skip(reflect<T>::keys[I], mctx)) return;
                   }
+                  if constexpr (meta_has_skip_if<T>) {
+                     static constexpr auto key = glz::get<I>(reflect<T>::keys);
+                     static constexpr meta_context mctx{.op = operation::serialize};
+                     decltype(auto) field_value = [&]() -> decltype(auto) {
+                        if constexpr (reflectable<T>) {
+                           return get<I>(t);
+                        }
+                        else {
+                           return get_member(value, glz::get<I>(reflect<T>::values));
+                        }
+                     }();
+                     if (meta<T>::skip_if(field_value, key, mctx)) return;
+                  }
 
                   constexpr bool write_member_functions = check_write_member_functions(Opts);
                   if constexpr (always_skipped<val_t> ||
@@ -2028,6 +2051,6 @@ namespace glz
    }
 }
 
-#if defined(_MSC_VER)
+#if defined(_MSC_VER) && !defined(__clang__)
 #pragma warning(pop)
 #endif
