@@ -675,6 +675,359 @@ suite response_building_tests = [] {
    };
 };
 
+// Response Middleware Tests
+suite response_middleware_tests = [] {
+   "request_hook_registration"_test = [] {
+      glz::http_server<> server;
+
+      bool hook_called = false;
+      auto& hook_ref = server.on_request([&hook_called](const glz::request&, glz::response&) { hook_called = true; });
+
+      expect(&hook_ref == &server) << "on_request() should return server reference for chaining\n";
+   };
+
+   "response_hook_registration"_test = [] {
+      glz::http_server<> server;
+
+      bool hook_called = false;
+      auto& hook_ref =
+         server.on_response([&hook_called](const glz::request&, const glz::response&) { hook_called = true; });
+
+      expect(&hook_ref == &server) << "on_response() should return server reference for chaining\n";
+   };
+
+   "metrics_tracking_simulation"_test = [] {
+      glz::http_router router;
+
+      // Simulate basic metrics tracking without timing
+      struct Metrics
+      {
+         std::atomic<uint64_t> total_requests{0};
+         std::atomic<uint64_t> total_responses{0};
+      };
+
+      Metrics metrics;
+
+      // Simulate on_request hook
+      auto request_hook = [&metrics](const glz::request&, glz::response&) {
+         metrics.total_requests.fetch_add(1, std::memory_order_relaxed);
+      };
+
+      // Simulate on_response hook
+      auto response_hook = [&metrics](const glz::request&, const glz::response&) {
+         metrics.total_responses.fetch_add(1, std::memory_order_relaxed);
+      };
+
+      // Register a route
+      router.get("/test", [](const glz::request&, glz::response& res) { res.body("test response"); });
+
+      // Simulate handling 5 requests
+      for (int i = 0; i < 5; ++i) {
+         glz::request req;
+         req.method = glz::http_method::GET;
+         req.target = "/test";
+
+         glz::response res;
+
+         // Simulate request hook
+         request_hook(req, res);
+
+         // Execute handler
+         auto [handler, params] = router.match(req.method, req.target);
+         handler(req, res);
+
+         // Simulate response hook
+         response_hook(req, res);
+      }
+
+      expect(metrics.total_requests.load() == 5) << "Should track all requests\n";
+      expect(metrics.total_responses.load() == 5) << "Should track all responses\n";
+   };
+
+   "multiple_request_hooks"_test = [] {
+      std::vector<std::string> execution_order;
+
+      auto hook1 = [&execution_order](const glz::request&, glz::response&) { execution_order.push_back("hook1"); };
+
+      auto hook2 = [&execution_order](const glz::request&, glz::response&) { execution_order.push_back("hook2"); };
+
+      glz::request req;
+      req.method = glz::http_method::GET;
+      req.target = "/test";
+
+      glz::response res;
+
+      // Execute hooks in order
+      hook1(req, res);
+      hook2(req, res);
+
+      expect(execution_order.size() == 2) << "Both hooks should execute\n";
+      expect(execution_order[0] == "hook1") << "First hook should execute first\n";
+      expect(execution_order[1] == "hook2") << "Second hook should execute second\n";
+   };
+
+   "response_hook_can_inspect_status"_test = [] {
+      int captured_status = 0;
+
+      auto response_hook = [&captured_status](const glz::request&, const glz::response& res) {
+         captured_status = res.status_code;
+      };
+
+      glz::request req;
+      glz::response res;
+      res.status(404).body("Not found");
+
+      response_hook(req, res);
+
+      expect(captured_status == 404) << "Response hook should be able to inspect status code\n";
+   };
+
+   "response_hook_can_inspect_headers"_test = [] {
+      std::string captured_content_type;
+
+      auto response_hook = [&captured_content_type](const glz::request&, const glz::response& res) {
+         auto it = res.response_headers.find("content-type");
+         if (it != res.response_headers.end()) {
+            captured_content_type = it->second;
+         }
+      };
+
+      glz::request req;
+      glz::response res;
+      res.content_type("application/json").body("{\"test\": true}");
+
+      response_hook(req, res);
+
+      expect(captured_content_type == "application/json") << "Response hook should inspect headers\n";
+   };
+
+   "hook_can_inspect_response_data"_test = [] {
+      int captured_status = 0;
+      std::string captured_body;
+
+      auto response_hook = [&captured_status, &captured_body](const glz::request&, const glz::response& res) {
+         captured_status = res.status_code;
+         captured_body = res.response_body;
+      };
+
+      glz::request req;
+      glz::response res;
+      res.status(201).body("created");
+
+      response_hook(req, res);
+
+      expect(captured_status == 201) << "Response hook should inspect status code\n";
+      expect(captured_body == "created") << "Response hook should inspect body\n";
+   };
+};
+
+// Wrapping Middleware Tests
+suite wrapping_middleware_tests = [] {
+   "wrap_middleware_registration"_test = [] {
+      glz::http_server<> server;
+
+      auto& wrap_ref = server.wrap([](const glz::request&, glz::response&, const auto& next) { next(); });
+
+      expect(&wrap_ref == &server) << "wrap() should return server reference for chaining\n";
+   };
+
+   "wrap_middleware_timing"_test = [] {
+      glz::http_router router;
+      router.get("/test", [](const glz::request&, glz::response& res) {
+         std::this_thread::sleep_for(std::chrono::milliseconds(10));
+         res.body("response");
+      });
+
+      glz::request req;
+      req.method = glz::http_method::GET;
+      req.target = "/test";
+
+      glz::response res;
+
+      std::chrono::nanoseconds measured_duration{0};
+
+      // Simulate wrapping middleware that measures timing
+      auto wrapping_middleware = [&measured_duration](const glz::request&, glz::response&, const auto& next) {
+         auto start = std::chrono::steady_clock::now();
+         next();
+         measured_duration = std::chrono::steady_clock::now() - start;
+      };
+
+      auto [handler, params] = router.match(req.method, req.target);
+
+      // Build and execute chain
+      std::function<void()> chain = [&handler, &req, &res]() { handler(req, res); };
+      auto prev_chain = std::move(chain);
+      chain = [wrapping_middleware, prev_chain = std::move(prev_chain), &req, &res]() {
+         glz::next_handler next(prev_chain);
+         wrapping_middleware(req, res, next);
+      };
+      chain();
+
+      expect(measured_duration.count() > 0) << "Should measure non-zero duration\n";
+      auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(measured_duration);
+      expect(ms.count() >= 10) << "Should measure at least 10ms\n";
+   };
+
+   "wrap_middleware_order"_test = [] {
+      std::vector<std::string> execution_order;
+
+      auto middleware1 = [&execution_order](const glz::request&, glz::response&, const auto& next) {
+         execution_order.push_back("middleware1_before");
+         next();
+         execution_order.push_back("middleware1_after");
+      };
+
+      auto middleware2 = [&execution_order](const glz::request&, glz::response&, const auto& next) {
+         execution_order.push_back("middleware2_before");
+         next();
+         execution_order.push_back("middleware2_after");
+      };
+
+      auto handler = [&execution_order]() { execution_order.push_back("handler"); };
+
+      // Build chain (middleware added in order, but chain built in reverse)
+      std::function<void()> chain = handler;
+
+      // Wrap with middleware2 (will be outermost)
+      auto prev = std::move(chain);
+      chain = [middleware2, prev = std::move(prev)]() {
+         glz::request req;
+         glz::response res;
+         glz::next_handler next(prev);
+         middleware2(req, res, next);
+      };
+
+      // Wrap with middleware1 (will be innermost after middleware2)
+      prev = std::move(chain);
+      chain = [middleware1, prev = std::move(prev)]() {
+         glz::request req;
+         glz::response res;
+         glz::next_handler next(prev);
+         middleware1(req, res, next);
+      };
+
+      chain();
+
+      // Expected order: middleware1 before -> middleware2 before -> handler ->
+      //                 middleware2 after -> middleware1 after
+      expect(execution_order.size() == 5) << "Should execute all parts\n";
+      expect(execution_order[0] == "middleware1_before") << "First middleware before\n";
+      expect(execution_order[1] == "middleware2_before") << "Second middleware before\n";
+      expect(execution_order[2] == "handler") << "Handler in middle\n";
+      expect(execution_order[3] == "middleware2_after") << "Second middleware after\n";
+      expect(execution_order[4] == "middleware1_after") << "First middleware after\n";
+   };
+
+   "wrap_middleware_can_modify_response"_test = [] {
+      glz::request req;
+      glz::response res;
+      res.body("original");
+
+      auto middleware = [](const glz::request&, glz::response& res, const auto& next) {
+         next();
+         // Transform response after handler
+         res.body(res.response_body + " + transformed");
+      };
+
+      auto handler = [](glz::response& res) { res.body("handler_output"); };
+
+      std::function<void()> chain = [&handler, &res]() { handler(res); };
+      chain = [middleware, prev = std::move(chain), &req, &res]() {
+         glz::next_handler next(prev);
+         middleware(req, res, next);
+      };
+
+      chain();
+
+      expect(res.response_body == "handler_output + transformed") << "Middleware should transform response\n";
+   };
+
+   "wrap_middleware_error_handling"_test = [] {
+      bool error_caught = false;
+
+      auto middleware = [&error_caught](const glz::request&, glz::response&, const auto& next) {
+         try {
+            next();
+         }
+         catch (const std::exception&) {
+            error_caught = true;
+         }
+      };
+
+      auto handler = []() { throw std::runtime_error("test error"); };
+
+      std::function<void()> chain = handler;
+      glz::request req;
+      glz::response res;
+      chain = [middleware, prev = std::move(chain), &req, &res]() {
+         glz::next_handler next(prev);
+         middleware(req, res, next);
+      };
+
+      chain();
+
+      expect(error_caught) << "Middleware should catch errors from handler\n";
+   };
+
+   "wrap_middleware_metrics_use_case"_test = [] {
+      struct Metrics
+      {
+         std::atomic<uint64_t> total_requests{0};
+         std::atomic<uint64_t> total_responses{0};
+         std::atomic<uint64_t> success_count{0};
+         std::atomic<uint64_t> error_count{0};
+      };
+
+      Metrics metrics;
+
+      auto metrics_middleware = [&metrics](const glz::request&, glz::response& res, const auto& next) {
+         metrics.total_requests++;
+         next();
+         metrics.total_responses++;
+         if (res.status_code >= 200 && res.status_code < 300) {
+            metrics.success_count++;
+         }
+         else if (res.status_code >= 400) {
+            metrics.error_count++;
+         }
+      };
+
+      // Simulate 3 successful requests
+      for (int i = 0; i < 3; ++i) {
+         glz::request req;
+         glz::response res;
+         res.status(200);
+         auto handler = []() {};
+         std::function<void()> chain = handler;
+         chain = [metrics_middleware, prev = std::move(chain), &req, &res]() {
+            glz::next_handler next(prev);
+            metrics_middleware(req, res, next);
+         };
+         chain();
+      }
+
+      // Simulate 2 error requests
+      for (int i = 0; i < 2; ++i) {
+         glz::request req;
+         glz::response res;
+         res.status(404);
+         auto handler = []() {};
+         std::function<void()> chain = handler;
+         chain = [metrics_middleware, prev = std::move(chain), &req, &res]() {
+            glz::next_handler next(prev);
+            metrics_middleware(req, res, next);
+         };
+         chain();
+      }
+
+      expect(metrics.total_requests.load() == 5) << "Should count all requests\n";
+      expect(metrics.total_responses.load() == 5) << "Should count all responses\n";
+      expect(metrics.success_count.load() == 3) << "Should count successful responses\n";
+      expect(metrics.error_count.load() == 2) << "Should count error responses\n";
+   };
+};
+
 int main()
 {
    std::cout << "Running Glaze Async Server and API Unit Tests...\n";
