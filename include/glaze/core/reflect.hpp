@@ -322,7 +322,7 @@ namespace glz
 
             // Check if meta<T>::requires_key customization point exists
             if constexpr (meta_has_requires_key<T>) {
-               static constexpr auto key = reflect<T>::keys[I];
+               constexpr auto key = reflect<T>::keys[I];
                constexpr bool is_nullable = [] {
                   if constexpr (is_specialization_v<V, custom_t>) {
                      using From = typename V::from_t;
