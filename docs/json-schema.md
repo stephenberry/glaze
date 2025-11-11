@@ -110,8 +110,40 @@ The `requires_key` function receives:
 - `key`: The name of the field being checked
 - `is_nullable`: Whether the field type is nullable (e.g., `std::optional`, pointers)
 
-This allows fine-grained control over which fields are marked as required in the generated JSON schema, useful for:
+**Important:** The `requires_key` customization point affects both:
+1. **JSON Schema generation** - which fields are listed in the `"required"` array
+2. **JSON parsing/validation** - which fields are validated as required when `error_on_missing_keys = true`
+
+This allows fine-grained control over which fields are required, useful for:
 - Excluding internal/reserved fields from requirements
+- Making non-nullable fields optional without wrapping them in `std::optional`
 - Making certain nullable fields required based on business logic
 - Implementing complex validation rules
+
+#### Example: Parsing with `requires_key`
+
+```c++
+struct my_struct {
+   int required_field{};
+   int optional_field{};  // Not std::optional, but we want it to be optional
+};
+
+template <>
+struct glz::meta<my_struct> {
+   static constexpr bool requires_key(std::string_view key, bool is_nullable) {
+      if (key == "optional_field") {
+         return false;  // Make this field optional
+      }
+      return !is_nullable;  // Default: non-nullable fields are required
+   }
+};
+
+// Parsing works with error_on_missing_keys = true
+std::string json = R"({"required_field":42})";  // optional_field is missing - OK!
+my_struct obj;
+auto ec = glz::read<glz::opts{.error_on_missing_keys = true}>(obj, json);
+// Success! optional_field was not required due to requires_key
+```
+
+For more detailed information about field validation and the `requires_key` customization point, see [Field Validation](field-validation.md).
 

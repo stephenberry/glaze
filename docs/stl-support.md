@@ -26,7 +26,7 @@ Array types logically convert to JSON array values. Concepts are used to allow v
 
 - `std::variant`
 
-See [Variant Handling](./docs/variant-handling.md) for more information.
+See [Variant Handling](./variant-handling.md) for more information.
 
 ## Nullable Types
 
