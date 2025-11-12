@@ -65,7 +65,7 @@ namespace glz
             }
          }
 
-         if constexpr (Opts.bools_as_numbers) {
+         if constexpr (check_bools_as_numbers(Opts)) {
             if (value) {
                std::memcpy(&b[ix], "1", 1);
             }

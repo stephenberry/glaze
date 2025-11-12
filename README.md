@@ -1007,8 +1007,6 @@ struct opts
   bool error_on_const_read =
      false; // Error if attempt is made to read into a const value, by default the value is skipped without error
 
-  bool bools_as_numbers = false; // Read and write booleans with 1's and 0's
-
   bool quoted_num = false; // treat numbers as quoted or array-like types as having quoted numbers
   bool number = false; // treats all types like std::string as numbers: read/write these quoted numbers
   bool raw = false; // write out string like values without quotes

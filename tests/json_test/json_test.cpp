@@ -9668,6 +9668,11 @@ struct bools_as_numbers_struct
 };
 
 suite bools_as_numbers_test = [] {
+   struct bools_as_numbers_opts : glz::opts
+   {
+      bool bools_as_numbers = true;
+   };
+
    "bools_as_numbers"_test = [] {
       std::string s = R"({"a":1,"b":0,"c":true,"d":false})";
       bools_as_numbers_struct obj{};
@@ -9680,7 +9685,7 @@ suite bools_as_numbers_test = [] {
    "bools_as_numbers_array"_test = [] {
       std::string s = R"([1,0,1,0])";
       std::array<bool, 4> obj{};
-      constexpr glz::opts opts{.bools_as_numbers = true};
+      constexpr bools_as_numbers_opts opts{};
       expect(!glz::read<opts>(obj, s));
       expect(glz::write<opts>(obj) == s);
    };
@@ -9688,7 +9693,7 @@ suite bools_as_numbers_test = [] {
    "bools_as_numbers_vector"_test = [] {
       std::string s = R"([1,0,1,0])";
       std::vector<bool> obj{};
-      constexpr glz::opts opts{.bools_as_numbers = true};
+      constexpr bools_as_numbers_opts opts{};
       expect(!glz::read<opts>(obj, s));
       expect(glz::write<opts>(obj) == s);
    };
