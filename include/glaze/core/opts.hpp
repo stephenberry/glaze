@@ -188,6 +188,9 @@ namespace glz
 
    inline constexpr bools_as_numbers_opt_tag bools_as_numbers_member{};
 
+   template <auto member_ptr>
+   concept is_bools_as_numbers_tag = std::same_as<std::decay_t<decltype(member_ptr)>, bools_as_numbers_opt_tag>;
+
    consteval bool check_validate_skipped(auto&& Opts)
    {
       if constexpr (requires { Opts.validate_skipped; }) {
@@ -472,7 +475,7 @@ namespace glz
    template <auto Opts, auto member_ptr>
    constexpr auto set_opt(auto&& value)
    {
-      if constexpr (std::same_as<std::decay_t<decltype(member_ptr)>, bools_as_numbers_opt_tag>) {
+      if constexpr (is_bools_as_numbers_tag<member_ptr>) {
          if constexpr (requires { Opts.bools_as_numbers; }) {
             auto ret = Opts;
             ret.bools_as_numbers = static_cast<bool>(value);
@@ -496,7 +499,7 @@ namespace glz
    template <auto Opts, auto member_ptr>
    constexpr auto opt_on()
    {
-      if constexpr (std::same_as<std::decay_t<decltype(member_ptr)>, bools_as_numbers_opt_tag>) {
+      if constexpr (is_bools_as_numbers_tag<member_ptr>) {
          if constexpr (requires { Opts.bools_as_numbers; }) {
             auto ret = Opts;
             ret.bools_as_numbers = true;
@@ -523,7 +526,7 @@ namespace glz
    template <auto Opts, auto member_ptr>
    constexpr auto opt_off()
    {
-      if constexpr (std::same_as<std::decay_t<decltype(member_ptr)>, bools_as_numbers_opt_tag>) {
+      if constexpr (is_bools_as_numbers_tag<member_ptr>) {
          if constexpr (requires { Opts.bools_as_numbers; }) {
             auto ret = Opts;
             ret.bools_as_numbers = false;
