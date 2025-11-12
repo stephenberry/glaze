@@ -186,8 +186,6 @@ namespace glz
    {
    };
 
-   inline constexpr bools_as_numbers_opt_tag bools_as_numbers_member{};
-
    template <auto member_ptr>
    concept is_bools_as_numbers_tag = std::same_as<std::decay_t<decltype(member_ptr)>, bools_as_numbers_opt_tag>;
 

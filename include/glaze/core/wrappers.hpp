@@ -74,7 +74,7 @@ namespace glz
 
    // Read and write booleans as numbers
    template <auto MemPtr>
-   constexpr auto bools_as_numbers = opts_wrapper<MemPtr, bools_as_numbers_member>();
+   constexpr auto bools_as_numbers = opts_wrapper<MemPtr, bools_as_numbers_opt_tag{}>();
 
    // Read and write numbers as strings
    template <auto MemPtr>
