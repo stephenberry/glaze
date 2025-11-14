@@ -406,12 +406,19 @@ namespace glz
 #endif
                                              asio::ip::tcp::socket>;
 
-      inline http_server() : owned_io_context(std::make_unique<asio::io_context>()), io_context(**owned_io_context)
+      inline http_server(std::shared_ptr<asio::io_context> context = nullptr,
+                         glz::error_handler custom_error_handler = {})
+         : io_context(context ? context : std::make_shared<asio::io_context>())
       {
-         error_handler = [](std::error_code ec, std::source_location loc) {
-            std::fprintf(stderr, "Error at %s:%d: %s\n", loc.file_name(), static_cast<int>(loc.line()),
-                         ec.message().c_str());
-         };
+         if (custom_error_handler) {
+            error_handler = std::move(custom_error_handler);
+         }
+         else {
+            error_handler = [](std::error_code ec, std::source_location loc) {
+               std::fprintf(stderr, "Error at %s:%d: %s\n", loc.file_name(), static_cast<int>(loc.line()),
+                            ec.message().c_str());
+            };
+         }
 
          // Initialize SSL context for TLS-enabled servers
          if constexpr (EnableTLS) {
@@ -423,29 +430,6 @@ namespace glz
 #endif
          }
       }
-
-    /**
-     * @brief Construct a new http server object with external io_context
-     *
-     * @param external_io_context
-     * @param custom_error_handler
-     */
-    inline http_server(asio::io_context& external_io_context,
-                       std::function<void(std::error_code, std::source_location)> custom_error_handler)
-        : owned_io_context(std::nullopt),
-          io_context(external_io_context),
-          error_handler(std::move(custom_error_handler))
-    {
-         // Initialize SSL context for TLS-enabled servers
-         if constexpr (EnableTLS) {
-#ifdef GLZ_ENABLE_SSL
-            ssl_context = std::make_unique<asio::ssl::context>(asio::ssl::context::tlsv12);
-            ssl_context->set_default_verify_paths();
-#else
-            static_assert(!EnableTLS, "TLS support requires GLZ_ENABLE_SSL to be defined and OpenSSL to be available");
-#endif
-         }
-    }
 
       inline ~http_server()
       {
@@ -465,7 +449,7 @@ namespace glz
       {
          try {
             asio::ip::tcp::endpoint endpoint(asio::ip::make_address(address), port);
-            acceptor = std::make_unique<asio::ip::tcp::acceptor>(io_context.get(), endpoint);
+            acceptor = std::make_unique<asio::ip::tcp::acceptor>(*io_context, endpoint);
          }
          catch (...) {
             error_handler(std::make_error_code(std::errc::address_in_use), std::source_location::current());
@@ -495,7 +479,7 @@ namespace glz
          threads.reserve(num_threads);
          for (size_t i = 0; i < num_threads; ++i) {
             threads.emplace_back([this] {
-               io_context.get().run();
+               io_context->run();
                // Don't report errors during shutdown
             });
          }
@@ -532,9 +516,7 @@ namespace glz
          }
 
          // Stop the io_context
-         if (owned_io_context) {
-            io_context.get().stop();
-         }
+         io_context->stop();
 
          // Only join threads if we're not in one of the worker threads
          auto current_thread_id = std::this_thread::get_id();
@@ -997,7 +979,7 @@ namespace glz
          signal_handling_enabled = true;
 
          // Create signal_set that will handle SIGINT and SIGTERM
-         signals_ = std::make_unique<asio::signal_set>(io_context.get(), SIGINT, SIGTERM);
+         signals_ = std::make_unique<asio::signal_set>(*io_context, SIGINT, SIGTERM);
 
          // Set up async handler - this properly captures 'this' and integrates with ASIO
          signals_->async_wait([this](std::error_code ec, int signal_number) {
@@ -1035,9 +1017,7 @@ namespace glz
       }
 
      private:
-       std::optional<std::unique_ptr<asio::io_context>> owned_io_context;
-       std::reference_wrapper<asio::io_context> io_context;
-
+      std::shared_ptr<asio::io_context> io_context;
       std::unique_ptr<asio::ip::tcp::acceptor> acceptor;
       std::vector<std::thread> threads;
       http_router root_router;
