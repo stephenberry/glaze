@@ -9,6 +9,7 @@
 #include <iostream>
 #include <memory>
 #include <thread>
+#include "asio/io_context.hpp"
 
 #ifndef GLZ_ENABLE_SSL
 #define GLZ_ENABLE_SSL
@@ -586,6 +587,97 @@ suite server_lifecycle_tests = [] {
       std::this_thread::sleep_for(std::chrono::milliseconds(200));
 
       test_server.stop();
+      expect(true) << "HTTPS server should stop cleanly\n";
+   };
+};
+
+class ExternalIOContextServer
+{
+  public:
+   ExternalIOContextServer() : io_context(),
+    server_(io_context, [](std::error_code, std::source_location) {
+        std::cout << "HTTPS Server Error Handler Invoked\n";
+    }),
+    work_guard(asio::make_work_guard(io_context)) {
+      // Ensure certificates exist
+      if (!certificates_exist()) {
+         CertificateGenerator::generate_test_certificates();
+      }
+
+      wait_for_port_free(8443);
+    }
+
+   ~ExternalIOContextServer()
+   {
+        stop_io_thread();
+   }
+
+   void start_io_thread()
+   {
+      io_thread = std::thread([this]() {
+        setup_routes();
+        server_.load_certificate("test_cert.pem", "test_key.pem");
+        server_.set_ssl_verify_mode(0);
+        server_.enable_cors();
+        server_.bind("127.0.0.1", 8443);
+        // Start the server accepting connections
+        server_.start(0);
+        // lets run the server in this thread
+        io_context.run();
+    });
+   }
+
+   void stop_io_thread()
+   {
+      work_guard.reset();
+      io_context.stop();
+      server_.stop();
+      if (io_thread.joinable()) {
+         io_thread.join();
+      }
+   }
+
+   void setup_routes()
+   {
+      // Health check endpoint
+      server_.get("/health", [](const glz::request&, glz::response& res) {
+        res.status(200).body("HTTPS Server OK"); });
+   }
+
+  private:
+    asio::io_context io_context;
+    glz::http_server<> server_;
+    std::thread io_thread;
+    asio::executor_work_guard<asio::io_context::executor_type> work_guard;
+};
+
+suite server_lifecycle_external_context_tests = [] {
+    asio::io_context io_context;
+    auto error_handler = [](std::error_code, std::source_location) {};
+   "https_server_creation"_test = [&] {
+      glz::https_server server(io_context, error_handler);
+      expect(true) << "HTTPS server should be created successfully\n";
+   };
+
+   "https_server_configuration"_test = [&] {
+      glz::https_server server(io_context, error_handler);
+
+      auto& server_ref = server.enable_cors().set_ssl_verify_mode(0);
+
+      expect(&server_ref == &server) << "Method chaining should work\n";
+   };
+
+   "https_server_startup_shutdown"_test = [&] {
+      // Ensure certificates exist
+      if (!certificates_exist()) {
+         CertificateGenerator::generate_test_certificates();
+      }
+
+      ExternalIOContextServer server;
+      std::cout << "Starting HTTPS server with external io_context thread...\n";
+      server.start_io_thread();
+
+      std::this_thread::sleep_for(std::chrono::milliseconds(200));
       expect(true) << "HTTPS server should stop cleanly\n";
    };
 };
