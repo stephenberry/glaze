@@ -2882,7 +2882,7 @@ namespace glz
 
                                  it = start; // we restart our object parsing now that we know the target type
                                  tag_specified_index = type_index; // Store the tag-specified type
-                                 if (value.index() != type_index) value = runtime_variant_map<T>()[type_index];
+                                 if (value.index() != type_index) emplace_runtime_variant(value, type_index);
                                  std::visit(
                                     [&](auto&& v) {
                                        using V = std::decay_t<decltype(v)>;
@@ -2938,7 +2938,7 @@ namespace glz
 
                                     it = start; // we restart our object parsing now that we know the target type
                                     tag_specified_index = type_index; // Store the default type index
-                                    if (value.index() != type_index) value = runtime_variant_map<T>()[type_index];
+                                    if (value.index() != type_index) emplace_runtime_variant(value, type_index);
                                     std::visit(
                                        [&](auto&& v) {
                                           using V = std::decay_t<decltype(v)>;
@@ -3017,7 +3017,7 @@ namespace glz
                               it = start;
                               const auto type_index = id_it->second;
                               tag_specified_index = type_index; // Store the tag-specified type
-                              if (value.index() != type_index) value = runtime_variant_map<T>()[type_index];
+                              if (value.index() != type_index) emplace_runtime_variant(value, type_index);
                               return;
                            }
                            else {
@@ -3029,7 +3029,7 @@ namespace glz
                                  it = start;
                                  const auto type_index = ids_size;
                                  tag_specified_index = type_index; // Store the default type index
-                                 if (value.index() != type_index) value = runtime_variant_map<T>()[type_index];
+                                 if (value.index() != type_index) emplace_runtime_variant(value, type_index);
                                  return;
                               }
                               else {
@@ -3060,7 +3060,7 @@ namespace glz
                            const auto type_index = possible_types.countr_zero();
 
                            if (value.index() != static_cast<size_t>(type_index))
-                              value = runtime_variant_map<T>()[type_index];
+                              emplace_runtime_variant(value, type_index);
                            std::visit(
                               [&](auto&& v) {
                                  using V = std::decay_t<decltype(v)>;
@@ -3139,7 +3139,7 @@ namespace glz
 
                         it = start;
                         if (value.index() != static_cast<size_t>(type_index))
-                           value = runtime_variant_map<T>()[type_index];
+                           emplace_runtime_variant(value, type_index);
                         std::visit(
                            [&](auto&& v) {
                               using V = std::decay_t<decltype(v)>;
@@ -3225,7 +3225,7 @@ namespace glz
                            }
 
                            it = start;
-                           if (value.index() != chosen_index) value = runtime_variant_map<T>()[chosen_index];
+                           if (value.index() != chosen_index) emplace_runtime_variant(value, chosen_index);
                            std::visit(
                               [&](auto&& v) {
                                  using V = std::decay_t<decltype(v)>;
@@ -3334,7 +3334,7 @@ namespace glz
 
                // Try parsing as this type
                if (value.index() != I) {
-                  value = runtime_variant_map<T>()[I];
+                  emplace_runtime_variant(value, I);
                }
 
                std::visit([&](auto&& v) { parse<JSON>::op<Options>(v, ctx, it, end); }, value);
@@ -3424,7 +3424,7 @@ namespace glz
                return;
             }
             const auto type_index = id_it->second;
-            if (value.index() != type_index) value = runtime_variant_map<T>()[type_index];
+            if (value.index() != type_index) emplace_runtime_variant(value, type_index);
             std::visit([&](auto&& v) { parse<JSON>::op<Opts>(v, ctx, it, end); }, value);
             if (bool(ctx.error)) [[unlikely]]
                return;

@@ -13,6 +13,7 @@
 #include <variant>
 #include <vector>
 
+#include "glaze/containers/flat_map.hpp"
 #include "glaze/json.hpp"
 #include "json_test_shared_types.hpp"
 #include "ut/ut.hpp"
@@ -1108,6 +1109,129 @@ suite integer_id_variant_tests = [] {
       ]
    }
 ])") << out;
+   };
+};
+
+struct SiteDiagnostic
+{
+   std::string message{};
+   int severity{};
+};
+
+template <>
+struct glz::meta<SiteDiagnostic>
+{
+   using T = SiteDiagnostic;
+   static constexpr std::string_view name = "SiteDiagnostic";
+   static constexpr auto value = object(&T::message, &T::severity);
+};
+
+struct DerivedSite0
+{
+   std::string message{};
+   int severity{};
+   std::string additional_info{};
+};
+
+template <>
+struct glz::meta<DerivedSite0>
+{
+   using T = DerivedSite0;
+   static constexpr std::string_view name = "DerivedSite0";
+   static constexpr auto value = object(&T::message, &T::severity, &T::additional_info);
+};
+
+using SiteDiagnosticsVariant = std::variant<std::unique_ptr<SiteDiagnostic>, std::unique_ptr<DerivedSite0>>;
+
+template <>
+struct glz::meta<SiteDiagnosticsVariant>
+{
+   static constexpr std::string_view tag = "type";
+   static constexpr auto ids = std::array{"SiteDiagnostic", "DerivedSite0"};
+};
+
+struct DiagnosticsConfig
+{
+   glz::flat_map<std::string, SiteDiagnosticsVariant> diagnostics{};
+};
+
+template <>
+struct glz::meta<DiagnosticsConfig>
+{
+   using T = DiagnosticsConfig;
+   static constexpr auto value = object(&T::diagnostics);
+};
+
+suite unique_ptr_variant_tests = [] {
+   "flat_map with variant of unique_ptr"_test = [] {
+      DiagnosticsConfig config;
+
+      config.diagnostics["site1"] = std::make_unique<SiteDiagnostic>(SiteDiagnostic{"Basic diagnostic", 1});
+      config.diagnostics["site2"] =
+         std::make_unique<DerivedSite0>(DerivedSite0{"Advanced diagnostic", 2, "Extra details"});
+
+      std::string json;
+      auto write_result = glz::write_json(config, json);
+      expect(!write_result) << "Failed to write JSON";
+
+      expect(json.find(R"("message":"Basic diagnostic")") != std::string::npos);
+      expect(json.find(R"("message":"Advanced diagnostic")") != std::string::npos);
+      expect(json.find(R"("additional_info":"Extra details")") != std::string::npos);
+
+      DiagnosticsConfig parsed_config;
+      auto read_result = glz::read_json(parsed_config, json);
+      expect(!read_result) << glz::format_error(read_result, json);
+
+      expect(parsed_config.diagnostics.size() == 2);
+      expect(parsed_config.diagnostics.contains("site1"));
+      expect(parsed_config.diagnostics.contains("site2"));
+
+      auto& variant1 = parsed_config.diagnostics["site1"];
+      expect(std::holds_alternative<std::unique_ptr<SiteDiagnostic>>(variant1));
+      if (std::holds_alternative<std::unique_ptr<SiteDiagnostic>>(variant1)) {
+         auto& diag1 = std::get<std::unique_ptr<SiteDiagnostic>>(variant1);
+         expect(diag1 != nullptr);
+         expect(diag1->message == "Basic diagnostic");
+         expect(diag1->severity == 1);
+      }
+
+      auto& variant2 = parsed_config.diagnostics["site2"];
+      expect(std::holds_alternative<std::unique_ptr<DerivedSite0>>(variant2));
+      if (std::holds_alternative<std::unique_ptr<DerivedSite0>>(variant2)) {
+         auto& diag2 = std::get<std::unique_ptr<DerivedSite0>>(variant2);
+         expect(diag2 != nullptr);
+         expect(diag2->message == "Advanced diagnostic");
+         expect(diag2->severity == 2);
+         expect(diag2->additional_info == "Extra details");
+      }
+   };
+
+   "flat_map with variant unique_ptr - empty map"_test = [] {
+      DiagnosticsConfig config;
+
+      std::string json;
+      expect(!glz::write_json(config, json));
+      expect(json == R"({"diagnostics":{}})") << json;
+
+      DiagnosticsConfig parsed;
+      expect(!glz::read_json(parsed, json));
+      expect(parsed.diagnostics.empty());
+   };
+
+   "flat_map with variant unique_ptr - single entry"_test = [] {
+      DiagnosticsConfig config;
+      config.diagnostics["only_site"] = std::make_unique<DerivedSite0>(DerivedSite0{"Test", 3, "Info"});
+
+      std::string json;
+      expect(!glz::write_json(config, json));
+
+      DiagnosticsConfig parsed;
+      expect(!glz::read_json(parsed, json));
+      expect(parsed.diagnostics.size() == 1);
+      expect(parsed.diagnostics.contains("only_site"));
+
+      auto& variant = parsed.diagnostics["only_site"];
+      expect(std::holds_alternative<std::unique_ptr<DerivedSite0>>(variant));
    };
 };
 

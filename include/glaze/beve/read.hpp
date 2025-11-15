@@ -504,7 +504,7 @@ namespace glz
          }
 
          if (value.index() != type_index) {
-            value = runtime_variant_map<T>()[type_index];
+            emplace_runtime_variant(value, type_index);
          }
          std::visit([&](auto&& v) { parse<BEVE>::op<Opts>(v, ctx, it, end); }, value);
       }
