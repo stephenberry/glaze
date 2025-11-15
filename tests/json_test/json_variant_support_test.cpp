@@ -1233,6 +1233,156 @@ suite unique_ptr_variant_tests = [] {
       auto& variant = parsed.diagnostics["only_site"];
       expect(std::holds_alternative<std::unique_ptr<DerivedSite0>>(variant));
    };
+
+   "tagged variant with unique_ptr - tags are written"_test = [] {
+      SiteDiagnosticsVariant variant = std::make_unique<SiteDiagnostic>(SiteDiagnostic{"Test message", 5});
+
+      std::string json;
+      auto write_result = glz::write_json(variant, json);
+      expect(!write_result) << "Failed to write JSON";
+
+      expect(json.find(R"("type":"SiteDiagnostic")") != std::string::npos) << json;
+      expect(json.find(R"("message":"Test message")") != std::string::npos) << json;
+      expect(json.find(R"("severity":5)") != std::string::npos) << json;
+   };
+
+   "tagged variant with unique_ptr - roundtrip with tags"_test = [] {
+      SiteDiagnosticsVariant original = std::make_unique<DerivedSite0>(DerivedSite0{"Derived message", 7, "Extra"});
+
+      std::string json;
+      expect(!glz::write_json(original, json)) << "Write failed";
+
+      expect(json.find(R"("type":"DerivedSite0")") != std::string::npos) << json;
+
+      SiteDiagnosticsVariant parsed;
+      auto read_result = glz::read_json(parsed, json);
+      expect(!read_result) << glz::format_error(read_result, json);
+
+      expect(std::holds_alternative<std::unique_ptr<DerivedSite0>>(parsed));
+      if (std::holds_alternative<std::unique_ptr<DerivedSite0>>(parsed)) {
+         auto& diag = std::get<std::unique_ptr<DerivedSite0>>(parsed);
+         expect(diag != nullptr);
+         expect(diag->message == "Derived message");
+         expect(diag->severity == 7);
+         expect(diag->additional_info == "Extra");
+      }
+   };
+
+   "tagged variant with unique_ptr - flat_map preserves tags"_test = [] {
+      DiagnosticsConfig config;
+      config.diagnostics["a"] = std::make_unique<SiteDiagnostic>(SiteDiagnostic{"Msg A", 1});
+      config.diagnostics["b"] = std::make_unique<DerivedSite0>(DerivedSite0{"Msg B", 2, "Details"});
+
+      std::string json;
+      expect(!glz::write_json(config, json));
+
+      expect(json.find(R"("type":"SiteDiagnostic")") != std::string::npos) << json;
+      expect(json.find(R"("type":"DerivedSite0")") != std::string::npos) << json;
+
+      DiagnosticsConfig parsed;
+      expect(!glz::read_json(parsed, json)) << json;
+
+      expect(parsed.diagnostics.size() == 2);
+      expect(std::holds_alternative<std::unique_ptr<SiteDiagnostic>>(parsed.diagnostics["a"]));
+      expect(std::holds_alternative<std::unique_ptr<DerivedSite0>>(parsed.diagnostics["b"]));
+   };
+};
+
+struct Animal
+{
+   std::string name{};
+   int age{};
+};
+
+template <>
+struct glz::meta<Animal>
+{
+   using T = Animal;
+   static constexpr std::string_view name = "Animal";
+   static constexpr auto value = object(&T::name, &T::age);
+};
+
+struct Dog
+{
+   std::string name{};
+   int age{};
+   std::string breed{};
+};
+
+template <>
+struct glz::meta<Dog>
+{
+   using T = Dog;
+   static constexpr std::string_view name = "Dog";
+   static constexpr auto value = object(&T::name, &T::age, &T::breed);
+};
+
+using AnimalVariantShared = std::variant<std::shared_ptr<Animal>, std::shared_ptr<Dog>>;
+
+template <>
+struct glz::meta<AnimalVariantShared>
+{
+   static constexpr std::string_view tag = "species";
+   static constexpr auto ids = std::array{"Animal", "Dog"};
+};
+
+suite shared_ptr_variant_tests = [] {
+   "tagged variant with shared_ptr - tags are written"_test = [] {
+      AnimalVariantShared variant = std::make_shared<Animal>(Animal{"Buddy", 3});
+
+      std::string json;
+      auto write_result = glz::write_json(variant, json);
+      expect(!write_result) << "Failed to write JSON";
+
+      expect(json.find(R"("species":"Animal")") != std::string::npos) << json;
+      expect(json.find(R"("name":"Buddy")") != std::string::npos) << json;
+      expect(json.find(R"("age":3)") != std::string::npos) << json;
+   };
+
+   "tagged variant with shared_ptr - roundtrip with tags"_test = [] {
+      AnimalVariantShared original = std::make_shared<Dog>(Dog{"Max", 5, "Golden Retriever"});
+
+      std::string json;
+      expect(!glz::write_json(original, json)) << "Write failed";
+
+      expect(json.find(R"("species":"Dog")") != std::string::npos) << json;
+
+      AnimalVariantShared parsed;
+      auto read_result = glz::read_json(parsed, json);
+      expect(!read_result) << glz::format_error(read_result, json);
+
+      expect(std::holds_alternative<std::shared_ptr<Dog>>(parsed));
+      if (std::holds_alternative<std::shared_ptr<Dog>>(parsed)) {
+         auto& dog = std::get<std::shared_ptr<Dog>>(parsed);
+         expect(dog != nullptr);
+         expect(dog->name == "Max");
+         expect(dog->age == 5);
+         expect(dog->breed == "Golden Retriever");
+      }
+   };
+
+   "tagged variant with shared_ptr - multiple instances"_test = [] {
+      std::vector<AnimalVariantShared> animals;
+      animals.push_back(std::make_shared<Animal>(Animal{"Cat", 2}));
+      animals.push_back(std::make_shared<Dog>(Dog{"Rover", 4, "Labrador"}));
+      animals.push_back(std::make_shared<Animal>(Animal{"Bird", 1}));
+
+      std::string json;
+      expect(!glz::write_json(animals, json));
+
+      std::vector<AnimalVariantShared> parsed;
+      expect(!glz::read_json(parsed, json)) << json;
+
+      expect(parsed.size() == 3);
+      expect(std::holds_alternative<std::shared_ptr<Animal>>(parsed[0]));
+      expect(std::holds_alternative<std::shared_ptr<Dog>>(parsed[1]));
+      expect(std::holds_alternative<std::shared_ptr<Animal>>(parsed[2]));
+
+      if (std::holds_alternative<std::shared_ptr<Dog>>(parsed[1])) {
+         auto& dog = std::get<std::shared_ptr<Dog>>(parsed[1]);
+         expect(dog->breed == "Labrador");
+      }
+   };
 };
 
 int main() { return 0; }

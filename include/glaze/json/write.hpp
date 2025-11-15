@@ -1354,8 +1354,16 @@ namespace glz
                using V = std::decay_t<decltype(val)>;
 
                if constexpr (check_write_type_info(Opts) && not tag_v<T>.empty() &&
-                             (glaze_object_t<V> || (reflectable<V> && !has_member_with_name<V>(tag_v<T>)))) {
-                  constexpr auto N = reflect<V>::size;
+                             (glaze_object_t<V> || (reflectable<V> && !has_member_with_name<V>(tag_v<T>)) ||
+                              is_memory_object<V>)) {
+                  constexpr auto N = []() {
+                     if constexpr (is_memory_object<V>) {
+                        return reflect<memory_type<V>>::size;
+                     }
+                     else {
+                        return reflect<V>::size;
+                     }
+                  }();
 
                   // must first write out type
                   if constexpr (Opts.prettify) {
@@ -1414,7 +1422,16 @@ namespace glz
                         }
                      }
                   }
-                  to<JSON, V>::template op<opening_and_closing_handled<Opts>()>(val, ctx, b, ix);
+                  if constexpr (is_memory_object<V>) {
+                     if (!val) [[unlikely]] {
+                        ctx.error = error_code::invalid_variant_object;
+                        return;
+                     }
+                     to<JSON, memory_type<V>>::template op<opening_and_closing_handled<Opts>()>(*val, ctx, b, ix);
+                  }
+                  else {
+                     to<JSON, V>::template op<opening_and_closing_handled<Opts>()>(val, ctx, b, ix);
+                  }
                   // If we skip everything then we may have an extra comma, which we want to revert
                   if constexpr (Opts.skip_null_members) {
                      if (b[ix - 1] == ',') {
