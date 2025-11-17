@@ -70,21 +70,79 @@ server.bind("::", 8080);   // all IPv6 interfaces
 ### Thread Pool Configuration
 
 ```cpp
+// Start with default thread count (hardware concurrency, minimum 1)
+server.start();   // Uses std::thread::hardware_concurrency(), minimum 1 thread
+
 // Start with specific number of threads
 server.start(4);  // 4 worker threads
 
-// Start with hardware concurrency (default)
-server.start();   // Uses std::thread::hardware_concurrency()
+// Start without creating worker threads (for external io_context management)
+server.start(0);  // No worker threads - caller manages io_context::run()
 ```
 
 ### Error Handling
 
+You can provide a custom error handler either in the constructor or using `on_error()`:
+
 ```cpp
+// Option 1: Provide error handler in constructor
+auto error_handler = [](std::error_code ec, std::source_location loc) {
+    std::fprintf(stderr, "Server error at %s:%d: %s\n",
+                loc.file_name(), loc.line(), ec.message().c_str());
+};
+glz::http_server server(nullptr, error_handler);
+
+// Option 2: Set error handler after construction
 server.on_error([](std::error_code ec, std::source_location loc) {
-    std::fprintf(stderr, "Server error at %s:%d: %s\n", 
+    std::fprintf(stderr, "Server error at %s:%d: %s\n",
                 loc.file_name(), loc.line(), ec.message().c_str());
 });
 ```
+
+### Using an External io_context
+
+You can provide your own `asio::io_context` to the server, allowing you to share the event loop with other ASIO-based components or manage the lifecycle externally.
+
+```cpp
+#include "glaze/net/http_server.hpp"
+#include <asio/io_context.hpp>
+#include <memory>
+#include <thread>
+
+// Create a shared io_context
+auto io_ctx = std::make_shared<asio::io_context>();
+
+// Pass it to the server constructor
+glz::http_server server(io_ctx);
+
+// Configure routes
+server.get("/hello", [](const glz::request&, glz::response& res) {
+    res.body("Hello, World!");
+});
+
+// Bind the server
+server.bind(8080);
+
+// Start server without creating worker threads (pass 0)
+server.start(0);
+
+// Run io_context in your own thread(s)
+std::thread io_thread([io_ctx]() {
+    io_ctx->run();
+});
+
+// ... later, when shutting down ...
+server.stop();
+io_ctx->stop();
+io_thread.join();
+```
+
+This is useful when:
+- You want to share an io_context between multiple ASIO components (e.g., multiple servers or clients)
+- You need fine-grained control over thread management
+- You're integrating the server into an existing ASIO-based application
+
+**Important:** When using an external io_context, pass `0` to `start()` to prevent the server from creating its own worker threads. You are then responsible for calling `io_context::run()` in your own threads.
 
 ## Route Registration
 
