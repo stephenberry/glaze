@@ -263,33 +263,102 @@ void run_dual_servers() {
     http_server.get("/redirect", [](const glz::request& req, glz::response& res) {
         res.status(301).header("Location", "https://localhost:8443" + req.target);
     });
-    
+
     // HTTPS server
     glz::https_server https_server;
     https_server.load_certificate("cert.pem", "key.pem");
     setup_secure_routes(https_server);
-    
+
     // Start both servers
     auto http_future = std::async([&]() {
         http_server.bind(8080);
         http_server.start();
     });
-    
+
     auto https_future = std::async([&]() {
         https_server.bind(8443);
         https_server.start();
     });
-    
+
     // Wait for shutdown signal
     wait_for_shutdown();
-    
+
     http_server.stop();
     https_server.stop();
-    
+
     http_future.wait();
     https_future.wait();
 }
 ```
+
+### Multiple Servers with Shared io_context
+
+You can run multiple servers on the same io_context for better resource efficiency:
+
+```cpp
+#include "glaze/net/http_server.hpp"
+#include <asio/io_context.hpp>
+#include <memory>
+#include <thread>
+
+void run_multiple_servers_shared_context() {
+    // Create a shared io_context
+    auto io_ctx = std::make_shared<asio::io_context>();
+
+    // Create HTTP server on shared context
+    glz::http_server http_server(io_ctx);
+    http_server.get("/api/v1", [](const glz::request&, glz::response& res) {
+        res.json({{"version", "1.0"}});
+    });
+    http_server.bind(8080);
+    http_server.start(0); // Don't create worker threads
+
+    // Create HTTPS server on same shared context
+    glz::https_server https_server(io_ctx);
+    https_server.load_certificate("cert.pem", "key.pem");
+    https_server.get("/api/v2", [](const glz::request&, glz::response& res) {
+        res.json({{"version", "2.0"}, {"secure", true}});
+    });
+    https_server.bind(8443);
+    https_server.start(0); // Don't create worker threads
+
+    // Run the shared io_context in a thread pool
+    std::vector<std::thread> threads;
+    const size_t num_threads = std::thread::hardware_concurrency();
+    threads.reserve(num_threads);
+
+    for (size_t i = 0; i < num_threads; ++i) {
+        threads.emplace_back([io_ctx]() {
+            io_ctx->run();
+        });
+    }
+
+    std::cout << "HTTP server running on port 8080\n";
+    std::cout << "HTTPS server running on port 8443\n";
+    std::cout << "Both servers sharing " << num_threads << " worker threads\n";
+
+    // Wait for shutdown...
+    wait_for_shutdown();
+
+    // Stop both servers and the io_context
+    http_server.stop();
+    https_server.stop();
+    io_ctx->stop();
+
+    // Wait for all threads to finish
+    for (auto& thread : threads) {
+        if (thread.joinable()) {
+            thread.join();
+        }
+    }
+}
+```
+
+This approach is useful when you need to:
+- Run multiple servers (HTTP, HTTPS, WebSocket) on the same thread pool
+- Minimize resource usage by sharing threads between services
+- Centralize io_context management for better control
+- Integrate multiple servers into an existing ASIO-based application
 
 ## HTTP Client
 
