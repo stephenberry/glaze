@@ -45,14 +45,25 @@ namespace glz
 namespace glz
 {
    // Generic json type.
-   struct generic
+   // Template parameter controls whether to use int64_t for precise integer handling
+   template <bool UseInt64 = false>
+   struct generic_t
    {
-      virtual ~generic() {}
+      virtual ~generic_t() {}
 
-      using array_t = std::vector<generic>;
-      using object_t = std::map<std::string, generic, std::less<>>;
+      using array_t = std::vector<generic_t<UseInt64>>;
+      using object_t = std::map<std::string, generic_t<UseInt64>, std::less<>>;
       using null_t = std::nullptr_t;
-      using val_t = std::variant<null_t, double, std::string, bool, array_t, object_t>;
+
+      // Use int64_t variant when UseInt64 is true
+      // This enables precise integer handling for large integers beyond double's safe range (2^53)
+      // The parser tries int64_t first, then falls back to double if decimal point is encountered
+      using val_t = std::conditional_t<
+         UseInt64,
+         std::variant<null_t, int64_t, double, std::string, bool, array_t, object_t>,
+         std::variant<null_t, double, std::string, bool, array_t, object_t>
+      >;
+
       val_t data{};
 
       /**
@@ -102,6 +113,11 @@ namespace glz
       [[nodiscard]] T as() const
       {
          // Can be used for int and the like
+         if constexpr (UseInt64) {
+            if (holds<int64_t>()) {
+               return static_cast<T>(get<int64_t>());
+            }
+         }
          return static_cast<T>(get<double>());
       }
 
@@ -119,23 +135,23 @@ namespace glz
          return std::holds_alternative<T>(data);
       }
 
-      generic& operator[](std::integral auto&& index) { return std::get<array_t>(data)[index]; }
+      generic_t& operator[](std::integral auto&& index) { return std::get<array_t>(data)[index]; }
 
-      const generic& operator[](std::integral auto&& index) const { return std::get<array_t>(data)[index]; }
+      const generic_t& operator[](std::integral auto&& index) const { return std::get<array_t>(data)[index]; }
 
-      generic& operator[](std::convertible_to<std::string_view> auto&& key)
+      generic_t& operator[](std::convertible_to<std::string_view> auto&& key)
       {
          //[] operator for maps does not support heterogeneous lookups yet
          if (holds<null_t>()) data = object_t{};
          auto& object = std::get<object_t>(data);
          auto iter = object.find(key);
          if (iter == object.end()) {
-            iter = object.insert(std::make_pair(std::string(key), generic{})).first;
+            iter = object.insert(std::make_pair(std::string(key), generic_t{})).first;
          }
          return iter->second;
       }
 
-      const generic& operator[](std::convertible_to<std::string_view> auto&& key) const
+      const generic_t& operator[](std::convertible_to<std::string_view> auto&& key) const
       {
          //[] operator for maps does not support heterogeneous lookups yet
          auto& object = std::get<object_t>(data);
@@ -146,13 +162,13 @@ namespace glz
          return iter->second;
       }
 
-      generic& operator=(const std::nullptr_t value)
+      generic_t& operator=(const std::nullptr_t value)
       {
          data = value;
          return *this;
       }
 
-      generic& operator=(const double value)
+      generic_t& operator=(const double value)
       {
          data = value;
          return *this;
@@ -160,60 +176,65 @@ namespace glz
 
       // for integers
       template <int_t T>
-      generic& operator=(const T value)
+      generic_t& operator=(const T value)
       {
-         data = static_cast<double>(value);
+         if constexpr (UseInt64) {
+            data = static_cast<int64_t>(value);
+         }
+         else {
+            data = static_cast<double>(value);
+         }
          return *this;
       }
 
-      generic& operator=(const std::string& value)
+      generic_t& operator=(const std::string& value)
       {
          data = value;
          return *this;
       }
 
-      generic& operator=(const std::string_view value)
+      generic_t& operator=(const std::string_view value)
       {
          data = std::string(value);
          return *this;
       }
 
-      generic& operator=(const char* value)
+      generic_t& operator=(const char* value)
       {
          data = std::string(value);
          return *this;
       }
 
-      generic& operator=(const bool value)
+      generic_t& operator=(const bool value)
       {
          data = value;
          return *this;
       }
 
-      generic& operator=(const array_t& value)
+      generic_t& operator=(const array_t& value)
       {
          data = value;
          return *this;
       }
 
-      generic& operator=(const object_t& value)
+      generic_t& operator=(const object_t& value)
       {
          data = value;
          return *this;
       }
 
       template <class T>
-         requires(!std::is_same_v<std::decay_t<T>, generic> && !std::is_same_v<std::decay_t<T>, std::nullptr_t> &&
+         requires(!std::is_same_v<std::decay_t<T>, generic_t> && !std::is_same_v<std::decay_t<T>, std::nullptr_t> &&
                   !std::is_same_v<std::decay_t<T>, double> && !std::is_same_v<std::decay_t<T>, bool> &&
                   !std::is_same_v<std::decay_t<T>, std::string> && !std::is_same_v<std::decay_t<T>, std::string_view> &&
                   !std::is_same_v<std::decay_t<T>, const char*> && !std::is_same_v<std::decay_t<T>, array_t> &&
                   !std::is_same_v<std::decay_t<T>, object_t> && !int_t<T> &&
                   requires { write_json(std::declval<T>()); })
-      generic& operator=(T&& value)
+      generic_t& operator=(T&& value)
       {
          auto json_str = write_json(std::forward<T>(value));
          if (json_str) {
-            auto result = read_json<generic>(*json_str);
+            auto result = read_json<generic_t>(*json_str);
             if (result) {
                *this = std::move(*result);
             }
@@ -221,9 +242,9 @@ namespace glz
          return *this;
       }
 
-      [[nodiscard]] generic& at(std::convertible_to<std::string_view> auto&& key) { return operator[](key); }
+      [[nodiscard]] generic_t& at(std::convertible_to<std::string_view> auto&& key) { return operator[](key); }
 
-      [[nodiscard]] const generic& at(std::convertible_to<std::string_view> auto&& key) const
+      [[nodiscard]] const generic_t& at(std::convertible_to<std::string_view> auto&& key) const
       {
          return operator[](key);
       }
@@ -246,32 +267,42 @@ namespace glz
 
       void reset() noexcept { data = null_t{}; }
 
-      generic() = default;
-      generic(const generic&) = default;
-      generic& operator=(const generic&) = default;
-      generic(generic&&) = default;
-      generic& operator=(generic&&) = default;
+      generic_t() = default;
+      generic_t(const generic_t&) = default;
+      generic_t& operator=(const generic_t&) = default;
+      generic_t(generic_t&&) = default;
+      generic_t& operator=(generic_t&&) = default;
 
       template <class T>
-         requires std::convertible_to<T, val_t> && (!std::derived_from<std::decay_t<T>, generic>)
-      generic(T&& val)
+         requires std::convertible_to<T, val_t> && (!std::derived_from<std::decay_t<T>, generic_t>)
+      generic_t(T&& val)
       {
          data = val;
       }
 
       template <class T>
-         requires std::convertible_to<T, double> && (!std::derived_from<std::decay_t<T>, generic>) &&
+         requires std::convertible_to<T, double> && (!std::derived_from<std::decay_t<T>, generic_t>) &&
                   (!std::convertible_to<T, val_t>)
-      generic(T&& val)
+      generic_t(T&& val)
       {
-         data = static_cast<double>(val);
+         if constexpr (UseInt64) {
+            if constexpr (int_t<T>) {
+               data = static_cast<int64_t>(val);
+            }
+            else {
+               data = static_cast<double>(val);
+            }
+         }
+         else {
+            data = static_cast<double>(val);
+         }
       }
 
-      generic(const std::string_view value) { data = std::string(value); }
+      generic_t(const std::string_view value) { data = std::string(value); }
 
-      generic(std::initializer_list<std::pair<const char*, generic>>&& obj)
+      generic_t(std::initializer_list<std::pair<const char*, generic_t>>&& obj)
       {
-         data.emplace<object_t>();
+         data.template emplace<object_t>();
          auto& data_obj = std::get<object_t>(data);
          for (auto&& pair : obj) {
             // std::initializer_list holds const values that cannot be moved
@@ -281,16 +312,24 @@ namespace glz
 
       // Prevent conflict with object initializer list
       template <bool deprioritize = true>
-      generic(std::initializer_list<generic>&& arr)
+      generic_t(std::initializer_list<generic_t>&& arr)
       {
-         data.emplace<array_t>(std::move(arr));
+         data.template emplace<array_t>(std::move(arr));
       }
 
-      [[nodiscard]] bool is_array() const noexcept { return holds<generic::array_t>(); }
+      [[nodiscard]] bool is_array() const noexcept { return holds<array_t>(); }
 
-      [[nodiscard]] bool is_object() const noexcept { return holds<generic::object_t>(); }
+      [[nodiscard]] bool is_object() const noexcept { return holds<object_t>(); }
 
-      [[nodiscard]] bool is_number() const noexcept { return holds<double>(); }
+      [[nodiscard]] bool is_number() const noexcept
+      {
+         if constexpr (UseInt64) {
+            return holds<int64_t>() || holds<double>();
+         }
+         else {
+            return holds<double>();
+         }
+      }
 
       [[nodiscard]] bool is_string() const noexcept { return holds<std::string>(); }
 
@@ -304,8 +343,50 @@ namespace glz
       [[nodiscard]] object_t& get_object() { return get<object_t>(); }
       [[nodiscard]] const object_t& get_object() const { return get<object_t>(); }
 
-      [[nodiscard]] double& get_number() { return get<double>(); }
-      [[nodiscard]] const double& get_number() const { return get<double>(); }
+      [[nodiscard]] double& get_number()
+      {
+         if constexpr (UseInt64) {
+            if (holds<int64_t>()) {
+               glaze_error("Cannot get reference to double when variant holds int64_t. Use as<double>() for conversion or "
+                           "get<int64_t>() for the actual value.");
+            }
+         }
+         return get<double>();
+      }
+      [[nodiscard]] const double& get_number() const
+      {
+         if constexpr (UseInt64) {
+            if (holds<int64_t>()) {
+               glaze_error("Cannot get reference to double when variant holds int64_t. Use as<double>() for conversion or "
+                           "get<int64_t>() for the actual value.");
+            }
+         }
+         return get<double>();
+      }
+
+      // Get number as double, converting from int64_t if needed (only available when int64 mode is enabled)
+      [[nodiscard]] double as_number() const
+         requires(UseInt64)
+      {
+         if (holds<int64_t>()) {
+            return static_cast<double>(get<int64_t>());
+         }
+         return get<double>();
+      }
+
+      // Check if the number is stored as int64_t (only available when int64 mode is enabled)
+      [[nodiscard]] bool is_int64() const noexcept
+         requires(UseInt64)
+      {
+         return holds<int64_t>();
+      }
+
+      // Check if the number is stored as double (only available when int64 mode is enabled)
+      [[nodiscard]] bool is_double() const noexcept
+         requires(UseInt64)
+      {
+         return holds<double>();
+      }
 
       [[nodiscard]] std::string& get_string() { return get<std::string>(); }
       [[nodiscard]] const std::string& get_string() const { return get<std::string>(); }
@@ -352,27 +433,36 @@ namespace glz
       }
    };
 
+   // Default generic type alias for backward compatibility
+   using generic = generic_t<false>;
+
    // Backwards compatibility alias
    using json_t [[deprecated("glz::json_t is deprecated, use glz::generic instead")]] = generic;
 
-   [[nodiscard]] inline bool is_array(const generic& value) noexcept { return value.is_array(); }
+   template <bool UseInt64>
+   [[nodiscard]] inline bool is_array(const generic_t<UseInt64>& value) noexcept { return value.is_array(); }
 
-   [[nodiscard]] inline bool is_object(const generic& value) noexcept { return value.is_object(); }
+   template <bool UseInt64>
+   [[nodiscard]] inline bool is_object(const generic_t<UseInt64>& value) noexcept { return value.is_object(); }
 
-   [[nodiscard]] inline bool is_number(const generic& value) noexcept { return value.is_number(); }
+   template <bool UseInt64>
+   [[nodiscard]] inline bool is_number(const generic_t<UseInt64>& value) noexcept { return value.is_number(); }
 
-   [[nodiscard]] inline bool is_string(const generic& value) noexcept { return value.is_string(); }
+   template <bool UseInt64>
+   [[nodiscard]] inline bool is_string(const generic_t<UseInt64>& value) noexcept { return value.is_string(); }
 
-   [[nodiscard]] inline bool is_boolean(const generic& value) noexcept { return value.is_boolean(); }
+   template <bool UseInt64>
+   [[nodiscard]] inline bool is_boolean(const generic_t<UseInt64>& value) noexcept { return value.is_boolean(); }
 
-   [[nodiscard]] inline bool is_null(const generic& value) noexcept { return value.is_null(); }
+   template <bool UseInt64>
+   [[nodiscard]] inline bool is_null(const generic_t<UseInt64>& value) noexcept { return value.is_null(); }
 }
 
-template <>
-struct glz::meta<glz::generic>
+template <bool UseInt64>
+struct glz::meta<glz::generic_t<UseInt64>>
 {
    static constexpr std::string_view name = "glz::generic";
-   using T = glz::generic;
+   using T = glz::generic_t<UseInt64>;
    static constexpr auto value = &T::data;
 };
 
@@ -632,51 +722,89 @@ namespace glz
    // Takes result by reference to allow memory reuse and avoid extra moves
 
    // Forward declaration for recursive conversion
-   template <class T>
-   error_ctx convert_from_generic(T& result, const generic& source);
+   template <class T, bool UseInt64>
+   error_ctx convert_from_generic(T& result, const generic_t<UseInt64>& source);
 
    // Specialization for bool
-   template <>
-   inline error_ctx convert_from_generic<bool>(bool& result, const generic& source)
+   template <bool UseInt64>
+   inline error_ctx convert_from_generic(bool& result, const generic_t<UseInt64>& source)
    {
       if (!source.is_boolean()) {
          return error_ctx{error_code::syntax_error};
       }
-      result = source.get<bool>();
+      result = source.template get<bool>();
       return {};
    }
 
    // Specialization for double
-   template <>
-   inline error_ctx convert_from_generic<double>(double& result, const generic& source)
+   template <bool UseInt64>
+   inline error_ctx convert_from_generic(double& result, const generic_t<UseInt64>& source)
    {
       if (!source.is_number()) {
          return error_ctx{error_code::syntax_error};
       }
-      result = source.get<double>();
+      if constexpr (UseInt64) {
+         if (source.template holds<int64_t>()) {
+            result = static_cast<double>(source.template get<int64_t>());
+         }
+         else {
+            result = source.template get<double>();
+         }
+      }
+      else {
+         result = source.template get<double>();
+      }
+      return {};
+   }
+
+   // Specialization for int64_t
+   template <bool UseInt64>
+      requires(UseInt64)
+   inline error_ctx convert_from_generic(int64_t& result, const generic_t<UseInt64>& source)
+   {
+      if (!source.is_number()) {
+         return error_ctx{error_code::syntax_error};
+      }
+      if (source.template holds<int64_t>()) {
+         result = source.template get<int64_t>();
+      }
+      else {
+         // Convert from double to int64_t
+         result = static_cast<int64_t>(source.template get<double>());
+      }
       return {};
    }
 
    // Specialization for string
-   template <>
-   inline error_ctx convert_from_generic<std::string>(std::string& result, const generic& source)
+   template <bool UseInt64>
+   inline error_ctx convert_from_generic(std::string& result, const generic_t<UseInt64>& source)
    {
       if (!source.is_string()) {
          return error_ctx{error_code::syntax_error};
       }
-      result = source.get<std::string>();
+      result = source.template get<std::string>();
       return {};
    }
 
-   // Specialization for integer types (convert from double)
-   template <class T>
+   // Specialization for integer types (convert from int64_t or double)
+   template <class T, bool UseInt64>
       requires(int_t<T>)
-   error_ctx convert_from_generic(T& result, const generic& source)
+   error_ctx convert_from_generic(T& result, const generic_t<UseInt64>& source)
    {
       if (!source.is_number()) {
          return error_ctx{error_code::syntax_error};
       }
-      result = static_cast<T>(source.get<double>());
+      if constexpr (UseInt64) {
+         if (source.template holds<int64_t>()) {
+            result = static_cast<T>(source.template get<int64_t>());
+         }
+         else {
+            result = static_cast<T>(source.template get<double>());
+         }
+      }
+      else {
+         result = static_cast<T>(source.template get<double>());
+      }
       return {};
    }
 
