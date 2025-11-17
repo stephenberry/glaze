@@ -9,6 +9,7 @@
 #include <iostream>
 #include <memory>
 #include <thread>
+
 #include "asio/io_context.hpp"
 
 #ifndef GLZ_ENABLE_SSL
