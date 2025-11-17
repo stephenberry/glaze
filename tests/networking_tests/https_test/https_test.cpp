@@ -618,9 +618,10 @@ class ExternalIOContextServer
          server_.set_ssl_verify_mode(0);
          server_.enable_cors();
          server_.bind("127.0.0.1", 8443);
-         // Start the server accepting connections
+         // Start the server accepting connections without creating worker threads (0)
+         // We'll run the io_context manually in this thread
          server_.start(0);
-         // lets run the server in this thread
+         // Run the io_context event loop in this thread
          io_context->run();
       });
    }
@@ -674,8 +675,55 @@ suite server_lifecycle_external_context_tests = [] {
       std::cout << "Starting HTTPS server with external io_context thread...\n";
       server.start_io_thread();
 
+      // Wait for server to be ready
+      std::this_thread::sleep_for(std::chrono::milliseconds(500));
+
+      // Verify server is running by making a successful connection
+      bool connection_successful = false;
+      try {
+         asio::io_context client_io;
+         asio::ip::tcp::socket socket(client_io);
+         asio::ip::tcp::endpoint endpoint(asio::ip::address::from_string("127.0.0.1"), 8443);
+
+         std::error_code ec;
+         socket.connect(endpoint, ec);
+         connection_successful = !ec;
+         if (!ec) {
+            socket.close();
+         }
+      }
+      catch (...) {
+         connection_successful = false;
+      }
+
+      expect(connection_successful) << "Server should accept connections before shutdown\n";
+
+      // Stop the server
+      server.stop_io_thread();
+      std::cout << "Server stopped, verifying connections are closed...\n";
+
+      // Wait a moment for cleanup
       std::this_thread::sleep_for(std::chrono::milliseconds(200));
-      expect(true) << "HTTPS server should stop cleanly\n";
+
+      // Verify connections are refused after shutdown
+      bool connection_refused = false;
+      try {
+         asio::io_context client_io;
+         asio::ip::tcp::socket socket(client_io);
+         asio::ip::tcp::endpoint endpoint(asio::ip::address::from_string("127.0.0.1"), 8443);
+
+         std::error_code ec;
+         socket.connect(endpoint, ec);
+         connection_refused = (ec == asio::error::connection_refused);
+         if (!ec) {
+            socket.close();
+         }
+      }
+      catch (...) {
+         connection_refused = true; // Exception also indicates connection failed
+      }
+
+      expect(connection_refused) << "Server should refuse connections after shutdown\n";
    };
 };
 
