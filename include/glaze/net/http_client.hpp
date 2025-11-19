@@ -60,6 +60,13 @@ namespace glz
          return std::unexpected(std::make_error_code(std::errc::invalid_argument));
       }
 
+      // Check for control characters to prevent CRLF injection
+      for (unsigned char c : url) {
+         if (c < 32 || c == 127) {
+            return std::unexpected(std::make_error_code(std::errc::invalid_argument));
+         }
+      }
+
       // Find protocol
       size_t protocol_end = url.find("://");
       if (protocol_end == std::string_view::npos) {

@@ -188,7 +188,10 @@ namespace glz
 
       template <typename SocketType>
       void read_handshake_response(std::shared_ptr<SocketType> socket, const std::string& expected_key) {
-          auto response_buf = std::make_shared<asio::streambuf>();
+          // Limit handshake response size to 16KB to prevent DoS
+          static constexpr size_t max_handshake_size = 1024 * 16; 
+          auto response_buf = std::make_shared<asio::streambuf>(max_handshake_size);
+          
           asio::async_read_until(*socket, *response_buf, "\r\n\r\n",
              [this, socket, response_buf, expected_key](std::error_code ec, std::size_t) {
                  if (ec) {
