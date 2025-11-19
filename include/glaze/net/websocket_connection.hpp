@@ -432,6 +432,9 @@ namespace glz
                                  if (self->server_) {
                                     self->server_->notify_error(self, ec);
                                  }
+                                 else if (self->error_handler_) {
+                                    self->error_handler_(ec);
+                                 }
                                  self->do_close();
                                  return;
                               }
@@ -441,6 +444,9 @@ namespace glz
                               // Notify server of successful connection
                               if (self->server_) {
                                  self->server_->notify_open(self, req);
+                              }
+                              else if (self->open_handler_) {
+                                 self->open_handler_();
                               }
 
                               // Start reading frames
