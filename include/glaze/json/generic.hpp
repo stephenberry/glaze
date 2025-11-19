@@ -247,27 +247,23 @@ namespace glz
       void reset() noexcept { data = null_t{}; }
 
       generic() = default;
-      generic(const generic&) = default;
+      generic(const generic& other) : data(other.data) {}
       generic& operator=(const generic&) = default;
-      generic(generic&&) = default;
+      generic(generic&& other) noexcept : data(std::move(other.data)) {}
       generic& operator=(generic&&) = default;
 
       template <class T>
          requires std::convertible_to<T, val_t> && (!std::derived_from<std::decay_t<T>, generic>)
-      generic(T&& val)
-      {
-         data = val;
-      }
+      generic(T&& val) : data(std::forward<T>(val))
+      {}
 
       template <class T>
          requires std::convertible_to<T, double> && (!std::derived_from<std::decay_t<T>, generic>) &&
                   (!std::convertible_to<T, val_t>)
-      generic(T&& val)
-      {
-         data = static_cast<double>(val);
-      }
+      generic(T&& val) : data(static_cast<double>(std::forward<T>(val)))
+      {}
 
-      generic(const std::string_view value) { data = std::string(value); }
+      generic(const std::string_view value) : data(std::string(value)) {}
 
       generic(std::initializer_list<std::pair<const char*, generic>>&& obj)
       {
