@@ -60,6 +60,8 @@ namespace glz
       void on_close(close_handler_t handler) { on_close_ = std::move(handler); }
       void on_error(error_handler_t handler) { on_error_ = std::move(handler); }
 
+      void set_max_message_size(size_t size) { max_message_size_ = size; }
+
       void run() { ctx_->run(); }
 
       void connect(std::string_view url_str) {
@@ -150,6 +152,8 @@ namespace glz
       }
 
    private:
+      size_t max_message_size_{1024 * 1024 * 16}; // 16 MB limit
+
       asio::ip::tcp::socket& get_tcp_socket_ref() {
 #ifdef GLZ_ENABLE_SSL
           if (ssl_socket_) return ssl_socket_->lowest_layer();
@@ -254,6 +258,7 @@ namespace glz
                  // Handshake successful. Transfer socket to websocket_connection.
                  auto ws_conn = std::make_shared<websocket_connection<SocketType>>(std::move(*socket));
                  ws_conn->set_client_mode(true);
+                 ws_conn->set_max_message_size(max_message_size_);
                  
                  if (response_buf->size() > 0) {
                      std::string_view initial_data{

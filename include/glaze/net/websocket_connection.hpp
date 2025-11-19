@@ -266,6 +266,10 @@ namespace glz
 
       websocket_server() = default;
 
+      // Configuration
+      void set_max_message_size(size_t size) { max_message_size_ = size; }
+      size_t get_max_message_size() const { return max_message_size_; }
+
       // Set message handler
       inline void on_message(message_handler handler) { message_handler_ = std::move(handler); }
 
@@ -319,6 +323,7 @@ namespace glz
       }
 
      private:
+      size_t max_message_size_{1024 * 1024 * 16};
       open_handler open_handler_;
       message_handler message_handler_;
       close_handler close_handler_;
@@ -334,9 +339,15 @@ namespace glz
          : socket_(std::move(socket)), server_(server)
       {
          remote_endpoint_ = socket_.remote_endpoint();
+         if (server_) {
+             max_message_size_ = server_->get_max_message_size();
+         }
       }
 
       ~websocket_connection() = default;
+
+      // Configuration
+      void set_max_message_size(size_t size) { max_message_size_ = size; }
 
       // Start the WebSocket connection (performs handshake)
       inline void start(const request& req) { perform_handshake(req); }
@@ -382,7 +393,7 @@ namespace glz
       }
 
      private:
-      static constexpr size_t max_message_size = 1024 * 1024 * 16; // 16 MB limit
+      size_t max_message_size_{1024 * 1024 * 16}; // 16 MB limit
 
       inline void perform_handshake(const request& req)
       {
@@ -483,7 +494,7 @@ namespace glz
          frame_buffer_.insert(frame_buffer_.end(), read_buffer_.begin(), read_buffer_.begin() + bytes_transferred);
 
          // Check buffer size limit (simple DoS protection)
-         if (frame_buffer_.size() > max_message_size + 1024) { // Allow some header overhead
+         if (frame_buffer_.size() > max_message_size_ + 1024) { // Allow some header overhead
              close(ws_close_code::message_too_big, "Buffer limit exceeded");
              return;
          }
@@ -538,7 +549,7 @@ namespace glz
                header_size += 8;
             }
 
-            if (payload_length > max_message_size) {
+            if (payload_length > max_message_size_) {
                 close(ws_close_code::message_too_big, "Message too big");
                 return length;
             }
@@ -589,7 +600,7 @@ namespace glz
             current_opcode_ = opcode;
             message_buffer_.assign(payload, payload + length);
 
-            if (message_buffer_.size() > max_message_size) {
+            if (message_buffer_.size() > max_message_size_) {
                 close(ws_close_code::message_too_big, "Message too big");
                 return;
             }
@@ -621,7 +632,7 @@ namespace glz
                return;
             }
 
-            if (message_buffer_.size() + length > max_message_size) {
+            if (message_buffer_.size() + length > max_message_size_) {
                 close(ws_close_code::message_too_big, "Message too big");
                 return;
             }
