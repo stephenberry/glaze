@@ -50,10 +50,10 @@ int main()
    http_server server;
 
    // Create WebSocket server
-   auto ws_server = std::make_shared<websocket_server>();
+   auto ws_server = std::make_shared<websocket_server<asio::ip::tcp::socket>>();
 
    // Thread-safe storage for connected clients
-   std::set<std::shared_ptr<websocket_connection>> clients;
+   std::set<std::shared_ptr<websocket_connection<asio::ip::tcp::socket>>> clients;
    std::mutex clients_mutex;
 
    // WebSocket event handlers
@@ -63,7 +63,7 @@ int main()
       return true; // Accept all connections for this example
    });
 
-   ws_server->on_open([&clients, &clients_mutex](std::shared_ptr<websocket_connection> conn, const request&) {
+   ws_server->on_open([&clients, &clients_mutex](auto conn, const request&) {
       std::lock_guard<std::mutex> lock(clients_mutex);
       clients.insert(conn);
 
@@ -82,7 +82,7 @@ int main()
       }
    });
 
-   ws_server->on_message([&clients, &clients_mutex](std::shared_ptr<websocket_connection> conn,
+   ws_server->on_message([&clients, &clients_mutex](auto conn,
                                                     std::string_view message, ws_opcode opcode) {
       std::cout << "💬 Message from " << conn->remote_address() << ": " << message << std::endl;
 
@@ -121,7 +121,7 @@ int main()
       }
    });
 
-   ws_server->on_close([&clients, &clients_mutex](std::shared_ptr<websocket_connection> conn) {
+   ws_server->on_close([&clients, &clients_mutex](auto conn) {
       std::lock_guard<std::mutex> lock(clients_mutex);
       clients.erase(conn);
 
@@ -135,7 +135,7 @@ int main()
       }
    });
 
-   ws_server->on_error([](std::shared_ptr<websocket_connection> conn, std::error_code ec) {
+   ws_server->on_error([](auto conn, std::error_code ec) {
       std::cout << "🚨 WebSocket error for " << conn->remote_address() << ": " << ec.message() << std::endl;
    });
 

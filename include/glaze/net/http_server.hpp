@@ -985,7 +985,7 @@ namespace glz
        * @param server The WebSocket server instance to handle connections
        * @return Reference to this http_server for method chaining
        */
-      inline http_server& websocket(std::string_view path, std::shared_ptr<websocket_server> server)
+      inline http_server& websocket(std::string_view path, std::shared_ptr<websocket_server<asio::ip::tcp::socket>> server)
       {
          websocket_handlers_[std::string(path)] = server;
          return *this;
@@ -1124,7 +1124,7 @@ namespace glz
       http_router root_router;
       bool running = false;
       glz::error_handler error_handler;
-      std::unordered_map<std::string, std::shared_ptr<websocket_server>> websocket_handlers_;
+      std::unordered_map<std::string, std::shared_ptr<websocket_server<asio::ip::tcp::socket>>> websocket_handlers_;
       std::unordered_map<std::string, std::unordered_map<http_method, streaming_handler>> streaming_handlers_;
 
       // Wrapping middleware (executes around handlers)
@@ -1377,7 +1377,7 @@ namespace glz
 
          // Create WebSocket connection and start it
          // Need to include websocket_connection.hpp for this to work
-         auto ws_conn = std::make_shared<websocket_connection>(std::move(*socket), ws_it->second.get());
+         auto ws_conn = std::make_shared<websocket_connection<asio::ip::tcp::socket>>(std::move(*socket), ws_it->second.get());
          ws_conn->start(req);
       }
 
