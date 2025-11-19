@@ -67,7 +67,7 @@ namespace glz
       }
 
       std::string protocol(url.substr(0, protocol_end));
-      if (protocol != "http" && protocol != "https") {
+      if (protocol != "http" && protocol != "https" && protocol != "ws" && protocol != "wss") {
          return std::unexpected(std::make_error_code(std::errc::invalid_argument));
       }
 
@@ -113,7 +113,7 @@ namespace glz
 
       uint16_t port = 0;
       if (port_str.empty()) {
-         port = (protocol == "https") ? 443 : 80;
+         port = (protocol == "https" || protocol == "wss") ? 443 : 80;
       }
       else {
          try {
