@@ -87,7 +87,8 @@ namespace glz
              
              // Set SNI
              if (!SSL_set_tlsext_host_name(ssl_socket_->native_handle(), url.host.c_str())) {
-                 // Handle error
+                 if (on_error_) on_error_(std::make_error_code(std::errc::address_not_available));
+                 return;
              }
 #else
              if (on_error_) on_error_(std::make_error_code(std::errc::protocol_not_supported));
@@ -181,7 +182,7 @@ namespace glz
           auto req_buf = std::make_shared<std::string>(std::move(handshake));
           
           asio::async_write(*socket, asio::buffer(*req_buf),
-             [this, socket, req_buf, key](std::error_code ec, std::size_t) {
+             [this, socket, req_buf /* keep alive */, key](std::error_code ec, std::size_t) {
                  if (ec) {
                      if (on_error_) on_error_(ec);
                      return;
