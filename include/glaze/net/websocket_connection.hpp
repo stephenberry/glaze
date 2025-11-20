@@ -10,7 +10,6 @@
 #include <cstring>
 #include <functional>
 #include <memory>
-#include <random>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -330,13 +329,8 @@ namespace glz
    // WebSocket connection class - implementations come after websocket_server
    struct websocket_connection : public std::enable_shared_from_this<websocket_connection>
    {
-      using message_handler_t = std::function<void(std::string_view, ws_opcode)>;
-      using close_handler_t = std::function<void(ws_close_code, std::string_view)>;
-      using error_handler_t = std::function<void(std::error_code)>;
-      using open_handler_t = std::function<void()>;
-
      public:
-      inline websocket_connection(asio::ip::tcp::socket socket, websocket_server* server = nullptr)
+      inline websocket_connection(asio::ip::tcp::socket socket, websocket_server* server)
          : socket_(std::move(socket)), server_(server)
       {
          remote_endpoint_ = socket_.remote_endpoint();
@@ -344,26 +338,8 @@ namespace glz
 
       ~websocket_connection() = default;
 
-      // Set client mode (enables masking)
-      inline void set_client_mode(bool is_client) { is_client_ = is_client; }
-
-      // Set individual callbacks for this connection
-      inline void on_message(message_handler_t handler) { message_handler_ = std::move(handler); }
-      inline void on_close(close_handler_t handler) { close_handler_ = std::move(handler); }
-      inline void on_error(error_handler_t handler) { error_handler_ = std::move(handler); }
-      inline void on_open(open_handler_t handler) { open_handler_ = std::move(handler); }
-
-      // Start the WebSocket connection (performs handshake) - Server side
+      // Start the WebSocket connection (performs handshake)
       inline void start(const request& req) { perform_handshake(req); }
-
-      // Start reading (assumes handshake is already complete) - Client side
-      inline void start_read()
-      {
-         auto self = shared_from_this();
-         socket_.async_read_some(asio::buffer(read_buffer_), [self](std::error_code ec, std::size_t bytes_transferred) {
-            self->on_read(ec, bytes_transferred);
-         });
-      }
 
       // Send a text message
       inline void send_text(std::string_view message) { send_frame(ws_opcode::text, message); }
@@ -395,14 +371,6 @@ namespace glz
       // Set user data
       inline void set_user_data(std::shared_ptr<void> data) { user_data_ = data; }
       inline std::shared_ptr<void> get_user_data() const { return user_data_; }
-
-      // Inject initial data read during handshake
-      inline void set_initial_data(std::string_view data) {
-         frame_buffer_.insert(frame_buffer_.end(), data.begin(), data.end());
-         if (!frame_buffer_.empty()) {
-             process_frame(frame_buffer_.data(), frame_buffer_.size());
-         }
-      }
 
      private:
       inline void perform_handshake(const request& req)
@@ -464,9 +432,6 @@ namespace glz
                                  if (self->server_) {
                                     self->server_->notify_error(self, ec);
                                  }
-                                 else if (self->error_handler_) {
-                                    self->error_handler_(ec);
-                                 }
                                  self->do_close();
                                  return;
                               }
@@ -477,13 +442,18 @@ namespace glz
                               if (self->server_) {
                                  self->server_->notify_open(self, req);
                               }
-                              else if (self->open_handler_) {
-                                 self->open_handler_();
-                              }
 
                               // Start reading frames
                               self->start_read();
                            });
+      }
+
+      inline void start_read()
+      {
+         auto self = shared_from_this();
+         socket_.async_read_some(asio::buffer(read_buffer_), [self](std::error_code ec, std::size_t bytes_transferred) {
+            self->on_read(ec, bytes_transferred);
+         });
       }
 
       inline void on_read(std::error_code ec, std::size_t bytes_transferred)
@@ -492,9 +462,6 @@ namespace glz
             is_closing_ = true;
             if (server_) {
                server_->notify_error(shared_from_this(), ec);
-            }
-            else if (error_handler_) {
-               error_handler_(ec);
             }
             // Close the connection after a read error (connection is likely broken)
             do_close();
@@ -508,7 +475,7 @@ namespace glz
          process_frame(frame_buffer_.data(), frame_buffer_.size());
 
          // Continue reading if connection is still open
-         if (!is_closing_ && (handshake_complete_ || is_client_)) {
+         if (!is_closing_ && handshake_complete_) {
             start_read();
          }
       }
@@ -615,11 +582,6 @@ namespace glz
                      std::string_view(reinterpret_cast<const char*>(message_buffer_.data()), message_buffer_.size()),
                      current_opcode_);
                }
-               else if (message_handler_) {
-                  message_handler_(
-                     std::string_view(reinterpret_cast<const char*>(message_buffer_.data()), message_buffer_.size()),
-                     current_opcode_);
-               }
                message_buffer_.clear();
                current_opcode_ = ws_opcode::continuation;
             }
@@ -649,11 +611,6 @@ namespace glz
                if (server_) {
                   server_->notify_message(
                      shared_from_this(),
-                     std::string_view(reinterpret_cast<const char*>(message_buffer_.data()), message_buffer_.size()),
-                     current_opcode_);
-               }
-               else if (message_handler_) {
-                  message_handler_(
                      std::string_view(reinterpret_cast<const char*>(message_buffer_.data()), message_buffer_.size()),
                      current_opcode_);
                }
@@ -700,33 +657,10 @@ namespace glz
          if (is_closing_ && opcode != ws_opcode::close) return;
 
          std::size_t header_size = get_frame_header_size(payload.size());
-         if (is_client_) {
-            header_size += 4; // Add space for mask key
-         }
-
          std::vector<uint8_t> frame(header_size + payload.size());
-         std::array<uint8_t, 4> mask_key{};
 
          write_frame_header(opcode, payload.size(), fin, frame.data());
-
-         if (is_client_) {
-            // Generate random mask key
-            std::uniform_int_distribution<uint16_t> dist(0, 255);
-            for (int i = 0; i < 4; ++i) {
-               mask_key[i] = static_cast<uint8_t>(dist(rng_));
-               frame[get_frame_header_size(payload.size()) + i] = mask_key[i]; // Place mask key after header
-            }
-         }
-
-         // Copy and optionally mask payload
-         if (is_client_) {
-             std::size_t payload_start = header_size;
-             for (std::size_t i = 0; i < payload.size(); ++i) {
-                 frame[payload_start + i] = payload[i] ^ mask_key[i % 4];
-             }
-         } else {
-             std::copy(payload.begin(), payload.end(), frame.begin() + header_size);
-         }
+         std::copy(payload.begin(), payload.end(), frame.begin() + header_size);
 
          auto self = shared_from_this();
 
@@ -738,9 +672,6 @@ namespace glz
                self->is_closing_ = true;
                if (self->server_) {
                   self->server_->notify_error(self, ec);
-               }
-               else if (self->error_handler_) {
-                  self->error_handler_(ec);
                }
                // Close the connection after a write error (connection is likely broken)
                self->do_close();
@@ -773,27 +704,10 @@ namespace glz
       inline void send_close_frame_with_callback(ws_opcode opcode, std::string_view payload)
       {
          std::size_t header_size = get_frame_header_size(payload.size());
-         if (is_client_) header_size += 4;
-
          std::vector<uint8_t> frame(header_size + payload.size());
-         std::array<uint8_t, 4> mask_key{};
 
          write_frame_header(opcode, payload.size(), true, frame.data());
-
-         if (is_client_) {
-             std::uniform_int_distribution<uint16_t> dist(0, 255);
-             for (int i = 0; i < 4; ++i) {
-                 mask_key[i] = static_cast<uint8_t>(dist(rng_));
-                 frame[get_frame_header_size(payload.size()) + i] = mask_key[i];
-             }
-             
-             std::size_t payload_start = header_size;
-             for(std::size_t i = 0; i < payload.size(); ++i) {
-                 frame[payload_start + i] = payload[i] ^ mask_key[i % 4];
-             }
-         } else {
-             std::copy(payload.begin(), payload.end(), frame.begin() + header_size);
-         }
+         std::copy(payload.begin(), payload.end(), frame.begin() + header_size);
 
          auto self = shared_from_this();
 
@@ -804,9 +718,6 @@ namespace glz
                self->is_closing_ = true;
                if (self->server_) {
                   self->server_->notify_error(self, ec);
-               }
-               else if (self->error_handler_) {
-                  self->error_handler_(ec);
                }
                self->do_close();
                return;
@@ -836,7 +747,7 @@ namespace glz
          ws_frame_header frame_header;
          frame_header.fin(fin);
          frame_header.opcode(opcode);
-         frame_header.mask(is_client_);
+         frame_header.mask(false);
 
          header[0] = frame_header.data[0];
 
@@ -910,14 +821,6 @@ namespace glz
          if (server_) {
             server_->notify_close(shared_from_this());
          }
-         else if (close_handler_) {
-            // Currently assume normal closure if not specified, but we can't easily get code/reason here 
-            // unless we passed them in or stored them. 
-            // For now, just notify without arguments if the handler signature supported it,
-            // but our handler takes args.
-            // We'll pass normal and empty string for now.
-            close_handler_(ws_close_code::normal, "");
-         }
 
          asio::error_code ec;
          socket_.close(ec);
@@ -925,16 +828,6 @@ namespace glz
 
       asio::ip::tcp::socket socket_;
       websocket_server* server_;
-      
-      bool is_client_{false};
-      std::mt19937 rng_{std::random_device{}()};
-      
-      // Client-side callbacks
-      message_handler_t message_handler_;
-      close_handler_t close_handler_;
-      error_handler_t error_handler_;
-      open_handler_t open_handler_;
-
       std::array<uint8_t, 4096> read_buffer_;
       std::vector<uint8_t> frame_buffer_;
       std::vector<uint8_t> message_buffer_;
