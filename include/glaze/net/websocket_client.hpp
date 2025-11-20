@@ -1,6 +1,7 @@
 #pragma once
 
 #include <variant>
+#include <mutex>
 #include "glaze/net/websocket_connection.hpp"
 #include "glaze/net/http_client.hpp"
 
@@ -34,6 +35,7 @@ namespace glz
 
       std::shared_ptr<asio::io_context> ctx_;
       connection_variant connection_;
+      std::mutex connection_mutex_;
       
       // Callbacks
       message_handler_t on_message_;
@@ -137,6 +139,7 @@ namespace glz
       }
 
       void send(std::string_view msg) {
+          std::lock_guard<std::mutex> lock(connection_mutex_);
           std::visit([&](auto&& conn) {
               if constexpr (!std::is_same_v<std::decay_t<decltype(conn)>, std::monostate>) {
                   if (conn) conn->send_text(msg);
@@ -145,6 +148,7 @@ namespace glz
       }
 
       void close() {
+          std::lock_guard<std::mutex> lock(connection_mutex_);
           std::visit([&](auto&& conn) {
               if constexpr (!std::is_same_v<std::decay_t<decltype(conn)>, std::monostate>) {
                   if (conn) conn->close();
@@ -274,7 +278,10 @@ namespace glz
                  if (on_error_) ws_conn->on_error(on_error_);
                  
                  ws_conn->start_read();
-                 connection_ = ws_conn;
+                 {
+                     std::lock_guard<std::mutex> lock(connection_mutex_);
+                     connection_ = ws_conn;
+                 }
 
                  if (on_open_) on_open_();
              });
