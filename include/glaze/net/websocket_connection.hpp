@@ -340,7 +340,7 @@ namespace glz
       {
          remote_endpoint_ = socket_.remote_endpoint();
          if (server_) {
-             max_message_size_ = server_->get_max_message_size();
+            max_message_size_ = server_->get_max_message_size();
          }
       }
 
@@ -384,11 +384,12 @@ namespace glz
       inline std::shared_ptr<void> get_user_data() const { return user_data_; }
 
       // Inject initial data read during handshake
-      inline void set_initial_data(std::string_view data) {
+      inline void set_initial_data(std::string_view data)
+      {
          frame_buffer_.insert(frame_buffer_.end(), data.begin(), data.end());
          size_t consumed = process_frames(frame_buffer_.data(), frame_buffer_.size());
          if (consumed > 0) {
-             frame_buffer_.erase(frame_buffer_.begin(), frame_buffer_.begin() + consumed);
+            frame_buffer_.erase(frame_buffer_.begin(), frame_buffer_.begin() + consumed);
          }
       }
 
@@ -495,14 +496,14 @@ namespace glz
 
          // Check buffer size limit (simple DoS protection)
          if (frame_buffer_.size() > max_message_size_ + 1024) { // Allow some header overhead
-             close(ws_close_code::message_too_big, "Buffer limit exceeded");
-             return;
+            close(ws_close_code::message_too_big, "Buffer limit exceeded");
+            return;
          }
 
          // Process complete frames
          size_t consumed = process_frames(frame_buffer_.data(), frame_buffer_.size());
          if (consumed > 0) {
-             frame_buffer_.erase(frame_buffer_.begin(), frame_buffer_.begin() + consumed);
+            frame_buffer_.erase(frame_buffer_.begin(), frame_buffer_.begin() + consumed);
          }
 
          // Continue reading if connection is still open
@@ -550,8 +551,8 @@ namespace glz
             }
 
             if (payload_length > max_message_size_) {
-                close(ws_close_code::message_too_big, "Message too big");
-                return length;
+               close(ws_close_code::message_too_big, "Message too big");
+               return length;
             }
 
             // Read mask key if present
@@ -570,7 +571,8 @@ namespace glz
             // Extract and unmask payload
             std::vector<uint8_t> payload(static_cast<size_t>(payload_length));
             if (payload_length > 0) {
-               std::copy(data + offset + header_size, data + offset + header_size + static_cast<size_t>(payload_length), payload.begin());
+               std::copy(data + offset + header_size, data + offset + header_size + static_cast<size_t>(payload_length),
+                         payload.begin());
 
                if (header.mask()) {
                   for (std::size_t i = 0; i < payload.size(); ++i) {
@@ -601,8 +603,8 @@ namespace glz
             message_buffer_.assign(payload, payload + length);
 
             if (message_buffer_.size() > max_message_size_) {
-                close(ws_close_code::message_too_big, "Message too big");
-                return;
+               close(ws_close_code::message_too_big, "Message too big");
+               return;
             }
 
             if (fin) {
@@ -633,8 +635,8 @@ namespace glz
             }
 
             if (message_buffer_.size() + length > max_message_size_) {
-                close(ws_close_code::message_too_big, "Message too big");
-                return;
+               close(ws_close_code::message_too_big, "Message too big");
+               return;
             }
 
             message_buffer_.insert(message_buffer_.end(), payload, payload + length);

@@ -1,3 +1,5 @@
+#include "glaze/net/websocket_client.hpp"
+
 #include <atomic>
 #include <chrono>
 #include <iostream>
@@ -6,7 +8,6 @@
 
 #include "glaze/glaze.hpp"
 #include "glaze/net/http_server.hpp"
-#include "glaze/net/websocket_client.hpp"
 #include "glaze/net/websocket_connection.hpp"
 #include "ut/ut.hpp"
 
