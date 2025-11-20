@@ -266,6 +266,10 @@ namespace glz
 
       websocket_server() = default;
 
+      // Configuration
+      void set_max_message_size(size_t size) { max_message_size_ = size; }
+      size_t get_max_message_size() const { return max_message_size_; }
+
       // Set message handler
       inline void on_message(message_handler handler) { message_handler_ = std::move(handler); }
 
@@ -319,6 +323,7 @@ namespace glz
       }
 
      private:
+      size_t max_message_size_{1024 * 1024 * 16};
       open_handler open_handler_;
       message_handler message_handler_;
       close_handler close_handler_;
@@ -334,9 +339,15 @@ namespace glz
          : socket_(std::move(socket)), server_(server)
       {
          remote_endpoint_ = socket_.remote_endpoint();
+         if (server_) {
+             max_message_size_ = server_->get_max_message_size();
+         }
       }
 
       ~websocket_connection() = default;
+
+      // Configuration
+      void set_max_message_size(size_t size) { max_message_size_ = size; }
 
       // Start the WebSocket connection (performs handshake)
       inline void start(const request& req) { perform_handshake(req); }
@@ -372,7 +383,18 @@ namespace glz
       inline void set_user_data(std::shared_ptr<void> data) { user_data_ = data; }
       inline std::shared_ptr<void> get_user_data() const { return user_data_; }
 
+      // Inject initial data read during handshake
+      inline void set_initial_data(std::string_view data) {
+         frame_buffer_.insert(frame_buffer_.end(), data.begin(), data.end());
+         size_t consumed = process_frames(frame_buffer_.data(), frame_buffer_.size());
+         if (consumed > 0) {
+             frame_buffer_.erase(frame_buffer_.begin(), frame_buffer_.begin() + consumed);
+         }
+      }
+
      private:
+      size_t max_message_size_{1024 * 1024 * 16}; // 16 MB limit
+
       inline void perform_handshake(const request& req)
       {
          // Validate WebSocket upgrade request
@@ -471,8 +493,17 @@ namespace glz
          // Add received data to frame buffer
          frame_buffer_.insert(frame_buffer_.end(), read_buffer_.begin(), read_buffer_.begin() + bytes_transferred);
 
+         // Check buffer size limit (simple DoS protection)
+         if (frame_buffer_.size() > max_message_size_ + 1024) { // Allow some header overhead
+             close(ws_close_code::message_too_big, "Buffer limit exceeded");
+             return;
+         }
+
          // Process complete frames
-         process_frame(frame_buffer_.data(), frame_buffer_.size());
+         size_t consumed = process_frames(frame_buffer_.data(), frame_buffer_.size());
+         if (consumed > 0) {
+             frame_buffer_.erase(frame_buffer_.begin(), frame_buffer_.begin() + consumed);
+         }
 
          // Continue reading if connection is still open
          if (!is_closing_ && handshake_complete_) {
@@ -480,7 +511,7 @@ namespace glz
          }
       }
 
-      inline void process_frame(const uint8_t* data, std::size_t length)
+      inline size_t process_frames(const uint8_t* data, std::size_t length)
       {
          std::size_t offset = 0;
 
@@ -493,67 +524,67 @@ namespace glz
             ws_frame_header header;
             header.data[0] = data[offset];
             header.data[1] = data[offset + 1];
-            offset += 2;
+            size_t header_size = 2;
 
             // Check reserved bits
             if ((header.data[0] & 0x70) != 0) {
                close(ws_close_code::protocol_error, "Reserved bits set");
-               return;
+               return length; // Consume all
             }
 
             // Get payload length
             uint64_t payload_length = header.payload_len();
 
             if (payload_length == 126) {
-               if (length - offset < 2) break;
-               payload_length = (static_cast<uint64_t>(data[offset]) << 8) | data[offset + 1];
-               offset += 2;
+               if (length - offset < 4) break;
+               payload_length = (static_cast<uint64_t>(data[offset + 2]) << 8) | data[offset + 3];
+               header_size += 2;
             }
             else if (payload_length == 127) {
-               if (length - offset < 8) break;
+               if (length - offset < 10) break;
                payload_length = 0;
                for (int i = 0; i < 8; ++i) {
-                  payload_length = (payload_length << 8) | data[offset + i];
+                  payload_length = (payload_length << 8) | data[offset + 2 + i];
                }
-               offset += 8;
+               header_size += 8;
+            }
+
+            if (payload_length > max_message_size_) {
+                close(ws_close_code::message_too_big, "Message too big");
+                return length;
             }
 
             // Read mask key if present
             std::array<uint8_t, 4> mask_key{};
             if (header.mask()) {
-               if (length - offset < 4) break;
-               std::copy(data + offset, data + offset + 4, mask_key.begin());
-               offset += 4;
+               if (length - offset < header_size + 4) break;
+               std::copy(data + offset + header_size, data + offset + header_size + 4, mask_key.begin());
+               header_size += 4;
             }
 
             // Check if we have the complete payload
-            if (length - offset < payload_length) {
+            if (length - offset < header_size + payload_length) {
                break;
             }
 
             // Extract and unmask payload
-            std::vector<uint8_t> payload(payload_length);
+            std::vector<uint8_t> payload(static_cast<size_t>(payload_length));
             if (payload_length > 0) {
-               std::copy(data + offset, data + offset + payload_length, payload.begin());
+               std::copy(data + offset + header_size, data + offset + header_size + static_cast<size_t>(payload_length), payload.begin());
 
                if (header.mask()) {
-                  for (std::size_t i = 0; i < payload_length; ++i) {
+                  for (std::size_t i = 0; i < payload.size(); ++i) {
                      payload[i] ^= mask_key[i % 4];
                   }
                }
             }
 
-            offset += payload_length;
-
             // Handle the frame
             handle_frame(header.opcode(), payload.data(), payload.size(), header.fin());
 
-            // Remove processed data from buffer
-            if (offset > 0) {
-               frame_buffer_.erase(frame_buffer_.begin(), frame_buffer_.begin() + offset);
-               return process_frame(frame_buffer_.data(), frame_buffer_.size());
-            }
+            offset += header_size + static_cast<size_t>(payload_length);
          }
+         return offset;
       }
 
       inline void handle_frame(ws_opcode opcode, const uint8_t* payload, std::size_t length, bool fin)
@@ -568,6 +599,11 @@ namespace glz
 
             current_opcode_ = opcode;
             message_buffer_.assign(payload, payload + length);
+
+            if (message_buffer_.size() > max_message_size_) {
+                close(ws_close_code::message_too_big, "Message too big");
+                return;
+            }
 
             if (fin) {
                // Validate UTF-8 for text frames
@@ -594,6 +630,11 @@ namespace glz
             if (!is_reading_frame_) {
                close(ws_close_code::protocol_error, "Unexpected continuation frame");
                return;
+            }
+
+            if (message_buffer_.size() + length > max_message_size_) {
+                close(ws_close_code::message_too_big, "Message too big");
+                return;
             }
 
             message_buffer_.insert(message_buffer_.end(), payload, payload + length);
