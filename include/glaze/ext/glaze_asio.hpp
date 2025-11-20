@@ -660,7 +660,25 @@ namespace glz
             while (true) {
                co_await co_receive_buffer(socket, request);
                response.header.ec = {}; // clear error code, as we use this field to determine if a new error occured
-               registry.call(request, response);
+               try {
+                  registry.call(request, response);
+               }
+               catch (const std::exception& e) {
+                  if (error_handler) {
+                     error_handler(e.what());
+                  }
+                  repe::encode_error(error_code::invalid_call, response, e.what());
+                  response.header.length =
+                     sizeof(repe::header) + response.header.query_length + response.header.body_length;
+               }
+               catch (...) {
+                  if (error_handler) {
+                     error_handler("unknown error");
+                  }
+                  repe::encode_error(error_code::invalid_call, response, "unknown error");
+                  response.header.length =
+                     sizeof(repe::header) + response.header.query_length + response.header.body_length;
+               }
                if (not request.header.notify) {
                   co_await co_send_buffer(socket, response);
                }

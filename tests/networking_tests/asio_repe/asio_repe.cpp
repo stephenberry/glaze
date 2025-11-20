@@ -417,6 +417,46 @@ suite send_receive_api_tests = [] {
    };
 };
 
+struct keep_alive_api
+{
+   std::function<int()> broken = []() {
+      throw std::runtime_error("broken");
+      return 0;
+   };
+   std::function<int()> works = []() {
+      return 42;
+   };
+};
+
+void server_keep_alive_test()
+{
+   static constexpr int16_t port = 8766;
+
+   glz::asio_server server{.port = port, .concurrency = 1};
+   server.error_handler = [](const std::string& error) { expect(error == "broken"); };
+
+   keep_alive_api api{};
+   server.on(api);
+
+   server.run_async();
+
+   glz::asio_client client{"localhost", std::to_string(port)};
+   (void)client.init();
+
+   int result{};
+   glz::repe::message msg{};
+
+   // First call throws
+   client.call({"/broken"}, msg);
+   expect(bool(glz::repe::decode_message(result, msg)));
+
+   // Second call should succeed if server is still alive
+   msg = {}; // reset message
+   client.call({"/works"}, msg);
+   expect(not glz::repe::decode_message(result, msg));
+   expect(result == 42);
+}
+
 int main()
 {
    notify_test();
@@ -426,6 +466,7 @@ int main()
    raw_json_tests();
    async_server_test();
    server_error_test();
+   server_keep_alive_test();
 
    return 0;
 }

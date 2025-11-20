@@ -35,3 +35,13 @@ The `glz::repe::registry` allows users to expose C++ classes directly to the reg
 >
 > `glz::asio_server` and `glz::asio_client` require the [standalone asio](https://think-async.com/Asio/AsioStandalone.html) to build. Glaze does not include this dependency within its CMake files. The developer is expected to include this header-only library.
 
+### Error Handling
+
+The `glz::asio_server` provides an `error_handler` callback to manage exceptions thrown during request processing. By default, exceptions are caught, and an error response is sent to the client. To log or monitor these errors on the server, assign a callback:
+
+```cpp
+server.error_handler = [](const std::string& error_msg) {
+   std::cerr << "Server error: " << error_msg << '\n';
+};
+```
+
