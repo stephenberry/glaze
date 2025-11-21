@@ -59,7 +59,10 @@ namespace glz
 
       ~websocket_client() = default;
 
-      void on_message(message_handler_t handler) { on_message_ = std::make_shared<message_handler_t>(std::move(handler)); }
+      void on_message(message_handler_t handler)
+      {
+         on_message_ = std::make_shared<message_handler_t>(std::move(handler));
+      }
       void on_open(open_handler_t handler) { on_open_ = std::make_shared<open_handler_t>(std::move(handler)); }
       void on_close(close_handler_t handler) { on_close_ = std::make_shared<close_handler_t>(std::move(handler)); }
       void on_error(error_handler_t handler) { on_error_ = std::make_shared<error_handler_t>(std::move(handler)); }
@@ -106,7 +109,7 @@ namespace glz
 
          resolver_ = std::make_shared<asio::ip::tcp::resolver>(*ctx_);
 
-         auto error_handler = on_error_;  // Copy shared_ptr
+         auto error_handler = on_error_; // Copy shared_ptr
          resolver_->async_resolve(
             url.host, std::to_string(url.port),
             [this, url, error_handler](std::error_code ec, asio::ip::tcp::resolver::results_type results) {
@@ -118,37 +121,39 @@ namespace glz
                // Determine which socket to connect
                auto& socket_ref = get_tcp_socket_ref();
 
-               auto error_handler2 = on_error_;  // Copy shared_ptr
-               asio::async_connect(
-                  socket_ref, results, [this, url, error_handler2](std::error_code ec, const asio::ip::tcp::endpoint&) {
-                     if (ec) {
-                        if (error_handler2 && *error_handler2) (*error_handler2)(ec);
-                        return;
-                     }
+               auto error_handler2 = on_error_; // Copy shared_ptr
+               asio::async_connect(socket_ref, results,
+                                   [this, url, error_handler2](std::error_code ec, const asio::ip::tcp::endpoint&) {
+                                      if (ec) {
+                                         if (error_handler2 && *error_handler2) (*error_handler2)(ec);
+                                         return;
+                                      }
 
-                     if (url.protocol == "wss") {
+                                      if (url.protocol == "wss") {
 #ifdef GLZ_ENABLE_SSL
-                        // Perform SSL Handshake
-                        auto error_handler3 = on_error_;
-                        ssl_socket_->async_handshake(asio::ssl::stream_base::client, [this, url, error_handler3](std::error_code ec) {
-                           if (ec) {
-                              if (error_handler3 && *error_handler3) (*error_handler3)(ec);
-                              return;
-                           }
-                           perform_handshake(ssl_socket_, url);
-                        });
+                                         // Perform SSL Handshake
+                                         auto error_handler3 = on_error_;
+                                         ssl_socket_->async_handshake(asio::ssl::stream_base::client,
+                                                                      [this, url, error_handler3](std::error_code ec) {
+                                                                         if (ec) {
+                                                                            if (error_handler3 && *error_handler3)
+                                                                               (*error_handler3)(ec);
+                                                                            return;
+                                                                         }
+                                                                         perform_handshake(ssl_socket_, url);
+                                                                      });
 #endif
-                     }
-                     else {
-                        perform_handshake(tcp_socket_, url);
-                     }
-                  });
+                                      }
+                                      else {
+                                         perform_handshake(tcp_socket_, url);
+                                      }
+                                   });
             });
       }
 
       void send(std::string_view msg)
       {
-         auto mutex = connection_mutex_;  // Copy shared_ptr to keep mutex alive
+         auto mutex = connection_mutex_; // Copy shared_ptr to keep mutex alive
          if (!mutex) return;
 
          std::lock_guard<std::mutex> lock(*mutex);
@@ -163,7 +168,7 @@ namespace glz
 
       void send_binary(std::string_view msg)
       {
-         auto mutex = connection_mutex_;  // Copy shared_ptr to keep mutex alive
+         auto mutex = connection_mutex_; // Copy shared_ptr to keep mutex alive
          if (!mutex) return;
 
          std::lock_guard<std::mutex> lock(*mutex);
@@ -178,7 +183,7 @@ namespace glz
 
       void close()
       {
-         auto mutex = connection_mutex_;  // Copy shared_ptr to keep mutex alive
+         auto mutex = connection_mutex_; // Copy shared_ptr to keep mutex alive
          if (!mutex) return;
 
          std::lock_guard<std::mutex> lock(*mutex);
@@ -217,7 +222,7 @@ namespace glz
                                  "\r\n" + "Sec-WebSocket-Version: 13\r\n\r\n";
 
          auto req_buf = std::make_shared<std::string>(std::move(handshake));
-         auto error_handler = on_error_;  // Copy shared_ptr
+         auto error_handler = on_error_; // Copy shared_ptr
 
          asio::async_write(*socket, asio::buffer(*req_buf),
                            [this, socket, req_buf, key, error_handler](std::error_code ec, std::size_t) {
@@ -235,7 +240,7 @@ namespace glz
          // Limit handshake response size to 16KB to prevent DoS
          static constexpr size_t max_handshake_size = 1024 * 16;
          auto response_buf = std::make_shared<asio::streambuf>(max_handshake_size);
-         auto error_handler = on_error_;  // Copy shared_ptr
+         auto error_handler = on_error_; // Copy shared_ptr
          auto message_handler = on_message_;
          auto close_handler = on_close_;
          auto open_handler = on_open_;
@@ -243,7 +248,8 @@ namespace glz
          auto max_msg_size = max_message_size_;
 
          asio::async_read_until(*socket, *response_buf, "\r\n\r\n",
-                                [this, socket, response_buf, expected_key, error_handler, message_handler, close_handler, open_handler, mutex, max_msg_size](std::error_code ec, std::size_t) {
+                                [this, socket, response_buf, expected_key, error_handler, message_handler,
+                                 close_handler, open_handler, mutex, max_msg_size](std::error_code ec, std::size_t) {
                                    if (ec) {
                                       if (error_handler && *error_handler) (*error_handler)(ec);
                                       return;
@@ -258,7 +264,8 @@ namespace glz
                                    std::getline(response_stream, status_message);
 
                                    if (!response_stream || status_code != 101) {
-                                      if (error_handler && *error_handler) (*error_handler)(std::make_error_code(std::errc::protocol_error));
+                                      if (error_handler && *error_handler)
+                                         (*error_handler)(std::make_error_code(std::errc::protocol_error));
                                       return;
                                    }
 
@@ -298,13 +305,13 @@ namespace glz
                                    }
 
                                    if (!upgrade_websocket || !connection_upgrade || !accept_key_valid) {
-                                      if (error_handler && *error_handler) (*error_handler)(std::make_error_code(std::errc::protocol_error));
+                                      if (error_handler && *error_handler)
+                                         (*error_handler)(std::make_error_code(std::errc::protocol_error));
                                       return;
                                    }
 
                                    // Handshake successful. Transfer socket to websocket_connection.
-                                   auto ws_conn =
-                                      std::make_shared<websocket_connection<SocketType>>(socket);
+                                   auto ws_conn = std::make_shared<websocket_connection<SocketType>>(socket);
                                    ws_conn->set_client_mode(true);
                                    ws_conn->set_max_message_size(max_msg_size);
 

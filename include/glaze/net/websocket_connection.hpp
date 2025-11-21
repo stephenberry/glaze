@@ -261,10 +261,13 @@ namespace glz
    // WebSocket server class
    struct websocket_server
    {
-      using message_handler = std::function<void(std::shared_ptr<websocket_connection<asio::ip::tcp::socket>>, std::string_view, ws_opcode)>;
+      using message_handler =
+         std::function<void(std::shared_ptr<websocket_connection<asio::ip::tcp::socket>>, std::string_view, ws_opcode)>;
       using close_handler = std::function<void(std::shared_ptr<websocket_connection<asio::ip::tcp::socket>>)>;
-      using error_handler = std::function<void(std::shared_ptr<websocket_connection<asio::ip::tcp::socket>>, std::error_code)>;
-      using open_handler = std::function<void(std::shared_ptr<websocket_connection<asio::ip::tcp::socket>>, const request&)>;
+      using error_handler =
+         std::function<void(std::shared_ptr<websocket_connection<asio::ip::tcp::socket>>, std::error_code)>;
+      using open_handler =
+         std::function<void(std::shared_ptr<websocket_connection<asio::ip::tcp::socket>>, const request&)>;
       using validate_handler = std::function<bool(const request&)>;
 
       websocket_server() = default;
@@ -296,7 +299,8 @@ namespace glz
          }
       }
 
-      inline void notify_message(std::shared_ptr<websocket_connection<asio::ip::tcp::socket>> conn, std::string_view message, ws_opcode opcode)
+      inline void notify_message(std::shared_ptr<websocket_connection<asio::ip::tcp::socket>> conn,
+                                 std::string_view message, ws_opcode opcode)
       {
          if (message_handler_) {
             message_handler_(conn, message, opcode);
@@ -490,7 +494,6 @@ namespace glz
                            });
       }
 
-
       inline void on_read(std::error_code ec, std::size_t bytes_transferred)
       {
          if (ec) {
@@ -629,7 +632,8 @@ namespace glz
                   return;
                }
 
-               std::string_view message_view(reinterpret_cast<const char*>(message_buffer_.data()), message_buffer_.size());
+               std::string_view message_view(reinterpret_cast<const char*>(message_buffer_.data()),
+                                             message_buffer_.size());
                if (server_) {
                   server_->notify_message(this->shared_from_this(), message_view, current_opcode_);
                }
@@ -667,7 +671,8 @@ namespace glz
                   return;
                }
 
-               std::string_view message_view(reinterpret_cast<const char*>(message_buffer_.data()), message_buffer_.size());
+               std::string_view message_view(reinterpret_cast<const char*>(message_buffer_.data()),
+                                             message_buffer_.size());
                if (server_) {
                   server_->notify_message(this->shared_from_this(), message_view, current_opcode_);
                }
@@ -749,20 +754,22 @@ namespace glz
 
          // Use shared_ptr to keep the frame alive during async operation
          auto frame_buffer = std::make_shared<std::vector<uint8_t>>(std::move(frame));
-         asio::async_write(*socket, asio::buffer(*frame_buffer), [self, frame_buffer, payload_size = payload.size()](std::error_code ec, std::size_t) {
-            if (ec) {
-               // Mark connection as closing before notifying handlers to avoid re-entrant close attempts
-               self->is_closing_ = true;
-               if (self->server_) {
-                  self->server_->notify_error(self, ec);
-               }
-               else if (self->client_error_handler_) {
-                  self->client_error_handler_(ec);
-               }
-               // Close the connection after a write error (connection is likely broken)
-               self->do_close();
-            }
-         });
+         asio::async_write(*socket, asio::buffer(*frame_buffer),
+                           [self, frame_buffer, payload_size = payload.size()](std::error_code ec, std::size_t) {
+                              if (ec) {
+                                 // Mark connection as closing before notifying handlers to avoid re-entrant close
+                                 // attempts
+                                 self->is_closing_ = true;
+                                 if (self->server_) {
+                                    self->server_->notify_error(self, ec);
+                                 }
+                                 else if (self->client_error_handler_) {
+                                    self->client_error_handler_(ec);
+                                 }
+                                 // Close the connection after a write error (connection is likely broken)
+                                 self->do_close();
+                              }
+                           });
       }
 
       inline void send_close_frame(ws_close_code code, std::string_view reason, bool schedule_socket_close = false)
@@ -806,25 +813,26 @@ namespace glz
 
          // Use shared_ptr to keep the frame alive during async operation
          auto frame_buffer = std::make_shared<std::vector<uint8_t>>(std::move(frame));
-         asio::async_write(*socket, asio::buffer(*frame_buffer), [self, frame_buffer, socket](std::error_code ec, std::size_t) {
-            if (ec) {
-               self->is_closing_ = true;
-               if (self->server_) {
-                  self->server_->notify_error(self, ec);
-               }
-               self->do_close();
-               return;
-            }
-            // Give the OS time to transmit the data before closing the socket
-            if (socket) {
-               auto timer = std::make_shared<asio::steady_timer>(socket->get_executor());
-               timer->expires_after(std::chrono::milliseconds(100));
-               timer->async_wait([self, timer](std::error_code) { self->do_close(); });
-            }
-            else {
-               self->do_close();
-            }
-         });
+         asio::async_write(*socket, asio::buffer(*frame_buffer),
+                           [self, frame_buffer, socket](std::error_code ec, std::size_t) {
+                              if (ec) {
+                                 self->is_closing_ = true;
+                                 if (self->server_) {
+                                    self->server_->notify_error(self, ec);
+                                 }
+                                 self->do_close();
+                                 return;
+                              }
+                              // Give the OS time to transmit the data before closing the socket
+                              if (socket) {
+                                 auto timer = std::make_shared<asio::steady_timer>(socket->get_executor());
+                                 timer->expires_after(std::chrono::milliseconds(100));
+                                 timer->async_wait([self, timer](std::error_code) { self->do_close(); });
+                              }
+                              else {
+                                 self->do_close();
+                              }
+                           });
       }
 
       inline std::size_t get_frame_header_size(std::size_t payload_length, bool use_masking)
@@ -842,7 +850,8 @@ namespace glz
          return base_size + (use_masking ? 4 : 0); // Add 4 bytes for masking key if needed
       }
 
-      inline void write_frame_header(ws_opcode opcode, std::size_t payload_length, bool fin, uint8_t* header, bool use_masking)
+      inline void write_frame_header(ws_opcode opcode, std::size_t payload_length, bool fin, uint8_t* header,
+                                     bool use_masking)
       {
          ws_frame_header frame_header;
          frame_header.fin(fin);
@@ -974,15 +983,24 @@ namespace glz
 
      public:
       // Client mode support
-      inline void set_client_mode(bool enabled) { client_mode_ = enabled; handshake_complete_ = true; }
-      inline void start_read() {
-         do_start_read();
+      inline void set_client_mode(bool enabled)
+      {
+         client_mode_ = enabled;
+         handshake_complete_ = true;
       }
+      inline void start_read() { do_start_read(); }
 
       // Client mode callback setters
-      inline void on_message(std::function<void(std::string_view, ws_opcode)> handler) { client_message_handler_ = std::move(handler); }
-      inline void on_close(std::function<void(ws_close_code, std::string_view)> handler) { client_close_handler_ = std::move(handler); }
+      inline void on_message(std::function<void(std::string_view, ws_opcode)> handler)
+      {
+         client_message_handler_ = std::move(handler);
+      }
+      inline void on_close(std::function<void(ws_close_code, std::string_view)> handler)
+      {
+         client_close_handler_ = std::move(handler);
+      }
       inline void on_error(std::function<void(std::error_code)> handler) { client_error_handler_ = std::move(handler); }
+
      private:
       inline void do_start_read()
       {
@@ -998,9 +1016,10 @@ namespace glz
          }
 
          auto self = this->shared_from_this();
-         socket->async_read_some(asio::buffer(read_buffer_), [self, socket](std::error_code ec, std::size_t bytes_transferred) {
-            self->on_read(ec, bytes_transferred);
-         });
+         socket->async_read_some(asio::buffer(read_buffer_),
+                                 [self, socket](std::error_code ec, std::size_t bytes_transferred) {
+                                    self->on_read(ec, bytes_transferred);
+                                 });
       }
    };
 }

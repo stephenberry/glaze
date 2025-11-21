@@ -3,9 +3,9 @@
 #include <atomic>
 #include <chrono>
 #include <iostream>
+#include <random>
 #include <thread>
 #include <vector>
-#include <random>
 
 #include "glaze/glaze.hpp"
 #include "glaze/net/http_server.hpp"
@@ -153,14 +153,16 @@ void run_counting_server(std::atomic<bool>& server_ready, std::atomic<bool>& sho
    }
 }
 
-struct TestMessage {
+struct TestMessage
+{
    std::string type;
    std::string content;
    int64_t timestamp;
 };
 
 template <>
-struct glz::meta<TestMessage> {
+struct glz::meta<TestMessage>
+{
    using T = TestMessage;
    static constexpr auto value = object("type", &T::type, "content", &T::content, "timestamp", &T::timestamp);
 };
@@ -189,8 +191,7 @@ suite websocket_client_tests = [] {
       });
 
       client.on_error([&](std::error_code ec) {
-         std::cerr << "Client Error: " << ec.message()
-                   << " (code=" << ec.value()
+         std::cerr << "Client Error: " << ec.message() << " (code=" << ec.value()
                    << ", category=" << ec.category().name() << ")\n";
       });
 
@@ -351,12 +352,15 @@ suite websocket_client_tests = [] {
       });
 
       client.on_message([&](std::string_view message, ws_opcode opcode) {
-         std::cout << "[large_message_test] Received " << message.size() << " bytes, opcode=" << static_cast<int>(opcode) << std::endl;
-         if (opcode == ws_opcode::text && message.size() > 256 * 1024 && message.find("END") != std::string_view::npos) {
+         std::cout << "[large_message_test] Received " << message.size()
+                   << " bytes, opcode=" << static_cast<int>(opcode) << std::endl;
+         if (opcode == ws_opcode::text && message.size() > 256 * 1024 &&
+             message.find("END") != std::string_view::npos) {
             std::cout << "[large_message_test] Large message received successfully" << std::endl;
             large_message_received = true;
             client.close();
-         } else {
+         }
+         else {
             std::cout << "[large_message_test] Message didn't match criteria (size=" << message.size()
                       << ", has_END=" << (message.find("END") != std::string_view::npos) << ")" << std::endl;
          }
@@ -373,7 +377,8 @@ suite websocket_client_tests = [] {
 
       std::thread client_thread([&client]() { client.ctx_->run(); });
 
-      bool received = wait_for_condition([&] { return large_message_received.load(); }, std::chrono::milliseconds(60000));
+      bool received =
+         wait_for_condition([&] { return large_message_received.load(); }, std::chrono::milliseconds(60000));
 
       if (!received) {
          std::cerr << "[large_message_test] Test failed - connection_opened=" << connection_opened.load()
@@ -482,8 +487,7 @@ suite websocket_client_tests = [] {
 
       std::thread client_thread([&client]() { client.ctx_->run(); });
 
-      expect(wait_for_condition([&] { return connection_closed.load(); }))
-         << "Connection was not closed by server";
+      expect(wait_for_condition([&] { return connection_closed.load(); })) << "Connection was not closed by server";
       expect(close_code_correct.load()) << "Close code or reason was incorrect";
 
       if (!client.ctx_->stopped()) {
@@ -521,15 +525,17 @@ suite websocket_client_tests = [] {
          auto* client_ptr = clients[i].get();
          int client_id = i;
 
-         client_ptr->on_open([client_ptr, client_id]() { client_ptr->send("Hello from client " + std::to_string(client_id)); });
+         client_ptr->on_open(
+            [client_ptr, client_id]() { client_ptr->send("Hello from client " + std::to_string(client_id)); });
 
-         client_ptr->on_message([&messages_received, client_ptr, client_id](std::string_view message, ws_opcode opcode) {
-            if (opcode == ws_opcode::text) {
-               std::cout << "Client " << client_id << " received: " << message << std::endl;
-               messages_received[client_id] = true;
-               client_ptr->close();
-            }
-         });
+         client_ptr->on_message(
+            [&messages_received, client_ptr, client_id](std::string_view message, ws_opcode opcode) {
+               if (opcode == ws_opcode::text) {
+                  std::cout << "Client " << client_id << " received: " << message << std::endl;
+                  messages_received[client_id] = true;
+                  client_ptr->close();
+               }
+            });
 
          client_ptr->on_error([client_id](std::error_code ec) {
             std::cerr << "Client " << client_id << " error: " << ec.message() << "\n";

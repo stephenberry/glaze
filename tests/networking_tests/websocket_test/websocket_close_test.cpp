@@ -185,7 +185,8 @@ suite websocket_close_frame_tests = [] {
          conn->close(ws_close_code::normal, "Test close");
       });
 
-      ws_server->on_close([&](std::shared_ptr<websocket_connection<asio::ip::tcp::socket>>) { on_close_called = true; });
+      ws_server->on_close(
+         [&](std::shared_ptr<websocket_connection<asio::ip::tcp::socket>>) { on_close_called = true; });
 
       // Create HTTP server
       http_server server;
@@ -345,9 +346,12 @@ suite websocket_error_handling_tests = [] {
          server_conn = conn;
       });
 
-      ws_server->on_error([&](std::shared_ptr<websocket_connection<asio::ip::tcp::socket>>, std::error_code) { on_error_called = true; });
+      ws_server->on_error([&](std::shared_ptr<websocket_connection<asio::ip::tcp::socket>>, std::error_code) {
+         on_error_called = true;
+      });
 
-      ws_server->on_close([&](std::shared_ptr<websocket_connection<asio::ip::tcp::socket>>) { on_close_called = true; });
+      ws_server->on_close(
+         [&](std::shared_ptr<websocket_connection<asio::ip::tcp::socket>>) { on_close_called = true; });
 
       // Create HTTP server
       http_server server;
@@ -415,9 +419,12 @@ suite websocket_error_handling_tests = [] {
       // Create WebSocket server
       auto ws_server = std::make_shared<websocket_server>();
 
-      ws_server->on_error([&](std::shared_ptr<websocket_connection<asio::ip::tcp::socket>>, std::error_code) { on_error_called = true; });
+      ws_server->on_error([&](std::shared_ptr<websocket_connection<asio::ip::tcp::socket>>, std::error_code) {
+         on_error_called = true;
+      });
 
-      ws_server->on_close([&](std::shared_ptr<websocket_connection<asio::ip::tcp::socket>>) { on_close_called = true; });
+      ws_server->on_close(
+         [&](std::shared_ptr<websocket_connection<asio::ip::tcp::socket>>) { on_close_called = true; });
 
       // Create HTTP server
       http_server server;

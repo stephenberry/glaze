@@ -63,24 +63,25 @@ int main()
       return true; // Accept all connections for this example
    });
 
-   ws_server->on_open([&clients, &clients_mutex](std::shared_ptr<websocket_connection<asio::ip::tcp::socket>> conn, const request&) {
-      std::lock_guard<std::mutex> lock(clients_mutex);
-      clients.insert(conn);
+   ws_server->on_open(
+      [&clients, &clients_mutex](std::shared_ptr<websocket_connection<asio::ip::tcp::socket>> conn, const request&) {
+         std::lock_guard<std::mutex> lock(clients_mutex);
+         clients.insert(conn);
 
-      std::cout << "🔗 WebSocket opened: " << conn->remote_address() << " (Total clients: " << clients.size() << ")"
-                << std::endl;
+         std::cout << "🔗 WebSocket opened: " << conn->remote_address() << " (Total clients: " << clients.size() << ")"
+                   << std::endl;
 
-      // Send welcome message
-      conn->send_text("Welcome! You are connected to the Glaze WebSocket server.");
+         // Send welcome message
+         conn->send_text("Welcome! You are connected to the Glaze WebSocket server.");
 
-      // Notify other clients about the new connection
-      std::string join_msg = "User from " + conn->remote_address() + " joined the chat";
-      for (auto& client : clients) {
-         if (client != conn) {
-            client->send_text("📢 " + join_msg);
+         // Notify other clients about the new connection
+         std::string join_msg = "User from " + conn->remote_address() + " joined the chat";
+         for (auto& client : clients) {
+            if (client != conn) {
+               client->send_text("📢 " + join_msg);
+            }
          }
-      }
-   });
+      });
 
    ws_server->on_message([&clients, &clients_mutex](std::shared_ptr<websocket_connection<asio::ip::tcp::socket>> conn,
                                                     std::string_view message, ws_opcode opcode) {
