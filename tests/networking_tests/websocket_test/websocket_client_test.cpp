@@ -38,12 +38,19 @@ void run_echo_server(std::atomic<bool>& server_ready, std::atomic<bool>& should_
 
    ws_server->on_message([](auto conn, std::string_view message, ws_opcode opcode) {
       if (opcode == ws_opcode::text) {
+         // Log large messages
+         if (message.size() > 100000) {
+            std::cout << "[echo_server] Received large text message: " << message.size() << " bytes" << std::endl;
+         }
          // Efficiently build echo response for large messages
          std::string echo_msg;
          echo_msg.reserve(6 + message.size());
          echo_msg = "Echo: ";
          echo_msg.append(message);
          conn->send_text(echo_msg);
+         if (message.size() > 100000) {
+            std::cout << "[echo_server] Sent echo response: " << echo_msg.size() << " bytes" << std::endl;
+         }
       }
       else if (opcode == ws_opcode::binary) {
          conn->send_binary(message);
@@ -52,8 +59,9 @@ void run_echo_server(std::atomic<bool>& server_ready, std::atomic<bool>& should_
 
    ws_server->on_close([](auto /*conn*/) {});
 
-   ws_server->on_error(
-      [](auto /*conn*/, std::error_code ec) { std::cerr << "Server Error: " << ec.message() << "\n"; });
+   ws_server->on_error([](auto /*conn*/, std::error_code ec) {
+      std::cerr << "[echo_server] Server Error: " << ec.message() << " (code=" << ec.value() << ")\n";
+   });
 
    server.websocket("/ws", ws_server);
 
