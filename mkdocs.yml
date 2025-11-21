@@ -106,6 +106,7 @@ nav:
    - networking/rest-registry.md
    - networking/tls-support.md
    - networking/http-client.md
+   - networking/websocket-client.md
    - networking/advanced-networking.md
    - networking/http-examples.md
  - Interface Utilities:
