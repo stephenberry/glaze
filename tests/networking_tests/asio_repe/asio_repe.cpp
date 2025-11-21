@@ -427,9 +427,7 @@ struct keep_alive_api
       throw 5;
       return 0;
    };
-   std::function<int()> works = []() {
-      return 42;
-   };
+   std::function<int()> works = []() { return 42; };
 };
 
 void server_keep_alive_test()
