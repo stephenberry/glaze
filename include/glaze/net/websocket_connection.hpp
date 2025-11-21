@@ -9,7 +9,9 @@
 #include <chrono>
 #include <cstring>
 #include <functional>
+#include <iostream>
 #include <memory>
+#include <random>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -29,6 +31,7 @@
 #include "glaze/base64/base64.hpp"
 #include "glaze/ext/glaze_asio.hpp"
 #include "glaze/net/http_router.hpp"
+#include "glaze/util/parse.hpp"
 
 namespace glz
 {
@@ -253,18 +256,26 @@ namespace glz
    }
 
    // Forward declarations
+   template <typename SocketType = asio::ip::tcp::socket>
    struct websocket_connection;
 
    // WebSocket server class
    struct websocket_server
    {
-      using message_handler = std::function<void(std::shared_ptr<websocket_connection>, std::string_view, ws_opcode)>;
-      using close_handler = std::function<void(std::shared_ptr<websocket_connection>)>;
-      using error_handler = std::function<void(std::shared_ptr<websocket_connection>, std::error_code)>;
-      using open_handler = std::function<void(std::shared_ptr<websocket_connection>, const request&)>;
+      using message_handler =
+         std::function<void(std::shared_ptr<websocket_connection<asio::ip::tcp::socket>>, std::string_view, ws_opcode)>;
+      using close_handler = std::function<void(std::shared_ptr<websocket_connection<asio::ip::tcp::socket>>)>;
+      using error_handler =
+         std::function<void(std::shared_ptr<websocket_connection<asio::ip::tcp::socket>>, std::error_code)>;
+      using open_handler =
+         std::function<void(std::shared_ptr<websocket_connection<asio::ip::tcp::socket>>, const request&)>;
       using validate_handler = std::function<bool(const request&)>;
 
       websocket_server() = default;
+
+      // Configuration
+      void set_max_message_size(size_t size) { max_message_size_ = size; }
+      size_t get_max_message_size() const { return max_message_size_; }
 
       // Set message handler
       inline void on_message(message_handler handler) { message_handler_ = std::move(handler); }
@@ -282,28 +293,29 @@ namespace glz
       inline void on_validate(validate_handler handler) { validate_handler_ = std::move(handler); }
 
       // Internal methods called by websocket_connection
-      inline void notify_open(std::shared_ptr<websocket_connection> conn, const request& req)
+      inline void notify_open(std::shared_ptr<websocket_connection<asio::ip::tcp::socket>> conn, const request& req)
       {
          if (open_handler_) {
             open_handler_(conn, req);
          }
       }
 
-      inline void notify_message(std::shared_ptr<websocket_connection> conn, std::string_view message, ws_opcode opcode)
+      inline void notify_message(std::shared_ptr<websocket_connection<asio::ip::tcp::socket>> conn,
+                                 std::string_view message, ws_opcode opcode)
       {
          if (message_handler_) {
             message_handler_(conn, message, opcode);
          }
       }
 
-      inline void notify_close(std::shared_ptr<websocket_connection> conn)
+      inline void notify_close(std::shared_ptr<websocket_connection<asio::ip::tcp::socket>> conn)
       {
          if (close_handler_) {
             close_handler_(conn);
          }
       }
 
-      inline void notify_error(std::shared_ptr<websocket_connection> conn, std::error_code ec)
+      inline void notify_error(std::shared_ptr<websocket_connection<asio::ip::tcp::socket>> conn, std::error_code ec)
       {
          if (error_handler_) {
             error_handler_(conn, ec);
@@ -319,6 +331,7 @@ namespace glz
       }
 
      private:
+      size_t max_message_size_{1024 * 1024 * 16};
       open_handler open_handler_;
       message_handler message_handler_;
       close_handler close_handler_;
@@ -327,16 +340,36 @@ namespace glz
    };
 
    // WebSocket connection class - implementations come after websocket_server
-   struct websocket_connection : public std::enable_shared_from_this<websocket_connection>
+   template <typename SocketType>
+   struct websocket_connection : public std::enable_shared_from_this<websocket_connection<SocketType>>
    {
      public:
-      inline websocket_connection(asio::ip::tcp::socket socket, websocket_server* server)
-         : socket_(std::move(socket)), server_(server)
+      inline websocket_connection(std::shared_ptr<SocketType> socket, websocket_server* server = nullptr)
+         : socket_(socket), server_(server)
       {
-         remote_endpoint_ = socket_.remote_endpoint();
+         // Try to get remote endpoint, but don't fail if it's not available yet
+         try {
+            if constexpr (std::is_same_v<SocketType, asio::ip::tcp::socket>) {
+               remote_endpoint_ = socket_->remote_endpoint();
+            }
+            else {
+               // For SSL sockets, get the endpoint from the lowest layer
+               remote_endpoint_ = socket_->lowest_layer().remote_endpoint();
+            }
+         }
+         catch (...) {
+            // Endpoint not available yet (e.g., for client mode before connection)
+            // Will be set later if needed
+         }
+         if (server_) {
+            max_message_size_ = server_->get_max_message_size();
+         }
       }
 
       ~websocket_connection() = default;
+
+      // Configuration
+      void set_max_message_size(size_t size) { max_message_size_ = size; }
 
       // Start the WebSocket connection (performs handshake)
       inline void start(const request& req) { perform_handshake(req); }
@@ -372,7 +405,19 @@ namespace glz
       inline void set_user_data(std::shared_ptr<void> data) { user_data_ = data; }
       inline std::shared_ptr<void> get_user_data() const { return user_data_; }
 
+      // Inject initial data read during handshake
+      inline void set_initial_data(std::string_view data)
+      {
+         frame_buffer_.insert(frame_buffer_.end(), data.begin(), data.end());
+         size_t consumed = process_frames(frame_buffer_.data(), frame_buffer_.size());
+         if (consumed > 0) {
+            frame_buffer_.erase(frame_buffer_.begin(), frame_buffer_.begin() + consumed);
+         }
+      }
+
      private:
+      size_t max_message_size_{1024 * 1024 * 16}; // 16 MB limit
+
       inline void perform_handshake(const request& req)
       {
          // Validate WebSocket upgrade request
@@ -421,12 +466,14 @@ namespace glz
          response_str.append(accept_key);
          response_str.append("\r\n\r\n");
 
-         auto self = shared_from_this();
+         auto self = this->shared_from_this();
+         // Capture socket locally to prevent race condition
+         auto socket = socket_;
 
          // Use shared_ptr to keep response string alive during async operation
          auto response_buffer = std::make_shared<std::string>(std::move(response_str));
-         asio::async_write(socket_, asio::buffer(*response_buffer),
-                           [self, req, response_buffer](std::error_code ec, std::size_t) {
+         asio::async_write(*socket, asio::buffer(*response_buffer),
+                           [self, req, response_buffer, socket](std::error_code ec, std::size_t) {
                               if (ec) {
                                  self->is_closing_ = true;
                                  if (self->server_) {
@@ -448,20 +495,15 @@ namespace glz
                            });
       }
 
-      inline void start_read()
-      {
-         auto self = shared_from_this();
-         socket_.async_read_some(asio::buffer(read_buffer_), [self](std::error_code ec, std::size_t bytes_transferred) {
-            self->on_read(ec, bytes_transferred);
-         });
-      }
-
       inline void on_read(std::error_code ec, std::size_t bytes_transferred)
       {
          if (ec) {
             is_closing_ = true;
             if (server_) {
-               server_->notify_error(shared_from_this(), ec);
+               server_->notify_error(this->shared_from_this(), ec);
+            }
+            else if (client_error_handler_) {
+               client_error_handler_(ec);
             }
             // Close the connection after a read error (connection is likely broken)
             do_close();
@@ -471,8 +513,17 @@ namespace glz
          // Add received data to frame buffer
          frame_buffer_.insert(frame_buffer_.end(), read_buffer_.begin(), read_buffer_.begin() + bytes_transferred);
 
+         // Check buffer size limit (simple DoS protection)
+         if (frame_buffer_.size() > max_message_size_ + 1024) { // Allow some header overhead
+            close(ws_close_code::message_too_big, "Buffer limit exceeded");
+            return;
+         }
+
          // Process complete frames
-         process_frame(frame_buffer_.data(), frame_buffer_.size());
+         size_t consumed = process_frames(frame_buffer_.data(), frame_buffer_.size());
+         if (consumed > 0) {
+            frame_buffer_.erase(frame_buffer_.begin(), frame_buffer_.begin() + consumed);
+         }
 
          // Continue reading if connection is still open
          if (!is_closing_ && handshake_complete_) {
@@ -480,7 +531,7 @@ namespace glz
          }
       }
 
-      inline void process_frame(const uint8_t* data, std::size_t length)
+      inline size_t process_frames(const uint8_t* data, std::size_t length)
       {
          std::size_t offset = 0;
 
@@ -493,67 +544,68 @@ namespace glz
             ws_frame_header header;
             header.data[0] = data[offset];
             header.data[1] = data[offset + 1];
-            offset += 2;
+            size_t header_size = 2;
 
             // Check reserved bits
             if ((header.data[0] & 0x70) != 0) {
                close(ws_close_code::protocol_error, "Reserved bits set");
-               return;
+               return length; // Consume all
             }
 
             // Get payload length
             uint64_t payload_length = header.payload_len();
 
             if (payload_length == 126) {
-               if (length - offset < 2) break;
-               payload_length = (static_cast<uint64_t>(data[offset]) << 8) | data[offset + 1];
-               offset += 2;
+               if (length - offset < 4) break;
+               payload_length = (static_cast<uint64_t>(data[offset + 2]) << 8) | data[offset + 3];
+               header_size += 2;
             }
             else if (payload_length == 127) {
-               if (length - offset < 8) break;
+               if (length - offset < 10) break;
                payload_length = 0;
                for (int i = 0; i < 8; ++i) {
-                  payload_length = (payload_length << 8) | data[offset + i];
+                  payload_length = (payload_length << 8) | data[offset + 2 + i];
                }
-               offset += 8;
+               header_size += 8;
+            }
+
+            if (payload_length > max_message_size_) {
+               close(ws_close_code::message_too_big, "Message too big");
+               return length;
             }
 
             // Read mask key if present
             std::array<uint8_t, 4> mask_key{};
             if (header.mask()) {
-               if (length - offset < 4) break;
-               std::copy(data + offset, data + offset + 4, mask_key.begin());
-               offset += 4;
+               if (length - offset < header_size + 4) break;
+               std::copy(data + offset + header_size, data + offset + header_size + 4, mask_key.begin());
+               header_size += 4;
             }
 
             // Check if we have the complete payload
-            if (length - offset < payload_length) {
+            if (length - offset < header_size + payload_length) {
                break;
             }
 
             // Extract and unmask payload
-            std::vector<uint8_t> payload(payload_length);
+            std::vector<uint8_t> payload(static_cast<size_t>(payload_length));
             if (payload_length > 0) {
-               std::copy(data + offset, data + offset + payload_length, payload.begin());
+               std::copy(data + offset + header_size, data + offset + header_size + static_cast<size_t>(payload_length),
+                         payload.begin());
 
                if (header.mask()) {
-                  for (std::size_t i = 0; i < payload_length; ++i) {
+                  for (std::size_t i = 0; i < payload.size(); ++i) {
                      payload[i] ^= mask_key[i % 4];
                   }
                }
             }
 
-            offset += payload_length;
-
             // Handle the frame
             handle_frame(header.opcode(), payload.data(), payload.size(), header.fin());
 
-            // Remove processed data from buffer
-            if (offset > 0) {
-               frame_buffer_.erase(frame_buffer_.begin(), frame_buffer_.begin() + offset);
-               return process_frame(frame_buffer_.data(), frame_buffer_.size());
-            }
+            offset += header_size + static_cast<size_t>(payload_length);
          }
+         return offset;
       }
 
       inline void handle_frame(ws_opcode opcode, const uint8_t* payload, std::size_t length, bool fin)
@@ -569,18 +621,27 @@ namespace glz
             current_opcode_ = opcode;
             message_buffer_.assign(payload, payload + length);
 
+            if (message_buffer_.size() > max_message_size_) {
+               close(ws_close_code::message_too_big, "Message too big");
+               return;
+            }
+
             if (fin) {
                // Validate UTF-8 for text frames
-               if (opcode == ws_opcode::text && !is_valid_utf8(message_buffer_.data(), message_buffer_.size())) {
-                  close(ws_close_code::invalid_payload, "Invalid UTF-8");
-                  return;
+               if (opcode == ws_opcode::text) {
+                  if (!glz::validate_utf8(message_buffer_.data(), message_buffer_.size())) {
+                     close(ws_close_code::invalid_payload, "Invalid UTF-8");
+                     return;
+                  }
                }
 
+               std::string_view message_view(reinterpret_cast<const char*>(message_buffer_.data()),
+                                             message_buffer_.size());
                if (server_) {
-                  server_->notify_message(
-                     shared_from_this(),
-                     std::string_view(reinterpret_cast<const char*>(message_buffer_.data()), message_buffer_.size()),
-                     current_opcode_);
+                  server_->notify_message(this->shared_from_this(), message_view, current_opcode_);
+               }
+               else if (client_message_handler_) {
+                  client_message_handler_(message_view, current_opcode_);
                }
                message_buffer_.clear();
                current_opcode_ = ws_opcode::continuation;
@@ -596,23 +657,31 @@ namespace glz
                return;
             }
 
+            if (message_buffer_.size() + length > max_message_size_) {
+               close(ws_close_code::message_too_big, "Message too big");
+               return;
+            }
+
             message_buffer_.insert(message_buffer_.end(), payload, payload + length);
 
             if (fin) {
                is_reading_frame_ = false;
 
                // Validate UTF-8 for text frames
-               if (current_opcode_ == ws_opcode::text &&
-                   !is_valid_utf8(message_buffer_.data(), message_buffer_.size())) {
-                  close(ws_close_code::invalid_payload, "Invalid UTF-8");
-                  return;
+               if (current_opcode_ == ws_opcode::text) {
+                  if (!glz::validate_utf8(message_buffer_.data(), message_buffer_.size())) {
+                     close(ws_close_code::invalid_payload, "Invalid UTF-8");
+                     return;
+                  }
                }
 
+               std::string_view message_view(reinterpret_cast<const char*>(message_buffer_.data()),
+                                             message_buffer_.size());
                if (server_) {
-                  server_->notify_message(
-                     shared_from_this(),
-                     std::string_view(reinterpret_cast<const char*>(message_buffer_.data()), message_buffer_.size()),
-                     current_opcode_);
+                  server_->notify_message(this->shared_from_this(), message_view, current_opcode_);
+               }
+               else if (client_message_handler_) {
+                  client_message_handler_(message_view, current_opcode_);
                }
                message_buffer_.clear();
                current_opcode_ = ws_opcode::continuation;
@@ -629,6 +698,10 @@ namespace glz
                   reason = std::string(reinterpret_cast<const char*>(payload + 2), length - 2);
                }
             }
+
+            // Store close info for client callback
+            close_code_ = code;
+            close_reason_ = reason;
 
             if (!is_closing_) {
                send_close_frame(code, reason);
@@ -654,29 +727,53 @@ namespace glz
       inline void send_frame(ws_opcode opcode, std::string_view payload, bool fin = true)
       {
          // Allow close frames to be sent even when closing, but block other frame types
-         if (is_closing_ && opcode != ws_opcode::close) return;
+         if (is_closing_ && opcode != ws_opcode::close) {
+            return;
+         }
 
-         std::size_t header_size = get_frame_header_size(payload.size());
+         // Capture socket locally to prevent race condition
+         auto socket = socket_;
+         if (!socket) {
+            return;
+         }
+
+         std::size_t header_size = get_frame_header_size(payload.size(), client_mode_);
          std::vector<uint8_t> frame(header_size + payload.size());
 
-         write_frame_header(opcode, payload.size(), fin, frame.data());
+         write_frame_header(opcode, payload.size(), fin, frame.data(), client_mode_);
          std::copy(payload.begin(), payload.end(), frame.begin() + header_size);
 
-         auto self = shared_from_this();
+         // Apply masking if in client mode
+         if (client_mode_ && payload.size() > 0) {
+            // Get the masking key from the header
+            std::size_t mask_key_offset = header_size - 4;
+            const uint8_t* mask_key = frame.data() + mask_key_offset;
+            // Mask the payload
+            for (std::size_t i = 0; i < payload.size(); ++i) {
+               frame[header_size + i] ^= mask_key[i % 4];
+            }
+         }
+
+         auto self = this->shared_from_this();
 
          // Use shared_ptr to keep the frame alive during async operation
          auto frame_buffer = std::make_shared<std::vector<uint8_t>>(std::move(frame));
-         asio::async_write(socket_, asio::buffer(*frame_buffer), [self, frame_buffer](std::error_code ec, std::size_t) {
-            if (ec) {
-               // Mark connection as closing before notifying handlers to avoid re-entrant close attempts
-               self->is_closing_ = true;
-               if (self->server_) {
-                  self->server_->notify_error(self, ec);
-               }
-               // Close the connection after a write error (connection is likely broken)
-               self->do_close();
-            }
-         });
+         asio::async_write(*socket, asio::buffer(*frame_buffer),
+                           [self, frame_buffer, payload_size = payload.size()](std::error_code ec, std::size_t) {
+                              if (ec) {
+                                 // Mark connection as closing before notifying handlers to avoid re-entrant close
+                                 // attempts
+                                 self->is_closing_ = true;
+                                 if (self->server_) {
+                                    self->server_->notify_error(self, ec);
+                                 }
+                                 else if (self->client_error_handler_) {
+                                    self->client_error_handler_(ec);
+                                 }
+                                 // Close the connection after a write error (connection is likely broken)
+                                 self->do_close();
+                              }
+                           });
       }
 
       inline void send_close_frame(ws_close_code code, std::string_view reason, bool schedule_socket_close = false)
@@ -703,53 +800,71 @@ namespace glz
 
       inline void send_close_frame_with_callback(ws_opcode opcode, std::string_view payload)
       {
-         std::size_t header_size = get_frame_header_size(payload.size());
+         // Capture socket locally to prevent race condition
+         auto socket = socket_;
+         if (!socket) {
+            do_close();
+            return;
+         }
+
+         std::size_t header_size = get_frame_header_size(payload.size(), client_mode_);
          std::vector<uint8_t> frame(header_size + payload.size());
 
-         write_frame_header(opcode, payload.size(), true, frame.data());
+         write_frame_header(opcode, payload.size(), true, frame.data(), client_mode_);
          std::copy(payload.begin(), payload.end(), frame.begin() + header_size);
 
-         auto self = shared_from_this();
+         auto self = this->shared_from_this();
 
          // Use shared_ptr to keep the frame alive during async operation
          auto frame_buffer = std::make_shared<std::vector<uint8_t>>(std::move(frame));
-         asio::async_write(socket_, asio::buffer(*frame_buffer), [self, frame_buffer](std::error_code ec, std::size_t) {
-            if (ec) {
-               self->is_closing_ = true;
-               if (self->server_) {
-                  self->server_->notify_error(self, ec);
-               }
-               self->do_close();
-               return;
-            }
-            // Give the OS time to transmit the data before closing the socket
-            auto timer = std::make_shared<asio::steady_timer>(self->socket_.get_executor());
-            timer->expires_after(std::chrono::milliseconds(100));
-            timer->async_wait([self, timer](std::error_code) { self->do_close(); });
-         });
+         asio::async_write(*socket, asio::buffer(*frame_buffer),
+                           [self, frame_buffer, socket](std::error_code ec, std::size_t) {
+                              if (ec) {
+                                 self->is_closing_ = true;
+                                 if (self->server_) {
+                                    self->server_->notify_error(self, ec);
+                                 }
+                                 self->do_close();
+                                 return;
+                              }
+                              // Give the OS time to transmit the data before closing the socket
+                              if (socket) {
+                                 auto timer = std::make_shared<asio::steady_timer>(socket->get_executor());
+                                 timer->expires_after(std::chrono::milliseconds(100));
+                                 timer->async_wait([self, timer](std::error_code) { self->do_close(); });
+                              }
+                              else {
+                                 self->do_close();
+                              }
+                           });
       }
 
-      inline std::size_t get_frame_header_size(std::size_t payload_length)
+      inline std::size_t get_frame_header_size(std::size_t payload_length, bool use_masking)
       {
+         std::size_t base_size;
          if (payload_length < 126) {
-            return 2;
+            base_size = 2;
          }
          else if (payload_length <= 0xFFFF) {
-            return 4;
+            base_size = 4;
          }
          else {
-            return 10;
+            base_size = 10;
          }
+         return base_size + (use_masking ? 4 : 0); // Add 4 bytes for masking key if needed
       }
 
-      inline void write_frame_header(ws_opcode opcode, std::size_t payload_length, bool fin, uint8_t* header)
+      inline void write_frame_header(ws_opcode opcode, std::size_t payload_length, bool fin, uint8_t* header,
+                                     bool use_masking)
       {
          ws_frame_header frame_header;
          frame_header.fin(fin);
          frame_header.opcode(opcode);
-         frame_header.mask(false);
+         frame_header.mask(use_masking);
 
          header[0] = frame_header.data[0];
+
+         std::size_t header_offset = 2;
 
          if (payload_length < 126) {
             frame_header.payload_len(static_cast<uint8_t>(payload_length));
@@ -760,54 +875,29 @@ namespace glz
             header[1] = frame_header.data[1];
             header[2] = static_cast<uint8_t>(payload_length >> 8);
             header[3] = static_cast<uint8_t>(payload_length & 0xFF);
+            header_offset = 4;
          }
          else {
             frame_header.payload_len(127);
             header[1] = frame_header.data[1];
             for (int i = 0; i < 8; ++i) {
-               header[2 + i] = static_cast<uint8_t>(payload_length >> (8 * (7 - i)));
+               header[2 + i] = static_cast<uint8_t>(static_cast<uint64_t>(payload_length) >> (8 * (7 - i)));
             }
-         }
-      }
-
-      inline bool is_valid_utf8(const uint8_t* data, std::size_t length)
-      {
-         // Simple UTF-8 validation
-         for (std::size_t i = 0; i < length;) {
-            uint8_t byte = data[i];
-
-            if (byte < 0x80) {
-               // ASCII character
-               i++;
-            }
-            else if ((byte & 0xE0) == 0xC0) {
-               // 2-byte sequence
-               if (i + 1 >= length || (data[i + 1] & 0xC0) != 0x80) {
-                  return false;
-               }
-               i += 2;
-            }
-            else if ((byte & 0xF0) == 0xE0) {
-               // 3-byte sequence
-               if (i + 2 >= length || (data[i + 1] & 0xC0) != 0x80 || (data[i + 2] & 0xC0) != 0x80) {
-                  return false;
-               }
-               i += 3;
-            }
-            else if ((byte & 0xF8) == 0xF0) {
-               // 4-byte sequence
-               if (i + 3 >= length || (data[i + 1] & 0xC0) != 0x80 || (data[i + 2] & 0xC0) != 0x80 ||
-                   (data[i + 3] & 0xC0) != 0x80) {
-                  return false;
-               }
-               i += 4;
-            }
-            else {
-               return false;
-            }
+            header_offset = 10;
          }
 
-         return true;
+         // Write masking key if needed (client mode)
+         if (use_masking) {
+            // Generate random masking key
+            std::random_device rd;
+            std::mt19937 gen(rd());
+            std::uniform_int_distribution<uint8_t> dist(0, 255);
+            for (int i = 0; i < 4; ++i) {
+               header[header_offset + i] = dist(gen);
+            }
+            // Mask the payload (done in-place in the frame buffer after this header)
+            // Note: Actual masking of payload should be done by caller if needed
+         }
       }
 
       inline void do_close()
@@ -819,16 +909,22 @@ namespace glz
          }
 
          if (server_) {
-            server_->notify_close(shared_from_this());
+            server_->notify_close(this->shared_from_this());
+         }
+         else if (client_close_handler_) {
+            client_close_handler_(close_code_, close_reason_);
          }
 
-         asio::error_code ec;
-         socket_.close(ec);
+         if (socket_) {
+            asio::error_code ec;
+            socket_->close(ec);
+            socket_.reset(); // Reset pointer so subsequent checks know socket is closed
+         }
       }
 
-      asio::ip::tcp::socket socket_;
+      std::shared_ptr<SocketType> socket_;
       websocket_server* server_;
-      std::array<uint8_t, 4096> read_buffer_;
+      std::array<uint8_t, 16384> read_buffer_;
       std::vector<uint8_t> frame_buffer_;
       std::vector<uint8_t> message_buffer_;
       ws_opcode current_opcode_{ws_opcode::continuation};
@@ -838,5 +934,56 @@ namespace glz
       std::atomic<bool> closed_{false};
       std::shared_ptr<void> user_data_;
       asio::ip::tcp::endpoint remote_endpoint_;
+      bool client_mode_{false}; // For client-side connections (requires masking)
+
+      // Client mode callbacks
+      std::function<void(std::string_view, ws_opcode)> client_message_handler_;
+      std::function<void(ws_close_code, std::string_view)> client_close_handler_;
+      std::function<void(std::error_code)> client_error_handler_;
+
+      // Close info for client callback
+      ws_close_code close_code_{ws_close_code::normal};
+      std::string close_reason_;
+
+     public:
+      // Client mode support
+      inline void set_client_mode(bool enabled)
+      {
+         client_mode_ = enabled;
+         handshake_complete_ = true;
+      }
+      inline void start_read() { do_start_read(); }
+
+      // Client mode callback setters
+      inline void on_message(std::function<void(std::string_view, ws_opcode)> handler)
+      {
+         client_message_handler_ = std::move(handler);
+      }
+      inline void on_close(std::function<void(ws_close_code, std::string_view)> handler)
+      {
+         client_close_handler_ = std::move(handler);
+      }
+      inline void on_error(std::function<void(std::error_code)> handler) { client_error_handler_ = std::move(handler); }
+
+     private:
+      inline void do_start_read()
+      {
+         // Capture socket locally to prevent race condition
+         auto socket = socket_;
+         if (!socket) {
+            return;
+         }
+
+         // Check if already closing to avoid operations on closed sockets
+         if (is_closing_) {
+            return;
+         }
+
+         auto self = this->shared_from_this();
+         socket->async_read_some(asio::buffer(read_buffer_),
+                                 [self, socket](std::error_code ec, std::size_t bytes_transferred) {
+                                    self->on_read(ec, bytes_transferred);
+                                 });
+      }
    };
 }
