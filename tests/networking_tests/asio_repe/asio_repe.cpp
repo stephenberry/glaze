@@ -478,6 +478,39 @@ void server_keep_alive_test()
    expect(result == 42);
 }
 
+void client_exception_test()
+{
+   static constexpr int16_t port = 8767;
+
+   glz::asio_server server{.port = port, .concurrency = 1};
+
+   keep_alive_api api{};
+   server.on(api);
+
+   server.run_async();
+
+   glz::asio_client client{"localhost", std::to_string(port)};
+   (void)client.init();
+
+   try {
+      int i{};
+      client.get("/broken", i);
+      expect(false) << "Should have thrown";
+   }
+   catch (const std::exception& e) {
+      expect(std::string(e.what()) == "parse_error: registry error for `/broken`: broken") << e.what();
+   }
+
+   try {
+      int i{};
+      client.get("/unknown_broken", i);
+      expect(false) << "Should have thrown";
+   }
+   catch (const std::exception& e) {
+      expect(std::string(e.what()) == "invalid_call: unknown error") << e.what();
+   }
+}
+
 int main()
 {
    notify_test();
@@ -488,6 +521,7 @@ int main()
    async_server_test();
    server_error_test();
    server_keep_alive_test();
+   client_exception_test();
 
    return 0;
 }
