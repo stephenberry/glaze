@@ -98,6 +98,22 @@ client.send("Hello, server!");
 client.send("{\"type\": \"message\", \"content\": \"Hello\"}");
 ```
 
+### send_binary()
+
+Sends a binary message to the connected WebSocket server.
+
+```cpp
+void send_binary(std::string_view message);
+```
+
+**Example:**
+```cpp
+// Send binary data
+std::vector<uint8_t> data = {0x01, 0x02, 0x03, 0xFF};
+std::string binary_msg(reinterpret_cast<const char*>(data.data()), data.size());
+client.send_binary(binary_msg);
+```
+
 ### close()
 
 Closes the WebSocket connection gracefully.
@@ -405,6 +421,58 @@ int main() {
 }
 ```
 
+### Binary Message Exchange
+
+```cpp
+#include "glaze/net/websocket_client.hpp"
+#include <iostream>
+#include <vector>
+
+int main() {
+    glz::websocket_client client;
+
+    client.on_open([&client]() {
+        std::cout << "Connected! Sending binary data..." << std::endl;
+
+        // Create binary data (e.g., image, file, or protocol buffer)
+        std::vector<uint8_t> binary_data = {0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A}; // PNG header
+        std::string binary_msg(reinterpret_cast<const char*>(binary_data.data()),
+                               binary_data.size());
+
+        client.send_binary(binary_msg);
+    });
+
+    client.on_message([&client](std::string_view message, glz::ws_opcode opcode) {
+        if (opcode == glz::ws_opcode::binary) {
+            std::cout << "Received binary message (" << message.size() << " bytes)" << std::endl;
+
+            // Process binary data
+            const uint8_t* data = reinterpret_cast<const uint8_t*>(message.data());
+            for (size_t i = 0; i < std::min(size_t(16), message.size()); ++i) {
+                printf("%02X ", data[i]);
+            }
+            std::cout << std::endl;
+
+            client.close();
+        }
+    });
+
+    client.on_close([&client](glz::ws_close_code code, std::string_view reason) {
+        std::cout << "Connection closed" << std::endl;
+        client.ctx_->stop();
+    });
+
+    client.on_error([](std::error_code ec) {
+        std::cerr << "Error: " << ec.message() << std::endl;
+    });
+
+    client.connect("ws://localhost:8080/ws");
+    client.run();
+
+    return 0;
+}
+```
+
 ### Multiple Clients with Shared io_context
 
 ```cpp
@@ -412,34 +480,37 @@ int main() {
 #include <iostream>
 #include <thread>
 #include <vector>
+#include <memory>
 
 int main() {
     // Create shared io_context
     auto io_ctx = std::make_shared<asio::io_context>();
 
     // Create multiple clients sharing the same io_context
-    std::vector<glz::websocket_client> clients;
+    // Use unique_ptr to avoid memory issues when vector resizes
+    std::vector<std::unique_ptr<glz::websocket_client>> clients;
 
     for (int i = 0; i < 5; ++i) {
-        clients.emplace_back(io_ctx);
+        clients.push_back(std::make_unique<glz::websocket_client>(io_ctx));
 
-        auto& client = clients.back();
+        // Get raw pointer to avoid capturing reference to vector element
+        auto* client_ptr = clients.back().get();
         int client_id = i;
 
-        client.on_open([client_id, &client]() {
+        client_ptr->on_open([client_ptr, client_id]() {
             std::cout << "Client " << client_id << " connected" << std::endl;
-            client.send("Hello from client " + std::to_string(client_id));
+            client_ptr->send("Hello from client " + std::to_string(client_id));
         });
 
-        client.on_message([client_id](std::string_view message, glz::ws_opcode opcode) {
+        client_ptr->on_message([client_id](std::string_view message, glz::ws_opcode opcode) {
             std::cout << "Client " << client_id << " received: " << message << std::endl;
         });
 
-        client.on_error([client_id](std::error_code ec) {
+        client_ptr->on_error([client_id](std::error_code ec) {
             std::cerr << "Client " << client_id << " error: " << ec.message() << std::endl;
         });
 
-        client.connect("ws://localhost:8080/ws");
+        client_ptr->connect("ws://localhost:8080/ws");
     }
 
     // Run the shared io_context in a thread pool
