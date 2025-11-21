@@ -764,7 +764,7 @@ namespace glz
 
          // Use shared_ptr to keep the frame alive during async operation
          auto frame_buffer = std::make_shared<std::vector<uint8_t>>(std::move(frame));
-         asio::async_write(*socket, asio::buffer(*frame_buffer), [self, frame_buffer, socket, payload_size = payload.size()](std::error_code ec, std::size_t bytes_written) {
+         asio::async_write(*socket, asio::buffer(*frame_buffer), [self, frame_buffer, payload_size = payload.size()](std::error_code ec, std::size_t bytes_written) {
             if (self->client_mode_ && payload_size > 10000) {
                if (ec) {
                   std::cerr << "[send_frame] async_write FAILED: " << ec.message() << " (code=" << ec.value() << ")" << std::endl;
