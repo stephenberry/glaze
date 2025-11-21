@@ -417,6 +417,100 @@ suite send_receive_api_tests = [] {
    };
 };
 
+struct keep_alive_api
+{
+   std::function<int()> broken = []() {
+      throw std::runtime_error("broken");
+      return 0;
+   };
+   std::function<int()> unknown_broken = []() {
+      throw 5;
+      return 0;
+   };
+   std::function<int()> works = []() {
+      return 42;
+   };
+};
+
+void server_keep_alive_test()
+{
+   static constexpr int16_t port = 8766;
+
+   glz::asio_server server{.port = port, .concurrency = 1};
+   server.error_handler = [](const std::string& error) {
+      if (error != "broken" && error != "unknown error") {
+         expect(false) << "Unexpected error: " << error;
+      }
+   };
+
+   keep_alive_api api{};
+   server.on(api);
+
+   server.run_async();
+
+   glz::asio_client client{"localhost", std::to_string(port)};
+   (void)client.init();
+
+   int result{};
+   glz::repe::message msg{};
+
+   // First call throws
+   client.call({"/broken"}, msg);
+   auto err = glz::repe::decode_message(result, msg);
+   expect(bool(err));
+   if (err) {
+      expect(err.value() == "REPE error: parse_error | registry error for `/broken`: broken") << err.value();
+   }
+
+   // Second call throws unknown exception
+   msg = {}; // reset message
+   client.call({"/unknown_broken"}, msg);
+   err = glz::repe::decode_message(result, msg);
+   expect(bool(err));
+   if (err) {
+      expect(err.value() == "REPE error: invalid_call | unknown error") << err.value();
+   }
+
+   // Third call should succeed if server is still alive
+   msg = {}; // reset message
+   client.call({"/works"}, msg);
+   expect(not glz::repe::decode_message(result, msg));
+   expect(result == 42);
+}
+
+void client_exception_test()
+{
+   static constexpr int16_t port = 8767;
+
+   glz::asio_server server{.port = port, .concurrency = 1};
+
+   keep_alive_api api{};
+   server.on(api);
+
+   server.run_async();
+
+   glz::asio_client client{"localhost", std::to_string(port)};
+   (void)client.init();
+
+   try {
+      int i{};
+      client.get("/broken", i);
+      expect(false) << "Should have thrown";
+   }
+   catch (const std::exception& e) {
+      expect(std::string(e.what()) == "parse_error: registry error for `/broken`: broken") << e.what();
+   }
+
+   try {
+      int i{};
+      client.get("/unknown_broken", i);
+      expect(false) << "Should have thrown";
+   }
+   catch (const std::exception& e) {
+      expect(std::string(e.what()) == "invalid_call: unknown error") << e.what();
+   }
+}
+
 int main()
 {
    notify_test();
@@ -426,6 +520,8 @@ int main()
    raw_json_tests();
    async_server_test();
    server_error_test();
+   server_keep_alive_test();
+   client_exception_test();
 
    return 0;
 }
