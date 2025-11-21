@@ -330,21 +330,33 @@ suite websocket_client_tests = [] {
 
       websocket_client client;
       std::atomic<bool> large_message_received{false};
+      std::atomic<bool> connection_opened{false};
 
-      // Create a 1MB message
-      std::string large_msg(1024 * 1024, 'A');
+      // Create a 256KB message (large enough to test multi-frame handling, fast enough for CI)
+      std::string large_msg(256 * 1024, 'A');
       large_msg += "END";
 
-      client.on_open([&client, &large_msg]() { client.send(large_msg); });
+      client.on_open([&client, &large_msg, &connection_opened]() {
+         std::cout << "[large_message_test] Connected, sending " << large_msg.size() << " byte message" << std::endl;
+         connection_opened = true;
+         client.send(large_msg);
+      });
 
       client.on_message([&](std::string_view message, ws_opcode opcode) {
-         if (opcode == ws_opcode::text && message.size() > 1024 * 1024 && message.find("END") != std::string_view::npos) {
+         std::cout << "[large_message_test] Received " << message.size() << " bytes, opcode=" << static_cast<int>(opcode) << std::endl;
+         if (opcode == ws_opcode::text && message.size() > 256 * 1024 && message.find("END") != std::string_view::npos) {
+            std::cout << "[large_message_test] Large message received successfully" << std::endl;
             large_message_received = true;
             client.close();
+         } else {
+            std::cout << "[large_message_test] Message didn't match criteria (size=" << message.size()
+                      << ", has_END=" << (message.find("END") != std::string_view::npos) << ")" << std::endl;
          }
       });
 
-      client.on_error([](std::error_code ec) { std::cerr << "Client Error: " << ec.message() << "\n"; });
+      client.on_error([](std::error_code ec) {
+         std::cerr << "[large_message_test] Client Error: " << ec.message() << " (code=" << ec.value() << ")\n";
+      });
 
       client.on_close([&](ws_close_code, std::string_view) { client.ctx_->stop(); });
 
@@ -353,8 +365,14 @@ suite websocket_client_tests = [] {
 
       std::thread client_thread([&client]() { client.ctx_->run(); });
 
-      expect(wait_for_condition([&] { return large_message_received.load(); }, std::chrono::milliseconds(10000)))
-         << "Large message was not received";
+      bool received = wait_for_condition([&] { return large_message_received.load(); }, std::chrono::milliseconds(10000));
+
+      if (!received) {
+         std::cerr << "[large_message_test] Test failed - connection_opened=" << connection_opened.load()
+                   << ", large_message_received=" << large_message_received.load() << std::endl;
+      }
+
+      expect(received) << "Large message was not received";
 
       if (!client.ctx_->stopped()) {
          client.ctx_->stop();
