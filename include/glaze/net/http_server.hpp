@@ -1213,7 +1213,8 @@ namespace glz
                if (request_line_end_pos == std::string_view::npos) {
                   request_line = headers_part; // Request line is the entire headers_part
                   headers_part = ""; // headers_part becomes empty as there are no more headers
-               } else {
+               }
+               else {
                   request_line = headers_part.substr(0, request_line_end_pos);
                   headers_part.remove_prefix(request_line_end_pos + 2); // +2 for \r\n
                }
