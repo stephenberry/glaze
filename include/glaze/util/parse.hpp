@@ -1200,6 +1200,58 @@ namespace glz
    {
       return val + (multiple - (val % multiple)) % multiple;
    }
+
+   inline bool validate_utf8(const auto* str, const size_t size) noexcept
+   {
+      const uint8_t* it = reinterpret_cast<const uint8_t*>(str);
+      const uint8_t* end = it + size;
+
+      while (it < end) {
+         // Optimistic SWAR check for ASCII
+         if (it + 8 <= end) {
+            uint64_t chunk;
+            std::memcpy(&chunk, it, 8);
+            if ((chunk & glz::repeat_byte8(0x80)) == 0) {
+               it += 8;
+               continue;
+            }
+         }
+
+         // Byte-by-byte validation (standard conformant)
+         uint8_t byte = *it;
+
+         if (byte < 0x80) {
+            it++;
+         }
+         else if ((byte & 0xE0) == 0xC0) {
+            // 2-byte sequence
+            if (it + 2 > end || (it[1] & 0xC0) != 0x80) return false;
+            if (byte < 0xC2) return false; // Overlong
+            it += 2;
+         }
+         else if ((byte & 0xF0) == 0xE0) {
+            // 3-byte sequence
+            if (it + 3 > end || (it[1] & 0xC0) != 0x80 || (it[2] & 0xC0) != 0x80) return false;
+            if (byte == 0xE0 && it[1] < 0xA0) return false; // Overlong
+            if (byte == 0xED && it[1] >= 0xA0) return false; // Surrogate
+            it += 3;
+         }
+         else if ((byte & 0xF8) == 0xF0) {
+            // 4-byte sequence
+            if (it + 4 > end || (it[1] & 0xC0) != 0x80 || (it[2] & 0xC0) != 0x80 || (it[3] & 0xC0) != 0x80)
+               return false;
+            if (byte == 0xF0 && it[1] < 0x90) return false; // Overlong
+            if (byte == 0xF4 && it[1] >= 0x90) return false; // > U+10FFFF
+            if (byte > 0xF4) return false; // > U+10FFFF
+            it += 4;
+         }
+         else {
+            return false;
+         }
+      }
+
+      return true;
+   }
 }
 
 namespace glz

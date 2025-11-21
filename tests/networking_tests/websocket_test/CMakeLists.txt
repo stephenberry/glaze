@@ -24,3 +24,12 @@ add_executable(${PROJECT_NAME} ${PROJECT_NAME}.cpp)
 target_link_libraries(${PROJECT_NAME} PRIVATE glz_test_exceptions)
 
 add_test(NAME ${PROJECT_NAME} COMMAND ${PROJECT_NAME})
+
+# UTF-8 validation tests
+project(utf8_test)
+
+add_executable(${PROJECT_NAME} ${PROJECT_NAME}.cpp)
+
+target_link_libraries(${PROJECT_NAME} PRIVATE glz_test_exceptions)
+
+add_test(NAME ${PROJECT_NAME} COMMAND ${PROJECT_NAME})

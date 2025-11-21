@@ -31,6 +31,7 @@
 #include "glaze/base64/base64.hpp"
 #include "glaze/ext/glaze_asio.hpp"
 #include "glaze/net/http_router.hpp"
+#include "glaze/util/parse.hpp"
 
 namespace glz
 {
@@ -627,9 +628,11 @@ namespace glz
 
             if (fin) {
                // Validate UTF-8 for text frames
-               if (opcode == ws_opcode::text && !is_valid_utf8(message_buffer_.data(), message_buffer_.size())) {
-                  close(ws_close_code::invalid_payload, "Invalid UTF-8");
-                  return;
+               if (opcode == ws_opcode::text) {
+                  if (!glz::validate_utf8(message_buffer_.data(), message_buffer_.size())) {
+                     close(ws_close_code::invalid_payload, "Invalid UTF-8");
+                     return;
+                  }
                }
 
                std::string_view message_view(reinterpret_cast<const char*>(message_buffer_.data()),
@@ -665,10 +668,11 @@ namespace glz
                is_reading_frame_ = false;
 
                // Validate UTF-8 for text frames
-               if (current_opcode_ == ws_opcode::text &&
-                   !is_valid_utf8(message_buffer_.data(), message_buffer_.size())) {
-                  close(ws_close_code::invalid_payload, "Invalid UTF-8");
-                  return;
+               if (current_opcode_ == ws_opcode::text) {
+                  if (!glz::validate_utf8(message_buffer_.data(), message_buffer_.size())) {
+                     close(ws_close_code::invalid_payload, "Invalid UTF-8");
+                     return;
+                  }
                }
 
                std::string_view message_view(reinterpret_cast<const char*>(message_buffer_.data()),
@@ -894,46 +898,6 @@ namespace glz
             // Mask the payload (done in-place in the frame buffer after this header)
             // Note: Actual masking of payload should be done by caller if needed
          }
-      }
-
-      inline bool is_valid_utf8(const uint8_t* data, std::size_t length)
-      {
-         // Simple UTF-8 validation
-         for (std::size_t i = 0; i < length;) {
-            uint8_t byte = data[i];
-
-            if (byte < 0x80) {
-               // ASCII character
-               i++;
-            }
-            else if ((byte & 0xE0) == 0xC0) {
-               // 2-byte sequence
-               if (i + 1 >= length || (data[i + 1] & 0xC0) != 0x80) {
-                  return false;
-               }
-               i += 2;
-            }
-            else if ((byte & 0xF0) == 0xE0) {
-               // 3-byte sequence
-               if (i + 2 >= length || (data[i + 1] & 0xC0) != 0x80 || (data[i + 2] & 0xC0) != 0x80) {
-                  return false;
-               }
-               i += 3;
-            }
-            else if ((byte & 0xF8) == 0xF0) {
-               // 4-byte sequence
-               if (i + 3 >= length || (data[i + 1] & 0xC0) != 0x80 || (data[i + 2] & 0xC0) != 0x80 ||
-                   (data[i + 3] & 0xC0) != 0x80) {
-                  return false;
-               }
-               i += 4;
-            }
-            else {
-               return false;
-            }
-         }
-
-         return true;
       }
 
       inline void do_close()
