@@ -1,14 +1,13 @@
+#include <string>
+#include <vector>
+
 #include "glaze/util/parse.hpp"
 #include "ut/ut.hpp"
-#include <vector>
-#include <string>
 
 using namespace ut;
 
 // Helper to adapt string/string_view tests to pointer+size API
-inline bool validate(std::string_view s) {
-   return glz::validate_utf8(s.data(), s.size());
-}
+inline bool validate(std::string_view s) { return glz::validate_utf8(s.data(), s.size()); }
 
 suite utf8_validation_tests = [] {
    "ascii_valid"_test = [] {
@@ -39,13 +38,13 @@ suite utf8_validation_tests = [] {
       // C0 80 is overlong for U+0000 (NUL) -> Invalid
       const char overlong[] = "\xC0\x80";
       expect(!validate(std::string_view(overlong, 2)));
-      
+
       // C1 BF is overlong for U+007F -> Invalid
       const char overlong2[] = "\xC1\xBF";
       expect(!validate(std::string_view(overlong2, 2)));
 
       // Missing continuation
-      const char missing[] = "\xC2"; 
+      const char missing[] = "\xC2";
       expect(!validate(std::string_view(missing, 1)));
 
       // Bad continuation
@@ -115,7 +114,7 @@ suite utf8_validation_tests = [] {
       // Test SWAR logic transitions
       // 8 bytes ASCII -> Valid
       expect(validate("12345678"));
-      
+
       // 9 bytes ASCII -> Valid (SWAR loop + 1 byte loop)
       expect(validate("123456789"));
 
