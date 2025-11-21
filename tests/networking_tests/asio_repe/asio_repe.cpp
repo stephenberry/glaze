@@ -423,6 +423,10 @@ struct keep_alive_api
       throw std::runtime_error("broken");
       return 0;
    };
+   std::function<int()> unknown_broken = []() {
+      throw 5;
+      return 0;
+   };
    std::function<int()> works = []() {
       return 42;
    };
@@ -433,7 +437,11 @@ void server_keep_alive_test()
    static constexpr int16_t port = 8766;
 
    glz::asio_server server{.port = port, .concurrency = 1};
-   server.error_handler = [](const std::string& error) { expect(error == "broken"); };
+   server.error_handler = [](const std::string& error) {
+      if (error != "broken" && error != "unknown error") {
+         expect(false) << "Unexpected error: " << error;
+      }
+   };
 
    keep_alive_api api{};
    server.on(api);
@@ -448,9 +456,22 @@ void server_keep_alive_test()
 
    // First call throws
    client.call({"/broken"}, msg);
-   expect(bool(glz::repe::decode_message(result, msg)));
+   auto err = glz::repe::decode_message(result, msg);
+   expect(bool(err));
+   if (err) {
+      expect(err.value() == "REPE error: parse_error | registry error for `/broken`: broken") << err.value();
+   }
 
-   // Second call should succeed if server is still alive
+   // Second call throws unknown exception
+   msg = {}; // reset message
+   client.call({"/unknown_broken"}, msg);
+   err = glz::repe::decode_message(result, msg);
+   expect(bool(err));
+   if (err) {
+      expect(err.value() == "REPE error: invalid_call | unknown error") << err.value();
+   }
+
+   // Third call should succeed if server is still alive
    msg = {}; // reset message
    client.call({"/works"}, msg);
    expect(not glz::repe::decode_message(result, msg));

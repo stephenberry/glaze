@@ -43,7 +43,7 @@ namespace glz
          if (error_message.empty()) {
             return;
          }
-         const auto error_size = 4 + error_message.size(); // 4 bytes for message length
+         const auto error_size = error_message.size();
          msg.header.body_length = error_size;
          msg.body = error_message;
       }
