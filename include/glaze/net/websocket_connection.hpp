@@ -566,7 +566,6 @@ namespace glz
             }
 
             if (payload_length > max_message_size_) {
-               std::cerr << "DEBUG: Message too big! Payload: " << payload_length << ", Max: " << max_message_size_ << "\n";
                close(ws_close_code::message_too_big, "Message too big");
                return length;
             }
@@ -619,7 +618,6 @@ namespace glz
             message_buffer_.assign(payload, payload + length);
 
             if (message_buffer_.size() > max_message_size_) {
-               std::cerr << "DEBUG: Message buffer too big (single)! Size: " << message_buffer_.size() << ", Max: " << max_message_size_ << "\n";
                close(ws_close_code::message_too_big, "Message too big");
                return;
             }
@@ -653,7 +651,6 @@ namespace glz
             }
 
             if (message_buffer_.size() + length > max_message_size_) {
-               std::cerr << "DEBUG: Message buffer too big (continuation)! Size: " << (message_buffer_.size() + length) << ", Max: " << max_message_size_ << "\n";
                close(ws_close_code::message_too_big, "Message too big");
                return;
             }
@@ -871,7 +868,7 @@ namespace glz
             frame_header.payload_len(127);
             header[1] = frame_header.data[1];
             for (int i = 0; i < 8; ++i) {
-               header[2 + i] = static_cast<uint8_t>(payload_length >> (8 * (7 - i)));
+               header[2 + i] = static_cast<uint8_t>(static_cast<uint64_t>(payload_length) >> (8 * (7 - i)));
             }
             header_offset = 10;
          }
