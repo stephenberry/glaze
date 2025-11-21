@@ -717,12 +717,27 @@ namespace glz
 
       inline void send_frame(ws_opcode opcode, std::string_view payload, bool fin = true)
       {
+         // Debug: Log large frame sends in client mode
+         if (client_mode_ && payload.size() > 10000) {
+            std::cout << "[send_frame] Attempting to send " << payload.size() << " bytes, opcode=" << static_cast<int>(opcode) << std::endl;
+         }
+
          // Allow close frames to be sent even when closing, but block other frame types
-         if (is_closing_ && opcode != ws_opcode::close) return;
+         if (is_closing_ && opcode != ws_opcode::close) {
+            if (client_mode_ && payload.size() > 10000) {
+               std::cerr << "[send_frame] BLOCKED: is_closing_=true" << std::endl;
+            }
+            return;
+         }
 
          // Capture socket locally to prevent race condition
          auto socket = socket_;
-         if (!socket) return;
+         if (!socket) {
+            if (client_mode_ && payload.size() > 10000) {
+               std::cerr << "[send_frame] BLOCKED: socket is null" << std::endl;
+            }
+            return;
+         }
 
          std::size_t header_size = get_frame_header_size(payload.size(), client_mode_);
          std::vector<uint8_t> frame(header_size + payload.size());
@@ -741,16 +756,30 @@ namespace glz
             }
          }
 
+         if (client_mode_ && payload.size() > 10000) {
+            std::cout << "[send_frame] Calling async_write for " << frame.size() << " bytes" << std::endl;
+         }
+
          auto self = this->shared_from_this();
 
          // Use shared_ptr to keep the frame alive during async operation
          auto frame_buffer = std::make_shared<std::vector<uint8_t>>(std::move(frame));
-         asio::async_write(*socket, asio::buffer(*frame_buffer), [self, frame_buffer, socket](std::error_code ec, std::size_t) {
+         asio::async_write(*socket, asio::buffer(*frame_buffer), [self, frame_buffer, socket, payload_size = payload.size()](std::error_code ec, std::size_t bytes_written) {
+            if (self->client_mode_ && payload_size > 10000) {
+               if (ec) {
+                  std::cerr << "[send_frame] async_write FAILED: " << ec.message() << " (code=" << ec.value() << ")" << std::endl;
+               } else {
+                  std::cout << "[send_frame] async_write succeeded: " << bytes_written << " bytes written" << std::endl;
+               }
+            }
             if (ec) {
                // Mark connection as closing before notifying handlers to avoid re-entrant close attempts
                self->is_closing_ = true;
                if (self->server_) {
                   self->server_->notify_error(self, ec);
+               }
+               else if (self->client_error_handler_) {
+                  self->client_error_handler_(ec);
                }
                // Close the connection after a write error (connection is likely broken)
                self->do_close();
