@@ -38,7 +38,12 @@ void run_echo_server(std::atomic<bool>& server_ready, std::atomic<bool>& should_
 
    ws_server->on_message([](auto conn, std::string_view message, ws_opcode opcode) {
       if (opcode == ws_opcode::text) {
-         conn->send_text(std::string("Echo: ") + std::string(message));
+         // Efficiently build echo response for large messages
+         std::string echo_msg;
+         echo_msg.reserve(6 + message.size());
+         echo_msg = "Echo: ";
+         echo_msg.append(message);
+         conn->send_text(echo_msg);
       }
       else if (opcode == ws_opcode::binary) {
          conn->send_binary(message);
