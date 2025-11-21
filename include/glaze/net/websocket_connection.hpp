@@ -566,6 +566,7 @@ namespace glz
             }
 
             if (payload_length > max_message_size_) {
+               std::cerr << "DEBUG: Message too big! Payload: " << payload_length << ", Max: " << max_message_size_ << "\n";
                close(ws_close_code::message_too_big, "Message too big");
                return length;
             }
@@ -618,6 +619,7 @@ namespace glz
             message_buffer_.assign(payload, payload + length);
 
             if (message_buffer_.size() > max_message_size_) {
+               std::cerr << "DEBUG: Message buffer too big (single)! Size: " << message_buffer_.size() << ", Max: " << max_message_size_ << "\n";
                close(ws_close_code::message_too_big, "Message too big");
                return;
             }
@@ -651,6 +653,7 @@ namespace glz
             }
 
             if (message_buffer_.size() + length > max_message_size_) {
+               std::cerr << "DEBUG: Message buffer too big (continuation)! Size: " << (message_buffer_.size() + length) << ", Max: " << max_message_size_ << "\n";
                close(ws_close_code::message_too_big, "Message too big");
                return;
             }

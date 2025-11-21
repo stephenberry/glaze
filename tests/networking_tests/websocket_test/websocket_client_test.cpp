@@ -124,7 +124,7 @@ void run_counting_server(std::atomic<bool>& server_ready, std::atomic<bool>& sho
 
    ws_server->on_open([](auto /*conn*/, const request&) {});
 
-   ws_server->on_message([&message_count](auto conn, std::string_view message, ws_opcode opcode) {
+   ws_server->on_message([&message_count](auto conn, std::string_view /*message*/, ws_opcode opcode) {
       if (opcode == ws_opcode::text) {
          message_count++;
          conn->send_text(std::string("Message ") + std::to_string(message_count.load()));
@@ -241,7 +241,7 @@ suite websocket_client_tests = [] {
          }
       });
 
-      client.on_message([&](std::string_view message, ws_opcode opcode) {
+      client.on_message([&](std::string_view /*message*/, ws_opcode opcode) {
          if (opcode == ws_opcode::text) {
             messages_received++;
             if (messages_received >= expected_messages) {
