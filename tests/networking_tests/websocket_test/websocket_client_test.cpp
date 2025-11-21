@@ -340,8 +340,8 @@ suite websocket_client_tests = [] {
       std::atomic<bool> large_message_received{false};
       std::atomic<bool> connection_opened{false};
 
-      // Create a 32KB message (testing large message handling within platform limits)
-      std::string large_msg(32 * 1024, 'A');
+      // Create a 256KB message to test large message handling
+      std::string large_msg(256 * 1024, 'A');
       large_msg += "END";
 
       client.on_open([&client, &large_msg, &connection_opened]() {
@@ -352,7 +352,7 @@ suite websocket_client_tests = [] {
 
       client.on_message([&](std::string_view message, ws_opcode opcode) {
          std::cout << "[large_message_test] Received " << message.size() << " bytes, opcode=" << static_cast<int>(opcode) << std::endl;
-         if (opcode == ws_opcode::text && message.size() > 32 * 1024 && message.find("END") != std::string_view::npos) {
+         if (opcode == ws_opcode::text && message.size() > 256 * 1024 && message.find("END") != std::string_view::npos) {
             std::cout << "[large_message_test] Large message received successfully" << std::endl;
             large_message_received = true;
             client.close();
