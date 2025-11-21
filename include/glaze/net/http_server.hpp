@@ -1209,11 +1209,14 @@ namespace glz
 
                // Parse request line
                size_t request_line_end_pos = headers_part.find("\r\n");
+               std::string_view request_line;
                if (request_line_end_pos == std::string_view::npos) {
-                  request_line_end_pos = headers_part.length();
+                  request_line = headers_part; // Request line is the entire headers_part
+                  headers_part = ""; // headers_part becomes empty as there are no more headers
+               } else {
+                  request_line = headers_part.substr(0, request_line_end_pos);
+                  headers_part.remove_prefix(request_line_end_pos + 2); // +2 for \r\n
                }
-               std::string_view request_line = headers_part.substr(0, request_line_end_pos);
-               headers_part.remove_prefix(request_line_end_pos + 2); // +2 for \r\n
 
                // Parse method, target, and HTTP version from the request line
                size_t first_space = request_line.find(' ');
