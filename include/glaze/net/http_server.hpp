@@ -407,6 +407,8 @@ namespace glz
 #endif
                                              asio::ip::tcp::socket>;
 
+      using error_code = asio::error_code;
+
       /**
        * @brief Construct an HTTP server
        *
@@ -505,16 +507,25 @@ namespace glz
 
       inline http_server& bind(uint16_t port) { return bind("0.0.0.0", port); }
 
+      inline uint16_t port(error_code& ec) const
+      {
+         if (!acceptor) {
+            ec = asio::error::not_connected;
+            return 0;
+         }
+         auto endpoint = acceptor->local_endpoint(ec);
+         if (ec) {
+            return 0;
+         }
+         return endpoint.port();
+      }
+
       inline uint16_t port() const
       {
-         if (acceptor) {
-            asio::error_code ec;
-            auto endpoint = acceptor->local_endpoint(ec);
-            if (!ec) {
-               return endpoint.port();
-            }
+         if (!acceptor) {
+            throw std::runtime_error("Server not bound");
          }
-         return 0;
+         return acceptor->local_endpoint().port();
       }
 
       /**
