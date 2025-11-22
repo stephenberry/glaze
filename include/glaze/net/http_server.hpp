@@ -505,6 +505,27 @@ namespace glz
 
       inline http_server& bind(uint16_t port) { return bind("0.0.0.0", port); }
 
+      inline uint16_t port(asio::error_code& ec) const
+      {
+         if (!acceptor) {
+            ec = asio::error::not_connected;
+            return 0;
+         }
+         auto endpoint = acceptor->local_endpoint(ec);
+         if (ec) {
+            return 0;
+         }
+         return endpoint.port();
+      }
+
+      inline uint16_t port() const
+      {
+         if (!acceptor) {
+            throw std::runtime_error("Server not bound");
+         }
+         return acceptor->local_endpoint().port();
+      }
+
       /**
        * @brief Start the HTTP server
        *

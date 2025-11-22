@@ -237,6 +237,31 @@ suite http_server_api_tests = [] {
       expect(&server_ref == &server) << "bind() should return server reference for chaining\n";
    };
 
+   "server_random_port_binding"_test = [] {
+      glz::http_server server;
+      server.bind(0);
+
+      // Test non-throwing version
+      asio::error_code ec;
+      expect(server.port(ec) > 0) << "Server should be assigned a non-zero port when binding to 0\n";
+      expect(!ec) << "Error code should not be set\n";
+
+      // Test throwing version
+      expect(server.port() > 0) << "Server should be assigned a non-zero port\n";
+   };
+
+   "server_port_not_bound"_test = [] {
+      glz::http_server server;
+
+      // Test throwing version
+      expect(throws([&]() { server.port(); })) << "Should throw when not bound\n";
+
+      // Test non-throwing version
+      asio::error_code ec;
+      expect(server.port(ec) == 0) << "Should return 0 when not bound\n";
+      expect(bool(ec)) << "Error code should be set\n";
+   };
+
    "route_registration_methods"_test = [] {
       glz::http_server server;
       bool handler_called = false;
