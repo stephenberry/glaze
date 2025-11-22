@@ -8,85 +8,83 @@
 using namespace ut;
 
 // Structs for testing custom readers with glz::generic
-namespace generic_custom_tests {
-   struct generic_optional {
-      std::optional<char> val;
+struct generic_optional {
+   std::optional<char> val;
 
-      void read_val(const glz::generic& value) {
-         if (value.is_null()) {
-            val = std::nullopt;
-            return;
-         }
-
-         if (value.is_string()) {
-            const auto& str = value.get<std::string>();
-            val = str.empty() ? std::nullopt : std::optional(str[0]);
-            return;
-         }
-
+   void read_val(const glz::generic& value) {
+      if (value.is_null()) {
          val = std::nullopt;
+         return;
       }
 
-      glz::generic write_val() const {
-         if (val.has_value()) {
-            return std::string(1, val.value());
-         }
-         return nullptr;
+      if (value.is_string()) {
+         const auto& str = value.get<std::string>();
+         val = str.empty() ? std::nullopt : std::optional(str[0]);
+         return;
       }
-   };
 
-   struct generic_optional_int {
-      std::optional<int> num;
+      val = std::nullopt;
+   }
 
-      void read_val(const glz::generic& value) {
-         if (value.is_null()) {
+   glz::generic write_val() const {
+      if (val.has_value()) {
+         return std::string(1, val.value());
+      }
+      return nullptr;
+   }
+};
+
+struct generic_optional_int {
+   std::optional<int> num;
+
+   void read_val(const glz::generic& value) {
+      if (value.is_null()) {
+         num = std::nullopt;
+         return;
+      }
+
+      if (value.is_number()) {
+         num = value.as<int>();
+         return;
+      }
+
+      if (value.is_string()) {
+         const auto& str = value.get<std::string>();
+         if (str.empty()) {
             num = std::nullopt;
             return;
          }
 
-         if (value.is_number()) {
-            num = value.as<int>();
+         int val{};
+         auto [ptr, ec] = std::from_chars(str.data(), str.data() + str.size(), val);
+         if (ec == std::errc{} && ptr == str.data() + str.size()) {
+            num = val;
             return;
          }
-
-         if (value.is_string()) {
-            const auto& str = value.get<std::string>();
-            if (str.empty()) {
-               num = std::nullopt;
-               return;
-            }
-
-            int val{};
-            auto [ptr, ec] = std::from_chars(str.data(), str.data() + str.size(), val);
-            if (ec == std::errc{} && ptr == str.data() + str.size()) {
-               num = val;
-               return;
-            }
-         }
-
-         num = std::nullopt;
       }
 
-      glz::generic write_val() const {
-         if (num.has_value()) {
-            return num.value();
-         }
-         return nullptr;
+      num = std::nullopt;
+   }
+
+   glz::generic write_val() const {
+      if (num.has_value()) {
+         return num.value();
       }
-   };
-}
+      return nullptr;
+   }
+};
 
 template <>
-struct glz::meta<generic_custom_tests::generic_optional> {
-   using T = generic_custom_tests::generic_optional;
+struct glz::meta<generic_optional> {
+   using T = generic_optional;
    static constexpr auto value = glz::object(
       "val", glz::custom<&T::read_val, &T::write_val>
    );
 };
 
 template <>
-struct glz::meta<generic_custom_tests::generic_optional_int> {
-   using T = generic_custom_tests::generic_optional_int;
+struct glz::meta<generic_optional_int> {
+   using T = generic_optional_int;
    static constexpr auto value = glz::object(
       "num", glz::custom<&T::read_val, &T::write_val>
    );
@@ -1043,7 +1041,6 @@ suite optimized_read_json_tests = [] {
 
 suite generic_custom_reader_tests = [] {
    // Tests for handling null values with custom readers using glz::generic
-   using namespace generic_custom_tests;
 
    "generic custom reader with null"_test = [] {
       generic_optional obj{};
