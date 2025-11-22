@@ -242,7 +242,7 @@ suite http_server_api_tests = [] {
       server.bind(0);
 
       // Test non-throwing version
-      glz::http_server<>::asio_error_code ec;
+      asio::error_code ec;
       expect(server.port(ec) > 0) << "Server should be assigned a non-zero port when binding to 0\n";
       expect(!ec) << "Error code should not be set\n";
 
@@ -257,7 +257,7 @@ suite http_server_api_tests = [] {
       expect(throws([&]() { server.port(); })) << "Should throw when not bound\n";
 
       // Test non-throwing version
-      glz::http_server<>::asio_error_code ec;
+      asio::error_code ec;
       expect(server.port(ec) == 0) << "Should return 0 when not bound\n";
       expect(bool(ec)) << "Error code should be set\n";
    };

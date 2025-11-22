@@ -407,8 +407,6 @@ namespace glz
 #endif
                                              asio::ip::tcp::socket>;
 
-      using asio_error_code = asio::error_code;
-
       /**
        * @brief Construct an HTTP server
        *
@@ -507,7 +505,7 @@ namespace glz
 
       inline http_server& bind(uint16_t port) { return bind("0.0.0.0", port); }
 
-      inline uint16_t port(asio_error_code& ec) const
+      inline uint16_t port(asio::error_code& ec) const
       {
          if (!acceptor) {
             ec = asio::error::not_connected;
