@@ -501,7 +501,7 @@ namespace glz
    {
       using V = std::decay_t<T>;
       using U = std::underlying_type_t<V>;
-      
+
       // use make_enum_to_string_map for O(1) lookup with perfect hashing
       // This handles non-monotonic enums and large values safely
       constexpr auto map = make_enum_to_string_map<V>();

@@ -1205,12 +1205,7 @@ suite has_reflect_meta_types_tests = [] {
 };
 
 // Enum for testing monotonic values
-enum class Monotonic
-{
-   A,
-   B,
-   C
-};
+enum class Monotonic { A, B, C };
 
 template <>
 struct glz::meta<Monotonic>
@@ -1220,12 +1215,7 @@ struct glz::meta<Monotonic>
 };
 
 // Enum for testing non-monotonic values
-enum class NonMonotonic
-{
-   A = 1,
-   B = 10,
-   C = 100
-};
+enum class NonMonotonic { A = 1, B = 10, C = 100 };
 
 template <>
 struct glz::meta<NonMonotonic>
@@ -1235,10 +1225,7 @@ struct glz::meta<NonMonotonic>
 };
 
 // Enum for testing large values
-enum class LargeEnum
-{
-   A = 0xFF
-};
+enum class LargeEnum { A = 0xFF };
 
 template <>
 struct glz::meta<LargeEnum>
@@ -1260,13 +1247,11 @@ suite enum_name_test = [] {
       expect(glz::get_enum_name(NonMonotonic::C) == "C");
    };
 
-   "large_enum_test"_test = [] {
-      expect(glz::get_enum_name(LargeEnum::A) == "A");
-   };
+   "large_enum_test"_test = [] { expect(glz::get_enum_name(LargeEnum::A) == "A"); };
 
    "unknown_enum_value"_test = [] {
-       // If we cast an invalid integer to enum, it should return empty string
-       expect(glz::get_enum_name(static_cast<Monotonic>(42)).empty());
+      // If we cast an invalid integer to enum, it should return empty string
+      expect(glz::get_enum_name(static_cast<Monotonic>(42)).empty());
    };
 };
 
