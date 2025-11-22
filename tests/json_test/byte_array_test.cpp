@@ -28,7 +28,7 @@ suite byte_array_tests = [] {
     "default_char_array_behavior"_test = [] {
         char arr[4] = {0, 0, 1, 0};
         std::string json;
-        glz::write_json(arr, json);
+        expect(not glz::write_json(arr, json));
         // arr is treated as null-terminated string, so it stops at first null.
         expect(json == "\"\"") << "Default char arrays stop at null";
     };
@@ -37,7 +37,7 @@ suite byte_array_tests = [] {
         char arr[4] = {0, 0, 1, 0};
         std::string json;
         
-        glz::write_json(glz::escape_bytes_t{arr}, json);
+        expect(not glz::write_json(glz::escape_bytes_t{arr}, json));
         
         expect(json == R"("\u0000\u0000\u0001\u0000")") << "escape_bytes_t wrapper serializes all bytes with escaping";
     };
@@ -45,7 +45,7 @@ suite byte_array_tests = [] {
     "escape_bytes_t_roundtrip"_test = [] {
         char original[4] = {0, 0, 1, 0};
         std::string json;
-        glz::write_json(glz::escape_bytes_t{original}, json);
+        expect(not glz::write_json(glz::escape_bytes_t{original}, json));
         
         char result[4] = {1, 1, 1, 1}; // Initialize with garbage
         
@@ -64,7 +64,7 @@ suite byte_array_tests = [] {
         std::string json;
         // vector serialization usually produces array [0,0,1,0].
         // But with escape_bytes it should produce string "\u0000..."
-        glz::write_json(glz::escape_bytes_t{original}, json);
+        expect(not glz::write_json(glz::escape_bytes_t{original}, json));
         expect(json == R"("\u0000\u0000\u0001\u0000")") << "vector with wrapper serializes to string";
         
         std::vector<char> result;
@@ -77,7 +77,7 @@ suite byte_array_tests = [] {
     "escape_bytes_t_mixed_content"_test = [] {
        char arr[4] = {'a', 0, 'b', '\n'};
        std::string json;
-       glz::write_json(glz::escape_bytes_t{arr}, json);
+       expect(not glz::write_json(glz::escape_bytes_t{arr}, json));
        
        // "a\u0000b\n"
        expect(json == R"("a\u0000b\n")") << json;
@@ -99,7 +99,7 @@ suite byte_array_tests = [] {
         obj.data[3] = 2;
         
         std::string json;
-        glz::write_json(obj, json);
+        expect(not glz::write_json(obj, json));
         
         std::string expected = R"({"data":"\u0000\u0001\u0000\u0002"})";
         expect(json.size() == expected.size()) << "Size mismatch: " << json.size() << " vs " << expected.size();
