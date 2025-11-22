@@ -508,10 +508,10 @@ namespace glz
       inline uint16_t port() const
       {
          if (acceptor) {
-            try {
-               return acceptor->local_endpoint().port();
-            }
-            catch (...) {
+            asio::error_code ec;
+            auto endpoint = acceptor->local_endpoint(ec);
+            if (!ec) {
+               return endpoint.port();
             }
          }
          return 0;
