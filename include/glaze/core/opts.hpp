@@ -184,13 +184,13 @@ namespace glz
 
    struct bools_as_numbers_opt_tag
    {};
-   
+
    struct escape_control_characters_opt_tag
    {};
 
    template <auto member_ptr>
    concept is_bools_as_numbers_tag = std::same_as<std::decay_t<decltype(member_ptr)>, bools_as_numbers_opt_tag>;
-   
+
    template <auto member_ptr>
    concept is_escape_control_characters_tag =
       std::same_as<std::decay_t<decltype(member_ptr)>, escape_control_characters_opt_tag>;

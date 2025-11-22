@@ -25,7 +25,7 @@ namespace glz
       using value_type = T;
       T& val;
    };
-   
+
    template <class T>
    escape_bytes_t(T&) -> escape_bytes_t<T>;
 
