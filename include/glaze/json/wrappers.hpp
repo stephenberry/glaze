@@ -44,6 +44,55 @@ namespace glz
       }
    };
 
+   template <class T>
+   struct from<JSON, escape_bytes_t<T>>
+   {
+      template <auto Opts>
+      static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
+      {
+         std::string& temp = string_buffer();
+         temp.clear();
+         parse<JSON>::op<Opts>(temp, ctx, it, end);
+
+         if (bool(ctx.error)) return;
+
+         using V = std::remove_reference_t<T>;
+         if constexpr (std::is_array_v<V>) {
+            if (temp.size() > std::extent_v<V>) {
+               ctx.error = error_code::exceeded_static_array_size;
+               return;
+            }
+            std::memcpy(value.val, temp.data(), temp.size());
+            if (temp.size() < std::extent_v<V>) {
+               std::memset(value.val + temp.size(), 0, std::extent_v<V> - temp.size());
+            }
+         }
+         else if constexpr (resizable<V>) {
+            value.val.resize(temp.size());
+            std::memcpy(value.val.data(), temp.data(), temp.size());
+         }
+      }
+   };
+
+   template <class T>
+   struct to<JSON, escape_bytes_t<T>>
+   {
+      template <auto Opts>
+      static void op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix)
+      {
+         const auto sv = [&]() -> std::string_view {
+            using V = std::remove_reference_t<T>;
+            if constexpr (std::is_array_v<V>) {
+               return std::string_view{value.val, std::extent_v<V>};
+            }
+            else {
+               return std::string_view{value.val};
+            }
+         }();
+         to<JSON, std::string_view>::template op<opt_true<Opts, escape_control_characters_opt_tag{}>>(sv, ctx, b, ix);
+      }
+   };
+
    template <is_opts_wrapper T>
    struct from<JSON, T>
    {

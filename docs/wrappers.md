@@ -14,6 +14,8 @@ glz::number<&T::x> // Read a string as a number and writes the string as a numbe
 glz::raw<&T::x> // Write out string like types without quotes
 glz::raw_string<&T::string> // Do not decode/encode escaped characters for strings (improves read/write performance)
 glz::escaped<&T::string> // Opposite of glz::raw_string, it turns off this behavior
+glz::escape_bytes_t<T> // A wrapper type for local use to treat char array or vector as byte sequence to be fully escaped (prevents null termination truncation)
+glz::escape_bytes<&T::x> // For meta usage: treats char array or vector as byte sequence to be fully escaped (prevents null termination truncation)
 
 glz::read_constraint<&T::x, constraint_function, "Message"> // Applies a constraint function when reading
   
@@ -405,6 +407,60 @@ World)");
 buffer.clear();
 glz::write_json(obj, buffer);
 expect(buffer == R"({"a":"Hello\nWorld","b":"","c":""})");
+```
+
+## escape_bytes
+
+The `glz::escape_bytes_t` wrapper (for local usage) and `glz::escape_bytes` (for meta usage) are used to read and write binary data stored in character arrays (`char[]`) or vectors (`std::vector<char>`) as fully escaped JSON strings. This is particularly useful for handling binary data that might contain null characters or other control characters that would otherwise be truncated or cause issues.
+
+**Meta Usage (`glz::escape_bytes<&T::member>`):**
+
+```c++
+struct binary_data
+{
+   char data[4];
+};
+
+template <>
+struct glz::meta<binary_data>
+{
+   using T = binary_data;
+   static constexpr auto value = object("data", glz::escape_bytes<&T::data>);
+};
+```
+
+In use:
+
+```c++
+binary_data obj;
+obj.data[0] = 0;
+obj.data[1] = 1;
+obj.data[2] = 0;
+obj.data[3] = 2;
+
+std::string out;
+glz::write_json(obj, out);
+expect(out == R"({"data":"\u0000\u0001\u0000\u0002"})");
+
+binary_data obj2;
+glz::read_json(obj2, out);
+expect(std::memcmp(obj.data, obj2.data, 4) == 0);
+```
+
+**Local Usage (`glz::escape_bytes_t{value}`):**
+
+```c++
+char local_data[4] = {0, 'A', 0, 'B'};
+std::string out;
+glz::write_json(glz::escape_bytes_t{local_data}, out);
+expect(out == R"("\u0000A\u0000B")");
+
+char read_back_data[4];
+glz::read_json(glz::escape_bytes_t{read_back_data}, out);
+expect(read_back_data[0] == 0);
+expect(read_back_data[1] == 'A');
+expect(read_back_data[2] == 0);
+expect(read_back_data[3] == 'B');
 ```
 
 ## read_constraint
