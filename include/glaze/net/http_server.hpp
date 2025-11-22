@@ -505,6 +505,18 @@ namespace glz
 
       inline http_server& bind(uint16_t port) { return bind("0.0.0.0", port); }
 
+      inline uint16_t port() const
+      {
+         if (acceptor) {
+            try {
+               return acceptor->local_endpoint().port();
+            }
+            catch (...) {
+            }
+         }
+         return 0;
+      }
+
       /**
        * @brief Start the HTTP server
        *

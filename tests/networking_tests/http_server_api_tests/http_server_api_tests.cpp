@@ -237,6 +237,12 @@ suite http_server_api_tests = [] {
       expect(&server_ref == &server) << "bind() should return server reference for chaining\n";
    };
 
+   "server_random_port_binding"_test = [] {
+      glz::http_server server;
+      server.bind(0);
+      expect(server.port() > 0) << "Server should be assigned a non-zero port when binding to 0\n";
+   };
+
    "route_registration_methods"_test = [] {
       glz::http_server server;
       bool handler_called = false;
