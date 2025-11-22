@@ -1,17 +1,20 @@
 // Glaze Library
 // For the license information refer to glaze.hpp
 
+#include <charconv> // for std::from_chars
+
 #include "glaze/json.hpp"
 #include "ut/ut.hpp"
-#include <charconv> // for std::from_chars
 
 using namespace ut;
 
 // Structs for testing custom readers with glz::generic
-struct generic_optional {
+struct generic_optional
+{
    std::optional<char> val;
 
-   void read_val(const glz::generic& value) {
+   void read_val(const glz::generic& value)
+   {
       if (value.is_null()) {
          val = std::nullopt;
          return;
@@ -26,7 +29,8 @@ struct generic_optional {
       val = std::nullopt;
    }
 
-   glz::generic write_val() const {
+   glz::generic write_val() const
+   {
       if (val.has_value()) {
          return std::string(1, val.value());
       }
@@ -34,10 +38,12 @@ struct generic_optional {
    }
 };
 
-struct generic_optional_int {
+struct generic_optional_int
+{
    std::optional<int> num;
 
-   void read_val(const glz::generic& value) {
+   void read_val(const glz::generic& value)
+   {
       if (value.is_null()) {
          num = std::nullopt;
          return;
@@ -66,7 +72,8 @@ struct generic_optional_int {
       num = std::nullopt;
    }
 
-   glz::generic write_val() const {
+   glz::generic write_val() const
+   {
       if (num.has_value()) {
          return num.value();
       }
@@ -75,19 +82,17 @@ struct generic_optional_int {
 };
 
 template <>
-struct glz::meta<generic_optional> {
+struct glz::meta<generic_optional>
+{
    using T = generic_optional;
-   static constexpr auto value = glz::object(
-      "val", glz::custom<&T::read_val, &T::write_val>
-   );
+   static constexpr auto value = glz::object("val", glz::custom<&T::read_val, &T::write_val>);
 };
 
 template <>
-struct glz::meta<generic_optional_int> {
+struct glz::meta<generic_optional_int>
+{
    using T = generic_optional_int;
-   static constexpr auto value = glz::object(
-      "num", glz::custom<&T::read_val, &T::write_val>
-   );
+   static constexpr auto value = glz::object("num", glz::custom<&T::read_val, &T::write_val>);
 };
 
 suite generic_json_tests = [] {
