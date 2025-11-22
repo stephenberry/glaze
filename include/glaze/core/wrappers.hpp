@@ -19,7 +19,7 @@ namespace glz
    };
 
    template <class T>
-   struct escape_bytes
+   struct escape_bytes_t
    {
       static constexpr bool glaze_wrapper = true;
       using value_type = T;
@@ -27,7 +27,7 @@ namespace glz
    };
    
    template <class T>
-   escape_bytes(T&) -> escape_bytes<T>;
+   escape_bytes_t(T&) -> escape_bytes_t<T>;
 
    template <class T, auto OptsMemPtr>
    struct opts_wrapper_t
@@ -106,4 +106,14 @@ namespace glz
    // Customize reading and writing
    template <auto From, auto To>
    constexpr auto custom = custom_impl<From, To>();
+
+   template <auto MemPtr>
+   inline constexpr decltype(auto) escape_bytes_impl() noexcept
+   {
+      return [](auto&& val) { return escape_bytes_t<std::remove_reference_t<decltype(val.*MemPtr)>>{val.*MemPtr}; };
+   }
+
+   // Treat char arrays as byte sequences to be fully escaped
+   template <auto MemPtr>
+   constexpr auto escape_bytes = escape_bytes_impl<MemPtr>();
 }

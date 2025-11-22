@@ -45,7 +45,7 @@ namespace glz
    };
 
    template <class T>
-   struct from<JSON, escape_bytes<T>>
+   struct from<JSON, escape_bytes_t<T>>
    {
       template <auto Opts>
       static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
@@ -75,7 +75,7 @@ namespace glz
    };
 
    template <class T>
-   struct to<JSON, escape_bytes<T>>
+   struct to<JSON, escape_bytes_t<T>>
    {
       template <auto Opts>
       static void op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix)
