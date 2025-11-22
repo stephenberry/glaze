@@ -424,10 +424,108 @@ namespace glz
    namespace detail
    {
       template <auto Opts = opts{}, class T>
-         requires(Opts.format == JSON && not readable_array_t<T>)
+         requires(Opts.format == JSON && not readable_array_t<T> &&
+                  not(tuple_t<std::decay_t<T>> || is_std_tuple<std::decay_t<T>>))
       inline void handle_slice(const jmespath::ArrayParseResult&, T&&, context& ctx, auto&&, auto&&)
       {
          ctx.error = error_code::syntax_error;
+      }
+
+      template <auto Opts = opts{}, class T>
+         requires(Opts.format == JSON && (tuple_t<std::decay_t<T>> || is_std_tuple<std::decay_t<T>>))
+      inline void handle_slice(const jmespath::ArrayParseResult& decomposed_key, T&& value, context& ctx, auto&& it,
+                               auto&& end)
+      {
+         if (skip_ws<Opts>(ctx, it, end)) {
+            return;
+         }
+
+         // Determine slice parameters
+         int32_t step_idx = decomposed_key.step.value_or(1);
+         bool has_negative_index = (decomposed_key.start.value_or(0) < 0) || (decomposed_key.end.value_or(0) < 0);
+
+         // Only support step == 1 and positive indices for now for tuples
+         if (step_idx != 1 || has_negative_index) {
+            ctx.error = error_code::syntax_error;
+            return;
+         }
+
+         const int32_t start_idx = decomposed_key.start.value_or(0);
+         const int32_t end_idx = decomposed_key.end.value_or((std::numeric_limits<int32_t>::max)());
+
+         if (*it == ']') {
+            ++it;
+            return;
+         }
+
+         int32_t current_index = 0;
+
+         // Iterate tuple elements
+         using TupleType = std::decay_t<T>;
+         constexpr size_t N = glz::tuple_size_v<TupleType>;
+
+         for_each<N>([&]<size_t I>() {
+            if (bool(ctx.error)) return;
+
+            int32_t target_idx = start_idx + I;
+
+            // If target is beyond the slice request
+            if (target_idx >= end_idx) {
+               return;
+            }
+
+            // Skip until target_idx
+            while (current_index < target_idx) {
+               if (*it == ']') {
+                  // Array ended before we reached target
+                  ctx.error = error_code::array_element_not_found;
+                  return;
+               }
+               skip_value<JSON>::op<Opts>(ctx, it, end);
+               if (bool(ctx.error)) return;
+               if (*it == ',') {
+                  ++it;
+                  skip_ws<Opts>(ctx, it, end);
+               }
+               else if (*it == ']') {
+                  return;
+               }
+               current_index++;
+            }
+
+            // Now current_index == target_idx
+            if (*it == ']') {
+               ctx.error = error_code::array_element_not_found;
+               return;
+            }
+
+            if constexpr (is_std_tuple<TupleType>) {
+               parse<Opts.format>::template op<Opts>(std::get<I>(value), ctx, it, end);
+            }
+            else {
+               parse<Opts.format>::template op<Opts>(glz::get<I>(value), ctx, it, end);
+            }
+            if (bool(ctx.error)) return;
+
+            if (*it == ',') {
+               ++it;
+               skip_ws<Opts>(ctx, it, end);
+            }
+            current_index++;
+         });
+
+         if (bool(ctx.error)) return;
+
+         // Consume remainder of array
+         while (*it != ']') {
+            skip_value<JSON>::op<Opts>(ctx, it, end);
+            if (bool(ctx.error)) return;
+            if (*it == ',') {
+               ++it;
+               skip_ws<Opts>(ctx, it, end);
+            }
+         }
+         ++it; // consume ']'
       }
 
       template <auto Opts = opts{}, class T>
