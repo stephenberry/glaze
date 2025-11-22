@@ -3,8 +3,92 @@
 
 #include "glaze/json.hpp"
 #include "ut/ut.hpp"
+#include <charconv> // for std::from_chars
 
 using namespace ut;
+
+// Structs for testing custom readers with glz::generic
+struct generic_optional {
+   std::optional<char> val;
+
+   void read_val(const glz::generic& value) {
+      if (value.is_null()) {
+         val = std::nullopt;
+         return;
+      }
+
+      if (value.is_string()) {
+         const auto& str = value.get<std::string>();
+         val = str.empty() ? std::nullopt : std::optional(str[0]);
+         return;
+      }
+
+      val = std::nullopt;
+   }
+
+   glz::generic write_val() const {
+      if (val.has_value()) {
+         return std::string(1, val.value());
+      }
+      return nullptr;
+   }
+};
+
+struct generic_optional_int {
+   std::optional<int> num;
+
+   void read_val(const glz::generic& value) {
+      if (value.is_null()) {
+         num = std::nullopt;
+         return;
+      }
+
+      if (value.is_number()) {
+         num = value.as<int>();
+         return;
+      }
+
+      if (value.is_string()) {
+         const auto& str = value.get<std::string>();
+         if (str.empty()) {
+            num = std::nullopt;
+            return;
+         }
+
+         int val{};
+         auto [ptr, ec] = std::from_chars(str.data(), str.data() + str.size(), val);
+         if (ec == std::errc{} && ptr == str.data() + str.size()) {
+            num = val;
+            return;
+         }
+      }
+
+      num = std::nullopt;
+   }
+
+   glz::generic write_val() const {
+      if (num.has_value()) {
+         return num.value();
+      }
+      return nullptr;
+   }
+};
+
+template <>
+struct glz::meta<generic_optional> {
+   using T = generic_optional;
+   static constexpr auto value = glz::object(
+      "val", glz::custom<&T::read_val, &T::write_val>
+   );
+};
+
+template <>
+struct glz::meta<generic_optional_int> {
+   using T = generic_optional_int;
+   static constexpr auto value = glz::object(
+      "num", glz::custom<&T::read_val, &T::write_val>
+   );
+};
 
 suite generic_json_tests = [] {
    "generic_json_write"_test = [] {
@@ -952,6 +1036,113 @@ suite optimized_read_json_tests = [] {
       expect(!glz::read<glz::opts{}>(vec, json));
       expect(vec.size() == 3) << "Vector should have 3 elements";
       expect(vec[0] == 1) << "First element should be 1";
+   };
+};
+
+suite generic_custom_reader_tests = [] {
+   // Tests for handling null values with custom readers using glz::generic
+
+   "generic custom reader with null"_test = [] {
+      generic_optional obj{};
+      obj.val = 'x';
+
+      std::string json = R"({"val":null})";
+      auto ec = glz::read_json(obj, json);
+
+      expect(!ec) << glz::format_error(ec, json);
+      expect(!obj.val.has_value());
+   };
+
+   "generic custom reader with string"_test = [] {
+      generic_optional obj{};
+
+      std::string json = R"({"val":"abc"})";
+      auto ec = glz::read_json(obj, json);
+
+      expect(!ec) << glz::format_error(ec, json);
+      expect(obj.val.has_value());
+      expect(obj.val.value() == 'a');
+   };
+
+   "generic custom reader with empty string"_test = [] {
+      generic_optional obj{};
+      obj.val = 'x';
+
+      std::string json = R"({"val":""})";
+      auto ec = glz::read_json(obj, json);
+
+      expect(!ec) << glz::format_error(ec, json);
+      expect(!obj.val.has_value());
+   };
+
+   "generic custom writer with null"_test = [] {
+      generic_optional obj{};
+      obj.val = std::nullopt;
+
+      std::string buffer;
+      auto ec = glz::write_json(obj, buffer);
+
+      expect(!ec);
+      expect(buffer == R"({"val":null})");
+   };
+
+   "generic custom writer with value"_test = [] {
+      generic_optional obj{};
+      obj.val = 'z';
+
+      std::string buffer;
+      auto ec = glz::write_json(obj, buffer);
+
+      expect(!ec);
+      expect(buffer == R"({"val":"z"})");
+   };
+
+   "generic custom reader roundtrip"_test = [] {
+      generic_optional obj{};
+      obj.val = 'k';
+
+      std::string buffer;
+      auto ec_write = glz::write_json(obj, buffer);
+      expect(!ec_write);
+
+      generic_optional obj2{};
+      auto ec_read = glz::read_json(obj2, buffer);
+      expect(!ec_read) << glz::format_error(ec_read, buffer);
+      expect(obj2.val.has_value());
+      expect(obj2.val.value() == 'k');
+   };
+
+   "generic custom reader int with null"_test = [] {
+      generic_optional_int obj{};
+      obj.num = 42;
+
+      std::string json = R"({"num":null})";
+      auto ec = glz::read_json(obj, json);
+
+      expect(!ec) << glz::format_error(ec, json);
+      expect(!obj.num.has_value());
+   };
+
+   "generic custom reader int with number"_test = [] {
+      generic_optional_int obj{};
+
+      std::string json = R"({"num":123})";
+      auto ec = glz::read_json(obj, json);
+
+      expect(!ec) << glz::format_error(ec, json);
+      expect(obj.num.has_value());
+      expect(obj.num.value() == 123);
+   };
+
+   "generic custom reader int with string"_test = [] {
+      generic_optional_int obj{};
+
+      std::string json = R"({"num":"456"})";
+      auto ec = glz::read_json(obj, json);
+
+      expect(!ec) << glz::format_error(ec, json);
+      expect(obj.num.has_value());
+      expect(obj.num.value() == 456);
    };
 };
 
