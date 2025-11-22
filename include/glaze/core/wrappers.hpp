@@ -18,6 +18,17 @@ namespace glz
       T& val;
    };
 
+   template <class T>
+   struct escape_bytes
+   {
+      static constexpr bool glaze_wrapper = true;
+      using value_type = T;
+      T& val;
+   };
+   
+   template <class T>
+   escape_bytes(T&) -> escape_bytes<T>;
+
    template <class T, auto OptsMemPtr>
    struct opts_wrapper_t
    {

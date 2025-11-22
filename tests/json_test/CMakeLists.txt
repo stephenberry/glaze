@@ -69,3 +69,11 @@ add_executable(nullable_lambda_test nullable_lambda_test.cpp)
 target_link_libraries(nullable_lambda_test PRIVATE glz_test_common)
 
 add_test(NAME nullable_lambda_test COMMAND nullable_lambda_test)
+
+## Byte array test - test for issue #1959 and PR #1966
+
+add_executable(byte_array_test byte_array_test.cpp)
+
+target_link_libraries(byte_array_test PRIVATE glz_test_common)
+
+add_test(NAME byte_array_test COMMAND byte_array_test)

@@ -184,9 +184,16 @@ namespace glz
 
    struct bools_as_numbers_opt_tag
    {};
+   
+   struct escape_control_characters_opt_tag
+   {};
 
    template <auto member_ptr>
    concept is_bools_as_numbers_tag = std::same_as<std::decay_t<decltype(member_ptr)>, bools_as_numbers_opt_tag>;
+   
+   template <auto member_ptr>
+   concept is_escape_control_characters_tag =
+      std::same_as<std::decay_t<decltype(member_ptr)>, escape_control_characters_opt_tag>;
 
    consteval bool check_validate_skipped(auto&& Opts)
    {
@@ -486,6 +493,20 @@ namespace glz
             return opts_bools_as_numbers{{Opts}, static_cast<bool>(value)};
          }
       }
+      else if constexpr (is_escape_control_characters_tag<member_ptr>) {
+         if constexpr (requires { Opts.escape_control_characters; }) {
+            auto ret = Opts;
+            ret.escape_control_characters = static_cast<bool>(value);
+            return ret;
+         }
+         else {
+            struct opts_escape_control_characters : std::decay_t<decltype(Opts)>
+            {
+               bool escape_control_characters{};
+            };
+            return opts_escape_control_characters{{Opts}, static_cast<bool>(value)};
+         }
+      }
       else {
          auto ret = Opts;
          ret.*member_ptr = value;
@@ -510,6 +531,20 @@ namespace glz
             return opts_bools_as_numbers{{Opts}};
          }
       }
+      else if constexpr (is_escape_control_characters_tag<member_ptr>) {
+         if constexpr (requires { Opts.escape_control_characters; }) {
+            auto ret = Opts;
+            ret.escape_control_characters = true;
+            return ret;
+         }
+         else {
+            struct opts_escape_control_characters : std::decay_t<decltype(Opts)>
+            {
+               bool escape_control_characters = true;
+            };
+            return opts_escape_control_characters{{Opts}};
+         }
+      }
       else {
          auto ret = Opts;
          ret.*member_ptr = true;
@@ -527,6 +562,16 @@ namespace glz
          if constexpr (requires { Opts.bools_as_numbers; }) {
             auto ret = Opts;
             ret.bools_as_numbers = false;
+            return ret;
+         }
+         else {
+            return Opts;
+         }
+      }
+      else if constexpr (is_escape_control_characters_tag<member_ptr>) {
+         if constexpr (requires { Opts.escape_control_characters; }) {
+            auto ret = Opts;
+            ret.escape_control_characters = false;
             return ret;
          }
          else {
