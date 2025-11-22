@@ -257,8 +257,7 @@ suite tuple_slice_tests = [] {
       glz::tuple<int, std::string> target;
 
       static_assert(glz::tuple_t<decltype(target)>, "glz::tuple should satisfy tuple_t");
-      static_assert(glz::is_std_tuple<std::tuple<int, std::string>>,
-                    "std::tuple should satisfy is_std_tuple");
+      static_assert(glz::is_std_tuple<std::tuple<int, std::string>>, "std::tuple should satisfy is_std_tuple");
 
       auto ec = glz::read_jmespath<"[0:2]">(target, buffer);
       expect(not ec) << "Error code: " << int(ec) << " " << glz::format_error(ec, buffer);
