@@ -219,9 +219,11 @@ namespace glz
    // Forward declaration of refl_t for member type extraction
    // The actual definition is in glaze/core/reflect.hpp
    // This allows users to get the type of a member at a given index in rename_key
-   namespace detail {
+   namespace detail
+   {
       template <class T, size_t I>
-      struct member_type_at_index {
+      struct member_type_at_index
+      {
          using tie_type = decltype(to_tie(std::declval<std::remove_cvref_t<T>&>()));
          using type = std::remove_cvref_t<tuple_element_t<I, tie_type>>;
       };

@@ -572,7 +572,6 @@ namespace glz
 
    constexpr auto flags(auto&&... args) noexcept { return detail::Flags{tuple{args...}}; }
 
-
 #if defined(__clang__)
 #pragma clang diagnostic pop
 #endif
