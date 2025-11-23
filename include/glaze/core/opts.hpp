@@ -305,6 +305,16 @@ namespace glz
       }
    }
 
+   consteval bool check_skip_null_members_on_read(auto&& Opts)
+   {
+      if constexpr (requires { Opts.skip_null_members_on_read; }) {
+         return Opts.skip_null_members_on_read;
+      }
+      else {
+         return false;
+      }
+   }
+
    consteval bool check_use_headers(auto&& Opts)
    {
       if constexpr (requires { Opts.use_headers; }) {

@@ -85,3 +85,11 @@ add_executable(indexed_rename_key_test indexed_rename_key_test.cpp)
 target_link_libraries(indexed_rename_key_test PRIVATE glz_test_common)
 
 add_test(NAME indexed_rename_key_test COMMAND indexed_rename_key_test)
+
+## Skip null on read test - test for issue #1047
+
+add_executable(skip_null_on_read_test skip_null_on_read_test.cpp)
+
+target_link_libraries(skip_null_on_read_test PRIVATE glz_test_common)
+
+add_test(NAME skip_null_on_read_test COMMAND skip_null_on_read_test)
