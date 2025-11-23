@@ -891,9 +891,9 @@ namespace glz
             // Generate random masking key
             std::random_device rd;
             std::mt19937 gen(rd());
-            std::uniform_int_distribution<uint8_t> dist(0, 255);
+            std::uniform_int_distribution<unsigned int> dist(0, 255);
             for (int i = 0; i < 4; ++i) {
-               header[header_offset + i] = dist(gen);
+               header[header_offset + i] = static_cast<uint8_t>(dist(gen));
             }
             // Mask the payload (done in-place in the frame buffer after this header)
             // Note: Actual masking of payload should be done by caller if needed
