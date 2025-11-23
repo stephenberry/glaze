@@ -851,3 +851,119 @@ expect(s == R"({"x":[1,2,3]})");
 expect(obj.x[0] == 1);
 expect(obj.x[1] == 2);
 ```
+
+## skip_null_members_on_read
+
+The `skip_null_members_on_read` option allows reading JSON or BEVE data with null values without requiring `std::optional` wrappers on your C++ types. When enabled, null values in the input are simply skipped, leaving the existing field values unchanged.
+
+This option is particularly useful when:
+- You receive JSON from external sources that may include null values but you want to maintain default or existing values
+- You want to avoid wrapping all your types in `std::optional` just to handle occasional null values
+- You're implementing partial updates where null means "don't change this field"
+
+### Usage
+
+Add `bool skip_null_members_on_read = true;` to a custom options struct:
+
+```c++
+struct Person {
+   std::string name = "Unknown";
+   int age = 0;
+   double salary = 0.0;
+};
+
+template <>
+struct glz::meta<Person> {
+   using T = Person;
+   static constexpr auto value = glz::object(&T::name, &T::age, &T::salary);
+};
+
+struct opts_skip_null : glz::opts {
+   bool skip_null_members_on_read = true;
+};
+```
+
+### Example: Preserving Existing Values
+
+```c++
+Person person;
+person.name = "Alice";
+person.age = 30;
+person.salary = 75000.0;
+
+// JSON with null values
+std::string json = R"({"name":null,"age":35,"salary":null})";
+
+glz::read<opts_skip_null{}>(person, json);
+
+// null fields were skipped, preserving existing values
+expect(person.name == "Alice");    // Unchanged (was null in JSON)
+expect(person.age == 35);          // Updated
+expect(person.salary == 75000.0);  // Unchanged (was null in JSON)
+```
+
+### Format Support
+
+This option works with both JSON and BEVE formats:
+
+**JSON:**
+```c++
+struct opts_skip_null_json : glz::opts {
+   bool skip_null_members_on_read = true;
+   // format = JSON (default)
+};
+```
+
+**BEVE:**
+```c++
+struct opts_skip_null_beve : glz::opts {
+   uint32_t format = glz::BEVE;
+   bool skip_null_members_on_read = true;
+};
+```
+
+### Behavior
+
+- **With option enabled:** Null values in input are skipped; C++ field retains its existing value
+- **With option disabled (default):** Null values cause errors for non-nullable types, or reset `std::optional` types to empty
+
+### Comparison with std::optional
+
+**Without skip_null_members_on_read:**
+```c++
+struct PersonWithOptional {
+   std::optional<std::string> name;
+   std::optional<int> age;
+};
+
+PersonWithOptional p;
+p.name = "Alice";
+p.age = 30;
+
+glz::read_json(p, R"({"name":null,"age":35})");
+
+// name is reset to empty by null
+expect(!p.name.has_value());
+expect(p.age == 35);
+```
+
+**With skip_null_members_on_read:**
+```c++
+struct Person {
+   std::string name;  // No std::optional needed
+   int age;
+};
+
+Person p;
+p.name = "Alice";
+p.age = 30;
+
+glz::read<opts_skip_null{}>(p, R"({"name":null,"age":35})");
+
+// name preserves existing value
+expect(p.name == "Alice");
+expect(p.age == 35);
+```
+
+> [!NOTE]
+> This option is not a core field in `glz::opts`. You must create a custom options struct that adds this field, as shown in the examples above.
