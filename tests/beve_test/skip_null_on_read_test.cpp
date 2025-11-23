@@ -20,7 +20,8 @@ struct glz::meta<simple_struct>
 };
 
 // Struct with optional fields for writing null values
-struct optional_struct {
+struct optional_struct
+{
    std::optional<std::string> name;
    std::optional<int> age;
    std::optional<double> score;
@@ -90,7 +91,6 @@ suite skip_null_on_read_beve_tests = [] {
       expect(obj.age == 25);
       expect(obj.score == 100.0);
    };
-
 };
 
 int main() {}
