@@ -206,6 +206,27 @@ namespace glz
             return;
          }
 
+         // Check for null value skipping on read
+         if constexpr (check_skip_null_members_on_read(Opts)) {
+            if (*it == 'n') {
+               ++it;
+               if constexpr (not Opts.null_terminated) {
+                  if (it == end) [[unlikely]] {
+                     ctx.error = error_code::unexpected_end;
+                     return;
+                  }
+               }
+               match<"ull", Opts>(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
+               // Successfully matched "null", skip it
+               if constexpr (Opts.error_on_missing_keys || Opts.partial_read) {
+                  ((selected_index = I), ...); // Mark as handled even if skipped
+               }
+               return;
+            }
+         }
+
          // Check for operation-specific skipping
          if constexpr (meta_has_skip<std::remove_cvref_t<T>>) {
             if constexpr (meta<std::remove_cvref_t<T>>::skip(Key, {glz::operation::parse})) {
