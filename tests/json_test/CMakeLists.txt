@@ -77,3 +77,11 @@ add_executable(byte_array_test byte_array_test.cpp)
 target_link_libraries(byte_array_test PRIVATE glz_test_common)
 
 add_test(NAME byte_array_test COMMAND byte_array_test)
+
+## Indexed rename_key test - generic solution for issue #1117
+
+add_executable(indexed_rename_key_test indexed_rename_key_test.cpp)
+
+target_link_libraries(indexed_rename_key_test PRIVATE glz_test_common)
+
+add_test(NAME indexed_rename_key_test COMMAND indexed_rename_key_test)
