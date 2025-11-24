@@ -8982,6 +8982,22 @@ struct glz::meta<zoo_exclude_name_t>
    static constexpr std::array excluded{"name"};
 };
 
+// Test exclusion with glz::object (glaze_object_t)
+struct user_with_object_t
+{
+   std::string name = "Alice";
+   std::string email = "alice@example.com";
+   std::string password = "secret123";
+};
+
+template <>
+struct glz::meta<user_with_object_t>
+{
+   using T = user_with_object_t;
+   static constexpr auto value = glz::object(&T::name, &T::email, &T::password);
+   static constexpr std::array excluded{"password"};
+};
+
 struct partial_write_tester
 {
    int magnitude{};
@@ -9162,6 +9178,55 @@ suite partial_write_tests = [] {
       expect(restored.lion == "Simba");
       expect(restored.tiger == "Tigger");
       expect(restored.panda == "Panda") << "Excluded field should have default value";
+   };
+
+   // Test exclusion with glz::object (glaze_object_t)
+   "meta exclusion with glz::object write"_test = [] {
+      user_with_object_t user{};
+      std::string s{};
+      const auto ec = glz::write_json(user, s);
+      expect(!ec);
+      expect(s == R"({"name":"Alice","email":"alice@example.com"})") << s;
+      expect(s.find("password") == std::string::npos) << "Password should not appear in JSON";
+   };
+
+   "meta exclusion with glz::object read"_test = [] {
+      user_with_object_t user{};
+      const auto json = R"({"name":"Bob","email":"bob@example.com"})";
+      const auto ec = glz::read_json(user, json);
+      expect(!ec) << glz::format_error(ec, json);
+      expect(user.name == "Bob");
+      expect(user.email == "bob@example.com");
+      expect(user.password == "secret123") << "Excluded field should retain default value";
+   };
+
+   "meta exclusion with glz::object read with excluded field"_test = [] {
+      user_with_object_t user{};
+      const auto json = R"({"name":"Charlie","email":"charlie@example.com","password":"hacked"})";
+      const auto ec = glz::read<glz::opts{.error_on_unknown_keys = false}>(user, json);
+      expect(!ec) << glz::format_error(ec, json);
+      expect(user.name == "Charlie");
+      expect(user.email == "charlie@example.com");
+      expect(user.password == "secret123") << "Excluded field should NOT be set from JSON";
+   };
+
+   "meta exclusion with glz::object round-trip"_test = [] {
+      user_with_object_t original{};
+      original.name = "Dave";
+      original.email = "dave@example.com";
+      original.password = "super-secret";
+
+      std::string json{};
+      const auto write_ec = glz::write_json(original, json);
+      expect(!write_ec);
+      expect(json == R"({"name":"Dave","email":"dave@example.com"})") << json;
+
+      user_with_object_t restored{};
+      const auto read_ec = glz::read_json(restored, json);
+      expect(!read_ec) << glz::format_error(read_ec, json);
+      expect(restored.name == "Dave");
+      expect(restored.email == "dave@example.com");
+      expect(restored.password == "secret123") << "Excluded field should have default value, not original";
    };
 };
 
