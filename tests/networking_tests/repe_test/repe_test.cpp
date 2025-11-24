@@ -89,6 +89,21 @@ struct Museum
    };
 };
 
+struct VolatileData
+{
+   volatile int i = 10;
+   volatile double d = 3.14;
+
+   int get_i() volatile { return i; }
+   void inc_i() volatile { ++i; }
+
+   struct glaze
+   {
+      using T = VolatileData;
+      static constexpr auto value = glz::object(&T::i, &T::d, &T::get_i, &T::inc_i);
+   };
+};
+
 suite structs_of_functions = [] {
    "structs_of_functions"_test = [] {
       glz::registry server{};
@@ -215,9 +230,43 @@ suite structs_of_functions = [] {
 
       request = repe::request_json({""});
       server.call(request, response);
+      expect(response.body == R"({"name":"Alice","custom_name":"Alice"})") << response.body;
+   };
+
+   "volatile_member_functions_test"_test = [] {
+      struct opts_with_write_member_functions : glz::opts
+      {
+         bool write_member_functions = true;
+      };
+
+      glz::registry<opts_with_write_member_functions{}> server{};
+      VolatileData obj{};
+
+      server.on(obj);
+
+      repe::message response{};
+
+      // Test reading volatile data member
+      server.call(repe::request_json({"/i"}), response);
+      expect(response.body == "10");
+
+      // Test calling volatile member function
+      server.call(repe::request_json({"/get_i"}), response);
+      expect(response.body == "10");
+
+      // Test calling volatile void member function (modifier)
+      server.call(repe::request_json({"/inc_i"}), response);
+      expect(response.body == "null");
+
+      // Verify change
+      server.call(repe::request_json({"/i"}), response);
+      expect(response.body == "11");
+
+      // Test empty query with write_member_functions=true
+      server.call(repe::request_json({""}), response);
       expect(
          response.body ==
-         R"({"name":"Alice","custom_name":"Alice"})")
+         R"=({"i":11,"d":3.14,"get_i":"int (VolatileData::*)() volatile","inc_i":"void (VolatileData::*)() volatile"})=")
          << response.body;
    };
 };
