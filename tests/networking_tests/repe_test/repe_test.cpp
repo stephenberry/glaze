@@ -62,6 +62,33 @@ struct example_functions_t
    };
 };
 
+struct Exhibit
+{
+   std::string name{};
+   int year{};
+
+   struct glaze
+   {
+      using T = Exhibit;
+      static constexpr auto value = glz::object(&T::name, &T::year);
+   };
+};
+
+struct Museum
+{
+   std::string name{};
+   Exhibit main_exhibit{};
+
+   Exhibit get_main_exhibit() { return main_exhibit; }
+   void set_main_exhibit(const Exhibit& exhibit) { main_exhibit = exhibit; }
+
+   struct glaze
+   {
+      using T = Museum;
+      static constexpr auto value = glz::object(&T::name, &T::main_exhibit, &T::get_main_exhibit, &T::set_main_exhibit);
+   };
+};
+
 suite structs_of_functions = [] {
    "structs_of_functions"_test = [] {
       glz::registry server{};
@@ -85,6 +112,12 @@ suite structs_of_functions = [] {
 
       server.call(repe::request_json({"/get_number"}), response);
       expect(response.body == R"(42)");
+
+      server.call(repe::request_json({""}), response);
+      expect(
+         response.body ==
+         R"({"i":42,"hello":"std::function<std::string_view()>","world":"std::function<std::string_view()>","get_number":"std::function<int32_t()>","void_func":"std::function<void()>","max":"std::function<double(std::vector<double>&)>"})")
+         << response.body;
    };
 
    "nested_structs_of_functions"_test = [] {
@@ -179,6 +212,13 @@ suite structs_of_functions = [] {
       server.call(request, response);
       expect(obj.name == "Alice");
       expect(response.body == "null") << response.body;
+
+      request = repe::request_json({""});
+      server.call(request, response);
+      expect(
+         response.body ==
+         R"({"name":"Alice","custom_name":"Alice"})")
+         << response.body;
    };
 };
 
@@ -722,6 +762,133 @@ suite id_preservation_tests = [] {
       expect(response.header.ec == glz::error_code::none);
       expect(response.header.id == 99999) << "ID should be preserved in successful response";
       expect(response.body == R"(42)");
+   };
+};
+
+struct inner_t
+{
+   int val = 10;
+   int get_val() { return val; }
+
+   struct glaze
+   {
+      using T = inner_t;
+      static constexpr auto value = glz::object(&T::val, &T::get_val);
+   };
+};
+
+struct middle_t
+{
+   inner_t inner{};
+   std::string name = "mid";
+   std::string_view get_name() { return name; }
+
+   struct glaze
+   {
+      using T = middle_t;
+      static constexpr auto value = glz::object(&T::inner, &T::name, &T::get_name);
+   };
+};
+
+struct outer_t
+{
+   middle_t middle{};
+   double score = 3.14;
+   void set_score(double s) { score = s; }
+
+   struct glaze
+   {
+      using T = outer_t;
+      static constexpr auto value = glz::object(&T::middle, &T::score, &T::set_score);
+   };
+};
+
+suite deeply_nested_tests = [] {
+   "nested_mix_test"_test = [] {
+      glz::registry server{};
+      outer_t obj{};
+      server.on(obj);
+
+      // Modify some values to ensure we get current state
+      obj.middle.inner.val = 99;
+      obj.middle.name = "modified_mid";
+      obj.score = 1.23;
+
+      repe::message request{};
+      repe::message response{};
+
+      request = repe::request_json({""});
+      server.call(request, response);
+
+      expect(
+         response.body ==
+         R"({"middle":{"inner":{"val":99},"name":"modified_mid"},"score":1.23})")
+         << response.body;
+   };
+
+   "nested_mix_write_member_functions_test"_test = [] {
+      struct opts_with_write_member_functions : glz::opts
+      {
+         bool write_member_functions = true;
+      };
+
+      glz::registry<opts_with_write_member_functions{}> server{};
+      outer_t obj{};
+      server.on(obj);
+
+      // Modify some values
+      obj.middle.inner.val = 99;
+      obj.middle.name = "modified_mid";
+      obj.score = 1.23;
+
+      repe::message request{};
+      repe::message response{};
+
+      request = repe::request_json({""});
+      server.call(request, response);
+
+      expect(
+         response.body ==
+         R"e({"middle":{"inner":{"val":99,"get_val":"int32_t (inner_t::*)()"},"name":"modified_mid","get_name":"std::string_view (middle_t::*)()"},"score":1.23,"set_score":"void (outer_t::*)(double)"})e")
+         << response.body;
+   };
+
+   "museum_member_functions_test"_test = [] {
+      struct opts_with_write_member_functions : glz::opts
+      {
+         bool write_member_functions = true;
+      };
+
+      glz::registry<opts_with_write_member_functions{}> server{};
+      Museum museum{};
+      museum.name = "The Louvre";
+      museum.main_exhibit = {"Mona Lisa", 1503};
+
+      server.on(museum);
+
+      repe::message response{};
+
+      // Test reading data member
+      server.call(repe::request_json({"/name"}), response);
+      expect(response.body == R"("The Louvre")");
+
+      // Test calling member function that returns a struct
+      server.call(repe::request_json({"/get_main_exhibit"}), response);
+      expect(response.body == R"({"name":"Mona Lisa","year":1503})") << response.body;
+
+      // Test writing via member function
+      server.call(repe::request_json({.query = "/set_main_exhibit"}, Exhibit{"The Raft of the Medusa", 1819}), response);
+      expect(response.body == "null");
+
+      // Verify change
+      server.call(repe::request_json({"/main_exhibit"}), response);
+      expect(response.body == R"({"name":"The Raft of the Medusa","year":1819})");
+
+      server.call(repe::request_json({""}), response);
+      expect(
+         response.body ==
+         R"=({"name":"The Louvre","main_exhibit":{"name":"The Raft of the Medusa","year":1819},"get_main_exhibit":"Exhibit (Museum::*)()","set_main_exhibit":"void (Museum::*)(const Exhibit&)"})=")
+         << response.body;
    };
 };
 
