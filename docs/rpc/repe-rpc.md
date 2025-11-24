@@ -45,3 +45,48 @@ server.error_handler = [](const std::string& error_msg) {
 };
 ```
 
+## Registering Multiple Objects with `glz::merge`
+
+By default, when you register an object with `server.on(obj)`, the root path `""` returns that object's JSON representation. If you call `server.on()` multiple times with different objects, only the last registered object will be returned at the root path `""`.
+
+To combine multiple objects into a single merged view at the root path, use `glz::merge`:
+
+```cpp
+struct sensors_t {
+   double temperature = 25.0;
+   double humidity = 60.0;
+};
+
+struct settings_t {
+   int refresh_rate = 100;
+   std::string mode = "auto";
+};
+
+sensors_t sensors{};
+settings_t settings{};
+
+// Create a merged view of both objects
+auto merged = glz::merge{sensors, settings};
+
+glz::registry server{};
+server.on(merged);
+```
+
+Now queries work as follows:
+
+- `""` returns the combined view: `{"temperature":25.0,"humidity":60.0,"refresh_rate":100,"mode":"auto"}`
+- `/temperature` returns `25.0`
+- `/refresh_rate` returns `100`
+- Individual field writes work: writing to `/temperature` updates `sensors.temperature`
+
+### Important Notes
+
+**`glz::merge` stores references, not copies.** The original objects must remain alive for the duration of the registry's use. Changes to the original objects are reflected when queried.
+
+**The merged root endpoint is read-only.** Writing to the `""` path returns an error. This limitation exists because efficiently parsing JSON into multiple distinct objects would require either:
+- Multiple parse passes (O(N) where N is the number of merged objects)
+- An intermediate representation with extra memory allocation
+- Runtime dispatch overhead that loses glaze's compile-time optimizations
+
+Individual field paths remain writable, so you can still update any field via its specific path (e.g., `/temperature`, `/mode`).
+

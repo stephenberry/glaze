@@ -37,10 +37,11 @@ namespace glz
 
       void clear() { endpoints.clear(); }
 
-      // Register a C++ type that stores pointers to the value, so be sure to keep the registered value alive
-      template <const std::string_view& root = detail::empty_path, class T, const std::string_view& parent = root>
+     private:
+      // Helper to register all members of a type without registering the root endpoint
+      template <const std::string_view& root, class T, const std::string_view& parent>
          requires(glaze_object_t<T> || reflectable<T>)
-      void on(T& value)
+      void register_members(T& value)
       {
          using namespace glz::detail;
          static constexpr auto N = reflect<T>::size;
@@ -55,10 +56,6 @@ namespace glz
          }();
 
          using impl = registry_impl<Opts, Proto>;
-
-         if constexpr (parent == root && (glaze_object_t<T> || reflectable<T>)) {
-            impl::register_endpoint(root, value, *this);
-         }
 
          for_each<N>([&]<auto I>() {
             decltype(auto) func = [&]() -> decltype(auto) {
@@ -158,6 +155,39 @@ namespace glz
                   impl::template register_variable_endpoint<std::remove_reference_t<Func>>(full_key, func, *this);
                }
             }
+         });
+      }
+
+     public:
+      // Register a C++ type that stores pointers to the value, so be sure to keep the registered value alive
+      template <const std::string_view& root = detail::empty_path, class T, const std::string_view& parent = root>
+         requires(glaze_object_t<T> || reflectable<T>)
+      void on(T& value)
+      {
+         using impl = registry_impl<Opts, Proto>;
+
+         if constexpr (parent == root && (glaze_object_t<T> || reflectable<T>)) {
+            impl::register_endpoint(root, value, *this);
+         }
+
+         register_members<root, T, parent>(value);
+      }
+
+      // Register multiple C++ types merged together, allowing the root endpoint to return a combined view
+      template <const std::string_view& root = detail::empty_path, class... Ts>
+         requires(sizeof...(Ts) > 0 && (... && (glaze_object_t<Ts> || reflectable<Ts>)))
+      void on(glz::merge<Ts...>& merged)
+      {
+         using impl = registry_impl<Opts, Proto>;
+
+         // Register root endpoint with the merged object - this handles ""
+         impl::register_merge_endpoint(root, merged, *this);
+
+         // Register each merged object's member paths
+         for_each<sizeof...(Ts)>([&]<size_t I>() {
+            auto& obj = glz::get<I>(merged.value);
+            using T = std::decay_t<decltype(obj)>;
+            register_members<root, T, root>(obj);
          });
       }
 

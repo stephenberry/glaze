@@ -231,5 +231,30 @@ namespace glz
             }
          };
       }
+
+      // Register a merged endpoint that combines multiple objects into a single response
+      // Note: This endpoint is read-only; writing to it is not supported
+      template <class... Ts, class RegistryType>
+      static void register_merge_endpoint(const sv path, glz::merge<Ts...>& merged, RegistryType& reg)
+      {
+         reg.endpoints[path] = [&merged](repe::state&& state) mutable {
+            // Merged endpoints are read-only
+            if (state.has_body()) {
+               state.out.header.ec = error_code::invalid_body;
+               state.out.body = "writing to merged endpoint is not supported";
+               state.out.header.body_length = state.out.body.size();
+               state.out.header.body_format = repe::body_format::UTF8;
+               state.out.header.length =
+                  sizeof(repe::header) + state.out.query.size() + state.out.body.size();
+               return;
+            }
+
+            if (state.notify()) {
+               return;
+            }
+
+            write_response<Opts>(merged, state);
+         };
+      }
    };
 }

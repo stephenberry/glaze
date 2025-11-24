@@ -783,26 +783,50 @@ namespace glz
 
    template <class T>
       requires is_specialization_v<T, glz::merge>
-   consteval size_t merge_element_count()
-   {
-      size_t count{};
-      using Tuple = std::decay_t<decltype(std::declval<T>().value)>;
-      for_each<glz::tuple_size_v<Tuple>>([&]<auto I>() constexpr {
-         using Value = std::decay_t<glz::tuple_element_t<I, Tuple>>;
-         if constexpr (is_specialization_v<Value, glz::obj> || is_specialization_v<Value, glz::obj_copy>) {
-            count += glz::tuple_size_v<decltype(std::declval<Value>().value)> / 2;
-         }
-         else {
-            count += reflect<Value>::N;
-         }
-      });
-      return count;
-   }
-
-   template <class T>
-      requires is_specialization_v<T, glz::merge>
    struct to<BEVE, T>
    {
+      template <auto Opts, class Value, size_t I>
+      static consteval bool should_skip_field()
+      {
+         using V = field_t<Value, I>;
+
+         if constexpr (std::same_as<V, hidden> || std::same_as<V, skip>) {
+            return true;
+         }
+         else if constexpr (is_member_function_pointer<V>) {
+            return !check_write_member_functions(Opts);
+         }
+         else {
+            return false;
+         }
+      }
+
+      template <auto Opts, class Value>
+      static consteval size_t count_fields_for_type()
+      {
+         constexpr auto N = reflect<Value>::size;
+         return []<size_t... I>(std::index_sequence<I...>) {
+            return (size_t{} + ... + (should_skip_field<Opts, Value, I>() ? size_t{} : size_t{1}));
+         }(std::make_index_sequence<N>{});
+      }
+
+      template <auto Opts>
+      static consteval size_t merge_element_count()
+      {
+         size_t count{};
+         using Tuple = std::decay_t<decltype(std::declval<T>().value)>;
+         for_each<glz::tuple_size_v<Tuple>>([&]<auto I>() constexpr {
+            using Value = std::decay_t<glz::tuple_element_t<I, Tuple>>;
+            if constexpr (is_specialization_v<Value, glz::obj> || is_specialization_v<Value, glz::obj_copy>) {
+               count += glz::tuple_size_v<decltype(std::declval<Value>().value)> / 2;
+            }
+            else {
+               count += count_fields_for_type<Opts, Value>();
+            }
+         });
+         return count;
+      }
+
       template <auto Opts>
       static void op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix)
       {
@@ -812,7 +836,7 @@ namespace glz
          constexpr uint8_t type = 0; // string key
          constexpr uint8_t tag = tag::object | type;
          dump_type(tag, b, ix);
-         dump_compressed_int<merge_element_count<T>()>(b, ix);
+         dump_compressed_int<merge_element_count<Opts>()>(b, ix);
 
          [&]<size_t... I>(std::index_sequence<I...>) {
             (serialize<BEVE>::op<opening_handled<Opts>()>(glz::get<I>(value.value), ctx, b, ix), ...);
