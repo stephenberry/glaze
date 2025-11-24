@@ -35,7 +35,9 @@ if (MSVC)
     endif()
    endif()
 else()
-  target_compile_options(${PROJECT_NAME}_${PROJECT_NAME} INTERFACE "-Wno-missing-braces")
+  # Only apply -Wno-missing-braces for C and C++ compilation to avoid breaking ISPC and other language builds
+  target_compile_options(${PROJECT_NAME}_${PROJECT_NAME} INTERFACE
+    $<$<OR:$<COMPILE_LANGUAGE:C>,$<COMPILE_LANGUAGE:CXX>>:-Wno-missing-braces>)
 endif()
 
 set_property(TARGET ${PROJECT_NAME}_${PROJECT_NAME} PROPERTY EXPORT_NAME glaze)
