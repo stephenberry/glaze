@@ -869,10 +869,7 @@ suite deeply_nested_tests = [] {
       request = repe::request_json({""});
       server.call(request, response);
 
-      expect(
-         response.body ==
-         R"({"middle":{"inner":{"val":99},"name":"modified_mid"},"score":1.23})")
-         << response.body;
+      expect(response.body == R"({"middle":{"inner":{"val":99},"name":"modified_mid"},"score":1.23})") << response.body;
    };
 
    "nested_mix_write_member_functions_test"_test = [] {
@@ -926,7 +923,8 @@ suite deeply_nested_tests = [] {
       expect(response.body == R"({"name":"Mona Lisa","year":1503})") << response.body;
 
       // Test writing via member function
-      server.call(repe::request_json({.query = "/set_main_exhibit"}, Exhibit{"The Raft of the Medusa", 1819}), response);
+      server.call(repe::request_json({.query = "/set_main_exhibit"}, Exhibit{"The Raft of the Medusa", 1819}),
+                  response);
       expect(response.body == "null");
 
       // Verify change
