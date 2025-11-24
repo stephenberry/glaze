@@ -38,6 +38,37 @@ namespace glz
       }
    }
 
+   // Check if a type has an excluded array in its glaze meta
+   template <class T>
+   concept has_excluded = requires { T::glaze::excluded; } || requires { meta<T>::excluded; };
+
+   // Get the excluded fields array for a type
+   template <class T>
+   inline constexpr auto meta_excluded_v = [] {
+      if constexpr (requires { T::glaze::excluded; }) {
+         return T::glaze::excluded;
+      }
+      else if constexpr (requires { meta<T>::excluded; }) {
+         return meta<T>::excluded;
+      }
+      else {
+         return std::array<sv, 0>{};
+      }
+   }();
+
+   // Check if a field name is in the excluded array
+   template <class T>
+   consteval bool is_excluded(const sv& field_name)
+   {
+      constexpr auto& excluded_fields = meta_excluded_v<T>;
+      for (size_t i = 0; i < excluded_fields.size(); ++i) {
+         if (excluded_fields[i] == field_name) {
+            return true;
+         }
+      }
+      return false;
+   }
+
    template <class T>
    concept is_object_key_type = std::convertible_to<T, std::string_view>;
 
@@ -82,6 +113,28 @@ namespace glz
       }
    };
 
+   // Filter value indices to remove excluded fields
+   // Only called when has_excluded<V> is true
+   // Must be defined after get_key_element
+   template <class T>
+      requires has_excluded<std::remove_cvref_t<T>>
+   consteval auto filter_excluded_indices()
+   {
+      using V = std::remove_cvref_t<T>;
+      constexpr auto value_indices = filter_indices<meta_t<V>, not_object_key_type>();
+      constexpr auto N = value_indices.size();
+
+      return [&]<size_t... Is>(std::index_sequence<Is...>) consteval {
+         constexpr bool included[] = {!is_excluded<V>(get_key_element<T, value_indices[Is]>())...};
+         constexpr size_t count = (included[Is] + ...);
+
+         std::array<size_t, count> filtered{};
+         size_t index = 0;
+         ((void)((included[Is] ? (filtered[index++] = value_indices[Is], true) : false)), ...);
+         return filtered;
+      }(std::make_index_sequence<N>{});
+   }
+
    template <class T>
    struct reflect;
 
@@ -99,13 +152,46 @@ namespace glz
       using type = std::nullptr_t;
    };
 
+   // Fast path: glaze_object_t without exclusions
    template <class T>
       requires(!meta_keys<T> && (glaze_object_t<T> || glaze_flags_t<T> || glaze_enum_t<T>) &&
-               (tuple_size_v<meta_t<T>> != 0))
+               (tuple_size_v<meta_t<T>> != 0) && !has_excluded<std::remove_cvref_t<T>>)
    struct reflect<T>
    {
       using V = std::remove_cvref_t<T>;
       static constexpr auto value_indices = filter_indices<meta_t<V>, not_object_key_type>();
+
+      static constexpr auto values = [] {
+         return [&]<size_t... I>(std::index_sequence<I...>) { //
+            return tuple{get<value_indices[I]>(meta_v<T>)...}; //
+         }(std::make_index_sequence<value_indices.size()>{}); //
+      }();
+
+      static constexpr auto size = tuple_size_v<decltype(values)>;
+
+      static constexpr auto keys = [] {
+         std::array<sv, size> res{};
+         [&]<size_t... I>(std::index_sequence<I...>) { //
+            ((res[I] = get_key_element<T, value_indices[I]>()), ...);
+         }(std::make_index_sequence<value_indices.size()>{});
+         return res;
+      }();
+
+      template <size_t I>
+      using elem = decltype(get<I>(values));
+
+      template <size_t I>
+      using type = member_t<V, decltype(get<I>(values))>;
+   };
+
+   // Slow path: glaze_object_t with exclusions
+   template <class T>
+      requires(!meta_keys<T> && (glaze_object_t<T> || glaze_flags_t<T> || glaze_enum_t<T>) &&
+               (tuple_size_v<meta_t<T>> != 0) && has_excluded<std::remove_cvref_t<T>>)
+   struct reflect<T>
+   {
+      using V = std::remove_cvref_t<T>;
+      static constexpr auto value_indices = filter_excluded_indices<T>();
 
       static constexpr auto values = [] {
          return [&]<size_t... I>(std::index_sequence<I...>) { //
@@ -180,8 +266,29 @@ namespace glz
       using type = member_t<V, decltype(get<I>(values))>;
    };
 
+   // Filter indices for reflectable types based on excluded member names
+   // Only called when has_excluded<V> is true
    template <class T>
-      requires reflectable<T>
+   consteval auto filter_excluded_reflectable_indices()
+   {
+      using V = std::remove_cvref_t<T>;
+      constexpr auto all_keys = member_names<V>;
+      constexpr auto N = all_keys.size();
+
+      return [&]<size_t... Is>(std::index_sequence<Is...>) consteval {
+         constexpr bool included[] = {!is_excluded<V>(all_keys[Is])...};
+         constexpr size_t count = (included[Is] + ...);
+
+         std::array<size_t, count> filtered{};
+         size_t index = 0;
+         ((void)((included[Is] ? (filtered[index++] = Is, true) : false)), ...);
+         return filtered;
+      }(std::make_index_sequence<N>{});
+   }
+
+   // Fast path: reflectable types without exclusions
+   template <class T>
+      requires(reflectable<T> && !has_excluded<std::remove_cvref_t<T>>)
    struct reflect<T>
    {
       using V = std::remove_cvref_t<T>;
@@ -190,11 +297,44 @@ namespace glz
       static constexpr auto keys = member_names<V>;
       static constexpr auto size = keys.size();
 
+      static constexpr auto value_indices = [] {
+         std::array<size_t, size> indices{};
+         for (size_t i = 0; i < size; ++i) {
+            indices[i] = i;
+         }
+         return indices;
+      }();
+
       template <size_t I>
       using elem = decltype(get<I>(std::declval<tie_type>()));
 
       template <size_t I>
       using type = member_t<V, decltype(get<I>(std::declval<tie_type>()))>;
+   };
+
+   // Slower path: reflectable types with exclusions
+   template <class T>
+      requires(reflectable<T> && has_excluded<std::remove_cvref_t<T>>)
+   struct reflect<T>
+   {
+      using V = std::remove_cvref_t<T>;
+      using tie_type = decltype(to_tie(std::declval<T&>()));
+
+      static constexpr auto all_keys = member_names<V>;
+      static constexpr auto value_indices = filter_excluded_reflectable_indices<T>();
+
+      static constexpr auto keys = [] {
+         return [&]<size_t... I>(std::index_sequence<I...>) {
+            return std::array<sv, value_indices.size()>{all_keys[value_indices[I]]...};
+         }(std::make_index_sequence<value_indices.size()>{});
+      }();
+      static constexpr auto size = keys.size();
+
+      template <size_t I>
+      using elem = decltype(get<value_indices[I]>(std::declval<tie_type>()));
+
+      template <size_t I>
+      using type = member_t<V, decltype(get<value_indices[I]>(std::declval<tie_type>()))>;
    };
 
    template <class T>

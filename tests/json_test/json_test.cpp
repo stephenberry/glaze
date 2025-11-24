@@ -8919,6 +8919,69 @@ struct zoo_reflection_t
    std::string name{"My Awesome Zoo"};
 };
 
+// Test types with meta-based exclusions
+struct animals_exclude_lion_panda_t
+{
+   std::string lion = "Lion";
+   std::string tiger = "Tiger";
+   std::string panda = "Panda";
+};
+
+template <>
+struct glz::meta<animals_exclude_lion_panda_t>
+{
+   static constexpr std::array excluded{"lion", "panda"};
+};
+
+struct zoo_exclude_lion_panda_t
+{
+   animals_exclude_lion_panda_t animals{};
+   std::string name{"My Awesome Zoo"};
+};
+
+struct zoo_exclude_animals_t
+{
+   animals_t animals{};
+   std::string name{"My Awesome Zoo"};
+};
+
+template <>
+struct glz::meta<zoo_exclude_animals_t>
+{
+   static constexpr std::array excluded{"animals"};
+};
+
+struct animals_exclude_panda_t
+{
+   std::string lion = "Lion";
+   std::string tiger = "Tiger";
+   std::string panda = "Panda";
+};
+
+template <>
+struct glz::meta<animals_exclude_panda_t>
+{
+   static constexpr std::array excluded{"panda"};
+};
+
+struct zoo_exclude_panda_t
+{
+   animals_exclude_panda_t animals{};
+   std::string name{"My Awesome Zoo"};
+};
+
+struct zoo_exclude_name_t
+{
+   animals_t animals{};
+   std::string name{"My Awesome Zoo"};
+};
+
+template <>
+struct glz::meta<zoo_exclude_name_t>
+{
+   static constexpr std::array excluded{"name"};
+};
+
 struct partial_write_tester
 {
    int magnitude{};
@@ -8974,6 +9037,131 @@ suite partial_write_tests = [] {
       std::string buffer{};
       expect(not glz::write_json<partial>(obj, buffer));
       expect(buffer == R"({"magnitude":0,"thresh_hi":0,"thresh_lo":0})") << buffer;
+   };
+
+   "meta exclusion write"_test = [] {
+      zoo_exclude_lion_panda_t obj{};
+      std::string s{};
+      const auto ec = glz::write_json(obj, s);
+      expect(!ec);
+      // Should write all fields except panda and lion (should have tiger and name)
+      expect(s == R"({"animals":{"tiger":"Tiger"},"name":"My Awesome Zoo"})") << s;
+   };
+
+   "meta exclusion single field"_test = [] {
+      zoo_exclude_animals_t obj{};
+      std::string s{};
+      const auto ec = glz::write_json(obj, s);
+      expect(!ec);
+      // Should write all fields except animals (just name)
+      expect(s == R"({"name":"My Awesome Zoo"})") << s;
+   };
+
+   "meta exclusion const qualified"_test = [] {
+      const zoo_exclude_panda_t obj{};
+      std::string s{};
+      const auto ec = glz::write_json(obj, s);
+      expect(!ec);
+      // Should write all fields except panda
+      expect(s == R"({"animals":{"lion":"Lion","tiger":"Tiger"},"name":"My Awesome Zoo"})") << s;
+   };
+
+   "meta exclusion explicit glaze"_test = [] {
+      const zoo_exclude_name_t obj{};
+      std::string s{};
+      const auto ec = glz::write_json(obj, s);
+      expect(!ec);
+      // Should write all fields except name (just animals)
+      expect(s == R"({"animals":{"lion":"Lion","tiger":"Tiger","panda":"Panda"}})") << s;
+   };
+
+   // Read tests - verify excluded fields are not deserialized
+   "meta exclusion read without excluded field"_test = [] {
+      animals_exclude_panda_t obj{};
+      // JSON doesn't include the excluded "panda" field
+      const auto json = R"({"lion":"King","tiger":"Shere Khan"})";
+      const auto ec = glz::read_json(obj, json);
+      expect(!ec) << glz::format_error(ec, json);
+      expect(obj.lion == "King");
+      expect(obj.tiger == "Shere Khan");
+      expect(obj.panda == "Panda") << "Excluded field should retain default value";
+   };
+
+   "meta exclusion read with excluded field present"_test = [] {
+      animals_exclude_panda_t obj{};
+      // JSON includes the excluded "panda" field - it should be ignored
+      const auto json = R"({"lion":"King","panda":"Ignored","tiger":"Shere Khan"})";
+      const auto ec = glz::read<glz::opts{.error_on_unknown_keys = false}>(obj, json);
+      expect(!ec) << glz::format_error(ec, json);
+      expect(obj.lion == "King");
+      expect(obj.tiger == "Shere Khan");
+      expect(obj.panda == "Panda") << "Excluded field should NOT be set from JSON";
+   };
+
+   "meta exclusion read nested"_test = [] {
+      zoo_exclude_panda_t obj{};
+      const auto json = R"({"animals":{"lion":"King","tiger":"Shere Khan"},"name":"Safari Park"})";
+      const auto ec = glz::read_json(obj, json);
+      expect(!ec) << glz::format_error(ec, json);
+      expect(obj.animals.lion == "King");
+      expect(obj.animals.tiger == "Shere Khan");
+      expect(obj.animals.panda == "Panda") << "Excluded nested field should retain default";
+      expect(obj.name == "Safari Park");
+   };
+
+   "meta exclusion read with excluded field in nested"_test = [] {
+      zoo_exclude_panda_t obj{};
+      // JSON includes the excluded nested "panda" field - should be ignored
+      const auto json = R"({"animals":{"lion":"King","panda":"Ignored","tiger":"Shere Khan"},"name":"Safari Park"})";
+      const auto ec = glz::read<glz::opts{.error_on_unknown_keys = false}>(obj, json);
+      expect(!ec) << glz::format_error(ec, json);
+      expect(obj.animals.lion == "King");
+      expect(obj.animals.tiger == "Shere Khan");
+      expect(obj.animals.panda == "Panda") << "Excluded field should NOT be set from JSON";
+      expect(obj.name == "Safari Park");
+   };
+
+   "meta exclusion read entire object excluded"_test = [] {
+      zoo_exclude_animals_t obj{};
+      // JSON doesn't include the excluded "animals" field
+      const auto json = R"({"name":"City Zoo"})";
+      const auto ec = glz::read_json(obj, json);
+      expect(!ec) << glz::format_error(ec, json);
+      expect(obj.name == "City Zoo");
+      expect(obj.animals.lion == "Lion") << "Excluded object should retain defaults";
+      expect(obj.animals.tiger == "Tiger");
+      expect(obj.animals.panda == "Panda");
+   };
+
+   "meta exclusion read with excluded object present"_test = [] {
+      zoo_exclude_animals_t obj{};
+      // JSON includes the excluded "animals" object - should be ignored
+      const auto json = R"({"animals":{"lion":"Ignored","tiger":"Ignored","panda":"Ignored"},"name":"City Zoo"})";
+      const auto ec = glz::read<glz::opts{.error_on_unknown_keys = false}>(obj, json);
+      expect(!ec) << glz::format_error(ec, json);
+      expect(obj.name == "City Zoo");
+      expect(obj.animals.lion == "Lion") << "Excluded object should NOT be set from JSON";
+      expect(obj.animals.tiger == "Tiger");
+      expect(obj.animals.panda == "Panda");
+   };
+
+   "meta exclusion round-trip"_test = [] {
+      animals_exclude_panda_t original{};
+      original.lion = "Simba";
+      original.tiger = "Tigger";
+      original.panda = "Secret";  // This should not be serialized
+
+      std::string json{};
+      const auto write_ec = glz::write_json(original, json);
+      expect(!write_ec);
+      expect(json == R"({"lion":"Simba","tiger":"Tigger"})") << json;
+
+      animals_exclude_panda_t restored{};
+      const auto read_ec = glz::read_json(restored, json);
+      expect(!read_ec) << glz::format_error(read_ec, json);
+      expect(restored.lion == "Simba");
+      expect(restored.tiger == "Tigger");
+      expect(restored.panda == "Panda") << "Excluded field should have default value";
    };
 };
 

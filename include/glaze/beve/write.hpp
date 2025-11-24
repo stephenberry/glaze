@@ -137,6 +137,7 @@ namespace glz
       template <auto& Partial, auto Opts, class... Args>
       static void op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix)
       {
+         // Write only specified fields (whitelist mode)
          static constexpr auto sorted = sort_json_ptrs(Partial);
          static constexpr auto groups = glz::group_json_ptrs<sorted>();
          static constexpr auto N = glz::tuple_size_v<std::decay_t<decltype(groups)>>;

@@ -115,6 +115,7 @@ namespace glz
       template <auto& Partial, auto Opts, class... Args>
       static void op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix)
       {
+         // Write only specified fields (whitelist mode)
          if constexpr (!check_opening_handled(Opts)) {
             dump<'{'>(b, ix);
             if constexpr (Opts.prettify) {
@@ -1839,7 +1840,7 @@ namespace glz
                      static constexpr meta_context mctx{.op = operation::serialize};
                      decltype(auto) field_value = [&]() -> decltype(auto) {
                         if constexpr (reflectable<T>) {
-                           return get<I>(t);
+                           return get<reflect<T>::value_indices[I]>(t);
                         }
                         else {
                            return get_member(value, glz::get<I>(reflect<T>::values));
@@ -1861,7 +1862,7 @@ namespace glz
                            const auto is_null = [&]() {
                               decltype(auto) element = [&]() -> decltype(auto) {
                                  if constexpr (reflectable<T>) {
-                                    return get<I>(t);
+                                    return get<reflect<T>::value_indices[I]>(t);
                                  }
                                  else {
                                     return get<I>(reflect<T>::values);
@@ -1915,7 +1916,8 @@ namespace glz
 
                      static constexpr auto check_opts = required_padding<val_t>() ? write_unchecked_on<Opts>() : Opts;
                      if constexpr (reflectable<T>) {
-                        to<JSON, val_t>::template op<check_opts>(get_member(value, get<I>(t)), ctx, b, ix);
+                        to<JSON, val_t>::template op<check_opts>(
+                           get_member(value, get<reflect<T>::value_indices[I]>(t)), ctx, b, ix);
                      }
                      else {
                         to<JSON, val_t>::template op<check_opts>(get_member(value, get<I>(reflect<T>::values)), ctx, b,
@@ -1981,7 +1983,8 @@ namespace glz
 
                      static constexpr auto check_opts = required_padding<val_t>() ? write_unchecked_on<Opts>() : Opts;
                      if constexpr (reflectable<T>) {
-                        to<JSON, val_t>::template op<check_opts>(get_member(value, get<I>(t)), ctx, b, ix);
+                        to<JSON, val_t>::template op<check_opts>(
+                           get_member(value, get<reflect<T>::value_indices[I]>(t)), ctx, b, ix);
                      }
                      else {
                         to<JSON, val_t>::template op<check_opts>(get_member(value, get<I>(reflect<T>::values)), ctx, b,
