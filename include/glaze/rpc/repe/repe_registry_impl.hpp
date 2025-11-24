@@ -244,8 +244,7 @@ namespace glz
                state.out.body = "writing to merged endpoint is not supported";
                state.out.header.body_length = state.out.body.size();
                state.out.header.body_format = repe::body_format::UTF8;
-               state.out.header.length =
-                  sizeof(repe::header) + state.out.query.size() + state.out.body.size();
+               state.out.header.length = sizeof(repe::header) + state.out.query.size() + state.out.body.size();
                return;
             }
 
