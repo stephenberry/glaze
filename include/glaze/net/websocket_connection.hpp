@@ -725,11 +725,15 @@ namespace glz
             close_code_ = code;
 
             if (!is_closing_) {
-               // Echo back with same code, no reason needed
-               send_close_frame(code, {});
+               // Peer initiated close - mark as closing and send response
+               is_closing_ = true;
+               // Send close frame and schedule socket close after write completes
+               send_close_frame(code, {}, true);
             }
-
-            do_close();
+            else {
+               // We initiated close, peer responded - close socket now
+               do_close();
+            }
          } break;
 
          case ws_opcode::ping:
