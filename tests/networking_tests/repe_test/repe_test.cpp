@@ -95,7 +95,7 @@ struct VolatileData
    volatile double d = 3.14;
 
    int get_i() volatile { return i; }
-   void inc_i() volatile { ++i; }
+   void inc_i() volatile { i = i + 1; }
 
    struct glaze
    {
