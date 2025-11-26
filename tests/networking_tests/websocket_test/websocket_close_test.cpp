@@ -179,7 +179,12 @@ void send_close_frame(asio::ip::tcp::socket& socket, uint16_t code = 1000)
    uint8_t mask[4] = {0x12, 0x34, 0x56, 0x78}; // Simple mask
    uint8_t code_bytes[2] = {static_cast<uint8_t>(code >> 8), static_cast<uint8_t>(code & 0xFF)};
 
-   std::vector<uint8_t> frame = {0x88, 0x82, mask[0], mask[1], mask[2], mask[3],
+   std::vector<uint8_t> frame = {0x88,
+                                 0x82,
+                                 mask[0],
+                                 mask[1],
+                                 mask[2],
+                                 mask[3],
                                  static_cast<uint8_t>(code_bytes[0] ^ mask[0]),
                                  static_cast<uint8_t>(code_bytes[1] ^ mask[1])};
 
@@ -200,7 +205,8 @@ suite websocket_close_frame_tests = [] {
          conn->close(ws_close_code::normal, "Test close");
       });
 
-      ws_server->on_close([&](std::shared_ptr<websocket_connection<asio::ip::tcp::socket>>, ws_close_code, std::string_view) { on_close_called = true; });
+      ws_server->on_close([&](std::shared_ptr<websocket_connection<asio::ip::tcp::socket>>, ws_close_code,
+                              std::string_view) { on_close_called = true; });
 
       // Create HTTP server
       http_server server;
@@ -367,7 +373,8 @@ suite websocket_error_handling_tests = [] {
          on_error_called = true;
       });
 
-      ws_server->on_close([&](std::shared_ptr<websocket_connection<asio::ip::tcp::socket>>, ws_close_code, std::string_view) { on_close_called = true; });
+      ws_server->on_close([&](std::shared_ptr<websocket_connection<asio::ip::tcp::socket>>, ws_close_code,
+                              std::string_view) { on_close_called = true; });
 
       // Create HTTP server
       http_server server;
@@ -439,7 +446,8 @@ suite websocket_error_handling_tests = [] {
          on_error_called = true;
       });
 
-      ws_server->on_close([&](std::shared_ptr<websocket_connection<asio::ip::tcp::socket>>, ws_close_code, std::string_view) { on_close_called = true; });
+      ws_server->on_close([&](std::shared_ptr<websocket_connection<asio::ip::tcp::socket>>, ws_close_code,
+                              std::string_view) { on_close_called = true; });
 
       // Create HTTP server
       http_server server;
@@ -504,7 +512,8 @@ suite websocket_error_handling_tests = [] {
          conn->close(ws_close_code::normal, "Third close");
       });
 
-      ws_server->on_close([&](std::shared_ptr<websocket_connection<asio::ip::tcp::socket>>, ws_close_code, std::string_view) { on_close_call_count++; });
+      ws_server->on_close([&](std::shared_ptr<websocket_connection<asio::ip::tcp::socket>>, ws_close_code,
+                              std::string_view) { on_close_call_count++; });
 
       // Create HTTP server
       http_server server;

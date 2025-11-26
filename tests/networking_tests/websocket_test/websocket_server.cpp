@@ -123,7 +123,7 @@ int main()
    });
 
    ws_server->on_close([&clients, &clients_mutex](std::shared_ptr<websocket_connection<asio::ip::tcp::socket>> conn,
-                                                   ws_close_code code, std::string_view reason) {
+                                                  ws_close_code code, std::string_view reason) {
       std::lock_guard<std::mutex> lock(clients_mutex);
       clients.erase(conn);
 

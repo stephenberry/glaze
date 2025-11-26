@@ -1006,9 +1006,8 @@ suite websocket_write_queue_tests = [] {
          }
       });
 
-      client.on_error([](std::error_code ec) {
-         std::cerr << "[rapid_fire_test] Client Error: " << ec.message() << "\n";
-      });
+      client.on_error(
+         [](std::error_code ec) { std::cerr << "[rapid_fire_test] Client Error: " << ec.message() << "\n"; });
 
       client.on_close([&](ws_close_code, std::string_view) { client.ctx_->stop(); });
 
@@ -1068,9 +1067,8 @@ suite websocket_write_queue_tests = [] {
          }
       });
 
-      client.on_error([](std::error_code ec) {
-         std::cerr << "[concurrent_test] Client Error: " << ec.message() << "\n";
-      });
+      client.on_error(
+         [](std::error_code ec) { std::cerr << "[concurrent_test] Client Error: " << ec.message() << "\n"; });
 
       client.on_close([&](ws_close_code, std::string_view) { client.ctx_->stop(); });
 
@@ -1187,9 +1185,8 @@ suite websocket_write_queue_tests = [] {
          }
       });
 
-      client.on_error([](std::error_code ec) {
-         std::cerr << "[broadcast_test] Client Error: " << ec.message() << "\n";
-      });
+      client.on_error(
+         [](std::error_code ec) { std::cerr << "[broadcast_test] Client Error: " << ec.message() << "\n"; });
 
       client.on_close([&](ws_close_code, std::string_view) { client.ctx_->stop(); });
 
@@ -1198,8 +1195,8 @@ suite websocket_write_queue_tests = [] {
 
       std::thread client_thread([&client]() { client.ctx_->run(); });
 
-      bool success =
-         wait_for_condition([&] { return messages_received.load() >= broadcast_count; }, std::chrono::milliseconds(10000));
+      bool success = wait_for_condition([&] { return messages_received.load() >= broadcast_count; },
+                                        std::chrono::milliseconds(10000));
 
       std::cout << "[broadcast_test] Received " << messages_received.load() << "/" << broadcast_count
                 << " messages (valid=" << valid_broadcasts.load() << ", invalid=" << invalid_broadcasts.load() << ")"
@@ -1252,9 +1249,8 @@ suite websocket_write_queue_tests = [] {
          }
       });
 
-      client.on_error([](std::error_code ec) {
-         std::cerr << "[mixed_size_test] Client Error: " << ec.message() << "\n";
-      });
+      client.on_error(
+         [](std::error_code ec) { std::cerr << "[mixed_size_test] Client Error: " << ec.message() << "\n"; });
 
       client.on_close([&](ws_close_code, std::string_view) { client.ctx_->stop(); });
 
@@ -1339,9 +1335,8 @@ suite websocket_write_queue_tests = [] {
          }
       });
 
-      client.on_error([](std::error_code ec) {
-         std::cerr << "[concurrent_close_test] Client Error: " << ec.message() << "\n";
-      });
+      client.on_error(
+         [](std::error_code ec) { std::cerr << "[concurrent_close_test] Client Error: " << ec.message() << "\n"; });
 
       client.on_close([&](ws_close_code code, std::string_view) {
          std::cout << "[concurrent_close_test] Connection closed with code: " << static_cast<int>(code) << std::endl;
@@ -1442,9 +1437,7 @@ suite websocket_write_queue_tests = [] {
          }
       });
 
-      client.on_error([](std::error_code ec) {
-         std::cerr << "[stress_test] Client Error: " << ec.message() << "\n";
-      });
+      client.on_error([](std::error_code ec) { std::cerr << "[stress_test] Client Error: " << ec.message() << "\n"; });
 
       client.on_close([&](ws_close_code, std::string_view) { client.ctx_->stop(); });
 
