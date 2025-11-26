@@ -22,7 +22,11 @@ int main() {
     });
 
     client.on_close([](glz::ws_close_code code, std::string_view reason) {
-        std::cout << "Connection closed: " << reason << std::endl;
+        std::cout << "Connection closed with code: " << static_cast<int>(code);
+        if (!reason.empty()) {
+            std::cout << ", reason: " << reason;
+        }
+        std::cout << std::endl;
     });
 
     client.on_error([](std::error_code ec) {
@@ -209,13 +213,16 @@ void on_close(std::function<void(ws_close_code, std::string_view)> handler);
 
 The handler receives:
 - `ws_close_code` - The close code (e.g., normal closure, protocol error)
-- `std::string_view` - The close reason message
+- `std::string_view` - The close reason (optional text explaining why the connection was closed)
 
 **Example:**
 ```cpp
 client.on_close([](glz::ws_close_code code, std::string_view reason) {
-    std::cout << "Connection closed with code " << static_cast<int>(code)
-              << ": " << reason << std::endl;
+    std::cout << "Connection closed with code " << static_cast<int>(code);
+    if (!reason.empty()) {
+        std::cout << " (" << reason << ")";
+    }
+    std::cout << std::endl;
 });
 ```
 

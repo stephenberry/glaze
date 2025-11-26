@@ -123,12 +123,15 @@ int main()
    });
 
    ws_server->on_close([&clients, &clients_mutex](std::shared_ptr<websocket_connection<asio::ip::tcp::socket>> conn,
-                                                   ws_close_code code) {
+                                                   ws_close_code code, std::string_view reason) {
       std::lock_guard<std::mutex> lock(clients_mutex);
       clients.erase(conn);
 
-      std::cout << "❌ WebSocket closed: " << conn->remote_address() << " (code=" << static_cast<int>(code)
-                << ", remaining clients: " << clients.size() << ")" << std::endl;
+      std::cout << "❌ WebSocket closed: " << conn->remote_address() << " (code=" << static_cast<int>(code);
+      if (!reason.empty()) {
+         std::cout << ", reason=" << reason;
+      }
+      std::cout << ", remaining clients: " << clients.size() << ")" << std::endl;
 
       // Notify remaining clients
       std::string leave_msg = "User from " + conn->remote_address() + " left the chat";

@@ -279,7 +279,7 @@ namespace glz
       using message_handler =
          std::function<void(std::shared_ptr<websocket_connection<asio::ip::tcp::socket>>, std::string_view, ws_opcode)>;
       using close_handler = std::function<void(std::shared_ptr<websocket_connection<asio::ip::tcp::socket>>,
-                                               ws_close_code)>;
+                                               ws_close_code, std::string_view)>;
       using error_handler =
          std::function<void(std::shared_ptr<websocket_connection<asio::ip::tcp::socket>>, std::error_code)>;
       using open_handler =
@@ -323,10 +323,11 @@ namespace glz
          }
       }
 
-      inline void notify_close(std::shared_ptr<websocket_connection<asio::ip::tcp::socket>> conn, ws_close_code code)
+      inline void notify_close(std::shared_ptr<websocket_connection<asio::ip::tcp::socket>> conn, ws_close_code code,
+                               std::string_view reason)
       {
          if (close_handler_) {
-            close_handler_(conn, code);
+            close_handler_(conn, code, reason);
          }
       }
 
@@ -440,8 +441,9 @@ namespace glz
       inline void set_user_data(std::shared_ptr<void> data) { user_data_ = data; }
       inline std::shared_ptr<void> get_user_data() const { return user_data_; }
 
-      // Get close code (valid after connection is closed)
+      // Get close code and reason (valid after connection is closed)
       inline ws_close_code get_close_code() const { return close_code_; }
+      inline std::string_view get_close_reason() const { return close_reason_; }
 
       // Inject initial data read during handshake
       inline void set_initial_data(std::string_view data)
@@ -729,13 +731,18 @@ namespace glz
          // https://datatracker.ietf.org/doc/html/rfc6455#section-5.5.1
          case ws_opcode::close: {
             ws_close_code code = ws_close_code::normal;
+            std::string reason;
 
             if (length >= 2) {
                code = static_cast<ws_close_code>((payload[0] << 8) | payload[1]);
+               if (length > 2) {
+                  reason = std::string(reinterpret_cast<const char*>(payload + 2), length - 2);
+               }
             }
 
-            // Store close code
+            // Store close code and reason for callback
             close_code_ = code;
+            close_reason_ = std::move(reason);
 
             if (!is_closing_) {
                // Peer initiated close - mark as closing and send response
@@ -1008,10 +1015,10 @@ namespace glz
          }
 
          if (server_) {
-            server_->notify_close(this->shared_from_this(), close_code_);
+            server_->notify_close(this->shared_from_this(), close_code_, close_reason_);
          }
          else if (client_close_handler_) {
-            client_close_handler_(close_code_);
+            client_close_handler_(close_code_, close_reason_);
          }
 
          if (socket_) {
@@ -1043,11 +1050,12 @@ namespace glz
 
       // Client mode callbacks
       std::function<void(std::string_view, ws_opcode)> client_message_handler_;
-      std::function<void(ws_close_code)> client_close_handler_;
+      std::function<void(ws_close_code, std::string_view)> client_close_handler_;
       std::function<void(std::error_code)> client_error_handler_;
 
-      // Close code for callback (reason is passed ephemerally)
+      // Close code and reason for callback
       ws_close_code close_code_{ws_close_code::normal};
+      std::string close_reason_;
 
      public:
       // Client mode support
@@ -1063,7 +1071,7 @@ namespace glz
       {
          client_message_handler_ = std::move(handler);
       }
-      inline void on_close(std::function<void(ws_close_code)> handler)
+      inline void on_close(std::function<void(ws_close_code, std::string_view)> handler)
       {
          client_close_handler_ = std::move(handler);
       }
