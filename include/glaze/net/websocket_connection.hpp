@@ -342,6 +342,9 @@ namespace glz
    };
 
    // WebSocket connection class - implementations come after websocket_server
+   // Thread-safety: send_text(), send_binary(), send_ping(), send_pong(), and close()
+   // are thread-safe and may be called concurrently from multiple threads.
+   // Outgoing frames are serialized via an internal write queue.
    template <typename SocketType>
    struct websocket_connection : public std::enable_shared_from_this<websocket_connection<SocketType>>
    {
