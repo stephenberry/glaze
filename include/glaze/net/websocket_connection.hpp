@@ -411,9 +411,12 @@ namespace glz
       // Close the connection
       inline void close(ws_close_code code = ws_close_code::normal, std::string_view reason = {})
       {
-         if (is_closing_) return;
+         // Atomically check and set is_closing_ to prevent race conditions
+         bool expected = false;
+         if (!is_closing_.compare_exchange_strong(expected, true)) {
+            return; // Another thread is already closing
+         }
 
-         is_closing_ = true;
          // Send close frame and close socket after write completes
          send_close_frame(code, reason, true);
       }
@@ -750,6 +753,10 @@ namespace glz
          // Capture socket locally to prevent race condition
          auto socket = socket_;
          if (!socket) {
+            // Socket already closed - if close was requested, ensure do_close() is called
+            if (close_after) {
+               do_close();
+            }
             return;
          }
 

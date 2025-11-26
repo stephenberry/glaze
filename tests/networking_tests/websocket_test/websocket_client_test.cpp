@@ -1400,7 +1400,6 @@ suite websocket_write_queue_tests = [] {
 
       expect(close_success) << "Connection did not close gracefully";
       expect(invalid_messages.load() == 0) << "Detected corrupted messages during concurrent send/close!";
-      // Note: We don't check exact message count since close races with sends
 
       if (!client.ctx_->stopped()) {
          client.ctx_->stop();
