@@ -262,6 +262,18 @@ namespace glz
    struct websocket_connection;
 
    // WebSocket server class
+   //
+   // Message Handler Lifetime:
+   // The std::string_view passed to message handlers is only valid for the duration
+   // of the callback. The view points directly into internal receive buffers which
+   // are reused after the handler returns. If you need to retain the message data
+   // beyond the callback (e.g., for async processing), you must copy it:
+   //
+   //   ws_server->on_message([](auto conn, std::string_view msg, ws_opcode op) {
+   //      std::string retained(msg);  // Copy if needed beyond this callback
+   //      // ... use msg directly for synchronous processing ...
+   //   });
+   //
    struct websocket_server
    {
       using message_handler =
@@ -342,9 +354,14 @@ namespace glz
    };
 
    // WebSocket connection class - implementations come after websocket_server
+   //
    // Thread-safety: send_text(), send_binary(), send_ping(), send_pong(), and close()
    // are thread-safe and may be called concurrently from multiple threads.
    // Outgoing frames are serialized via an internal write queue.
+   //
+   // Message Handler Lifetime: The std::string_view passed to on_message callbacks
+   // is only valid for the duration of the callback. Copy the data if you need to
+   // retain it beyond the callback scope.
    template <typename SocketType>
    struct websocket_connection : public std::enable_shared_from_this<websocket_connection<SocketType>>
    {
@@ -536,7 +553,7 @@ namespace glz
          }
       }
 
-      inline size_t process_frames(const uint8_t* data, std::size_t length)
+      inline size_t process_frames(uint8_t* data, std::size_t length)
       {
          std::size_t offset = 0;
 
@@ -592,21 +609,18 @@ namespace glz
                break;
             }
 
-            // Extract and unmask payload
-            std::vector<uint8_t> payload(static_cast<size_t>(payload_length));
-            if (payload_length > 0) {
-               std::copy(data + offset + header_size, data + offset + header_size + static_cast<size_t>(payload_length),
-                         payload.begin());
+            // Get pointer to payload in frame buffer and unmask in-place
+            uint8_t* payload_ptr = data + offset + header_size;
+            const auto payload_size = static_cast<size_t>(payload_length);
 
-               if (header.mask()) {
-                  for (std::size_t i = 0; i < payload.size(); ++i) {
-                     payload[i] ^= mask_key[i % 4];
-                  }
+            if (header.mask() && payload_size > 0) {
+               for (std::size_t i = 0; i < payload_size; ++i) {
+                  payload_ptr[i] ^= mask_key[i % 4];
                }
             }
 
             // Handle the frame
-            handle_frame(header.opcode(), payload.data(), payload.size(), header.fin());
+            handle_frame(header.opcode(), payload_ptr, payload_size, header.fin());
 
             offset += header_size + static_cast<size_t>(payload_length);
          }
@@ -623,35 +637,32 @@ namespace glz
                return;
             }
 
-            current_opcode_ = opcode;
-            message_buffer_.assign(payload, payload + length);
-
-            if (message_buffer_.size() > max_message_size_) {
+            if (length > max_message_size_) {
                close(ws_close_code::message_too_big, "Message too big");
                return;
             }
 
             if (fin) {
-               // Validate UTF-8 for text frames
+               // Complete single-frame message - deliver directly (zero-copy)
                if (opcode == ws_opcode::text) {
-                  if (!glz::validate_utf8(message_buffer_.data(), message_buffer_.size())) {
+                  if (!glz::validate_utf8(payload, length)) {
                      close(ws_close_code::invalid_payload, "Invalid UTF-8");
                      return;
                   }
                }
 
-               std::string_view message_view(reinterpret_cast<const char*>(message_buffer_.data()),
-                                             message_buffer_.size());
+               std::string_view message_view(reinterpret_cast<const char*>(payload), length);
                if (server_) {
-                  server_->notify_message(this->shared_from_this(), message_view, current_opcode_);
+                  server_->notify_message(this->shared_from_this(), message_view, opcode);
                }
                else if (client_message_handler_) {
-                  client_message_handler_(message_view, current_opcode_);
+                  client_message_handler_(message_view, opcode);
                }
-               message_buffer_.clear();
-               current_opcode_ = ws_opcode::continuation;
             }
             else {
+               // Fragmented message - must buffer for reassembly
+               current_opcode_ = opcode;
+               message_buffer_.assign(payload, payload + length);
                is_reading_frame_ = true;
             }
             break;
