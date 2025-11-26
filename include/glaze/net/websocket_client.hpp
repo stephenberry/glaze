@@ -17,7 +17,7 @@ namespace glz
    {
       using message_handler_t = std::function<void(std::string_view, ws_opcode)>;
       using open_handler_t = std::function<void()>;
-      using close_handler_t = std::function<void(ws_close_code, std::string_view)>;
+      using close_handler_t = std::function<void(ws_close_code)>;
       using error_handler_t = std::function<void(std::error_code)>;
 
       using tcp_socket = asio::ip::tcp::socket;

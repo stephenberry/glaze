@@ -59,7 +59,7 @@ void run_echo_server(std::atomic<bool>& server_ready, std::atomic<bool>& should_
       }
    });
 
-   ws_server->on_close([](auto /*conn*/) {});
+   ws_server->on_close([](auto /*conn*/, ws_close_code /*code*/) {});
 
    ws_server->on_error([](auto /*conn*/, std::error_code ec) {
       std::cerr << "[echo_server] Server Error: " << ec.message() << " (code=" << ec.value() << ")\n";
@@ -95,7 +95,7 @@ void run_close_after_message_server(std::atomic<bool>& server_ready, std::atomic
       conn->close(ws_close_code::normal, "Test close");
    });
 
-   ws_server->on_close([](auto /*conn*/) {});
+   ws_server->on_close([](auto /*conn*/, ws_close_code /*code*/) {});
 
    ws_server->on_error([](auto /*conn*/, std::error_code /*ec*/) {});
 
@@ -133,7 +133,7 @@ void run_counting_server(std::atomic<bool>& server_ready, std::atomic<bool>& sho
       }
    });
 
-   ws_server->on_close([](auto /*conn*/) {});
+   ws_server->on_close([](auto /*conn*/, ws_close_code /*code*/) {});
 
    ws_server->on_error([](auto /*conn*/, std::error_code /*ec*/) {});
 
@@ -197,7 +197,7 @@ suite websocket_client_tests = [] {
                    << ", category=" << ec.category().name() << ")\n";
       });
 
-      client.on_close([&](ws_close_code, std::string_view) {
+      client.on_close([&](ws_close_code) {
          connection_closed = true;
          client.ctx_->stop();
       });
@@ -255,7 +255,7 @@ suite websocket_client_tests = [] {
 
       client.on_error([](std::error_code ec) { std::cerr << "Client Error: " << ec.message() << "\n"; });
 
-      client.on_close([&](ws_close_code, std::string_view) { client.ctx_->stop(); });
+      client.on_close([&](ws_close_code) { client.ctx_->stop(); });
 
       std::string client_url = "ws://localhost:" + std::to_string(port) + "/ws";
       client.connect(client_url);
@@ -309,7 +309,7 @@ suite websocket_client_tests = [] {
 
       client.on_error([](std::error_code ec) { std::cerr << "Client Error: " << ec.message() << "\n"; });
 
-      client.on_close([&](ws_close_code, std::string_view) { client.ctx_->stop(); });
+      client.on_close([&](ws_close_code) { client.ctx_->stop(); });
 
       std::string client_url = "ws://localhost:" + std::to_string(port) + "/ws";
       client.connect(client_url);
@@ -372,7 +372,7 @@ suite websocket_client_tests = [] {
          std::cerr << "[large_message_test] Client Error: " << ec.message() << " (code=" << ec.value() << ")\n";
       });
 
-      client.on_close([&](ws_close_code, std::string_view) { client.ctx_->stop(); });
+      client.on_close([&](ws_close_code) { client.ctx_->stop(); });
 
       std::string client_url = "ws://localhost:" + std::to_string(port) + "/ws";
       client.connect(client_url);
@@ -473,10 +473,10 @@ suite websocket_client_tests = [] {
 
       client.on_message([](std::string_view /*message*/, ws_opcode /*opcode*/) {});
 
-      client.on_close([&](ws_close_code code, std::string_view reason) {
-         std::cout << "Connection closed with code: " << static_cast<int>(code) << ", reason: " << reason << std::endl;
+      client.on_close([&](ws_close_code code) {
+         std::cout << "Connection closed with code: " << static_cast<int>(code) << std::endl;
          connection_closed = true;
-         if (code == ws_close_code::normal && reason == "Test close") {
+         if (code == ws_close_code::normal) {
             close_code_correct = true;
          }
          client.ctx_->stop();
@@ -543,7 +543,7 @@ suite websocket_client_tests = [] {
             std::cerr << "Client " << client_id << " error: " << ec.message() << "\n";
          });
 
-         client_ptr->on_close([](ws_close_code, std::string_view) {});
+         client_ptr->on_close([](ws_close_code) {});
 
          std::string client_url = "ws://localhost:" + std::to_string(port) + "/ws";
          client_ptr->connect(client_url);
@@ -606,7 +606,7 @@ suite websocket_client_tests = [] {
 
       client.on_error([](std::error_code ec) { std::cerr << "Client Error: " << ec.message() << "\n"; });
 
-      client.on_close([&](ws_close_code, std::string_view) { client.ctx_->stop(); });
+      client.on_close([&](ws_close_code) { client.ctx_->stop(); });
 
       std::string client_url = "ws://localhost:" + std::to_string(port) + "/ws";
       client.connect(client_url);
@@ -673,7 +673,7 @@ suite websocket_client_tests = [] {
          }
       });
 
-      ws_server->on_close([](auto /*conn*/) {});
+      ws_server->on_close([](auto /*conn*/, ws_close_code /*code*/) {});
       ws_server->on_error([](auto /*conn*/, std::error_code /*ec*/) {});
 
       server.websocket("/ws", ws_server);
@@ -721,7 +721,7 @@ suite websocket_client_tests = [] {
 
       client.on_error([](std::error_code ec) { std::cerr << "Client Error: " << ec.message() << "\n"; });
 
-      client.on_close([&](ws_close_code, std::string_view) { client.ctx_->stop(); });
+      client.on_close([&](ws_close_code) { client.ctx_->stop(); });
 
       std::string client_url = "ws://localhost:" + std::to_string(port) + "/ws";
       client.connect(client_url);
@@ -765,7 +765,7 @@ suite websocket_client_tests = [] {
 
       client.on_error([](std::error_code ec) { std::cerr << "Client Error: " << ec.message() << "\n"; });
 
-      client.on_close([&](ws_close_code, std::string_view) { client.ctx_->stop(); });
+      client.on_close([&](ws_close_code) { client.ctx_->stop(); });
 
       std::string client_url = "ws://localhost:" + std::to_string(port) + "/ws";
       client.connect(client_url);
@@ -814,7 +814,7 @@ suite websocket_client_tests = [] {
 
       client.on_error([](std::error_code ec) { std::cerr << "Client Error: " << ec.message() << "\n"; });
 
-      client.on_close([&](ws_close_code, std::string_view) { client.ctx_->stop(); });
+      client.on_close([&](ws_close_code) { client.ctx_->stop(); });
 
       std::string client_url = "ws://localhost:" + std::to_string(port) + "/ws";
       client.connect(client_url);
@@ -885,7 +885,7 @@ void run_integrity_check_server(std::atomic<bool>& server_ready, std::atomic<boo
       }
    });
 
-   ws_server->on_close([](auto /*conn*/) {});
+   ws_server->on_close([](auto /*conn*/, ws_close_code /*code*/) {});
    ws_server->on_error([](auto /*conn*/, std::error_code ec) {
       std::cerr << "[integrity_server] Error: " << ec.message() << std::endl;
    });
@@ -928,7 +928,7 @@ void run_broadcast_server(std::atomic<bool>& server_ready, std::atomic<bool>& sh
       }
    });
 
-   ws_server->on_close([&](auto conn) {
+   ws_server->on_close([&](auto conn, ws_close_code /*code*/) {
       std::lock_guard<std::mutex> lock(conn_mutex);
       connections.erase(std::remove(connections.begin(), connections.end(), conn), connections.end());
    });
@@ -1010,7 +1010,7 @@ suite websocket_write_queue_tests = [] {
          std::cerr << "[rapid_fire_test] Client Error: " << ec.message() << "\n";
       });
 
-      client.on_close([&](ws_close_code, std::string_view) { client.ctx_->stop(); });
+      client.on_close([&](ws_close_code) { client.ctx_->stop(); });
 
       std::string client_url = "ws://localhost:" + std::to_string(port) + "/ws";
       client.connect(client_url);
@@ -1072,7 +1072,7 @@ suite websocket_write_queue_tests = [] {
          std::cerr << "[concurrent_test] Client Error: " << ec.message() << "\n";
       });
 
-      client.on_close([&](ws_close_code, std::string_view) { client.ctx_->stop(); });
+      client.on_close([&](ws_close_code) { client.ctx_->stop(); });
 
       std::string client_url = "ws://localhost:" + std::to_string(port) + "/ws";
       client.connect(client_url);
@@ -1191,7 +1191,7 @@ suite websocket_write_queue_tests = [] {
          std::cerr << "[broadcast_test] Client Error: " << ec.message() << "\n";
       });
 
-      client.on_close([&](ws_close_code, std::string_view) { client.ctx_->stop(); });
+      client.on_close([&](ws_close_code) { client.ctx_->stop(); });
 
       std::string client_url = "ws://localhost:" + std::to_string(port) + "/ws";
       client.connect(client_url);
@@ -1256,7 +1256,7 @@ suite websocket_write_queue_tests = [] {
          std::cerr << "[mixed_size_test] Client Error: " << ec.message() << "\n";
       });
 
-      client.on_close([&](ws_close_code, std::string_view) { client.ctx_->stop(); });
+      client.on_close([&](ws_close_code) { client.ctx_->stop(); });
 
       std::string client_url = "ws://localhost:" + std::to_string(port) + "/ws";
       client.connect(client_url);
@@ -1343,7 +1343,7 @@ suite websocket_write_queue_tests = [] {
          std::cerr << "[concurrent_close_test] Client Error: " << ec.message() << "\n";
       });
 
-      client.on_close([&](ws_close_code code, std::string_view) {
+      client.on_close([&](ws_close_code code) {
          std::cout << "[concurrent_close_test] Connection closed with code: " << static_cast<int>(code) << std::endl;
          closed = true;
          client.ctx_->stop();
@@ -1446,7 +1446,7 @@ suite websocket_write_queue_tests = [] {
          std::cerr << "[stress_test] Client Error: " << ec.message() << "\n";
       });
 
-      client.on_close([&](ws_close_code, std::string_view) { client.ctx_->stop(); });
+      client.on_close([&](ws_close_code) { client.ctx_->stop(); });
 
       std::string client_url = "ws://localhost:" + std::to_string(port) + "/ws";
       client.connect(client_url);

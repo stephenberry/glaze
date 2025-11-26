@@ -185,8 +185,7 @@ suite websocket_close_frame_tests = [] {
          conn->close(ws_close_code::normal, "Test close");
       });
 
-      ws_server->on_close(
-         [&](std::shared_ptr<websocket_connection<asio::ip::tcp::socket>>) { on_close_called = true; });
+      ws_server->on_close([&](std::shared_ptr<websocket_connection<asio::ip::tcp::socket>>, ws_close_code) { on_close_called = true; });
 
       // Create HTTP server
       http_server server;
@@ -350,8 +349,7 @@ suite websocket_error_handling_tests = [] {
          on_error_called = true;
       });
 
-      ws_server->on_close(
-         [&](std::shared_ptr<websocket_connection<asio::ip::tcp::socket>>) { on_close_called = true; });
+      ws_server->on_close([&](std::shared_ptr<websocket_connection<asio::ip::tcp::socket>>, ws_close_code) { on_close_called = true; });
 
       // Create HTTP server
       http_server server;
@@ -423,8 +421,7 @@ suite websocket_error_handling_tests = [] {
          on_error_called = true;
       });
 
-      ws_server->on_close(
-         [&](std::shared_ptr<websocket_connection<asio::ip::tcp::socket>>) { on_close_called = true; });
+      ws_server->on_close([&](std::shared_ptr<websocket_connection<asio::ip::tcp::socket>>, ws_close_code) { on_close_called = true; });
 
       // Create HTTP server
       http_server server;
@@ -489,7 +486,7 @@ suite websocket_error_handling_tests = [] {
          conn->close(ws_close_code::normal, "Third close");
       });
 
-      ws_server->on_close([&](std::shared_ptr<websocket_connection<asio::ip::tcp::socket>>) { on_close_call_count++; });
+      ws_server->on_close([&](std::shared_ptr<websocket_connection<asio::ip::tcp::socket>>, ws_close_code) { on_close_call_count++; });
 
       // Create HTTP server
       http_server server;
