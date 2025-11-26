@@ -743,7 +743,7 @@ namespace glz
          }
 
          std::size_t header_size = get_frame_header_size(payload.size(), client_mode_);
-         auto frame_buffer = std::make_shared<std::vector<uint8_t>>(header_size + payload.size());
+         auto frame_buffer = std::make_unique<std::vector<uint8_t>>(header_size + payload.size());
 
          write_frame_header(opcode, payload.size(), fin, frame_buffer->data(), client_mode_);
          std::copy(payload.begin(), payload.end(), frame_buffer->begin() + header_size);
@@ -762,7 +762,7 @@ namespace glz
          // Queue the frame and start writing if not already in progress
          {
             std::lock_guard<std::mutex> lock(write_mutex_);
-            write_queue_.push_back(frame_buffer);
+            write_queue_.push_back(std::move(frame_buffer));
             if (close_after) {
                close_after_write_ = true; // Set atomically with queuing
             }
@@ -779,7 +779,7 @@ namespace glz
       // Process the write queue - called when a write completes or when starting a new write
       inline void do_write()
       {
-         std::shared_ptr<std::vector<uint8_t>> frame_buffer;
+         std::unique_ptr<std::vector<uint8_t>> frame_buffer;
          bool should_close_after = false;
 
          {
@@ -790,7 +790,7 @@ namespace glz
                close_after_write_ = false;
             }
             else {
-               frame_buffer = write_queue_.front();
+               frame_buffer = std::move(write_queue_.front());
                write_queue_.pop_front();
             }
          }
@@ -813,8 +813,10 @@ namespace glz
          }
 
          auto self = this->shared_from_this();
-         asio::async_write(*socket, asio::buffer(*frame_buffer),
-                           [self, frame_buffer](std::error_code ec, std::size_t) {
+         // Create buffer view before moving frame_buffer into lambda (C++14 evaluation order safety)
+         auto buffer_view = asio::buffer(*frame_buffer);
+         asio::async_write(*socket, buffer_view,
+                           [self, frame_buffer = std::move(frame_buffer)](std::error_code ec, std::size_t) {
                               if (ec) {
                                  // Mark connection as closing before notifying handlers to avoid re-entrant close
                                  // attempts
@@ -983,7 +985,7 @@ namespace glz
 
       // Write queue for serializing outgoing frames (prevents interleaved writes)
       std::mutex write_mutex_;
-      std::deque<std::shared_ptr<std::vector<uint8_t>>> write_queue_;
+      std::deque<std::unique_ptr<std::vector<uint8_t>>> write_queue_;
       bool write_in_progress_{false};
       bool close_after_write_{false}; // Close socket after write queue drains
 
