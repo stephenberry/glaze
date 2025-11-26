@@ -726,7 +726,7 @@ namespace glz
          }
       }
 
-      inline void send_frame(ws_opcode opcode, std::string_view payload, bool fin = true)
+      inline void send_frame(ws_opcode opcode, std::string_view payload, bool fin = true, bool close_after = false)
       {
          // Allow close frames to be sent even when closing, but block other frame types
          if (is_closing_ && opcode != ws_opcode::close) {
@@ -760,6 +760,9 @@ namespace glz
          {
             std::lock_guard<std::mutex> lock(write_mutex_);
             write_queue_.push_back(frame_buffer);
+            if (close_after) {
+               close_after_write_ = true; // Set atomically with queuing
+            }
             if (write_in_progress_) {
                return; // Another write is in progress, frame will be sent when it completes
             }
@@ -874,14 +877,8 @@ namespace glz
 
       inline void send_close_frame_with_callback(ws_opcode opcode, std::string_view payload)
       {
-         // Set flag to close socket after the write queue drains
-         {
-            std::lock_guard<std::mutex> lock(write_mutex_);
-            close_after_write_ = true;
-         }
-
-         // Queue the close frame using the standard send_frame mechanism
-         send_frame(opcode, payload);
+         // Queue the close frame and set close_after_write_ flag atomically
+         send_frame(opcode, payload, true, true);
       }
 
       inline std::size_t get_frame_header_size(std::size_t payload_length, bool use_masking)
