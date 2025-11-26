@@ -558,7 +558,8 @@ namespace glz
          }
 
          // Continue reading if connection is still open
-         if (!is_closing_ && handshake_complete_) {
+         // Use closed_ instead of is_closing_ to allow receiving close response during handshake
+         if (!closed_.load() && handshake_complete_) {
             start_read();
          }
       }
@@ -830,10 +831,18 @@ namespace glz
 
          auto socket = socket_;
          if (!socket) {
-            std::lock_guard<std::mutex> lock(write_mutex_);
-            write_in_progress_ = false;
-            write_queue_.clear();
-            close_after_write_ = false;
+            // Socket was closed externally - ensure close callback fires if pending
+            bool had_close_pending = false;
+            {
+               std::lock_guard<std::mutex> lock(write_mutex_);
+               write_in_progress_ = false;
+               had_close_pending = close_after_write_;
+               write_queue_.clear();
+               close_after_write_ = false;
+            }
+            if (had_close_pending) {
+               do_close(); // Ensure callback fires (idempotent via closed_ CAS)
+            }
             return;
          }
 
