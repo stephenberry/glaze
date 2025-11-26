@@ -8,9 +8,11 @@
 #include <atomic>
 #include <chrono>
 #include <cstring>
+#include <deque>
 #include <functional>
 #include <iostream>
 #include <memory>
+#include <mutex>
 #include <random>
 #include <string>
 #include <string_view>
@@ -738,32 +740,85 @@ namespace glz
          }
 
          std::size_t header_size = get_frame_header_size(payload.size(), client_mode_);
-         std::vector<uint8_t> frame(header_size + payload.size());
+         auto frame_buffer = std::make_shared<std::vector<uint8_t>>(header_size + payload.size());
 
-         write_frame_header(opcode, payload.size(), fin, frame.data(), client_mode_);
-         std::copy(payload.begin(), payload.end(), frame.begin() + header_size);
+         write_frame_header(opcode, payload.size(), fin, frame_buffer->data(), client_mode_);
+         std::copy(payload.begin(), payload.end(), frame_buffer->begin() + header_size);
 
          // Apply masking if in client mode
          if (client_mode_ && payload.size() > 0) {
             // Get the masking key from the header
             std::size_t mask_key_offset = header_size - 4;
-            const uint8_t* mask_key = frame.data() + mask_key_offset;
+            const uint8_t* mask_key = frame_buffer->data() + mask_key_offset;
             // Mask the payload
             for (std::size_t i = 0; i < payload.size(); ++i) {
-               frame[header_size + i] ^= mask_key[i % 4];
+               (*frame_buffer)[header_size + i] ^= mask_key[i % 4];
             }
          }
 
-         auto self = this->shared_from_this();
+         // Queue the frame and start writing if not already in progress
+         {
+            std::lock_guard<std::mutex> lock(write_mutex_);
+            write_queue_.push_back(frame_buffer);
+            if (write_in_progress_) {
+               return; // Another write is in progress, frame will be sent when it completes
+            }
+            write_in_progress_ = true;
+         }
 
-         // Use shared_ptr to keep the frame alive during async operation
-         auto frame_buffer = std::make_shared<std::vector<uint8_t>>(std::move(frame));
+         // Start writing the queued frame
+         do_write();
+      }
+
+      // Process the write queue - called when a write completes or when starting a new write
+      inline void do_write()
+      {
+         std::shared_ptr<std::vector<uint8_t>> frame_buffer;
+         bool should_close_after = false;
+
+         {
+            std::lock_guard<std::mutex> lock(write_mutex_);
+            if (write_queue_.empty()) {
+               write_in_progress_ = false;
+               should_close_after = close_after_write_;
+               close_after_write_ = false;
+            }
+            else {
+               frame_buffer = write_queue_.front();
+               write_queue_.pop_front();
+            }
+         }
+
+         // Handle close-after-write when queue is empty
+         if (!frame_buffer) {
+            if (should_close_after) {
+               schedule_close();
+            }
+            return;
+         }
+
+         auto socket = socket_;
+         if (!socket) {
+            std::lock_guard<std::mutex> lock(write_mutex_);
+            write_in_progress_ = false;
+            write_queue_.clear();
+            close_after_write_ = false;
+            return;
+         }
+
+         auto self = this->shared_from_this();
          asio::async_write(*socket, asio::buffer(*frame_buffer),
-                           [self, frame_buffer, payload_size = payload.size()](std::error_code ec, std::size_t) {
+                           [self, frame_buffer](std::error_code ec, std::size_t) {
                               if (ec) {
                                  // Mark connection as closing before notifying handlers to avoid re-entrant close
                                  // attempts
                                  self->is_closing_ = true;
+                                 {
+                                    std::lock_guard<std::mutex> lock(self->write_mutex_);
+                                    self->write_in_progress_ = false;
+                                    self->write_queue_.clear();
+                                    self->close_after_write_ = false;
+                                 }
                                  if (self->server_) {
                                     self->server_->notify_error(self, ec);
                                  }
@@ -772,8 +827,27 @@ namespace glz
                                  }
                                  // Close the connection after a write error (connection is likely broken)
                                  self->do_close();
+                                 return;
                               }
+
+                              // Process next frame in queue
+                              self->do_write();
                            });
+      }
+
+      // Schedule socket close after a short delay to allow data transmission
+      inline void schedule_close()
+      {
+         auto socket = socket_;
+         if (!socket) {
+            do_close();
+            return;
+         }
+
+         auto self = this->shared_from_this();
+         auto timer = std::make_shared<asio::steady_timer>(socket->get_executor());
+         timer->expires_after(std::chrono::milliseconds(100));
+         timer->async_wait([self, timer](std::error_code) { self->do_close(); });
       }
 
       inline void send_close_frame(ws_close_code code, std::string_view reason, bool schedule_socket_close = false)
@@ -800,43 +874,14 @@ namespace glz
 
       inline void send_close_frame_with_callback(ws_opcode opcode, std::string_view payload)
       {
-         // Capture socket locally to prevent race condition
-         auto socket = socket_;
-         if (!socket) {
-            do_close();
-            return;
+         // Set flag to close socket after the write queue drains
+         {
+            std::lock_guard<std::mutex> lock(write_mutex_);
+            close_after_write_ = true;
          }
 
-         std::size_t header_size = get_frame_header_size(payload.size(), client_mode_);
-         std::vector<uint8_t> frame(header_size + payload.size());
-
-         write_frame_header(opcode, payload.size(), true, frame.data(), client_mode_);
-         std::copy(payload.begin(), payload.end(), frame.begin() + header_size);
-
-         auto self = this->shared_from_this();
-
-         // Use shared_ptr to keep the frame alive during async operation
-         auto frame_buffer = std::make_shared<std::vector<uint8_t>>(std::move(frame));
-         asio::async_write(*socket, asio::buffer(*frame_buffer),
-                           [self, frame_buffer, socket](std::error_code ec, std::size_t) {
-                              if (ec) {
-                                 self->is_closing_ = true;
-                                 if (self->server_) {
-                                    self->server_->notify_error(self, ec);
-                                 }
-                                 self->do_close();
-                                 return;
-                              }
-                              // Give the OS time to transmit the data before closing the socket
-                              if (socket) {
-                                 auto timer = std::make_shared<asio::steady_timer>(socket->get_executor());
-                                 timer->expires_after(std::chrono::milliseconds(100));
-                                 timer->async_wait([self, timer](std::error_code) { self->do_close(); });
-                              }
-                              else {
-                                 self->do_close();
-                              }
-                           });
+         // Queue the close frame using the standard send_frame mechanism
+         send_frame(opcode, payload);
       }
 
       inline std::size_t get_frame_header_size(std::size_t payload_length, bool use_masking)
@@ -935,6 +980,12 @@ namespace glz
       std::shared_ptr<void> user_data_;
       asio::ip::tcp::endpoint remote_endpoint_;
       bool client_mode_{false}; // For client-side connections (requires masking)
+
+      // Write queue for serializing outgoing frames (prevents interleaved writes)
+      std::mutex write_mutex_;
+      std::deque<std::shared_ptr<std::vector<uint8_t>>> write_queue_;
+      bool write_in_progress_{false};
+      bool close_after_write_{false}; // Close socket after write queue drains
 
       // Client mode callbacks
       std::function<void(std::string_view, ws_opcode)> client_message_handler_;
