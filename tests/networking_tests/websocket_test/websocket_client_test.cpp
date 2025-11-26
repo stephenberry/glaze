@@ -433,7 +433,7 @@ suite websocket_client_tests = [] {
       websocket_client client;
       std::atomic<bool> error_received{false};
 
-      client.on_error([&](std::error_code ec) {
+      client.on_error([&](std::error_code) {
          error_received = true;
          if (!client.ctx_->stopped()) {
             client.ctx_->stop();
