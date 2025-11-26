@@ -8,9 +8,11 @@
 #include <atomic>
 #include <chrono>
 #include <cstring>
+#include <deque>
 #include <functional>
 #include <iostream>
 #include <memory>
+#include <mutex>
 #include <random>
 #include <string>
 #include <string_view>
@@ -260,11 +262,24 @@ namespace glz
    struct websocket_connection;
 
    // WebSocket server class
+   //
+   // Message Handler Lifetime:
+   // The std::string_view passed to message handlers is only valid for the duration
+   // of the callback. The view points directly into internal receive buffers which
+   // are reused after the handler returns. If you need to retain the message data
+   // beyond the callback (e.g., for async processing), you must copy it:
+   //
+   //   ws_server->on_message([](auto conn, std::string_view msg, ws_opcode op) {
+   //      std::string retained(msg);  // Copy if needed beyond this callback
+   //      // ... use msg directly for synchronous processing ...
+   //   });
+   //
    struct websocket_server
    {
       using message_handler =
          std::function<void(std::shared_ptr<websocket_connection<asio::ip::tcp::socket>>, std::string_view, ws_opcode)>;
-      using close_handler = std::function<void(std::shared_ptr<websocket_connection<asio::ip::tcp::socket>>)>;
+      using close_handler = std::function<void(std::shared_ptr<websocket_connection<asio::ip::tcp::socket>>,
+                                               ws_close_code, std::string_view)>;
       using error_handler =
          std::function<void(std::shared_ptr<websocket_connection<asio::ip::tcp::socket>>, std::error_code)>;
       using open_handler =
@@ -308,10 +323,11 @@ namespace glz
          }
       }
 
-      inline void notify_close(std::shared_ptr<websocket_connection<asio::ip::tcp::socket>> conn)
+      inline void notify_close(std::shared_ptr<websocket_connection<asio::ip::tcp::socket>> conn, ws_close_code code,
+                               std::string_view reason)
       {
          if (close_handler_) {
-            close_handler_(conn);
+            close_handler_(conn, code, reason);
          }
       }
 
@@ -340,6 +356,14 @@ namespace glz
    };
 
    // WebSocket connection class - implementations come after websocket_server
+   //
+   // Thread-safety: send_text(), send_binary(), send_ping(), send_pong(), and close()
+   // are thread-safe and may be called concurrently from multiple threads.
+   // Outgoing frames are serialized via an internal write queue.
+   //
+   // Message Handler Lifetime: The std::string_view passed to on_message callbacks
+   // is only valid for the duration of the callback. Copy the data if you need to
+   // retain it beyond the callback scope.
    template <typename SocketType>
    struct websocket_connection : public std::enable_shared_from_this<websocket_connection<SocketType>>
    {
@@ -387,13 +411,25 @@ namespace glz
       inline void send_pong(std::string_view payload = {}) { send_frame(ws_opcode::pong, payload); }
 
       // Close the connection
+      // RFC 6455 Section 7.1.2: "To Start the WebSocket Closing Handshake with a status code,
+      // an endpoint MUST send a Close control frame"
+      // https://datatracker.ietf.org/doc/html/rfc6455#section-7.1.2
       inline void close(ws_close_code code = ws_close_code::normal, std::string_view reason = {})
       {
-         if (is_closing_) return;
+         // Atomically check and set is_closing_ to prevent race conditions
+         bool expected = false;
+         if (!is_closing_.compare_exchange_strong(expected, true)) {
+            return; // Another thread is already closing
+         }
 
-         is_closing_ = true;
-         // Send close frame and close socket after write completes
-         send_close_frame(code, reason, true);
+         // Store close code for the callback
+         close_code_ = code;
+
+         // Send close frame but DON'T close socket immediately.
+         // RFC 6455 Section 7.1.1: "Once an endpoint has both sent and received a Close control
+         // frame, that endpoint SHOULD Close the WebSocket Connection"
+         // The socket will be closed when we receive the close response in handle_frame().
+         send_close_frame(code, reason, false);
       }
 
       // Get remote endpoint information
@@ -404,6 +440,10 @@ namespace glz
       // Set user data
       inline void set_user_data(std::shared_ptr<void> data) { user_data_ = data; }
       inline std::shared_ptr<void> get_user_data() const { return user_data_; }
+
+      // Get close code and reason (valid after connection is closed)
+      inline ws_close_code get_close_code() const { return close_code_; }
+      inline std::string_view get_close_reason() const { return close_reason_; }
 
       // Inject initial data read during handshake
       inline void set_initial_data(std::string_view data)
@@ -526,12 +566,16 @@ namespace glz
          }
 
          // Continue reading if connection is still open
-         if (!is_closing_ && handshake_complete_) {
+         // RFC 6455 Section 7.1.1: The initiator must continue reading to receive the peer's
+         // Close frame response before closing the TCP connection.
+         // Use closed_ (not is_closing_) to allow receiving close response during handshake.
+         // https://datatracker.ietf.org/doc/html/rfc6455#section-7.1.1
+         if (!closed_.load() && handshake_complete_) {
             start_read();
          }
       }
 
-      inline size_t process_frames(const uint8_t* data, std::size_t length)
+      inline size_t process_frames(uint8_t* data, std::size_t length)
       {
          std::size_t offset = 0;
 
@@ -587,21 +631,18 @@ namespace glz
                break;
             }
 
-            // Extract and unmask payload
-            std::vector<uint8_t> payload(static_cast<size_t>(payload_length));
-            if (payload_length > 0) {
-               std::copy(data + offset + header_size, data + offset + header_size + static_cast<size_t>(payload_length),
-                         payload.begin());
+            // Get pointer to payload in frame buffer and unmask in-place
+            uint8_t* payload_ptr = data + offset + header_size;
+            const auto payload_size = static_cast<size_t>(payload_length);
 
-               if (header.mask()) {
-                  for (std::size_t i = 0; i < payload.size(); ++i) {
-                     payload[i] ^= mask_key[i % 4];
-                  }
+            if (header.mask() && payload_size > 0) {
+               for (std::size_t i = 0; i < payload_size; ++i) {
+                  payload_ptr[i] ^= mask_key[i % 4];
                }
             }
 
             // Handle the frame
-            handle_frame(header.opcode(), payload.data(), payload.size(), header.fin());
+            handle_frame(header.opcode(), payload_ptr, payload_size, header.fin());
 
             offset += header_size + static_cast<size_t>(payload_length);
          }
@@ -618,35 +659,32 @@ namespace glz
                return;
             }
 
-            current_opcode_ = opcode;
-            message_buffer_.assign(payload, payload + length);
-
-            if (message_buffer_.size() > max_message_size_) {
+            if (length > max_message_size_) {
                close(ws_close_code::message_too_big, "Message too big");
                return;
             }
 
             if (fin) {
-               // Validate UTF-8 for text frames
+               // Complete single-frame message - deliver directly (zero-copy)
                if (opcode == ws_opcode::text) {
-                  if (!glz::validate_utf8(message_buffer_.data(), message_buffer_.size())) {
+                  if (!glz::validate_utf8(payload, length)) {
                      close(ws_close_code::invalid_payload, "Invalid UTF-8");
                      return;
                   }
                }
 
-               std::string_view message_view(reinterpret_cast<const char*>(message_buffer_.data()),
-                                             message_buffer_.size());
+               std::string_view message_view(reinterpret_cast<const char*>(payload), length);
                if (server_) {
-                  server_->notify_message(this->shared_from_this(), message_view, current_opcode_);
+                  server_->notify_message(this->shared_from_this(), message_view, opcode);
                }
                else if (client_message_handler_) {
-                  client_message_handler_(message_view, current_opcode_);
+                  client_message_handler_(message_view, opcode);
                }
-               message_buffer_.clear();
-               current_opcode_ = ws_opcode::continuation;
             }
             else {
+               // Fragmented message - must buffer for reassembly
+               current_opcode_ = opcode;
+               message_buffer_.assign(payload, payload + length);
                is_reading_frame_ = true;
             }
             break;
@@ -688,6 +726,9 @@ namespace glz
             }
             break;
 
+         // RFC 6455 Section 5.5.1: "If an endpoint receives a Close frame and did not previously
+         // send a Close frame, the endpoint MUST send a Close frame in response."
+         // https://datatracker.ietf.org/doc/html/rfc6455#section-5.5.1
          case ws_opcode::close: {
             ws_close_code code = ws_close_code::normal;
             std::string reason;
@@ -699,15 +740,23 @@ namespace glz
                }
             }
 
-            // Store close info for client callback
+            // Store close code and reason for callback
             close_code_ = code;
-            close_reason_ = reason;
+            close_reason_ = std::move(reason);
 
             if (!is_closing_) {
-               send_close_frame(code, reason);
+               // Peer initiated close - mark as closing and send response
+               // RFC 6455: "the endpoint MUST send a Close frame in response"
+               is_closing_ = true;
+               // Send close frame and schedule socket close after write completes
+               send_close_frame(code, {}, true);
             }
-
-            do_close();
+            else {
+               // We initiated close, peer responded - close socket now
+               // RFC 6455 Section 7.1.1: "Once an endpoint has both sent and received a Close
+               // control frame, that endpoint SHOULD Close the WebSocket Connection"
+               do_close();
+            }
          } break;
 
          case ws_opcode::ping:
@@ -724,7 +773,7 @@ namespace glz
          }
       }
 
-      inline void send_frame(ws_opcode opcode, std::string_view payload, bool fin = true)
+      inline void send_frame(ws_opcode opcode, std::string_view payload, bool fin = true, bool close_after = false)
       {
          // Allow close frames to be sent even when closing, but block other frame types
          if (is_closing_ && opcode != ws_opcode::close) {
@@ -734,36 +783,106 @@ namespace glz
          // Capture socket locally to prevent race condition
          auto socket = socket_;
          if (!socket) {
+            // Socket already closed - if close was requested, ensure do_close() is called
+            if (close_after) {
+               do_close();
+            }
             return;
          }
 
          std::size_t header_size = get_frame_header_size(payload.size(), client_mode_);
-         std::vector<uint8_t> frame(header_size + payload.size());
+         auto frame_buffer = std::make_unique<std::vector<uint8_t>>(header_size + payload.size());
 
-         write_frame_header(opcode, payload.size(), fin, frame.data(), client_mode_);
-         std::copy(payload.begin(), payload.end(), frame.begin() + header_size);
+         write_frame_header(opcode, payload.size(), fin, frame_buffer->data(), client_mode_);
+         std::copy(payload.begin(), payload.end(), frame_buffer->begin() + header_size);
 
          // Apply masking if in client mode
          if (client_mode_ && payload.size() > 0) {
             // Get the masking key from the header
             std::size_t mask_key_offset = header_size - 4;
-            const uint8_t* mask_key = frame.data() + mask_key_offset;
+            const uint8_t* mask_key = frame_buffer->data() + mask_key_offset;
             // Mask the payload
             for (std::size_t i = 0; i < payload.size(); ++i) {
-               frame[header_size + i] ^= mask_key[i % 4];
+               (*frame_buffer)[header_size + i] ^= mask_key[i % 4];
             }
          }
 
-         auto self = this->shared_from_this();
+         // Queue the frame and start writing if not already in progress
+         {
+            std::lock_guard<std::mutex> lock(write_mutex_);
+            write_queue_.push_back(std::move(frame_buffer));
+            if (close_after) {
+               close_after_write_ = true; // Set atomically with queuing
+            }
+            if (write_in_progress_) {
+               return; // Another write is in progress, frame will be sent when it completes
+            }
+            write_in_progress_ = true;
+         }
 
-         // Use shared_ptr to keep the frame alive during async operation
-         auto frame_buffer = std::make_shared<std::vector<uint8_t>>(std::move(frame));
-         asio::async_write(*socket, asio::buffer(*frame_buffer),
-                           [self, frame_buffer, payload_size = payload.size()](std::error_code ec, std::size_t) {
+         // Start writing the queued frame
+         do_write();
+      }
+
+      // Process the write queue - called when a write completes or when starting a new write
+      inline void do_write()
+      {
+         std::unique_ptr<std::vector<uint8_t>> frame_buffer;
+         bool should_close_after = false;
+
+         {
+            std::lock_guard<std::mutex> lock(write_mutex_);
+            if (write_queue_.empty()) {
+               write_in_progress_ = false;
+               should_close_after = close_after_write_;
+               close_after_write_ = false;
+            }
+            else {
+               frame_buffer = std::move(write_queue_.front());
+               write_queue_.pop_front();
+            }
+         }
+
+         // Handle close-after-write when queue is empty
+         if (!frame_buffer) {
+            if (should_close_after) {
+               schedule_close();
+            }
+            return;
+         }
+
+         auto socket = socket_;
+         if (!socket) {
+            // Socket was closed externally - ensure close callback fires if pending
+            bool had_close_pending = false;
+            {
+               std::lock_guard<std::mutex> lock(write_mutex_);
+               write_in_progress_ = false;
+               had_close_pending = close_after_write_;
+               write_queue_.clear();
+               close_after_write_ = false;
+            }
+            if (had_close_pending) {
+               do_close(); // Ensure callback fires (idempotent via closed_ CAS)
+            }
+            return;
+         }
+
+         auto self = this->shared_from_this();
+         // Create buffer view before moving frame_buffer into lambda (C++14 evaluation order safety)
+         auto buffer_view = asio::buffer(*frame_buffer);
+         asio::async_write(*socket, buffer_view,
+                           [self, frame_buffer = std::move(frame_buffer)](std::error_code ec, std::size_t) {
                               if (ec) {
                                  // Mark connection as closing before notifying handlers to avoid re-entrant close
                                  // attempts
                                  self->is_closing_ = true;
+                                 {
+                                    std::lock_guard<std::mutex> lock(self->write_mutex_);
+                                    self->write_in_progress_ = false;
+                                    self->write_queue_.clear();
+                                    self->close_after_write_ = false;
+                                 }
                                  if (self->server_) {
                                     self->server_->notify_error(self, ec);
                                  }
@@ -772,8 +891,30 @@ namespace glz
                                  }
                                  // Close the connection after a write error (connection is likely broken)
                                  self->do_close();
+                                 return;
                               }
+
+                              // Process next frame in queue
+                              self->do_write();
                            });
+      }
+
+      // Close the socket after the close frame has been sent (responder side)
+      // RFC 6455 Section 7.1.1: "the server MUST close the connection immediately"
+      // after sending the Close frame response.
+      // https://datatracker.ietf.org/doc/html/rfc6455#section-7.1.1
+      inline void schedule_close()
+      {
+         // The close frame has been written to the kernel buffer via async_write.
+         // Use shutdown to signal we're done sending while allowing pending data to drain.
+         // This ensures the close frame reaches the peer before we close the socket.
+         auto socket = socket_;
+         if (socket) {
+            asio::error_code ec;
+            socket->shutdown(asio::ip::tcp::socket::shutdown_send, ec);
+            // Ignore shutdown errors - socket may already be closed
+         }
+         do_close();
       }
 
       inline void send_close_frame(ws_close_code code, std::string_view reason, bool schedule_socket_close = false)
@@ -800,43 +941,8 @@ namespace glz
 
       inline void send_close_frame_with_callback(ws_opcode opcode, std::string_view payload)
       {
-         // Capture socket locally to prevent race condition
-         auto socket = socket_;
-         if (!socket) {
-            do_close();
-            return;
-         }
-
-         std::size_t header_size = get_frame_header_size(payload.size(), client_mode_);
-         std::vector<uint8_t> frame(header_size + payload.size());
-
-         write_frame_header(opcode, payload.size(), true, frame.data(), client_mode_);
-         std::copy(payload.begin(), payload.end(), frame.begin() + header_size);
-
-         auto self = this->shared_from_this();
-
-         // Use shared_ptr to keep the frame alive during async operation
-         auto frame_buffer = std::make_shared<std::vector<uint8_t>>(std::move(frame));
-         asio::async_write(*socket, asio::buffer(*frame_buffer),
-                           [self, frame_buffer, socket](std::error_code ec, std::size_t) {
-                              if (ec) {
-                                 self->is_closing_ = true;
-                                 if (self->server_) {
-                                    self->server_->notify_error(self, ec);
-                                 }
-                                 self->do_close();
-                                 return;
-                              }
-                              // Give the OS time to transmit the data before closing the socket
-                              if (socket) {
-                                 auto timer = std::make_shared<asio::steady_timer>(socket->get_executor());
-                                 timer->expires_after(std::chrono::milliseconds(100));
-                                 timer->async_wait([self, timer](std::error_code) { self->do_close(); });
-                              }
-                              else {
-                                 self->do_close();
-                              }
-                           });
+         // Queue the close frame and set close_after_write_ flag atomically
+         send_frame(opcode, payload, true, true);
       }
 
       inline std::size_t get_frame_header_size(std::size_t payload_length, bool use_masking)
@@ -909,7 +1015,7 @@ namespace glz
          }
 
          if (server_) {
-            server_->notify_close(this->shared_from_this());
+            server_->notify_close(this->shared_from_this(), close_code_, close_reason_);
          }
          else if (client_close_handler_) {
             client_close_handler_(close_code_, close_reason_);
@@ -929,19 +1035,25 @@ namespace glz
       std::vector<uint8_t> message_buffer_;
       ws_opcode current_opcode_{ws_opcode::continuation};
       bool is_reading_frame_{false};
-      bool is_closing_{false};
+      std::atomic<bool> is_closing_{false};
       bool handshake_complete_{false};
       std::atomic<bool> closed_{false};
       std::shared_ptr<void> user_data_;
       asio::ip::tcp::endpoint remote_endpoint_;
       bool client_mode_{false}; // For client-side connections (requires masking)
 
+      // Write queue for serializing outgoing frames (prevents interleaved writes)
+      std::mutex write_mutex_;
+      std::deque<std::unique_ptr<std::vector<uint8_t>>> write_queue_;
+      bool write_in_progress_{false};
+      bool close_after_write_{false}; // Close socket after write queue drains
+
       // Client mode callbacks
       std::function<void(std::string_view, ws_opcode)> client_message_handler_;
       std::function<void(ws_close_code, std::string_view)> client_close_handler_;
       std::function<void(std::error_code)> client_error_handler_;
 
-      // Close info for client callback
+      // Close code and reason for callback
       ws_close_code close_code_{ws_close_code::normal};
       std::string close_reason_;
 
@@ -974,8 +1086,11 @@ namespace glz
             return;
          }
 
-         // Check if already closing to avoid operations on closed sockets
-         if (is_closing_) {
+         // Check if already fully closed to avoid operations on closed sockets
+         // RFC 6455 Section 7.1.1: Use closed_ (not is_closing_) to allow receiving
+         // close response during handshake. The initiator must continue reading.
+         // https://datatracker.ietf.org/doc/html/rfc6455#section-7.1.1
+         if (closed_.load()) {
             return;
          }
 

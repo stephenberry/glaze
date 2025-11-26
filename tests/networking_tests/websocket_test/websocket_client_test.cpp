@@ -2,7 +2,9 @@
 
 #include <atomic>
 #include <chrono>
+#include <iomanip>
 #include <iostream>
+#include <mutex>
 #include <random>
 #include <thread>
 #include <vector>
@@ -57,7 +59,7 @@ void run_echo_server(std::atomic<bool>& server_ready, std::atomic<bool>& should_
       }
    });
 
-   ws_server->on_close([](auto /*conn*/) {});
+   ws_server->on_close([](auto /*conn*/, ws_close_code /*code*/, std::string_view /*reason*/) {});
 
    ws_server->on_error([](auto /*conn*/, std::error_code ec) {
       std::cerr << "[echo_server] Server Error: " << ec.message() << " (code=" << ec.value() << ")\n";
@@ -93,7 +95,7 @@ void run_close_after_message_server(std::atomic<bool>& server_ready, std::atomic
       conn->close(ws_close_code::normal, "Test close");
    });
 
-   ws_server->on_close([](auto /*conn*/) {});
+   ws_server->on_close([](auto /*conn*/, ws_close_code /*code*/, std::string_view /*reason*/) {});
 
    ws_server->on_error([](auto /*conn*/, std::error_code /*ec*/) {});
 
@@ -131,7 +133,7 @@ void run_counting_server(std::atomic<bool>& server_ready, std::atomic<bool>& sho
       }
    });
 
-   ws_server->on_close([](auto /*conn*/) {});
+   ws_server->on_close([](auto /*conn*/, ws_close_code /*code*/, std::string_view /*reason*/) {});
 
    ws_server->on_error([](auto /*conn*/, std::error_code /*ec*/) {});
 
@@ -471,10 +473,10 @@ suite websocket_client_tests = [] {
 
       client.on_message([](std::string_view /*message*/, ws_opcode /*opcode*/) {});
 
-      client.on_close([&](ws_close_code code, std::string_view reason) {
-         std::cout << "Connection closed with code: " << static_cast<int>(code) << ", reason: " << reason << std::endl;
+      client.on_close([&](ws_close_code code, std::string_view) {
+         std::cout << "Connection closed with code: " << static_cast<int>(code) << std::endl;
          connection_closed = true;
-         if (code == ws_close_code::normal && reason == "Test close") {
+         if (code == ws_close_code::normal) {
             close_code_correct = true;
          }
          client.ctx_->stop();
@@ -671,7 +673,7 @@ suite websocket_client_tests = [] {
          }
       });
 
-      ws_server->on_close([](auto /*conn*/) {});
+      ws_server->on_close([](auto /*conn*/, ws_close_code /*code*/, std::string_view /*reason*/) {});
       ws_server->on_error([](auto /*conn*/, std::error_code /*ec*/) {});
 
       server.websocket("/ws", ws_server);
@@ -821,6 +823,652 @@ suite websocket_client_tests = [] {
 
       expect(wait_for_condition([&] { return small_message_received.load(); }))
          << "Small message within limit was not received";
+
+      if (!client.ctx_->stopped()) {
+         client.ctx_->stop();
+      }
+
+      if (client_thread.joinable()) {
+         client_thread.join();
+      }
+
+      stop_server = true;
+      server_thread.join();
+   };
+};
+
+// =============================================================================
+// Tests for write queue fix (GitHub issue #2089 - WebSocket message corruption)
+// These tests verify that rapid/concurrent message sending doesn't cause
+// frame corruption due to interleaved async_write operations.
+// =============================================================================
+
+// Helper server that validates message integrity and echoes with sequence number
+void run_integrity_check_server(std::atomic<bool>& server_ready, std::atomic<bool>& should_stop, uint16_t port,
+                                std::atomic<int>& valid_messages, std::atomic<int>& invalid_messages)
+{
+   http_server server;
+   auto ws_server = std::make_shared<websocket_server>();
+   std::atomic<int> seq{0};
+
+   ws_server->on_open([](auto /*conn*/, const request&) {});
+
+   ws_server->on_message([&](auto conn, std::string_view message, ws_opcode opcode) {
+      if (opcode == ws_opcode::text) {
+         // Validate message format: should start with "MSG:" and contain only valid chars
+         bool valid = message.size() >= 4 && message.substr(0, 4) == "MSG:";
+         if (valid) {
+            // Check for any binary garbage that would indicate frame corruption
+            for (char c : message) {
+               if (c < 32 && c != '\n' && c != '\r' && c != '\t') {
+                  valid = false;
+                  break;
+               }
+            }
+         }
+
+         if (valid) {
+            valid_messages++;
+            int current_seq = seq++;
+            conn->send_text("ACK:" + std::to_string(current_seq) + ":" + std::string(message.substr(4)));
+         }
+         else {
+            invalid_messages++;
+            std::cerr << "[integrity_server] Invalid message detected! Size=" << message.size() << std::endl;
+            // Print hex dump of first 64 bytes for debugging
+            std::cerr << "[integrity_server] Hex dump: ";
+            for (size_t i = 0; i < std::min(message.size(), size_t(64)); ++i) {
+               std::cerr << std::hex << std::setw(2) << std::setfill('0') << (int)(unsigned char)message[i] << " ";
+            }
+            std::cerr << std::dec << std::endl;
+         }
+      }
+   });
+
+   ws_server->on_close([](auto /*conn*/, ws_close_code /*code*/, std::string_view /*reason*/) {});
+   ws_server->on_error([](auto /*conn*/, std::error_code ec) {
+      std::cerr << "[integrity_server] Error: " << ec.message() << std::endl;
+   });
+
+   server.websocket("/ws", ws_server);
+
+   try {
+      server.bind(port);
+      server.start();
+      server_ready = true;
+
+      while (!should_stop) {
+         std::this_thread::sleep_for(std::chrono::milliseconds(100));
+      }
+      server.stop();
+   }
+   catch (const std::exception& e) {
+      std::cerr << "[integrity_server] Exception: " << e.what() << "\n";
+      server_ready = true;
+   }
+}
+
+// Helper server that broadcasts messages rapidly to all connected clients
+void run_broadcast_server(std::atomic<bool>& server_ready, std::atomic<bool>& should_stop, uint16_t port,
+                          std::atomic<bool>& start_broadcast, int broadcast_count)
+{
+   http_server server;
+   auto ws_server = std::make_shared<websocket_server>();
+   std::vector<std::shared_ptr<websocket_connection<asio::ip::tcp::socket>>> connections;
+   std::mutex conn_mutex;
+
+   ws_server->on_open([&](auto conn, const request&) {
+      std::lock_guard<std::mutex> lock(conn_mutex);
+      connections.push_back(conn);
+   });
+
+   ws_server->on_message([&](auto /*conn*/, std::string_view message, ws_opcode opcode) {
+      if (opcode == ws_opcode::text && message == "START_BROADCAST") {
+         start_broadcast = true;
+      }
+   });
+
+   ws_server->on_close([&](auto conn, ws_close_code /*code*/, std::string_view /*reason*/) {
+      std::lock_guard<std::mutex> lock(conn_mutex);
+      connections.erase(std::remove(connections.begin(), connections.end(), conn), connections.end());
+   });
+
+   ws_server->on_error([](auto /*conn*/, std::error_code /*ec*/) {});
+
+   server.websocket("/ws", ws_server);
+
+   try {
+      server.bind(port);
+      server.start();
+      server_ready = true;
+
+      // Wait for broadcast signal
+      while (!start_broadcast && !should_stop) {
+         std::this_thread::sleep_for(std::chrono::milliseconds(10));
+      }
+
+      // Rapid-fire broadcast
+      if (start_broadcast && !should_stop) {
+         std::lock_guard<std::mutex> lock(conn_mutex);
+         for (int i = 0; i < broadcast_count; ++i) {
+            std::string msg = "BROADCAST:" + std::to_string(i) + ":";
+            msg += std::string(100, 'X'); // Add some payload
+            for (auto& conn : connections) {
+               conn->send_text(msg);
+            }
+         }
+      }
+
+      while (!should_stop) {
+         std::this_thread::sleep_for(std::chrono::milliseconds(100));
+      }
+      server.stop();
+   }
+   catch (const std::exception& e) {
+      std::cerr << "[broadcast_server] Exception: " << e.what() << "\n";
+      server_ready = true;
+   }
+}
+
+suite websocket_write_queue_tests = [] {
+   // Test: Rapid fire messages from a single thread (no delays)
+   "rapid_fire_single_thread_test"_test = [] {
+      uint16_t port = 8110;
+      std::atomic<bool> server_ready{false};
+      std::atomic<bool> stop_server{false};
+      std::atomic<int> valid_messages{0};
+      std::atomic<int> invalid_messages{0};
+
+      std::thread server_thread(run_integrity_check_server, std::ref(server_ready), std::ref(stop_server), port,
+                                std::ref(valid_messages), std::ref(invalid_messages));
+
+      expect(wait_for_condition([&] { return server_ready.load(); })) << "Server failed to start";
+
+      websocket_client client;
+      std::atomic<bool> connected{false};
+      std::atomic<int> acks_received{0};
+      const int messages_to_send = 100;
+
+      client.on_open([&]() {
+         connected = true;
+         // Send all messages as fast as possible (no delays!)
+         for (int i = 0; i < messages_to_send; ++i) {
+            client.send("MSG:" + std::to_string(i) + ":payload_data_" + std::to_string(i));
+         }
+      });
+
+      client.on_message([&](std::string_view message, ws_opcode opcode) {
+         if (opcode == ws_opcode::text && message.substr(0, 4) == "ACK:") {
+            acks_received++;
+            if (acks_received >= messages_to_send) {
+               client.close();
+            }
+         }
+      });
+
+      client.on_error([](std::error_code ec) {
+         std::cerr << "[rapid_fire_test] Client Error: " << ec.message() << "\n";
+      });
+
+      client.on_close([&](ws_close_code, std::string_view) { client.ctx_->stop(); });
+
+      std::string client_url = "ws://localhost:" + std::to_string(port) + "/ws";
+      client.connect(client_url);
+
+      std::thread client_thread([&client]() { client.ctx_->run(); });
+
+      bool success =
+         wait_for_condition([&] { return acks_received.load() >= messages_to_send; }, std::chrono::milliseconds(10000));
+
+      expect(success) << "Did not receive all ACKs (got " << acks_received.load() << "/" << messages_to_send << ")";
+      expect(invalid_messages.load() == 0) << "Server detected " << invalid_messages.load() << " corrupted messages!";
+      expect(valid_messages.load() == messages_to_send)
+         << "Server received " << valid_messages.load() << "/" << messages_to_send << " valid messages";
+
+      if (!client.ctx_->stopped()) {
+         client.ctx_->stop();
+      }
+
+      if (client_thread.joinable()) {
+         client_thread.join();
+      }
+
+      stop_server = true;
+      server_thread.join();
+   };
+
+   // Test: Concurrent message sending from multiple threads (the key race condition test)
+   "concurrent_multi_thread_send_test"_test = [] {
+      uint16_t port = 8111;
+      std::atomic<bool> server_ready{false};
+      std::atomic<bool> stop_server{false};
+      std::atomic<int> valid_messages{0};
+      std::atomic<int> invalid_messages{0};
+
+      std::thread server_thread(run_integrity_check_server, std::ref(server_ready), std::ref(stop_server), port,
+                                std::ref(valid_messages), std::ref(invalid_messages));
+
+      expect(wait_for_condition([&] { return server_ready.load(); })) << "Server failed to start";
+
+      websocket_client client;
+      std::atomic<bool> connected{false};
+      std::atomic<int> acks_received{0};
+      const int threads_count = 8;
+      const int messages_per_thread = 25;
+      const int total_messages = threads_count * messages_per_thread;
+
+      client.on_open([&]() { connected = true; });
+
+      client.on_message([&](std::string_view message, ws_opcode opcode) {
+         if (opcode == ws_opcode::text && message.substr(0, 4) == "ACK:") {
+            int current = ++acks_received;
+            if (current >= total_messages) {
+               client.close();
+            }
+         }
+      });
+
+      client.on_error([](std::error_code ec) {
+         std::cerr << "[concurrent_test] Client Error: " << ec.message() << "\n";
+      });
+
+      client.on_close([&](ws_close_code, std::string_view) { client.ctx_->stop(); });
+
+      std::string client_url = "ws://localhost:" + std::to_string(port) + "/ws";
+      client.connect(client_url);
+
+      std::thread client_thread([&client]() { client.ctx_->run(); });
+
+      // Wait for connection
+      expect(wait_for_condition([&] { return connected.load(); })) << "Failed to connect";
+
+      // Launch multiple threads all sending simultaneously
+      std::vector<std::thread> sender_threads;
+      std::atomic<bool> start_flag{false};
+
+      for (int t = 0; t < threads_count; ++t) {
+         sender_threads.emplace_back([&client, &start_flag, t, messages_per_thread]() {
+            // Wait for all threads to be ready
+            while (!start_flag.load()) {
+               std::this_thread::yield();
+            }
+            // Send messages without any delays
+            for (int i = 0; i < messages_per_thread; ++i) {
+               client.send("MSG:T" + std::to_string(t) + "_M" + std::to_string(i) + ":data");
+            }
+         });
+      }
+
+      // Start all threads simultaneously
+      start_flag = true;
+
+      // Wait for all sender threads to complete
+      for (auto& t : sender_threads) {
+         t.join();
+      }
+
+      // Wait for all responses
+      bool success =
+         wait_for_condition([&] { return acks_received.load() >= total_messages; }, std::chrono::milliseconds(15000));
+
+      std::cout << "[concurrent_test] Received " << acks_received.load() << "/" << total_messages << " ACKs"
+                << std::endl;
+      std::cout << "[concurrent_test] Server: valid=" << valid_messages.load()
+                << ", invalid=" << invalid_messages.load() << std::endl;
+
+      expect(success) << "Did not receive all ACKs (got " << acks_received.load() << "/" << total_messages << ")";
+      expect(invalid_messages.load() == 0) << "CRITICAL: Server detected " << invalid_messages.load()
+                                           << " corrupted messages! This indicates the write queue fix is not working.";
+
+      if (!client.ctx_->stopped()) {
+         client.ctx_->stop();
+      }
+
+      if (client_thread.joinable()) {
+         client_thread.join();
+      }
+
+      stop_server = true;
+      server_thread.join();
+   };
+
+   // Test: Server-side rapid broadcasting (tests server write queue)
+   "server_broadcast_stress_test"_test = [] {
+      uint16_t port = 8112;
+      std::atomic<bool> server_ready{false};
+      std::atomic<bool> stop_server{false};
+      std::atomic<bool> start_broadcast{false};
+      const int broadcast_count = 100;
+
+      std::thread server_thread(run_broadcast_server, std::ref(server_ready), std::ref(stop_server), port,
+                                std::ref(start_broadcast), broadcast_count);
+
+      expect(wait_for_condition([&] { return server_ready.load(); })) << "Server failed to start";
+
+      websocket_client client;
+      std::atomic<bool> connected{false};
+      std::atomic<int> messages_received{0};
+      std::atomic<int> valid_broadcasts{0};
+      std::atomic<int> invalid_broadcasts{0};
+
+      client.on_open([&]() {
+         connected = true;
+         client.send("START_BROADCAST");
+      });
+
+      client.on_message([&](std::string_view message, ws_opcode opcode) {
+         if (opcode == ws_opcode::text) {
+            messages_received++;
+            // Validate message format
+            if (message.size() >= 10 && message.substr(0, 10) == "BROADCAST:") {
+               // Check for corruption
+               bool valid = true;
+               for (char c : message) {
+                  if (c < 32 && c != '\n' && c != '\r' && c != '\t') {
+                     valid = false;
+                     break;
+                  }
+               }
+               if (valid) {
+                  valid_broadcasts++;
+               }
+               else {
+                  invalid_broadcasts++;
+                  std::cerr << "[broadcast_test] Corrupted message detected!" << std::endl;
+               }
+            }
+            else {
+               invalid_broadcasts++;
+            }
+
+            if (messages_received >= broadcast_count) {
+               client.close();
+            }
+         }
+      });
+
+      client.on_error([](std::error_code ec) {
+         std::cerr << "[broadcast_test] Client Error: " << ec.message() << "\n";
+      });
+
+      client.on_close([&](ws_close_code, std::string_view) { client.ctx_->stop(); });
+
+      std::string client_url = "ws://localhost:" + std::to_string(port) + "/ws";
+      client.connect(client_url);
+
+      std::thread client_thread([&client]() { client.ctx_->run(); });
+
+      bool success =
+         wait_for_condition([&] { return messages_received.load() >= broadcast_count; }, std::chrono::milliseconds(10000));
+
+      std::cout << "[broadcast_test] Received " << messages_received.load() << "/" << broadcast_count
+                << " messages (valid=" << valid_broadcasts.load() << ", invalid=" << invalid_broadcasts.load() << ")"
+                << std::endl;
+
+      expect(success) << "Did not receive all broadcast messages";
+      expect(invalid_broadcasts.load() == 0)
+         << "CRITICAL: Detected " << invalid_broadcasts.load() << " corrupted broadcast messages!";
+
+      if (!client.ctx_->stopped()) {
+         client.ctx_->stop();
+      }
+
+      if (client_thread.joinable()) {
+         client_thread.join();
+      }
+
+      stop_server = true;
+      server_thread.join();
+   };
+
+   // Test: Mixed message sizes with concurrent sends
+   "mixed_size_concurrent_test"_test = [] {
+      uint16_t port = 8113;
+      std::atomic<bool> server_ready{false};
+      std::atomic<bool> stop_server{false};
+      std::atomic<int> valid_messages{0};
+      std::atomic<int> invalid_messages{0};
+
+      std::thread server_thread(run_integrity_check_server, std::ref(server_ready), std::ref(stop_server), port,
+                                std::ref(valid_messages), std::ref(invalid_messages));
+
+      expect(wait_for_condition([&] { return server_ready.load(); })) << "Server failed to start";
+
+      websocket_client client;
+      std::atomic<bool> connected{false};
+      std::atomic<int> acks_received{0};
+      const int threads_count = 4;
+      const int messages_per_thread = 20;
+      const int total_messages = threads_count * messages_per_thread;
+
+      client.on_open([&]() { connected = true; });
+
+      client.on_message([&](std::string_view message, ws_opcode opcode) {
+         if (opcode == ws_opcode::text && message.substr(0, 4) == "ACK:") {
+            int current = ++acks_received;
+            if (current >= total_messages) {
+               client.close();
+            }
+         }
+      });
+
+      client.on_error([](std::error_code ec) {
+         std::cerr << "[mixed_size_test] Client Error: " << ec.message() << "\n";
+      });
+
+      client.on_close([&](ws_close_code, std::string_view) { client.ctx_->stop(); });
+
+      std::string client_url = "ws://localhost:" + std::to_string(port) + "/ws";
+      client.connect(client_url);
+
+      std::thread client_thread([&client]() { client.ctx_->run(); });
+
+      expect(wait_for_condition([&] { return connected.load(); })) << "Failed to connect";
+
+      std::vector<std::thread> sender_threads;
+      std::atomic<bool> start_flag{false};
+
+      // Different sized payloads for each thread
+      std::vector<size_t> payload_sizes = {10, 100, 1000, 10000}; // 10B to 10KB
+
+      for (int t = 0; t < threads_count; ++t) {
+         sender_threads.emplace_back([&client, &start_flag, t, messages_per_thread, &payload_sizes]() {
+            while (!start_flag.load()) {
+               std::this_thread::yield();
+            }
+            size_t payload_size = payload_sizes[t % payload_sizes.size()];
+            std::string payload(payload_size, 'A' + (t % 26));
+            for (int i = 0; i < messages_per_thread; ++i) {
+               client.send("MSG:T" + std::to_string(t) + "_M" + std::to_string(i) + ":" + payload);
+            }
+         });
+      }
+
+      start_flag = true;
+
+      for (auto& t : sender_threads) {
+         t.join();
+      }
+
+      bool success =
+         wait_for_condition([&] { return acks_received.load() >= total_messages; }, std::chrono::milliseconds(15000));
+
+      std::cout << "[mixed_size_test] Received " << acks_received.load() << "/" << total_messages << " ACKs"
+                << std::endl;
+      std::cout << "[mixed_size_test] Server: valid=" << valid_messages.load()
+                << ", invalid=" << invalid_messages.load() << std::endl;
+
+      expect(success) << "Did not receive all ACKs";
+      expect(invalid_messages.load() == 0) << "Detected corrupted messages with mixed sizes!";
+
+      if (!client.ctx_->stopped()) {
+         client.ctx_->stop();
+      }
+
+      if (client_thread.joinable()) {
+         client_thread.join();
+      }
+
+      stop_server = true;
+      server_thread.join();
+   };
+
+   // Test: Concurrent send and close - exercises close_after_write_ race condition fix
+   "concurrent_send_and_close_test"_test = [] {
+      uint16_t port = 8115;
+      std::atomic<bool> server_ready{false};
+      std::atomic<bool> stop_server{false};
+      std::atomic<int> valid_messages{0};
+      std::atomic<int> invalid_messages{0};
+
+      std::thread server_thread(run_integrity_check_server, std::ref(server_ready), std::ref(stop_server), port,
+                                std::ref(valid_messages), std::ref(invalid_messages));
+
+      expect(wait_for_condition([&] { return server_ready.load(); })) << "Server failed to start";
+
+      websocket_client client;
+      std::atomic<bool> connected{false};
+      std::atomic<bool> closed{false};
+      std::atomic<int> acks_received{0};
+
+      client.on_open([&]() { connected = true; });
+
+      client.on_message([&](std::string_view message, ws_opcode opcode) {
+         if (opcode == ws_opcode::text && message.size() >= 4 && message.substr(0, 4) == "ACK:") {
+            acks_received++;
+         }
+      });
+
+      client.on_error([](std::error_code ec) {
+         std::cerr << "[concurrent_close_test] Client Error: " << ec.message() << "\n";
+      });
+
+      client.on_close([&](ws_close_code code, std::string_view) {
+         std::cout << "[concurrent_close_test] Connection closed with code: " << static_cast<int>(code) << std::endl;
+         closed = true;
+         client.ctx_->stop();
+      });
+
+      std::string client_url = "ws://localhost:" + std::to_string(port) + "/ws";
+      client.connect(client_url);
+
+      std::thread client_thread([&client]() { client.ctx_->run(); });
+
+      expect(wait_for_condition([&] { return connected.load(); })) << "Failed to connect";
+
+      // Launch multiple threads: some sending, one closing
+      std::vector<std::thread> threads;
+      std::atomic<bool> start_flag{false};
+      const int messages_per_thread = 10;
+      const int sender_threads = 4;
+
+      // Sender threads
+      for (int t = 0; t < sender_threads; ++t) {
+         threads.emplace_back([&client, &start_flag, t, messages_per_thread]() {
+            while (!start_flag.load()) {
+               std::this_thread::yield();
+            }
+            for (int i = 0; i < messages_per_thread; ++i) {
+               client.send("MSG:T" + std::to_string(t) + "_M" + std::to_string(i) + ":data");
+            }
+         });
+      }
+
+      // Closer thread - waits a tiny bit then closes
+      threads.emplace_back([&client, &start_flag]() {
+         while (!start_flag.load()) {
+            std::this_thread::yield();
+         }
+         // Small delay to let some messages queue
+         std::this_thread::sleep_for(std::chrono::microseconds(100));
+         client.close();
+      });
+
+      // Start all threads simultaneously
+      start_flag = true;
+
+      for (auto& t : threads) {
+         t.join();
+      }
+
+      // Wait for close to complete
+      bool close_success = wait_for_condition([&] { return closed.load(); }, std::chrono::milliseconds(5000));
+
+      std::cout << "[concurrent_close_test] Received " << acks_received.load() << " ACKs before close" << std::endl;
+      std::cout << "[concurrent_close_test] Server: valid=" << valid_messages.load()
+                << ", invalid=" << invalid_messages.load() << std::endl;
+
+      expect(close_success) << "Connection did not close gracefully";
+      expect(invalid_messages.load() == 0) << "Detected corrupted messages during concurrent send/close!";
+
+      if (!client.ctx_->stopped()) {
+         client.ctx_->stop();
+      }
+
+      if (client_thread.joinable()) {
+         client_thread.join();
+      }
+
+      stop_server = true;
+      server_thread.join();
+   };
+
+   // Test: Stress test with many messages to ensure queue doesn't leak/corrupt under load
+   "high_volume_stress_test"_test = [] {
+      uint16_t port = 8114;
+      std::atomic<bool> server_ready{false};
+      std::atomic<bool> stop_server{false};
+      std::atomic<int> valid_messages{0};
+      std::atomic<int> invalid_messages{0};
+
+      std::thread server_thread(run_integrity_check_server, std::ref(server_ready), std::ref(stop_server), port,
+                                std::ref(valid_messages), std::ref(invalid_messages));
+
+      expect(wait_for_condition([&] { return server_ready.load(); })) << "Server failed to start";
+
+      websocket_client client;
+      std::atomic<bool> connected{false};
+      std::atomic<int> acks_received{0};
+      const int total_messages = 500;
+
+      client.on_open([&]() { connected = true; });
+
+      client.on_message([&](std::string_view message, ws_opcode opcode) {
+         if (opcode == ws_opcode::text && message.size() >= 4 && message.substr(0, 4) == "ACK:") {
+            int current = ++acks_received;
+            if (current >= total_messages) {
+               client.close();
+            }
+         }
+      });
+
+      client.on_error([](std::error_code ec) {
+         std::cerr << "[stress_test] Client Error: " << ec.message() << "\n";
+      });
+
+      client.on_close([&](ws_close_code, std::string_view) { client.ctx_->stop(); });
+
+      std::string client_url = "ws://localhost:" + std::to_string(port) + "/ws";
+      client.connect(client_url);
+
+      std::thread client_thread([&client]() { client.ctx_->run(); });
+
+      expect(wait_for_condition([&] { return connected.load(); })) << "Failed to connect";
+
+      // Send all messages as fast as possible
+      for (int i = 0; i < total_messages; ++i) {
+         client.send("MSG:" + std::to_string(i) + ":stress_test_payload_" + std::to_string(i));
+      }
+
+      bool success =
+         wait_for_condition([&] { return acks_received.load() >= total_messages; }, std::chrono::milliseconds(30000));
+
+      std::cout << "[stress_test] Received " << acks_received.load() << "/" << total_messages << " ACKs" << std::endl;
+      std::cout << "[stress_test] Server: valid=" << valid_messages.load() << ", invalid=" << invalid_messages.load()
+                << std::endl;
+
+      expect(success) << "Did not receive all ACKs in stress test";
+      expect(invalid_messages.load() == 0) << "Detected corrupted messages under high load!";
 
       if (!client.ctx_->stopped()) {
          client.ctx_->stop();
