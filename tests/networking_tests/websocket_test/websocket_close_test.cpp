@@ -171,6 +171,21 @@ std::optional<websocket_frame> poll_for_frame(asio::ip::tcp::socket& socket, std
    return std::nullopt;
 }
 
+// Helper to send a close frame (client must use masking)
+void send_close_frame(asio::ip::tcp::socket& socket, uint16_t code = 1000)
+{
+   // WebSocket close frame from client (must be masked)
+   // Frame: 0x88 (FIN=1, opcode=8), 0x82 (mask=1, len=2), 4-byte mask, 2-byte code (masked)
+   uint8_t mask[4] = {0x12, 0x34, 0x56, 0x78}; // Simple mask
+   uint8_t code_bytes[2] = {static_cast<uint8_t>(code >> 8), static_cast<uint8_t>(code & 0xFF)};
+
+   std::vector<uint8_t> frame = {0x88, 0x82, mask[0], mask[1], mask[2], mask[3],
+                                 static_cast<uint8_t>(code_bytes[0] ^ mask[0]),
+                                 static_cast<uint8_t>(code_bytes[1] ^ mask[1])};
+
+   asio::write(socket, asio::buffer(frame));
+}
+
 suite websocket_close_frame_tests = [] {
    "close_frame_is_sent"_test = [] {
       std::atomic<bool> close_frame_received{false};
@@ -230,6 +245,9 @@ suite websocket_close_frame_tests = [] {
 
       if (frame && frame->opcode == 0x08) {
          close_frame_received = true;
+         // Send close frame response to complete the handshake
+         socket.non_blocking(false);
+         send_close_frame(socket, 1000);
       }
 
       expect(close_frame_received.load()) << "Close frame should be received by client";
@@ -534,6 +552,12 @@ suite websocket_error_handling_tests = [] {
       while (frame) {
          if (frame->opcode == 0x08) {
             close_frame_count++;
+            // Send close frame response after receiving the first close frame
+            if (close_frame_count == 1) {
+               socket.non_blocking(false);
+               send_close_frame(socket, 1000);
+               socket.non_blocking(true);
+            }
          }
          frame = poll_for_frame(socket, pending, std::chrono::milliseconds(200));
       }

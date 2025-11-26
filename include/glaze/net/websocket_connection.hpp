@@ -410,6 +410,9 @@ namespace glz
       inline void send_pong(std::string_view payload = {}) { send_frame(ws_opcode::pong, payload); }
 
       // Close the connection
+      // RFC 6455 Section 7.1.2: "To Start the WebSocket Closing Handshake with a status code,
+      // an endpoint MUST send a Close control frame"
+      // https://datatracker.ietf.org/doc/html/rfc6455#section-7.1.2
       inline void close(ws_close_code code = ws_close_code::normal, std::string_view reason = {})
       {
          // Atomically check and set is_closing_ to prevent race conditions
@@ -421,8 +424,11 @@ namespace glz
          // Store close code for the callback
          close_code_ = code;
 
-         // Send close frame and close socket after write completes
-         send_close_frame(code, reason, true);
+         // Send close frame but DON'T close socket immediately.
+         // RFC 6455 Section 7.1.1: "Once an endpoint has both sent and received a Close control
+         // frame, that endpoint SHOULD Close the WebSocket Connection"
+         // The socket will be closed when we receive the close response in handle_frame().
+         send_close_frame(code, reason, false);
       }
 
       // Get remote endpoint information
@@ -558,7 +564,10 @@ namespace glz
          }
 
          // Continue reading if connection is still open
-         // Use closed_ instead of is_closing_ to allow receiving close response during handshake
+         // RFC 6455 Section 7.1.1: The initiator must continue reading to receive the peer's
+         // Close frame response before closing the TCP connection.
+         // Use closed_ (not is_closing_) to allow receiving close response during handshake.
+         // https://datatracker.ietf.org/doc/html/rfc6455#section-7.1.1
          if (!closed_.load() && handshake_complete_) {
             start_read();
          }
@@ -715,6 +724,9 @@ namespace glz
             }
             break;
 
+         // RFC 6455 Section 5.5.1: "If an endpoint receives a Close frame and did not previously
+         // send a Close frame, the endpoint MUST send a Close frame in response."
+         // https://datatracker.ietf.org/doc/html/rfc6455#section-5.5.1
          case ws_opcode::close: {
             ws_close_code code = ws_close_code::normal;
 
@@ -727,12 +739,15 @@ namespace glz
 
             if (!is_closing_) {
                // Peer initiated close - mark as closing and send response
+               // RFC 6455: "the endpoint MUST send a Close frame in response"
                is_closing_ = true;
                // Send close frame and schedule socket close after write completes
                send_close_frame(code, {}, true);
             }
             else {
                // We initiated close, peer responded - close socket now
+               // RFC 6455 Section 7.1.1: "Once an endpoint has both sent and received a Close
+               // control frame, that endpoint SHOULD Close the WebSocket Connection"
                do_close();
             }
          } break;
@@ -877,12 +892,21 @@ namespace glz
                            });
       }
 
-      // Close the socket after the close frame has been sent
+      // Close the socket after the close frame has been sent (responder side)
+      // RFC 6455 Section 7.1.1: "the server MUST close the connection immediately"
+      // after sending the Close frame response.
+      // https://datatracker.ietf.org/doc/html/rfc6455#section-7.1.1
       inline void schedule_close()
       {
-         // The close frame has already been written to the kernel buffer via async_write.
-         // We can close immediately - TCP will still attempt to deliver buffered data.
-         // Previously this used a 100ms timer, but that was unreliable in some edge cases.
+         // The close frame has been written to the kernel buffer via async_write.
+         // Use shutdown to signal we're done sending while allowing pending data to drain.
+         // This ensures the close frame reaches the peer before we close the socket.
+         auto socket = socket_;
+         if (socket) {
+            asio::error_code ec;
+            socket->shutdown(asio::ip::tcp::socket::shutdown_send, ec);
+            // Ignore shutdown errors - socket may already be closed
+         }
          do_close();
       }
 
@@ -1054,8 +1078,11 @@ namespace glz
             return;
          }
 
-         // Check if already closing to avoid operations on closed sockets
-         if (is_closing_) {
+         // Check if already fully closed to avoid operations on closed sockets
+         // RFC 6455 Section 7.1.1: Use closed_ (not is_closing_) to allow receiving
+         // close response during handshake. The initiator must continue reading.
+         // https://datatracker.ietf.org/doc/html/rfc6455#section-7.1.1
+         if (closed_.load()) {
             return;
          }
 
