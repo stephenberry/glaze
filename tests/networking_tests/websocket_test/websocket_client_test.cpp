@@ -1313,6 +1313,107 @@ suite websocket_write_queue_tests = [] {
       server_thread.join();
    };
 
+   // Test: Concurrent send and close - exercises close_after_write_ race condition fix
+   "concurrent_send_and_close_test"_test = [] {
+      uint16_t port = 8115;
+      std::atomic<bool> server_ready{false};
+      std::atomic<bool> stop_server{false};
+      std::atomic<int> valid_messages{0};
+      std::atomic<int> invalid_messages{0};
+
+      std::thread server_thread(run_integrity_check_server, std::ref(server_ready), std::ref(stop_server), port,
+                                std::ref(valid_messages), std::ref(invalid_messages));
+
+      expect(wait_for_condition([&] { return server_ready.load(); })) << "Server failed to start";
+
+      websocket_client client;
+      std::atomic<bool> connected{false};
+      std::atomic<bool> closed{false};
+      std::atomic<int> acks_received{0};
+
+      client.on_open([&]() { connected = true; });
+
+      client.on_message([&](std::string_view message, ws_opcode opcode) {
+         if (opcode == ws_opcode::text && message.size() >= 4 && message.substr(0, 4) == "ACK:") {
+            acks_received++;
+         }
+      });
+
+      client.on_error([](std::error_code ec) {
+         std::cerr << "[concurrent_close_test] Client Error: " << ec.message() << "\n";
+      });
+
+      client.on_close([&](ws_close_code code, std::string_view) {
+         std::cout << "[concurrent_close_test] Connection closed with code: " << static_cast<int>(code) << std::endl;
+         closed = true;
+         client.ctx_->stop();
+      });
+
+      std::string client_url = "ws://localhost:" + std::to_string(port) + "/ws";
+      client.connect(client_url);
+
+      std::thread client_thread([&client]() { client.ctx_->run(); });
+
+      expect(wait_for_condition([&] { return connected.load(); })) << "Failed to connect";
+
+      // Launch multiple threads: some sending, one closing
+      std::vector<std::thread> threads;
+      std::atomic<bool> start_flag{false};
+      const int messages_per_thread = 10;
+      const int sender_threads = 4;
+
+      // Sender threads
+      for (int t = 0; t < sender_threads; ++t) {
+         threads.emplace_back([&client, &start_flag, t, messages_per_thread]() {
+            while (!start_flag.load()) {
+               std::this_thread::yield();
+            }
+            for (int i = 0; i < messages_per_thread; ++i) {
+               client.send("MSG:T" + std::to_string(t) + "_M" + std::to_string(i) + ":data");
+            }
+         });
+      }
+
+      // Closer thread - waits a tiny bit then closes
+      threads.emplace_back([&client, &start_flag]() {
+         while (!start_flag.load()) {
+            std::this_thread::yield();
+         }
+         // Small delay to let some messages queue
+         std::this_thread::sleep_for(std::chrono::microseconds(100));
+         client.close();
+      });
+
+      // Start all threads simultaneously
+      start_flag = true;
+
+      for (auto& t : threads) {
+         t.join();
+      }
+
+      // Wait for close to complete
+      bool close_success = wait_for_condition([&] { return closed.load(); }, std::chrono::milliseconds(5000));
+
+      std::cout << "[concurrent_close_test] Received " << acks_received.load() << " ACKs before close" << std::endl;
+      std::cout << "[concurrent_close_test] Server: valid=" << valid_messages.load()
+                << ", invalid=" << invalid_messages.load() << std::endl;
+
+      expect(close_success) << "Connection did not close gracefully";
+      expect(invalid_messages.load() == 0) << "Detected corrupted messages during concurrent send/close!";
+      // Note: We don't check exact message count since close races with sends
+
+      if (!client.ctx_->stopped()) {
+         client.ctx_->stop();
+      }
+
+      if (client_thread.joinable()) {
+         client_thread.join();
+      }
+
+      stop_server = true;
+      server_thread.join();
+   };
+
    // Test: Stress test with many messages to ensure queue doesn't leak/corrupt under load
    "high_volume_stress_test"_test = [] {
       uint16_t port = 8114;
