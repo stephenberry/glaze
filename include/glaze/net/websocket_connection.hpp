@@ -974,7 +974,7 @@ namespace glz
       std::vector<uint8_t> message_buffer_;
       ws_opcode current_opcode_{ws_opcode::continuation};
       bool is_reading_frame_{false};
-      bool is_closing_{false};
+      std::atomic<bool> is_closing_{false};
       bool handshake_complete_{false};
       std::atomic<bool> closed_{false};
       std::shared_ptr<void> user_data_;
