@@ -861,19 +861,13 @@ namespace glz
                            });
       }
 
-      // Schedule socket close after a short delay to allow data transmission
+      // Close the socket after the close frame has been sent
       inline void schedule_close()
       {
-         auto socket = socket_;
-         if (!socket) {
-            do_close();
-            return;
-         }
-
-         auto self = this->shared_from_this();
-         auto timer = std::make_shared<asio::steady_timer>(socket->get_executor());
-         timer->expires_after(std::chrono::milliseconds(100));
-         timer->async_wait([self, timer](std::error_code) { self->do_close(); });
+         // The close frame has already been written to the kernel buffer via async_write.
+         // We can close immediately - TCP will still attempt to deliver buffered data.
+         // Previously this used a 100ms timer, but that was unreliable in some edge cases.
+         do_close();
       }
 
       inline void send_close_frame(ws_close_code code, std::string_view reason, bool schedule_socket_close = false)
