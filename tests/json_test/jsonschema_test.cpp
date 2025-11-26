@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cstdint>
 #include <glaze/json.hpp>
 #include <glaze/json/schema.hpp>
@@ -291,6 +292,22 @@ struct error_on_missing_keys_test
    int important{};
 };
 
+// Test types for demonstrating error_on_missing_keys with nested objects
+struct Address
+{
+   std::string street{};
+   std::string city{};
+   std::optional<std::string> apartment{}; // nullable - will NOT be required
+};
+
+struct Person
+{
+   std::string name{};
+   int age{};
+   std::optional<std::string> nickname{}; // nullable - will NOT be required
+   Address address{};
+};
+
 #if 0
 struct invalid_name
 {
@@ -425,6 +442,35 @@ suite schema_tests = [] {
       expect(
          schema_str_nreq ==
          R"({"type":["object"],"properties":{"important":{"$ref":"#/$defs/int32_t"},"unimportant":{"$ref":"#/$defs/std::optional<int32_t>"}},"additionalProperties":false,"$defs":{"int32_t":{"type":["integer"],"minimum":-2147483648,"maximum":2147483647},"std::optional<int32_t>":{"type":["integer","null"],"minimum":-2147483648,"maximum":2147483647}},"title":"error_on_missing_keys_test"})");
+   };
+
+   // Demonstrates using error_on_missing_keys to mark all non-nullable fields as required in JSON schema
+   "error_on_missing_keys marks all non-nullable fields as required"_test = [] {
+      // Generate schema with all non-nullable fields marked as required
+      auto schema = glz::write_json_schema<Person, glz::opts{.error_on_missing_keys = true}>().value_or("error");
+
+      // Parse the schema to verify the required fields
+      glz::detail::schematic obj{};
+      auto err = glz::read<glz::opts{.error_on_unknown_keys = false}>(obj, schema);
+      expect(!err) << glz::format_error(err, schema);
+
+      // Verify Person has required fields: name, age, address (but NOT nickname)
+      expect(obj.required.has_value());
+      auto& req = *obj.required;
+      expect(std::find(req.begin(), req.end(), "name") != req.end());
+      expect(std::find(req.begin(), req.end(), "age") != req.end());
+      expect(std::find(req.begin(), req.end(), "address") != req.end());
+      expect(std::find(req.begin(), req.end(), "nickname") == req.end()); // nullable, not required
+
+      // Verify Address definition also has required fields: street, city (but NOT apartment)
+      expect(obj.defs.has_value());
+      auto address_it = obj.defs->find("Address");
+      expect(address_it != obj.defs->end());
+      expect(address_it->second.required.has_value());
+      auto& addr_req = *address_it->second.required;
+      expect(std::find(addr_req.begin(), addr_req.end(), "street") != addr_req.end());
+      expect(std::find(addr_req.begin(), addr_req.end(), "city") != addr_req.end());
+      expect(std::find(addr_req.begin(), addr_req.end(), "apartment") == addr_req.end()); // nullable, not required
    };
 };
 
