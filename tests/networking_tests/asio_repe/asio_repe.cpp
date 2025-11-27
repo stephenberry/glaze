@@ -509,6 +509,144 @@ void client_exception_test()
    }
 }
 
+struct custom_call_api
+{
+   int value = 100;
+};
+
+void custom_call_handler_test()
+{
+   static constexpr int16_t port = 8768;
+
+   glz::asio_server server{.port = port, .concurrency = 1};
+
+   custom_call_api api{};
+   server.on(api);
+
+   // Set custom call handler that intercepts all calls
+   std::atomic<int> call_count{0};
+   server.call = [&](glz::repe::message& request, glz::repe::message& response) {
+      ++call_count;
+
+      // Custom routing: if path starts with /custom, handle directly
+      if (request.query.starts_with("/custom")) {
+         response.body = R"({"custom":true})";
+         response.header.body_length = response.body.size();
+         response.header.ec = glz::error_code::none;
+         glz::repe::finalize_header(response);
+      }
+      else {
+         // Forward to registry for other paths
+         server.registry.call(request, response);
+      }
+   };
+
+   server.run_async();
+
+   glz::asio_client client{"localhost", std::to_string(port)};
+   (void)client.init();
+
+   glz::repe::message msg{};
+
+   // Test custom path handling
+   client.call({"/custom/endpoint"}, msg);
+   expect(not bool(msg.error()));
+   expect(msg.body == R"({"custom":true})") << msg.body;
+
+   // Test forwarding to registry
+   msg = {};
+   client.call({"/value"}, msg);
+   expect(not bool(msg.error()));
+   expect(msg.body == "100") << msg.body;
+
+   // Verify custom handler was called for both
+   expect(call_count == 2);
+}
+
+void custom_call_middleware_test()
+{
+   static constexpr int16_t port = 8769;
+
+   glz::asio_server server{.port = port, .concurrency = 1};
+
+   custom_call_api api{};
+   server.on(api);
+
+   // Set middleware-style handler that logs and delegates
+   std::vector<std::string> logged_queries;
+   std::mutex log_mutex;
+
+   server.call = [&](glz::repe::message& request, glz::repe::message& response) {
+      // Pre-processing: log the query
+      {
+         std::lock_guard lock{log_mutex};
+         logged_queries.push_back(std::string{request.query});
+      }
+
+      // Delegate to registry
+      server.registry.call(request, response);
+
+      // Post-processing could go here
+   };
+
+   server.run_async();
+
+   glz::asio_client client{"localhost", std::to_string(port)};
+   (void)client.init();
+
+   glz::repe::message msg{};
+   client.call({"/value"}, msg);
+   expect(not bool(msg.error()));
+
+   msg = {};
+   client.call({"/value"}, msg, 42);
+   expect(not bool(msg.error()));
+
+   // Verify logging happened
+   expect(logged_queries.size() == 2);
+   expect(logged_queries[0] == "/value");
+   expect(logged_queries[1] == "/value");
+}
+
+void custom_call_error_handling_test()
+{
+   static constexpr int16_t port = 8770;
+
+   glz::asio_server server{.port = port, .concurrency = 1};
+
+   // Custom handler that returns an error for certain paths
+   server.call = [](glz::repe::message& request, glz::repe::message& response) {
+      if (request.query == "/forbidden") {
+         glz::repe::encode_error(glz::error_code::invalid_query, response, "Access denied");
+         glz::repe::finalize_header(response);
+      }
+      else {
+         response.body = R"("ok")";
+         response.header.body_length = response.body.size();
+         response.header.ec = glz::error_code::none;
+         glz::repe::finalize_header(response);
+      }
+   };
+
+   server.run_async();
+
+   glz::asio_client client{"localhost", std::to_string(port)};
+   (void)client.init();
+
+   glz::repe::message msg{};
+
+   // Test allowed path
+   client.call({"/allowed"}, msg);
+   expect(not bool(msg.error()));
+   expect(msg.body == R"("ok")");
+
+   // Test forbidden path
+   msg = {};
+   client.call({"/forbidden"}, msg);
+   expect(bool(msg.error()));
+   expect(msg.header.ec == glz::error_code::invalid_query);
+}
+
 int main()
 {
    notify_test();
@@ -520,6 +658,9 @@ int main()
    server_error_test();
    server_keep_alive_test();
    client_exception_test();
+   custom_call_handler_test();
+   custom_call_middleware_test();
+   custom_call_error_handling_test();
 
    return 0;
 }
