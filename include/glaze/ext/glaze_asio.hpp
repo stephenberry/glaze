@@ -20,91 +20,12 @@ static_assert(false, "standalone or boost asio must be included to use glaze/ext
 #include <coroutine>
 #include <iostream>
 
+#include "glaze/rpc/repe/buffer.hpp"
 #include "glaze/rpc/registry.hpp"
 #include "glaze/util/memory_pool.hpp"
 
 namespace glz
 {
-   namespace repe
-   {
-      inline void encode_error(const error_code& ec, message& msg)
-      {
-         msg.header.ec = ec;
-         msg.body.clear();
-      }
-
-      template <has_size ErrorMessage>
-      inline void encode_error(const error_code& ec, message& msg, ErrorMessage&& error_message)
-      {
-         msg.header.ec = ec;
-         if (error_message.size() > (std::numeric_limits<uint32_t>::max)()) {
-            return;
-         }
-         if (error_message.empty()) {
-            return;
-         }
-         const auto error_size = error_message.size();
-         msg.header.body_length = error_size;
-         msg.body = error_message;
-      }
-
-      template <class ErrorMessage>
-         requires(not has_size<ErrorMessage>)
-      inline void encode_error(const error_code& ec, message& msg, ErrorMessage&& error_message)
-      {
-         encode_error(ec, msg, std::string_view{error_message});
-      }
-
-      // Decodes a repe::message when an error has been encountered
-      inline std::string decode_error(message& msg)
-      {
-         if (bool(msg.error())) {
-            const auto ec = msg.header.ec;
-            if (msg.header.body_length >= 4) {
-               const std::string_view error_message = msg.body;
-               std::string ret = "REPE error: ";
-               ret.append(format_error(ec));
-               ret.append(" | ");
-               ret.append(error_message);
-               return {ret};
-            }
-            else {
-               return std::string{"REPE error: "} + format_error(ec);
-            }
-         }
-         return {"no error"};
-      }
-
-      // Decodes a repe::message into a structure
-      // Returns a std::string with a formatted error on error
-      template <auto Opts = opts{}, class T>
-      inline std::optional<std::string> decode_message(T&& value, message& msg)
-      {
-         if (bool(msg.header.ec)) {
-            const auto ec = msg.header.ec;
-            if (msg.header.body_length >= 4) {
-               const std::string_view error_message = msg.body;
-               std::string ret = "REPE error: ";
-               ret.append(format_error(ec));
-               ret.append(" | ");
-               ret.append(error_message);
-               return {ret};
-            }
-            else {
-               return std::string{"REPE error: "} + format_error(ec);
-            }
-         }
-
-         // we don't const qualify `msg` for performance
-         auto ec = glz::read<Opts>(std::forward<T>(value), msg.body);
-         if (ec) {
-            return {glz::format_error(ec, msg.body)};
-         }
-
-         return {};
-      }
-   }
-
 #if defined(GLZ_USING_BOOST_ASIO)
    namespace asio
    {
@@ -115,7 +36,7 @@ namespace glz
    inline void send_buffer(asio::ip::tcp::socket& socket, repe::message& msg)
    {
       if (msg.header.length == 0) {
-         encode_error(error_code::invalid_header, msg);
+         repe::encode_error(error_code::invalid_header, msg);
          return;
       }
 
@@ -125,7 +46,7 @@ namespace glz
       asio::error_code e{};
       asio::write(socket, buffers, asio::transfer_exactly(msg.header.length), e);
       if (e) {
-         encode_error(error_code::connection_failure, msg, e.message());
+         repe::encode_error(error_code::connection_failure, msg, e.message());
          return;
       }
    }
@@ -135,19 +56,19 @@ namespace glz
       asio::error_code e{};
       asio::read(socket, asio::buffer(&msg.header, sizeof(msg.header)), asio::transfer_exactly(sizeof(msg.header)), e);
       if (e) {
-         encode_error(error_code::connection_failure, msg, e.message());
+         repe::encode_error(error_code::connection_failure, msg, e.message());
          return;
       }
 
       // Validate REPE spec magic bytes
-      if (msg.header.spec != 0x1507) {
-         encode_error(error_code::invalid_header, msg, "Invalid REPE spec magic bytes");
+      if (msg.header.spec != repe::repe_magic) {
+         repe::encode_error(error_code::invalid_header, msg, "Invalid REPE spec magic bytes");
          return;
       }
 
       // Validate version
       if (msg.header.version != 1) {
-         encode_error(error_code::version_mismatch, msg, "Unsupported REPE version");
+         repe::encode_error(error_code::version_mismatch, msg, "Unsupported REPE version");
          return;
       }
 
@@ -156,7 +77,7 @@ namespace glz
       msg.body.resize(msg.header.body_length);
       asio::read(socket, asio::buffer(msg.body), asio::transfer_exactly(msg.header.body_length), e);
       if (e) {
-         encode_error(error_code::connection_failure, msg, e.message());
+         repe::encode_error(error_code::connection_failure, msg, e.message());
          return;
       }
    }
@@ -191,7 +112,7 @@ namespace glz
                                 asio::transfer_exactly(sizeof(msg.header)), asio::use_awaitable);
 
       // Validate REPE spec magic bytes
-      if (msg.header.spec != 0x1507) {
+      if (msg.header.spec != repe::repe_magic) {
          throw std::runtime_error("Invalid REPE spec magic bytes");
       }
 
@@ -371,12 +292,12 @@ namespace glz
          auto request = message_pool->borrow();
          request->body.clear();
          if (not connected()) {
-            encode_error(request->error(), response, "call failure: NOT CONNECTED");
+            repe::encode_error(request->error(), response, "call failure: NOT CONNECTED");
             return;
          }
          repe::request<Opts>(std::move(header), *request, std::forward<Params>(params)...);
          if (bool(request->error())) {
-            encode_error(request->error(), response, "bad request");
+            repe::encode_error(request->error(), response, "bad request");
             return;
          }
 
@@ -384,7 +305,7 @@ namespace glz
          if (not socket) {
             socket.ptr.reset();
             (*is_connected) = false;
-            encode_error(error_code::send_error, response, "socket failure");
+            repe::encode_error(error_code::send_error, response, "socket failure");
             return;
          }
 
@@ -668,16 +589,14 @@ namespace glz
                      error_handler(e.what());
                   }
                   repe::encode_error(error_code::invalid_call, response, e.what());
-                  response.header.length =
-                     sizeof(repe::header) + response.header.query_length + response.header.body_length;
+                  repe::finalize_header(response);
                }
                catch (...) {
                   if (error_handler) {
                      error_handler("unknown error");
                   }
                   repe::encode_error(error_code::invalid_call, response, "unknown error");
-                  response.header.length =
-                     sizeof(repe::header) + response.header.query_length + response.header.body_length;
+                  repe::finalize_header(response);
                }
                if (not request.header.notify) {
                   co_await co_send_buffer(socket, response);
