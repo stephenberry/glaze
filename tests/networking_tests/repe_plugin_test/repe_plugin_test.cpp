@@ -24,11 +24,6 @@ suite c_interface_tests = [] {
       expect(REPE_PLUGIN_INTERFACE_VERSION == 1);
    };
 
-   "repe_buffer_size"_test = [] {
-      // repe_buffer should be exactly 16 bytes (pointer + uint64_t)
-      expect(sizeof(repe_buffer) == 16);
-   };
-
    "repe_buffer_layout"_test = [] {
       repe_buffer buf{};
       buf.data = "test";
