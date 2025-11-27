@@ -99,3 +99,7 @@ int main() {
 ```
 
 > Thanks to **[jbbjarnason](https://github.com/jbbjarnason)**
+
+## See Also
+
+- [JSON-RPC 2.0 Registry](jsonrpc-registry.md) - Automatic method registration from C++ objects with JSON-RPC 2.0 protocol

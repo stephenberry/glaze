@@ -27,6 +27,7 @@ namespace glz
    // Protocol formats
    inline constexpr uint32_t REPE = 30000;
    inline constexpr uint32_t REST = 30100;
+   inline constexpr uint32_t JSONRPC = 30200;
 
    // layout
    inline constexpr uint8_t rowwise = 0;

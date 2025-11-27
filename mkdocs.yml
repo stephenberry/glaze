@@ -113,6 +113,8 @@ nav:
    - REPE RPC: rpc/repe-rpc.md
    - REPE Buffer Handling: rpc/repe-buffer.md
    - REPE Plugin Interface: rpc/repe-plugin.md
+   - JSON-RPC 2.0 Registry: rpc/jsonrpc-registry.md
+   - JSON-RPC 2.0 Client/Server: rpc/json-rpc.md
    - REPE to JSON-RPC: rpc/repe-jsonrpc-conversion.md
  - Interface Utilities:
    - JSON Include: json-include.md
