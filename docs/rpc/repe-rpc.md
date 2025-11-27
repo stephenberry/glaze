@@ -45,6 +45,42 @@ server.error_handler = [](const std::string& error_msg) {
 };
 ```
 
+### Custom Call Handler
+
+The `glz::asio_server` provides an optional `call` member that allows intercepting all incoming REPE calls before they reach the registry. This enables custom routing, middleware patterns, and plugin dispatch.
+
+```cpp
+glz::asio_server server{.port = 8080, .concurrency = 4};
+
+my_api api{};
+server.on(api);
+
+// Set custom call handler
+server.call = [&](glz::repe::message& request, glz::repe::message& response) {
+   // Custom routing based on path
+   if (request.query.starts_with("/custom/")) {
+      // Handle directly
+      response.body = R"({"handled": "custom"})";
+      glz::repe::finalize_header(response);
+   }
+   else {
+      // Delegate to registry
+      server.registry.call(request, response);
+   }
+};
+
+server.run();
+```
+
+When `call` is set, it is invoked instead of `registry.call()` for every request. This allows:
+
+- **Custom routing**: Route requests to different handlers based on path prefixes
+- **Middleware**: Add logging, authentication, or metrics before/after registry calls
+- **Multi-registry patterns**: Dispatch to different registries based on request metadata
+- **Plugin systems**: Forward messages to dynamically loaded plugins
+
+If `call` is not set (the default), requests are processed directly by the registry.
+
 ## Registering Multiple Objects with `glz::merge`
 
 By default, when you register an object with `server.on(obj)`, the root path `""` returns that object's JSON representation. If you call `server.on()` multiple times with different objects, only the last registered object will be returned at the root path `""`.

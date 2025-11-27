@@ -482,6 +482,12 @@ namespace glz
       // simultaneously.
       std::function<void(const std::string&)> error_handler{};
 
+      // Optional custom call handler. When set, this is invoked instead of registry.call().
+      // This enables custom message routing, middleware, plugin dispatch, or multi-registry patterns.
+      // Signature: void(repe::message& request, repe::message& response)
+      // IMPORTANT: Must be set before calling run() and should not be modified during execution.
+      std::function<void(repe::message&, repe::message&)> call{};
+
       ~asio_server() { stop(); }
 
       struct glaze
@@ -582,7 +588,12 @@ namespace glz
                co_await co_receive_buffer(socket, request);
                response.header.ec = {}; // clear error code, as we use this field to determine if a new error occured
                try {
-                  registry.call(request, response);
+                  if (call) {
+                     call(request, response);
+                  }
+                  else {
+                     registry.call(request, response);
+                  }
                }
                catch (const std::exception& e) {
                   if (error_handler) {
