@@ -6,13 +6,12 @@
 
 #pragma once
 
-#include "glaze/rpc/repe/plugin.h"
+#include <string>
 
+#include "glaze/rpc/registry.hpp"
 #include "glaze/rpc/repe/buffer.hpp"
 #include "glaze/rpc/repe/header.hpp"
-#include "glaze/rpc/registry.hpp"
-
-#include <string>
+#include "glaze/rpc/repe/plugin.h"
 
 namespace glz::repe
 {

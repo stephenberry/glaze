@@ -17,17 +17,18 @@ extern "C" {
 #define REPE_PLUGIN_INTERFACE_VERSION 1
 
 // ABI-stable buffer for request/response data
-typedef struct {
-    const char* data;
-    uint64_t size;
+typedef struct
+{
+   const char* data;
+   uint64_t size;
 } repe_buffer;
 
 // Result codes for plugin operations
 typedef enum {
-    REPE_OK = 0,
-    REPE_ERROR_INIT_FAILED = 1,
-    REPE_ERROR_INVALID_CONFIG = 2,
-    REPE_ERROR_ALREADY_INITIALIZED = 3
+   REPE_OK = 0,
+   REPE_ERROR_INIT_FAILED = 1,
+   REPE_ERROR_INVALID_CONFIG = 2,
+   REPE_ERROR_ALREADY_INITIALIZED = 3
 } repe_result;
 
 // ---------------------------------------------------------------------------

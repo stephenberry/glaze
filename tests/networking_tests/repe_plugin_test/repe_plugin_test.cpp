@@ -1,14 +1,13 @@
 // Glaze Library
 // For the license information refer to glaze.hpp
 
-#include <thread>
-#include <vector>
 #include <atomic>
 #include <mutex>
+#include <thread>
+#include <vector>
 
 #include "glaze/rpc/repe/plugin.h"
 #include "glaze/rpc/repe/plugin_helper.hpp"
-
 #include "ut/ut.hpp"
 
 using namespace ut;
@@ -20,9 +19,7 @@ namespace repe = glz::repe;
 // =============================================================================
 
 suite c_interface_tests = [] {
-   "interface_version"_test = [] {
-      expect(REPE_PLUGIN_INTERFACE_VERSION == 1);
-   };
+   "interface_version"_test = [] { expect(REPE_PLUGIN_INTERFACE_VERSION == 1); };
 
    "repe_buffer_layout"_test = [] {
       repe_buffer buf{};
@@ -127,12 +124,8 @@ template <>
 struct glz::meta<test_api>
 {
    using T = test_api;
-   static constexpr auto value = object(
-      &T::value, &T::name,
-      &T::get_value, &T::set_value,
-      &T::get_name, &T::set_name,
-      &T::throw_error
-   );
+   static constexpr auto value =
+      object(&T::value, &T::name, &T::get_value, &T::set_value, &T::get_name, &T::set_name, &T::throw_error);
 };
 
 // =============================================================================
@@ -363,8 +356,10 @@ suite thread_safety_tests = [] {
 // Integration Tests - Full Plugin Workflow
 // =============================================================================
 
-namespace test_plugin {
-   struct calculator_api {
+namespace test_plugin
+{
+   struct calculator_api
+   {
       double value = 0.0;
       double get_value() { return value; }
       void set_value(double v) { value = v; }
@@ -379,15 +374,15 @@ struct glz::meta<test_plugin::calculator_api>
    static constexpr auto value = object(&T::value, &T::get_value, &T::set_value, &T::increment);
 };
 
-namespace test_plugin {
+namespace test_plugin
+{
    calculator_api api_instance;
    glz::registry<> internal_registry;
    std::once_flag init_flag;
 
-   void ensure_initialized() {
-      std::call_once(init_flag, []() {
-         internal_registry.on<glz::root<"/calculator">>(api_instance);
-      });
+   void ensure_initialized()
+   {
+      std::call_once(init_flag, []() { internal_registry.on<glz::root<"/calculator">>(api_instance); });
    }
 
    // Simulated plugin exports
@@ -396,20 +391,24 @@ namespace test_plugin {
    const char* version() { return "1.0.0"; }
    const char* root_path() { return "/calculator"; }
 
-   repe_result init(const char*, uint64_t) {
+   repe_result init(const char*, uint64_t)
+   {
       try {
          ensure_initialized();
          return REPE_OK;
-      } catch (...) {
+      }
+      catch (...) {
          return REPE_ERROR_INIT_FAILED;
       }
    }
 
-   void shutdown() {
+   void shutdown()
+   {
       // Cleanup
    }
 
-   repe_buffer call(const char* request, uint64_t request_size) {
+   repe_buffer call(const char* request, uint64_t request_size)
+   {
       // Plugin is responsible for ensuring initialization before calling plugin_call
       ensure_initialized();
       return repe::plugin_call(internal_registry, request, request_size);
