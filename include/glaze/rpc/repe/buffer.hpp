@@ -36,10 +36,7 @@ namespace glz::repe
    }
 
    template <class ErrorMessage>
-      requires(requires(ErrorMessage m) {
-         m.size();
-         m.data();
-      })
+      requires(requires(ErrorMessage m) { m.size(); })
    inline void encode_error(const error_code ec, message& msg, ErrorMessage&& error_message)
    {
       msg.header.ec = ec;
@@ -55,10 +52,7 @@ namespace glz::repe
    }
 
    template <class ErrorMessage>
-      requires(not requires(ErrorMessage m) {
-         m.size();
-         m.data();
-      })
+      requires(not requires(ErrorMessage m) { m.size(); })
    inline void encode_error(const error_code ec, message& msg, ErrorMessage&& error_message)
    {
       encode_error(ec, msg, std::string_view{error_message});
