@@ -118,13 +118,12 @@ The response is written to `plugin_response_buffer`.
 
 ### `plugin_call`
 
-Template function that handles the complete request/response cycle:
+Template function that dispatches a REPE request to a registry:
 
 ```cpp
 namespace glz::repe {
-    template <typename InitFunc, typename Registry>
+    template <typename Registry>
     repe_buffer plugin_call(
-        InitFunc&& init_func,
         Registry& registry,
         const char* request,
         uint64_t request_size
@@ -133,15 +132,15 @@ namespace glz::repe {
 ```
 
 **Parameters:**
-- `init_func` - Callable for lazy initialization (should use `std::call_once` internally)
 - `registry` - The `glz::registry<>` to dispatch calls to
 - `request` - Raw REPE request bytes
 - `request_size` - Size of request data
 
 **Returns:** `repe_buffer` pointing to `plugin_response_buffer`
 
+**Note:** Plugin initialization should be done via `repe_plugin_init` before any calls. The plugin is responsible for ensuring initialization before calling `plugin_call`.
+
 **Error Handling:**
-- Init function exceptions → `error_code::invalid_call`
 - Deserialization failures → `error_code::parse_error`
 - Registry call exceptions → `error_code::invalid_call` (ID preserved)
 - Unknown exceptions → `error_code::invalid_call`
@@ -211,9 +210,8 @@ extern "C" {
 
     // Required: Request processing
     repe_buffer repe_plugin_call(const char* request, uint64_t request_size) {
-        return glz::repe::plugin_call(
-            ensure_initialized, internal_registry, request, request_size
-        );
+        ensure_initialized();  // Plugin ensures initialization before dispatch
+        return glz::repe::plugin_call(internal_registry, request, request_size);
     }
 }
 ```
@@ -408,7 +406,7 @@ See [REPE RPC](repe-rpc.md) for more details on thread-safe classes.
 |--------|-------------|
 | `glz::repe::plugin_response_buffer` | Thread-local response buffer |
 | `glz::repe::plugin_error_response()` | Create formatted REPE error |
-| `glz::repe::plugin_call()` | Complete request handling |
+| `glz::repe::plugin_call()` | Dispatch request to registry |
 
 ## Compatibility
 

@@ -147,8 +147,6 @@ suite plugin_call_tests = [] {
       glz::registry<> registry{};
       registry.on<glz::root<"/api">>(api);
 
-      auto init = []() {}; // no-op init
-
       // Create request for /api/get_value
       repe::message request{};
       repe::request_json({"/api/get_value"}, request);
@@ -156,7 +154,7 @@ suite plugin_call_tests = [] {
       std::string request_buffer;
       repe::to_buffer(request, request_buffer);
 
-      auto result = repe::plugin_call(init, registry, request_buffer.data(), request_buffer.size());
+      auto result = repe::plugin_call(registry, request_buffer.data(), request_buffer.size());
 
       expect(result.data != nullptr);
       expect(result.size > 0);
@@ -176,8 +174,6 @@ suite plugin_call_tests = [] {
       glz::registry<> registry{};
       registry.on<glz::root<"/api">>(api);
 
-      auto init = []() {};
-
       // Create request for /api/set_value with parameter
       repe::message request{};
       repe::request_json({"/api/set_value"}, request, 999);
@@ -185,7 +181,7 @@ suite plugin_call_tests = [] {
       std::string request_buffer;
       repe::to_buffer(request, request_buffer);
 
-      auto result = repe::plugin_call(init, registry, request_buffer.data(), request_buffer.size());
+      auto result = repe::plugin_call(registry, request_buffer.data(), request_buffer.size());
 
       repe::message response{};
       auto ec = repe::from_buffer(result.data, result.size, response);
@@ -196,65 +192,15 @@ suite plugin_call_tests = [] {
       expect(api.value == 999);
    };
 
-   "init_exception_handling"_test = [] {
-      test_api api{};
-      glz::registry<> registry{};
-      registry.on<glz::root<"/api">>(api);
-
-      auto bad_init = []() {
-         throw std::runtime_error("init failed");
-      };
-
-      repe::message request{};
-      repe::request_json({"/api/get_value"}, request);
-
-      std::string request_buffer;
-      repe::to_buffer(request, request_buffer);
-
-      auto result = repe::plugin_call(bad_init, registry, request_buffer.data(), request_buffer.size());
-
-      repe::message response{};
-      auto ec = repe::from_buffer(result.data, result.size, response);
-      expect(ec == glz::error_code::none);
-      expect(response.header.ec == glz::error_code::invalid_call);
-      expect(response.body.find("init failed") != std::string::npos);
-   };
-
-   "init_unknown_exception_handling"_test = [] {
-      test_api api{};
-      glz::registry<> registry{};
-      registry.on<glz::root<"/api">>(api);
-
-      auto bad_init = []() {
-         throw 42; // non-std::exception
-      };
-
-      repe::message request{};
-      repe::request_json({"/api/get_value"}, request);
-
-      std::string request_buffer;
-      repe::to_buffer(request, request_buffer);
-
-      auto result = repe::plugin_call(bad_init, registry, request_buffer.data(), request_buffer.size());
-
-      repe::message response{};
-      auto ec = repe::from_buffer(result.data, result.size, response);
-      expect(ec == glz::error_code::none);
-      expect(response.header.ec == glz::error_code::invalid_call);
-      expect(response.body.find("unknown error") != std::string::npos);
-   };
-
    "deserialization_error"_test = [] {
       test_api api{};
       glz::registry<> registry{};
       registry.on<glz::root<"/api">>(api);
 
-      auto init = []() {};
-
       // Send invalid REPE data
       std::string invalid_data = "not a valid REPE message";
 
-      auto result = repe::plugin_call(init, registry, invalid_data.data(), invalid_data.size());
+      auto result = repe::plugin_call(registry, invalid_data.data(), invalid_data.size());
 
       repe::message response{};
       auto ec = repe::from_buffer(result.data, result.size, response);
@@ -267,8 +213,6 @@ suite plugin_call_tests = [] {
       glz::registry<> registry{};
       registry.on<glz::root<"/api">>(api);
 
-      auto init = []() {};
-
       // Call function that throws
       repe::message request{};
       repe::request_json({"/api/throw_error"}, request);
@@ -277,7 +221,7 @@ suite plugin_call_tests = [] {
       std::string request_buffer;
       repe::to_buffer(request, request_buffer);
 
-      auto result = repe::plugin_call(init, registry, request_buffer.data(), request_buffer.size());
+      auto result = repe::plugin_call(registry, request_buffer.data(), request_buffer.size());
 
       repe::message response{};
       auto ec = repe::from_buffer(result.data, result.size, response);
@@ -291,8 +235,6 @@ suite plugin_call_tests = [] {
       glz::registry<> registry{};
       registry.on<glz::root<"/api">>(api);
 
-      auto init = []() {};
-
       // Call non-existent method
       repe::message request{};
       repe::request_json({"/api/nonexistent"}, request);
@@ -301,7 +243,7 @@ suite plugin_call_tests = [] {
       std::string request_buffer;
       repe::to_buffer(request, request_buffer);
 
-      auto result = repe::plugin_call(init, registry, request_buffer.data(), request_buffer.size());
+      auto result = repe::plugin_call(registry, request_buffer.data(), request_buffer.size());
 
       repe::message response{};
       auto ec = repe::from_buffer(result.data, result.size, response);
@@ -315,8 +257,6 @@ suite plugin_call_tests = [] {
       glz::registry<> registry{};
       registry.on<glz::root<"/api">>(api);
 
-      auto init = []() {};
-
       repe::message request{};
       repe::request_json({"/api/get_value"}, request);
       request.header.id = 99999;
@@ -324,7 +264,7 @@ suite plugin_call_tests = [] {
       std::string request_buffer;
       repe::to_buffer(request, request_buffer);
 
-      auto result = repe::plugin_call(init, registry, request_buffer.data(), request_buffer.size());
+      auto result = repe::plugin_call(registry, request_buffer.data(), request_buffer.size());
 
       repe::message response{};
       auto ec = repe::from_buffer(result.data, result.size, response);
@@ -383,13 +323,6 @@ suite thread_safety_tests = [] {
       glz::registry<> registry{};
       registry.on<glz::root<"/api">>(api);
 
-      std::once_flag init_flag;
-      auto init = [&]() {
-         std::call_once(init_flag, []() {
-            // Initialization logic
-         });
-      };
-
       constexpr int num_threads = 4;
       constexpr int calls_per_thread = 100;
 
@@ -406,7 +339,7 @@ suite thread_safety_tests = [] {
                std::string request_buffer;
                repe::to_buffer(request, request_buffer);
 
-               auto result = repe::plugin_call(init, registry, request_buffer.data(), request_buffer.size());
+               auto result = repe::plugin_call(registry, request_buffer.data(), request_buffer.size());
 
                repe::message response{};
                auto ec = repe::from_buffer(result.data, result.size, response);
@@ -477,7 +410,9 @@ namespace test_plugin {
    }
 
    repe_buffer call(const char* request, uint64_t request_size) {
-      return repe::plugin_call(ensure_initialized, internal_registry, request, request_size);
+      // Plugin is responsible for ensuring initialization before calling plugin_call
+      ensure_initialized();
+      return repe::plugin_call(internal_registry, request, request_size);
    }
 }
 

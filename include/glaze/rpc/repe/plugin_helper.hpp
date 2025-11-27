@@ -33,29 +33,15 @@ namespace glz::repe
    }
 
    // Common plugin call implementation
-   // InitFunc: callable that initializes the plugin (should use std::call_once internally)
-   // Registry: the glz::registry<Options> to dispatch calls to
-   template <typename InitFunc, typename Registry>
-   repe_buffer plugin_call(InitFunc&& init_func, Registry& registry, const char* request, uint64_t request_size)
+   // Dispatches a REPE request to a registry and returns the response
+   // Note: Plugin initialization should be done via repe_plugin_init before any calls
+   template <typename Registry>
+   repe_buffer plugin_call(Registry& registry, const char* request, uint64_t request_size)
    {
-      // Attempt initialization
-      try {
-         init_func();
-      }
-      catch (const std::exception& e) {
-         plugin_error_response(error_code::invalid_call, std::string("Plugin initialization failed: ") + e.what());
-         return {plugin_response_buffer.data(), plugin_response_buffer.size()};
-      }
-      catch (...) {
-         plugin_error_response(error_code::invalid_call, "Plugin initialization failed: unknown error");
-         return {plugin_response_buffer.data(), plugin_response_buffer.size()};
-      }
-
       // Deserialize request
       message request_msg{};
       auto ec = from_buffer(request, request_size, request_msg);
       if (ec != error_code::none) {
-         // Use error_code::parse_error to distinguish deserialization failures
          plugin_error_response(error_code::parse_error, "Failed to deserialize REPE request");
          return {plugin_response_buffer.data(), plugin_response_buffer.size()};
       }
