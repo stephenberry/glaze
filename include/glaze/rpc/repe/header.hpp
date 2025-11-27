@@ -12,16 +12,20 @@
 
 namespace glz::repe
 {
+   // REPE protocol magic bytes (0x1507 = 5383)
+   inline constexpr uint16_t repe_magic = 0x1507;
+
    // REPE Reserved Query Formats (0-4095 are reserved)
    enum class query_format : uint16_t { RAW_BINARY = 0, JSON_POINTER = 1 };
 
    // REPE Reserved Body Formats (0-4095 are reserved)
    enum class body_format : uint16_t { RAW_BINARY = 0, BEVE = 1, JSON = 2, UTF8 = 3 };
+
    struct header
    {
       uint64_t length{}; // Total length of [header, query, body]
       //
-      uint16_t spec{0x1507}; // (5383) Magic two bytes to denote the REPE specification
+      uint16_t spec{repe_magic}; // Magic two bytes to denote the REPE specification
       uint8_t version = 1; // REPE version
       uint8_t notify{}; // 1 (true) for no response from server
       uint32_t reserved{}; // Must be zero, receivers must ignore this field
