@@ -2,7 +2,6 @@
 // For the license information refer to glaze.hpp
 
 #include "glaze/rpc/repe/buffer.hpp"
-
 #include "ut/ut.hpp"
 
 using namespace ut;
