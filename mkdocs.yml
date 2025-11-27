@@ -109,6 +109,10 @@ nav:
    - networking/websocket-client.md
    - networking/advanced-networking.md
    - networking/http-examples.md
+ - RPC:
+   - REPE RPC: rpc/repe-rpc.md
+   - REPE Buffer Handling: rpc/repe-buffer.md
+   - REPE to JSON-RPC: rpc/repe-jsonrpc-conversion.md
  - Interface Utilities:
    - JSON Include: json-include.md
    - CLI Menu: cli-menu.md
