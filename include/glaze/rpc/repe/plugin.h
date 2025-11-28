@@ -14,22 +14,31 @@ extern "C" {
 #include <stdint.h>
 
 // Current plugin interface version - increment when ABI changes
-#define REPE_PLUGIN_INTERFACE_VERSION 1
+#define REPE_PLUGIN_INTERFACE_VERSION 2
 
 // ABI-stable buffer for request/response data
-typedef struct
+typedef struct repe_buffer
 {
    const char* data;
    uint64_t size;
 } repe_buffer;
 
 // Result codes for plugin operations
-typedef enum {
+typedef enum repe_result {
    REPE_OK = 0,
    REPE_ERROR_INIT_FAILED = 1,
    REPE_ERROR_INVALID_CONFIG = 2,
    REPE_ERROR_ALREADY_INITIALIZED = 3
 } repe_result;
+
+// Plugin metadata struct
+// Returned by repe_plugin_info(), must remain valid for the plugin's lifetime
+typedef struct repe_plugin_data
+{
+   const char* name;       // Plugin name (e.g., "calculator")
+   const char* version;    // Plugin version (e.g., "1.0.0")
+   const char* root_path;  // RPC path prefix (e.g., "/calculator")
+} repe_plugin_data;
 
 // ---------------------------------------------------------------------------
 // Plugin Interface Version (required)
@@ -38,21 +47,33 @@ typedef enum {
 // Returns the plugin interface version this plugin was built against.
 // Hosts should check: repe_plugin_interface_version() == REPE_PLUGIN_INTERFACE_VERSION
 // If versions don't match, the host should refuse to load the plugin.
+//
+// NOTE: This is kept as a standalone function (not in the struct) for ABI safety.
+// The version must be checked BEFORE interpreting the struct layout.
 uint32_t repe_plugin_interface_version(void);
 
 // ---------------------------------------------------------------------------
-// Plugin Identification (required)
+// Plugin Information (required)
 // ---------------------------------------------------------------------------
 
-// Returns a human-readable plugin name (e.g., "calculator")
-const char* repe_plugin_name(void);
-
-// Returns the plugin version string (e.g., "1.0.0")
-const char* repe_plugin_version(void);
-
-// Returns the root path for request routing (e.g., "/calculator")
-// All methods in this plugin should be under this path
-const char* repe_plugin_root_path(void);
+// Returns a pointer to the plugin's metadata struct.
+// The returned pointer must remain valid for the entire lifetime of the plugin
+// (until repe_plugin_shutdown() is called or the library is unloaded).
+//
+// Returns NULL on error (host should refuse to load the plugin).
+//
+// Recommended implementation pattern (file-scope static):
+//
+//   static const repe_plugin_data plugin_info = {
+//       .name = "calculator",
+//       .version = "1.0.0",
+//       .root_path = "/calculator"
+//   };
+//
+//   const repe_plugin_data* repe_plugin_info(void) {
+//       return &plugin_info;
+//   }
+const repe_plugin_data* repe_plugin_info(void);
 
 // ---------------------------------------------------------------------------
 // Plugin Lifecycle (optional - may be NULL)

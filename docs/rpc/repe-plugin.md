@@ -29,27 +29,36 @@ The C header defines the ABI-stable plugin contract. It has no C++ or Glaze depe
 ### Interface Version
 
 ```c
-#define REPE_PLUGIN_INTERFACE_VERSION 1
+#define REPE_PLUGIN_INTERFACE_VERSION 2
 ```
 
 Plugins and hosts should check version compatibility before use. When the plugin interface changes, this version is incremented.
+
+> **Note:** The interface version is retrieved via a standalone function `repe_plugin_interface_version()` (not from the struct) for ABI safety. This allows the host to check version compatibility before interpreting the `repe_plugin_data` struct layout.
 
 ### Types
 
 ```c
 // ABI-stable buffer for request/response data
-typedef struct {
+typedef struct repe_buffer {
     const char* data;
     uint64_t size;
 } repe_buffer;
 
 // Result codes for plugin operations
-typedef enum {
+typedef enum repe_result {
     REPE_OK = 0,
     REPE_ERROR_INIT_FAILED = 1,
     REPE_ERROR_INVALID_CONFIG = 2,
     REPE_ERROR_ALREADY_INITIALIZED = 3
 } repe_result;
+
+// Plugin metadata struct
+typedef struct repe_plugin_data {
+    const char* name;       // Plugin name (e.g., "calculator")
+    const char* version;    // Plugin version (e.g., "1.0.0")
+    const char* root_path;  // RPC path prefix (e.g., "/calculator")
+} repe_plugin_data;
 ```
 
 ### Required Plugin Exports
@@ -57,16 +66,28 @@ typedef enum {
 Plugins must export these symbols with C linkage:
 
 ```c
-// Interface version for compatibility checking
+// Interface version for compatibility checking (standalone for ABI safety)
 uint32_t repe_plugin_interface_version(void);
 
-// Plugin identification
-const char* repe_plugin_name(void);
-const char* repe_plugin_version(void);
-const char* repe_plugin_root_path(void);
+// Plugin metadata (returns pointer to static struct)
+const repe_plugin_data* repe_plugin_info(void);
 
 // Request processing
 repe_buffer repe_plugin_call(const char* request, uint64_t request_size);
+```
+
+The `repe_plugin_info()` function must return a pointer that remains valid for the plugin's entire lifetime. The recommended pattern is to use a file-scope static:
+
+```c
+static const repe_plugin_data plugin_info = {
+    .name = "calculator",
+    .version = "1.0.0",
+    .root_path = "/calculator"
+};
+
+const repe_plugin_data* repe_plugin_info(void) {
+    return &plugin_info;
+}
 ```
 
 ### Optional Plugin Exports
@@ -180,6 +201,13 @@ namespace {
     }
 }
 
+// File-scope static plugin metadata (initialized at load time)
+static const repe_plugin_data plugin_info = {
+    "calculator",   // name
+    "1.0.0",        // version
+    "/calculator"   // root_path
+};
+
 // Plugin exports with C linkage
 extern "C" {
     // Required: Interface version for ABI compatibility
@@ -187,10 +215,10 @@ extern "C" {
         return REPE_PLUGIN_INTERFACE_VERSION;
     }
 
-    // Required: Plugin identification
-    const char* repe_plugin_name() { return "calculator"; }
-    const char* repe_plugin_version() { return "1.0.0"; }
-    const char* repe_plugin_root_path() { return "/calculator"; }
+    // Required: Plugin metadata
+    const repe_plugin_data* repe_plugin_info() {
+        return &plugin_info;
+    }
 
     // Optional: Explicit initialization with configuration
     repe_result repe_plugin_init(const char* /*config*/, uint64_t /*config_size*/) {
@@ -228,11 +256,13 @@ extern "C" {
 
 struct loaded_plugin {
     std::string name;
+    std::string version;
     std::string root_path;
     void* handle = nullptr;
 
     // Function pointers
     uint32_t (*interface_version_fn)(void) = nullptr;
+    const repe_plugin_data* (*info_fn)(void) = nullptr;
     repe_result (*init_fn)(const char*, uint64_t) = nullptr;
     void (*shutdown_fn)(void) = nullptr;
     repe_buffer (*call_fn)(const char*, uint64_t) = nullptr;
@@ -260,10 +290,8 @@ std::optional<loaded_plugin> load_plugin(const std::string& path) {
     // Load required symbols
     plugin.interface_version_fn =
         (uint32_t(*)(void))dlsym(plugin.handle, "repe_plugin_interface_version");
-    auto name_fn =
-        (const char*(*)(void))dlsym(plugin.handle, "repe_plugin_name");
-    auto root_fn =
-        (const char*(*)(void))dlsym(plugin.handle, "repe_plugin_root_path");
+    plugin.info_fn =
+        (const repe_plugin_data*(*)(void))dlsym(plugin.handle, "repe_plugin_info");
     plugin.call_fn =
         (repe_buffer(*)(const char*, uint64_t))dlsym(plugin.handle, "repe_plugin_call");
 
@@ -274,17 +302,24 @@ std::optional<loaded_plugin> load_plugin(const std::string& path) {
         (void(*)(void))dlsym(plugin.handle, "repe_plugin_shutdown");
 
     // Validate required symbols
-    if (!plugin.interface_version_fn || !name_fn || !root_fn || !plugin.call_fn) {
+    if (!plugin.interface_version_fn || !plugin.info_fn || !plugin.call_fn) {
         return std::nullopt;
     }
 
-    // Check interface version compatibility
+    // Check interface version BEFORE accessing struct
     if (plugin.interface_version_fn() != REPE_PLUGIN_INTERFACE_VERSION) {
         return std::nullopt;
     }
 
-    plugin.name = name_fn();
-    plugin.root_path = root_fn();
+    // Now safe to access plugin info struct
+    const repe_plugin_data* info = plugin.info_fn();
+    if (!info || !info->name || !info->root_path) {
+        return std::nullopt;
+    }
+
+    plugin.name = info->name;
+    plugin.version = info->version ? info->version : "";
+    plugin.root_path = info->root_path;
 
     // Initialize if init function is provided
     if (plugin.init_fn) {
@@ -389,13 +424,12 @@ See [REPE RPC](repe-rpc.md) for more details on thread-safe classes.
 
 | Symbol | Required | Description |
 |--------|----------|-------------|
-| `REPE_PLUGIN_INTERFACE_VERSION` | - | Macro defining current interface version (1) |
+| `REPE_PLUGIN_INTERFACE_VERSION` | - | Macro defining current interface version (2) |
 | `repe_buffer` | - | POD struct: `{const char* data, uint64_t size}` |
 | `repe_result` | - | Enum: `REPE_OK`, `REPE_ERROR_*` |
-| `repe_plugin_interface_version()` | Yes | Returns interface version |
-| `repe_plugin_name()` | Yes | Returns plugin name |
-| `repe_plugin_version()` | Yes | Returns plugin version string |
-| `repe_plugin_root_path()` | Yes | Returns root path for routing |
+| `repe_plugin_data` | - | Struct: `{name, version, root_path}` |
+| `repe_plugin_interface_version()` | Yes | Returns interface version (standalone for ABI safety) |
+| `repe_plugin_info()` | Yes | Returns pointer to plugin metadata struct |
 | `repe_plugin_init()` | No | Initialize with optional config |
 | `repe_plugin_shutdown()` | No | Cleanup before unload |
 | `repe_plugin_call()` | Yes | Process REPE request |
