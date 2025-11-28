@@ -19,7 +19,7 @@ namespace repe = glz::repe;
 // =============================================================================
 
 suite c_interface_tests = [] {
-   "interface_version"_test = [] { expect(REPE_PLUGIN_INTERFACE_VERSION == 1); };
+   "interface_version"_test = [] { expect(REPE_PLUGIN_INTERFACE_VERSION == 2); };
 
    "repe_buffer_layout"_test = [] {
       repe_buffer buf{};
@@ -27,6 +27,19 @@ suite c_interface_tests = [] {
       buf.size = 4;
       expect(buf.data != nullptr);
       expect(buf.size == 4);
+   };
+
+   "repe_plugin_data_layout"_test = [] {
+      repe_plugin_data data{};
+      data.name = "test_plugin";
+      data.version = "1.0.0";
+      data.root_path = "/test";
+      expect(data.name != nullptr);
+      expect(data.version != nullptr);
+      expect(data.root_path != nullptr);
+      expect(std::string_view(data.name) == "test_plugin");
+      expect(std::string_view(data.version) == "1.0.0");
+      expect(std::string_view(data.root_path) == "/test");
    };
 
    "repe_result_values"_test = [] {
@@ -385,11 +398,17 @@ namespace test_plugin
       std::call_once(init_flag, []() { internal_registry.on<glz::root<"/calculator">>(api_instance); });
    }
 
+   // File-scope static plugin metadata (initialized at load time)
+   static const repe_plugin_data plugin_info_data = {
+      "calculator",  // name
+      "1.0.0",       // version
+      "/calculator"  // root_path
+   };
+
    // Simulated plugin exports
    uint32_t interface_version() { return REPE_PLUGIN_INTERFACE_VERSION; }
-   const char* name() { return "calculator"; }
-   const char* version() { return "1.0.0"; }
-   const char* root_path() { return "/calculator"; }
+
+   const repe_plugin_data* info() { return &plugin_info_data; }
 
    repe_result init(const char*, uint64_t)
    {
@@ -419,9 +438,12 @@ suite integration_tests = [] {
    "full_plugin_workflow"_test = [] {
       // Verify plugin info
       expect(test_plugin::interface_version() == REPE_PLUGIN_INTERFACE_VERSION);
-      expect(std::string_view(test_plugin::name()) == "calculator");
-      expect(std::string_view(test_plugin::version()) == "1.0.0");
-      expect(std::string_view(test_plugin::root_path()) == "/calculator");
+
+      const repe_plugin_data* info = test_plugin::info();
+      expect(info != nullptr);
+      expect(std::string_view(info->name) == "calculator");
+      expect(std::string_view(info->version) == "1.0.0");
+      expect(std::string_view(info->root_path) == "/calculator");
 
       // Initialize plugin
       expect(test_plugin::init(nullptr, 0) == REPE_OK);
