@@ -35,9 +35,9 @@ typedef enum repe_result {
 // Returned by repe_plugin_info(), must remain valid for the plugin's lifetime
 typedef struct repe_plugin_data
 {
-   const char* name;       // Plugin name (e.g., "calculator")
-   const char* version;    // Plugin version (e.g., "1.0.0")
-   const char* root_path;  // RPC path prefix (e.g., "/calculator")
+   const char* name; // Plugin name (e.g., "calculator")
+   const char* version; // Plugin version (e.g., "1.0.0")
+   const char* root_path; // RPC path prefix (e.g., "/calculator")
 } repe_plugin_data;
 
 // ---------------------------------------------------------------------------

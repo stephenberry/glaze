@@ -400,9 +400,9 @@ namespace test_plugin
 
    // File-scope static plugin metadata (initialized at load time)
    static const repe_plugin_data plugin_info_data = {
-      "calculator",  // name
-      "1.0.0",       // version
-      "/calculator"  // root_path
+      "calculator", // name
+      "1.0.0", // version
+      "/calculator" // root_path
    };
 
    // Simulated plugin exports
