@@ -265,19 +265,22 @@ namespace glz
       std::string call(std::string_view json_request)
          requires(Proto == JSONRPC)
       {
-         // Validate JSON first
-         if (auto parse_err = glz::validate_json(json_request)) {
-            return R"({"jsonrpc":"2.0","error":{"code":-32700,"message":"Parse error","data":)" +
-                   write_json(format_error(parse_err, json_request)).value_or("null") + R"(},"id":null})";
-         }
+         // Find first non-whitespace to determine batch vs single request
+         auto it = std::find_if(json_request.begin(), json_request.end(),
+                                [](char c) { return !std::isspace(static_cast<unsigned char>(c)); });
 
-         // Check if it's a batch request (array)
-         auto batch_requests = glz::read_json<std::vector<glz::raw_json_view>>(json_request);
-         if (batch_requests.has_value()) {
-            if (batch_requests.value().empty()) {
+         if (it != json_request.end() && *it == '[') {
+            // Batch request
+            auto batch_requests = glz::read_json<std::vector<glz::raw_json_view>>(json_request);
+            if (!batch_requests) {
+               return R"({"jsonrpc":"2.0","error":{"code":-32700,"message":"Parse error","data":)" +
+                      write_json(format_error(batch_requests.error(), json_request)).value_or("null") +
+                      R"(},"id":null})";
+            }
+            if (batch_requests->empty()) {
                return R"({"jsonrpc":"2.0","error":{"code":-32600,"message":"Invalid Request","data":"Empty batch"},"id":null})";
             }
-            return process_batch(batch_requests.value());
+            return process_batch(*batch_requests);
          }
 
          // Single request
@@ -292,7 +295,13 @@ namespace glz
       {
          auto request = glz::read_json<rpc::generic_request_t>(json_request);
          if (!request.has_value()) {
-            // Try to extract the id even on parse failure
+            // Check if it's a JSON syntax error vs schema error
+            if (glz::validate_json(json_request)) {
+               // JSON is syntactically invalid - return Parse error (-32700)
+               return R"({"jsonrpc":"2.0","error":{"code":-32700,"message":"Parse error","data":)" +
+                      write_json(format_error(request.error(), json_request)).value_or("null") + R"(},"id":null})";
+            }
+            // Valid JSON but invalid request structure - return Invalid Request (-32600)
             auto id = glz::get_as_json<rpc::id_t, "/id">(json_request);
             std::string id_json = id.has_value() ? glz::write_json(id.value()).value_or("null") : "null";
             return R"({"jsonrpc":"2.0","error":{"code":-32600,"message":"Invalid Request","data":)" +
@@ -313,21 +322,26 @@ namespace glz
          // Check if this is a notification (id is null)
          bool is_notification = std::holds_alternative<glz::generic::null_t>(req.id);
 
-         // Convert method to path (add leading slash if not present)
-         std::string method_path;
-         if (req.method.empty() || req.method[0] != '/') {
-            method_path = "/";
-            method_path += req.method;
-         }
-         else {
-            method_path = std::string(req.method);
-         }
-
-         // Look up the endpoint
-         auto it = endpoints.find(method_path);
+         // Look up the endpoint - try direct lookup first (handles methods that already start with /)
+         auto it = endpoints.find(req.method);
          if (it == endpoints.end()) {
-            // Also try without the leading slash for "" endpoint
-            if (method_path == "/") {
+            if (!req.method.empty()) {
+               // Try with leading slash using stack buffer for common case
+               char buf[256];
+               if (req.method.size() < sizeof(buf) - 1) {
+                  buf[0] = '/';
+                  std::memcpy(buf + 1, req.method.data(), req.method.size());
+                  it = endpoints.find(std::string_view{buf, req.method.size() + 1});
+               }
+               else {
+                  // Fallback for very long method names
+                  std::string method_path = "/";
+                  method_path += req.method;
+                  it = endpoints.find(method_path);
+               }
+            }
+            else {
+               // Empty method - try root endpoint
                it = endpoints.find("");
             }
             if (it == endpoints.end()) {
@@ -371,10 +385,12 @@ namespace glz
          std::vector<std::string> responses;
          responses.reserve(batch.size());
 
+         size_t total_size = 2; // []
          for (const auto& req : batch) {
             auto response = process_single_request(req.str);
             if (response.has_value()) {
-               responses.push_back(std::move(response.value()));
+               total_size += response->size() + 1; // +1 for comma
+               responses.push_back(std::move(*response));
             }
          }
 
@@ -383,8 +399,10 @@ namespace glz
             return "";
          }
 
-         // Build batch response array
-         std::string result = "[";
+         // Build batch response array with pre-reserved capacity
+         std::string result;
+         result.reserve(total_size);
+         result = "[";
          for (size_t i = 0; i < responses.size(); ++i) {
             if (i > 0) {
                result += ",";
