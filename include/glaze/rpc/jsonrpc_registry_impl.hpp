@@ -43,7 +43,8 @@ namespace glz
          auto ec = write<Opts>(std::forward<Value>(value), result_json);
          if (ec) {
             // Write error response
-            state.response = R"({"jsonrpc":"2.0","error":{"code":-32603,"message":"Internal error","data":"Failed to serialize result"},"id":)";
+            state.response =
+               R"({"jsonrpc":"2.0","error":{"code":-32603,"message":"Internal error","data":"Failed to serialize result"},"id":)";
             state.response += write_json(state.id).value_or("null");
             state.response += "}";
             return;
@@ -111,8 +112,7 @@ namespace glz
    template <>
    struct protocol_storage<JSONRPC>
    {
-      using type =
-         std::unordered_map<sv, std::function<void(jsonrpc::state&&)>, detail::string_hash, std::equal_to<>>;
+      using type = std::unordered_map<sv, std::function<void(jsonrpc::state&&)>, detail::string_hash, std::equal_to<>>;
    };
 
    // Implementation for JSON RPC protocol
