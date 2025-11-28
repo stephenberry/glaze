@@ -1,8 +1,19 @@
-## JSON-RPC 2.0
+## JSON-RPC 2.0 Client/Server
 
-Compile time specification of JSON-RPC methods making it unnecessary to convert JSON to its according params/result/error type.
+Compile-time typed JSON-RPC 2.0 implementation with explicit method definitions. This approach provides full type safety for both client and server, with methods and their parameter/result types known at compile time.
 
 - [JSON-RPC 2.0 specification](https://www.jsonrpc.org/specification)
+
+> **Note:** Glaze offers two JSON-RPC 2.0 implementations. This page covers the **compile-time typed** approach. For automatic method registration from C++ objects using reflection, see [JSON-RPC 2.0 Registry](jsonrpc-registry.md).
+
+### When to Use This Approach
+
+Use the compile-time typed client/server when you need:
+
+- **A JSON-RPC client** - This is the only client implementation Glaze provides (works with any JSON-RPC 2.0 server)
+- **Strict type safety** - Method signatures are enforced at compile time
+- **Async callbacks** - Client supports callback-based response handling with request tracking
+- **Well-defined API contracts** - Methods, parameters, and results are explicitly declared
 
 ### Example
 
@@ -99,3 +110,7 @@ int main() {
 ```
 
 > Thanks to **[jbbjarnason](https://github.com/jbbjarnason)**
+
+## See Also
+
+- [JSON-RPC 2.0 Registry](jsonrpc-registry.md) - Automatic method registration from C++ objects with JSON-RPC 2.0 protocol

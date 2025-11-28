@@ -390,7 +390,24 @@ namespace glz
          }
       }
 
-      ~websocket_connection() = default;
+      ~websocket_connection()
+      {
+         // Close the socket BEFORE handlers are destroyed to prevent
+         // cancelled async operations from invoking already-destroyed handlers.
+         // Member destruction order would destroy handlers first (declared last),
+         // then socket (declared first), which could cause use-after-free.
+         if (socket_) {
+            asio::error_code ec;
+            socket_->close(ec);
+            // Error code intentionally ignored - we're destroying anyway
+            socket_.reset();
+         }
+
+         // Clear handlers to prevent any use-after-free if they're somehow invoked
+         client_message_handler_ = nullptr;
+         client_close_handler_ = nullptr;
+         client_error_handler_ = nullptr;
+      }
 
       // Configuration
       void set_max_message_size(size_t size) { max_message_size_ = size; }

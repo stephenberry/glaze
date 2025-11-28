@@ -20,6 +20,7 @@ namespace glz
 
 // Include implementation files
 #include "glaze/net/rest_registry_impl.hpp"
+#include "glaze/rpc/jsonrpc_registry_impl.hpp"
 #include "glaze/rpc/repe/repe_registry_impl.hpp"
 
 namespace glz
@@ -256,6 +257,160 @@ namespace glz
             out.header.id = in.header.id; // Preserve the ID from the input message
             write_error(body);
          }
+      }
+
+      // Function to call methods - only available for JSONRPC protocol
+      // Returns a JSON RPC response string
+      // Supports single requests, batch requests, and notifications
+      std::string call(std::string_view json_request)
+         requires(Proto == JSONRPC)
+      {
+         // Find first non-whitespace to determine batch vs single request
+         auto it = std::find_if(json_request.begin(), json_request.end(),
+                                [](char c) { return !std::isspace(static_cast<unsigned char>(c)); });
+
+         if (it != json_request.end() && *it == '[') {
+            // Batch request
+            auto batch_requests = glz::read_json<std::vector<glz::raw_json_view>>(json_request);
+            if (!batch_requests) {
+               return R"({"jsonrpc":"2.0","error":{"code":-32700,"message":"Parse error","data":)" +
+                      write_json(format_error(batch_requests.error(), json_request)).value_or("null") +
+                      R"(},"id":null})";
+            }
+            if (batch_requests->empty()) {
+               return R"({"jsonrpc":"2.0","error":{"code":-32600,"message":"Invalid Request","data":"Empty batch"},"id":null})";
+            }
+            return process_batch(*batch_requests);
+         }
+
+         // Single request
+         auto response = process_single_request(json_request);
+         return response.value_or("");
+      }
+
+     private:
+      // Process a single JSON RPC request, returns nullopt for notifications
+      std::optional<std::string> process_single_request(std::string_view json_request)
+         requires(Proto == JSONRPC)
+      {
+         auto request = glz::read_json<rpc::generic_request_t>(json_request);
+         if (!request.has_value()) {
+            // Check if it's a JSON syntax error vs schema error
+            if (glz::validate_json(json_request)) {
+               // JSON is syntactically invalid - return Parse error (-32700)
+               return R"({"jsonrpc":"2.0","error":{"code":-32700,"message":"Parse error","data":)" +
+                      write_json(format_error(request.error(), json_request)).value_or("null") + R"(},"id":null})";
+            }
+            // Valid JSON but invalid request structure - return Invalid Request (-32600)
+            auto id = glz::get_as_json<rpc::id_t, "/id">(json_request);
+            std::string id_json = id.has_value() ? glz::write_json(id.value()).value_or("null") : "null";
+            return R"({"jsonrpc":"2.0","error":{"code":-32600,"message":"Invalid Request","data":)" +
+                   write_json(format_error(request.error(), json_request)).value_or("null") + R"(},"id":)" + id_json +
+                   "}";
+         }
+
+         auto& req = request.value();
+
+         // Validate version
+         if (req.version != rpc::supported_version) {
+            std::string id_json = glz::write_json(req.id).value_or("null");
+            return R"({"jsonrpc":"2.0","error":{"code":-32600,"message":"Invalid Request","data":)" +
+                   write_json("Invalid version: " + std::string(req.version)).value_or("null") + R"(},"id":)" +
+                   id_json + "}";
+         }
+
+         // Check if this is a notification (id is null)
+         bool is_notification = std::holds_alternative<glz::generic::null_t>(req.id);
+
+         // Look up the endpoint - try direct lookup first (handles methods that already start with /)
+         auto it = endpoints.find(req.method);
+         if (it == endpoints.end()) {
+            if (!req.method.empty()) {
+               // Try with leading slash using stack buffer for common case
+               char buf[256];
+               if (req.method.size() < sizeof(buf) - 1) {
+                  buf[0] = '/';
+                  std::memcpy(buf + 1, req.method.data(), req.method.size());
+                  it = endpoints.find(std::string_view{buf, req.method.size() + 1});
+               }
+               else {
+                  // Fallback for very long method names
+                  std::string method_path = "/";
+                  method_path += req.method;
+                  it = endpoints.find(method_path);
+               }
+            }
+            else {
+               // Empty method - try root endpoint
+               it = endpoints.find("");
+            }
+            if (it == endpoints.end()) {
+               if (is_notification) {
+                  return std::nullopt; // No response for notifications
+               }
+               std::string id_json = glz::write_json(req.id).value_or("null");
+               return R"({"jsonrpc":"2.0","error":{"code":-32601,"message":"Method not found","data":)" +
+                      write_json(req.method).value_or("null") + R"(},"id":)" + id_json + "}";
+            }
+         }
+
+         // Prepare state
+         std::string response;
+         bool has_params = !req.params.str.empty() && req.params.str != "null";
+         jsonrpc::state state{req.id, response, is_notification, has_params, req.params.str};
+
+         try {
+            it->second(std::move(state));
+         }
+         catch (const std::exception& e) {
+            if (is_notification) {
+               return std::nullopt;
+            }
+            std::string id_json = glz::write_json(req.id).value_or("null");
+            return R"({"jsonrpc":"2.0","error":{"code":-32603,"message":"Internal error","data":)" +
+                   write_json(std::string_view{e.what()}).value_or("null") + R"(},"id":)" + id_json + "}";
+         }
+
+         if (is_notification) {
+            return std::nullopt;
+         }
+
+         return response;
+      }
+
+      // Process batch requests
+      std::string process_batch(const std::vector<glz::raw_json_view>& batch)
+         requires(Proto == JSONRPC)
+      {
+         std::vector<std::string> responses;
+         responses.reserve(batch.size());
+
+         size_t total_size = 2; // []
+         for (const auto& req : batch) {
+            auto response = process_single_request(req.str);
+            if (response.has_value()) {
+               total_size += response->size() + 1; // +1 for comma
+               responses.push_back(std::move(*response));
+            }
+         }
+
+         // If all were notifications, return empty string
+         if (responses.empty()) {
+            return "";
+         }
+
+         // Build batch response array with pre-reserved capacity
+         std::string result;
+         result.reserve(total_size);
+         result = "[";
+         for (size_t i = 0; i < responses.size(); ++i) {
+            if (i > 0) {
+               result += ",";
+            }
+            result += responses[i];
+         }
+         result += "]";
+         return result;
       }
    };
 }
