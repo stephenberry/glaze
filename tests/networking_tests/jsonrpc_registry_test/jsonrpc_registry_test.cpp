@@ -377,6 +377,9 @@ suite jsonrpc_merge_tests = [] {
 struct throwing_functions_t
 {
    std::function<int()> throw_func = []() -> int { throw std::runtime_error("Test exception"); };
+   std::function<int()> throw_special = []() -> int {
+      throw std::runtime_error("Error with \"quotes\" and\nnewlines");
+   };
 };
 
 suite jsonrpc_exception_tests = [] {
@@ -391,6 +394,55 @@ suite jsonrpc_exception_tests = [] {
       expect(response.find(R"(-32603)") != std::string::npos) << response; // Internal error
       expect(response.find("Test exception") != std::string::npos) << response;
       expect(response.find(R"("id":1)") != std::string::npos) << response; // ID preserved
+   };
+
+   "exception_with_special_chars_produces_valid_json"_test = [] {
+      glz::registry<glz::opts{}, glz::JSONRPC> server{};
+
+      throwing_functions_t obj{};
+      server.on(obj);
+
+      auto response = server.call(R"({"jsonrpc":"2.0","method":"throw_special","id":1})");
+      expect(response.find(R"("error")") != std::string::npos) << response;
+      expect(response.find(R"(-32603)") != std::string::npos) << response; // Internal error
+
+      // Verify the response is valid JSON
+      auto err = glz::validate_json(response);
+      expect(!err) << "Response must be valid JSON: " << glz::format_error(err, response);
+   };
+};
+
+suite jsonrpc_error_json_validity_tests = [] {
+   "parse_error_with_special_chars_produces_valid_json"_test = [] {
+      glz::registry<glz::opts{}, glz::JSONRPC> server{};
+
+      my_functions_t obj{};
+      server.on(obj);
+
+      // Malformed JSON with special characters that will appear in the error message
+      auto response = server.call("{\"test\n\"}");
+      expect(response.find(R"("error")") != std::string::npos) << response;
+      expect(response.find(R"(-32700)") != std::string::npos) << response; // Parse error
+
+      // Verify the response is valid JSON
+      auto err = glz::validate_json(response);
+      expect(!err) << "Response must be valid JSON: " << glz::format_error(err, response);
+   };
+
+   "missing_id_field_treated_as_notification"_test = [] {
+      glz::registry<glz::opts{}, glz::JSONRPC> server{};
+
+      my_functions_t obj{};
+      obj.i = 42;
+      server.on(obj);
+
+      // Request without id field at all (not id:null, but completely missing)
+      auto response = server.call(R"({"jsonrpc":"2.0","method":"i"})");
+      expect(response.empty()) << "Missing id field should be treated as notification, got: " << response;
+
+      // Verify the value can still be read with a proper request
+      response = server.call(R"({"jsonrpc":"2.0","method":"i","id":1})");
+      expect(response.find(R"("result":42)") != std::string::npos) << response;
    };
 };
 

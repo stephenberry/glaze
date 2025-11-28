@@ -79,27 +79,11 @@ namespace glz
 
          state.response = R"({"jsonrpc":"2.0","error":{"code":)";
          state.response += std::to_string(static_cast<int>(code));
-         state.response += R"(,"message":")";
-         state.response += message;
-         state.response += "\"";
+         state.response += R"(,"message":)";
+         state.response += write_json(message).value_or("\"\"");
          if (data) {
-            state.response += R"(,"data":")";
-            // Escape the data for JSON string
-            for (char c : *data) {
-               if (c == '"')
-                  state.response += "\\\"";
-               else if (c == '\\')
-                  state.response += "\\\\";
-               else if (c == '\n')
-                  state.response += "\\n";
-               else if (c == '\r')
-                  state.response += "\\r";
-               else if (c == '\t')
-                  state.response += "\\t";
-               else
-                  state.response += c;
-            }
-            state.response += "\"";
+            state.response += R"(,"data":)";
+            state.response += write_json(*data).value_or("null");
          }
          state.response += R"(},"id":)";
          state.response += write_json(state.id).value_or("null");
@@ -135,8 +119,11 @@ namespace glz
    template <auto Opts>
    struct registry_impl<Opts, JSONRPC>
    {
+     private:
+      // Helper for registering read/write endpoints (used by register_endpoint, register_object_endpoint,
+      // register_variable_endpoint)
       template <class T, class RegistryType>
-      static void register_endpoint(const sv path, T& value, RegistryType& reg)
+      static void register_read_write_endpoint(const sv path, T& value, RegistryType& reg)
       {
          reg.endpoints[path] = [&value](jsonrpc::state&& state) mutable {
             if (state.has_body()) {
@@ -156,6 +143,13 @@ namespace glz
                jsonrpc::write_response<Opts>(state);
             }
          };
+      }
+
+     public:
+      template <class T, class RegistryType>
+      static void register_endpoint(const sv path, T& value, RegistryType& reg)
+      {
+         register_read_write_endpoint(path, value, reg);
       }
 
       template <class Func, class Result, class RegistryType>
@@ -215,24 +209,7 @@ namespace glz
       template <class Obj, class RegistryType>
       static void register_object_endpoint(const sv path, Obj& obj, RegistryType& reg)
       {
-         reg.endpoints[path] = [&obj](jsonrpc::state&& state) mutable {
-            if (state.has_body()) {
-               if (!jsonrpc::read_params<Opts>(obj, state)) {
-                  return;
-               }
-            }
-
-            if (state.notify()) {
-               return;
-            }
-
-            if (!state.has_body()) {
-               jsonrpc::write_response<Opts>(obj, state);
-            }
-            else {
-               jsonrpc::write_response<Opts>(state);
-            }
-         };
+         register_read_write_endpoint(path, obj, reg);
       }
 
       template <class Value, class RegistryType>
@@ -261,24 +238,7 @@ namespace glz
       template <class Var, class RegistryType>
       static void register_variable_endpoint(const sv path, Var& var, RegistryType& reg)
       {
-         reg.endpoints[path] = [&var](jsonrpc::state&& state) mutable {
-            if (state.has_body()) {
-               if (!jsonrpc::read_params<Opts>(var, state)) {
-                  return;
-               }
-            }
-
-            if (state.notify()) {
-               return;
-            }
-
-            if (!state.has_body()) {
-               jsonrpc::write_response<Opts>(var, state);
-            }
-            else {
-               jsonrpc::write_response<Opts>(state);
-            }
-         };
+         register_read_write_endpoint(path, var, reg);
       }
 
       template <class T, class F, class Ret, class RegistryType>

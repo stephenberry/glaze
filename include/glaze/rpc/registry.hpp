@@ -267,8 +267,8 @@ namespace glz
       {
          // Validate JSON first
          if (auto parse_err = glz::validate_json(json_request)) {
-            return R"({"jsonrpc":"2.0","error":{"code":-32700,"message":"Parse error","data":")" +
-                   format_error(parse_err, json_request) + R"("},"id":null})";
+            return R"({"jsonrpc":"2.0","error":{"code":-32700,"message":"Parse error","data":)" +
+                   write_json(format_error(parse_err, json_request)).value_or("null") + R"(},"id":null})";
          }
 
          // Check if it's a batch request (array)
@@ -295,8 +295,9 @@ namespace glz
             // Try to extract the id even on parse failure
             auto id = glz::get_as_json<rpc::id_t, "/id">(json_request);
             std::string id_json = id.has_value() ? glz::write_json(id.value()).value_or("null") : "null";
-            return R"({"jsonrpc":"2.0","error":{"code":-32600,"message":"Invalid Request","data":")" +
-                   format_error(request.error(), json_request) + R"("},"id":)" + id_json + "}";
+            return R"({"jsonrpc":"2.0","error":{"code":-32600,"message":"Invalid Request","data":)" +
+                   write_json(format_error(request.error(), json_request)).value_or("null") + R"(},"id":)" + id_json +
+                   "}";
          }
 
          auto& req = request.value();
@@ -304,8 +305,9 @@ namespace glz
          // Validate version
          if (req.version != rpc::supported_version) {
             std::string id_json = glz::write_json(req.id).value_or("null");
-            return R"({"jsonrpc":"2.0","error":{"code":-32600,"message":"Invalid Request","data":"Invalid version: )" +
-                   std::string(req.version) + R"("},"id":)" + id_json + "}";
+            return R"({"jsonrpc":"2.0","error":{"code":-32600,"message":"Invalid Request","data":)" +
+                   write_json("Invalid version: " + std::string(req.version)).value_or("null") + R"(},"id":)" +
+                   id_json + "}";
          }
 
          // Check if this is a notification (id is null)
@@ -333,8 +335,8 @@ namespace glz
                   return std::nullopt; // No response for notifications
                }
                std::string id_json = glz::write_json(req.id).value_or("null");
-               return R"({"jsonrpc":"2.0","error":{"code":-32601,"message":"Method not found","data":")" +
-                      std::string(req.method) + R"("},"id":)" + id_json + "}";
+               return R"({"jsonrpc":"2.0","error":{"code":-32601,"message":"Method not found","data":)" +
+                      write_json(req.method).value_or("null") + R"(},"id":)" + id_json + "}";
             }
          }
 
@@ -351,8 +353,8 @@ namespace glz
                return std::nullopt;
             }
             std::string id_json = glz::write_json(req.id).value_or("null");
-            return R"({"jsonrpc":"2.0","error":{"code":-32603,"message":"Internal error","data":")" +
-                   std::string(e.what()) + R"("},"id":)" + id_json + "}";
+            return R"({"jsonrpc":"2.0","error":{"code":-32603,"message":"Internal error","data":)" +
+                   write_json(std::string_view{e.what()}).value_or("null") + R"(},"id":)" + id_json + "}";
          }
 
          if (is_notification) {
