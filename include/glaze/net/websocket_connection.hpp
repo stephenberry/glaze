@@ -399,8 +399,14 @@ namespace glz
          if (socket_) {
             asio::error_code ec;
             socket_->close(ec);
+            // Error code intentionally ignored - we're destroying anyway
             socket_.reset();
          }
+
+         // Clear handlers to prevent any use-after-free if they're somehow invoked
+         client_message_handler_ = nullptr;
+         client_close_handler_ = nullptr;
+         client_error_handler_ = nullptr;
       }
 
       // Configuration

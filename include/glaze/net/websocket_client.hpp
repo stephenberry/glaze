@@ -57,7 +57,38 @@ namespace glz
          connection_mutex_ = std::make_shared<std::mutex>();
       }
 
-      ~websocket_client() = default;
+      ~websocket_client()
+      {
+         // Stop io_context first to prevent new callbacks from being dispatched
+         if (ctx_) {
+            ctx_->stop();
+         }
+
+         // Cancel any pending resolver operations
+         if (resolver_) {
+            asio::error_code ec;
+            resolver_->cancel();
+         }
+
+         // Close sockets to cancel pending connect/read operations
+         if (tcp_socket_ && tcp_socket_->is_open()) {
+            asio::error_code ec;
+            tcp_socket_->close(ec);
+         }
+#ifdef GLZ_ENABLE_SSL
+         if (ssl_socket_) {
+            asio::error_code ec;
+            ssl_socket_->lowest_layer().close(ec);
+         }
+#endif
+
+         // Release the websocket connection before io_context is destroyed
+         // This ensures the connection destructor runs while io_context is still valid
+         if (connection_mutex_) {
+            std::lock_guard<std::mutex> lock(*connection_mutex_);
+            connection_ = std::monostate{};
+         }
+      }
 
       void on_message(message_handler_t handler)
       {
