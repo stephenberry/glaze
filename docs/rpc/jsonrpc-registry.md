@@ -4,6 +4,37 @@ Glaze provides native JSON-RPC 2.0 protocol support through the `glz::registry` 
 
 - [JSON-RPC 2.0 specification](https://www.jsonrpc.org/specification)
 
+## Choosing Between JSON-RPC Implementations
+
+Glaze offers two JSON-RPC 2.0 implementations. Choose based on your needs:
+
+| Feature | Registry (this page) | [Client/Server](json-rpc.md) |
+|---------|---------------------|------------------------------|
+| **Method registration** | Automatic via reflection | Explicit compile-time declaration |
+| **Client support** | Server only | Client and server (client works with either server) |
+| **Type safety** | Runtime (JSON parsing) | Compile-time enforced |
+| **Setup complexity** | Minimal (`server.on(obj)`) | Requires method declarations |
+| **Variable access** | Read/write member variables | Methods only |
+| **Nested objects** | Automatic path traversal | Manual |
+| **Use case** | Expose existing C++ objects | Define strict API contracts |
+
+### When to Use the Registry
+
+Use the JSON-RPC registry when you want to:
+
+- **Expose existing objects** - Turn any C++ struct into a JSON-RPC API with one line
+- **Access member variables** - Read and write fields directly, not just call methods
+- **Minimize boilerplate** - No need to declare method signatures separately
+- **Navigate nested structures** - Access deep members via path-style method names
+
+### When to Use the Client/Server
+
+Use the [compile-time typed approach](json-rpc.md) when you need:
+
+- **A JSON-RPC client** - Glaze's only client implementation (works with either server approach)
+- **Compile-time type checking** - Method signatures enforced at compile time
+- **Callback-based responses** - Async client with request tracking
+
 ## Overview
 
 The JSON-RPC registry is similar to the [REPE registry](repe-rpc.md) but uses the JSON-RPC 2.0 protocol format. It provides:
@@ -272,6 +303,6 @@ Like other registry implementations, the JSON-RPC registry does not acquire lock
 
 ## See Also
 
-- [JSON-RPC 2.0 Client/Server](json-rpc.md) - Compile-time typed JSON-RPC
-- [REPE RPC](repe-rpc.md) - Binary RPC protocol
+- [JSON-RPC 2.0 Client/Server](json-rpc.md) - Compile-time typed JSON-RPC with client and server support
+- [REPE RPC](repe-rpc.md) - Binary RPC protocol with similar registry API
 - [REPE/JSON-RPC Conversion](repe-jsonrpc-conversion.md) - Protocol bridging utilities
