@@ -165,6 +165,90 @@ For cross-compilation to ARM or other architectures:
 set(glaze_ENABLE_AVX2 OFF)
 ```
 
+## C++20 Module Support (Experimental)
+
+Glaze provides opt-in C++20 module wrappers for cleaner imports and potentially faster compile times.
+
+### Requirements
+
+- **CMake 3.28+** (for `FILE_SET CXX_MODULES` support)
+- **Ninja** or **Visual Studio 17.4+** generator (Make does not support modules)
+- **Compiler with C++20 module support**:
+  - Clang 16+ with libc++
+  - GCC 14+
+  - MSVC 19.34+ (VS 2022 17.4+)
+
+### Enabling Modules
+
+```cmake
+cmake_minimum_required(VERSION 3.28)
+project(MyProject LANGUAGES CXX)
+
+set(CMAKE_CXX_STANDARD 23)
+
+include(FetchContent)
+FetchContent_Declare(
+  glaze
+  GIT_REPOSITORY https://github.com/stephenberry/glaze.git
+  GIT_TAG main
+  GIT_SHALLOW TRUE
+)
+
+# Enable module support (set cache entry before the project loads)
+set(glaze_BUILD_MODULES ON CACHE BOOL "" FORCE)
+
+FetchContent_MakeAvailable(glaze)
+
+add_executable(myapp main.cpp)
+target_link_libraries(myapp PRIVATE glaze::json_module)
+
+# Enable module scanning for your target
+set_target_properties(myapp PROPERTIES CXX_SCAN_FOR_MODULES ON)
+```
+
+### Building with Modules
+
+Modules require the Ninja generator:
+
+```bash
+cmake -B build -G Ninja -Dglaze_BUILD_MODULES=ON
+cmake --build build
+```
+
+### Usage
+
+When using modules, include standard library headers **before** the module import to avoid ODR conflicts:
+
+```cpp
+// Standard headers first
+#include <string>
+#include <vector>
+
+// Then import the module
+import glaze.json;
+
+struct Person {
+    std::string name;
+    int age;
+};
+
+int main() {
+    Person person{"John", 30};
+    
+    // Write to JSON
+    auto json = glz::write_json(person);
+    if (json) {
+        std::cout << json.value() << std::endl;
+    }
+    
+    // Read from JSON
+    auto result = glz::read_json<Person>(R"({"name":"Jane","age":25})");
+    if (result) {
+        std::cout << result->name << std::endl;
+    }
+}
+```
+
 ## Example Project Setup
 
 ### Complete CMakeLists.txt Example
