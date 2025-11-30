@@ -334,6 +334,13 @@ suite variant_tests = [] {
    };
 };
 
+struct incomparable_struct {
+   bool operator<=>(const incomparable_struct&) const = delete;
+};
+struct struct_with_incomparable_variant {
+   std::vector<std::variant<incomparable_struct>> vec;
+};
+
 // Tests for std::vector<std::variant<...>> with purely reflected structs
 struct reflected_person
 {
@@ -540,6 +547,13 @@ suite vector_variant_reflection_tests = [] {
       expect(read_items.size() == 2);
       expect(std::holds_alternative<reflected_person>(read_items[0]));
       expect(std::holds_alternative<reflected_animal>(read_items[1]));
+   };
+
+   "struct with vector of incomparable variant"_test = [] {
+      struct_with_incomparable_variant obj;
+
+      std::string json;
+      expect(!glz::write_json(obj, json));
    };
 };
 
