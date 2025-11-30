@@ -113,17 +113,6 @@ namespace glz
          constexpr decltype(auto) operator[](tag<I>) && { return (std::move(*this).value); }
          auto operator<=>(const tuple_elem&) const = default;
          bool operator==(const tuple_elem&) const = default;
-         // Implements comparison for tuples containing reference types
-         constexpr auto operator<=>(const tuple_elem& other) const noexcept(noexcept(value <=> other.value))
-            requires(std::is_reference_v<T> && ordered<T>)
-         {
-            return value <=> other.value;
-         }
-         constexpr bool operator==(const tuple_elem& other) const noexcept(noexcept(value == other.value))
-            requires(std::is_reference_v<T> && equality_comparable<T>)
-         {
-            return value == other.value;
-         }
       };
    } // namespace tuplet
 
