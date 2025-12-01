@@ -51,8 +51,23 @@ target_include_directories(
 option(glaze_BUILD_MODULES "Build C++20 module targets (requires CMake 3.28+)" OFF)
 
 if(glaze_BUILD_MODULES)
+  message(STATUS "Building with C++20 module support")
+
   if(CMAKE_VERSION VERSION_LESS "3.28")
     message(FATAL_ERROR "glaze_BUILD_MODULES requires CMake 3.28 or later")
+  endif()
+
+  # Compiler compatibility warnings
+  if(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
+    if(CMAKE_CXX_COMPILER_VERSION VERSION_LESS "15")
+      message(WARNING "GCC 15+ recommended for C++20 modules")
+    endif()
+  elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND NOT CMAKE_CXX_COMPILER_ID MATCHES "AppleClang")
+    if(CMAKE_CXX_COMPILER_VERSION VERSION_LESS "20")
+      message(WARNING "Clang 20+ recommended for C++20 modules")
+    endif()
+  elseif(CMAKE_CXX_COMPILER_ID MATCHES "AppleClang")
+    message(WARNING "Apple Clang does not support CMake's module dependency scanning. Use LLVM Clang instead.")
   endif()
 
   # JSON module target
@@ -76,6 +91,7 @@ if(glaze_BUILD_MODULES)
 
   set_target_properties(glaze_json_module PROPERTIES
     EXPORT_NAME json_module
+    CXX_SCAN_FOR_MODULES ON
   )
 endif()
 

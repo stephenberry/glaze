@@ -165,7 +165,7 @@ For cross-compilation to ARM or other architectures:
 set(glaze_ENABLE_AVX2 OFF)
 ```
 
-## C++20 Module Support (Experimental)
+## C++20 Module Support
 
 Glaze provides opt-in C++20 module wrappers for cleaner imports and potentially faster compile times.
 
@@ -174,9 +174,11 @@ Glaze provides opt-in C++20 module wrappers for cleaner imports and potentially 
 - **CMake 3.28+** (for `FILE_SET CXX_MODULES` support)
 - **Ninja** or **Visual Studio 17.4+** generator (Make does not support modules)
 - **Compiler with C++20 module support**:
-  - Clang 16+ with libc++
-  - GCC 14+
+  - LLVM Clang 20+ with libc++ (recommended)
+  - GCC 15+ (Linux only)
   - MSVC 19.34+ (VS 2022 17.4+)
+
+> **Note:** Apple Clang is not supported for modules. See [Troubleshooting](#troubleshooting) for platform-specific guidance.
 
 ### Enabling Modules
 
@@ -234,13 +236,13 @@ struct Person {
 
 int main() {
     Person person{"John", 30};
-    
+
     // Write to JSON
     auto json = glz::write_json(person);
     if (json) {
         std::cout << json.value() << std::endl;
     }
-    
+
     // Read from JSON
     auto result = glz::read_json<Person>(R"({"name":"Jane","age":25})");
     if (result) {
@@ -248,6 +250,35 @@ int main() {
     }
 }
 ```
+
+### macOS with LLVM Clang
+
+On macOS, use Homebrew's LLVM Clang (not Apple Clang) and set the SDK path:
+
+```bash
+SDKROOT=$(xcrun --show-sdk-path)
+cmake -B build -G Ninja \
+  -DCMAKE_CXX_COMPILER=/opt/homebrew/opt/llvm/bin/clang++ \
+  -DCMAKE_C_COMPILER=/opt/homebrew/opt/llvm/bin/clang \
+  -DCMAKE_OSX_SYSROOT="$SDKROOT" \
+  -Dglaze_BUILD_MODULES=ON
+cmake --build build
+```
+
+### Troubleshooting
+
+**"The compiler does not provide a way to discover import graph dependencies"**
+- Apple Clang does not support CMake's module dependency scanning (P1689)
+- Solution: Use LLVM Clang 20+ installed via Homebrew on macOS
+
+**macOS with GCC: `rsize_t` errors**
+- GCC has known incompatibilities with the macOS SDK when compiling modules
+- Solution: Use LLVM Clang on macOS, or test on Linux with GCC
+
+**Module not found / import errors**
+- Ensure you're using the Ninja generator (`-G Ninja`)
+- Make generators do not support C++20 modules
+- Ensure `glaze_BUILD_MODULES=ON` is set before `FetchContent_MakeAvailable`
 
 ## Example Project Setup
 

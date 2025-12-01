@@ -64,6 +64,34 @@ suite module_json_tests = [] {
       // Minified JSON should not contain newlines
       expect(result.find('\n') == std::string::npos);
    };
+
+   "error_handling"_test = [] {
+      std::string invalid_json = R"({"name": invalid})";
+      auto result = glz::read_json<Person>(invalid_json);
+      expect(!result.has_value());
+   };
+
+   "validate_json"_test = [] {
+      std::string valid = R"({"name":"Test","age":1})";
+      std::string invalid = R"({"name": })";
+      expect(!glz::validate_json(valid)); // no error = valid
+      expect(bool(glz::validate_json(invalid))); // error = invalid
+   };
+
+   "json_pointer_get"_test = [] {
+      glz::generic json{};
+      json["name"] = "Dave";
+      json["age"] = 40;
+      auto name = glz::get<std::string>(json, "/name");
+      expect(name.has_value());
+      expect(name->get() == "Dave");
+   };
+
+   "json_schema"_test = [] {
+      std::string schema = glz::write_json_schema<Person>().value_or("");
+      expect(!schema.empty());
+      expect(schema.find("properties") != std::string::npos);
+   };
 };
 
 int main() { return 0; }

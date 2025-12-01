@@ -10,11 +10,13 @@ export module glaze.json;
 export namespace glz {
 
    // Core Types
+   using glz::context;
    using glz::error_code;
    using glz::error_ctx;
    using glz::expected;
    using glz::JSON;
    using glz::opts;
+   using glz::raw_json;
 
    // Reflection and Metadata
    using glz::enumerate;
@@ -42,6 +44,7 @@ export namespace glz {
    // JSON Utilities
    using glz::minify_json;
    using glz::prettify_json;
+   using glz::validate_json;
 
    // JSON Pointer
    using glz::get;
@@ -68,8 +71,9 @@ export namespace glz {
 
    // JSON Schema
    using glz::json_schema;
+   using glz::write_json_schema;
 
    // Generic JSON
-   using glz::json_t;
+   using glz::generic;
 
 }
