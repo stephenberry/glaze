@@ -234,12 +234,30 @@ namespace glz
       const asio::ip::tcp::socket& operator*() const { return *ptr; }
 
       unique_socket(socket_pool* input_pool) : pool(input_pool) { std::tie(ptr, index, ec) = pool->get(); }
-      unique_socket(const unique_socket&) = default;
-      unique_socket(unique_socket&&) = default;
-      unique_socket& operator=(const unique_socket&) = default;
-      unique_socket& operator=(unique_socket&&) = default;
 
-      ~unique_socket() { pool->free(index); }
+      unique_socket(const unique_socket&) = delete;
+      unique_socket& operator=(const unique_socket&) = delete;
+
+      unique_socket(unique_socket&& other) noexcept
+         : pool(std::exchange(other.pool, nullptr)), ptr(std::move(other.ptr)), index(other.index), ec(other.ec)
+      {}
+
+      unique_socket& operator=(unique_socket&& other) noexcept
+      {
+         if (this != &other) {
+            if (pool) pool->free(index);
+            pool = std::exchange(other.pool, nullptr);
+            ptr = std::move(other.ptr);
+            index = other.index;
+            ec = other.ec;
+         }
+         return *this;
+      }
+
+      ~unique_socket()
+      {
+         if (pool) pool->free(index);
+      }
    };
 
    template <auto Opts = opts{}>
