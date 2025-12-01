@@ -647,6 +647,187 @@ void custom_call_error_handling_test()
    expect(msg.header.ec == glz::error_code::invalid_query);
 }
 
+// Connection state tests
+suite connection_state_tests = [] {
+   "initial_connected_state"_test = [] {
+      // Client should not be connected before init()
+      glz::asio_client client{"localhost", "9999"};
+      expect(not client.connected()) << "Client should not be connected before init()";
+   };
+
+   "connected_after_init"_test = [] {
+      static constexpr int16_t port = 8771;
+
+      glz::asio_server server{.port = port, .concurrency = 1};
+
+      some_object_t obj{};
+      server.on(obj);
+      server.run_async();
+
+      glz::asio_client client{"localhost", std::to_string(port)};
+      expect(not client.connected()) << "Client should not be connected before init()";
+
+      auto ec = client.init();
+      expect(not bool(ec)) << "init() should succeed";
+      expect(client.connected()) << "Client should be connected after successful init()";
+
+      server.stop();
+   };
+
+   "connected_false_after_server_shutdown"_test = [] {
+      static constexpr int16_t port = 8772;
+
+      auto server = std::make_unique<glz::asio_server<>>();
+      server->port = port;
+      server->concurrency = 1;
+
+      some_object_t obj{};
+      server->on(obj);
+      server->run_async();
+
+      glz::asio_client client{"localhost", std::to_string(port)};
+      (void)client.init();
+      expect(client.connected()) << "Client should be connected initially";
+
+      // Verify connection works
+      int age{};
+      client.get("/age", age);
+
+      // Shutdown server
+      server->stop();
+      server.reset();
+
+      // Give the server time to fully shutdown
+      std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+      // Try an operation - should fail and update connected state
+      glz::repe::message msg{};
+      client.call({"/age"}, msg);
+
+      // After a failed call due to connection loss, connected() should be false
+      expect(not client.connected()) << "Client should not be connected after server shutdown and failed call";
+   };
+
+   "connected_false_when_init_fails"_test = [] {
+      // Try to connect to a port where no server is running
+      glz::asio_client client{"localhost", "59999"};
+      expect(not client.connected()) << "Client should not be connected before init()";
+
+      auto ec = client.init();
+      expect(bool(ec)) << "init() should fail when no server is running";
+      expect(not client.connected()) << "Client should not be connected after failed init()";
+   };
+
+   "call_returns_error_when_not_connected"_test = [] {
+      glz::asio_client client{"localhost", "59999"};
+
+      // Don't call init(), try to call directly
+      glz::repe::message msg{};
+      client.call({"/test"}, msg);
+
+      expect(bool(msg.error())) << "call() should return error when not connected";
+   };
+
+   "set_throws_when_not_connected"_test = [] {
+      glz::asio_client client{"localhost", "59999"};
+
+      bool threw = false;
+      try {
+         client.set("/test", 42);
+      }
+      catch (const std::runtime_error& e) {
+         threw = true;
+         expect(std::string(e.what()).find("NOT CONNECTED") != std::string::npos)
+            << "Exception should mention NOT CONNECTED";
+      }
+      expect(threw) << "set() should throw when not connected";
+   };
+
+   "get_throws_when_not_connected"_test = [] {
+      glz::asio_client client{"localhost", "59999"};
+
+      bool threw = false;
+      try {
+         int value{};
+         client.get("/test", value);
+      }
+      catch (const std::runtime_error& e) {
+         threw = true;
+         expect(std::string(e.what()).find("NOT CONNECTED") != std::string::npos)
+            << "Exception should mention NOT CONNECTED";
+      }
+      expect(threw) << "get() should throw when not connected";
+   };
+
+   "inout_throws_when_not_connected"_test = [] {
+      glz::asio_client client{"localhost", "59999"};
+
+      bool threw = false;
+      try {
+         int x = 5;
+         client.inout("/test", x, x);
+      }
+      catch (const std::runtime_error& e) {
+         threw = true;
+         expect(std::string(e.what()).find("NOT CONNECTED") != std::string::npos)
+            << "Exception should mention NOT CONNECTED";
+      }
+      expect(threw) << "inout() should throw when not connected";
+   };
+
+   "reconnect_after_server_restart"_test = [] {
+      static constexpr int16_t port = 8773;
+
+      // Start server
+      auto server = std::make_unique<glz::asio_server<>>();
+      server->port = port;
+      server->concurrency = 1;
+
+      some_object_t obj{.age = 25};
+      server->on(obj);
+      server->run_async();
+
+      glz::asio_client client{"localhost", std::to_string(port)};
+      (void)client.init();
+      expect(client.connected());
+
+      // Verify connection works
+      int age{};
+      client.get("/age", age);
+      expect(age == 25);
+
+      // Shutdown server
+      server->stop();
+      server.reset();
+      std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+      // Try operation - should fail
+      glz::repe::message msg{};
+      client.call({"/age"}, msg);
+      expect(not client.connected()) << "Should be disconnected after server shutdown";
+
+      // Restart server on same port
+      server = std::make_unique<glz::asio_server<>>();
+      server->port = port;
+      server->concurrency = 1;
+
+      some_object_t obj2{.age = 99};
+      server->on(obj2);
+      server->run_async();
+
+      // Re-init client
+      auto ec = client.init();
+      expect(not bool(ec)) << "Re-init should succeed";
+      expect(client.connected()) << "Should be connected after re-init";
+
+      // Verify new connection works
+      client.get("/age", age);
+      expect(age == 99) << "Should get value from new server";
+
+      server->stop();
+   };
+};
+
 int main()
 {
    notify_test();

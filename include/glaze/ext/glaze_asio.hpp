@@ -196,6 +196,10 @@ namespace glz
             if (ec) {
                return {nullptr, index, ec};
             }
+            socket->set_option(asio::socket_base::keep_alive(true), ec);
+            if (ec) {
+               return {nullptr, index, ec};
+            }
             (*is_connected) = true;
             return {socket, index, ec};
          }
@@ -292,7 +296,7 @@ namespace glz
          auto request = message_pool->borrow();
          request->body.clear();
          if (not connected()) {
-            repe::encode_error(request->error(), response, "call failure: NOT CONNECTED");
+            repe::encode_error(error_code::connection_failure, response, "call failure: NOT CONNECTED");
             return;
          }
          repe::request<Opts>(std::move(header), *request, std::forward<Params>(params)...);
@@ -312,12 +316,21 @@ namespace glz
          send_buffer(*socket, *request);
 
          if (bool(request->error())) {
+            if (request->error() == error_code::connection_failure) {
+               socket.ptr.reset();
+               (*is_connected) = false;
+            }
+            repe::encode_error(request->error(), response, "send failure");
             return;
          }
 
          if (not header.notify) {
             receive_buffer(*socket, response);
             if (bool(response.error())) {
+               if (response.error() == error_code::connection_failure) {
+                  socket.ptr.reset();
+                  (*is_connected) = false;
+               }
                return;
             }
          }
@@ -358,11 +371,19 @@ namespace glz
          send_buffer(*socket, *request);
 
          if (bool(request->error())) {
+            if (request->error() == error_code::connection_failure) {
+               socket.ptr.reset();
+               (*is_connected) = false;
+            }
             throw std::runtime_error(glz::format_error(request->error()));
          }
 
          receive_buffer(*socket, response);
          if (bool(response.error())) {
+            if (response.error() == error_code::connection_failure) {
+               socket.ptr.reset();
+               (*is_connected) = false;
+            }
             std::string error_message = glz::format_error(response.error());
             if (response.body.size()) {
                error_message.append(": ");
@@ -397,11 +418,19 @@ namespace glz
          send_buffer(*socket, *request);
 
          if (bool(request->error())) {
+            if (request->error() == error_code::connection_failure) {
+               socket.ptr.reset();
+               (*is_connected) = false;
+            }
             throw std::runtime_error(glz::format_error(request->error()));
          }
 
          receive_buffer(*socket, response);
          if (bool(response.error())) {
+            if (response.error() == error_code::connection_failure) {
+               socket.ptr.reset();
+               (*is_connected) = false;
+            }
             std::string error_message = glz::format_error(response.error());
             if (response.body.size()) {
                error_message.append(": ");
@@ -450,11 +479,19 @@ namespace glz
          send_buffer(*socket, *request);
 
          if (bool(request->error())) {
+            if (request->error() == error_code::connection_failure) {
+               socket.ptr.reset();
+               (*is_connected) = false;
+            }
             throw std::runtime_error(glz::format_error(request->error()));
          }
 
          receive_buffer(*socket, response);
          if (bool(response.error())) {
+            if (response.error() == error_code::connection_failure) {
+               socket.ptr.reset();
+               (*is_connected) = false;
+            }
             std::string error_message = glz::format_error(response.error());
             if (response.body.size()) {
                error_message.append(": ");
@@ -578,6 +615,7 @@ namespace glz
       asio::awaitable<void> run_instance(asio::ip::tcp::socket socket)
       {
          socket.set_option(asio::ip::tcp::no_delay(true));
+         socket.set_option(asio::socket_base::keep_alive(true));
 
          // Allocate once and reuse memory
          repe::message request{};
