@@ -477,7 +477,7 @@ namespace glz
    template <class T>
    constexpr auto make_enum_to_string_map()
    {
-      constexpr auto N = reflect<T>::size;
+      static constexpr auto N = reflect<T>::size;
       return [&]<size_t... I>(std::index_sequence<I...>) {
          using key_t = std::underlying_type_t<T>;
          return normal_map<key_t, sv, N>(std::array<pair<key_t, sv>, N>{

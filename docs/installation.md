@@ -271,10 +271,6 @@ cmake --build build
 - Apple Clang does not support CMake's module dependency scanning (P1689)
 - Solution: Use LLVM Clang 20+ installed via Homebrew on macOS
 
-**macOS with GCC: `rsize_t` errors**
-- GCC has known incompatibilities with the macOS SDK when compiling modules
-- Solution: Use LLVM Clang on macOS, or test on Linux with GCC
-
 **Module not found / import errors**
 - Ensure you're using the Ninja generator (`-G Ninja`)
 - Make generators do not support C++20 modules
