@@ -889,7 +889,7 @@ namespace glz
          // Create buffer view before moving frame_buffer into lambda (C++14 evaluation order safety)
          auto buffer_view = asio::buffer(*frame_buffer);
          asio::async_write(*socket, buffer_view,
-                           [self, frame_buffer = std::move(frame_buffer)](std::error_code ec, std::size_t) {
+                           [self, socket, frame_buffer = std::move(frame_buffer)](std::error_code ec, std::size_t) {
                               if (ec) {
                                  // Mark connection as closing before notifying handlers to avoid re-entrant close
                                  // attempts
