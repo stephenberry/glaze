@@ -46,11 +46,11 @@ namespace glz
          std::shared_ptr<error_handler_t> on_error;
 
          // Connection resources
-         std::shared_ptr<asio::ip::tcp::resolver> resolver;
-         std::shared_ptr<tcp_socket> tcp_socket;
+         std::shared_ptr<asio::ip::tcp::resolver> resolver_;
+         std::shared_ptr<tcp_socket> tcp_socket_;
 #ifdef GLZ_ENABLE_SSL
-         std::shared_ptr<asio::ssl::context> ssl_ctx;
-         std::shared_ptr<ssl_socket> ssl_socket;
+         std::shared_ptr<asio::ssl::context> ssl_ctx_;
+         std::shared_ptr<ssl_socket> ssl_socket_;
 #endif
 
          size_t max_message_size{1024 * 1024 * 16}; // 16 MB limit
@@ -59,18 +59,18 @@ namespace glz
 
          void cancel_all()
          {
-            if (resolver) {
-               resolver->cancel();
+            if (resolver_) {
+               resolver_->cancel();
             }
 
-            if (tcp_socket && tcp_socket->is_open()) {
+            if (tcp_socket_ && tcp_socket_->is_open()) {
                asio::error_code ec;
-               tcp_socket->close(ec);
+               tcp_socket_->close(ec);
             }
 #ifdef GLZ_ENABLE_SSL
-            if (ssl_socket) {
+            if (ssl_socket_) {
                asio::error_code ec;
-               ssl_socket->lowest_layer().close(ec);
+               ssl_socket_->lowest_layer().close(ec);
             }
 #endif
 
@@ -83,9 +83,9 @@ namespace glz
          asio::ip::tcp::socket& get_tcp_socket_ref()
          {
 #ifdef GLZ_ENABLE_SSL
-            if (ssl_socket) return ssl_socket->lowest_layer();
+            if (ssl_socket_) return ssl_socket_->lowest_layer();
 #endif
-            return *tcp_socket;
+            return *tcp_socket_;
          }
 
          void connect(std::string_view url_str)
@@ -100,13 +100,13 @@ namespace glz
 
             if (url.protocol == "wss") {
 #ifdef GLZ_ENABLE_SSL
-               if (!ssl_ctx) {
-                  ssl_ctx = std::make_shared<asio::ssl::context>(asio::ssl::context::tlsv12_client);
-                  ssl_ctx->set_default_verify_paths();
+               if (!ssl_ctx_) {
+                  ssl_ctx_ = std::make_shared<asio::ssl::context>(asio::ssl::context::tlsv12_client);
+                  ssl_ctx_->set_default_verify_paths();
                }
-               ssl_socket = std::make_shared<asio::ssl::stream<asio::ip::tcp::socket>>(*ctx, *ssl_ctx);
+               ssl_socket_ = std::make_shared<asio::ssl::stream<asio::ip::tcp::socket>>(*ctx, *ssl_ctx_);
 
-               if (!SSL_set_tlsext_host_name(ssl_socket->native_handle(), url.host.c_str())) {
+               if (!SSL_set_tlsext_host_name(ssl_socket_->native_handle(), url.host.c_str())) {
                   if (on_error && *on_error) (*on_error)(std::make_error_code(std::errc::address_not_available));
                   return;
                }
@@ -116,14 +116,14 @@ namespace glz
 #endif
             }
             else {
-               tcp_socket = std::make_shared<asio::ip::tcp::socket>(*ctx);
+               tcp_socket_ = std::make_shared<asio::ip::tcp::socket>(*ctx);
             }
 
-            resolver = std::make_shared<asio::ip::tcp::resolver>(*ctx);
+            resolver_ = std::make_shared<asio::ip::tcp::resolver>(*ctx);
 
             std::weak_ptr<impl> weak_self = weak_from_this();
 
-            resolver->async_resolve(
+            resolver_->async_resolve(
                url.host, std::to_string(url.port),
                [weak_self, url](std::error_code ec, asio::ip::tcp::resolver::results_type results) {
                   auto self = weak_self.lock();
@@ -161,7 +161,7 @@ namespace glz
 #ifdef GLZ_ENABLE_SSL
                std::weak_ptr<impl> weak_self = weak_from_this();
 
-               ssl_socket->async_handshake(asio::ssl::stream_base::client, [weak_self, url](std::error_code ec) {
+               ssl_socket_->async_handshake(asio::ssl::stream_base::client, [weak_self, url](std::error_code ec) {
                   auto self = weak_self.lock();
                   if (!self) return; // Client was destroyed
 
@@ -169,12 +169,12 @@ namespace glz
                      if (self->on_error && *self->on_error) (*self->on_error)(ec);
                      return;
                   }
-                  self->perform_handshake(self->ssl_socket, url);
+                  self->perform_handshake(self->ssl_socket_, url);
                });
 #endif
             }
             else {
-               perform_handshake(tcp_socket, url);
+               perform_handshake(tcp_socket_, url);
             }
          }
 
