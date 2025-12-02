@@ -1,8 +1,9 @@
-#include "glaze/net/websocket_client.hpp"
-#include "glaze/net/http_server.hpp"
-#include "ut/ut.hpp"
-#include <thread>
 #include <atomic>
+#include <thread>
+
+#include "glaze/net/http_server.hpp"
+#include "glaze/net/websocket_client.hpp"
+#include "ut/ut.hpp"
 
 using namespace ut;
 using namespace glz;
@@ -47,27 +48,25 @@ suite shared_context_test = [] {
       std::atomic<bool> stop_server{false};
 
       std::thread server_thread(run_echo_server, std::ref(server_ready), std::ref(stop_server), port);
-      
-      while(!server_ready) std::this_thread::yield();
+
+      while (!server_ready) std::this_thread::yield();
 
       auto io_ctx = std::make_shared<asio::io_context>();
       auto work_guard = asio::make_work_guard(*io_ctx); // Keep run() alive
 
-      std::thread io_thread([io_ctx]() {
-         io_ctx->run();
-      });
+      std::thread io_thread([io_ctx]() { io_ctx->run(); });
 
       {
          // Scope for Client A
          auto client_a = std::make_unique<websocket_client>(io_ctx);
          std::atomic<bool> connected_a{false};
-         client_a->on_open([&connected_a](){ connected_a = true; });
+         client_a->on_open([&connected_a]() { connected_a = true; });
          client_a->connect("ws://localhost:" + std::to_string(port) + "/ws");
-         
+
          int retries = 0;
-         while(!connected_a && retries++ < 100) std::this_thread::sleep_for(std::chrono::milliseconds(10));
+         while (!connected_a && retries++ < 100) std::this_thread::sleep_for(std::chrono::milliseconds(10));
          expect(connected_a.load()) << "Client A failed to connect";
-         
+
          // Client A goes out of scope here, its destructor runs
       }
 
@@ -75,13 +74,13 @@ suite shared_context_test = [] {
       auto client_b = std::make_unique<websocket_client>(io_ctx);
       std::atomic<bool> connected_b{false};
       std::atomic<bool> msg_received_b{false};
-      
-      client_b->on_open([&](){ 
-         connected_b = true; 
+
+      client_b->on_open([&]() {
+         connected_b = true;
          client_b->send("Test");
       });
-      
-      client_b->on_message([&](std::string_view msg, ws_opcode){
+
+      client_b->on_message([&](std::string_view msg, ws_opcode) {
          if (msg == "Echo: Test") msg_received_b = true;
       });
 
@@ -92,18 +91,18 @@ suite shared_context_test = [] {
 
       // If io_ctx was stopped by Client A, Client B will not connect or receive messages
       bool ctx_stopped = io_ctx->stopped();
-      
+
       expect(!ctx_stopped) << "IO Context was stopped by Client A destructor!";
       expect(connected_b.load()) << "Client B failed to connect (Context stopped?)";
       expect(msg_received_b.load()) << "Client B failed to receive message";
 
       work_guard.reset();
       io_ctx->stop();
-      if(io_thread.joinable()) io_thread.join();
-      
+      if (io_thread.joinable()) io_thread.join();
+
       stop_server = true;
       server_thread.join();
    };
 };
 
-int main() { }
+int main() {}
