@@ -143,7 +143,26 @@ Runs the internal `io_context`, blocking until it stops.
 void run();
 ```
 
-This is a convenience method that calls `ctx_->run()`. If you're using a shared `io_context`, you may prefer to manage its execution yourself.
+This is a convenience method that calls `context()->run()`. If you're using a shared `io_context`, you may prefer to manage its execution yourself.
+
+### context()
+
+Returns a reference to the internal `io_context`.
+
+```cpp
+std::shared_ptr<asio::io_context>& context();
+```
+
+**Example:**
+```cpp
+// Stop the io_context
+client.context()->stop();
+
+// Check if stopped
+if (client.context()->stopped()) {
+    std::cout << "io_context has stopped" << std::endl;
+}
+```
 
 ### set_max_message_size()
 
@@ -267,7 +286,7 @@ int main() {
 
     client.on_close([&client](glz::ws_close_code code, std::string_view reason) {
         std::cout << "Connection closed" << std::endl;
-        client.ctx_->stop();
+        client.context()->stop();
     });
 
     client.on_error([](std::error_code ec) {
@@ -307,7 +326,7 @@ int main() {
 
     client.on_close([&client](glz::ws_close_code code, std::string_view reason) {
         std::cout << "Disconnected from chat" << std::endl;
-        client.ctx_->stop();
+        client.context()->stop();
     });
 
     client.on_error([](std::error_code ec) {
@@ -466,7 +485,7 @@ int main() {
 
     client.on_close([&client](glz::ws_close_code code, std::string_view reason) {
         std::cout << "Connection closed" << std::endl;
-        client.ctx_->stop();
+        client.context()->stop();
     });
 
     client.on_error([](std::error_code ec) {
@@ -596,6 +615,40 @@ client.on_error([](std::error_code ec) {
 });
 ```
 
+## Client Lifetime
+
+The `websocket_client` uses a safe callback lifetime model:
+
+- **Destruction stops callbacks**: When a client is destroyed, pending async callbacks exit silently rather than firing with errors. This prevents use-after-free bugs when callback captures reference local variables.
+
+- **Shared context safety**: When multiple clients share an `io_context`, destroying one client does not stop the shared context. The context is only stopped if the destroyed client was the sole owner.
+
+```cpp
+// Safe pattern - local variables won't dangle
+void safe_example() {
+    std::string local_data = "important";
+    glz::websocket_client client;
+
+    client.on_message([&local_data](auto msg, auto) {
+        std::cout << local_data;  // Safe: callback won't fire after function returns
+    });
+
+    client.connect("ws://...");
+    // When function returns and client is destroyed,
+    // callbacks exit silently - no dangling reference
+}
+```
+
+If you need to know when operations complete, wait before destroying:
+
+```cpp
+std::atomic<bool> closed{false};
+client.on_close([&](auto, auto) { closed = true; });
+client.close();
+while (!closed) { std::this_thread::sleep_for(std::chrono::milliseconds(10)); }
+// Now safe to let client go out of scope
+```
+
 ## Best Practices
 
 ### 1. Always Set Error Handler
@@ -621,7 +674,7 @@ client.on_open([&is_connected]() {
 
 client.on_close([&is_connected, &client](glz::ws_close_code code, std::string_view reason) {
     is_connected = false;
-    client.ctx_->stop();
+    client.context()->stop();
 });
 ```
 

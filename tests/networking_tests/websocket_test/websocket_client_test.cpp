@@ -199,19 +199,19 @@ suite websocket_client_tests = [] {
 
       client.on_close([&](ws_close_code, std::string_view) {
          connection_closed = true;
-         client.ctx_->stop();
+         client.context()->stop();
       });
 
       std::string client_url = "ws://localhost:" + std::to_string(port) + "/ws";
       client.connect(client_url);
 
-      std::thread client_thread([&client]() { client.ctx_->run(); });
+      std::thread client_thread([&client]() { client.context()->run(); });
 
       expect(wait_for_condition([&] { return message_received.load(); })) << "Message was not received/echoed";
       expect(wait_for_condition([&] { return connection_closed.load(); })) << "Connection was not closed gracefully";
 
-      if (!client.ctx_->stopped()) {
-         client.ctx_->stop();
+      if (!client.context()->stopped()) {
+         client.context()->stop();
       }
 
       if (client_thread.joinable()) {
@@ -255,18 +255,18 @@ suite websocket_client_tests = [] {
 
       client.on_error([](std::error_code ec) { std::cerr << "Client Error: " << ec.message() << "\n"; });
 
-      client.on_close([&](ws_close_code, std::string_view) { client.ctx_->stop(); });
+      client.on_close([&](ws_close_code, std::string_view) { client.context()->stop(); });
 
       std::string client_url = "ws://localhost:" + std::to_string(port) + "/ws";
       client.connect(client_url);
 
-      std::thread client_thread([&client]() { client.ctx_->run(); });
+      std::thread client_thread([&client]() { client.context()->run(); });
 
       expect(wait_for_condition([&] { return messages_received.load() >= expected_messages; }))
          << "Did not receive all messages";
 
-      if (!client.ctx_->stopped()) {
-         client.ctx_->stop();
+      if (!client.context()->stopped()) {
+         client.context()->stop();
       }
 
       if (client_thread.joinable()) {
@@ -309,17 +309,17 @@ suite websocket_client_tests = [] {
 
       client.on_error([](std::error_code ec) { std::cerr << "Client Error: " << ec.message() << "\n"; });
 
-      client.on_close([&](ws_close_code, std::string_view) { client.ctx_->stop(); });
+      client.on_close([&](ws_close_code, std::string_view) { client.context()->stop(); });
 
       std::string client_url = "ws://localhost:" + std::to_string(port) + "/ws";
       client.connect(client_url);
 
-      std::thread client_thread([&client]() { client.ctx_->run(); });
+      std::thread client_thread([&client]() { client.context()->run(); });
 
       expect(wait_for_condition([&] { return binary_received.load(); })) << "Binary message was not received";
 
-      if (!client.ctx_->stopped()) {
-         client.ctx_->stop();
+      if (!client.context()->stopped()) {
+         client.context()->stop();
       }
 
       if (client_thread.joinable()) {
@@ -372,12 +372,12 @@ suite websocket_client_tests = [] {
          std::cerr << "[large_message_test] Client Error: " << ec.message() << " (code=" << ec.value() << ")\n";
       });
 
-      client.on_close([&](ws_close_code, std::string_view) { client.ctx_->stop(); });
+      client.on_close([&](ws_close_code, std::string_view) { client.context()->stop(); });
 
       std::string client_url = "ws://localhost:" + std::to_string(port) + "/ws";
       client.connect(client_url);
 
-      std::thread client_thread([&client]() { client.ctx_->run(); });
+      std::thread client_thread([&client]() { client.context()->run(); });
 
       bool received =
          wait_for_condition([&] { return large_message_received.load(); }, std::chrono::milliseconds(60000));
@@ -389,8 +389,8 @@ suite websocket_client_tests = [] {
 
       expect(received) << "Large message was not received";
 
-      if (!client.ctx_->stopped()) {
-         client.ctx_->stop();
+      if (!client.context()->stopped()) {
+         client.context()->stop();
       }
 
       if (client_thread.joinable()) {
@@ -410,18 +410,18 @@ suite websocket_client_tests = [] {
       client.on_error([&](std::error_code ec) {
          std::cout << "Expected error: " << ec.message() << std::endl;
          error_received = true;
-         client.ctx_->stop();
+         client.context()->stop();
       });
 
       // Try to connect to a port with no server
       client.connect("ws://localhost:9999/ws");
 
-      std::thread client_thread([&client]() { client.ctx_->run(); });
+      std::thread client_thread([&client]() { client.context()->run(); });
 
       expect(wait_for_condition([&] { return error_received.load(); })) << "Expected connection error";
 
-      if (!client.ctx_->stopped()) {
-         client.ctx_->stop();
+      if (!client.context()->stopped()) {
+         client.context()->stop();
       }
 
       if (client_thread.joinable()) {
@@ -435,20 +435,20 @@ suite websocket_client_tests = [] {
 
       client.on_error([&](std::error_code) {
          error_received = true;
-         if (!client.ctx_->stopped()) {
-            client.ctx_->stop();
+         if (!client.context()->stopped()) {
+            client.context()->stop();
          }
       });
 
       // Invalid URL
       client.connect("not-a-valid-url");
 
-      std::thread client_thread([&client]() { client.ctx_->run(); });
+      std::thread client_thread([&client]() { client.context()->run(); });
 
       expect(wait_for_condition([&] { return error_received.load(); })) << "Expected URL parse error";
 
-      if (!client.ctx_->stopped()) {
-         client.ctx_->stop();
+      if (!client.context()->stopped()) {
+         client.context()->stop();
       }
 
       if (client_thread.joinable()) {
@@ -479,7 +479,7 @@ suite websocket_client_tests = [] {
          if (code == ws_close_code::normal) {
             close_code_correct = true;
          }
-         client.ctx_->stop();
+         client.context()->stop();
       });
 
       client.on_error([](std::error_code ec) { std::cerr << "Client Error: " << ec.message() << "\n"; });
@@ -487,13 +487,13 @@ suite websocket_client_tests = [] {
       std::string client_url = "ws://localhost:" + std::to_string(port) + "/ws";
       client.connect(client_url);
 
-      std::thread client_thread([&client]() { client.ctx_->run(); });
+      std::thread client_thread([&client]() { client.context()->run(); });
 
       expect(wait_for_condition([&] { return connection_closed.load(); })) << "Connection was not closed by server";
       expect(close_code_correct.load()) << "Close code or reason was incorrect";
 
-      if (!client.ctx_->stopped()) {
-         client.ctx_->stop();
+      if (!client.context()->stopped()) {
+         client.context()->stop();
       }
 
       if (client_thread.joinable()) {
@@ -606,12 +606,12 @@ suite websocket_client_tests = [] {
 
       client.on_error([](std::error_code ec) { std::cerr << "Client Error: " << ec.message() << "\n"; });
 
-      client.on_close([&](ws_close_code, std::string_view) { client.ctx_->stop(); });
+      client.on_close([&](ws_close_code, std::string_view) { client.context()->stop(); });
 
       std::string client_url = "ws://localhost:" + std::to_string(port) + "/ws";
       client.connect(client_url);
 
-      std::thread client_thread([&client]() { client.ctx_->run(); });
+      std::thread client_thread([&client]() { client.context()->run(); });
 
       // Wait for connection
       expect(wait_for_condition([&] { return connected.load(); })) << "Failed to connect";
@@ -636,8 +636,8 @@ suite websocket_client_tests = [] {
       expect(wait_for_condition([&] { return messages_received.load() >= messages_to_send; }))
          << "Did not receive all messages in thread safety test";
 
-      if (!client.ctx_->stopped()) {
-         client.ctx_->stop();
+      if (!client.context()->stopped()) {
+         client.context()->stop();
       }
 
       if (client_thread.joinable()) {
@@ -721,17 +721,17 @@ suite websocket_client_tests = [] {
 
       client.on_error([](std::error_code ec) { std::cerr << "Client Error: " << ec.message() << "\n"; });
 
-      client.on_close([&](ws_close_code, std::string_view) { client.ctx_->stop(); });
+      client.on_close([&](ws_close_code, std::string_view) { client.context()->stop(); });
 
       std::string client_url = "ws://localhost:" + std::to_string(port) + "/ws";
       client.connect(client_url);
 
-      std::thread client_thread([&client]() { client.ctx_->run(); });
+      std::thread client_thread([&client]() { client.context()->run(); });
 
       expect(wait_for_condition([&] { return json_received.load(); })) << "JSON message was not received correctly";
 
-      if (!client.ctx_->stopped()) {
-         client.ctx_->stop();
+      if (!client.context()->stopped()) {
+         client.context()->stop();
       }
 
       if (client_thread.joinable()) {
@@ -765,17 +765,17 @@ suite websocket_client_tests = [] {
 
       client.on_error([](std::error_code ec) { std::cerr << "Client Error: " << ec.message() << "\n"; });
 
-      client.on_close([&](ws_close_code, std::string_view) { client.ctx_->stop(); });
+      client.on_close([&](ws_close_code, std::string_view) { client.context()->stop(); });
 
       std::string client_url = "ws://localhost:" + std::to_string(port) + "/ws";
       client.connect(client_url);
 
-      std::thread client_thread([&client]() { client.ctx_->run(); });
+      std::thread client_thread([&client]() { client.context()->run(); });
 
       expect(wait_for_condition([&] { return empty_message_received.load(); })) << "Empty message handling failed";
 
-      if (!client.ctx_->stopped()) {
-         client.ctx_->stop();
+      if (!client.context()->stopped()) {
+         client.context()->stop();
       }
 
       if (client_thread.joinable()) {
@@ -814,18 +814,18 @@ suite websocket_client_tests = [] {
 
       client.on_error([](std::error_code ec) { std::cerr << "Client Error: " << ec.message() << "\n"; });
 
-      client.on_close([&](ws_close_code, std::string_view) { client.ctx_->stop(); });
+      client.on_close([&](ws_close_code, std::string_view) { client.context()->stop(); });
 
       std::string client_url = "ws://localhost:" + std::to_string(port) + "/ws";
       client.connect(client_url);
 
-      std::thread client_thread([&client]() { client.ctx_->run(); });
+      std::thread client_thread([&client]() { client.context()->run(); });
 
       expect(wait_for_condition([&] { return small_message_received.load(); }))
          << "Small message within limit was not received";
 
-      if (!client.ctx_->stopped()) {
-         client.ctx_->stop();
+      if (!client.context()->stopped()) {
+         client.context()->stop();
       }
 
       if (client_thread.joinable()) {
@@ -1009,12 +1009,12 @@ suite websocket_write_queue_tests = [] {
       client.on_error(
          [](std::error_code ec) { std::cerr << "[rapid_fire_test] Client Error: " << ec.message() << "\n"; });
 
-      client.on_close([&](ws_close_code, std::string_view) { client.ctx_->stop(); });
+      client.on_close([&](ws_close_code, std::string_view) { client.context()->stop(); });
 
       std::string client_url = "ws://localhost:" + std::to_string(port) + "/ws";
       client.connect(client_url);
 
-      std::thread client_thread([&client]() { client.ctx_->run(); });
+      std::thread client_thread([&client]() { client.context()->run(); });
 
       bool success =
          wait_for_condition([&] { return acks_received.load() >= messages_to_send; }, std::chrono::milliseconds(10000));
@@ -1024,8 +1024,8 @@ suite websocket_write_queue_tests = [] {
       expect(valid_messages.load() == messages_to_send)
          << "Server received " << valid_messages.load() << "/" << messages_to_send << " valid messages";
 
-      if (!client.ctx_->stopped()) {
-         client.ctx_->stop();
+      if (!client.context()->stopped()) {
+         client.context()->stop();
       }
 
       if (client_thread.joinable()) {
@@ -1070,12 +1070,12 @@ suite websocket_write_queue_tests = [] {
       client.on_error(
          [](std::error_code ec) { std::cerr << "[concurrent_test] Client Error: " << ec.message() << "\n"; });
 
-      client.on_close([&](ws_close_code, std::string_view) { client.ctx_->stop(); });
+      client.on_close([&](ws_close_code, std::string_view) { client.context()->stop(); });
 
       std::string client_url = "ws://localhost:" + std::to_string(port) + "/ws";
       client.connect(client_url);
 
-      std::thread client_thread([&client]() { client.ctx_->run(); });
+      std::thread client_thread([&client]() { client.context()->run(); });
 
       // Wait for connection
       expect(wait_for_condition([&] { return connected.load(); })) << "Failed to connect";
@@ -1118,8 +1118,8 @@ suite websocket_write_queue_tests = [] {
       expect(invalid_messages.load() == 0) << "CRITICAL: Server detected " << invalid_messages.load()
                                            << " corrupted messages! This indicates the write queue fix is not working.";
 
-      if (!client.ctx_->stopped()) {
-         client.ctx_->stop();
+      if (!client.context()->stopped()) {
+         client.context()->stop();
       }
 
       if (client_thread.joinable()) {
@@ -1188,12 +1188,12 @@ suite websocket_write_queue_tests = [] {
       client.on_error(
          [](std::error_code ec) { std::cerr << "[broadcast_test] Client Error: " << ec.message() << "\n"; });
 
-      client.on_close([&](ws_close_code, std::string_view) { client.ctx_->stop(); });
+      client.on_close([&](ws_close_code, std::string_view) { client.context()->stop(); });
 
       std::string client_url = "ws://localhost:" + std::to_string(port) + "/ws";
       client.connect(client_url);
 
-      std::thread client_thread([&client]() { client.ctx_->run(); });
+      std::thread client_thread([&client]() { client.context()->run(); });
 
       bool success = wait_for_condition([&] { return messages_received.load() >= broadcast_count; },
                                         std::chrono::milliseconds(10000));
@@ -1206,8 +1206,8 @@ suite websocket_write_queue_tests = [] {
       expect(invalid_broadcasts.load() == 0)
          << "CRITICAL: Detected " << invalid_broadcasts.load() << " corrupted broadcast messages!";
 
-      if (!client.ctx_->stopped()) {
-         client.ctx_->stop();
+      if (!client.context()->stopped()) {
+         client.context()->stop();
       }
 
       if (client_thread.joinable()) {
@@ -1252,12 +1252,12 @@ suite websocket_write_queue_tests = [] {
       client.on_error(
          [](std::error_code ec) { std::cerr << "[mixed_size_test] Client Error: " << ec.message() << "\n"; });
 
-      client.on_close([&](ws_close_code, std::string_view) { client.ctx_->stop(); });
+      client.on_close([&](ws_close_code, std::string_view) { client.context()->stop(); });
 
       std::string client_url = "ws://localhost:" + std::to_string(port) + "/ws";
       client.connect(client_url);
 
-      std::thread client_thread([&client]() { client.ctx_->run(); });
+      std::thread client_thread([&client]() { client.context()->run(); });
 
       expect(wait_for_condition([&] { return connected.load(); })) << "Failed to connect";
 
@@ -1297,8 +1297,8 @@ suite websocket_write_queue_tests = [] {
       expect(success) << "Did not receive all ACKs";
       expect(invalid_messages.load() == 0) << "Detected corrupted messages with mixed sizes!";
 
-      if (!client.ctx_->stopped()) {
-         client.ctx_->stop();
+      if (!client.context()->stopped()) {
+         client.context()->stop();
       }
 
       if (client_thread.joinable()) {
@@ -1341,13 +1341,13 @@ suite websocket_write_queue_tests = [] {
       client.on_close([&](ws_close_code code, std::string_view) {
          std::cout << "[concurrent_close_test] Connection closed with code: " << static_cast<int>(code) << std::endl;
          closed = true;
-         client.ctx_->stop();
+         client.context()->stop();
       });
 
       std::string client_url = "ws://localhost:" + std::to_string(port) + "/ws";
       client.connect(client_url);
 
-      std::thread client_thread([&client]() { client.ctx_->run(); });
+      std::thread client_thread([&client]() { client.context()->run(); });
 
       expect(wait_for_condition([&] { return connected.load(); })) << "Failed to connect";
 
@@ -1396,8 +1396,8 @@ suite websocket_write_queue_tests = [] {
       expect(close_success) << "Connection did not close gracefully";
       expect(invalid_messages.load() == 0) << "Detected corrupted messages during concurrent send/close!";
 
-      if (!client.ctx_->stopped()) {
-         client.ctx_->stop();
+      if (!client.context()->stopped()) {
+         client.context()->stop();
       }
 
       if (client_thread.joinable()) {
@@ -1439,12 +1439,12 @@ suite websocket_write_queue_tests = [] {
 
       client.on_error([](std::error_code ec) { std::cerr << "[stress_test] Client Error: " << ec.message() << "\n"; });
 
-      client.on_close([&](ws_close_code, std::string_view) { client.ctx_->stop(); });
+      client.on_close([&](ws_close_code, std::string_view) { client.context()->stop(); });
 
       std::string client_url = "ws://localhost:" + std::to_string(port) + "/ws";
       client.connect(client_url);
 
-      std::thread client_thread([&client]() { client.ctx_->run(); });
+      std::thread client_thread([&client]() { client.context()->run(); });
 
       expect(wait_for_condition([&] { return connected.load(); })) << "Failed to connect";
 
@@ -1463,8 +1463,8 @@ suite websocket_write_queue_tests = [] {
       expect(success) << "Did not receive all ACKs in stress test";
       expect(invalid_messages.load() == 0) << "Detected corrupted messages under high load!";
 
-      if (!client.ctx_->stopped()) {
-         client.ctx_->stop();
+      if (!client.context()->stopped()) {
+         client.context()->stop();
       }
 
       if (client_thread.joinable()) {
