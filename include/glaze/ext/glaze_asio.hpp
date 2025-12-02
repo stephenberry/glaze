@@ -154,13 +154,6 @@ namespace glz
             throw std::runtime_error("asio::io_context is null");
          }
 
-         // reset all socket pointers if a connection failed
-         if (not*is_connected) {
-            for (auto& socket : sockets) {
-               socket.reset();
-            }
-         }
-
          if (available.empty()) {
             const auto current_size = sockets.size();
             const auto new_size = sockets.size() * 2;
@@ -178,31 +171,32 @@ namespace glz
 #else
          boost::system::error_code ec{};
 #endif
-         if (socket) {
+         // Check if socket exists and is still open
+         if (socket && socket->is_open()) {
             return {socket, index, ec};
          }
-         else {
-            socket = std::make_shared<asio::ip::tcp::socket>(*ctx);
-            asio::ip::tcp::resolver resolver{*ctx};
-            const auto endpoint = resolver.resolve(host, service, ec);
-            if (ec) {
-               return {nullptr, index, ec};
-            }
-            asio::connect(*socket, endpoint, ec);
-            if (ec) {
-               return {nullptr, index, ec};
-            }
-            socket->set_option(asio::ip::tcp::no_delay(true), ec);
-            if (ec) {
-               return {nullptr, index, ec};
-            }
-            socket->set_option(asio::socket_base::keep_alive(true), ec);
-            if (ec) {
-               return {nullptr, index, ec};
-            }
-            (*is_connected) = true;
-            return {socket, index, ec};
+
+         // Socket is null or closed, create a new one
+         socket = std::make_shared<asio::ip::tcp::socket>(*ctx);
+         asio::ip::tcp::resolver resolver{*ctx};
+         const auto endpoint = resolver.resolve(host, service, ec);
+         if (ec) {
+            return {nullptr, index, ec};
          }
+         asio::connect(*socket, endpoint, ec);
+         if (ec) {
+            return {nullptr, index, ec};
+         }
+         socket->set_option(asio::ip::tcp::no_delay(true), ec);
+         if (ec) {
+            return {nullptr, index, ec};
+         }
+         socket->set_option(asio::socket_base::keep_alive(true), ec);
+         if (ec) {
+            return {nullptr, index, ec};
+         }
+         (*is_connected) = true;
+         return {socket, index, ec};
       }
 
       void free(const size_t index)
