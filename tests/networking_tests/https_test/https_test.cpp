@@ -684,7 +684,7 @@ suite server_lifecycle_external_context_tests = [] {
       try {
          asio::io_context client_io;
          asio::ip::tcp::socket socket(client_io);
-         asio::ip::tcp::endpoint endpoint(asio::ip::address::from_string("127.0.0.1"), 8443);
+         asio::ip::tcp::endpoint endpoint(asio::ip::make_address("127.0.0.1"), 8443);
 
          std::error_code ec;
          socket.connect(endpoint, ec);
@@ -711,7 +711,7 @@ suite server_lifecycle_external_context_tests = [] {
       try {
          asio::io_context client_io;
          asio::ip::tcp::socket socket(client_io);
-         asio::ip::tcp::endpoint endpoint(asio::ip::address::from_string("127.0.0.1"), 8443);
+         asio::ip::tcp::endpoint endpoint(asio::ip::make_address("127.0.0.1"), 8443);
 
          std::error_code ec;
          socket.connect(endpoint, ec);
