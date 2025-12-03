@@ -25,7 +25,7 @@ void test(const uint8_t* Data, size_t Size)
       return;
    }
    auto str = glz::write_json(s).value_or(std::string{});
-   auto restored = glz::read_json<S>(str);
+   [[maybe_unused]] auto restored = glz::read_json<S>(str);
    assert(restored);
    assert(restored.value().value == s.value);
 }

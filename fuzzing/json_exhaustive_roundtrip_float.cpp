@@ -61,7 +61,7 @@ void test()
 
    std::vector<std::thread> threads;
    threads.reserve(nthreads);
-   for (int threadi = 0; threadi < nthreads; ++threadi) {
+   for (size_t threadi = 0; threadi < nthreads; ++threadi) {
       const UT start = threadi * step;
       const UT stop = (threadi == nthreads - 1) ? (std::numeric_limits<UT>::max)() : start + step;
       // std::cout << "thread i=" << threadi << " goes from " << start << " to " << stop << '\n';
@@ -80,4 +80,4 @@ void test()
    std::cout << "tested " << (std::numeric_limits<UT>::max)() << " values of float" << std::endl;
 }
 
-int main(int argc, char* argv[]) { test(); }
+int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) { test(); }
