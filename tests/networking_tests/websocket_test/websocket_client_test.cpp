@@ -619,7 +619,7 @@ suite websocket_client_tests = [] {
       // Send messages from multiple threads
       std::vector<std::thread> sender_threads;
       for (int i = 0; i < 4; ++i) {
-         sender_threads.emplace_back([&client, i, messages_to_send]() {
+         sender_threads.emplace_back([&client, i]() {
             for (int j = 0; j < messages_to_send / 4; ++j) {
                client.send("Thread " + std::to_string(i) + " message " + std::to_string(j));
                std::this_thread::sleep_for(std::chrono::milliseconds(10));
@@ -1085,7 +1085,7 @@ suite websocket_write_queue_tests = [] {
       std::atomic<bool> start_flag{false};
 
       for (int t = 0; t < threads_count; ++t) {
-         sender_threads.emplace_back([&client, &start_flag, t, messages_per_thread]() {
+         sender_threads.emplace_back([&client, &start_flag, t]() {
             // Wait for all threads to be ready
             while (!start_flag.load()) {
                std::this_thread::yield();
@@ -1268,7 +1268,7 @@ suite websocket_write_queue_tests = [] {
       std::vector<size_t> payload_sizes = {10, 100, 1000, 10000}; // 10B to 10KB
 
       for (int t = 0; t < threads_count; ++t) {
-         sender_threads.emplace_back([&client, &start_flag, t, messages_per_thread, &payload_sizes]() {
+         sender_threads.emplace_back([&client, &start_flag, t, &payload_sizes]() {
             while (!start_flag.load()) {
                std::this_thread::yield();
             }
@@ -1359,7 +1359,7 @@ suite websocket_write_queue_tests = [] {
 
       // Sender threads
       for (int t = 0; t < sender_threads; ++t) {
-         threads.emplace_back([&client, &start_flag, t, messages_per_thread]() {
+         threads.emplace_back([&client, &start_flag, t]() {
             while (!start_flag.load()) {
                std::this_thread::yield();
             }
