@@ -1,6 +1,6 @@
 # REPE Buffer Handling
 
-The `glaze/rpc/repe/buffer.hpp` header provides ASIO-independent functions for serializing and deserializing REPE messages to and from raw byte buffers. This enables use of REPE messages in contexts beyond direct socket I/O, such as:
+The `glaze/rpc/repe/buffer.hpp` and `glaze/rpc/repe/repe.hpp` headers provide ASIO-independent functions for serializing and deserializing REPE messages to and from raw byte buffers. This enables use of REPE messages in contexts beyond direct socket I/O, such as:
 
 - Plugin systems with C ABI boundaries
 - Message queues and brokers
@@ -12,6 +12,7 @@ The `glaze/rpc/repe/buffer.hpp` header provides ASIO-independent functions for s
 
 ```cpp
 #include "glaze/rpc/repe/buffer.hpp"
+#include "glaze/rpc/repe/repe.hpp"  // For zero-copy types
 ```
 
 ## Constants
@@ -148,6 +149,135 @@ glz::error_code from_buffer(const char* data, size_t size, message& msg);
 
 // From string_view
 glz::error_code from_buffer(std::string_view data, message& msg);
+```
+
+## Zero-Copy API
+
+For high-performance scenarios, Glaze provides a zero-copy API that avoids intermediate allocations. Instead of deserializing into a `repe::message` (which copies query and body strings), you can use views into the original buffer.
+
+### `request_view`
+
+A view into a parsed REPE request. Query and body are `std::string_view` pointing into the original buffer.
+
+```cpp
+struct request_view {
+    header hdr;                    // Header (copied for alignment safety)
+    std::string_view query;        // View into original buffer
+    std::string_view body;         // View into original buffer
+
+    [[nodiscard]] uint64_t id() const noexcept;
+    [[nodiscard]] bool is_notify() const noexcept;
+    [[nodiscard]] error_code error() const noexcept;
+};
+```
+
+### `parse_request`
+
+Parses a buffer into a `request_view` with zero-copy for query and body:
+
+```cpp
+std::span<const char> buffer = /* received bytes */;
+
+auto result = glz::repe::parse_request(buffer);
+if (!result) {
+    // result.ec contains the error code
+    handle_error(result.ec);
+    return;
+}
+
+const auto& req = result.request;
+// req.query and req.body are views into the original buffer
+process_request(req.query, req.body);
+```
+
+The header is copied via `memcpy` (48 bytes) for alignment safety. Query and body remain as views.
+
+**Error codes:**
+- `error_code::none` - Success
+- `error_code::invalid_header` - Buffer too small or invalid magic bytes
+- `error_code::version_mismatch` - Unsupported REPE version
+- `error_code::invalid_body` - Buffer truncated
+
+### `response_builder`
+
+Builds REPE responses efficiently, writing directly to a buffer or message:
+
+```cpp
+std::string response_buffer;
+glz::repe::response_builder resp{response_buffer};
+
+// Reset with request ID
+resp.reset(request_view);  // Copies ID from request
+
+// Set error response
+resp.set_error(glz::error_code::invalid_params, "Missing required field");
+
+// Or serialize a value as the body
+resp.set_body(my_response_object);  // Uses glz::write internally
+
+// Or set raw body bytes
+resp.set_body_raw(R"({"result": 42})", glz::repe::body_format::JSON);
+```
+
+The `response_builder` can also write directly to a `repe::message`:
+
+```cpp
+glz::repe::message response_msg;
+glz::repe::response_builder resp{response_msg};
+resp.reset(request.id());
+resp.set_body(my_object);
+// response_msg is now ready to send
+```
+
+### `state_view`
+
+Combines a `request_view` and `response_builder` for use in RPC procedure handlers:
+
+```cpp
+struct state_view {
+    const request_view& in;
+    response_builder& out;
+
+    [[nodiscard]] bool notify() const noexcept;   // Is this a notification?
+    [[nodiscard]] bool has_body() const noexcept; // Does request have a body?
+};
+```
+
+This is used internally by `glz::registry` for zero-copy procedure dispatch.
+
+### Example: Zero-Copy Request Handler
+
+```cpp
+void handle_request(std::span<const char> request, std::string& response_buffer) {
+    // Zero-copy parse
+    auto result = glz::repe::parse_request(request);
+    if (!result) {
+        glz::repe::encode_error_buffer(
+            glz::error_code::parse_error,
+            response_buffer,
+            "Failed to parse request"
+        );
+        return;
+    }
+
+    const auto& req = result.request;
+    glz::repe::response_builder resp{response_buffer};
+
+    // Route based on query (no allocation - query is a view)
+    if (req.query == "/api/status") {
+        resp.reset(req);
+        resp.set_body_raw(R"({"status": "ok"})", glz::repe::body_format::JSON);
+    }
+    else if (req.query == "/api/echo") {
+        // Echo back the body
+        resp.reset(req);
+        resp.set_body_raw(req.body, glz::repe::body_format::JSON);
+    }
+    else {
+        resp.reset(req);
+        resp.set_error(glz::error_code::method_not_found, "Unknown endpoint");
+    }
+}
 ```
 
 ## Header-Only Parsing
