@@ -19,9 +19,11 @@ static_assert(false, "standalone or boost asio must be included to use glaze/ext
 #include <cassert>
 #include <coroutine>
 #include <iostream>
+#include <span>
 
 #include "glaze/rpc/registry.hpp"
 #include "glaze/rpc/repe/buffer.hpp"
+#include "glaze/util/buffer_pool.hpp"
 #include "glaze/util/memory_pool.hpp"
 
 namespace glz
@@ -130,6 +132,66 @@ namespace glz
       msg.body.resize(msg.header.body_length);
       co_await asio::async_read(socket, asio::buffer(msg.body), asio::transfer_exactly(msg.header.body_length),
                                 asio::use_awaitable);
+   }
+
+   /// Receive a complete REPE message into a contiguous buffer (zero-copy optimized)
+   /// Buffer layout: [header (48 bytes)][query][body]
+   /// @param socket The socket to read from
+   /// @param buffer Output buffer (will be resized to fit message)
+   /// @param max_message_size Maximum allowed message size (prevents DoS) - 0 for unlimited
+   inline asio::awaitable<void> co_receive_raw(asio::ip::tcp::socket& socket, std::string& buffer,
+                                               size_t max_message_size = 64 * 1024 * 1024)
+   {
+      // Read just the length field (first 8 bytes of header)
+      uint64_t length{};
+      co_await asio::async_read(socket, asio::buffer(&length, sizeof(length)), asio::transfer_exactly(sizeof(length)),
+                                asio::use_awaitable);
+
+      // SECURITY: Validate length before allocation to prevent DoS
+      if (length < sizeof(repe::header)) {
+         throw std::runtime_error("Invalid REPE message: length too small for header");
+      }
+      if (max_message_size > 0 && length > max_message_size) {
+         throw std::runtime_error("REPE message exceeds maximum allowed size");
+      }
+
+      // Resize buffer for complete message
+      buffer.resize(length);
+
+      // Copy the 8 bytes we already read into the buffer
+      std::memcpy(buffer.data(), &length, sizeof(length));
+
+      // Read the rest of the message directly into buffer
+      const size_t remaining = length - sizeof(length);
+      if (remaining > 0) {
+         co_await asio::async_read(socket, asio::buffer(buffer.data() + sizeof(length), remaining),
+                                   asio::transfer_exactly(remaining), asio::use_awaitable);
+      }
+
+      // Validate header fields using safe memcpy (avoids strict aliasing issues)
+      uint16_t spec{};
+      uint8_t version{};
+      std::memcpy(&spec, buffer.data() + offsetof(repe::header, spec), sizeof(spec));
+      std::memcpy(&version, buffer.data() + offsetof(repe::header, version), sizeof(version));
+
+      if (spec != repe::repe_magic) {
+         throw std::runtime_error("Invalid REPE magic bytes");
+      }
+      if (version != 1) {
+         throw std::runtime_error("Unsupported REPE version");
+      }
+   }
+
+   /// Send raw bytes directly without any transformation (zero-copy)
+   /// @param socket The socket to write to
+   /// @param data Span pointing to data (can be any memory: plugin buffer, owned buffer, etc.)
+   inline asio::awaitable<void> co_send_raw(asio::ip::tcp::socket& socket, std::span<const char> data)
+   {
+      if (data.empty()) {
+         co_return;
+      }
+      co_await asio::async_write(socket, asio::buffer(data.data(), data.size()), asio::transfer_exactly(data.size()),
+                                 asio::use_awaitable);
    }
 
    // TODO: Make this socket_pool behave more like the object_pool and return a shared_ptr<socket>
@@ -525,17 +587,41 @@ namespace glz
       uint16_t port{}; // 0 will select a random free port
       uint32_t concurrency{1}; // How many threads to use (a call to .run() is inclusive on the main thread)
 
+      /// Maximum message size (default 64MB)
+      /// Set to 0 for unlimited (not recommended for untrusted clients)
+      size_t max_message_size = 64 * 1024 * 1024;
+
+      /// Buffer pool for coroutine-safe buffer management
+      /// Buffers are borrowed by each connection and automatically returned
+      buffer_pool pool{};
+
       // Register a callback that takes a string error message on server/registry errors.
       // Note that we use a std::string to support a wide source of errors and use e.what()
       // IMPORTANT: The code within the callback must be thread safe, as multiple threads could call this
       // simultaneously.
       std::function<void(const std::string&)> error_handler{};
 
-      // Optional custom call handler. When set, this is invoked instead of registry.call().
-      // This enables custom message routing, middleware, plugin dispatch, or multi-registry patterns.
-      // Signature: void(repe::message& request, repe::message& response)
+      // Custom call handler - works with raw buffers for zero-copy performance.
+      //
+      // The handler receives raw request bytes and a response buffer. Leave the buffer
+      // empty for no response (e.g., notifications).
+      //
+      // @param request Raw REPE message bytes
+      // @param response_buffer Buffer for building the response (will be resized, empty = no response)
+      //
+      // Example:
+      //   server.call = [&](std::span<const char> request, std::string& response_buffer) {
+      //      auto result = parse_request(request);
+      //      if (!result) {
+      //         encode_error_buffer(result.ec, response_buffer, "error");
+      //         return;
+      //      }
+      //      // ... process request ...
+      //      encode_response(response_buffer, data);
+      //   };
+      //
       // IMPORTANT: Must be set before calling run() and should not be modified during execution.
-      std::function<void(repe::message&, repe::message&)> call{};
+      std::function<void(std::span<const char> request, std::string& response_buffer)> call{};
 
       ~asio_server() { stop(); }
 
@@ -629,38 +715,67 @@ namespace glz
          socket.set_option(asio::ip::tcp::no_delay(true));
          socket.set_option(asio::socket_base::keep_alive(true));
 
-         // Allocate once and reuse memory
-         repe::message request{};
-         repe::message response{};
+         // Borrow buffers from pool - RAII ensures automatic return when coroutine ends
+         auto request_buf = pool.borrow();
+         auto response_buf = pool.borrow();
 
          try {
-            while (true) {
-               co_await co_receive_buffer(socket, request);
-               response.header.ec = {}; // clear error code, as we use this field to determine if a new error occured
-               try {
-                  if (call) {
-                     call(request, response);
+            if (call) {
+               // Custom call handler path with buffer pool
+               while (true) {
+                  co_await co_receive_raw(socket, request_buf.value(), max_message_size);
+
+                  try {
+                     call(std::span<const char>(request_buf.value()), response_buf.value());
                   }
-                  else {
-                     registry.call(request, response);
+                  catch (const std::exception& e) {
+                     if (error_handler) {
+                        error_handler(e.what());
+                     }
+                     auto id = repe::extract_id(request_buf.value());
+                     repe::encode_error_buffer(error_code::invalid_call, response_buf.value(), e.what(), id);
+                  }
+                  catch (...) {
+                     if (error_handler) {
+                        error_handler("unknown error");
+                     }
+                     auto id = repe::extract_id(request_buf.value());
+                     repe::encode_error_buffer(error_code::invalid_call, response_buf.value(), "unknown error", id);
+                  }
+
+                  // Send response if buffer is not empty
+                  if (!response_buf.value().empty()) {
+                     co_await co_send_raw(socket, response_buf.value());
                   }
                }
-               catch (const std::exception& e) {
-                  if (error_handler) {
-                     error_handler(e.what());
+            }
+            else {
+               // Standard registry path with span-based call
+               while (true) {
+                  co_await co_receive_raw(socket, request_buf.value(), max_message_size);
+
+                  try {
+                     registry.call(std::span<const char>(request_buf.value()), response_buf.value());
                   }
-                  repe::encode_error(error_code::invalid_call, response, e.what());
-                  repe::finalize_header(response);
-               }
-               catch (...) {
-                  if (error_handler) {
-                     error_handler("unknown error");
+                  catch (const std::exception& e) {
+                     if (error_handler) {
+                        error_handler(e.what());
+                     }
+                     auto id = repe::extract_id(request_buf.value());
+                     repe::encode_error_buffer(error_code::invalid_call, response_buf.value(), e.what(), id);
                   }
-                  repe::encode_error(error_code::invalid_call, response, "unknown error");
-                  repe::finalize_header(response);
-               }
-               if (not request.header.notify) {
-                  co_await co_send_buffer(socket, response);
+                  catch (...) {
+                     if (error_handler) {
+                        error_handler("unknown error");
+                     }
+                     auto id = repe::extract_id(request_buf.value());
+                     repe::encode_error_buffer(error_code::invalid_call, response_buf.value(), "unknown error", id);
+                  }
+
+                  // Send response if buffer is not empty
+                  if (!response_buf.value().empty()) {
+                     co_await co_send_raw(socket, response_buf.value());
+                  }
                }
             }
          }
@@ -672,6 +787,7 @@ namespace glz
                std::fprintf(stderr, "glz::asio_server error: %s\n", e.what());
             }
          }
+         // Buffers automatically returned to pool when scoped_buffers are destroyed
       }
 
       asio::awaitable<void> listener(asio::ip::tcp::acceptor acceptor)

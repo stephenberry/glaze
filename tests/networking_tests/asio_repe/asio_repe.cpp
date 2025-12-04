@@ -466,7 +466,7 @@ void server_keep_alive_test()
    err = glz::repe::decode_message(result, msg);
    expect(bool(err));
    if (err) {
-      expect(err.value() == "REPE error: invalid_call | unknown error") << err.value();
+      expect(err.value() == "REPE error: parse_error | Unknown error") << err.value();
    }
 
    // Third call should succeed if server is still alive
@@ -496,7 +496,7 @@ void client_exception_test()
       expect(false) << "Should have thrown";
    }
    catch (const std::exception& e) {
-      expect(std::string(e.what()) == "parse_error: registry error for `/broken`: broken") << e.what();
+      expect(std::string_view(e.what()) == "parse_error: registry error for `/broken`: broken") << e.what();
    }
 
    try {
@@ -505,7 +505,7 @@ void client_exception_test()
       expect(false) << "Should have thrown";
    }
    catch (const std::exception& e) {
-      expect(std::string(e.what()) == "invalid_call: unknown error") << e.what();
+      expect(std::string_view(e.what()) == "parse_error: Unknown error") << e.what();
    }
 }
 
@@ -523,21 +523,34 @@ void custom_call_handler_test()
    custom_call_api api{};
    server.on(api);
 
-   // Set custom call handler that intercepts all calls
+   // Set custom call handler that intercepts all calls using buffer pool API
    std::atomic<int> call_count{0};
-   server.call = [&](glz::repe::message& request, glz::repe::message& response) {
+   server.call = [&](std::span<const char> request, std::string& response_buffer) {
       ++call_count;
 
+      glz::repe::message request_msg;
+      glz::repe::message response_msg;
+
+      // Parse request
+      auto ec = glz::repe::from_buffer(request.data(), request.size(), request_msg);
+      if (ec != glz::error_code::none) {
+         glz::repe::encode_error_buffer(ec, response_buffer, "Failed to parse request");
+         return;
+      }
+
       // Custom routing: if path starts with /custom, handle directly
-      if (request.query.starts_with("/custom")) {
-         response.body = R"({"custom":true})";
-         response.header.body_length = response.body.size();
-         response.header.ec = glz::error_code::none;
-         glz::repe::finalize_header(response);
+      if (request_msg.query.starts_with("/custom")) {
+         response_msg.body = R"({"custom":true})";
+         response_msg.header.id = request_msg.header.id;
+         response_msg.header.body_length = response_msg.body.size();
+         response_msg.header.ec = glz::error_code::none;
+         glz::repe::finalize_header(response_msg);
+         glz::repe::to_buffer(response_msg, response_buffer);
       }
       else {
          // Forward to registry for other paths
-         server.registry.call(request, response);
+         server.registry.call(request_msg, response_msg);
+         glz::repe::to_buffer(response_msg, response_buffer);
       }
    };
 
@@ -572,21 +585,33 @@ void custom_call_middleware_test()
    custom_call_api api{};
    server.on(api);
 
-   // Set middleware-style handler that logs and delegates
+   // Set middleware-style handler that logs and delegates using zero-copy API
    std::vector<std::string> logged_queries;
    std::mutex log_mutex;
 
-   server.call = [&](glz::repe::message& request, glz::repe::message& response) {
+   server.call = [&](std::span<const char> request, std::string& response_buffer) {
+      thread_local glz::repe::message request_msg;
+      thread_local glz::repe::message response_msg;
+
+      // Parse request
+      auto ec = glz::repe::from_buffer(request.data(), request.size(), request_msg);
+      if (ec != glz::error_code::none) {
+         glz::repe::encode_error_buffer(ec, response_buffer, "Failed to parse request");
+         return;
+      }
+
       // Pre-processing: log the query
       {
          std::lock_guard lock{log_mutex};
-         logged_queries.push_back(std::string{request.query});
+         logged_queries.push_back(std::string{request_msg.query});
       }
 
       // Delegate to registry
-      server.registry.call(request, response);
+      server.registry.call(request_msg, response_msg);
 
       // Post-processing could go here
+
+      glz::repe::to_buffer(response_msg, response_buffer);
    };
 
    server.run_async();
@@ -614,17 +639,25 @@ void custom_call_error_handling_test()
 
    glz::asio_server server{.port = port, .concurrency = 1};
 
-   // Custom handler that returns an error for certain paths
-   server.call = [](glz::repe::message& request, glz::repe::message& response) {
-      if (request.query == "/forbidden") {
-         glz::repe::encode_error(glz::error_code::invalid_query, response, "Access denied");
-         glz::repe::finalize_header(response);
+   // Custom handler that returns an error for certain paths using zero-copy API
+   server.call = [](std::span<const char> request, std::string& response_buffer) {
+      // Zero-copy parse - query and body are views into the request buffer
+      auto result = glz::repe::parse_request(request);
+      if (!result) {
+         glz::repe::encode_error_buffer(glz::error_code::parse_error, response_buffer, "Failed to parse request");
+         return;
+      }
+
+      const auto& req = result.request;
+      glz::repe::response_builder resp{response_buffer};
+
+      if (req.query == "/forbidden") {
+         resp.reset(req);
+         resp.set_error(glz::error_code::invalid_query, "Access denied");
       }
       else {
-         response.body = R"("ok")";
-         response.header.body_length = response.body.size();
-         response.header.ec = glz::error_code::none;
-         glz::repe::finalize_header(response);
+         resp.reset(req);
+         resp.set_body_raw(R"("ok")", glz::repe::body_format::JSON);
       }
    };
 
