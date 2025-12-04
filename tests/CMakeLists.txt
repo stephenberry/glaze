@@ -76,6 +76,7 @@ add_subdirectory(stencil)
 add_subdirectory(threading_test)
 add_subdirectory(toml_test)
 add_subdirectory(utility_formats)
+add_subdirectory(msgpack_test)
 
 # JSON Tests
 add_subdirectory(json_conformance)
