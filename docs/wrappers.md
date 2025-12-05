@@ -40,7 +40,8 @@ glz::as_array<&T::member> // Treat a reflected/member-annotated type as a positi
 
 When reading into an array that is appendable, the new data will be appended rather than overwrite
 
-Associated option: `glz::opts{.append_arrays = true};`
+Associated option: add `bool append_arrays = true;` to a custom options struct (for example,
+`struct append_arrays_opts : glz::opts { bool append_arrays = true; };`).
 
 ```c++
 struct append_obj
