@@ -5,6 +5,11 @@
 
 // Glaze Feature Test Macros for breaking changes
 
+// v6.2.0 moves append_arrays and error_on_const_read out of glz::opts
+// Use a custom opts struct inheriting from glz::opts to enable these options
+#define glaze_v6_2_0_opts_append_arrays
+#define glaze_v6_2_0_opts_error_on_const_read
+
 // v6.2.0 changes std::array<char, N> serialization to respect array bounds instead of scanning for null terminator
 // This fixes a potential buffer overflow when arrays lack null terminators
 // Use const char* for null-terminated C-style string semantics

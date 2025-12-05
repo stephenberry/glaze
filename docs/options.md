@@ -74,17 +74,11 @@ struct opts
    bool new_lines_in_arrays = true;
    // Whether prettified arrays should have new lines for each element
 
-   bool append_arrays = false;
-   // When reading into an array the data will be appended if the type supports it
-
    bool error_on_missing_keys = false;
    // Require all non nullable keys to be present in the object.
    // Use skip_null_members = false to require nullable members
    // Can be customized per-type using meta<T>::requires_key(key, is_nullable) function
 
-   bool error_on_const_read = false;
-   // Error if attempt is made to read into a const value, by default the value is skipped without error
-   
    bool quoted_num = false;
    // Treat numbers as quoted or array-like types as having quoted numbers
    
@@ -135,6 +129,12 @@ bool write_type_info = true;
 bool shrink_to_fit = false;
 // Shrinks dynamic containers to new size to save memory
 
+bool append_arrays = false;
+// When reading into an array the data will be appended if the type supports it
+
+bool error_on_const_read = false;
+// Error if attempt is made to read into a const value, by default the value is skipped without error
+
 bool hide_non_invocable = true;
 // Hides non-invocable members from the cli_menu (may be applied elsewhere in the future)
 
@@ -159,7 +159,6 @@ struct opts_csv {
   static constexpr bool null_terminated = true;
   uint8_t layout = rowwise;              // rowwise | colwise
   bool use_headers = true;               // write/read with headers for structs
-  bool append_arrays = false;            // append on read if container supports it
   bool raw_string = false;               // do not escape/unescape string contents
   bool skip_header_row = false;          // skip first row on read
   bool validate_rectangular = false;     // enforce equal column counts on 2D reads
@@ -172,7 +171,7 @@ Notes:
 - `use_headers`: when `false`, vectors of structs read/write without headers in declaration order.
 - `skip_header_row`: skip the first row during read (useful when ingesting headered CSV into headerless targets).
 - `validate_rectangular`: for 2D arrays, fail reads when row lengths differ (`constraint_violated`).
-- `append_arrays`: appends parsed values to existing containers when supported.
+- `append_arrays`: appends parsed values to existing containers when supported (add to custom opts struct).
 - Use as a template parameter: `glz::read<glz::opts_csv{.layout = glz::colwise, .use_headers = false}>(...)`.
 
 ## See Also

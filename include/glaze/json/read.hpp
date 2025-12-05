@@ -42,7 +42,7 @@ namespace glz
       GLZ_ALWAYS_INLINE static void op(T&& value, Ctx&& ctx, It0&& it, It1&& end)
       {
          if constexpr (const_value_v<T>) {
-            if constexpr (Opts.error_on_const_read) {
+            if constexpr (check_error_on_const_read(Opts)) {
                ctx.error = error_code::attempt_const_read;
             }
             else {
@@ -243,7 +243,7 @@ namespace glz
          using V = refl_t<T, I>;
 
          if constexpr (const_value_v<V>) {
-            if constexpr (Opts.error_on_const_read) {
+            if constexpr (check_error_on_const_read(Opts)) {
                ctx.error = error_code::attempt_const_read;
             }
             else {
@@ -1532,7 +1532,7 @@ namespace glz
                --ctx.indentation_level;
             }
             ++it;
-            if constexpr ((resizable<T> || is_inplace_vector<T>) && not Opts.append_arrays) {
+            if constexpr ((resizable<T> || is_inplace_vector<T>) && not check_append_arrays(Opts)) {
                value.clear();
 
                if constexpr (check_shrink_to_fit(Opts)) {
@@ -1544,7 +1544,7 @@ namespace glz
 
          const size_t ws_size = size_t(it - ws_start);
 
-         static constexpr bool should_append = (resizable<T> || is_inplace_vector<T>) && Opts.append_arrays;
+         static constexpr bool should_append = (resizable<T> || is_inplace_vector<T>) && check_append_arrays(Opts);
          if constexpr (not should_append) {
             const auto n = value.size();
 

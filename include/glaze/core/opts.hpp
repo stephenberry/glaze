@@ -89,11 +89,8 @@ namespace glz
       char indentation_char = ' '; // Prettified JSON indentation char
       uint8_t indentation_width = 3; // Prettified JSON indentation size
       bool new_lines_in_arrays = true; // Whether prettified arrays should have new lines for each element
-      bool append_arrays = false; // When reading into an array the data will be appended if the type supports it
       bool error_on_missing_keys = false; // Require all non nullable keys to be present in the object. Use
                                           // skip_null_members = false to require nullable members
-      bool error_on_const_read =
-         false; // Error if attempt is made to read into a const value, by default the value is skipped without error
 
       bool quoted_num = false; // treat numbers as quoted or array-like types as having quoted numbers
       bool number = false; // treats all types like std::string as numbers: read/write these quoted numbers
@@ -118,7 +115,6 @@ namespace glz
       static constexpr bool null_terminated = true; // Whether the input buffer is null terminated
       uint8_t layout = rowwise; // CSV row wise output/input
       bool use_headers = true; // Whether to write column/row headers in CSV format
-      bool append_arrays = false; // When reading into an array the data will be appended if the type supports it
       bool raw_string = false; // do not decode/encode escaped characters for strings (improves read/write performance)
 
       // New options for headerless CSV support
@@ -164,8 +160,16 @@ namespace glz
    // Write type info for meta objects in variants
 
    // ---
+   // bool append_arrays = false;
+   // When reading into an array the data will be appended if the type supports it
+
+   // ---
    // bool shrink_to_fit = false;
    // Shrinks dynamic containers to new size to save memory
+
+   // ---
+   // bool error_on_const_read = false;
+   // Error if attempt is made to read into a const value, by default the value is skipped without error
 
    // ---
    // bool hide_non_invocable = true;
@@ -183,11 +187,17 @@ namespace glz
    // float_precision float_max_write_precision{};
    // The maximum precision type used for writing floats, higher precision floats will be cast down to this precision
 
+   struct append_arrays_opt_tag
+   {};
+
    struct bools_as_numbers_opt_tag
    {};
 
    struct escape_control_characters_opt_tag
    {};
+
+   template <auto member_ptr>
+   concept is_append_arrays_tag = std::same_as<std::decay_t<decltype(member_ptr)>, append_arrays_opt_tag>;
 
    template <auto member_ptr>
    concept is_bools_as_numbers_tag = std::same_as<std::decay_t<decltype(member_ptr)>, bools_as_numbers_opt_tag>;
@@ -200,6 +210,26 @@ namespace glz
    {
       if constexpr (requires { Opts.validate_skipped; }) {
          return Opts.validate_skipped;
+      }
+      else {
+         return false;
+      }
+   }
+
+   consteval bool check_append_arrays(auto&& Opts)
+   {
+      if constexpr (requires { Opts.append_arrays; }) {
+         return Opts.append_arrays;
+      }
+      else {
+         return false;
+      }
+   }
+
+   consteval bool check_error_on_const_read(auto&& Opts)
+   {
+      if constexpr (requires { Opts.error_on_const_read; }) {
+         return Opts.error_on_const_read;
       }
       else {
          return false;
@@ -490,7 +520,21 @@ namespace glz
    template <auto Opts, auto member_ptr>
    constexpr auto set_opt(auto&& value)
    {
-      if constexpr (is_bools_as_numbers_tag<member_ptr>) {
+      if constexpr (is_append_arrays_tag<member_ptr>) {
+         if constexpr (requires { Opts.append_arrays; }) {
+            auto ret = Opts;
+            ret.append_arrays = static_cast<bool>(value);
+            return ret;
+         }
+         else {
+            struct opts_append_arrays : std::decay_t<decltype(Opts)>
+            {
+               bool append_arrays{};
+            };
+            return opts_append_arrays{{Opts}, static_cast<bool>(value)};
+         }
+      }
+      else if constexpr (is_bools_as_numbers_tag<member_ptr>) {
          if constexpr (requires { Opts.bools_as_numbers; }) {
             auto ret = Opts;
             ret.bools_as_numbers = static_cast<bool>(value);
@@ -528,7 +572,21 @@ namespace glz
    template <auto Opts, auto member_ptr>
    constexpr auto opt_on()
    {
-      if constexpr (is_bools_as_numbers_tag<member_ptr>) {
+      if constexpr (is_append_arrays_tag<member_ptr>) {
+         if constexpr (requires { Opts.append_arrays; }) {
+            auto ret = Opts;
+            ret.append_arrays = true;
+            return ret;
+         }
+         else {
+            struct opts_append_arrays : std::decay_t<decltype(Opts)>
+            {
+               bool append_arrays = true;
+            };
+            return opts_append_arrays{{Opts}};
+         }
+      }
+      else if constexpr (is_bools_as_numbers_tag<member_ptr>) {
          if constexpr (requires { Opts.bools_as_numbers; }) {
             auto ret = Opts;
             ret.bools_as_numbers = true;
@@ -569,7 +627,17 @@ namespace glz
    template <auto Opts, auto member_ptr>
    constexpr auto opt_off()
    {
-      if constexpr (is_bools_as_numbers_tag<member_ptr>) {
+      if constexpr (is_append_arrays_tag<member_ptr>) {
+         if constexpr (requires { Opts.append_arrays; }) {
+            auto ret = Opts;
+            ret.append_arrays = false;
+            return ret;
+         }
+         else {
+            return Opts;
+         }
+      }
+      else if constexpr (is_bools_as_numbers_tag<member_ptr>) {
          if constexpr (requires { Opts.bools_as_numbers; }) {
             auto ret = Opts;
             ret.bools_as_numbers = false;

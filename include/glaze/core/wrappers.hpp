@@ -81,7 +81,7 @@ namespace glz
 
    // When reading into an array that is appendable, the new data will be appended rather than overwrite
    template <auto MemPtr>
-   constexpr auto append_arrays = opts_wrapper<MemPtr, &opts::append_arrays>();
+   constexpr auto append_arrays = opts_wrapper<MemPtr, append_arrays_opt_tag{}>();
 
    // Read and write booleans as numbers
    template <auto MemPtr>

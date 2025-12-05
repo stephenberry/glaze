@@ -6730,11 +6730,16 @@ suite write_as_json_raw = [] {
    };
 };
 
+struct error_on_const_read_opts : glz::opts
+{
+   bool error_on_const_read = true;
+};
+
 suite const_read_error = [] {
    "const_read_error"_test = [] {
       const std::string hello = "world";
       std::string s = R"(explode)";
-      constexpr glz::opts opts{.error_on_const_read = true};
+      constexpr error_on_const_read_opts opts{};
       expect(glz::read<opts>(hello, s) == glz::error_code::attempt_const_read);
    };
 };
@@ -10527,7 +10532,7 @@ suite const_pointer_tests = [] {
       std::string buffer = R"({"name":"Foo Bar","p_add":{"street":"Baz Yaz"}})";
       trr::Address add{};
       trr::Person p{&add};
-      auto ec = glz::read<glz::opts{.format = glz::JSON, .error_on_const_read = true}>(p, buffer);
+      auto ec = glz::read<error_on_const_read_opts{}>(p, buffer);
       if (ec) {
          std::cout << glz::format_error(ec, buffer) << std::endl;
       }
@@ -10631,10 +10636,15 @@ struct glz::meta<append_obj>
    static constexpr auto value = object("names", append_arrays<&T::names>, "arrays", append_arrays<&T::arrays>);
 };
 
+struct append_arrays_opts : glz::opts
+{
+   bool append_arrays = true;
+};
+
 suite append_arrays_tests = [] {
    "append_arrays vector"_test = [] {
       std::vector<int> v{};
-      constexpr glz::opts append_opts{.append_arrays = true};
+      constexpr append_arrays_opts append_opts{};
       expect(not glz::read<append_opts>(v, "[1,2,3]"));
       expect(v == std::vector<int>{1, 2, 3});
       expect(not glz::read<append_opts>(v, "[4,5,6]"));
@@ -10643,7 +10653,7 @@ suite append_arrays_tests = [] {
 
    "append_arrays deque"_test = [] {
       std::deque<int> v{};
-      constexpr glz::opts append_opts{.append_arrays = true};
+      constexpr append_arrays_opts append_opts{};
       expect(not glz::read<append_opts>(v, "[1,2,3]"));
       expect(v == std::deque<int>{1, 2, 3});
       expect(not glz::read<append_opts>(v, "[4,5,6]"));
