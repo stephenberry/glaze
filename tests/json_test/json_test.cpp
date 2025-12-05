@@ -17,6 +17,7 @@
 #include <random>
 #include <ranges>
 #include <set>
+#include <span>
 #if defined(__STDCPP_FLOAT128_T__)
 #include <stdfloat>
 #endif
@@ -11002,6 +11003,43 @@ suite explicit_string_view_support = [] {
       buffer.clear();
       expect(not glz::write<glz::opts{.raw_string = true}>(value, buffer));
       expect(buffer == R"("explicit")");
+   };
+};
+
+suite span_char_serialization = [] {
+   "write json from std::span<const char>"_test = [] {
+      const char data[] = "hello span";
+      std::span<const char> span{data, 10};
+
+      std::string buffer{};
+      expect(not glz::write_json(span, buffer));
+      expect(buffer == R"("hello span")");
+   };
+
+   "write json from std::span<char>"_test = [] {
+      char data[] = "mutable";
+      std::span<char> span{data, 7};
+
+      std::string buffer{};
+      expect(not glz::write_json(span, buffer));
+      expect(buffer == R"("mutable")");
+   };
+
+   "write json from empty std::span<const char>"_test = [] {
+      std::span<const char> span{};
+
+      std::string buffer{};
+      expect(not glz::write_json(span, buffer));
+      expect(buffer == R"("")");
+   };
+
+   "write json from std::span<const char> with raw_string option"_test = [] {
+      const char data[] = "raw span";
+      std::span<const char> span{data, 8};
+
+      std::string buffer{};
+      expect(not glz::write<glz::opts{.raw_string = true}>(span, buffer));
+      expect(buffer == R"("raw span")");
    };
 };
 
