@@ -56,6 +56,7 @@ jobs:
         uses: MarkusJx/install-boost@v2
         with:
           boost_version: ${{ matrix.boost_version }}
+          platform_version: 24.04
 
       - name: Configure CMake
         run: |
