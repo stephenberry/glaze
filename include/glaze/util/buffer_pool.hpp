@@ -25,13 +25,13 @@ namespace glz
    ///   // buffer automatically returned when buf goes out of scope
    class buffer_pool final
    {
-   private:
+     private:
       std::vector<std::unique_ptr<std::string>> buffers_;
       mutable std::mutex mutex_;
       size_t max_buffers_;
       size_t max_buffer_size_;
 
-   public:
+     public:
       /// RAII handle for borrowed buffer - automatically returns to pool on destruction
       class scoped_buffer final
       {
@@ -44,7 +44,7 @@ namespace glz
             : pool_(pool), buffer_(std::move(buf))
          {}
 
-      public:
+        public:
          scoped_buffer() = default;
 
          ~scoped_buffer()
@@ -55,8 +55,7 @@ namespace glz
          }
 
          // Move-only
-         scoped_buffer(scoped_buffer&& other) noexcept
-            : pool_(other.pool_), buffer_(std::move(other.buffer_))
+         scoped_buffer(scoped_buffer&& other) noexcept : pool_(other.pool_), buffer_(std::move(other.buffer_))
          {
             other.pool_ = nullptr;
          }
@@ -142,7 +141,7 @@ namespace glz
       /// Get maximum buffer size before shrinking
       [[nodiscard]] size_t max_buffer_size() const noexcept { return max_buffer_size_; }
 
-   private:
+     private:
       void release(std::unique_ptr<std::string> buf)
       {
          if (!buf) return;
