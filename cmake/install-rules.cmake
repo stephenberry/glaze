@@ -32,12 +32,27 @@ set(
 )
 mark_as_advanced(glaze_INSTALL_CMAKEDIR)
 
+# Generate config file from template with dependency information
+configure_package_config_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/cmake/install-config.cmake.in"
+    "${PROJECT_BINARY_DIR}/${package}Config.cmake"
+    INSTALL_DESTINATION "${glaze_INSTALL_CMAKEDIR}"
+)
+
 install(
-    FILES cmake/install-config.cmake
+    FILES "${PROJECT_BINARY_DIR}/${package}Config.cmake"
     DESTINATION "${glaze_INSTALL_CMAKEDIR}"
-    RENAME "${package}Config.cmake"
     COMPONENT glaze_Development
 )
+
+# Install FindErlang.cmake when EETF format is enabled
+if(glaze_EETF_FORMAT)
+    install(
+        FILES cmake/FindErlang.cmake
+        DESTINATION "${glaze_INSTALL_CMAKEDIR}"
+        COMPONENT glaze_Development
+    )
+endif()
 
 install(
     FILES "${PROJECT_BINARY_DIR}/${package}ConfigVersion.cmake"
