@@ -179,6 +179,37 @@ namespace glz
       return false;
    }
 
+   // Extracted from decode_index to reduce code duplication across instantiations.
+   // This path handles unknown keys and doesn't depend on the field index I.
+   template <auto Opts, class T, class Value>
+      requires(glaze_object_t<T> || reflectable<T>)
+   void decode_index_unknown_key(Value&& value, is_context auto&& ctx, auto&& it, auto&& end)
+   {
+      if constexpr (Opts.error_on_unknown_keys) {
+         ctx.error = error_code::unknown_key;
+      }
+      else {
+         auto* start = it;
+         skip_string_view<Opts>(ctx, it, end);
+         if (bool(ctx.error)) [[unlikely]]
+            return;
+         const sv key = {start, size_t(it - start)};
+         ++it;
+         if constexpr (not Opts.null_terminated) {
+            if (it == end) [[unlikely]] {
+               ctx.error = error_code::unexpected_end;
+               return;
+            }
+         }
+
+         if (parse_ws_colon<Opts>(ctx, it, end)) {
+            return;
+         }
+
+         parse<JSON>::handle_unknown<Opts>(key, value, ctx, it, end);
+      }
+   }
+
    template <auto Opts, class T, size_t I, class Value, class... SelectedIndex>
       requires(glaze_object_t<T> || reflectable<T>)
    void decode_index(Value&& value, is_context auto&& ctx, auto&& it, auto&& end, SelectedIndex&&... selected_index)
@@ -267,29 +298,7 @@ namespace glz
          }
       }
       else [[unlikely]] {
-         if constexpr (Opts.error_on_unknown_keys) {
-            ctx.error = error_code::unknown_key;
-         }
-         else {
-            auto* start = it;
-            skip_string_view<Opts>(ctx, it, end);
-            if (bool(ctx.error)) [[unlikely]]
-               return;
-            const sv key = {start, size_t(it - start)};
-            ++it;
-            if constexpr (not Opts.null_terminated) {
-               if (it == end) [[unlikely]] {
-                  ctx.error = error_code::unexpected_end;
-                  return;
-               }
-            }
-
-            if (parse_ws_colon<Opts>(ctx, it, end)) {
-               return;
-            }
-
-            parse<JSON>::handle_unknown<Opts>(key, value, ctx, it, end);
-         }
+         decode_index_unknown_key<Opts, T>(value, ctx, it, end);
       }
    }
 
