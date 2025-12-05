@@ -91,8 +91,6 @@ namespace glz
       bool new_lines_in_arrays = true; // Whether prettified arrays should have new lines for each element
       bool error_on_missing_keys = false; // Require all non nullable keys to be present in the object. Use
                                           // skip_null_members = false to require nullable members
-      bool error_on_const_read =
-         false; // Error if attempt is made to read into a const value, by default the value is skipped without error
 
       bool quoted_num = false; // treat numbers as quoted or array-like types as having quoted numbers
       bool number = false; // treats all types like std::string as numbers: read/write these quoted numbers
@@ -170,6 +168,10 @@ namespace glz
    // Shrinks dynamic containers to new size to save memory
 
    // ---
+   // bool error_on_const_read = false;
+   // Error if attempt is made to read into a const value, by default the value is skipped without error
+
+   // ---
    // bool hide_non_invocable = true;
    // Hides non-invocable members from the cli_menu (may be applied elsewhere in the future)
 
@@ -218,6 +220,16 @@ namespace glz
    {
       if constexpr (requires { Opts.append_arrays; }) {
          return Opts.append_arrays;
+      }
+      else {
+         return false;
+      }
+   }
+
+   consteval bool check_error_on_const_read(auto&& Opts)
+   {
+      if constexpr (requires { Opts.error_on_const_read; }) {
+         return Opts.error_on_const_read;
       }
       else {
          return false;

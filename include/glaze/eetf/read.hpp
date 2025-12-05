@@ -52,7 +52,7 @@ namespace glz
          }
 
          if constexpr (std::is_const_v<std::remove_reference_t<T>>) {
-            if constexpr (Opts.error_on_const_read) {
+            if constexpr (check_error_on_const_read(Opts)) {
                ctx.error = error_code::attempt_const_read;
             }
             else {

@@ -6730,11 +6730,16 @@ suite write_as_json_raw = [] {
    };
 };
 
+struct error_on_const_read_opts : glz::opts
+{
+   bool error_on_const_read = true;
+};
+
 suite const_read_error = [] {
    "const_read_error"_test = [] {
       const std::string hello = "world";
       std::string s = R"(explode)";
-      constexpr glz::opts opts{.error_on_const_read = true};
+      constexpr error_on_const_read_opts opts{};
       expect(glz::read<opts>(hello, s) == glz::error_code::attempt_const_read);
    };
 };
@@ -10527,7 +10532,7 @@ suite const_pointer_tests = [] {
       std::string buffer = R"({"name":"Foo Bar","p_add":{"street":"Baz Yaz"}})";
       trr::Address add{};
       trr::Person p{&add};
-      auto ec = glz::read<glz::opts{.format = glz::JSON, .error_on_const_read = true}>(p, buffer);
+      auto ec = glz::read<error_on_const_read_opts{}>(p, buffer);
       if (ec) {
          std::cout << glz::format_error(ec, buffer) << std::endl;
       }
