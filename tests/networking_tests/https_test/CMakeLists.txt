@@ -32,8 +32,10 @@ if(OPENSSL_HEADERS_AVAILABLE)
     # Set C++ standard
     target_compile_features(${PROJECT_NAME} PRIVATE cxx_std_23)
     
+    add_test(NAME ${PROJECT_NAME} COMMAND ${PROJECT_NAME})
+
     message(STATUS "Self-contained HTTPS test will be built with OpenSSL support")
     message(STATUS " Certificates will be generated automatically at runtime")
 else()
-    message(FATAL_ERROR "❌ OpenSSL headers missing - install libssl-dev/openssl-devel")
+    message(FATAL_ERROR "OpenSSL headers missing - install libssl-dev/openssl-devel")
 endif()

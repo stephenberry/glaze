@@ -8,10 +8,10 @@ project(
 
 file(GLOB srcs src/*.cpp include/*.hpp)
 
-if(glaze_ERLANG_FORMAT)
+if(glaze_EETF_FORMAT)
   list(APPEND CMAKE_MODULE_PATH "${EXTERNAL_MODULE_PATH}")
   find_package(Erlang REQUIRED)
-endif(glaze_ERLANG_FORMAT)
+endif(glaze_EETF_FORMAT)
 
 find_package(glaze CONFIG REQUIRED)
 
