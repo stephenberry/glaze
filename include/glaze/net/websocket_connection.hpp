@@ -393,18 +393,11 @@ namespace glz
 
       ~websocket_connection()
       {
-         // Close the socket BEFORE handlers are destroyed to prevent
-         // cancelled async operations from invoking already-destroyed handlers.
-         // Member destruction order would destroy handlers first (declared last),
-         // then socket (declared first), which could cause use-after-free.
-         if (socket_) {
-            asio::error_code ec;
-            socket_->close(ec);
-            // Error code intentionally ignored - we're destroying anyway
-            socket_.reset();
-         }
-
-         // Clear handlers to prevent any use-after-free if they're somehow invoked
+         // Clear handlers first to prevent any callbacks during destruction.
+         // Don't close the socket here - let it close naturally when the shared_ptr
+         // is destroyed. Closing during destruction can cause issues if this destructor
+         // runs during io_context destruction (cancelled operations try to interact
+         // with a destroying io_context).
          client_message_handler_ = nullptr;
          client_close_handler_ = nullptr;
          client_error_handler_ = nullptr;

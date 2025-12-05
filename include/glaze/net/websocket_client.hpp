@@ -59,10 +59,26 @@ namespace glz
 
          void cancel_all()
          {
+            // Clear handlers first to prevent callbacks during cleanup
+            on_message.reset();
+            on_open.reset();
+            on_close.reset();
+            on_error.reset();
+
+            // Clear the connection (releases websocket_connection shared_ptr)
+            // Do this before closing sockets to ensure websocket_connection
+            // handlers are cleared before socket cancellation
+            {
+               std::lock_guard<std::mutex> lock(connection_mutex);
+               connection = std::monostate{};
+            }
+
+            // Cancel resolver
             if (resolver_) {
                resolver_->cancel();
             }
 
+            // Close sockets - this cancels any pending async operations
             if (tcp_socket_ && tcp_socket_->is_open()) {
                asio::error_code ec;
                tcp_socket_->close(ec);
@@ -73,11 +89,6 @@ namespace glz
                ssl_socket_->lowest_layer().close(ec);
             }
 #endif
-
-            {
-               std::lock_guard<std::mutex> lock(connection_mutex);
-               connection = std::monostate{};
-            }
          }
 
          asio::ip::tcp::socket& get_tcp_socket_ref()
@@ -355,13 +366,15 @@ namespace glz
 
       ~websocket_client()
       {
-         // Stop io_context if we're the sole owner
+         // Cancel pending operations first - this closes sockets which cancels
+         // any pending async operations
+         impl_->cancel_all();
+
+         // Stop io_context if we're the sole owner. This must happen AFTER
+         // cancel_all() so that cancellation handlers don't try to run.
          if (impl_->ctx.use_count() == 1) {
             impl_->ctx->stop();
          }
-
-         // Cancel pending operations
-         impl_->cancel_all();
       }
 
       void on_message(message_handler_t handler)
