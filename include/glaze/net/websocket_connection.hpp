@@ -261,6 +261,13 @@ namespace glz
    template <typename SocketType = asio::ip::tcp::socket>
    struct websocket_connection;
 
+   // Base class for type-erased connection closing
+   struct closeable_connection
+   {
+      virtual ~closeable_connection() = default;
+      virtual void force_close() = 0;
+   };
+
    // WebSocket server class
    //
    // Message Handler Lifetime:
@@ -287,6 +294,37 @@ namespace glz
       using validate_handler = std::function<bool(const request&)>;
 
       websocket_server() = default;
+
+      ~websocket_server() { close_all_connections(); }
+
+      // Close all active connections - called on server shutdown
+      void close_all_connections()
+      {
+         std::lock_guard<std::mutex> lock(connections_mutex_);
+         for (auto& weak_conn : connections_) {
+            if (auto conn = weak_conn.lock()) {
+               conn->force_close();
+            }
+         }
+         connections_.clear();
+      }
+
+      // Register a connection for tracking (called by websocket_connection)
+      void register_connection(std::shared_ptr<closeable_connection> conn)
+      {
+         std::lock_guard<std::mutex> lock(connections_mutex_);
+         connections_.push_back(conn);
+      }
+
+      // Remove expired weak_ptrs (optional cleanup, called periodically or on unregister)
+      void cleanup_expired_connections()
+      {
+         std::lock_guard<std::mutex> lock(connections_mutex_);
+         connections_.erase(
+            std::remove_if(connections_.begin(), connections_.end(),
+                           [](const std::weak_ptr<closeable_connection>& w) { return w.expired(); }),
+            connections_.end());
+      }
 
       // Configuration
       void set_max_message_size(size_t size) { max_message_size_ = size; }
@@ -353,6 +391,10 @@ namespace glz
       close_handler close_handler_;
       error_handler error_handler_;
       validate_handler validate_handler_;
+
+      // Connection tracking for clean shutdown
+      std::mutex connections_mutex_;
+      std::vector<std::weak_ptr<closeable_connection>> connections_;
    };
 
    // WebSocket connection class - implementations come after websocket_server
@@ -365,7 +407,8 @@ namespace glz
    // is only valid for the duration of the callback. Copy the data if you need to
    // retain it beyond the callback scope.
    template <typename SocketType>
-   struct websocket_connection : public std::enable_shared_from_this<websocket_connection<SocketType>>
+   struct websocket_connection : public closeable_connection,
+                                 public std::enable_shared_from_this<websocket_connection<SocketType>>
    {
      public:
       inline websocket_connection(std::shared_ptr<SocketType> socket,
@@ -441,6 +484,19 @@ namespace glz
          // frame, that endpoint SHOULD Close the WebSocket Connection"
          // The socket will be closed when we receive the close response in handle_frame().
          send_close_frame(code, reason, false);
+      }
+
+      // Force close the connection immediately (closes socket without handshake).
+      // Used during server shutdown to ensure clean destruction.
+      void force_close() override
+      {
+         is_closing_ = true;
+         closed_ = true;
+         if (socket_) {
+            asio::error_code ec;
+            socket_->close(ec);
+            socket_.reset();
+         }
       }
 
       // Get remote endpoint information
@@ -538,8 +594,9 @@ namespace glz
 
                               self->handshake_complete_ = true;
 
-                              // Notify server of successful connection
+                              // Register with server for clean shutdown tracking
                               if (auto srv = self->server_.lock()) {
+                                 srv->register_connection(self);
                                  srv->notify_open(self, req);
                               }
 
