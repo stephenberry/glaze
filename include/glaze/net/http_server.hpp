@@ -1402,7 +1402,7 @@ namespace glz
 
          // Create WebSocket connection and start it
          // Need to include websocket_connection.hpp for this to work
-         auto ws_conn = std::make_shared<websocket_connection<asio::ip::tcp::socket>>(socket, ws_it->second.get());
+         auto ws_conn = std::make_shared<websocket_connection<asio::ip::tcp::socket>>(socket, ws_it->second);
          ws_conn->start(req);
       }
 

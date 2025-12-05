@@ -368,8 +368,9 @@ namespace glz
    struct websocket_connection : public std::enable_shared_from_this<websocket_connection<SocketType>>
    {
      public:
-      inline websocket_connection(std::shared_ptr<SocketType> socket, websocket_server* server = nullptr)
-         : socket_(socket), server_(server)
+      inline websocket_connection(std::shared_ptr<SocketType> socket,
+                                  std::weak_ptr<websocket_server> server = std::weak_ptr<websocket_server>{})
+         : socket_(socket), server_(std::move(server))
       {
          // Try to get remote endpoint, but don't fail if it's not available yet
          try {
@@ -385,8 +386,8 @@ namespace glz
             // Endpoint not available yet (e.g., for client mode before connection)
             // Will be set later if needed
          }
-         if (server_) {
-            max_message_size_ = server_->get_max_message_size();
+         if (auto srv = server_.lock()) {
+            max_message_size_ = srv->get_max_message_size();
          }
       }
 
@@ -506,9 +507,11 @@ namespace glz
          }
 
          // Check if server wants to validate this connection
-         if (server_ && !server_->validate_connection(req)) {
-            do_close();
-            return;
+         if (auto srv = server_.lock()) {
+            if (!srv->validate_connection(req)) {
+               do_close();
+               return;
+            }
          }
 
          // Generate accept key
@@ -533,8 +536,8 @@ namespace glz
                            [self, req, response_buffer, socket](std::error_code ec, std::size_t) {
                               if (ec) {
                                  self->is_closing_ = true;
-                                 if (self->server_) {
-                                    self->server_->notify_error(self, ec);
+                                 if (auto srv = self->server_.lock()) {
+                                    srv->notify_error(self, ec);
                                  }
                                  self->do_close();
                                  return;
@@ -543,8 +546,8 @@ namespace glz
                               self->handshake_complete_ = true;
 
                               // Notify server of successful connection
-                              if (self->server_) {
-                                 self->server_->notify_open(self, req);
+                              if (auto srv = self->server_.lock()) {
+                                 srv->notify_open(self, req);
                               }
 
                               // Start reading frames
@@ -556,8 +559,8 @@ namespace glz
       {
          if (ec) {
             is_closing_ = true;
-            if (server_) {
-               server_->notify_error(this->shared_from_this(), ec);
+            if (auto srv = server_.lock()) {
+               srv->notify_error(this->shared_from_this(), ec);
             }
             else if (client_error_handler_) {
                client_error_handler_(ec);
@@ -691,8 +694,8 @@ namespace glz
                }
 
                std::string_view message_view(reinterpret_cast<const char*>(payload), length);
-               if (server_) {
-                  server_->notify_message(this->shared_from_this(), message_view, opcode);
+               if (auto srv = server_.lock()) {
+                  srv->notify_message(this->shared_from_this(), message_view, opcode);
                }
                else if (client_message_handler_) {
                   client_message_handler_(message_view, opcode);
@@ -732,8 +735,8 @@ namespace glz
 
                std::string_view message_view(reinterpret_cast<const char*>(message_buffer_.data()),
                                              message_buffer_.size());
-               if (server_) {
-                  server_->notify_message(this->shared_from_this(), message_view, current_opcode_);
+               if (auto srv = server_.lock()) {
+                  srv->notify_message(this->shared_from_this(), message_view, current_opcode_);
                }
                else if (client_message_handler_) {
                   client_message_handler_(message_view, current_opcode_);
@@ -761,10 +764,11 @@ namespace glz
             close_code_ = code;
             close_reason_ = std::move(reason);
 
-            if (!is_closing_) {
-               // Peer initiated close - mark as closing and send response
+            // Atomically check and set is_closing_ to handle race with close() method
+            bool expected = false;
+            if (is_closing_.compare_exchange_strong(expected, true)) {
+               // Peer initiated close - we successfully marked as closing, send response
                // RFC 6455: "the endpoint MUST send a Close frame in response"
-               is_closing_ = true;
                // Send close frame and schedule socket close after write completes
                send_close_frame(code, {}, true);
             }
@@ -900,8 +904,8 @@ namespace glz
                                     self->write_queue_.clear();
                                     self->close_after_write_ = false;
                                  }
-                                 if (self->server_) {
-                                    self->server_->notify_error(self, ec);
+                                 if (auto srv = self->server_.lock()) {
+                                    srv->notify_error(self, ec);
                                  }
                                  else if (self->client_error_handler_) {
                                     self->client_error_handler_(ec);
@@ -1031,8 +1035,8 @@ namespace glz
             return; // Already closed
          }
 
-         if (server_) {
-            server_->notify_close(this->shared_from_this(), close_code_, close_reason_);
+         if (auto srv = server_.lock()) {
+            srv->notify_close(this->shared_from_this(), close_code_, close_reason_);
          }
          else if (client_close_handler_) {
             client_close_handler_(close_code_, close_reason_);
@@ -1046,7 +1050,7 @@ namespace glz
       }
 
       std::shared_ptr<SocketType> socket_;
-      websocket_server* server_;
+      std::weak_ptr<websocket_server> server_;
       std::array<uint8_t, 16384> read_buffer_;
       std::vector<uint8_t> frame_buffer_;
       std::vector<uint8_t> message_buffer_;
