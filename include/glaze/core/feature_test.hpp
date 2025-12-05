@@ -5,6 +5,11 @@
 
 // Glaze Feature Test Macros for breaking changes
 
+// v6.2.0 changes std::array<char, N> serialization to respect array bounds instead of scanning for null terminator
+// This fixes a potential buffer overflow when arrays lack null terminators
+// Use const char* for null-terminated C-style string semantics
+#define glaze_v6_2_0_array_char_bounds
+
 // v6.1.0 removes bools_as_numbers from default glz::opts
 #define glaze_v6_1_0_bools_as_numbers_opt
 

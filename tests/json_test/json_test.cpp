@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <any>
+#include <array>
 #include <atomic>
 #include <bitset>
 #include <chrono>
@@ -17,6 +18,7 @@
 #include <random>
 #include <ranges>
 #include <set>
+#include <span>
 #if defined(__STDCPP_FLOAT128_T__)
 #include <stdfloat>
 #endif
@@ -10212,10 +10214,23 @@ suite array_char_tests = [] {
       std::array<char, 8> value{};
       expect(not glz::read_json(value, R"("hello")"));
       expect(std::string_view{value.data()} == "hello");
-      expect(glz::write_json(value).value_or("error") == R"("hello")");
+      // After fix for issue #1760: std::array<char, N> now respects array bounds
+      // instead of scanning for null terminator (which could cause buffer overflow).
+      // The output includes all 8 characters of the array.
+      // Use const char* for null-terminated C-style string semantics.
+      auto result = glz::write_json(value);
+      expect(result.has_value());
+      expect(result->size() > 7) << "Output should include full array contents";
+      expect(result->front() == '"' && result->back() == '"');
       expect(glz::read_json(value, R"("hello---too long")"));
       expect(not glz::read_json(value, R"("bye")"));
       expect(std::string_view{value.data()} == "bye");
+   };
+
+   "const char* for null-terminated strings"_test = [] {
+      // const char* retains null-terminated semantics for C API compatibility
+      const char* cstr = "hello";
+      expect(glz::write_json(cstr).value_or("error") == R"("hello")");
    };
 };
 
@@ -11002,6 +11017,84 @@ suite explicit_string_view_support = [] {
       buffer.clear();
       expect(not glz::write<glz::opts{.raw_string = true}>(value, buffer));
       expect(buffer == R"("explicit")");
+   };
+};
+
+suite span_char_serialization = [] {
+   "write json from std::span<const char>"_test = [] {
+      const char data[] = "hello span";
+      std::span<const char> span{data, 10};
+
+      std::string buffer{};
+      expect(not glz::write_json(span, buffer));
+      expect(buffer == R"("hello span")");
+   };
+
+   "write json from std::span<char>"_test = [] {
+      char data[] = "mutable";
+      std::span<char> span{data, 7};
+
+      std::string buffer{};
+      expect(not glz::write_json(span, buffer));
+      expect(buffer == R"("mutable")");
+   };
+
+   "write json from empty std::span<const char>"_test = [] {
+      std::span<const char> span{};
+
+      std::string buffer{};
+      expect(not glz::write_json(span, buffer));
+      expect(buffer == R"("")");
+   };
+
+   "write json from std::span<const char> with raw_string option"_test = [] {
+      const char data[] = "raw span";
+      std::span<const char> span{data, 8};
+
+      std::string buffer{};
+      expect(not glz::write<glz::opts{.raw_string = true}>(span, buffer));
+      expect(buffer == R"("raw span")");
+   };
+
+   "write json from std::array<char, N> without null terminator"_test = [] {
+      // This tests the fix for issue #1760 buffer overflow
+      // Array has no null terminator - must respect array bounds
+      std::array<char, 5> arr = {'h', 'e', 'l', 'l', 'o'};
+
+      std::string buffer{};
+      expect(not glz::write_json(arr, buffer));
+      expect(buffer == R"("hello")") << buffer;
+   };
+
+   "write json from std::array<char, N> with null terminator"_test = [] {
+      // Array contains null terminator as part of the data
+      // The full array size should be used, including the null
+      std::array<char, 6> arr = {'h', 'e', 'l', 'l', 'o', '\0'};
+
+      std::string buffer{};
+      expect(not glz::write_json(arr, buffer));
+      // The null character is included in the output (escaped as \u0000 or similar)
+      expect(buffer.size() > 2) << "Buffer should contain data";
+      expect(buffer.front() == '"' && buffer.back() == '"') << "Should be quoted string";
+   };
+
+   "write json from std::array<char, N> with embedded null"_test = [] {
+      // Array with embedded null - should serialize full array
+      std::array<char, 5> arr = {'a', '\0', 'b', 'c', 'd'};
+
+      std::string buffer{};
+      expect(not glz::write_json(arr, buffer));
+      // Should contain all 5 characters, with embedded null escaped
+      expect(buffer.size() > 2) << buffer;
+   };
+
+   "const char* uses null-terminated semantics"_test = [] {
+      // const char* should still use null-terminated semantics for C API compatibility
+      const char* cstr = "c-string";
+
+      std::string buffer{};
+      expect(not glz::write_json(cstr, buffer));
+      expect(buffer == R"("c-string")") << buffer;
    };
 };
 
