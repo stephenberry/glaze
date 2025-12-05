@@ -1532,7 +1532,7 @@ namespace glz
                --ctx.indentation_level;
             }
             ++it;
-            if constexpr ((resizable<T> || is_inplace_vector<T>) && not Opts.append_arrays) {
+            if constexpr ((resizable<T> || is_inplace_vector<T>) && not check_append_arrays(Opts)) {
                value.clear();
 
                if constexpr (check_shrink_to_fit(Opts)) {
@@ -1544,7 +1544,7 @@ namespace glz
 
          const size_t ws_size = size_t(it - ws_start);
 
-         static constexpr bool should_append = (resizable<T> || is_inplace_vector<T>) && Opts.append_arrays;
+         static constexpr bool should_append = (resizable<T> || is_inplace_vector<T>) && check_append_arrays(Opts);
          if constexpr (not should_append) {
             const auto n = value.size();
 

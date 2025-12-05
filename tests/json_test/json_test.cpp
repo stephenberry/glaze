@@ -10631,10 +10631,15 @@ struct glz::meta<append_obj>
    static constexpr auto value = object("names", append_arrays<&T::names>, "arrays", append_arrays<&T::arrays>);
 };
 
+struct append_arrays_opts : glz::opts
+{
+   bool append_arrays = true;
+};
+
 suite append_arrays_tests = [] {
    "append_arrays vector"_test = [] {
       std::vector<int> v{};
-      constexpr glz::opts append_opts{.append_arrays = true};
+      constexpr append_arrays_opts append_opts{};
       expect(not glz::read<append_opts>(v, "[1,2,3]"));
       expect(v == std::vector<int>{1, 2, 3});
       expect(not glz::read<append_opts>(v, "[4,5,6]"));
@@ -10643,7 +10648,7 @@ suite append_arrays_tests = [] {
 
    "append_arrays deque"_test = [] {
       std::deque<int> v{};
-      constexpr glz::opts append_opts{.append_arrays = true};
+      constexpr append_arrays_opts append_opts{};
       expect(not glz::read<append_opts>(v, "[1,2,3]"));
       expect(v == std::deque<int>{1, 2, 3});
       expect(not glz::read<append_opts>(v, "[4,5,6]"));

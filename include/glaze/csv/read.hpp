@@ -497,7 +497,7 @@ namespace glz
       static void op(auto&& value, is_context auto&& ctx, It&& it, auto&& end)
       {
          // Clear existing data if not appending (only for resizable containers)
-         if constexpr (!Opts.append_arrays && resizable<T>) {
+         if constexpr (!check_append_arrays(Opts) && resizable<T>) {
             value.clear();
          }
 
@@ -1065,7 +1065,7 @@ namespace glz
          static constexpr auto HashInfo = hash_info<U>;
 
          // Clear existing data if not appending
-         if constexpr (!Opts.append_arrays) {
+         if constexpr (!check_append_arrays(Opts)) {
             value.clear();
          }
 
