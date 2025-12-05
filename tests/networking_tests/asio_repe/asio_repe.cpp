@@ -523,34 +523,29 @@ void custom_call_handler_test()
    custom_call_api api{};
    server.on(api);
 
-   // Set custom call handler that intercepts all calls using buffer pool API
+   // Set custom call handler that intercepts all calls using zero-copy API
    std::atomic<int> call_count{0};
    server.call = [&](std::span<const char> request, std::string& response_buffer) {
       ++call_count;
 
-      glz::repe::message request_msg;
-      glz::repe::message response_msg;
-
-      // Parse request
-      auto ec = glz::repe::from_buffer(request.data(), request.size(), request_msg);
-      if (ec != glz::error_code::none) {
-         glz::repe::encode_error_buffer(ec, response_buffer, "Failed to parse request");
+      // Zero-copy parse
+      auto result = glz::repe::parse_request(request);
+      if (!result) {
+         glz::repe::encode_error_buffer(glz::error_code::parse_error, response_buffer, "Failed to parse request");
          return;
       }
 
+      const auto& req = result.request;
+      glz::repe::response_builder resp{response_buffer};
+
       // Custom routing: if path starts with /custom, handle directly
-      if (request_msg.query.starts_with("/custom")) {
-         response_msg.body = R"({"custom":true})";
-         response_msg.header.id = request_msg.header.id;
-         response_msg.header.body_length = response_msg.body.size();
-         response_msg.header.ec = glz::error_code::none;
-         glz::repe::finalize_header(response_msg);
-         glz::repe::to_buffer(response_msg, response_buffer);
+      if (req.query.starts_with("/custom")) {
+         resp.reset(req);
+         resp.set_body_raw(R"({"custom":true})", glz::repe::body_format::JSON);
       }
       else {
-         // Forward to registry for other paths
-         server.registry.call(request_msg, response_msg);
-         glz::repe::to_buffer(response_msg, response_buffer);
+         // Forward to registry for other paths (zero-copy)
+         server.registry.call(request, response_buffer);
       }
    };
 
@@ -590,28 +585,25 @@ void custom_call_middleware_test()
    std::mutex log_mutex;
 
    server.call = [&](std::span<const char> request, std::string& response_buffer) {
-      thread_local glz::repe::message request_msg;
-      thread_local glz::repe::message response_msg;
-
-      // Parse request
-      auto ec = glz::repe::from_buffer(request.data(), request.size(), request_msg);
-      if (ec != glz::error_code::none) {
-         glz::repe::encode_error_buffer(ec, response_buffer, "Failed to parse request");
+      // Zero-copy parse
+      auto result = glz::repe::parse_request(request);
+      if (!result) {
+         glz::repe::encode_error_buffer(glz::error_code::parse_error, response_buffer, "Failed to parse request");
          return;
       }
+
+      const auto& req = result.request;
 
       // Pre-processing: log the query
       {
          std::lock_guard lock{log_mutex};
-         logged_queries.push_back(std::string{request_msg.query});
+         logged_queries.push_back(std::string{req.query});
       }
 
-      // Delegate to registry
-      server.registry.call(request_msg, response_msg);
+      // Delegate to registry (zero-copy)
+      server.registry.call(request, response_buffer);
 
-      // Post-processing could go here
-
-      glz::repe::to_buffer(response_msg, response_buffer);
+      // Post-processing could go here (response is in response_buffer)
    };
 
    server.run_async();

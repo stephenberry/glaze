@@ -10,8 +10,12 @@
 
 namespace glz
 {
-   /// Thread-safe buffer pool for coroutine-based servers
-   /// Thread_local is UNSAFE with Asio coroutines - use this instead
+   /// Thread-safe buffer pool for coroutine-based servers.
+   ///
+   /// thread_local buffers are unsafe with coroutines because when a coroutine
+   /// suspends (co_await), the thread may process other connections, overwriting
+   /// thread_local data. This pool provides per-connection buffers that survive
+   /// coroutine suspension.
    ///
    /// Usage:
    ///   buffer_pool pool{};

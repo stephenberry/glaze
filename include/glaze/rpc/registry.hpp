@@ -260,9 +260,12 @@ namespace glz
          });
       }
 
-      // Function to call methods - only available for REPE protocol
+      /// Message-based call for REPE protocol (deprecated)
+      /// @deprecated Use the zero-copy span-based overload instead:
+      ///             `call(std::span<const char>, std::string&)`
       template <class In = repe::message, class Out = repe::message>
-         requires(Proto == REPE) // call method is only available for REPE protocol
+         requires(Proto == REPE)
+      [[deprecated("Use call(std::span<const char>, std::string&) for zero-copy performance")]]
       void call(In&& in, Out&& out)
       {
          auto write_error = [&](std::string_view body) {
@@ -332,6 +335,8 @@ namespace glz
       }
 
       /// Span-based call for zero-copy processing (REPE protocol only)
+      /// Request is parsed in-place (query/body are views into the buffer).
+      /// Response is written directly to response_buffer.
       /// @param request Raw REPE message bytes
       /// @param response_buffer Buffer for response (will be resized, empty if no response)
       void call(std::span<const char> request, std::string& response_buffer)
@@ -343,8 +348,34 @@ namespace glz
          // Parse request with zero-copy (header copied to stack, query/body are views)
          auto result = repe::parse_request(request);
          if (!result) {
-            resp.reset();
-            resp.set_error(error_code::parse_error, "Failed to parse request");
+            // Use the specific error code from parse_result
+            // Note: parse_request copies the header before validation, so we can access it
+            resp.reset(result.request.hdr.id);
+
+            // Build appropriate error message based on error code
+            if (result.ec == error_code::version_mismatch) {
+               resp.set_error(result.ec, detail::build_version_error(result.request.hdr.version));
+            }
+            else if (result.ec == error_code::invalid_header) {
+               // Could be magic mismatch, length mismatch, or buffer too small
+               if (request.size() >= sizeof(repe::header)) {
+                  const auto& hdr = result.request.hdr;
+                  if (hdr.spec != repe::repe_magic) {
+                     resp.set_error(result.ec, detail::build_magic_error(hdr.spec));
+                  }
+                  else {
+                     // Length mismatch
+                     const uint64_t expected = sizeof(repe::header) + hdr.query_length + hdr.body_length;
+                     resp.set_error(result.ec, detail::build_length_error(expected, hdr.length));
+                  }
+               }
+               else {
+                  resp.set_error(result.ec, "Invalid header");
+               }
+            }
+            else {
+               resp.set_error(result.ec, "Failed to parse request");
+            }
             return;
          }
 
@@ -357,7 +388,7 @@ namespace glz
                return; // Silent ignore for unknown notifications (buffer stays empty)
             }
             resp.reset(req);
-            resp.set_error(error_code::method_not_found, "Unknown method");
+            resp.set_error(error_code::method_not_found, detail::build_invalid_query_error(req.query));
             return;
          }
 

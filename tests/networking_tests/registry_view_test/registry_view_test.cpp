@@ -265,13 +265,14 @@ suite registry_span_call_tests = [] {
       test_api api{};
       registry.on(api);
 
-      std::string bad_request(10, '\0'); // Too small
+      std::string bad_request(10, '\0'); // Too small (less than header size)
       std::string response_buf;
       registry.call(std::span<const char>{bad_request.data(), bad_request.size()}, response_buf);
 
       expect(!response_buf.empty()) << "Should have error response";
       auto result = glz::repe::parse_request({response_buf.data(), response_buf.size()});
-      expect(result.request.error() == glz::error_code::parse_error);
+      // Invalid request with too-small buffer returns invalid_header
+      expect(result.request.error() == glz::error_code::invalid_header);
    };
 
    "span_call_request_id_preserved"_test = [] {

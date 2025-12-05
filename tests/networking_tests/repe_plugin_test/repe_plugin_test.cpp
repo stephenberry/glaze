@@ -211,7 +211,8 @@ suite plugin_call_tests = [] {
       repe::message response{};
       auto ec = repe::from_buffer(result.data, result.size, response);
       expect(ec == glz::error_code::none);
-      expect(response.header.ec == glz::error_code::parse_error);
+      // Invalid data too small for header returns invalid_header
+      expect(response.header.ec == glz::error_code::invalid_header);
    };
 
    "registry_exception_handling"_test = [] {
