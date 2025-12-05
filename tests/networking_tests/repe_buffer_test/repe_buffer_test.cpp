@@ -1,6 +1,8 @@
 // Glaze Library
 // For the license information refer to glaze.hpp
 
+#include <span>
+
 #include "glaze/rpc/repe/buffer.hpp"
 #include "ut/ut.hpp"
 
@@ -466,6 +468,238 @@ suite decode_message_tests = [] {
       auto result = repe::decode_message(value, msg);
 
       expect(result.has_value()); // Should have error
+   };
+};
+
+// ============================================================
+// Zero-copy helper function tests
+// ============================================================
+
+suite is_notify_tests = [] {
+   "is_notify_true"_test = [] {
+      repe::message msg{};
+      msg.header.notify = 1;
+      msg.query = "/test";
+      repe::finalize_header(msg);
+
+      std::string buffer = repe::to_buffer(msg);
+      std::span<const char> span{buffer};
+
+      expect(repe::is_notify(span) == true);
+   };
+
+   "is_notify_false"_test = [] {
+      repe::message msg{};
+      msg.header.notify = 0;
+      msg.query = "/test";
+      repe::finalize_header(msg);
+
+      std::string buffer = repe::to_buffer(msg);
+      std::span<const char> span{buffer};
+
+      expect(repe::is_notify(span) == false);
+   };
+
+   "is_notify_too_small"_test = [] {
+      std::string small(10, '\0');
+      std::span<const char> span{small};
+
+      expect(repe::is_notify(span) == false);
+   };
+};
+
+suite extract_id_tests = [] {
+   "extract_id_basic"_test = [] {
+      repe::message msg{};
+      msg.header.id = 42;
+      msg.query = "/test";
+      repe::finalize_header(msg);
+
+      std::string buffer = repe::to_buffer(msg);
+      std::span<const char> span{buffer};
+
+      expect(repe::extract_id(span) == 42u);
+   };
+
+   "extract_id_large_value"_test = [] {
+      repe::message msg{};
+      msg.header.id = 0xDEADBEEFCAFE;
+      msg.query = "/test";
+      repe::finalize_header(msg);
+
+      std::string buffer = repe::to_buffer(msg);
+      std::span<const char> span{buffer};
+
+      expect(repe::extract_id(span) == 0xDEADBEEFCAFEu);
+   };
+
+   "extract_id_too_small"_test = [] {
+      std::string small(10, '\0');
+      std::span<const char> span{small};
+
+      expect(repe::extract_id(span) == 0u);
+   };
+};
+
+suite extract_query_span_tests = [] {
+   "extract_query_span_basic"_test = [] {
+      repe::message msg{};
+      msg.query = "/api/v1/users";
+      msg.body = "{}";
+      repe::finalize_header(msg);
+
+      std::string buffer = repe::to_buffer(msg);
+
+      // Use the pointer/size overload for span-like access
+      auto query = repe::extract_query(buffer.data(), buffer.size());
+
+      expect(query == "/api/v1/users");
+   };
+};
+
+suite validate_header_only_tests = [] {
+   "validate_header_only_valid"_test = [] {
+      repe::message msg{};
+      msg.query = "/test";
+      repe::finalize_header(msg);
+
+      std::string buffer = repe::to_buffer(msg);
+      std::span<const char> span{buffer};
+
+      auto ec = repe::validate_header_only(span);
+
+      expect(ec == glz::error_code::none);
+   };
+
+   "validate_header_only_too_small"_test = [] {
+      std::string small(10, '\0');
+      std::span<const char> span{small};
+
+      auto ec = repe::validate_header_only(span);
+
+      expect(ec == glz::error_code::invalid_header);
+   };
+
+   "validate_header_only_invalid_magic"_test = [] {
+      repe::message msg{};
+      msg.query = "/test";
+      repe::finalize_header(msg);
+
+      std::string buffer = repe::to_buffer(msg);
+      buffer[8] = 0xFF; // Corrupt magic byte
+      buffer[9] = 0xFF;
+      std::span<const char> span{buffer};
+
+      auto ec = repe::validate_header_only(span);
+
+      expect(ec == glz::error_code::invalid_header);
+   };
+
+   "validate_header_only_invalid_version"_test = [] {
+      repe::message msg{};
+      msg.query = "/test";
+      repe::finalize_header(msg);
+
+      std::string buffer = repe::to_buffer(msg);
+      buffer[10] = 99; // Invalid version
+      std::span<const char> span{buffer};
+
+      auto ec = repe::validate_header_only(span);
+
+      expect(ec == glz::error_code::version_mismatch);
+   };
+};
+
+suite encode_error_buffer_tests = [] {
+   "encode_error_buffer_basic"_test = [] {
+      std::string buffer;
+      repe::encode_error_buffer(glz::error_code::parse_error, buffer, "Test error message", 123);
+
+      expect(buffer.size() == sizeof(repe::header) + 18u); // "Test error message" is 18 chars
+
+      // Verify we can parse it back
+      repe::message msg{};
+      auto ec = repe::from_buffer(buffer, msg);
+
+      expect(ec == glz::error_code::none);
+      expect(msg.header.ec == glz::error_code::parse_error);
+      expect(msg.header.id == 123u);
+      expect(msg.body == "Test error message");
+   };
+
+   "encode_error_buffer_empty_message"_test = [] {
+      std::string buffer;
+      repe::encode_error_buffer(glz::error_code::invalid_header, buffer, "");
+
+      expect(buffer.size() == sizeof(repe::header));
+
+      repe::message msg{};
+      auto ec = repe::from_buffer(buffer, msg);
+
+      expect(ec == glz::error_code::none);
+      expect(msg.header.ec == glz::error_code::invalid_header);
+      expect(msg.body.empty());
+   };
+
+   "encode_error_buffer_string_view"_test = [] {
+      std::string buffer;
+      std::string_view error_msg = "Error from string_view";
+      repe::encode_error_buffer(glz::error_code::method_not_found, buffer, error_msg, 456);
+
+      repe::message msg{};
+      auto ec = repe::from_buffer(buffer, msg);
+
+      expect(ec == glz::error_code::none);
+      expect(msg.header.ec == glz::error_code::method_not_found);
+      expect(msg.header.id == 456u);
+      expect(msg.body == "Error from string_view");
+   };
+};
+
+suite make_error_response_tests = [] {
+   "make_error_response_basic"_test = [] {
+      std::string buffer = repe::make_error_response(glz::error_code::connection_failure, "Connection failed", 789);
+
+      repe::message msg{};
+      auto ec = repe::from_buffer(buffer, msg);
+
+      expect(ec == glz::error_code::none);
+      expect(msg.header.ec == glz::error_code::connection_failure);
+      expect(msg.header.id == 789u);
+      expect(msg.body == "Connection failed");
+   };
+
+   "make_error_response_default_id"_test = [] {
+      std::string buffer = repe::make_error_response(glz::error_code::timeout, "Timeout occurred");
+
+      repe::message msg{};
+      auto ec = repe::from_buffer(buffer, msg);
+
+      expect(ec == glz::error_code::none);
+      expect(msg.header.ec == glz::error_code::timeout);
+      expect(msg.header.id == 0u);
+      expect(msg.body == "Timeout occurred");
+   };
+};
+
+suite from_buffer_span_tests = [] {
+   "from_buffer_span_basic"_test = [] {
+      repe::message original{};
+      original.query = "/api/endpoint";
+      original.body = R"({"key": "value"})";
+      original.header.id = 12345;
+      repe::finalize_header(original);
+
+      std::string buffer = repe::to_buffer(original);
+
+      repe::message restored{};
+      // Use the pointer/size overload for span-like access
+      auto ec = repe::from_buffer(buffer.data(), buffer.size(), restored);
+
+      expect(ec == glz::error_code::none);
+      expect(restored.query == original.query);
+      expect(restored.body == original.body);
+      expect(restored.header.id == original.header.id);
    };
 };
 

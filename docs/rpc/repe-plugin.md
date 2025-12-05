@@ -124,7 +124,7 @@ Creates a properly formatted REPE error response:
 namespace glz::repe {
     void plugin_error_response(
         error_code ec,
-        const std::string& error_msg,
+        std::string_view error_msg,
         uint64_t id = 0
     );
 }
@@ -135,11 +135,11 @@ namespace glz::repe {
 - `error_msg` - Human-readable error message for the body
 - `id` - Request ID to echo back (default: 0)
 
-The response is written to `plugin_response_buffer`.
+The response is written to `plugin_response_buffer`. This function uses `encode_error_buffer` internally for zero-copy error encoding.
 
 ### `plugin_call`
 
-Template function that dispatches a REPE request to a registry:
+Template function that dispatches a REPE request to a registry using the zero-copy API:
 
 ```cpp
 namespace glz::repe {
@@ -161,10 +161,17 @@ namespace glz::repe {
 
 **Note:** Plugin initialization should be done via `repe_plugin_init` before any calls. The plugin is responsible for ensuring initialization before calling `plugin_call`.
 
+**Zero-Copy Implementation:**
+This function uses the registry's span-based call internally:
+```cpp
+registry.call(std::span<const char>{request, request_size}, plugin_response_buffer);
+```
+The request is parsed with zero-copy (query and body are views into the original buffer), and the response is written directly to the plugin's thread-local buffer.
+
 **Error Handling:**
-- Deserialization failures → `error_code::parse_error`
-- Registry call exceptions → `error_code::invalid_call` (ID preserved)
-- Unknown exceptions → `error_code::invalid_call`
+- Parse failures → `error_code::parse_error`
+- Registry call exceptions → caught and returned as error responses
+- Unknown endpoints → `error_code::method_not_found`
 
 ## Plugin Implementation Example
 
@@ -349,29 +356,35 @@ int main() {
     glz::asio_server server{};
     server.port = 8080;
 
-    // Custom call handler routes to plugins
-    server.call = [&](glz::repe::message& request, glz::repe::message& response) {
+    // Custom call handler routes to plugins (zero-copy API)
+    server.call = [&](std::span<const char> request, std::string& response_buffer) {
+        // Zero-copy parse to get the query for routing
+        auto parse_result = glz::repe::parse_request(request);
+        if (!parse_result) {
+            glz::repe::encode_error_buffer(
+                glz::error_code::parse_error,
+                response_buffer,
+                "Failed to parse request"
+            );
+            return;
+        }
+
+        const auto& req = parse_result.request;
+
         for (const auto& plugin : plugins) {
-            if (request.query.starts_with(plugin.root_path)) {
-                std::string buffer;
-                glz::repe::to_buffer(request, buffer);
+            if (req.query.starts_with(plugin.root_path)) {
+                // Forward raw request to plugin (zero-copy)
+                auto result = plugin.call(request.data(), request.size());
 
-                auto result = plugin.call(buffer.data(), buffer.size());
-
-                auto ec = glz::repe::from_buffer(result.data, result.size, response);
-                if (ec != glz::error_code::none) {
-                    glz::repe::encode_error(ec, response, "Failed to parse plugin response");
-                    glz::repe::finalize_header(response);
-                }
+                // Copy plugin response to our buffer
+                response_buffer.assign(result.data, result.size);
                 return;
             }
         }
 
-        glz::repe::encode_error(
-            glz::repe::error_code::method_not_found, response,
-            "No plugin registered for path"
-        );
-        glz::repe::finalize_header(response);
+        glz::repe::response_builder resp{response_buffer};
+        resp.reset(req);
+        resp.set_error(glz::error_code::method_not_found, "No plugin registered for path");
     };
 
     server.run();
@@ -439,8 +452,8 @@ See [REPE RPC](repe-rpc.md) for more details on thread-safe classes.
 | Symbol | Description |
 |--------|-------------|
 | `glz::repe::plugin_response_buffer` | Thread-local response buffer |
-| `glz::repe::plugin_error_response()` | Create formatted REPE error |
-| `glz::repe::plugin_call()` | Dispatch request to registry |
+| `glz::repe::plugin_error_response()` | Create formatted REPE error (zero-copy) |
+| `glz::repe::plugin_call()` | Dispatch request to registry (zero-copy) |
 
 ## Compatibility
 
