@@ -1,0 +1,112 @@
+name: C++20 Modules
+
+on:
+  push:
+    branches:
+      - main
+      - feature/*
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+  pull_request:
+    branches:
+      - main
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+  workflow_dispatch:
+
+jobs:
+  clang-modules:
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        clang: [20]
+        build_type: [Release]
+        std: [23]
+
+    env:
+      CC: clang-${{matrix.clang}}
+      CXX: clang++-${{matrix.clang}}
+      LLVM_VERSION: ${{matrix.clang}}
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Clang and Ninja
+      run: |
+        wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
+        echo "deb http://apt.llvm.org/noble/ llvm-toolchain-noble-${{matrix.clang}} main" | sudo tee /etc/apt/sources.list.d/llvm.list
+        sudo apt-get clean
+        sudo apt-get update
+        sudo apt-get install -y --fix-missing clang-${{matrix.clang}} libc++-${{matrix.clang}}-dev libc++abi-${{matrix.clang}}-dev ninja-build
+
+    - name: Set path for clang
+      run: |
+        echo "PATH=/usr/lib/llvm-${{matrix.clang}}/bin:$PATH" >> $GITHUB_ENV
+        clang-${{matrix.clang}} --version
+        clang++-${{matrix.clang}} --version
+
+    - name: Configure CMake with Modules
+      run: |
+        cmake -B ${{github.workspace}}/build -G Ninja \
+          -DCMAKE_BUILD_TYPE=${{matrix.build_type}} \
+          -DCMAKE_CXX_STANDARD=${{matrix.std}} \
+          -DCMAKE_C_COMPILER=${{env.CC}} \
+          -DCMAKE_CXX_COMPILER=${{env.CXX}} \
+          -DCMAKE_CXX_FLAGS="-stdlib=libc++" \
+          -DCMAKE_EXE_LINKER_FLAGS="-stdlib=libc++ -lc++abi" \
+          -Dglaze_BUILD_MODULES=ON
+
+    - name: Build Module Tests
+      run: cmake --build build --target json_module_test -j $(nproc)
+
+    - name: Run Module Tests
+      run: ./build/tests/module_test/json_module_test
+
+  gcc-modules:
+    runs-on: ubuntu-24.04
+    container:
+      image: gcc:15
+
+    strategy:
+      fail-fast: false
+      matrix:
+        build_type: [Release]
+        std: [23]
+
+    env:
+      CC: gcc
+      CXX: g++
+
+    steps:
+    - name: Install build dependencies
+      env:
+        DEBIAN_FRONTEND: noninteractive
+      run: |
+        apt-get update
+        apt-get install -y --no-install-recommends \
+          ca-certificates \
+          cmake \
+          git \
+          libssl-dev \
+          ninja-build \
+          python3
+        update-ca-certificates
+
+    - uses: actions/checkout@v4
+
+    - name: Configure CMake with Modules
+      run: |
+        cmake -B build -G Ninja \
+          -DCMAKE_BUILD_TYPE=${{matrix.build_type}} \
+          -DCMAKE_CXX_STANDARD=${{matrix.std}} \
+          -Dglaze_BUILD_MODULES=ON
+
+    - name: Build Module Tests
+      run: cmake --build build --target json_module_test -j $(nproc)
+
+    - name: Run Module Tests
+      run: ./build/tests/module_test/json_module_test

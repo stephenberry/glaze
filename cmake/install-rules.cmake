@@ -19,6 +19,16 @@ install(
     INCLUDES DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
 )
 
+# Install module targets when modules are enabled
+if(glaze_BUILD_MODULES)
+    install(
+        TARGETS glaze_json_module
+        EXPORT glazeTargets
+        ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
+        FILE_SET CXX_MODULES DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
+    )
+endif()
+
 write_basic_package_version_file(
     "${package}ConfigVersion.cmake"
     COMPATIBILITY SameMajorVersion

@@ -54,7 +54,7 @@ namespace glz
          }
       }();
 
-      constexpr size_t max_pure_reflection_count = 128;
+      inline constexpr size_t max_pure_reflection_count = 128;
    }
 
    template <class T, size_t N = detail::count_members<T>>

@@ -7,7 +7,7 @@ This guide covers some of the ways to install and integrate the Glaze JSON libra
 ### Compiler Support
 - **C++23** standard required
 - **Clang 17+**
-- **GCC 12+** 
+- **GCC 13+**
 - **MSVC 2022+**
 - **Apple Clang (latest Xcode)**
 
@@ -164,6 +164,117 @@ For cross-compilation to ARM or other architectures:
 ```cmake
 set(glaze_ENABLE_AVX2 OFF)
 ```
+
+## C++20 Module Support
+
+Glaze provides opt-in C++20 module wrappers for cleaner imports and potentially faster compile times.
+
+### Requirements
+
+- **CMake 3.28+** (for `FILE_SET CXX_MODULES` support)
+- **Ninja** or **Visual Studio 17.4+** generator (Make does not support modules)
+- **Compiler with C++20 module support**:
+  - LLVM Clang 20+ with libc++ (recommended)
+  - GCC 15+ (Linux only)
+  - MSVC 19.34+ (VS 2022 17.4+)
+
+> **Note:** Apple Clang is not supported for modules. See [Troubleshooting](#troubleshooting) for platform-specific guidance.
+
+### Enabling Modules
+
+```cmake
+cmake_minimum_required(VERSION 3.28)
+project(MyProject LANGUAGES CXX)
+
+set(CMAKE_CXX_STANDARD 23)
+
+include(FetchContent)
+FetchContent_Declare(
+  glaze
+  GIT_REPOSITORY https://github.com/stephenberry/glaze.git
+  GIT_TAG main
+  GIT_SHALLOW TRUE
+)
+
+# Enable module support (set cache entry before the project loads)
+set(glaze_BUILD_MODULES ON CACHE BOOL "" FORCE)
+
+FetchContent_MakeAvailable(glaze)
+
+add_executable(myapp main.cpp)
+target_link_libraries(myapp PRIVATE glaze::json_module)
+
+# Enable module scanning for your target
+set_target_properties(myapp PROPERTIES CXX_SCAN_FOR_MODULES ON)
+```
+
+### Building with Modules
+
+Modules require the Ninja generator:
+
+```bash
+cmake -B build -G Ninja -Dglaze_BUILD_MODULES=ON
+cmake --build build
+```
+
+### Usage
+
+When using modules, include standard library headers **before** the module import to avoid ODR conflicts:
+
+```cpp
+// Standard headers first
+#include <string>
+#include <vector>
+
+// Then import the module
+import glaze.json;
+
+struct Person {
+    std::string name;
+    int age;
+};
+
+int main() {
+    Person person{"John", 30};
+
+    // Write to JSON
+    auto json = glz::write_json(person);
+    if (json) {
+        std::cout << json.value() << std::endl;
+    }
+
+    // Read from JSON
+    auto result = glz::read_json<Person>(R"({"name":"Jane","age":25})");
+    if (result) {
+        std::cout << result->name << std::endl;
+    }
+}
+```
+
+### macOS with LLVM Clang
+
+On macOS, use Homebrew's LLVM Clang (not Apple Clang) and set the SDK path:
+
+```bash
+SDKROOT=$(xcrun --show-sdk-path)
+cmake -B build -G Ninja \
+  -DCMAKE_CXX_COMPILER=/opt/homebrew/opt/llvm/bin/clang++ \
+  -DCMAKE_C_COMPILER=/opt/homebrew/opt/llvm/bin/clang \
+  -DCMAKE_OSX_SYSROOT="$SDKROOT" \
+  -Dglaze_BUILD_MODULES=ON
+cmake --build build
+```
+
+### Troubleshooting
+
+**"The compiler does not provide a way to discover import graph dependencies"**
+- Apple Clang does not support CMake's module dependency scanning (P1689)
+- Solution: Use LLVM Clang 20+ installed via Homebrew on macOS
+
+**Module not found / import errors**
+- Ensure you're using the Ninja generator (`-G Ninja`)
+- Make generators do not support C++20 modules
+- Ensure `glaze_BUILD_MODULES=ON` is set before `FetchContent_MakeAvailable`
 
 ## Example Project Setup
 
