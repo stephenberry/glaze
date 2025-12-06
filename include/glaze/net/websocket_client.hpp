@@ -59,25 +59,39 @@ namespace glz
 
          void cancel_all()
          {
-            if (resolver_) {
-               resolver_->cancel();
-            }
+            // Clear handlers first to prevent callbacks during cleanup
+            on_message.reset();
+            on_open.reset();
+            on_close.reset();
+            on_error.reset();
 
-            if (tcp_socket_ && tcp_socket_->is_open()) {
-               asio::error_code ec;
-               tcp_socket_->close(ec);
-            }
-#ifdef GLZ_ENABLE_SSL
-            if (ssl_socket_) {
-               asio::error_code ec;
-               ssl_socket_->lowest_layer().close(ec);
-            }
-#endif
-
+            // Force close the connection - this closes the socket immediately,
+            // ensuring it's deregistered from the reactor before io_context destruction
             {
                std::lock_guard<std::mutex> lock(connection_mutex);
+               std::visit(
+                  [](auto&& conn) {
+                     if constexpr (!std::is_same_v<std::decay_t<decltype(conn)>, std::monostate>) {
+                        if (conn) {
+                           conn->force_close();
+                        }
+                     }
+                  },
+                  connection);
                connection = std::monostate{};
             }
+
+            // Cancel resolver
+            if (resolver_) {
+               resolver_->cancel();
+               resolver_.reset();
+            }
+
+            // Reset socket pointers (sockets already closed via force_close above)
+            tcp_socket_.reset();
+#ifdef GLZ_ENABLE_SSL
+            ssl_socket_.reset();
+#endif
          }
 
          asio::ip::tcp::socket& get_tcp_socket_ref()
@@ -355,12 +369,8 @@ namespace glz
 
       ~websocket_client()
       {
-         // Stop io_context if we're the sole owner
-         if (impl_->ctx.use_count() == 1) {
-            impl_->ctx->stop();
-         }
-
-         // Cancel pending operations
+         // Cancel pending operations - this closes sockets and releases the connection.
+         // Sockets must be closed before io_context is destroyed.
          impl_->cancel_all();
       }
 

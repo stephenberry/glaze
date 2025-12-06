@@ -489,6 +489,10 @@ namespace glz
             }
          }
          threads.clear();
+
+         // websocket_handlers_ destruction will call close_all_connections() on each
+         // websocket_server, which force-closes all sockets. This ensures sockets are
+         // deregistered from the reactor BEFORE io_context is destroyed.
       }
 
       inline http_server& bind(std::string_view address, uint16_t port)
@@ -1402,7 +1406,7 @@ namespace glz
 
          // Create WebSocket connection and start it
          // Need to include websocket_connection.hpp for this to work
-         auto ws_conn = std::make_shared<websocket_connection<asio::ip::tcp::socket>>(socket, ws_it->second.get());
+         auto ws_conn = std::make_shared<websocket_connection<asio::ip::tcp::socket>>(socket, ws_it->second);
          ws_conn->start(req);
       }
 
