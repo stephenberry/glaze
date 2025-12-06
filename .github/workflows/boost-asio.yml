@@ -18,12 +18,10 @@ on:
 
 jobs:
   build:
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-22.04]
-        platform_version: ["22.04"]
         compiler:
           - { name: clang, version: 17 }
           - { name: clang, version: 18 }
@@ -58,7 +56,6 @@ jobs:
         uses: MarkusJx/install-boost@v2
         with:
           boost_version: ${{ matrix.boost_version }}
-          platform_version: ${{ matrix.platform_version }}
 
       - name: Configure CMake
         run: |
