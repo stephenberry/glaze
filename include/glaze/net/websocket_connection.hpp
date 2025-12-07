@@ -261,6 +261,13 @@ namespace glz
    template <typename SocketType = asio::ip::tcp::socket>
    struct websocket_connection;
 
+   // Base class for type-erased connection closing
+   struct closeable_connection
+   {
+      virtual ~closeable_connection() = default;
+      virtual void force_close() = 0;
+   };
+
    // WebSocket server class
    //
    // Message Handler Lifetime:
@@ -287,6 +294,36 @@ namespace glz
       using validate_handler = std::function<bool(const request&)>;
 
       websocket_server() = default;
+
+      ~websocket_server() { close_all_connections(); }
+
+      // Close all active connections - called on server shutdown
+      void close_all_connections()
+      {
+         std::lock_guard<std::mutex> lock(connections_mutex_);
+         for (auto& weak_conn : connections_) {
+            if (auto conn = weak_conn.lock()) {
+               conn->force_close();
+            }
+         }
+         connections_.clear();
+      }
+
+      // Register a connection for tracking (called by websocket_connection)
+      void register_connection(std::shared_ptr<closeable_connection> conn)
+      {
+         std::lock_guard<std::mutex> lock(connections_mutex_);
+         connections_.push_back(conn);
+      }
+
+      // Remove expired weak_ptrs (optional cleanup, called periodically or on unregister)
+      void cleanup_expired_connections()
+      {
+         std::lock_guard<std::mutex> lock(connections_mutex_);
+         connections_.erase(std::remove_if(connections_.begin(), connections_.end(),
+                                           [](const std::weak_ptr<closeable_connection>& w) { return w.expired(); }),
+                            connections_.end());
+      }
 
       // Configuration
       void set_max_message_size(size_t size) { max_message_size_ = size; }
@@ -353,6 +390,10 @@ namespace glz
       close_handler close_handler_;
       error_handler error_handler_;
       validate_handler validate_handler_;
+
+      // Connection tracking for clean shutdown
+      std::mutex connections_mutex_;
+      std::vector<std::weak_ptr<closeable_connection>> connections_;
    };
 
    // WebSocket connection class - implementations come after websocket_server
@@ -365,11 +406,13 @@ namespace glz
    // is only valid for the duration of the callback. Copy the data if you need to
    // retain it beyond the callback scope.
    template <typename SocketType>
-   struct websocket_connection : public std::enable_shared_from_this<websocket_connection<SocketType>>
+   struct websocket_connection : public closeable_connection,
+                                 public std::enable_shared_from_this<websocket_connection<SocketType>>
    {
      public:
-      inline websocket_connection(std::shared_ptr<SocketType> socket, websocket_server* server = nullptr)
-         : socket_(socket), server_(server)
+      inline websocket_connection(std::shared_ptr<SocketType> socket,
+                                  std::weak_ptr<websocket_server> server = std::weak_ptr<websocket_server>{})
+         : socket_(socket), server_(std::move(server))
       {
          // Try to get remote endpoint, but don't fail if it's not available yet
          try {
@@ -385,25 +428,18 @@ namespace glz
             // Endpoint not available yet (e.g., for client mode before connection)
             // Will be set later if needed
          }
-         if (server_) {
-            max_message_size_ = server_->get_max_message_size();
+         if (auto srv = server_.lock()) {
+            max_message_size_ = srv->get_max_message_size();
          }
       }
 
       ~websocket_connection()
       {
-         // Close the socket BEFORE handlers are destroyed to prevent
-         // cancelled async operations from invoking already-destroyed handlers.
-         // Member destruction order would destroy handlers first (declared last),
-         // then socket (declared first), which could cause use-after-free.
-         if (socket_) {
-            asio::error_code ec;
-            socket_->close(ec);
-            // Error code intentionally ignored - we're destroying anyway
-            socket_.reset();
-         }
-
-         // Clear handlers to prevent any use-after-free if they're somehow invoked
+         // Clear handlers first to prevent any callbacks during destruction.
+         // Don't close the socket here - let it close naturally when the shared_ptr
+         // is destroyed. Closing during destruction can cause issues if this destructor
+         // runs during io_context destruction (cancelled operations try to interact
+         // with a destroying io_context).
          client_message_handler_ = nullptr;
          client_close_handler_ = nullptr;
          client_error_handler_ = nullptr;
@@ -447,6 +483,19 @@ namespace glz
          // frame, that endpoint SHOULD Close the WebSocket Connection"
          // The socket will be closed when we receive the close response in handle_frame().
          send_close_frame(code, reason, false);
+      }
+
+      // Force close the connection immediately (closes socket without handshake).
+      // Used during server shutdown to ensure clean destruction.
+      void force_close() override
+      {
+         is_closing_ = true;
+         closed_ = true;
+         if (socket_) {
+            asio::error_code ec;
+            socket_->close(ec);
+            socket_.reset();
+         }
       }
 
       // Get remote endpoint information
@@ -506,9 +555,11 @@ namespace glz
          }
 
          // Check if server wants to validate this connection
-         if (server_ && !server_->validate_connection(req)) {
-            do_close();
-            return;
+         if (auto srv = server_.lock()) {
+            if (!srv->validate_connection(req)) {
+               do_close();
+               return;
+            }
          }
 
          // Generate accept key
@@ -533,8 +584,8 @@ namespace glz
                            [self, req, response_buffer, socket](std::error_code ec, std::size_t) {
                               if (ec) {
                                  self->is_closing_ = true;
-                                 if (self->server_) {
-                                    self->server_->notify_error(self, ec);
+                                 if (auto srv = self->server_.lock()) {
+                                    srv->notify_error(self, ec);
                                  }
                                  self->do_close();
                                  return;
@@ -542,9 +593,10 @@ namespace glz
 
                               self->handshake_complete_ = true;
 
-                              // Notify server of successful connection
-                              if (self->server_) {
-                                 self->server_->notify_open(self, req);
+                              // Register with server for clean shutdown tracking
+                              if (auto srv = self->server_.lock()) {
+                                 srv->register_connection(self);
+                                 srv->notify_open(self, req);
                               }
 
                               // Start reading frames
@@ -556,8 +608,8 @@ namespace glz
       {
          if (ec) {
             is_closing_ = true;
-            if (server_) {
-               server_->notify_error(this->shared_from_this(), ec);
+            if (auto srv = server_.lock()) {
+               srv->notify_error(this->shared_from_this(), ec);
             }
             else if (client_error_handler_) {
                client_error_handler_(ec);
@@ -691,8 +743,8 @@ namespace glz
                }
 
                std::string_view message_view(reinterpret_cast<const char*>(payload), length);
-               if (server_) {
-                  server_->notify_message(this->shared_from_this(), message_view, opcode);
+               if (auto srv = server_.lock()) {
+                  srv->notify_message(this->shared_from_this(), message_view, opcode);
                }
                else if (client_message_handler_) {
                   client_message_handler_(message_view, opcode);
@@ -732,8 +784,8 @@ namespace glz
 
                std::string_view message_view(reinterpret_cast<const char*>(message_buffer_.data()),
                                              message_buffer_.size());
-               if (server_) {
-                  server_->notify_message(this->shared_from_this(), message_view, current_opcode_);
+               if (auto srv = server_.lock()) {
+                  srv->notify_message(this->shared_from_this(), message_view, current_opcode_);
                }
                else if (client_message_handler_) {
                   client_message_handler_(message_view, current_opcode_);
@@ -761,10 +813,11 @@ namespace glz
             close_code_ = code;
             close_reason_ = std::move(reason);
 
-            if (!is_closing_) {
-               // Peer initiated close - mark as closing and send response
+            // Atomically check and set is_closing_ to handle race with close() method
+            bool expected = false;
+            if (is_closing_.compare_exchange_strong(expected, true)) {
+               // Peer initiated close - we successfully marked as closing, send response
                // RFC 6455: "the endpoint MUST send a Close frame in response"
-               is_closing_ = true;
                // Send close frame and schedule socket close after write completes
                send_close_frame(code, {}, true);
             }
@@ -900,8 +953,8 @@ namespace glz
                                     self->write_queue_.clear();
                                     self->close_after_write_ = false;
                                  }
-                                 if (self->server_) {
-                                    self->server_->notify_error(self, ec);
+                                 if (auto srv = self->server_.lock()) {
+                                    srv->notify_error(self, ec);
                                  }
                                  else if (self->client_error_handler_) {
                                     self->client_error_handler_(ec);
@@ -1031,8 +1084,8 @@ namespace glz
             return; // Already closed
          }
 
-         if (server_) {
-            server_->notify_close(this->shared_from_this(), close_code_, close_reason_);
+         if (auto srv = server_.lock()) {
+            srv->notify_close(this->shared_from_this(), close_code_, close_reason_);
          }
          else if (client_close_handler_) {
             client_close_handler_(close_code_, close_reason_);
@@ -1046,7 +1099,7 @@ namespace glz
       }
 
       std::shared_ptr<SocketType> socket_;
-      websocket_server* server_;
+      std::weak_ptr<websocket_server> server_;
       std::array<uint8_t, 16384> read_buffer_;
       std::vector<uint8_t> frame_buffer_;
       std::vector<uint8_t> message_buffer_;
