@@ -1,10 +1,9 @@
 // Discord message performance tests - split from json_performance.cpp for faster compilation
 // This file contains large struct definitions that cause significant template instantiation
-#include "json_perf_common.hpp"
-
 #include <optional>
 
 #include "glaze/glaze.hpp"
+#include "json_perf_common.hpp"
 #include "ut/ut.hpp"
 
 using namespace ut;
@@ -430,10 +429,6 @@ auto generic_tester()
    return r;
 }
 
-suite discord_test = [] {
-   "discord"_test = [] {
-      generic_tester<discord_message, glz::opts{}>();
-   };
-};
+suite discord_test = [] { "discord"_test = [] { generic_tester<discord_message, glz::opts{}>(); }; };
 
 int main() { return 0; }

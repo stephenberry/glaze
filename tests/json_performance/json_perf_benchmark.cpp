@@ -1,11 +1,10 @@
 // Benchmark performance tests - split from json_performance.cpp for faster compilation
 // This file tests large objects with 26 vector fields
-#include "json_perf_common.hpp"
-
 #include <limits>
 #include <random>
 
 #include "glaze/glaze.hpp"
+#include "json_perf_common.hpp"
 #include "ut/ut.hpp"
 
 using namespace ut;
@@ -343,10 +342,6 @@ auto benchmark_tester()
    return r;
 }
 
-suite benchmark_test = [] {
-   "benchmark"_test = [] {
-      benchmark_tester<glz::opts{}>();
-   };
-};
+suite benchmark_test = [] { "benchmark"_test = [] { benchmark_tester<glz::opts{}>(); }; };
 
 int main() { return 0; }
