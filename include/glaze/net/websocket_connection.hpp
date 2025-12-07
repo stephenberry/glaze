@@ -320,10 +320,9 @@ namespace glz
       void cleanup_expired_connections()
       {
          std::lock_guard<std::mutex> lock(connections_mutex_);
-         connections_.erase(
-            std::remove_if(connections_.begin(), connections_.end(),
-                           [](const std::weak_ptr<closeable_connection>& w) { return w.expired(); }),
-            connections_.end());
+         connections_.erase(std::remove_if(connections_.begin(), connections_.end(),
+                                           [](const std::weak_ptr<closeable_connection>& w) { return w.expired(); }),
+                            connections_.end());
       }
 
       // Configuration
