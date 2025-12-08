@@ -1,7 +1,6 @@
 // Object performance tests - split from json_performance.cpp for faster compilation
-#include "json_perf_common.hpp"
-
 #include "glaze/glaze.hpp"
+#include "json_perf_common.hpp"
 #include "ut/ut.hpp"
 
 using namespace ut;
@@ -207,10 +206,6 @@ auto glaze_test()
    return r;
 }
 
-suite object_performance = [] {
-   "object_performance"_test = [] {
-      glaze_test<glz::opts{}>();
-   };
-};
+suite object_performance = [] { "object_performance"_test = [] { glaze_test<glz::opts{}>(); }; };
 
 int main() { return 0; }
