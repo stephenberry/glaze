@@ -623,6 +623,14 @@ namespace glz
       // IMPORTANT: Must be set before calling run() and should not be modified during execution.
       std::function<void(std::span<const char> request, std::string& response_buffer)> call{};
 
+      // Callback invoked after the server starts listening and is ready to accept connections.
+      // Useful for synchronization in tests (e.g., with std::latch).
+      std::function<void()> on_listen{};
+
+      // Whether to set SO_REUSEADDR on the acceptor socket.
+      // Allows rebinding to a port in TIME_WAIT state.
+      bool reuse_address = false;
+
       ~asio_server()
       {
          stop();
@@ -680,10 +688,16 @@ namespace glz
          asio::ip::tcp::acceptor acceptor(executor);
          asio::ip::tcp::endpoint endpoint{asio::ip::tcp::v6(), port};
          acceptor.open(endpoint.protocol());
-         acceptor.set_option(asio::ip::tcp::acceptor::reuse_address(true));
+         if (reuse_address) {
+            acceptor.set_option(asio::ip::tcp::acceptor::reuse_address(true));
+         }
          acceptor.bind(endpoint);
          acceptor.listen();
          port = acceptor.local_endpoint().port();
+
+         if (on_listen) {
+            on_listen();
+         }
 
          // Start the listener coroutine
          asio::co_spawn(*ctx, listener(std::move(acceptor)), asio::detached);
@@ -790,28 +804,33 @@ namespace glz
                }
             }
          }
-         catch (const std::exception& e) {
-            // Check for EOF which indicates normal client disconnect
-            // Handle both std::system_error (standalone Asio, modern Boost)
-            // and boost::system::system_error (older Boost versions)
-            bool is_eof_error = false;
-
-            if (auto* sys_err = dynamic_cast<const std::system_error*>(&e)) {
-               is_eof_error = (sys_err->code() == asio::error::eof);
+         catch (const asio::system_error& e) {
+            // EOF indicates normal client disconnect, not an error
+            if (e.code() == asio::error::eof) {
+               co_return;
             }
+            if (error_handler) {
+               error_handler(e.what());
+            }
+            else {
+               std::fprintf(stderr, "glz::asio_server error: %s\n", e.what());
+            }
+         }
 #if defined(GLZ_USING_BOOST_ASIO)
-            // For older Boost versions where system_error doesn't derive from std::system_error
-            if (!is_eof_error) {
-               if (auto* boost_err = dynamic_cast<const boost::system::system_error*>(&e)) {
-                  is_eof_error = (boost_err->code() == boost::asio::error::eof);
-               }
+         catch (const boost::system::system_error& e) {
+            // EOF indicates normal client disconnect, not an error
+            if (e.code() == boost::asio::error::eof) {
+               co_return;
             }
+            if (error_handler) {
+               error_handler(e.what());
+            }
+            else {
+               std::fprintf(stderr, "glz::asio_server error: %s\n", e.what());
+            }
+         }
 #endif
-
-            if (is_eof_error) {
-               co_return; // Normal client disconnect, not an error
-            }
-
+         catch (const std::exception& e) {
             if (error_handler) {
                error_handler(e.what());
             }

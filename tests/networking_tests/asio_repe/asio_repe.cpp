@@ -6,6 +6,7 @@
 using namespace ut;
 
 #include <iostream>
+#include <latch>
 #include <thread>
 
 #include "glaze/ext/glaze_asio.hpp"
@@ -21,7 +22,10 @@ struct notify_api
 void notify_test()
 {
    static constexpr int16_t port = 8431;
+   std::latch ready{1};
    glz::asio_server server{.port = port, .concurrency = 4};
+   server.reuse_address = true;
+   server.on_listen = [&] { ready.count_down(); };
 
    std::future<void> server_thread = std::async([&] {
       try {
@@ -34,7 +38,7 @@ void notify_test()
       }
    });
 
-   std::this_thread::sleep_for(std::chrono::milliseconds(100));
+   ready.wait();
 
    try {
       glz::asio_client client{"localhost", std::to_string(port)};
@@ -71,8 +75,11 @@ struct my_data
 void async_clients_test()
 {
    static constexpr int16_t port = 8431;
+   std::latch ready{1};
 
    glz::asio_server server{.port = port, .concurrency = 4};
+   server.reuse_address = true;
+   server.on_listen = [&] { ready.count_down(); };
 
    std::future<void> server_thread = std::async([&] {
       try {
@@ -85,7 +92,7 @@ void async_clients_test()
       }
    });
 
-   std::this_thread::sleep_for(std::chrono::milliseconds(100));
+   ready.wait();
 
    try {
       glz::asio_client client{"localhost", std::to_string(port)};
@@ -131,8 +138,11 @@ struct api
 void asio_client_test()
 {
    static constexpr int16_t port = 8431;
+   std::latch ready{1};
 
    glz::asio_server server{.port = port, .concurrency = 4};
+   server.reuse_address = true;
+   server.on_listen = [&] { ready.count_down(); };
 
    std::future<void> server_thread = std::async([&] {
       std::cout << "Server active...\n";
@@ -149,7 +159,7 @@ void asio_client_test()
       std::cout << "Server closed...\n";
    });
 
-   std::this_thread::sleep_for(std::chrono::seconds(1));
+   ready.wait();
 
    try {
       constexpr auto N = 100;
@@ -231,8 +241,11 @@ struct api2
 void async_calls()
 {
    static constexpr int16_t port = 8765;
+   std::latch ready{1};
 
    glz::asio_server server{.port = port, .concurrency = 2};
+   server.reuse_address = true;
+   server.on_listen = [&] { ready.count_down(); };
 
    std::future<void> server_thread = std::async([&] {
       api2 methods{};
@@ -240,7 +253,7 @@ void async_calls()
       server.run();
    });
 
-   std::this_thread::sleep_for(std::chrono::milliseconds(100));
+   ready.wait();
 
    try {
       glz::asio_client client{"localhost", std::to_string(port)};
@@ -282,8 +295,11 @@ struct raw_json_api
 void raw_json_tests()
 {
    static constexpr int16_t port = 8765;
+   std::latch ready{1};
 
    glz::asio_server server{.port = port, .concurrency = 2};
+   server.reuse_address = true;
+   server.on_listen = [&] { ready.count_down(); };
 
    std::future<void> server_thread = std::async([&] {
       api2 methods{};
@@ -292,7 +308,7 @@ void raw_json_tests()
       server.run();
    });
 
-   std::this_thread::sleep_for(std::chrono::milliseconds(100));
+   ready.wait();
 
    glz::raw_json results{};
 
@@ -718,12 +734,9 @@ suite connection_state_tests = [] {
       int age{};
       client.get("/age", age);
 
-      // Shutdown server
+      // Shutdown server - destructor joins threads so shutdown is complete after reset()
       server->stop();
       server.reset();
-
-      // Give the server time to fully shutdown
-      std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
       // Try an operation - should fail and update connected state
       glz::repe::message msg{};
@@ -807,6 +820,7 @@ suite connection_state_tests = [] {
       auto server = std::make_unique<glz::asio_server<>>();
       server->port = port;
       server->concurrency = 1;
+      server->reuse_address = true;
 
       some_object_t obj{.age = 25};
       server->on(obj);
@@ -824,7 +838,6 @@ suite connection_state_tests = [] {
       // Shutdown server
       server->stop();
       server.reset();
-      std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
       // Try operation - should fail
       glz::repe::message msg{};
@@ -835,6 +848,7 @@ suite connection_state_tests = [] {
       server = std::make_unique<glz::asio_server<>>();
       server->port = port;
       server->concurrency = 1;
+      server->reuse_address = true;
 
       some_object_t obj2{.age = 99};
       server->on(obj2);
