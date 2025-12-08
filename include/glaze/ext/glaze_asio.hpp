@@ -623,7 +623,13 @@ namespace glz
       // IMPORTANT: Must be set before calling run() and should not be modified during execution.
       std::function<void(std::span<const char> request, std::string& response_buffer)> call{};
 
-      ~asio_server() { stop(); }
+      ~asio_server()
+      {
+         stop();
+         // Explicitly join threads before member destruction begins,
+         // ensuring coroutines don't access destroyed members (like registry)
+         threads.reset();
+      }
 
       struct glaze
       {
@@ -780,6 +786,12 @@ namespace glz
             }
          }
          catch (const std::exception& e) {
+            // "End of file" is a normal disconnection, not an error
+            const std::string_view msg{e.what()};
+            if (msg == "End of file") {
+               co_return; // Normal client disconnect, don't report as error
+            }
+
             if (error_handler) {
                error_handler(e.what());
             }
