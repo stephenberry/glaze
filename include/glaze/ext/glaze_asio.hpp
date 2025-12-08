@@ -33,6 +33,7 @@ namespace glz
    {
       using namespace boost::asio;
       using error_code = boost::system::error_code;
+      using system_error = boost::system::system_error;
    }
 #endif
    inline void send_buffer(asio::ip::tcp::socket& socket, repe::message& msg)
@@ -816,20 +817,6 @@ namespace glz
                std::fprintf(stderr, "glz::asio_server error: %s\n", e.what());
             }
          }
-#if defined(GLZ_USING_BOOST_ASIO)
-         catch (const boost::system::system_error& e) {
-            // EOF indicates normal client disconnect, not an error
-            if (e.code() == boost::asio::error::eof) {
-               co_return;
-            }
-            if (error_handler) {
-               error_handler(e.what());
-            }
-            else {
-               std::fprintf(stderr, "glz::asio_server error: %s\n", e.what());
-            }
-         }
-#endif
          catch (const std::exception& e) {
             if (error_handler) {
                error_handler(e.what());
