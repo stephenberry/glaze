@@ -786,10 +786,25 @@ namespace glz
             }
          }
          catch (const std::exception& e) {
-            // "End of file" is a normal disconnection, not an error
-            const std::string_view msg{e.what()};
-            if (msg == "End of file") {
-               co_return; // Normal client disconnect, don't report as error
+            // Check for EOF which indicates normal client disconnect
+            // Handle both std::system_error (standalone Asio, modern Boost)
+            // and boost::system::system_error (older Boost versions)
+            bool is_eof_error = false;
+
+            if (auto* sys_err = dynamic_cast<const std::system_error*>(&e)) {
+               is_eof_error = (sys_err->code() == asio::error::eof);
+            }
+#if defined(GLZ_USING_BOOST_ASIO)
+            // For older Boost versions where system_error doesn't derive from std::system_error
+            if (!is_eof_error) {
+               if (auto* boost_err = dynamic_cast<const boost::system::system_error*>(&e)) {
+                  is_eof_error = (boost_err->code() == boost::asio::error::eof);
+               }
+            }
+#endif
+
+            if (is_eof_error) {
+               co_return; // Normal client disconnect, not an error
             }
 
             if (error_handler) {
