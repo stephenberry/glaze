@@ -34,6 +34,8 @@ void notify_test()
       }
    });
 
+   std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
    try {
       glz::asio_client client{"localhost", std::to_string(port)};
 
@@ -82,6 +84,8 @@ void async_clients_test()
          std::cerr << "Exception: " << e.what();
       }
    });
+
+   std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
    try {
       glz::asio_client client{"localhost", std::to_string(port)};
