@@ -32,6 +32,10 @@ set(
 )
 mark_as_advanced(glaze_INSTALL_CMAKEDIR)
 
+file(READ ${CMAKE_CURRENT_LIST_DIR}/FindErlang.cmake glaze_FIND_ERLANG_SCRIPT)
+
+configure_file(${CMAKE_CURRENT_LIST_DIR}/install-config.cmake.in ${CMAKE_CURRENT_LIST_DIR}/install-config.cmake @ONLY)
+
 install(
     FILES cmake/install-config.cmake
     DESTINATION "${glaze_INSTALL_CMAKEDIR}"
