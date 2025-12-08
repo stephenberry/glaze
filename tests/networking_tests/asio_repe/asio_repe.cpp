@@ -51,13 +51,12 @@ void notify_test()
       if (bool(msg.error())) {
          throw std::runtime_error(glz::repe::decode_error(msg));
       }
-
-      server.stop();
    }
    catch (const std::exception& e) {
       expect(false) << e.what();
    }
 
+   server.stop();
    server_thread.get();
 }
 
@@ -105,13 +104,12 @@ void async_clients_test()
       }
 
       expect(age == 29);
-
-      server.stop();
    }
    catch (const std::exception& e) {
       expect(false) << e.what();
    }
 
+   server.stop();
    server_thread.get();
 }
 
@@ -189,13 +187,12 @@ void asio_client_test()
       for (auto& t : threads) {
          t.get();
       }
-
-      server.stop();
    }
    catch (const std::exception& e) {
       expect(false) << e.what();
    }
 
+   server.stop();
    server_thread.get();
 }
 
@@ -264,13 +261,12 @@ void async_calls()
       for (auto& t : threads) {
          t.get();
       }
-
-      server.stop();
    }
    catch (const std::exception& e) {
       expect(false) << e.what();
    }
 
+   server.stop();
    server_thread.get();
 }
 
