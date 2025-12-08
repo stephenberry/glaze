@@ -677,7 +677,12 @@ namespace glz
 
          // Create the acceptor synchronously so we know the actual port if set to 0 (select random free)
          auto executor = ctx->get_executor();
-         asio::ip::tcp::acceptor acceptor(executor, {asio::ip::tcp::v6(), port});
+         asio::ip::tcp::acceptor acceptor(executor);
+         asio::ip::tcp::endpoint endpoint{asio::ip::tcp::v6(), port};
+         acceptor.open(endpoint.protocol());
+         acceptor.set_option(asio::ip::tcp::acceptor::reuse_address(true));
+         acceptor.bind(endpoint);
+         acceptor.listen();
          port = acceptor.local_endpoint().port();
 
          // Start the listener coroutine
