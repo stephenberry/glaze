@@ -48,6 +48,53 @@ target_include_directories(
     INTERFACE "$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>"
 )
 
+option(glaze_BUILD_MODULES "Build C++20 module targets (requires CMake 3.28+)" OFF)
+
+if(glaze_BUILD_MODULES)
+  message(STATUS "Building with C++20 module support")
+
+  if(CMAKE_VERSION VERSION_LESS "3.28")
+    message(FATAL_ERROR "glaze_BUILD_MODULES requires CMake 3.28 or later")
+  endif()
+
+  # Compiler compatibility warnings
+  if(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
+    if(CMAKE_CXX_COMPILER_VERSION VERSION_LESS "15")
+      message(WARNING "GCC 15+ recommended for C++20 modules")
+    endif()
+  elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND NOT CMAKE_CXX_COMPILER_ID MATCHES "AppleClang")
+    if(CMAKE_CXX_COMPILER_VERSION VERSION_LESS "20")
+      message(WARNING "Clang 20+ recommended for C++20 modules")
+    endif()
+  elseif(CMAKE_CXX_COMPILER_ID MATCHES "AppleClang")
+    message(WARNING "Apple Clang does not support CMake's module dependency scanning. Use LLVM Clang instead.")
+  endif()
+
+  # JSON module target
+  add_library(glaze_json_module)
+  add_library(glaze::json_module ALIAS glaze_json_module)
+
+  target_sources(glaze_json_module
+    PUBLIC
+      FILE_SET CXX_MODULES
+        BASE_DIRS
+          "$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>"
+          "$<INSTALL_INTERFACE:include>"
+        FILES "${PROJECT_SOURCE_DIR}/include/glaze/module/glaze_json.cppm"
+  )
+
+  target_compile_features(glaze_json_module PUBLIC cxx_std_23)
+  target_include_directories(glaze_json_module
+    PUBLIC "$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>"
+  )
+  target_link_libraries(glaze_json_module PUBLIC glaze::glaze)
+
+  set_target_properties(glaze_json_module PROPERTIES
+    EXPORT_NAME json_module
+    CXX_SCAN_FOR_MODULES ON
+  )
+endif()
+
 if(NOT CMAKE_SKIP_INSTALL_RULES)
   include(cmake/install-rules.cmake)
 endif()

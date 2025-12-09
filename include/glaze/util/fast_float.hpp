@@ -185,8 +185,8 @@ namespace glz::fast_float {
 enum class chars_format : uint64_t;
 
 namespace detail {
-constexpr chars_format basic_json_fmt = chars_format(1 << 5);
-constexpr chars_format basic_fortran_fmt = chars_format(1 << 6);
+inline constexpr chars_format basic_json_fmt = chars_format(1 << 5);
+inline constexpr chars_format basic_fortran_fmt = chars_format(1 << 6);
 } // namespace detail
 
 enum class chars_format : uint64_t {
@@ -577,7 +577,7 @@ struct adjusted_mantissa {
 };
 
 // Bias so we can get the real exponent with an invalid adjusted_mantissa.
-constexpr static int32_t invalid_am_bias = -0x8000;
+inline constexpr int32_t invalid_am_bias = -0x8000;
 
 // used for binary_format_lookup_tables<T>::max_mantissa
 constexpr uint64_t constant_55555 = 5 * 5 * 5 * 5 * 5;
@@ -1167,7 +1167,7 @@ template <typename UC> constexpr bool is_space(UC c) {
   return c < 256 && space_lut<>::value[uint8_t(c)];
 }
 
-template <typename UC> static constexpr uint64_t int_cmp_zeros() {
+template <typename UC> inline constexpr uint64_t int_cmp_zeros() {
   static_assert((sizeof(UC) == 1) || (sizeof(UC) == 2) || (sizeof(UC) == 4),
                 "Unsupported character size");
   return (sizeof(UC) == 1) ? 0x3030303030303030
@@ -1177,7 +1177,7 @@ template <typename UC> static constexpr uint64_t int_cmp_zeros() {
              : (uint64_t(UC('0')) << 32 | UC('0'));
 }
 
-template <typename UC> static constexpr int int_cmp_len() {
+template <typename UC> inline constexpr int int_cmp_len() {
   return sizeof(uint64_t) / sizeof(UC);
 }
 
@@ -2974,11 +2974,11 @@ namespace glz::fast_float {
 #if defined(GLZ_FASTFLOAT_64BIT) && !defined(__sparc)
 #define GLZ_FASTFLOAT_64BIT_LIMB 1
 typedef uint64_t limb;
-constexpr size_t limb_bits = 64;
+inline constexpr size_t limb_bits = 64;
 #else
 #define GLZ_FASTFLOAT_32BIT_LIMB
 typedef uint32_t limb;
-constexpr size_t limb_bits = 32;
+inline constexpr size_t limb_bits = 32;
 #endif
 
 typedef span<limb> limb_span;
@@ -3604,7 +3604,7 @@ struct bigint : pow5_tables<> {
 namespace glz::fast_float {
 
 // 1e0 to 1e19
-constexpr static uint64_t powers_of_ten_uint64[] = {1UL,
+inline constexpr uint64_t powers_of_ten_uint64[] = {1UL,
                                                     10UL,
                                                     100UL,
                                                     1000UL,

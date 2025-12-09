@@ -211,16 +211,16 @@ namespace glz
 
    namespace unicode
    {
-      constexpr uint32_t generic_surrogate_mask = 0xF800;
-      constexpr uint32_t generic_surrogate_value = 0xD800;
+      inline constexpr uint32_t generic_surrogate_mask = 0xF800;
+      inline constexpr uint32_t generic_surrogate_value = 0xD800;
 
-      constexpr uint32_t surrogate_mask = 0xFC00;
-      constexpr uint32_t high_surrogate_value = 0xD800;
-      constexpr uint32_t low_surrogate_value = 0xDC00;
+      inline constexpr uint32_t surrogate_mask = 0xFC00;
+      inline constexpr uint32_t high_surrogate_value = 0xD800;
+      inline constexpr uint32_t low_surrogate_value = 0xDC00;
 
-      constexpr uint32_t surrogate_codepoint_offset = 0x10000;
-      constexpr uint32_t surrogate_codepoint_mask = 0x03FF;
-      constexpr uint32_t surrogate_codepoint_bits = 10;
+      inline constexpr uint32_t surrogate_codepoint_offset = 0x10000;
+      inline constexpr uint32_t surrogate_codepoint_mask = 0x03FF;
+      inline constexpr uint32_t surrogate_codepoint_bits = 10;
    }
 
    template <class Char>
