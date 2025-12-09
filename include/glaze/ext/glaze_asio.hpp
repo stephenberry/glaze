@@ -33,6 +33,7 @@ namespace glz
    {
       using namespace boost::asio;
       using error_code = boost::system::error_code;
+      using system_error = boost::system::system_error;
    }
 #endif
    inline void send_buffer(asio::ip::tcp::socket& socket, repe::message& msg)
@@ -623,7 +624,21 @@ namespace glz
       // IMPORTANT: Must be set before calling run() and should not be modified during execution.
       std::function<void(std::span<const char> request, std::string& response_buffer)> call{};
 
-      ~asio_server() { stop(); }
+      // Callback invoked after the server starts listening and is ready to accept connections.
+      // Useful for synchronization in tests (e.g., with std::latch).
+      std::function<void()> on_listen{};
+
+      // Whether to set SO_REUSEADDR on the acceptor socket.
+      // Allows rebinding to a port in TIME_WAIT state.
+      bool reuse_address = false;
+
+      ~asio_server()
+      {
+         stop();
+         // Explicitly join threads before member destruction begins,
+         // ensuring coroutines don't access destroyed members (like registry)
+         threads.reset();
+      }
 
       struct glaze
       {
@@ -671,8 +686,19 @@ namespace glz
 
          // Create the acceptor synchronously so we know the actual port if set to 0 (select random free)
          auto executor = ctx->get_executor();
-         asio::ip::tcp::acceptor acceptor(executor, {asio::ip::tcp::v6(), port});
+         asio::ip::tcp::acceptor acceptor(executor);
+         asio::ip::tcp::endpoint endpoint{asio::ip::tcp::v6(), port};
+         acceptor.open(endpoint.protocol());
+         if (reuse_address) {
+            acceptor.set_option(asio::ip::tcp::acceptor::reuse_address(true));
+         }
+         acceptor.bind(endpoint);
+         acceptor.listen();
          port = acceptor.local_endpoint().port();
+
+         if (on_listen) {
+            on_listen();
+         }
 
          // Start the listener coroutine
          asio::co_spawn(*ctx, listener(std::move(acceptor)), asio::detached);
@@ -777,6 +803,18 @@ namespace glz
                      co_await co_send_raw(socket, response_buf.value());
                   }
                }
+            }
+         }
+         catch (const asio::system_error& e) {
+            // EOF indicates normal client disconnect, not an error
+            if (e.code() == asio::error::eof) {
+               co_return;
+            }
+            if (error_handler) {
+               error_handler(e.what());
+            }
+            else {
+               std::fprintf(stderr, "glz::asio_server error: %s\n", e.what());
             }
          }
          catch (const std::exception& e) {
