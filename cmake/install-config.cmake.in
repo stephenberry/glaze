@@ -3,10 +3,10 @@
 include(CMakeFindDependencyMacro)
 
 # Handle EETF format dependency (Erlang)
+# The FindErlang module is embedded directly to avoid file collisions with other projects
 set(_glaze_EETF_FORMAT "@glaze_EETF_FORMAT@")
 if(_glaze_EETF_FORMAT)
-    list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}")
-    find_dependency(Erlang REQUIRED)
+@glaze_FIND_ERLANG_SCRIPT@
 endif()
 unset(_glaze_EETF_FORMAT)
 

@@ -7,6 +7,12 @@ FindAsio
 
 Finds the standalone Asio library (header-only).
 
+Search Order
+^^^^^^^^^^^^
+
+1. Direct header search (find_path for asio.hpp)
+2. pkg-config fallback (if direct search fails)
+
 Imported Targets
 ^^^^^^^^^^^^^^^^
 
@@ -42,6 +48,25 @@ find_path(Asio_INCLUDE_DIR
     NAMES asio.hpp
     DOC "Standalone Asio include directory"
 )
+
+# Fallback to pkg-config if header not found directly
+# This helps Linux distro users where Asio may only provide a .pc file
+if(NOT Asio_INCLUDE_DIR)
+    find_package(PkgConfig QUIET)
+    if(PkgConfig_FOUND)
+        pkg_check_modules(_Asio QUIET asio)
+        if(_Asio_FOUND)
+            # pkg-config returns a list; use the first include directory
+            list(GET _Asio_INCLUDE_DIRS 0 _Asio_INCLUDE_DIR_FIRST)
+            set(Asio_INCLUDE_DIR "${_Asio_INCLUDE_DIR_FIRST}"
+                CACHE PATH "Standalone Asio include directory")
+            if(_Asio_VERSION)
+                set(Asio_VERSION "${_Asio_VERSION}")
+            endif()
+            unset(_Asio_INCLUDE_DIR_FIRST)
+        endif()
+    endif()
+endif()
 
 # Try to extract version from asio/version.hpp
 if(Asio_INCLUDE_DIR AND EXISTS "${Asio_INCLUDE_DIR}/asio/version.hpp")

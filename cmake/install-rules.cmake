@@ -32,6 +32,14 @@ set(
 )
 mark_as_advanced(glaze_INSTALL_CMAKEDIR)
 
+# Read FindErlang.cmake content for embedding into config file
+# This avoids installing a separate FindErlang.cmake that could collide with other projects
+if(glaze_EETF_FORMAT)
+    file(READ "${CMAKE_CURRENT_SOURCE_DIR}/cmake/FindErlang.cmake" glaze_FIND_ERLANG_SCRIPT)
+else()
+    set(glaze_FIND_ERLANG_SCRIPT "")
+endif()
+
 # Generate config file from template with dependency information
 configure_package_config_file(
     "${CMAKE_CURRENT_SOURCE_DIR}/cmake/install-config.cmake.in"
@@ -45,14 +53,6 @@ install(
     COMPONENT glaze_Development
 )
 
-# Install FindErlang.cmake when EETF format is enabled
-if(glaze_EETF_FORMAT)
-    install(
-        FILES cmake/FindErlang.cmake
-        DESTINATION "${glaze_INSTALL_CMAKEDIR}"
-        COMPONENT glaze_Development
-    )
-endif()
 
 install(
     FILES "${PROJECT_BINARY_DIR}/${package}ConfigVersion.cmake"
