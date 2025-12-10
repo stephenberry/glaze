@@ -50,14 +50,14 @@ Key GCC configure options:
 
 | Configuration | Flags | Result |
 |--------------|-------|--------|
-| O3-stack-clash | `-O3 -fstack-clash-protection` | ⏳ |
-| O3-fortify3 | `-O3 -D_FORTIFY_SOURCE=3` | ⏳ |
-| O3-pie | `-O3 -fPIE` (+ `-pie` linker flag) | ⏳ |
-| O3-no-plt | `-O3 -fno-plt` | ⏳ |
-| O3-no-semantic-interposition | `-O3 -fno-semantic-interposition` | ⏳ |
-| O3-retpoline | `-O3 -mindirect-branch=thunk -mfunction-return=thunk` | ⏳ |
-| O3-sls-hardening | `-O3 -mharden-sls=all` | ⏳ |
-| O3-auto-var-init | `-O3 -ftrivial-auto-var-init=zero` | ⏳ |
+| O3-stack-clash | `-O3 -fstack-clash-protection` | ✅ PASS |
+| O3-fortify3 | `-O3 -D_FORTIFY_SOURCE=3` | ✅ PASS |
+| O3-pie | `-O3 -fPIE` (+ `-pie` linker flag) | ✅ PASS |
+| O3-no-plt | `-O3 -fno-plt` | ✅ PASS |
+| O3-no-semantic-interposition | `-O3 -fno-semantic-interposition` | ✅ PASS |
+| O3-retpoline | `-O3 -mindirect-branch=thunk -mfunction-return=thunk` | ✅ PASS |
+| O3-sls-hardening | `-O3 -mharden-sls=all` | ✅ PASS |
+| O3-auto-var-init | `-O3 -ftrivial-auto-var-init=zero` | ✅ PASS |
 
 ### Round 2b: Full Gentoo Hardened Profile Combinations
 
@@ -65,15 +65,15 @@ Note: `-fcf-protection` (CET) and `-mindirect-branch`/`-mfunction-return` (retpo
 
 | Configuration | Flags | Result |
 |--------------|-------|--------|
-| O3-full-gentoo-hardened-cet | `-O3 -fcf-protection=full -fstack-protector-strong -fstack-clash-protection -D_FORTIFY_SOURCE=3 -fPIE -fno-plt -fno-semantic-interposition` | ⏳ |
-| O3-full-gentoo-hardened-retpoline | `-O3 -mindirect-branch=thunk -mfunction-return=thunk -fstack-protector-strong -fstack-clash-protection -D_FORTIFY_SOURCE=3 -fPIE -fno-plt -fno-semantic-interposition` | ⏳ |
+| O3-full-gentoo-hardened-cet | `-O3 -fcf-protection=full -fstack-protector-strong -fstack-clash-protection -D_FORTIFY_SOURCE=3 -fPIE -fno-plt -fno-semantic-interposition` | ✅ PASS |
+| O3-full-gentoo-hardened-retpoline | `-O3 -mindirect-branch=thunk -mfunction-return=thunk -fstack-protector-strong -fstack-clash-protection -D_FORTIFY_SOURCE=3 -fPIE -fno-plt -fno-semantic-interposition` | ✅ PASS |
 
 ### Round 3: LTO Combinations
 
 | Configuration | Flags | Result |
 |--------------|-------|--------|
-| O3-lto | `-O3 -flto=auto` | ⏳ |
-| O3-lto-hardened | `-O3 -flto=auto -fPIE -fcf-protection=full -fstack-protector-strong -fstack-clash-protection -D_FORTIFY_SOURCE=3` | ⏳ |
+| O3-lto | `-O3 -flto=auto` | ✅ PASS |
+| O3-lto-hardened | `-O3 -flto=auto -fPIE -fcf-protection=full -fstack-protector-strong -fstack-clash-protection -D_FORTIFY_SOURCE=3` | ✅ PASS |
 
 ## Diagnostic Test
 
@@ -90,22 +90,25 @@ A diagnostic test program outputs:
 ## Notes
 
 - Issue cannot be reproduced on macOS (ARM) with GCC 15.1 or Clang
-- Issue cannot be reproduced with standard GCC 15 Docker image + basic hardened flags (Round 1)
+- Issue cannot be reproduced with standard GCC 15 Docker image + any tested flag combination
+- **All 17 flag configurations tested pass on upstream GCC 15**
 - Gentoo Hardened applies custom patches to GCC (`p3` suffix)
 - Reporter offered to provide Docker image if needed
 
-## Potential Causes (To Investigate)
+## Potential Causes (Narrowed Down)
 
-1. **Gentoo-specific GCC patches** - The `p3` suffix indicates Gentoo-specific patches not in upstream GCC
-2. **Custom CFLAGS/CXXFLAGS** - Reporter may have additional flags in `/etc/portage/make.conf`
-3. **Different glibc** - Gentoo may use a different glibc version or configuration
-4. **Specific CPU features** - Hardware-specific optimizations
+Since all standard hardened flags pass on upstream GCC 15, the issue is likely caused by:
+
+1. **Gentoo-specific GCC patches** - The `p3` suffix indicates Gentoo-specific patches not in upstream GCC. This is the most likely cause.
+2. **Custom CFLAGS/CXXFLAGS** - Reporter may have additional flags in `/etc/portage/make.conf` not covered by our tests
+3. **Different glibc** - Gentoo Hardened may use a patched glibc
+4. **Specific CPU features** - Hardware-specific code generation differences
 
 ## Next Steps
 
-1. ~~Test basic hardened flags~~ (PASSED - Round 1)
-2. Test extended Gentoo-specific flags (IN PROGRESS - Round 2)
-3. Test full Gentoo hardened profile (IN PROGRESS - Round 2b)
-4. Test LTO combinations (IN PROGRESS - Round 3)
-5. If still not reproducible, request reporter's exact CFLAGS/CXXFLAGS from `emerge --info`
-6. If still not reproducible, request Docker image from reporter
+1. ~~Test basic hardened flags~~ ✅ ALL PASS
+2. ~~Test extended Gentoo-specific flags~~ ✅ ALL PASS
+3. ~~Test full Gentoo hardened profile~~ ✅ ALL PASS
+4. ~~Test LTO combinations~~ ✅ ALL PASS
+5. **Request reporter's exact CFLAGS/CXXFLAGS from `emerge --info`**
+6. **Request Gentoo Hardened Docker image from reporter** - This is likely needed to reproduce
