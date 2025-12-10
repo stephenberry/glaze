@@ -1,0 +1,212 @@
+name: gcc-hardened-o3
+
+# This workflow tests issue #2115: Test failures with -O3 on Gentoo Hardened
+# https://github.com/stephenberry/glaze/issues/2115
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  test-o3-variants:
+    runs-on: ubuntu-24.04
+    container:
+      image: gcc:15
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: "O2-baseline"
+            cxxflags: "-O2"
+          - name: "O3-basic"
+            cxxflags: "-O3"
+          - name: "O3-cf-protection"
+            cxxflags: "-O3 -fcf-protection=full"
+          - name: "O3-hardened"
+            cxxflags: "-O3 -fcf-protection=full -fstack-protector-strong -D_FORTIFY_SOURCE=2"
+          - name: "O3-no-strict-aliasing"
+            cxxflags: "-O3 -fno-strict-aliasing"
+          - name: "O3-hardened-no-strict-aliasing"
+            cxxflags: "-O3 -fcf-protection=full -fstack-protector-strong -D_FORTIFY_SOURCE=2 -fno-strict-aliasing"
+
+    env:
+      CC: gcc
+      CXX: g++
+
+    steps:
+    - name: Install build dependencies
+      env:
+        DEBIAN_FRONTEND: noninteractive
+      run: |
+        apt-get update
+        apt-get install -y --no-install-recommends \
+          ca-certificates \
+          cmake \
+          git \
+          libssl-dev \
+          python3
+        update-ca-certificates
+
+    - uses: actions/checkout@v4
+
+    - name: Show compiler info
+      run: |
+        gcc --version
+        echo "CXXFLAGS: ${{ matrix.cxxflags }}"
+
+    - name: Configure CMake
+      run: |
+        CXXFLAGS="${{ matrix.cxxflags }}" cmake -S "$GITHUB_WORKSPACE" -B "$GITHUB_WORKSPACE/build" \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DCMAKE_CXX_STANDARD=23
+
+    - name: Build json_test and json_reflection_test
+      run: |
+        cmake --build "$GITHUB_WORKSPACE/build" --target json_test json_reflection_test -j $(nproc)
+
+    - name: Run json_reflection_test
+      run: |
+        echo "=== Running json_reflection_test with ${{ matrix.name }} ==="
+        "$GITHUB_WORKSPACE/build/tests/json_reflection_test/json_reflection_test"
+
+    - name: Run json_test
+      run: |
+        echo "=== Running json_test with ${{ matrix.name }} ==="
+        "$GITHUB_WORKSPACE/build/tests/json_test/json_test"
+
+  diagnostic-test:
+    runs-on: ubuntu-24.04
+    container:
+      image: gcc:15
+
+    env:
+      CC: gcc
+      CXX: g++
+
+    steps:
+    - name: Install build dependencies
+      env:
+        DEBIAN_FRONTEND: noninteractive
+      run: |
+        apt-get update
+        apt-get install -y --no-install-recommends \
+          ca-certificates \
+          cmake \
+          git \
+          libssl-dev \
+          python3
+        update-ca-certificates
+
+    - uses: actions/checkout@v4
+
+    - name: Create diagnostic test
+      run: |
+        cat << 'EOF' > /tmp/hash_diagnostic.cpp
+        #include "glaze/glaze.hpp"
+        #include <iostream>
+
+        struct point3d {
+           int x{}, y{}, z{};
+        };
+
+        struct full_hash_t {
+           int collide{};
+           int collide2{};
+           int colllide{};
+           int colilide{};
+        };
+
+        struct front_32_t {
+           int aaaa{};
+           int aaab{};
+           int aaba{};
+           int bbbb{};
+        };
+
+        struct front_64_t {
+           int aaaaaaaa{};
+           int aaaaaaaz{};
+           int aaaaaaza{};
+           int zzzzzzzz{};
+        };
+
+        template<typename T>
+        void test_struct(const char* name, const char* json, auto check) {
+           T obj{};
+           auto ec = glz::read_json(obj, json);
+           std::cout << name << ": ";
+           if (ec) {
+              std::cout << "PARSE ERROR: " << glz::format_error(ec) << "\n";
+           } else if (check(obj)) {
+              std::cout << "PASS\n";
+           } else {
+              std::cout << "FAIL\n";
+           }
+        }
+
+        int main() {
+           using namespace glz;
+
+           std::cout << "=== Hash Type Info ===\n";
+           std::cout << "point3d: type=" << int(hash_info<point3d>.type) << " (4=mod4)\n";
+           std::cout << "full_hash_t: type=" << int(hash_info<full_hash_t>.type) << " (9=full_flat)\n";
+           std::cout << "front_32_t: type=" << int(hash_info<front_32_t>.type) << " (2=front_hash)\n";
+           std::cout << "front_64_t: type=" << int(hash_info<front_64_t>.type) << " (2=front_hash)\n";
+
+           std::cout << "\n=== Key Order ===\n";
+           std::cout << "point3d keys: ";
+           for (size_t i = 0; i < reflect<point3d>::size; ++i) {
+              std::cout << "[" << i << "]=" << reflect<point3d>::keys[i] << " ";
+           }
+           std::cout << "\n";
+
+           std::cout << "\n=== Parsing Tests ===\n";
+
+           test_struct<point3d>("point3d", R"({"x":1,"y":2,"z":3})",
+              [](auto& obj) { return obj.x == 1 && obj.y == 2 && obj.z == 3; });
+
+           test_struct<full_hash_t>("full_hash_t", R"({"collide":1,"collide2":2})",
+              [](auto& obj) { return obj.collide == 1 && obj.collide2 == 2; });
+
+           test_struct<front_32_t>("front_32_t", R"({"aaaa":1,"aaab":2,"aaba":3})",
+              [](auto& obj) { return obj.aaaa == 1 && obj.aaab == 2 && obj.aaba == 3; });
+
+           test_struct<front_64_t>("front_64_t", R"({"aaaaaaaa":1,"aaaaaaaz":2,"aaaaaaza":3})",
+              [](auto& obj) { return obj.aaaaaaaa == 1 && obj.aaaaaaaz == 2 && obj.aaaaaaza == 3; });
+
+           std::cout << "\n=== Detailed point3d test ===\n";
+           point3d p{100, 200, 300};
+           std::cout << "Before: x=" << p.x << " y=" << p.y << " z=" << p.z << "\n";
+           glz::read_json(p, R"({"x":1,"y":2,"z":3})");
+           std::cout << "After:  x=" << p.x << " y=" << p.y << " z=" << p.z << "\n";
+
+           return 0;
+        }
+        EOF
+
+    - name: Run diagnostic with O2
+      run: |
+        echo "=== O2 ==="
+        g++ -std=c++23 -O2 -I include /tmp/hash_diagnostic.cpp -o /tmp/diag_o2
+        /tmp/diag_o2
+
+    - name: Run diagnostic with O3
+      run: |
+        echo "=== O3 ==="
+        g++ -std=c++23 -O3 -I include /tmp/hash_diagnostic.cpp -o /tmp/diag_o3
+        /tmp/diag_o3
+
+    - name: Run diagnostic with O3 + cf-protection
+      run: |
+        echo "=== O3 + cf-protection ==="
+        g++ -std=c++23 -O3 -fcf-protection=full -I include /tmp/hash_diagnostic.cpp -o /tmp/diag_o3_cf
+        /tmp/diag_o3_cf
+
+    - name: Run diagnostic with O3 + hardened
+      run: |
+        echo "=== O3 + hardened flags ==="
+        g++ -std=c++23 -O3 -fcf-protection=full -fstack-protector-strong -D_FORTIFY_SOURCE=2 -I include /tmp/hash_diagnostic.cpp -o /tmp/diag_o3_hardened
+        /tmp/diag_o3_hardened
