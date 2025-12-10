@@ -2,6 +2,8 @@
 
 The Glaze HTTP server provides a high-performance, async HTTP server implementation using ASIO.
 
+> **Prerequisites:** This feature requires ASIO. See the [ASIO Setup Guide](asio-setup.md) for installation instructions.
+
 ## Basic Usage
 
 ### Creating a Server

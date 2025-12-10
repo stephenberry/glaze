@@ -2,6 +2,8 @@
 
 This guide covers advanced Glaze HTTP features including CORS support, WebSocket functionality, SSL/TLS encryption, and HTTP client capabilities.
 
+> **Prerequisites:** All networking features require ASIO. See the [ASIO Setup Guide](asio-setup.md) for installation instructions.
+
 ## CORS (Cross-Origin Resource Sharing)
 
 ### Quick CORS Setup

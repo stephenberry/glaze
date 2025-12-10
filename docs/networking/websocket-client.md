@@ -2,6 +2,8 @@
 
 The Glaze WebSocket client provides a simple and efficient way to connect to WebSocket servers with support for both secure (WSS) and insecure (WS) connections.
 
+> **Prerequisites:** This feature requires ASIO. See the [ASIO Setup Guide](asio-setup.md) for installation instructions. For secure WebSocket (WSS) connections, OpenSSL is also required.
+
 ## Basic Usage
 
 ```cpp

@@ -33,7 +33,7 @@ The `glz::repe::registry` allows users to expose C++ classes directly to the reg
 
 > [!NOTE]
 >
-> `glz::asio_server` and `glz::asio_client` require the [standalone asio](https://think-async.com/Asio/AsioStandalone.html) to build. Glaze does not include this dependency within its CMake files. The developer is expected to include this header-only library.
+> `glz::asio_server` and `glz::asio_client` require ASIO (standalone or Boost.Asio) to build. Glaze does not include this dependency within its CMake files. See the **[ASIO Setup Guide](../networking/asio-setup.md)** for installation instructions.
 
 ### Error Handling
 
