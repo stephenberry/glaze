@@ -2,6 +2,7 @@ name: gcc-hardened-o3
 
 # This workflow tests issue #2115: Test failures with -O3 on Gentoo Hardened
 # https://github.com/stephenberry/glaze/issues/2115
+# Tracking doc: docs/issues/2115-o3-test-failures.md
 
 on:
   pull_request:
@@ -10,7 +11,8 @@ on:
   workflow_dispatch:
 
 jobs:
-  test-o3-variants:
+  # Round 1: Basic hardened flags
+  test-basic-hardened:
     runs-on: ubuntu-24.04
     container:
       image: gcc:15
@@ -25,12 +27,10 @@ jobs:
             cxxflags: "-O3"
           - name: "O3-cf-protection"
             cxxflags: "-O3 -fcf-protection=full"
-          - name: "O3-hardened"
+          - name: "O3-hardened-basic"
             cxxflags: "-O3 -fcf-protection=full -fstack-protector-strong -D_FORTIFY_SOURCE=2"
           - name: "O3-no-strict-aliasing"
             cxxflags: "-O3 -fno-strict-aliasing"
-          - name: "O3-hardened-no-strict-aliasing"
-            cxxflags: "-O3 -fcf-protection=full -fstack-protector-strong -D_FORTIFY_SOURCE=2 -fno-strict-aliasing"
 
     env:
       CC: gcc
@@ -64,8 +64,7 @@ jobs:
           -DCMAKE_CXX_STANDARD=23
 
     - name: Build json_test and json_reflection_test
-      run: |
-        cmake --build "$GITHUB_WORKSPACE/build" --target json_test json_reflection_test -j $(nproc)
+      run: cmake --build "$GITHUB_WORKSPACE/build" --target json_test json_reflection_test -j $(nproc)
 
     - name: Run json_reflection_test
       run: |
@@ -77,6 +76,207 @@ jobs:
         echo "=== Running json_test with ${{ matrix.name }} ==="
         "$GITHUB_WORKSPACE/build/tests/json_test/json_test"
 
+  # Round 2: Extended Gentoo-specific flags
+  test-gentoo-extended:
+    runs-on: ubuntu-24.04
+    container:
+      image: gcc:15
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: "O3-stack-clash"
+            cxxflags: "-O3 -fstack-clash-protection"
+          - name: "O3-fortify3"
+            cxxflags: "-O3 -D_FORTIFY_SOURCE=3"
+          - name: "O3-pie"
+            cxxflags: "-O3 -fPIE"
+            ldflags: "-pie"
+          - name: "O3-no-plt"
+            cxxflags: "-O3 -fno-plt"
+          - name: "O3-no-semantic-interposition"
+            cxxflags: "-O3 -fno-semantic-interposition"
+          - name: "O3-retpoline"
+            cxxflags: "-O3 -mindirect-branch=thunk -mfunction-return=thunk"
+          - name: "O3-sls-hardening"
+            cxxflags: "-O3 -mharden-sls=all"
+          - name: "O3-auto-var-init"
+            cxxflags: "-O3 -ftrivial-auto-var-init=zero"
+
+    env:
+      CC: gcc
+      CXX: g++
+
+    steps:
+    - name: Install build dependencies
+      env:
+        DEBIAN_FRONTEND: noninteractive
+      run: |
+        apt-get update
+        apt-get install -y --no-install-recommends \
+          ca-certificates \
+          cmake \
+          git \
+          libssl-dev \
+          python3
+        update-ca-certificates
+
+    - uses: actions/checkout@v4
+
+    - name: Show compiler info
+      run: |
+        gcc --version
+        echo "CXXFLAGS: ${{ matrix.cxxflags }}"
+        echo "LDFLAGS: ${{ matrix.ldflags }}"
+
+    - name: Configure CMake
+      run: |
+        CXXFLAGS="${{ matrix.cxxflags }}" LDFLAGS="${{ matrix.ldflags }}" \
+        cmake -S "$GITHUB_WORKSPACE" -B "$GITHUB_WORKSPACE/build" \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DCMAKE_CXX_STANDARD=23
+
+    - name: Build json_test and json_reflection_test
+      run: cmake --build "$GITHUB_WORKSPACE/build" --target json_test json_reflection_test -j $(nproc)
+
+    - name: Run json_reflection_test
+      run: |
+        echo "=== Running json_reflection_test with ${{ matrix.name }} ==="
+        "$GITHUB_WORKSPACE/build/tests/json_reflection_test/json_reflection_test"
+
+    - name: Run json_test
+      run: |
+        echo "=== Running json_test with ${{ matrix.name }} ==="
+        "$GITHUB_WORKSPACE/build/tests/json_test/json_test"
+
+  # Round 2b: Combined full Gentoo hardened profile
+  test-full-gentoo-hardened:
+    runs-on: ubuntu-24.04
+    container:
+      image: gcc:15
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: "O3-full-gentoo-hardened"
+            cxxflags: "-O3 -fcf-protection=full -fstack-protector-strong -fstack-clash-protection -D_FORTIFY_SOURCE=3 -fPIE -fno-plt -fno-semantic-interposition"
+            ldflags: "-pie -Wl,-z,relro -Wl,-z,now"
+          - name: "O3-full-gentoo-hardened-retpoline"
+            cxxflags: "-O3 -fcf-protection=full -fstack-protector-strong -fstack-clash-protection -D_FORTIFY_SOURCE=3 -fPIE -fno-plt -fno-semantic-interposition -mindirect-branch=thunk -mfunction-return=thunk"
+            ldflags: "-pie -Wl,-z,relro -Wl,-z,now"
+
+    env:
+      CC: gcc
+      CXX: g++
+
+    steps:
+    - name: Install build dependencies
+      env:
+        DEBIAN_FRONTEND: noninteractive
+      run: |
+        apt-get update
+        apt-get install -y --no-install-recommends \
+          ca-certificates \
+          cmake \
+          git \
+          libssl-dev \
+          python3
+        update-ca-certificates
+
+    - uses: actions/checkout@v4
+
+    - name: Show compiler info
+      run: |
+        gcc --version
+        echo "CXXFLAGS: ${{ matrix.cxxflags }}"
+        echo "LDFLAGS: ${{ matrix.ldflags }}"
+
+    - name: Configure CMake
+      run: |
+        CXXFLAGS="${{ matrix.cxxflags }}" LDFLAGS="${{ matrix.ldflags }}" \
+        cmake -S "$GITHUB_WORKSPACE" -B "$GITHUB_WORKSPACE/build" \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DCMAKE_CXX_STANDARD=23
+
+    - name: Build json_test and json_reflection_test
+      run: cmake --build "$GITHUB_WORKSPACE/build" --target json_test json_reflection_test -j $(nproc)
+
+    - name: Run json_reflection_test
+      run: |
+        echo "=== Running json_reflection_test with ${{ matrix.name }} ==="
+        "$GITHUB_WORKSPACE/build/tests/json_reflection_test/json_reflection_test"
+
+    - name: Run json_test
+      run: |
+        echo "=== Running json_test with ${{ matrix.name }} ==="
+        "$GITHUB_WORKSPACE/build/tests/json_test/json_test"
+
+  # Round 3: LTO combinations (reporter mentioned LTO is NOT the issue, but test anyway)
+  test-lto:
+    runs-on: ubuntu-24.04
+    container:
+      image: gcc:15
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: "O3-lto"
+            cxxflags: "-O3 -flto=auto"
+            ldflags: "-flto=auto"
+          - name: "O3-lto-hardened"
+            cxxflags: "-O3 -flto=auto -fcf-protection=full -fstack-protector-strong -fstack-clash-protection -D_FORTIFY_SOURCE=3"
+            ldflags: "-flto=auto -pie -Wl,-z,relro -Wl,-z,now"
+
+    env:
+      CC: gcc
+      CXX: g++
+
+    steps:
+    - name: Install build dependencies
+      env:
+        DEBIAN_FRONTEND: noninteractive
+      run: |
+        apt-get update
+        apt-get install -y --no-install-recommends \
+          ca-certificates \
+          cmake \
+          git \
+          libssl-dev \
+          python3
+        update-ca-certificates
+
+    - uses: actions/checkout@v4
+
+    - name: Show compiler info
+      run: |
+        gcc --version
+        echo "CXXFLAGS: ${{ matrix.cxxflags }}"
+        echo "LDFLAGS: ${{ matrix.ldflags }}"
+
+    - name: Configure CMake
+      run: |
+        CXXFLAGS="${{ matrix.cxxflags }}" LDFLAGS="${{ matrix.ldflags }}" \
+        cmake -S "$GITHUB_WORKSPACE" -B "$GITHUB_WORKSPACE/build" \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DCMAKE_CXX_STANDARD=23
+
+    - name: Build json_test and json_reflection_test
+      run: cmake --build "$GITHUB_WORKSPACE/build" --target json_test json_reflection_test -j $(nproc)
+
+    - name: Run json_reflection_test
+      run: |
+        echo "=== Running json_reflection_test with ${{ matrix.name }} ==="
+        "$GITHUB_WORKSPACE/build/tests/json_reflection_test/json_reflection_test"
+
+    - name: Run json_test
+      run: |
+        echo "=== Running json_test with ${{ matrix.name }} ==="
+        "$GITHUB_WORKSPACE/build/tests/json_test/json_test"
+
+  # Diagnostic job for detailed output
   diagnostic-test:
     runs-on: ubuntu-24.04
     container:
@@ -187,26 +387,33 @@ jobs:
         }
         EOF
 
-    - name: Run diagnostic with O2
+    - name: Run diagnostic with O3 + full Gentoo hardened
       run: |
-        echo "=== O2 ==="
-        g++ -std=c++23 -O2 -I include /tmp/hash_diagnostic.cpp -o /tmp/diag_o2
-        /tmp/diag_o2
+        echo "=== O3 + Full Gentoo Hardened ==="
+        g++ -std=c++23 -O3 \
+          -fcf-protection=full \
+          -fstack-protector-strong \
+          -fstack-clash-protection \
+          -D_FORTIFY_SOURCE=3 \
+          -fPIE \
+          -fno-plt \
+          -fno-semantic-interposition \
+          -I include /tmp/hash_diagnostic.cpp -o /tmp/diag -pie
+        /tmp/diag
 
-    - name: Run diagnostic with O3
+    - name: Run diagnostic with O3 + retpoline
       run: |
-        echo "=== O3 ==="
-        g++ -std=c++23 -O3 -I include /tmp/hash_diagnostic.cpp -o /tmp/diag_o3
-        /tmp/diag_o3
+        echo "=== O3 + Retpoline ==="
+        g++ -std=c++23 -O3 \
+          -mindirect-branch=thunk \
+          -mfunction-return=thunk \
+          -I include /tmp/hash_diagnostic.cpp -o /tmp/diag_retpoline
+        /tmp/diag_retpoline
 
-    - name: Run diagnostic with O3 + cf-protection
+    - name: Run diagnostic with O3 + SLS hardening
       run: |
-        echo "=== O3 + cf-protection ==="
-        g++ -std=c++23 -O3 -fcf-protection=full -I include /tmp/hash_diagnostic.cpp -o /tmp/diag_o3_cf
-        /tmp/diag_o3_cf
-
-    - name: Run diagnostic with O3 + hardened
-      run: |
-        echo "=== O3 + hardened flags ==="
-        g++ -std=c++23 -O3 -fcf-protection=full -fstack-protector-strong -D_FORTIFY_SOURCE=2 -I include /tmp/hash_diagnostic.cpp -o /tmp/diag_o3_hardened
-        /tmp/diag_o3_hardened
+        echo "=== O3 + SLS Hardening ==="
+        g++ -std=c++23 -O3 \
+          -mharden-sls=all \
+          -I include /tmp/hash_diagnostic.cpp -o /tmp/diag_sls
+        /tmp/diag_sls
