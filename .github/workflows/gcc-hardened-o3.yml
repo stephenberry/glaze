@@ -229,7 +229,7 @@ jobs:
             cxxflags: "-O3 -flto=auto"
             ldflags: "-flto=auto"
           - name: "O3-lto-hardened"
-            cxxflags: "-O3 -flto=auto -fcf-protection=full -fstack-protector-strong -fstack-clash-protection -D_FORTIFY_SOURCE=3"
+            cxxflags: "-O3 -flto=auto -fPIE -fcf-protection=full -fstack-protector-strong -fstack-clash-protection -D_FORTIFY_SOURCE=3"
             ldflags: "-flto=auto -pie -Wl,-z,relro -Wl,-z,now"
 
     env:

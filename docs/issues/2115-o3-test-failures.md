@@ -73,7 +73,7 @@ Note: `-fcf-protection` (CET) and `-mindirect-branch`/`-mfunction-return` (retpo
 | Configuration | Flags | Result |
 |--------------|-------|--------|
 | O3-lto | `-O3 -flto=auto` | ⏳ |
-| O3-lto-hardened | `-O3 -flto=auto -fcf-protection=full -fstack-protector-strong -fstack-clash-protection -D_FORTIFY_SOURCE=3` | ⏳ |
+| O3-lto-hardened | `-O3 -flto=auto -fPIE -fcf-protection=full -fstack-protector-strong -fstack-clash-protection -D_FORTIFY_SOURCE=3` | ⏳ |
 
 ## Diagnostic Test
 
