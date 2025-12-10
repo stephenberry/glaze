@@ -160,11 +160,13 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: "O3-full-gentoo-hardened"
+          - name: "O3-full-gentoo-hardened-cet"
+            # CET-based hardening (modern Intel/AMD)
             cxxflags: "-O3 -fcf-protection=full -fstack-protector-strong -fstack-clash-protection -D_FORTIFY_SOURCE=3 -fPIE -fno-plt -fno-semantic-interposition"
             ldflags: "-pie -Wl,-z,relro -Wl,-z,now"
           - name: "O3-full-gentoo-hardened-retpoline"
-            cxxflags: "-O3 -fcf-protection=full -fstack-protector-strong -fstack-clash-protection -D_FORTIFY_SOURCE=3 -fPIE -fno-plt -fno-semantic-interposition -mindirect-branch=thunk -mfunction-return=thunk"
+            # Retpoline-based hardening (older CPUs, incompatible with CET)
+            cxxflags: "-O3 -mindirect-branch=thunk -mfunction-return=thunk -fstack-protector-strong -fstack-clash-protection -D_FORTIFY_SOURCE=3 -fPIE -fno-plt -fno-semantic-interposition"
             ldflags: "-pie -Wl,-z,relro -Wl,-z,now"
 
     env:

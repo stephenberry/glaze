@@ -61,10 +61,12 @@ Key GCC configure options:
 
 ### Round 2b: Full Gentoo Hardened Profile Combinations
 
+Note: `-fcf-protection` (CET) and `-mindirect-branch`/`-mfunction-return` (retpoline) are **mutually exclusive** - they are different approaches to the same security goal.
+
 | Configuration | Flags | Result |
 |--------------|-------|--------|
-| O3-full-gentoo-hardened | `-O3 -fcf-protection=full -fstack-protector-strong -fstack-clash-protection -D_FORTIFY_SOURCE=3 -fPIE -fno-plt -fno-semantic-interposition` | ⏳ |
-| O3-full-gentoo-hardened-retpoline | Above + `-mindirect-branch=thunk -mfunction-return=thunk` | ⏳ |
+| O3-full-gentoo-hardened-cet | `-O3 -fcf-protection=full -fstack-protector-strong -fstack-clash-protection -D_FORTIFY_SOURCE=3 -fPIE -fno-plt -fno-semantic-interposition` | ⏳ |
+| O3-full-gentoo-hardened-retpoline | `-O3 -mindirect-branch=thunk -mfunction-return=thunk -fstack-protector-strong -fstack-clash-protection -D_FORTIFY_SOURCE=3 -fPIE -fno-plt -fno-semantic-interposition` | ⏳ |
 
 ### Round 3: LTO Combinations
 
