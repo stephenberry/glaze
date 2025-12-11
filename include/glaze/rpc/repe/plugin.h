@@ -24,11 +24,7 @@ typedef struct repe_buffer
 } repe_buffer;
 
 // Result codes for plugin operations
-typedef enum repe_result {
-   REPE_OK = 0,
-   REPE_ERROR_INIT_FAILED = 1,
-   REPE_ERROR_ALREADY_INITIALIZED = 2
-} repe_result;
+typedef enum repe_result { REPE_OK = 0, REPE_ERROR_INIT_FAILED = 1, REPE_ERROR_ALREADY_INITIALIZED = 2 } repe_result;
 
 // Plugin metadata struct
 // Returned by repe_plugin_info(), must remain valid for the plugin's lifetime
