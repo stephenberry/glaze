@@ -19,7 +19,7 @@ namespace repe = glz::repe;
 // =============================================================================
 
 suite c_interface_tests = [] {
-   "interface_version"_test = [] { expect(REPE_PLUGIN_INTERFACE_VERSION == 2); };
+   "interface_version"_test = [] { expect(REPE_PLUGIN_INTERFACE_VERSION == 3); };
 
    "repe_buffer_layout"_test = [] {
       repe_buffer buf{};
@@ -45,8 +45,7 @@ suite c_interface_tests = [] {
    "repe_result_values"_test = [] {
       expect(REPE_OK == 0);
       expect(REPE_ERROR_INIT_FAILED == 1);
-      expect(REPE_ERROR_INVALID_CONFIG == 2);
-      expect(REPE_ERROR_ALREADY_INITIALIZED == 3);
+      expect(REPE_ERROR_ALREADY_INITIALIZED == 2);
    };
 };
 

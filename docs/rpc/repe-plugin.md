@@ -29,7 +29,7 @@ The C header defines the ABI-stable plugin contract. It has no C++ or Glaze depe
 ### Interface Version
 
 ```c
-#define REPE_PLUGIN_INTERFACE_VERSION 2
+#define REPE_PLUGIN_INTERFACE_VERSION 3
 ```
 
 Plugins and hosts should check version compatibility before use. When the plugin interface changes, this version is incremented.
@@ -49,8 +49,7 @@ typedef struct repe_buffer {
 typedef enum repe_result {
     REPE_OK = 0,
     REPE_ERROR_INIT_FAILED = 1,
-    REPE_ERROR_INVALID_CONFIG = 2,
-    REPE_ERROR_ALREADY_INITIALIZED = 3
+    REPE_ERROR_ALREADY_INITIALIZED = 2
 } repe_result;
 
 // Plugin metadata struct
@@ -95,8 +94,8 @@ const repe_plugin_data* repe_plugin_info(void) {
 These may be NULL if not needed:
 
 ```c
-// Initialize plugin with optional configuration
-repe_result repe_plugin_init(const char* config, uint64_t config_size);
+// Initialize plugin
+repe_result repe_plugin_init(void);
 
 // Cleanup resources before unload
 void repe_plugin_shutdown(void);
@@ -227,8 +226,8 @@ extern "C" {
         return &plugin_info;
     }
 
-    // Optional: Explicit initialization with configuration
-    repe_result repe_plugin_init(const char* /*config*/, uint64_t /*config_size*/) {
+    // Optional: Explicit initialization
+    repe_result repe_plugin_init() {
         try {
             ensure_initialized();
             return REPE_OK;
@@ -270,7 +269,7 @@ struct loaded_plugin {
     // Function pointers
     uint32_t (*interface_version_fn)(void) = nullptr;
     const repe_plugin_data* (*info_fn)(void) = nullptr;
-    repe_result (*init_fn)(const char*, uint64_t) = nullptr;
+    repe_result (*init_fn)(void) = nullptr;
     void (*shutdown_fn)(void) = nullptr;
     repe_buffer (*call_fn)(const char*, uint64_t) = nullptr;
 
@@ -304,7 +303,7 @@ std::optional<loaded_plugin> load_plugin(const std::string& path) {
 
     // Load optional symbols (may be NULL)
     plugin.init_fn =
-        (repe_result(*)(const char*, uint64_t))dlsym(plugin.handle, "repe_plugin_init");
+        (repe_result(*)(void))dlsym(plugin.handle, "repe_plugin_init");
     plugin.shutdown_fn =
         (void(*)(void))dlsym(plugin.handle, "repe_plugin_shutdown");
 
@@ -330,7 +329,7 @@ std::optional<loaded_plugin> load_plugin(const std::string& path) {
 
     // Initialize if init function is provided
     if (plugin.init_fn) {
-        if (plugin.init_fn(nullptr, 0) != REPE_OK) {
+        if (plugin.init_fn() != REPE_OK) {
             return std::nullopt;
         }
     }
@@ -437,13 +436,13 @@ See [REPE RPC](repe-rpc.md) for more details on thread-safe classes.
 
 | Symbol | Required | Description |
 |--------|----------|-------------|
-| `REPE_PLUGIN_INTERFACE_VERSION` | - | Macro defining current interface version (2) |
+| `REPE_PLUGIN_INTERFACE_VERSION` | - | Macro defining current interface version (3) |
 | `repe_buffer` | - | POD struct: `{const char* data, uint64_t size}` |
 | `repe_result` | - | Enum: `REPE_OK`, `REPE_ERROR_*` |
 | `repe_plugin_data` | - | Struct: `{name, version, root_path}` |
 | `repe_plugin_interface_version()` | Yes | Returns interface version (standalone for ABI safety) |
 | `repe_plugin_info()` | Yes | Returns pointer to plugin metadata struct |
-| `repe_plugin_init()` | No | Initialize with optional config |
+| `repe_plugin_init()` | No | Initialize plugin |
 | `repe_plugin_shutdown()` | No | Cleanup before unload |
 | `repe_plugin_call()` | Yes | Process REPE request |
 
