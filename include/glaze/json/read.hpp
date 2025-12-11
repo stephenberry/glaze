@@ -2260,7 +2260,7 @@ namespace glz
                   --ctx.indentation_level;
                }
                if constexpr (glaze_object_t<T> || reflectable<T>) {
-                  if constexpr (has_self_constraint_v<T>) {
+                  if constexpr (has_self_constraint_v<T> && !check_skip_self_constraint(Opts)) {
                      auto wrapper = self_constraint_v<T>(value);
                      from<JSON, decltype(wrapper)>::template op<ws_handled<Opts>()>(wrapper, ctx, it, end);
                      if (bool(ctx.error)) {
@@ -2333,7 +2333,7 @@ namespace glz
                      }
                   }
                   if constexpr (glaze_object_t<T> || reflectable<T>) {
-                     if constexpr (has_self_constraint_v<T>) {
+                     if constexpr (has_self_constraint_v<T> && !check_skip_self_constraint(Opts)) {
                         auto wrapper = self_constraint_v<T>(value);
                         from<JSON, decltype(wrapper)>::template op<ws_handled<Opts>()>(wrapper, ctx, it, end);
                         if (bool(ctx.error)) {

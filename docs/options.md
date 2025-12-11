@@ -147,6 +147,11 @@ bool escape_control_characters = false;
 
 float_precision float_max_write_precision{};
 // The maximum precision type used for writing floats, higher precision floats will be cast down to this precision
+
+bool skip_self_constraint = false;
+// Skip self_constraint validation during reading.
+// Useful for performance when constraints are known to be valid or when validation should be deferred.
+// See the Wrappers documentation for more on self_constraint.
 ```
 
 ## CSV Options (`glz::opts_csv`)

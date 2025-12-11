@@ -571,6 +571,26 @@ constraints fire before the member is written, so the in-memory representation n
 contrast, `self_constraint` runs after fields are populated, so it can detect issues that span multiple members but the
 object may hold the problematic data until the constraint handler reports an error.
 
+### Skipping self_constraint validation
+
+In some cases you may want to skip `self_constraint` validation—for example, when performance is critical and the data
+is known to be valid, or when validation should be deferred to a later stage. You can disable `self_constraint` checks
+by creating a custom options struct with `skip_self_constraint = true`:
+
+```c++
+struct skip_constraint_opts : glz::opts
+{
+   bool skip_self_constraint = true;
+};
+
+// Use it like this:
+constexpr skip_constraint_opts opts{};
+auto ec = glz::read<opts>(obj, buffer);
+```
+
+With this option enabled, the `self_constraint` is still defined in `glz::meta<T>` but will not be evaluated during
+deserialization. This allows you to toggle validation on or off at compile time based on your use case.
+
 ## partial_read
 
 Reads into existing object and array elements and then exits without parsing the rest of the input. More documentation concerning `partial_read` can be found in the [Partial Read documentation](./partial-read.md).

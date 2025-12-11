@@ -975,7 +975,7 @@ For example: `glz::read<glz::opts{.error_on_unknown_keys = false}>(...)` will tu
 
 ### Available Default Compile Time Options
 
-The struct below shows the available options in `glz::opts` and the defaults. See [Options](./docs/options.md) for additional options for user customization.
+The struct below shows the available options in `glz::opts` and the defaults. See [Options](./docs/options.md) for additional inheritable options for user customization.
 
 ```c++
 struct opts
@@ -986,25 +986,19 @@ struct opts
   bool comments = false; // Support reading in JSONC style comments
   bool error_on_unknown_keys = true; // Error when an unknown key is encountered
   bool skip_null_members = true; // Skip writing out params in an object if the value is null
-  bool use_hash_comparison = true; // Will replace some string equality checks with hash checks
   bool prettify = false; // Write out prettified JSON
   bool minified = false; // Require minified input for JSON, which results in faster read performance
   char indentation_char = ' '; // Prettified JSON indentation char
   uint8_t indentation_width = 3; // Prettified JSON indentation size
   bool new_lines_in_arrays = true; // Whether prettified arrays should have new lines for each element
-  bool append_arrays = false; // When reading into an array the data will be appended if the type supports it
-  bool shrink_to_fit = false; // Shrinks dynamic containers to new size to save memory
-  bool write_type_info = true; // Write type info for meta objects in variants
   bool error_on_missing_keys = false; // Require all non nullable keys to be present in the object. Use
                                       // skip_null_members = false to require nullable members
-  bool error_on_const_read =
-     false; // Error if attempt is made to read into a const value, by default the value is skipped without error
 
   bool quoted_num = false; // treat numbers as quoted or array-like types as having quoted numbers
   bool number = false; // treats all types like std::string as numbers: read/write these quoted numbers
   bool raw = false; // write out string like values without quotes
   bool raw_string = false; // do not decode/encode escaped characters for strings (improves read/write performance)
-  bool structs_as_arrays = false; // Handle structs (reading/writing) without keys, which applies
+  bool structs_as_arrays = false; // Handle structs (reading/writing) without keys
 
   bool partial_read =
      false; // Reads into the deepest structural object and then exits without parsing the rest of the input
@@ -1012,6 +1006,8 @@ struct opts
 ```
 
 > Many of these compile time options have wrappers to apply the option to only a single field. See [Wrappers](./docs/wrappers.md) for more details.
+>
+> Additional inheritable options (like `validate_skipped`, `skip_self_constraint`, `append_arrays`, etc.) can be added by creating a custom options struct. See [Options](./docs/options.md) for the full list.
 
 ## JSON Conformance
 

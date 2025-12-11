@@ -187,6 +187,11 @@ namespace glz
    // float_precision float_max_write_precision{};
    // The maximum precision type used for writing floats, higher precision floats will be cast down to this precision
 
+   // ---
+   // bool skip_self_constraint = false;
+   // Skip self_constraint validation during reading. Useful for performance when constraints are known to be valid
+   // or when validation should be deferred.
+
    struct append_arrays_opt_tag
    {};
 
@@ -383,6 +388,16 @@ namespace glz
       }
       else {
          return {};
+      }
+   }
+
+   consteval bool check_skip_self_constraint(auto&& Opts)
+   {
+      if constexpr (requires { Opts.skip_self_constraint; }) {
+         return Opts.skip_self_constraint;
+      }
+      else {
+         return false;
       }
    }
 
