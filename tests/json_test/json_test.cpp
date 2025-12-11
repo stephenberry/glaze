@@ -7330,6 +7330,49 @@ suite self_constraint_real_world = [] {
    };
 };
 
+struct skip_self_constraint_opts : glz::opts
+{
+   bool skip_self_constraint = true;
+};
+
+suite skip_self_constraint_tests = [] {
+   "skip_self_constraint allows invalid data through"_test = [] {
+      constexpr skip_self_constraint_opts opts{};
+
+      // This would normally fail self_constraint validation
+      cross_constrained_object obj{};
+      std::string buffer = R"({"age":9,"name":"Alice"})";
+
+      // With default options, constraint is violated
+      auto ec = glz::read_json(obj, buffer);
+      expect(ec == glz::error_code::constraint_violated);
+
+      // With skip_self_constraint = true, constraint is skipped
+      obj = {};
+      ec = glz::read<opts>(obj, buffer);
+      expect(ec == glz::error_code::none);
+      expect(obj.age == 9);
+      expect(obj.name == "Alice");
+   };
+
+   "skip_self_constraint works with registration_request"_test = [] {
+      constexpr skip_self_constraint_opts opts{};
+
+      registration_request req{};
+      std::string buffer = R"({"username":"coder","password":"short","confirm_password":"short"})";
+
+      // With default options, constraint is violated (password too short)
+      auto ec = glz::read_json(req, buffer);
+      expect(ec == glz::error_code::constraint_violated);
+
+      // With skip_self_constraint = true, constraint is skipped
+      req = {};
+      ec = glz::read<opts>(req, buffer);
+      expect(ec == glz::error_code::none);
+      expect(req.password == "short");
+   };
+};
+
 struct client_state
 {
    uint64_t id{};
