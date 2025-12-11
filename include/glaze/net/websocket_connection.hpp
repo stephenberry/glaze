@@ -490,11 +490,26 @@ namespace glz
       void force_close() override
       {
          is_closing_ = true;
+         // ALWAYS clear handlers under mutex to prevent callbacks with dangling references.
+         // This races with do_close() which also holds the mutex while calling handlers.
+         // Mutual exclusion ensures either handlers are called OR cleared, never both.
+         {
+            std::lock_guard<std::mutex> lock(close_handler_mutex_);
+            client_message_handler_ = nullptr;
+            client_close_handler_ = nullptr;
+            client_error_handler_ = nullptr;
+         }
          closed_ = true;
-         if (socket_) {
-            asio::error_code ec;
-            socket_->close(ec);
-            socket_.reset();
+         // Hold socket_op_mutex_ while closing to prevent race with async_read_some/async_write
+         // setup in do_start_read/do_write. ASIO socket operations are NOT thread-safe.
+         {
+            std::lock_guard<std::mutex> lock(socket_op_mutex_);
+            if (socket_) {
+               asio::error_code ec;
+               socket_->cancel(ec); // Cancel pending operations first
+               socket_->close(ec);
+               socket_.reset();
+            }
          }
       }
 
@@ -575,8 +590,17 @@ namespace glz
          response_str.append("\r\n\r\n");
 
          auto self = this->shared_from_this();
+
+         // Hold socket_op_mutex_ while setting up the async write operation.
+         // This prevents close() from being called while async_write() is setting up.
+         std::lock_guard<std::mutex> sock_lock(socket_op_mutex_);
+
          // Capture socket locally to prevent race condition
          auto socket = socket_;
+         // Check both pointer validity AND that socket is still open
+         if (!socket || !socket->is_open()) {
+            return;
+         }
 
          // Use shared_ptr to keep response string alive during async operation
          auto response_buffer = std::make_shared<std::string>(std::move(response_str));
@@ -608,11 +632,15 @@ namespace glz
       {
          if (ec) {
             is_closing_ = true;
-            if (auto srv = server_.lock()) {
-               srv->notify_error(this->shared_from_this(), ec);
-            }
-            else if (client_error_handler_) {
-               client_error_handler_(ec);
+            // Only call error handlers if not already closed (prevents calling handlers
+            // after force_close() when user's captured references may be invalid)
+            if (!closed_.load()) {
+               if (auto srv = server_.lock()) {
+                  srv->notify_error(this->shared_from_this(), ec);
+               }
+               else if (client_error_handler_) {
+                  client_error_handler_(ec);
+               }
             }
             // Close the connection after a read error (connection is likely broken)
             do_close();
@@ -743,11 +771,15 @@ namespace glz
                }
 
                std::string_view message_view(reinterpret_cast<const char*>(payload), length);
-               if (auto srv = server_.lock()) {
-                  srv->notify_message(this->shared_from_this(), message_view, opcode);
-               }
-               else if (client_message_handler_) {
-                  client_message_handler_(message_view, opcode);
+               // Only call message handlers if not closed (prevents calling handlers
+               // after force_close() when user's captured references may be invalid)
+               if (!closed_.load()) {
+                  if (auto srv = server_.lock()) {
+                     srv->notify_message(this->shared_from_this(), message_view, opcode);
+                  }
+                  else if (client_message_handler_) {
+                     client_message_handler_(message_view, opcode);
+                  }
                }
             }
             else {
@@ -784,11 +816,15 @@ namespace glz
 
                std::string_view message_view(reinterpret_cast<const char*>(message_buffer_.data()),
                                              message_buffer_.size());
-               if (auto srv = server_.lock()) {
-                  srv->notify_message(this->shared_from_this(), message_view, current_opcode_);
-               }
-               else if (client_message_handler_) {
-                  client_message_handler_(message_view, current_opcode_);
+               // Only call message handlers if not closed (prevents calling handlers
+               // after force_close() when user's captured references may be invalid)
+               if (!closed_.load()) {
+                  if (auto srv = server_.lock()) {
+                     srv->notify_message(this->shared_from_this(), message_view, current_opcode_);
+                  }
+                  else if (client_message_handler_) {
+                     client_message_handler_(message_view, current_opcode_);
+                  }
                }
                message_buffer_.clear();
                current_opcode_ = ws_opcode::continuation;
@@ -921,8 +957,16 @@ namespace glz
             return;
          }
 
+         // Hold socket_op_mutex_ while setting up the async write operation.
+         // This prevents close() from being called while async_write() is setting up.
+         // ASIO socket operations are NOT thread-safe for concurrent calls.
+         std::lock_guard<std::mutex> sock_lock(socket_op_mutex_);
+
          auto socket = socket_;
-         if (!socket) {
+         // Check both pointer validity AND that socket is still open.
+         // The socket could be closed (is_open() == false) while the shared_ptr is still valid.
+         // Calling async_write on a closed socket crashes in ASIO's reactor.
+         if (!socket || !socket->is_open()) {
             // Socket was closed externally - ensure close callback fires if pending
             bool had_close_pending = false;
             {
@@ -953,11 +997,15 @@ namespace glz
                                     self->write_queue_.clear();
                                     self->close_after_write_ = false;
                                  }
-                                 if (auto srv = self->server_.lock()) {
-                                    srv->notify_error(self, ec);
-                                 }
-                                 else if (self->client_error_handler_) {
-                                    self->client_error_handler_(ec);
+                                 // Only call error handlers if not already closed (prevents calling handlers
+                                 // after force_close() when user's captured references may be invalid)
+                                 if (!self->closed_.load()) {
+                                    if (auto srv = self->server_.lock()) {
+                                       srv->notify_error(self, ec);
+                                    }
+                                    else if (self->client_error_handler_) {
+                                       self->client_error_handler_(ec);
+                                    }
                                  }
                                  // Close the connection after a write error (connection is likely broken)
                                  self->do_close();
@@ -1084,17 +1132,27 @@ namespace glz
             return; // Already closed
          }
 
-         if (auto srv = server_.lock()) {
-            srv->notify_close(this->shared_from_this(), close_code_, close_reason_);
-         }
-         else if (client_close_handler_) {
-            client_close_handler_(close_code_, close_reason_);
+         // Synchronize with force_close() to prevent calling handlers with dangling references
+         {
+            std::lock_guard<std::mutex> lock(close_handler_mutex_);
+            if (auto srv = server_.lock()) {
+               srv->notify_close(this->shared_from_this(), close_code_, close_reason_);
+            }
+            else if (client_close_handler_) {
+               client_close_handler_(close_code_, close_reason_);
+            }
          }
 
-         if (socket_) {
-            asio::error_code ec;
-            socket_->close(ec);
-            socket_.reset(); // Reset pointer so subsequent checks know socket is closed
+         // Hold socket_op_mutex_ while closing to prevent race with async_read_some/async_write
+         // setup in do_start_read/do_write. ASIO socket operations are NOT thread-safe.
+         {
+            std::lock_guard<std::mutex> lock(socket_op_mutex_);
+            if (socket_) {
+               asio::error_code ec;
+               socket_->cancel(ec); // Cancel pending operations first
+               socket_->close(ec);
+               socket_.reset(); // Reset pointer so subsequent checks know socket is closed
+            }
          }
       }
 
@@ -1123,6 +1181,15 @@ namespace glz
       std::function<void(ws_close_code, std::string_view)> client_close_handler_;
       std::function<void(std::error_code)> client_error_handler_;
 
+      // Mutex to synchronize close handler access between do_close() and force_close()
+      std::mutex close_handler_mutex_;
+
+      // Mutex to prevent race between starting async operations and closing the socket.
+      // ASIO sockets are NOT thread-safe for concurrent operations (e.g., async_read_some
+      // racing with close()). This mutex is held briefly while setting up async ops and
+      // while closing the socket.
+      std::mutex socket_op_mutex_;
+
       // Close code and reason for callback
       ws_close_code close_code_{ws_close_code::normal};
       std::string close_reason_;
@@ -1150,17 +1217,22 @@ namespace glz
      private:
       inline void do_start_read()
       {
-         // Capture socket locally to prevent race condition
-         auto socket = socket_;
-         if (!socket) {
-            return;
-         }
-
          // Check if already fully closed to avoid operations on closed sockets
          // RFC 6455 Section 7.1.1: Use closed_ (not is_closing_) to allow receiving
          // close response during handshake. The initiator must continue reading.
          // https://datatracker.ietf.org/doc/html/rfc6455#section-7.1.1
          if (closed_.load()) {
+            return;
+         }
+
+         // Hold socket_op_mutex_ while setting up the async read operation.
+         // This prevents close() from being called while async_read_some() is setting up.
+         // ASIO socket operations are NOT thread-safe for concurrent calls.
+         std::lock_guard<std::mutex> lock(socket_op_mutex_);
+
+         // Re-check under lock since socket may have been closed while waiting for mutex
+         auto socket = socket_;
+         if (!socket || !socket->is_open()) {
             return;
          }
 
