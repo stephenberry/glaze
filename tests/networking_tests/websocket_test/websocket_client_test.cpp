@@ -73,7 +73,7 @@ void run_echo_server(std::atomic<bool>& server_ready, std::atomic<bool>& should_
       server_ready = true;
 
       while (!should_stop) {
-         std::this_thread::sleep_for(std::chrono::milliseconds(100));
+         std::this_thread::sleep_for(std::chrono::milliseconds(10));
       }
       server.stop();
    }
@@ -107,7 +107,7 @@ void run_close_after_message_server(std::atomic<bool>& server_ready, std::atomic
       server_ready = true;
 
       while (!should_stop) {
-         std::this_thread::sleep_for(std::chrono::milliseconds(100));
+         std::this_thread::sleep_for(std::chrono::milliseconds(10));
       }
       server.stop();
    }
@@ -145,7 +145,7 @@ void run_counting_server(std::atomic<bool>& server_ready, std::atomic<bool>& sho
       server_ready = true;
 
       while (!should_stop) {
-         std::this_thread::sleep_for(std::chrono::milliseconds(100));
+         std::this_thread::sleep_for(std::chrono::milliseconds(10));
       }
       server.stop();
    }
@@ -519,9 +519,11 @@ suite websocket_client_tests = [] {
       const int num_clients = 3;
       std::vector<std::unique_ptr<websocket_client>> clients;
       std::vector<std::atomic<bool>> messages_received(num_clients);
+      std::vector<std::atomic<bool>> clients_closed(num_clients);
 
       for (int i = 0; i < num_clients; ++i) {
          messages_received[i] = false;
+         clients_closed[i] = false;
          clients.push_back(std::make_unique<websocket_client>(io_ctx));
 
          auto* client_ptr = clients[i].get();
@@ -543,7 +545,9 @@ suite websocket_client_tests = [] {
             std::cerr << "Client " << client_id << " error: " << ec.message() << "\n";
          });
 
-         client_ptr->on_close([](ws_close_code, std::string_view) {});
+         client_ptr->on_close([&clients_closed, client_id](ws_close_code, std::string_view) {
+            clients_closed[client_id] = true;
+         });
 
          std::string client_url = "ws://localhost:" + std::to_string(port) + "/ws";
          client_ptr->connect(client_url);
@@ -562,8 +566,15 @@ suite websocket_client_tests = [] {
 
       expect(all_received) << "Not all clients received messages";
 
-      // Small delay to ensure clean close
-      std::this_thread::sleep_for(std::chrono::milliseconds(500));
+      // Wait for all clients to complete close handshake
+      bool all_closed = wait_for_condition([&] {
+         for (int i = 0; i < num_clients; ++i) {
+            if (!clients_closed[i].load()) return false;
+         }
+         return true;
+      });
+
+      expect(all_closed) << "Not all clients closed cleanly";
 
       if (!io_ctx->stopped()) {
          io_ctx->stop();
@@ -685,7 +696,7 @@ suite websocket_client_tests = [] {
             server_ready = true;
 
             while (!stop_server) {
-               std::this_thread::sleep_for(std::chrono::milliseconds(100));
+               std::this_thread::sleep_for(std::chrono::milliseconds(10));
             }
             server.stop();
          }
@@ -898,7 +909,7 @@ void run_integrity_check_server(std::atomic<bool>& server_ready, std::atomic<boo
       server_ready = true;
 
       while (!should_stop) {
-         std::this_thread::sleep_for(std::chrono::milliseconds(100));
+         std::this_thread::sleep_for(std::chrono::milliseconds(10));
       }
       server.stop();
    }
@@ -960,7 +971,7 @@ void run_broadcast_server(std::atomic<bool>& server_ready, std::atomic<bool>& sh
       }
 
       while (!should_stop) {
-         std::this_thread::sleep_for(std::chrono::milliseconds(100));
+         std::this_thread::sleep_for(std::chrono::milliseconds(10));
       }
       server.stop();
    }
