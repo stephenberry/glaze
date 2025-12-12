@@ -93,3 +93,11 @@ add_executable(skip_null_on_read_test skip_null_on_read_test.cpp)
 target_link_libraries(skip_null_on_read_test PRIVATE glz_test_common)
 
 add_test(NAME skip_null_on_read_test COMMAND skip_null_on_read_test)
+
+## u8string test - test for std::u8string support as both buffer and value types
+
+add_executable(u8string_test u8string_test.cpp)
+
+target_link_libraries(u8string_test PRIVATE glz_test_common)
+
+add_test(NAME u8string_test COMMAND u8string_test)

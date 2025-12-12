@@ -209,17 +209,30 @@ namespace glz
    template <class T>
    concept meta_value_t = glaze_t<std::decay_t<T>>;
 
-   // this concept requires that T is just a view
+   // Concept for byte-sized string views (std::string_view, std::u8string_view)
+   // Excludes wide string views (wstring_view, u16string_view, u32string_view)
    template <class T>
-   concept string_view_t = std::same_as<std::decay_t<T>, std::string_view>;
+   concept string_view_t = is_specialization_v<std::decay_t<T>, std::basic_string_view> &&
+                           sizeof(typename std::decay_t<T>::value_type) == 1;
+
+   // Concept for byte-sized basic_string types (std::string, std::u8string)
+   // Excludes wide strings (wstring, u16string, u32string)
+   template <class T>
+   concept basic_string_t = is_specialization_v<std::decay_t<T>, std::basic_string> &&
+                            sizeof(typename std::decay_t<T>::value_type) == 1;
 
    template <class T>
    concept array_char_t =
       requires { std::tuple_size<T>::value; } && std::same_as<T, std::array<char, std::tuple_size_v<T>>>;
 
+   // Concept for char8_t-based string types (std::u8string, std::u8string_view)
+   template <class T>
+   concept u8str_t = (basic_string_t<T> || string_view_t<T>) &&
+                     std::same_as<typename std::decay_t<T>::value_type, char8_t>;
+
    template <class T>
    concept str_t = (!std::same_as<std::nullptr_t, T> && std::constructible_from<std::string_view, std::decay_t<T>>) ||
-                   array_char_t<T>;
+                   array_char_t<T> || u8str_t<T>;
 
    template <class T>
    concept is_static_string =
