@@ -1356,8 +1356,7 @@ namespace glz
       // Cancel the idle timer (called when a new request starts)
       inline void cancel_idle_timer(std::shared_ptr<connection_state> conn)
       {
-         std::error_code ec;
-         conn->idle_timer->cancel(ec);
+         conn->idle_timer->cancel();
       }
 
       // Read the next HTTP request from the connection
