@@ -11,6 +11,7 @@
 #include <ranges>
 #include <type_traits>
 
+#include "glaze/core/chrono.hpp"
 #include "glaze/core/common.hpp"
 #include "glaze/core/opts.hpp"
 #include "glaze/core/read.hpp"
@@ -4094,6 +4095,210 @@ namespace glz
             }
          }
          value = buffer;
+      }
+   };
+
+   // ============================================
+   // std::chrono deserialization
+   // ============================================
+
+   // Duration: parse from count
+   template <is_duration T>
+      requires(not custom_read<T>)
+   struct from<JSON, T>
+   {
+      template <auto Opts, class It0, class It1>
+      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, It0&& it, It1&& end) noexcept
+      {
+         using Rep = typename std::remove_cvref_t<T>::rep;
+         Rep count{};
+         from<JSON, Rep>::template op<Opts>(count, ctx, it, end);
+         if (bool(ctx.error)) [[unlikely]]
+            return;
+         value = std::remove_cvref_t<T>(count);
+      }
+   };
+
+   // system_clock::time_point: parse from ISO 8601 string
+   // Fast manual parser - no heap allocations, direct character parsing
+   template <is_system_time_point T>
+      requires(not custom_read<T>)
+   struct from<JSON, T>
+   {
+      template <auto Opts, class It0, class It1>
+      static void op(auto&& value, is_context auto&& ctx, It0&& it, It1&& end) noexcept
+      {
+         std::string_view str;
+         from<JSON, std::string_view>::template op<Opts>(str, ctx, it, end);
+
+         if (bool(ctx.error)) [[unlikely]]
+            return;
+
+         // Minimum: YYYY-MM-DDTHH:MM:SSZ = 20 chars
+         if (str.size() < 20) [[unlikely]] {
+            ctx.error = error_code::parse_error;
+            return;
+         }
+
+         const char* s = str.data();
+         const auto n = str.size();
+
+         // Helper to parse N digits
+         auto parse_digits = [&s](size_t start, size_t count) -> int {
+            int val = 0;
+            for (size_t i = 0; i < count; ++i) {
+               const char c = s[start + i];
+               if (c < '0' || c > '9') return -1;
+               val = val * 10 + (c - '0');
+            }
+            return val;
+         };
+
+         // YYYY-MM-DDTHH:MM:SS
+         const int yr = parse_digits(0, 4);
+         const int mo = parse_digits(5, 2);
+         const int dy = parse_digits(8, 2);
+         const int hr = parse_digits(11, 2);
+         const int mi = parse_digits(14, 2);
+         const int sc = parse_digits(17, 2);
+
+         if (yr < 0 || mo < 0 || dy < 0 || hr < 0 || mi < 0 || sc < 0 || s[4] != '-' || s[7] != '-' || s[10] != 'T' ||
+             s[13] != ':' || s[16] != ':') [[unlikely]] {
+            ctx.error = error_code::parse_error;
+            return;
+         }
+
+         // Validate ranges (leap seconds not supported - std::chrono::system_clock uses Unix time)
+         if (mo < 1 || mo > 12 || dy < 1 || dy > 31 || hr > 23 || mi > 59 || sc > 59) [[unlikely]] {
+            ctx.error = error_code::parse_error;
+            return;
+         }
+
+         // Parse optional fractional seconds
+         size_t pos = 19;
+         int64_t subsec_nanos = 0;
+         if (pos < n && s[pos] == '.') {
+            ++pos;
+            int64_t frac = 0;
+            int digits = 0;
+            while (pos < n && s[pos] >= '0' && s[pos] <= '9') {
+               if (digits < 9) {
+                  frac = frac * 10 + (s[pos] - '0');
+                  ++digits;
+               }
+               ++pos;
+            }
+            // Scale to nanoseconds
+            static constexpr int64_t scale[] = {1000000000, 100000000, 10000000, 1000000, 100000, 10000, 1000, 100, 10, 1};
+            if (digits > 0 && digits <= 9) {
+               subsec_nanos = frac * scale[digits];
+            }
+         }
+
+         // Parse timezone: Z or +HH:MM or -HH:MM (defaults to UTC if missing)
+         int tz_offset_seconds = 0;
+         if (pos < n) {
+            if (s[pos] == 'Z') {
+               // UTC
+            }
+            else if (s[pos] == '+' || s[pos] == '-') {
+               // +05:00 means local is ahead of UTC, so subtract to get UTC (multiply by -1)
+               // -08:00 means local is behind UTC, so add to get UTC (multiply by +1)
+               const int utc_adjustment = (s[pos] == '+') ? -1 : 1;
+               ++pos;
+               if (pos + 2 > n) [[unlikely]] {
+                  ctx.error = error_code::parse_error;
+                  return;
+               }
+               const int tz_hour = parse_digits(pos, 2);
+               if (tz_hour < 0 || tz_hour > 23) [[unlikely]] {
+                  ctx.error = error_code::parse_error;
+                  return;
+               }
+               pos += 2;
+               int tz_min = 0;
+               if (pos < n && s[pos] == ':') ++pos;
+               if (pos + 2 <= n) {
+                  const int m = parse_digits(pos, 2);
+                  if (m < 0 || m > 59) [[unlikely]] {
+                     ctx.error = error_code::parse_error;
+                     return;
+                  }
+                  tz_min = m;
+                  pos += 2;
+               }
+               tz_offset_seconds = utc_adjustment * (tz_hour * 3600 + tz_min * 60);
+            }
+         }
+
+         // Construct time_point using std::chrono calendar types
+         using namespace std::chrono;
+
+         const auto ymd = year_month_day{year{yr}, month{static_cast<unsigned>(mo)}, day{static_cast<unsigned>(dy)}};
+         if (!ymd.ok()) [[unlikely]] {
+            ctx.error = error_code::parse_error;
+            return;
+         }
+
+         const auto tp =
+            sys_days{ymd} + hours{hr} + minutes{mi} + seconds{sc} + seconds{tz_offset_seconds} + nanoseconds{subsec_nanos};
+
+         using Duration = typename std::remove_cvref_t<T>::duration;
+         value = time_point_cast<Duration>(tp);
+      }
+   };
+
+   // steady_clock::time_point: parse as count in the time_point's native duration
+   template <is_steady_time_point T>
+      requires(not custom_read<T>)
+   struct from<JSON, T>
+   {
+      template <auto Opts, class It0, class It1>
+      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, It0&& it, It1&& end) noexcept
+      {
+         using Duration = typename std::remove_cvref_t<T>::duration;
+         using Rep = typename Duration::rep;
+         Rep count{};
+         from<JSON, Rep>::template op<Opts>(count, ctx, it, end);
+         if (bool(ctx.error)) [[unlikely]]
+            return;
+         value = std::remove_cvref_t<T>(Duration(count));
+      }
+   };
+
+   // high_resolution_clock::time_point when it's a distinct type (rare)
+   template <is_high_res_time_point T>
+      requires(not custom_read<T>)
+   struct from<JSON, T>
+   {
+      template <auto Opts, class It0, class It1>
+      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, It0&& it, It1&& end) noexcept
+      {
+         // Treat like steady_clock - parse as count
+         using Duration = typename std::remove_cvref_t<T>::duration;
+         using Rep = typename Duration::rep;
+         Rep count{};
+         from<JSON, Rep>::template op<Opts>(count, ctx, it, end);
+         if (bool(ctx.error)) [[unlikely]]
+            return;
+         value = std::remove_cvref_t<T>(Duration(count));
+      }
+   };
+
+   // epoch_time wrapper: parse as numeric Unix timestamp
+   template <class Duration>
+      requires(not custom_read<epoch_time<Duration>>)
+   struct from<JSON, epoch_time<Duration>>
+   {
+      template <auto Opts, class It0, class It1>
+      GLZ_ALWAYS_INLINE static void op(auto&& wrapper, is_context auto&& ctx, It0&& it, It1&& end) noexcept
+      {
+         using Rep = typename Duration::rep;
+         Rep count{};
+         from<JSON, Rep>::template op<Opts>(count, ctx, it, end);
+         if (bool(ctx.error)) [[unlikely]]
+            return;
+         wrapper.value = std::chrono::system_clock::time_point{Duration{count}};
       }
    };
 

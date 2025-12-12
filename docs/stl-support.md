@@ -56,6 +56,14 @@ std::bitset<8> b = 0b10101010;
 // will be serialized as a string: "10101010"
 ```
 
+## Chrono Types
+
+- `std::chrono::duration<Rep, Period>` - serializes as numeric count
+- `std::chrono::system_clock::time_point` - serializes as ISO 8601 string
+- `std::chrono::steady_clock::time_point` - serializes as numeric count
+
+See [Chrono Support](./chrono.md) for detailed information about time serialization and `epoch_time` wrappers.
+
 ## std::expected
 
 `std::expected` is supported where the expected value is treated as it would typically be handled in JSON, and the unexpected value is treated as a JSON object with the unexpected value referred to by an `"unexpected"` key.
