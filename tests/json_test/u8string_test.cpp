@@ -20,6 +20,63 @@ struct U8StringValue
    std::u8string text{};
 };
 
+// Structs for nested object tests
+struct Nested
+{
+   int a{};
+   std::string b{};
+};
+
+struct Outer
+{
+   Nested inner{};
+   std::vector<int> nums{};
+};
+
+// Struct for large data test
+struct LargeData
+{
+   std::vector<int> data{};
+};
+
+// Struct with mixed string types
+struct MixedStrings
+{
+   std::string regular{};
+   std::u8string utf8{};
+   int num{};
+};
+
+// Struct with vector of u8strings
+struct VectorOfU8
+{
+   std::vector<std::u8string> strings{};
+};
+
+// Struct with u8string map key
+struct MapWithU8Key
+{
+   std::map<std::u8string, int> data{};
+};
+
+// Struct with u8string map value
+struct MapWithU8Value
+{
+   std::map<std::string, std::u8string> data{};
+};
+
+// Structs for combined tests with u8string values
+struct InnerU8
+{
+   std::u8string name{};
+};
+
+struct OuterU8
+{
+   InnerU8 inner{};
+   std::u8string title{};
+};
+
 suite u8string_buffer_tests = [] {
    "u8string buffer write"_test = [] {
       TestMsg msg{};
@@ -103,17 +160,6 @@ suite u8string_buffer_tests = [] {
    };
 
    "u8string buffer nested objects"_test = [] {
-      struct Nested
-      {
-         int a{};
-         std::string b{};
-      };
-      struct Outer
-      {
-         Nested inner{};
-         std::vector<int> nums{};
-      };
-
       Outer obj{};
       obj.inner.a = 10;
       obj.inner.b = "nested";
@@ -132,11 +178,6 @@ suite u8string_buffer_tests = [] {
    };
 
    "u8string buffer large data"_test = [] {
-      struct LargeData
-      {
-         std::vector<int> data{};
-      };
-
       LargeData obj{};
       obj.data.resize(1000);
       for (int i = 0; i < 1000; ++i) {
@@ -239,13 +280,6 @@ suite u8string_value_tests = [] {
    };
 
    "u8string value mixed struct"_test = [] {
-      struct MixedStrings
-      {
-         std::string regular{};
-         std::u8string utf8{};
-         int num{};
-      };
-
       MixedStrings obj{};
       obj.regular = "regular string";
       obj.utf8 = u8"utf8 string 日本語";
@@ -262,11 +296,6 @@ suite u8string_value_tests = [] {
    };
 
    "u8string value in vector"_test = [] {
-      struct VectorOfU8
-      {
-         std::vector<std::u8string> strings{};
-      };
-
       VectorOfU8 obj{};
       obj.strings = {u8"first", u8"second", u8"third"};
 
@@ -282,11 +311,6 @@ suite u8string_value_tests = [] {
    };
 
    "u8string value as map key"_test = [] {
-      struct MapWithU8Key
-      {
-         std::map<std::u8string, int> data{};
-      };
-
       MapWithU8Key obj{};
       obj.data[u8"key1"] = 10;
       obj.data[u8"key2"] = 20;
@@ -302,11 +326,6 @@ suite u8string_value_tests = [] {
    };
 
    "u8string value as map value"_test = [] {
-      struct MapWithU8Value
-      {
-         std::map<std::string, std::u8string> data{};
-      };
-
       MapWithU8Value obj{};
       obj.data["key1"] = u8"value1";
       obj.data["key2"] = u8"value2 日本語";
@@ -340,17 +359,7 @@ suite u8string_combined_tests = [] {
    };
 
    "u8string buffer with u8string values in nested struct"_test = [] {
-      struct Inner
-      {
-         std::u8string name{};
-      };
-      struct Outer
-      {
-         Inner inner{};
-         std::u8string title{};
-      };
-
-      Outer obj{};
+      OuterU8 obj{};
       obj.inner.name = u8"inner name";
       obj.title = u8"outer title";
 
@@ -359,7 +368,7 @@ suite u8string_combined_tests = [] {
 
       buffer.push_back(u8'\0');
 
-      Outer obj2{};
+      OuterU8 obj2{};
       expect(not glz::read_json(obj2, buffer));
       expect(obj2.inner.name == u8"inner name");
       expect(obj2.title == u8"outer title");
