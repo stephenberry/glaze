@@ -60,7 +60,7 @@ struct glz::meta<glz::error_code>
                                     "file_include_error",
                                     "file_extension_not_supported",
                                     "could_not_determine_extension",
-                                    "get_nonexistent_json_ptr",
+                                    "nonexistent_json_ptr",
                                     "get_wrong_type",
                                     "seek_failure",
                                     "cannot_be_referenced",
@@ -75,7 +75,9 @@ struct glz::meta<glz::error_code>
                                     "invalid_distribution_elements",
                                     "hostname_failure",
                                     "includer_error",
-                                    "feature_not_supported"};
+                                    "feature_not_supported",
+                                    "invalid_json_pointer",
+                                    "patch_test_failed"};
    static constexpr std::array value{none, //
                                      version_mismatch, //
                                      invalid_header, //
@@ -129,7 +131,7 @@ struct glz::meta<glz::error_code>
                                      file_extension_not_supported, //
                                      could_not_determine_extension, //
                                      // JSON pointer access errors
-                                     get_nonexistent_json_ptr, //
+                                     nonexistent_json_ptr, //
                                      get_wrong_type, //
                                      seek_failure, //
                                      // Other errors
@@ -145,7 +147,11 @@ struct glz::meta<glz::error_code>
                                      invalid_distribution_elements, //
                                      hostname_failure, //
                                      includer_error, //
-                                     feature_not_supported};
+                                     feature_not_supported, //
+                                     // JSON Pointer errors (RFC 6901)
+                                     invalid_json_pointer, //
+                                     // JSON Patch errors (RFC 6902)
+                                     patch_test_failed};
 };
 
 #include <system_error>
