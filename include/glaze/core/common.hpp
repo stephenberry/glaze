@@ -212,14 +212,14 @@ namespace glz
    // Concept for byte-sized string views (std::string_view, std::u8string_view)
    // Excludes wide string views (wstring_view, u16string_view, u32string_view)
    template <class T>
-   concept string_view_t = is_specialization_v<std::decay_t<T>, std::basic_string_view> &&
-                           sizeof(typename std::decay_t<T>::value_type) == 1;
+   concept string_view_t =
+      is_specialization_v<std::decay_t<T>, std::basic_string_view> && sizeof(typename std::decay_t<T>::value_type) == 1;
 
    // Concept for byte-sized basic_string types (std::string, std::u8string)
    // Excludes wide strings (wstring, u16string, u32string)
    template <class T>
-   concept basic_string_t = is_specialization_v<std::decay_t<T>, std::basic_string> &&
-                            sizeof(typename std::decay_t<T>::value_type) == 1;
+   concept basic_string_t =
+      is_specialization_v<std::decay_t<T>, std::basic_string> && sizeof(typename std::decay_t<T>::value_type) == 1;
 
    template <class T>
    concept array_char_t =
@@ -227,8 +227,8 @@ namespace glz
 
    // Concept for char8_t-based string types (std::u8string, std::u8string_view)
    template <class T>
-   concept u8str_t = (basic_string_t<T> || string_view_t<T>) &&
-                     std::same_as<typename std::decay_t<T>::value_type, char8_t>;
+   concept u8str_t =
+      (basic_string_t<T> || string_view_t<T>) && std::same_as<typename std::decay_t<T>::value_type, char8_t>;
 
    template <class T>
    concept str_t = (!std::same_as<std::nullptr_t, T> && std::constructible_from<std::string_view, std::decay_t<T>>) ||
