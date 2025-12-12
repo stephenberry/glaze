@@ -394,6 +394,42 @@ namespace glz
    using request_hook = std::function<void(const request&, response&)>;
    using response_hook = std::function<void(const request&, const response&)>;
 
+   /**
+    * @brief Configuration for HTTP connection behavior
+    *
+    * Controls keep-alive (persistent connection) settings for the HTTP server.
+    * HTTP/1.1 defaults to keep-alive; this configuration allows tuning or disabling it.
+    */
+   struct connection_config
+   {
+      /**
+       * @brief Enable HTTP/1.1 persistent connections (keep-alive)
+       *
+       * When enabled, the server will reuse connections for multiple requests.
+       * When disabled, each request/response closes the connection.
+       * Default: true (HTTP/1.1 compliant behavior)
+       */
+      bool keep_alive = true;
+
+      /**
+       * @brief Timeout for idle connections in seconds
+       *
+       * After sending a response, if no new request arrives within this timeout,
+       * the connection is closed. Set to 0 to disable timeout (not recommended).
+       * Default: 60 seconds
+       */
+      uint32_t keep_alive_timeout = 60;
+
+      /**
+       * @brief Maximum requests allowed per connection
+       *
+       * After this many requests on a single connection, the server sends
+       * Connection: close and closes the connection. Set to 0 for unlimited.
+       * Default: 0 (unlimited)
+       */
+      uint32_t max_requests_per_connection = 0;
+   };
+
    // Server implementation using non-blocking asio with WebSocket support
    template <bool EnableTLS = false>
    struct http_server
@@ -1120,6 +1156,66 @@ namespace glz
       }
 
       /**
+       * @brief Configure connection behavior (keep-alive settings)
+       *
+       * @param config The connection configuration to use
+       * @return Reference to this server for method chaining
+       *
+       * Example:
+       * @code
+       * server.connection_settings({
+       *    .keep_alive = true,           // Enable persistent connections
+       *    .keep_alive_timeout = 30,     // 30 second idle timeout
+       *    .max_requests_per_connection = 100  // Close after 100 requests
+       * });
+       * @endcode
+       */
+      inline http_server& connection_settings(const connection_config& config)
+      {
+         conn_config_ = config;
+         return *this;
+      }
+
+      /**
+       * @brief Enable or disable HTTP keep-alive (persistent connections)
+       *
+       * When disabled, the server sends "Connection: close" with every response
+       * and closes the connection after each request/response cycle.
+       *
+       * @param enable true to enable keep-alive (default), false to disable
+       * @return Reference to this server for method chaining
+       */
+      inline http_server& keep_alive(bool enable)
+      {
+         conn_config_.keep_alive = enable;
+         return *this;
+      }
+
+      /**
+       * @brief Set the keep-alive timeout for idle connections
+       *
+       * @param timeout_seconds Seconds to wait for a new request before closing
+       * @return Reference to this server for method chaining
+       */
+      inline http_server& keep_alive_timeout(uint32_t timeout_seconds)
+      {
+         conn_config_.keep_alive_timeout = timeout_seconds;
+         return *this;
+      }
+
+      /**
+       * @brief Set maximum requests per connection
+       *
+       * @param max_requests Maximum requests before closing (0 = unlimited)
+       * @return Reference to this server for method chaining
+       */
+      inline http_server& max_requests_per_connection(uint32_t max_requests)
+      {
+         conn_config_.max_requests_per_connection = max_requests;
+         return *this;
+      }
+
+      /**
        * @brief Wait for a shutdown signal
        *
        * This method blocks until the server is stopped, either by calling stop()
@@ -1159,6 +1255,27 @@ namespace glz
       std::vector<request_hook> request_hooks_;
       std::vector<response_hook> response_hooks_;
 
+      // Connection configuration
+      connection_config conn_config_;
+
+      // Connection state for managing keep-alive connections
+      struct connection_state : public std::enable_shared_from_this<connection_state>
+      {
+         std::shared_ptr<asio::ip::tcp::socket> socket;
+         std::shared_ptr<asio::streambuf> buffer;
+         asio::ip::tcp::endpoint remote_endpoint;
+         std::shared_ptr<asio::steady_timer> idle_timer;
+         uint32_t request_count = 0;
+         bool should_close = false;
+
+         connection_state(std::shared_ptr<asio::ip::tcp::socket> sock, asio::ip::tcp::endpoint endpoint)
+            : socket(std::move(sock)),
+              buffer(std::make_shared<asio::streambuf>()),
+              remote_endpoint(std::move(endpoint)),
+              idle_timer(std::make_shared<asio::steady_timer>(socket->get_executor()))
+         {}
+      };
+
       // Helper for executing wrapping middleware chain
       void execute_middleware_chain(size_t index, request& req, response& res, const handler& h)
       {
@@ -1187,8 +1304,17 @@ namespace glz
       {
          acceptor->async_accept([this](std::error_code ec, asio::ip::tcp::socket socket) {
             if (!ec) {
-               // Process the connection
-               process_request(std::move(socket));
+               // Create connection state for managing this connection's lifecycle
+               auto socket_ptr = std::make_shared<asio::ip::tcp::socket>(std::move(socket));
+               asio::error_code endpoint_ec;
+               auto remote_endpoint = socket_ptr->remote_endpoint(endpoint_ec);
+               if (endpoint_ec) {
+                  error_handler(endpoint_ec, std::source_location::current());
+               }
+               else {
+                  auto conn = std::make_shared<connection_state>(std::move(socket_ptr), remote_endpoint);
+                  start_connection(conn);
+               }
             }
             else if (running) {
                // Only report errors if we're still running (not shutting down)
@@ -1202,169 +1328,561 @@ namespace glz
          });
       }
 
-      inline void process_request(asio::ip::tcp::socket socket)
+      // Start handling a new connection
+      inline void start_connection(std::shared_ptr<connection_state> conn)
       {
-         // Capture socket in a shared_ptr for async operations
-         auto socket_ptr = std::make_shared<asio::ip::tcp::socket>(std::move(socket));
-         auto remote_endpoint = socket_ptr->remote_endpoint();
-         auto buffer = std::make_shared<asio::streambuf>();
+         read_request(conn);
+      }
+
+      // Start or reset the idle timer for keep-alive connections
+      inline void start_idle_timer(std::shared_ptr<connection_state> conn)
+      {
+         if (conn_config_.keep_alive_timeout == 0) {
+            return; // No timeout configured
+         }
+
+         conn->idle_timer->expires_after(std::chrono::seconds(conn_config_.keep_alive_timeout));
+         conn->idle_timer->async_wait([conn](std::error_code ec) {
+            if (!ec) {
+               // Timer expired - close the connection
+               std::error_code close_ec;
+               conn->socket->shutdown(asio::ip::tcp::socket::shutdown_both, close_ec);
+               conn->socket->close(close_ec);
+            }
+            // If ec is operation_aborted, the timer was cancelled (new request arrived)
+         });
+      }
+
+      // Cancel the idle timer (called when a new request starts)
+      inline void cancel_idle_timer(std::shared_ptr<connection_state> conn)
+      {
+         std::error_code ec;
+         conn->idle_timer->cancel(ec);
+      }
+
+      // Read the next HTTP request from the connection
+      inline void read_request(std::shared_ptr<connection_state> conn)
+      {
+         // Start idle timer for keep-alive connections (except for first request)
+         if (conn->request_count > 0 && conn_config_.keep_alive) {
+            start_idle_timer(conn);
+         }
 
          asio::async_read_until(
-            *socket_ptr, *buffer, "\r\n\r\n",
-            [this, socket_ptr, buffer, remote_endpoint](asio::error_code ec, std::size_t /*bytes_transferred*/) {
+            *conn->socket, *conn->buffer, "\r\n\r\n",
+            [this, conn](asio::error_code ec, std::size_t /*bytes_transferred*/) {
+               // Cancel idle timer since we received data
+               cancel_idle_timer(conn);
+
                if (ec) {
                   // EOF is a normal disconnect, not a server error
-                  if (ec != asio::error::eof) {
+                  if (ec != asio::error::eof && ec != asio::error::operation_aborted) {
                      error_handler(ec, std::source_location::current());
                   }
                   return;
                }
 
-               const auto data_size = buffer->size();
-               const char* data_ptr = static_cast<const char*>(buffer->data().data());
-               std::string_view request_view(data_ptr, data_size);
+               conn->request_count++;
+               process_request_data(conn);
+            });
+      }
 
-               size_t headers_end_pos = request_view.find("\r\n\r\n");
-               if (headers_end_pos == std::string_view::npos) {
-                  send_error_response(socket_ptr, 400, "Bad Request");
-                  return;
-               }
-               std::string_view headers_part = request_view.substr(0, headers_end_pos);
-               size_t body_start_offset = headers_end_pos + 4;
+      // Process data received from the connection
+      inline void process_request_data(std::shared_ptr<connection_state> conn)
+      {
+         const auto data_size = conn->buffer->size();
+         const char* data_ptr = static_cast<const char*>(conn->buffer->data().data());
+         std::string_view request_view(data_ptr, data_size);
 
-               // Parse request line
-               size_t request_line_end_pos = headers_part.find("\r\n");
-               std::string_view request_line;
-               if (request_line_end_pos == std::string_view::npos) {
-                  request_line = headers_part; // Request line is the entire headers_part
-                  headers_part = ""; // headers_part becomes empty as there are no more headers
-               }
-               else {
-                  request_line = headers_part.substr(0, request_line_end_pos);
-                  headers_part.remove_prefix(request_line_end_pos + 2); // +2 for \r\n
-               }
+         size_t headers_end_pos = request_view.find("\r\n\r\n");
+         if (headers_end_pos == std::string_view::npos) {
+            send_error_response_with_close(conn, 400, "Bad Request");
+            return;
+         }
+         std::string_view headers_part = request_view.substr(0, headers_end_pos);
+         size_t body_start_offset = headers_end_pos + 4;
 
-               // Parse method, target, and HTTP version from the request line
-               size_t first_space = request_line.find(' ');
-               if (first_space == std::string_view::npos) {
-                  send_error_response(socket_ptr, 400, "Bad Request");
-                  return;
-               }
-               std::string_view method_sv = request_line.substr(0, first_space);
-               if (method_sv.empty() || !std::all_of(method_sv.begin(), method_sv.end(),
-                                                     [](char c) { return std::isalnum(c) || c == '_'; })) {
-                  send_error_response(socket_ptr, 400, "Bad Request");
-                  return;
-               }
+         // Parse request line
+         size_t request_line_end_pos = headers_part.find("\r\n");
+         std::string_view request_line;
+         if (request_line_end_pos == std::string_view::npos) {
+            request_line = headers_part; // Request line is the entire headers_part
+            headers_part = ""; // headers_part becomes empty as there are no more headers
+         }
+         else {
+            request_line = headers_part.substr(0, request_line_end_pos);
+            headers_part.remove_prefix(request_line_end_pos + 2); // +2 for \r\n
+         }
 
-               size_t second_space = request_line.find(' ', first_space + 1);
-               if (second_space == std::string_view::npos) {
-                  send_error_response(socket_ptr, 400, "Bad Request");
-                  return;
-               }
-               std::string_view target_sv = request_line.substr(first_space + 1, second_space - first_space - 1);
-               if (target_sv.empty() || target_sv.find(' ') != std::string_view::npos) {
-                  send_error_response(socket_ptr, 400, "Bad Request");
-                  return;
-               }
+         // Parse method, target, and HTTP version from the request line
+         size_t first_space = request_line.find(' ');
+         if (first_space == std::string_view::npos) {
+            send_error_response_with_close(conn, 400, "Bad Request");
+            return;
+         }
+         std::string_view method_sv = request_line.substr(0, first_space);
+         if (method_sv.empty() || !std::all_of(method_sv.begin(), method_sv.end(),
+                                               [](char c) { return std::isalnum(c) || c == '_'; })) {
+            send_error_response_with_close(conn, 400, "Bad Request");
+            return;
+         }
 
-               std::string_view http_version_part = request_line.substr(second_space + 1);
-               if (http_version_part.size() > 0 && http_version_part.back() == '\r') {
-                  http_version_part.remove_suffix(1);
-               }
-               if (http_version_part.size() < 7 || http_version_part.rfind("HTTP/", 0) != 0) {
-                  send_error_response(socket_ptr, 400, "Bad Request");
-                  return;
-               }
-               std::string_view version_number = http_version_part.substr(5);
-               size_t dot_pos = version_number.find('.');
-               if (dot_pos == std::string_view::npos || dot_pos == 0 || dot_pos == version_number.length() - 1) {
-                  send_error_response(socket_ptr, 400, "Bad Request");
-                  return;
-               }
-               std::string_view major_v = version_number.substr(0, dot_pos);
-               std::string_view minor_v = version_number.substr(dot_pos + 1);
-               if (major_v.empty() || !std::all_of(major_v.begin(), major_v.end(), ::isdigit) || minor_v.empty() ||
-                   !std::all_of(minor_v.begin(), minor_v.end(), ::isdigit)) {
-                  send_error_response(socket_ptr, 400, "Bad Request");
-                  return;
-               }
+         size_t second_space = request_line.find(' ', first_space + 1);
+         if (second_space == std::string_view::npos) {
+            send_error_response_with_close(conn, 400, "Bad Request");
+            return;
+         }
+         std::string_view target_sv = request_line.substr(first_space + 1, second_space - first_space - 1);
+         if (target_sv.empty() || target_sv.find(' ') != std::string_view::npos) {
+            send_error_response_with_close(conn, 400, "Bad Request");
+            return;
+         }
 
-               auto method_opt = from_string(std::string(method_sv));
-               if (!method_opt) {
-                  send_error_response(socket_ptr, 501, "Not Implemented");
-                  return;
-               }
-               std::string target{target_sv};
+         std::string_view http_version_part = request_line.substr(second_space + 1);
+         if (http_version_part.size() > 0 && http_version_part.back() == '\r') {
+            http_version_part.remove_suffix(1);
+         }
+         if (http_version_part.size() < 7 || http_version_part.rfind("HTTP/", 0) != 0) {
+            send_error_response_with_close(conn, 400, "Bad Request");
+            return;
+         }
+         std::string_view version_number = http_version_part.substr(5);
+         size_t dot_pos = version_number.find('.');
+         if (dot_pos == std::string_view::npos || dot_pos == 0 || dot_pos == version_number.length() - 1) {
+            send_error_response_with_close(conn, 400, "Bad Request");
+            return;
+         }
+         std::string_view major_v = version_number.substr(0, dot_pos);
+         std::string_view minor_v = version_number.substr(dot_pos + 1);
+         if (major_v.empty() || !std::all_of(major_v.begin(), major_v.end(), ::isdigit) || minor_v.empty() ||
+             !std::all_of(minor_v.begin(), minor_v.end(), ::isdigit)) {
+            send_error_response_with_close(conn, 400, "Bad Request");
+            return;
+         }
 
-               // Parse headers
-               std::unordered_map<std::string, std::string> headers;
-               while (!headers_part.empty()) {
-                  size_t line_end = headers_part.find("\r\n");
-                  std::string_view line = headers_part.substr(0, line_end);
+         // Determine HTTP version for keep-alive default behavior
+         // HTTP/1.1 defaults to keep-alive, HTTP/1.0 defaults to close
+         bool is_http_11 = (major_v == "1" && minor_v == "1");
 
-                  auto colon_pos = line.find(':');
-                  if (colon_pos != std::string_view::npos) {
-                     std::string_view name_sv = line.substr(0, colon_pos);
-                     std::string_view value_sv = line.substr(colon_pos + 1);
-                     value_sv.remove_prefix(std::min(value_sv.find_first_not_of(" \t"), value_sv.size()));
-                     headers[to_lower_case(name_sv)] = std::string(value_sv);
+         auto method_opt = from_string(std::string(method_sv));
+         if (!method_opt) {
+            send_error_response_with_close(conn, 501, "Not Implemented");
+            return;
+         }
+         std::string target{target_sv};
+
+         // Parse headers
+         std::unordered_map<std::string, std::string> headers;
+         while (!headers_part.empty()) {
+            size_t line_end = headers_part.find("\r\n");
+            std::string_view line = headers_part.substr(0, line_end);
+
+            auto colon_pos = line.find(':');
+            if (colon_pos != std::string_view::npos) {
+               std::string_view name_sv = line.substr(0, colon_pos);
+               std::string_view value_sv = line.substr(colon_pos + 1);
+               value_sv.remove_prefix(std::min(value_sv.find_first_not_of(" \t"), value_sv.size()));
+               headers[to_lower_case(name_sv)] = std::string(value_sv);
+            }
+
+            if (line_end == std::string_view::npos) break;
+            headers_part.remove_prefix(line_end + 2);
+         }
+
+         // Determine if connection should be kept alive based on:
+         // 1. Server configuration
+         // 2. HTTP version (1.1 = keep-alive by default, 1.0 = close by default)
+         // 3. Client's Connection header
+         // 4. Max requests per connection limit
+         bool should_keep_alive = determine_keep_alive(headers, is_http_11, conn);
+         conn->should_close = !should_keep_alive;
+
+         // Consume the parsed headers from the buffer
+         conn->buffer->consume(body_start_offset);
+
+         if (is_websocket_upgrade(headers)) {
+            // WebSocket upgrades take over the connection
+            handle_websocket_upgrade(conn->socket, *method_opt, target, headers, conn->remote_endpoint);
+            return;
+         }
+
+         std::size_t content_length = 0;
+         if (auto it = headers.find("content-length"); it != headers.end()) {
+            try {
+               content_length = std::stoul(it->second);
+            }
+            catch (const std::exception&) {
+               send_error_response_with_close(conn, 400, "Bad Request");
+               return;
+            }
+         }
+
+         if (content_length > 0) {
+            std::string body;
+            body.reserve(content_length);
+            // Append what's already in the buffer
+            const size_t initial_body_size = std::min(content_length, conn->buffer->size());
+            body.append(static_cast<const char*>(conn->buffer->data().data()), initial_body_size);
+            conn->buffer->consume(initial_body_size);
+
+            if (body.length() < content_length) {
+               asio::async_read(*conn->socket, *conn->buffer, asio::transfer_exactly(content_length - body.length()),
+                                [this, conn, method_opt, target, headers,
+                                 body = std::move(body)](std::error_code ec, size_t) mutable {
+                                   if (ec) {
+                                      error_handler(ec, std::source_location::current());
+                                      return;
+                                   }
+                                   // Append newly read data
+                                   body.append(static_cast<const char*>(conn->buffer->data().data()),
+                                               conn->buffer->size());
+                                   conn->buffer->consume(conn->buffer->size());
+                                   process_full_request_with_conn(conn, *method_opt, target, headers, std::move(body));
+                                });
+            }
+            else {
+               process_full_request_with_conn(conn, *method_opt, target, headers, std::move(body));
+            }
+         }
+         else {
+            process_full_request_with_conn(conn, *method_opt, target, headers, "");
+         }
+      }
+
+      // Determine if the connection should be kept alive
+      inline bool determine_keep_alive(const std::unordered_map<std::string, std::string>& headers, bool is_http_11,
+                                       std::shared_ptr<connection_state> conn)
+      {
+         // If server has keep-alive disabled, always close
+         if (!conn_config_.keep_alive) {
+            return false;
+         }
+
+         // Check max requests per connection limit
+         if (conn_config_.max_requests_per_connection > 0 &&
+             conn->request_count >= conn_config_.max_requests_per_connection) {
+            return false;
+         }
+
+         // Check client's Connection header
+         auto conn_header_it = headers.find("connection");
+         if (conn_header_it != headers.end()) {
+            std::string conn_value = to_lower_case(conn_header_it->second);
+            if (conn_value.find("close") != std::string::npos) {
+               return false; // Client requested close
+            }
+            if (conn_value.find("keep-alive") != std::string::npos) {
+               return true; // Client explicitly requested keep-alive
+            }
+         }
+
+         // Default behavior based on HTTP version
+         // HTTP/1.1: keep-alive by default
+         // HTTP/1.0: close by default
+         return is_http_11;
+      }
+
+      // Process a full request using connection state (new keep-alive aware version)
+      inline void process_full_request_with_conn(std::shared_ptr<connection_state> conn, http_method method,
+                                                 const std::string& target,
+                                                 const std::unordered_map<std::string, std::string>& headers,
+                                                 std::string body)
+      {
+         // Check for a streaming handler first
+         auto handler_it = streaming_handlers_.find(target);
+         if (handler_it != streaming_handlers_.end()) {
+            auto method_it = handler_it->second.find(method);
+            if (method_it != handler_it->second.end()) {
+               // Streaming handlers take over the connection (no keep-alive loop)
+               handle_streaming_request(conn->socket, method, target, headers, std::move(body), conn->remote_endpoint,
+                                        method_it->second);
+               return;
+            }
+         }
+
+         // Create the request object
+         request request;
+         request.method = method;
+         request.target = target;
+         request.headers = headers;
+         request.body = std::move(body);
+         request.remote_ip = conn->remote_endpoint.address().to_string();
+         request.remote_port = conn->remote_endpoint.port();
+
+         // Find a matching route
+         auto [handle, params] = root_router.match(method, target);
+
+         // Create the response object
+         response response;
+
+         // Call request hooks for metrics/logging
+         try {
+            for (const auto& hook : request_hooks_) {
+               hook(request, response);
+            }
+         }
+         catch (const std::exception&) {
+            error_handler(std::make_error_code(std::errc::invalid_argument), std::source_location::current());
+            send_error_response_with_close(conn, 500, "Internal Server Error");
+            return;
+         }
+
+         if (!handle) {
+            if (method == http_method::OPTIONS) {
+               std::vector<http_method> allowed_methods;
+               std::unordered_map<std::string, std::string> preflight_params;
+
+               auto capture_first_params = [&](std::unordered_map<std::string, std::string>&& candidate_params) {
+                  if (preflight_params.empty()) {
+                     preflight_params = std::move(candidate_params);
+                  }
+               };
+
+               auto try_method = [&](http_method m) {
+                  if (m == http_method::OPTIONS) return;
+                  auto [candidate_handle, candidate_params] = root_router.match(m, target);
+                  if (candidate_handle) {
+                     allowed_methods.push_back(m);
+                     capture_first_params(std::move(candidate_params));
+                  }
+               };
+
+               try_method(http_method::GET);
+               try_method(http_method::POST);
+               try_method(http_method::PUT);
+               try_method(http_method::DELETE);
+               try_method(http_method::PATCH);
+               try_method(http_method::HEAD);
+
+               if (!allowed_methods.empty()) {
+                  request.params = std::move(preflight_params);
+
+                  bool has_request_method_header = false;
+                  bool requested_method_known = false;
+                  http_method requested_method{};
+
+                  if (auto request_method_it = request.headers.find("access-control-request-method");
+                      request_method_it != request.headers.end()) {
+                     has_request_method_header = true;
+                     std::string method_token = request_method_it->second;
+                     auto trim_pos = method_token.find_last_not_of(" \t\r\n");
+                     if (trim_pos != std::string::npos) {
+                        method_token.erase(trim_pos + 1);
+                     }
+                     else {
+                        method_token.clear();
+                     }
+
+                     if (!method_token.empty()) {
+                        std::transform(method_token.begin(), method_token.end(), method_token.begin(),
+                                       [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
+
+                        if (auto parsed = from_string(method_token)) {
+                           requested_method = *parsed;
+                           requested_method_known = true;
+                        }
+                     }
                   }
 
-                  if (line_end == std::string_view::npos) break;
-                  headers_part.remove_prefix(line_end + 2);
-               }
+                  if (std::none_of(allowed_methods.begin(), allowed_methods.end(),
+                                   [](http_method m) { return m == http_method::OPTIONS; })) {
+                     allowed_methods.push_back(http_method::OPTIONS);
+                  }
 
-               // Consume the parsed headers from the buffer
-               buffer->consume(body_start_offset);
+                  std::string allow_header;
+                  allow_header.reserve(allowed_methods.size() * 8);
+                  for (size_t i = 0; i < allowed_methods.size(); ++i) {
+                     if (i > 0) allow_header.append(", ");
+                     allow_header.append(std::string{to_string(allowed_methods[i])});
+                  }
+                  response.header("Allow", allow_header);
 
-               if (is_websocket_upgrade(headers)) {
-                  handle_websocket_upgrade(socket_ptr, *method_opt, target, headers, remote_endpoint);
-                  return;
-               }
+                  bool requested_method_allowed = true;
+                  if (has_request_method_header) {
+                     requested_method_allowed =
+                        requested_method_known && std::find(allowed_methods.begin(), allowed_methods.end(),
+                                                            requested_method) != allowed_methods.end();
+                  }
 
-               std::size_t content_length = 0;
-               if (auto it = headers.find("content-length"); it != headers.end()) {
                   try {
-                     content_length = std::stoul(it->second);
+                     for (const auto& middleware : root_router.middlewares) {
+                        middleware(request, response);
+                     }
                   }
                   catch (const std::exception&) {
-                     send_error_response(socket_ptr, 400, "Bad Request");
+                     error_handler(std::make_error_code(std::errc::invalid_argument), std::source_location::current());
+                     send_error_response_with_close(conn, 500, "Internal Server Error");
                      return;
                   }
-               }
 
-               if (content_length > 0) {
-                  std::string body;
-                  body.reserve(content_length);
-                  // Append what's already in the buffer
-                  const size_t initial_body_size = std::min(content_length, buffer->size());
-                  body.append(static_cast<const char*>(buffer->data().data()), initial_body_size);
-                  buffer->consume(initial_body_size);
+                  if (!requested_method_allowed) {
+                     response.status(405);
+                     for (const auto& hook : response_hooks_) {
+                        try {
+                           hook(request, response);
+                        }
+                        catch (const std::exception&) {
+                           error_handler(std::make_error_code(std::errc::invalid_argument),
+                                         std::source_location::current());
+                        }
+                     }
+                     send_response_with_conn(conn, response);
+                     return;
+                  }
 
-                  if (body.length() < content_length) {
-                     asio::async_read(*socket_ptr, *buffer, asio::transfer_exactly(content_length - body.length()),
-                                      [this, socket_ptr, buffer, method_opt, target, headers, remote_endpoint,
-                                       body = std::move(body)](std::error_code ec, size_t) mutable {
-                                         if (ec) {
-                                            error_handler(ec, std::source_location::current());
-                                            return;
-                                         }
-                                         // Append newly read data
-                                         body.append(static_cast<const char*>(buffer->data().data()), buffer->size());
-                                         buffer->consume(buffer->size());
-                                         process_full_request(socket_ptr, *method_opt, target, headers, std::move(body),
-                                                              remote_endpoint);
-                                      });
+                  for (const auto& hook : response_hooks_) {
+                     try {
+                        hook(request, response);
+                     }
+                     catch (const std::exception&) {
+                        error_handler(std::make_error_code(std::errc::invalid_argument),
+                                      std::source_location::current());
+                     }
                   }
-                  else {
-                     process_full_request(socket_ptr, *method_opt, target, headers, std::move(body), remote_endpoint);
+                  send_response_with_conn(conn, response);
+                  return;
+               }
+            }
+
+            // No matching route found
+            send_error_response_with_conn(conn, 404, "Not Found");
+            return;
+         }
+
+         request.params = std::move(params);
+
+         try {
+            for (const auto& middleware : root_router.middlewares) {
+               middleware(request, response);
+            }
+
+            if (wrapping_middlewares_.empty()) {
+               handle(request, response);
+            }
+            else {
+               execute_middleware_chain(0, request, response, handle);
+            }
+
+            for (const auto& hook : response_hooks_) {
+               try {
+                  hook(request, response);
+               }
+               catch (const std::exception&) {
+                  error_handler(std::make_error_code(std::errc::invalid_argument), std::source_location::current());
+               }
+            }
+
+            send_response_with_conn(conn, response);
+         }
+         catch (const std::exception&) {
+            error_handler(std::make_error_code(std::errc::invalid_argument), std::source_location::current());
+            send_error_response_with_close(conn, 500, "Internal Server Error");
+         }
+      }
+
+      // Send response with keep-alive support
+      inline void send_response_with_conn(std::shared_ptr<connection_state> conn, const response& response)
+      {
+         size_t estimated_size = 64;
+
+         for (const auto& [name, value] : response.response_headers) {
+            estimated_size += name.size() + value.size() + 4;
+         }
+
+         estimated_size += response.response_body.size() + 128;
+
+         std::string response_str;
+         response_str.reserve(estimated_size);
+
+         response_str.append("HTTP/1.1 ");
+         response_str.append(std::to_string(response.status_code));
+         response_str.append(" ");
+         response_str.append(get_status_message(response.status_code));
+         response_str.append("\r\n");
+
+         for (const auto& [name, value] : response.response_headers) {
+            response_str.append(name);
+            response_str.append(": ");
+            response_str.append(value);
+            response_str.append("\r\n");
+         }
+
+         if (response.response_headers.find("content-length") == response.response_headers.end()) {
+            response_str.append("Content-Length: ");
+            response_str.append(std::to_string(response.response_body.size()));
+            response_str.append("\r\n");
+         }
+
+         if (response.response_headers.find("date") == response.response_headers.end()) {
+            response_str.append("Date: ");
+            response_str.append(get_current_date());
+            response_str.append("\r\n");
+         }
+
+         if (response.response_headers.find("server") == response.response_headers.end()) {
+            response_str.append("Server: Glaze/1.0\r\n");
+         }
+
+         // Add Connection header based on keep-alive decision
+         if (response.response_headers.find("connection") == response.response_headers.end()) {
+            if (conn->should_close) {
+               response_str.append("Connection: close\r\n");
+            }
+            else {
+               response_str.append("Connection: keep-alive\r\n");
+               // Add Keep-Alive header with timeout info
+               if (conn_config_.keep_alive_timeout > 0) {
+                  response_str.append("Keep-Alive: timeout=");
+                  response_str.append(std::to_string(conn_config_.keep_alive_timeout));
+                  if (conn_config_.max_requests_per_connection > 0) {
+                     response_str.append(", max=");
+                     response_str.append(std::to_string(conn_config_.max_requests_per_connection));
                   }
+                  response_str.append("\r\n");
                }
-               else {
-                  process_full_request(socket_ptr, *method_opt, target, headers, "", remote_endpoint);
-               }
-            });
+            }
+         }
+
+         response_str.append("\r\n");
+         response_str.append(response.response_body);
+
+         auto response_buffer = std::make_shared<std::string>(std::move(response_str));
+
+         asio::async_write(*conn->socket, asio::buffer(*response_buffer),
+                           [this, conn, response_buffer](std::error_code ec, std::size_t /*bytes_transferred*/) {
+                              if (ec) {
+                                 // Write error - connection is dead
+                                 return;
+                              }
+
+                              if (conn->should_close) {
+                                 // Close the connection gracefully
+                                 std::error_code close_ec;
+                                 conn->socket->shutdown(asio::ip::tcp::socket::shutdown_both, close_ec);
+                                 conn->socket->close(close_ec);
+                              }
+                              else {
+                                 // Keep-alive: read the next request
+                                 read_request(conn);
+                              }
+                           });
+      }
+
+      // Send error response with keep-alive support (for normal errors)
+      inline void send_error_response_with_conn(std::shared_ptr<connection_state> conn, int status_code,
+                                                const std::string& message)
+      {
+         response resp;
+         resp.status(status_code).content_type("text/plain").body(message);
+         send_response_with_conn(conn, resp);
+      }
+
+      // Send error response and close connection (for protocol errors)
+      inline void send_error_response_with_close(std::shared_ptr<connection_state> conn, int status_code,
+                                                 const std::string& message)
+      {
+         conn->should_close = true; // Force close after error
+         send_error_response_with_conn(conn, status_code, message);
       }
 
       inline bool is_websocket_upgrade(const std::unordered_map<std::string, std::string>& headers)
