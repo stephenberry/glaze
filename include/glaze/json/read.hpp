@@ -2546,7 +2546,7 @@ namespace glz
                   }
                   else {
                      Key key_value{};
-                     if constexpr (glaze_enum_t<Key>) {
+                     if constexpr (glaze_enum_t<Key> || mimics_str_t<Key>) {
                         parse<JSON>::op<Opts>(key_value, ctx, it, end);
                      }
                      else if constexpr (std::is_arithmetic_v<Key>) {

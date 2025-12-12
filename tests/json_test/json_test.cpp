@@ -5866,6 +5866,88 @@ suite arbitrary_key_maps = [] {
    };
 };
 
+// Test for issue #1477: Double quoted keys for custom struct json write
+// When a custom type with custom serialization is used as a map key,
+// the mimics<T, std::string> concept prevents double-quoting
+struct mimics_string_key
+{
+   std::string value{};
+
+   [[nodiscard]] std::strong_ordering operator<=>(const mimics_string_key&) const noexcept = default;
+};
+
+template <>
+struct glz::meta<mimics_string_key>
+{
+   using mimic = std::string;
+   static constexpr auto value = &mimics_string_key::value;
+};
+
+// Struct for testing mimics in nested context
+struct mimics_string_nested_struct
+{
+   std::map<mimics_string_key, bool> data;
+
+   bool operator==(const mimics_string_nested_struct&) const = default;
+};
+
+suite mimics_string_key_tests = [] {
+   "mimics<T, std::string> key write"_test = [] {
+      std::map<mimics_string_key, int> m{{{"hello"}, 42}, {{"world"}, 99}};
+
+      std::string buffer{};
+      expect(not glz::write_json(m, buffer));
+      // With using mimic = std::string, the key should be "hello" not "\"hello\""
+      expect(buffer == R"({"hello":42,"world":99})") << buffer;
+   };
+
+   "mimics<T, std::string> key read"_test = [] {
+      std::map<mimics_string_key, int> m{};
+      std::string json = R"({"hello":42,"world":99})";
+
+      expect(not glz::read_json(m, json));
+      expect(m.size() == 2);
+      expect(m[{"hello"}] == 42);
+      expect(m[{"world"}] == 99);
+   };
+
+   "mimics<T, std::string> key roundtrip"_test = [] {
+      std::map<mimics_string_key, std::string> original{{{"key1"}, "value1"}, {{"key2"}, "value2"}};
+
+      std::string buffer{};
+      expect(not glz::write_json(original, buffer));
+
+      std::map<mimics_string_key, std::string> parsed{};
+      expect(not glz::read_json(parsed, buffer));
+
+      expect(parsed.size() == original.size());
+      for (const auto& [key, val] : original) {
+         expect(parsed.contains(key));
+         expect(parsed[key] == val);
+      }
+   };
+
+   "mimics<T, std::string> key in struct"_test = [] {
+      mimics_string_nested_struct obj{.data = {{{"enabled"}, true}, {{"disabled"}, false}}};
+
+      std::string buffer{};
+      expect(not glz::write_json(obj, buffer));
+      expect(buffer == R"({"data":{"disabled":false,"enabled":true}})") << buffer;
+
+      mimics_string_nested_struct parsed{};
+      expect(not glz::read_json(parsed, buffer));
+      expect(parsed == obj);
+   };
+
+   "mimic concepts"_test = [] {
+      // Test that the concepts work correctly
+      static_assert(glz::has_mimic<mimics_string_key>);
+      static_assert(glz::mimics<mimics_string_key, std::string>);
+      static_assert(glz::mimics_str_t<mimics_string_key>);
+      expect(true);
+   };
+};
+
 suite char_array = [] {
    "char array write"_test = [] {
       char arr[12] = "Hello World";

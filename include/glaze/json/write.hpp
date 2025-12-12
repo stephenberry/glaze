@@ -915,7 +915,7 @@ namespace glz
    template <auto Opts, class Key, class Value, is_context Ctx, class B>
    GLZ_ALWAYS_INLINE void write_pair_content(const Key& key, Value&& value, Ctx& ctx, B&& b, auto&& ix)
    {
-      if constexpr (str_t<Key> || char_t<Key> || glaze_enum_t<Key> || Opts.quoted_num) {
+      if constexpr (str_t<Key> || char_t<Key> || glaze_enum_t<Key> || mimics_str_t<Key> || Opts.quoted_num) {
          to<JSON, core_t<Key>>::template op<Opts>(key, ctx, b, ix);
       }
       else if constexpr (num_t<Key>) {

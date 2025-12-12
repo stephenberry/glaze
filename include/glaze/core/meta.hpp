@@ -698,4 +698,40 @@ namespace glz
 
    template <class T>
    concept custom_write = requires { requires meta<T>::custom_write == true; };
+
+   // Check if T has a mimic type defined in glz::meta or T::glaze
+   // Usage: using mimic = std::string;
+   template <class T>
+   concept local_mimic_t = requires { typename T::glaze::mimic; };
+
+   template <class T>
+   concept global_mimic_t = requires { typename meta<T>::mimic; };
+
+   template <class T>
+   concept has_mimic = local_mimic_t<T> || global_mimic_t<T>;
+
+   // Extract the mimic type from T's glz::meta or T::glaze
+   namespace detail
+   {
+      template <class T>
+      struct mimic_type_impl
+      {
+         using type = typename meta<T>::mimic;
+      };
+
+      template <local_mimic_t T>
+      struct mimic_type_impl<T>
+      {
+         using type = typename T::glaze::mimic;
+      };
+   }
+
+   template <has_mimic T>
+   using mimic_type = typename detail::mimic_type_impl<T>::type;
+
+   // Generic concept: does T mimic Target type exactly?
+   // Allows developers to add `using mimic = std::string;` to their glz::meta
+   // to indicate that a custom type mimics another type's serialization behavior.
+   template <class T, class Target>
+   concept mimics = has_mimic<T> && std::same_as<mimic_type<T>, Target>;
 }
