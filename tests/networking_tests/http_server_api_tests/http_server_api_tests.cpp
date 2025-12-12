@@ -1284,7 +1284,8 @@ suite keepalive_config_tests = [] {
 
    "connection_settings_method"_test = [] {
       keepalive_test_server server;
-      server.server().connection_settings({.keep_alive = false, .keep_alive_timeout = 30, .max_requests_per_connection = 100});
+      server.server().connection_settings(
+         {.keep_alive = false, .keep_alive_timeout = 30, .max_requests_per_connection = 100});
 
       expect(server.start()) << "Server should start with custom config\n";
       server.stop();

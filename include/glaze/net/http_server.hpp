@@ -1329,10 +1329,7 @@ namespace glz
       }
 
       // Start handling a new connection
-      inline void start_connection(std::shared_ptr<connection_state> conn)
-      {
-         read_request(conn);
-      }
+      inline void start_connection(std::shared_ptr<connection_state> conn) { read_request(conn); }
 
       // Start or reset the idle timer for keep-alive connections
       inline void start_idle_timer(std::shared_ptr<connection_state> conn)
@@ -1354,10 +1351,7 @@ namespace glz
       }
 
       // Cancel the idle timer (called when a new request starts)
-      inline void cancel_idle_timer(std::shared_ptr<connection_state> conn)
-      {
-         conn->idle_timer->cancel();
-      }
+      inline void cancel_idle_timer(std::shared_ptr<connection_state> conn) { conn->idle_timer->cancel(); }
 
       // Read the next HTTP request from the connection
       inline void read_request(std::shared_ptr<connection_state> conn)
@@ -1367,23 +1361,22 @@ namespace glz
             start_idle_timer(conn);
          }
 
-         asio::async_read_until(
-            *conn->socket, *conn->buffer, "\r\n\r\n",
-            [this, conn](asio::error_code ec, std::size_t /*bytes_transferred*/) {
-               // Cancel idle timer since we received data
-               cancel_idle_timer(conn);
+         asio::async_read_until(*conn->socket, *conn->buffer, "\r\n\r\n",
+                                [this, conn](asio::error_code ec, std::size_t /*bytes_transferred*/) {
+                                   // Cancel idle timer since we received data
+                                   cancel_idle_timer(conn);
 
-               if (ec) {
-                  // EOF is a normal disconnect, not a server error
-                  if (ec != asio::error::eof && ec != asio::error::operation_aborted) {
-                     error_handler(ec, std::source_location::current());
-                  }
-                  return;
-               }
+                                   if (ec) {
+                                      // EOF is a normal disconnect, not a server error
+                                      if (ec != asio::error::eof && ec != asio::error::operation_aborted) {
+                                         error_handler(ec, std::source_location::current());
+                                      }
+                                      return;
+                                   }
 
-               conn->request_count++;
-               process_request_data(conn);
-            });
+                                   conn->request_count++;
+                                   process_request_data(conn);
+                                });
       }
 
       // Process data received from the connection
@@ -1420,8 +1413,8 @@ namespace glz
             return;
          }
          std::string_view method_sv = request_line.substr(0, first_space);
-         if (method_sv.empty() || !std::all_of(method_sv.begin(), method_sv.end(),
-                                               [](char c) { return std::isalnum(c) || c == '_'; })) {
+         if (method_sv.empty() ||
+             !std::all_of(method_sv.begin(), method_sv.end(), [](char c) { return std::isalnum(c) || c == '_'; })) {
             send_error_response_with_close(conn, 400, "Bad Request");
             return;
          }
@@ -1526,8 +1519,8 @@ namespace glz
 
             if (body.length() < content_length) {
                asio::async_read(*conn->socket, *conn->buffer, asio::transfer_exactly(content_length - body.length()),
-                                [this, conn, method_opt, target, headers,
-                                 body = std::move(body)](std::error_code ec, size_t) mutable {
+                                [this, conn, method_opt, target, headers, body = std::move(body)](std::error_code ec,
+                                                                                                  size_t) mutable {
                                    if (ec) {
                                       error_handler(ec, std::source_location::current());
                                       return;
