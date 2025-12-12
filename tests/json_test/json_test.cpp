@@ -1841,6 +1841,12 @@ suite large_length_range = [] {
    };
 };
 
+// Test struct for issue #2124
+struct RecursiveNode
+{
+   std::unordered_map<std::string, RecursiveNode> children;
+};
+
 suite json_pointer = [] {
    using namespace ut;
 
@@ -1942,6 +1948,15 @@ suite json_pointer = [] {
       auto maybe_id = glz::get_sv_json<"/data/1/id">(json);
       expect(maybe_id.has_value());
       expect(maybe_id.value() == "88") << maybe_id.value();
+   };
+
+   "seek_nonexistent_key_in_map"_test = [] {
+      // Test for issue #2124: seek should not modify the map when key doesn't exist
+      RecursiveNode root;
+      bool found = glz::seek([](auto&) {}, root, "/children/does_not_exist/children/does_not_exist_as_well");
+
+      expect(found == false) << "seek should return false for non-existent path";
+      expect(root.children.empty()) << "seek should not modify the map";
    };
 };
 
