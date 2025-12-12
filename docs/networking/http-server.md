@@ -676,6 +676,52 @@ server.on_error([](std::error_code ec, std::source_location loc) {
 });
 ```
 
+### Connection Management (Keep-Alive)
+
+The HTTP server supports HTTP/1.1 persistent connections (keep-alive) for improved performance. By default, keep-alive is enabled with a 60-second idle timeout.
+
+#### Configuration Options
+
+```cpp
+// Configure all connection settings at once
+server.connection_settings({
+    .keep_alive = true,              // Enable persistent connections (default: true)
+    .keep_alive_timeout = 30,        // Idle timeout in seconds (default: 60)
+    .max_requests_per_connection = 100  // Max requests per connection (default: 0 = unlimited)
+});
+
+// Or configure individual settings
+server.keep_alive(true)              // Enable/disable keep-alive
+      .keep_alive_timeout(30)        // Set idle timeout
+      .max_requests_per_connection(100);  // Set max requests limit
+```
+
+#### Disabling Keep-Alive
+
+If you experience connection issues with certain clients, you can disable keep-alive:
+
+```cpp
+// Disable keep-alive entirely
+server.keep_alive(false);
+
+// Or use connection_settings
+server.connection_settings({
+    .keep_alive = false
+});
+```
+
+When keep-alive is disabled, the server sends `Connection: close` with every response and closes the connection after each request/response cycle.
+
+#### Behavior Details
+
+- **HTTP/1.1 clients**: Keep-alive is enabled by default (per HTTP/1.1 spec)
+- **HTTP/1.0 clients**: Keep-alive is disabled unless client sends `Connection: keep-alive`
+- **Client requests close**: If client sends `Connection: close`, server respects it
+- **Idle timeout**: Connections are closed after the configured timeout of inactivity
+- **Max requests**: Connections are closed after reaching the request limit (if configured)
+
+The server always sends the appropriate `Connection` header (`keep-alive` or `close`) and a `Keep-Alive` header with timeout information when keep-alive is active.
+
 ### Health Checks
 
 ```cpp
