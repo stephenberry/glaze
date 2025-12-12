@@ -201,7 +201,11 @@ namespace glz
             }
          }
          else {
-            return seek(std::forward<F>(func), value[key], json_ptr);
+            auto it = value.find(key);
+            if (it == value.end()) {
+               return false;
+            }
+            return seek(std::forward<F>(func), it->second, json_ptr);
          }
       }
    };
