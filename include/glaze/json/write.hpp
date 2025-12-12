@@ -539,6 +539,9 @@ namespace glz
                   if constexpr (!char_array_t<T> && std::is_pointer_v<std::decay_t<T>>) {
                      return value ? value : "";
                   }
+                  else if constexpr (u8str_t<T>) {
+                     return sv{reinterpret_cast<const char*>(value.data()), value.size()};
+                  }
                   else {
                      return sv{value};
                   }
@@ -572,6 +575,9 @@ namespace glz
                   }
                   else if constexpr (array_char_t<T>) {
                      return sv{value.data(), value.size()};
+                  }
+                  else if constexpr (u8str_t<T>) {
+                     return sv{reinterpret_cast<const char*>(value.data()), value.size()};
                   }
                   else {
                      return sv{value};

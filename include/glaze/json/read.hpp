@@ -759,7 +759,8 @@ namespace glz
       }
    };
 
-   template <string_t T>
+   template <class T>
+      requires(string_t<T> && !u8str_t<T>)
    struct from<JSON, T>
    {
       template <auto Opts, class It, class End>
@@ -1166,6 +1167,415 @@ namespace glz
       }
    };
 
+   // Specialization for u8string types (std::u8string)
+   template <class T>
+      requires(u8str_t<T> && !string_view_t<T>)
+   struct from<JSON, T>
+   {
+      template <auto Opts, class It, class End>
+         requires(check_is_padded(Opts))
+      static void op(auto& value, is_context auto&& ctx, It&& it, End&& end)
+      {
+         if constexpr (Opts.number) {
+            auto start = it;
+            skip_number<Opts>(ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
+            value.append(reinterpret_cast<const char8_t*>(start), size_t(it - start));
+         }
+         else {
+            if constexpr (!check_opening_handled(Opts)) {
+               if constexpr (!check_ws_handled(Opts)) {
+                  if (skip_ws<Opts>(ctx, it, end)) {
+                     return;
+                  }
+               }
+
+               if (match_invalid_end<'"', Opts>(ctx, it, end)) {
+                  return;
+               }
+            }
+
+            if constexpr (not Opts.raw_string) {
+               static constexpr auto string_padding_bytes = 8;
+
+               auto start = it;
+               while (true) {
+                  if (it >= end) [[unlikely]] {
+                     ctx.error = error_code::unexpected_end;
+                     return;
+                  }
+
+                  uint64_t chunk;
+                  std::memcpy(&chunk, it, 8);
+                  const uint64_t test_chars = has_quote(chunk);
+                  if (test_chars) {
+                     it += (countr_zero(test_chars) >> 3);
+
+                     auto* prev = it - 1;
+                     while (*prev == '\\') {
+                        --prev;
+                     }
+                     if (size_t(it - prev) % 2) {
+                        break;
+                     }
+                     ++it; // skip the escaped quote
+                  }
+                  else {
+                     it += 8;
+                  }
+               }
+
+               auto n = size_t(it - start);
+               value.resize(n + string_padding_bytes);
+
+               auto* p = reinterpret_cast<char*>(value.data());
+
+               while (true) {
+                  if (start >= it) {
+                     break;
+                  }
+
+                  std::memcpy(p, start, 8);
+                  uint64_t swar;
+                  std::memcpy(&swar, p, 8);
+
+                  constexpr uint64_t lo7_mask = repeat_byte8(0b01111111);
+                  const uint64_t lo7 = swar & lo7_mask;
+                  const uint64_t backslash = (lo7 ^ repeat_byte8('\\')) + lo7_mask;
+                  const uint64_t less_32 = (swar & repeat_byte8(0b01100000)) + lo7_mask;
+                  uint64_t next = ~((backslash & less_32) | swar);
+
+                  next &= repeat_byte8(0b10000000);
+                  if (next == 0) {
+                     start += 8;
+                     p += 8;
+                     continue;
+                  }
+
+                  next = countr_zero(next) >> 3;
+                  start += next;
+                  if (start >= it) {
+                     break;
+                  }
+
+                  if ((*start & 0b11100000) == 0) [[unlikely]] {
+                     ctx.error = error_code::syntax_error;
+                     return;
+                  }
+                  ++start; // skip the escape
+                  if (*start == 'u') {
+                     ++start;
+                     p += next;
+                     const auto mark = start;
+                     const auto offset = handle_unicode_code_point(start, p, end);
+                     if (offset == 0) [[unlikely]] {
+                        ctx.error = error_code::unicode_escape_conversion_failure;
+                        return;
+                     }
+                     n += offset;
+                     // escape + u + unicode code points
+                     n -= 2 + uint32_t(start - mark);
+                  }
+                  else {
+                     p += next;
+                     *p = char_unescape_table[uint8_t(*start)];
+                     if (*p == 0) [[unlikely]] {
+                        ctx.error = error_code::invalid_escape;
+                        return;
+                     }
+                     ++p;
+                     ++start;
+                     --n;
+                  }
+               }
+
+               value.resize(n);
+               ++it;
+            }
+            else {
+               // raw_string
+               auto start = it;
+               skip_string_view<Opts>(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
+
+               value.assign(reinterpret_cast<const char8_t*>(start), size_t(it - start));
+               ++it;
+            }
+         }
+      }
+
+      template <auto Opts, class It, class End>
+         requires(not check_is_padded(Opts))
+      static void op(auto& value, is_context auto&& ctx, It&& it, End&& end)
+      {
+         if constexpr (Opts.number) {
+            auto start = it;
+            skip_number<Opts>(ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
+            if (start == it) [[unlikely]] {
+               ctx.error = error_code::parse_number_failure;
+               return;
+            }
+            value.append(reinterpret_cast<const char8_t*>(start), size_t(it - start));
+         }
+         else {
+            if constexpr (!check_opening_handled(Opts)) {
+               if constexpr (!check_ws_handled(Opts)) {
+                  if (skip_ws<Opts>(ctx, it, end)) {
+                     return;
+                  }
+               }
+
+               if (match_invalid_end<'"', Opts>(ctx, it, end)) {
+                  return;
+               }
+            }
+
+            if constexpr (not Opts.raw_string) {
+               static constexpr auto string_padding_bytes = 8;
+
+               if (size_t(end - it) >= 8) {
+                  auto start = it;
+                  const auto end8 = end - 8;
+                  while (true) {
+                     if (it >= end8) [[unlikely]] {
+                        break;
+                     }
+
+                     uint64_t chunk;
+                     std::memcpy(&chunk, it, 8);
+                     const uint64_t test_chars = has_quote(chunk);
+                     if (test_chars) {
+                        it += (countr_zero(test_chars) >> 3);
+
+                        auto* prev = it - 1;
+                        while (*prev == '\\') {
+                           --prev;
+                        }
+                        if (size_t(it - prev) % 2) {
+                           goto continue_decode_u8;
+                        }
+                        ++it; // skip the escaped quote
+                     }
+                     else {
+                        it += 8;
+                     }
+                  }
+
+                  while (it[-1] == '\\') [[unlikely]] {
+                     // if we ended on an escape character then we need to rewind
+                     // because we lost our context
+                     --it;
+                  }
+
+                  for (; it < end; ++it) {
+                     if (*it == '"') {
+                        auto* prev = it - 1;
+                        while (*prev == '\\') {
+                           --prev;
+                        }
+                        if (size_t(it - prev) % 2) {
+                           goto continue_decode_u8;
+                        }
+                     }
+                  }
+
+                  ctx.error = error_code::unexpected_end;
+                  return;
+
+               continue_decode_u8:
+
+                  const auto available_padding = size_t(end - it);
+                  auto n = size_t(it - start);
+                  if (available_padding >= 8) [[likely]] {
+                     value.resize(n + string_padding_bytes);
+
+                     auto* p = reinterpret_cast<char*>(value.data());
+
+                     while (true) {
+                        if (start >= it) {
+                           break;
+                        }
+
+                        std::memcpy(p, start, 8);
+                        uint64_t swar;
+                        std::memcpy(&swar, p, 8);
+
+                        constexpr uint64_t lo7_mask = repeat_byte8(0b01111111);
+                        const uint64_t lo7 = swar & lo7_mask;
+                        const uint64_t backslash = (lo7 ^ repeat_byte8('\\')) + lo7_mask;
+                        const uint64_t less_32 = (swar & repeat_byte8(0b01100000)) + lo7_mask;
+                        uint64_t next = ~((backslash & less_32) | swar);
+
+                        next &= repeat_byte8(0b10000000);
+                        if (next == 0) {
+                           start += 8;
+                           p += 8;
+                           continue;
+                        }
+
+                        next = countr_zero(next) >> 3;
+                        start += next;
+                        if (start >= it) {
+                           break;
+                        }
+
+                        if ((*start & 0b11100000) == 0) [[unlikely]] {
+                           ctx.error = error_code::syntax_error;
+                           return;
+                        }
+                        ++start; // skip the escape
+                        if (*start == 'u') {
+                           ++start;
+                           p += next;
+                           const auto mark = start;
+                           const auto offset = handle_unicode_code_point(start, p, end);
+                           if (offset == 0) [[unlikely]] {
+                              ctx.error = error_code::unicode_escape_conversion_failure;
+                              return;
+                           }
+                           n += offset;
+                           // escape + u + unicode code points
+                           n -= 2 + uint32_t(start - mark);
+                        }
+                        else {
+                           p += next;
+                           *p = char_unescape_table[uint8_t(*start)];
+                           if (*p == 0) [[unlikely]] {
+                              ctx.error = error_code::invalid_escape;
+                              return;
+                           }
+                           ++p;
+                           ++start;
+                           --n;
+                        }
+                     }
+
+                     value.resize(n);
+                     ++it;
+                  }
+                  else {
+                     // For large inputs this case of running out of buffer is very rare
+                     value.resize(n);
+                     auto* p = reinterpret_cast<char*>(value.data());
+
+                     it = start;
+                     while (it < end) [[likely]] {
+                        if (*it == '"') {
+                           value.resize(size_t(p - reinterpret_cast<char*>(value.data())));
+                           ++it;
+                           return;
+                        }
+
+                        *p = *it;
+
+                        if (*it == '\\') {
+                           ++it; // skip the escape
+                           if (*it == 'u') {
+                              ++it;
+                              if (!handle_unicode_code_point(it, p, end)) [[unlikely]] {
+                                 ctx.error = error_code::unicode_escape_conversion_failure;
+                                 return;
+                              }
+                           }
+                           else {
+                              *p = char_unescape_table[uint8_t(*it)];
+                              if (*p == 0) [[unlikely]] {
+                                 ctx.error = error_code::invalid_escape;
+                                 return;
+                              }
+                              ++p;
+                              ++it;
+                           }
+                        }
+                        else {
+                           ++it;
+                           ++p;
+                        }
+                     }
+
+                     ctx.error = error_code::unexpected_end;
+                  }
+               }
+               else {
+                  // For short strings
+
+                  std::array<char, 8> buffer{};
+
+                  auto* p = buffer.data();
+
+                  while (it < end) [[likely]] {
+                     *p = *it;
+                     if (*it == '"') {
+                        value.assign(reinterpret_cast<const char8_t*>(buffer.data()), size_t(p - buffer.data()));
+                        ++it;
+                        if constexpr (not Opts.null_terminated) {
+                           if (it == end) {
+                              ctx.error = error_code::end_reached;
+                              return;
+                           }
+                        }
+                        return;
+                     }
+                     else if (*it == '\\') {
+                        ++it; // skip the escape
+                        if constexpr (not Opts.null_terminated) {
+                           if (it == end) [[unlikely]] {
+                              ctx.error = error_code::unexpected_end;
+                              return;
+                           }
+                        }
+                        if (*it == 'u') {
+                           ++it;
+                           if constexpr (not Opts.null_terminated) {
+                              if (it == end) [[unlikely]] {
+                                 ctx.error = error_code::unexpected_end;
+                                 return;
+                              }
+                           }
+                           if (!handle_unicode_code_point(it, p, end)) [[unlikely]] {
+                              ctx.error = error_code::unicode_escape_conversion_failure;
+                              return;
+                           }
+                        }
+                        else {
+                           *p = char_unescape_table[uint8_t(*it)];
+                           if (*p == 0) [[unlikely]] {
+                              ctx.error = error_code::invalid_escape;
+                              return;
+                           }
+                           ++p;
+                           ++it;
+                        }
+                     }
+                     else {
+                        ++it;
+                        ++p;
+                     }
+                  }
+
+                  ctx.error = error_code::unexpected_end;
+               }
+            }
+            else {
+               // raw_string
+               auto start = it;
+               skip_string_view<Opts>(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
+
+               value.assign(reinterpret_cast<const char8_t*>(start), size_t(it - start));
+               ++it;
+            }
+         }
+      }
+   };
+
    template <class T>
       requires(string_view_t<T> || char_array_t<T> || array_char_t<T> || static_string_t<T>)
    struct from<JSON, T>
@@ -1191,7 +1601,13 @@ namespace glz
             return;
 
          if constexpr (string_view_t<T>) {
-            value = {start, size_t(it - start)};
+            using value_type = typename std::decay_t<T>::value_type;
+            if constexpr (std::same_as<value_type, char8_t>) {
+               value = {reinterpret_cast<const char8_t*>(start), size_t(it - start)};
+            }
+            else {
+               value = {start, size_t(it - start)};
+            }
          }
          else if constexpr (char_array_t<T>) {
             const size_t n = it - start;

@@ -223,9 +223,9 @@ namespace glz
       constexpr uint32_t surrogate_codepoint_bits = 10;
    }
 
-   template <class Char>
-   [[nodiscard]] GLZ_ALWAYS_INLINE uint32_t handle_unicode_code_point(const Char*& it, Char*& dst,
-                                                                      const Char* end) noexcept
+   template <class SrcChar, class DstChar = SrcChar>
+   [[nodiscard]] GLZ_ALWAYS_INLINE uint32_t handle_unicode_code_point(const SrcChar*& it, DstChar*& dst,
+                                                                      const SrcChar* end) noexcept
    {
       using namespace unicode;
 
