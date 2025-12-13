@@ -163,7 +163,8 @@ namespace glz
    {
       // Parse a JSON pointer path into parent path and final token
       // Returns {parent_path, token} or error
-      [[nodiscard]] inline expected<std::pair<std::string_view, std::string>, error_ctx> split_path(std::string_view path)
+      [[nodiscard]] inline expected<std::pair<std::string_view, std::string>, error_ctx> split_path(
+         std::string_view path)
       {
          if (path.empty()) {
             return std::pair<std::string_view, std::string>{"", ""};
@@ -212,7 +213,7 @@ namespace glz
    //   path="/foo"   → returns {&root, "foo"} (root is parent of top-level keys)
    //   path="/a/b"   → returns {&root["a"], "b"}
    [[nodiscard]] inline expected<std::pair<generic*, std::string>, error_ctx> navigate_to_parent(generic& root,
-                                                                                                  std::string_view path)
+                                                                                                 std::string_view path)
    {
       if (path.empty()) {
          // Empty path refers to root itself, which has no parent
@@ -602,7 +603,8 @@ namespace glz
                   // Keys removed from source
                   for (const auto& [key, value] : src_obj) {
                      if (tgt_obj.find(key) == tgt_obj.end()) {
-                        ops.push_back({patch_op_type::remove, path + "/" + escape_json_ptr(key), std::nullopt, std::nullopt});
+                        ops.push_back(
+                           {patch_op_type::remove, path + "/" + escape_json_ptr(key), std::nullopt, std::nullopt});
                      }
                   }
 
@@ -659,7 +661,7 @@ namespace glz
 
    // Generate a patch document that transforms 'source' into 'target'
    [[nodiscard]] inline expected<patch_document, error_ctx> diff(const generic& source, const generic& target,
-                                                                  diff_opts opts = {})
+                                                                 diff_opts opts = {})
    {
       patch_document ops;
       detail::diff_impl(source, target, "", ops, opts);
@@ -694,7 +696,7 @@ namespace glz
 
    // Apply a patch document, returning a new value (non-mutating)
    [[nodiscard]] inline expected<generic, error_ctx> patched(const generic& document, const patch_document& ops,
-                                                              patch_opts opts = {})
+                                                             patch_opts opts = {})
    {
       generic result = document;
       opts.atomic = false; // No need for atomic since we're working on a copy
@@ -707,7 +709,7 @@ namespace glz
 
    // Convenience overload for JSON string input
    [[nodiscard]] inline expected<patch_document, error_ctx> diff(std::string_view source_json,
-                                                                  std::string_view target_json, diff_opts opts = {})
+                                                                 std::string_view target_json, diff_opts opts = {})
    {
       auto source = read_json<generic>(source_json);
       if (!source) {
@@ -724,8 +726,8 @@ namespace glz
 
    // Convenience overload for JSON string patch application
    [[nodiscard]] inline expected<std::string, error_ctx> patch_json(std::string_view document_json,
-                                                                     std::string_view patch_json_str,
-                                                                     patch_opts opts = {})
+                                                                    std::string_view patch_json_str,
+                                                                    patch_opts opts = {})
    {
       auto document = read_json<generic>(document_json);
       if (!document) {

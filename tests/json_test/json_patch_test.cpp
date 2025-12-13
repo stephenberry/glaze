@@ -4,7 +4,6 @@
 #include <cstdlib>
 
 #include "glaze/json/patch.hpp"
-
 #include "ut/ut.hpp"
 
 using namespace ut;
@@ -528,9 +527,8 @@ suite json_patch_tests = [] {
       auto original = *doc;
 
       // First op succeeds, second fails
-      glz::patch_document ops = {
-         {glz::patch_op_type::replace, "/a", glz::generic(99.0), std::nullopt},
-         {glz::patch_op_type::remove, "/nonexistent", std::nullopt, std::nullopt}};
+      glz::patch_document ops = {{glz::patch_op_type::replace, "/a", glz::generic(99.0), std::nullopt},
+                                 {glz::patch_op_type::remove, "/nonexistent", std::nullopt, std::nullopt}};
 
       auto ec = glz::patch(*doc, ops);
       expect(ec.ec == glz::error_code::nonexistent_json_ptr);
@@ -544,9 +542,8 @@ suite json_patch_tests = [] {
       expect(doc.has_value());
 
       // First op succeeds, second fails
-      glz::patch_document ops = {
-         {glz::patch_op_type::replace, "/a", glz::generic(99.0), std::nullopt},
-         {glz::patch_op_type::remove, "/nonexistent", std::nullopt, std::nullopt}};
+      glz::patch_document ops = {{glz::patch_op_type::replace, "/a", glz::generic(99.0), std::nullopt},
+                                 {glz::patch_op_type::remove, "/nonexistent", std::nullopt, std::nullopt}};
 
       glz::patch_opts opts;
       opts.atomic = false;
@@ -599,10 +596,9 @@ suite json_patch_tests = [] {
    };
 
    "patch_document round-trip"_test = [] {
-      glz::patch_document ops = {
-         {glz::patch_op_type::add, "/a", glz::generic(1.0), std::nullopt},
-         {glz::patch_op_type::remove, "/b", std::nullopt, std::nullopt},
-         {glz::patch_op_type::move, "/d", std::nullopt, "/c"}};
+      glz::patch_document ops = {{glz::patch_op_type::add, "/a", glz::generic(1.0), std::nullopt},
+                                 {glz::patch_op_type::remove, "/b", std::nullopt, std::nullopt},
+                                 {glz::patch_op_type::move, "/d", std::nullopt, "/c"}};
 
       auto json = glz::write_json(ops);
       expect(json.has_value());
