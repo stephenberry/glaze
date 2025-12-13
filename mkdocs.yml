@@ -88,6 +88,7 @@ nav:
    - Wrappers: wrappers.md
    - Custom Wrappers: custom-wrappers.md
    - Custom Serialization: custom-serialization.md
+   - Chrono Support: chrono.md
    - Variant Handling: variant-handling.md
    - Unknown Keys: unknown-keys.md
    - JSON Pointer Syntax: json-pointer-syntax.md

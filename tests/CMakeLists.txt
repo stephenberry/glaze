@@ -135,6 +135,7 @@ add_subdirectory(toml_test)
 add_subdirectory(utility_formats)
 
 # JSON Tests
+add_subdirectory(chrono_test)
 add_subdirectory(json_conformance)
 add_subdirectory(json_performance)
 add_subdirectory(json_reflection_test)
