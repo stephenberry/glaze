@@ -9,6 +9,20 @@
 
 using namespace ut;
 
+// Structs must be defined at namespace scope for Glaze reflection to work
+struct Event
+{
+   std::string name;
+   std::chrono::sys_time<std::chrono::seconds> timestamp;
+   std::chrono::milliseconds duration;
+};
+
+struct Record
+{
+   glz::epoch_seconds created_at;
+   glz::epoch_millis updated_at;
+};
+
 suite chrono_duration_tests = [] {
    "duration_milliseconds"_test = [] {
       std::chrono::milliseconds ms{12345};
@@ -196,13 +210,6 @@ suite chrono_epoch_time_tests = [] {
 
 suite chrono_struct_tests = [] {
    "struct_with_chrono"_test = [] {
-      struct Event
-      {
-         std::string name;
-         std::chrono::sys_time<std::chrono::seconds> timestamp;
-         std::chrono::milliseconds duration;
-      };
-
       Event e{"test", {}, std::chrono::milliseconds{100}};
       e.timestamp = std::chrono::time_point_cast<std::chrono::seconds>(std::chrono::system_clock::now());
 
@@ -216,12 +223,6 @@ suite chrono_struct_tests = [] {
    };
 
    "struct_with_epoch_time"_test = [] {
-      struct Record
-      {
-         glz::epoch_seconds created_at;
-         glz::epoch_millis updated_at;
-      };
-
       Record r{};
       r.created_at.value = std::chrono::system_clock::from_time_t(1702481400);
       r.updated_at.value =
