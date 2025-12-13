@@ -108,8 +108,7 @@ suite chrono_system_clock_tests = [] {
 
    "system_clock_roundtrip"_test = [] {
       // Use a known timestamp to avoid precision issues
-      auto original =
-         std::chrono::time_point_cast<std::chrono::seconds>(std::chrono::system_clock::now());
+      auto original = std::chrono::time_point_cast<std::chrono::seconds>(std::chrono::system_clock::now());
       auto json = glz::write_json(original);
 
       std::chrono::system_clock::time_point parsed{};
@@ -193,8 +192,7 @@ suite chrono_epoch_time_tests = [] {
 
    "epoch_millis_wrapper"_test = [] {
       glz::epoch_millis ts;
-      ts.value =
-         std::chrono::system_clock::from_time_t(1702481400) + std::chrono::milliseconds{123};
+      ts.value = std::chrono::system_clock::from_time_t(1702481400) + std::chrono::milliseconds{123};
 
       auto json = glz::write_json(ts);
       expect(json.value() == "1702481400123");
@@ -225,8 +223,7 @@ suite chrono_struct_tests = [] {
    "struct_with_epoch_time"_test = [] {
       Record r{};
       r.created_at.value = std::chrono::system_clock::from_time_t(1702481400);
-      r.updated_at.value =
-         std::chrono::system_clock::from_time_t(1702481500) + std::chrono::milliseconds{123};
+      r.updated_at.value = std::chrono::system_clock::from_time_t(1702481500) + std::chrono::milliseconds{123};
 
       auto json = glz::write_json(r);
 
@@ -588,8 +585,8 @@ suite chrono_roundtrip_1000_tests = [] {
       // Test 1000 different time points at second precision
       // Range: 1970 to 2100 (130 years = ~4.1 billion seconds)
       // We'll sample across this range
-      constexpr int64_t start_seconds = 0;                  // 1970-01-01
-      constexpr int64_t end_seconds = 4102444800;           // 2100-01-01
+      constexpr int64_t start_seconds = 0; // 1970-01-01
+      constexpr int64_t end_seconds = 4102444800; // 2100-01-01
       constexpr int64_t step = (end_seconds - start_seconds) / 1000;
 
       for (int i = 0; i < 1000; ++i) {
@@ -609,12 +606,12 @@ suite chrono_roundtrip_1000_tests = [] {
 
       // Test 1000 different time points at millisecond precision
       // Range: 2000 to 2050
-      constexpr int64_t start_ms = 946684800000LL;   // 2000-01-01
-      constexpr int64_t end_ms = 2524608000000LL;    // 2050-01-01
+      constexpr int64_t start_ms = 946684800000LL; // 2000-01-01
+      constexpr int64_t end_ms = 2524608000000LL; // 2050-01-01
       constexpr int64_t step = (end_ms - start_ms) / 1000;
 
       for (int i = 0; i < 1000; ++i) {
-         int64_t ms_val = start_ms + i * step + (i % 1000);  // Add subsecond variation
+         int64_t ms_val = start_ms + i * step + (i % 1000); // Add subsecond variation
          sys_time<milliseconds> original{milliseconds{ms_val}};
 
          auto json = glz::write_json(original);
@@ -629,11 +626,11 @@ suite chrono_roundtrip_1000_tests = [] {
       using namespace std::chrono;
 
       // Test 1000 different time points at microsecond precision
-      constexpr int64_t start_us = 946684800000000LL;   // 2000-01-01
-      constexpr int64_t step = 1577000000000LL;         // ~18 days in microseconds
+      constexpr int64_t start_us = 946684800000000LL; // 2000-01-01
+      constexpr int64_t step = 1577000000000LL; // ~18 days in microseconds
 
       for (int i = 0; i < 1000; ++i) {
-         int64_t us_val = start_us + i * step + (i * 123 % 1000000);  // Add subsecond variation
+         int64_t us_val = start_us + i * step + (i * 123 % 1000000); // Add subsecond variation
          sys_time<microseconds> original{microseconds{us_val}};
 
          auto json = glz::write_json(original);
@@ -648,11 +645,11 @@ suite chrono_roundtrip_1000_tests = [] {
       using namespace std::chrono;
 
       // Test 1000 different time points at nanosecond precision
-      constexpr int64_t start_ns = 946684800000000000LL;   // 2000-01-01
-      constexpr int64_t step = 1577000000000000LL;         // ~18 days in nanoseconds
+      constexpr int64_t start_ns = 946684800000000000LL; // 2000-01-01
+      constexpr int64_t step = 1577000000000000LL; // ~18 days in nanoseconds
 
       for (int i = 0; i < 1000; ++i) {
-         int64_t ns_val = start_ns + i * step + (i * 12345 % 1000000000);  // Add subsecond variation
+         int64_t ns_val = start_ns + i * step + (i * 12345 % 1000000000); // Add subsecond variation
          sys_time<nanoseconds> original{nanoseconds{ns_val}};
 
          auto json = glz::write_json(original);
@@ -684,7 +681,7 @@ suite chrono_roundtrip_1000_tests = [] {
 
       // Test 1000 different epoch_seconds values
       constexpr int64_t start = 0;
-      constexpr int64_t step = 4102444;  // ~47 days
+      constexpr int64_t step = 4102444; // ~47 days
 
       for (int i = 0; i < 1000; ++i) {
          glz::epoch_seconds original;
@@ -705,8 +702,8 @@ suite chrono_roundtrip_1000_tests = [] {
       using namespace std::chrono;
 
       // Test 1000 different epoch_millis values
-      constexpr int64_t start = 946684800000LL;  // 2000-01-01
-      constexpr int64_t step = 1577000000LL;     // ~18 days in milliseconds
+      constexpr int64_t start = 946684800000LL; // 2000-01-01
+      constexpr int64_t step = 1577000000LL; // ~18 days in milliseconds
 
       for (int i = 0; i < 1000; ++i) {
          glz::epoch_millis original;
@@ -727,8 +724,8 @@ suite chrono_roundtrip_1000_tests = [] {
       using namespace std::chrono;
 
       // Test 1000 different epoch_micros values
-      constexpr int64_t start = 946684800000000LL;  // 2000-01-01
-      constexpr int64_t step = 1577000000000LL;     // ~18 days in microseconds
+      constexpr int64_t start = 946684800000000LL; // 2000-01-01
+      constexpr int64_t step = 1577000000000LL; // ~18 days in microseconds
 
       for (int i = 0; i < 1000; ++i) {
          glz::epoch_micros original;
@@ -751,14 +748,13 @@ suite chrono_roundtrip_1000_tests = [] {
       // Test 1000 different epoch_nanos values
       // Note: system_clock::time_point precision is implementation-defined (microseconds on libc++)
       // so we use duration_cast to handle potential precision differences
-      constexpr int64_t start = 946684800000000000LL;  // 2000-01-01
-      constexpr int64_t step = 1577000000000000LL;     // ~18 days in nanoseconds
+      constexpr int64_t start = 946684800000000000LL; // 2000-01-01
+      constexpr int64_t step = 1577000000000000LL; // ~18 days in nanoseconds
 
       for (int i = 0; i < 1000; ++i) {
          glz::epoch_nanos original;
          const auto ns_val = nanoseconds{start + i * step + i * 12345};
-         original.value = system_clock::time_point{
-            duration_cast<system_clock::duration>(ns_val)};
+         original.value = system_clock::time_point{duration_cast<system_clock::duration>(ns_val)};
 
          auto json = glz::write_json(original);
          glz::epoch_nanos parsed{};

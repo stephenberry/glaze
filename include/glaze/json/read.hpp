@@ -4189,7 +4189,8 @@ namespace glz
                ++pos;
             }
             // Scale to nanoseconds
-            static constexpr int64_t scale[] = {1000000000, 100000000, 10000000, 1000000, 100000, 10000, 1000, 100, 10, 1};
+            static constexpr int64_t scale[] = {1000000000, 100000000, 10000000, 1000000, 100000,
+                                                10000,      1000,      100,      10,      1};
             if (digits > 0 && digits <= 9) {
                subsec_nanos = frac * scale[digits];
             }
@@ -4240,8 +4241,8 @@ namespace glz
             return;
          }
 
-         const auto tp =
-            sys_days{ymd} + hours{hr} + minutes{mi} + seconds{sc} + seconds{tz_offset_seconds} + nanoseconds{subsec_nanos};
+         const auto tp = sys_days{ymd} + hours{hr} + minutes{mi} + seconds{sc} + seconds{tz_offset_seconds} +
+                         nanoseconds{subsec_nanos};
 
          using Duration = typename std::remove_cvref_t<T>::duration;
          value = time_point_cast<Duration>(tp);
@@ -4300,8 +4301,8 @@ namespace glz
             return;
          // Use duration_cast to handle precision differences between Duration and system_clock::duration
          using sys_duration = std::chrono::system_clock::duration;
-         wrapper.value = std::chrono::system_clock::time_point{
-            std::chrono::duration_cast<sys_duration>(Duration{count})};
+         wrapper.value =
+            std::chrono::system_clock::time_point{std::chrono::duration_cast<sys_duration>(Duration{count})};
       }
    };
 

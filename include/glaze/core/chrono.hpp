@@ -13,8 +13,7 @@ namespace glz
    concept is_duration = requires {
       typename T::rep;
       typename T::period;
-      requires std::is_same_v<std::remove_cvref_t<T>,
-                              std::chrono::duration<typename T::rep, typename T::period>>;
+      requires std::is_same_v<std::remove_cvref_t<T>, std::chrono::duration<typename T::rep, typename T::period>>;
    };
 
    // Concept for std::chrono::time_point types
@@ -22,8 +21,7 @@ namespace glz
    concept is_time_point = requires {
       typename T::clock;
       typename T::duration;
-      requires std::is_same_v<std::remove_cvref_t<T>,
-                              std::chrono::time_point<typename T::clock, typename T::duration>>;
+      requires std::is_same_v<std::remove_cvref_t<T>, std::chrono::time_point<typename T::clock, typename T::duration>>;
    };
 
    // Concept for system_clock time_points (serialize as ISO 8601 string)
@@ -37,17 +35,14 @@ namespace glz
       is_time_point<T> && std::is_same_v<typename std::remove_cvref_t<T>::clock, std::chrono::steady_clock>;
 
    // Detect if high_resolution_clock is a true alias or a distinct type
-   inline constexpr bool hrc_is_system =
-      std::is_same_v<std::chrono::high_resolution_clock, std::chrono::system_clock>;
-   inline constexpr bool hrc_is_steady =
-      std::is_same_v<std::chrono::high_resolution_clock, std::chrono::steady_clock>;
+   inline constexpr bool hrc_is_system = std::is_same_v<std::chrono::high_resolution_clock, std::chrono::system_clock>;
+   inline constexpr bool hrc_is_steady = std::is_same_v<std::chrono::high_resolution_clock, std::chrono::steady_clock>;
 
    // Concept for high_resolution_clock when it's a distinct type (rare)
    template <class T>
    concept is_high_res_time_point =
-      is_time_point<T> &&
-      std::is_same_v<typename std::remove_cvref_t<T>::clock, std::chrono::high_resolution_clock> && !hrc_is_system &&
-      !hrc_is_steady;
+      is_time_point<T> && std::is_same_v<typename std::remove_cvref_t<T>::clock, std::chrono::high_resolution_clock> &&
+      !hrc_is_system && !hrc_is_steady;
 
    // ============================================
    // epoch_time wrapper for Unix timestamp format
