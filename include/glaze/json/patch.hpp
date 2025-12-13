@@ -746,4 +746,322 @@ namespace glz
 
       return write_json(*document);
    }
+
+   // ============================================================================
+   // RFC 7386 JSON Merge Patch
+   // https://datatracker.ietf.org/doc/html/rfc7386
+   // ============================================================================
+
+   namespace detail
+   {
+      // Recursive merge patch implementation
+      // Modifies target in-place according to RFC 7386 algorithm
+      [[nodiscard]] inline error_ctx apply_merge_patch_impl(generic& target, const generic& patch, uint32_t depth = 0)
+      {
+         if (depth >= max_recursive_depth_limit) [[unlikely]] {
+            return error_ctx{error_code::exceeded_max_recursive_depth};
+         }
+
+         if (patch.is_object()) {
+            // If target is not an object, replace with empty object
+            if (!target.is_object()) {
+               target.data = generic::object_t{};
+            }
+
+            auto& target_obj = target.get_object();
+            const auto& patch_obj = patch.get_object();
+
+            for (const auto& [key, value] : patch_obj) {
+               if (value.is_null()) {
+                  // Null means remove
+                  target_obj.erase(key);
+               }
+               else if (value.is_object()) {
+                  // Recursively merge objects
+                  // Use try_emplace to avoid double lookup
+                  auto [it, inserted] = target_obj.try_emplace(key, generic{});
+                  auto ec = apply_merge_patch_impl(it->second, value, depth + 1);
+                  if (ec) {
+                     return ec;
+                  }
+               }
+               else {
+                  // Non-object value - direct assignment (no recursion needed)
+                  target_obj[key] = value;
+               }
+            }
+         }
+         else {
+            // Non-object patch replaces target entirely
+            target = patch;
+         }
+
+         return {};
+      }
+
+      // Merge diff implementation - generates a merge patch from source to target
+      inline void merge_diff_impl(const generic& source, const generic& target, generic& patch)
+      {
+         // If types differ or source is not an object, return target as patch
+         if (!source.is_object() || !target.is_object()) {
+            patch = target;
+            return;
+         }
+
+         // Both are objects - compute diff
+         patch.data = generic::object_t{};
+         auto& patch_obj = patch.get_object();
+         const auto& source_obj = source.get_object();
+         const auto& target_obj = target.get_object();
+
+         // Check for removed keys (in source but not in target)
+         for (const auto& [key, value] : source_obj) {
+            if (target_obj.find(key) == target_obj.end()) {
+               // Key was removed - emit null
+               patch_obj.emplace(key, nullptr);
+            }
+         }
+
+         // Check for added or modified keys
+         for (const auto& [key, target_value] : target_obj) {
+            auto source_it = source_obj.find(key);
+            if (source_it == source_obj.end()) {
+               // Key was added
+               patch_obj.emplace(key, target_value);
+            }
+            else if (!equal(source_it->second, target_value)) {
+               // Key was modified
+               if (source_it->second.is_object() && target_value.is_object()) {
+                  // Both objects - recurse
+                  generic child_patch;
+                  merge_diff_impl(source_it->second, target_value, child_patch);
+                  patch_obj.emplace(key, std::move(child_patch));
+               }
+               else {
+                  // Different types or non-objects - replace
+                  patch_obj.emplace(key, target_value);
+               }
+            }
+            // If equal, no patch entry needed
+         }
+      }
+   } // namespace detail
+
+   // ============================================================================
+   // Merge Patch API Functions
+   // ============================================================================
+
+   // Apply a merge patch to a JSON value (in-place modification)
+   // Note: Uses template parameter to prevent ambiguity with string_view overload
+   // (string literals would otherwise match both const generic& and string_view)
+   template <class G>
+      requires(std::same_as<std::remove_cvref_t<G>, generic>)
+   [[nodiscard]] inline error_ctx merge_patch(generic& target, G&& patch)
+   {
+      return detail::apply_merge_patch_impl(target, patch);
+   }
+
+   // Apply a merge patch, returning a new value (non-mutating)
+   template <class G>
+      requires(std::same_as<std::remove_cvref_t<G>, generic>)
+   [[nodiscard]] inline expected<generic, error_ctx> merge_patched(const generic& target, G&& patch)
+   {
+      generic result = target;
+      auto ec = merge_patch(result, std::forward<G>(patch));
+      if (ec) {
+         return unexpected(ec);
+      }
+      return result;
+   }
+
+   // Convenience overload: apply merge patch from JSON string
+   [[nodiscard]] inline error_ctx merge_patch(generic& target, std::string_view patch_json)
+   {
+      auto patch = read_json<generic>(patch_json);
+      if (!patch) {
+         return patch.error();
+      }
+      return merge_patch(target, *patch);
+   }
+
+   // Convenience overload: apply merge patch from JSON strings, return JSON string
+   [[nodiscard]] inline expected<std::string, error_ctx> merge_patch_json(std::string_view target_json,
+                                                                          std::string_view patch_json)
+   {
+      auto target = read_json<generic>(target_json);
+      if (!target) {
+         return unexpected(target.error());
+      }
+
+      auto patch = read_json<generic>(patch_json);
+      if (!patch) {
+         return unexpected(patch.error());
+      }
+
+      auto ec = merge_patch(*target, *patch);
+      if (ec) {
+         return unexpected(ec);
+      }
+
+      return write_json(*target);
+   }
+
+   // Convenience overload: apply merge patch from JSON strings, return generic
+   [[nodiscard]] inline expected<generic, error_ctx> merge_patched(std::string_view target_json,
+                                                                   std::string_view patch_json)
+   {
+      auto target = read_json<generic>(target_json);
+      if (!target) {
+         return unexpected(target.error());
+      }
+
+      auto patch = read_json<generic>(patch_json);
+      if (!patch) {
+         return unexpected(patch.error());
+      }
+
+      auto ec = merge_patch(*target, *patch);
+      if (ec) {
+         return unexpected(ec);
+      }
+
+      return *target;
+   }
+
+   // Generate a merge patch that transforms 'source' into 'target'
+   // Note: Due to null semantics, this cannot perfectly round-trip if
+   // the target contains explicit null values (they would be interpreted as removals)
+   [[nodiscard]] inline expected<generic, error_ctx> merge_diff(const generic& source, const generic& target)
+   {
+      generic patch;
+      detail::merge_diff_impl(source, target, patch);
+      return patch;
+   }
+
+   // Convenience overload: generate merge patch from JSON strings, return JSON string
+   [[nodiscard]] inline expected<std::string, error_ctx> merge_diff_json(std::string_view source_json,
+                                                                         std::string_view target_json)
+   {
+      auto source = read_json<generic>(source_json);
+      if (!source) {
+         return unexpected(source.error());
+      }
+
+      auto target = read_json<generic>(target_json);
+      if (!target) {
+         return unexpected(target.error());
+      }
+
+      auto patch = merge_diff(*source, *target);
+      if (!patch) {
+         return unexpected(patch.error());
+      }
+
+      return write_json(*patch);
+   }
+
+   // ============================================================================
+   // Struct/Type-based Merge Patch API
+   // ============================================================================
+
+   // Concept to check if a type is not generic (to avoid ambiguous overloads)
+   template <class T>
+   concept not_generic = !std::same_as<std::decay_t<T>, generic>;
+
+   // Concept to check if a type is a struct/class suitable for merge patching
+   // (excludes generic and string-like types to avoid ambiguous overloads)
+   template <class T>
+   concept merge_patch_struct =
+      not_generic<T> && !std::convertible_to<T, std::string_view> && !std::is_array_v<std::remove_cvref_t<T>>;
+
+   // Apply a merge patch to a C++ struct/type (in-place modification)
+   // Glaze's read_json already has merge-patch semantics: it only updates fields
+   // present in the source and leaves other fields unchanged.
+   // Note: Uses template parameter G constrained to generic to prevent implicit conversion
+   // from string literals (which would cause ambiguity with the string_view overload)
+   template <class T, class G>
+      requires(merge_patch_struct<T> && std::same_as<std::remove_cvref_t<G>, generic>)
+   [[nodiscard]] inline error_ctx merge_patch(T& target, G&& patch)
+   {
+      // Glaze can read directly from generic into structs, updating only fields present
+      return read_json(target, patch);
+   }
+
+   // Apply a merge patch from JSON string to a C++ struct/type
+   // Glaze's read_json already has merge-patch semantics: it only updates fields
+   // present in the JSON and leaves other fields unchanged.
+   template <class T>
+      requires(merge_patch_struct<T>)
+   [[nodiscard]] inline error_ctx merge_patch(T& target, std::string_view patch_json)
+   {
+      // Direct read - Glaze only updates fields present in the JSON
+      return read_json(target, patch_json);
+   }
+
+   // Apply a merge patch, returning a new struct (non-mutating)
+   // Note: Uses template parameter G constrained to generic to prevent implicit conversion
+   // from string literals (which would cause ambiguity with the string_view overload)
+   template <class T, class G>
+      requires(merge_patch_struct<T> && std::is_default_constructible_v<T> && std::same_as<std::remove_cvref_t<G>, generic>)
+   [[nodiscard]] inline expected<T, error_ctx> merge_patched(const T& target, G&& patch)
+   {
+      T result = target;
+      auto ec = merge_patch(result, std::forward<G>(patch));
+      if (ec) {
+         return unexpected(ec);
+      }
+      return result;
+   }
+
+   // Apply a merge patch from JSON string, returning a new struct (non-mutating)
+   template <class T>
+      requires(merge_patch_struct<T> && std::is_default_constructible_v<T>)
+   [[nodiscard]] inline expected<T, error_ctx> merge_patched(const T& target, std::string_view patch_json)
+   {
+      T result = target;
+      auto ec = read_json(result, patch_json);
+      if (ec) {
+         return unexpected(ec);
+      }
+      return result;
+   }
+
+   // Generate a merge patch that transforms one struct into another
+   template <class T>
+      requires(merge_patch_struct<T>)
+   [[nodiscard]] inline expected<generic, error_ctx> merge_diff(const T& source, const T& target)
+   {
+      // Serialize both to JSON then to generic
+      auto source_json = write_json(source);
+      if (!source_json) {
+         return unexpected(source_json.error());
+      }
+      auto source_generic = read_json<generic>(*source_json);
+      if (!source_generic) {
+         return unexpected(source_generic.error());
+      }
+
+      auto target_json = write_json(target);
+      if (!target_json) {
+         return unexpected(target_json.error());
+      }
+      auto target_generic = read_json<generic>(*target_json);
+      if (!target_generic) {
+         return unexpected(target_generic.error());
+      }
+
+      return merge_diff(*source_generic, *target_generic);
+   }
+
+   // Generate a merge patch between two structs, return as JSON string
+   template <class T>
+      requires(merge_patch_struct<T>)
+   [[nodiscard]] inline expected<std::string, error_ctx> merge_diff_json(const T& source, const T& target)
+   {
+      auto patch = merge_diff(source, target);
+      if (!patch) {
+         return unexpected(patch.error());
+      }
+      return write_json(*patch);
+   }
 }
