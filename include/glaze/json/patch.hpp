@@ -1002,7 +1002,8 @@ namespace glz
    // Note: Uses template parameter G constrained to generic to prevent implicit conversion
    // from string literals (which would cause ambiguity with the string_view overload)
    template <class T, class G>
-      requires(merge_patch_struct<T> && std::is_default_constructible_v<T> && std::same_as<std::remove_cvref_t<G>, generic>)
+      requires(merge_patch_struct<T> && std::is_default_constructible_v<T> &&
+               std::same_as<std::remove_cvref_t<G>, generic>)
    [[nodiscard]] inline expected<T, error_ctx> merge_patched(const T& target, G&& patch)
    {
       T result = target;
