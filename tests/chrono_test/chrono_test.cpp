@@ -748,21 +748,24 @@ suite chrono_roundtrip_1000_tests = [] {
       using namespace std::chrono;
 
       // Test 1000 different epoch_nanos values
+      // Note: system_clock::time_point precision is implementation-defined (microseconds on libc++)
+      // so we use duration_cast to handle potential precision differences
       constexpr int64_t start = 946684800000000000LL;  // 2000-01-01
       constexpr int64_t step = 1577000000000000LL;     // ~18 days in nanoseconds
 
       for (int i = 0; i < 1000; ++i) {
          glz::epoch_nanos original;
-         original.value = sys_time<nanoseconds>{nanoseconds{start + i * step + i * 12345}};
+         const auto ns_val = nanoseconds{start + i * step + i * 12345};
+         original.value = system_clock::time_point{
+            duration_cast<system_clock::duration>(ns_val)};
 
          auto json = glz::write_json(original);
          glz::epoch_nanos parsed{};
          auto err = glz::read_json(parsed, json.value());
          expect(!err) << "Failed at i=" << i;
 
-         auto orig_ns = time_point_cast<nanoseconds>(original.value);
-         auto parsed_ns = time_point_cast<nanoseconds>(parsed.value);
-         expect(orig_ns == parsed_ns) << "Mismatch at i=" << i;
+         // Compare at system_clock precision (may be less than nanoseconds)
+         expect(original.value == parsed.value) << "Mismatch at i=" << i;
       }
    };
 };

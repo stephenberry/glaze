@@ -4298,7 +4298,10 @@ namespace glz
          from<JSON, Rep>::template op<Opts>(count, ctx, it, end);
          if (bool(ctx.error)) [[unlikely]]
             return;
-         wrapper.value = std::chrono::system_clock::time_point{Duration{count}};
+         // Use duration_cast to handle precision differences between Duration and system_clock::duration
+         using sys_duration = std::chrono::system_clock::duration;
+         wrapper.value = std::chrono::system_clock::time_point{
+            std::chrono::duration_cast<sys_duration>(Duration{count})};
       }
    };
 
