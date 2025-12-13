@@ -40,7 +40,7 @@ namespace glz
    struct parse<JSON>
    {
       template <auto Opts, class T, is_context Ctx, class It0, class It1>
-      GLZ_ALWAYS_INLINE static void op(T&& value, Ctx&& ctx, It0&& it, It1&& end)
+      GLZ_ALWAYS_INLINE static void op(T&& value, Ctx&& ctx, It0&& it, It1 end)
       {
          if constexpr (const_value_v<T>) {
             if constexpr (check_error_on_const_read(Opts)) {
@@ -48,19 +48,19 @@ namespace glz
             }
             else {
                // do not read anything into the const value
-               skip_value<JSON>::op<Opts>(std::forward<Ctx>(ctx), std::forward<It0>(it), std::forward<It1>(end));
+               skip_value<JSON>::op<Opts>(std::forward<Ctx>(ctx), std::forward<It0>(it), end);
             }
          }
          else {
             using V = std::remove_cvref_t<T>;
             from<JSON, V>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx), std::forward<It0>(it),
-                                             std::forward<It1>(end));
+                                             end);
          }
       }
 
       // This unknown key handler should not be given unescaped keys, that is for the user to handle.
       template <auto Opts, class T, is_context Ctx, class It0, class It1>
-      static void handle_unknown(const sv& key, T&& value, Ctx&& ctx, It0&& it, It1&& end)
+      static void handle_unknown(const sv& key, T&& value, Ctx&& ctx, It0&& it, It1 end)
       {
          using ValueType = std::decay_t<decltype(value)>;
          if constexpr (has_unknown_reader<ValueType>) {
@@ -157,11 +157,11 @@ namespace glz
    struct from<JSON, T>
    {
       template <auto Opts, class Value, is_context Ctx, class It0, class It1>
-      GLZ_ALWAYS_INLINE static void op(Value&& value, Ctx&& ctx, It0&& it, It1&& end)
+      GLZ_ALWAYS_INLINE static void op(Value&& value, Ctx&& ctx, It0&& it, It1 end)
       {
          using V = std::decay_t<decltype(get_member(std::declval<Value>(), meta_wrapper_v<T>))>;
          from<JSON, V>::template op<Opts>(get_member(std::forward<Value>(value), meta_wrapper_v<T>),
-                                          std::forward<Ctx>(ctx), std::forward<It0>(it), std::forward<It1>(end));
+                                          std::forward<Ctx>(ctx), std::forward<It0>(it), end);
       }
    };
 
@@ -766,7 +766,7 @@ namespace glz
    {
       template <auto Opts, class It, class End>
          requires(check_is_padded(Opts))
-      static void op(auto& value, is_context auto&& ctx, It&& it, End&& end)
+      static void op(auto& value, is_context auto&& ctx, It&& it, End end)
       {
          if constexpr (Opts.number) {
             auto start = it;
@@ -901,7 +901,7 @@ namespace glz
 
       template <auto Opts, class It, class End>
          requires(not check_is_padded(Opts))
-      static void op(auto& value, is_context auto&& ctx, It&& it, End&& end)
+      static void op(auto& value, is_context auto&& ctx, It&& it, End end)
       {
          if constexpr (Opts.number) {
             auto start = it;
@@ -1175,7 +1175,7 @@ namespace glz
    {
       template <auto Opts, class It, class End>
          requires(check_is_padded(Opts))
-      static void op(auto& value, is_context auto&& ctx, It&& it, End&& end)
+      static void op(auto& value, is_context auto&& ctx, It&& it, End end)
       {
          if constexpr (Opts.number) {
             auto start = it;
@@ -1310,7 +1310,7 @@ namespace glz
 
       template <auto Opts, class It, class End>
          requires(not check_is_padded(Opts))
-      static void op(auto& value, is_context auto&& ctx, It&& it, End&& end)
+      static void op(auto& value, is_context auto&& ctx, It&& it, End end)
       {
          if constexpr (Opts.number) {
             auto start = it;
@@ -1582,7 +1582,7 @@ namespace glz
    struct from<JSON, T>
    {
       template <auto Opts, class It, class End>
-      GLZ_ALWAYS_INLINE static void op(auto& value, is_context auto&& ctx, It&& it, End&& end) noexcept
+      GLZ_ALWAYS_INLINE static void op(auto& value, is_context auto&& ctx, It&& it, End end) noexcept
       {
          if constexpr (!check_opening_handled(Opts)) {
             if constexpr (!check_ws_handled(Opts)) {
@@ -4108,7 +4108,7 @@ namespace glz
    struct from<JSON, T>
    {
       template <auto Opts, class It0, class It1>
-      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, It0&& it, It1&& end) noexcept
+      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, It0&& it, It1 end) noexcept
       {
          using Rep = typename std::remove_cvref_t<T>::rep;
          Rep count{};
@@ -4126,7 +4126,7 @@ namespace glz
    struct from<JSON, T>
    {
       template <auto Opts, class It0, class It1>
-      static void op(auto&& value, is_context auto&& ctx, It0&& it, It1&& end) noexcept
+      static void op(auto&& value, is_context auto&& ctx, It0&& it, It1 end) noexcept
       {
          std::string_view str;
          from<JSON, std::string_view>::template op<Opts>(str, ctx, it, end);
@@ -4255,7 +4255,7 @@ namespace glz
    struct from<JSON, T>
    {
       template <auto Opts, class It0, class It1>
-      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, It0&& it, It1&& end) noexcept
+      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, It0&& it, It1 end) noexcept
       {
          using Duration = typename std::remove_cvref_t<T>::duration;
          using Rep = typename Duration::rep;
@@ -4273,7 +4273,7 @@ namespace glz
    struct from<JSON, T>
    {
       template <auto Opts, class It0, class It1>
-      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, It0&& it, It1&& end) noexcept
+      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, It0&& it, It1 end) noexcept
       {
          // Treat like steady_clock - parse as count
          using Duration = typename std::remove_cvref_t<T>::duration;
@@ -4292,7 +4292,7 @@ namespace glz
    struct from<JSON, epoch_time<Duration>>
    {
       template <auto Opts, class It0, class It1>
-      GLZ_ALWAYS_INLINE static void op(auto&& wrapper, is_context auto&& ctx, It0&& it, It1&& end) noexcept
+      GLZ_ALWAYS_INLINE static void op(auto&& wrapper, is_context auto&& ctx, It0&& it, It1 end) noexcept
       {
          using Rep = typename Duration::rep;
          Rep count{};

@@ -24,7 +24,7 @@ namespace glz
    {
       template <auto Opts, class T, class Tag, is_context Ctx, class It0, class It1>
          requires(check_no_header(Opts))
-      GLZ_ALWAYS_INLINE static void op(T&& value, Tag&& tag, Ctx&& ctx, It0&& it, It1&& end)
+      GLZ_ALWAYS_INLINE static void op(T&& value, Tag&& tag, Ctx&& ctx, It0&& it, It1 end)
       {
          if constexpr (const_value_v<T>) {
             if constexpr (check_error_on_const_read(Opts)) {
@@ -32,19 +32,19 @@ namespace glz
             }
             else {
                // do not read anything into the const value
-               skip_value<BEVE>::op<Opts>(std::forward<Ctx>(ctx), std::forward<It0>(it), std::forward<It1>(end));
+               skip_value<BEVE>::op<Opts>(std::forward<Ctx>(ctx), std::forward<It0>(it), end);
             }
          }
          else {
             using V = std::remove_cvref_t<T>;
             from<BEVE, V>::template op<Opts>(std::forward<T>(value), std::forward<Tag>(tag), std::forward<Ctx>(ctx),
-                                             std::forward<It0>(it), std::forward<It1>(end));
+                                             std::forward<It0>(it), end);
          }
       }
 
       template <auto Opts, class T, is_context Ctx, class It0, class It1>
          requires(not check_no_header(Opts))
-      GLZ_ALWAYS_INLINE static void op(T&& value, Ctx&& ctx, It0&& it, It1&& end)
+      GLZ_ALWAYS_INLINE static void op(T&& value, Ctx&& ctx, It0&& it, It1 end)
       {
          if constexpr (const_value_v<T>) {
             if constexpr (check_error_on_const_read(Opts)) {
@@ -52,13 +52,13 @@ namespace glz
             }
             else {
                // do not read anything into the const value
-               skip_value<BEVE>::op<Opts>(std::forward<Ctx>(ctx), std::forward<It0>(it), std::forward<It1>(end));
+               skip_value<BEVE>::op<Opts>(std::forward<Ctx>(ctx), std::forward<It0>(it), end);
             }
          }
          else {
             using V = std::remove_cvref_t<T>;
             from<BEVE, V>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx), std::forward<It0>(it),
-                                             std::forward<It1>(end));
+                                             end);
          }
       }
    };
@@ -68,21 +68,21 @@ namespace glz
    struct from<BEVE, T>
    {
       template <auto Opts, class Value, is_context Ctx, class It0, class It1>
-      GLZ_ALWAYS_INLINE static void op(Value&& value, Ctx&& ctx, It0&& it, It1&& end)
+      GLZ_ALWAYS_INLINE static void op(Value&& value, Ctx&& ctx, It0&& it, It1 end)
       {
          using V = std::decay_t<decltype(get_member(std::declval<Value>(), meta_wrapper_v<T>))>;
          from<BEVE, V>::template op<Opts>(get_member(std::forward<Value>(value), meta_wrapper_v<T>),
-                                          std::forward<Ctx>(ctx), std::forward<It0>(it), std::forward<It1>(end));
+                                          std::forward<Ctx>(ctx), std::forward<It0>(it), end);
       }
 
       template <auto Opts, class Value, class Tag, is_context Ctx, class It0, class It1>
          requires(check_no_header(Opts))
-      GLZ_ALWAYS_INLINE static void op(Value&& value, Tag&& tag, Ctx&& ctx, It0&& it, It1&& end)
+      GLZ_ALWAYS_INLINE static void op(Value&& value, Tag&& tag, Ctx&& ctx, It0&& it, It1 end)
       {
          using V = std::decay_t<decltype(get_member(std::declval<Value>(), meta_wrapper_v<T>))>;
          from<BEVE, V>::template op<Opts>(get_member(std::forward<Value>(value), meta_wrapper_v<T>),
                                           std::forward<Tag>(tag), std::forward<Ctx>(ctx), std::forward<It0>(it),
-                                          std::forward<It1>(end));
+                                          end);
       }
    };
 
@@ -166,7 +166,7 @@ namespace glz
    struct from<BEVE, T>
    {
       template <auto Opts, is_context Ctx, class It0, class It1>
-      static void op(auto&& value, Ctx&& ctx, It0&& it, It1&& end)
+      static void op(auto&& value, Ctx&& ctx, It0&& it, It1 end)
       {
          constexpr auto N = reflect<T>::size;
 

@@ -25,7 +25,7 @@ namespace glz
    {
       template <auto Opts, class T, is_context Ctx, class It0, class It1>
          requires(not check_no_header(Opts))
-      GLZ_ALWAYS_INLINE static void op(T&& value, Ctx&& ctx, It0&& it, It1&& end) noexcept
+      GLZ_ALWAYS_INLINE static void op(T&& value, Ctx&& ctx, It0&& it, It1 end) noexcept
       {
          // TODO Check version
          const auto version = decode_version(ctx, it);
@@ -40,12 +40,12 @@ namespace glz
          }
 
          parse<Opts.format>::template op<no_header_on<Opts>()>(std::forward<T>(value), std::forward<Ctx>(ctx),
-                                                               std::forward<It0>(it), std::forward<It1>(end));
+                                                               std::forward<It0>(it), end);
       }
 
       template <auto Opts, class T, is_context Ctx, class It0, class It1>
          requires(check_no_header(Opts))
-      GLZ_ALWAYS_INLINE static void op(T&& value, Ctx&& ctx, It0&& it, It1&& end) noexcept
+      GLZ_ALWAYS_INLINE static void op(T&& value, Ctx&& ctx, It0&& it, It1 end) noexcept
       {
          if (bool(ctx.error)) {
             return;
@@ -57,12 +57,12 @@ namespace glz
             }
             else {
                // do not read anything into the const value
-               skip_value<EETF>::op<Opts>(std::forward<Ctx>(ctx), std::forward<It0>(it), std::forward<It1>(end));
+               skip_value<EETF>::op<Opts>(std::forward<Ctx>(ctx), std::forward<It0>(it), end);
             }
          }
          else {
             from<EETF, std::remove_cvref_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
-                                                                  std::forward<It0>(it), std::forward<It1>(end));
+                                                                  std::forward<It0>(it), end);
          }
       }
    };
@@ -221,7 +221,7 @@ namespace glz
          field_iterator(error_code ec, Ctx&& ctx) : term_header{-1ull, -1ull} { ctx.error = ec; }
 
          template <auto Opts>
-         bool next(Ctx&& ctx, It0&& it, It1&& end)
+         bool next(Ctx&& ctx, It0&& it, It1 end)
          {
             if (term_header.first == 0) {
                return false;
@@ -257,7 +257,7 @@ namespace glz
       };
 
       template <auto Opts, is_context Ctx, class It0, class It1>
-      static auto make_term_iterator(Ctx&& ctx, It0&& it, It1&& end)
+      static auto make_term_iterator(Ctx&& ctx, It0&& it, It1 end)
       {
          using fi = field_iterator<Ctx, It0, It1>;
          const auto tag = get_type(ctx, it);

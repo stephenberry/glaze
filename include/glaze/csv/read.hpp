@@ -61,11 +61,11 @@ namespace glz
    struct from<CSV, T>
    {
       template <auto Opts, is_context Ctx, class It0, class It1>
-      static void op(auto&& value, Ctx&& ctx, It0&& it, It1&& end)
+      static void op(auto&& value, Ctx&& ctx, It0&& it, It1 end)
       {
          using V = decltype(get_member(std::declval<T>(), meta_wrapper_v<T>));
          from<CSV, V>::template op<Opts>(get_member(value, meta_wrapper_v<T>), std::forward<Ctx>(ctx),
-                                         std::forward<It0>(it), std::forward<It1>(end));
+                                         std::forward<It0>(it), end);
       }
    };
 
@@ -442,9 +442,9 @@ namespace glz
    struct from<CSV, skip>
    {
       template <auto Opts, class It0, class It1>
-      GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&& ctx, It0&& it, It1&& end) noexcept
+      GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&& ctx, It0&& it, It1 end) noexcept
       {
-         skip_value<CSV>::template op<Opts>(ctx, std::forward<It0>(it), std::forward<It1>(end));
+         skip_value<CSV>::template op<Opts>(ctx, std::forward<It0>(it), end);
       }
    };
 

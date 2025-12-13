@@ -25,17 +25,17 @@ namespace glz
    struct parse<TOML>
    {
       template <auto Opts, class T, is_context Ctx, class It0, class It1>
-      GLZ_ALWAYS_INLINE static void op(T&& value, Ctx&& ctx, It0&& it, It1&& end)
+      GLZ_ALWAYS_INLINE static void op(T&& value, Ctx&& ctx, It0&& it, It1 end)
       {
          using V = std::remove_cvref_t<T>;
          from<TOML, V>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx), std::forward<It0>(it),
-                                          std::forward<It1>(end));
+                                          end);
       }
    };
 
    // Parse TOML key (bare key or quoted key)
    template <class Ctx, class It, class End>
-   GLZ_ALWAYS_INLINE bool parse_toml_key(std::string& key, Ctx& ctx, It&& it, End&& end) noexcept
+   GLZ_ALWAYS_INLINE bool parse_toml_key(std::string& key, Ctx& ctx, It&& it, End end) noexcept
    {
       key.clear();
       skip_ws_and_comments(it, end);
@@ -840,7 +840,7 @@ namespace glz
    namespace detail
    {
       template <auto Opts, class T, class It, class End, class Ctx>
-      GLZ_ALWAYS_INLINE void parse_toml_object_members(T&& value, It&& it, End&& end, Ctx&& ctx, bool is_inline_table)
+      GLZ_ALWAYS_INLINE void parse_toml_object_members(T&& value, It&& it, End end, Ctx&& ctx, bool is_inline_table)
       {
          using U = std::remove_cvref_t<T>;
          static constexpr auto N = reflect<U>::size;
