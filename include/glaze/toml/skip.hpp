@@ -229,7 +229,7 @@ namespace glz
    struct skip_value<TOML>
    {
       template <auto Opts>
-      GLZ_ALWAYS_INLINE static void op(is_context auto&& ctx, auto&& it, auto&& end) noexcept
+      GLZ_ALWAYS_INLINE static void op(is_context auto&& ctx, auto&& it, auto end) noexcept
       {
          toml::skip_value_impl<Opts>(ctx, it, end);
       }

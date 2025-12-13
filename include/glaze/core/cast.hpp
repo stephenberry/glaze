@@ -57,7 +57,7 @@ namespace glz
       }
 
       template <auto Opts>
-      static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
+      static void op(auto&& value, is_context auto&& ctx, auto&& it, auto end)
       {
          using V = std::decay_t<decltype(value)>;
          using Cast = typename V::cast_type;
@@ -78,7 +78,7 @@ namespace glz
 
       template <auto Opts>
          requires(check_no_header(Opts))
-      static void op(auto&& value, const uint8_t tag, is_context auto&& ctx, auto&& it, auto&& end)
+      static void op(auto&& value, const uint8_t tag, is_context auto&& ctx, auto&& it, auto end)
       {
          using V = std::decay_t<decltype(value)>;
          using Cast = typename V::cast_type;
@@ -121,7 +121,7 @@ namespace glz
       }
 
       template <auto Opts>
-      static void no_header(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
+      static void no_header(auto&& value, is_context auto&& ctx, auto&& it, auto end)
       {
          using V = std::decay_t<decltype(value)>;
          using Target = typename V::target_t;

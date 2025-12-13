@@ -1539,7 +1539,7 @@ namespace glz
    }();
 
    template <size_t min_length>
-   GLZ_ALWAYS_INLINE constexpr const void* quote_memchr(auto&& it, auto&& end) noexcept
+   GLZ_ALWAYS_INLINE constexpr const void* quote_memchr(auto&& it, auto end) noexcept
    {
       if (std::is_constant_evaluated()) {
          const auto count = size_t(end - it);
@@ -1611,7 +1611,7 @@ namespace glz
       static constexpr auto bsize = bucket_size(hash_type::unique_index, N);
       static constexpr auto uindex = HashInfo.unique_index;
 
-      GLZ_ALWAYS_INLINE static constexpr size_t op(auto&& it, auto&& end) noexcept
+      GLZ_ALWAYS_INLINE static constexpr size_t op(auto&& it, auto end) noexcept
       {
          if constexpr (HashInfo.sized_hash) {
             const auto* c = quote_memchr<HashInfo.min_length>(it, end);
@@ -1663,7 +1663,7 @@ namespace glz
       static constexpr auto N = reflect<T>::size;
       static constexpr auto uindex = HashInfo.unique_index;
 
-      GLZ_ALWAYS_INLINE static constexpr size_t op(auto&& it, auto&& end) noexcept
+      GLZ_ALWAYS_INLINE static constexpr size_t op(auto&& it, auto end) noexcept
       {
          if constexpr (uindex > 0) {
             if ((it + uindex) >= end) [[unlikely]] {
@@ -1688,7 +1688,7 @@ namespace glz
       static constexpr auto N = reflect<T>::size;
       static constexpr auto bsize = bucket_size(hash_type::front_hash, N);
 
-      GLZ_ALWAYS_INLINE static constexpr size_t op(auto&& it, auto&& end) noexcept
+      GLZ_ALWAYS_INLINE static constexpr size_t op(auto&& it, auto end) noexcept
       {
          if constexpr (HashInfo.front_hash_bytes == 2) {
             if ((it + 2) >= end) [[unlikely]] {
@@ -1750,7 +1750,7 @@ namespace glz
       static constexpr auto N = reflect<T>::size;
       static constexpr auto bsize = bucket_size(hash_type::unique_per_length, N);
 
-      GLZ_ALWAYS_INLINE static constexpr size_t op(auto&& it, auto&& end) noexcept
+      GLZ_ALWAYS_INLINE static constexpr size_t op(auto&& it, auto end) noexcept
       {
          const auto* c = quote_memchr<HashInfo.min_length>(it, end);
          if (c) [[likely]] {
@@ -1777,7 +1777,7 @@ namespace glz
       static constexpr auto max_length = HashInfo.max_length;
       static constexpr auto length_range = max_length - min_length;
 
-      GLZ_ALWAYS_INLINE static constexpr size_t op(auto&& it, auto&& end) noexcept
+      GLZ_ALWAYS_INLINE static constexpr size_t op(auto&& it, auto end) noexcept
       {
          // For JSON we require at a minimum ":1} characters after a key (1 being a single char number)
          // This means that we can require all these characters to exist for SWAR parsing

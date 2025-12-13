@@ -15,7 +15,7 @@ namespace glz
    struct from<Format, T>
    {
       template <auto Opts>
-      static void op(auto&& wrapper, is_context auto&& ctx, auto&& it, auto&& end)
+      static void op(auto&& wrapper, is_context auto&& ctx, auto&& it, auto end)
       {
          auto tie = to_tie(wrapper.value);
          parse<Format>::template op<Opts>(tie, ctx, it, end);

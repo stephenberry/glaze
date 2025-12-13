@@ -166,7 +166,7 @@ namespace glz
    };
 
    template <auto Opts>
-   GLZ_ALWAYS_INLINE bool parse_ws_colon(is_context auto& ctx, auto&& it, auto&& end) noexcept
+   GLZ_ALWAYS_INLINE bool parse_ws_colon(is_context auto& ctx, auto&& it, auto end) noexcept
    {
       if (skip_ws<Opts>(ctx, it, end)) {
          return true;
@@ -184,7 +184,7 @@ namespace glz
    // This path handles unknown keys and doesn't depend on the field index I.
    template <auto Opts, class T, class Value>
       requires(glaze_object_t<T> || reflectable<T>)
-   void decode_index_unknown_key(Value&& value, is_context auto&& ctx, auto&& it, auto&& end)
+   void decode_index_unknown_key(Value&& value, is_context auto&& ctx, auto&& it, auto end)
    {
       if constexpr (Opts.error_on_unknown_keys) {
          ctx.error = error_code::unknown_key;
@@ -305,7 +305,7 @@ namespace glz
 
    template <auto Opts, class T, size_t I, class Value>
       requires(glaze_enum_t<T> || (meta_keys<T> && std::is_enum_v<T>))
-   void decode_index(Value&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+   void decode_index(Value&& value, is_context auto&& ctx, auto&& it, auto end) noexcept
    {
       static constexpr auto TargetKey = glz::get<I>(reflect<T>::keys);
       static constexpr auto Length = TargetKey.size();
@@ -405,7 +405,7 @@ namespace glz
    struct from<JSON, T>
    {
       template <auto Opts, class... Args>
-      static void op(auto&&, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+      static void op(auto&&, is_context auto&& ctx, auto&& it, auto end) noexcept
       {
          if constexpr (!check_ws_handled(Opts)) {
             if (skip_ws<Opts>(ctx, it, end)) {
@@ -421,7 +421,7 @@ namespace glz
    struct from<JSON, T>
    {
       template <auto Opts>
-      static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+      static void op(auto&& value, is_context auto&& ctx, auto&& it, auto end) noexcept
       {
          if (match_invalid_end<'"', Opts>(ctx, it, end)) {
             return;
@@ -496,7 +496,7 @@ namespace glz
    struct from<JSON, T>
    {
       template <auto Options>
-      static void op(auto&& v, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+      static void op(auto&& v, is_context auto&& ctx, auto&& it, auto end) noexcept
       {
          constexpr auto Opts = ws_handled_off<Options>();
          if constexpr (!check_ws_handled(Options)) {
@@ -543,7 +543,7 @@ namespace glz
    struct from<JSON, T>
    {
       template <auto Opts>
-      GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+      GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&& ctx, auto&& it, auto end) noexcept
       {
          if constexpr (!check_ws_handled(Opts)) {
             if (skip_ws<Opts>(ctx, it, end)) {
@@ -570,7 +570,7 @@ namespace glz
    struct from<JSON, T>
    {
       template <auto Opts>
-      static void op(bool_t auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+      static void op(bool_t auto&& value, is_context auto&& ctx, auto&& it, auto end) noexcept
       {
          if constexpr (Opts.quoted_num) {
             if (skip_ws<Opts>(ctx, it, end)) {
@@ -665,7 +665,7 @@ namespace glz
    struct from<JSON, T>
    {
       template <auto Opts, class It>
-      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, It&& it, auto&& end) noexcept
+      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, It&& it, auto end) noexcept
       {
          if constexpr (Opts.quoted_num) {
             if (skip_ws<Opts>(ctx, it, end)) {
@@ -1650,7 +1650,7 @@ namespace glz
    struct from<JSON, T>
    {
       template <auto Opts>
-      static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+      static void op(auto& value, is_context auto&& ctx, auto&& it, auto end) noexcept
       {
          if constexpr (!check_opening_handled(Opts)) {
             if constexpr (!check_ws_handled(Opts)) {
@@ -1749,7 +1749,7 @@ namespace glz
    struct from<JSON, T>
    {
       template <auto Opts>
-      static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+      static void op(auto& value, is_context auto&& ctx, auto&& it, auto end) noexcept
       {
          if constexpr (!check_ws_handled(Opts)) {
             if (skip_ws<Opts>(ctx, it, end)) {
@@ -1794,7 +1794,7 @@ namespace glz
    struct from<JSON, T>
    {
       template <auto Opts>
-      static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+      static void op(auto& value, is_context auto&& ctx, auto&& it, auto end) noexcept
       {
          // TODO: use std::bit_cast???
          std::underlying_type_t<std::decay_t<T>> x{};
@@ -1807,7 +1807,7 @@ namespace glz
    struct from<JSON, T>
    {
       template <auto Opts>
-      static void op(auto& /*value*/, is_context auto&& ctx, auto&& it, auto&& end)
+      static void op(auto& /*value*/, is_context auto&& ctx, auto&& it, auto end)
       {
          if constexpr (!check_ws_handled(Opts)) {
             if (skip_ws<Opts>(ctx, it, end)) {
@@ -1836,7 +1836,7 @@ namespace glz
    struct from<JSON, basic_raw_json<T>>
    {
       template <auto Opts>
-      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
+      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto end)
       {
          auto it_start = it;
          if (*it == 'n') {
@@ -1858,7 +1858,7 @@ namespace glz
    struct from<JSON, basic_text<T>>
    {
       template <auto Opts>
-      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&&, auto&& it, auto&& end)
+      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&&, auto&& it, auto end)
       {
          value.str = {it, static_cast<size_t>(end - it)}; // read entire contents as string
          it = end;
@@ -1871,7 +1871,7 @@ namespace glz
    struct from<JSON, T>
    {
       template <auto Options>
-      static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end)
+      static void op(auto& value, is_context auto&& ctx, auto&& it, auto end)
       {
          constexpr auto Opts = ws_handled_off<Options>();
          if constexpr (!check_ws_handled(Options)) {
@@ -1932,7 +1932,7 @@ namespace glz
    struct from<JSON, T>
    {
       template <auto Options>
-      static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
+      static void op(auto&& value, is_context auto&& ctx, auto&& it, auto end)
       {
          constexpr auto Opts = ws_handled_off<Options>();
          if constexpr (!check_ws_handled(Options)) {
@@ -2076,7 +2076,7 @@ namespace glz
       // Intead of hashing or linear searching, we just clear the input and overwrite the entire contents
       template <auto Options>
          requires(pair_t<range_value_t<T>> && check_concatenate(Options) == true)
-      static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
+      static void op(auto&& value, is_context auto&& ctx, auto&& it, auto end)
       {
          static constexpr auto Opts = opening_handled_off<ws_handled_off<Options>()>();
          if constexpr (!check_opening_handled(Options)) {
@@ -2193,7 +2193,7 @@ namespace glz
    // 'it' is copied so that it does not actually progress the iterator
    // expects the opening brace ([) to have already been consumed
    template <auto Opts>
-   [[nodiscard]] size_t number_of_array_elements(is_context auto&& ctx, auto it, auto&& end) noexcept
+   [[nodiscard]] size_t number_of_array_elements(is_context auto&& ctx, auto it, auto end) noexcept
    {
       skip_ws<Opts>(ctx, it, end);
       if (bool(ctx.error)) [[unlikely]]
@@ -2254,7 +2254,7 @@ namespace glz
    struct from<JSON, T>
    {
       template <auto Options>
-      static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end)
+      static void op(auto& value, is_context auto&& ctx, auto&& it, auto end)
       {
          constexpr auto Opts = ws_handled_off<Options>();
          if constexpr (!check_ws_handled(Options)) {
@@ -2301,7 +2301,7 @@ namespace glz
    struct from<JSON, T>
    {
       template <auto Opts>
-      static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end)
+      static void op(auto& value, is_context auto&& ctx, auto&& it, auto end)
       {
          static constexpr auto N = []() constexpr {
             if constexpr (glaze_array_t<T>) {
@@ -2390,7 +2390,7 @@ namespace glz
    struct from<JSON, T>
    {
       template <auto Opts>
-      static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
+      static void op(auto&& value, is_context auto&& ctx, auto&& it, auto end)
       {
          if constexpr (!check_ws_handled(Opts)) {
             if (skip_ws<Opts>(ctx, it, end)) {
@@ -2454,7 +2454,7 @@ namespace glz
    struct from<JSON, includer<T>>
    {
       template <auto Options>
-      static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
+      static void op(auto&& value, is_context auto&& ctx, auto&& it, auto end)
       {
          constexpr auto Opts = ws_handled_off<Options>();
          std::string buffer{};
@@ -2499,7 +2499,7 @@ namespace glz
    struct from<JSON, T>
    {
       template <auto Options, string_literal tag = "">
-      static void op(T& value, is_context auto&& ctx, auto&& it, auto&& end)
+      static void op(T& value, is_context auto&& ctx, auto&& it, auto end)
       {
          constexpr auto Opts = opening_handled_off<ws_handled_off<Options>()>();
          if constexpr (!check_opening_handled(Options)) {
@@ -2598,7 +2598,7 @@ namespace glz
    struct from<JSON, T>
    {
       template <auto Options, string_literal tag = "">
-      static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
+      static void op(auto&& value, is_context auto&& ctx, auto&& it, auto end)
       {
          static constexpr auto num_members = reflect<T>::size;
 
@@ -3082,7 +3082,7 @@ namespace glz
    struct process_variant_alternatives
    {
       template <auto Options>
-      static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
+      static void op(auto&& value, is_context auto&& ctx, auto&& it, auto end)
       {
          if constexpr (glz::tuple_size_v<Tuple> < 1) {
             ctx.error = error_code::no_matching_variant_type;
@@ -3199,7 +3199,7 @@ namespace glz
    {
       // Note that items in the variant are required to be default constructable for us to switch types
       template <auto Options>
-      static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
+      static void op(auto&& value, is_context auto&& ctx, auto&& it, auto end)
       {
          constexpr auto Opts = ws_handled_off<Options>();
          if constexpr (variant_is_auto_deducible<T>()) {
@@ -3821,7 +3821,7 @@ namespace glz
    struct from<JSON, array_variant_wrapper<T>>
    {
       template <auto Options>
-      static void op(auto&& wrapper, is_context auto&& ctx, auto&& it, auto&& end)
+      static void op(auto&& wrapper, is_context auto&& ctx, auto&& it, auto end)
       {
          auto& value = wrapper.value;
 
@@ -3895,7 +3895,7 @@ namespace glz
    struct from<JSON, T>
    {
       template <auto Opts, class... Args>
-      static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
+      static void op(auto&& value, is_context auto&& ctx, auto&& it, auto end)
       {
          if constexpr (!check_ws_handled(Opts)) {
             if (skip_ws<Opts>(ctx, it, end)) {
@@ -3995,7 +3995,7 @@ namespace glz
    struct from<JSON, T>
    {
       template <auto Opts, class V, size_t N>
-      GLZ_ALWAYS_INLINE static void op(V (&value)[N], is_context auto&& ctx, auto&& it, auto&& end) noexcept
+      GLZ_ALWAYS_INLINE static void op(V (&value)[N], is_context auto&& ctx, auto&& it, auto end) noexcept
       {
          parse<JSON>::op<Opts>(std::span{value, N}, ctx, it, end);
       }
@@ -4007,7 +4007,7 @@ namespace glz
    struct from<JSON, T>
    {
       template <auto Options>
-      static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
+      static void op(auto&& value, is_context auto&& ctx, auto&& it, auto end)
       {
          constexpr auto Opts = ws_handled_off<Options>();
          if constexpr (!check_ws_handled(Options)) {
@@ -4081,7 +4081,7 @@ namespace glz
    struct from<JSON, T>
    {
       template <auto Opts>
-      static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
+      static void op(auto&& value, is_context auto&& ctx, auto&& it, auto end)
       {
          std::string& buffer = string_buffer();
          parse<JSON>::op<Opts>(buffer, ctx, it, end);

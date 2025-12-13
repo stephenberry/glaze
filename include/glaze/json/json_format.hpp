@@ -72,7 +72,7 @@ namespace glz::detail
 
    template <auto Opts>
       requires(check_is_padded(Opts))
-   sv read_json_string(auto&& it, auto&& end) noexcept
+   sv read_json_string(auto&& it, auto end) noexcept
    {
       auto start = it;
       ++it; // skip quote
@@ -103,7 +103,7 @@ namespace glz::detail
 
    template <auto Opts>
       requires(!check_is_padded(Opts))
-   sv read_json_string(auto&& it, auto&& end) noexcept
+   sv read_json_string(auto&& it, auto end) noexcept
    {
       auto start = it;
       ++it; // skip quote
@@ -148,7 +148,7 @@ namespace glz::detail
    }
 
    // Reads /* my comment */ style comments
-   inline sv read_jsonc_comment(auto&& it, auto&& end) noexcept
+   inline sv read_jsonc_comment(auto&& it, auto end) noexcept
    {
       auto start = it;
       it += 2; // skip /*
@@ -184,7 +184,7 @@ namespace glz::detail
    }
 
    template <bool null_terminated>
-   GLZ_ALWAYS_INLINE sv read_json_number(auto&& it, auto&& end) noexcept
+   GLZ_ALWAYS_INLINE sv read_json_number(auto&& it, auto end) noexcept
    {
       auto start = it;
       if constexpr (null_terminated) {

@@ -48,7 +48,7 @@ namespace glz
    struct from<JSON, escape_bytes_t<T>>
    {
       template <auto Opts>
-      static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
+      static void op(auto&& value, is_context auto&& ctx, auto&& it, auto end)
       {
          std::string& temp = string_buffer();
          temp.clear();

@@ -94,7 +94,7 @@ namespace glz
    }
 
    template <class It0, class It1>
-   auto skip_term(is_context auto&& ctx, It0&& it, It1&& end)
+   auto skip_term(is_context auto&& ctx, It0&& it, It1 end)
    {
       int index{};
       if (ei_skip_term(it, &index) < 0) {
@@ -145,7 +145,7 @@ namespace glz
    }
 
    template <class It0, class It1>
-   GLZ_ALWAYS_INLINE void decode_token(auto&& value, is_context auto&& ctx, It0&& it, It1&& end)
+   GLZ_ALWAYS_INLINE void decode_token(auto&& value, is_context auto&& ctx, It0&& it, It1 end)
    {
       using namespace std::placeholders;
 
@@ -179,7 +179,7 @@ namespace glz
    }
 
    template <auto Opts, class T, class It0>
-   void decode_binary(T&& value, std::size_t sz, is_context auto&& ctx, It0&& it, auto&& end)
+   void decode_binary(T&& value, std::size_t sz, is_context auto&& ctx, It0&& it, auto end)
    {
       using namespace std::placeholders;
 
@@ -225,7 +225,7 @@ namespace glz
    }
 
    template <auto Opts, class T>
-   GLZ_ALWAYS_INLINE void decode_list(T&& value, is_context auto&& ctx, auto&& it, auto&& end)
+   GLZ_ALWAYS_INLINE void decode_list(T&& value, is_context auto&& ctx, auto&& it, auto end)
    {
       using V = range_value_t<std::decay_t<T>>;
 

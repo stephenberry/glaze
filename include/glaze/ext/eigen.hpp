@@ -27,7 +27,7 @@ namespace glz
    struct from<BEVE, T>
    {
       template <auto Opts>
-      static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end)
+      static void op(auto& value, is_context auto&& ctx, auto&& it, auto end)
       {
          ++it;
          if (it >= end) [[unlikely]] {
@@ -53,7 +53,7 @@ namespace glz
    struct from<BEVE, T>
    {
       template <auto Opts>
-      static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end)
+      static void op(auto& value, is_context auto&& ctx, auto&& it, auto end)
       {
          ++it;
          if (it >= end) [[unlikely]] {
@@ -126,7 +126,7 @@ namespace glz
    struct from<JSON, T>
    {
       template <auto Opts>
-      static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end)
+      static void op(auto& value, is_context auto&& ctx, auto&& it, auto end)
       {
          std::span<typename T::Scalar, T::RowsAtCompileTime * T::ColsAtCompileTime> view(value.data(), value.size());
          parse<JSON>::op<Opts>(view, ctx, it, end);
@@ -174,7 +174,7 @@ namespace glz
    struct from<JSON, T>
    {
       template <auto Opts>
-      static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end)
+      static void op(auto& value, is_context auto&& ctx, auto&& it, auto end)
       {
          if (match_invalid_end<'[', Opts>(ctx, it, end)) {
             return;
@@ -202,7 +202,7 @@ namespace glz
    struct from<JSON, Eigen::Transform<Scalar, Dim, Mode>>
    {
       template <auto Opts>
-      static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end)
+      static void op(auto& value, is_context auto&& ctx, auto&& it, auto end)
       {
          constexpr auto size = Mode == Eigen::TransformTraits::AffineCompact ? (Dim + 1) * Dim : (Dim + 1) * (Dim + 1);
          std::span<Scalar, size> view(value.data(), size);

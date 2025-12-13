@@ -434,7 +434,7 @@ namespace glz
       template <auto Opts = opts{}, class T>
          requires(Opts.format == JSON && (tuple_t<std::decay_t<T>> || is_std_tuple<std::decay_t<T>>))
       inline void handle_slice(const jmespath::ArrayParseResult& decomposed_key, T&& value, context& ctx, auto&& it,
-                               auto&& end)
+                               auto end)
       {
          if (skip_ws<Opts>(ctx, it, end)) {
             return;
@@ -531,7 +531,7 @@ namespace glz
       template <auto Opts = opts{}, class T>
          requires(Opts.format == JSON && readable_array_t<T>)
       inline void handle_slice(const jmespath::ArrayParseResult& decomposed_key, T&& value, context& ctx, auto&& it,
-                               auto&& end)
+                               auto end)
       {
          if (skip_ws<Opts>(ctx, it, end)) {
             return;

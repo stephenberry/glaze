@@ -203,7 +203,7 @@ namespace glz
    struct from<TOML, T>
    {
       template <auto Opts, is_context Ctx, class It0, class It1>
-      static void op(auto&& value, Ctx&& ctx, It0&& it, It1&& end)
+      static void op(auto&& value, Ctx&& ctx, It0&& it, It1 end)
       {
          using V = decltype(get_member(std::declval<T>(), meta_wrapper_v<T>));
          from<TOML, V>::template op<Opts>(get_member(value, meta_wrapper_v<T>), std::forward<Ctx>(ctx),
@@ -330,7 +330,7 @@ namespace glz
       };
 
       template <std::integral T>
-      constexpr bool parse_toml_integer(T& v, auto&& it, auto&& end) noexcept
+      constexpr bool parse_toml_integer(T& v, auto&& it, auto end) noexcept
       {
          // Ensure the caller gave us at least one character.
          if (it == end) [[unlikely]] {
@@ -490,7 +490,7 @@ namespace glz
    struct from<TOML, T>
    {
       template <auto Opts, class It>
-      static void op(auto&& value, is_context auto&& ctx, It&& it, auto&& end) noexcept
+      static void op(auto&& value, is_context auto&& ctx, It&& it, auto end) noexcept
       {
          if (bool(ctx.error)) [[unlikely]] {
             return;
@@ -525,7 +525,7 @@ namespace glz
    struct from<TOML, T>
    {
       template <auto Opts, class It>
-      static void op(auto&& value, is_context auto&& ctx, It&& it, auto&& end)
+      static void op(auto&& value, is_context auto&& ctx, It&& it, auto end)
       {
          if (bool(ctx.error)) [[unlikely]] {
             return;
@@ -736,7 +736,7 @@ namespace glz
    struct from<TOML, T>
    {
       template <auto Opts, class It>
-      static void op(auto&& value, is_context auto&& ctx, It&& it, auto&& end) noexcept
+      static void op(auto&& value, is_context auto&& ctx, It&& it, auto end) noexcept
       {
          if (bool(ctx.error)) [[unlikely]] {
             return;
@@ -770,7 +770,7 @@ namespace glz
    struct from<TOML, T>
    {
       template <auto Opts, class It>
-      static void op(auto&& value, is_context auto&& ctx, It&& it, auto&& end)
+      static void op(auto&& value, is_context auto&& ctx, It&& it, auto end)
       {
          if (bool(ctx.error)) [[unlikely]] {
             return;
@@ -1041,7 +1041,7 @@ namespace glz
    struct from<TOML, T>
    {
       template <auto Opts, class It>
-      static void op(auto&& value, is_context auto&& ctx, It&& it, auto&& end)
+      static void op(auto&& value, is_context auto&& ctx, It&& it, auto end)
       {
          while (it != end) {
             // TODO: Introduce OPTS here

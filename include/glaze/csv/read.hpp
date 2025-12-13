@@ -26,7 +26,7 @@ namespace glz
       }
    };
 
-   GLZ_ALWAYS_INLINE bool csv_new_line(is_context auto& ctx, auto&& it, auto&& end) noexcept
+   GLZ_ALWAYS_INLINE bool csv_new_line(is_context auto& ctx, auto&& it, auto end) noexcept
    {
       if (it == end) [[unlikely]] {
          ctx.error = error_code::unexpected_end;
@@ -73,7 +73,7 @@ namespace glz
    struct from<CSV, T>
    {
       template <auto Opts, class It>
-      static void op(auto&& value, is_context auto&& ctx, It&& it, auto&& end) noexcept
+      static void op(auto&& value, is_context auto&& ctx, It&& it, auto end) noexcept
       {
          if (bool(ctx.error)) [[unlikely]] {
             return;
@@ -129,7 +129,7 @@ namespace glz
    struct from<CSV, T>
    {
       template <auto Opts, class It>
-      static void op(auto&& value, is_context auto&& ctx, It&& it, auto&& end)
+      static void op(auto&& value, is_context auto&& ctx, It&& it, auto end)
       {
          if (bool(ctx.error)) [[unlikely]] {
             return;
@@ -211,7 +211,7 @@ namespace glz
    struct from<CSV, T>
    {
       template <auto Opts, class It>
-      static void op(auto&& value, is_context auto&& ctx, It&& it, auto&& end)
+      static void op(auto&& value, is_context auto&& ctx, It&& it, auto end)
       {
          using storage_t = std::remove_cvref_t<decltype(value)>;
 
@@ -331,7 +331,7 @@ namespace glz
    struct from<CSV, T>
    {
       template <auto Opts, class It>
-      static void op(auto&& value, is_context auto&& ctx, It&& it, auto&& end)
+      static void op(auto&& value, is_context auto&& ctx, It&& it, auto end)
       {
          if (bool(ctx.error)) [[unlikely]] {
             return;
@@ -384,7 +384,7 @@ namespace glz
    struct from<CSV, T>
    {
       template <auto Opts, class It>
-      static void op(auto&& value, is_context auto&& ctx, It&& it, auto&& end) noexcept
+      static void op(auto&& value, is_context auto&& ctx, It&& it, auto end) noexcept
       {
          if (bool(ctx.error)) [[unlikely]] {
             return;
@@ -452,7 +452,7 @@ namespace glz
    struct from<CSV, T>
    {
       template <auto Opts, class It>
-      static void op(auto&& value, is_context auto&& ctx, It&& it, auto&& end)
+      static void op(auto&& value, is_context auto&& ctx, It&& it, auto end)
       {
          parse<CSV>::op<Opts>(value.emplace_back(), ctx, it, end);
       }
@@ -494,7 +494,7 @@ namespace glz
       using Value = typename Row::value_type;
 
       template <auto Opts, class It>
-      static void op(auto&& value, is_context auto&& ctx, It&& it, auto&& end)
+      static void op(auto&& value, is_context auto&& ctx, It&& it, auto end)
       {
          // Clear existing data if not appending (only for resizable containers)
          if constexpr (!check_append_arrays(Opts) && resizable<T>) {
@@ -799,14 +799,14 @@ namespace glz
    };
 
    template <char delim>
-   inline void goto_delim(auto&& it, auto&& end) noexcept
+   inline void goto_delim(auto&& it, auto end) noexcept
    {
       while (it != end && *it != delim) {
          ++it;
       }
    }
 
-   inline auto read_column_wise_keys(auto&& ctx, auto&& it, auto&& end)
+   inline auto read_column_wise_keys(auto&& ctx, auto&& it, auto end)
    {
       std::vector<std::pair<sv, size_t>> keys;
 
@@ -867,7 +867,7 @@ namespace glz
    struct from<CSV, T>
    {
       template <auto Opts, class It>
-      static void op(auto&& value, is_context auto&& ctx, It&& it, auto&& end)
+      static void op(auto&& value, is_context auto&& ctx, It&& it, auto end)
       {
          if constexpr (check_layout(Opts) == rowwise) {
             while (it != end) {
@@ -1059,7 +1059,7 @@ namespace glz
       using U = typename T::value_type;
 
       template <auto Opts, class It>
-      static void op(auto&& value, is_context auto&& ctx, It&& it, auto&& end)
+      static void op(auto&& value, is_context auto&& ctx, It&& it, auto end)
       {
          static constexpr auto N = reflect<U>::size;
          static constexpr auto HashInfo = hash_info<U>;
@@ -1282,7 +1282,7 @@ namespace glz
    struct from<CSV, T>
    {
       template <auto Opts, class It>
-      static void op(auto&& value, is_context auto&& ctx, It&& it, auto&& end)
+      static void op(auto&& value, is_context auto&& ctx, It&& it, auto end)
       {
          static constexpr auto N = reflect<T>::size;
          static constexpr auto HashInfo = hash_info<T>;
