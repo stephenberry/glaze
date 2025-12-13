@@ -15,7 +15,7 @@
 
 namespace glz
 {
-   GLZ_ALWAYS_INLINE bool invalid_end(is_context auto& ctx, auto&& it, auto&& end) noexcept
+   GLZ_ALWAYS_INLINE bool invalid_end(is_context auto& ctx, auto&& it, auto end) noexcept
    {
       if (it >= end) [[unlikely]] {
          ctx.error = error_code::unexpected_end;
@@ -67,7 +67,7 @@ namespace glz
 
    inline constexpr std::array<uint8_t, 8> byte_count_lookup{1, 2, 4, 8, 16, 32, 64, 128};
 
-   [[nodiscard]] GLZ_ALWAYS_INLINE constexpr size_t int_from_compressed(auto&& ctx, auto&& it, auto&& end) noexcept
+   [[nodiscard]] GLZ_ALWAYS_INLINE constexpr size_t int_from_compressed(auto&& ctx, auto&& it, auto end) noexcept
    {
       if (it >= end) [[unlikely]] {
          ctx.error = error_code::unexpected_end;
@@ -122,7 +122,7 @@ namespace glz
       }
    }
 
-   GLZ_ALWAYS_INLINE constexpr void skip_compressed_int(is_context auto&& ctx, auto&& it, auto&& end) noexcept
+   GLZ_ALWAYS_INLINE constexpr void skip_compressed_int(is_context auto&& ctx, auto&& it, auto end) noexcept
    {
       if (invalid_end(ctx, it, end)) {
          return;

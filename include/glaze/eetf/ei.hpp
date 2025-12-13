@@ -23,7 +23,7 @@ namespace glz
    namespace detail
    {
       template <class F, is_context Ctx, class It0, class It1>
-      GLZ_ALWAYS_INLINE void decode_impl(F&& func, Ctx&& ctx, It0&& it, It1&& end)
+      GLZ_ALWAYS_INLINE void decode_impl(F&& func, Ctx&& ctx, It0&& it, It1 end)
       {
          int index{};
          if (func(it, &index) < 0) [[unlikely]] {
@@ -94,7 +94,7 @@ namespace glz
    }
 
    template <class It0, class It1>
-   auto skip_term(is_context auto&& ctx, It0&& it, It1&& end)
+   auto skip_term(is_context auto&& ctx, It0&& it, It1 end)
    {
       int index{};
       if (ei_skip_term(it, &index) < 0) {
@@ -145,7 +145,7 @@ namespace glz
    }
 
    template <class It0, class It1>
-   GLZ_ALWAYS_INLINE void decode_token(auto&& value, is_context auto&& ctx, It0&& it, It1&& end)
+   GLZ_ALWAYS_INLINE void decode_token(auto&& value, is_context auto&& ctx, It0&& it, It1 end)
    {
       using namespace std::placeholders;
 
@@ -179,7 +179,7 @@ namespace glz
    }
 
    template <auto Opts, class T, class It0>
-   void decode_binary(T&& value, std::size_t sz, is_context auto&& ctx, It0&& it, auto&& end)
+   void decode_binary(T&& value, std::size_t sz, is_context auto&& ctx, It0&& it, auto end)
    {
       using namespace std::placeholders;
 
@@ -225,7 +225,7 @@ namespace glz
    }
 
    template <auto Opts, class T>
-   GLZ_ALWAYS_INLINE void decode_list(T&& value, is_context auto&& ctx, auto&& it, auto&& end)
+   GLZ_ALWAYS_INLINE void decode_list(T&& value, is_context auto&& ctx, auto&& it, auto end)
    {
       using V = range_value_t<std::decay_t<T>>;
 
@@ -264,7 +264,7 @@ namespace glz
    }
 
    template <auto Opts, class T, is_context Ctx, class It0, class It1>
-   GLZ_ALWAYS_INLINE void decode_sequence(T&& value, Ctx&& ctx, It0&& it, It1&& end)
+   GLZ_ALWAYS_INLINE void decode_sequence(T&& value, Ctx&& ctx, It0&& it, It1 end)
    {
       int index{};
       int type{};
@@ -276,12 +276,12 @@ namespace glz
 
       if (eetf::is_binary(type)) {
          decode_binary<Opts>(std::forward<T>(value), static_cast<std::size_t>(sz), std::forward<Ctx>(ctx),
-                             std::forward<It0>(it), std::forward<It1>(end));
+                             std::forward<It0>(it), end);
       }
       else if (eetf::is_list(type)) {
          if (eetf::is_string(type)) {
             std::string buff;
-            decode_token(buff, std::forward<Ctx>(ctx), std::forward<It0>(it), std::forward<It1>(end));
+            decode_token(buff, std::forward<Ctx>(ctx), std::forward<It0>(it), end);
             if constexpr (resizable<T>) {
                value.resize(sz);
                if constexpr (check_shrink_to_fit(Opts)) {
@@ -298,7 +298,7 @@ namespace glz
          }
          else {
             decode_list<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx), std::forward<It0>(it),
-                              std::forward<It1>(end));
+                              end);
          }
       }
       // else if tuple?

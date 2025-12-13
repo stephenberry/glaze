@@ -334,7 +334,7 @@ namespace glz
 
    // Checks for a character and validates that we are not at the end (considered an error)
    template <char C, auto Opts>
-   GLZ_ALWAYS_INLINE bool match_invalid_end(is_context auto& ctx, auto&& it, auto&& end) noexcept
+   GLZ_ALWAYS_INLINE bool match_invalid_end(is_context auto& ctx, auto&& it, auto end) noexcept
    {
       if (*it != C) [[unlikely]] {
          if constexpr (C == '"') {
@@ -401,7 +401,7 @@ namespace glz
 
    template <string_literal str, auto Opts>
       requires(check_is_padded(Opts) && str.size() <= padding_bytes)
-   GLZ_ALWAYS_INLINE void match(is_context auto&& ctx, auto&& it, auto&&) noexcept
+   GLZ_ALWAYS_INLINE void match(is_context auto&& ctx, auto&& it, auto) noexcept
    {
       static constexpr auto S = str.sv();
       if (not comparitor<S>(it)) [[unlikely]] {
@@ -414,7 +414,7 @@ namespace glz
 
    template <string_literal str, auto Opts>
       requires(!check_is_padded(Opts))
-   GLZ_ALWAYS_INLINE void match(is_context auto&& ctx, auto&& it, auto&& end) noexcept
+   GLZ_ALWAYS_INLINE void match(is_context auto&& ctx, auto&& it, auto end) noexcept
    {
       const auto n = size_t(end - it);
       static constexpr auto S = str.sv();
@@ -426,7 +426,7 @@ namespace glz
       }
    }
 
-   GLZ_ALWAYS_INLINE void skip_comment(is_context auto&& ctx, auto&& it, auto&& end) noexcept
+   GLZ_ALWAYS_INLINE void skip_comment(is_context auto&& ctx, auto&& it, auto end) noexcept
    {
       ++it;
       if (it == end) [[unlikely]] {
@@ -493,7 +493,7 @@ namespace glz
 {
    // skip whitespace
    template <auto Opts>
-   GLZ_ALWAYS_INLINE bool skip_ws(is_context auto&& ctx, auto&& it, auto&& end) noexcept
+   GLZ_ALWAYS_INLINE bool skip_ws(is_context auto&& ctx, auto&& it, auto end) noexcept
    {
       using namespace glz::detail;
 
@@ -652,7 +652,7 @@ namespace glz
    }
 #endif
 
-   GLZ_ALWAYS_INLINE void skip_till_quote(is_context auto&& ctx, auto&& it, auto&& end) noexcept
+   GLZ_ALWAYS_INLINE void skip_till_quote(is_context auto&& ctx, auto&& it, auto end) noexcept
    {
       const auto* pc = std::memchr(it, '"', size_t(end - it));
       if (pc) [[likely]] {
@@ -664,7 +664,7 @@ namespace glz
    }
 
    template <auto Opts>
-   GLZ_ALWAYS_INLINE void skip_string_view(is_context auto&& ctx, auto&& it, auto&& end) noexcept
+   GLZ_ALWAYS_INLINE void skip_string_view(is_context auto&& ctx, auto&& it, auto end) noexcept
    {
       while (it < end) [[likely]] {
          const auto* pc = std::memchr(it, '"', size_t(end - it));
@@ -689,7 +689,7 @@ namespace glz
 
    template <auto Opts>
       requires(check_is_padded(Opts))
-   GLZ_ALWAYS_INLINE void skip_string(is_context auto&& ctx, auto&& it, auto&& end) noexcept
+   GLZ_ALWAYS_INLINE void skip_string(is_context auto&& ctx, auto&& it, auto end) noexcept
    {
       if constexpr (!check_opening_handled(Opts)) {
          ++it;
@@ -779,7 +779,7 @@ namespace glz
 
    template <auto Opts>
       requires(not check_is_padded(Opts))
-   GLZ_ALWAYS_INLINE void skip_string(is_context auto&& ctx, auto&& it, auto&& end) noexcept
+   GLZ_ALWAYS_INLINE void skip_string(is_context auto&& ctx, auto&& it, auto end) noexcept
    {
       if constexpr (!check_opening_handled(Opts)) {
          ++it;
@@ -831,7 +831,7 @@ namespace glz
 
    template <auto Opts, char open, char close, size_t Depth = 1>
       requires(check_is_padded(Opts) && not bool(Opts.comments))
-   GLZ_ALWAYS_INLINE void skip_until_closed(is_context auto&& ctx, auto&& it, auto&& end) noexcept
+   GLZ_ALWAYS_INLINE void skip_until_closed(is_context auto&& ctx, auto&& it, auto end) noexcept
    {
       size_t depth = Depth;
 
@@ -879,7 +879,7 @@ namespace glz
 
    template <auto Opts, char open, char close, size_t Depth = 1>
       requires(check_is_padded(Opts) && bool(Opts.comments))
-   GLZ_ALWAYS_INLINE void skip_until_closed(is_context auto&& ctx, auto&& it, auto&& end) noexcept
+   GLZ_ALWAYS_INLINE void skip_until_closed(is_context auto&& ctx, auto&& it, auto end) noexcept
    {
       size_t depth = Depth;
 
@@ -934,7 +934,7 @@ namespace glz
 
    template <auto Opts, char open, char close, size_t Depth = 1>
       requires(!check_is_padded(Opts) && not bool(Opts.comments))
-   GLZ_ALWAYS_INLINE void skip_until_closed(is_context auto&& ctx, auto&& it, auto&& end) noexcept
+   GLZ_ALWAYS_INLINE void skip_until_closed(is_context auto&& ctx, auto&& it, auto end) noexcept
    {
       size_t depth = Depth;
 
@@ -1018,7 +1018,7 @@ namespace glz
 
    template <auto Opts, char open, char close, size_t Depth = 1>
       requires(!check_is_padded(Opts) && bool(Opts.comments))
-   GLZ_ALWAYS_INLINE void skip_until_closed(is_context auto&& ctx, auto&& it, auto&& end) noexcept
+   GLZ_ALWAYS_INLINE void skip_until_closed(is_context auto&& ctx, auto&& it, auto end) noexcept
    {
       size_t depth = Depth;
 
@@ -1122,7 +1122,7 @@ namespace glz
       return {};
    }
 
-   GLZ_ALWAYS_INLINE void skip_number_with_validation(is_context auto&& ctx, auto&& it, auto&& end) noexcept
+   GLZ_ALWAYS_INLINE void skip_number_with_validation(is_context auto&& ctx, auto&& it, auto end) noexcept
    {
       it += *it == '-';
       const auto sig_start_it = it;
@@ -1166,7 +1166,7 @@ namespace glz
    }
 
    template <auto Opts>
-   GLZ_ALWAYS_INLINE void skip_number(is_context auto&& ctx, auto&& it, auto&& end) noexcept
+   GLZ_ALWAYS_INLINE void skip_number(is_context auto&& ctx, auto&& it, auto end) noexcept
    {
       if constexpr (!check_validate_skipped(Opts)) {
          while (numeric_table[uint8_t(*it)]) {
@@ -1179,7 +1179,7 @@ namespace glz
    }
 
    // expects opening whitespace to be handled
-   GLZ_ALWAYS_INLINE sv parse_key(is_context auto&& ctx, auto&& it, auto&& end) noexcept
+   GLZ_ALWAYS_INLINE sv parse_key(is_context auto&& ctx, auto&& it, auto end) noexcept
    {
       // TODO this assumes no escapes.
       if (bool(ctx.error)) [[unlikely]]

@@ -759,7 +759,7 @@ namespace glz
    struct from<Format, glz::async_string>
    {
       template <auto Opts>
-      static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+      static void op(auto&& value, is_context auto&& ctx, auto&& it, auto end) noexcept
       {
          auto proxy = value.write();
          parse<Format>::template op<Opts>(*proxy, ctx, it, end);

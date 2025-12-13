@@ -21,7 +21,7 @@ namespace glz
    struct from<JSON, raw_or_file>
    {
       template <auto Options>
-      static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
+      static void op(auto&& value, is_context auto&& ctx, auto&& it, auto end)
       {
          constexpr auto Opts = ws_handled_off<Options>();
          auto& v = value;

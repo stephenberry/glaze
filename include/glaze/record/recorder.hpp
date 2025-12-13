@@ -113,7 +113,7 @@ namespace glz
    struct from<JSON, T>
    {
       template <auto Options>
-      static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
+      static void op(auto&& value, is_context auto&& ctx, auto&& it, auto end)
       {
          if (bool(ctx.error)) [[unlikely]] {
             return;

@@ -84,7 +84,7 @@ namespace glz
    struct from<JSON, detail::hostname_includer<T>>
    {
       template <auto Options>
-      static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
+      static void op(auto&& value, is_context auto&& ctx, auto&& it, auto end)
       {
          constexpr auto Opts = ws_handled_off<Options>();
          std::string buffer{};

@@ -12,15 +12,15 @@ namespace glz
    {
       template <auto Opts>
          requires(not Opts.comments)
-      GLZ_ALWAYS_INLINE static void op(is_context auto&& ctx, auto&& it, auto&& end) noexcept;
+      GLZ_ALWAYS_INLINE static void op(is_context auto&& ctx, auto&& it, auto end) noexcept;
 
       template <auto Opts>
          requires(bool(Opts.comments))
-      GLZ_ALWAYS_INLINE static void op(is_context auto&& ctx, auto&& it, auto&& end) noexcept;
+      GLZ_ALWAYS_INLINE static void op(is_context auto&& ctx, auto&& it, auto end) noexcept;
    };
 
    template <auto Opts>
-   void skip_object(is_context auto&& ctx, auto&& it, auto&& end) noexcept
+   void skip_object(is_context auto&& ctx, auto&& it, auto end) noexcept
    {
       if constexpr (!check_validate_skipped(Opts)) {
          ++it;
@@ -109,7 +109,7 @@ namespace glz
 
    template <auto Opts>
       requires(Opts.format == JSON || Opts.format == NDJSON)
-   void skip_array(is_context auto&& ctx, auto&& it, auto&& end) noexcept
+   void skip_array(is_context auto&& ctx, auto&& it, auto end) noexcept
    {
       if constexpr (!check_validate_skipped(Opts)) {
          ++it;
@@ -185,7 +185,7 @@ namespace glz
    // so we use validate_skipped for precise validation and value skipping
    // expects opening whitespace to be handled
    template <auto Opts>
-   GLZ_ALWAYS_INLINE auto parse_value(is_context auto&& ctx, auto&& it, auto&& end) noexcept
+   GLZ_ALWAYS_INLINE auto parse_value(is_context auto&& ctx, auto&& it, auto end) noexcept
    {
       auto start = it;
       struct opts_validate_skipped : std::decay_t<decltype(Opts)>
@@ -198,7 +198,7 @@ namespace glz
 
    template <auto Opts>
       requires(not Opts.comments)
-   GLZ_ALWAYS_INLINE void skip_value<JSON>::op(is_context auto&& ctx, auto&& it, auto&& end) noexcept
+   GLZ_ALWAYS_INLINE void skip_value<JSON>::op(is_context auto&& ctx, auto&& it, auto end) noexcept
    {
       using namespace glz::detail;
 
@@ -308,7 +308,7 @@ namespace glz
 
    template <auto Opts>
       requires(bool(Opts.comments))
-   GLZ_ALWAYS_INLINE void skip_value<JSON>::op(is_context auto&& ctx, auto&& it, auto&& end) noexcept
+   GLZ_ALWAYS_INLINE void skip_value<JSON>::op(is_context auto&& ctx, auto&& it, auto end) noexcept
    {
       using namespace glz::detail;
 
