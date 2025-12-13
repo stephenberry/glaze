@@ -161,7 +161,7 @@ namespace glz
                },
                state, dist.ptr);
             if (!found) {
-               pe.ec = error_code::get_nonexistent_json_ptr;
+               pe.ec = error_code::nonexistent_json_ptr;
                return unexpected(pe);
             }
 
@@ -353,7 +353,7 @@ namespace glz
                },
                state, dist.ptr);
             if (!found) {
-               pe.ec = error_code::get_nonexistent_json_ptr;
+               pe.ec = error_code::nonexistent_json_ptr;
                return unexpected(pe);
             }
 

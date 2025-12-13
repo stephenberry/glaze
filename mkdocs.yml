@@ -92,6 +92,8 @@ nav:
    - Variant Handling: variant-handling.md
    - Unknown Keys: unknown-keys.md
    - JSON Pointer Syntax: json-pointer-syntax.md
+   - Struct JSON Pointer Operations: struct-json-pointer.md
+   - JSON Patch (RFC 6902): json-patch.md
    - JMESPath: JMESPath.md
    - JSON Schema: json-schema.md
    - Field Validation: field-validation.md

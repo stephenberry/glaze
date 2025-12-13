@@ -101,3 +101,11 @@ add_executable(u8string_test u8string_test.cpp)
 target_link_libraries(u8string_test PRIVATE glz_test_common)
 
 add_test(NAME u8string_test COMMAND u8string_test)
+
+## JSON Patch test - RFC 6902
+
+add_executable(json_patch_test json_patch_test.cpp)
+
+target_link_libraries(json_patch_test PRIVATE glz_test_common)
+
+add_test(NAME json_patch_test COMMAND json_patch_test)
