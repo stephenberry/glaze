@@ -297,8 +297,7 @@ namespace glz
             std::copy(buff.begin(), buff.end(), value.begin());
          }
          else {
-            decode_list<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx), std::forward<It0>(it),
-                              end);
+            decode_list<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx), std::forward<It0>(it), end);
          }
       }
       // else if tuple?

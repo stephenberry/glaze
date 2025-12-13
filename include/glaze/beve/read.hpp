@@ -81,8 +81,7 @@ namespace glz
       {
          using V = std::decay_t<decltype(get_member(std::declval<Value>(), meta_wrapper_v<T>))>;
          from<BEVE, V>::template op<Opts>(get_member(std::forward<Value>(value), meta_wrapper_v<T>),
-                                          std::forward<Tag>(tag), std::forward<Ctx>(ctx), std::forward<It0>(it),
-                                          end);
+                                          std::forward<Tag>(tag), std::forward<Ctx>(ctx), std::forward<It0>(it), end);
       }
    };
 

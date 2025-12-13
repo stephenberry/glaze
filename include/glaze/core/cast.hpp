@@ -130,13 +130,11 @@ namespace glz
 
          if constexpr (std::is_member_object_pointer_v<Target>) {
             serialize<Format>::template no_header<Opts>(static_cast<Cast>(object.*(value.target)), ctx,
-                                                        std::forward<decltype(b)>(b),
-                                                        std::forward<decltype(ix)>(ix));
+                                                        std::forward<decltype(b)>(b), std::forward<decltype(ix)>(ix));
          }
          else if constexpr (std::invocable<Target, decltype(object)>) {
             serialize<Format>::template no_header<Opts>(static_cast<Cast>(value.target(object)), ctx,
-                                                        std::forward<decltype(b)>(b),
-                                                        std::forward<decltype(ix)>(ix));
+                                                        std::forward<decltype(b)>(b), std::forward<decltype(ix)>(ix));
          }
          else {
             static_assert(false_v<T>, "invalid type for cast_t");
