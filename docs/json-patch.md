@@ -2,6 +2,8 @@
 
 Glaze provides full support for [JSON Patch (RFC 6902)](https://datatracker.ietf.org/doc/html/rfc6902), a format for describing changes to JSON documents. JSON Patch works with [glz::generic](./generic-json.md) for runtime JSON manipulation.
 
+> **See also:** [JSON Merge Patch (RFC 7386)](./json-merge-patch.md) for a simpler alternative when you don't need fine-grained control over array elements or explicit null values.
+
 ## Include
 
 ```c++
@@ -251,5 +253,6 @@ Patch operations serialize to standard RFC 6902 format:
 
 ## See Also
 
+- [JSON Merge Patch (RFC 7386)](./json-merge-patch.md) - Simpler patching for partial updates
 - [Generic JSON](./generic-json.md) - Working with `glz::generic`
 - [JSON Pointer Syntax](./json-pointer-syntax.md) - Path syntax used by JSON Patch

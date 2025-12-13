@@ -109,3 +109,11 @@ add_executable(json_patch_test json_patch_test.cpp)
 target_link_libraries(json_patch_test PRIVATE glz_test_common)
 
 add_test(NAME json_patch_test COMMAND json_patch_test)
+
+## JSON Merge Patch test - RFC 7386
+
+add_executable(json_merge_patch_test json_merge_patch_test.cpp)
+
+target_link_libraries(json_merge_patch_test PRIVATE glz_test_common)
+
+add_test(NAME json_merge_patch_test COMMAND json_merge_patch_test)
