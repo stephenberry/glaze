@@ -3249,7 +3249,8 @@ namespace glz
                }
                else {
                   auto possible_types = bit_array<std::variant_size_v<T>>{}.flip();
-                  static constexpr auto deduction_registry = make_variant_deduction_registry<T>();
+                  static constexpr auto& deduction_bits = variant_deduction_bits<T>;
+                  static constexpr size_t deduction_key_count = variant_deduction_key_count<T>;
                   static constexpr auto tag_literal = string_literal_from_view<tag_v<T>.size()>(tag_v<T>);
 
                   // Track if we've encountered a tag and what value it had
@@ -3283,7 +3284,7 @@ namespace glz
                         return;
                      }
 
-                     if constexpr (deduction_registry.size()) {
+                     if constexpr (deduction_key_count > 0) {
                         // We first check if a tag is defined and see if the key matches the tag
                         if constexpr (not tag_v<T>.empty()) {
                            if (key == tag_v<T>) {
@@ -3440,9 +3441,15 @@ namespace glz
                            }
                         }
 
-                        auto* bits_ptr = deduction_registry.find(key);
-                        if (bits_ptr) [[likely]] {
-                           possible_types &= *bits_ptr;
+                        // Inline decode_hash lookup for variant deduction
+                        using deduction_keys_t = keys_wrapper<variant_deduction_keys<T>>;
+                        constexpr auto& DeductionHashInfo = hash_info<deduction_keys_t>;
+                        const auto deduction_index =
+                           decode_hash_with_size<JSON, deduction_keys_t, DeductionHashInfo, DeductionHashInfo.type>::op(
+                              key.data(), key.data() + key.size(), key.size());
+                        if (deduction_index < deduction_key_count &&
+                            variant_deduction_keys<T>[deduction_index] == key) [[likely]] {
+                           possible_types &= deduction_bits[deduction_index];
                         }
                         else if constexpr (Opts.error_on_unknown_keys) {
                            ctx.error = error_code::unknown_key;
