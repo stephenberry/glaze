@@ -21,7 +21,6 @@
 #include "glaze/util/bit_array.hpp"
 #include "glaze/util/expected.hpp"
 #include "glaze/util/for_each.hpp"
-#include "glaze/util/hash_map.hpp"
 #include "glaze/util/help.hpp"
 #include "glaze/util/string_literal.hpp"
 #include "glaze/util/tuple.hpp"
@@ -426,38 +425,6 @@ namespace glz
       To{from};
 #endif
    };
-
-   template <is_variant T, size_t... I>
-   constexpr auto make_variant_sv_id_map_impl(std::index_sequence<I...>, auto&& variant_ids)
-   {
-      // Use the actual size of the ids array, not the variant size
-      return normal_map<sv, size_t, sizeof...(I)>(std::array{pair<sv, size_t>{sv(variant_ids[I]), I}...});
-   }
-
-   template <is_variant T, size_t... I>
-   constexpr auto make_variant_id_map_impl(std::index_sequence<I...>, auto&& variant_ids)
-   {
-      using id_type = std::decay_t<decltype(ids_v<T>[0])>;
-      // Use the actual size of the ids array, not the variant size
-      return normal_map<id_type, size_t, sizeof...(I)>(std::array{pair{variant_ids[I], I}...});
-   }
-
-   template <is_variant T>
-   constexpr auto make_variant_id_map()
-   {
-      // Use the size of the ids array, not the variant size
-      // This allows unlabeled variant types to serve as defaults
-      constexpr auto indices = std::make_index_sequence<ids_v<T>.size()>{};
-
-      using id_type = std::decay_t<decltype(ids_v<T>[0])>;
-
-      if constexpr (std::integral<id_type>) {
-         return make_variant_id_map_impl<T>(indices, ids_v<T>);
-      }
-      else {
-         return make_variant_sv_id_map_impl<T>(indices, ids_v<T>);
-      }
-   }
 
    /**
     * @brief Extracts the underlying member from a struct.

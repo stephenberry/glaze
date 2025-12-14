@@ -7,6 +7,7 @@ using namespace ut;
 
 #include <iostream>
 #include <latch>
+#include <numeric>
 #include <thread>
 
 #include "glaze/ext/glaze_asio.hpp"
