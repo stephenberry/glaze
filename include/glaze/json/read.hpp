@@ -3249,7 +3249,7 @@ namespace glz
                }
                else {
                   auto possible_types = bit_array<std::variant_size_v<T>>{}.flip();
-                  static constexpr auto deduction_map = make_variant_deduction_map<T>();
+                  static constexpr auto deduction_registry = make_variant_deduction_registry<T>();
                   static constexpr auto tag_literal = string_literal_from_view<tag_v<T>.size()>(tag_v<T>);
 
                   // Track if we've encountered a tag and what value it had
@@ -3283,7 +3283,7 @@ namespace glz
                         return;
                      }
 
-                     if constexpr (deduction_map.size()) {
+                     if constexpr (deduction_registry.size()) {
                         // We first check if a tag is defined and see if the key matches the tag
                         if constexpr (not tag_v<T>.empty()) {
                            if (key == tag_v<T>) {
@@ -3310,16 +3310,22 @@ namespace glz
                                  return;
                               }
 
-                              static constexpr auto id_map = make_variant_id_map<T>();
-                              auto id_it = id_map.find(type_id);
-                              if (id_it != id_map.end()) [[likely]] {
-                                 const auto type_index = id_it->second;
+                              size_t type_index;
+                              if constexpr (std::integral<id_type>) {
+                                 type_index = variant_id_to_index<T>::op(type_id);
+                              }
+                              else {
+                                 type_index = variant_id_to_index<T>::op(type_id.data(),
+                                                                         type_id.data() + type_id.size(),
+                                                                         type_id.size());
+                              }
+                              if (type_index < ids_v<T>.size()) [[likely]] {
 
                                  // Check if the deduced types include the tag-specified type
                                  // If not, the tag doesn't match the fields
-                                 // We're already inside if constexpr (deduction_map.size()), so we know deduction is
-                                 // happening At this point, possible_types has been narrowed by field deduction Check
-                                 // if the tag-specified type is still possible
+                                 // We're already inside if constexpr (deduction_registry.size()), so we know deduction
+                                 // is happening. At this point, possible_types has been narrowed by field deduction.
+                                 // Check if the tag-specified type is still possible
                                  const bool type_is_possible = possible_types[type_index];
                                  if (!type_is_possible) {
                                     // Tag specifies a type that doesn't match the fields seen so far
@@ -3434,9 +3440,9 @@ namespace glz
                            }
                         }
 
-                        auto deduction_it = deduction_map.find(key);
-                        if (deduction_it != deduction_map.end()) [[likely]] {
-                           possible_types &= deduction_it->second;
+                        auto* bits_ptr = deduction_registry.find(key);
+                        if (bits_ptr) [[likely]] {
+                           possible_types &= *bits_ptr;
                         }
                         else if constexpr (Opts.error_on_unknown_keys) {
                            ctx.error = error_code::unknown_key;
@@ -3458,11 +3464,11 @@ namespace glz
                               return;
                            }
 
-                           static constexpr auto id_map = make_variant_id_map<T>();
-                           auto id_it = id_map.find(type_id);
-                           if (id_it != id_map.end()) [[likely]] {
+                           const auto type_index = variant_id_to_index<T>::op(type_id.data(),
+                                                                               type_id.data() + type_id.size(),
+                                                                               type_id.size());
+                           if (type_index < ids_v<T>.size()) [[likely]] {
                               it = start;
-                              const auto type_index = id_it->second;
                               tag_specified_index = type_index; // Store the tag-specified type
                               if (value.index() != type_index) emplace_runtime_variant(value, type_index);
                               return;
@@ -3474,9 +3480,9 @@ namespace glz
                               if constexpr (ids_size < variant_size) {
                                  // Use the first unlabeled type as the default
                                  it = start;
-                                 const auto type_index = ids_size;
-                                 tag_specified_index = type_index; // Store the default type index
-                                 if (value.index() != type_index) emplace_runtime_variant(value, type_index);
+                                 const auto default_index = ids_size;
+                                 tag_specified_index = default_index; // Store the default type index
+                                 if (value.index() != default_index) emplace_runtime_variant(value, default_index);
                                  return;
                               }
                               else {
@@ -3861,16 +3867,16 @@ namespace glz
             }
          }
 
-         static constexpr auto id_map = make_variant_id_map<T>();
-         auto id_it = id_map.find(type_id);
-         if (id_it != id_map.end()) [[likely]] {
+         const auto type_index = variant_id_to_index<T>::op(type_id.data(),
+                                                              type_id.data() + type_id.size(),
+                                                              type_id.size());
+         if (type_index < ids_v<T>.size()) [[likely]] {
             if (skip_ws<Opts>(ctx, it, end)) {
                return;
             }
             if (match_invalid_end<',', Opts>(ctx, it, end)) {
                return;
             }
-            const auto type_index = id_it->second;
             if (value.index() != type_index) emplace_runtime_variant(value, type_index);
             std::visit([&](auto&& v) { parse<JSON>::op<Opts>(v, ctx, it, end); }, value);
             if (bool(ctx.error)) [[unlikely]]
