@@ -622,11 +622,11 @@ namespace glz
    // ============================================================================
 
    enum struct int_hash_type {
-      direct,       // Sequential values starting at 0: value as index
-      offset,       // Sequential values with offset: value - min_value
+      direct, // Sequential values starting at 0: value as index
+      offset, // Sequential values with offset: value - min_value
       power_of_two, // Powers of 2 (flags): countr_zero(value)
-      small_range,  // Sparse lookup table for small ranges
-      modular       // Perfect hash: (value * seed) % table_size
+      small_range, // Sparse lookup table for small ranges
+      modular // Perfect hash: (value * seed) % table_size
    };
 
    template <size_t N, size_t TableSize>
@@ -745,8 +745,7 @@ namespace glz
          }
          else if constexpr (power_of_two_info.first) {
             constexpr auto tbl_size = power_of_two_info.second;
-            int_keys_info_t<N, tbl_size> info{
-               .type = int_hash_type::power_of_two, .table_size = tbl_size};
+            int_keys_info_t<N, tbl_size> info{.type = int_hash_type::power_of_two, .table_size = tbl_size};
             info.table.fill(static_cast<uint8_t>(N));
 
             using UnsignedU = std::make_unsigned_t<U>;
@@ -758,10 +757,8 @@ namespace glz
          }
          else if constexpr (range < sparse_threshold) {
             // Strategy 3: Small range → sparse lookup table
-            int_keys_info_t<N, sparse_threshold> info{.type = int_hash_type::small_range,
-                                                      .min_value = min_val,
-                                                      .max_value = max_val,
-                                                      .table_size = range + 1};
+            int_keys_info_t<N, sparse_threshold> info{
+               .type = int_hash_type::small_range, .min_value = min_val, .max_value = max_val, .table_size = range + 1};
             info.table.fill(static_cast<uint8_t>(N));
 
             for (size_t i = 0; i < N; ++i) {
@@ -2517,8 +2514,7 @@ namespace glz
          }
          else if constexpr (power_of_two_info.first) {
             constexpr auto tbl_size = power_of_two_info.second;
-            int_keys_info_t<N, tbl_size> info{
-               .type = int_hash_type::power_of_two, .table_size = tbl_size};
+            int_keys_info_t<N, tbl_size> info{.type = int_hash_type::power_of_two, .table_size = tbl_size};
             info.table.fill(static_cast<uint8_t>(N));
 
             using UnsignedU = std::make_unsigned_t<U>;
@@ -2529,10 +2525,8 @@ namespace glz
             return info;
          }
          else if constexpr (range < sparse_threshold) {
-            int_keys_info_t<N, sparse_threshold> info{.type = int_hash_type::small_range,
-                                                      .min_value = min_val,
-                                                      .max_value = max_val,
-                                                      .table_size = range + 1};
+            int_keys_info_t<N, sparse_threshold> info{
+               .type = int_hash_type::small_range, .min_value = min_val, .max_value = max_val, .table_size = range + 1};
             info.table.fill(static_cast<uint8_t>(N));
 
             for (size_t i = 0; i < N; ++i) {

@@ -3316,12 +3316,10 @@ namespace glz
                                  type_index = variant_id_to_index<T>::op(type_id);
                               }
                               else {
-                                 type_index = variant_id_to_index<T>::op(type_id.data(),
-                                                                         type_id.data() + type_id.size(),
-                                                                         type_id.size());
+                                 type_index = variant_id_to_index<T>::op(
+                                    type_id.data(), type_id.data() + type_id.size(), type_id.size());
                               }
                               if (type_index < ids_v<T>.size()) [[likely]] {
-
                                  // Check if the deduced types include the tag-specified type
                                  // If not, the tag doesn't match the fields
                                  // We're already inside if constexpr (deduction_registry.size()), so we know deduction
@@ -3447,8 +3445,8 @@ namespace glz
                         const auto deduction_index =
                            decode_hash_with_size<JSON, deduction_keys_t, DeductionHashInfo, DeductionHashInfo.type>::op(
                               key.data(), key.data() + key.size(), key.size());
-                        if (deduction_index < deduction_key_count &&
-                            variant_deduction_keys<T>[deduction_index] == key) [[likely]] {
+                        if (deduction_index < deduction_key_count && variant_deduction_keys<T>[deduction_index] == key)
+                           [[likely]] {
                            possible_types &= deduction_bits[deduction_index];
                         }
                         else if constexpr (Opts.error_on_unknown_keys) {
@@ -3471,9 +3469,8 @@ namespace glz
                               return;
                            }
 
-                           const auto type_index = variant_id_to_index<T>::op(type_id.data(),
-                                                                               type_id.data() + type_id.size(),
-                                                                               type_id.size());
+                           const auto type_index = variant_id_to_index<T>::op(
+                              type_id.data(), type_id.data() + type_id.size(), type_id.size());
                            if (type_index < ids_v<T>.size()) [[likely]] {
                               it = start;
                               tag_specified_index = type_index; // Store the tag-specified type
@@ -3874,9 +3871,8 @@ namespace glz
             }
          }
 
-         const auto type_index = variant_id_to_index<T>::op(type_id.data(),
-                                                              type_id.data() + type_id.size(),
-                                                              type_id.size());
+         const auto type_index =
+            variant_id_to_index<T>::op(type_id.data(), type_id.data() + type_id.size(), type_id.size());
          if (type_index < ids_v<T>.size()) [[likely]] {
             if (skip_ws<Opts>(ctx, it, end)) {
                return;
