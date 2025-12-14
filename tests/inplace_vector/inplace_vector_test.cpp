@@ -1,6 +1,7 @@
 #include "glaze/containers/inplace_vector.hpp"
 
 #include <compare>
+#include <numeric>
 
 #include "glaze/glaze.hpp"
 #include "ut/ut.hpp"
