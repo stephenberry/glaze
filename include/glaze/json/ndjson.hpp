@@ -35,7 +35,7 @@ namespace glz
    struct from<NDJSON, T>
    {
       template <auto Opts>
-      static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end)
+      static void op(auto& value, is_context auto&& ctx, auto&& it, auto end)
       {
          if (bool(ctx.error)) [[unlikely]] {
             return;
@@ -110,7 +110,7 @@ namespace glz
    struct from<NDJSON, T>
    {
       template <auto Opts>
-      static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end)
+      static void op(auto& value, is_context auto&& ctx, auto&& it, auto end)
       {
          if (bool(ctx.error)) [[unlikely]] {
             return;

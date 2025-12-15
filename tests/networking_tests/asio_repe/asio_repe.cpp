@@ -7,6 +7,7 @@ using namespace ut;
 
 #include <iostream>
 #include <latch>
+#include <numeric>
 #include <thread>
 
 #include "glaze/ext/glaze_asio.hpp"
@@ -333,7 +334,7 @@ void async_server_test()
 {
    static constexpr int16_t port = 8765;
 
-   glz::asio_server server{.port = port, .concurrency = 1};
+   glz::asio_server server{.port = port, .concurrency = 1, .reuse_address = true};
 
    async_api api{};
    server.on(api);
@@ -363,7 +364,7 @@ void server_error_test()
 {
    static constexpr int16_t port = 8765;
 
-   glz::asio_server server{.port = port, .concurrency = 1};
+   glz::asio_server server{.port = port, .concurrency = 1, .reuse_address = true};
    server.error_handler = [](const std::string& error) { expect(error == "func error"); };
 
    error_api api{};
@@ -392,7 +393,7 @@ suite send_receive_api_tests = [] {
    "send"_test = [] {
       static constexpr int16_t port = 8765;
 
-      glz::asio_server server{.port = port, .concurrency = 1};
+      glz::asio_server server{.port = port, .concurrency = 1, .reuse_address = true};
 
       some_object_t obj{};
       server.on(obj);

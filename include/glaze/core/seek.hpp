@@ -201,7 +201,11 @@ namespace glz
             }
          }
          else {
-            return seek(std::forward<F>(func), value[key], json_ptr);
+            auto it = value.find(key);
+            if (it == value.end()) {
+               return false;
+            }
+            return seek(std::forward<F>(func), it->second, json_ptr);
          }
       }
    };
@@ -242,7 +246,7 @@ namespace glz
          },
          std::forward<T>(root_value), json_ptr);
       if (!result) {
-         return unexpected(error_ctx{error_code::get_nonexistent_json_ptr});
+         return unexpected(error_ctx{error_code::nonexistent_json_ptr});
       }
       else if (bool(ec)) {
          return unexpected(error_ctx{ec});
@@ -287,7 +291,7 @@ namespace glz
          },
          std::forward<T>(root_value), json_ptr);
       if (!found) {
-         return unexpected(error_code::get_nonexistent_json_ptr);
+         return unexpected(error_code::nonexistent_json_ptr);
       }
       else if (bool(ec)) {
          return unexpected(ec);
@@ -367,7 +371,7 @@ namespace glz
          std::forward<T>(root_value), json_ptr);
 
       if (!valid) {
-         return unexpected(error_code::get_nonexistent_json_ptr);
+         return unexpected(error_code::nonexistent_json_ptr);
       }
 
       if (bool(ec)) {

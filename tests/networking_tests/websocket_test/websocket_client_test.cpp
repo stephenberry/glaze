@@ -545,9 +545,8 @@ suite websocket_client_tests = [] {
             std::cerr << "Client " << client_id << " error: " << ec.message() << "\n";
          });
 
-         client_ptr->on_close([&clients_closed, client_id](ws_close_code, std::string_view) {
-            clients_closed[client_id] = true;
-         });
+         client_ptr->on_close(
+            [&clients_closed, client_id](ws_close_code, std::string_view) { clients_closed[client_id] = true; });
 
          std::string client_url = "ws://localhost:" + std::to_string(port) + "/ws";
          client_ptr->connect(client_url);

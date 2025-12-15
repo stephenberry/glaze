@@ -14,7 +14,7 @@ extern "C" {
 #include <stdint.h>
 
 // Current plugin interface version - increment when ABI changes
-#define REPE_PLUGIN_INTERFACE_VERSION 2
+#define REPE_PLUGIN_INTERFACE_VERSION 3
 
 // ABI-stable buffer for request/response data
 typedef struct repe_buffer
@@ -24,12 +24,7 @@ typedef struct repe_buffer
 } repe_buffer;
 
 // Result codes for plugin operations
-typedef enum repe_result {
-   REPE_OK = 0,
-   REPE_ERROR_INIT_FAILED = 1,
-   REPE_ERROR_INVALID_CONFIG = 2,
-   REPE_ERROR_ALREADY_INITIALIZED = 3
-} repe_result;
+typedef enum repe_result { REPE_OK = 0, REPE_ERROR_INIT_FAILED = 1, REPE_ERROR_ALREADY_INITIALIZED = 2 } repe_result;
 
 // Plugin metadata struct
 // Returned by repe_plugin_info(), must remain valid for the plugin's lifetime
@@ -79,12 +74,11 @@ const repe_plugin_data* repe_plugin_info(void);
 // Plugin Lifecycle (optional - may be NULL)
 // ---------------------------------------------------------------------------
 
-// Initialize the plugin with optional configuration.
+// Initialize the plugin.
 // Called once by the host before any calls to repe_plugin_call.
-// config/config_size: Optional JSON or REPE-formatted configuration (may be NULL/0)
 // Returns: REPE_OK on success, error code on failure
 // If not exported, the host assumes initialization is handled lazily.
-repe_result repe_plugin_init(const char* config, uint64_t config_size);
+repe_result repe_plugin_init(void);
 
 // Shutdown the plugin and release all resources.
 // Called once by the host before unloading the plugin.

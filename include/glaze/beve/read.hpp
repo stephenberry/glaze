@@ -24,7 +24,7 @@ namespace glz
    {
       template <auto Opts, class T, class Tag, is_context Ctx, class It0, class It1>
          requires(check_no_header(Opts))
-      GLZ_ALWAYS_INLINE static void op(T&& value, Tag&& tag, Ctx&& ctx, It0&& it, It1&& end)
+      GLZ_ALWAYS_INLINE static void op(T&& value, Tag&& tag, Ctx&& ctx, It0&& it, It1 end)
       {
          if constexpr (const_value_v<T>) {
             if constexpr (check_error_on_const_read(Opts)) {
@@ -32,19 +32,19 @@ namespace glz
             }
             else {
                // do not read anything into the const value
-               skip_value<BEVE>::op<Opts>(std::forward<Ctx>(ctx), std::forward<It0>(it), std::forward<It1>(end));
+               skip_value<BEVE>::op<Opts>(std::forward<Ctx>(ctx), std::forward<It0>(it), end);
             }
          }
          else {
             using V = std::remove_cvref_t<T>;
             from<BEVE, V>::template op<Opts>(std::forward<T>(value), std::forward<Tag>(tag), std::forward<Ctx>(ctx),
-                                             std::forward<It0>(it), std::forward<It1>(end));
+                                             std::forward<It0>(it), end);
          }
       }
 
       template <auto Opts, class T, is_context Ctx, class It0, class It1>
          requires(not check_no_header(Opts))
-      GLZ_ALWAYS_INLINE static void op(T&& value, Ctx&& ctx, It0&& it, It1&& end)
+      GLZ_ALWAYS_INLINE static void op(T&& value, Ctx&& ctx, It0&& it, It1 end)
       {
          if constexpr (const_value_v<T>) {
             if constexpr (check_error_on_const_read(Opts)) {
@@ -52,13 +52,13 @@ namespace glz
             }
             else {
                // do not read anything into the const value
-               skip_value<BEVE>::op<Opts>(std::forward<Ctx>(ctx), std::forward<It0>(it), std::forward<It1>(end));
+               skip_value<BEVE>::op<Opts>(std::forward<Ctx>(ctx), std::forward<It0>(it), end);
             }
          }
          else {
             using V = std::remove_cvref_t<T>;
             from<BEVE, V>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx), std::forward<It0>(it),
-                                             std::forward<It1>(end));
+                                             end);
          }
       }
    };
@@ -68,21 +68,20 @@ namespace glz
    struct from<BEVE, T>
    {
       template <auto Opts, class Value, is_context Ctx, class It0, class It1>
-      GLZ_ALWAYS_INLINE static void op(Value&& value, Ctx&& ctx, It0&& it, It1&& end)
+      GLZ_ALWAYS_INLINE static void op(Value&& value, Ctx&& ctx, It0&& it, It1 end)
       {
          using V = std::decay_t<decltype(get_member(std::declval<Value>(), meta_wrapper_v<T>))>;
          from<BEVE, V>::template op<Opts>(get_member(std::forward<Value>(value), meta_wrapper_v<T>),
-                                          std::forward<Ctx>(ctx), std::forward<It0>(it), std::forward<It1>(end));
+                                          std::forward<Ctx>(ctx), std::forward<It0>(it), end);
       }
 
       template <auto Opts, class Value, class Tag, is_context Ctx, class It0, class It1>
          requires(check_no_header(Opts))
-      GLZ_ALWAYS_INLINE static void op(Value&& value, Tag&& tag, Ctx&& ctx, It0&& it, It1&& end)
+      GLZ_ALWAYS_INLINE static void op(Value&& value, Tag&& tag, Ctx&& ctx, It0&& it, It1 end)
       {
          using V = std::decay_t<decltype(get_member(std::declval<Value>(), meta_wrapper_v<T>))>;
          from<BEVE, V>::template op<Opts>(get_member(std::forward<Value>(value), meta_wrapper_v<T>),
-                                          std::forward<Tag>(tag), std::forward<Ctx>(ctx), std::forward<It0>(it),
-                                          std::forward<It1>(end));
+                                          std::forward<Tag>(tag), std::forward<Ctx>(ctx), std::forward<It0>(it), end);
       }
    };
 
@@ -90,7 +89,7 @@ namespace glz
    struct from<BEVE, T>
    {
       template <auto Opts>
-      GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+      GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&& ctx, auto&& it, auto end) noexcept
       {
          if (invalid_end(ctx, it, end)) {
             return;
@@ -117,7 +116,7 @@ namespace glz
    struct from<BEVE, T>
    {
       template <auto Opts>
-      static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+      static void op(auto&& value, is_context auto&& ctx, auto&& it, auto end) noexcept
       {
          if (invalid_end(ctx, it, end)) {
             return;
@@ -166,7 +165,7 @@ namespace glz
    struct from<BEVE, T>
    {
       template <auto Opts, is_context Ctx, class It0, class It1>
-      static void op(auto&& value, Ctx&& ctx, It0&& it, It1&& end)
+      static void op(auto&& value, Ctx&& ctx, It0&& it, It1 end)
       {
          constexpr auto N = reflect<T>::size;
 
@@ -196,7 +195,7 @@ namespace glz
       template <auto Opts>
          requires(check_no_header(Opts))
       GLZ_ALWAYS_INLINE static void op(auto&& value, const uint8_t tag, is_context auto&& ctx, auto&& it,
-                                       auto&& end) noexcept
+                                       auto end) noexcept
       {
          if (invalid_end(ctx, it, end)) {
             return;
@@ -312,7 +311,7 @@ namespace glz
 
       template <auto Opts>
          requires(not check_no_header(Opts))
-      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto end) noexcept
       {
          if (invalid_end(ctx, it, end)) {
             return;
@@ -328,7 +327,7 @@ namespace glz
    struct from<BEVE, T>
    {
       template <auto Opts>
-      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto end) noexcept
       {
          using V = std::underlying_type_t<std::decay_t<T>>;
 
@@ -371,7 +370,7 @@ namespace glz
    struct from<BEVE, T>
    {
       template <auto Opts>
-      static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+      static void op(auto&& value, is_context auto&& ctx, auto&& it, auto end) noexcept
       {
          if constexpr (check_no_header(Opts)) {
             using V = std::decay_t<T>;
@@ -426,7 +425,7 @@ namespace glz
    struct from<BEVE, T>
    {
       template <auto Opts>
-      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto end) noexcept
       {
          if (invalid_end(ctx, it, end)) {
             return;
@@ -455,7 +454,7 @@ namespace glz
    struct from<BEVE, T>
    {
       template <auto Opts>
-      GLZ_ALWAYS_INLINE static void op(auto&& /*value*/, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+      GLZ_ALWAYS_INLINE static void op(auto&& /*value*/, is_context auto&& ctx, auto&& it, auto end) noexcept
       {
          skip_string_beve(ctx, it, end);
       }
@@ -465,7 +464,7 @@ namespace glz
    struct from<BEVE, basic_raw_json<T>>
    {
       template <auto Opts>
-      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
+      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto end)
       {
          parse<BEVE>::op<Opts>(value.str, ctx, it, end);
       }
@@ -475,7 +474,7 @@ namespace glz
    struct from<BEVE, basic_text<T>>
    {
       template <auto Opts>
-      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
+      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto end)
       {
          parse<BEVE>::op<Opts>(value.str, ctx, it, end);
       }
@@ -485,7 +484,7 @@ namespace glz
    struct from<BEVE, T>
    {
       template <auto Opts>
-      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto end) noexcept
       {
          constexpr uint8_t header = tag::extensions | 0b00001'000;
          if (invalid_end(ctx, it, end)) {
@@ -518,7 +517,7 @@ namespace glz
 
       template <auto Opts>
          requires(check_no_header(Opts))
-      GLZ_ALWAYS_INLINE static void op(auto&& value, const uint8_t, is_context auto&& ctx, auto&& it, auto&& end)
+      GLZ_ALWAYS_INLINE static void op(auto&& value, const uint8_t, is_context auto&& ctx, auto&& it, auto end)
       {
          const auto n = int_from_compressed(ctx, it, end);
          if (bool(ctx.error)) [[unlikely]] {
@@ -535,7 +534,7 @@ namespace glz
 
       template <auto Opts>
          requires(not check_no_header(Opts))
-      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
+      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto end)
       {
          constexpr uint8_t header = tag::string;
 
@@ -575,7 +574,7 @@ namespace glz
    struct from<BEVE, T> final
    {
       template <auto Opts>
-      static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
+      static void op(auto&& value, is_context auto&& ctx, auto&& it, auto end)
       {
          using V = range_value_t<std::decay_t<T>>;
 
@@ -712,7 +711,7 @@ namespace glz
    struct from<BEVE, T> final
    {
       template <auto Opts>
-      static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
+      static void op(auto&& value, is_context auto&& ctx, auto&& it, auto end)
       {
          using V = range_value_t<std::decay_t<T>>;
 
@@ -1008,7 +1007,7 @@ namespace glz
       // Instead of hashing or linear searching, we just clear the input and overwrite the entire contents
       template <auto Opts>
          requires(pair_t<range_value_t<T>> && check_concatenate(Opts) == true)
-      static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
+      static void op(auto&& value, is_context auto&& ctx, auto&& it, auto end)
       {
          using Element = typename T::value_type;
          using Key = typename Element::first_type;
@@ -1062,7 +1061,7 @@ namespace glz
    struct from<BEVE, T> final
    {
       template <auto Opts>
-      GLZ_ALWAYS_INLINE static void op(T& value, is_context auto&& ctx, auto&& it, auto&& end)
+      GLZ_ALWAYS_INLINE static void op(T& value, is_context auto&& ctx, auto&& it, auto end)
       {
          using Key = typename T::first_type;
 
@@ -1098,7 +1097,7 @@ namespace glz
    struct from<BEVE, T> final
    {
       template <auto Opts>
-      static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
+      static void op(auto&& value, is_context auto&& ctx, auto&& it, auto end)
       {
          using Key = typename T::key_type;
 
@@ -1181,7 +1180,7 @@ namespace glz
    struct from<BEVE, T> final
    {
       template <auto Opts, class V, size_t N>
-      GLZ_ALWAYS_INLINE static void op(V (&value)[N], is_context auto&& ctx, auto&& it, auto&& end) noexcept
+      GLZ_ALWAYS_INLINE static void op(V (&value)[N], is_context auto&& ctx, auto&& it, auto end) noexcept
       {
          parse<BEVE>::op<Opts>(std::span{value, N}, ctx, it, end);
       }
@@ -1192,7 +1191,7 @@ namespace glz
    struct from<BEVE, T> final
    {
       template <auto Opts>
-      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
+      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto end)
       {
          if (invalid_end(ctx, it, end)) {
             return;
@@ -1235,7 +1234,7 @@ namespace glz
    struct from<BEVE, T> final
    {
       template <auto Opts>
-      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
+      GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto end)
       {
          if (invalid_end(ctx, it, end)) {
             return;
@@ -1270,7 +1269,7 @@ namespace glz
    struct from<BEVE, T>
    {
       template <auto Opts>
-      GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+      GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&& ctx, auto&& it, auto end) noexcept
       {
          if constexpr (check_no_header(Opts)) {
             skip_compressed_int(ctx, it, end);
@@ -1299,7 +1298,7 @@ namespace glz
    {
       template <auto Opts>
          requires(Opts.structs_as_arrays == true)
-      static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
+      static void op(auto&& value, is_context auto&& ctx, auto&& it, auto end)
       {
          if constexpr (reflectable<T>) {
             constexpr auto N = detail::count_members<T>;
@@ -1350,7 +1349,7 @@ namespace glz
 
       template <auto Opts>
          requires(Opts.structs_as_arrays == false)
-      static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
+      static void op(auto&& value, is_context auto&& ctx, auto&& it, auto end)
       {
          constexpr uint8_t type = 0; // string key
          constexpr uint8_t header = tag::object | type;
@@ -1491,7 +1490,7 @@ namespace glz
    struct from<BEVE, T> final
    {
       template <auto Opts>
-      static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
+      static void op(auto&& value, is_context auto&& ctx, auto&& it, auto end)
       {
          if (invalid_end(ctx, it, end)) {
             return;
@@ -1523,7 +1522,7 @@ namespace glz
    struct from<BEVE, T> final
    {
       template <auto Opts>
-      static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
+      static void op(auto&& value, is_context auto&& ctx, auto&& it, auto end)
       {
          if (invalid_end(ctx, it, end)) {
             return;

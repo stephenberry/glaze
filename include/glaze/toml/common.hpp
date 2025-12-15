@@ -8,7 +8,7 @@ namespace glz
 {
    // Skip whitespace and comments
    template <class It, class End>
-   GLZ_ALWAYS_INLINE void skip_ws_and_comments(It&& it, End&& end) noexcept
+   GLZ_ALWAYS_INLINE void skip_ws_and_comments(It&& it, End end) noexcept
    {
       while (it != end) {
          if (*it == ' ' || *it == '\t') {
@@ -27,7 +27,7 @@ namespace glz
 
    // Skip to next line
    template <class Ctx, class It, class End>
-   GLZ_ALWAYS_INLINE bool skip_to_next_line(Ctx&, It&& it, End&& end) noexcept
+   GLZ_ALWAYS_INLINE bool skip_to_next_line(Ctx&, It&& it, End end) noexcept
    {
       while (it != end && *it != '\n' && *it != '\r') {
          ++it;

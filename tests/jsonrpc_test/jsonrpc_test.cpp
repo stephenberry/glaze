@@ -1,6 +1,7 @@
 
 #include "glaze/ext/jsonrpc.hpp"
 
+#include <numeric>
 #include <string>
 
 #include "ut/ut.hpp"

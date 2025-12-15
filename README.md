@@ -601,6 +601,8 @@ struct glz::meta<S> {
 
 Glaze provides a wrapper to enable complex reading constraints for struct members: `glz::read_constraint`.
 
+<details><summary>See example:</summary>
+
 ```c++
 struct constrained_object
 {
@@ -635,6 +637,8 @@ For invalid input such as `{"age": -1, "name": "Victor"}`, Glaze will outut the 
 
 - Member functions can also be registered as the constraint. 
 - The first field of the constraint lambda is the parent object, allowing complex constraints to be written by the user.
+
+</details>
 
 # Reading/Writing Private Fields
 
@@ -971,47 +975,36 @@ For example: `glz::read<glz::opts{.error_on_unknown_keys = false}>(...)` will tu
 
 > [!IMPORTANT]
 >
-> Many options for Glaze are not part of `glz::opts`. This keeps compiler errors shorter and makes options more manageable. See [Options](./docs/options.md) documentation for more details on available compile time options.
+> See [Options](./docs/options.md) for a **comprehensive reference table** of all compile time options, including inheritable options that can be added to custom option structs.
 
-### Available Default Compile Time Options
+### Common Compile Time Options
 
-The struct below shows the available options in `glz::opts` and the defaults. See [Options](./docs/options.md) for additional options for user customization.
+The `glz::opts` struct provides default options. Here are the most commonly used:
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `format` | `JSON` | Format selector (`JSON`, `BEVE`, `CSV`, `TOML`) |
+| `null_terminated` | `true` | Whether input buffer is null terminated |
+| `error_on_unknown_keys` | `true` | Error on unknown JSON keys |
+| `skip_null_members` | `true` | Skip null values when writing |
+| `prettify` | `false` | Output formatted JSON |
+| `minified` | `false` | Require minified input (faster parsing) |
+| `error_on_missing_keys` | `false` | Require all keys to be present |
+| `partial_read` | `false` | Exit after reading deepest object |
+
+**Inheritable options** (not in `glz::opts` by default) can be added via custom structs:
 
 ```c++
-struct opts
-{
-  // USER CONFIGURABLE
-  uint32_t format = JSON;
-  bool null_terminated = true; // Whether the input buffer is null terminated
-  bool comments = false; // Support reading in JSONC style comments
-  bool error_on_unknown_keys = true; // Error when an unknown key is encountered
-  bool skip_null_members = true; // Skip writing out params in an object if the value is null
-  bool use_hash_comparison = true; // Will replace some string equality checks with hash checks
-  bool prettify = false; // Write out prettified JSON
-  bool minified = false; // Require minified input for JSON, which results in faster read performance
-  char indentation_char = ' '; // Prettified JSON indentation char
-  uint8_t indentation_width = 3; // Prettified JSON indentation size
-  bool new_lines_in_arrays = true; // Whether prettified arrays should have new lines for each element
-  bool append_arrays = false; // When reading into an array the data will be appended if the type supports it
-  bool shrink_to_fit = false; // Shrinks dynamic containers to new size to save memory
-  bool write_type_info = true; // Write type info for meta objects in variants
-  bool error_on_missing_keys = false; // Require all non nullable keys to be present in the object. Use
-                                      // skip_null_members = false to require nullable members
-  bool error_on_const_read =
-     false; // Error if attempt is made to read into a const value, by default the value is skipped without error
-
-  bool quoted_num = false; // treat numbers as quoted or array-like types as having quoted numbers
-  bool number = false; // treats all types like std::string as numbers: read/write these quoted numbers
-  bool raw = false; // write out string like values without quotes
-  bool raw_string = false; // do not decode/encode escaped characters for strings (improves read/write performance)
-  bool structs_as_arrays = false; // Handle structs (reading/writing) without keys, which applies
-
-  bool partial_read =
-     false; // Reads into the deepest structural object and then exits without parsing the rest of the input
+struct my_opts : glz::opts {
+   bool validate_skipped = true;        // Full validation on skipped values
+   bool append_arrays = true;           // Append to arrays instead of replace
 };
+
+constexpr my_opts opts{};
+auto ec = glz::read<opts>(obj, buffer);
 ```
 
-> Many of these compile time options have wrappers to apply the option to only a single field. See [Wrappers](./docs/wrappers.md) for more details.
+> See [Options](./docs/options.md) for the complete list with detailed descriptions, and [Wrappers](./docs/wrappers.md) for per-field options.
 
 ## JSON Conformance
 

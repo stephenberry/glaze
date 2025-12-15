@@ -1053,6 +1053,415 @@ suite wrapping_middleware_tests = [] {
    };
 };
 
+// Helper struct for raw HTTP connection tests (keep-alive testing)
+struct raw_http_client
+{
+   raw_http_client() : io_context_(), socket_(io_context_) {}
+
+   bool connect(const std::string& host, uint16_t port)
+   {
+      try {
+         asio::ip::tcp::resolver resolver(io_context_);
+         auto endpoints = resolver.resolve(host, std::to_string(port));
+         asio::connect(socket_, endpoints);
+         return true;
+      }
+      catch (...) {
+         return false;
+      }
+   }
+
+   void close()
+   {
+      std::error_code ec;
+      socket_.shutdown(asio::ip::tcp::socket::shutdown_both, ec);
+      socket_.close(ec);
+   }
+
+   bool is_open() const { return socket_.is_open(); }
+
+   // Send a raw HTTP request and receive response
+   struct http_response
+   {
+      int status_code = 0;
+      std::unordered_map<std::string, std::string> headers;
+      std::string body;
+   };
+
+   std::optional<http_response> send_request(const std::string& method, const std::string& path,
+                                             const std::string& host,
+                                             const std::vector<std::pair<std::string, std::string>>& headers = {},
+                                             const std::string& body = "")
+   {
+      try {
+         std::string request = method + " " + path + " HTTP/1.1\r\n";
+         request += "Host: " + host + "\r\n";
+
+         for (const auto& [name, value] : headers) {
+            request += name + ": " + value + "\r\n";
+         }
+
+         if (!body.empty()) {
+            request += "Content-Length: " + std::to_string(body.size()) + "\r\n";
+         }
+
+         request += "\r\n" + body;
+
+         asio::write(socket_, asio::buffer(request));
+
+         asio::streambuf response_buffer;
+         asio::read_until(socket_, response_buffer, "\r\n\r\n");
+
+         std::istream response_stream(&response_buffer);
+         std::string status_line;
+         std::getline(response_stream, status_line);
+
+         if (!status_line.empty() && status_line.back() == '\r') {
+            status_line.pop_back();
+         }
+
+         http_response resp;
+
+         // Parse status code from "HTTP/1.1 200 OK"
+         auto first_space = status_line.find(' ');
+         if (first_space != std::string::npos) {
+            auto second_space = status_line.find(' ', first_space + 1);
+            if (second_space != std::string::npos) {
+               resp.status_code = std::stoi(status_line.substr(first_space + 1, second_space - first_space - 1));
+            }
+         }
+
+         // Parse headers
+         std::string header_line;
+         size_t content_length = 0;
+         while (std::getline(response_stream, header_line) && header_line != "\r") {
+            if (!header_line.empty() && header_line.back() == '\r') {
+               header_line.pop_back();
+            }
+
+            auto colon_pos = header_line.find(':');
+            if (colon_pos == std::string::npos) continue;
+
+            std::string name = header_line.substr(0, colon_pos);
+            std::string value = header_line.substr(colon_pos + 1);
+
+            // Trim whitespace
+            value.erase(0, value.find_first_not_of(" \t"));
+            value.erase(value.find_last_not_of(" \t") + 1);
+
+            // Convert name to lowercase for easier lookup
+            std::transform(name.begin(), name.end(), name.begin(), [](unsigned char c) { return std::tolower(c); });
+            resp.headers[name] = value;
+
+            if (name == "content-length") {
+               content_length = std::stoul(value);
+            }
+         }
+
+         // Read body based on content-length
+         if (content_length > 0) {
+            // Read any remaining data already in buffer
+            size_t already_read = response_buffer.size();
+            if (already_read < content_length) {
+               asio::read(socket_, response_buffer, asio::transfer_exactly(content_length - already_read));
+            }
+            std::string body_str{std::istreambuf_iterator<char>(&response_buffer), std::istreambuf_iterator<char>()};
+            resp.body = body_str.substr(0, content_length);
+         }
+
+         return resp;
+      }
+      catch (...) {
+         return std::nullopt;
+      }
+   }
+
+  private:
+   asio::io_context io_context_;
+   asio::ip::tcp::socket socket_;
+};
+
+// Test server for keep-alive tests
+struct keepalive_test_server
+{
+   keepalive_test_server() : port_(0), running_(false) {}
+
+   ~keepalive_test_server() { stop(); }
+
+   glz::http_server<>& server() { return server_; }
+
+   bool start()
+   {
+      if (running_) return true;
+
+      setup_routes();
+
+      try {
+         for (uint16_t test_port = 19080; test_port < 19200; ++test_port) {
+            try {
+               server_.bind("127.0.0.1", test_port);
+               port_ = test_port;
+               break;
+            }
+            catch (...) {
+               continue;
+            }
+         }
+
+         if (port_ == 0) {
+            return false;
+         }
+
+         running_ = true;
+
+         server_thread_ = std::thread([this]() {
+            try {
+               server_.start(1);
+            }
+            catch (...) {
+               running_ = false;
+            }
+         });
+
+         // Wait for server to be ready
+         std::this_thread::sleep_for(std::chrono::milliseconds(200));
+         return true;
+      }
+      catch (...) {
+         return false;
+      }
+   }
+
+   void stop()
+   {
+      if (!running_) return;
+      running_ = false;
+      std::this_thread::sleep_for(std::chrono::milliseconds(50));
+      server_.stop();
+      if (server_thread_.joinable()) {
+         server_thread_.join();
+      }
+   }
+
+   uint16_t port() const { return port_; }
+
+  private:
+   glz::http_server<> server_;
+   std::thread server_thread_;
+   uint16_t port_;
+   std::atomic<bool> running_;
+
+   void setup_routes()
+   {
+      server_.on_error([this](std::error_code ec, std::source_location) {
+         if (running_ && ec != asio::error::eof && ec != asio::error::operation_aborted) {
+            // Suppress expected errors during tests
+         }
+      });
+
+      server_.get("/test", [](const glz::request&, glz::response& res) { res.status(200).body("OK"); });
+
+      server_.get("/echo-connection", [](const glz::request& req, glz::response& res) {
+         auto conn_it = req.headers.find("connection");
+         if (conn_it != req.headers.end()) {
+            res.body("Connection: " + conn_it->second);
+         }
+         else {
+            res.body("Connection: (none)");
+         }
+      });
+   }
+};
+
+// Keep-Alive Configuration Tests
+suite keepalive_config_tests = [] {
+   "connection_config_defaults"_test = [] {
+      glz::connection_config config;
+      expect(config.keep_alive == true) << "Keep-alive should be enabled by default\n";
+      expect(config.keep_alive_timeout == 60) << "Default timeout should be 60 seconds\n";
+      expect(config.max_requests_per_connection == 0) << "Default max requests should be 0 (unlimited)\n";
+   };
+
+   "connection_settings_method"_test = [] {
+      keepalive_test_server server;
+      server.server().connection_settings(
+         {.keep_alive = false, .keep_alive_timeout = 30, .max_requests_per_connection = 100});
+
+      expect(server.start()) << "Server should start with custom config\n";
+      server.stop();
+   };
+
+   "keep_alive_method_chain"_test = [] {
+      keepalive_test_server server;
+      server.server().keep_alive(true).keep_alive_timeout(45).max_requests_per_connection(50);
+
+      expect(server.start()) << "Server should start with chained config\n";
+      server.stop();
+   };
+};
+
+// Keep-Alive Behavior Tests
+suite keepalive_behavior_tests = [] {
+   "server_sends_connection_keepalive_header"_test = [] {
+      keepalive_test_server server;
+      server.server().keep_alive(true).keep_alive_timeout(30);
+      expect(server.start()) << "Server should start\n";
+
+      raw_http_client client;
+      expect(client.connect("127.0.0.1", server.port())) << "Client should connect\n";
+
+      auto resp = client.send_request("GET", "/test", "127.0.0.1:" + std::to_string(server.port()));
+      expect(resp.has_value()) << "Should receive response\n";
+
+      if (resp.has_value()) {
+         expect(resp->status_code == 200) << "Status should be 200\n";
+
+         auto conn_header = resp->headers.find("connection");
+         expect(conn_header != resp->headers.end()) << "Connection header should be present\n";
+         if (conn_header != resp->headers.end()) {
+            expect(conn_header->second == "keep-alive") << "Connection should be keep-alive\n";
+         }
+
+         auto ka_header = resp->headers.find("keep-alive");
+         expect(ka_header != resp->headers.end()) << "Keep-Alive header should be present\n";
+         if (ka_header != resp->headers.end()) {
+            expect(ka_header->second.find("timeout=30") != std::string::npos) << "Should contain timeout value\n";
+         }
+      }
+
+      client.close();
+      server.stop();
+   };
+
+   "server_sends_connection_close_when_disabled"_test = [] {
+      keepalive_test_server server;
+      server.server().keep_alive(false);
+      expect(server.start()) << "Server should start\n";
+
+      raw_http_client client;
+      expect(client.connect("127.0.0.1", server.port())) << "Client should connect\n";
+
+      auto resp = client.send_request("GET", "/test", "127.0.0.1:" + std::to_string(server.port()));
+      expect(resp.has_value()) << "Should receive response\n";
+
+      if (resp.has_value()) {
+         auto conn_header = resp->headers.find("connection");
+         expect(conn_header != resp->headers.end()) << "Connection header should be present\n";
+         if (conn_header != resp->headers.end()) {
+            expect(conn_header->second == "close") << "Connection should be close\n";
+         }
+      }
+
+      client.close();
+      server.stop();
+   };
+
+   "server_respects_client_connection_close"_test = [] {
+      keepalive_test_server server;
+      server.server().keep_alive(true);
+      expect(server.start()) << "Server should start\n";
+
+      raw_http_client client;
+      expect(client.connect("127.0.0.1", server.port())) << "Client should connect\n";
+
+      // Send request with Connection: close
+      auto resp =
+         client.send_request("GET", "/test", "127.0.0.1:" + std::to_string(server.port()), {{"Connection", "close"}});
+      expect(resp.has_value()) << "Should receive response\n";
+
+      if (resp.has_value()) {
+         auto conn_header = resp->headers.find("connection");
+         expect(conn_header != resp->headers.end()) << "Connection header should be present\n";
+         if (conn_header != resp->headers.end()) {
+            expect(conn_header->second == "close") << "Server should respect client's close request\n";
+         }
+      }
+
+      client.close();
+      server.stop();
+   };
+
+   "multiple_requests_on_same_connection"_test = [] {
+      keepalive_test_server server;
+      server.server().keep_alive(true).keep_alive_timeout(60);
+      expect(server.start()) << "Server should start\n";
+
+      raw_http_client client;
+      expect(client.connect("127.0.0.1", server.port())) << "Client should connect\n";
+
+      // Send multiple requests on same connection
+      for (int i = 0; i < 3; ++i) {
+         auto resp = client.send_request("GET", "/test", "127.0.0.1:" + std::to_string(server.port()));
+         expect(resp.has_value()) << "Request " << i + 1 << " should succeed\n";
+         if (resp.has_value()) {
+            expect(resp->status_code == 200) << "Request " << i + 1 << " should return 200\n";
+            expect(resp->body == "OK") << "Request " << i + 1 << " body should match\n";
+         }
+      }
+
+      expect(client.is_open()) << "Connection should still be open after multiple requests\n";
+
+      client.close();
+      server.stop();
+   };
+
+   "max_requests_per_connection_limit"_test = [] {
+      keepalive_test_server server;
+      server.server().keep_alive(true).max_requests_per_connection(2);
+      expect(server.start()) << "Server should start\n";
+
+      raw_http_client client;
+      expect(client.connect("127.0.0.1", server.port())) << "Client should connect\n";
+
+      // First request - should keep alive
+      auto resp1 = client.send_request("GET", "/test", "127.0.0.1:" + std::to_string(server.port()));
+      expect(resp1.has_value()) << "First request should succeed\n";
+      if (resp1.has_value()) {
+         auto conn_header = resp1->headers.find("connection");
+         if (conn_header != resp1->headers.end()) {
+            expect(conn_header->second == "keep-alive") << "First request should keep alive\n";
+         }
+      }
+
+      // Second request - should close (at limit)
+      auto resp2 = client.send_request("GET", "/test", "127.0.0.1:" + std::to_string(server.port()));
+      expect(resp2.has_value()) << "Second request should succeed\n";
+      if (resp2.has_value()) {
+         auto conn_header = resp2->headers.find("connection");
+         if (conn_header != resp2->headers.end()) {
+            expect(conn_header->second == "close") << "Second request should close (at limit)\n";
+         }
+      }
+
+      client.close();
+      server.stop();
+   };
+
+   "keepalive_header_includes_max_requests"_test = [] {
+      keepalive_test_server server;
+      server.server().keep_alive(true).keep_alive_timeout(45).max_requests_per_connection(100);
+      expect(server.start()) << "Server should start\n";
+
+      raw_http_client client;
+      expect(client.connect("127.0.0.1", server.port())) << "Client should connect\n";
+
+      auto resp = client.send_request("GET", "/test", "127.0.0.1:" + std::to_string(server.port()));
+      expect(resp.has_value()) << "Should receive response\n";
+
+      if (resp.has_value()) {
+         auto ka_header = resp->headers.find("keep-alive");
+         expect(ka_header != resp->headers.end()) << "Keep-Alive header should be present\n";
+         if (ka_header != resp->headers.end()) {
+            expect(ka_header->second.find("timeout=45") != std::string::npos) << "Should contain timeout\n";
+            expect(ka_header->second.find("max=100") != std::string::npos) << "Should contain max\n";
+         }
+      }
+
+      client.close();
+      server.stop();
+   };
+};
+
 int main()
 {
    std::cout << "Running Glaze Async Server and API Unit Tests...\n";
