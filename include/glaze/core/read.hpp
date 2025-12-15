@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include <atomic>
 #include <span>
 
 #include "glaze/api/std/span.hpp"
@@ -11,6 +12,15 @@
 
 namespace glz
 {
+   // Compiler barrier to prevent incorrect optimizations in GCC 15+
+   // This is needed to work around a GCC strict aliasing optimization bug
+   // that can cause parsed values to be incorrectly optimized away.
+   // Uses atomic_signal_fence which is a compiler-only barrier (no runtime cost).
+   inline void compiler_barrier() noexcept
+   {
+      std::atomic_signal_fence(std::memory_order_acq_rel);
+   }
+
    template <auto Opts, bool Padded = false>
    auto read_iterators(contiguous auto&& buffer) noexcept
    {
@@ -62,6 +72,10 @@ namespace glz
       else {
          parse<Opts.format>::template op<is_padded_off<Opts>()>(value, ctx, it, end);
       }
+
+      // Compiler barrier to prevent GCC 15 from incorrectly optimizing
+      // based on faulty strict aliasing analysis
+      compiler_barrier();
 
       if (bool(ctx.error)) [[unlikely]] {
          goto finish;
