@@ -122,15 +122,15 @@ namespace glz
          constexpr auto Opts = opening_handled_off<ws_handled_off<Options>()>();
 
          if constexpr (!check_opening_handled(Options)) {
-            if (skip_ws<Opts>(ctx, it, end)) {
+            if (skip_ws<Opts.minified, Opts.null_terminated, Opts.comments>(ctx, it, end)) {
                return;
             }
-            if (match_invalid_end<'{', Opts>(ctx, it, end)) {
+            if (match_invalid_end<'{', Opts.null_terminated>(ctx, it, end)) {
                return;
             }
          }
 
-         if (skip_ws<Opts>(ctx, it, end)) {
+         if (skip_ws<Opts.minified, Opts.null_terminated, Opts.comments>(ctx, it, end)) {
             return;
          }
 
@@ -142,7 +142,7 @@ namespace glz
             }
 
             // find the string, escape characters are not supported for recorders
-            if (skip_ws<Opts>(ctx, it, end)) {
+            if (skip_ws<Opts.minified, Opts.null_terminated, Opts.comments>(ctx, it, end)) {
                return;
             }
             const auto name = parse_key(ctx, it, end);
@@ -153,32 +153,32 @@ namespace glz
                return;
             }
 
-            if (skip_ws<Opts>(ctx, it, end)) {
+            if (skip_ws<Opts.minified, Opts.null_terminated, Opts.comments>(ctx, it, end)) {
                return;
             }
-            if (match_invalid_end<':', Opts>(ctx, it, end)) {
+            if (match_invalid_end<':', Opts.null_terminated>(ctx, it, end)) {
                return;
             }
-            if (skip_ws<Opts>(ctx, it, end)) {
+            if (skip_ws<Opts.minified, Opts.null_terminated, Opts.comments>(ctx, it, end)) {
                return;
             }
 
             std::visit([&](auto&& deq) { parse<JSON>::op<Opts>(deq, ctx, it, end); }, v.first);
 
             if (i < n - 1) {
-               if (skip_ws<Opts>(ctx, it, end)) {
+               if (skip_ws<Opts.minified, Opts.null_terminated, Opts.comments>(ctx, it, end)) {
                   return;
                }
-               if (match_invalid_end<',', Opts>(ctx, it, end)) {
+               if (match_invalid_end<',', Opts.null_terminated>(ctx, it, end)) {
                   return;
                }
-               if (skip_ws<Opts>(ctx, it, end)) {
+               if (skip_ws<Opts.minified, Opts.null_terminated, Opts.comments>(ctx, it, end)) {
                   return;
                }
             }
          }
 
-         if (skip_ws<Opts>(ctx, it, end)) {
+         if (skip_ws<Opts.minified, Opts.null_terminated, Opts.comments>(ctx, it, end)) {
             return;
          }
          match<'}'>(ctx, it);

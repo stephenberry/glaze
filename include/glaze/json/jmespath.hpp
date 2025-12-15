@@ -436,7 +436,7 @@ namespace glz
       inline void handle_slice(const jmespath::ArrayParseResult& decomposed_key, T&& value, context& ctx, auto&& it,
                                auto end)
       {
-         if (skip_ws<Opts>(ctx, it, end)) {
+         if (skip_ws<Opts.minified, Opts.null_terminated, Opts.comments>(ctx, it, end)) {
             return;
          }
 
@@ -485,7 +485,7 @@ namespace glz
                if (bool(ctx.error)) return;
                if (*it == ',') {
                   ++it;
-                  skip_ws<Opts>(ctx, it, end);
+                  skip_ws<Opts.minified, Opts.null_terminated, Opts.comments>(ctx, it, end);
                }
                else if (*it == ']') {
                   return;
@@ -509,7 +509,7 @@ namespace glz
 
             if (*it == ',') {
                ++it;
-               skip_ws<Opts>(ctx, it, end);
+               skip_ws<Opts.minified, Opts.null_terminated, Opts.comments>(ctx, it, end);
             }
             current_index++;
          });
@@ -522,7 +522,7 @@ namespace glz
             if (bool(ctx.error)) return;
             if (*it == ',') {
                ++it;
-               skip_ws<Opts>(ctx, it, end);
+               skip_ws<Opts.minified, Opts.null_terminated, Opts.comments>(ctx, it, end);
             }
          }
          ++it; // consume ']'
@@ -533,7 +533,7 @@ namespace glz
       inline void handle_slice(const jmespath::ArrayParseResult& decomposed_key, T&& value, context& ctx, auto&& it,
                                auto end)
       {
-         if (skip_ws<Opts>(ctx, it, end)) {
+         if (skip_ws<Opts.minified, Opts.null_terminated, Opts.comments>(ctx, it, end)) {
             return;
          }
 
@@ -556,7 +556,7 @@ namespace glz
                   if (bool(ctx.error)) [[unlikely]]
                      return;
 
-                  if (skip_ws<Opts>(ctx, it, end)) {
+                  if (skip_ws<Opts.minified, Opts.null_terminated, Opts.comments>(ctx, it, end)) {
                      return;
                   }
                   if (*it == ']') {
@@ -568,7 +568,7 @@ namespace glz
                      return;
                   }
                   ++it;
-                  if (skip_ws<Opts>(ctx, it, end)) {
+                  if (skip_ws<Opts.minified, Opts.null_terminated, Opts.comments>(ctx, it, end)) {
                      return;
                   }
                }
@@ -631,7 +631,7 @@ namespace glz
          // We'll read elements and track their index
          int32_t current_index = 0;
          while (true) {
-            if (skip_ws<Opts>(ctx, it, end)) {
+            if (skip_ws<Opts.minified, Opts.null_terminated, Opts.comments>(ctx, it, end)) {
                return;
             }
 
@@ -655,7 +655,7 @@ namespace glz
                   return;
             }
 
-            if (skip_ws<Opts>(ctx, it, end)) {
+            if (skip_ws<Opts.minified, Opts.null_terminated, Opts.comments>(ctx, it, end)) {
                return;
             }
             if (*it == ']') {
@@ -667,7 +667,7 @@ namespace glz
                return;
             }
             ++it; // consume ','
-            if (skip_ws<Opts>(ctx, it, end)) {
+            if (skip_ws<Opts.minified, Opts.null_terminated, Opts.comments>(ctx, it, end)) {
                return;
             }
 
@@ -706,7 +706,7 @@ namespace glz
       else {
          using namespace glz::detail;
 
-         skip_ws<Opts>(ctx, it, end);
+         skip_ws<Opts.minified, Opts.null_terminated, Opts.comments>(ctx, it, end);
 
          for_each<N>([&]<auto I>() {
             if (bool(ctx.error)) [[unlikely]] {
@@ -719,11 +719,11 @@ namespace glz
             if constexpr (decomposed_key.is_array_access) {
                // If we have a key, that means we're looking into an object like: key[0:5]
                if constexpr (key.empty()) {
-                  if (skip_ws<Opts>(ctx, it, end)) {
+                  if (skip_ws<Opts.minified, Opts.null_terminated, Opts.comments>(ctx, it, end)) {
                      return;
                   }
                   // We expect the JSON at this level to be an array
-                  if (match_invalid_end<'[', Opts>(ctx, it, end)) {
+                  if (match_invalid_end<'[', Opts.null_terminated>(ctx, it, end)) {
                      return;
                   }
 
@@ -743,7 +743,7 @@ namespace glz
                               if (bool(ctx.error)) [[unlikely]]
                                  return;
 
-                              if (skip_ws<Opts>(ctx, it, end)) {
+                              if (skip_ws<Opts.minified, Opts.null_terminated, Opts.comments>(ctx, it, end)) {
                                  return;
                               }
                               if (*it != ',') {
@@ -751,7 +751,7 @@ namespace glz
                                  return;
                               }
                               ++it;
-                              if (skip_ws<Opts>(ctx, it, end)) {
+                              if (skip_ws<Opts.minified, Opts.null_terminated, Opts.comments>(ctx, it, end)) {
                                  return;
                               }
                            }
@@ -767,7 +767,7 @@ namespace glz
                               if (bool(ctx.error)) [[unlikely]]
                                  return;
 
-                              if (skip_ws<Opts>(ctx, it, end)) {
+                              if (skip_ws<Opts.minified, Opts.null_terminated, Opts.comments>(ctx, it, end)) {
                                  return;
                               }
                               if (*it != ',') {
@@ -775,7 +775,7 @@ namespace glz
                                  return;
                               }
                               ++it;
-                              if (skip_ws<Opts>(ctx, it, end)) {
+                              if (skip_ws<Opts.minified, Opts.null_terminated, Opts.comments>(ctx, it, end)) {
                                  return;
                               }
                            }
@@ -792,12 +792,12 @@ namespace glz
                }
                else {
                   // Object scenario with a key, like: key[0:5]
-                  if (match_invalid_end<'{', Opts>(ctx, it, end)) {
+                  if (match_invalid_end<'{', Opts.null_terminated>(ctx, it, end)) {
                      return;
                   }
 
                   while (true) {
-                     if (skip_ws<Opts>(ctx, it, end)) {
+                     if (skip_ws<Opts.minified, Opts.null_terminated, Opts.comments>(ctx, it, end)) {
                         return;
                      }
                      if (match<'"'>(ctx, it)) {
@@ -805,23 +805,23 @@ namespace glz
                      }
 
                      auto* start = it;
-                     skip_string_view<Opts>(ctx, it, end);
+                     skip_string_view(ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
                      const sv k = {start, size_t(it - start)};
                      ++it;
 
                      if (key.size() == k.size() && comparitor<key>(k.data())) {
-                        if (skip_ws<Opts>(ctx, it, end)) {
+                        if (skip_ws<Opts.minified, Opts.null_terminated, Opts.comments>(ctx, it, end)) {
                            return;
                         }
-                        if (match_invalid_end<':', Opts>(ctx, it, end)) {
+                        if (match_invalid_end<':', Opts.null_terminated>(ctx, it, end)) {
                            return;
                         }
-                        if (skip_ws<Opts>(ctx, it, end)) {
+                        if (skip_ws<Opts.minified, Opts.null_terminated, Opts.comments>(ctx, it, end)) {
                            return;
                         }
-                        if (match_invalid_end<'[', Opts>(ctx, it, end)) {
+                        if (match_invalid_end<'[', Opts.null_terminated>(ctx, it, end)) {
                            return;
                         }
 
@@ -839,7 +839,7 @@ namespace glz
                                  if (bool(ctx.error)) [[unlikely]]
                                     return;
 
-                                 if (skip_ws<Opts>(ctx, it, end)) {
+                                 if (skip_ws<Opts.minified, Opts.null_terminated, Opts.comments>(ctx, it, end)) {
                                     return;
                                  }
                                  if (*it != ',') {
@@ -847,12 +847,12 @@ namespace glz
                                     return;
                                  }
                                  ++it;
-                                 if (skip_ws<Opts>(ctx, it, end)) {
+                                 if (skip_ws<Opts.minified, Opts.null_terminated, Opts.comments>(ctx, it, end)) {
                                     return;
                                  }
                               }
 
-                              if (skip_ws<Opts>(ctx, it, end)) {
+                              if (skip_ws<Opts.minified, Opts.null_terminated, Opts.comments>(ctx, it, end)) {
                                  return;
                               }
 
@@ -872,7 +872,7 @@ namespace glz
                         if (bool(ctx.error)) [[unlikely]] {
                            return;
                         }
-                        if (skip_ws<Opts>(ctx, it, end)) {
+                        if (skip_ws<Opts.minified, Opts.null_terminated, Opts.comments>(ctx, it, end)) {
                            return;
                         }
                         if (*it != ',') {
@@ -886,12 +886,12 @@ namespace glz
             }
             else {
                // If it's not array access, we are dealing with an object key
-               if (match_invalid_end<'{', Opts>(ctx, it, end)) {
+               if (match_invalid_end<'{', Opts.null_terminated>(ctx, it, end)) {
                   return;
                }
 
                while (it < end) {
-                  if (skip_ws<Opts>(ctx, it, end)) {
+                  if (skip_ws<Opts.minified, Opts.null_terminated, Opts.comments>(ctx, it, end)) {
                      return;
                   }
                   if (match<'"'>(ctx, it)) {
@@ -899,20 +899,20 @@ namespace glz
                   }
 
                   auto* start = it;
-                  skip_string_view<Opts>(ctx, it, end);
+                  skip_string_view(ctx, it, end);
                   if (bool(ctx.error)) [[unlikely]]
                      return;
                   const sv k = {start, size_t(it - start)};
                   ++it;
 
                   if (key.size() == k.size() && comparitor<key>(k.data())) {
-                     if (skip_ws<Opts>(ctx, it, end)) {
+                     if (skip_ws<Opts.minified, Opts.null_terminated, Opts.comments>(ctx, it, end)) {
                         return;
                      }
-                     if (match_invalid_end<':', Opts>(ctx, it, end)) {
+                     if (match_invalid_end<':', Opts.null_terminated>(ctx, it, end)) {
                         return;
                      }
-                     if (skip_ws<Opts>(ctx, it, end)) {
+                     if (skip_ws<Opts.minified, Opts.null_terminated, Opts.comments>(ctx, it, end)) {
                         return;
                      }
 
@@ -926,7 +926,7 @@ namespace glz
                      if (bool(ctx.error)) [[unlikely]] {
                         return;
                      }
-                     if (skip_ws<Opts>(ctx, it, end)) {
+                     if (skip_ws<Opts.minified, Opts.null_terminated, Opts.comments>(ctx, it, end)) {
                         return;
                      }
                      if (*it != ',') {
@@ -1004,7 +1004,7 @@ namespace glz
       else {
          using namespace glz::detail;
 
-         skip_ws<Opts>(ctx, it, end);
+         skip_ws<Opts.minified, Opts.null_terminated, Opts.comments>(ctx, it, end);
 
          for (size_t I = 0; I < N; ++I) {
             if (bool(ctx.error)) [[unlikely]] {
@@ -1018,10 +1018,10 @@ namespace glz
                if (decomposed_key.is_array_access) {
                   if (key.empty()) {
                      // Top-level array scenario
-                     if (skip_ws<Opts>(ctx, it, end)) {
+                     if (skip_ws<Opts.minified, Opts.null_terminated, Opts.comments>(ctx, it, end)) {
                         return;
                      }
-                     if (match_invalid_end<'[', Opts>(ctx, it, end)) {
+                     if (match_invalid_end<'[', Opts.null_terminated>(ctx, it, end)) {
                         return;
                      }
 
@@ -1042,7 +1042,7 @@ namespace glz
                                  if (bool(ctx.error)) [[unlikely]]
                                     return;
 
-                                 if (skip_ws<Opts>(ctx, it, end)) {
+                                 if (skip_ws<Opts.minified, Opts.null_terminated, Opts.comments>(ctx, it, end)) {
                                     return;
                                  }
                                  if (*it != ',') {
@@ -1050,7 +1050,7 @@ namespace glz
                                     return;
                                  }
                                  ++it;
-                                 if (skip_ws<Opts>(ctx, it, end)) {
+                                 if (skip_ws<Opts.minified, Opts.null_terminated, Opts.comments>(ctx, it, end)) {
                                     return;
                                  }
                               }
@@ -1066,7 +1066,7 @@ namespace glz
                                  if (bool(ctx.error)) [[unlikely]]
                                     return;
 
-                                 if (skip_ws<Opts>(ctx, it, end)) {
+                                 if (skip_ws<Opts.minified, Opts.null_terminated, Opts.comments>(ctx, it, end)) {
                                     return;
                                  }
                                  if (*it != ',') {
@@ -1074,7 +1074,7 @@ namespace glz
                                     return;
                                  }
                                  ++it;
-                                 if (skip_ws<Opts>(ctx, it, end)) {
+                                 if (skip_ws<Opts.minified, Opts.null_terminated, Opts.comments>(ctx, it, end)) {
                                     return;
                                  }
                               }
@@ -1089,12 +1089,12 @@ namespace glz
                   }
                   else {
                      // Object scenario: key[...]
-                     if (match_invalid_end<'{', Opts>(ctx, it, end)) {
+                     if (match_invalid_end<'{', Opts.null_terminated>(ctx, it, end)) {
                         return;
                      }
 
                      while (true) {
-                        if (skip_ws<Opts>(ctx, it, end)) {
+                        if (skip_ws<Opts.minified, Opts.null_terminated, Opts.comments>(ctx, it, end)) {
                            return;
                         }
                         if (match<'"'>(ctx, it)) {
@@ -1102,23 +1102,23 @@ namespace glz
                         }
 
                         auto* start_pos = it;
-                        skip_string_view<Opts>(ctx, it, end);
+                        skip_string_view(ctx, it, end);
                         if (bool(ctx.error)) [[unlikely]]
                            return;
                         const sv k = {start_pos, size_t(it - start_pos)};
                         ++it;
 
                         if (key.size() == k.size() && memcmp(key.data(), k.data(), key.size()) == 0) {
-                           if (skip_ws<Opts>(ctx, it, end)) {
+                           if (skip_ws<Opts.minified, Opts.null_terminated, Opts.comments>(ctx, it, end)) {
                               return;
                            }
-                           if (match_invalid_end<':', Opts>(ctx, it, end)) {
+                           if (match_invalid_end<':', Opts.null_terminated>(ctx, it, end)) {
                               return;
                            }
-                           if (skip_ws<Opts>(ctx, it, end)) {
+                           if (skip_ws<Opts.minified, Opts.null_terminated, Opts.comments>(ctx, it, end)) {
                               return;
                            }
-                           if (match_invalid_end<'[', Opts>(ctx, it, end)) {
+                           if (match_invalid_end<'[', Opts.null_terminated>(ctx, it, end)) {
                               return;
                            }
 
@@ -1136,7 +1136,7 @@ namespace glz
                                     if (bool(ctx.error)) [[unlikely]]
                                        return;
 
-                                    if (skip_ws<Opts>(ctx, it, end)) {
+                                    if (skip_ws<Opts.minified, Opts.null_terminated, Opts.comments>(ctx, it, end)) {
                                        return;
                                     }
                                     if (*it != ',') {
@@ -1144,12 +1144,12 @@ namespace glz
                                        return;
                                     }
                                     ++it;
-                                    if (skip_ws<Opts>(ctx, it, end)) {
+                                    if (skip_ws<Opts.minified, Opts.null_terminated, Opts.comments>(ctx, it, end)) {
                                        return;
                                     }
                                  }
 
-                                 if (skip_ws<Opts>(ctx, it, end)) {
+                                 if (skip_ws<Opts.minified, Opts.null_terminated, Opts.comments>(ctx, it, end)) {
                                     return;
                                  }
 
@@ -1169,7 +1169,7 @@ namespace glz
                            if (bool(ctx.error)) [[unlikely]] {
                               return;
                            }
-                           if (skip_ws<Opts>(ctx, it, end)) {
+                           if (skip_ws<Opts.minified, Opts.null_terminated, Opts.comments>(ctx, it, end)) {
                               return;
                            }
                            if (*it != ',') {
@@ -1183,12 +1183,12 @@ namespace glz
                }
                else {
                   // Non-array access: key-only navigation
-                  if (match_invalid_end<'{', Opts>(ctx, it, end)) {
+                  if (match_invalid_end<'{', Opts.null_terminated>(ctx, it, end)) {
                      return;
                   }
 
                   while (it < end) {
-                     if (skip_ws<Opts>(ctx, it, end)) {
+                     if (skip_ws<Opts.minified, Opts.null_terminated, Opts.comments>(ctx, it, end)) {
                         return;
                      }
                      if (match<'"'>(ctx, it)) {
@@ -1196,20 +1196,20 @@ namespace glz
                      }
 
                      auto* start_pos = it;
-                     skip_string_view<Opts>(ctx, it, end);
+                     skip_string_view(ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
                      const sv k = {start_pos, size_t(it - start_pos)};
                      ++it;
 
                      if (key.size() == k.size() && memcmp(key.data(), k.data(), key.size()) == 0) {
-                        if (skip_ws<Opts>(ctx, it, end)) {
+                        if (skip_ws<Opts.minified, Opts.null_terminated, Opts.comments>(ctx, it, end)) {
                            return;
                         }
-                        if (match_invalid_end<':', Opts>(ctx, it, end)) {
+                        if (match_invalid_end<':', Opts.null_terminated>(ctx, it, end)) {
                            return;
                         }
-                        if (skip_ws<Opts>(ctx, it, end)) {
+                        if (skip_ws<Opts.minified, Opts.null_terminated, Opts.comments>(ctx, it, end)) {
                            return;
                         }
 
@@ -1223,7 +1223,7 @@ namespace glz
                         if (bool(ctx.error)) [[unlikely]] {
                            return;
                         }
-                        if (skip_ws<Opts>(ctx, it, end)) {
+                        if (skip_ws<Opts.minified, Opts.null_terminated, Opts.comments>(ctx, it, end)) {
                            return;
                         }
                         if (*it != ',') {

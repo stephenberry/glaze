@@ -72,7 +72,7 @@ namespace glz
       // validate this, even though this memory will not affect Glaze.
       if constexpr (check_validate_trailing_whitespace(Opts)) {
          if (it < end) {
-            skip_ws<Opts>(ctx, it, end);
+            skip_ws<Opts.minified, Opts.null_terminated, Opts.comments>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]] {
                goto finish;
             }

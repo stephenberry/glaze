@@ -176,7 +176,7 @@ namespace glz
       template <auto Opts>
       static void op(auto& value, is_context auto&& ctx, auto&& it, auto end)
       {
-         if (match_invalid_end<'[', Opts>(ctx, it, end)) {
+         if (match_invalid_end<'[', Opts.null_terminated>(ctx, it, end)) {
             return;
          }
          std::array<Eigen::Index, 2> extents; // NOLINT
