@@ -30,7 +30,6 @@ namespace glz
       using connection_variant = std::variant<std::monostate, std::shared_ptr<websocket_connection<tcp_socket>>>;
 #endif
 
-     private:
       // Internal implementation - prevent callbacks from firing after client destruction
       // by using weak_from_this() pattern
       struct impl : std::enable_shared_from_this<impl>
@@ -95,6 +94,14 @@ namespace glz
          }
 
          asio::ip::tcp::socket& get_tcp_socket_ref()
+         {
+#ifdef GLZ_ENABLE_SSL
+            if (ssl_socket_) return ssl_socket_->lowest_layer();
+#endif
+            return *tcp_socket_;
+         }
+
+         const asio::ip::tcp::socket& get_tcp_socket_ref() const
          {
 #ifdef GLZ_ENABLE_SSL
             if (ssl_socket_) return ssl_socket_->lowest_layer();
@@ -356,6 +363,7 @@ namespace glz
          }
       };
 
+     private:
       std::shared_ptr<impl> impl_;
 
      public:
@@ -395,6 +403,9 @@ namespace glz
 
       std::shared_ptr<asio::io_context>& context() { return impl_->ctx; }
 
+      asio::ip::tcp::socket& socket() { return impl_->get_tcp_socket_ref(); }
+      const asio::ip::tcp::socket& socket() const { return impl_->get_tcp_socket_ref(); }
+
       void run() { impl_->ctx->run(); }
 
       void connect(std::string_view url_str) { impl_->connect(url_str); }
@@ -404,5 +415,8 @@ namespace glz
       void send_binary(std::string_view msg) { impl_->send_binary(msg); }
 
       void close() { impl_->close_connection(); }
+
+      impl& internal() { return *impl_; }
+      const impl& internal() const { return *impl_; }
    };
 }
