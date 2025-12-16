@@ -55,7 +55,7 @@ namespace glz
       else {
          using namespace glz::detail;
 
-         skip_ws<Opts.minified, Opts.null_terminated, Opts.comments>(ctx, it, end);
+         skip_ws<Opts>(ctx, it, end);
 
          result_t ret;
 
@@ -70,7 +70,7 @@ namespace glz
                case '{': {
                   ++it;
                   while (true) {
-                     if (skip_ws<Opts.minified, Opts.null_terminated, Opts.comments>(ctx, it, end)) {
+                     if (skip_ws<Opts>(ctx, it, end)) {
                         return;
                      }
                      if (match<'"'>(ctx, it)) {
@@ -85,13 +85,13 @@ namespace glz
                      ++it;
 
                      if (key.size() == k.size() && comparitor<key>(k.data())) {
-                        if (skip_ws<Opts.minified, Opts.null_terminated, Opts.comments>(ctx, it, end)) {
+                        if (skip_ws<Opts>(ctx, it, end)) {
                            return;
                         }
                         if (match_invalid_end<':', Opts.null_terminated>(ctx, it, end)) {
                            return;
                         }
-                        if (skip_ws<Opts.minified, Opts.null_terminated, Opts.comments>(ctx, it, end)) {
+                        if (skip_ws<Opts>(ctx, it, end)) {
                            return;
                         }
 
@@ -130,7 +130,7 @@ namespace glz
                         ++it;
                      });
 
-                     if (skip_ws<Opts.minified, Opts.null_terminated, Opts.comments>(ctx, it, end)) {
+                     if (skip_ws<Opts>(ctx, it, end)) {
                         return;
                      }
 
@@ -152,7 +152,7 @@ namespace glz
                }
 
                while (it < end) {
-                  if (skip_ws<Opts.minified, Opts.null_terminated, Opts.comments>(ctx, it, end)) {
+                  if (skip_ws<Opts>(ctx, it, end)) {
                      return;
                   }
                   if (match<'"'>(ctx, it)) {
@@ -167,13 +167,13 @@ namespace glz
                   ++it;
 
                   if (key.size() == k.size() && comparitor<key>(k.data())) {
-                     if (skip_ws<Opts.minified, Opts.null_terminated, Opts.comments>(ctx, it, end)) {
+                     if (skip_ws<Opts>(ctx, it, end)) {
                         return;
                      }
                      if (match_invalid_end<':', Opts.null_terminated>(ctx, it, end)) {
                         return;
                      }
-                     if (skip_ws<Opts.minified, Opts.null_terminated, Opts.comments>(ctx, it, end)) {
+                     if (skip_ws<Opts>(ctx, it, end)) {
                         return;
                      }
 

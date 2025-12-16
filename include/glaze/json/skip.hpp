@@ -43,7 +43,7 @@ namespace glz
                return;
             }
          }
-         if (skip_ws<Opts.minified, Opts.null_terminated, Opts.comments>(ctx, it, end)) {
+         if (skip_ws<Opts>(ctx, it, end)) {
             return;
          }
          if (*it == '}') {
@@ -64,22 +64,22 @@ namespace glz
                ctx.error = error_code::syntax_error;
                return;
             }
-            skip_string<check_is_padded(Opts), check_opening_handled(Opts), check_validate_skipped(Opts)>(ctx, it, end);
+            skip_string<Opts>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
                return;
-            if (skip_ws<Opts.minified, Opts.null_terminated, Opts.comments>(ctx, it, end)) {
+            if (skip_ws<Opts>(ctx, it, end)) {
                return;
             }
             if (match_invalid_end<':', Opts.null_terminated>(ctx, it, end)) {
                return;
             }
-            if (skip_ws<Opts.minified, Opts.null_terminated, Opts.comments>(ctx, it, end)) {
+            if (skip_ws<Opts>(ctx, it, end)) {
                return;
             }
             skip_value<JSON>::op<Opts>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
                return;
-            if (skip_ws<Opts.minified, Opts.null_terminated, Opts.comments>(ctx, it, end)) {
+            if (skip_ws<Opts>(ctx, it, end)) {
                return;
             }
             if (*it != ',') break;
@@ -90,7 +90,7 @@ namespace glz
                   return;
                }
             }
-            if (skip_ws<Opts.minified, Opts.null_terminated, Opts.comments>(ctx, it, end)) {
+            if (skip_ws<Opts>(ctx, it, end)) {
                return;
             }
          }
@@ -132,7 +132,7 @@ namespace glz
                return;
             }
          }
-         if (skip_ws<Opts.minified, Opts.null_terminated, Opts.comments>(ctx, it, end)) {
+         if (skip_ws<Opts>(ctx, it, end)) {
             return;
          }
          if (*it == ']') {
@@ -152,7 +152,7 @@ namespace glz
             skip_value<JSON>::op<Opts>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
                return;
-            if (skip_ws<Opts.minified, Opts.null_terminated, Opts.comments>(ctx, it, end)) {
+            if (skip_ws<Opts>(ctx, it, end)) {
                return;
             }
             if (*it != ',') break;
@@ -163,7 +163,7 @@ namespace glz
                   return;
                }
             }
-            if (skip_ws<Opts.minified, Opts.null_terminated, Opts.comments>(ctx, it, end)) {
+            if (skip_ws<Opts>(ctx, it, end)) {
                return;
             }
          }
@@ -204,7 +204,7 @@ namespace glz
 
       if constexpr (not check_validate_skipped(Opts)) {
          if constexpr (not check_ws_handled(Opts)) {
-            if (skip_ws<Opts.minified, Opts.null_terminated, Opts.comments>(ctx, it, end)) {
+            if (skip_ws<Opts>(ctx, it, end)) {
                return;
             }
          }
@@ -235,7 +235,7 @@ namespace glz
                   return;
                break;
             case '"':
-               skip_string<check_is_padded(Opts), check_opening_handled(Opts), check_validate_skipped(Opts)>(ctx, it, end);
+               skip_string<Opts>(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
                   return;
                break;
@@ -263,7 +263,7 @@ namespace glz
       }
       else {
          if constexpr (not check_ws_handled(Opts)) {
-            if (skip_ws<Opts.minified, Opts.null_terminated, Opts.comments>(ctx, it, end)) {
+            if (skip_ws<Opts>(ctx, it, end)) {
                return;
             }
          }
@@ -277,7 +277,7 @@ namespace glz
             break;
          }
          case '"': {
-            skip_string<check_is_padded(Opts), check_opening_handled(Opts), check_validate_skipped(Opts)>(ctx, it, end);
+            skip_string<Opts>(ctx, it, end);
             break;
          }
          case 'n': {
@@ -313,7 +313,7 @@ namespace glz
       using namespace glz::detail;
 
       if constexpr (not check_ws_handled(Opts)) {
-         if (skip_ws<Opts.minified, Opts.null_terminated, Opts.comments>(ctx, it, end)) {
+         if (skip_ws<Opts>(ctx, it, end)) {
             return;
          }
       }
@@ -327,7 +327,7 @@ namespace glz
          break;
       }
       case '"': {
-         skip_string<check_is_padded(Opts), check_opening_handled(Opts), check_validate_skipped(Opts)>(ctx, it, end);
+         skip_string<Opts>(ctx, it, end);
          break;
       }
       case '/': {

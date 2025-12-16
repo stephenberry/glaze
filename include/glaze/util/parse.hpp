@@ -369,15 +369,6 @@ namespace glz
       return false;
    }
 
-   // Deprecated: use match_invalid_end<C, Opts.null_terminated> instead
-   template <char C, auto Opts>
-      requires(not std::same_as<std::decay_t<decltype(Opts)>, bool>)
-   [[deprecated("Use match_invalid_end<C, Opts.null_terminated> instead")]]
-   GLZ_ALWAYS_INLINE bool match_invalid_end(is_context auto& ctx, auto&& it, auto end) noexcept
-   {
-      return match_invalid_end<C, Opts.null_terminated>(ctx, it, end);
-   }
-
    template <char C>
    GLZ_ALWAYS_INLINE bool match(is_context auto& ctx, auto&& it) noexcept
    {
@@ -500,15 +491,38 @@ namespace glz
 
 namespace glz
 {
+   // Options struct for skip_ws - reduces template instantiations
+   struct ws_opts
+   {
+      bool minified;
+      bool null_terminated;
+      bool comments;
+
+      // Convert from any opts-like type
+      template <typename T>
+      constexpr ws_opts(const T& opts) noexcept
+         : minified{opts.minified}
+         , null_terminated{opts.null_terminated}
+         , comments{opts.comments}
+      {}
+
+      // Direct construction - all values required
+      constexpr ws_opts(bool minified_, bool null_terminated_, bool comments_) noexcept
+         : minified{minified_}
+         , null_terminated{null_terminated_}
+         , comments{comments_}
+      {}
+   };
+
    // skip whitespace
-   template <bool Minified, bool NullTerminated, bool Comments>
+   template <ws_opts Opts>
    GLZ_ALWAYS_INLINE bool skip_ws(is_context auto&& ctx, auto&& it, auto end) noexcept
    {
       using namespace glz::detail;
 
-      if constexpr (not Minified) {
-         if constexpr (NullTerminated) {
-            if constexpr (Comments) {
+      if constexpr (not Opts.minified) {
+         if constexpr (Opts.null_terminated) {
+            if constexpr (Opts.comments) {
                while (whitespace_comment_table[uint8_t(*it)]) {
                   if (*it == '/') [[unlikely]] {
                      skip_comment(ctx, it, end);
@@ -528,7 +542,7 @@ namespace glz
             }
          }
          else {
-            if constexpr (Comments) {
+            if constexpr (Opts.comments) {
                while (it < end && whitespace_comment_table[uint8_t(*it)]) {
                   if (*it == '/') [[unlikely]] {
                      skip_comment(ctx, it, end);
@@ -558,14 +572,6 @@ namespace glz
       }
 
       return false;
-   }
-
-   // Deprecated: use skip_ws<Opts.minified, Opts.null_terminated, Opts.comments> instead
-   template <auto Opts>
-   [[deprecated("Use skip_ws<Opts.minified, Opts.null_terminated, Opts.comments> instead")]]
-   GLZ_ALWAYS_INLINE bool skip_ws(is_context auto&& ctx, auto&& it, auto end) noexcept
-   {
-      return skip_ws<Opts.minified, Opts.null_terminated, Opts.comments>(ctx, it, end);
    }
 
    GLZ_ALWAYS_INLINE void skip_matching_ws(const auto* ws, auto&& it, uint64_t length) noexcept
@@ -703,23 +709,38 @@ namespace glz
       ctx.error = error_code::expected_quote;
    }
 
-   // Deprecated: use skip_string_view without template parameter instead
-   template <auto Opts>
-   [[deprecated("Use skip_string_view (without template parameter) instead")]]
-   GLZ_ALWAYS_INLINE void skip_string_view(is_context auto&& ctx, auto&& it, auto end) noexcept
+   // Options struct for skip_string - reduces template instantiations
+   struct skip_string_opts
    {
-      skip_string_view(ctx, it, end);
-   }
+      bool padded;
+      bool opening_handled;
+      bool validate_skipped;
 
-   template <bool Padded, bool OpeningHandled, bool ValidateSkipped>
-      requires(Padded)
+      // Convert from any opts-like type
+      template <typename T>
+      constexpr skip_string_opts(const T& opts) noexcept
+         : padded{check_is_padded(opts)}
+         , opening_handled{check_opening_handled(opts)}
+         , validate_skipped{check_validate_skipped(opts)}
+      {}
+
+      // Direct construction - all values required
+      constexpr skip_string_opts(bool padded_, bool opening_handled_, bool validate_skipped_) noexcept
+         : padded{padded_}
+         , opening_handled{opening_handled_}
+         , validate_skipped{validate_skipped_}
+      {}
+   };
+
+   template <skip_string_opts Opts>
+      requires(Opts.padded)
    GLZ_ALWAYS_INLINE void skip_string(is_context auto&& ctx, auto&& it, auto end) noexcept
    {
-      if constexpr (not OpeningHandled) {
+      if constexpr (not Opts.opening_handled) {
          ++it;
       }
 
-      if constexpr (ValidateSkipped) {
+      if constexpr (Opts.validate_skipped) {
          while (true) {
             uint64_t swar{};
             std::memcpy(&swar, it, 8);
@@ -801,15 +822,15 @@ namespace glz
       }
    }
 
-   template <bool Padded, bool OpeningHandled, bool ValidateSkipped>
-      requires(not Padded)
+   template <skip_string_opts Opts>
+      requires(not Opts.padded)
    GLZ_ALWAYS_INLINE void skip_string(is_context auto&& ctx, auto&& it, auto end) noexcept
    {
-      if constexpr (not OpeningHandled) {
+      if constexpr (not Opts.opening_handled) {
          ++it;
       }
 
-      if constexpr (ValidateSkipped) {
+      if constexpr (Opts.validate_skipped) {
          while (true) {
             if ((*it & 0b11100000) == 0) [[unlikely]] {
                ctx.error = error_code::syntax_error;
@@ -871,7 +892,7 @@ namespace glz
 
             switch (*it) {
             case '"': {
-               skip_string<Padded, opening_not_handled, skip_validation>(ctx, it, end);
+               skip_string<skip_string_opts{Padded, opening_not_handled, skip_validation}>(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]] {
                   return;
                }
@@ -922,7 +943,7 @@ namespace glz
 
             switch (*it) {
             case '"': {
-               skip_string<Padded, opening_not_handled, skip_validation>(ctx, it, end);
+               skip_string<skip_string_opts{Padded, opening_not_handled, skip_validation}>(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]] {
                   return;
                }
@@ -980,7 +1001,7 @@ namespace glz
 
             switch (*it) {
             case '"': {
-               skip_string<Padded, opening_not_handled, skip_validation>(ctx, it, end);
+               skip_string<skip_string_opts{Padded, opening_not_handled, skip_validation}>(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]] {
                   return;
                }
@@ -1014,7 +1035,7 @@ namespace glz
       while (it < end) {
          switch (*it) {
          case '"': {
-            skip_string<Padded, opening_not_handled, skip_validation>(ctx, it, end);
+            skip_string<skip_string_opts{Padded, opening_not_handled, skip_validation}>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]] {
                return;
             }
@@ -1067,7 +1088,7 @@ namespace glz
 
             switch (*it) {
             case '"': {
-               skip_string<Padded, opening_not_handled, skip_validation>(ctx, it, end);
+               skip_string<skip_string_opts{Padded, opening_not_handled, skip_validation}>(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]] {
                   return;
                }
@@ -1108,7 +1129,7 @@ namespace glz
       while (it < end) {
          switch (*it) {
          case '"': {
-            skip_string<Padded, opening_not_handled, skip_validation>(ctx, it, end);
+            skip_string<skip_string_opts{Padded, opening_not_handled, skip_validation}>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]] {
                return;
             }
