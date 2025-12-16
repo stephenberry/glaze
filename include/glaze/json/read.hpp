@@ -171,7 +171,7 @@ namespace glz
       if (skip_ws<Opts>(ctx, it, end)) {
          return true;
       }
-      if (match_invalid_end<':', Opts.null_terminated>(ctx, it, end)) {
+      if (match_invalid_end<':', Opts>(ctx, it, end)) {
          return true;
       }
       if (skip_ws<Opts>(ctx, it, end)) {
@@ -231,7 +231,7 @@ namespace glz
          if (skip_ws<Opts>(ctx, it, end)) {
             return;
          }
-         if (match_invalid_end<':', Opts.null_terminated>(ctx, it, end)) {
+         if (match_invalid_end<':', Opts>(ctx, it, end)) {
             return;
          }
          if (skip_ws<Opts>(ctx, it, end)) {
@@ -423,7 +423,7 @@ namespace glz
       template <auto Opts>
       static void op(auto&& value, is_context auto&& ctx, auto&& it, auto end) noexcept
       {
-         if (match_invalid_end<'"', Opts.null_terminated>(ctx, it, end)) {
+         if (match_invalid_end<'"', Opts>(ctx, it, end)) {
             return;
          }
 
@@ -504,7 +504,7 @@ namespace glz
                return;
             }
          }
-         if (match_invalid_end<'[', Opts.null_terminated>(ctx, it, end)) {
+         if (match_invalid_end<'[', Opts>(ctx, it, end)) {
             return;
          }
          if constexpr (not Opts.null_terminated) {
@@ -521,7 +521,7 @@ namespace glz
             return;
          }
 
-         if (match_invalid_end<',', Opts.null_terminated>(ctx, it, end)) {
+         if (match_invalid_end<',', Opts>(ctx, it, end)) {
             return;
          }
 
@@ -576,7 +576,7 @@ namespace glz
             if (skip_ws<Opts>(ctx, it, end)) {
                return;
             }
-            if (match_invalid_end<'"', Opts.null_terminated>(ctx, it, end)) {
+            if (match_invalid_end<'"', Opts>(ctx, it, end)) {
                return;
             }
          }
@@ -671,7 +671,7 @@ namespace glz
             if (skip_ws<Opts>(ctx, it, end)) {
                return;
             }
-            if (match_invalid_end<'"', Opts.null_terminated>(ctx, it, end)) {
+            if (match_invalid_end<'"', Opts>(ctx, it, end)) {
                return;
             }
          }
@@ -770,7 +770,7 @@ namespace glz
       {
          if constexpr (Opts.number) {
             auto start = it;
-            skip_number<check_validate_skipped(Opts)>(ctx, it, end);
+            skip_number<Opts>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]] {
                return;
             }
@@ -784,7 +784,7 @@ namespace glz
                   }
                }
 
-               if (match_invalid_end<'"', Opts.null_terminated>(ctx, it, end)) {
+               if (match_invalid_end<'"', Opts>(ctx, it, end)) {
                   return;
                }
             }
@@ -905,7 +905,7 @@ namespace glz
       {
          if constexpr (Opts.number) {
             auto start = it;
-            skip_number<check_validate_skipped(Opts)>(ctx, it, end);
+            skip_number<Opts>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]] {
                return;
             }
@@ -923,7 +923,7 @@ namespace glz
                   }
                }
 
-               if (match_invalid_end<'"', Opts.null_terminated>(ctx, it, end)) {
+               if (match_invalid_end<'"', Opts>(ctx, it, end)) {
                   return;
                }
             }
@@ -1179,7 +1179,7 @@ namespace glz
       {
          if constexpr (Opts.number) {
             auto start = it;
-            skip_number<check_validate_skipped(Opts)>(ctx, it, end);
+            skip_number<Opts>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]] {
                return;
             }
@@ -1193,7 +1193,7 @@ namespace glz
                   }
                }
 
-               if (match_invalid_end<'"', Opts.null_terminated>(ctx, it, end)) {
+               if (match_invalid_end<'"', Opts>(ctx, it, end)) {
                   return;
                }
             }
@@ -1314,7 +1314,7 @@ namespace glz
       {
          if constexpr (Opts.number) {
             auto start = it;
-            skip_number<check_validate_skipped(Opts)>(ctx, it, end);
+            skip_number<Opts>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]] {
                return;
             }
@@ -1332,7 +1332,7 @@ namespace glz
                   }
                }
 
-               if (match_invalid_end<'"', Opts.null_terminated>(ctx, it, end)) {
+               if (match_invalid_end<'"', Opts>(ctx, it, end)) {
                   return;
                }
             }
@@ -1591,7 +1591,7 @@ namespace glz
                }
             }
 
-            if (match_invalid_end<'"', Opts.null_terminated>(ctx, it, end)) {
+            if (match_invalid_end<'"', Opts>(ctx, it, end)) {
                return;
             }
          }
@@ -1659,7 +1659,7 @@ namespace glz
                }
             }
 
-            if (match_invalid_end<'"', Opts.null_terminated>(ctx, it, end)) {
+            if (match_invalid_end<'"', Opts>(ctx, it, end)) {
                return;
             }
          }
@@ -1814,7 +1814,7 @@ namespace glz
                return;
             }
          }
-         if (match_invalid_end<'"', Opts.null_terminated>(ctx, it, end)) {
+         if (match_invalid_end<'"', Opts>(ctx, it, end)) {
             return;
          }
          skip_string_view(ctx, it, end);
@@ -1843,7 +1843,7 @@ namespace glz
             match<"null", Opts>(ctx, it, end);
          }
          else if (is_digit(uint8_t(*it))) {
-            skip_number<check_validate_skipped(Opts)>(ctx, it, end);
+            skip_number<Opts>(ctx, it, end);
          }
          else {
             skip_value<JSON>::op<Opts>(ctx, it, end);
@@ -1880,7 +1880,7 @@ namespace glz
             }
          }
 
-         if (match_invalid_end<'[', Opts.null_terminated>(ctx, it, end)) {
+         if (match_invalid_end<'[', Opts>(ctx, it, end)) {
             return;
          }
          if constexpr (not Opts.null_terminated) {
@@ -1916,7 +1916,7 @@ namespace glz
                ++it;
                return;
             }
-            if (match_invalid_end<',', Opts.null_terminated>(ctx, it, end)) {
+            if (match_invalid_end<',', Opts>(ctx, it, end)) {
                return;
             }
             if (skip_ws<Opts>(ctx, it, end)) {
@@ -1941,7 +1941,7 @@ namespace glz
             }
          }
 
-         if (match_invalid_end<'[', Opts.null_terminated>(ctx, it, end)) {
+         if (match_invalid_end<'[', Opts>(ctx, it, end)) {
             return;
          }
          if constexpr (not Opts.null_terminated) {
@@ -2085,7 +2085,7 @@ namespace glz
                   return;
                }
             }
-            if (match_invalid_end<'{', Opts.null_terminated>(ctx, it, end)) {
+            if (match_invalid_end<'{', Opts>(ctx, it, end)) {
                return;
             }
             if constexpr (not Opts.null_terminated) {
@@ -2218,13 +2218,13 @@ namespace glz
          }
          case '{':
             ++it;
-            skip_until_closed<check_is_padded(Opts), Opts.comments, '{', '}'>(ctx, it, end);
+            skip_until_closed<Opts, '{', '}'>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
                return {};
             break;
          case '[':
             ++it;
-            skip_until_closed<check_is_padded(Opts), Opts.comments, '[', ']'>(ctx, it, end);
+            skip_until_closed<Opts, '[', ']'>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
                return {};
             break;
@@ -2263,7 +2263,7 @@ namespace glz
             }
          }
 
-         if (match_invalid_end<'[', Opts.null_terminated>(ctx, it, end)) {
+         if (match_invalid_end<'[', Opts>(ctx, it, end)) {
             return;
          }
          if constexpr (not Opts.null_terminated) {
@@ -2283,7 +2283,7 @@ namespace glz
                return;
             }
             if (i < n - 1) {
-               if (match_invalid_end<',', Opts.null_terminated>(ctx, it, end)) {
+               if (match_invalid_end<',', Opts>(ctx, it, end)) {
                   return;
                }
             }
@@ -2318,7 +2318,7 @@ namespace glz
             }
          }
 
-         if (match_invalid_end<'[', Opts.null_terminated>(ctx, it, end)) {
+         if (match_invalid_end<'[', Opts>(ctx, it, end)) {
             return;
          }
          if constexpr (not Opts.null_terminated) {
@@ -2339,7 +2339,7 @@ namespace glz
                return;
             }
             if constexpr (I != 0) {
-               if (match_invalid_end<',', Opts.null_terminated>(ctx, it, end)) {
+               if (match_invalid_end<',', Opts>(ctx, it, end)) {
                   return;
                }
                if (skip_ws<Opts>(ctx, it, end)) {
@@ -2398,7 +2398,7 @@ namespace glz
             }
          }
 
-         if (match_invalid_end<'[', Opts.null_terminated>(ctx, it, end)) {
+         if (match_invalid_end<'[', Opts>(ctx, it, end)) {
             return;
          }
          if constexpr (not Opts.null_terminated) {
@@ -2443,7 +2443,7 @@ namespace glz
                }
                return;
             }
-            if (match_invalid_end<',', Opts.null_terminated>(ctx, it, end)) {
+            if (match_invalid_end<',', Opts>(ctx, it, end)) {
                return;
             }
          }
@@ -2508,7 +2508,7 @@ namespace glz
                   return;
                }
             }
-            if (match_invalid_end<'{', Opts.null_terminated>(ctx, it, end)) {
+            if (match_invalid_end<'{', Opts>(ctx, it, end)) {
                return;
             }
             if constexpr (not Opts.null_terminated) {
@@ -2609,7 +2609,7 @@ namespace glz
                   return;
                }
             }
-            if (match_invalid_end<'{', Opts.null_terminated>(ctx, it, end)) {
+            if (match_invalid_end<'{', Opts>(ctx, it, end)) {
                return;
             }
             if constexpr (not Opts.null_terminated) {
@@ -2771,7 +2771,7 @@ namespace glz
                   first = false;
                }
                else {
-                  if (match_invalid_end<',', Opts.null_terminated>(ctx, it, end)) {
+                  if (match_invalid_end<',', Opts>(ctx, it, end)) {
                      return;
                   }
                   if constexpr (not Opts.null_terminated) {
@@ -2800,7 +2800,7 @@ namespace glz
                      static_assert(false_v<T>, "This should be unreachable");
                   }
                   else {
-                     if (match_invalid_end<'"', Opts.null_terminated>(ctx, it, end)) {
+                     if (match_invalid_end<'"', Opts>(ctx, it, end)) {
                         return;
                      }
 
@@ -3262,7 +3262,7 @@ namespace glz
                   auto start = it;
                   while (*it != '}') {
                      if (it != start) {
-                        if (match_invalid_end<',', Opts.null_terminated>(ctx, it, end)) {
+                        if (match_invalid_end<',', Opts>(ctx, it, end)) {
                            return;
                         }
                      }
@@ -3270,7 +3270,7 @@ namespace glz
                      if (skip_ws<Opts>(ctx, it, end)) {
                         return;
                      }
-                     if (match_invalid_end<'"', Opts.null_terminated>(ctx, it, end)) {
+                     if (match_invalid_end<'"', Opts>(ctx, it, end)) {
                         return;
                      }
 
@@ -3280,7 +3280,7 @@ namespace glz
                         return;
                      const sv key = {key_start, size_t(it - key_start)};
 
-                     if (match_invalid_end<'"', Opts.null_terminated>(ctx, it, end)) {
+                     if (match_invalid_end<'"', Opts>(ctx, it, end)) {
                         return;
                      }
 
@@ -3842,7 +3842,7 @@ namespace glz
             }
          }
 
-         if (match_invalid_end<'[', Opts.null_terminated>(ctx, it, end)) {
+         if (match_invalid_end<'[', Opts>(ctx, it, end)) {
             return;
          }
          if constexpr (not Opts.null_terminated) {
@@ -3853,7 +3853,7 @@ namespace glz
          }
 
          // TODO Use key parsing for compiletime known keys
-         if (match_invalid_end<'"', Opts.null_terminated>(ctx, it, end)) {
+         if (match_invalid_end<'"', Opts>(ctx, it, end)) {
             return;
          }
          auto start = it;
@@ -3877,7 +3877,7 @@ namespace glz
             if (skip_ws<Opts>(ctx, it, end)) {
                return;
             }
-            if (match_invalid_end<',', Opts.null_terminated>(ctx, it, end)) {
+            if (match_invalid_end<',', Opts>(ctx, it, end)) {
                return;
             }
             if (value.index() != type_index) emplace_runtime_variant(value, type_index);
@@ -3948,7 +3948,7 @@ namespace glz
                   if (skip_ws<Opts>(ctx, it, end)) {
                      return;
                   }
-                  if (match_invalid_end<':', Opts.null_terminated>(ctx, it, end)) {
+                  if (match_invalid_end<':', Opts>(ctx, it, end)) {
                      return;
                   }
                   // read in unexpected value

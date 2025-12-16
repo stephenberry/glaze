@@ -30,7 +30,7 @@ namespace glz
                return;
             }
          }
-         skip_until_closed<check_is_padded(Opts), Opts.comments, '{', '}'>(ctx, it, end);
+         skip_until_closed<Opts, '{', '}'>(ctx, it, end);
       }
       else {
          if constexpr (not Opts.null_terminated) {
@@ -70,7 +70,7 @@ namespace glz
             if (skip_ws<Opts>(ctx, it, end)) {
                return;
             }
-            if (match_invalid_end<':', Opts.null_terminated>(ctx, it, end)) {
+            if (match_invalid_end<':', Opts>(ctx, it, end)) {
                return;
             }
             if (skip_ws<Opts>(ctx, it, end)) {
@@ -119,7 +119,7 @@ namespace glz
                return;
             }
          }
-         skip_until_closed<check_is_padded(Opts), Opts.comments, '[', ']'>(ctx, it, end);
+         skip_until_closed<Opts, '[', ']'>(ctx, it, end);
       }
       else {
          if constexpr (not Opts.null_terminated) {
@@ -218,7 +218,7 @@ namespace glz
                      return;
                   }
                }
-               skip_until_closed<check_is_padded(Opts), Opts.comments, '{', '}'>(ctx, it, end);
+               skip_until_closed<Opts, '{', '}'>(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
                   return;
                break;
@@ -230,7 +230,7 @@ namespace glz
                      return;
                   }
                }
-               skip_until_closed<check_is_padded(Opts), Opts.comments, '[', ']'>(ctx, it, end);
+               skip_until_closed<Opts, '[', ']'>(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
                   return;
                break;
@@ -300,7 +300,7 @@ namespace glz
             break;
          }
          default: {
-            skip_number<check_validate_skipped(Opts)>(ctx, it, end);
+            skip_number<Opts>(ctx, it, end);
          }
          }
       }
@@ -356,7 +356,7 @@ namespace glz
          break;
       }
       default: {
-         skip_number<check_validate_skipped(Opts)>(ctx, it, end);
+         skip_number<Opts>(ctx, it, end);
       }
       }
    }

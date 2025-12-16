@@ -125,7 +125,7 @@ namespace glz
             if (skip_ws<Opts>(ctx, it, end)) {
                return;
             }
-            if (match_invalid_end<'{', Opts.null_terminated>(ctx, it, end)) {
+            if (match_invalid_end<'{', Opts>(ctx, it, end)) {
                return;
             }
          }
@@ -156,7 +156,7 @@ namespace glz
             if (skip_ws<Opts>(ctx, it, end)) {
                return;
             }
-            if (match_invalid_end<':', Opts.null_terminated>(ctx, it, end)) {
+            if (match_invalid_end<':', Opts>(ctx, it, end)) {
                return;
             }
             if (skip_ws<Opts>(ctx, it, end)) {
@@ -169,7 +169,7 @@ namespace glz
                if (skip_ws<Opts>(ctx, it, end)) {
                   return;
                }
-               if (match_invalid_end<',', Opts.null_terminated>(ctx, it, end)) {
+               if (match_invalid_end<',', Opts>(ctx, it, end)) {
                   return;
                }
                if (skip_ws<Opts>(ctx, it, end)) {

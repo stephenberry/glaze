@@ -723,7 +723,7 @@ namespace glz
                      return;
                   }
                   // We expect the JSON at this level to be an array
-                  if (match_invalid_end<'[', Opts.null_terminated>(ctx, it, end)) {
+                  if (match_invalid_end<'[', Opts>(ctx, it, end)) {
                      return;
                   }
 
@@ -792,7 +792,7 @@ namespace glz
                }
                else {
                   // Object scenario with a key, like: key[0:5]
-                  if (match_invalid_end<'{', Opts.null_terminated>(ctx, it, end)) {
+                  if (match_invalid_end<'{', Opts>(ctx, it, end)) {
                      return;
                   }
 
@@ -815,13 +815,13 @@ namespace glz
                         if (skip_ws<Opts>(ctx, it, end)) {
                            return;
                         }
-                        if (match_invalid_end<':', Opts.null_terminated>(ctx, it, end)) {
+                        if (match_invalid_end<':', Opts>(ctx, it, end)) {
                            return;
                         }
                         if (skip_ws<Opts>(ctx, it, end)) {
                            return;
                         }
-                        if (match_invalid_end<'[', Opts.null_terminated>(ctx, it, end)) {
+                        if (match_invalid_end<'[', Opts>(ctx, it, end)) {
                            return;
                         }
 
@@ -886,7 +886,7 @@ namespace glz
             }
             else {
                // If it's not array access, we are dealing with an object key
-               if (match_invalid_end<'{', Opts.null_terminated>(ctx, it, end)) {
+               if (match_invalid_end<'{', Opts>(ctx, it, end)) {
                   return;
                }
 
@@ -909,7 +909,7 @@ namespace glz
                      if (skip_ws<Opts>(ctx, it, end)) {
                         return;
                      }
-                     if (match_invalid_end<':', Opts.null_terminated>(ctx, it, end)) {
+                     if (match_invalid_end<':', Opts>(ctx, it, end)) {
                         return;
                      }
                      if (skip_ws<Opts>(ctx, it, end)) {
@@ -1021,7 +1021,7 @@ namespace glz
                      if (skip_ws<Opts>(ctx, it, end)) {
                         return;
                      }
-                     if (match_invalid_end<'[', Opts.null_terminated>(ctx, it, end)) {
+                     if (match_invalid_end<'[', Opts>(ctx, it, end)) {
                         return;
                      }
 
@@ -1089,7 +1089,7 @@ namespace glz
                   }
                   else {
                      // Object scenario: key[...]
-                     if (match_invalid_end<'{', Opts.null_terminated>(ctx, it, end)) {
+                     if (match_invalid_end<'{', Opts>(ctx, it, end)) {
                         return;
                      }
 
@@ -1112,13 +1112,13 @@ namespace glz
                            if (skip_ws<Opts>(ctx, it, end)) {
                               return;
                            }
-                           if (match_invalid_end<':', Opts.null_terminated>(ctx, it, end)) {
+                           if (match_invalid_end<':', Opts>(ctx, it, end)) {
                               return;
                            }
                            if (skip_ws<Opts>(ctx, it, end)) {
                               return;
                            }
-                           if (match_invalid_end<'[', Opts.null_terminated>(ctx, it, end)) {
+                           if (match_invalid_end<'[', Opts>(ctx, it, end)) {
                               return;
                            }
 
@@ -1183,7 +1183,7 @@ namespace glz
                }
                else {
                   // Non-array access: key-only navigation
-                  if (match_invalid_end<'{', Opts.null_terminated>(ctx, it, end)) {
+                  if (match_invalid_end<'{', Opts>(ctx, it, end)) {
                      return;
                   }
 
@@ -1206,7 +1206,7 @@ namespace glz
                         if (skip_ws<Opts>(ctx, it, end)) {
                            return;
                         }
-                        if (match_invalid_end<':', Opts.null_terminated>(ctx, it, end)) {
+                        if (match_invalid_end<':', Opts>(ctx, it, end)) {
                            return;
                         }
                         if (skip_ws<Opts>(ctx, it, end)) {
