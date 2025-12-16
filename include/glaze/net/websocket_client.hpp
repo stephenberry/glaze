@@ -30,7 +30,6 @@ namespace glz
       using connection_variant = std::variant<std::monostate, std::shared_ptr<websocket_connection<tcp_socket>>>;
 #endif
 
-     private:
       // Internal implementation - prevent callbacks from firing after client destruction
       // by using weak_from_this() pattern
       struct impl : std::enable_shared_from_this<impl>
@@ -356,6 +355,7 @@ namespace glz
          }
       };
 
+     private:
       std::shared_ptr<impl> impl_;
 
      public:
@@ -404,5 +404,8 @@ namespace glz
       void send_binary(std::string_view msg) { impl_->send_binary(msg); }
 
       void close() { impl_->close_connection(); }
+
+      impl& internal() { return *impl_; }
+      const impl& internal() const { return *impl_; }
    };
 }
