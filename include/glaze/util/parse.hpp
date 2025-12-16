@@ -716,9 +716,9 @@ namespace glz
       bool opening_handled;
       bool validate_skipped;
 
-      // Convert from any opts-like type
+      // Convert from any opts-like type (consteval because check_* functions are consteval)
       template <typename T>
-      constexpr skip_string_opts(const T& opts) noexcept
+      consteval skip_string_opts(const T& opts) noexcept
          : padded{check_is_padded(opts)}
          , opening_handled{check_opening_handled(opts)}
          , validate_skipped{check_validate_skipped(opts)}
