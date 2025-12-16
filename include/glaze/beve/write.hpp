@@ -48,13 +48,14 @@ namespace glz
 
       if constexpr (is_volatile) {
          V temp = value;
-         if constexpr (std::endian::native == std::endian::big) {
+         if constexpr (std::endian::native == std::endian::big && sizeof(V) > 1) {
             byteswap_le(temp);
          }
          std::memcpy(&b[ix], &temp, n);
       }
       else {
-         if constexpr (std::endian::native == std::endian::big && (std::integral<V> || std::floating_point<V>)) {
+         if constexpr (std::endian::native == std::endian::big &&
+                       (std::integral<V> || std::floating_point<V> || std::is_enum_v<V>) && sizeof(V) > 1) {
             V temp = value;
             byteswap_le(temp);
             std::memcpy(&b[ix], &temp, n);

@@ -220,7 +220,7 @@ namespace glz
                      }
                      using I = std::decay_t<decltype(i)>;
                      std::memcpy(&i, it, sizeof(I));
-                     if constexpr (std::endian::native == std::endian::big) {
+                     if constexpr (std::endian::native == std::endian::big && sizeof(I) > 1) {
                         byteswap_le(i);
                      }
                      value = static_cast<V>(i);
@@ -305,14 +305,14 @@ namespace glz
          if constexpr (is_volatile) {
             V temp;
             std::memcpy(&temp, it, sizeof(V));
-            if constexpr (std::endian::native == std::endian::big) {
+            if constexpr (std::endian::native == std::endian::big && sizeof(V) > 1) {
                byteswap_le(temp);
             }
             value = temp;
          }
          else {
             std::memcpy(&value, it, sizeof(V));
-            if constexpr (std::endian::native == std::endian::big) {
+            if constexpr (std::endian::native == std::endian::big && sizeof(V) > 1) {
                byteswap_le(value);
             }
          }
@@ -1037,11 +1037,15 @@ namespace glz
             }
 
             if constexpr (contiguous<T>) {
-               if constexpr (std::endian::native == std::endian::big && sizeof(V) > 1) {
-                  // On big endian, read and swap each element
+               if constexpr (std::endian::native == std::endian::big && sizeof(X) > 1) {
+                  // On big endian, read and swap each complex element's components
                   for (size_t i = 0; i < n; ++i) {
                      std::memcpy(&value[i], it, sizeof(V));
-                     byteswap_le(value[i]);
+                     X real_part = value[i].real();
+                     X imag_part = value[i].imag();
+                     byteswap_le(real_part);
+                     byteswap_le(imag_part);
+                     value[i] = V(real_part, imag_part);
                      it += sizeof(V);
                   }
                }
@@ -1054,8 +1058,12 @@ namespace glz
             else {
                for (auto&& x : value) {
                   std::memcpy(&x, it, sizeof(V));
-                  if constexpr (std::endian::native == std::endian::big) {
-                     byteswap_le(x);
+                  if constexpr (std::endian::native == std::endian::big && sizeof(X) > 1) {
+                     X real_part = x.real();
+                     X imag_part = x.imag();
+                     byteswap_le(real_part);
+                     byteswap_le(imag_part);
+                     x = V(real_part, imag_part);
                   }
                   it += sizeof(V);
                }
