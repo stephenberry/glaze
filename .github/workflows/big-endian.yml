@@ -1,0 +1,79 @@
+name: big-endian
+
+on:
+  push:
+    branches:
+      - main
+      - feature/*
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+  pull_request:
+    branches:
+      - main
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+  workflow_dispatch:
+
+jobs:
+  build-s390x:
+    runs-on: ubuntu-24.04
+    name: GCC s390x (big-endian)
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up QEMU
+      uses: docker/setup-qemu-action@v3
+      with:
+        platforms: s390x
+
+    - name: Build and test on s390x
+      run: |
+        docker run --rm -v ${{ github.workspace }}:/workspace -w /workspace \
+          --platform linux/s390x \
+          s390x/debian:bookworm \
+          /bin/bash -c "
+            set -e
+
+            echo '::group::Install dependencies'
+            apt-get update
+            apt-get install -y --no-install-recommends \
+              build-essential \
+              cmake \
+              git \
+              ca-certificates \
+              libssl-dev
+            echo '::endgroup::'
+
+            echo '::group::Verify big-endian'
+            cat > /tmp/check_endian.cpp << 'EOF'
+        #include <bit>
+        #include <iostream>
+        int main() {
+          if constexpr (std::endian::native == std::endian::big) {
+            std::cout << \"Big-endian: OK\" << std::endl;
+            return 0;
+          } else {
+            std::cout << \"ERROR: Not big-endian!\" << std::endl;
+            return 1;
+          }
+        }
+        EOF
+            g++ -std=c++20 /tmp/check_endian.cpp -o /tmp/check_endian
+            /tmp/check_endian
+            echo '::endgroup::'
+
+            echo '::group::Configure CMake'
+            cmake -B build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_STANDARD=23
+            echo '::endgroup::'
+
+            echo '::group::Build'
+            cmake --build build -j \$(nproc)
+            echo '::endgroup::'
+
+            echo '::group::Test'
+            ctest --test-dir build --output-on-failure
+            echo '::endgroup::'
+          "
