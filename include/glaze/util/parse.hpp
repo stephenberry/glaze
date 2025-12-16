@@ -339,12 +339,12 @@ namespace glz
 
       // Convert from any opts-like type
       template <typename T>
-      constexpr match_invalid_end_opts(const T& opts) noexcept
+      consteval match_invalid_end_opts(const T& opts) noexcept
          : null_terminated{opts.null_terminated}
       {}
 
       // Direct construction
-      explicit constexpr match_invalid_end_opts(bool null_terminated_) noexcept
+      explicit consteval match_invalid_end_opts(bool null_terminated_) noexcept
          : null_terminated{null_terminated_}
       {}
    };
@@ -517,14 +517,14 @@ namespace glz
 
       // Convert from any opts-like type
       template <typename T>
-      constexpr ws_opts(const T& opts) noexcept
+      consteval ws_opts(const T& opts) noexcept
          : minified{opts.minified}
          , null_terminated{opts.null_terminated}
          , comments{opts.comments}
       {}
 
       // Direct construction - all values required
-      constexpr ws_opts(bool minified_, bool null_terminated_, bool comments_) noexcept
+      consteval ws_opts(bool minified_, bool null_terminated_, bool comments_) noexcept
          : minified{minified_}
          , null_terminated{null_terminated_}
          , comments{comments_}
@@ -742,7 +742,7 @@ namespace glz
       {}
 
       // Direct construction - all values required
-      constexpr skip_string_opts(bool padded_, bool opening_handled_, bool validate_skipped_) noexcept
+      consteval skip_string_opts(bool padded_, bool opening_handled_, bool validate_skipped_) noexcept
          : padded{padded_}
          , opening_handled{opening_handled_}
          , validate_skipped{validate_skipped_}
@@ -905,7 +905,7 @@ namespace glz
       {}
 
       // Direct construction - all values required
-      constexpr skip_until_closed_opts(bool padded_, bool comments_) noexcept
+      consteval skip_until_closed_opts(bool padded_, bool comments_) noexcept
          : padded{padded_}
          , comments{comments_}
       {}
@@ -1271,7 +1271,7 @@ namespace glz
       {}
 
       // Direct construction
-      explicit constexpr skip_number_opts(bool validate_) noexcept
+      explicit consteval skip_number_opts(bool validate_) noexcept
          : validate{validate_}
       {}
    };
