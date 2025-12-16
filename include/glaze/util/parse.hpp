@@ -369,6 +369,15 @@ namespace glz
       return false;
    }
 
+   // Deprecated: use match_invalid_end<C, Opts.null_terminated> instead
+   template <char C, auto Opts>
+      requires(not std::same_as<std::decay_t<decltype(Opts)>, bool>)
+   [[deprecated("Use match_invalid_end<C, Opts.null_terminated> instead")]]
+   GLZ_ALWAYS_INLINE bool match_invalid_end(is_context auto& ctx, auto&& it, auto end) noexcept
+   {
+      return match_invalid_end<C, Opts.null_terminated>(ctx, it, end);
+   }
+
    template <char C>
    GLZ_ALWAYS_INLINE bool match(is_context auto& ctx, auto&& it) noexcept
    {
@@ -551,6 +560,14 @@ namespace glz
       return false;
    }
 
+   // Deprecated: use skip_ws<Opts.minified, Opts.null_terminated, Opts.comments> instead
+   template <auto Opts>
+   [[deprecated("Use skip_ws<Opts.minified, Opts.null_terminated, Opts.comments> instead")]]
+   GLZ_ALWAYS_INLINE bool skip_ws(is_context auto&& ctx, auto&& it, auto end) noexcept
+   {
+      return skip_ws<Opts.minified, Opts.null_terminated, Opts.comments>(ctx, it, end);
+   }
+
    GLZ_ALWAYS_INLINE void skip_matching_ws(const auto* ws, auto&& it, uint64_t length) noexcept
    {
       if (length > 7) {
@@ -684,6 +701,14 @@ namespace glz
       }
 
       ctx.error = error_code::expected_quote;
+   }
+
+   // Deprecated: use skip_string_view without template parameter instead
+   template <auto Opts>
+   [[deprecated("Use skip_string_view (without template parameter) instead")]]
+   GLZ_ALWAYS_INLINE void skip_string_view(is_context auto&& ctx, auto&& it, auto end) noexcept
+   {
+      skip_string_view(ctx, it, end);
    }
 
    template <bool Padded, bool OpeningHandled, bool ValidateSkipped>
