@@ -832,6 +832,9 @@ namespace glz
       requires(Padded && not Comments)
    GLZ_ALWAYS_INLINE void skip_until_closed(is_context auto&& ctx, auto&& it, auto end) noexcept
    {
+      static constexpr bool opening_not_handled = false;
+      static constexpr bool skip_validation = false;
+
       size_t depth = Depth;
 
       while (it < end) [[likely]] {
@@ -843,7 +846,7 @@ namespace glz
 
             switch (*it) {
             case '"': {
-               skip_string<true, false, false>(ctx, it, end);
+               skip_string<Padded, opening_not_handled, skip_validation>(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]] {
                   return;
                }
@@ -880,6 +883,9 @@ namespace glz
       requires(Padded && Comments)
    GLZ_ALWAYS_INLINE void skip_until_closed(is_context auto&& ctx, auto&& it, auto end) noexcept
    {
+      static constexpr bool opening_not_handled = false;
+      static constexpr bool skip_validation = false;
+
       size_t depth = Depth;
 
       while (it < end) [[likely]] {
@@ -891,7 +897,7 @@ namespace glz
 
             switch (*it) {
             case '"': {
-               skip_string<true, false, false>(ctx, it, end);
+               skip_string<Padded, opening_not_handled, skip_validation>(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]] {
                   return;
                }
@@ -935,6 +941,9 @@ namespace glz
       requires(not Padded && not Comments)
    GLZ_ALWAYS_INLINE void skip_until_closed(is_context auto&& ctx, auto&& it, auto end) noexcept
    {
+      static constexpr bool opening_not_handled = false;
+      static constexpr bool skip_validation = false;
+
       size_t depth = Depth;
 
       for (const auto fin = end - 7; it < fin;) {
@@ -946,7 +955,7 @@ namespace glz
 
             switch (*it) {
             case '"': {
-               skip_string<false, false, false>(ctx, it, end);
+               skip_string<Padded, opening_not_handled, skip_validation>(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]] {
                   return;
                }
@@ -980,7 +989,7 @@ namespace glz
       while (it < end) {
          switch (*it) {
          case '"': {
-            skip_string<false, false, false>(ctx, it, end);
+            skip_string<Padded, opening_not_handled, skip_validation>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]] {
                return;
             }
@@ -1019,6 +1028,9 @@ namespace glz
       requires(not Padded && Comments)
    GLZ_ALWAYS_INLINE void skip_until_closed(is_context auto&& ctx, auto&& it, auto end) noexcept
    {
+      static constexpr bool opening_not_handled = false;
+      static constexpr bool skip_validation = false;
+
       size_t depth = Depth;
 
       for (const auto fin = end - 7; it < fin;) {
@@ -1030,7 +1042,7 @@ namespace glz
 
             switch (*it) {
             case '"': {
-               skip_string<false, false, false>(ctx, it, end);
+               skip_string<Padded, opening_not_handled, skip_validation>(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]] {
                   return;
                }
@@ -1071,7 +1083,7 @@ namespace glz
       while (it < end) {
          switch (*it) {
          case '"': {
-            skip_string<false, false, false>(ctx, it, end);
+            skip_string<Padded, opening_not_handled, skip_validation>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]] {
                return;
             }
