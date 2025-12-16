@@ -78,7 +78,7 @@ namespace glz
                      }
 
                      auto* start = it;
-                     skip_string_view<Opts>(ctx, it, end);
+                     skip_string_view(ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
                      const sv k = {start, size_t(it - start)};
@@ -160,7 +160,7 @@ namespace glz
                   }
 
                   auto* start = it;
-                  skip_string_view<Opts>(ctx, it, end);
+                  skip_string_view(ctx, it, end);
                   if (bool(ctx.error)) [[unlikely]]
                      return;
                   const sv k = {start, size_t(it - start)};

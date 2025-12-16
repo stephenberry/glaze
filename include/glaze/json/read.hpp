@@ -191,7 +191,7 @@ namespace glz
       }
       else {
          auto* start = it;
-         skip_string_view<Opts>(ctx, it, end);
+         skip_string_view(ctx, it, end);
          if (bool(ctx.error)) [[unlikely]]
             return;
          const sv key = {start, size_t(it - start)};
@@ -356,7 +356,7 @@ namespace glz
             else {
                // we need to search until we find the ending quote of the key
                auto start = it;
-               skip_string_view<Opts>(ctx, it, end);
+               skip_string_view(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
                   return;
                const sv key = {start, size_t(it - start)};
@@ -889,7 +889,7 @@ namespace glz
             else {
                // raw_string
                auto start = it;
-               skip_string_view<Opts>(ctx, it, end);
+               skip_string_view(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
                   return;
 
@@ -1157,7 +1157,7 @@ namespace glz
             else {
                // raw_string
                auto start = it;
-               skip_string_view<Opts>(ctx, it, end);
+               skip_string_view(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
                   return;
 
@@ -1298,7 +1298,7 @@ namespace glz
             else {
                // raw_string
                auto start = it;
-               skip_string_view<Opts>(ctx, it, end);
+               skip_string_view(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
                   return;
 
@@ -1566,7 +1566,7 @@ namespace glz
             else {
                // raw_string
                auto start = it;
-               skip_string_view<Opts>(ctx, it, end);
+               skip_string_view(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
                   return;
 
@@ -1597,7 +1597,7 @@ namespace glz
          }
 
          auto start = it;
-         skip_string_view<Opts>(ctx, it, end);
+         skip_string_view(ctx, it, end);
          if (bool(ctx.error)) [[unlikely]]
             return;
 
@@ -1817,7 +1817,7 @@ namespace glz
          if (match_invalid_end<'"', Opts>(ctx, it, end)) {
             return;
          }
-         skip_string_view<Opts>(ctx, it, end);
+         skip_string_view(ctx, it, end);
          if (bool(ctx.error)) [[unlikely]]
             return;
          if (match<'"'>(ctx, it)) {
@@ -2640,7 +2640,7 @@ namespace glz
                   }
 
                   const auto start = it;
-                  skip_string_view<Opts>(ctx, it, end);
+                  skip_string_view(ctx, it, end);
                   if (bool(ctx.error)) [[unlikely]]
                      return;
                   const sv key{start, size_t(it - start)};
@@ -2810,7 +2810,7 @@ namespace glz
                      // handled by the user.
 
                      const auto start = it;
-                     skip_string_view<Opts>(ctx, it, end);
+                     skip_string_view(ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
                      const sv key{start, size_t(it - start)};
@@ -2857,7 +2857,7 @@ namespace glz
                      // We only need to do this if the tag is not part of the keys
 
                      const auto start = it;
-                     skip_string_view<Opts>(ctx, it, end);
+                     skip_string_view(ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
                      const sv key{start, size_t(it - start)};
@@ -3275,7 +3275,7 @@ namespace glz
                      }
 
                      auto* key_start = it;
-                     skip_string_view<Opts>(ctx, it, end);
+                     skip_string_view(ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
                      const sv key = {key_start, size_t(it - key_start)};
@@ -3857,7 +3857,7 @@ namespace glz
             return;
          }
          auto start = it;
-         skip_string_view<Opts>(ctx, it, end);
+         skip_string_view(ctx, it, end);
          if (bool(ctx.error)) [[unlikely]]
             return;
          sv type_id = {start, size_t(it - start)};

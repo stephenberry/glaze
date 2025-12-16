@@ -332,8 +332,25 @@ namespace glz
       return skip_code_point(code_point) > 0;
    }
 
+   // Options struct for match_invalid_end - reduces template instantiations
+   struct match_invalid_end_opts
+   {
+      bool null_terminated;
+
+      // Convert from any opts-like type
+      template <typename T>
+      consteval match_invalid_end_opts(const T& opts) noexcept
+         : null_terminated{opts.null_terminated}
+      {}
+
+      // Direct construction
+      explicit consteval match_invalid_end_opts(bool null_terminated_) noexcept
+         : null_terminated{null_terminated_}
+      {}
+   };
+
    // Checks for a character and validates that we are not at the end (considered an error)
-   template <char C, auto Opts>
+   template <char C, match_invalid_end_opts Opts>
    GLZ_ALWAYS_INLINE bool match_invalid_end(is_context auto& ctx, auto&& it, auto end) noexcept
    {
       if (*it != C) [[unlikely]] {
@@ -491,13 +508,36 @@ namespace glz
 
 namespace glz
 {
+   // Options struct for skip_ws - reduces template instantiations
+   struct ws_opts
+   {
+      bool minified;
+      bool null_terminated;
+      bool comments;
+
+      // Convert from any opts-like type
+      template <typename T>
+      consteval ws_opts(const T& opts) noexcept
+         : minified{opts.minified}
+         , null_terminated{opts.null_terminated}
+         , comments{opts.comments}
+      {}
+
+      // Direct construction - all values required
+      consteval ws_opts(bool minified_, bool null_terminated_, bool comments_) noexcept
+         : minified{minified_}
+         , null_terminated{null_terminated_}
+         , comments{comments_}
+      {}
+   };
+
    // skip whitespace
-   template <auto Opts>
+   template <ws_opts Opts>
    GLZ_ALWAYS_INLINE bool skip_ws(is_context auto&& ctx, auto&& it, auto end) noexcept
    {
       using namespace glz::detail;
 
-      if constexpr (!Opts.minified) {
+      if constexpr (not Opts.minified) {
          if constexpr (Opts.null_terminated) {
             if constexpr (Opts.comments) {
                while (whitespace_comment_table[uint8_t(*it)]) {
@@ -663,7 +703,6 @@ namespace glz
       ctx.error = error_code::expected_quote;
    }
 
-   template <auto Opts>
    GLZ_ALWAYS_INLINE void skip_string_view(is_context auto&& ctx, auto&& it, auto end) noexcept
    {
       while (it < end) [[likely]] {
@@ -687,15 +726,38 @@ namespace glz
       ctx.error = error_code::expected_quote;
    }
 
-   template <auto Opts>
-      requires(check_is_padded(Opts))
+   // Options struct for skip_string - reduces template instantiations
+   struct skip_string_opts
+   {
+      bool padded;
+      bool opening_handled;
+      bool validate_skipped;
+
+      // Convert from any opts-like type (consteval because check_* functions are consteval)
+      template <typename T>
+      consteval skip_string_opts(const T& opts) noexcept
+         : padded{check_is_padded(opts)}
+         , opening_handled{check_opening_handled(opts)}
+         , validate_skipped{check_validate_skipped(opts)}
+      {}
+
+      // Direct construction - all values required
+      consteval skip_string_opts(bool padded_, bool opening_handled_, bool validate_skipped_) noexcept
+         : padded{padded_}
+         , opening_handled{opening_handled_}
+         , validate_skipped{validate_skipped_}
+      {}
+   };
+
+   template <skip_string_opts Opts>
+      requires(Opts.padded)
    GLZ_ALWAYS_INLINE void skip_string(is_context auto&& ctx, auto&& it, auto end) noexcept
    {
-      if constexpr (!check_opening_handled(Opts)) {
+      if constexpr (not Opts.opening_handled) {
          ++it;
       }
 
-      if constexpr (check_validate_skipped(Opts)) {
+      if constexpr (Opts.validate_skipped) {
          while (true) {
             uint64_t swar{};
             std::memcpy(&swar, it, 8);
@@ -769,7 +831,7 @@ namespace glz
          ctx.error = error_code::unexpected_end;
       }
       else {
-         skip_string_view<Opts>(ctx, it, end);
+         skip_string_view(ctx, it, end);
          if (bool(ctx.error)) [[unlikely]] {
             return;
          }
@@ -777,15 +839,15 @@ namespace glz
       }
    }
 
-   template <auto Opts>
-      requires(not check_is_padded(Opts))
+   template <skip_string_opts Opts>
+      requires(not Opts.padded)
    GLZ_ALWAYS_INLINE void skip_string(is_context auto&& ctx, auto&& it, auto end) noexcept
    {
-      if constexpr (!check_opening_handled(Opts)) {
+      if constexpr (not Opts.opening_handled) {
          ++it;
       }
 
-      if constexpr (check_validate_skipped(Opts)) {
+      if constexpr (Opts.validate_skipped) {
          while (true) {
             if ((*it & 0b11100000) == 0) [[unlikely]] {
                ctx.error = error_code::syntax_error;
@@ -821,7 +883,7 @@ namespace glz
          }
       }
       else {
-         skip_string_view<Opts>(ctx, it, end);
+         skip_string_view(ctx, it, end);
          if (bool(ctx.error)) [[unlikely]] {
             return;
          }
@@ -829,10 +891,33 @@ namespace glz
       }
    }
 
-   template <auto Opts, char open, char close, size_t Depth = 1>
-      requires(check_is_padded(Opts) && not bool(Opts.comments))
+   // Options struct for skip_until_closed - reduces template instantiations
+   struct skip_until_closed_opts
+   {
+      bool padded;
+      bool comments;
+
+      // Convert from any opts-like type (consteval because check_is_padded is consteval)
+      template <typename T>
+      consteval skip_until_closed_opts(const T& opts) noexcept
+         : padded{check_is_padded(opts)}
+         , comments{opts.comments}
+      {}
+
+      // Direct construction - all values required
+      consteval skip_until_closed_opts(bool padded_, bool comments_) noexcept
+         : padded{padded_}
+         , comments{comments_}
+      {}
+   };
+
+   template <skip_until_closed_opts Opts, char open, char close, size_t Depth = 1>
+      requires(Opts.padded && not Opts.comments)
    GLZ_ALWAYS_INLINE void skip_until_closed(is_context auto&& ctx, auto&& it, auto end) noexcept
    {
+      static constexpr bool opening_not_handled = false;
+      static constexpr bool skip_validation = false;
+
       size_t depth = Depth;
 
       while (it < end) [[likely]] {
@@ -844,7 +929,7 @@ namespace glz
 
             switch (*it) {
             case '"': {
-               skip_string<opts{}>(ctx, it, end);
+               skip_string<skip_string_opts{Opts.padded, opening_not_handled, skip_validation}>(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]] {
                   return;
                }
@@ -877,10 +962,13 @@ namespace glz
       ctx.error = error_code::unexpected_end;
    }
 
-   template <auto Opts, char open, char close, size_t Depth = 1>
-      requires(check_is_padded(Opts) && bool(Opts.comments))
+   template <skip_until_closed_opts Opts, char open, char close, size_t Depth = 1>
+      requires(Opts.padded && Opts.comments)
    GLZ_ALWAYS_INLINE void skip_until_closed(is_context auto&& ctx, auto&& it, auto end) noexcept
    {
+      static constexpr bool opening_not_handled = false;
+      static constexpr bool skip_validation = false;
+
       size_t depth = Depth;
 
       while (it < end) [[likely]] {
@@ -892,7 +980,7 @@ namespace glz
 
             switch (*it) {
             case '"': {
-               skip_string<opts{}>(ctx, it, end);
+               skip_string<skip_string_opts{Opts.padded, opening_not_handled, skip_validation}>(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]] {
                   return;
                }
@@ -932,10 +1020,13 @@ namespace glz
       ctx.error = error_code::unexpected_end;
    }
 
-   template <auto Opts, char open, char close, size_t Depth = 1>
-      requires(!check_is_padded(Opts) && not bool(Opts.comments))
+   template <skip_until_closed_opts Opts, char open, char close, size_t Depth = 1>
+      requires(not Opts.padded && not Opts.comments)
    GLZ_ALWAYS_INLINE void skip_until_closed(is_context auto&& ctx, auto&& it, auto end) noexcept
    {
+      static constexpr bool opening_not_handled = false;
+      static constexpr bool skip_validation = false;
+
       size_t depth = Depth;
 
       for (const auto fin = end - 7; it < fin;) {
@@ -947,7 +1038,7 @@ namespace glz
 
             switch (*it) {
             case '"': {
-               skip_string<opts{}>(ctx, it, end);
+               skip_string<skip_string_opts{Opts.padded, opening_not_handled, skip_validation}>(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]] {
                   return;
                }
@@ -981,7 +1072,7 @@ namespace glz
       while (it < end) {
          switch (*it) {
          case '"': {
-            skip_string<opts{}>(ctx, it, end);
+            skip_string<skip_string_opts{Opts.padded, opening_not_handled, skip_validation}>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]] {
                return;
             }
@@ -1016,10 +1107,13 @@ namespace glz
       ctx.error = error_code::unexpected_end;
    }
 
-   template <auto Opts, char open, char close, size_t Depth = 1>
-      requires(!check_is_padded(Opts) && bool(Opts.comments))
+   template <skip_until_closed_opts Opts, char open, char close, size_t Depth = 1>
+      requires(not Opts.padded && Opts.comments)
    GLZ_ALWAYS_INLINE void skip_until_closed(is_context auto&& ctx, auto&& it, auto end) noexcept
    {
+      static constexpr bool opening_not_handled = false;
+      static constexpr bool skip_validation = false;
+
       size_t depth = Depth;
 
       for (const auto fin = end - 7; it < fin;) {
@@ -1031,7 +1125,7 @@ namespace glz
 
             switch (*it) {
             case '"': {
-               skip_string<opts{}>(ctx, it, end);
+               skip_string<skip_string_opts{Opts.padded, opening_not_handled, skip_validation}>(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]] {
                   return;
                }
@@ -1072,7 +1166,7 @@ namespace glz
       while (it < end) {
          switch (*it) {
          case '"': {
-            skip_string<opts{}>(ctx, it, end);
+            skip_string<skip_string_opts{Opts.padded, opening_not_handled, skip_validation}>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]] {
                return;
             }
@@ -1165,10 +1259,27 @@ namespace glz
       }
    }
 
-   template <auto Opts>
+   // Options struct for skip_number - reduces template instantiations
+   struct skip_number_opts
+   {
+      bool validate;
+
+      // Convert from any opts-like type (consteval because check_validate_skipped is consteval)
+      template <typename T>
+      consteval skip_number_opts(const T& opts) noexcept
+         : validate{check_validate_skipped(opts)}
+      {}
+
+      // Direct construction
+      explicit consteval skip_number_opts(bool validate_) noexcept
+         : validate{validate_}
+      {}
+   };
+
+   template <skip_number_opts Opts>
    GLZ_ALWAYS_INLINE void skip_number(is_context auto&& ctx, auto&& it, auto end) noexcept
    {
-      if constexpr (!check_validate_skipped(Opts)) {
+      if constexpr (not Opts.validate) {
          while (numeric_table[uint8_t(*it)]) {
             ++it;
          }
