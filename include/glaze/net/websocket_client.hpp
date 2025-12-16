@@ -101,6 +101,14 @@ namespace glz
             return *tcp_socket_;
          }
 
+         const asio::ip::tcp::socket& get_tcp_socket_ref() const
+         {
+#ifdef GLZ_ENABLE_SSL
+            if (ssl_socket_) return ssl_socket_->lowest_layer();
+#endif
+            return *tcp_socket_;
+         }
+
          void connect(std::string_view url_str)
          {
             auto url_result = parse_url(url_str);
@@ -394,6 +402,9 @@ namespace glz
       void set_max_message_size(size_t size) { impl_->max_message_size = size; }
 
       std::shared_ptr<asio::io_context>& context() { return impl_->ctx; }
+
+      asio::ip::tcp::socket& socket() { return impl_->get_tcp_socket_ref(); }
+      const asio::ip::tcp::socket& socket() const { return impl_->get_tcp_socket_ref(); }
 
       void run() { impl_->ctx->run(); }
 
