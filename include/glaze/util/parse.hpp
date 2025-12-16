@@ -339,14 +339,11 @@ namespace glz
 
       // Convert from any opts-like type
       template <typename T>
-      consteval match_invalid_end_opts(const T& opts) noexcept
-         : null_terminated{opts.null_terminated}
+      consteval match_invalid_end_opts(const T& opts) noexcept : null_terminated{opts.null_terminated}
       {}
 
       // Direct construction
-      explicit consteval match_invalid_end_opts(bool null_terminated_) noexcept
-         : null_terminated{null_terminated_}
-      {}
+      explicit consteval match_invalid_end_opts(bool null_terminated_) noexcept : null_terminated{null_terminated_} {}
    };
 
    // Checks for a character and validates that we are not at the end (considered an error)
@@ -518,16 +515,12 @@ namespace glz
       // Convert from any opts-like type
       template <typename T>
       consteval ws_opts(const T& opts) noexcept
-         : minified{opts.minified}
-         , null_terminated{opts.null_terminated}
-         , comments{opts.comments}
+         : minified{opts.minified}, null_terminated{opts.null_terminated}, comments{opts.comments}
       {}
 
       // Direct construction - all values required
       consteval ws_opts(bool minified_, bool null_terminated_, bool comments_) noexcept
-         : minified{minified_}
-         , null_terminated{null_terminated_}
-         , comments{comments_}
+         : minified{minified_}, null_terminated{null_terminated_}, comments{comments_}
       {}
    };
 
@@ -736,16 +729,14 @@ namespace glz
       // Convert from any opts-like type (consteval because check_* functions are consteval)
       template <typename T>
       consteval skip_string_opts(const T& opts) noexcept
-         : padded{check_is_padded(opts)}
-         , opening_handled{check_opening_handled(opts)}
-         , validate_skipped{check_validate_skipped(opts)}
+         : padded{check_is_padded(opts)},
+           opening_handled{check_opening_handled(opts)},
+           validate_skipped{check_validate_skipped(opts)}
       {}
 
       // Direct construction - all values required
       consteval skip_string_opts(bool padded_, bool opening_handled_, bool validate_skipped_) noexcept
-         : padded{padded_}
-         , opening_handled{opening_handled_}
-         , validate_skipped{validate_skipped_}
+         : padded{padded_}, opening_handled{opening_handled_}, validate_skipped{validate_skipped_}
       {}
    };
 
@@ -899,16 +890,11 @@ namespace glz
 
       // Convert from any opts-like type (consteval because check_is_padded is consteval)
       template <typename T>
-      consteval skip_until_closed_opts(const T& opts) noexcept
-         : padded{check_is_padded(opts)}
-         , comments{opts.comments}
+      consteval skip_until_closed_opts(const T& opts) noexcept : padded{check_is_padded(opts)}, comments{opts.comments}
       {}
 
       // Direct construction - all values required
-      consteval skip_until_closed_opts(bool padded_, bool comments_) noexcept
-         : padded{padded_}
-         , comments{comments_}
-      {}
+      consteval skip_until_closed_opts(bool padded_, bool comments_) noexcept : padded{padded_}, comments{comments_} {}
    };
 
    template <skip_until_closed_opts Opts, char open, char close, size_t Depth = 1>
@@ -1266,14 +1252,11 @@ namespace glz
 
       // Convert from any opts-like type (consteval because check_validate_skipped is consteval)
       template <typename T>
-      consteval skip_number_opts(const T& opts) noexcept
-         : validate{check_validate_skipped(opts)}
+      consteval skip_number_opts(const T& opts) noexcept : validate{check_validate_skipped(opts)}
       {}
 
       // Direct construction
-      explicit consteval skip_number_opts(bool validate_) noexcept
-         : validate{validate_}
-      {}
+      explicit consteval skip_number_opts(bool validate_) noexcept : validate{validate_} {}
    };
 
    template <skip_number_opts Opts>
