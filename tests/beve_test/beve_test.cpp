@@ -3187,11 +3187,7 @@ suite delimited_beve_tests = [] {
    };
 
    "read_beve_delimited vector of objects"_test = [] {
-      std::vector<simple_obj> input{
-         {1, "first"},
-         {2, "second"},
-         {3, "third"}
-      };
+      std::vector<simple_obj> input{{1, "first"}, {2, "second"}, {3, "third"}};
       std::string buffer{};
       auto ec = glz::write_beve_delimited(input, buffer);
       expect(!ec);
