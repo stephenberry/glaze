@@ -106,6 +106,21 @@ suite chrono_system_clock_tests = [] {
       expect(json.value().ends_with("Z\""));
    };
 
+   "system_clock_time_point_raw"_test = [] {
+      // Test that opts.raw removes quotes from timestamp output
+      using namespace std::chrono;
+      sys_time<seconds> tp;
+      expect(!glz::read_json(tp, "\"2024-12-13T15:30:45Z\""));
+
+      // With raw = true, should not have quotes
+      auto raw_json = glz::write<glz::opts{.raw = true}>(tp);
+      expect(raw_json.value() == "2024-12-13T15:30:45Z") << raw_json.value();
+
+      // Without raw (default), should have quotes
+      auto json = glz::write_json(tp);
+      expect(json.value() == "\"2024-12-13T15:30:45Z\"") << json.value();
+   };
+
    "system_clock_roundtrip"_test = [] {
       // Use a known timestamp to avoid precision issues
       auto original = std::chrono::time_point_cast<std::chrono::seconds>(std::chrono::system_clock::now());

@@ -2101,7 +2101,9 @@ namespace glz
             ix += N;
          };
 
-         b[ix++] = '"';
+         if constexpr (not Opts.raw) {
+            b[ix++] = '"';
+         }
          write_digits.template operator()<4>(static_cast<uint64_t>(yr));
          b[ix++] = '-';
          write_digits.template operator()<2>(mo);
@@ -2130,7 +2132,9 @@ namespace glz
          }
 
          b[ix++] = 'Z';
-         b[ix++] = '"';
+         if constexpr (not Opts.raw) {
+            b[ix++] = '"';
+         }
       }
    };
 
