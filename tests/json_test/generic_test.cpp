@@ -928,7 +928,7 @@ suite issue_1807_tests = [] {
       glz::generic num_json{};
       expect(!glz::read_json(num_json, "42.5"));
 
-      int num;
+      int num{};
       ec = glz::convert_from_generic(num, num_json);
       expect(!ec) << "Should convert number to int";
       expect(num == 42) << "Number should be 42";
@@ -984,7 +984,7 @@ suite optimized_read_json_tests = [] {
       glz::generic num_json{};
       expect(!glz::read_json(num_json, "42.5"));
 
-      int num;
+      int num{};
       expect(!glz::read_json(num, num_json));
       expect(num == 42) << "Should convert double to int";
 

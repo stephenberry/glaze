@@ -750,8 +750,11 @@ namespace glz
 
       if constexpr (Opts.validate_skipped) {
          while (true) {
-            uint64_t swar{};
+            uint64_t swar;
             std::memcpy(&swar, it, 8);
+            if constexpr (std::endian::native == std::endian::big) {
+               swar = std::byteswap(swar);
+            }
 
             constexpr uint64_t lo7_mask = repeat_byte8(0b01111111);
             const uint64_t lo7 = swar & lo7_mask;
@@ -909,6 +912,9 @@ namespace glz
       while (it < end) [[likely]] {
          uint64_t chunk;
          std::memcpy(&chunk, it, 8);
+         if constexpr (std::endian::native == std::endian::big) {
+            chunk = std::byteswap(chunk);
+         }
          const uint64_t test = has_quote(chunk) | has_char<open>(chunk) | has_char<close>(chunk);
          if (test) {
             it += (countr_zero(test) >> 3);
@@ -960,6 +966,9 @@ namespace glz
       while (it < end) [[likely]] {
          uint64_t chunk;
          std::memcpy(&chunk, it, 8);
+         if constexpr (std::endian::native == std::endian::big) {
+            chunk = std::byteswap(chunk);
+         }
          const uint64_t test = has_quote(chunk) | has_char<'/'>(chunk) | has_char<open>(chunk) | has_char<close>(chunk);
          if (test) {
             it += (countr_zero(test) >> 3);
@@ -1018,6 +1027,9 @@ namespace glz
       for (const auto fin = end - 7; it < fin;) {
          uint64_t chunk;
          std::memcpy(&chunk, it, 8);
+         if constexpr (std::endian::native == std::endian::big) {
+            chunk = std::byteswap(chunk);
+         }
          const uint64_t test = has_quote(chunk) | has_char<open>(chunk) | has_char<close>(chunk);
          if (test) {
             it += (countr_zero(test) >> 3);
@@ -1105,6 +1117,9 @@ namespace glz
       for (const auto fin = end - 7; it < fin;) {
          uint64_t chunk;
          std::memcpy(&chunk, it, 8);
+         if constexpr (std::endian::native == std::endian::big) {
+            chunk = std::byteswap(chunk);
+         }
          const uint64_t test = has_quote(chunk) | has_char<'/'>(chunk) | has_char<open>(chunk) | has_char<close>(chunk);
          if (test) {
             it += (countr_zero(test) >> 3);

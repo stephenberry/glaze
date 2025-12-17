@@ -613,6 +613,9 @@ namespace glz
             static constexpr uint32_t u_true = 0b01100101'01110101'01110010'01110100;
             static constexpr uint32_t u_fals = 0b01110011'01101100'01100001'01100110;
             std::memcpy(&c, it, 4);
+            if constexpr (std::endian::native == std::endian::big) {
+               c = std::byteswap(c);
+            }
             it += 4;
             if (c == u_true) {
                value = true;
@@ -801,6 +804,9 @@ namespace glz
 
                   uint64_t chunk;
                   std::memcpy(&chunk, it, 8);
+                  if constexpr (std::endian::native == std::endian::big) {
+                     chunk = std::byteswap(chunk);
+                  }
                   const uint64_t test_chars = has_quote(chunk);
                   if (test_chars) {
                      it += (countr_zero(test_chars) >> 3);
@@ -832,6 +838,9 @@ namespace glz
                   std::memcpy(p, start, 8);
                   uint64_t swar;
                   std::memcpy(&swar, p, 8);
+                  if constexpr (std::endian::native == std::endian::big) {
+                     swar = std::byteswap(swar);
+                  }
 
                   constexpr uint64_t lo7_mask = repeat_byte8(0b01111111);
                   const uint64_t lo7 = swar & lo7_mask;
@@ -941,6 +950,9 @@ namespace glz
 
                      uint64_t chunk;
                      std::memcpy(&chunk, it, 8);
+                     if constexpr (std::endian::native == std::endian::big) {
+                        chunk = std::byteswap(chunk);
+                     }
                      const uint64_t test_chars = has_quote(chunk);
                      if (test_chars) {
                         it += (countr_zero(test_chars) >> 3);
@@ -997,6 +1009,9 @@ namespace glz
                         std::memcpy(p, start, 8);
                         uint64_t swar;
                         std::memcpy(&swar, p, 8);
+                        if constexpr (std::endian::native == std::endian::big) {
+                           swar = std::byteswap(swar);
+                        }
 
                         constexpr uint64_t lo7_mask = repeat_byte8(0b01111111);
                         const uint64_t lo7 = swar & lo7_mask;
@@ -1210,6 +1225,9 @@ namespace glz
 
                   uint64_t chunk;
                   std::memcpy(&chunk, it, 8);
+                  if constexpr (std::endian::native == std::endian::big) {
+                     chunk = std::byteswap(chunk);
+                  }
                   const uint64_t test_chars = has_quote(chunk);
                   if (test_chars) {
                      it += (countr_zero(test_chars) >> 3);
@@ -1241,6 +1259,9 @@ namespace glz
                   std::memcpy(p, start, 8);
                   uint64_t swar;
                   std::memcpy(&swar, p, 8);
+                  if constexpr (std::endian::native == std::endian::big) {
+                     swar = std::byteswap(swar);
+                  }
 
                   constexpr uint64_t lo7_mask = repeat_byte8(0b01111111);
                   const uint64_t lo7 = swar & lo7_mask;
@@ -1350,6 +1371,9 @@ namespace glz
 
                      uint64_t chunk;
                      std::memcpy(&chunk, it, 8);
+                     if constexpr (std::endian::native == std::endian::big) {
+                        chunk = std::byteswap(chunk);
+                     }
                      const uint64_t test_chars = has_quote(chunk);
                      if (test_chars) {
                         it += (countr_zero(test_chars) >> 3);
@@ -1406,6 +1430,9 @@ namespace glz
                         std::memcpy(p, start, 8);
                         uint64_t swar;
                         std::memcpy(&swar, p, 8);
+                        if constexpr (std::endian::native == std::endian::big) {
+                           swar = std::byteswap(swar);
+                        }
 
                         constexpr uint64_t lo7_mask = repeat_byte8(0b01111111);
                         const uint64_t lo7 = swar & lo7_mask;

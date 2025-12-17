@@ -9,6 +9,7 @@
 #include <variant>
 
 #include "glaze/core/chrono.hpp"
+#include "glaze/util/parse.hpp"
 
 #if !defined(GLZ_DISABLE_SIMD) && (defined(__x86_64__) || defined(_M_X64))
 #if defined(_MSC_VER)
@@ -697,6 +698,9 @@ namespace glz
                         std::memcpy(data, c, 8);
                         uint64_t swar;
                         std::memcpy(&swar, c, 8);
+                        if constexpr (std::endian::native == std::endian::big) {
+                           swar = std::byteswap(swar);
+                        }
 
                         constexpr uint64_t lo7_mask = repeat_byte8(0b01111111);
                         const uint64_t lo7 = swar & lo7_mask;
@@ -1340,8 +1344,14 @@ namespace glz
                b.resize(2 * k);
             }
          }
-         static constexpr uint32_t null_v = 1819047278;
-         std::memcpy(&b[ix], &null_v, 4);
+         if constexpr (std::endian::native == std::endian::big) {
+            static constexpr char null_v[] = "null";
+            std::memcpy(&b[ix], null_v, 4);
+         }
+         else {
+            static constexpr uint32_t null_v = 1819047278;
+            std::memcpy(&b[ix], &null_v, 4);
+         }
          ix += 4;
       }
    };

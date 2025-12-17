@@ -592,7 +592,7 @@ namespace glz
                   }
                   else if constexpr (std::endian::native == std::endian::big && sizeof(V) > 1) {
                      // On big endian, swap each element
-                     const auto n_elements = value.size();
+                     const auto n_elements = static_cast<size_t>(value.size());
                      for (size_t i = 0; i < n_elements; ++i) {
                         V temp = value[i];
                         byteswap_le(temp);
