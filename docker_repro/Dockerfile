@@ -1,9 +1,8 @@
 # Dockerfile for reproducing GCC 15 strict aliasing bug
 #
-# Build:   docker build -t glaze_gcc15_bug .
-# Run:     docker run --rm -it glaze_gcc15_bug
+# Build:   docker build -t glaze_issue_2115_repro .
+# Run:     docker run --rm -it glaze_issue_2115_repro
 #
-# This creates an environment with GCC 15.2.1 to reproduce the bug.
 
 FROM gentoo/stage3:latest
 
@@ -16,39 +15,34 @@ RUN emerge-webrsync && \
         dev-vcs/git \
         app-misc/jq
 
-# Clone Glaze library (v6.2.0 - known to trigger the bug)
+# Clone Glaze library (v6.2.0)
 WORKDIR /work
 RUN git clone --depth 1 --branch v6.2.0 https://github.com/stephenberry/glaze.git
 
-# Build Glaze to fetch the ut testing framework dependency
-WORKDIR /work/glaze
-RUN mkdir -p build && cd build && \
-    cmake .. -DCMAKE_CXX_COMPILER=g++ -DCMAKE_CXX_STANDARD=23 && \
-    make -j$(nproc) 2>/dev/null || true
+# Clone UT library (dependency)
+RUN git clone --depth 1 https://github.com/boost-ext/ut.git /work/ut
+
+# Set up environment variables
+ENV GLAZE_INCLUDE=/work/glaze/include
+ENV UT_INCLUDE=/work/ut/include
 
 # Create test directory
 WORKDIR /work/test
 
-# Copy the reproduction test file (will be mounted or copied in)
-# The reduced_6805.cpp file triggers the bug
+# Copy necessary files
+# Note: These files must be in the build context (folder where you run docker build)
+COPY reduced_6805.cpp test.cpp
+COPY json_test_shared_types.hpp .
 
-# Set up environment variables for easy compilation
-ENV GLAZE_INCLUDE=/work/glaze/include
-ENV UT_INCLUDE=/work/glaze/build/_deps/ut-src/include
-
-# Default command: show instructions
+# Default command: show instructions and try to reproduce
 CMD ["/bin/bash", "-c", "echo '=== GCC 15 Strict Aliasing Bug Reproduction ===' && \
-    echo '' && \
     g++ --version | head -1 && \
     echo '' && \
-    echo 'To reproduce the bug:' && \
-    echo '  1. Copy reduced_6805.cpp to /work/test/' && \
-    echo '  2. g++ -std=c++23 -O3 -I$GLAZE_INCLUDE -I$UT_INCLUDE test.cpp -o test' && \
-    echo '  3. ./test -tc=\"mod hash\"' && \
+    echo 'Compiling test case...' && \
+    g++ -std=c++23 -O3 -I$GLAZE_INCLUDE -I$UT_INCLUDE -I. test.cpp -o test_o3 && \
+    echo 'Running test (expected to FAIL)...' && \
+    ./test_o3 -tc='mod hash' || true && \
     echo '' && \
-    echo 'Expected: FAILED (bug present at -O3)' && \
-    echo '' && \
-    echo 'To verify fix:' && \
-    echo '  g++ -std=c++23 -O2 ... (should PASS)' && \
-    echo '  g++ -std=c++23 -O3 -fno-strict-aliasing ... (should PASS)' && \
-    exec /bin/bash"]
+    echo 'Compiling with -O2 (expected to PASS)...' && \
+    g++ -std=c++23 -O2 -I$GLAZE_INCLUDE -I$UT_INCLUDE -I. test.cpp -o test_o2 && \
+    ./test_o2 -tc='mod hash'"]

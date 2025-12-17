@@ -33,9 +33,23 @@ Target: x86_64-pc-linux-gnu
 
 ## Reproduction Steps
 
-### Using Docker (Recommended)
+### Using the Reproduction Script (Recommended)
 
-A Docker image is available that contains GCC 15 and all necessary dependencies.
+1. Navigate to the reproduction directory:
+   ```bash
+   cd docker_repro
+   ```
+
+2. Run the script:
+   ```bash
+   ./reproduce.sh
+   ```
+
+This will automatically build the Docker image and run the test case, showing the failure at `-O3` and success at `-O2`.
+
+### Manual Docker Steps
+
+If you prefer running commands manually:
 
 #### 1. Build the Docker Image
 
@@ -44,76 +58,13 @@ cd docker_repro
 docker build -t glaze_issue_2115_repro .
 ```
 
-#### 2. Run the Reproduction Test
+#### 2. Run the Container
 
 ```bash
-docker run --rm -it \
-  -v $(pwd)/..:/glaze_dev:ro \
-  glaze_issue_2115_repro \
-  /bin/bash -c '
-    cd /work
-
-    # Copy test file
-    cp /glaze_dev/docker_repro/reduced_6805.cpp test.cpp
-
-    # Compile with -O3 (triggers bug)
-    g++ -std=c++23 -O3 -I/work/glaze/include \
-        -I/work/glaze/build/_deps/ut-src/include \
-        test.cpp -o test_o3
-
-    echo "=== Running with -O3 (should FAIL) ==="
-    ./test_o3 -tc="mod hash"
-
-    # Compile with -O2 (no bug)
-    g++ -std=c++23 -O2 -I/work/glaze/include \
-        -I/work/glaze/build/_deps/ut-src/include \
-        test.cpp -o test_o2
-
-    echo ""
-    echo "=== Running with -O2 (should PASS) ==="
-    ./test_o2 -tc="mod hash"
-  '
+docker run --rm -it glaze_issue_2115_repro
 ```
 
-#### Expected Output
-
-```
-=== Running with -O3 (should FAIL) ===
-FAILED "mod hash" test.cpp:6799
-
-FAILED
-tests: 272 (271 passed, 1 failed, 0 compile-time)
-asserts: 17583 (17582 passed, 1 failed)
-
-=== Running with -O2 (should PASS) ===
-
-PASSED
-tests: 272 (272 passed, 0 failed, 0 compile-time)
-asserts: 17583 (17583 passed, 0 failed)
-```
-
-### Interactive Docker Session
-
-For deeper investigation:
-
-```bash
-docker run --rm -it \
-  -v $(pwd)/..:/glaze_dev:ro \
-  glaze_issue_2115_repro \
-  /bin/bash
-
-# Inside container:
-cd /work
-cp /glaze_dev/docker_repro/reduced_6805.cpp test.cpp
-
-# Set up includes
-UT_INCLUDE=/work/glaze/build/_deps/ut-src/include
-GLAZE_INCLUDE=/work/glaze/include
-
-# Compile and test
-g++ -std=c++23 -O3 -I$GLAZE_INCLUDE -I$UT_INCLUDE test.cpp -o test
-./test -tc="mod hash"
-```
+The container is configured to automatically run the reproduction test upon startup.
 
 ---
 
@@ -177,55 +128,13 @@ The `<< obj.x` forces an actual memory read for the diagnostic output, which pre
 
 ---
 
-## The Fix
-
-### Workaround Implementation
-
-```cpp
-// In glaze/core/read.hpp
-
-inline void compiler_barrier() noexcept
-{
-   std::atomic_signal_fence(std::memory_order_acq_rel);
-}
-
-// Called after parsing:
-template <auto Opts, class T>
-[[nodiscard]] error_ctx read(T& value, contiguous auto&& buffer, is_context auto&& ctx)
-{
-   // ... parsing code ...
-
-   parse<Opts.format>::template op<...>(value, ctx, it, end);
-
-   // Compiler barrier to prevent GCC 15 optimization bug
-   compiler_barrier();
-
-   // ... rest of function ...
-}
-```
-
-### Why It Works
-
-`std::atomic_signal_fence(std::memory_order_acq_rel)`:
-- Acts as a **compiler-only barrier** (no runtime overhead)
-- Forces the compiler to "forget" cached knowledge about memory state
-- Prevents the faulty alias analysis from substituting incorrect values
-- Does NOT generate any actual CPU instructions
-
-### Alternative Fixes (Not Recommended)
-
-1. **`-fno-strict-aliasing`** - Disables the optimization entirely, may impact performance
-2. **`-O2` instead of `-O3`** - Loses other beneficial optimizations
-3. **`volatile` qualifiers** - Intrusive changes to data structures
-
----
-
 ## Files Included
 
 | File | Description |
 |------|-------------|
 | `reduced_6805.cpp` | Minimal reproduction (6805 lines) |
 | `Dockerfile` | Docker image for reproduction environment |
+| `reproduce.sh` | Automated reproduction script |
 | `GCC15_STRICT_ALIASING_BUG_REPORT.md` | This document |
 
 ---
@@ -260,24 +169,54 @@ This bug affects any C++ code that:
 ## Appendix: Dockerfile
 
 ```dockerfile
-FROM gentoo/stage3
+# Dockerfile for reproducing GCC 15 strict aliasing bug
+#
+# Build:   docker build -t glaze_issue_2115_repro .
+# Run:     docker run --rm -it glaze_issue_2115_repro
+#
 
-# Install GCC 15 and dependencies
+FROM gentoo/stage3:latest
+
+# Update portage and install required packages
 RUN emerge-webrsync && \
     emerge --sync && \
-    emerge -av sys-devel/gcc:15 dev-build/cmake
+    ACCEPT_KEYWORDS="~amd64" emerge -av --quiet \
+        sys-devel/gcc \
+        dev-build/cmake \
+        dev-vcs/git \
+        app-misc/jq
 
-# Clone Glaze library (version 6.2.0)
+# Clone Glaze library (v6.2.0)
 WORKDIR /work
 RUN git clone --depth 1 --branch v6.2.0 https://github.com/stephenberry/glaze.git
 
-# Build Glaze to fetch test dependencies (ut testing framework)
-WORKDIR /work/glaze
-RUN mkdir build && cd build && \
-    cmake .. -DCMAKE_CXX_COMPILER=g++ && \
-    make -j$(nproc) || true  # May fail, but fetches dependencies
+# Clone UT library (dependency)
+RUN git clone --depth 1 https://github.com/boost-ext/ut.git /work/ut
 
-WORKDIR /work
+# Set up environment variables
+ENV GLAZE_INCLUDE=/work/glaze/include
+ENV UT_INCLUDE=/work/ut/include
+
+# Create test directory
+WORKDIR /work/test
+
+# Copy necessary files
+# Note: These files must be in the build context (folder where you run docker build)
+COPY reduced_6805.cpp test.cpp
+COPY json_test_shared_types.hpp .
+
+# Default command: show instructions and try to reproduce
+CMD ["/bin/bash", "-c", "echo '=== GCC 15 Strict Aliasing Bug Reproduction ===' && \
+    g++ --version | head -1 && \
+    echo '' && \
+    echo 'Compiling test case...' && \
+    g++ -std=c++23 -O3 -I$GLAZE_INCLUDE -I$UT_INCLUDE -I. test.cpp -o test_o3 && \
+    echo 'Running test (expected to FAIL)...' && \
+    ./test_o3 -tc='mod hash' || true && \
+    echo '' && \
+    echo 'Compiling with -O2 (expected to PASS)...' && \
+    g++ -std=c++23 -O2 -I$GLAZE_INCLUDE -I$UT_INCLUDE -I. test.cpp -o test_o2 && \
+    ./test_o2 -tc='mod hash'"]
 ```
 
 ---
