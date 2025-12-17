@@ -1038,6 +1038,241 @@ void half_precision_tests()
       uint16_t half = glz::cbor::encode_half(nan_val);
       expect(std::isnan(glz::cbor::decode_half(half)));
    };
+
+   "half_negative_zero"_test = [] {
+      double neg_zero = -0.0;
+      uint16_t half = glz::cbor::encode_half(neg_zero);
+      double decoded = glz::cbor::decode_half(half);
+      expect(decoded == 0.0);
+      expect(std::signbit(decoded)); // Should preserve negative sign
+   };
+
+   "can_encode_half_exact_values"_test = [] {
+      // Values that CAN be exactly represented in half-precision
+      expect(glz::cbor::can_encode_half(0.0));
+      expect(glz::cbor::can_encode_half(-0.0));
+      expect(glz::cbor::can_encode_half(1.0));
+      expect(glz::cbor::can_encode_half(-1.0));
+      expect(glz::cbor::can_encode_half(2.0));
+      expect(glz::cbor::can_encode_half(0.5));
+      expect(glz::cbor::can_encode_half(0.25));
+      expect(glz::cbor::can_encode_half(0.125));
+      expect(glz::cbor::can_encode_half(-0.5));
+      expect(glz::cbor::can_encode_half(100.0));
+      expect(glz::cbor::can_encode_half(-100.0));
+      expect(glz::cbor::can_encode_half(65504.0));  // Max half value
+      expect(glz::cbor::can_encode_half(-65504.0)); // Min half value
+      expect(glz::cbor::can_encode_half(1.5));
+      expect(glz::cbor::can_encode_half(1.25));
+      expect(glz::cbor::can_encode_half(1.75));
+
+      // Powers of 2 (exact in half)
+      expect(glz::cbor::can_encode_half(2.0));
+      expect(glz::cbor::can_encode_half(4.0));
+      expect(glz::cbor::can_encode_half(8.0));
+      expect(glz::cbor::can_encode_half(16.0));
+      expect(glz::cbor::can_encode_half(32.0));
+      expect(glz::cbor::can_encode_half(64.0));
+      expect(glz::cbor::can_encode_half(128.0));
+      expect(glz::cbor::can_encode_half(256.0));
+      expect(glz::cbor::can_encode_half(512.0));
+      expect(glz::cbor::can_encode_half(1024.0));
+      expect(glz::cbor::can_encode_half(2048.0));
+      expect(glz::cbor::can_encode_half(4096.0));
+
+      // Special values
+      expect(glz::cbor::can_encode_half(std::numeric_limits<double>::infinity()));
+      expect(glz::cbor::can_encode_half(-std::numeric_limits<double>::infinity()));
+      expect(glz::cbor::can_encode_half(std::numeric_limits<double>::quiet_NaN()));
+   };
+
+   "can_encode_half_inexact_values"_test = [] {
+      // Values that CANNOT be exactly represented in half-precision
+      expect(!glz::cbor::can_encode_half(0.1));  // Not exactly representable
+      expect(!glz::cbor::can_encode_half(0.3));
+      expect(!glz::cbor::can_encode_half(1.1));
+      expect(!glz::cbor::can_encode_half(3.14159));
+      expect(!glz::cbor::can_encode_half(2.71828));
+
+      // Values too large for half (> 65504)
+      expect(!glz::cbor::can_encode_half(65505.0));
+      expect(!glz::cbor::can_encode_half(100000.0));
+      expect(!glz::cbor::can_encode_half(1e10));
+
+      // Values with too much precision (more than 10 mantissa bits)
+      // Note: 1.0009765625 = 1 + 1/1024 IS exactly representable (it's 1 + 2^-10)
+      expect(!glz::cbor::can_encode_half(1.00048828125)); // 1 + 1/2048, below smallest half increment
+      expect(!glz::cbor::can_encode_half(1.0001));        // Requires more precision than half provides
+
+      // Very small values that lose precision
+      expect(!glz::cbor::can_encode_half(1e-10));
+      expect(!glz::cbor::can_encode_half(1e-20));
+   };
+
+   "can_encode_half_subnormals"_test = [] {
+      // Minimum positive normal half: 2^-14 = 6.103515625e-5
+      double min_normal = std::ldexp(1.0, -14);
+      expect(glz::cbor::can_encode_half(min_normal));
+
+      // Subnormal range in half: exponents from -15 to -24
+      // However, subnormals have reduced precision, so not all values round-trip
+      // The minimum positive subnormal (2^-24) underflows to zero in our encoder
+      double min_subnormal = std::ldexp(1.0, -24);
+      expect(!glz::cbor::can_encode_half(min_subnormal)); // Underflows to zero
+
+      // Values just below normal range that DON'T round-trip exactly
+      // due to subnormal precision loss
+      double subnormal1 = std::ldexp(1.0, -15); // 2^-15
+      expect(!glz::cbor::can_encode_half(subnormal1)); // Loses precision in subnormal encoding
+
+      // Values that are too small for half precision
+      expect(!glz::cbor::can_encode_half(1e-10));
+      expect(!glz::cbor::can_encode_half(1e-20));
+   };
+
+   "can_encode_float_exact_values"_test = [] {
+      // Values that CAN be exactly represented in single-precision
+      expect(glz::cbor::can_encode_float(0.0));
+      expect(glz::cbor::can_encode_float(-0.0));
+      expect(glz::cbor::can_encode_float(1.0));
+      expect(glz::cbor::can_encode_float(-1.0));
+      expect(glz::cbor::can_encode_float(0.5));
+      expect(glz::cbor::can_encode_float(0.25));
+      expect(glz::cbor::can_encode_float(0.125));
+      expect(glz::cbor::can_encode_float(3.14159f)); // Float literal
+      expect(glz::cbor::can_encode_float(static_cast<double>(3.14159f)));
+
+      // Large values within float range
+      expect(glz::cbor::can_encode_float(65504.0));
+      expect(glz::cbor::can_encode_float(100000.0));
+      expect(glz::cbor::can_encode_float(1e10));
+      // Note: 1e30 does NOT round-trip exactly through float
+
+      // Integers that fit in 23 mantissa bits
+      expect(glz::cbor::can_encode_float(16777216.0)); // 2^24 - exactly representable
+      expect(glz::cbor::can_encode_float(8388608.0));  // 2^23
+
+      // Special values
+      expect(glz::cbor::can_encode_float(std::numeric_limits<double>::infinity()));
+      expect(glz::cbor::can_encode_float(-std::numeric_limits<double>::infinity()));
+      expect(glz::cbor::can_encode_float(std::numeric_limits<double>::quiet_NaN()));
+   };
+
+   "can_encode_float_inexact_values"_test = [] {
+      // Values that CANNOT be exactly represented in single-precision
+      // but require double precision
+
+      // High-precision values
+      expect(!glz::cbor::can_encode_float(3.141592653589793)); // Full pi
+      expect(!glz::cbor::can_encode_float(2.718281828459045)); // Full e
+      expect(!glz::cbor::can_encode_float(1.0000000000001));   // Needs double precision
+
+      // Large integers beyond float precision
+      expect(!glz::cbor::can_encode_float(16777217.0)); // 2^24 + 1, not exactly representable
+      expect(!glz::cbor::can_encode_float(16777219.0)); // 2^24 + 3
+
+      // Very small differences from 1.0
+      expect(!glz::cbor::can_encode_float(1.0 + 1e-10));
+      expect(!glz::cbor::can_encode_float(1.0 + 1e-15));
+   };
+
+   "preferred_serialization_size"_test = [] {
+      // Test that preferred serialization produces expected byte sizes
+      std::string buffer;
+
+      // Half precision: 1 byte header + 2 bytes = 3 bytes
+      buffer.clear();
+      expect(not glz::write_cbor(1.0, buffer));
+      expect(buffer.size() == 3u) << "Expected 3 bytes for 1.0 (half), got " << buffer.size();
+
+      buffer.clear();
+      expect(not glz::write_cbor(0.0, buffer));
+      expect(buffer.size() == 3u) << "Expected 3 bytes for 0.0 (half), got " << buffer.size();
+
+      buffer.clear();
+      expect(not glz::write_cbor(0.5, buffer));
+      expect(buffer.size() == 3u) << "Expected 3 bytes for 0.5 (half), got " << buffer.size();
+
+      buffer.clear();
+      expect(not glz::write_cbor(-1.0, buffer));
+      expect(buffer.size() == 3u) << "Expected 3 bytes for -1.0 (half), got " << buffer.size();
+
+      buffer.clear();
+      expect(not glz::write_cbor(65504.0, buffer));
+      expect(buffer.size() == 3u) << "Expected 3 bytes for 65504.0 (half), got " << buffer.size();
+
+      buffer.clear();
+      double inf = std::numeric_limits<double>::infinity();
+      expect(not glz::write_cbor(inf, buffer));
+      expect(buffer.size() == 3u) << "Expected 3 bytes for infinity (half), got " << buffer.size();
+
+      // Single precision: 1 byte header + 4 bytes = 5 bytes
+      buffer.clear();
+      expect(not glz::write_cbor(65505.0, buffer)); // Just beyond half range
+      expect(buffer.size() == 5u) << "Expected 5 bytes for 65505.0 (float), got " << buffer.size();
+
+      buffer.clear();
+      expect(not glz::write_cbor(100000.0, buffer));
+      expect(buffer.size() == 5u) << "Expected 5 bytes for 100000.0 (float), got " << buffer.size();
+
+      buffer.clear();
+      expect(not glz::write_cbor(static_cast<double>(3.14159f), buffer));
+      expect(buffer.size() == 5u) << "Expected 5 bytes for 3.14159f (float), got " << buffer.size();
+
+      // Double precision: 1 byte header + 8 bytes = 9 bytes
+      buffer.clear();
+      expect(not glz::write_cbor(3.141592653589793, buffer)); // Full pi
+      expect(buffer.size() == 9u) << "Expected 9 bytes for full pi (double), got " << buffer.size();
+
+      buffer.clear();
+      expect(not glz::write_cbor(1.0000000000001, buffer));
+      expect(buffer.size() == 9u) << "Expected 9 bytes for high-precision value (double), got " << buffer.size();
+
+      buffer.clear();
+      expect(not glz::write_cbor(16777217.0, buffer)); // 2^24 + 1
+      expect(buffer.size() == 9u) << "Expected 9 bytes for 16777217.0 (double), got " << buffer.size();
+   };
+
+   "float_roundtrip_precision"_test = [] {
+      // Verify that values roundtrip correctly regardless of encoding size
+      auto test_roundtrip = [](double val) {
+         std::string buffer;
+         expect(not glz::write_cbor(val, buffer));
+         double result{};
+         expect(not glz::read_cbor(result, buffer));
+         if (std::isnan(val)) {
+            expect(std::isnan(result));
+         }
+         else {
+            expect(result == val) << "Roundtrip failed for " << val;
+         }
+      };
+
+      // Half-precision values
+      test_roundtrip(0.0);
+      test_roundtrip(-0.0);
+      test_roundtrip(1.0);
+      test_roundtrip(-1.0);
+      test_roundtrip(0.5);
+      test_roundtrip(65504.0);
+      test_roundtrip(std::numeric_limits<double>::infinity());
+      test_roundtrip(-std::numeric_limits<double>::infinity());
+      test_roundtrip(std::numeric_limits<double>::quiet_NaN());
+
+      // Single-precision values
+      test_roundtrip(65505.0);
+      test_roundtrip(100000.0);
+      test_roundtrip(1e10);
+      test_roundtrip(static_cast<double>(3.14159f));
+
+      // Double-precision values
+      test_roundtrip(3.141592653589793);
+      test_roundtrip(2.718281828459045);
+      test_roundtrip(1.0000000000001);
+      test_roundtrip(16777217.0);
+      test_roundtrip(1e100);
+      test_roundtrip(-1e100);
+   };
 }
 
 void byte_buffer_tests()

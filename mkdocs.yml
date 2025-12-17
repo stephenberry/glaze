@@ -81,6 +81,7 @@ nav:
    - TOML: toml.md
    - CSV: csv.md
    - BEVE (binary): binary.md
+   - CBOR: cbor.md
    - Stencil/Mustache: stencil-mustache.md
    - EETF: EETF/erlang-external-term-format.md
  - Serialization/Parsing:
