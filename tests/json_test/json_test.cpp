@@ -2103,7 +2103,10 @@ suite bench = [] {
       auto tstart = std::chrono::high_resolution_clock::now();
       for (size_t i{}; i < repeat; ++i) {
          buffer.clear();
-         expect(not glz::write_json(thing, buffer));
+         if (glz::write_json(thing, buffer)) {
+            expect(false) << "write_json failed";
+            break;
+         }
       }
       auto tend = std::chrono::high_resolution_clock::now();
       trace.end("write_bench");
@@ -2116,7 +2119,11 @@ suite bench = [] {
       trace.begin("read_bench");
       tstart = std::chrono::high_resolution_clock::now();
       for (size_t i{}; i < repeat; ++i) {
-         expect(glz::read_json(thing, buffer) == glz::error_code::none);
+         auto ec = glz::read_json(thing, buffer);
+         if (ec != glz::error_code::none) {
+            expect(false) << "read_json failed: " << glz::format_error(ec, buffer);
+            break;
+         }
       }
       tend = std::chrono::high_resolution_clock::now();
       trace.end("read_bench", "JSON reading benchmark");

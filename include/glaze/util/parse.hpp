@@ -148,13 +148,17 @@ namespace glz
    {
       constexpr auto& t = digit_hex_table;
       const uint8_t arr[4]{t[uint8_t(c[3])], t[uint8_t(c[2])], t[uint8_t(c[1])], t[uint8_t(c[0])]};
-      const auto chunk = std::bit_cast<uint32_t>(arr);
+      auto chunk = std::bit_cast<uint32_t>(arr);
+      // On big-endian, bit_cast produces bytes in opposite order than expected
+      // byteswap to get consistent little-endian representation
+      if constexpr (std::endian::native == std::endian::big) {
+         chunk = std::byteswap(chunk);
+      }
       // check that all hex characters are valid
       if (chunk & repeat_byte4(0b11110000u)) [[unlikely]] {
          return 0xFFFFFFFFu;
       }
 
-      // TODO: can you use std::bit_cast here?
       // now pack into first four bytes of uint32_t
       uint32_t packed{};
       packed |= (chunk & 0x0000000F);
