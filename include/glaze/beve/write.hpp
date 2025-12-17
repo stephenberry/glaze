@@ -40,31 +40,42 @@ namespace glz
    {
       using V = std::decay_t<decltype(value)>;
       constexpr auto n = sizeof(V);
-      if (const auto k = ix + n; k > b.size()) [[unlikely]] {
-         b.resize(2 * k);
-      }
 
-      constexpr auto is_volatile = std::is_volatile_v<std::remove_reference_t<decltype(value)>>;
-
-      if constexpr (is_volatile) {
-         V temp = value;
-         if constexpr (std::endian::native == std::endian::big && sizeof(V) > 1) {
-            byteswap_le(temp);
+      if constexpr (n == 1) {
+         // Optimized single-byte path: direct assignment instead of memcpy
+         if (ix == b.size()) [[unlikely]] {
+            b.resize(b.size() == 0 ? 128 : b.size() * 2);
          }
-         std::memcpy(&b[ix], &temp, n);
+         b[ix] = static_cast<std::decay_t<decltype(b[0])>>(value);
+         ++ix;
       }
       else {
-         if constexpr (std::endian::native == std::endian::big &&
-                       (std::integral<V> || std::floating_point<V> || std::is_enum_v<V>) && sizeof(V) > 1) {
+         if (const auto k = ix + n; k > b.size()) [[unlikely]] {
+            b.resize(2 * k);
+         }
+
+         constexpr auto is_volatile = std::is_volatile_v<std::remove_reference_t<decltype(value)>>;
+
+         if constexpr (is_volatile) {
             V temp = value;
-            byteswap_le(temp);
+            if constexpr (std::endian::native == std::endian::big) {
+               byteswap_le(temp);
+            }
             std::memcpy(&b[ix], &temp, n);
          }
          else {
-            std::memcpy(&b[ix], &value, n);
+            if constexpr (std::endian::native == std::endian::big &&
+                          (std::integral<V> || std::floating_point<V> || std::is_enum_v<V>)) {
+               V temp = value;
+               byteswap_le(temp);
+               std::memcpy(&b[ix], &temp, n);
+            }
+            else {
+               std::memcpy(&b[ix], &value, n);
+            }
          }
+         ix += n;
       }
-      ix += n;
    }
 
    template <uint64_t i, class... Args>

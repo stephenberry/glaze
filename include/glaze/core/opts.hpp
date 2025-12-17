@@ -15,6 +15,7 @@ namespace glz
    // User defined formats can be 65536 to 4294967296
    inline constexpr uint32_t INVALID = 0;
    inline constexpr uint32_t BEVE = 1;
+   inline constexpr uint32_t CBOR = 2; // RFC 8949 - Concise Binary Object Representation
    inline constexpr uint32_t JSON = 10;
    inline constexpr uint32_t JSON_PTR = 20;
    inline constexpr uint32_t NDJSON = 100; // new line delimited JSON
@@ -703,6 +704,14 @@ namespace glz
    {
       auto ret = Opts;
       ret.format = BEVE;
+      return ret;
+   }
+
+   template <auto Opts>
+   constexpr auto set_cbor()
+   {
+      auto ret = Opts;
+      ret.format = CBOR;
       return ret;
    }
 
