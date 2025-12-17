@@ -2065,6 +2065,9 @@ namespace glz
             }
             else {
                std::memcpy(&h, it, 2);
+               if constexpr (std::endian::native == std::endian::big) {
+                  h = std::byteswap(h);
+               }
             }
             return HashInfo.table[bitmix(h, HashInfo.seed) % bsize];
          }
@@ -2081,6 +2084,9 @@ namespace glz
             }
             else {
                std::memcpy(&h, it, 4);
+               if constexpr (std::endian::native == std::endian::big) {
+                  h = std::byteswap(h);
+               }
             }
             return HashInfo.table[bitmix(h, HashInfo.seed) % bsize];
          }
@@ -2097,6 +2103,9 @@ namespace glz
             }
             else {
                std::memcpy(&h, it, 8);
+               if constexpr (std::endian::native == std::endian::big) {
+                  h = std::byteswap(h);
+               }
             }
             return HashInfo.table[rich_bitmix(h, HashInfo.seed) % bsize];
          }
@@ -2302,6 +2311,9 @@ namespace glz
             }
             else {
                std::memcpy(&h, it, 2);
+               if constexpr (std::endian::native == std::endian::big) {
+                  h = std::byteswap(h);
+               }
             }
             return HashInfo.table[bitmix(h, HashInfo.seed) % bsize];
          }
@@ -2315,6 +2327,9 @@ namespace glz
             }
             else {
                std::memcpy(&h, it, 4);
+               if constexpr (std::endian::native == std::endian::big) {
+                  h = std::byteswap(h);
+               }
             }
             return HashInfo.table[bitmix(h, HashInfo.seed) % bsize];
          }
@@ -2328,6 +2343,9 @@ namespace glz
             }
             else {
                std::memcpy(&h, it, 8);
+               if constexpr (std::endian::native == std::endian::big) {
+                  h = std::byteswap(h);
+               }
             }
             return HashInfo.table[rich_bitmix(h, HashInfo.seed) % bsize];
          }
