@@ -79,7 +79,7 @@ jobs:
           -DCMAKE_TOOLCHAIN_FILE=toolchain-s390x.cmake \
           -DCMAKE_BUILD_TYPE=Release \
           -DCMAKE_CXX_STANDARD=23 \
-          -Dglz_ENABLE_FUZZING=OFF
+          -Dglaze_BUILD_NETWORKING_TESTS=OFF
 
     - name: Build
       run: cmake --build build -j$(nproc)
@@ -87,6 +87,4 @@ jobs:
     - name: Test
       env:
         QEMU_LD_PREFIX: /usr/s390x-linux-gnu
-      run: |
-        # Run tests via QEMU user-space emulation
-        ctest --test-dir build --output-on-failure -E '(http|websocket|asio)'
+      run: ctest --test-dir build --output-on-failure

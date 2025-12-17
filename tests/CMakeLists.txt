@@ -141,7 +141,10 @@ add_subdirectory(json_performance)
 add_subdirectory(json_reflection_test)
 add_subdirectory(json_test)
 
-add_subdirectory(networking_tests)
+option(glaze_BUILD_NETWORKING_TESTS "Build networking tests (requires OpenSSL)" ON)
+if(glaze_BUILD_NETWORKING_TESTS)
+    add_subdirectory(networking_tests)
+endif()
 
 if(glaze_EETF_FORMAT)
     add_subdirectory(eetf_test)
