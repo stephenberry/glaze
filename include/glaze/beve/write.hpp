@@ -1206,4 +1206,110 @@ namespace glz
    {
       return write_file_beve<opt_true<Opts, &opts::structs_as_arrays>>(std::forward<T>(value), file_name, buffer);
    }
+
+   // ===== Delimited BEVE support for multiple objects in one buffer =====
+
+   // Write the BEVE delimiter byte to a buffer
+   // Used to separate multiple BEVE values in a stream/buffer (like NDJSON's newline)
+   template <class Buffer>
+   void write_beve_delimiter(Buffer& buffer)
+   {
+      buffer.push_back(static_cast<typename Buffer::value_type>(tag::delimiter));
+   }
+
+   // Append a BEVE value to an existing buffer without clearing it
+   // Returns the number of bytes written via the expected value
+   template <auto Opts = opts{}, write_supported<BEVE> T, class Buffer>
+      requires output_buffer<Buffer>
+   [[nodiscard]] glz::expected<size_t, error_ctx> write_beve_append(T&& value, Buffer& buffer)
+   {
+      const size_t start_ix = buffer.size();
+
+      if constexpr (resizable<Buffer>) {
+         if (buffer.size() < start_ix + 2 * write_padding_bytes) {
+            buffer.resize(start_ix + 2 * write_padding_bytes);
+         }
+      }
+
+      context ctx{};
+      size_t ix = start_ix;
+      to<BEVE, std::remove_cvref_t<T>>::template op<set_beve<Opts>()>(std::forward<T>(value), ctx, buffer, ix);
+
+      if constexpr (resizable<Buffer>) {
+         buffer.resize(ix);
+      }
+
+      if (bool(ctx.error)) [[unlikely]] {
+         return glz::unexpected(error_ctx{ctx.error, ctx.custom_error_message});
+      }
+
+      return ix - start_ix; // bytes written
+   }
+
+   // Append a BEVE value to an existing buffer with a delimiter prefix
+   // Useful for streaming multiple values
+   template <auto Opts = opts{}, write_supported<BEVE> T, class Buffer>
+      requires output_buffer<Buffer>
+   [[nodiscard]] glz::expected<size_t, error_ctx> write_beve_append_with_delimiter(T&& value, Buffer& buffer)
+   {
+      write_beve_delimiter(buffer);
+      auto result = write_beve_append<Opts>(std::forward<T>(value), buffer);
+      if (result) {
+         return *result + 1; // +1 for delimiter
+      }
+      return result;
+   }
+
+   // Write multiple BEVE values to a buffer with delimiters between them
+   template <auto Opts = opts{}, class Container, class Buffer>
+      requires output_buffer<Buffer> && readable_array_t<Container>
+   [[nodiscard]] error_ctx write_beve_delimited(const Container& values, Buffer& buffer)
+   {
+      context ctx{};
+
+      if constexpr (resizable<Buffer>) {
+         if (buffer.size() < 2 * write_padding_bytes) {
+            buffer.resize(2 * write_padding_bytes);
+         }
+      }
+
+      size_t ix = 0;
+      bool first = true;
+
+      for (const auto& value : values) {
+         if (!first) {
+            // Write delimiter between values
+            dump_type(tag::delimiter, buffer, ix);
+         }
+         first = false;
+
+         to<BEVE, std::remove_cvref_t<decltype(value)>>::template op<set_beve<Opts>()>(value, ctx, buffer, ix);
+
+         if (bool(ctx.error)) [[unlikely]] {
+            if constexpr (resizable<Buffer>) {
+               buffer.resize(ix);
+            }
+            return {ctx.error, ctx.custom_error_message};
+         }
+      }
+
+      if constexpr (resizable<Buffer>) {
+         buffer.resize(ix);
+      }
+
+      return {};
+   }
+
+   // Write multiple BEVE values to a buffer with delimiters, returning the buffer
+   template <auto Opts = opts{}, class Container>
+      requires readable_array_t<Container>
+   [[nodiscard]] glz::expected<std::string, error_ctx> write_beve_delimited(const Container& values)
+   {
+      std::string buffer{};
+      const auto ec = write_beve_delimited<Opts>(values, buffer);
+      if (bool(ec)) [[unlikely]] {
+         return glz::unexpected(ec);
+      }
+      return buffer;
+   }
 }

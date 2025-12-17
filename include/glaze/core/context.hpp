@@ -99,7 +99,8 @@ namespace glz
       // But, since the first error always short-circuits parsing, developers are free to inject
       // their own errors in the custom_error_message.
       std::string_view custom_error_message{};
-      // INTERNAL USE:
+      // Number of bytes consumed from the buffer during parsing.
+      // Useful for reading multiple values from a single buffer (e.g., delimited BEVE/NDJSON).
       size_t location{};
       std::string_view includer_error{}; // error from a nested file includer
 

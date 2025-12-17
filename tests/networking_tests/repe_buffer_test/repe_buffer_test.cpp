@@ -203,8 +203,8 @@ suite from_buffer_tests = [] {
       std::string buffer = repe::to_buffer(original);
 
       // Corrupt magic bytes
-      buffer[8] = 0xFF;
-      buffer[9] = 0xFF;
+      buffer[8] = '\xFF';
+      buffer[9] = '\xFF';
 
       repe::message msg{};
       auto ec = repe::from_buffer(buffer, msg);
@@ -341,7 +341,7 @@ suite extract_query_tests = [] {
       repe::finalize_header(msg);
 
       std::string buffer = repe::to_buffer(msg);
-      buffer[8] = 0xFF; // Corrupt magic
+      buffer[8] = '\xFF'; // Corrupt magic
 
       auto query = repe::extract_query(buffer);
 
@@ -586,8 +586,8 @@ suite validate_header_only_tests = [] {
       repe::finalize_header(msg);
 
       std::string buffer = repe::to_buffer(msg);
-      buffer[8] = 0xFF; // Corrupt magic byte
-      buffer[9] = 0xFF;
+      buffer[8] = '\xFF'; // Corrupt magic byte
+      buffer[9] = '\xFF';
       std::span<const char> span{buffer};
 
       auto ec = repe::validate_header_only(span);
