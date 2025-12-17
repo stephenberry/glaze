@@ -117,7 +117,17 @@ namespace glz
    }();
 
    inline constexpr std::array<uint16_t, 256> char_escape_table = [] {
-      auto combine = [](const char chars[2]) -> uint16_t { return uint16_t(chars[0]) | (uint16_t(chars[1]) << 8); };
+      // Build uint16_t so that memcpy produces chars in correct order.
+      // On LE: chars[0] in low byte, chars[1] in high byte -> memcpy writes [chars[0]][chars[1]]
+      // On BE: chars[0] in high byte, chars[1] in low byte -> memcpy writes [chars[0]][chars[1]]
+      auto combine = [](const char chars[2]) -> uint16_t {
+         if constexpr (std::endian::native == std::endian::big) {
+            return (uint16_t(uint8_t(chars[0])) << 8) | uint16_t(uint8_t(chars[1]));
+         }
+         else {
+            return uint16_t(uint8_t(chars[0])) | (uint16_t(uint8_t(chars[1])) << 8);
+         }
+      };
 
       std::array<uint16_t, 256> t{};
       t['\b'] = combine(R"(\b)");
