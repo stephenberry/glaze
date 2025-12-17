@@ -7886,6 +7886,19 @@ World)");
       expect(not glz::write_json(obj, buffer));
       expect(buffer == R"({"a":"Hello\nWorld","b":"","c":""})");
    };
+
+   "raw_and_raw_string_combined"_test = [] {
+      // Test that opts.raw works correctly when combined with opts.raw_string
+      std::string value = R"(Hello\nWorld)";
+
+      // With raw_string only: should have quotes
+      auto json_raw_string = glz::write<glz::opts{.raw_string = true}>(value);
+      expect(json_raw_string.value() == R"("Hello\nWorld")") << json_raw_string.value();
+
+      // With raw and raw_string: should not have quotes
+      auto json_raw_and_raw_string = glz::write<glz::opts{.raw = true, .raw_string = true}>(value);
+      expect(json_raw_and_raw_string.value() == R"(Hello\nWorld)") << json_raw_and_raw_string.value();
+   };
 };
 
 struct Update
