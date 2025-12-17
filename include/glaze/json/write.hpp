@@ -561,15 +561,19 @@ namespace glz
                }
                // now we don't have to check writing
 
-               std::memcpy(&b[ix], "\"", 1);
-               ++ix;
+               if constexpr (not Opts.raw) {
+                  std::memcpy(&b[ix], "\"", 1);
+                  ++ix;
+               }
                if (str.size()) [[likely]] {
                   const auto n = str.size();
                   std::memcpy(&b[ix], str.data(), n);
                   ix += n;
                }
-               std::memcpy(&b[ix], "\"", 1);
-               ++ix;
+               if constexpr (not Opts.raw) {
+                  std::memcpy(&b[ix], "\"", 1);
+                  ++ix;
+               }
             }
             else {
                const sv str = [&]() -> const sv {
