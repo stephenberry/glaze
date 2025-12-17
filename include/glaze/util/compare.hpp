@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include <bit>
 #include <cstdint>
 #include <cstring>
 #include <string_view>
@@ -222,46 +223,70 @@ namespace glz
    template <const std::string_view& Str, size_t N = Str.size()>
    GLZ_ALWAYS_INLINE bool comparitor(const auto* other) noexcept
    {
+      // pack() builds values in little-endian order (byte 0 in LSB position).
+      // On big-endian systems, memcpy produces native (big-endian) values,
+      // so we need to byteswap to match the packed representation.
       if constexpr (N == 8) {
          static constexpr auto packed = pack<Str, 8>();
          uint64_t in;
          std::memcpy(&in, other, 8);
+         if constexpr (std::endian::native == std::endian::big) {
+            in = std::byteswap(in);
+         }
          return (in == packed);
       }
       else if constexpr (N == 7) {
          static constexpr auto packed = pack_buffered<Str, 8>();
          uint64_t in{};
          std::memcpy(&in, other, 7);
+         if constexpr (std::endian::native == std::endian::big) {
+            in = std::byteswap(in);
+         }
          return (in == packed);
       }
       else if constexpr (N == 6) {
          static constexpr auto packed = pack_buffered<Str, 8>();
          uint64_t in{};
          std::memcpy(&in, other, 6);
+         if constexpr (std::endian::native == std::endian::big) {
+            in = std::byteswap(in);
+         }
          return (in == packed);
       }
       else if constexpr (N == 5) {
          static constexpr auto packed = pack<Str, 4>();
          uint32_t in;
          std::memcpy(&in, other, 4);
+         if constexpr (std::endian::native == std::endian::big) {
+            in = std::byteswap(in);
+         }
          return (in == packed) & (Str[4] == other[4]);
       }
       else if constexpr (N == 4) {
          static constexpr auto packed = pack<Str, 4>();
          uint32_t in;
          std::memcpy(&in, other, 4);
+         if constexpr (std::endian::native == std::endian::big) {
+            in = std::byteswap(in);
+         }
          return (in == packed);
       }
       else if constexpr (N == 3) {
          static constexpr auto packed = pack<Str, 2>();
          uint16_t in;
          std::memcpy(&in, other, 2);
+         if constexpr (std::endian::native == std::endian::big) {
+            in = std::byteswap(in);
+         }
          return (in == packed) & (Str[2] == other[2]);
       }
       else if constexpr (N == 2) {
          static constexpr auto packed = pack<Str, 2>();
          uint16_t in;
          std::memcpy(&in, other, 2);
+         if constexpr (std::endian::native == std::endian::big) {
+            in = std::byteswap(in);
+         }
          return (in == packed);
       }
       else if constexpr (N == 1) {

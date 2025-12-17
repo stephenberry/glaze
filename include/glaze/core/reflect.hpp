@@ -31,9 +31,9 @@ namespace glz
    // Convert up to 7 bytes to uint64_t (for short key hashing)
    inline constexpr uint64_t to_uint64_n_below_8(const char* bytes, const size_t N) noexcept
    {
-      static_assert(std::endian::native == std::endian::little);
       uint64_t res{};
       if (std::is_constant_evaluated()) {
+         // Compile-time: build value byte-by-byte in little-endian order
          for (size_t i = 0; i < N; ++i) {
             res |= (uint64_t(uint8_t(bytes[i])) << (i << 3));
          }
@@ -73,6 +73,14 @@ namespace glz
             break;
          }
          }
+         // On big endian: byteswap to match little-endian layout
+         // Example for "abc" (N=3):
+         //   LE memcpy: res = 0x0000000000636261 (bytes in LSB positions)
+         //   BE memcpy: res = 0x6162630000000000 (bytes in MSB positions)
+         //   BE after byteswap: res = 0x0000000000636261 (matches LE)
+         if constexpr (std::endian::native == std::endian::big) {
+            res = std::byteswap(res);
+         }
       }
       return res;
    }
@@ -82,7 +90,6 @@ namespace glz
    constexpr uint64_t to_uint64(const char* bytes) noexcept
    {
       static_assert(N <= sizeof(uint64_t));
-      static_assert(std::endian::native == std::endian::little);
       if (std::is_constant_evaluated()) {
          uint64_t res{};
          for (size_t i = 0; i < N; ++i) {
@@ -93,19 +100,18 @@ namespace glz
       else if constexpr (N == 8) {
          uint64_t res;
          std::memcpy(&res, bytes, N);
+         if constexpr (std::endian::native == std::endian::big) {
+            res = std::byteswap(res);
+         }
          return res;
       }
       else {
          uint64_t res{};
          std::memcpy(&res, bytes, N);
-         constexpr auto num_bytes = sizeof(uint64_t);
-         constexpr auto shift = (uint64_t(num_bytes - N) << 3);
-         if constexpr (shift == 0) {
-            return res;
+         if constexpr (std::endian::native == std::endian::big) {
+            res = std::byteswap(res);
          }
-         else {
-            return (res << shift) >> shift;
-         }
+         return res;
       }
    }
 
@@ -2059,6 +2065,9 @@ namespace glz
             }
             else {
                std::memcpy(&h, it, 2);
+               if constexpr (std::endian::native == std::endian::big) {
+                  h = std::byteswap(h);
+               }
             }
             return HashInfo.table[bitmix(h, HashInfo.seed) % bsize];
          }
@@ -2075,6 +2084,9 @@ namespace glz
             }
             else {
                std::memcpy(&h, it, 4);
+               if constexpr (std::endian::native == std::endian::big) {
+                  h = std::byteswap(h);
+               }
             }
             return HashInfo.table[bitmix(h, HashInfo.seed) % bsize];
          }
@@ -2091,6 +2103,9 @@ namespace glz
             }
             else {
                std::memcpy(&h, it, 8);
+               if constexpr (std::endian::native == std::endian::big) {
+                  h = std::byteswap(h);
+               }
             }
             return HashInfo.table[rich_bitmix(h, HashInfo.seed) % bsize];
          }
@@ -2296,6 +2311,9 @@ namespace glz
             }
             else {
                std::memcpy(&h, it, 2);
+               if constexpr (std::endian::native == std::endian::big) {
+                  h = std::byteswap(h);
+               }
             }
             return HashInfo.table[bitmix(h, HashInfo.seed) % bsize];
          }
@@ -2309,6 +2327,9 @@ namespace glz
             }
             else {
                std::memcpy(&h, it, 4);
+               if constexpr (std::endian::native == std::endian::big) {
+                  h = std::byteswap(h);
+               }
             }
             return HashInfo.table[bitmix(h, HashInfo.seed) % bsize];
          }
@@ -2322,6 +2343,9 @@ namespace glz
             }
             else {
                std::memcpy(&h, it, 8);
+               if constexpr (std::endian::native == std::endian::big) {
+                  h = std::byteswap(h);
+               }
             }
             return HashInfo.table[rich_bitmix(h, HashInfo.seed) % bsize];
          }

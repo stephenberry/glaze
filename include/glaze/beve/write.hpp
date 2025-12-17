@@ -47,11 +47,22 @@ namespace glz
       constexpr auto is_volatile = std::is_volatile_v<std::remove_reference_t<decltype(value)>>;
 
       if constexpr (is_volatile) {
-         const V temp = value;
+         V temp = value;
+         if constexpr (std::endian::native == std::endian::big && sizeof(V) > 1) {
+            byteswap_le(temp);
+         }
          std::memcpy(&b[ix], &temp, n);
       }
       else {
-         std::memcpy(&b[ix], &value, n);
+         if constexpr (std::endian::native == std::endian::big &&
+                       (std::integral<V> || std::floating_point<V> || std::is_enum_v<V>) && sizeof(V) > 1) {
+            V temp = value;
+            byteswap_le(temp);
+            std::memcpy(&b[ix], &temp, n);
+         }
+         else {
+            std::memcpy(&b[ix], &value, n);
+         }
       }
       ix += n;
    }
@@ -569,15 +580,28 @@ namespace glz
                   }
 
                   if constexpr (is_volatile) {
-                     V temp;
                      const auto n_elements = value.size();
                      for (size_t i = 0; i < n_elements; ++i) {
-                        temp = value[i];
+                        V temp = value[i];
+                        if constexpr (std::endian::native == std::endian::big) {
+                           byteswap_le(temp);
+                        }
+                        std::memcpy(&b[ix], &temp, sizeof(V));
+                        ix += sizeof(V);
+                     }
+                  }
+                  else if constexpr (std::endian::native == std::endian::big && sizeof(V) > 1) {
+                     // On big endian, swap each element
+                     const auto n_elements = static_cast<size_t>(value.size());
+                     for (size_t i = 0; i < n_elements; ++i) {
+                        V temp = value[i];
+                        byteswap_le(temp);
                         std::memcpy(&b[ix], &temp, sizeof(V));
                         ix += sizeof(V);
                      }
                   }
                   else {
+                     // Little endian or single-byte: bulk memcpy
                      if (n) {
                         std::memcpy(&b[ix], value.data(), n);
                         ix += n;
@@ -636,9 +660,25 @@ namespace glz
                   b.resize(2 * k);
                }
 
-               if (n) {
-                  std::memcpy(&b[ix], value.data(), n);
-                  ix += n;
+               if constexpr (std::endian::native == std::endian::big) {
+                  // On big endian, swap each component
+                  for (auto&& x : value) {
+                     X real_val = x.real();
+                     X imag_val = x.imag();
+                     byteswap_le(real_val);
+                     byteswap_le(imag_val);
+                     std::memcpy(&b[ix], &real_val, sizeof(X));
+                     ix += sizeof(X);
+                     std::memcpy(&b[ix], &imag_val, sizeof(X));
+                     ix += sizeof(X);
+                  }
+               }
+               else {
+                  // Little endian: bulk memcpy
+                  if (n) {
+                     std::memcpy(&b[ix], value.data(), n);
+                     ix += n;
+                  }
                }
             }
             else {

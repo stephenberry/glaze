@@ -214,6 +214,9 @@ namespace glz
                         std::memcpy(data, c, 8);
                         uint64_t swar;
                         std::memcpy(&swar, c, 8);
+                        if constexpr (std::endian::native == std::endian::big) {
+                           swar = std::byteswap(swar);
+                        }
 
                         constexpr uint64_t lo7_mask = repeat_byte8(0b01111111);
                         const uint64_t lo7 = swar & lo7_mask;

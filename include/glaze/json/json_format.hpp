@@ -79,6 +79,9 @@ namespace glz::detail
       while (it < end) [[likely]] {
          uint64_t chunk;
          std::memcpy(&chunk, it, 8);
+         if constexpr (std::endian::native == std::endian::big) {
+            chunk = std::byteswap(chunk);
+         }
          const uint64_t quote = has_quote(chunk);
          if (quote) {
             it += (countr_zero(quote) >> 3);
@@ -110,6 +113,9 @@ namespace glz::detail
       for (const auto end_m7 = end - 7; it < end_m7;) {
          uint64_t chunk;
          std::memcpy(&chunk, it, 8);
+         if constexpr (std::endian::native == std::endian::big) {
+            chunk = std::byteswap(chunk);
+         }
          const uint64_t quote = has_quote(chunk);
          if (quote) {
             it += (countr_zero(quote) >> 3);
@@ -155,6 +161,9 @@ namespace glz::detail
       for (const auto end_m7 = end - 7; it < end_m7;) {
          uint64_t chunk;
          std::memcpy(&chunk, it, 8);
+         if constexpr (std::endian::native == std::endian::big) {
+            chunk = std::byteswap(chunk);
+         }
          const uint64_t slash = has_char<'/'>(chunk);
          if (slash) {
             it += (countr_zero(slash) >> 3);

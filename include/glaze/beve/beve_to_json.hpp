@@ -21,7 +21,11 @@ namespace glz
                ctx.error = error_code::syntax_error;
                return;
             }
-            std::memcpy(&value, it, sizeof(T));
+            using V = std::remove_cvref_t<T>;
+            std::memcpy(&value, it, sizeof(V));
+            if constexpr (std::endian::native == std::endian::big) {
+               byteswap_le(value);
+            }
             to<JSON, T>::template op<Opts>(value, ctx, out, ix);
             it += sizeof(T);
          };
@@ -279,7 +283,11 @@ namespace glz
                      ctx.error = error_code::unexpected_end;
                      return;
                   }
-                  std::memcpy(&value, it, sizeof(T));
+                  using V = std::remove_cvref_t<T>;
+                  std::memcpy(&value, it, sizeof(V));
+                  if constexpr (std::endian::native == std::endian::big) {
+                     byteswap_le(value);
+                  }
                   to<JSON, T>::template op<Opts>(value, ctx, out, ix);
                   it += sizeof(T);
                   if (i != n - 1) {

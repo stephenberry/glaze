@@ -140,6 +140,11 @@ namespace
 
       uint64_t raw{};
       std::memcpy(&raw, buffer.data(), sizeof(raw));
+      // BEVE uses little-endian wire format, so on big-endian systems
+      // the memcpy'd value needs to be byteswapped to match the original
+      if constexpr (std::endian::native == std::endian::big) {
+         raw = std::byteswap(raw);
+      }
       expect(raw == id.value);
    }
 
