@@ -144,7 +144,7 @@ namespace glz
       }
    };
 
-   // Complex numbers - stored as 2-element array [real, imag]
+   // Complex numbers - tag 43000 with 2-element array [real, imag]
    template <class T>
       requires complex_t<T>
    struct to<CBOR, T> final
@@ -152,6 +152,8 @@ namespace glz
       template <auto Opts>
       GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix)
       {
+         // Write tag 43000 (complex number)
+         cbor_detail::encode_arg(cbor::major::tag, cbor::semantic_tag::complex_number, b, ix);
          // Write array header for 2 elements
          cbor_detail::dump_byte(cbor::initial_byte(cbor::major::array, 2), b, ix);
          // Write real part
@@ -382,6 +384,33 @@ namespace glz
             }
 
             // Bulk write: native endianness matches tag
+            if (byte_len > 0) {
+               std::memcpy(&b[ix], value.data(), byte_len);
+               ix += byte_len;
+            }
+         }
+         else if constexpr (complex_t<V> && contiguous<T>) {
+            // Complex array: tag 43001 with interleaved typed array [r0, i0, r1, i1, ...]
+            // std::complex<T> stores data as [real, imag] pairs contiguously
+            using Scalar = typename V::value_type;
+
+            // Write tag 43001 (complex array)
+            cbor_detail::encode_arg(cbor::major::tag, cbor::semantic_tag::complex_array, b, ix);
+
+            // Write typed array tag for the underlying scalar type
+            constexpr uint64_t scalar_tag = cbor::typed_array::native_tag<Scalar>();
+            cbor_detail::encode_arg(cbor::major::tag, scalar_tag, b, ix);
+
+            // Write byte string header (2 scalars per complex: real and imag)
+            const size_t byte_len = value.size() * sizeof(V); // sizeof(complex<T>) = 2 * sizeof(T)
+            cbor_detail::encode_arg(cbor::major::bstr, byte_len, b, ix);
+
+            // Ensure buffer space
+            if (const auto k = ix + byte_len; k > b.size()) [[unlikely]] {
+               b.resize(2 * k);
+            }
+
+            // Bulk write: std::complex stores [real, imag] contiguously
             if (byte_len > 0) {
                std::memcpy(&b[ix], value.data(), byte_len);
                ix += byte_len;

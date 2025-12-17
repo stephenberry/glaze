@@ -83,8 +83,13 @@ namespace glz::cbor
       inline constexpr uint64_t self_described = 55799; // Self-described CBOR (magic)
 
       // Multi-dimensional arrays (RFC 8746)
-      inline constexpr uint64_t multi_dim_array = 40;           // Row-major multi-dimensional array
+      inline constexpr uint64_t multi_dim_array = 40;             // Row-major multi-dimensional array
       inline constexpr uint64_t multi_dim_array_col_major = 1040; // Column-major multi-dimensional array
+
+      // Complex numbers (IANA CBOR tags registry)
+      // https://www.iana.org/assignments/cbor-tags/cbor-tags.xhtml
+      inline constexpr uint64_t complex_number = 43000; // Single complex: [real, imag]
+      inline constexpr uint64_t complex_array = 43001;  // Interleaved: [r0, i0, r1, i1, ...]
 
       // Typed arrays (RFC 8746)
       inline constexpr uint64_t ta_uint8 = 64;

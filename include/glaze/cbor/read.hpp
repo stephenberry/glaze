@@ -193,7 +193,7 @@ namespace glz
       }
    };
 
-   // Complex numbers - read from 2-element array [real, imag]
+   // Complex numbers - tag 43000 with 2-element array [real, imag]
    template <class T>
       requires complex_t<T>
    struct from<CBOR, T>
@@ -212,16 +212,37 @@ namespace glz
          std::memcpy(&initial, it, 1);
          ++it;
 
-         const uint8_t major_type = get_major_type(initial);
-         const uint8_t additional_info = get_additional_info(initial);
+         // Expect tag 43000 (complex number)
+         if (get_major_type(initial) != major::tag) [[unlikely]] {
+            ctx.error = error_code::syntax_error;
+            return;
+         }
 
-         if (major_type != major::array) [[unlikely]] {
+         const uint64_t tag = cbor_detail::decode_arg(ctx, it, end, get_additional_info(initial));
+         if (bool(ctx.error)) [[unlikely]]
+            return;
+
+         if (tag != semantic_tag::complex_number) [[unlikely]] {
+            ctx.error = error_code::syntax_error;
+            return;
+         }
+
+         // Read array header
+         if (it >= end) [[unlikely]] {
+            ctx.error = error_code::unexpected_end;
+            return;
+         }
+
+         std::memcpy(&initial, it, 1);
+         ++it;
+
+         if (get_major_type(initial) != major::array) [[unlikely]] {
             ctx.error = error_code::syntax_error;
             return;
          }
 
          // Expect exactly 2 elements
-         uint64_t count = cbor_detail::decode_arg(ctx, it, end, additional_info);
+         uint64_t count = cbor_detail::decode_arg(ctx, it, end, get_additional_info(initial));
          if (bool(ctx.error)) [[unlikely]]
             return;
 
@@ -844,6 +865,141 @@ namespace glz
                }
                else {
                   // Not a matching typed array tag - error
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
+            }
+         }
+
+         // Check for complex array (tag 43001 with nested typed array)
+         if constexpr (complex_t<V> && contiguous<T>) {
+            if (major_type == major::tag) {
+               ++it; // consume the tag initial byte
+
+               // Decode the tag number
+               const uint64_t tag_num = cbor_detail::decode_arg(ctx, it, end, additional_info);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
+
+               // Check for tag 43001 (complex array)
+               if (tag_num == semantic_tag::complex_array) {
+                  using Scalar = typename V::value_type;
+
+                  // Read nested typed array tag
+                  if (it >= end) [[unlikely]] {
+                     ctx.error = error_code::unexpected_end;
+                     return;
+                  }
+
+                  uint8_t ta_initial;
+                  std::memcpy(&ta_initial, it, 1);
+                  ++it;
+
+                  if (get_major_type(ta_initial) != major::tag) [[unlikely]] {
+                     ctx.error = error_code::syntax_error;
+                     return;
+                  }
+
+                  const uint64_t scalar_tag = cbor_detail::decode_arg(ctx, it, end, get_additional_info(ta_initial));
+                  if (bool(ctx.error)) [[unlikely]]
+                     return;
+
+                  // Verify it's a valid typed array tag for the scalar type
+                  const auto ta_info = typed_array::get_info(scalar_tag);
+                  if (!ta_info.valid || ta_info.element_size != sizeof(Scalar)) [[unlikely]] {
+                     ctx.error = error_code::syntax_error;
+                     return;
+                  }
+
+                  // Read the byte string
+                  if (it >= end) [[unlikely]] {
+                     ctx.error = error_code::unexpected_end;
+                     return;
+                  }
+
+                  uint8_t bstr_initial;
+                  std::memcpy(&bstr_initial, it, 1);
+                  ++it;
+
+                  if (get_major_type(bstr_initial) != major::bstr) [[unlikely]] {
+                     ctx.error = error_code::syntax_error;
+                     return;
+                  }
+
+                  const uint64_t byte_len = cbor_detail::decode_arg(ctx, it, end, get_additional_info(bstr_initial));
+                  if (bool(ctx.error)) [[unlikely]]
+                     return;
+
+                  // Each complex has 2 scalars
+                  constexpr size_t complex_byte_size = sizeof(V); // sizeof(complex<T>) = 2 * sizeof(T)
+                  if (byte_len % complex_byte_size != 0) [[unlikely]] {
+                     ctx.error = error_code::syntax_error;
+                     return;
+                  }
+
+                  if (static_cast<uint64_t>(end - it) < byte_len) [[unlikely]] {
+                     ctx.error = error_code::unexpected_end;
+                     return;
+                  }
+
+                  const size_t count = byte_len / complex_byte_size;
+
+                  if constexpr (resizable<T>) {
+                     value.resize(count);
+                     if constexpr (check_shrink_to_fit(Opts)) {
+                        value.shrink_to_fit();
+                     }
+                  }
+                  else {
+                     if (count != value.size()) [[unlikely]] {
+                        ctx.error = error_code::exceeded_static_array_size;
+                        return;
+                     }
+                  }
+
+                  // Check if we need to byteswap
+                  const bool need_swap = typed_array::needs_byteswap(scalar_tag);
+
+                  if (need_swap && sizeof(Scalar) > 1) {
+                     // Need to byteswap each scalar in the interleaved data
+                     auto* dest = reinterpret_cast<Scalar*>(value.data());
+                     const size_t num_scalars = count * 2; // 2 scalars per complex
+                     for (size_t i = 0; i < num_scalars; ++i) {
+                        Scalar elem;
+                        std::memcpy(&elem, it, sizeof(Scalar));
+                        if constexpr (sizeof(Scalar) == 2) {
+                           uint16_t bits;
+                           std::memcpy(&bits, &elem, sizeof(Scalar));
+                           bits = std::byteswap(bits);
+                           std::memcpy(&elem, &bits, sizeof(Scalar));
+                        }
+                        else if constexpr (sizeof(Scalar) == 4) {
+                           uint32_t bits;
+                           std::memcpy(&bits, &elem, sizeof(Scalar));
+                           bits = std::byteswap(bits);
+                           std::memcpy(&elem, &bits, sizeof(Scalar));
+                        }
+                        else if constexpr (sizeof(Scalar) == 8) {
+                           uint64_t bits;
+                           std::memcpy(&bits, &elem, sizeof(Scalar));
+                           bits = std::byteswap(bits);
+                           std::memcpy(&elem, &bits, sizeof(Scalar));
+                        }
+                        dest[i] = elem;
+                        it += sizeof(Scalar);
+                     }
+                  }
+                  else {
+                     // Native endianness or single-byte: bulk read
+                     if (byte_len > 0) {
+                        std::memcpy(value.data(), it, byte_len);
+                        it += byte_len;
+                     }
+                  }
+                  return; // Done with complex array
+               }
+               else {
+                  // Not a complex array tag - error
                   ctx.error = error_code::syntax_error;
                   return;
                }
