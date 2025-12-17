@@ -724,7 +724,9 @@ namespace glz
    };
 
    // Arrays (std::vector, std::deque, etc.)
+   // Note: eigen_t types have their own specialization in glaze/ext/eigen.hpp
    template <readable_array_t T>
+      requires(!eigen_t<T>)
    struct from<CBOR, T> final
    {
       template <auto Opts>

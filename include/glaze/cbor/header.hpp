@@ -82,6 +82,10 @@ namespace glz::cbor
       // Self-description
       inline constexpr uint64_t self_described = 55799; // Self-described CBOR (magic)
 
+      // Multi-dimensional arrays (RFC 8746)
+      inline constexpr uint64_t multi_dim_array = 40;           // Row-major multi-dimensional array
+      inline constexpr uint64_t multi_dim_array_col_major = 1040; // Column-major multi-dimensional array
+
       // Typed arrays (RFC 8746)
       inline constexpr uint64_t ta_uint8 = 64;
       inline constexpr uint64_t ta_uint16_be = 65;
