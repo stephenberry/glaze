@@ -138,8 +138,8 @@ namespace glz
          using EigenType = std::remove_cvref_t<T>;
 
          // Write tag: 40 for row-major, 1040 for column-major
-         constexpr uint64_t tag = EigenType::IsRowMajor ? cbor::semantic_tag::multi_dim_array
-                                                        : cbor::semantic_tag::multi_dim_array_col_major;
+         constexpr uint64_t tag =
+            EigenType::IsRowMajor ? cbor::semantic_tag::multi_dim_array : cbor::semantic_tag::multi_dim_array_col_major;
          cbor_detail::encode_arg(cbor::major::tag, tag, b, ix);
 
          // Write 2-element array: [dimensions, data]
@@ -182,11 +182,12 @@ namespace glz
          }
          ++it;
          const uint64_t tag = cbor_detail::decode_arg(ctx, it, end, cbor::get_additional_info(initial));
-         if (bool(ctx.error)) [[unlikely]] return;
+         if (bool(ctx.error)) [[unlikely]]
+            return;
 
          // Verify tag matches expected layout
-         constexpr uint64_t expected_tag = EigenType::IsRowMajor ? cbor::semantic_tag::multi_dim_array
-                                                                 : cbor::semantic_tag::multi_dim_array_col_major;
+         constexpr uint64_t expected_tag =
+            EigenType::IsRowMajor ? cbor::semantic_tag::multi_dim_array : cbor::semantic_tag::multi_dim_array_col_major;
          if (tag != expected_tag) [[unlikely]] {
             ctx.error = error_code::syntax_error;
             return;
@@ -204,7 +205,8 @@ namespace glz
          }
          ++it;
          const auto outer_size = cbor_detail::decode_arg(ctx, it, end, cbor::get_additional_info(initial));
-         if (bool(ctx.error)) [[unlikely]] return;
+         if (bool(ctx.error)) [[unlikely]]
+            return;
          if (outer_size != 2) [[unlikely]] {
             ctx.error = error_code::syntax_error;
             return;
@@ -222,7 +224,8 @@ namespace glz
          }
          ++it;
          const auto dims_size = cbor_detail::decode_arg(ctx, it, end, cbor::get_additional_info(initial));
-         if (bool(ctx.error)) [[unlikely]] return;
+         if (bool(ctx.error)) [[unlikely]]
+            return;
          if (dims_size != 2) [[unlikely]] {
             ctx.error = error_code::syntax_error;
             return;
@@ -232,13 +235,15 @@ namespace glz
          std::memcpy(&initial, it, 1);
          ++it;
          const auto rows = cbor_detail::decode_arg(ctx, it, end, cbor::get_additional_info(initial));
-         if (bool(ctx.error)) [[unlikely]] return;
+         if (bool(ctx.error)) [[unlikely]]
+            return;
 
          // Read cols
          std::memcpy(&initial, it, 1);
          ++it;
          const auto cols = cbor_detail::decode_arg(ctx, it, end, cbor::get_additional_info(initial));
-         if (bool(ctx.error)) [[unlikely]] return;
+         if (bool(ctx.error)) [[unlikely]]
+            return;
 
          // Resize if dynamic
          if constexpr (EigenType::RowsAtCompileTime < 0 || EigenType::ColsAtCompileTime < 0) {

@@ -172,8 +172,8 @@ namespace glz
       GLZ_ALWAYS_INLINE static void op(const bool value, is_context auto&&, auto&& b, auto&& ix)
       {
          using namespace cbor;
-         const uint8_t byte = value ? initial_byte(major::simple, simple::true_value)
-                                    : initial_byte(major::simple, simple::false_value);
+         const uint8_t byte =
+            value ? initial_byte(major::simple, simple::true_value) : initial_byte(major::simple, simple::false_value);
          cbor_detail::dump_byte(byte, b, ix);
       }
    };
@@ -693,9 +693,8 @@ namespace glz
          static constexpr auto N = reflect<T>::size;
          cbor_detail::encode_arg_cx<N>(cbor::major::array, b, ix);
 
-         for_each<N>([&]<size_t I>() {
-            serialize<CBOR>::op<Opts>(get_member(value, get<I>(reflect<T>::values)), ctx, b, ix);
-         });
+         for_each<N>(
+            [&]<size_t I>() { serialize<CBOR>::op<Opts>(get_member(value, get<I>(reflect<T>::values)), ctx, b, ix); });
       }
    };
 

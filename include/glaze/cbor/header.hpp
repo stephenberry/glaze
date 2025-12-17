@@ -18,20 +18,20 @@ namespace glz::cbor
    // These define the structural encoding of CBOR data items per RFC 8949.
    namespace major
    {
-      inline constexpr uint8_t uint = 0;   // 0b000 - Unsigned integer
-      inline constexpr uint8_t nint = 1;   // 0b001 - Negative integer (-1 - n)
-      inline constexpr uint8_t bstr = 2;   // 0b010 - Byte string
-      inline constexpr uint8_t tstr = 3;   // 0b011 - Text string (UTF-8)
-      inline constexpr uint8_t array = 4;  // 0b100 - Array of data items
-      inline constexpr uint8_t map = 5;    // 0b101 - Map of key-value pairs
-      inline constexpr uint8_t tag = 6;    // 0b110 - Semantic tag
+      inline constexpr uint8_t uint = 0; // 0b000 - Unsigned integer
+      inline constexpr uint8_t nint = 1; // 0b001 - Negative integer (-1 - n)
+      inline constexpr uint8_t bstr = 2; // 0b010 - Byte string
+      inline constexpr uint8_t tstr = 3; // 0b011 - Text string (UTF-8)
+      inline constexpr uint8_t array = 4; // 0b100 - Array of data items
+      inline constexpr uint8_t map = 5; // 0b101 - Map of key-value pairs
+      inline constexpr uint8_t tag = 6; // 0b110 - Semantic tag
       inline constexpr uint8_t simple = 7; // 0b111 - Simple value or float
    }
 
    // Additional information special values (low 5 bits of initial byte)
    namespace info
    {
-      inline constexpr uint8_t uint8_follows = 24;  // 1-byte argument follows
+      inline constexpr uint8_t uint8_follows = 24; // 1-byte argument follows
       inline constexpr uint8_t uint16_follows = 25; // 2-byte argument follows (big-endian)
       inline constexpr uint8_t uint32_follows = 26; // 4-byte argument follows (big-endian)
       inline constexpr uint8_t uint64_follows = 27; // 8-byte argument follows (big-endian)
@@ -59,37 +59,37 @@ namespace glz::cbor
    namespace semantic_tag
    {
       // Standard tags (RFC 8949)
-      inline constexpr uint64_t datetime_string = 0;  // RFC 3339 date/time string
-      inline constexpr uint64_t datetime_epoch = 1;   // Epoch-based date/time
-      inline constexpr uint64_t unsigned_bignum = 2;  // Positive bignum
-      inline constexpr uint64_t negative_bignum = 3;  // Negative bignum
+      inline constexpr uint64_t datetime_string = 0; // RFC 3339 date/time string
+      inline constexpr uint64_t datetime_epoch = 1; // Epoch-based date/time
+      inline constexpr uint64_t unsigned_bignum = 2; // Positive bignum
+      inline constexpr uint64_t negative_bignum = 3; // Negative bignum
       inline constexpr uint64_t decimal_fraction = 4; // Decimal fraction [exponent, mantissa]
-      inline constexpr uint64_t bigfloat = 5;         // Bigfloat [exponent, mantissa]
+      inline constexpr uint64_t bigfloat = 5; // Bigfloat [exponent, mantissa]
 
       // Encoding hints
-      inline constexpr uint64_t base64url = 21;     // Expected base64url encoding
-      inline constexpr uint64_t base64 = 22;        // Expected base64 encoding
-      inline constexpr uint64_t base16 = 23;        // Expected base16 encoding
-      inline constexpr uint64_t encoded_cbor = 24;  // Embedded CBOR data item
+      inline constexpr uint64_t base64url = 21; // Expected base64url encoding
+      inline constexpr uint64_t base64 = 22; // Expected base64 encoding
+      inline constexpr uint64_t base16 = 23; // Expected base16 encoding
+      inline constexpr uint64_t encoded_cbor = 24; // Embedded CBOR data item
 
       // Other standard tags
-      inline constexpr uint64_t uri = 32;           // URI (RFC 3986)
+      inline constexpr uint64_t uri = 32; // URI (RFC 3986)
       inline constexpr uint64_t base64url_str = 33; // base64url-encoded text
-      inline constexpr uint64_t base64_str = 34;    // base64-encoded text
-      inline constexpr uint64_t regex = 35;         // Regular expression
-      inline constexpr uint64_t mime = 36;          // MIME message
+      inline constexpr uint64_t base64_str = 34; // base64-encoded text
+      inline constexpr uint64_t regex = 35; // Regular expression
+      inline constexpr uint64_t mime = 36; // MIME message
 
       // Self-description
       inline constexpr uint64_t self_described = 55799; // Self-described CBOR (magic)
 
       // Multi-dimensional arrays (RFC 8746)
-      inline constexpr uint64_t multi_dim_array = 40;             // Row-major multi-dimensional array
+      inline constexpr uint64_t multi_dim_array = 40; // Row-major multi-dimensional array
       inline constexpr uint64_t multi_dim_array_col_major = 1040; // Column-major multi-dimensional array
 
       // Complex numbers (IANA CBOR tags registry)
       // https://www.iana.org/assignments/cbor-tags/cbor-tags.xhtml
       inline constexpr uint64_t complex_number = 43000; // Single complex: [real, imag]
-      inline constexpr uint64_t complex_array = 43001;  // Interleaved: [r0, i0, r1, i1, ...]
+      inline constexpr uint64_t complex_array = 43001; // Interleaved: [r0, i0, r1, i1, ...]
 
       // Typed arrays (RFC 8746)
       inline constexpr uint64_t ta_uint8 = 64;

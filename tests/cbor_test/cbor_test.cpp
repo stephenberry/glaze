@@ -1,6 +1,8 @@
 // Glaze Library
 // For the license information refer to glaze.hpp
 
+#include "glaze/cbor.hpp"
+
 #include <bit>
 #include <bitset>
 #include <complex>
@@ -10,7 +12,6 @@
 #include <unordered_map>
 #include <vector>
 
-#include "glaze/cbor.hpp"
 #include "glaze/glaze_exceptions.hpp"
 #include "ut/ut.hpp"
 
@@ -133,25 +134,24 @@ struct glz::meta<Thing>
 {
    using T = Thing;
    static constexpr std::string_view name = "Thing";
-   static constexpr auto value = object(
-      "thing", &T::thing, //
-      "vec3", &T::vec3, //
-      "intlist", &T::intlist, //
-      "deque", &T::deque, //
-      "vector", &T::vector, //
-      "i", &T::i, //
-      "d", &T::d, //
-      "b", &T::b, //
-      "c", &T::c, //
-      "v", &T::v, //
-      "color", &T::color, //
-      "vi", &T::vi, //
-      "sptr", &T::sptr, //
-      "optional", &T::optional, //
-      "array", &T::array, //
-      "map", &T::map, //
-      "mapi", &T::mapi, //
-      "thing_ptr", &T::thing_ptr);
+   static constexpr auto value = object("thing", &T::thing, //
+                                        "vec3", &T::vec3, //
+                                        "intlist", &T::intlist, //
+                                        "deque", &T::deque, //
+                                        "vector", &T::vector, //
+                                        "i", &T::i, //
+                                        "d", &T::d, //
+                                        "b", &T::b, //
+                                        "c", &T::c, //
+                                        "v", &T::v, //
+                                        "color", &T::color, //
+                                        "vi", &T::vi, //
+                                        "sptr", &T::sptr, //
+                                        "optional", &T::optional, //
+                                        "array", &T::array, //
+                                        "map", &T::map, //
+                                        "mapi", &T::mapi, //
+                                        "thing_ptr", &T::thing_ptr);
 };
 
 // Value type struct for testing glz::meta with value = &T::member
@@ -1060,7 +1060,7 @@ void half_precision_tests()
       expect(glz::cbor::can_encode_half(-0.5));
       expect(glz::cbor::can_encode_half(100.0));
       expect(glz::cbor::can_encode_half(-100.0));
-      expect(glz::cbor::can_encode_half(65504.0));  // Max half value
+      expect(glz::cbor::can_encode_half(65504.0)); // Max half value
       expect(glz::cbor::can_encode_half(-65504.0)); // Min half value
       expect(glz::cbor::can_encode_half(1.5));
       expect(glz::cbor::can_encode_half(1.25));
@@ -1088,7 +1088,7 @@ void half_precision_tests()
 
    "can_encode_half_inexact_values"_test = [] {
       // Values that CANNOT be exactly represented in half-precision
-      expect(!glz::cbor::can_encode_half(0.1));  // Not exactly representable
+      expect(!glz::cbor::can_encode_half(0.1)); // Not exactly representable
       expect(!glz::cbor::can_encode_half(0.3));
       expect(!glz::cbor::can_encode_half(1.1));
       expect(!glz::cbor::can_encode_half(3.14159));
@@ -1102,7 +1102,7 @@ void half_precision_tests()
       // Values with too much precision (more than 10 mantissa bits)
       // Note: 1.0009765625 = 1 + 1/1024 IS exactly representable (it's 1 + 2^-10)
       expect(!glz::cbor::can_encode_half(1.00048828125)); // 1 + 1/2048, below smallest half increment
-      expect(!glz::cbor::can_encode_half(1.0001));        // Requires more precision than half provides
+      expect(!glz::cbor::can_encode_half(1.0001)); // Requires more precision than half provides
 
       // Very small values that lose precision
       expect(!glz::cbor::can_encode_half(1e-10));
@@ -1150,7 +1150,7 @@ void half_precision_tests()
 
       // Integers that fit in 23 mantissa bits
       expect(glz::cbor::can_encode_float(16777216.0)); // 2^24 - exactly representable
-      expect(glz::cbor::can_encode_float(8388608.0));  // 2^23
+      expect(glz::cbor::can_encode_float(8388608.0)); // 2^23
 
       // Special values
       expect(glz::cbor::can_encode_float(std::numeric_limits<double>::infinity()));
@@ -1165,7 +1165,7 @@ void half_precision_tests()
       // High-precision values
       expect(!glz::cbor::can_encode_float(3.141592653589793)); // Full pi
       expect(!glz::cbor::can_encode_float(2.718281828459045)); // Full e
-      expect(!glz::cbor::can_encode_float(1.0000000000001));   // Needs double precision
+      expect(!glz::cbor::can_encode_float(1.0000000000001)); // Needs double precision
 
       // Large integers beyond float precision
       expect(!glz::cbor::can_encode_float(16777217.0)); // 2^24 + 1, not exactly representable
@@ -1358,9 +1358,8 @@ void roundtrip_tests()
    };
 
    "roundtrip_complex"_test = [] {
-      std::map<std::string, std::vector<std::pair<int, std::string>>> v{
-         {"key1", {{1, "a"}, {2, "b"}}},
-         {"key2", {{3, "c"}}}};
+      std::map<std::string, std::vector<std::pair<int, std::string>>> v{{"key1", {{1, "a"}, {2, "b"}}},
+                                                                        {"key2", {{3, "c"}}}};
       std::string buffer;
       expect(not glz::write_cbor(v, buffer));
       std::map<std::string, std::vector<std::pair<int, std::string>>> result{};
