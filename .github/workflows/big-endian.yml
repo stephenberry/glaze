@@ -19,61 +19,74 @@ on:
 jobs:
   build-s390x:
     runs-on: ubuntu-24.04
-    name: GCC s390x (big-endian)
+    name: GCC s390x (big-endian, cross-compiled)
 
     steps:
     - uses: actions/checkout@v4
 
-    - name: Set up QEMU
-      uses: docker/setup-qemu-action@v3
-      with:
-        platforms: s390x
-
-    - name: Build and test on s390x
+    - name: Install cross-compiler and QEMU
       run: |
-        docker run --rm -v ${{ github.workspace }}:/workspace -w /workspace \
-          --platform linux/s390x \
-          s390x/debian:bookworm \
-          /bin/bash -c "
-            set -e
+        sudo apt-get update
+        sudo apt-get install -y \
+          g++-13-s390x-linux-gnu \
+          qemu-user-static \
+          libstdc++-13-dev-s390x-cross
 
-            echo '::group::Install dependencies'
-            apt-get update
-            apt-get install -y --no-install-recommends \
-              build-essential \
-              cmake \
-              git \
-              ca-certificates \
-              libssl-dev
-            echo '::endgroup::'
+    - name: Verify cross-compiler
+      run: |
+        s390x-linux-gnu-g++-13 --version
+        qemu-s390x-static --version
 
-            echo '::group::Verify big-endian'
-            cat > /tmp/check_endian.cpp << 'EOF'
+    - name: Create CMake toolchain file
+      run: |
+        cat > toolchain-s390x.cmake << 'EOF'
+        set(CMAKE_SYSTEM_NAME Linux)
+        set(CMAKE_SYSTEM_PROCESSOR s390x)
+
+        set(CMAKE_C_COMPILER s390x-linux-gnu-gcc-13)
+        set(CMAKE_CXX_COMPILER s390x-linux-gnu-g++-13)
+
+        set(CMAKE_FIND_ROOT_PATH /usr/s390x-linux-gnu)
+        set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
+        set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
+        set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
+
+        # Tell CMake we're cross-compiling, so it won't try to run test executables
+        set(CMAKE_CROSSCOMPILING TRUE)
+        EOF
+
+    - name: Verify big-endian target
+      run: |
+        cat > /tmp/check_endian.cpp << 'EOF'
         #include <bit>
         #include <iostream>
         int main() {
           if constexpr (std::endian::native == std::endian::big) {
-            std::cout << \"Big-endian: OK\" << std::endl;
+            std::cout << "Big-endian: OK" << std::endl;
             return 0;
           } else {
-            std::cout << \"ERROR: Not big-endian!\" << std::endl;
+            std::cout << "ERROR: Not big-endian!" << std::endl;
             return 1;
           }
         }
         EOF
-            g++ -std=c++20 /tmp/check_endian.cpp -o /tmp/check_endian
-            /tmp/check_endian
-            echo '::endgroup::'
+        s390x-linux-gnu-g++-13 -std=c++20 /tmp/check_endian.cpp -o /tmp/check_endian
+        qemu-s390x-static -L /usr/s390x-linux-gnu /tmp/check_endian
 
-            echo '::group::Configure CMake'
-            cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_STANDARD=23 -Dglz_ENABLE_FUZZING=OFF
-            echo '::endgroup::'
+    - name: Configure CMake
+      run: |
+        cmake -B build \
+          -DCMAKE_TOOLCHAIN_FILE=toolchain-s390x.cmake \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DCMAKE_CXX_STANDARD=23 \
+          -Dglz_ENABLE_FUZZING=OFF
 
-            echo '::group::Build'
-            cmake --build build -j 2
-            echo '::endgroup::'
+    - name: Build
+      run: cmake --build build -j$(nproc)
 
-            echo '::group::Test'
-            ctest --test-dir build --output-on-failure -E '(http|websocket|asio)'
-            echo '::endgroup::'
-          "
+    - name: Test
+      env:
+        QEMU_LD_PREFIX: /usr/s390x-linux-gnu
+      run: |
+        # Run tests via QEMU user-space emulation
+        ctest --test-dir build --output-on-failure -E '(http|websocket|asio)'
