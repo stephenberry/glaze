@@ -87,4 +87,6 @@ jobs:
     - name: Test
       env:
         QEMU_LD_PREFIX: /usr/s390x-linux-gnu
-      run: ctest --test-dir build --output-on-failure
+      # Exclude performance tests - they are too slow under QEMU emulation
+      # and not meaningful for big-endian validation
+      run: ctest --test-dir build --output-on-failure -E 'int_parsing|json_performance|json_perf_strings|json_perf_objects|json_perf_numbers|json_perf_discord|json_perf_benchmark'
