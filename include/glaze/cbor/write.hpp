@@ -867,4 +867,14 @@ namespace glz
    {
       return write<set_cbor<Opts>()>(std::forward<T>(value));
    }
+
+   template <auto Opts = opts{}, write_supported<CBOR> T>
+   [[nodiscard]] inline error_code write_file_cbor(T&& value, const sv file_name, auto&& buffer)
+   {
+      const auto ec = write<set_cbor<Opts>()>(std::forward<T>(value), buffer);
+      if (bool(ec)) [[unlikely]] {
+         return ec.ec;
+      }
+      return buffer_to_file(buffer, file_name);
+   }
 }

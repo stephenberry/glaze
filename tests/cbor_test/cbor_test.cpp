@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "glaze/cbor.hpp"
+#include "glaze/glaze_exceptions.hpp"
 #include "ut/ut.hpp"
 
 using namespace ut;
@@ -1763,14 +1764,16 @@ void rfc8949_appendix_a_tests()
    };
 
    "rfc_write_empty_numeric_array"_test = [] {
-      // Numeric arrays use RFC 8746 typed arrays (zero-copy)
+      // Numeric arrays use RFC 8746 typed arrays
       std::string buffer;
       std::vector<int32_t> v;
       expect(not glz::write_cbor(v, buffer));
-      // Expected: tag (D8 4E for int32_le=78) + empty byte string (40)
+      // Expected: tag (D8 XX) + empty byte string (40)
+      // Tag is 74 (ta_sint32_be) on big endian, 78 (ta_sint32_le) on little endian
+      constexpr auto expected_tag = glz::cbor::typed_array::native_tag<int32_t>();
       expect(buffer.size() == 3u);
       expect(static_cast<uint8_t>(buffer[0]) == 0xd8); // tag follows
-      expect(static_cast<uint8_t>(buffer[1]) == 78);   // ta_sint32_le
+      expect(static_cast<uint8_t>(buffer[1]) == expected_tag);
       expect(static_cast<uint8_t>(buffer[2]) == 0x40); // empty bstr
    };
 
@@ -1958,6 +1961,57 @@ void error_tests()
    };
 }
 
+#if __cpp_exceptions
+void exceptions_tests()
+{
+   "ex_write_read_cbor"_test = [] {
+      my_struct obj{.i = 100, .d = 3.14, .hello = "exception test"};
+      std::string buffer = glz::ex::write_cbor(obj);
+      expect(buffer.size() > 0u);
+
+      my_struct result{};
+      glz::ex::read_cbor(result, buffer);
+      expect(result.i == 100);
+      expect(result.d == 3.14);
+      expect(result.hello == "exception test");
+   };
+
+   "ex_write_cbor_to_buffer"_test = [] {
+      std::vector<int> v = {1, 2, 3, 4, 5};
+      std::string buffer;
+      glz::ex::write_cbor(v, buffer);
+      expect(buffer.size() > 0u);
+
+      std::vector<int> result;
+      glz::ex::read_cbor(result, buffer);
+      expect(result == v);
+   };
+
+   "ex_read_cbor_return"_test = [] {
+      std::string buffer;
+      glz::ex::write_cbor(42, buffer);
+
+      auto result = glz::ex::read_cbor<int>(buffer);
+      expect(result == 42);
+   };
+
+   "ex_read_cbor_throws"_test = [] {
+      std::string invalid_buffer;
+      invalid_buffer.push_back(static_cast<char>(0xFF)); // invalid
+
+      bool threw = false;
+      try {
+         int result{};
+         glz::ex::read_cbor(result, invalid_buffer);
+      }
+      catch (const std::runtime_error&) {
+         threw = true;
+      }
+      expect(threw);
+   };
+}
+#endif
+
 int main()
 {
    basic_types_tests();
@@ -1989,6 +2043,9 @@ int main()
    typed_array_tests();
    cbor_to_json_tests();
    error_tests();
+#if __cpp_exceptions
+   exceptions_tests();
+#endif
 
    return 0;
 }
