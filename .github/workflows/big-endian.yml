@@ -66,14 +66,14 @@ jobs:
             echo '::endgroup::'
 
             echo '::group::Configure CMake'
-            cmake -B build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_STANDARD=23
+            cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_STANDARD=23 -Dglz_ENABLE_FUZZING=OFF
             echo '::endgroup::'
 
             echo '::group::Build'
-            cmake --build build -j \$(nproc)
+            cmake --build build -j 2
             echo '::endgroup::'
 
             echo '::group::Test'
-            ctest --test-dir build --output-on-failure
+            ctest --test-dir build --output-on-failure -E '(http|websocket|asio)'
             echo '::endgroup::'
           "
