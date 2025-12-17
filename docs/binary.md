@@ -93,6 +93,24 @@ This is useful for:
 - Log files with multiple serialized entries
 - Message queues with batched records
 
+### Quick Reference
+
+**Writing Functions**
+
+| Function | Description |
+|----------|-------------|
+| `write_beve_delimiter(buffer)` | Writes a single delimiter byte (0x06) |
+| `write_beve_append(value, buffer)` | Appends a BEVE value to existing buffer. Returns `expected<size_t, error_ctx>` with bytes written. |
+| `write_beve_append_with_delimiter(value, buffer)` | Writes delimiter + value. Returns bytes written including delimiter. |
+| `write_beve_delimited(container, buffer)` | Writes all container elements with delimiters between them |
+
+**Reading Functions**
+
+| Function | Description |
+|----------|-------------|
+| `read_beve_delimited(container, buffer)` | Reads all delimiter-separated values into a container |
+| `read_beve_at(value, buffer, offset)` | Reads a single value at offset. Returns bytes consumed. Skips leading delimiter if present. |
+
 ### Writing Delimited BEVE
 
 #### Append a Single Value
@@ -186,6 +204,9 @@ while (offset < buffer.size()) {
    // Process obj...
 }
 ```
+
+> [!NOTE]
+> `read_beve_at` automatically skips a delimiter byte if one is present at the given offset. The returned byte count **includes** the skipped delimiter, so `offset += *result` correctly advances to the next value.
 
 #### Bytes Consumed Tracking
 

@@ -3144,14 +3144,12 @@ suite delimited_beve_tests = [] {
       expect(!ec);
       expect(buffer.size() > size_t(0));
 
-      // Should contain 4 delimiters (between 5 values)
-      size_t delimiter_count = 0;
-      for (size_t i = 0; i < buffer.size(); ++i) {
-         if (static_cast<uint8_t>(buffer[i]) == glz::tag::delimiter) {
-            ++delimiter_count;
-         }
-      }
-      expect(delimiter_count == size_t(4));
+      // Verify round-trip works correctly (more robust than counting raw delimiter bytes)
+      std::vector<int> result{};
+      ec = glz::read_beve_delimited(result, buffer);
+      expect(!ec);
+      expect(result.size() == size_t(5));
+      expect(result == values);
    };
 
    "write_beve_delimited returning string"_test = [] {
@@ -3258,24 +3256,40 @@ suite delimited_beve_tests = [] {
       expect(output.empty());
    };
 
+   "trailing delimiter handling"_test = [] {
+      // Create buffer with values followed by a trailing delimiter
+      std::string buffer{};
+      (void)glz::write_beve_append(42, buffer);
+      glz::write_beve_delimiter(buffer);
+      (void)glz::write_beve_append(100, buffer);
+      glz::write_beve_delimiter(buffer); // trailing delimiter
+
+      // read_beve_delimited should gracefully handle trailing delimiter
+      std::vector<int> output{};
+      auto ec = glz::read_beve_delimited(output, buffer);
+      expect(!ec);
+      expect(output.size() == size_t(2));
+      expect(output[0] == 42);
+      expect(output[1] == 100);
+
+      // read_beve_at at trailing delimiter should return error (nothing to read)
+      int value{};
+      size_t trailing_offset = buffer.size() - 1; // points to trailing delimiter
+      auto result = glz::read_beve_at(value, buffer, trailing_offset);
+      expect(!result.has_value()); // should fail - no value after delimiter
+   };
+
    "single value delimited"_test = [] {
       std::vector<int> input{42};
       std::string buffer{};
       auto ec = glz::write_beve_delimited(input, buffer);
       expect(!ec);
 
-      // No delimiters should be in the buffer (only one value)
-      size_t delimiter_count = 0;
-      for (size_t i = 0; i < buffer.size(); ++i) {
-         if (static_cast<uint8_t>(buffer[i]) == glz::tag::delimiter) {
-            ++delimiter_count;
-         }
-      }
-      expect(delimiter_count == size_t(0));
-
+      // Verify single value round-trips correctly
       std::vector<int> output{};
       ec = glz::read_beve_delimited(output, buffer);
       expect(!ec);
+      expect(output.size() == size_t(1));
       expect(output == input);
    };
 

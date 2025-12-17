@@ -1831,8 +1831,18 @@ namespace glz
       return values;
    }
 
-   // Read a single BEVE value from a buffer at a given offset
-   // Returns the number of bytes consumed (useful for reading multiple values manually)
+   // Read a single BEVE value from a buffer at a given offset.
+   // If a delimiter byte (0x06) is present at the offset, it is automatically skipped.
+   // Returns the total bytes consumed from offset (including any skipped delimiter),
+   // so the next read offset is simply: offset + *result
+   //
+   // Example:
+   //   size_t offset = 0;
+   //   while (offset < buffer.size()) {
+   //      auto result = glz::read_beve_at(value, buffer, offset);
+   //      if (!result) break;
+   //      offset += *result;  // correctly advances past delimiter + value
+   //   }
    template <auto Opts = opts{}, read_supported<BEVE> T, class Buffer>
    [[nodiscard]] glz::expected<size_t, error_ctx> read_beve_at(T& value, Buffer&& buffer, size_t offset = 0)
    {
@@ -1847,7 +1857,7 @@ namespace glz
       auto end = reinterpret_cast<const char*>(buffer.data()) + buffer.size();
       auto start = it;
 
-      // Skip leading delimiter if present
+      // Skip leading delimiter if present (included in returned byte count)
       skip_beve_delimiter(it, end);
 
       if (it >= end) {
@@ -1860,6 +1870,6 @@ namespace glz
          return glz::unexpected(error_ctx{ctx.error, ctx.custom_error_message, size_t(it - start), ctx.includer_error});
       }
 
-      return size_t(it - start); // bytes consumed including any skipped delimiter
+      return size_t(it - start); // total bytes consumed from offset (delimiter + value)
    }
 }
