@@ -68,6 +68,10 @@ namespace glz::tag
    constexpr uint8_t generic_array = 5;
    constexpr uint8_t extensions = 6;
 
+   // Data delimiter for separating multiple BEVE values in a stream/buffer
+   // Used like NDJSON's newline delimiter - when converted to JSON outputs '\n'
+   constexpr uint8_t delimiter = 0b00000'110; // extensions type (6) with subtype 0
+
    constexpr uint8_t bool_false = 0b000'01'000;
    constexpr uint8_t bool_true = 0b000'11'000;
 

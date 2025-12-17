@@ -1746,4 +1746,120 @@ namespace glz
    {
       return read_file_beve<opt_true<Opts, &opts::structs_as_arrays>>(value, file_name, buffer);
    }
+
+   // ===== Delimited BEVE support for multiple objects in one buffer =====
+
+   // Skip a delimiter byte if present at the current position
+   // Returns true if a delimiter was skipped, false otherwise
+   GLZ_ALWAYS_INLINE bool skip_beve_delimiter(auto&& it, auto end) noexcept
+   {
+      if (it < end && uint8_t(*it) == tag::delimiter) {
+         ++it;
+         return true;
+      }
+      return false;
+   }
+
+   // Read multiple delimiter-separated BEVE values from a buffer into a container
+   template <auto Opts = opts{}, class Container, class Buffer>
+      requires readable_array_t<Container> && (emplace_backable<Container> || !resizable<Container>)
+   [[nodiscard]] error_ctx read_beve_delimited(Container& values, Buffer&& buffer)
+   {
+      static_assert(sizeof(decltype(*buffer.data())) == 1);
+
+      if (buffer.empty()) {
+         if constexpr (resizable<Container>) {
+            values.clear();
+         }
+         return {};
+      }
+
+      context ctx{};
+      auto it = reinterpret_cast<const char*>(buffer.data());
+      auto end = it + buffer.size();
+      auto start = it;
+
+      if constexpr (resizable<Container>) {
+         values.clear();
+      }
+
+      size_t index = 0;
+      const size_t container_size = values.size();
+
+      while (it < end) {
+         // Skip delimiter if present (except before first value)
+         if (index > 0) {
+            skip_beve_delimiter(it, end);
+         }
+
+         if (it >= end) {
+            break;
+         }
+
+         if constexpr (emplace_backable<Container>) {
+            auto& value = values.emplace_back();
+            parse<BEVE>::template op<set_beve<Opts>()>(value, ctx, it, end);
+         }
+         else {
+            if (index >= container_size) {
+               ctx.error = error_code::exceeded_static_array_size;
+               break;
+            }
+            parse<BEVE>::template op<set_beve<Opts>()>(values[index], ctx, it, end);
+         }
+
+         if (bool(ctx.error)) [[unlikely]] {
+            return {ctx.error, ctx.custom_error_message, size_t(it - start), ctx.includer_error};
+         }
+
+         ++index;
+      }
+
+      return {ctx.error, ctx.custom_error_message, size_t(it - start), ctx.includer_error};
+   }
+
+   // Read multiple delimiter-separated BEVE values, returning the container
+   template <class Container, auto Opts = opts{}, class Buffer>
+      requires readable_array_t<Container> && (emplace_backable<Container> || !resizable<Container>)
+   [[nodiscard]] expected<Container, error_ctx> read_beve_delimited(Buffer&& buffer)
+   {
+      Container values{};
+      const auto ec = read_beve_delimited<Opts>(values, std::forward<Buffer>(buffer));
+      if (bool(ec)) [[unlikely]] {
+         return unexpected(ec);
+      }
+      return values;
+   }
+
+   // Read a single BEVE value from a buffer at a given offset
+   // Returns the number of bytes consumed (useful for reading multiple values manually)
+   template <auto Opts = opts{}, read_supported<BEVE> T, class Buffer>
+   [[nodiscard]] glz::expected<size_t, error_ctx> read_beve_at(T& value, Buffer&& buffer, size_t offset = 0)
+   {
+      static_assert(sizeof(decltype(*buffer.data())) == 1);
+
+      if (offset >= buffer.size()) {
+         return glz::unexpected(error_ctx{error_code::unexpected_end});
+      }
+
+      context ctx{};
+      auto it = reinterpret_cast<const char*>(buffer.data()) + offset;
+      auto end = reinterpret_cast<const char*>(buffer.data()) + buffer.size();
+      auto start = it;
+
+      // Skip leading delimiter if present
+      skip_beve_delimiter(it, end);
+
+      if (it >= end) {
+         return glz::unexpected(error_ctx{error_code::unexpected_end});
+      }
+
+      parse<BEVE>::template op<set_beve<Opts>()>(value, ctx, it, end);
+
+      if (bool(ctx.error)) [[unlikely]] {
+         return glz::unexpected(error_ctx{ctx.error, ctx.custom_error_message, size_t(it - start), ctx.includer_error});
+      }
+
+      return size_t(it - start); // bytes consumed including any skipped delimiter
+   }
 }

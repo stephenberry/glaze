@@ -81,3 +81,147 @@ static constexpr auto partial = glz::json_ptrs("/i",
 std::vector<std::byte> out;
 glz::write_beve<partial>(s, out);
 ```
+
+## Delimited BEVE (Multiple Objects in One Buffer)
+
+Similar to [NDJSON](https://github.com/ndjson/ndjson-spec) for JSON, BEVE supports storing multiple objects in a single buffer using a delimiter. The BEVE specification defines a **Data Delimiter** extension (type 6, subtype 0) specifically for this purpose.
+
+This is useful for:
+
+- Streaming multiple messages over a connection
+- Appending records to a buffer without re-encoding existing data
+- Log files with multiple serialized entries
+- Message queues with batched records
+
+### Writing Delimited BEVE
+
+#### Append a Single Value
+
+Use `write_beve_append` to add a value to an existing buffer without clearing it:
+
+```c++
+std::string buffer{};
+
+// Write first object
+auto bytes1 = glz::write_beve_append(my_struct{1, "first"}, buffer);
+
+// Append delimiter and second object
+auto bytes2 = glz::write_beve_append_with_delimiter(my_struct{2, "second"}, buffer);
+
+// Append delimiter and third object
+auto bytes3 = glz::write_beve_append_with_delimiter(my_struct{3, "third"}, buffer);
+```
+
+The `write_beve_append` function returns `glz::expected<size_t, error_ctx>` containing the number of bytes written.
+
+#### Write a Delimiter
+
+You can manually write just the delimiter byte:
+
+```c++
+std::string buffer{};
+glz::write_beve_append(obj1, buffer);
+glz::write_beve_delimiter(buffer);  // Writes single 0x06 byte
+glz::write_beve_append(obj2, buffer);
+```
+
+#### Write a Container with Delimiters
+
+To write all elements of a container with delimiters between them:
+
+```c++
+std::vector<my_struct> objects = {
+   {1, "first"},
+   {2, "second"},
+   {3, "third"}
+};
+
+std::string buffer{};
+auto ec = glz::write_beve_delimited(objects, buffer);
+
+// Or get the buffer directly:
+auto result = glz::write_beve_delimited(objects);
+if (result) {
+   std::string buffer = std::move(*result);
+}
+```
+
+### Reading Delimited BEVE
+
+#### Read All Values into a Container
+
+Use `read_beve_delimited` to read all delimiter-separated values:
+
+```c++
+std::string buffer = /* delimited BEVE data */;
+
+std::vector<my_struct> objects{};
+auto ec = glz::read_beve_delimited(objects, buffer);
+
+// Or get the container directly:
+auto result = glz::read_beve_delimited<std::vector<my_struct>>(buffer);
+if (result) {
+   for (const auto& obj : *result) {
+      // process each object
+   }
+}
+```
+
+#### Read at a Specific Offset
+
+For manual control over reading, use `read_beve_at` which returns the number of bytes consumed:
+
+```c++
+std::string buffer = /* delimited BEVE data */;
+size_t offset = 0;
+
+while (offset < buffer.size()) {
+   my_struct obj{};
+   auto result = glz::read_beve_at(obj, buffer, offset);
+   if (!result) {
+      break;  // Error or end of data
+   }
+   offset += *result;  // Advance by bytes consumed
+
+   // Process obj...
+}
+```
+
+#### Bytes Consumed Tracking
+
+The standard `read_beve` function also tracks bytes consumed via `error_ctx.location`:
+
+```c++
+my_struct obj{};
+auto ec = glz::read_beve(obj, buffer);
+size_t bytes_consumed = ec.location;  // Number of bytes read
+```
+
+### Example: Streaming Workflow
+
+```c++
+struct Message {
+   int id{};
+   std::string content{};
+};
+
+// Producer: append messages to a buffer
+std::string buffer{};
+for (int i = 0; i < 100; ++i) {
+   Message msg{i, "message " + std::to_string(i)};
+   if (i == 0) {
+      glz::write_beve_append(msg, buffer);
+   } else {
+      glz::write_beve_append_with_delimiter(msg, buffer);
+   }
+}
+
+// Consumer: read all messages
+std::vector<Message> messages{};
+auto ec = glz::read_beve_delimited(messages, buffer);
+// messages now contains all 100 Message objects
+```
+
+### Delimiter Format
+
+The BEVE delimiter is a single byte: `0x06` (extensions type 6 with subtype 0). When converting delimited BEVE to JSON via `glz::beve_to_json`, each delimiter is converted to a newline character (`\n`), producing NDJSON-compatible output.
