@@ -5,8 +5,8 @@
 
 #if __cpp_exceptions
 
+#include "glaze/cbor.hpp"
 #include "glaze/exceptions/core_exceptions.hpp"
-#include "glaze/glaze.hpp"
 
 namespace glz::ex
 {
