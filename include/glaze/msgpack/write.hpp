@@ -306,23 +306,20 @@ namespace glz
    };
 
    template <class T>
-      requires((glaze_enum_t<T> || (meta_keys<T> && std::is_enum_v<std::decay_t<T>>)) && !custom_write<T>)
+      requires(is_named_enum<T>)
    struct to<MSGPACK, T>
    {
       template <auto Opts, class Value, is_context Ctx, class B, class IX>
       GLZ_ALWAYS_INLINE static void op(Value&& value, Ctx&& ctx, B&& b, IX&& ix)
       {
-         using key_t = std::underlying_type_t<std::decay_t<T>>;
-         static constexpr auto frozen_map = make_enum_to_string_map<T>();
-         const auto it = frozen_map.find(static_cast<key_t>(value));
-         if (it != frozen_map.end()) {
-            const std::string_view str{it->second.data(), it->second.size()};
+         const sv str = get_enum_name(value);
+         if (!str.empty()) {
             msgpack::detail::write_str_header(str.size(), b, ix);
             msgpack::detail::dump_raw_bytes(str.data(), str.size(), b, ix);
          }
          else {
             // fallback to numeric representation
-            serialize<MSGPACK>::op<Opts>(static_cast<key_t>(value), ctx, b, ix);
+            serialize<MSGPACK>::op<Opts>(static_cast<std::underlying_type_t<T>>(value), ctx, b, ix);
          }
       }
    };
@@ -523,19 +520,19 @@ namespace glz
          if (len <= std::numeric_limits<uint8_t>::max()) {
             dump_payload([&] {
                dump(std::byte{msgpack::ext8}, b, ix);
-               msgpack::detail::dump_uint8(static_cast<uint8_t>(len), b, ix);
+               msgpack::dump_uint8(static_cast<uint8_t>(len), b, ix);
             });
          }
          else if (len <= std::numeric_limits<uint16_t>::max()) {
             dump_payload([&] {
                dump(std::byte{msgpack::ext16}, b, ix);
-               msgpack::detail::dump_uint16(static_cast<uint16_t>(len), b, ix);
+               msgpack::dump_uint16(static_cast<uint16_t>(len), b, ix);
             });
          }
          else if (len <= std::numeric_limits<uint32_t>::max()) {
             dump_payload([&] {
                dump(std::byte{msgpack::ext32}, b, ix);
-               msgpack::detail::dump_uint32(static_cast<uint32_t>(len), b, ix);
+               msgpack::dump_uint32(static_cast<uint32_t>(len), b, ix);
             });
          }
          else {

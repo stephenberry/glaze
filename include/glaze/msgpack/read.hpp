@@ -320,7 +320,7 @@ namespace glz
    };
 
    template <class T>
-      requires((glaze_enum_t<T> || (meta_keys<T> && std::is_enum_v<std::decay_t<T>>)) && !custom_read<T>)
+      requires(is_named_enum<T>)
    struct from<MSGPACK, T>
    {
       template <auto Opts, class Value, is_context Ctx, class It, class End>
@@ -330,13 +330,32 @@ namespace glz
          if (!msgpack::detail::read_string_view(ctx, tag, it, end, sv)) {
             return;
          }
-         static constexpr auto frozen_map = make_string_to_enum_map<T>();
-         auto it_map = frozen_map.find(sv);
-         if (it_map != frozen_map.end()) {
-            value = static_cast<T>(it_map->second);
+
+         constexpr auto N = reflect<T>::size;
+
+         if constexpr (N == 0) {
+            ctx.error = error_code::unexpected_enum;
+            return;
+         }
+         else if constexpr (N == 1) {
+            if (sv == get<0>(reflect<T>::keys)) {
+               value = get<0>(reflect<T>::values);
+            }
+            else {
+               ctx.error = error_code::unexpected_enum;
+            }
          }
          else {
-            ctx.error = error_code::unexpected_enum;
+            static constexpr auto HashInfo = hash_info<T>;
+            const auto index =
+               decode_hash_with_size<MSGPACK, T, HashInfo, HashInfo.type>::op(sv.data(), sv.data() + sv.size(), sv.size());
+
+            if (index >= N || reflect<T>::keys[index] != sv) [[unlikely]] {
+               ctx.error = error_code::unexpected_enum;
+               return;
+            }
+
+            visit<N>([&]<size_t I>() { value = get<I>(reflect<T>::values); }, index);
          }
       }
    };
@@ -723,7 +742,7 @@ namespace glz
       {
          size_t len{};
          int8_t type{};
-         if (!msgpack::detail::read_ext_header(ctx, tag, it, end, len, type)) {
+         if (!msgpack::read_ext_header(ctx, tag, it, end, len, type)) {
             return;
          }
          value.type = type;
@@ -912,13 +931,18 @@ namespace glz
          }
          using V = std::decay_t<decltype(value.value)>;
          static constexpr auto N = glz::tuple_size_v<V> / 2;
-         for (size_t i = 0; i < len && ctx.error == error_code::none; ++i) {
-            parse<MSGPACK>::template op<Opts>(glz::get<2 * i>(value.value), ctx, it, end);
-            if (ctx.error != error_code::none) {
-               return;
-            }
-            parse<MSGPACK>::template op<Opts>(glz::get<2 * i + 1>(value.value), ctx, it, end);
+         if (len != N) {
+            ctx.error = error_code::syntax_error;
+            return;
          }
+         for_each<N>([&]<size_t I>() {
+            if (ctx.error == error_code::none) {
+               parse<MSGPACK>::template op<Opts>(glz::get<2 * I>(value.value), ctx, it, end);
+               if (ctx.error == error_code::none) {
+                  parse<MSGPACK>::template op<Opts>(glz::get<2 * I + 1>(value.value), ctx, it, end);
+               }
+            }
+         });
       }
    };
 
@@ -935,13 +959,18 @@ namespace glz
          }
          using V = std::decay_t<decltype(value.value)>;
          static constexpr auto N = glz::tuple_size_v<V> / 2;
-         for (size_t i = 0; i < len && ctx.error == error_code::none; ++i) {
-            parse<MSGPACK>::template op<Opts>(glz::get<2 * i>(value.value), ctx, it, end);
-            if (ctx.error != error_code::none) {
-               return;
-            }
-            parse<MSGPACK>::template op<Opts>(glz::get<2 * i + 1>(value.value), ctx, it, end);
+         if (len != N) {
+            ctx.error = error_code::syntax_error;
+            return;
          }
+         for_each<N>([&]<size_t I>() {
+            if (ctx.error == error_code::none) {
+               parse<MSGPACK>::template op<Opts>(glz::get<2 * I>(value.value), ctx, it, end);
+               if (ctx.error == error_code::none) {
+                  parse<MSGPACK>::template op<Opts>(glz::get<2 * I + 1>(value.value), ctx, it, end);
+               }
+            }
+         });
       }
    };
 
