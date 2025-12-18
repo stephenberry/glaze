@@ -9,10 +9,7 @@ Glaze also supports:
 - [TOML](./docs/toml.md) (Tom's Obvious, Minimal Language)
 - [Stencil/Mustache](./docs/stencil-mustache.md) (string interpolation)
 - [EETF](./docs/EETF/erlang-external-term-format.md) (Erlang External Term Format) [optionally included]
-
-> [!IMPORTANT]
->
-> Pure reflection now supports partial modifications through `glz::meta<T>::modify` so you can alias or wrap just a few members without giving up automatic metadata. Learn more in [Extending pure reflection with `modify`](#extending-pure-reflection-with-modify) and the [modify reflection guide](./docs/modify-reflection.md).
+- [And Many More Features](https://stephenberry.github.io/glaze/)
 
 > [!NOTE]
 >
@@ -31,7 +28,6 @@ See this README, the [Glaze Documentation Page](https://stephenberry.github.io/g
 
 - Pure, compile time reflection for structs
   - Powerful meta specialization system for custom names and behavior
-
 - JSON [RFC 8259](https://datatracker.ietf.org/doc/html/rfc8259) compliance with UTF-8 validation
 - Standard C++ library support
 - Header only
@@ -42,17 +38,11 @@ See this README, the [Glaze Documentation Page](https://stephenberry.github.io/g
 - [Handle unknown keys](./docs/unknown-keys.md) in a fast and flexible manner
 - Direct memory access through [JSON pointer syntax](./docs/json-pointer-syntax.md)
 - [JMESPath](./docs/JMESPath.md) querying
-- [Binary data](./docs/binary.md) through the same API for maximum performance
 - No exceptions (compiles with `-fno-exceptions`)
   - If you desire helpers that throw for cleaner syntax see [Glaze Exceptions](./docs/exceptions.md)
 - No runtime type information necessary (compiles with `-fno-rtti`)
-- Rapid error handling with short circuiting
-- [JSON-RPC 2.0 support](./docs/rpc/json-rpc.md)
 - [JSON Schema generation](./docs/json-schema.md)
-- Extremely portable, uses carefully optimized SWAR (SIMD Within A Register) for broad compatibility
 - [Partial Read](./docs/partial-read.md) and [Partial Write](./docs/partial-write.md) support
-- [CSV Reading/Writing](./docs/csv.md)
-- [TOML Reading/Writing](./docs/toml.md)
 - [Much more!](#more-features)
 
 ## Performance
@@ -729,7 +719,11 @@ auto ec = glz::read<options>(value, buffer); // read in a non-null terminated bu
 
 ## BEVE
 
-Null-termination is not required for BEVE (binary). It makes no difference in performance.
+Null-termination is not required for BEVE. It makes no difference in performance.
+
+## CBOR
+
+Null-termination is not required for CBOR. It makes no difference in performance.
 
 ## CSV
 
